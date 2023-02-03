@@ -29,7 +29,7 @@ const (
 
 type (
 	Tracker interface {
-		cos.StatsTracker
+		cos.StatsUpdater
 
 		StartedUp() bool
 		AddErrorHTTP(method string, val int64)

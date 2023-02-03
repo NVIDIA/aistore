@@ -1342,7 +1342,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	const tag = "list-objects"
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() < 1 {
-		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target))
+		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
 		return
 	}
 

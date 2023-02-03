@@ -8,6 +8,7 @@ package cli
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/urfave/cli"
 )
 
@@ -84,6 +85,9 @@ func showCountersHandler(c *cli.Context) error {
 	smap, err := fillNodeStatusMap(c, apc.Target)
 	if err != nil {
 		return err
+	}
+	if smap.CountActiveTs() == 0 {
+		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 	metrics, err := getMetricNames(c)
 	if err != nil {

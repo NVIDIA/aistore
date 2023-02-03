@@ -36,7 +36,7 @@ func init() {
 	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
 }
 
-func Init(st cos.StatsTracker, config *cmn.Config) *StreamCollector {
+func Init(st cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 	dfltMaxHdr = dfltSizeHeader
 	if config.Transport.MaxHeaderSize > 0 {
 		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)

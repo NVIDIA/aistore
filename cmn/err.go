@@ -107,7 +107,8 @@ type (
 	}
 
 	ErrNoNodes struct {
-		role string
+		role    string
+		mmcount int // maintenance mode
 	}
 	ErrXactionNotFound struct {
 		cause string
@@ -452,16 +453,25 @@ func (e *ErrInvalidFSPathsConf) Error() string {
 
 // ErrNoNodes
 
-func NewErrNoNodes(role string) *ErrNoNodes {
-	return &ErrNoNodes{role: role}
+func NewErrNoNodes(role string, mmcount int) *ErrNoNodes {
+	return &ErrNoNodes{role: role, mmcount: mmcount}
 }
 
-func (e *ErrNoNodes) Error() string {
+func (e *ErrNoNodes) Error() (s string) {
+	var what string
 	if e.role == apc.Proxy {
-		return "no available proxies"
+		what = "gateway"
+		s = "no proxies (gateways) in the cluster"
+	} else {
+		debug.Assert(e.role == apc.Target)
+		what = "target"
+		s = "no storage targets in the cluster"
 	}
-	debug.Assert(e.role == apc.Target)
-	return "no available targets"
+	if e.mmcount > 0 {
+		s += fmt.Sprintf(" (%d %s%s in maintenance mode or being decommissioned)",
+			e.mmcount, what, cos.Plural(e.mmcount))
+	}
+	return
 }
 
 // ErrXactionNotFound

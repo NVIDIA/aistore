@@ -1,11 +1,13 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
+// TODO: try resolve transport -> stats cyclic dep and move => stats/api.go
+
 type (
-	StatsTracker interface {
+	StatsUpdater interface {
 		Add(name string, val int64)
 		Get(name string) int64
 		AddMany(namedVal64 ...NamedVal64)

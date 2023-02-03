@@ -13,43 +13,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/fatih/color"
 )
 
-// table 1: non-zero counters and sizes
-const (
-// colGET = "GET"
-// colPUT = "PUT"
-)
-
-// table 2: throughput
-const (
-// colGETbps    = "GET"
-// colDiskRead  = "READ (min, avg, max)"
-// colDiskWrite = "WRITE (min, avg, max)"
-// colDiskUtil  = "UTIL (min, avg, max)"
-)
-
-// table 3: latency
-const (
-// colGETns = "GET"
-)
-
-// table 4:  GET-performance
-const (
-// include colGET, colGETbps, and colGETns from above
-)
-
-// table 5:  Memory, CPU, Capacity, Uptime, Jobs
-const (
-// include:
-// colMemUsed   = "MEM USED(%)"
-// colMemAvail  = "MEM AVAIL"
-// colCapUsed   = "CAP USED(%)"
-// colCapAvail  = "CAP AVAIL"
-// colCPUUsed   = "CPU USED(%)"
-// colRebalance = "REBALANCE"
-// colUptime    = "UPTIME"
-)
+var fred = color.New(color.FgHiRed)
 
 func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.StrKVs, showZeroCols bool) *Table {
 	cols := make([]*header, 0, 32)
@@ -78,19 +45,32 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.St
 	// 4. convert metric to column names
 	printedColumns := _rename(cols)
 
+	// 5. apply color
+	for i := range cols {
+		if isErrCol(cols[i].name) {
+			printedColumns[i].name = fred.Sprintf("%s", printedColumns[i].name)
+		}
+	}
+
+	// 6. construct empty table
 	table := newTable(printedColumns...)
 
-	// 4. rows of values
+	// 7. finally, add rows
 	for tid, ds := range st {
 		row := make([]string, 0, len(cols))
 		row = append(row, fmtDaemonID(tid, smap))
 		for _, h := range cols[1:] {
 			if v, ok := ds.Stats.Tracker[h.name]; ok {
+				var printedValue string
 				if strings.HasSuffix(h.name, ".size") {
-					row = append(row, cos.B2S(v.Value, 2))
+					printedValue = cos.B2S(v.Value, 2)
 				} else {
-					row = append(row, fmt.Sprintf("%d", v.Value))
+					printedValue = fmt.Sprintf("%d", v.Value)
 				}
+				if isErrCol(h.name) {
+					printedValue = fred.Sprintf("%s", printedValue)
+				}
+				row = append(row, printedValue)
 				continue
 			}
 			debug.Assert(false, h.name)
@@ -104,6 +84,8 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.St
 //
 // utils/helpers
 //
+
+func isErrCol(colName string) bool { return strings.HasPrefix(colName, "err") }
 
 // remove all-zeros columns
 func _zerout(cols []*header, st stats.DaemonStatusMap) []*header {

@@ -417,7 +417,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 			return
 		}
 	}
-	return nil, cmn.NewErrNoNodes(apc.Target)
+	return nil, cmn.NewErrNoNodes(apc.Target, len(m.Tmap))
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {

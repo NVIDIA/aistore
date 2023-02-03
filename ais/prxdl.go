@@ -143,7 +143,12 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 	freeBcArgs(args)
 	respCnt := len(results)
 	if respCnt == 0 {
-		return nil, http.StatusBadRequest, cmn.NewErrNoNodes(apc.Target)
+		smap := p.owner.smap.get()
+		if smap.CountActiveTs() < 1 {
+			return nil, http.StatusBadRequest, cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
+		}
+		err := fmt.Errorf("%s: target(s) temporarily unavailable? (%s)", p, smap.StringEx())
+		return nil, http.StatusInternalServerError, err
 	}
 
 	var (

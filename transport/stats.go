@@ -27,4 +27,4 @@ type (
 	}
 )
 
-var statsTracker cos.StatsTracker
+var statsTracker cos.StatsUpdater

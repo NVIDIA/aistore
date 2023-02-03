@@ -139,7 +139,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 			p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found", xactMsg.String())
 			return
 		}
-		err := cmn.NewErrNoNodes(apc.Target)
+		err := cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 		glog.Warningf("%s: %v, %s", p, err, smap)
 	}
 	p.writeJSON(w, r, targetResults, what)
