@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -71,11 +71,12 @@ type (
 		archive archiveQuery // archive query
 		ranges  byteRanges   // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 
-		atime    int64
-		nanotim  int64
-		isGFN    bool // is GFN request
-		chunked  bool // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
-		unlocked bool
+		atime      int64
+		latency    int64 // nanoseconds
+		isGFN      bool  // is GFN request
+		chunked    bool  // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		unlocked   bool
+		verchanged bool // version changed
 	}
 
 	// Contains information packed in append handle.
@@ -522,8 +523,8 @@ do:
 			goi.unlocked = true
 			return
 		}
-		cold = !equal
-		if cold {
+		if !equal {
+			cold, goi.verchanged = true, true
 			if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
 				goi.unlocked = true
 				return
@@ -947,9 +948,15 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 	// stats
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
-		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.nanotim)},
+		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.latency)},
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
+	if goi.verchanged {
+		goi.t.statsT.AddMany(
+			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},
+			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.SizeBytes()},
+		)
+	}
 	return nil
 }
 

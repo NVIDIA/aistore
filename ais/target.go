@@ -621,9 +621,10 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			filename = rel
 		}
 	}
-	nanotim := mono.NanoTime()
+	// GET latency and access time
+	tm := mono.NanoTime()
 	atime := time.Now().UnixNano()
-	if dpq.ptime != "" && nanotim&0x5 == 5 {
+	if dpq.ptime != "" && tm&0x5 == 5 {
 		if redelta := ptLatency(atime, dpq.ptime); redelta != 0 {
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
@@ -631,7 +632,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	goi := allocGetObjInfo()
 	{
 		goi.atime = atime
-		goi.nanotim = nanotim
+		goi.latency = tm // assigned upon transmitting resp.
 		goi.t = t
 		goi.lom = lom
 		goi.w = w

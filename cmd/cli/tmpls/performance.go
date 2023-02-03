@@ -149,8 +149,8 @@ func _rename(cols []*header) (printedColumns []*header) {
 			name = "DELETE"
 		case "ren":
 			name = "RENAME"
-		case "vchange":
-			name = "VOL-CHANGE"
+		case "ver":
+			name = "OBJ-VERSION"
 		default:
 			name = strings.ToUpper(parts[0])
 		}

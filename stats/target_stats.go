@@ -39,8 +39,8 @@ const (
 	LruEvictCount     = "lru.evict.n"
 	CleanupStoreSize  = "cleanup.store.size"
 	CleanupStoreCount = "cleanup.store.n"
-	VerChangeCount    = "vchange.n"
-	VerChangeSize     = "vchange.size"
+	VerChangeCount    = "ver.change.n"
+	VerChangeSize     = "ver.change.size"
 
 	// intra-cluster transmit & receive
 	StreamsOutObjCount = transport.OutObjCount

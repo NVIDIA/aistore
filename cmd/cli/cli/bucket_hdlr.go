@@ -581,9 +581,13 @@ func setPropsHandler(c *cli.Context) (err error) {
 	}
 	newProps, err := parseBckPropsFromContext(c)
 	if err != nil {
-		if strings.Contains(err.Error(), "missing") || strings.Contains(err.Error(), "invalid property") {
-			actionWarn(c, err.Error()+"\n")
-			_ = showBucketProps(c) //nolint:errcheck // returning orig. error
+		if strings.Contains(err.Error(), "missing property") {
+			if errV := showBucketProps(c); errV == nil {
+				msg := err.Error() + examplesBckSetProps
+				fmt.Fprintln(c.App.ErrWriter)
+				actionWarn(c, msg)
+				return nil
+			}
 		}
 		return fmt.Errorf("%v%s", err, examplesBckSetProps)
 	}
