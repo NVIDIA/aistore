@@ -6,6 +6,7 @@ package tmpls
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -18,22 +19,25 @@ import (
 
 var fred = color.New(color.FgHiRed)
 
-func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.StrKVs, showZeroCols bool) *Table {
-	cols := make([]*header, 0, 32)
-
+func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp,
+	allCols bool) *Table {
 	// 1. dynamically: counter names
+	cols := make([]*header, 0, 32)
 	for _, ds := range st {
+		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
+
 		for name := range ds.Stats.Tracker {
 			if metrics[name] == stats.KindCounter {
 				cols = append(cols, &header{name: name, hide: false})
 			}
 		}
+		// just once
 		break
 	}
 
-	// 2. exclude zero columns unless requested
-	if !showZeroCols {
+	// 2. exclude zero columns unless (all) requested
+	if !allCols {
 		cols = _zerout(cols, st)
 	}
 
@@ -45,18 +49,26 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, metrics cos.St
 	// 4. convert metric to column names
 	printedColumns := _rename(cols)
 
-	// 5. apply color
+	// 5. regex to filter columns, if spec-ed
+	if regex != nil {
+		cols, printedColumns = _filter(cols, printedColumns, regex)
+	}
+
+	// 6. apply color
 	for i := range cols {
 		if isErrCol(cols[i].name) {
 			printedColumns[i].name = fred.Sprintf("%s", printedColumns[i].name)
 		}
 	}
 
-	// 6. construct empty table
+	// 7. construct empty table
 	table := newTable(printedColumns...)
 
-	// 7. finally, add rows
+	// finally: 8. add rows
 	for tid, ds := range st {
+		if sid != "" && sid != tid {
+			continue
+		}
 		row := make([]string, 0, len(cols))
 		row = append(row, fmtDaemonID(tid, smap))
 		for _, h := range cols[1:] {
@@ -119,6 +131,10 @@ func _rename(cols []*header) (printedColumns []*header) {
 			name  string
 			parts = strings.Split(h.name, ".")
 		)
+		if h.name == colTarget {
+			name = h.name
+			goto add
+		}
 		// first name
 		switch parts[0] {
 		case "lru":
@@ -136,17 +152,36 @@ func _rename(cols []*header) (printedColumns []*header) {
 		default:
 			name = strings.ToUpper(parts[0])
 		}
-		// middle name
-		if len(parts) == 3 {
-			name += "-" + strings.ToUpper(parts[1])
+		// middle name: take everything in-between
+		for i := 1; i < len(parts)-1; i++ {
+			name += "-" + strings.ToUpper(parts[i])
 		}
+
 		// suffix
 		if suffix := parts[len(parts)-1]; suffix == "size" {
 			name += "-" + strings.ToUpper(suffix)
 		}
-
+	add:
 		printedColumns[i] = &header{name: name, hide: cols[i].hide}
 	}
 
 	return
+}
+
+func _filter(cols, printedColumns []*header, regex *regexp.Regexp) ([]*header, []*header) {
+	for i := 0; i < len(cols); i++ {
+		if cols[i].name == colTarget {
+			continue
+		}
+		if regex.MatchString(cols[i].name) || regex.MatchString(printedColumns[i].name) {
+			continue
+		}
+		// shift
+		copy(cols[i:], cols[i+1:])
+		cols = cols[:len(cols)-1]
+		copy(printedColumns[i:], printedColumns[i+1:])
+		printedColumns = printedColumns[:len(printedColumns)-1]
+		i--
+	}
+	return cols, printedColumns
 }

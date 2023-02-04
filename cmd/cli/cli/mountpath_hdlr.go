@@ -112,8 +112,8 @@ func mpathAction(c *cli.Context, action string) error {
 			if si == nil {
 				return fmt.Errorf("node %q does not exist", nodeID)
 			}
-			return fmt.Errorf("node %q is a proxy, <TAB-TAB> target IDs or run \"ais show cluster target\" to select target",
-				nodeID)
+			return fmt.Errorf("node %q is a proxy "+
+				"(hint: press <TAB-TAB> or run \"ais show cluster target\" to select a target)", nodeID)
 		}
 		switch action {
 		case apc.ActMountpathAttach:

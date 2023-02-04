@@ -6,9 +6,14 @@
 package cli
 
 import (
+	"regexp"
+
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -23,13 +28,14 @@ var perfCmd = cli.Command{
 var (
 	showPerfFlags = append(
 		longRunFlags,
-		showZeroColumnsFlag,
+		allColumnsFlag,
+		regexColsFlag,
 	)
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
 		Usage:     showPerfArgument,
 		ArgsUsage: optionalTargetIDArgument,
-		Flags:     append(showPerfFlags, allPerformanceTables),
+		Flags:     showPerfFlags,
 		Action:    showPerfHandler,
 		Subcommands: []cli.Command{
 			showCounters,
@@ -40,8 +46,11 @@ var (
 		},
 	}
 	showCounters = cli.Command{
-		Name:         cmdShowCounters,
-		Usage:        "show GET, PUT, and list-objects counters; show error counters, if any",
+		Name: cmdShowCounters,
+		Usage: "show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counters;\n" +
+			argsUsageIndent + "show (GET, PUT, etc.) cumulative sizes;\n" +
+			argsUsageIndent + "show the number of LIST-objects requests;\n" +
+			argsUsageIndent + "show error counters, if any, and more...",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showCountersHandler,
@@ -81,28 +90,42 @@ var (
 	}
 )
 
-func showCountersHandler(c *cli.Context) error {
-	smap, err := fillNodeStatusMap(c, apc.Target)
-	if err != nil {
+func showCountersHandler(c *cli.Context) (err error) {
+	var (
+		sid     string
+		smap    *cluster.Smap
+		metrics cos.StrKVs
+		regex   *regexp.Regexp
+
+		regexStr   = parseStrFlag(c, regexColsFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		allCols    = flagIsSet(c, allColumnsFlag)
+	)
+	if sid, _, err = argNode(c); err != nil {
+		return err
+	}
+	debug.Assert(sid == "" || getNodeType(c, sid) == apc.Target)
+	if regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if smap, err = fillNodeStatusMap(c, apc.Target); err != nil {
 		return err
 	}
 	if smap.CountActiveTs() == 0 {
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
-	metrics, err := getMetricNames(c)
-	if err != nil {
+	if metrics, err = getMetricNames(c); err != nil {
 		return err
 	}
-	var (
-		usejs      bool
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		zeroCols   = flagIsSet(c, showZeroColumnsFlag)
-	)
 
 	setLongRunParams(c, 72)
 
-	out := tmpls.NewCountersTab(curTgtStatus, smap, metrics, zeroCols).Template(hideHeader)
-	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, usejs)
+	out := tmpls.NewCountersTab(curTgtStatus, smap, sid, metrics, regex, allCols).Template(hideHeader)
+	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, false /*usejs*/)
 }
 
 // TODO -- FIXME: work in progress from here on ---------------

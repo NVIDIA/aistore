@@ -226,7 +226,7 @@ var (
 
 	showCmdJob = cli.Command{
 		Name:         commandJob,
-		Usage:        "show running and finished jobs (use <TAB-TAB> to select, --all for all, help for options)",
+		Usage:        "show running and finished jobs ('--all' for all, or " + tabHelpOpt + ")",
 		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
@@ -290,7 +290,8 @@ func showJobsHandler(c *cli.Context) error {
 	l, err = showJobsDo(c, name, xid, daemonID, bck)
 	if err == nil && l == 0 {
 		n, h := qflprn(allJobsFlag), qflprn(cli.HelpFlag)
-		fmt.Fprintf(c.App.Writer, "No running jobs. Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", n, n, h)
+		fmt.Fprintf(c.App.Writer, "No running jobs. "+
+			"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", n, n, h)
 	}
 	return err
 }
@@ -639,7 +640,7 @@ func showClusterConfigHandler(c *cli.Context) (err error) {
 
 func showConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, "missing arguments (hint: press <TAB-TAB>)")
+		return incorrectUsageMsg(c, "missing arguments (hint: "+tabtab+")")
 	}
 	if c.Args().First() == cmdCLI {
 		return showCLIConfigHandler(c)
@@ -1028,8 +1029,11 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 		return err
 	}
 
-	// TODO: extract regex-matching, if defined
 	if flagIsSet(c, jsonFlag) {
+		if regex != nil {
+			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
+			actionWarn(c, warn)
+		}
 		return tmpls.Print(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
 	}
 
@@ -1088,6 +1092,10 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 
 	usejs := flagIsSet(c, jsonFlag)
 	if usejs {
+		if regex != nil {
+			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
+			actionWarn(c, warn)
+		}
 		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 	}
 

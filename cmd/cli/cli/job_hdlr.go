@@ -156,7 +156,7 @@ var (
 	}
 	jobStopSub = cli.Command{
 		Name:         commandStop,
-		Usage:        "terminate a single batch job or multiple jobs (use <TAB-TAB> to select, help for options)",
+		Usage:        "terminate a single batch job or multiple jobs (" + tabHelpOpt + ")",
 		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        stopCmdsFlags,
 		Action:       stopJobHandler,
@@ -172,7 +172,7 @@ var (
 	}
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
-		Usage:        "wait for a specific batch job to complete (use <TAB-TAB> to select, help for options)",
+		Usage:        "wait for a specific batch job to complete (" + tabHelpOpt + ")",
 		ArgsUsage:    jobShowStopWaitArgument,
 		Flags:        waitCmdsFlags,
 		Action:       waitJobHandler,

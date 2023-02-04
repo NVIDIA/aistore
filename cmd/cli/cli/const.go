@@ -312,11 +312,14 @@ const (
 
 var (
 	// scope 'all'
-	allPropsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
-	allJobsFlag          = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
-	allRunningJobsFlag   = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
-	allFinishedJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
-	allPerformanceTables = cli.BoolFlag{Name: scopeAll, Usage: "all performance tables"}
+	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
+	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
+	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
+	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
+	allColumnsFlag      = cli.BoolFlag{
+		Name:  scopeAll,
+		Usage: "when printing tables, show all columns including those that have only zero values",
+	}
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
@@ -351,7 +354,12 @@ var (
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
-	regexFlag    = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+	regexFlag     = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+	regexColsFlag = cli.StringFlag{
+		Name:  regexFlag.Name,
+		Usage: "regular expression to select table columns (case-insensitive), e.g.: --regex \"put|err\"",
+	}
+
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
 	noFooterFlag = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
@@ -674,10 +682,5 @@ var (
 	cliConfigPathFlag = cli.BoolFlag{
 		Name:  "path",
 		Usage: "display path to the AIS CLI configuration",
-	}
-
-	showZeroColumnsFlag = cli.BoolFlag{
-		Name:  "show-all-columns",
-		Usage: "when printing tables, show all columns including those that have only zero values",
 	}
 )

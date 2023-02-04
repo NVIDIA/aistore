@@ -32,6 +32,12 @@ const (
    To install CLI directly from GitHub, use ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
 )
 
+const (
+	tabtab     = "press <TAB-TAB> to select"
+	tabHelpOpt = "press <TAB-TAB> to select, '--help' for options"
+	tabHelpDet = "press <TAB-TAB> to select, '--help' for details"
+)
+
 type (
 	acli struct {
 		app       *cli.App
