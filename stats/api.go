@@ -18,13 +18,14 @@ import (
 
 // enum: `statsValue` kinds
 const (
-	KindCounter = "counter"
-	KindGauge   = "gauge"
-	// + semantics
-	KindLatency            = "latency"
-	KindThroughput         = "bw"     // currently, only GetThroughput - see NOTE below
-	KindComputedThroughput = "compbw" // disk(s) read/write throughputs
+	// lockless
+	KindCounter            = "counter"
+	KindGauge              = "gauge"
 	KindSpecial            = "special"
+	KindComputedThroughput = "compbw" // disk read/write throughput
+	// compound (+ semantics)
+	KindLatency    = "latency"
+	KindThroughput = "bw" // e.g. GetThroughput
 )
 
 type (

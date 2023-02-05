@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -139,21 +141,16 @@ type (
 			stsd string // StatsD label
 			prom string // Prometheus label
 		}
-
-		Value int64 `json:"v,string"`
-
+		Value      int64 `json:"v,string"`
 		numSamples int64
 		cumulative int64
-
-		sync.RWMutex
-
-		isCommon bool // optional, common to the proxy and target
+		mu         sync.RWMutex
 	}
 	copyValue struct {
 		Value int64 `json:"v,string"`
 	}
 	statsTracker map[string]*statsValue
-	copyTracker  map[string]copyValue // values aggregated and computed every statsTime
+	copyTracker  map[string]copyValue // NOTE: values aggregated and computed every (log) statsTime
 	promDesc     map[string]*prometheus.Desc
 )
 
@@ -303,9 +300,7 @@ func (s *CoreStats) initProm(node *cluster.Snode) {
 
 func (s *CoreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
-	v.Lock()
-	v.Value = d.Nanoseconds()
-	v.Unlock()
+	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
 }
 
 func (s *CoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
@@ -313,9 +308,14 @@ func (s *CoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b,
 
 func (s *CoreStats) get(name string) (val int64) {
 	v := s.Tracker[name]
-	v.RLock()
-	val = v.Value
-	v.RUnlock()
+	switch v.kind {
+	case KindLatency, KindThroughput:
+		v.mu.RLock()
+		val = v.Value
+		v.mu.RUnlock()
+	default:
+		val = ratomic.LoadInt64(&v.Value)
+	}
 	return
 }
 
@@ -325,22 +325,20 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	debug.Assertf(ok, "invalid stats name %q", name)
 	switch v.kind {
 	case KindLatency:
-		v.Lock()
+		v.mu.Lock()
 		v.numSamples++
 		v.cumulative += val
 		v.Value += val
-		v.Unlock()
+		v.mu.Unlock()
 	case KindThroughput:
-		v.Lock()
+		v.mu.Lock()
 		v.cumulative += val
 		v.Value += val
-		v.Unlock()
+		v.mu.Unlock()
 	case KindCounter:
-		v.Lock()
-		v.Value += val
-		v.Unlock()
-		// NOTE:
-		// - currently only counters;
+		// NOTE: not locking (KindCounter isn't compound, making an exception to speed-up)
+		ratomic.AddInt64(&v.Value, val)
+
 		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
 		// - suffix is an arbitrary string that can be defined at runtime;
 		// - e.g. usage: per-mountpath error counters.
@@ -353,14 +351,15 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	}
 }
 
-func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
+// log + StatsD (Prometheus is done separately via `Collect`)
+func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 	idle := true
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
 		switch v.kind {
 		case KindLatency:
 			var lat int64
-			v.Lock()
+			v.mu.Lock()
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
 				ctracker[name] = copyValue{lat}
@@ -370,36 +369,42 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
 			}
 			v.Value = 0
 			v.numSamples = 0
-			v.Unlock()
+			v.mu.Unlock()
 			// NOTE: ns => ms, and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
 			}
-		case KindThroughput, KindComputedThroughput:
+		case KindThroughput:
 			var throughput int64
-			v.Lock()
+			v.mu.Lock()
 			if v.Value > 0 {
-				throughput = v.Value
-				if v.kind != KindComputedThroughput {
-					throughput /= cos.MaxI64(int64(s.statsTime.Seconds()), 1)
-				}
+				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
 				ctracker[name] = copyValue{throughput}
 				if !ignore(name) {
 					idle = false
 				}
 				v.Value = 0
 			}
-			v.Unlock()
+			v.mu.Unlock()
 			if !s.isPrometheus() && throughput > 0 {
 				fv := roundMBs(throughput)
 				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
 			}
+		case KindComputedThroughput:
+			if throughput := ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
+				ctracker[name] = copyValue{throughput}
+				if !ignore(name) {
+					idle = false
+				}
+				if !s.isPrometheus() {
+					fv := roundMBs(throughput)
+					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
+				}
+			}
 		case KindCounter:
-			var cnt int64
-			v.RLock()
-			if v.Value > 0 {
-				cnt = v.Value
+			cnt := ratomic.LoadInt64(&v.Value)
+			if cnt > 0 {
 				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
 					ctracker[name] = copyValue{cnt}
 					if !ignore(name) {
@@ -409,7 +414,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
 					cnt = 0
 				}
 			}
-			v.RUnlock()
+			// StatsD iff changed
 			if !s.isPrometheus() && cnt > 0 {
 				if strings.HasSuffix(name, ".size") {
 					// target only suffix
@@ -424,15 +429,16 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
 				}
 			}
 		case KindGauge:
-			ctracker[name] = copyValue{v.Value}
+			val := ratomic.LoadInt64(&v.Value)
+			ctracker[name] = copyValue{val}
 			if !s.isPrometheus() {
-				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(v.Value)}, s.sgl)
+				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(val)}, s.sgl)
 			}
-			if isDiskUtilMetric(name) && v.Value > diskLowUtil {
+			if isDiskUtilMetric(name) && val > diskLowUtil[0] {
 				idle = false
 			}
 		default:
-			ctracker[name] = copyValue{v.Value} // KindSpecial/KindDelta as is and wo/ lock
+			ctracker[name] = copyValue{ratomic.LoadInt64(&v.Value)} // KindSpecial/KindDelta as is and wo/ lock
 		}
 	}
 	if !s.isPrometheus() {
@@ -441,20 +447,22 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil int64) bool {
 	return idle
 }
 
-// serves to satisfy REST API what=stats query
+// REST API what=stats query
+// NOTE: not reporting zero counts
 func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
-		v.RLock()
-		if v.kind == KindLatency || v.kind == KindThroughput {
+		switch v.kind {
+		case KindLatency, KindThroughput:
+			v.mu.RLock()
 			ctracker[name] = copyValue{v.cumulative}
-		} else if v.kind == KindCounter {
-			if v.Value != 0 {
-				ctracker[name] = copyValue{v.Value}
+			v.mu.RUnlock()
+		case KindCounter:
+			if cnt := ratomic.LoadInt64(&v.Value); cnt > 0 {
+				ctracker[name] = copyValue{cnt}
 			}
-		} else { // KindSpecial, KindComputedThroughput, KindGauge
-			ctracker[name] = copyValue{v.Value}
+		default: // KindSpecial, KindComputedThroughput, KindGauge
+			ctracker[name] = copyValue{ratomic.LoadInt64(&v.Value)}
 		}
-		v.RUnlock()
 	}
 }
 
@@ -468,11 +476,17 @@ var (
 	_ json.Unmarshaler = (*statsValue)(nil)
 )
 
-func (v *statsValue) MarshalJSON() (b []byte, err error) {
-	v.RLock()
-	b, err = jsoniter.Marshal(v.Value)
-	v.RUnlock()
-	return
+func (v *statsValue) MarshalJSON() ([]byte, error) {
+	var s string
+	switch v.kind {
+	case KindLatency, KindThroughput:
+		v.mu.RLock()
+		s = strconv.FormatInt(v.Value, 10)
+		v.mu.RUnlock()
+	default:
+		s = strconv.FormatInt(ratomic.LoadInt64(&v.Value), 10)
+	}
+	return cos.UnsafeB(s), nil
 }
 
 func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
@@ -495,14 +509,12 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 //////////////////
 
 // NOTE: naming; compare with CoreStats.initProm()
-func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isCommon ...bool) {
-	v := &statsValue{kind: kind}
-	if len(isCommon) > 0 {
-		v.isCommon = isCommon[0]
-	}
+func (tracker statsTracker) register(node *cluster.Snode, name, kind string) {
 	debug.Assertf(kind == KindCounter || kind == KindGauge || kind == KindLatency ||
 		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial,
 		"invalid metric kind %q", kind)
+
+	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
 	case KindCounter:
@@ -542,26 +554,32 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string, isC
 
 // register common metrics; see RegMetrics() in target_stats.go
 func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
-	tracker.register(node, GetCount, KindCounter, true)
-	tracker.register(node, PutCount, KindCounter, true)
-	tracker.register(node, AppendCount, KindCounter, true)
-	tracker.register(node, DeleteCount, KindCounter, true)
-	tracker.register(node, RenameCount, KindCounter, true)
-	tracker.register(node, ListCount, KindCounter, true)
-	tracker.register(node, GetLatency, KindLatency, true)
-	tracker.register(node, ListLatency, KindLatency, true)
-	tracker.register(node, KeepAliveLatency, KindLatency, true)
-	tracker.register(node, ErrCount, KindCounter, true)
-	tracker.register(node, ErrGetCount, KindCounter, true)
-	tracker.register(node, ErrDeleteCount, KindCounter, true)
-	tracker.register(node, ErrPostCount, KindCounter, true)
-	tracker.register(node, ErrPutCount, KindCounter, true)
-	tracker.register(node, ErrHeadCount, KindCounter, true)
-	tracker.register(node, ErrListCount, KindCounter, true)
-	tracker.register(node, ErrRangeCount, KindCounter, true)
-	tracker.register(node, ErrDownloadCount, KindCounter, true)
+	// basic counters
+	tracker.register(node, GetCount, KindCounter)
+	tracker.register(node, PutCount, KindCounter)
+	tracker.register(node, AppendCount, KindCounter)
+	tracker.register(node, DeleteCount, KindCounter)
+	tracker.register(node, RenameCount, KindCounter)
+	tracker.register(node, ListCount, KindCounter)
 
-	tracker.register(node, Uptime, KindSpecial, true)
+	// error counters
+	tracker.register(node, ErrCount, KindCounter)
+	tracker.register(node, ErrGetCount, KindCounter)
+	tracker.register(node, ErrDeleteCount, KindCounter)
+	tracker.register(node, ErrPostCount, KindCounter)
+	tracker.register(node, ErrPutCount, KindCounter)
+	tracker.register(node, ErrHeadCount, KindCounter)
+	tracker.register(node, ErrListCount, KindCounter)
+	tracker.register(node, ErrRangeCount, KindCounter)
+	tracker.register(node, ErrDownloadCount, KindCounter)
+
+	// latency
+	tracker.register(node, GetLatency, KindLatency)
+	tracker.register(node, ListLatency, KindLatency)
+	tracker.register(node, KeepAliveLatency, KindLatency)
+
+	// special uptime
+	tracker.register(node, Uptime, KindSpecial)
 }
 
 /////////////////

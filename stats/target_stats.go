@@ -160,8 +160,9 @@ func (r *Trunner) RegDiskMetrics(disk string) {
 		return
 	}
 	r.reg(n, KindComputedThroughput)
-	r.reg(nameRavg(disk), KindGauge)
 	r.reg(nameWbps(disk), KindComputedThroughput)
+
+	r.reg(nameRavg(disk), KindGauge)
 	r.reg(nameWavg(disk), KindGauge)
 	r.reg(nameUtil(disk), KindGauge)
 }
