@@ -1407,7 +1407,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	debug.Assert(lst != nil)
 
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, r, lst, tag) {
+		if !p.writeMsgPack(w, lst, tag) {
 			return
 		}
 	} else if !p.writeJSON(w, r, lst, tag) {

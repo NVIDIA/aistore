@@ -31,16 +31,12 @@ const (
 type (
 	Tracker interface {
 		cos.StatsUpdater
-
 		StartedUp() bool
-		AddErrorHTTP(method string, val int64)
-
+		IncErr(metric string)
 		CoreStats() *CoreStats
 		GetWhatStats() *DaemonStats
-
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 		RegMetrics(node *cluster.Snode)
-
 		IsPrometheus() bool
 	}
 	CoreStats struct {

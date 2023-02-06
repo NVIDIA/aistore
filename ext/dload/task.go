@@ -240,7 +240,7 @@ func (task *singleTask) initialTimeout() time.Duration {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	task.xdl.statsT.Add(stats.ErrDownloadCount, 1)
+	task.xdl.statsT.IncErr(stats.ErrDownloadCount)
 	dlStore.persistError(task.jobID(), task.obj.objName, statusMsg)
 	dlStore.incErrorCnt(task.jobID())
 }

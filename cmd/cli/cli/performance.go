@@ -124,7 +124,11 @@ func showCountersHandler(c *cli.Context) (err error) {
 
 	setLongRunParams(c, 72)
 
-	out := tmpls.NewCountersTab(curTgtStatus, smap, sid, metrics, regex, allCols).Template(hideHeader)
+	table, err := tmpls.NewCountersTab(curTgtStatus, smap, sid, metrics, regex, allCols)
+	if err != nil {
+		return err
+	}
+	out := table.Template(hideHeader)
 	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, false /*usejs*/)
 }
 

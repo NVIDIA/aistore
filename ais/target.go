@@ -559,9 +559,9 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-///////////////////////
-// httpobj* handlers //
-///////////////////////
+//
+// httpobj* handlers
+//
 
 // GET /v1/objects/<bucket-name>/<object-name>
 //
@@ -649,8 +649,11 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
 		goi.ctx = context.WithValue(goi.ctx, cos.CtxOriginalURL, originalURL)
 	}
-	if errCode, err := goi.getObject(); err != nil && err != errSendingResp {
-		t.writeErr(w, r, err, errCode)
+	if errCode, err := goi.getObject(); err != nil {
+		t.statsT.IncErr(stats.GetCount)
+		if err != errSendingResp {
+			t.writeErr(w, r, err, errCode)
+		}
 	}
 	lom = goi.lom
 	freeGetObjInfo(goi)
@@ -733,6 +736,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
+		t.statsT.IncErr(stats.AppendCount)
 	default:
 		poi := allocPutObjInfo()
 		{
@@ -795,17 +799,32 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	switch msg.Action {
-	case apc.ActRenameObject:
-		query := r.URL.Query()
-		if isRedirect(query) == "" {
-			t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
-			return
-		}
-		t.objMv(w, r, msg)
-	default:
+	if msg.Action != apc.ActRenameObject {
 		t.writeErrAct(w, r, msg.Action)
+		return
 	}
+	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*useDpq*/)
+	defer apiReqFree(apireq)
+	if t.parseReq(w, r, apireq) != nil {
+		return
+	}
+	if isRedirect(apireq.query) == "" {
+		t.writeErrf(w, r, "%s: %s-%s(obj) is expected to be redirected", t.si, r.Method, msg.Action)
+		return
+	}
+
+	lom := cluster.AllocLOM(apireq.items[1])
+	err = lom.InitBck(apireq.bck.Bucket())
+	if err == nil {
+		err = t.objMv(lom, msg)
+	}
+	if err == nil {
+		t.statsT.Add(stats.RenameCount, 1)
+	} else {
+		t.statsT.IncErr(stats.RenameCount)
+		t.writeErr(w, r, err)
+	}
+	cluster.FreeLOM(lom)
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
@@ -1006,9 +1025,9 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 	lom.Persist()
 }
 
-//////////////////////
-// httpec* handlers //
-//////////////////////
+//
+// httpec* handlers
+//
 
 // Returns a slice. Does not use GFN.
 func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
@@ -1182,7 +1201,7 @@ func (t *target) putMirror(lom *cluster.LOM) {
 		return
 	}
 	if mpathCnt := fs.NumAvail(); mpathCnt < int(mconfig.Copies) {
-		t.statsT.Add(stats.ErrPutCount, 1) // TODO: differentiate put err metrics
+		t.statsT.IncErr(stats.ErrPutMirrorCount)
 		nanotim := mono.NanoTime()
 		if nanotim&0x7 == 7 {
 			if mpathCnt == 0 {
@@ -1210,7 +1229,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error
 	code, err, isback = t.delobj(lom, evict)
 	lom.Unlock(true)
 
-	// special corner-case retry, namely:
+	// special corner-case retry (quote):
 	// - googleapi: "Error 503: We encountered an internal error. Please try again."
 	// - aws-error[InternalError: We encountered an internal error. Please try again.]
 	if err != nil && isback {
@@ -1219,6 +1238,11 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error
 			time.Sleep(time.Second)
 			code, err = t.Backend(lom.Bck()).DeleteObj(lom)
 		}
+	}
+	if err == nil {
+		t.statsT.Add(stats.DeleteCount, 1)
+	} else {
+		t.statsT.IncErr(stats.DeleteCount) // TODO: count GET/PUT/DELETE remote errors separately..
 	}
 	return
 }
@@ -1243,9 +1267,6 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 
 	if delFromBackend {
 		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(lom)
-		if backendErr == nil {
-			t.statsT.Add(stats.DeleteCount, 1)
-		}
 	}
 	if delFromAIS {
 		size := lom.SizeBytes()
@@ -1273,31 +1294,18 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 	return aisErrCode, aisErr, false
 }
 
-// rename obj (TODO: consider unifying with Promote)
-func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
-	defer apiReqFree(apireq)
-	if err := t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-	lom := cluster.AllocLOM(apireq.items[1])
-	defer cluster.FreeLOM(lom)
-	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
-		t.writeErr(w, r, err)
-		return
-	}
+// rename obj
+func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
 	if lom.Bck().IsRemote() {
-		t.writeErrf(w, r, "%s: cannot rename object %s from a remote bucket", t.si, lom)
-		return
+		return fmt.Errorf("%s: cannot rename object %s from a remote bucket", t.si, lom)
 	}
 	if lom.Bck().Props.EC.Enabled {
-		t.writeErrf(w, r, "%s: cannot rename erasure-coded object %s", t.si, lom)
-		return
+		return fmt.Errorf("%s: cannot rename erasure-coded object %s", t.si, lom)
 	}
 	if msg.Name == lom.ObjName {
-		t.writeErrf(w, r, "%s: cannot rename/move object %s onto itself", t.si, lom)
-		return
+		return fmt.Errorf("%s: cannot rename/move object %s onto itself", t.si, lom)
 	}
+
 	buf, slab := t.gmm.Alloc()
 	coi := allocCopyObjInfo()
 	{
@@ -1310,15 +1318,16 @@ func (t *target) objMv(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	slab.Free(buf)
 	freeCopyObjInfo(coi)
 	if err != nil {
-		t.writeErr(w, r, err)
-		return
+		return err
 	}
+
 	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
-	if err = lom.Remove(); err != nil {
+	if err := lom.Remove(); err != nil {
 		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
+	return nil
 }
 
 func (t *target) fsErr(err error, filepath string) {

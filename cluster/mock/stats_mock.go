@@ -24,7 +24,7 @@ func NewStatsTracker() stats.Tracker {
 func (*StatsTracker) StartedUp() bool                  { return true }
 func (*StatsTracker) Add(string, int64)                {}
 func (*StatsTracker) Get(string) int64                 { return 0 }
-func (*StatsTracker) AddErrorHTTP(string, int64)       {}
+func (*StatsTracker) IncErr(string)                    {}
 func (*StatsTracker) AddMany(...cos.NamedVal64)        {}
 func (*StatsTracker) RegMetrics(*cluster.Snode)        {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs       { return nil }

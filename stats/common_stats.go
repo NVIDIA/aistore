@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	rfs "io/fs"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -54,27 +53,25 @@ const (
 	numGorExtreme = 1000
 )
 
-// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+const ErrPrefix = "err."
 
-// CoreStats stats
+// metrics
 const (
 	// KindCounter
-	GetCount         = "get.n"
-	PutCount         = "put.n"
-	AppendCount      = "append.n"
-	DeleteCount      = "del.n"
-	RenameCount      = "ren.n"
-	ListCount        = "lst.n"
-	ErrCount         = "err.n"
-	ErrGetCount      = "err.get.n"
-	ErrDeleteCount   = "err.delete.n"
-	ErrPostCount     = "err.post.n"
-	ErrPutCount      = "err.put.n"
-	ErrHeadCount     = "err.head.n"
-	ErrListCount     = "err.list.n"
-	ErrRangeCount    = "err.range.n"
-	ErrDownloadCount = "err.dl.n"
+	// all basic counters are accompanied by the corresponding (ErrPrefix + kind) error count:
+	// "err.get.n", "err.put.n", etc.
+	// see: `IncErr`, `regCommonMetrics`
+	GetCount    = "get.n"    // object
+	PutCount    = "put.n"    // ditto
+	AppendCount = "append.n" // ditto
+	DeleteCount = "del.n"    // ditto
+	RenameCount = "ren.n"    // ditto
+	ListCount   = "lst.n"    // list-objects
+
+	// statically defined err counts (NOTE: update regCommonMetrics when adding/updating)
+	ErrHTTPWriteCount = "err.http.write.n"
+	ErrDownloadCount  = "err.dl.n"
+	ErrPutMirrorCount = "err.put.mirror.n"
 
 	// KindLatency
 	GetLatency       = "get.ns"
@@ -90,6 +87,9 @@ var (
 	_ Tracker = (*Prunner)(nil)
 	_ Tracker = (*Trunner)(nil)
 )
+
+// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
 
 var ignoreIdle = []string{"kalive", Uptime, "disk."}
 
@@ -322,7 +322,7 @@ func (s *CoreStats) get(name string) (val int64) {
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
 func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
-	debug.Assertf(ok, "invalid stats name %q", name)
+	debug.Assertf(ok, "invalid metric name %q", name)
 	switch v.kind {
 	case KindLatency:
 		v.mu.Lock()
@@ -562,16 +562,18 @@ func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
 	tracker.register(node, RenameCount, KindCounter)
 	tracker.register(node, ListCount, KindCounter)
 
-	// error counters
-	tracker.register(node, ErrCount, KindCounter)
-	tracker.register(node, ErrGetCount, KindCounter)
-	tracker.register(node, ErrDeleteCount, KindCounter)
-	tracker.register(node, ErrPostCount, KindCounter)
-	tracker.register(node, ErrPutCount, KindCounter)
-	tracker.register(node, ErrHeadCount, KindCounter)
-	tracker.register(node, ErrListCount, KindCounter)
-	tracker.register(node, ErrRangeCount, KindCounter)
+	// basic error counters, respectively
+	tracker.register(node, ErrPrefix+GetCount, KindCounter)
+	tracker.register(node, ErrPrefix+PutCount, KindCounter)
+	tracker.register(node, ErrPrefix+AppendCount, KindCounter)
+	tracker.register(node, ErrPrefix+DeleteCount, KindCounter)
+	tracker.register(node, ErrPrefix+RenameCount, KindCounter)
+	tracker.register(node, ErrPrefix+ListCount, KindCounter)
+
+	// more error counters
+	tracker.register(node, ErrHTTPWriteCount, KindCounter)
 	tracker.register(node, ErrDownloadCount, KindCounter)
+	tracker.register(node, ErrPutMirrorCount, KindCounter)
 
 	// latency
 	tracker.register(node, GetLatency, KindLatency)
@@ -876,19 +878,10 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 	}
 }
 
-func (r *statsRunner) AddErrorHTTP(method string, val int64) {
-	switch method {
-	case http.MethodGet:
-		r.workCh <- cos.NamedVal64{Name: ErrGetCount, Value: val}
-	case http.MethodDelete:
-		r.workCh <- cos.NamedVal64{Name: ErrDeleteCount, Value: val}
-	case http.MethodPost:
-		r.workCh <- cos.NamedVal64{Name: ErrPostCount, Value: val}
-	case http.MethodPut:
-		r.workCh <- cos.NamedVal64{Name: ErrPutCount, Value: val}
-	case http.MethodHead:
-		r.workCh <- cos.NamedVal64{Name: ErrHeadCount, Value: val}
-	default:
-		r.workCh <- cos.NamedVal64{Name: ErrCount, Value: val}
+func (r *statsRunner) IncErr(metric string) {
+	if strings.HasPrefix(metric, ErrPrefix) { // e.g. ErrHTTPWriteCount
+		r.workCh <- cos.NamedVal64{Name: metric, Value: 1}
+	} else { // e.g. "err." + GetCount
+		r.workCh <- cos.NamedVal64{Name: ErrPrefix + metric, Value: 1}
 	}
 }

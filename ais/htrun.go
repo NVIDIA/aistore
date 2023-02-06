@@ -892,7 +892,7 @@ func (h *htrun) apiItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
 	return items, nil
 }
 
-func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Encodable, tag string) (ok bool) {
+func (h *htrun) writeMsgPack(w http.ResponseWriter, v msgp.Encodable, tag string) (ok bool) {
 	var (
 		err       error
 		buf, slab = h.gmm.AllocSize(cmn.MsgpLsoBufSize) // max size
@@ -906,7 +906,7 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, r *http.Request, v msgp.Enco
 	if err == nil {
 		return true
 	}
-	h.handleWriteError(r, tag, v, err)
+	h.handleWerr(tag, v, err)
 	return false
 }
 
@@ -926,7 +926,7 @@ func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag str
 		return true
 	}
 rerr:
-	h.handleWriteError(r, tag, v, err)
+	h.handleWerr(tag, v, err)
 	return false
 }
 
@@ -936,7 +936,7 @@ func isBrowser(userAgent string) bool {
 	return strings.HasPrefix(userAgent, "Mozilla/5.0")
 }
 
-func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) {
+func (h *htrun) handleWerr(tag string, v any, err error) {
 	const maxl = 32
 	if daemon.stopping.Load() {
 		return
@@ -964,7 +964,7 @@ func (h *htrun) handleWriteError(r *http.Request, tag string, v any, err error) 
 		msg += fmt.Sprintf("%s:%d", f, line)
 	}
 	glog.Errorln(msg + ")")
-	h.statsT.AddErrorHTTP(r.Method, 1)
+	h.statsT.IncErr(stats.ErrHTTPWriteCount)
 }
 
 func _parseNCopies(value any) (copies int64, err error) {
@@ -990,9 +990,9 @@ func _checkAction(msg *apc.ActMsg, expectedActions ...string) (err error) {
 	return
 }
 
-//////////////////////////////
-// Common HTTP req handlers //
-//////////////////////////////
+///////////
+// htrun //
+///////////
 
 func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
@@ -1098,18 +1098,16 @@ func _sev2logname(sev string) (log string, err error) {
 	return
 }
 
-////////////////////////////////////////////
-// HTTP err + spec message + code + stats //
-////////////////////////////////////////////
+//
+// HTTP err + spec message + code + stats
+//
 
-func (h *htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
+func (*htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
 	cmn.WriteErr(w, r, err, errCode...)
-	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
-func (h *htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+func (*htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	cmn.WriteErrMsg(w, r, msg, errCode...)
-	h.statsT.AddErrorHTTP(r.Method, 1)
 }
 
 func (h *htrun) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
@@ -1132,8 +1130,7 @@ func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode 
 	h.writeErrMsg(w, r, err.Error(), errCode)
 }
 
-func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...any) {
+func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
 	h.writeErrSilent(w, r, fmt.Errorf(format, a...), errCode)
 }
 
@@ -1172,57 +1169,9 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 	cmn.FreeHterr(err)
 }
 
-////////////////
-// callResult //
-////////////////
-
-// error helper for intra-cluster calls
-func (res *callResult) toErr() error {
-	if res.err == nil {
-		return nil
-	}
-	// cmn.ErrHTTP
-	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
-		// add status, details
-		if res.status >= http.StatusBadRequest {
-			herr.Status = res.status
-		}
-		if herr.Message == "" {
-			herr.Message = res.details
-		}
-		return herr
-	}
-	// res => cmn.ErrHTTP
-	if res.status >= http.StatusBadRequest {
-		var detail string
-		if res.details != "" {
-			detail = "[" + res.details + "]"
-		}
-		return cmn.NewErrHTTP(nil, fmt.Errorf("%v%s", res.err, detail), res.status)
-	}
-	if res.details == "" {
-		return res.err
-	}
-	return cmn.NewErrFailedTo(nil, "call "+res.si.String(), res.details, res.err)
-}
-
-func (res *callResult) errorf(format string, a ...any) error {
-	debug.Assert(res.err != nil)
-	// add formatted
-	msg := fmt.Sprintf(format, a...)
-	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
-		herr.Message = msg + ": " + herr.Message
-		res.err = herr
-	} else {
-		res.err = errors.New(msg + ": " + res.err.Error())
-	}
-	return res.toErr()
-}
-
-///////////////////
-// health client //
-// max-ver Cii   //
-///////////////////
+//
+// health client
+//
 
 func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
@@ -1301,9 +1250,9 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 	wg.Wait()
 }
 
-//////////////////////////
-// metasync Rx handlers //
-//////////////////////////
+//
+// metasync Rx
+//
 
 func _msdetail(ver int64, msg *aisMsg, caller string) (d string) {
 	if caller != "" {
@@ -1644,8 +1593,6 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	debug.Assert(pubValid && intraValid)
 	primaryURL, psi := h.getPrimaryURLAndSI(nil)
 	addCandidate(primaryURL)
-	// NOTE: The url above is either config or the primary's ControlNet.URL;
-	//       Add its public URL as "more static" in various virtualized environments.
 	if psi != nil {
 		addCandidate(psi.URL(cmn.NetPublic))
 	}
@@ -1855,7 +1802,7 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 		}
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
-		// https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
+		// * https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes
 		if !readiness && !h.ClusterStarted() {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
@@ -2026,4 +1973,51 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 		return nil
 	}
 	return cmn.WriteErrJSON(w, r, out, err)
+}
+
+////////////////
+// callResult //
+////////////////
+
+// error helper for intra-cluster calls
+func (res *callResult) toErr() error {
+	if res.err == nil {
+		return nil
+	}
+	// cmn.ErrHTTP
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
+		// add status, details
+		if res.status >= http.StatusBadRequest {
+			herr.Status = res.status
+		}
+		if herr.Message == "" {
+			herr.Message = res.details
+		}
+		return herr
+	}
+	// res => cmn.ErrHTTP
+	if res.status >= http.StatusBadRequest {
+		var detail string
+		if res.details != "" {
+			detail = "[" + res.details + "]"
+		}
+		return cmn.NewErrHTTP(nil, fmt.Errorf("%v%s", res.err, detail), res.status)
+	}
+	if res.details == "" {
+		return res.err
+	}
+	return cmn.NewErrFailedTo(nil, "call "+res.si.String(), res.details, res.err)
+}
+
+func (res *callResult) errorf(format string, a ...any) error {
+	debug.Assert(res.err != nil)
+	// add formatted
+	msg := fmt.Sprintf(format, a...)
+	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
+		herr.Message = msg + ": " + herr.Message
+		res.err = herr
+	} else {
+		res.err = errors.New(msg + ": " + res.err.Error())
+	}
+	return res.toErr()
 }

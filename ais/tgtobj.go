@@ -160,40 +160,47 @@ func (poi *putObjInfo) do(r *http.Request, dpq *dpq) (int, error) {
 	return poi.putObject()
 }
 
-func (poi *putObjInfo) putObject() (int, error) {
-	lom := poi.lom
+func (poi *putObjInfo) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
-		if lom.EqCksum(poi.cksumToUse) {
+		if poi.lom.EqCksum(poi.cksumToUse) {
 			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("destination %s has identical %s: PUT is a no-op", lom, poi.cksumToUse)
+				glog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
 			return 0, nil
 		}
 	}
-	if err := poi.write(); err != nil {
-		return http.StatusInternalServerError, err
+	if err = poi.write(); err != nil {
+		errCode = http.StatusInternalServerError
+		goto rerr
 	}
-	if errCode, err := poi.finalize(); err != nil {
-		return errCode, err
+	if errCode, err = poi.finalize(); err != nil {
+		goto rerr
 	}
-	// NOTE: counting only user PUTs
-	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
-		delta := time.Since(poi.atime)
-		poi.t.statsT.AddMany(
-			cos.NamedVal64{Name: stats.PutCount, Value: 1},
-			cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
-		)
-	}
-	// xaction in-objs counters, promote first
-	if poi.t2t && poi.xctn != nil && poi.owt == cmn.OwtPromote {
+	// stats
+	if !poi.t2t {
+		// NOTE: counting only user PUTs
+		if poi.owt == cmn.OwtPut && poi.restful {
+			delta := time.Since(poi.atime)
+			poi.t.statsT.AddMany(
+				cos.NamedVal64{Name: stats.PutCount, Value: 1},
+				cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
+			)
+		}
+	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
+		// xaction in-objs counters, promote first
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
 		glog.Infof(poi.loghdr())
 	}
-	return 0, nil
+	return
+rerr:
+	if poi.owt == cmn.OwtPut && poi.restful && !poi.t2t {
+		poi.t.statsT.IncErr(stats.PutCount)
+	}
+	return
 }
 
 func (poi *putObjInfo) loghdr() string {
@@ -923,7 +930,6 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {
 			goi.t.fsErr(err, fqn)
-			goi.t.statsT.Add(stats.ErrGetCount, 1)
 		}
 		glog.Error(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
 		// at this point, error is already written into the response -

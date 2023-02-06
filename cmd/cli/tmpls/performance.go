@@ -20,10 +20,14 @@ import (
 var fred = color.New(color.FgHiRed)
 
 func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp,
-	allCols bool) *Table {
+	allCols bool) (*Table, error) {
 	// 1. dynamically: counter names
 	cols := make([]*header, 0, 32)
-	for _, ds := range st {
+	for tid, ds := range st {
+		if ds.Stats == nil {
+			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, smap))
+		}
+
 		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
 
@@ -36,14 +40,23 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 		break
 	}
 
-	// 2. exclude zero columns unless (all) requested
+	// 2. exclude zero columns unless (--all) requested
 	if !allCols {
 		cols = _zerout(cols, st)
 	}
 
-	// 3. sort remaining columns
+	// 3. sort (remaining) columns and shift `err-*` to the right
 	sort.Slice(cols, func(i, j int) bool {
-		return cols[i].name < cols[j].name
+		switch {
+		case isErrCol(cols[i].name) && isErrCol(cols[j].name):
+			return cols[i].name < cols[j].name
+		case isErrCol(cols[i].name) && !isErrCol(cols[j].name):
+			return false
+		case !isErrCol(cols[i].name) && isErrCol(cols[j].name):
+			return true
+		default:
+			return cols[i].name < cols[j].name
+		}
 	})
 
 	// 4. convert metric to column names
@@ -57,15 +70,23 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 	// 6. apply color
 	for i := range cols {
 		if isErrCol(cols[i].name) {
-			printedColumns[i].name = fred.Sprintf("%s", printedColumns[i].name)
+			printedColumns[i].name = fred.Sprintf("\t%s", printedColumns[i].name)
 		}
 	}
 
-	// 7. construct empty table
+	// 7. sort targets
+	targets := make([]string, 0, len(st))
+	for tid := range st {
+		targets = append(targets, tid)
+	}
+	sort.Strings(targets)
+
+	// 8. construct empty table
 	table := newTable(printedColumns...)
 
-	// finally: 8. add rows
-	for tid, ds := range st {
+	// finally: 9. add rows
+	for _, tid := range targets {
+		ds := st[tid]
 		if sid != "" && sid != tid {
 			continue
 		}
@@ -80,7 +101,7 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 					printedValue = fmt.Sprintf("%d", v.Value)
 				}
 				if isErrCol(h.name) {
-					printedValue = fred.Sprintf("%s", printedValue)
+					printedValue = fred.Sprintf("\t%s", printedValue)
 				}
 				row = append(row, printedValue)
 				continue
@@ -90,14 +111,14 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 		}
 		table.addRow(row)
 	}
-	return table
+	return table, nil
 }
 
 //
 // utils/helpers
 //
 
-func isErrCol(colName string) bool { return strings.HasPrefix(colName, "err") }
+func isErrCol(colName string) bool { return strings.HasPrefix(colName, stats.ErrPrefix) }
 
 // remove all-zeros columns
 func _zerout(cols []*header, st stats.DaemonStatusMap) []*header {

@@ -78,12 +78,14 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 				err = bck.Init(t.owner.bmd)
 			}
 			if err != nil {
+				t.statsT.IncErr(stats.ListCount)
 				t.writeErr(w, r, err)
 				return
 			}
 		}
 		begin := mono.NanoTime()
 		if ok := t.listObjects(w, r, bck, msg); !ok {
+			t.statsT.IncErr(stats.ListCount)
 			return
 		}
 		delta := mono.SinceNano(begin)
@@ -258,7 +260,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 		resp.Lst.Flags = 1
 	}
 
-	return t.writeMsgPack(w, r, resp.Lst, "list_objects")
+	return t.writeMsgPack(w, resp.Lst, "list_objects")
 }
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck, msg *cmn.BsummCtrlMsg) {
