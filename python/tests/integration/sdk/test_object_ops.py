@@ -6,6 +6,8 @@
 
 import random
 import unittest
+
+from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH
 from aistore.sdk.errors import AISError, ErrBckNotFound
 
 from aistore.sdk import Client
@@ -36,8 +38,12 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             .object(obj_name)
             .get(chunk_size=chunk_size)
         )
-        self.assertEqual(stream.content_length, len(exp_content))
-        self.assertTrue(stream.e_tag != "")
+        self.assertEqual(stream.attributes.size, len(exp_content))
+        self.assertNotEqual(stream.attributes.checksum_type, "")
+        self.assertNotEqual(stream.attributes.checksum_value, "")
+        self.assertNotEqual(stream.attributes.access_time, "")
+        self.assertNotEqual(stream.attributes.obj_version, "")
+        self.assertEqual(stream.attributes.custom_metadata, {})
         if read_type == OBJ_READ_TYPE_ALL:
             obj = stream.read_all()
         else:
@@ -56,8 +62,8 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 client=self.client, bck_name=self.bck_name, obj_name=obj_name
             )
             properties = self.client.bucket(self.bck_name).object(obj_name).head()
-            self.assertEqual(properties["ais-version"], "1")
-            self.assertEqual(properties["content-length"], str(len(content)))
+            self.assertEqual(properties[AIS_VERSION], "1")
+            self.assertEqual(properties[CONTENT_LENGTH], str(len(content)))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 

@@ -81,7 +81,7 @@ class Object:
         Args:
             archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
-            etl_name(str, optional): Transforms an object based on ETL with etl_name
+            etl_name (str, optional): Transforms an object based on ETL with etl_name
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -102,14 +102,9 @@ class Object:
             params=params,
             stream=True,
         )
-        length = int(resp.headers.get("content-length", 0))
-        e_tag = resp.headers.get("ais-checksum-value", "")
-        e_tag_type = resp.headers.get("ais-checksum-type", "")
         return ObjStream(
-            content_length=length,
-            e_tag=e_tag,
-            e_tag_type=e_tag_type,
             stream=resp,
+            response_headers=resp.headers,
             chunk_size=chunk_size,
         )
 

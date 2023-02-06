@@ -5,12 +5,22 @@
 from __future__ import annotations  # pylint: disable=unused-variable
 import base64
 
-from typing import Any, Mapping, List, Iterator, Optional
+from typing import Any, Mapping, List, Iterator, Optional, Dict
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr, validator
+from pydantic import BaseModel, Field, StrictInt, validator
 import requests
+from requests.structures import CaseInsensitiveDict
 
-from aistore.sdk.const import DEFAULT_CHUNK_SIZE, ProviderAIS
+from aistore.sdk.const import (
+    DEFAULT_CHUNK_SIZE,
+    ProviderAIS,
+    CONTENT_LENGTH,
+    AIS_CHECKSUM_TYPE,
+    AIS_CHECKSUM_VALUE,
+    AIS_VERSION,
+    AIS_ACCESS_TIME,
+    AIS_CUSTOM_MD,
+)
 
 
 # pylint: disable=too-few-public-methods,unused-variable
@@ -124,16 +134,54 @@ class JobStatus(BaseModel):
     aborted: bool = False
 
 
+class ObjAttr(BaseModel):
+    size: int = 0
+    checksum_type: str = ""
+    access_time: str = ""
+    obj_version: str = ""
+    checksum_value: str = ""
+    custom_metadata: Dict = {}
+
+    def __init__(self, response_headers: CaseInsensitiveDict):
+        super().__init__()
+        self.size = int(response_headers.get(CONTENT_LENGTH, 0))
+        self.checksum_type = response_headers.get(AIS_CHECKSUM_TYPE, "")
+        self.checksum_value = response_headers.get(AIS_CHECKSUM_VALUE, "")
+        self.access_time = response_headers.get(AIS_ACCESS_TIME, "")
+        self.obj_version = response_headers.get(AIS_VERSION, "")
+        custom_md_header = response_headers.get(AIS_CUSTOM_MD, "")
+        if len(custom_md_header) > 0:
+            self._parse_custom(custom_md_header)
+
+    def _parse_custom(self, custom_md_header):
+        self.custom_metadata = {}
+        for entry in custom_md_header.split(","):
+            try:
+                assert isinstance(entry, str)
+                entry_list = entry.strip().split("=")
+                assert len(entry_list) == 2
+                self.custom_metadata[entry_list[0]] = entry_list[1]
+            except AssertionError:
+                continue
+
+
 class ObjStream(BaseModel):
     class Config:
         validate_assignment = True
         arbitrary_types_allowed = True
 
-    content_length: StrictInt = Field(default=-1, allow_mutation=False)
     chunk_size: StrictInt = Field(default=DEFAULT_CHUNK_SIZE, allow_mutation=False)
-    e_tag: StrictStr = Field(..., allow_mutation=False)
-    e_tag_type: StrictStr = Field(..., allow_mutation=False)
+    response_headers: CaseInsensitiveDict
     stream: requests.Response
+
+    @property
+    def attributes(self):
+        # Lazy evaluation of ObjAttr parsing based on response headers
+        attr = self.__dict__.get("_attributes")
+        if attr is None:
+            attr = ObjAttr(self.response_headers)
+            self.__dict__["_attributes"] = attr
+        return attr
 
     # read_all uses a bytes cast which makes it slightly slower
     def read_all(self) -> bytes:

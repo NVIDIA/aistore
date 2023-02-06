@@ -44,6 +44,14 @@ ACT_DELETE_MULTIPLE_OBJ = "delete-listrange"
 ACT_EVICT_MULTIPLE_OBJ = "evict-listrange"
 ACT_PREFETCH_MULTIPLE_OBJ = "prefetch-listrange"
 
+# Headers
+CONTENT_LENGTH = "content-length"
+AIS_CHECKSUM_TYPE = "ais-checksum-type"
+AIS_CHECKSUM_VALUE = "ais-checksum-value"
+AIS_ACCESS_TIME = "ais-atime"
+AIS_VERSION = "ais-version"
+AIS_CUSTOM_MD = "ais-custom-md"
+
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768
 

@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch, mock_open
 
 from requests import Response
+from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
@@ -11,6 +12,12 @@ from aistore.sdk.const import (
     QParamETLName,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
+    CONTENT_LENGTH,
+    AIS_CHECKSUM_VALUE,
+    AIS_CHECKSUM_TYPE,
+    AIS_ACCESS_TIME,
+    AIS_VERSION,
+    AIS_CUSTOM_MD,
 )
 from aistore.sdk.object import Object
 from aistore.sdk.types import ObjStream
@@ -60,17 +67,26 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         content_length = 123
         ais_check_val = "xyz"
         ais_check_type = "md5"
-        resp_headers = {
-            "content-length": content_length,
-            "ais-checksum-value": ais_check_val,
-            "ais-checksum-type": ais_check_type,
-        }
+        ais_atime = "time string"
+        ais_version = "3"
+        custom_metadata_dict = {"key1": "val1", "key2": "val2"}
+        custom_metadata = ", ".join(
+            ["=".join(kv) for kv in custom_metadata_dict.items()]
+        )
+        resp_headers = CaseInsensitiveDict(
+            {
+                CONTENT_LENGTH: content_length,
+                AIS_CHECKSUM_VALUE: ais_check_val,
+                AIS_CHECKSUM_TYPE: ais_check_type,
+                AIS_ACCESS_TIME: ais_atime,
+                AIS_VERSION: ais_version,
+                AIS_CUSTOM_MD: custom_metadata,
+            }
+        )
         client_response = Response()
         client_response.headers = resp_headers
         expected_obj = ObjStream(
-            content_length=content_length,
-            e_tag=ais_check_val,
-            e_tag_type=ais_check_type,
+            response_headers=resp_headers,
             stream=client_response,
             chunk_size=kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE),
         )
@@ -79,6 +95,12 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         res = self.object.get(**kwargs)
 
         self.assertEqual(expected_obj, res)
+        self.assertEqual(content_length, res.attributes.size)
+        self.assertEqual(ais_check_type, res.attributes.checksum_type)
+        self.assertEqual(ais_check_val, res.attributes.checksum_value)
+        self.assertEqual(ais_atime, res.attributes.access_time)
+        self.assertEqual(ais_version, res.attributes.obj_version)
+        self.assertEqual(custom_metadata_dict, res.attributes.custom_metadata)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_GET,
             path=f"objects/{self.bck_name}/{self.obj_name}",
