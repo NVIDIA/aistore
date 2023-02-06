@@ -14,7 +14,8 @@ from tests.utils import random_string, create_and_put_object
 REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + ":")
 
 
-class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
+# pylint: disable=unused-variable,too-many-instance-attributes
+class TestObjectGroupOps(unittest.TestCase):
     def setUp(self) -> None:
         self.client = Client(CLUSTER_ENDPOINT)
         self.obj_prefix = f"test_object_group_prefix-{random_string(10)}-"
@@ -23,10 +24,10 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         if REMOTE_SET:
             self.cloud_objects = []
-            self.provider, self.bck_name = REMOTE_BUCKET.split("://")
-            self.bucket = self.client.bucket(self.bck_name, provider=self.provider)
+            provider, self.bck_name = REMOTE_BUCKET.split("://")
+            self.bucket = self.client.bucket(self.bck_name, provider=provider)
         else:
-            self.provider = ProviderAIS
+            provider = ProviderAIS
             self.bck_name = random_string()
             self.bucket = self.client.bucket(self.bck_name)
             self.bucket.create()
@@ -36,7 +37,7 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.obj_prefix, 1, 8, step=2, suffix=self.obj_suffix
         )
         self.obj_names = self.create_object_list(
-            self.obj_prefix, self.provider, self.bck_name, 10, self.obj_suffix
+            self.obj_prefix, provider, self.obj_suffix, 10
         )
 
     def tearDown(self) -> None:
@@ -51,14 +52,13 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_delete_range(self):
         object_group = self.bucket.objects(obj_range=self.obj_range)
-        expected_object_names = [
-            self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
-        ]
-        expected_object_names.append(self.obj_prefix + "9" + self.obj_suffix)
-        self.delete_test_helper(object_group, expected_object_names)
+        self.delete_group_helper(object_group)
 
     def test_delete_template(self):
         object_group = self.bucket.objects(obj_template=self.obj_template)
+        self.delete_group_helper(object_group)
+
+    def delete_group_helper(self, object_group):
         expected_object_names = [
             self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
         ]
@@ -186,15 +186,15 @@ class TestObjectGroupOps(unittest.TestCase):  # pylint: disable=unused-variable
             else:
                 self.assertFalse(obj.is_cached())
 
-    def create_object_list(self, prefix, provider, bck_name, length, suffix=""):
+    def create_object_list(self, prefix, provider, suffix, length):
         obj_names = [prefix + str(i) + suffix for i in range(length)]
         for obj_name in obj_names:
-            if REMOTE_SET:
-                self.cloud_objects.append(obj_name)
             create_and_put_object(
                 self.client,
-                bck_name=bck_name,
+                bck_name=self.bck_name,
                 provider=provider,
                 obj_name=obj_name,
             )
+        if REMOTE_SET:
+            self.cloud_objects.extend(obj_names)
         return obj_names

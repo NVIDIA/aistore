@@ -32,9 +32,6 @@ def get_default_runtime():
 class Etl:
     """
     A class containing ETL-related functions.
-
-    Args:
-        None
     """
 
     def __init__(self, client):
@@ -53,15 +50,15 @@ class Etl:
         timeout: str = "5m",
     ):
         """
-        Initializes ETL based on POD spec template. Returns etl_name.
-        Existing templates can be found at `sdk.etl_templates`
-        For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+        Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
 
         Args:
-            docker_image (str): docker image name looks like: <hub-user>/<repo-name>:<tag>
-            etl_name (str): name of new ETL
+            template (str): Kubernetes pod spec template
+                Existing templates can be found at `sdk.etl_templates`
+                For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+            etl_name (str): Name of new ETL
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
-            timeout (str): timeout of the ETL (eg. 5m for 5 minutes)
+            timeout (str): Timeout of the ETL (eg. 5m for 5 minutes)
         Returns:
             etl_name (str): ETL name
         """
@@ -79,6 +76,7 @@ class Etl:
         resp = self.client.request(HTTP_METHOD_PUT, path="etl", json=action)
         return resp.text
 
+    # pylint: disable=too-many-arguments
     def init_code(
         self,
         transform: Callable,
@@ -99,9 +97,11 @@ class Etl:
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
                 python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
                 (see ext/etl/runtime/all.go)
-            communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
+            communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
+                hpush, io)
             timeout (str): [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
-            chunk_size (int): Chunk size in bytes if transform function in streaming data. (whole object is read by default)
+            chunk_size (int): Chunk size in bytes if transform function in streaming data.
+                (whole object is read by default)
         Returns:
             etl_name (str): ETL name
         """
@@ -150,8 +150,6 @@ class Etl:
 
         Note: Does not list ETLs that have been stopped or deleted.
 
-        Args:
-            Nothing
         Returns:
             List[ETL]: A list of running ETLs
         """
@@ -182,31 +180,27 @@ class Etl:
 
         Args:
             etl_name (str): name of ETL
-        Returns:
-            Nothing
         """
         self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/start")
 
     def stop(self, etl_name: str):
         """
-        Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
+        Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and
+        terminates any transforms.
 
         Args:
             etl_name (str): name of ETL
-        Returns:
-            Nothing
         """
         self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/stop")
 
     def delete(self, etl_name: str):
         """
-        Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+        Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL
+        in Kubernetes.
 
         Note: Running ETLs cannot be deleted.
 
         Args:
             etl_name (str): name of ETL
-        Returns:
-            Nothing
         """
         self.client.request(HTTP_METHOD_DELETE, path=f"etl/{ etl_name }")

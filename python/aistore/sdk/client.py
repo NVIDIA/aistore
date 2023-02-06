@@ -27,7 +27,9 @@ class Client:
     def __init__(self, endpoint: str):
         self._request_client = RequestClient(endpoint)
 
-    def bucket(self, bck_name: str, provider: str = ProviderAIS, ns: Namespace = None):
+    def bucket(
+        self, bck_name: str, provider: str = ProviderAIS, namespace: Namespace = None
+    ):
         """
         Factory constructor for bucket object.
         Does not make any HTTP request, only instantiates a bucket object.
@@ -35,13 +37,16 @@ class Client:
         Args:
             bck_name (str): Name of bucket
             provider (str): Provider of bucket, one of "ais", "aws", "gcp", ... (optional, defaults to ais)
-            ns (Namespace): Namespace of bucket (optional, defaults to None)
+            namespace (Namespace): Namespace of bucket (optional, defaults to None)
 
         Returns:
             The bucket object created.
         """
         return Bucket(
-            client=self._request_client, name=bck_name, provider=provider, ns=ns
+            client=self._request_client,
+            name=bck_name,
+            provider=provider,
+            namespace=namespace,
         )
 
     def cluster(self):

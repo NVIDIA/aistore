@@ -34,20 +34,17 @@ ifdef BOTOCORE_VERSION
 endif
 BOTO_VERSION_ARGS := $(patsubst "%",%,$(BOTO_VERSION_ARGS))
 
-.PHONY: all_deps
-all_deps: common_deps dev_deps
-
 .PHONY: common_deps
 common_deps:
-	$(PIP) install -r aistore/common_requirements
+	$(PIP) install -r aistore/common_requirements --quiet
 
 .PHONY: dev_deps
 dev_deps:
-	$(PIP) install -r aistore/pytorch/dev_requirements
+	$(PIP) install -r aistore/pytorch/dev_requirements --quiet
 
 .PHONY: botocore_deps
 botocore_deps:
-	$(PIP) install --upgrade -r aistore/botocore_patch/botocore_requirements $(BOTO_VERSION_ARGS)
+	$(PIP) install --upgrade -r aistore/botocore_patch/botocore_requirements $(BOTO_VERSION_ARGS) --quiet
 
 .PHONY: python_tests
 python_tests: common_deps dev_deps botocore_deps python_sdk_tests python_etl_tests python_botocore_tests
@@ -82,10 +79,14 @@ python_botocore_integration_tests: common_deps botocore_deps
 
 .PHONY: lint
 lint: common_deps
-	find . -type f -name "*.py" | egrep -v "^(./.history/|./build/|./dist/|./venv/|./env/|./.venv/|./.env/)" | xargs pylint
+	pylint --rcfile=.pylintrc --recursive=y aistore
+
+.PHONY: lint-tests
+lint-tests: common_deps botocore_deps
+	pylint --rcfile=.pylintrc-tests --recursive=y tests
 
 .PHONY: generate-docs
-generate-docs: 
+generate-docs:
 	@ set -e
 	@ [[ $$(pipx --help) ]] || $(PIP) install pipx; $(PYTHON) -m pipx ensurepath --force
 	@ [[ $$(pydoc-markdown --help) ]] || pipx install --force pydoc-markdown[novella]

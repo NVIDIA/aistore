@@ -32,38 +32,38 @@ from aistore.sdk.types import (
     Namespace,
 )
 
-bck_name = "bucket_name"
-namespace = "namespace"
+BCK_NAME = "bucket_name"
+NAMESPACE = "namespace"
 
 
-# pylint: disable=too-many-public-methods
-class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
+# pylint: disable=too-many-public-methods,unused-variable
+class TestBucket(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock(RequestClient)
-        self.amz_bck = Bucket(self.mock_client, bck_name, provider=ProviderAmazon)
+        self.amz_bck = Bucket(self.mock_client, BCK_NAME, provider=ProviderAmazon)
         self.amz_bck_params = self.amz_bck.qparam.copy()
         self.ais_bck = Bucket(
-            self.mock_client, bck_name, ns=Namespace(uuid="", name=namespace)
+            self.mock_client, BCK_NAME, namespace=Namespace(uuid="", name=NAMESPACE)
         )
         self.ais_bck_params = self.ais_bck.qparam.copy()
 
     def test_default_props(self):
-        bucket = Bucket(self.mock_client, bck_name)
+        bucket = Bucket(self.mock_client, BCK_NAME)
         self.assertEqual({QParamProvider: ProviderAIS}, bucket.qparam)
         self.assertEqual(ProviderAIS, bucket.provider)
         self.assertIsNone(bucket.namespace)
 
     def test_properties(self):
         self.assertEqual(self.mock_client, self.ais_bck.client)
-        expected_ns = Namespace(uuid="", name=namespace)
+        expected_ns = Namespace(uuid="", name=NAMESPACE)
         client = RequestClient("test client name")
         bck = Bucket(
-            client=client, name=bck_name, provider=ProviderAmazon, ns=expected_ns
+            client=client, name=BCK_NAME, provider=ProviderAmazon, namespace=expected_ns
         )
         self.assertEqual(client, bck.client)
         self.assertEqual(ProviderAmazon, bck.provider)
         self.assertEqual({QParamProvider: ProviderAmazon}, bck.qparam)
-        self.assertEqual(bck_name, bck.name)
+        self.assertEqual(BCK_NAME, bck.name)
         self.assertEqual(expected_ns, bck.namespace)
 
     def test_create_invalid_provider(self):
@@ -73,7 +73,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.ais_bck.create()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             json=ActionMsg(action=ACT_CREATE_BCK).dict(),
             params=self.ais_bck.qparam,
         )
@@ -94,7 +94,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(expected_response, response)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             json=ActionMsg(action=ACT_MOVE_BCK).dict(),
             params=self.ais_bck_params,
         )
@@ -107,7 +107,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.ais_bck.delete()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             json=ActionMsg(action=ACT_DESTROY_BCK).dict(),
             params=self.ais_bck.qparam,
         )
@@ -121,7 +121,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
             self.amz_bck.evict(keep_md=keep_md)
             self.mock_client.request.assert_called_with(
                 HTTP_METHOD_DELETE,
-                path=f"buckets/{bck_name}",
+                path=f"buckets/{BCK_NAME}",
                 json=ActionMsg(action=ACT_EVICT_REMOTE_BCK).dict(),
                 params=self.amz_bck_params,
             )
@@ -133,7 +133,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         headers = self.ais_bck.head()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_HEAD,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             params=self.ais_bck.qparam,
         )
         self.assertEqual(headers, mock_header.headers)
@@ -172,7 +172,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(expected_response, job_id)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             json=expected_action,
             params=self.ais_bck_params,
         )
@@ -217,7 +217,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         result = self.ais_bck.list_objects(**kwargs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             res_model=BucketList,
             json=action,
             params=self.ais_bck_params,
@@ -301,26 +301,24 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
         )
         self.assertEqual([], self.ais_bck.list_all_objects(**kwargs))
 
-        action_1 = ActionMsg(action=ACT_LIST, value=expected_act_value_1).dict()
-        action_2 = ActionMsg(action=ACT_LIST, value=expected_act_value_2).dict()
-
         self.mock_client.request_deserialize.side_effect = [list_1, list_2]
-        result = self.ais_bck.list_all_objects(**kwargs)
-        self.assertEqual([entry_1, entry_2, entry_3], result)
+        self.assertEqual(
+            [entry_1, entry_2, entry_3], self.ais_bck.list_all_objects(**kwargs)
+        )
 
         call_1 = mock.call(
             HTTP_METHOD_GET,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             res_model=BucketList,
-            json=action_1,
+            json=ActionMsg(action=ACT_LIST, value=expected_act_value_1).dict(),
             params=self.ais_bck_params,
         )
 
         call_2 = mock.call(
             HTTP_METHOD_GET,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             res_model=BucketList,
-            json=action_2,
+            json=ActionMsg(action=ACT_LIST, value=expected_act_value_2).dict(),
             params=self.ais_bck_params,
         )
 
@@ -363,7 +361,7 @@ class TestBucket(unittest.TestCase):  # pylint: disable=unused-variable
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{bck_name}",
+            path=f"buckets/{BCK_NAME}",
             json=expected_action,
             params=self.ais_bck_params,
         )

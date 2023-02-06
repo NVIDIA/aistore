@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
-from pydantic import parse_raw_as
+import pydantic.tools
 import requests
 
 from aistore.sdk.errors import AISError, ErrBckNotFound, ErrRemoteBckNotFound
@@ -9,9 +9,9 @@ from aistore.sdk.types import HttpError
 
 
 def _raise_error(text: str):
-    err = parse_raw_as(HttpError, text)
+    err = pydantic.tools.parse_raw_as(HttpError, text)
     if 400 <= err.status < 500:
-        err = parse_raw_as(HttpError, text)
+        err = pydantic.tools.parse_raw_as(HttpError, text)
         if "does not exist" in err.message:
             if "cloud bucket" in err.message or "remote bucket" in err.message:
                 raise ErrRemoteBckNotFound(err.status, err.message)
@@ -40,6 +40,15 @@ def handle_errors(resp: requests.Response):
 
 
 def probing_frequency(dur: int) -> float:
+    """
+    Given a timeout, return an interval to wait between retries
+
+    Args:
+        dur: Duration of timeout
+
+    Returns:
+        Frequency to probe
+    """
     freq = min(dur / 8.0, 1.0)
     freq = max(dur / 64.0, freq)
     return max(freq, 0.1)

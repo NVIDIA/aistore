@@ -64,10 +64,15 @@ function check_deps {
 
 function check_python_formatting {
   i=0
-  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*' ! -path '*/python/aistore/version.py'); do
+  # Check any python code not in aistore/python
+  for f in $(find . -type f -name "*.py" ! -regex ".*__init__.py" ! -regex $EXTERNAL_SRC_REGEX ! -path '*/docs/examples/*' ! -path '*/python/*'); do
     pylint --rcfile=$PYLINT_STYLE $f --msg-template="{path} ({C}):{line:3d},{column:2d}: {msg} ({msg_id}:{symbol})" 2>/dev/null
     if [[ $? -gt 0 ]]; then i=$((i+1)); fi
   done
+
+  # Check the python code in aistore/python using the make targets there
+  (cd 'python'; make lint && make lint-tests)
+  if [[ $? -gt 0 ]]; then i=$((i+1)); fi
 
   if [[ $i -ne 0 ]]; then
     printf "\npylint failed, fix before continuing\n"

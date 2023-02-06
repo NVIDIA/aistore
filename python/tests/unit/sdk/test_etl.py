@@ -126,8 +126,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         print("example action")
 
     @staticmethod
-    def encode_fn(fn, comm_type):
-        transform = base64.b64encode(cloudpickle.dumps(fn)).decode("utf-8")
+    def encode_fn(func, comm_type):
+        transform = base64.b64encode(cloudpickle.dumps(func)).decode("utf-8")
         io_comm_context = "transform()" if comm_type == "io" else ""
         template = CODE_TEMPLATE.format(transform, io_comm_context).encode("utf-8")
         return base64.b64encode(template).decode("utf-8")

@@ -33,7 +33,8 @@ def _assert_aistore() -> None:
 @functional_datapipe("ais_list_files")
 class AISFileListerIterDataPipe(IterDataPipe[str]):
     """
-    Iterable Datapipe that lists files from the AIStore backends with the given URL prefixes. (functional name: ``list_files_by_ais``).
+    Iterable Datapipe that lists files from the AIStore backends with the given URL prefixes.
+        (functional name: ``list_files_by_ais``).
     Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`
 
     Note:
@@ -51,7 +52,8 @@ class AISFileListerIterDataPipe(IterDataPipe[str]):
 
     Example:
         >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister
-        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/', 'ais://bucket-name/folder/', ...])
+        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/',
+        >>>        'ais://bucket-name/folder/', ...])
         >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
         >>> for url in dp_ais_urls:
         ...     pass
@@ -106,7 +108,8 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
 
     Example:
         >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister,AISFileLoader
-        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/', 'ais://bucket-name/folder/', ...])
+        >>> ais_prefixes = IterableWrapper(['gcp://bucket-name/folder/', 'aws:bucket-name/folder/',
+        >>>     'ais://bucket-name/folder/', ...])
         >>> dp_ais_urls = AISFileLister(url='localhost:8080', source_datapipe=ais_prefixes)
         >>> dp_cloud_files = AISFileLoader(url='localhost:8080', source_datapipe=dp_ais_urls)
         >>> for url, file in dp_cloud_files:

@@ -23,21 +23,33 @@ from aistore.sdk.const import (
 )
 
 
-# pylint: disable=too-few-public-methods,unused-variable
+# pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring
 
 
 class Namespace(BaseModel):
+    """
+    A bucket namespace
+    """
+
     uuid: str = ""
     name: str = ""
 
 
 class ActionMsg(BaseModel):
+    """
+    Represents the action message passed by the client via json
+    """
+
     action: str
     name: str = ""
     value: Any = None
 
 
 class HttpError(BaseModel):
+    """
+    Represents the errors returned by the API
+    """
+
     status: int
     message: str = ""
     method: str = ""
@@ -48,12 +60,20 @@ class HttpError(BaseModel):
 
 
 class NetInfo(BaseModel):
+    """
+    Represents a set of network-related info
+    """
+
     node_hostname: str = ""
     daemon_port: str = ""
     direct_url: str = ""
 
 
 class Snode(BaseModel):
+    """
+    Represents a system node
+    """
+
     daemon_id: str
     daemon_type: str
     public_net: NetInfo = None
@@ -63,6 +83,10 @@ class Snode(BaseModel):
 
 
 class Smap(BaseModel):
+    """
+    Represents a system map
+    """
+
     tmap: Mapping[str, Snode]
     pmap: Mapping[str, Snode]
     proxy_si: Snode
@@ -72,6 +96,10 @@ class Smap(BaseModel):
 
 
 class BucketEntry(BaseModel):
+    """
+    Represents a single entry in a bucket -- an object
+    """
+
     name: str
     size: int = 0
     checksum: str = ""
@@ -89,6 +117,10 @@ class BucketEntry(BaseModel):
 
 
 class BucketList(BaseModel):
+    """
+    Represents the response when getting a list of bucket items, containing a list of BucketEntry objects
+    """
+
     uuid: str
     entries: Optional[List[BucketEntry]] = []
     continuation_token: str
@@ -97,20 +129,29 @@ class BucketList(BaseModel):
     def get_entries(self):
         return self.entries
 
+    # pylint: disable=no-self-argument
     @validator("entries")
-    def set_entries(cls, entries):  # pylint: disable=no-self-argument
+    def set_entries(cls, entries):
         if entries is None:
             entries = []
         return entries
 
 
 class BucketModel(BaseModel):
+    """
+    Represents the response from the API containing bucket info
+    """
+
     name: str
     provider: str = ProviderAIS
     ns: Namespace = None
 
 
 class JobArgs(BaseModel):
+    """
+    Represents the set of args to pass when making a job-related request
+    """
+
     id: str = ""
     kind: str = ""
     daemon_id: str = ""
@@ -128,6 +169,10 @@ class JobArgs(BaseModel):
 
 
 class JobStatus(BaseModel):
+    """
+    Represents the response of an API query to fetch job status
+    """
+
     uuid: str = ""
     err: str = ""
     end_time: int = 0
@@ -135,6 +180,13 @@ class JobStatus(BaseModel):
 
 
 class ObjAttr(BaseModel):
+    """
+    Represents the attributes parsed from the response headers returned from an API call to get an object
+
+    Args:
+        response_headers (CaseInsensitiveDict): Response header dict containing object attributes
+    """
+
     size: int = 0
     checksum_type: str = ""
     access_time: str = ""
@@ -166,7 +218,15 @@ class ObjAttr(BaseModel):
 
 
 class ObjStream(BaseModel):
+    """
+    Represents the stream of data returned by the API when getting an object
+    """
+
     class Config:
+        """
+        Pydantic config
+        """
+
         validate_assignment = True
         arbitrary_types_allowed = True
 
@@ -201,16 +261,11 @@ class ObjStream(BaseModel):
             self.stream.close()
 
 
-class ObjectRange(BaseModel):
-    prefix: str
-    min_index: int
-    max_index: int
-    pad_width: int = 0
-    step: int = 1
-    suffix: str = ""
-
-
 class ETL(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+    """
+    Represents the API response when querying an ETL
+    """
+
     id: str = ""
     obj_count: int = 0
     in_bytes: int = 0
@@ -218,6 +273,10 @@ class ETL(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
 
 
 class ETLDetails(BaseModel):
+    """
+    Represents the API response of queries on single ETL details
+    """
+
     id: str
     communication: str
     timeout: str

@@ -23,21 +23,20 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
+        self.bucket = self.client.bucket(self.bck_name)
+        self.bucket.create()
 
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         try:
-            self.client.bucket(self.bck_name).delete()
+            self.bucket.delete()
         except ErrBckNotFound:
             pass
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
-        stream = (
-            self.client.bucket(self.bck_name)
-            .object(obj_name)
-            .get(chunk_size=chunk_size)
-        )
+        stream = self.bucket.object(obj_name).get(chunk_size=chunk_size)
+
         self.assertEqual(stream.attributes.size, len(exp_content))
         self.assertNotEqual(stream.attributes.checksum_type, "")
         self.assertNotEqual(stream.attributes.checksum_value, "")
@@ -53,7 +52,6 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(obj, exp_content)
 
     def test_put_head_get(self):
-        self.client.bucket(self.bck_name).create()
         num_objs = 10
 
         for i in range(num_objs):
@@ -61,7 +59,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             content = create_and_put_object(
                 client=self.client, bck_name=self.bck_name, obj_name=obj_name
             )
-            properties = self.client.bucket(self.bck_name).object(obj_name).head()
+            properties = self.bucket.object(obj_name).head()
             self.assertEqual(properties[AIS_VERSION], "1")
             self.assertEqual(properties[CONTENT_LENGTH], str(len(content)))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
@@ -74,36 +72,29 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             {"page_size": 7, "resp_size": 7},
             {"page_size": bucket_size * 2, "resp_size": bucket_size},
         ]
-        self.client.bucket(self.bck_name).create()
         for obj_id in range(bucket_size):
             create_and_put_object(
                 self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
             )
 
         for test in list(tests):
-            resp = self.client.bucket(self.bck_name).list_objects(
-                page_size=test["page_size"]
-            )
+            resp = self.bucket.list_objects(page_size=test["page_size"])
             self.assertEqual(len(resp.get_entries()), test["resp_size"])
 
     def test_list_all_objects(self):
         bucket_size = 110
         short_page_len = 17
-        self.client.bucket(self.bck_name).create()
         for obj_id in range(bucket_size):
             create_and_put_object(
                 self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
             )
-        objects = self.client.bucket(self.bck_name).list_all_objects()
+        objects = self.bucket.list_all_objects()
         self.assertEqual(len(objects), bucket_size)
-        objects = self.client.bucket(self.bck_name).list_all_objects(
-            page_size=short_page_len
-        )
+        objects = self.bucket.list_all_objects(page_size=short_page_len)
         self.assertEqual(len(objects), bucket_size)
 
     def test_list_object_iter(self):
         bucket_size = 110
-        self.client.bucket(self.bck_name).create()
         objects = {}
         for obj_id in range(bucket_size):
             create_and_put_object(
@@ -112,17 +103,13 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             objects[f"obj-{ obj_id }"] = 1
 
         # Read all `bucket_size` objects by prefix.
-        obj_iter = self.client.bucket(self.bck_name).list_objects_iter(
-            page_size=15, prefix="obj-"
-        )
+        obj_iter = self.bucket.list_objects_iter(page_size=15, prefix="obj-")
         for obj in obj_iter:
             del objects[obj.name]
         self.assertEqual(len(objects), 0)
 
         # Empty iterator if there are no objects matching the prefix.
-        obj_iter = self.client.bucket(self.bck_name).list_objects_iter(
-            prefix="invalid-obj-"
-        )
+        obj_iter = self.bucket.list_objects_iter(prefix="invalid-obj-")
         for obj in obj_iter:
             objects[obj.name] = 1
         self.assertEqual(len(objects), 0)
@@ -130,30 +117,27 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
     def test_obj_delete(self):
         bucket_size = 10
         delete_cnt = 7
-        self.client.bucket(self.bck_name).create()
 
         for obj_id in range(bucket_size):
             create_and_put_object(
                 self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
             )
 
-        objects = self.client.bucket(self.bck_name).list_objects()
+        objects = self.bucket.list_objects()
         self.assertEqual(len(objects.get_entries()), bucket_size)
 
         for obj_id in range(delete_cnt):
-            self.client.bucket(self.bck_name).object(f"obj-{ obj_id + 1 }").delete()
-        objects = self.client.bucket(self.bck_name).list_objects()
+            self.bucket.object(f"obj-{ obj_id + 1 }").delete()
+        objects = self.bucket.list_objects()
         self.assertEqual(len(objects.get_entries()), bucket_size - delete_cnt)
 
     def test_empty_bucket(self):
-        self.client.bucket(self.bck_name).create()
-        objects = self.client.bucket(self.bck_name).list_objects()
+        objects = self.bucket.list_objects()
         self.assertEqual(len(objects.get_entries()), 0)
 
     def test_bucket_with_no_matching_prefix(self):
         bucket_size = 10
-        self.client.bucket(self.bck_name).create()
-        objects = self.client.bucket(self.bck_name).list_objects()
+        objects = self.bucket.list_objects()
         self.assertEqual(len(objects.get_entries()), 0)
         for obj_id in range(bucket_size):
             create_and_put_object(

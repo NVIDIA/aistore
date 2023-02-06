@@ -26,6 +26,7 @@ from aistore.sdk.const import (
 )
 
 from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.object_range import ObjectRange
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object import Object
@@ -33,7 +34,6 @@ from aistore.sdk.types import (
     ActionMsg,
     BucketEntry,
     BucketList,
-    ObjectRange,
     Namespace,
 )
 
@@ -48,8 +48,8 @@ class Bucket:
     Args:
         client (RequestClient): Client for interfacing with AIS cluster
         name (str): name of bucket
-        provider (str, optional): provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
-        ns (Namespace, optional): namespace of bucket, defaults to None
+        provider (str, optional): Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
+        namespace (Namespace, optional): Namespace of bucket, defaults to None
     """
 
     def __init__(
@@ -57,12 +57,12 @@ class Bucket:
         client: RequestClient,
         name: str,
         provider: str = ProviderAIS,
-        ns: Namespace = None,
+        namespace: Namespace = None,
     ):
         self._client = client
         self._name = name
         self._provider = provider
-        self._namespace = ns
+        self._namespace = namespace
         self._qparam = {QParamProvider: provider}
 
     @property
@@ -94,11 +94,6 @@ class Bucket:
         """
         Creates a bucket in AIStore cluster.
         Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
-        Args:
-            None
-
-        Returns:
-            None
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -119,12 +114,6 @@ class Bucket:
         Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
         (iff the bucket in question is, in fact, a Cloud bucket).
 
-        Args:
-            None
-
-        Returns:
-            None
-
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
@@ -140,7 +129,8 @@ class Bucket:
     def rename(self, to_bck: str) -> str:
         """
         Renames bucket in AIStore cluster.
-        Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous operation.
+        Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous
+            operation.
 
         Args:
             to_bck (str): New bucket name for bucket to be renamed as
@@ -170,10 +160,8 @@ class Bucket:
         NOTE: only Cloud buckets can be evicted.
 
         Args:
-            keep_md (bool, optional): If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name and its properties)
-
-        Returns:
-            None
+            keep_md (bool, optional): If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name
+                and its properties)
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -210,6 +198,7 @@ class Bucket:
             params=self.qparam,
         ).headers
 
+    # pylint: disable=too-many-arguments
     def copy(
         self,
         to_bck_name: str,
@@ -248,6 +237,7 @@ class Bucket:
             HTTP_METHOD_POST, ACT_COPY_BCK, value=value, params=params
         ).text
 
+    # pylint: disable=too-many-arguments
     def list_objects(
         self,
         prefix: str = "",
@@ -257,13 +247,17 @@ class Bucket:
         continuation_token: str = "",
     ) -> BucketList:
         """
-        Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if available).
+        Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
+            available).
 
         Args:
             prefix (str, optional): Return only objects that start with the prefix
-            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
+                Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+                "ec", "custom", "node".
             page_size (int, optional): Return at most "page_size" objects.
-                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+                    more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number of objects.
             uuid (str, optional): Job ID, required to get the next page of objects
@@ -309,9 +303,12 @@ class Bucket:
 
         Args:
             prefix (str, optional): Return only objects that start with the prefix
-            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+            props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
+                Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+                "ec", "custom", "node".
             page_size (int, optional): return at most "page_size" objects
-                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+                    more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
 
@@ -345,9 +342,12 @@ class Bucket:
 
         Args:
             prefix (str, optional): return only objects that start with the prefix
-            props (str, optional): comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+            props (str, optional): comma-separated list of object properties to return. Default value is "name,size".
+                Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+                "ec", "custom", "node".
             page_size (int, optional): return at most "page_size" objects
-                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+                The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+                    more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
 
@@ -383,6 +383,7 @@ class Bucket:
             uuid = resp.uuid
         return obj_list
 
+    # pylint: disable=too-many-arguments
     def transform(
         self,
         etl_name: str,
@@ -399,7 +400,8 @@ class Bucket:
             etl_name (str): name of etl to be used for transformations
             to_bck (str): destination bucket for transformations
             prefix (str, optional): prefix to be added to resulting transformed objects
-            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
+            ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
+                (i.e. {"jpg": "txt"})
             dry_run (bool, optional): determines if the copy should actually happen or not
             force (bool, optional): override existing destination bucket
 
@@ -487,9 +489,15 @@ class Bucket:
         )
 
     def _verify_ais_bucket(self):
+        """
+        Verify the bucket provider is AIS
+        """
         if self.provider is not ProviderAIS:
             raise InvalidBckProvider(self.provider)
 
     def verify_cloud_bucket(self):
+        """
+        Verify the bucket provider is a cloud provider
+        """
         if self.provider is ProviderAIS:
             raise InvalidBckProvider(self.provider)

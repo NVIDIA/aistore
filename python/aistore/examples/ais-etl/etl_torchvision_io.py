@@ -4,11 +4,13 @@ Communication Type: io://
 
 Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
-from aistore import Client
-from torchvision import transforms
-from PIL import Image
 import io
 import sys
+
+from torchvision import transforms
+from PIL import Image
+
+from aistore import Client
 
 client = Client("http://192.168.49.2:8080")
 

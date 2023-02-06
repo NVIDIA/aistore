@@ -23,25 +23,20 @@ from aistore.sdk.types import ActionMsg, Smap
 class Cluster:
     """
     A class representing a cluster bound to an AIS client.
-
-    Args:
-        None
     """
 
+    # pylint: disable=duplicate-code
     def __init__(self, client: RequestClient):
         self._client = client
 
     @property
     def client(self):
-        """The client object bound to this cluster."""
+        """Client this cluster uses to make requests"""
         return self._client
 
     def get_info(self) -> Smap:
         """
         Returns state of AIS cluster, including the detailed information about its nodes.
-
-        Args:
-            None
 
         Returns:
             aistore.sdk.types.Smap: Smap containing cluster information

@@ -13,6 +13,9 @@ from tests.utils import random_string
 
 class BotoTest(TestCase):
     def setUp(self) -> None:
+        """
+        Test basic s3 operations on an AIS cluster using the boto3 client
+        """
         self.client = boto3.client(
             "s3",
             region_name=AWS_REGION,

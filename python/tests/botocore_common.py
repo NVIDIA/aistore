@@ -92,7 +92,6 @@ class BotocoreBaseTest(unittest.TestCase):
             mock_s3_redirect.redirections_enabled = self.enable_redirects
 
     def tearDown(self):
-        # pylint: disable=broad-exception-raised
         if self.use_moto:
             self.mock_s3.stop()
         else:
@@ -217,7 +216,6 @@ class MightRedirect:
             if value:
                 instead = value
 
-            # pylint: disable=broad-exception-raised
             raise Exception(
                 "A ClientError with a redirect code was expected, "
                 + "but didn't happen. Instead: "

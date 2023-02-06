@@ -2,10 +2,9 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
 import unittest
-from aistore.sdk.errors import ErrBckNotFound
 
 from aistore.sdk import Client
-from tests.utils import random_string
+from tests.utils import random_string, destroy_bucket
 from tests.integration import CLUSTER_ENDPOINT
 
 
@@ -16,11 +15,10 @@ class TestJobOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client = Client(CLUSTER_ENDPOINT)
 
     def tearDown(self) -> None:
-        # Try to destroy bucket if there is one left.
-        try:
-            self.client.bucket(self.bck_name).delete()
-        except ErrBckNotFound:
-            pass
+        """
+        Cleanup after each test, destroy the bucket if it exists
+        """
+        destroy_bucket(self.client, self.bck_name)
 
     def test_job_start(self):
         self.client.bucket(self.bck_name).create()

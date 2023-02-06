@@ -2,7 +2,7 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,invalid-name
 
 TAR2TF = "tar2tf"
 OBJECTS = "objects"

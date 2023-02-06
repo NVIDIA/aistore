@@ -4,6 +4,7 @@ import string
 import tempfile
 
 from aistore.sdk import Client
+from aistore.sdk.errors import ErrBckNotFound
 
 
 # pylint: disable=unused-variable
@@ -28,3 +29,10 @@ def create_and_put_object(
         file.flush()
         client.bucket(bck_name, provider=provider).object(obj_name).put(file.name)
     return content
+
+
+def destroy_bucket(client: Client, bck_name: str):
+    try:
+        client.bucket(bck_name).delete()
+    except ErrBckNotFound:
+        pass

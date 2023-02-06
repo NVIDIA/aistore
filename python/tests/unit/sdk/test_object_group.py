@@ -12,7 +12,7 @@ from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object_range import ObjectRange
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,too-many-instance-attributes
 class TestObjectGroup(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_bck = Mock()

@@ -23,12 +23,13 @@ class Job:
         client (RequestClient): Client for interfacing with AIS cluster
     """
 
+    # pylint: disable=duplicate-code
     def __init__(self, client: RequestClient):
         self._client = client
 
     @property
     def client(self):
-        """The client bound to this job object."""
+        """Client this job uses to make requests"""
         return self._client
 
     def status(
@@ -119,8 +120,10 @@ class Job:
         Args:
             job_kind (str, optional): Kind of the job (for supported kinds, see api/apc/const.go). Empty - all kinds.
             daemon_id (str, optional): Return jobs only running on the daemon_id.
-            force (bool, optional): Override existing restrictions for a bucket (e.g., run LRU eviction even if the bucket has LRU disabled).
-            buckets (List[Bucket], optional): List of one or more buckets; applicable only for jobs that have bucket scope (for details and full enumeration, see xact/table.go).
+            force (bool, optional): Override existing restrictions for a bucket (e.g., run LRU eviction even if the
+                bucket has LRU disabled).
+            buckets (List[Bucket], optional): List of one or more buckets; applicable only for jobs that have bucket
+                scope (for details and full enumeration, see xact/table.go).
 
         Returns:
             The running job ID.

@@ -31,7 +31,7 @@ def parse_url(url: str) -> Tuple[str, str, str]:
 # pylint: disable=unused-variable
 def list_objects_info(client: Client, urls_list: List[str]) -> List[Mapping[str, str]]:
     """
-    Create list of list of [bucket_name, object_name] from all the object urls
+    Create list of [bucket_name, object_name] from all the object urls
     Args:
         client (Client): AIStore client object of the calling method
         urls_list (List[str]): list of urls

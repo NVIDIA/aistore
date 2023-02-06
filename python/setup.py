@@ -11,21 +11,17 @@ REQUIRED_MINOR = 6
 
 ROOT_DIR = Path(__file__).parent.resolve()
 
-VERSION = "1.0.8"
-
 
 def _get_version() -> str:
-    # TODO: read from file
-    # with open(os.path.join(ROOT_DIR, "version.txt"), encoding='UTF-8') as file:
-    #     version = file.readline().strip()
-    # return version
-    return VERSION
-
-
-def _export_version(version):
-    version_path = ROOT_DIR / "aistore" / "version.py"
-    with open(version_path, "w", encoding="UTF-8") as file:
-        file.write(f"__version__ = '{version}'\n")
+    init_file = os.path.join(ROOT_DIR, "aistore", "__init__.py")
+    with open(init_file, encoding="UTF-8") as file:
+        for line in file.read().splitlines():
+            if line.startswith("__version__"):
+                delim = '"' if '"' in line else "'"
+                version = line.split(delim)[1]
+                print("Setup detected AIStore SDK version:", version)
+                return version
+    raise RuntimeError(f"Unable to find version string in {init_file}")
 
 
 # Check for python version
@@ -45,12 +41,9 @@ if sys.version_info < (REQUIRED_MAJOR, REQUIRED_MINOR):
 with open(os.path.join(ROOT_DIR, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
-VERSION = _get_version()
-_export_version(VERSION)
-
 setup(
     name="aistore",
-    version=VERSION,
+    version=_get_version(),
     description="A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore.",
     long_description=long_description,
     long_description_content_type="text/markdown",

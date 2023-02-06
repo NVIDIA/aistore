@@ -79,7 +79,8 @@ class Object:
         Reads an object
 
         Args:
-            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file from the archive
+            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
+                from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
             etl_name (str, optional): Transforms an object based on ETL with etl_name
 

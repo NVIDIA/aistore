@@ -2,12 +2,11 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
 import unittest
-
-from aistore.sdk.const import ProviderAIS
-from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider
+import requests
 
 from aistore.sdk import Client
-import requests
+from aistore.sdk.const import ProviderAIS
+from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider
 
 from tests.utils import create_and_put_object, random_string
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
@@ -73,8 +72,8 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
         self.client.bucket(self.bck_name).delete()
         try:
             self.client.bucket(self.bck_name).head()
-        except requests.exceptions.HTTPError as e:
-            self.assertEqual(e.response.status_code, 404)
+        except requests.exceptions.HTTPError as err:
+            self.assertEqual(err.response.status_code, 404)
 
     def test_rename_bucket(self):
         from_bck_n = self.bck_name + "from"
@@ -100,8 +99,8 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
         # old bucket should be inaccessible
         try:
             self.client.bucket(from_bck_n).head()
-        except requests.exceptions.HTTPError as e:
-            self.assertEqual(e.response.status_code, 404)
+        except requests.exceptions.HTTPError as err:
+            self.assertEqual(err.response.status_code, 404)
 
         # length of buckets before and after rename should be same
         res = self.client.cluster().list_buckets()
@@ -156,19 +155,6 @@ class TestBucketOps(unittest.TestCase):  # pylint: disable=unused-variable
                 self.assertTrue(obj.is_cached())
             else:
                 self.assertFalse(obj.is_cached())
-
-    def create_object_list(self, prefix, provider, bck_name, suffix="", length=10):
-        obj_names = [prefix + str(i) + suffix for i in range(length)]
-        for obj_name in obj_names:
-            if self.cloud_bck and bck_name == self.cloud_bck:
-                self.cloud_objects.append(obj_name)
-            create_and_put_object(
-                self.client,
-                bck_name=bck_name,
-                provider=provider,
-                obj_name=obj_name,
-            )
-        return obj_names
 
 
 if __name__ == "__main__":

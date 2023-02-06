@@ -10,22 +10,25 @@ from aistore.sdk import Client
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.pytorch import AISFileLister, AISFileLoader
 from tests.integration import CLUSTER_ENDPOINT
-from tests.utils import create_and_put_object, random_string
+from tests.utils import create_and_put_object, random_string, destroy_bucket
 
 
 # pylint: disable=unused-variable
 class TestPytorchPlugin(unittest.TestCase):
+    """
+    Integration tests for the Pytorch plugin
+    """
+
     def setUp(self) -> None:
         self.bck_name = random_string()
         self.client = Client(CLUSTER_ENDPOINT)
         self.client.bucket(self.bck_name).create()
 
     def tearDown(self) -> None:
-        # Try to destroy bucket if there is one left.
-        try:
-            self.client.bucket(self.bck_name).delete()
-        except ErrBckNotFound:
-            pass
+        """
+        Cleanup after each test, destroy the bucket if it exists
+        """
+        destroy_bucket(self.client, self.bck_name)
 
     def test_filelister_with_prefix_variations(self):
         num_objs = 10
