@@ -6,6 +6,7 @@ package tmpls
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/stats"
 	"k8s.io/apimachinery/pkg/util/duration"
 )
 
@@ -218,5 +220,18 @@ func FmtStartEnd(start, end time.Time) (startS, endS string) {
 		endS = cos.FormatTime(end, f)
 	}
 	startS = cos.FormatTime(start, f)
+	return
+}
+
+//
+// stats.DaemonStatusMap
+//
+
+func statusMap2SortedNodes(daeMap stats.DaemonStatusMap) (ids []string) {
+	ids = make([]string, 0, len(daeMap))
+	for sid := range daeMap {
+		ids = append(ids, sid)
+	}
+	sort.Strings(ids)
 	return
 }

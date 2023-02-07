@@ -549,7 +549,8 @@ func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp strin
 		}
 	} else {
 		if osi.Type() != nsi.Type() {
-			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)", osi.StringEx(), nsi.StringEx(), smap, keepalive)
+			err = fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
+				osi.StringEx(), nsi.StringEx(), smap, keepalive)
 			return
 		}
 		if keepalive {

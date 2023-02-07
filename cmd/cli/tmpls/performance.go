@@ -75,17 +75,13 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 	}
 
 	// 7. sort targets
-	targets := make([]string, 0, len(st))
-	for tid := range st {
-		targets = append(targets, tid)
-	}
-	sort.Strings(targets)
+	tids := statusMap2SortedNodes(st)
 
 	// 8. construct empty table
 	table := newTable(printedColumns...)
 
 	// finally: 9. add rows
-	for _, tid := range targets {
+	for _, tid := range tids {
 		ds := st[tid]
 		if sid != "" && sid != tid {
 			continue

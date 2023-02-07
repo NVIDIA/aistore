@@ -88,20 +88,27 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, si
 		},
 	}
 	if res, proxyOK := curPrxStatus[sid]; proxyOK {
-		out := tmpls.NewDaeStatus(res, smap, apc.Proxy).Template(hideHeader)
+		table := tmpls.NewDaeStatus(res, smap, apc.Proxy)
+		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if res, targetOK := curTgtStatus[sid]; targetOK {
-		out := tmpls.NewDaeStatus(res, smap, apc.Target).Template(hideHeader)
+		table := tmpls.NewDaeStatus(res, smap, apc.Target)
+		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Proxy {
-		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy).Template(hideHeader)
+		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy)
+		out := table.Template(hideHeader)
 		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Target {
-		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target).Template(hideHeader)
+		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target)
+		out := table.Template(hideHeader)
 		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == "" {
-		out := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy).Template(false) + "\n"
-		out += tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target).Template(false) + "\n"
+		tableP := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy)
+		tableT := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target)
+
+		out := tableP.Template(false) + "\n"
+		out += tableT.Template(false) + "\n"
 		out += tmpls.ClusterSummary
 		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	}

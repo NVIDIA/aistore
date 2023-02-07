@@ -74,7 +74,11 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 		}
 		table = newTable(cols...)
 	)
-	for _, status := range ps {
+
+	ids := statusMap2SortedNodes(ps)
+
+	for _, sid := range ids {
+		status := ps[sid]
 		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
 		if status.MemCPUInfo.PctMemUsed == 0 {
 			memUsed = unknownVal
@@ -126,7 +130,10 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 		}
 		table = newTable(cols...)
 	)
-	for _, status := range ts {
+	ids := statusMap2SortedNodes(ts)
+
+	for _, sid := range ids {
+		status := ts[sid]
 		row := []string{
 			fmtDaemonID(status.Snode.ID(), smap),
 			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed),
