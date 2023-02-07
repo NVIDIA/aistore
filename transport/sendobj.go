@@ -328,7 +328,7 @@ func (s *Stream) eoObj(err error) {
 		glog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
 	}
 	// target stats
-	statsTracker.Add(OutObjCount, 1)
+	statsTracker.Inc(OutObjCount)
 	statsTracker.Add(OutObjSize, objSize)
 exit:
 	if err != nil {

@@ -991,11 +991,9 @@ func showStatsHandler(c *cli.Context) (err error) {
 		node = smap.GetNode(sid)
 	}
 	var (
-		regexStr    = parseStrFlag(c, regexFlag)
-		regex       *regexp.Regexp
-		refresh     = flagIsSet(c, refreshFlag)
-		sleep       = calcRefreshRate(c)
-		averageOver = cos.MinDuration(cos.MaxDuration(sleep/2, 2*time.Second), 10*time.Second)
+		refresh  = flagIsSet(c, refreshFlag)
+		regexStr = parseStrFlag(c, regexFlag)
+		regex    *regexp.Regexp
 	)
 	if regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
@@ -1003,7 +1001,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 			return
 		}
 	}
-	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
+	sleep, averageOver := computeSleepRefreshBps(c)
 	for {
 		if node != nil {
 			err = showNodeStats(c, node, averageOver, regex)
@@ -1023,12 +1021,10 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 	if err != nil {
 		return err
 	}
-
 	// throughput (Bps)
-	if err := daemonBps(c, node, stats, averageOver); err != nil {
+	if err := computeDaeBps(c, node, stats, averageOver); err != nil {
 		return err
 	}
-
 	if flagIsSet(c, jsonFlag) {
 		if regex != nil {
 			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
@@ -1086,7 +1082,7 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 	}
 
 	// throughput (Bps)
-	if err := clusterBps(c, st, averageOver); err != nil {
+	if err := computecCluBps1(c, st, averageOver); err != nil {
 		return err
 	}
 

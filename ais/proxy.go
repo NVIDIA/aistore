@@ -618,7 +618,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
-	p.statsT.Add(stats.GetCount, 1)
+	p.statsT.Inc(stats.GetCount)
 }
 
 // PUT /v1/objects/bucket-name/object-name
@@ -694,9 +694,9 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	// 4. stats
 	if !appendTyProvided {
-		p.statsT.Add(stats.PutCount, 1)
+		p.statsT.Inc(stats.PutCount)
 	} else {
-		p.statsT.Add(stats.AppendCount, 1)
+		p.statsT.Inc(stats.AppendCount)
 	}
 }
 
@@ -726,7 +726,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	p.statsT.Add(stats.DeleteCount, 1)
+	p.statsT.Inc(stats.DeleteCount)
 }
 
 // DELETE { action } /v1/buckets
@@ -2181,7 +2181,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
-	p.statsT.Add(stats.RenameCount, 1)
+	p.statsT.Inc(stats.RenameCount)
 }
 
 func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {

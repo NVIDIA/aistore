@@ -8,6 +8,7 @@ package cos
 
 type (
 	StatsUpdater interface {
+		Inc(name string)
 		Add(name string, val int64)
 		Get(name string) int64
 		AddMany(namedVal64 ...NamedVal64)

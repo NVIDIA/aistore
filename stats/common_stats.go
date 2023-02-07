@@ -60,7 +60,7 @@ const (
 	// KindCounter
 	// all basic counters are accompanied by the corresponding (ErrPrefix + kind) error count:
 	// "err.get.n", "err.put.n", etc.
-	// see: `IncErr`, `regCommonMetrics`
+	// see: `IncErr`, `regCommon`
 	GetCount    = "get.n"    // object
 	PutCount    = "put.n"    // ditto
 	AppendCount = "append.n" // ditto
@@ -68,7 +68,7 @@ const (
 	RenameCount = "ren.n"    // ditto
 	ListCount   = "lst.n"    // list-objects
 
-	// statically defined err counts (NOTE: update regCommonMetrics when adding/updating)
+	// statically defined err counts (NOTE: update regCommon when adding/updating)
 	ErrHTTPWriteCount = "err.http.write.n"
 	ErrDownloadCount  = "err.dl.n"
 	ErrPutMirrorCount = "err.put.mirror.n"
@@ -184,7 +184,7 @@ func (s *CoreStats) init(node *cluster.Snode, size int) {
 	//     * total number of goroutines, etc.
 	// (access via host:port/debug/vars in debug mode)
 
-	s.Tracker.regCommonMetrics(node)
+	s.Tracker.regCommon(node)
 
 	// reusable sgl => (udp) => StatsD
 	s.sgl = memsys.PageMM().NewSGL(memsys.PageSize)
@@ -509,7 +509,7 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 //////////////////
 
 // NOTE: naming; compare with CoreStats.initProm()
-func (tracker statsTracker) register(node *cluster.Snode, name, kind string) {
+func (tracker statsTracker) reg(node *cluster.Snode, name, kind string) {
 	debug.Assertf(kind == KindCounter || kind == KindGauge || kind == KindLatency ||
 		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial,
 		"invalid metric kind %q", kind)
@@ -553,35 +553,35 @@ func (tracker statsTracker) register(node *cluster.Snode, name, kind string) {
 }
 
 // register common metrics; see RegMetrics() in target_stats.go
-func (tracker statsTracker) regCommonMetrics(node *cluster.Snode) {
+func (tracker statsTracker) regCommon(node *cluster.Snode) {
 	// basic counters
-	tracker.register(node, GetCount, KindCounter)
-	tracker.register(node, PutCount, KindCounter)
-	tracker.register(node, AppendCount, KindCounter)
-	tracker.register(node, DeleteCount, KindCounter)
-	tracker.register(node, RenameCount, KindCounter)
-	tracker.register(node, ListCount, KindCounter)
+	tracker.reg(node, GetCount, KindCounter)
+	tracker.reg(node, PutCount, KindCounter)
+	tracker.reg(node, AppendCount, KindCounter)
+	tracker.reg(node, DeleteCount, KindCounter)
+	tracker.reg(node, RenameCount, KindCounter)
+	tracker.reg(node, ListCount, KindCounter)
 
 	// basic error counters, respectively
-	tracker.register(node, ErrPrefix+GetCount, KindCounter)
-	tracker.register(node, ErrPrefix+PutCount, KindCounter)
-	tracker.register(node, ErrPrefix+AppendCount, KindCounter)
-	tracker.register(node, ErrPrefix+DeleteCount, KindCounter)
-	tracker.register(node, ErrPrefix+RenameCount, KindCounter)
-	tracker.register(node, ErrPrefix+ListCount, KindCounter)
+	tracker.reg(node, ErrPrefix+GetCount, KindCounter)
+	tracker.reg(node, ErrPrefix+PutCount, KindCounter)
+	tracker.reg(node, ErrPrefix+AppendCount, KindCounter)
+	tracker.reg(node, ErrPrefix+DeleteCount, KindCounter)
+	tracker.reg(node, ErrPrefix+RenameCount, KindCounter)
+	tracker.reg(node, ErrPrefix+ListCount, KindCounter)
 
 	// more error counters
-	tracker.register(node, ErrHTTPWriteCount, KindCounter)
-	tracker.register(node, ErrDownloadCount, KindCounter)
-	tracker.register(node, ErrPutMirrorCount, KindCounter)
+	tracker.reg(node, ErrHTTPWriteCount, KindCounter)
+	tracker.reg(node, ErrDownloadCount, KindCounter)
+	tracker.reg(node, ErrPutMirrorCount, KindCounter)
 
 	// latency
-	tracker.register(node, GetLatency, KindLatency)
-	tracker.register(node, ListLatency, KindLatency)
-	tracker.register(node, KeepAliveLatency, KindLatency)
+	tracker.reg(node, GetLatency, KindLatency)
+	tracker.reg(node, ListLatency, KindLatency)
+	tracker.reg(node, KeepAliveLatency, KindLatency)
 
 	// special uptime
-	tracker.register(node, Uptime, KindSpecial)
+	tracker.reg(node, Uptime, KindSpecial)
 }
 
 /////////////////
@@ -605,6 +605,24 @@ func (r *statsRunner) GetMetricNames() cos.StrKVs {
 		out[name] = v.kind
 	}
 	return out
+}
+
+//
+// as cos.StatsUpdater
+//
+
+func (r *statsRunner) Add(name string, val int64) {
+	r.workCh <- cos.NamedVal64{Name: name, Value: val}
+}
+
+func (r *statsRunner) Inc(name string) {
+	r.workCh <- cos.NamedVal64{Name: name, Value: 1}
+}
+
+func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
+	for _, nv := range nvs {
+		r.workCh <- nv
+	}
 }
 
 func (r *statsRunner) IsPrometheus() bool { return r.Core.isPrometheus() }
@@ -798,16 +816,6 @@ func (r *statsRunner) Stop(err error) {
 		r.Core.statsdC.Close()
 	}
 	close(r.stopCh)
-}
-
-// common impl
-// NOTE: currently, proxy's stats == common and hardcoded
-func (r *statsRunner) Add(name string, val int64) { r.workCh <- cos.NamedVal64{Name: name, Value: val} }
-
-func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
-	for _, nv := range nvs {
-		r.workCh <- nv
-	}
 }
 
 func recycleLogs() time.Duration {

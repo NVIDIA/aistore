@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -141,7 +141,7 @@ func (r *Trunner) InitCapacity() error {
 
 // register target-specific metrics in addition to those that must be
 // already added via regCommonMetrics()
-func (r *Trunner) reg(name, kind string) { r.Core.Tracker.register(r.t.Snode(), name, kind) }
+func (r *Trunner) reg(name, kind string) { r.Core.Tracker.reg(r.t.Snode(), name, kind) }
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
 func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }

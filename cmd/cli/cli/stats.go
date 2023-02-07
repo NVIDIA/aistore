@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
@@ -151,12 +152,20 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 }
 
 //
-// stats.ClusterStats
+// throughput
 //
 
-// throughput (Bps)
-// TODO: s/inner loop/daemonBps (below)/
-func clusterBps(c *cli.Context, st stats.ClusterStats, averageOver time.Duration) error {
+func computeSleepRefreshBps(c *cli.Context) (sleep, averageOver time.Duration) {
+	sleep = calcRefreshRate(c)
+	averageOver = cos.MinDuration(cos.MaxDuration(sleep/2, 2*time.Second), 10*time.Second)
+	// adjust not to over-sleep
+	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
+	return
+}
+
+// as F(stats.ClusterStats)
+// (compare w/ computecCluBps2)
+func computecCluBps1(c *cli.Context, statsBegin stats.ClusterStats, averageOver time.Duration) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
 		return err
@@ -164,27 +173,33 @@ func clusterBps(c *cli.Context, st stats.ClusterStats, averageOver time.Duration
 
 	time.Sleep(averageOver)
 
-	st2, err := api.GetClusterStats(apiBP)
+	statsEnd, err := api.GetClusterStats(apiBP)
 	if err != nil {
 		return err
 	}
-	for tid, tgt := range st.Target {
-		tgt2 := st2.Target[tid]
-		for k, v := range tgt.Tracker {
-			v2 := tgt2.Tracker[k]
-			if metrics != nil && metrics[k] == stats.KindThroughput {
-				throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
-				v.Value = throughput
+	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
+	debug.Assert(seconds > 1)
+	for tid, begin := range statsBegin.Target {
+		end := statsEnd.Target[tid]
+		for k, v := range begin.Tracker {
+			vend := end.Tracker[k]
+			// (unlike stats.KindComputedThroughput)
+			if metrics[k] == stats.KindThroughput {
+				if v.Value > 0 {
+					throughput := (vend.Value - v.Value) / seconds
+					v.Value = throughput
+				}
 			} else {
-				v.Value = v2.Value // more timely
+				v.Value = vend.Value // more timely
 			}
-			tgt.Tracker[k] = v
+			begin.Tracker[k] = v
 		}
 	}
 	return nil
 }
 
-func daemonBps(c *cli.Context, node *cluster.Snode, ds *stats.DaemonStats, averageOver time.Duration) error {
+// throughput as F(stats.DaemonStats)
+func computeDaeBps(c *cli.Context, node *cluster.Snode, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
 		return err
@@ -192,19 +207,61 @@ func daemonBps(c *cli.Context, node *cluster.Snode, ds *stats.DaemonStats, avera
 
 	time.Sleep(averageOver)
 
-	ds2, err := api.GetDaemonStats(apiBP, node)
+	statsEnd, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
 		return err
 	}
-	for k, v := range ds.Tracker {
-		v2 := ds2.Tracker[k]
-		if metrics != nil && metrics[k] == stats.KindThroughput {
-			throughput := (v2.Value - v.Value) / cos.MaxI64(int64(averageOver.Seconds()), 1)
-			v.Value = throughput
+	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
+	debug.Assert(seconds > 1)
+	for k, v := range statsBegin.Tracker {
+		vend := statsEnd.Tracker[k]
+		if metrics[k] == stats.KindThroughput {
+			if v.Value > 0 {
+				throughput := (vend.Value - v.Value) / seconds
+				v.Value = throughput
+			}
 		} else {
-			v.Value = v2.Value // more recent
+			v.Value = vend.Value // more recent
 		}
-		ds.Tracker[k] = v
+		statsBegin.Tracker[k] = v
 	}
 	return nil
+}
+
+// as F(stats.DaemonStatusMap)
+// (compare w/ computecCluBps1)
+func computecCluBps2(c *cli.Context, averageOver time.Duration) (stats.DaemonStatusMap, error) {
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
+		return nil, err
+	}
+	statusMapBegin := curTgtStatus
+	time.Sleep(averageOver)
+	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
+		return nil, err
+	}
+	statusMapEnd := curTgtStatus
+
+	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
+	debug.Assert(seconds > 1)
+	for tid, begin := range statusMapBegin {
+		end := statusMapEnd[tid]
+		for k, v := range begin.Stats.Tracker {
+			vend := end.Stats.Tracker[k]
+			if metrics[k] == stats.KindThroughput {
+				if v.Value > 0 {
+					throughput := (vend.Value - v.Value) / seconds
+					v.Value = throughput
+				}
+			} else {
+				v.Value = vend.Value // more timely
+			}
+			begin.Stats.Tracker[k] = v
+		}
+	}
+	return statusMapBegin, nil
 }

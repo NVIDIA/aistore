@@ -224,8 +224,8 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		// stats
 		if err == nil {
-			it.stats.Num.Inc()              // this stream stats
-			statsTracker.Add(InObjCount, 1) // stats/target_stats.go
+			it.stats.Num.Inc()           // this stream stats
+			statsTracker.Inc(InObjCount) // stats/target_stats.go
 			if size >= 0 {
 				statsTracker.Add(InObjSize, size)
 			} else {

@@ -7,6 +7,7 @@ package cli
 
 import (
 	"regexp"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -29,6 +30,7 @@ var (
 	showPerfFlags = append(
 		longRunFlags,
 		allColumnsFlag,
+		noHeaderFlag,
 		regexColsFlag,
 	)
 	showCmdPeformance = cli.Command{
@@ -140,8 +142,42 @@ func showPerfHandler(c *cli.Context) error {
 }
 
 func showThroughputHandler(c *cli.Context) error {
-	_, _, err := argNode(c)
-	return err
+	var (
+		sid     string
+		smap    *cluster.Smap
+		metrics cos.StrKVs
+		regex   *regexp.Regexp
+
+		refresh    = flagIsSet(c, refreshFlag)
+		regexStr   = parseStrFlag(c, regexColsFlag)
+		hideHeader = flagIsSet(c, noHeaderFlag)
+		allCols    = flagIsSet(c, allColumnsFlag)
+	)
+	sid, _, err := argNode(c)
+	if err != nil {
+		return err
+	}
+	debug.Assert(sid == "" || getNodeType(c, sid) == apc.Target)
+
+	if regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	{
+		_, _, _, _, _ = smap, metrics, regex, hideHeader, allCols // TODO -- FIXME:
+	}
+
+	sleep, averageOver := computeSleepRefreshBps(c)
+	for {
+		_, err = computecCluBps2(c, averageOver)
+		if err != nil || !refresh {
+			return err
+		}
+		time.Sleep(sleep)
+	}
 }
 
 func showLatencyHandler(c *cli.Context) error {

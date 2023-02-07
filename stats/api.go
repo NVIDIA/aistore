@@ -31,13 +31,17 @@ const (
 type (
 	Tracker interface {
 		cos.StatsUpdater
+
 		StartedUp() bool
+		IsPrometheus() bool
+
 		IncErr(metric string)
+
 		CoreStats() *CoreStats
 		GetWhatStats() *DaemonStats
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
-		RegMetrics(node *cluster.Snode)
-		IsPrometheus() bool
+
+		RegMetrics(node *cluster.Snode) // + init Prometheus, if configured
 	}
 	CoreStats struct {
 		Tracker   statsTracker

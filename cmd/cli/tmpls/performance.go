@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -24,13 +25,17 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 	// 1. dynamically: counter names
 	cols := make([]*header, 0, 32)
 	for tid, ds := range st {
+		debug.Assert(ds.Status != "", tid+" has no status")
+		if ds.Status != api.StatusOnline {
+			continue // maintenance mode et al. (see `cli._status`)
+		}
 		if ds.Stats == nil {
+			debug.Assert(false, tid)
 			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, smap))
 		}
 
 		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
-
 		for name := range ds.Stats.Tracker {
 			if metrics[name] == stats.KindCounter {
 				cols = append(cols, &header{name: name, hide: false})
@@ -87,8 +92,16 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 			continue
 		}
 		row := make([]string, 0, len(cols))
-		row = append(row, fmtDaemonID(tid, smap))
+		if ds.Status != api.StatusOnline {
+			row = append(row, fmtDaemonID(tid, smap)+"-"+ds.Status)
+		} else {
+			row = append(row, fmtDaemonID(tid, smap))
+		}
 		for _, h := range cols[1:] {
+			if ds.Status != api.StatusOnline {
+				row = append(row, unknownVal)
+				continue
+			}
 			if v, ok := ds.Stats.Tracker[h.name]; ok {
 				var printedValue string
 				if strings.HasSuffix(h.name, ".size") {
@@ -125,6 +138,9 @@ func _zerout(cols []*header, st stats.DaemonStatusMap) []*header {
 			continue
 		}
 		for _, ds := range st {
+			if ds.Status != api.StatusOnline {
+				continue
+			}
 			if v, ok := ds.Stats.Tracker[h.name]; ok && v.Value != 0 {
 				found = true
 				break

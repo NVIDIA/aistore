@@ -479,7 +479,7 @@ func (t *target) Stop(err error) {
 
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
-		t.statsT.Add(stats.RestartCount, 1)
+		t.statsT.Inc(stats.RestartCount)
 
 		// TODO -- FIXME quick and dirty to trigger rebalance
 		fs.PersistMarker(fname.RebalanceMarker)
@@ -819,7 +819,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		err = t.objMv(lom, msg)
 	}
 	if err == nil {
-		t.statsT.Add(stats.RenameCount, 1)
+		t.statsT.Inc(stats.RenameCount)
 	} else {
 		t.statsT.IncErr(stats.RenameCount)
 		t.writeErr(w, r, err)
@@ -1240,7 +1240,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error
 		}
 	}
 	if err == nil {
-		t.statsT.Add(stats.DeleteCount, 1)
+		t.statsT.Inc(stats.DeleteCount)
 	} else {
 		t.statsT.IncErr(stats.DeleteCount) // TODO: count GET/PUT/DELETE remote errors separately..
 	}

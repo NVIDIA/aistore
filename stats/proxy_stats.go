@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -14,6 +14,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
+
+// NOTE: currently, proxy's stats == common and hardcoded
 
 type Prunner struct {
 	statsRunner
