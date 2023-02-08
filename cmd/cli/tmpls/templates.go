@@ -31,19 +31,23 @@ const (
 
 const rebalanceExpirationTime = 5 * time.Minute
 
-// Templates for output
-// ** Changing the structure of the objects server side needs to make sure that this will still work **
 const (
-	primarySuffix      = "(primary)"
-	nonElectableSuffix = "(non-electable)"
-	MaintenanceSuffix  = "(maintenance)"
-	DecommissionSuffix = "(decommission)"
+	primarySuffix       = "[P]"
+	nonElectableSuffix  = "[n/e]"
+	specialStatusSuffix = "[x]" // (daeStatus, via apc.GetWhatDaemonStatus)
 
+	NodeOnline = "online"
+)
+
+const (
 	xactStateFinished = "Finished"
 	xactStateRunning  = "Running"
 	xactStateIdle     = "Idle"
 	xactStateAborted  = "Aborted"
+)
 
+// output templates
+const (
 	// Smap
 	smapHdr = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +

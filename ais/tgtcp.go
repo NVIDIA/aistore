@@ -255,9 +255,10 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				rebSnap = xctn.Snap()
 			}
 		}
+		smap := t.owner.smap.get()
 		msg := &stats.DaemonStatus{
 			Snode:          t.htrun.si,
-			SmapVersion:    t.owner.smap.get().Version,
+			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
 			Stats:          t.statsT.CoreStats(),
 			RebSnap:        rebSnap,
@@ -265,6 +266,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Version:        daemon.version,
 			BuildTime:      daemon.buildTime,
 			K8sPodName:     os.Getenv(env.AIS.K8sPod),
+			Status:         t._status(smap),
 		}
 		// capacity
 		tstats := t.statsT.(*stats.Trunner)

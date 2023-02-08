@@ -26,7 +26,9 @@ var curSmap *cluster.Smap
 // within-a-single-command lifecycle and singlethreaded-ness eliminate
 // all scenarios that'd be otherwise commonly expected
 func getClusterMap(c *cli.Context) (*cluster.Smap, error) {
-	if curSmap != nil {
+	// when "long-running" refresh Smap as well
+	// (see setLongRunParams)
+	if curSmap != nil && !flagIsSet(c, refreshFlag) {
 		return curSmap, nil
 	}
 	smap, err := api.GetClusterMap(apiBP)

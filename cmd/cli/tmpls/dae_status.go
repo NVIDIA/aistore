@@ -7,7 +7,6 @@ package tmpls
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,7 +67,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 			{name: colMemAvail},
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
-			{name: colStatus, hide: len(status) == 1 && status[0] == api.StatusOnline && len(ps) > 1},
+			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
 			{name: colVersion, hide: len(versions) == 1 && len(ps) > 1},
 			{name: colBuildTime, hide: len(versions) == 1 && len(ps) > 1}, // intended
 		}
@@ -80,7 +79,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 	for _, sid := range ids {
 		ds := ps[sid]
 
-		if ds.Status != api.StatusOnline {
+		if ds.Status != NodeOnline {
 			row := []string{
 				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 				unknownVal,
@@ -140,7 +139,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 			{name: colRebalance, hide: len(h.rebalance()) == 0},
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
-			{name: colStatus, hide: len(status) == 1 && status[0] == api.StatusOnline && len(ts) > 1},
+			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
 			{name: colVersion, hide: len(versions) == 1 && len(ts) > 1},
 			{name: colBuildTime, hide: len(versions) == 1 && len(ts) > 1}, // intended
 		}
@@ -151,7 +150,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 	for _, sid := range ids {
 		ds := ts[sid]
 
-		if ds.Status != api.StatusOnline {
+		if ds.Status != NodeOnline {
 			row := []string{
 				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 				unknownVal,

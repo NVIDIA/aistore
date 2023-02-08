@@ -1975,6 +1975,18 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 	return cmn.WriteErrJSON(w, r, out, err)
 }
 
+// (via apc.GetWhatDaemonStatus)
+func (h *htrun) _status(smap *smapX) (daeStatus string) {
+	self := smap.GetNode(h.si.ID()) // updated flags
+	switch {
+	case self.Flags.IsSet(cluster.NodeFlagMaint):
+		daeStatus = apc.NodeMaintenance
+	case self.Flags.IsSet(cluster.NodeFlagDecomm):
+		daeStatus = apc.NodeDecommission
+	}
+	return
+}
+
 ////////////////
 // callResult //
 ////////////////

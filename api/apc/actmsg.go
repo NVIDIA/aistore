@@ -109,6 +109,11 @@ const (
 	ActAbort  = "abort"
 )
 
+const (
+	NodeMaintenance  = "maintenance"
+	NodeDecommission = "decommission"
+)
+
 // ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActMsg struct {

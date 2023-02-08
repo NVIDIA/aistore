@@ -504,11 +504,9 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	smap, err := api.GetClusterMap(bp)
 	tassert.CheckFatal(t, err)
 
-	if nat := smap.CountActiveTs(); nat < 2 {
+	if nat := smap.CountActiveTs(); nat < 1 {
+		// NOTE in re nat == 1: single remaining target vs. graceful shutdown and such
 		s := "No targets"
-		if nat == 1 {
-			s = "Single target in the cluster"
-		}
 		tlog.Logf("%s, %s - cannot rebalance\n", s, smap)
 		_waitResil(t, bp, 2*time.Second)
 		return

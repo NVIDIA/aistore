@@ -5,9 +5,6 @@
 package api
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -18,12 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
-)
-
-const (
-	StatusOnline   = "online"
-	StatusOffline  = "offline"
-	StatusTimedOut = "timed out"
 )
 
 type GetLogInput struct {
@@ -225,7 +216,7 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, 
 }
 
 // GetDaemonStatus returns information about specific node in a cluster.
-func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonStatus, err error) {
+func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.DaemonStatus, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -234,19 +225,9 @@ func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeInfo *stats.DaemonS
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDaemonStatus}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
-	_, err = reqParams.DoReqAny(&daeInfo)
+	_, err = reqParams.DoReqAny(&daeStatus)
 	FreeRp(reqParams)
-	if err == nil {
-		daeInfo.Status = StatusOnline
-	} else {
-		daeInfo = &stats.DaemonStatus{Snode: node, Status: StatusOffline}
-		if errors.Is(err, context.DeadlineExceeded) {
-			daeInfo.Status = StatusTimedOut
-		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
-			daeInfo.Status = fmt.Sprintf("error: %d", herr.Status)
-		}
-	}
-	return daeInfo, err
+	return daeStatus, err
 }
 
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.

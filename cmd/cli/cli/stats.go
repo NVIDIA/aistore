@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
@@ -81,34 +82,38 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (*cluster.Smap, error) {
 	return smap, nil
 }
 
-func daeStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap cluster.NodeMap, out stats.DaemonStatusMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
-			_status(si, mu, daeMap)
+			_status(si, mu, out)
 			wg.Done()
 		}(si)
 	}
 }
 
-func _status(node *cluster.Snode, mu *sync.Mutex, daeMap stats.DaemonStatusMap) {
+func _status(node *cluster.Snode, mu *sync.Mutex, out stats.DaemonStatusMap) {
 	daeStatus, err := api.GetDaemonStatus(apiBP, node)
-	switch {
-	case node.Flags.IsSet(cluster.NodeFlagMaint):
-		daeStatus.Status = tmpls.MaintenanceSuffix
-	case node.Flags.IsSet(cluster.NodeFlagDecomm):
-		daeStatus.Status = tmpls.DecommissionSuffix
-	case err != nil:
-		if strings.HasPrefix(err.Error(), "errNodeNotFound") {
+	if err != nil {
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
+			daeStatus = &stats.DaemonStatus{Snode: node, Status: herr.TypeCode}
+		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
 			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[errNodeNotFound]"}
 		} else {
 			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[" + err.Error() + "]"}
 		}
-	default:
-		// keep daeStatus.Status (api.StatusOnline, ...) as is
+	} else if daeStatus.Status == "" {
+		daeStatus.Status = tmpls.NodeOnline
+		switch {
+		case node.Flags.IsSet(cluster.NodeFlagMaint):
+			daeStatus.Status = apc.NodeMaintenance
+		case node.Flags.IsSet(cluster.NodeFlagDecomm):
+			daeStatus.Status = apc.NodeDecommission
+		}
 	}
+
 	mu.Lock()
-	daeMap[node.ID()] = daeStatus
+	out[node.ID()] = daeStatus
 	mu.Unlock()
 }
 

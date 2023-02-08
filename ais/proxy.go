@@ -2368,15 +2368,17 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.writeJSON(w, r, smap, what)
 	case apc.GetWhatDaemonStatus:
+		smap := p.owner.smap.get()
 		msg := &stats.DaemonStatus{
 			Snode:          p.htrun.si,
-			SmapVersion:    p.owner.smap.get().Version,
+			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
 			Stats:          p.statsT.CoreStats(),
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,
 			BuildTime:      daemon.buildTime,
 			K8sPodName:     os.Getenv(env.AIS.K8sPod),
+			Status:         p._status(smap),
 		}
 
 		p.writeJSON(w, r, msg, what)

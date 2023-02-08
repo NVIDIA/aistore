@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -83,29 +82,29 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) string {
+func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) (snamePlus string) {
 	si := smap.GetNode(id)
-	sname := si.StringEx()
+	snamePlus = si.StringEx()
+
+	if len(daeStatus) > 0 {
+		if daeStatus[0] != NodeOnline {
+			snamePlus += specialStatusSuffix
+			return
+		}
+	}
 	if id == smap.Primary.ID() {
-		sname += primarySuffix
+		snamePlus += primarySuffix
+		return
 	}
 	if smap.NonElectable(si) {
 		debug.Assert(si.IsProxy())
-		sname += nonElectableSuffix
+		snamePlus += nonElectableSuffix
+		return
 	}
-	if len(daeStatus) > 0 {
-		if daeStatus[0] != api.StatusOnline {
-			sname += daeStatus[0]
-		}
-	} else {
-		switch {
-		case si.Flags.IsSet(cluster.NodeFlagMaint):
-			sname += MaintenanceSuffix
-		case si.Flags.IsSet(cluster.NodeFlagDecomm):
-			sname += DecommissionSuffix
-		}
+	if si.InMaintOrDecomm() {
+		snamePlus += specialStatusSuffix
 	}
-	return sname
+	return
 }
 
 func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
