@@ -1096,7 +1096,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if smap.PresentInMaint(si) {
+	if smap.InMaintOrDecomm(si) {
 		p.writeErrf(w, r, "node %q is already in maintenance", opts.DaemonID)
 		return
 	}
@@ -1144,7 +1144,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if !smap.PresentInMaint(si) {
+	if !smap.InMaintOrDecomm(si) {
 		p.writeErrf(w, r, "node %q is not under maintenance", si.StringEx())
 		return
 	}
@@ -1450,7 +1450,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		glog.Warningf("Request to set primary to %s(self) - nothing to do", proxyid)
 		return
 	}
-	if smap.PresentInMaint(psi) {
+	if smap.InMaintOrDecomm(psi) {
 		err := fmt.Errorf("%s: cannot set new primary - under maintenance", psi)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
@@ -1696,19 +1696,19 @@ func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
 		goto ret
 	}
 	for _, si := range cur.Tmap {
-		if si.IsProxy() || si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+		if si.IsProxy() || si.InMaintOrDecomm() {
 			continue
 		}
-		if prev.GetNodeNotMaint(si.ID()) == nil { // added or activated
+		if prev.GetActiveNode(si.ID()) == nil { // added or activated
 			ctx._mustReb = true
 			goto ret
 		}
 	}
 	for _, si := range prev.Tmap {
-		if si.IsProxy() || si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+		if si.IsProxy() || si.InMaintOrDecomm() {
 			continue
 		}
-		if cur.GetNodeNotMaint(si.ID()) == nil { // deleted or deactivated
+		if cur.GetActiveNode(si.ID()) == nil { // deleted or deactivated
 			ctx._mustReb = true
 			goto ret
 		}

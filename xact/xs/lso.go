@@ -297,7 +297,7 @@ func (r *LsoXact) nextPageR() error {
 		err  error
 		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
 		smap = r.p.T.Sowner().Get()
-		tsi  = smap.GetNodeNotMaint(r.msg.SID)
+		tsi  = smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
 		err = fmt.Errorf("%s: lost, missing, or inactive t[%s], %s", r, r.msg.SID, smap)

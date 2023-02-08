@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -82,7 +83,7 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDaemonID(id string, smap *cluster.Smap) string {
+func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) string {
 	si := smap.GetNode(id)
 	sname := si.StringEx()
 	if id == smap.Primary.ID() {
@@ -91,6 +92,18 @@ func fmtDaemonID(id string, smap *cluster.Smap) string {
 	if smap.NonElectable(si) {
 		debug.Assert(si.IsProxy())
 		sname += nonElectableSuffix
+	}
+	if len(daeStatus) > 0 {
+		if daeStatus[0] != api.StatusOnline {
+			sname += daeStatus[0]
+		}
+	} else {
+		switch {
+		case si.Flags.IsSet(cluster.NodeFlagMaint):
+			sname += MaintenanceSuffix
+		case si.Flags.IsSet(cluster.NodeFlagDecomm):
+			sname += DecommissionSuffix
+		}
 	}
 	return sname
 }

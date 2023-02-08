@@ -253,9 +253,9 @@ func (d *Snode) IsProxy() bool  { return d.DaeType == apc.Proxy }
 func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
-func (d *Snode) IsAnySet(flags cos.BitFlags) bool { return d.Flags.IsAnySet(flags) }
-func (d *Snode) nonElectable() bool               { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) isIC() bool                       { return d.Flags.IsSet(SnodeIC) }
+func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(NodeFlagsMaintDecomm) }
+func (d *Snode) nonElectable() bool    { return d.Flags.IsSet(SnodeNonElectable) }
+func (d *Snode) isIC() bool            { return d.Flags.IsSet(SnodeIC) }
 
 /////////////
 // NetInfo //
@@ -325,7 +325,7 @@ func (m *Smap) Count() int        { return len(m.Pmap) + len(m.Tmap) }
 
 func (m *Smap) CountActiveTs() (count int) {
 	for _, t := range m.Tmap {
-		if !t.IsAnySet(NodeFlagsMaintDecomm) {
+		if !t.InMaintOrDecomm() {
 			count++
 		}
 	}
@@ -334,7 +334,7 @@ func (m *Smap) CountActiveTs() (count int) {
 
 func (m *Smap) HasActiveTargetPeers() bool {
 	for tid, t := range m.Tmap {
-		if tid == T.SID() || t.IsAnySet(NodeFlagsMaintDecomm) {
+		if tid == T.SID() || t.InMaintOrDecomm() {
 			continue
 		}
 		return true
@@ -344,7 +344,7 @@ func (m *Smap) HasActiveTargetPeers() bool {
 
 func (m *Smap) CountActivePs() (count int) {
 	for _, p := range m.Pmap {
-		if !p.IsAnySet(NodeFlagsMaintDecomm) {
+		if !p.InMaintOrDecomm() {
 			count++
 		}
 	}
@@ -393,7 +393,6 @@ func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
 	return
 }
 
-// (compare w/ GetNodeNotMaint)
 func (m *Smap) GetNode(id string) *Snode {
 	if node := m.GetTarget(id); node != nil {
 		return node
@@ -401,11 +400,10 @@ func (m *Smap) GetNode(id string) *Snode {
 	return m.GetProxy(id)
 }
 
-// present and _not_ in maintenance
-// (compare w/ PresentInMaint)
-func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
+// (convenient, slightly redundant)
+func (m *Smap) GetActiveNode(sid string) (si *Snode) {
 	si = m.GetNode(sid)
-	if si != nil && si.IsAnySet(NodeFlagsMaintDecomm) {
+	if si != nil && si.InMaintOrDecomm() {
 		si = nil
 	}
 	return
@@ -413,7 +411,7 @@ func (m *Smap) GetNodeNotMaint(sid string) (si *Snode) {
 
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
-		if !tsi.IsAnySet(NodeFlagsMaintDecomm) {
+		if !tsi.InMaintOrDecomm() {
 			return
 		}
 	}
@@ -423,7 +421,7 @@ func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 	var cnt int
 	for _, psi := range m.Pmap {
-		if psi.IsAnySet(NodeFlagsMaintDecomm) {
+		if psi.InMaintOrDecomm() {
 			cnt++
 			continue
 		}
@@ -487,10 +485,11 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 	return node != nil && node.nonElectable()
 }
 
-// true when present and in maintenance (compare w/ GetNodeNotMaint)
-func (m *Smap) PresentInMaint(si *Snode) (ok bool) {
+// given Snode, check (usually, the current) Smap that it is present _and_ InMaintOrDecomm
+// (see also GetActiveNode)
+func (m *Smap) InMaintOrDecomm(si *Snode) (ok bool) {
 	node := m.GetNode(si.ID())
-	return node != nil && node.IsAnySet(NodeFlagsMaintDecomm)
+	return node != nil && node.InMaintOrDecomm()
 }
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
@@ -534,7 +533,7 @@ func (m NodeMap) Add(snode *Snode) { debug.Assert(m != nil); m[snode.DaeID] = sn
 func (m NodeMap) ActiveMap() (clone NodeMap) {
 	clone = make(NodeMap, len(m))
 	for id, node := range m {
-		if node.IsAnySet(NodeFlagsMaintDecomm) {
+		if node.InMaintOrDecomm() {
 			continue
 		}
 		clone[id] = node
@@ -545,7 +544,7 @@ func (m NodeMap) ActiveMap() (clone NodeMap) {
 func (m NodeMap) ActiveNodes() []*Snode {
 	snodes := make([]*Snode, 0, len(m))
 	for _, node := range m {
-		if node.IsAnySet(NodeFlagsMaintDecomm) {
+		if node.InMaintOrDecomm() {
 			continue
 		}
 		snodes = append(snodes, node)

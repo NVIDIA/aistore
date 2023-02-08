@@ -382,7 +382,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	// step 6: housekeep and return new pending
 	smap = y.p.owner.smap.get()
 	for sid := range y.nodesRevs {
-		si := smap.GetNodeNotMaint(sid)
+		si := smap.GetActiveNode(sid)
 		if si == nil {
 			delete(y.nodesRevs, sid)
 		}
@@ -426,7 +426,7 @@ func (y *metasyncer) useJIT(pair revsPair) revs {
 func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 	ndr, ok := y.nodesRevs[si.ID()]
 	smap := y.p.owner.smap.get()
-	if smap.GetNodeNotMaint(si.ID()) == nil {
+	if smap.GetActiveNode(si.ID()) == nil {
 		if ok {
 			delete(y.nodesRevs, si.ID())
 		}

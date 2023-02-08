@@ -41,7 +41,7 @@ func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error)
 		digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if skipMaint && tsi.IsAnySet(NodeFlagsMaintDecomm) {
+		if skipMaint && tsi.InMaintOrDecomm() {
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
@@ -72,7 +72,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 
 	for _, tsi := range smap.Tmap {
 		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
-		if tsi.IsAnySet(NodeFlagsMaintDecomm) {
+		if tsi.InMaintOrDecomm() {
 			continue
 		}
 		hlist.add(cs, tsi)
@@ -94,7 +94,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 		if psi.Flags.IsSet(SnodeNonElectable) {
 			continue
 		}
-		if psi.IsAnySet(NodeFlagsMaintDecomm) {
+		if psi.InMaintOrDecomm() {
 			continue
 		}
 		if psi.idDigest >= max {
@@ -114,7 +114,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
-		if psi.IsAnySet(NodeFlagsMaintDecomm) || !psi.isIC() {
+		if psi.InMaintOrDecomm() || !psi.isIC() {
 			continue
 		}
 		cs := xoshiro256.Hash(psi.idDigest ^ digest)
@@ -137,7 +137,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
-		if tsi.IsAnySet(NodeFlagsMaintDecomm) {
+		if tsi.InMaintOrDecomm() {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized

@@ -2228,8 +2228,8 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	smap := p.owner.smap.get()
 	si := smap.GetNode(nodeID)
-	if si != nil && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
-		// e.g. "good" scenario: node shutdown when we transition through states
+	if si != nil && si.InMaintOrDecomm() {
+		// e.g. scenario: node shutdown when we transition through states
 		glog.Warningf("%s: %s is in maintenance or decommissioned - proceeding anyway...", p.si, si.StringEx())
 	}
 
@@ -2647,7 +2647,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	// self
 	if p.si.ID() == proxyID {
 		smap := p.owner.smap.get()
-		if smap.GetNodeNotMaint(proxyID) == nil {
+		if smap.GetActiveNode(proxyID) == nil {
 			p.writeErrf(w, r, "%s: in maintenance or decommissioned", p)
 			return
 		}

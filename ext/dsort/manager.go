@@ -234,7 +234,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// we will know that all daemons have finished operation).
 	m.finishedAck.m = make(map[string]struct{}, targetCount)
 	for sid, si := range m.smap.Tmap {
-		if m.smap.PresentInMaint(si) {
+		if m.smap.InMaintOrDecomm(si) {
 			continue
 		}
 		m.finishedAck.m[sid] = struct{}{}

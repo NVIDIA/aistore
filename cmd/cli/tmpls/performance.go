@@ -92,11 +92,7 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 			continue
 		}
 		row := make([]string, 0, len(cols))
-		if ds.Status != api.StatusOnline {
-			row = append(row, fmtDaemonID(tid, smap)+"-"+ds.Status)
-		} else {
-			row = append(row, fmtDaemonID(tid, smap))
-		}
+		row = append(row, fmtDaemonID(tid, smap, ds.Status))
 		for _, h := range cols[1:] {
 			if ds.Status != api.StatusOnline {
 				row = append(row, unknownVal)

@@ -473,7 +473,7 @@ func (n *notifs) ListenSmapChanged() {
 	for uuid, nl := range n.nls.m {
 		nl.RLock()
 		for sid := range nl.ActiveNotifiers() {
-			if node := smap.GetNodeNotMaint(sid); node == nil {
+			if node := smap.GetActiveNode(sid); node == nil {
 				remnl[uuid] = nl
 				remid[uuid] = sid
 				break

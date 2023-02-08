@@ -710,14 +710,14 @@ func (h *htrun) callerNotify(n cluster.Notif, err error, upon string) {
 	debug.Assert(upon == apc.Progress || upon == apc.Finished)
 	if len(dsts) == 1 && dsts[0] == equalIC {
 		for pid, psi := range smap.Pmap {
-			if smap.IsIC(psi) && pid != h.si.ID() && !psi.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+			if smap.IsIC(psi) && pid != h.si.ID() && !psi.InMaintOrDecomm() {
 				nodes = append(nodes, psi)
 			}
 		}
 	} else {
 		for _, dst := range dsts {
 			debug.Assert(dst != equalIC)
-			if si := smap.GetNodeNotMaint(dst); si != nil {
+			if si := smap.GetActiveNode(dst); si != nil {
 				nodes = append(nodes, si)
 			} else {
 				glog.Error(&errNodeNotFound{"failed to notify", dst, h.si, smap})
@@ -804,7 +804,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 			if si.ID() == h.si.ID() {
 				continue
 			}
-			if !bargs.ignoreMaintenance && si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+			if !bargs.ignoreMaintenance && si.InMaintOrDecomm() {
 				continue
 			}
 			wg.Add(1)
@@ -844,7 +844,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	for pid, psi := range smap.Pmap {
-		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetNodeNotMaint(pid) == nil {
+		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetActiveNode(pid) == nil {
 			continue
 		}
 		wg.Add(1)
@@ -1235,7 +1235,7 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 		if sid == h.si.ID() {
 			continue
 		}
-		if si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+		if si.InMaintOrDecomm() {
 			continue
 		}
 		if count > 0 && count < len(nodemap) && i > count {

@@ -8,6 +8,7 @@ package cli
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -91,16 +92,23 @@ func daeStatus(nodeMap cluster.NodeMap, daeMap stats.DaemonStatusMap, wg cos.WG,
 }
 
 func _status(node *cluster.Snode, mu *sync.Mutex, daeMap stats.DaemonStatusMap) {
-	daeInfo, err := api.GetDaemonStatus(apiBP, node)
-	if err != nil {
-		daeInfo = &stats.DaemonStatus{Snode: node, Status: "Error: " + err.Error()}
-	} else if node.Flags.IsSet(cluster.NodeFlagMaint) {
-		daeInfo.Status = "maintenance"
-	} else if node.Flags.IsSet(cluster.NodeFlagDecomm) {
-		daeInfo.Status = "decommission"
+	daeStatus, err := api.GetDaemonStatus(apiBP, node)
+	switch {
+	case node.Flags.IsSet(cluster.NodeFlagMaint):
+		daeStatus.Status = tmpls.MaintenanceSuffix
+	case node.Flags.IsSet(cluster.NodeFlagDecomm):
+		daeStatus.Status = tmpls.DecommissionSuffix
+	case err != nil:
+		if strings.HasPrefix(err.Error(), "errNodeNotFound") {
+			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[errNodeNotFound]"}
+		} else {
+			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[" + err.Error() + "]"}
+		}
+	default:
+		// keep daeStatus.Status (api.StatusOnline, ...) as is
 	}
 	mu.Lock()
-	daeMap[node.ID()] = daeInfo
+	daeMap[node.ID()] = daeStatus
 	mu.Unlock()
 }
 

@@ -36,6 +36,8 @@ const rebalanceExpirationTime = 5 * time.Minute
 const (
 	primarySuffix      = "(primary)"
 	nonElectableSuffix = "(non-electable)"
+	MaintenanceSuffix  = "(maintenance)"
+	DecommissionSuffix = "(decommission)"
 
 	xactStateFinished = "Finished"
 	xactStateRunning  = "Running"

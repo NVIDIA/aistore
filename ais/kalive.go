@@ -225,7 +225,7 @@ func (pkr *palive) updateSmap() (stopped bool) {
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
-			if si.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+			if si.InMaintOrDecomm() {
 				continue
 			}
 			// do keepalive

@@ -752,7 +752,7 @@ func broadcastTargets(method, path string, urlParams url.Values, body []byte, sm
 	idx := 0
 outer:
 	for _, node := range smap.Tmap {
-		if smap.PresentInMaint(node) {
+		if smap.InMaintOrDecomm(node) {
 			continue
 		}
 		for _, ignoreNode := range ignore {

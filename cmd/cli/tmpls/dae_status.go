@@ -78,29 +78,45 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 	ids := statusMap2SortedNodes(ps)
 
 	for _, sid := range ids {
-		status := ps[sid]
-		memUsed := fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed)
-		if status.MemCPUInfo.PctMemUsed == 0 {
+		ds := ps[sid]
+
+		if ds.Status != api.StatusOnline {
+			row := []string{
+				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				ds.K8sPodName,
+				ds.Status,
+				ds.Version,
+				ds.BuildTime,
+			}
+			table.addRow(row)
+			continue
+		}
+
+		memUsed := fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed)
+		if ds.MemCPUInfo.PctMemUsed == 0 {
 			memUsed = unknownVal
 		}
-		memAvail := cos.UnsignedB2S(status.MemCPUInfo.MemAvail, 2)
-		if status.MemCPUInfo.MemAvail == 0 {
+		memAvail := cos.UnsignedB2S(ds.MemCPUInfo.MemAvail, 2)
+		if ds.MemCPUInfo.MemAvail == 0 {
 			memAvail = unknownVal
 		}
-		upns := extractStat(status.Stats, "up.ns.time")
+		upns := extractStat(ds.Stats, "up.ns.time")
 		uptime := fmtDuration(upns)
 		if upns == 0 {
 			uptime = unknownVal
 		}
 		row := []string{
-			fmtDaemonID(status.Snode.ID(), smap),
+			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			memUsed,
 			memAvail,
 			uptime,
-			status.K8sPodName,
-			status.Status,
-			status.Version,
-			status.BuildTime,
+			ds.K8sPodName,
+			ds.Status,
+			ds.Version,
+			ds.BuildTime,
 		}
 		table.addRow(row)
 	}
@@ -133,20 +149,40 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 	ids := statusMap2SortedNodes(ts)
 
 	for _, sid := range ids {
-		status := ts[sid]
+		ds := ts[sid]
+
+		if ds.Status != api.StatusOnline {
+			row := []string{
+				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				unknownVal,
+				ds.K8sPodName,
+				ds.Status,
+				ds.Version,
+				ds.BuildTime,
+			}
+			table.addRow(row)
+			continue
+		}
+
 		row := []string{
-			fmtDaemonID(status.Snode.ID(), smap),
-			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctMemUsed),
-			cos.UnsignedB2S(status.MemCPUInfo.MemAvail, 2),
-			fmt.Sprintf("%.2f%%", calcCapPercentage(status)),
-			cos.UnsignedB2S(calcCap(status), 3),
-			fmt.Sprintf("%.2f%%", status.MemCPUInfo.PctCPUUsed),
-			fmtRebStatus(status.RebSnap),
-			fmtDuration(extractStat(status.Stats, "up.ns.time")),
-			status.K8sPodName,
-			status.Status,
-			status.Version,
-			status.BuildTime,
+			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
+			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed),
+			cos.UnsignedB2S(ds.MemCPUInfo.MemAvail, 2),
+			fmt.Sprintf("%.2f%%", calcCapPercentage(ds)),
+			cos.UnsignedB2S(calcCap(ds), 3),
+			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctCPUUsed),
+			fmtRebStatus(ds.RebSnap),
+			fmtDuration(extractStat(ds.Stats, "up.ns.time")),
+			ds.K8sPodName,
+			ds.Status,
+			ds.Version,
+			ds.BuildTime,
 		}
 		table.addRow(row)
 	}
