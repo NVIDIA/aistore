@@ -28,7 +28,9 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python API](/docs/python_api.md), and [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) that also contains PyTorch integration and usage examples.
+* native [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore/sdk)([reference docs](/docs/python_sdk.md))
+* [PyTorch integration](https://github.com/NVIDIA/aistore/tree/master/python/aistore/pytorch) and usage examples
+* [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch) for using AIS as an S3 client
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 

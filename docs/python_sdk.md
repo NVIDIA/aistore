@@ -1,24 +1,22 @@
 ---
 layout: post
-title: PYTHON API
-permalink: /docs/python-api
+title: PYTHON SDK
+permalink: /docs/python-sdk
 redirect_from:
- - /python_api.md/
- - /docs/python_api.md/
+ - /python_sdk.md/
+ - /docs/python_sdk.md/
 ---
 
-AIStore Python API is a growing set of client-side objects and methods to access and utilize AIS clusters.
+AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters.
 
 > For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see [https://github.com/NVIDIA/aistore/tree/master/python/aistore](https://github.com/NVIDIA/aistore/tree/master/python/aistore).
 
-* [api](#api)
-  * [Client](#api.Client)
-    * [bucket](#api.Client.bucket)
-    * [cluster](#api.Client.cluster)
-    * [job](#api.Client.job)
-    * [etl](#api.Client.etl)
-    * [list\_objects\_iter](#api.Client.list_objects_iter)
-    * [get\_object](#api.Client.get_object)
+* [client](#client)
+  * [Client](#client.Client)
+    * [bucket](#client.Client.bucket)
+    * [cluster](#client.Client.cluster)
+    * [job](#client.Client.job)
+    * [etl](#client.Client.etl)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -28,7 +26,6 @@ AIStore Python API is a growing set of client-side objects and methods to access
 * [bucket](#bucket)
   * [Bucket](#bucket.Bucket)
     * [client](#bucket.Bucket.client)
-    * [bck](#bucket.Bucket.bck)
     * [qparam](#bucket.Bucket.qparam)
     * [provider](#bucket.Bucket.provider)
     * [name](#bucket.Bucket.name)
@@ -46,10 +43,11 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [object](#bucket.Bucket.object)
     * [objects](#bucket.Bucket.objects)
     * [make\_request](#bucket.Bucket.make_request)
+    * [verify\_cloud\_bucket](#bucket.Bucket.verify_cloud_bucket)
 * [object](#object)
   * [Object](#object.Object)
-    * [bck](#object.Object.bck)
-    * [obj\_name](#object.Object.obj_name)
+    * [bucket](#object.Object.bucket)
+    * [name](#object.Object.name)
     * [head](#object.Object.head)
     * [get](#object.Object.get)
     * [put](#object.Object.put)
@@ -71,7 +69,7 @@ AIStore Python API is a growing set of client-side objects and methods to access
     * [stop](#etl.Etl.stop)
     * [delete](#etl.Etl.delete)
 
-<a id="api.Client"></a>
+<a id="client.Client"></a>
 
 ## Class: Client
 
@@ -85,29 +83,31 @@ AIStore client for managing buckets, objects, ETL jobs
 
 - `endpoint` _str_ - AIStore endpoint
 
-<a id="api.Client.bucket"></a>
+<a id="client.Client.bucket"></a>
 
 ### bucket
 
 ```python
-def bucket(bck_name: str, provider: str = ProviderAIS, ns: Namespace = None)
+def bucket(bck_name: str,
+           provider: str = ProviderAIS,
+           namespace: Namespace = None)
 ```
 
 Factory constructor for bucket object.
-Does not make any HTTP request, only instantiates a bucket object owned by the client.
+Does not make any HTTP request, only instantiates a bucket object.
 
 **Arguments**:
 
-- `bck_name` _str_ - Name of bucket (optional, defaults to "ais").
-- `provider` _str_ - Provider of bucket (one of "ais", "aws", "gcp", ...).
-- `ns` _Namespace_ - Namespace of bucket (optional, defaults to None).
+- `bck_name` _str_ - Name of bucket
+- `provider` _str_ - Provider of bucket, one of "ais", "aws", "gcp", ... (optional, defaults to ais)
+- `namespace` _Namespace_ - Namespace of bucket (optional, defaults to None)
   
 
 **Returns**:
 
   The bucket object created.
 
-<a id="api.Client.cluster"></a>
+<a id="client.Client.cluster"></a>
 
 ### cluster
 
@@ -116,18 +116,13 @@ def cluster()
 ```
 
 Factory constructor for cluster object.
-Does not make any HTTP request, only instantiates a cluster object owned by the client.
-
-**Arguments**:
-
-  None
-  
+Does not make any HTTP request, only instantiates a cluster object.
 
 **Returns**:
 
   The cluster object created.
 
-<a id="api.Client.job"></a>
+<a id="client.Client.job"></a>
 
 ### job
 
@@ -136,18 +131,13 @@ def job()
 ```
 
 Factory constructor for job object, which contains job-related functions.
-Does not make any HTTP request, only instantiates a job object bound to the client.
-
-**Arguments**:
-
-  None
-  
+Does not make any HTTP request, only instantiates a job object.
 
 **Returns**:
 
   The job object created.
 
-<a id="api.Client.etl"></a>
+<a id="client.Client.etl"></a>
 
 ### etl
 
@@ -157,82 +147,11 @@ def etl()
 
 Factory constructor for ETL object.
 Contains APIs related to AIStore ETL operations.
-Does not make any HTTP request, only instantiates an ETL object bound to the client.
-
-**Arguments**:
-
-  None
-  
+Does not make any HTTP request, only instantiates an ETL object.
 
 **Returns**:
 
   The ETL object created.
-
-<a id="api.Client.list_objects_iter"></a>
-
-### list\_objects\_iter
-
-```python
-def list_objects_iter(bck_name: str,
-                      provider: str = ProviderAIS,
-                      prefix: str = "",
-                      props: str = "",
-                      page_size: int = 0) -> BucketLister
-```
-
-Returns an iterator for all objects in a bucket
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-  Defaults to "ais". Empty provider returns buckets of all providers.
-- `prefix` _str, optional_ - return only objects that start with the prefix
-- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
-
-**Returns**:
-
-- `BucketLister` - object iterator
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
-
-<a id="api.Client.get_object"></a>
-
-### get\_object
-
-```python
-def get_object(bck_name: str,
-               obj_name: str,
-               provider: str = ProviderAIS,
-               archpath: str = "",
-               chunk_size: int = 1) -> ObjStream
-```
-
-Reads an object
-
-**Arguments**:
-
-- `bck_name` _str_ - Name of a bucket
-- `obj_name` _str_ - Name of an object in the bucket
-- `provider` _str, optional_ - Name of bucket provider, one of "ais", "aws", "gcp", "az", "hdfs" or "ht".
-- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
-- `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-
-**Returns**:
-
-  The stream of bytes to read an object or a file inside an archive.
-
-**Raises**:
-
-- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
-- `requests.ConnectionError` - Connection error
-- `requests.ConnectionTimeout` - Timed out connecting to AIStore
-- `requests.ReadTimeout` - Timed out waiting response from AIStore
 
 <a id="cluster.Cluster"></a>
 
@@ -244,10 +163,6 @@ class Cluster()
 
 A class representing a cluster bound to an AIS client.
 
-**Arguments**:
-
-  None
-
 <a id="cluster.Cluster.client"></a>
 
 ### client
@@ -257,7 +172,7 @@ A class representing a cluster bound to an AIS client.
 def client()
 ```
 
-The client object bound to this cluster.
+Client this cluster uses to make requests
 
 <a id="cluster.Cluster.get_info"></a>
 
@@ -268,11 +183,6 @@ def get_info() -> Smap
 ```
 
 Returns state of AIS cluster, including the detailed information about its nodes.
-
-**Arguments**:
-
-  None
-  
 
 **Returns**:
 
@@ -304,7 +214,7 @@ Returns list of buckets in AIStore cluster.
 
 **Returns**:
 
-- `List[Bck]` - A list of buckets
+- `List[BucketModel]` - A list of buckets
   
 
 **Raises**:
@@ -322,12 +232,7 @@ Returns list of buckets in AIStore cluster.
 def is_aistore_running() -> bool
 ```
 
-Returns True if cluster is ready, or false if cluster is still setting up.
-
-**Arguments**:
-
-  None
-  
+Checks if cluster is ready or still setting up.
 
 **Returns**:
 
@@ -345,9 +250,10 @@ A class representing a bucket that contains user data.
 
 **Arguments**:
 
-- `bck_name` _str_ - name of bucket
-- `provider` _str, optional_ - provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
-- `ns` _Namespace, optional_ - namespace of bucket, defaults to None
+- `client` _RequestClient_ - Client for interfacing with AIS cluster
+- `name` _str_ - name of bucket
+- `provider` _str, optional_ - Provider of bucket (one of "ais", "aws", "gcp", ...), defaults to "ais"
+- `namespace` _Namespace, optional_ - Namespace of bucket, defaults to None
 
 <a id="bucket.Bucket.client"></a>
 
@@ -359,17 +265,6 @@ def client()
 ```
 
 The client bound to this bucket.
-
-<a id="bucket.Bucket.bck"></a>
-
-### bck
-
-```python
-@property
-def bck()
-```
-
-The custom type [Bck] corresponding to this bucket.
 
 <a id="bucket.Bucket.qparam"></a>
 
@@ -426,16 +321,6 @@ def create()
 Creates a bucket in AIStore cluster.
 Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
 
-**Arguments**:
-
-  None
-  
-
-**Returns**:
-
-  None
-  
-
 **Raises**:
 
 - `aistore.sdk.errors.AISError` - All other types of errors with AIStore
@@ -459,16 +344,6 @@ In all cases removes both the bucket's content _and_ the bucket's metadata from 
 Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
 (iff the bucket in question is, in fact, a Cloud bucket).
 
-**Arguments**:
-
-  None
-  
-
-**Returns**:
-
-  None
-  
-
 **Raises**:
 
 - `aistore.sdk.errors.AISError` - All other types of errors with AIStore
@@ -488,7 +363,8 @@ def rename(to_bck: str) -> str
 ```
 
 Renames bucket in AIStore cluster.
-Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous operation.
+Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous
+operation.
 
 **Arguments**:
 
@@ -523,12 +399,8 @@ NOTE: only Cloud buckets can be evicted.
 
 **Arguments**:
 
-- `keep_md` _bool, optional_ - If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name and its properties)
-  
-
-**Returns**:
-
-  None
+- `keep_md` _bool, optional_ - If true, evicts objects but keeps the bucket's metadata (i.e., the bucket's name
+  and its properties)
   
 
 **Raises**:
@@ -550,11 +422,6 @@ def head() -> Header
 ```
 
 Requests bucket properties.
-
-**Arguments**:
-
-  None
-  
 
 **Returns**:
 
@@ -621,16 +488,20 @@ def list_objects(prefix: str = "",
                  continuation_token: str = "") -> BucketList
 ```
 
-Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if available).
+Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
+available).
 
 **Arguments**:
 
 - `prefix` _str, optional_ - Return only objects that start with the prefix
-- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size".
+- `Properties` - "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+  "ec", "custom", "node".
 - `page_size` _int, optional_ - Return at most "page_size" objects.
-  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+  more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
-  Defaults to "0" - return maximum number objects.
+  Defaults to "0" - return maximum number of objects.
 - `uuid` _str, optional_ - Job ID, required to get the next page of objects
 - `continuation_token` _str, optional_ - Marks the object to start reading the next page
   
@@ -657,7 +528,7 @@ Returns a structure that contains a page of objects, job ID, and continuation to
 ```python
 def list_objects_iter(prefix: str = "",
                       props: str = "",
-                      page_size: int = 0) -> BucketLister
+                      page_size: int = 0) -> ObjectIterator
 ```
 
 Returns an iterator for all objects in bucket
@@ -665,16 +536,19 @@ Returns an iterator for all objects in bucket
 **Arguments**:
 
 - `prefix` _str, optional_ - Return only objects that start with the prefix
-- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `props` _str, optional_ - Comma-separated list of object properties to return. Default value is "name,size".
+- `Properties` - "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+  "ec", "custom", "node".
 - `page_size` _int, optional_ - return at most "page_size" objects
-  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+  more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects
   
 
 **Returns**:
 
-- `BucketLister` - object iterator
+- `ObjectIterator` - object iterator
   
 
 **Raises**:
@@ -701,9 +575,12 @@ Returns a list of all objects in bucket
 **Arguments**:
 
 - `prefix` _str, optional_ - return only objects that start with the prefix
-- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size". Properties: "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies", "ec", "custom", "node".
+- `props` _str, optional_ - comma-separated list of object properties to return. Default value is "name,size".
+- `Properties` - "name", "size", "atime", "version", "checksum", "cached", "target_url", "status", "copies",
+  "ec", "custom", "node".
 - `page_size` _int, optional_ - return at most "page_size" objects
-  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return more than 5,000 objects in a single page.
+  The maximum number of objects in response depends on the bucket backend. E.g, AWS bucket cannot return
+  more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects
   
@@ -742,7 +619,8 @@ Transforms all objects in a bucket and puts them to destination bucket.
 - `etl_name` _str_ - name of etl to be used for transformations
 - `to_bck` _str_ - destination bucket for transformations
 - `prefix` _str, optional_ - prefix to be added to resulting transformed objects
-- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced (i.e. {"jpg": "txt"})
+- `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
+  (i.e. {"jpg": "txt"})
 - `dry_run` _bool, optional_ - determines if the copy should actually happen or not
 - `force` _bool, optional_ - override existing destination bucket
   
@@ -819,6 +697,16 @@ Use the bucket's client to make a request to the bucket endpoint on the AIS serv
 
   Response from the server
 
+<a id="bucket.Bucket.verify_cloud_bucket"></a>
+
+### verify\_cloud\_bucket
+
+```python
+def verify_cloud_bucket()
+```
+
+Verify the bucket provider is a cloud provider
+
 <a id="object.Object"></a>
 
 ## Class: Object
@@ -831,29 +719,30 @@ A class representing an object of a bucket bound to a client.
 
 **Arguments**:
 
+- `bucket` _Bucket_ - Bucket to which this object belongs
 - `obj_name` _str_ - name of object
 
-<a id="object.Object.bck"></a>
+<a id="object.Object.bucket"></a>
 
-### bck
-
-```python
-@property
-def bck()
-```
-
-The custom type [Bck] bound to this object.
-
-<a id="object.Object.obj_name"></a>
-
-### obj\_name
+### bucket
 
 ```python
 @property
-def obj_name()
+def bucket()
 ```
 
-The name of this object.
+Bucket to which this object belongs
+
+<a id="object.Object.name"></a>
+
+### name
+
+```python
+@property
+def name()
+```
+
+Name of this object
 
 <a id="object.Object.head"></a>
 
@@ -864,11 +753,6 @@ def head() -> Header
 ```
 
 Requests object properties.
-
-**Arguments**:
-
-  None
-  
 
 **Returns**:
 
@@ -881,7 +765,7 @@ Requests object properties.
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exeptions.HTTPError(404)` - The object does not exist
+- `requests.exceptions.HTTPError(404)` - The object does not exist
 
 <a id="object.Object.get"></a>
 
@@ -890,16 +774,20 @@ Requests object properties.
 ```python
 def get(archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
-        etl_name: str = None) -> ObjStream
+        etl_name: str = None,
+        writer: BufferedWriter = None) -> ObjStream
 ```
 
 Reads an object
 
 **Arguments**:
 
-- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file from the archive
+- `archpath` _str, optional_ - If the object is an archive, use `archpath` to extract a single file
+  from the archive
 - `chunk_size` _int, optional_ - chunk_size to use while reading from stream
-  etl_name(str, optional): Transforms an object based on ETL with etl_name
+- `etl_name` _str, optional_ - Transforms an object based on ETL with etl_name
+- `writer` _BufferedWriter, optional_ - User-provided writer for writing content output.
+  User is responsible for closing the writer
   
 
 **Returns**:
@@ -953,11 +841,6 @@ def delete()
 
 Delete an object from a bucket.
 
-**Arguments**:
-
-  None
-  
-
 **Returns**:
 
   None
@@ -969,7 +852,7 @@ Delete an object from a bucket.
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `requests.exeptions.HTTPError(404)` - The object does not exist
+- `requests.exceptions.HTTPError(404)` - The object does not exist
 
 <a id="object_group.ObjectGroup"></a>
 
@@ -1086,10 +969,6 @@ class Etl()
 
 A class containing ETL-related functions.
 
-**Arguments**:
-
-  None
-
 <a id="etl.Etl.client"></a>
 
 ### client
@@ -1112,16 +991,16 @@ def init_spec(template: str,
               timeout: str = "5m")
 ```
 
-Initializes ETL based on POD spec template. Returns etl_name.
-Existing templates can be found at `sdk.etl_templates`
-For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
 
 **Arguments**:
 
-- `docker_image` _str_ - docker image name looks like: <hub-user>/<repo-name>:<tag>
-- `etl_name` _str_ - name of new ETL
+- `template` _str_ - Kubernetes pod spec template
+  Existing templates can be found at `sdk.etl_templates`
+  For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
+- `etl_name` _str_ - Name of new ETL
 - `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
-- `timeout` _str_ - timeout of the ETL (eg. 5m for 5 minutes)
+- `timeout` _str_ - Timeout of the ETL (eg. 5m for 5 minutes)
 
 **Returns**:
 
@@ -1151,9 +1030,11 @@ Initializes ETL based on the provided source code. Returns etl_name.
 - `runtime` _str_ - [optional, default= V2 implementation of the current python version if supported, else
   python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
   (see ext/etl/runtime/all.go)
-- `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev, hpush, io)
+- `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
+  hpush, io)
 - `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
-- `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data. (whole object is read by default)
+- `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data.
+  (whole object is read by default)
 
 **Returns**:
 
@@ -1170,10 +1051,6 @@ def list() -> List[ETLDetails]
 Lists all running ETLs.
 
 Note: Does not list ETLs that have been stopped or deleted.
-
-**Arguments**:
-
-  Nothing
 
 **Returns**:
 
@@ -1213,10 +1090,6 @@ Note: Deleted ETLs cannot be started.
 
 - `etl_name` _str_ - name of ETL
 
-**Returns**:
-
-  Nothing
-
 <a id="etl.Etl.stop"></a>
 
 ### stop
@@ -1225,15 +1098,12 @@ Note: Deleted ETLs cannot be started.
 def stop(etl_name: str)
 ```
 
-Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and terminates any transforms.
+Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and
+terminates any transforms.
 
 **Arguments**:
 
 - `etl_name` _str_ - name of ETL
-
-**Returns**:
-
-  Nothing
 
 <a id="etl.Etl.delete"></a>
 
@@ -1243,15 +1113,12 @@ Stops ETL with given ETL name. Stops (but does not delete) all the pods created 
 def delete(etl_name: str)
 ```
 
-Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL in Kubernetes.
+Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL
+in Kubernetes.
 
 Note: Running ETLs cannot be deleted.
 
 **Arguments**:
 
 - `etl_name` _str_ - name of ETL
-
-**Returns**:
-
-  Nothing
 

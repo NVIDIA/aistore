@@ -94,7 +94,7 @@ Below are the recommended commands for running the test suites. Run these comman
 
 ---
 
-### Pytorch
+### PyTorch
 
     python -m pytest tests/integration/pytorch
 

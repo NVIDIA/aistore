@@ -96,7 +96,7 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta client-bindings
+.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta
 
 all: node cli aisfs authn aisloader ## Build all main binaries
 
@@ -152,9 +152,6 @@ aisfs:
 	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
 	@echo "   done."
 
-client-bindings:
-	$(SCRIPTS_DIR)/generate-python-api-client.sh
-
 #
 # local deployment (intended for developers)
 #
@@ -175,7 +172,7 @@ restart: kill run
 #
 # cleanup local deployment (cached objects, logs, and executables)
 #
-.PHONY: kill clean clean-client-bindings
+.PHONY: kill clean
 
 kill: ## Kill all locally deployed clusters (all targets and all proxies)
 ifndef CLI_VERSION
@@ -189,9 +186,6 @@ clean: ## Remove all AIS related files and binaries
 	@echo -n "Cleaning... "
 	@"$(DEPLOY_DIR)/clean.sh"
 	@echo "done."
-
-clean-client-bindings: ## Remove all generated client binding files
-	$(SCRIPTS_DIR)/clean-python-api-client.sh
 
 #
 # go modules
@@ -341,5 +335,3 @@ help:
 		"MEM_PROFILE=/tmp/mem make deploy" "Deploy cluster with memory profiling enabled, write reports to /tmp/mem.<PID> (and make sure to stop gracefully)" \
 		"CPU_PROFILE=/tmp/cpu make deploy" "Build and deploy cluster instrumented for CPU profiling, write reports to /tmp/cpu.<PID>" \
 		"TAGS=nethttp make deploy" "Build 'transport' package with net/http (see transport/README.md) and deploy cluster locally" \
-		"make client-bindings" "Generate client bindings (ie. the python ais-client)"\
-		"make clean-client-bindings" "Clean up all generated client bindings"

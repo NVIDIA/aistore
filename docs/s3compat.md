@@ -25,9 +25,10 @@ For additional background, see:
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Quick example using `aws` CLI](#quick-example-using-aws-cli)
-  - [GET(object)](#getobject)
   - [PUT(object)](#putobject)
+  - [GET(object)](#getobject)
   - [HEAD(object)](#headobject)
 - [Quick example using Internet Browser](#quick-example-using-internet-browser)
 - [`s3cmd` command line](#s3cmd-command-line)
@@ -480,7 +481,7 @@ AIStore provides a shim that you can use to alter `botocore` and `boto3`'s behav
 
 To use `boto3` or `botocore` as client libraries for AIStore:
 
- - Install the [aistore python api](/docs/s3cmd.md) with the `botocore` extra.
+ - Install the [aistore python package](/docs/s3cmd.md) with the `botocore` extra.
 
 ```shell
 $ pip install aistore[botocore]

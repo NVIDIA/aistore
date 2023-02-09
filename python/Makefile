@@ -2,18 +2,18 @@
 SHELL := /bin/bash
 PYTHON = python3
 PIP = pip3
-DOCFILE := ../docs/python_api.md
+DOCFILE := ../docs/python_sdk.md
 define PREFIX =
 ---
 layout: post
-title: PYTHON API
-permalink: /docs/python-api
+title: PYTHON SDK
+permalink: /docs/python-sdk
 redirect_from:
- - /python_api.md/
- - /docs/python_api.md/
+ - /python_sdk.md/
+ - /docs/python_sdk.md/
 ---
 
-AIStore Python API is a growing set of client-side objects and methods to access and utilize AIS clusters.
+AIStore Python SDK is a growing set of client-side objects and methods to access and utilize AIS clusters.
 
 > For PyTorch integration and usage examples, please refer to [AIS Python SDK](https://pypi.org/project/aistore) available via Python Package Index (PyPI), or see [https://github.com/NVIDIA/aistore/tree/master/python/aistore](https://github.com/NVIDIA/aistore/tree/master/python/aistore).
 
@@ -91,5 +91,5 @@ generate-docs:
 	@ [[ $$(pipx --help) ]] || $(PIP) install pipx; $(PYTHON) -m pipx ensurepath --force
 	@ [[ $$(pydoc-markdown --help) ]] || pipx install --force pydoc-markdown[novella]
 	@ echo "$$PREFIX" > $(DOCFILE)
-	@ pydoc-markdown -I ./aistore/sdk -m api -m cluster -m bucket -m object -m object_group -m etl '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(DOCFILE)
+	@ pydoc-markdown -I ./aistore/sdk -m client -m cluster -m bucket -m object -m object_group -m etl '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(DOCFILE)
 	@ sed -i -e 's/####/###/g' $(DOCFILE)
