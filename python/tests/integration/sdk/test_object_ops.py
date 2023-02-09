@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 #
+import os
 
 # Default provider is AIS, so all Cloud-related tests are skipped.
 
@@ -51,19 +52,39 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
                 obj += chunk
         self.assertEqual(obj, exp_content)
 
-    def test_put_head_get(self):
-        num_objs = 10
-
-        for i in range(num_objs):
+    def _put_objects(self, num_obj):
+        name_to_content = {}
+        for i in range(num_obj):
             obj_name = f"obj{ i }"
             content = create_and_put_object(
                 client=self.client, bck_name=self.bck_name, obj_name=obj_name
             )
+            name_to_content[obj_name] = content
+        return name_to_content
+
+    def test_put_head_get(self):
+        objects = self._put_objects(10)
+        for obj_name, content in objects.items():
             properties = self.bucket.object(obj_name).head()
             self.assertEqual(properties[AIS_VERSION], "1")
             self.assertEqual(properties[CONTENT_LENGTH], str(len(content)))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
+
+    def test_get_with_writer(self):
+        filename = "test_get_with_writer.txt"
+        objects = self._put_objects(10)
+        all_content = b""
+        for obj_name, content in objects.items():
+            # Pass a writer that appends to a file
+            with open(filename, "ab") as writer:
+                self.bucket.object(obj_name).get(writer=writer)
+            all_content += content
+        # Verify file contents are written from each object
+        with open(filename, "rb") as reader:
+            output = reader.read()
+            self.assertEqual(all_content, output)
+        os.remove(filename)
 
     def test_list_object_page(self):
         bucket_size = 110

@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
-
+from io import BufferedWriter
 from typing import NewType
 import requests
 
@@ -74,6 +74,7 @@ class Object:
         archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
+        writer: BufferedWriter = None,
     ) -> ObjStream:
         """
         Reads an object
@@ -83,6 +84,8 @@ class Object:
                 from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
             etl_name (str, optional): Transforms an object based on ETL with etl_name
+            writer (BufferedWriter, optional): User-provided writer for writing content output.
+                User is responsible for closing the writer
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -103,11 +106,14 @@ class Object:
             params=params,
             stream=True,
         )
-        return ObjStream(
+        obj_stream = ObjStream(
             stream=resp,
             response_headers=resp.headers,
             chunk_size=chunk_size,
         )
+        if writer:
+            writer.writelines(obj_stream)
+        return obj_stream
 
     def put(self, path: str = None, content: bytes = None) -> Header:
         """

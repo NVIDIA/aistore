@@ -31,6 +31,7 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         self.mock_bucket = Mock()
         self.mock_bucket.client = self.mock_client
         self.mock_bucket.name = self.bck_name
+        self.mock_writer = Mock()
         self.mock_bucket.qparam = {}
         self.expected_params = {}
         self.object = Object(self.mock_bucket, self.obj_name)
@@ -61,6 +62,7 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
             archpath=archpath_param,
             chunk_size=DEFAULT_CHUNK_SIZE + 1,
             etl_name=etl_name,
+            writer=self.mock_writer,
         )
 
     def get_exec_assert(self, **kwargs):
@@ -107,6 +109,8 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
             params=self.expected_params,
             stream=True,
         )
+        if "writer" in kwargs:
+            self.mock_writer.writelines.assert_called_with(res)
 
     def test_put_conflicting_args(self):
         self.assertRaises(

@@ -83,6 +83,17 @@ client.bucket("my-ais-bucket").object("my-object").head()
 client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
 ```
 
+```python
+# Get Object
+client.bucket("my-ais-bucket").object("my-new-object").get()
+```
+
+```python
+# Get Object with user-defined writer. This will stream the response into the provided writer
+with open("filename.txt", "wb") as file_writer:
+    client.bucket("my-ais-bucket").object("my-new-object").get(writer=file_writer)
+```
+
 > If you are using AIS buckets, you can simply omit the provider argument (defaults to ProviderAIS) when instantiating a bucket object (`client.bucket("my-ais-bucket").create()` is equivalent to `client.bucket("my-ais-bucket", provider="ais").create()`).
 
 **Working with multiple objects**

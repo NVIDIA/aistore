@@ -93,7 +93,8 @@ disable=raw-checker-failed,
         use-symbolic-message-instead,
         broad-except,
         missing-module-docstring,
-        no-self-use
+        no-self-use,
+        no-name-in-module #Due to bug with pylint on 3.11 on builtin libs, remove when resolved
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
