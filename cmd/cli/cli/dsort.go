@@ -446,7 +446,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	// Show progress bar.
 	if !verbose && refresh && !logging {
-		refreshRate := calcRefreshRate(c)
+		refreshRate := _refreshRate(c)
 		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
@@ -477,7 +477,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	w := c.App.Writer
 
-	rate := calcRefreshRate(c)
+	rate := _refreshRate(c)
 	if logging {
 		file, err := cos.CreateFile(c.String(logFlag.Name))
 		if err != nil {

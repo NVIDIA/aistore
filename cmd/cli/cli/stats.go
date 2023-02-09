@@ -25,11 +25,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	curPrxStatus stats.DaemonStatusMap
-	curTgtStatus stats.DaemonStatusMap
-)
-
 // NOTE: target's metric names & kinds
 func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 	smap, err := getClusterMap(c)
@@ -50,12 +45,10 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 // stats.DaemonStatusMap
 //
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (*cluster.Smap, error) {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return nil, err
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap, err error) {
+	if smap, err = getClusterMap(c); err != nil {
+		return
 	}
-
 	var (
 		wg         cos.WG
 		mu         = &sync.Mutex{}
@@ -64,22 +57,22 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (*cluster.Smap, error) {
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
-		curTgtStatus = make(stats.DaemonStatusMap, tcnt)
-		daeStatus(smap.Tmap, curTgtStatus, wg, mu)
+		tstatusMap = make(stats.DaemonStatusMap, tcnt)
+		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
-		curPrxStatus = make(stats.DaemonStatusMap, pcnt)
-		daeStatus(smap.Pmap, curPrxStatus, wg, mu)
+		pstatusMap = make(stats.DaemonStatusMap, pcnt)
+		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-		curTgtStatus = make(stats.DaemonStatusMap, tcnt)
-		curPrxStatus = make(stats.DaemonStatusMap, pcnt)
-		daeStatus(smap.Pmap, curPrxStatus, wg, mu)
-		daeStatus(smap.Tmap, curTgtStatus, wg, mu)
+		tstatusMap = make(stats.DaemonStatusMap, tcnt)
+		pstatusMap = make(stats.DaemonStatusMap, pcnt)
+		daeStatus(smap.Tmap, tstatusMap, wg, mu)
+		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	}
 
 	wg.Wait()
-	return smap, nil
+	return
 }
 
 func daeStatus(nodeMap cluster.NodeMap, out stats.DaemonStatusMap, wg cos.WG, mu *sync.Mutex) {
@@ -168,17 +161,38 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 // throughput
 //
 
-func computeSleepRefreshBps(c *cli.Context) (sleep, averageOver time.Duration) {
-	sleep = calcRefreshRate(c)
-	averageOver = cos.MinDuration(cos.MaxDuration(sleep/2, 2*time.Second), 10*time.Second)
-	// adjust not to over-sleep
-	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
-	return
+// throughput as F(stats.DaemonStats)
+func _daeBps(c *cli.Context, node *cluster.Snode, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(averageOver)
+
+	statsEnd, err := api.GetDaemonStats(apiBP, node)
+	if err != nil {
+		return err
+	}
+	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
+	debug.Assert(seconds > 1)
+	for k, v := range statsBegin.Tracker {
+		vend := statsEnd.Tracker[k]
+		if metrics[k] == stats.KindThroughput {
+			if v.Value > 0 {
+				throughput := (vend.Value - v.Value) / seconds
+				v.Value = throughput
+			}
+		} else {
+			v.Value = vend.Value // more recent
+		}
+		statsBegin.Tracker[k] = v
+	}
+	return nil
 }
 
-// as F(stats.ClusterStats)
-// (compare w/ computecCluBps2)
-func computecCluBps1(c *cli.Context, statsBegin stats.ClusterStats, averageOver time.Duration) error {
+// troughput as F(stats.ClusterStats)
+func _cluStatsBps(c *cli.Context, statsBegin stats.ClusterStats, averageOver time.Duration) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
 		return err
@@ -211,70 +225,41 @@ func computecCluBps1(c *cli.Context, statsBegin stats.ClusterStats, averageOver 
 	return nil
 }
 
-// throughput as F(stats.DaemonStats)
-func computeDaeBps(c *cli.Context, node *cluster.Snode, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
-	metrics, err := getMetricNames(c)
-	if err != nil {
-		return err
-	}
+// units-per-second as F(stats.DaemonStatusMap)
+func _cluStatusMapPs(c *cli.Context, mapBegin stats.DaemonStatusMap, metrics cos.StrKVs,
+	averageOver time.Duration) (stats.DaemonStatusMap, stats.DaemonStatusMap, error) {
+	var (
+		mapEnd  stats.DaemonStatusMap
+		err     error
+		seconds = cos.MaxI64(int64(averageOver.Seconds()), 1) // averaging per second
+	)
+	debug.Assert(seconds > 1) // expecting a few
 
-	time.Sleep(averageOver)
-
-	statsEnd, err := api.GetDaemonStats(apiBP, node)
-	if err != nil {
-		return err
-	}
-	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
-	debug.Assert(seconds > 1)
-	for k, v := range statsBegin.Tracker {
-		vend := statsEnd.Tracker[k]
-		if metrics[k] == stats.KindThroughput {
-			if v.Value > 0 {
-				throughput := (vend.Value - v.Value) / seconds
-				v.Value = throughput
-			}
-		} else {
-			v.Value = vend.Value // more recent
+	if mapBegin == nil {
+		// begin stats
+		if _, mapBegin, _, err = fillNodeStatusMap(c, apc.Target); err != nil {
+			return nil, nil, err
 		}
-		statsBegin.Tracker[k] = v
-	}
-	return nil
-}
-
-// as F(stats.DaemonStatusMap)
-// (compare w/ computecCluBps1)
-func computecCluBps2(c *cli.Context, averageOver time.Duration) (stats.DaemonStatusMap, error) {
-	metrics, err := getMetricNames(c)
-	if err != nil {
-		return nil, err
 	}
 
-	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
-		return nil, err
-	}
-	statusMapBegin := curTgtStatus
 	time.Sleep(averageOver)
-	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
-		return nil, err
-	}
-	statusMapEnd := curTgtStatus
 
-	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
-	debug.Assert(seconds > 1)
-	for tid, begin := range statusMapBegin {
-		end := statusMapEnd[tid]
+	// post-interval stats
+	if _, mapEnd, _, err = fillNodeStatusMap(c, apc.Target); err != nil {
+		return nil, nil, err
+	}
+
+	// updating and returning mapBegin
+	for tid, begin := range mapBegin {
+		end := mapEnd[tid]
 		for k, v := range begin.Stats.Tracker {
-			vend := end.Stats.Tracker[k]
-			if metrics[k] == stats.KindThroughput {
-				if v.Value > 0 {
-					throughput := (vend.Value - v.Value) / seconds
-					v.Value = throughput
-				}
-			} else {
-				v.Value = vend.Value // more timely
+			if kind, ok := metrics[k]; !ok || kind == stats.KindCounter { // skip counters, if any
+				continue
 			}
+			vend := end.Stats.Tracker[k]
+			v.Value = (vend.Value - v.Value) / seconds
 			begin.Stats.Tracker[k] = v
 		}
 	}
-	return statusMapBegin, nil
+	return mapBegin, mapEnd, nil
 }

@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 )
 
@@ -92,63 +92,49 @@ var (
 	}
 )
 
-func showCountersHandler(c *cli.Context) (err error) {
-	var (
-		sid     string
-		smap    *cluster.Smap
-		metrics cos.StrKVs
-		regex   *regexp.Regexp
-
-		regexStr   = parseStrFlag(c, regexColsFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		allCols    = flagIsSet(c, allColumnsFlag)
-	)
-	if sid, _, err = argNode(c); err != nil {
-		return err
-	}
-	debug.Assert(sid == "" || getNodeType(c, sid) == apc.Target)
-	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
-		if err != nil {
-			return err
-		}
-	}
-
-	if smap, err = fillNodeStatusMap(c, apc.Target); err != nil {
-		return err
-	}
-	if smap.CountActiveTs() == 0 {
-		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
-	}
-	if metrics, err = getMetricNames(c); err != nil {
-		return err
-	}
-
-	setLongRunParams(c, 72)
-
-	table, err := tmpls.NewCountersTab(curTgtStatus, smap, sid, metrics, regex, allCols)
+// show all non-zero counters (unless allColumnsFlag)
+func showCountersHandler(c *cli.Context) error {
+	metrics, err := getMetricNames(c)
 	if err != nil {
 		return err
 	}
-	out := table.Template(hideHeader)
-	return tmpls.Print(curTgtStatus, c.App.Writer, out, nil, false /*usejs*/)
+
+	for name := range metrics {
+		if metrics[name] != stats.KindCounter {
+			delete(metrics, name)
+		}
+	}
+	return showPerformanceTab(c, metrics, false)
 }
 
-// TODO -- FIXME: work in progress from here on ---------------
-
-func showPerfHandler(c *cli.Context) error {
-	_, _, err := argNode(c, 0)
-	return err
-}
-
+// TODO -- FIXME: compute and add SUM(disk)/disks per target (w/ maybe min, max)
 func showThroughputHandler(c *cli.Context) error {
-	var (
-		sid     string
-		smap    *cluster.Smap
-		metrics cos.StrKVs
-		regex   *regexp.Regexp
+	metrics, err := getMetricNames(c)
+	if err != nil {
+		return err
+	}
+	for name := range metrics {
+		if metrics[name] == stats.KindThroughput {
+			continue
+		}
+		// but also take assorted error counters:
+		if name == stats.ErrPrefix+stats.GetCount ||
+			name == stats.ErrPrefix+stats.PutCount ||
+			name == stats.ErrPrefix+stats.ListCount ||
+			name == stats.ErrPutMirrorCount ||
+			name == stats.ErrHTTPWriteCount {
+			continue
+		}
+		// otherwise
+		delete(metrics, name)
+	}
+	return showPerformanceTab(c, metrics, true /* with units-per-time averaging*/)
+}
 
-		refresh    = flagIsSet(c, refreshFlag)
+// (generic)
+func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) error {
+	var (
+		regex      *regexp.Regexp
 		regexStr   = parseStrFlag(c, regexColsFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		allCols    = flagIsSet(c, allColumnsFlag)
@@ -158,7 +144,6 @@ func showThroughputHandler(c *cli.Context) error {
 		return err
 	}
 	debug.Assert(sid == "" || getNodeType(c, sid) == apc.Target)
-
 	if regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
 		if err != nil {
@@ -166,18 +151,61 @@ func showThroughputHandler(c *cli.Context) error {
 		}
 	}
 
-	{
-		_, _, _, _, _ = smap, metrics, regex, hideHeader, allCols // TODO -- FIXME:
+	smap, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
+	if err != nil {
+		return err
+	}
+	if smap.CountActiveTs() == 0 {
+		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
-	sleep, averageOver := computeSleepRefreshBps(c)
+	if !averaging {
+		setLongRunParams(c, 72)
+
+		table, err := tmpls.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, allCols)
+		if err != nil {
+			return err
+		}
+
+		out := table.Template(hideHeader)
+		return tmpls.Print(tstatusMap, c.App.Writer, out, nil, false /*usejs*/)
+	}
+
+	// until Ctrl-C
+	var (
+		refresh            = flagIsSet(c, refreshFlag)
+		sleep, averageOver = _refreshAvgRate(c)
+		mapBegin           stats.DaemonStatusMap
+	)
 	for {
-		_, err = computecCluBps2(c, averageOver)
+		mapBeginUpdated, mapEnd, err := _cluStatusMapPs(c, mapBegin, metrics, averageOver)
 		if err != nil || !refresh {
 			return err
 		}
+
 		time.Sleep(sleep)
+
+		table, err := tmpls.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, allCols)
+		if err != nil {
+			return err
+		}
+
+		out := table.Template(hideHeader)
+		err = tmpls.Print(mapBeginUpdated, c.App.Writer, out, nil, false /*usejs*/)
+		if err != nil {
+			return err
+		}
+		printLongRunFooter(c.App.Writer, 36)
+
+		mapBegin = mapEnd
 	}
+}
+
+// TODO -- FIXME: work in progress from here on ---------------
+
+func showPerfHandler(c *cli.Context) error {
+	_, _, err := argNode(c, 0)
+	return err
 }
 
 func showLatencyHandler(c *cli.Context) error {

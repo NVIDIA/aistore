@@ -19,12 +19,13 @@ import (
 
 var fred = color.New(color.FgHiRed)
 
-func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp,
+func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp,
 	allCols bool) (*Table, error) {
-	// 1. dynamically: counter names
+	// 1. columns
 	cols := make([]*header, 0, 32)
 	for tid, ds := range st {
 		debug.Assert(ds.Status != "", tid+" has no status")
+		// skip
 		if ds.Status != NodeOnline {
 			continue // maintenance mode et al. (see `cli._status`)
 		}
@@ -35,12 +36,13 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 
 		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
+		// selected by caller
 		for name := range ds.Stats.Tracker {
-			if metrics[name] == stats.KindCounter {
+			if _, ok := metrics[name]; ok {
 				cols = append(cols, &header{name: name, hide: false})
 			}
 		}
-		// just once
+		// only once
 		break
 	}
 
@@ -67,7 +69,7 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 	cols = _addStatus(cols, st)
 
 	// 5. convert metric to column names
-	printedColumns := _rename(cols)
+	printedColumns := _rename(cols, metrics)
 
 	// 6. regex to filter columns, if spec-ed
 	if regex != nil {
@@ -105,21 +107,30 @@ func NewCountersTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, me
 				row = append(row, unknownVal)
 				continue
 			}
-			if v, ok := ds.Stats.Tracker[h.name]; ok {
-				var printedValue string
-				if strings.HasSuffix(h.name, ".size") {
-					printedValue = cos.B2S(v.Value, 2)
-				} else {
-					printedValue = fmt.Sprintf("%d", v.Value)
-				}
-				if isErrCol(h.name) {
-					printedValue = fred.Sprintf("\t%s", printedValue)
-				}
-				row = append(row, printedValue)
-				continue
+
+			// format value
+			var (
+				printedValue string
+				v, ok1       = ds.Stats.Tracker[h.name]
+				kind, ok2    = metrics[h.name]
+			)
+			debug.Assert(ok1, h.name)
+			debug.Assert(ok2, h.name)
+			switch {
+			case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
+				printedValue = cos.B2S(v.Value, 2) + "/s"
+			case kind == stats.KindLatency:
+				printedValue = fmtDuration(v.Value)
+			case strings.HasSuffix(h.name, ".size"):
+				printedValue = cos.B2S(v.Value, 2)
+			default:
+				printedValue = fmt.Sprintf("%d", v.Value)
 			}
-			debug.Assert(false, h.name)
-			row = append(row, unknownVal)
+			// add some color
+			if isErrCol(h.name) {
+				printedValue = fred.Sprintf("\t%s", printedValue)
+			}
+			row = append(row, printedValue)
 		}
 		table.addRow(row)
 	}
@@ -170,17 +181,21 @@ func _addStatus(cols []*header, st stats.DaemonStatusMap) []*header {
 
 // convert metric names to column names
 // (for naming conventions, lookup "naming" and "convention" in stats/*)
-func _rename(cols []*header) (printedColumns []*header) {
+func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
 	printedColumns = make([]*header, len(cols))
 	for i, h := range cols {
 		var (
-			name  string
-			parts = strings.Split(h.name, ".")
+			name         string
+			kind, suffix string
+			ok           bool
+			parts        = strings.Split(h.name, ".")
 		)
 		if h.name == colTarget || h.name == colStatus {
 			name = h.name
 			goto add
 		}
+		kind, ok = metrics[h.name]
+		debug.Assert(ok, h.name)
 		// first name
 		switch parts[0] {
 		case "lru":
@@ -198,13 +213,19 @@ func _rename(cols []*header) (printedColumns []*header) {
 		default:
 			name = strings.ToUpper(parts[0])
 		}
-		// middle name: take everything in-between
+		// middle name (is every name in-between)
 		for i := 1; i < len(parts)-1; i++ {
 			name += "-" + strings.ToUpper(parts[i])
 		}
 
 		// suffix
-		if suffix := parts[len(parts)-1]; suffix == "size" {
+		suffix = parts[len(parts)-1]
+		switch {
+		case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
+			name += " (bw)"
+		case kind == stats.KindLatency:
+			name += " (latency)"
+		case suffix == "size":
 			name += "-" + strings.ToUpper(suffix)
 		}
 	add:

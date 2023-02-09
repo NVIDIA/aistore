@@ -73,8 +73,7 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-// Displays the status of the cluster or a node
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, sid string) error {
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap, cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs      = flagIsSet(c, jsonFlag)
 		hideHeader = flagIsSet(c, noHeaderFlag)
@@ -83,15 +82,15 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, cfg *cmn.ClusterConfig, si
 		Smap:      smap,
 		CluConfig: cfg,
 		Status: tmpls.DaemonStatusTemplateHelper{
-			Pmap: curPrxStatus,
-			Tmap: curTgtStatus,
+			Pmap: pstatusMap,
+			Tmap: tstatusMap,
 		},
 	}
-	if res, proxyOK := curPrxStatus[sid]; proxyOK {
+	if res, proxyOK := pstatusMap[sid]; proxyOK {
 		table := tmpls.NewDaeStatus(res, smap, apc.Proxy)
 		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
-	} else if res, targetOK := curTgtStatus[sid]; targetOK {
+	} else if res, targetOK := tstatusMap[sid]; targetOK {
 		table := tmpls.NewDaeStatus(res, smap, apc.Target)
 		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
@@ -123,13 +122,14 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	)
 	setLongRunParams(c)
 
-	if _, err := fillNodeStatusMap(c, apc.Target); err != nil {
+	_, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
+	if err != nil {
 		return err
 	}
 
 	targets := stats.DaemonStatusMap{sid: {}}
 	if sid == "" {
-		targets = curTgtStatus
+		targets = tstatusMap
 	}
 
 	diskStats, err := getDiskStats(targets)

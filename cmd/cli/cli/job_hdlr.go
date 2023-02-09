@@ -497,7 +497,7 @@ func startDownloadHandler(c *cli.Context) error {
 }
 
 func pbDownload(c *cli.Context, id string) (err error) {
-	refreshRate := calcRefreshRate(c)
+	refreshRate := _refreshRate(c)
 	downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 	if err != nil {
 		return err
@@ -573,7 +573,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 func waitDownload(c *cli.Context, id string) (err error) {
 	var (
 		aborted     bool
-		refreshRate = calcRefreshRate(c)
+		refreshRate = _refreshRate(c)
 	)
 
 	for {
@@ -1022,7 +1022,7 @@ func waitJobHandler(c *cli.Context) error {
 	var (
 		msg         = formatXactMsg(xactID, xname, bck)
 		xargs       = xact.ArgsMsg{ID: xactID, Kind: xactKind}
-		refreshRate = calcRefreshRate(c)
+		refreshRate = _refreshRate(c)
 		total       time.Duration
 		prompted    bool
 	)
@@ -1060,7 +1060,7 @@ func waitJobHandler(c *cli.Context) error {
 }
 
 func waitDownloadHandler(c *cli.Context, id string) error {
-	refreshRate := calcRefreshRate(c)
+	refreshRate := _refreshRate(c)
 	if flagIsSet(c, progressBarFlag) {
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
@@ -1096,7 +1096,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 }
 
 func waitDsortHandler(c *cli.Context, id string) error {
-	refreshRate := calcRefreshRate(c)
+	refreshRate := _refreshRate(c)
 	if flagIsSet(c, progressBarFlag) {
 		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {

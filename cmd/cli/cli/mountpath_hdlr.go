@@ -81,9 +81,9 @@ func mpathAction(c *cli.Context, action string) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	smap, errMap := fillNodeStatusMap(c, apc.Target)
-	if errMap != nil {
-		return errMap
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
 	}
 	kvs, err := makePairs(c.Args())
 	if err != nil {

@@ -764,7 +764,7 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 		return 0
 	}
 	if flagIsSet(c, refreshFlag) {
-		refresh = calcRefreshRate(c)
+		refresh = _refreshRate(c)
 	}
 	return refresh
 }

@@ -430,7 +430,7 @@ func showClusterHandler(c *cli.Context) (err error) {
 
 	setLongRunParams(c)
 
-	smap, err := fillNodeStatusMap(c, daeType)
+	smap, tstatusMap, pstatusMap, err := fillNodeStatusMap(c, daeType)
 	if err != nil {
 		return err
 	}
@@ -439,9 +439,9 @@ func showClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 	if sid != "" {
-		return cluDaeStatus(c, smap, cluConfig, sid)
+		return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, sid)
 	}
-	return cluDaeStatus(c, smap, cluConfig, what)
+	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, what)
 }
 
 func showStorageHandler(c *cli.Context) (err error) {
@@ -609,18 +609,14 @@ func showSmapHandler(c *cli.Context) error {
 	var (
 		smap            *cluster.Smap
 		sid, sname, err = argNode(c)
-		daeType         string
 	)
 	if err != nil {
 		return err
 	}
-	if sid != "" {
-		daeType = getNodeType(c, sid)
-	}
 
 	setLongRunParams(c)
 
-	smap, err = fillNodeStatusMap(c, daeType)
+	smap, err = getClusterMap(c)
 	if err != nil {
 		return err
 	}
@@ -1001,7 +997,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 			return
 		}
 	}
-	sleep, averageOver := computeSleepRefreshBps(c)
+	sleep, averageOver := _refreshAvgRate(c)
 	for {
 		if node != nil {
 			err = showNodeStats(c, node, averageOver, regex)
@@ -1022,7 +1018,7 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 		return err
 	}
 	// throughput (Bps)
-	if err := computeDaeBps(c, node, stats, averageOver); err != nil {
+	if err := _daeBps(c, node, stats, averageOver); err != nil {
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
@@ -1082,7 +1078,7 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 	}
 
 	// throughput (Bps)
-	if err := computecCluBps1(c, st, averageOver); err != nil {
+	if err := _cluStatsBps(c, st, averageOver); err != nil {
 		return err
 	}
 

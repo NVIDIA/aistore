@@ -28,6 +28,8 @@ const (
 	KindThroughput = "bw" // e.g. GetThroughput
 )
 
+const ErrPrefix = "err." // convention to be abided by
+
 type (
 	Tracker interface {
 		cos.StatsUpdater

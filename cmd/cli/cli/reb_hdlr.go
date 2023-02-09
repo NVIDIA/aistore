@@ -43,7 +43,7 @@ func showRebalanceHandler(c *cli.Context) error {
 	var (
 		tw             = &tabwriter.Writer{}
 		keepMonitoring = flagIsSet(c, refreshFlag)
-		refreshRate    = calcRefreshRate(c)
+		refreshRate    = _refreshRate(c)
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		xargs          = xact.ArgsMsg{Kind: apc.ActRebalance}
 

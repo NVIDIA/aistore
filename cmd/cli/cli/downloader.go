@@ -355,7 +355,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 
 	// with progress bar
 	if flagIsSet(c, progressBarFlag) {
-		refreshRate := calcRefreshRate(c)
+		refreshRate := _refreshRate(c)
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err

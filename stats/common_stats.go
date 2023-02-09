@@ -53,8 +53,6 @@ const (
 	numGorExtreme = 1000
 )
 
-const ErrPrefix = "err."
-
 // metrics
 const (
 	// KindCounter

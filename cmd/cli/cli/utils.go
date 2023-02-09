@@ -259,12 +259,25 @@ func getPrefixFromPrimary() string {
 	return scheme + apc.BckProviderSeparator
 }
 
-func calcRefreshRate(c *cli.Context) time.Duration {
+func _refreshRate(c *cli.Context) time.Duration {
 	refreshRate := refreshRateDefault
 	if flagIsSet(c, refreshFlag) {
-		refreshRate = cos.MaxDuration(parseDurationFlag(c, refreshFlag), refreshRateMinDur)
+		duration := parseDurationFlag(c, refreshFlag)
+		refreshRate = cos.MaxDuration(duration, refreshRateMinDur)
 	}
-	return refreshRate
+	return refreshRate // aka sleep
+}
+
+// same as above, plus the interval to compute units-per-second type metrics,
+// e.g. throughput
+func _refreshAvgRate(c *cli.Context) (sleep, averageOver time.Duration) {
+	sleep = _refreshRate(c)
+
+	averageOver = cos.MinDuration(cos.MaxDuration(sleep-time.Second, 2*time.Second), 10*time.Second)
+
+	// adjust to avoid oversleeping
+	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
+	return
 }
 
 // Users can pass in a comma-separated list
