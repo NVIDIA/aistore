@@ -297,3 +297,41 @@ class ETLDetails(BaseModel):
         if spec is not None:
             spec = base64.b64decode(spec)
         return spec
+
+
+class PromoteOptions(BaseModel):
+    """
+    Represents the set of args to pass when making a promote request on an object
+    """
+
+    target_id: str = ""
+    recursive: bool = False
+    overwrite_dest: bool = False
+    delete_source: bool = False
+    src_not_file_share: bool = False
+
+
+class PromoteAPIArgs(BaseModel):
+    """
+    Represents the set of args the sdk will pass to AIStore when making a promote request and
+    provides conversion to the expected json format
+    """
+
+    target_id: str = ""
+    source_path: str = ""
+    object_name: str = ""
+    recursive: bool = False
+    overwrite_dest: bool = False
+    delete_source: bool = False
+    src_not_file_share: bool = False
+
+    def get_json(self):
+        return {
+            "tid": self.target_id,
+            "src": self.source_path,
+            "obj": self.object_name,
+            "rcr": self.recursive,
+            "ovw": self.overwrite_dest,
+            "dls": self.delete_source,
+            "notshr": self.src_not_file_share,
+        }

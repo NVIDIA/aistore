@@ -465,7 +465,11 @@ class Bucket:
         )
 
     def make_request(
-        self, method: str, action: str, value: dict = None, params: dict = None
+        self,
+        method: str,
+        action: str,
+        value: dict = None,
+        params: dict = None,
     ) -> requests.Response:
         """
         Use the bucket's client to make a request to the bucket endpoint on the AIS server

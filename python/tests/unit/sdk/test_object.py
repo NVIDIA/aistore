@@ -18,9 +18,11 @@ from aistore.sdk.const import (
     AIS_ACCESS_TIME,
     AIS_VERSION,
     AIS_CUSTOM_MD,
+    HTTP_METHOD_POST,
+    ACT_PROMOTE,
 )
 from aistore.sdk.object import Object
-from aistore.sdk.types import ObjStream
+from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
 
 
 class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
@@ -143,6 +145,50 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
             path=request_path,
             params=self.expected_params,
             data=expected_data,
+        )
+
+    def test_promote_default_args(self):
+        filename = "promoted file"
+        options = PromoteOptions()
+        expected_value = PromoteAPIArgs(source_path=filename, object_name=self.obj_name)
+        self.promote_exec_assert(filename, options, expected_value)
+
+    def test_promote(self):
+        filename = "promoted file"
+        target_id = "target node"
+        recursive = True
+        overwrite_dest = True
+        delete_source = True
+        src_not_file_share = True
+        options = PromoteOptions(
+            target_id=target_id,
+            recursive=recursive,
+            overwrite_dest=overwrite_dest,
+            delete_source=delete_source,
+            src_not_file_share=src_not_file_share,
+        )
+        expected_value = PromoteAPIArgs(
+            source_path=filename,
+            object_name=self.obj_name,
+            target_id=target_id,
+            recursive=recursive,
+            overwrite_dest=overwrite_dest,
+            delete_source=delete_source,
+            src_not_file_share=src_not_file_share,
+        )
+        self.promote_exec_assert(filename, options, expected_value)
+
+    def promote_exec_assert(self, filename, options, expected_value):
+        request_path = f"/objects/{self.bck_name}"
+        expected_json = ActionMsg(
+            action=ACT_PROMOTE, name=filename, value=expected_value.get_json()
+        ).dict()
+        self.object.promote(filename, options)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_POST,
+            path=request_path,
+            params=self.expected_params,
+            json=expected_json,
         )
 
     def test_delete(self):

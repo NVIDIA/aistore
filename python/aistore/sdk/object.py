@@ -13,9 +13,11 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     QParamArchpath,
     QParamETLName,
+    ACT_PROMOTE,
+    HTTP_METHOD_POST,
 )
 
-from aistore.sdk.types import ObjStream
+from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -147,6 +149,46 @@ class Object:
             path=url,
             params=self._qparams,
             data=data,
+        ).headers
+
+    def promote(self, path: str, promote_options: PromoteOptions = None) -> Header:
+        """
+        Promotes a file or folder an AIS target can access to a bucket in AIS storage.
+        These files can be either on the physical disk of an AIS target itself or on a network file system
+        the cluster can access.
+        See more info here: https://aiatscale.org/blog/2022/03/17/promote
+
+        Args:
+            path (str): Path to file or folder the AIS cluster can reach
+            promote_options (PromoteOptions, optional): Object containing additional options for promoting files
+
+        Returns:
+            Object properties
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            AISError: Path does not exist on the AIS cluster storage
+        """
+        url = f"/objects/{ self._bck_name }"
+        if promote_options is None:
+            value = PromoteAPIArgs(source_path=path, object_name=self.name).get_json()
+        else:
+            value = PromoteAPIArgs(
+                target_id=promote_options.target_id,
+                source_path=path,
+                object_name=self.name,
+                recursive=promote_options.recursive,
+                overwrite_dest=promote_options.overwrite_dest,
+                delete_source=promote_options.delete_source,
+                src_not_file_share=promote_options.src_not_file_share,
+            ).get_json()
+        json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).dict()
+
+        return self._client.request(
+            HTTP_METHOD_POST, path=url, params=self._qparams, json=json_val
         ).headers
 
     def delete(self):
