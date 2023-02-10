@@ -260,7 +260,6 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Snode:          t.htrun.si,
 			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
-			Stats:          t.statsT.CoreStats(),
 			RebSnap:        rebSnap,
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,
@@ -268,9 +267,11 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			K8sPodName:     os.Getenv(env.AIS.K8sPod),
 			Status:         t._status(smap),
 		}
-		// capacity
-		tstats := t.statsT.(*stats.Trunner)
-		msg.Capacity = tstats.MPCap
+		// stats and capacity
+		daeStats := t.statsT.GetWhatStats()
+		msg.Tracker = daeStats.Tracker
+		msg.Capacity = daeStats.MPCap
+
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case apc.GetWhatDiskStats:
 		diskStats := make(ios.AllDiskStats)

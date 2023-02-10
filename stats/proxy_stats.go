@@ -32,14 +32,14 @@ func (r *Prunner) Run() error { return r.runcommon(r) }
 
 // NOTE: have only common metrics (see regCommon()) - init only the Prometheus part if used
 func (r *Prunner) RegMetrics(node *cluster.Snode) {
-	r.Core.initProm(node)
+	r.core.initProm(node)
 }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
 func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
-	r.Core = &CoreStats{}
-	r.Core.init(p.Snode(), 24)
-	r.Core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
+	r.core = &coreStats{}
+	r.core.init(p.Snode(), 24)
+	r.core.statsTime = cmn.GCO.Get().Periodic.StatsTime.D()
 	r.ctracker = make(copyTracker, 24)
 
 	r.statsRunner.name = "proxystats"
@@ -48,7 +48,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
 
-	r.Core.initMetricClient(p.Snode(), &r.statsRunner)
+	r.core.initMetricClient(p.Snode(), &r.statsRunner)
 
 	return &r.statsRunner.startedUp
 }
@@ -58,10 +58,10 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 //
 
 func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
-	r.Core.updateUptime(uptime)
-	r.Core.promLock()
-	idle := r.Core.copyT(r.ctracker)
-	r.Core.promUnlock()
+	r.core.updateUptime(uptime)
+	r.core.promLock()
+	idle := r.core.copyT(r.ctracker)
+	r.core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		b := cos.MustMarshal(r.ctracker)
 		glog.Infoln(string(b))
@@ -74,12 +74,12 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 }
 
 func (r *Prunner) doAdd(nv cos.NamedVal64) {
-	s := r.Core
+	s := r.core
 	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
 }
 
 func (r *Prunner) statsTime(newval time.Duration) {
-	r.Core.statsTime = newval
+	r.core.statsTime = newval
 }
 
 func (*Prunner) standingBy() bool { return false }

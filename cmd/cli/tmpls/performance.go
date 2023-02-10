@@ -29,7 +29,7 @@ func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string,
 		if ds.Status != NodeOnline {
 			continue // maintenance mode et al. (see `cli._status`)
 		}
-		if ds.Stats == nil { // (unlikely)
+		if ds.Tracker == nil { // (unlikely)
 			debug.Assert(false, tid)
 			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, smap))
 		}
@@ -37,7 +37,7 @@ func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string,
 		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
 		// selected by caller
-		for name := range ds.Stats.Tracker {
+		for name := range ds.Tracker {
 			if _, ok := metrics[name]; ok {
 				cols = append(cols, &header{name: name, hide: false})
 			}
@@ -111,7 +111,7 @@ func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string,
 			// format value
 			var (
 				printedValue string
-				v, ok1       = ds.Stats.Tracker[h.name]
+				v, ok1       = ds.Tracker[h.name]
 				kind, ok2    = metrics[h.name]
 			)
 			debug.Assert(ok1, h.name)
@@ -155,7 +155,7 @@ func _zerout(cols []*header, st stats.DaemonStatusMap) []*header {
 			if ds.Status != NodeOnline {
 				continue
 			}
-			if v, ok := ds.Stats.Tracker[h.name]; ok && v.Value != 0 {
+			if v, ok := ds.Tracker[h.name]; ok && v.Value != 0 {
 				found = true
 				break
 			}

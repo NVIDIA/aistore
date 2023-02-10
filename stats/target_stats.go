@@ -109,15 +109,15 @@ func (r *Trunner) Run() error     { return r.runcommon(r) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
-	r.Core = &CoreStats{}
-	r.Core.init(t.Snode(), 48) // register common (target's own stats are reg()-ed elsewhere)
+	r.core = &coreStats{}
+	r.core.init(t.Snode(), 48) // register common (target's own stats are reg()-ed elsewhere)
 
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
 	r.disk = make(ios.AllDiskStats, 16)
 
 	config := cmn.GCO.Get()
-	r.Core.statsTime = config.Periodic.StatsTime.D()
+	r.core.statsTime = config.Periodic.StatsTime.D()
 
 	r.statsRunner.name = "targetstats"
 	r.statsRunner.daemon = t
@@ -125,7 +125,7 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.statsRunner.stopCh = make(chan struct{}, 4)
 	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
 
-	r.Core.initMetricClient(t.Snode(), &r.statsRunner)
+	r.core.initMetricClient(t.Snode(), &r.statsRunner)
 	return &r.statsRunner.startedUp
 }
 
@@ -144,7 +144,7 @@ func (r *Trunner) InitCapacity() error {
 
 // register target-specific metrics in addition to those that must be
 // already added via regCommonMetrics()
-func (r *Trunner) reg(name, kind string) { r.Core.Tracker.reg(r.t.Snode(), name, kind) }
+func (r *Trunner) reg(name, kind string) { r.core.Tracker.reg(r.t.Snode(), name, kind) }
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
 func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
@@ -158,7 +158,7 @@ func isDiskUtilMetric(name string) bool {
 }
 
 func (r *Trunner) RegDiskMetrics(disk string) {
-	s, n := r.Core.Tracker, nameRbps(disk)
+	s, n := r.core.Tracker, nameRbps(disk)
 	if _, ok := s[n]; ok { // must be config.TestingEnv()
 		return
 	}
@@ -217,7 +217,7 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.reg(DSortCreationRespLatency, KindLatency)
 
 	// Prometheus
-	r.Core.initProm(node)
+	r.core.initProm(node)
 }
 
 func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
@@ -231,7 +231,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 1. collect disk stats and populate the tracker
 	fs.FillDiskStats(r.disk)
-	s := r.Core
+	s := r.core
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
 		v.Value = stats.RBps
@@ -246,10 +246,10 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 2 copy stats, reset latencies, send via StatsD if configured
-	r.Core.updateUptime(uptime)
-	r.Core.promLock()
-	idle := r.Core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
-	r.Core.promUnlock()
+	r.core.updateUptime(uptime)
+	r.core.promLock()
+	idle := r.core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
+	r.core.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		ln := cos.MustMarshalToString(r.ctracker)
 		r.lines = append(r.lines, ln)
@@ -336,7 +336,7 @@ func (r *Trunner) logDiskStats() {
 
 func (r *Trunner) doAdd(nv cos.NamedVal64) {
 	var (
-		s     = r.Core
+		s     = r.core
 		name  = nv.Name
 		value = nv.Value
 	)
@@ -346,7 +346,7 @@ func (r *Trunner) doAdd(nv cos.NamedVal64) {
 }
 
 func (r *Trunner) statsTime(newval time.Duration) {
-	r.Core.statsTime = newval
+	r.core.statsTime = newval
 }
 
 func (r *Trunner) standingBy() bool { return r.standby }

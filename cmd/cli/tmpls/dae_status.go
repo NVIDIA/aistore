@@ -102,7 +102,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 		if ds.MemCPUInfo.MemAvail == 0 {
 			memAvail = unknownVal
 		}
-		upns := extractStat(ds.Stats, "up.ns.time")
+		upns := ds.Tracker[stats.Uptime].Value
 		uptime := fmtDuration(upns)
 		if upns == 0 {
 			uptime = unknownVal
@@ -177,7 +177,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap) *Table {
 			cos.UnsignedB2S(calcCap(ds), 3),
 			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctCPUUsed),
 			fmtRebStatus(ds.RebSnap),
-			fmtDuration(extractStat(ds.Stats, "up.ns.time")),
+			fmtDuration(ds.Tracker[stats.Uptime].Value),
 			ds.K8sPodName,
 			ds.Status,
 			ds.Version,

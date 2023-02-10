@@ -510,14 +510,6 @@ func (sth SmapTemplateHelper) forMarshal() any {
 	return sth.Smap
 }
 
-// Gets the associated value from CoreStats
-func extractStat(daemon *stats.CoreStats, statName string) int64 {
-	if daemon == nil {
-		return 0
-	}
-	return daemon.Tracker[statName].Value
-}
-
 //
 // stats.DaemonStatus
 //

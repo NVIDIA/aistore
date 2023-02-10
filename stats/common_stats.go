@@ -117,18 +117,35 @@ type (
 	runnerHost interface {
 		ClusterStarted() bool
 	}
+)
+
+type (
+	coreStats struct {
+		Tracker   statsTracker
+		promDesc  promDesc
+		statsdC   *statsd.Client
+		sgl       *memsys.SGL
+		statsTime time.Duration
+		cmu       sync.RWMutex // ctracker vs Prometheus Collect()
+	}
+
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
 		daemon      runnerHost
 		stopCh      chan struct{}
 		workCh      chan cos.NamedVal64
 		ticker      *time.Ticker
-		Core        *CoreStats  `json:"core"`
+		core        *coreStats
 		ctracker    copyTracker // to avoid making it at runtime
 		name        string      // this stats-runner's name
 		nextLogTime int64       // mono.NanoTime()
 		startedUp   atomic.Bool
 	}
+
+	//
+	// values
+	//
+
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
@@ -147,19 +164,24 @@ type (
 	copyValue struct {
 		Value int64 `json:"v,string"`
 	}
+
+	//
+	// maps
+	//
+
 	statsTracker map[string]*statsValue
 	copyTracker  map[string]copyValue // NOTE: values aggregated and computed every (log) statsTime
 	promDesc     map[string]*prometheus.Desc
 )
 
 ///////////////
-// CoreStats //
+// coreStats //
 ///////////////
 
 // interface guard
 var (
-	_ json.Marshaler   = (*CoreStats)(nil)
-	_ json.Unmarshaler = (*CoreStats)(nil)
+	_ json.Marshaler   = (*coreStats)(nil)
+	_ json.Unmarshaler = (*coreStats)(nil)
 )
 
 // helper: convert bytes to megabytes with a fixed rounding precision = 2 digits (NOTE: MB not MiB)
@@ -170,7 +192,7 @@ func roundMBs(val int64) (mbs float64) {
 	return
 }
 
-func (s *CoreStats) init(node *cluster.Snode, size int) {
+func (s *coreStats) init(node *cluster.Snode, size int) {
 	s.Tracker = make(statsTracker, size)
 	s.promDesc = make(promDesc, size)
 
@@ -189,35 +211,35 @@ func (s *CoreStats) init(node *cluster.Snode, size int) {
 }
 
 // NOTE: nil StatsD client means that we provide metrics to Prometheus (see below)
-func (s *CoreStats) isPrometheus() bool { return s.statsdC == nil }
+func (s *coreStats) isPrometheus() bool { return s.statsdC == nil }
 
 // vs Collect()
-func (s *CoreStats) promRLock() {
+func (s *coreStats) promRLock() {
 	if s.isPrometheus() {
 		s.cmu.RLock()
 	}
 }
 
-func (s *CoreStats) promRUnlock() {
+func (s *coreStats) promRUnlock() {
 	if s.isPrometheus() {
 		s.cmu.RUnlock()
 	}
 }
 
-func (s *CoreStats) promLock() {
+func (s *coreStats) promLock() {
 	if s.isPrometheus() {
 		s.cmu.Lock()
 	}
 }
 
-func (s *CoreStats) promUnlock() {
+func (s *coreStats) promUnlock() {
 	if s.isPrometheus() {
 		s.cmu.Unlock()
 	}
 }
 
 // init MetricClient client: StatsD (default) or Prometheus
-func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
+func (s *coreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 	// Either Prometheus
 	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" {
 		glog.Infoln("Using Prometheus")
@@ -257,7 +279,7 @@ func (s *CoreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 
 // populate *prometheus.Desc and statsValue.label.prom
 // NOTE: naming; compare with statsTracker.register()
-func (s *CoreStats) initProm(node *cluster.Snode) {
+func (s *coreStats) initProm(node *cluster.Snode) {
 	if !s.isPrometheus() {
 		return
 	}
@@ -296,15 +318,15 @@ func (s *CoreStats) initProm(node *cluster.Snode) {
 	}
 }
 
-func (s *CoreStats) updateUptime(d time.Duration) {
+func (s *coreStats) updateUptime(d time.Duration) {
 	v := s.Tracker[Uptime]
 	ratomic.StoreInt64(&v.Value, d.Nanoseconds())
 }
 
-func (s *CoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
-func (s *CoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
+func (s *coreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(s.Tracker) }
+func (s *coreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &s.Tracker) }
 
-func (s *CoreStats) get(name string) (val int64) {
+func (s *coreStats) get(name string) (val int64) {
 	v := s.Tracker[name]
 	switch v.kind {
 	case KindLatency, KindThroughput:
@@ -318,7 +340,7 @@ func (s *CoreStats) get(name string) (val int64) {
 }
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
+func (s *coreStats) doAdd(name, nameSuffix string, val int64) {
 	v, ok := s.Tracker[name]
 	debug.Assertf(ok, "invalid metric name %q", name)
 	switch v.kind {
@@ -350,7 +372,7 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 }
 
 // log + StatsD (Prometheus is done separately via `Collect`)
-func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
+func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 	idle := true
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
@@ -459,7 +481,7 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 
 // REST API what=stats query
 // NOTE: not reporting zero counts
-func (s *CoreStats) copyCumulative(ctracker copyTracker) {
+func (s *coreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
 		switch v.kind {
 		case KindLatency, KindThroughput:
@@ -518,7 +540,7 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 // statsTracker //
 //////////////////
 
-// NOTE: naming; compare with CoreStats.initProm()
+// NOTE: naming; compare with coreStats.initProm()
 func (tracker statsTracker) reg(node *cluster.Snode, name, kind string) {
 	debug.Assert(kind == KindCounter || kind == KindSize || kind == KindGauge || kind == KindLatency ||
 		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial)
@@ -603,13 +625,13 @@ var (
 
 func (r *statsRunner) GetWhatStats() *DaemonStats {
 	ctracker := make(copyTracker, 48)
-	r.Core.copyCumulative(ctracker)
+	r.core.copyCumulative(ctracker)
 	return &DaemonStats{Tracker: ctracker}
 }
 
 func (r *statsRunner) GetMetricNames() cos.StrKVs {
 	out := make(cos.StrKVs, 32)
-	for name, v := range r.Core.Tracker {
+	for name, v := range r.core.Tracker {
 		out[name] = v.kind
 	}
 	return out
@@ -633,10 +655,10 @@ func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
 	}
 }
 
-func (r *statsRunner) IsPrometheus() bool { return r.Core.isPrometheus() }
+func (r *statsRunner) IsPrometheus() bool { return r.core.isPrometheus() }
 
 func (r *statsRunner) Describe(ch chan<- *prometheus.Desc) {
-	for _, desc := range r.Core.promDesc {
+	for _, desc := range r.core.promDesc {
 		ch <- desc
 	}
 }
@@ -645,8 +667,8 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 	if !r.StartedUp() {
 		return
 	}
-	r.Core.promRLock()
-	for name, v := range r.Core.Tracker {
+	r.core.promRLock()
+	for name, v := range r.core.Tracker {
 		var (
 			val int64
 			fv  float64
@@ -680,19 +702,18 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 			promMetricType = prometheus.CounterValue
 		}
 		// 3. publish
-		desc, ok := r.Core.promDesc[name]
+		desc, ok := r.core.promDesc[name]
 		debug.Assert(ok, name)
 		m, err := prometheus.NewConstMetric(desc, promMetricType, fv)
 		debug.AssertNoErr(err)
 		ch <- m
 	}
-	r.Core.promRUnlock()
+	r.core.promRUnlock()
 }
 
 func (r *statsRunner) Name() string { return r.name }
 
-func (r *statsRunner) CoreStats() *CoreStats       { return r.Core }
-func (r *statsRunner) Get(name string) (val int64) { return r.Core.get(name) }
+func (r *statsRunner) Get(name string) (val int64) { return r.core.get(name) }
 
 func (r *statsRunner) runcommon(logger statsLogger) error {
 	var (
@@ -821,7 +842,7 @@ func (r *statsRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Name(), err)
 	r.stopCh <- struct{}{}
 	if !r.IsPrometheus() {
-		r.Core.statsdC.Close()
+		r.core.statsdC.Close()
 	}
 	close(r.stopCh)
 }

@@ -246,13 +246,13 @@ func _cluStatusMapPs(c *cli.Context, mapBegin stats.DaemonStatusMap, metrics cos
 	// updating and returning mapBegin
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
-		for k, v := range begin.Stats.Tracker {
+		for k, v := range begin.Tracker {
 			if kind, ok := metrics[k]; !ok || kind == stats.KindCounter { // skip counters, if any
 				continue
 			}
-			vend := end.Stats.Tracker[k]
+			vend := end.Tracker[k]
 			v.Value = (vend.Value - v.Value) / seconds
-			begin.Stats.Tracker[k] = v
+			begin.Tracker[k] = v
 		}
 	}
 	return mapBegin, mapEnd, nil

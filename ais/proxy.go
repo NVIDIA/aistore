@@ -2373,13 +2373,14 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Snode:          p.htrun.si,
 			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
-			Stats:          p.statsT.CoreStats(),
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,
 			BuildTime:      daemon.buildTime,
 			K8sPodName:     os.Getenv(env.AIS.K8sPod),
 			Status:         p._status(smap),
 		}
+		daeStats := p.statsT.GetWhatStats()
+		msg.Tracker = daeStats.Tracker
 
 		p.writeJSON(w, r, msg, what)
 	default:
