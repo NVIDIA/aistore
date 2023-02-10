@@ -180,11 +180,13 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 	}
 	// stats
 	if !poi.t2t {
-		// NOTE: counting only user PUTs
+		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
+		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			delta := time.Since(poi.atime)
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
+				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
 				cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 			)
 		}

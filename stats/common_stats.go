@@ -372,7 +372,7 @@ func (s *coreStats) doAdd(name, nameSuffix string, val int64) {
 }
 
 // log + StatsD (Prometheus is done separately via `Collect`)
-func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
+func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 	idle := true
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
@@ -382,7 +382,7 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 			v.mu.Lock()
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
-				ctracker[name] = copyValue{lat}
+				out[name] = copyValue{lat}
 				if !ignore(name) {
 					idle = false
 				}
@@ -400,10 +400,11 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 			v.mu.Lock()
 			if v.Value > 0 {
 				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
-				ctracker[name] = copyValue{throughput}
+				out[name] = copyValue{throughput}
 				if !ignore(name) {
 					idle = false
 				}
+				// NOTE: ok to zero-out as we report .cumulative via API
 				v.Value = 0
 			}
 			v.mu.Unlock()
@@ -413,7 +414,7 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 			}
 		case KindComputedThroughput:
 			if throughput := ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
-				ctracker[name] = copyValue{throughput}
+				out[name] = copyValue{throughput}
 				if !ignore(name) {
 					idle = false
 				}
@@ -425,8 +426,8 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 		case KindCounter:
 			cnt := ratomic.LoadInt64(&v.Value)
 			if cnt > 0 {
-				if prev, ok := ctracker[name]; !ok || prev.Value != cnt {
-					ctracker[name] = copyValue{cnt}
+				if prev, ok := out[name]; !ok || prev.Value != cnt {
+					out[name] = copyValue{cnt}
 					if !ignore(name) {
 						idle = false
 					}
@@ -441,8 +442,8 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 		case KindSize:
 			siz := ratomic.LoadInt64(&v.Value)
 			if siz > 0 {
-				if prev, ok := ctracker[name]; !ok || prev.Value != siz {
-					ctracker[name] = copyValue{siz}
+				if prev, ok := out[name]; !ok || prev.Value != siz {
+					out[name] = copyValue{siz}
 					if !ignore(name) {
 						idle = false
 					}
@@ -462,7 +463,7 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 			}
 		case KindGauge:
 			val := ratomic.LoadInt64(&v.Value)
-			ctracker[name] = copyValue{val}
+			out[name] = copyValue{val}
 			if !s.isPrometheus() {
 				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: float64(val)}, s.sgl)
 			}
@@ -470,7 +471,7 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 				idle = false
 			}
 		default:
-			ctracker[name] = copyValue{ratomic.LoadInt64(&v.Value)} // KindSpecial/KindDelta as is and wo/ lock
+			out[name] = copyValue{ratomic.LoadInt64(&v.Value)}
 		}
 	}
 	if !s.isPrometheus() {
@@ -484,10 +485,21 @@ func (s *coreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 func (s *coreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
 		switch v.kind {
-		case KindLatency, KindThroughput:
+		case KindLatency:
 			v.mu.RLock()
 			ctracker[name] = copyValue{v.cumulative}
 			v.mu.RUnlock()
+		case KindThroughput:
+			v.mu.RLock()
+			val := copyValue{v.cumulative}
+			v.mu.RUnlock()
+			ctracker[name] = val
+
+			// NOTE: here we effectively add a metric that was never added/updated
+			// via `statsRunner.Add` and friends. Is OK to replace ".bps" suffix
+			// as statsValue.cumulative _is_ the total size (aka, KindSize)
+			n := name[:len(name)-3] + "size"
+			ctracker[n] = val
 		case KindCounter, KindSize:
 			if val := ratomic.LoadInt64(&v.Value); val > 0 {
 				ctracker[name] = copyValue{val}

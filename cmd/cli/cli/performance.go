@@ -172,12 +172,12 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 		return tmpls.Print(tstatusMap, c.App.Writer, out, nil, false /*usejs*/)
 	}
 
-	// until Ctrl-C
 	var (
 		refresh            = flagIsSet(c, refreshFlag)
 		sleep, averageOver = _refreshAvgRate(c)
 		mapBegin           stats.DaemonStatusMap
 	)
+	// forever until Ctrl-C
 	for {
 		mapBeginUpdated, mapEnd, err := _cluStatusMapPs(c, mapBegin, metrics, averageOver)
 		if err != nil || !refresh {

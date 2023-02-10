@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Naming Convention:
@@ -77,6 +78,11 @@ const (
 
 	// KindThroughput
 	GetThroughput = "get.bps" // bytes per second
+	PutThroughput = "put.bps" // ditto
+
+	// same as above via `.cumulative`
+	GetSize = "get.size"
+	PutSize = "put.size"
 )
 
 type (
@@ -188,7 +194,12 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.reg(GetRedirLatency, KindLatency)
 	r.reg(PutRedirLatency, KindLatency)
 
+	// bps
 	r.reg(GetThroughput, KindThroughput)
+	r.reg(PutThroughput, KindThroughput)
+
+	r.reg(GetSize, KindSize)
+	r.reg(PutSize, KindSize)
 
 	// errors
 	r.reg(ErrCksumCount, KindCounter)
@@ -250,9 +261,15 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.core.promLock()
 	idle := r.core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
 	r.core.promUnlock()
+
 	if now >= r.nextLogTime && !idle {
-		ln := cos.MustMarshalToString(r.ctracker)
-		r.lines = append(r.lines, ln)
+		// NOTE: sharing the same sgl w/ CoreStats.copyT
+		s.sgl.Reset()
+		err := jsoniter.NewEncoder(r.core.sgl).Encode(r.ctracker)
+		debug.AssertNoErr(err)
+
+		bytes := r.core.sgl.Bytes()
+		r.lines = append(r.lines, string(bytes))
 		i := int64(config.Log.StatsTime)
 		if i == 0 {
 			i = dfltStatsLogInterval
