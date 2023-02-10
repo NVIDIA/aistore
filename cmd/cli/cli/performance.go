@@ -92,7 +92,7 @@ var (
 	}
 )
 
-// show all non-zero counters (unless allColumnsFlag)
+// show all non-zero counters _and_ sizes (unless allColumnsFlag)
 func showCountersHandler(c *cli.Context) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
@@ -100,9 +100,10 @@ func showCountersHandler(c *cli.Context) error {
 	}
 
 	for name := range metrics {
-		if metrics[name] != stats.KindCounter {
-			delete(metrics, name)
+		if metrics[name] == stats.KindCounter || metrics[name] == stats.KindSize {
+			continue
 		}
+		delete(metrics, name)
 	}
 	return showPerformanceTab(c, metrics, false)
 }

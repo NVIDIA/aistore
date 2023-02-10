@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -92,21 +93,22 @@ func flattenXactStats(snap *cluster.Snap) nvpairList {
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
 		props = append(props,
 			nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-			nvpair{Name: "loc.obj.size", Value: formatStatHuman(".size", snap.Stats.Bytes)},
+			nvpair{Name: "loc.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.Bytes)},
 		)
 	}
 	if snap.Stats.InObjs != 0 || snap.Stats.InBytes != 0 {
 		props = append(props,
 			nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-			nvpair{Name: "in.obj.size", Value: formatStatHuman(".size", snap.Stats.InBytes)},
+			nvpair{Name: "in.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.InBytes)},
 		)
 	}
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
 		props = append(props,
 			nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-			nvpair{Name: "out.obj.size", Value: formatStatHuman(".size", snap.Stats.OutBytes)},
+			nvpair{Name: "out.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.OutBytes)},
 		)
 	}
+	// NOTE: extended stats
 	if extStats, ok := snap.Ext.(map[string]any); ok {
 		for k, v := range extStats {
 			var value string

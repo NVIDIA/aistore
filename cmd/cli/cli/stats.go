@@ -7,6 +7,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -162,12 +163,7 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 //
 
 // throughput as F(stats.DaemonStats)
-func _daeBps(c *cli.Context, node *cluster.Snode, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
-	metrics, err := getMetricNames(c)
-	if err != nil {
-		return err
-	}
-
+func _daeBps(node *cluster.Snode, metrics cos.StrKVs, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
 	time.Sleep(averageOver)
 
 	statsEnd, err := api.GetDaemonStats(apiBP, node)
@@ -192,12 +188,7 @@ func _daeBps(c *cli.Context, node *cluster.Snode, statsBegin *stats.DaemonStats,
 }
 
 // troughput as F(stats.ClusterStats)
-func _cluStatsBps(c *cli.Context, statsBegin stats.ClusterStats, averageOver time.Duration) error {
-	metrics, err := getMetricNames(c)
-	if err != nil {
-		return err
-	}
-
+func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.ClusterStats, averageOver time.Duration) error {
 	time.Sleep(averageOver)
 
 	statsEnd, err := api.GetClusterStats(apiBP)
@@ -208,10 +199,13 @@ func _cluStatsBps(c *cli.Context, statsBegin stats.ClusterStats, averageOver tim
 	debug.Assert(seconds > 1)
 	for tid, begin := range statsBegin.Target {
 		end := statsEnd.Target[tid]
-		for k, v := range begin.Tracker {
-			vend := end.Tracker[k]
+		if begin == nil || end == nil {
+			return fmt.Errorf("%s seems to be offline", cluster.Tname(tid))
+		}
+		for name, v := range begin.Tracker {
+			vend := end.Tracker[name]
 			// (unlike stats.KindComputedThroughput)
-			if metrics[k] == stats.KindThroughput {
+			if metrics[name] == stats.KindThroughput {
 				if v.Value > 0 {
 					throughput := (vend.Value - v.Value) / seconds
 					v.Value = throughput
@@ -219,7 +213,7 @@ func _cluStatsBps(c *cli.Context, statsBegin stats.ClusterStats, averageOver tim
 			} else {
 				v.Value = vend.Value // more timely
 			}
-			begin.Tracker[k] = v
+			begin.Tracker[name] = v
 		}
 	}
 	return nil

@@ -32,15 +32,18 @@ import (
 //	-> "*.bps" - throughput (in byte/s)
 //	-> "*.id" - ID
 const (
-	// KindCounter - QPS and byte counts (always incremented, never reset)
-	GetColdCount      = "get.cold.n"
-	GetColdSize       = "get.cold.size"
-	LruEvictSize      = "lru.evict.size"
-	LruEvictCount     = "lru.evict.n"
-	CleanupStoreSize  = "cleanup.store.size"
+	// KindCounter & KindSize - always incremented
+	GetColdCount = "get.cold.n"
+	GetColdSize  = "get.cold.size"
+
+	LruEvictCount = "lru.evict.n"
+	LruEvictSize  = "lru.evict.size"
+
 	CleanupStoreCount = "cleanup.store.n"
-	VerChangeCount    = "ver.change.n"
-	VerChangeSize     = "ver.change.size"
+	CleanupStoreSize  = "cleanup.store.size"
+
+	VerChangeCount = "ver.change.n"
+	VerChangeSize  = "ver.change.size"
 
 	// intra-cluster transmit & receive
 	StreamsOutObjCount = transport.OutObjCount
@@ -169,13 +172,16 @@ func (r *Trunner) RegDiskMetrics(disk string) {
 
 func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.reg(GetColdCount, KindCounter)
-	r.reg(GetColdSize, KindCounter)
-	r.reg(LruEvictSize, KindCounter)
+	r.reg(GetColdSize, KindSize)
+
 	r.reg(LruEvictCount, KindCounter)
-	r.reg(CleanupStoreSize, KindCounter)
+	r.reg(LruEvictSize, KindSize)
+
 	r.reg(CleanupStoreCount, KindCounter)
+	r.reg(CleanupStoreSize, KindSize)
+
 	r.reg(VerChangeCount, KindCounter)
-	r.reg(VerChangeSize, KindCounter)
+	r.reg(VerChangeSize, KindSize)
 
 	r.reg(PutLatency, KindLatency)
 	r.reg(AppendLatency, KindLatency)
@@ -186,22 +192,22 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 
 	// errors
 	r.reg(ErrCksumCount, KindCounter)
-	r.reg(ErrCksumSize, KindCounter)
-	r.reg(ErrMetadataCount, KindCounter)
+	r.reg(ErrCksumSize, KindSize)
 
+	r.reg(ErrMetadataCount, KindCounter)
 	r.reg(ErrIOCount, KindCounter)
 
 	// streams
 	r.reg(StreamsOutObjCount, KindCounter)
-	r.reg(StreamsOutObjSize, KindCounter)
+	r.reg(StreamsOutObjSize, KindSize)
 	r.reg(StreamsInObjCount, KindCounter)
-	r.reg(StreamsInObjSize, KindCounter)
+	r.reg(StreamsInObjSize, KindSize)
 
 	// special
 	r.reg(RestartCount, KindCounter)
 
 	// download
-	r.reg(DownloadSize, KindCounter)
+	r.reg(DownloadSize, KindSize)
 	r.reg(DownloadLatency, KindLatency)
 
 	// dsort

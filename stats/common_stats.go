@@ -333,7 +333,7 @@ func (s *CoreStats) doAdd(name, nameSuffix string, val int64) {
 		v.cumulative += val
 		v.Value += val
 		v.mu.Unlock()
-	case KindCounter:
+	case KindCounter, KindSize:
 		// NOTE: not locking (KindCounter isn't compound, making an exception to speed-up)
 		ratomic.AddInt64(&v.Value, val)
 
@@ -414,17 +414,29 @@ func (s *CoreStats) copyT(ctracker copyTracker, diskLowUtil ...int64) bool {
 			}
 			// StatsD iff changed
 			if !s.isPrometheus() && cnt > 0 {
-				if strings.HasSuffix(name, ".size") {
-					// target only suffix
-					metricType := statsd.Counter
-					if v.label.comm == "dl" {
-						metricType = statsd.PersistentCounter
+				s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: cnt}, s.sgl)
+			}
+		case KindSize:
+			siz := ratomic.LoadInt64(&v.Value)
+			if siz > 0 {
+				if prev, ok := ctracker[name]; !ok || prev.Value != siz {
+					ctracker[name] = copyValue{siz}
+					if !ignore(name) {
+						idle = false
 					}
-					fv := roundMBs(cnt)
-					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
 				} else {
-					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: cnt}, s.sgl)
+					siz = 0
 				}
+			}
+			// StatsD iff changed
+			if !s.isPrometheus() && siz > 0 {
+				// target only suffix
+				metricType := statsd.Counter
+				if v.label.comm == "dl" {
+					metricType = statsd.PersistentCounter
+				}
+				fv := roundMBs(siz)
+				s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
 			}
 		case KindGauge:
 			val := ratomic.LoadInt64(&v.Value)
@@ -454,9 +466,9 @@ func (s *CoreStats) copyCumulative(ctracker copyTracker) {
 			v.mu.RLock()
 			ctracker[name] = copyValue{v.cumulative}
 			v.mu.RUnlock()
-		case KindCounter:
-			if cnt := ratomic.LoadInt64(&v.Value); cnt > 0 {
-				ctracker[name] = copyValue{cnt}
+		case KindCounter, KindSize:
+			if val := ratomic.LoadInt64(&v.Value); val > 0 {
+				ctracker[name] = copyValue{val}
 			}
 		default: // KindSpecial, KindComputedThroughput, KindGauge
 			ctracker[name] = copyValue{ratomic.LoadInt64(&v.Value)}
@@ -508,32 +520,30 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 
 // NOTE: naming; compare with CoreStats.initProm()
 func (tracker statsTracker) reg(node *cluster.Snode, name, kind string) {
-	debug.Assertf(kind == KindCounter || kind == KindGauge || kind == KindLatency ||
-		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial,
-		"invalid metric kind %q", kind)
+	debug.Assert(kind == KindCounter || kind == KindSize || kind == KindGauge || kind == KindLatency ||
+		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial)
 
 	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
 	case KindCounter:
-		if strings.HasSuffix(name, ".size") {
-			v.label.comm = strings.TrimSuffix(name, ".size")
-			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
-		} else {
-			debug.Assert(strings.HasSuffix(name, ".n"), name)
-			v.label.comm = strings.TrimSuffix(name, ".n")
-			v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
-			v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
-		}
+		debug.Assert(strings.HasSuffix(name, ".n"), name) // naming convention
+		v.label.comm = strings.TrimSuffix(name, ".n")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "count")
+	case KindSize:
+		debug.Assert(strings.HasSuffix(name, ".size"), name) // naming convention
+		v.label.comm = strings.TrimSuffix(name, ".size")
+		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
+		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbytes")
 	case KindLatency:
-		debug.Assert(strings.Contains(name, ".ns"), name)
+		debug.Assert(strings.Contains(name, ".ns"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".ns")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ".ns.", ".")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "ms")
 	case KindThroughput, KindComputedThroughput:
-		debug.Assert(strings.HasSuffix(name, ".bps"), name)
+		debug.Assert(strings.HasSuffix(name, ".bps"), name) // ditto
 		v.label.comm = strings.TrimSuffix(name, ".bps")
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
@@ -650,9 +660,9 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 		// 1. convert units
 		switch v.kind {
 		case KindCounter:
-			if strings.HasSuffix(name, ".size") {
-				fv = roundMBs(val)
-			}
+			// do nothing
+		case KindSize:
+			fv = roundMBs(val)
 		case KindLatency:
 			millis := cos.DivRound(val, int64(time.Millisecond))
 			fv = float64(millis)
@@ -666,7 +676,7 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 		}
 		// 2. convert kind
 		promMetricType := prometheus.GaugeValue
-		if v.kind == KindCounter {
+		if v.kind == KindCounter || v.kind == KindSize {
 			promMetricType = prometheus.CounterValue
 		}
 		// 3. publish

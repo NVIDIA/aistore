@@ -177,10 +177,10 @@ target.disk.sda.avg.rsize        298636
 target.disk.sda.avg.wsize        1077943
 target.disk.sda.util             33
 ...
-target.streams.in.obj.n          24168
-target.streams.in.obj.size       149.39MiB
-target.streams.out.obj.n         24168
-target.streams.out.obj.size      110.23MiB
+target.stream.in.n               24168
+target.stream.in.size            149.39MiB
+target.stream.out.n              24168
+target.stream.out.size           110.23MiB
 ```
 
 Monitor intra-cluster networking at a 3s seconds interval:
@@ -188,10 +188,10 @@ Monitor intra-cluster networking at a 3s seconds interval:
 ```console
 $ ais show cluster stats streams --refresh 3s
 
-target.streams.in.obj.n          41288
-target.streams.in.obj.size       4.01GiB
-target.streams.out.obj.n         41288
-target.streams.out.obj.size      194.98MiB
+target.stream.in.n          41288
+target.stream.in.size       4.01GiB
+target.stream.out.n         41288
+target.stream.out.size      194.98MiB
 ```
 
 Use `--raw` option:
@@ -252,9 +252,9 @@ lst.ns                   3.695827ms
 put.n                    40
 put.ns                   485.817135ms
 put.redir.ns             75.654033ms
-streams.in.obj.n         139
-streams.out.obj.n        175
-streams.out.obj.size     283.90MiB
+stream.in.n              139
+stream.out.n             175
+stream.out.size          283.90MiB
 up.ns.time               169m
 mountpath.0.path         /tmp/ais/mp1/8
 mountpath.0.used         21.64GiB

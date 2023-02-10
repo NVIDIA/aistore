@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/docker"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -960,23 +961,25 @@ func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 	return flat, err
 }
 
-func formatStatHuman(name string, value int64) string {
+func formatStatHuman(name, kind string, value int64) string {
 	if value == 0 {
 		return "0"
 	}
-	switch {
-	case strings.HasSuffix(name, ".ns"):
+	switch kind {
+	case stats.KindLatency:
 		dur := time.Duration(value)
 		return dur.String()
-	case strings.HasSuffix(name, ".time"):
-		dur := time.Duration(value)
-		return duration.HumanDuration(dur)
-	case strings.HasSuffix(name, ".size"):
+	case stats.KindSize:
 		return cos.B2S(value, 2)
-	case strings.HasSuffix(name, ".bps"):
+	case stats.KindThroughput, stats.KindComputedThroughput:
 		return cos.B2S(value, 0) + "/s"
+	default:
+		if strings.HasSuffix(name, ".time") { // uptime
+			dur := time.Duration(value)
+			return duration.HumanDuration(dur)
+		}
+		return fmt.Sprintf("%d", value)
 	}
-	return fmt.Sprintf("%d", value)
 }
 
 //////////////

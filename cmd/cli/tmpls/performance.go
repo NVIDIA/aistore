@@ -185,10 +185,9 @@ func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
 	printedColumns = make([]*header, len(cols))
 	for i, h := range cols {
 		var (
-			name         string
-			kind, suffix string
-			ok           bool
-			parts        = strings.Split(h.name, ".")
+			name, kind string
+			ok         bool
+			parts      = strings.Split(h.name, ".")
 		)
 		if h.name == colTarget || h.name == colStatus {
 			name = h.name
@@ -219,14 +218,13 @@ func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
 		}
 
 		// suffix
-		suffix = parts[len(parts)-1]
 		switch {
 		case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
-			name += " (bw)"
+			name += "(bw)"
 		case kind == stats.KindLatency:
-			name += " (latency)"
-		case suffix == "size":
-			name += "-" + strings.ToUpper(suffix)
+			name += "(latency)"
+		case kind == stats.KindSize:
+			name += "(size)"
 		}
 	add:
 		printedColumns[i] = &header{name: name, hide: cols[i].hide}

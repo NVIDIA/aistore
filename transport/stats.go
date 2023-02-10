@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	OutObjCount = "streams.out.obj.n"
-	OutObjSize  = "streams.out.obj.size"
-	InObjCount  = "streams.in.obj.n"
-	InObjSize   = "streams.in.obj.size"
+	OutObjCount = "stream.out.n"
+	OutObjSize  = "stream.out.size"
+	InObjCount  = "stream.in.n"
+	InObjSize   = "stream.in.size"
 )
 
 type (

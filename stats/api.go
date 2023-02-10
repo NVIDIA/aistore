@@ -20,6 +20,7 @@ import (
 const (
 	// lockless
 	KindCounter            = "counter"
+	KindSize               = "size"
 	KindGauge              = "gauge"
 	KindSpecial            = "special"
 	KindComputedThroughput = "compbw" // disk read/write throughput

@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -956,26 +957,27 @@ func showMpathHandler(c *cli.Context) error {
 	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 }
 
-func fmtStatValue(name string, value int64, human bool) string {
+func fmtStatValue(name, kind string, value int64, human bool) string {
 	if human {
-		return formatStatHuman(name, value)
+		return formatStatHuman(name, kind, value)
 	}
-	return fmt.Sprintf("%v", value)
+	return fmt.Sprintf("%v", value) // raw
 }
 
-func appendStatToProps(props nvpairList, name string, value int64, prefix string, regex *regexp.Regexp, human bool) nvpairList {
+func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, human bool) nvpairList {
 	name = prefix + name
 	if regex != nil && !regex.MatchString(name) {
 		return props
 	}
-	return append(props, nvpair{Name: name, Value: fmtStatValue(name, value, human)})
+	return append(props, nvpair{Name: name, Value: fmtStatValue(name, kind, value, human)})
 }
 
 func showStatsHandler(c *cli.Context) (err error) {
 	var (
-		sid  string
-		node *cluster.Snode
-		smap *cluster.Smap
+		sid     string
+		node    *cluster.Snode
+		smap    *cluster.Smap
+		metrics cos.StrKVs
 	)
 	if c.NArg() > 0 {
 		sid, _, err = argNode(c)
@@ -985,6 +987,9 @@ func showStatsHandler(c *cli.Context) (err error) {
 		smap, err = getClusterMap(c)
 		debug.AssertNoErr(err)
 		node = smap.GetNode(sid)
+	}
+	if metrics, err = getMetricNames(c); err != nil {
+		return err
 	}
 	var (
 		refresh  = flagIsSet(c, refreshFlag)
@@ -1000,9 +1005,9 @@ func showStatsHandler(c *cli.Context) (err error) {
 	sleep, averageOver := _refreshAvgRate(c)
 	for {
 		if node != nil {
-			err = showNodeStats(c, node, averageOver, regex)
+			err = showNodeStats(c, node, metrics, averageOver, regex)
 		} else {
-			err = showAggregatedStats(c, averageOver, regex)
+			err = showAggregatedStats(c, metrics, averageOver, regex)
 		}
 		if err != nil || !refresh {
 			return err
@@ -1012,13 +1017,13 @@ func showStatsHandler(c *cli.Context) (err error) {
 	}
 }
 
-func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duration, regex *regexp.Regexp) error {
-	stats, err := api.GetDaemonStats(apiBP, node)
+func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
+	ds, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
 		return err
 	}
 	// throughput (Bps)
-	if err := _daeBps(c, node, stats, averageOver); err != nil {
+	if err := _daeBps(node, metrics, ds, averageOver); err != nil {
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
@@ -1026,15 +1031,17 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
 			actionWarn(c, warn)
 		}
-		return tmpls.Print(stats, c.App.Writer, tmpls.ConfigTmpl, nil, true)
+		return tmpls.Print(ds, c.App.Writer, tmpls.ConfigTmpl, nil, true)
 	}
 
 	var (
 		human = !flagIsSet(c, rawFlag)
-		props = make(nvpairList, 0, len(stats.Tracker))
+		props = make(nvpairList, 0, len(ds.Tracker))
 	)
-	for k, v := range stats.Tracker {
-		props = appendStatToProps(props, k, v.Value, "", regex, human)
+	for name, v := range ds.Tracker {
+		kind, ok := metrics[name]
+		debug.Assert(ok, name)
+		props = appendStatToProps(props, name, kind, v.Value, "", regex, human)
 	}
 	sort.Slice(props, func(i, j int) bool {
 		return props[i].Name < props[j].Name
@@ -1047,15 +1054,15 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 	// target
 	var (
 		idx         int
-		mpathSorted = make([]string, 0, len(stats.MPCap)) // sort
+		mpathSorted = make([]string, 0, len(ds.MPCap)) // sort
 	)
-	for mpath := range stats.MPCap {
+	for mpath := range ds.MPCap {
 		mpathSorted = append(mpathSorted, mpath)
 	}
 	sort.Strings(mpathSorted)
 	for _, mpath := range mpathSorted {
 		var (
-			mstat  = stats.MPCap[mpath]
+			mstat  = ds.MPCap[mpath]
 			prefix = fmt.Sprintf("mountpath.%d.", idx)
 		)
 		idx++
@@ -1064,21 +1071,21 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, averageOver time.Duratio
 		}
 		props = append(props,
 			nvpair{Name: prefix + "path", Value: mpath},
-			nvpair{Name: prefix + "used", Value: fmtStatValue(".size", int64(mstat.Used), human)},
-			nvpair{Name: prefix + "avail", Value: fmtStatValue(".size", int64(mstat.Avail), human)},
+			nvpair{Name: prefix + "used", Value: fmtStatValue("", stats.KindSize, int64(mstat.Used), human)},
+			nvpair{Name: prefix + "avail", Value: fmtStatValue("", stats.KindSize, int64(mstat.Avail), human)},
 			nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 	}
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
 }
 
-func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regexp.Regexp) error {
+func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
 	st, err := api.GetClusterStats(apiBP)
 	if err != nil {
 		return err
 	}
 
 	// throughput (Bps)
-	if err := _cluStatsBps(c, st, averageOver); err != nil {
+	if err := _cluStatsBps(metrics, st, averageOver); err != nil {
 		return err
 	}
 
@@ -1093,31 +1100,41 @@ func showAggregatedStats(c *cli.Context, averageOver time.Duration, regex *regex
 
 	human := !flagIsSet(c, rawFlag)
 	props := make(nvpairList, 0, len(st.Proxy.Tracker))
-	for k, v := range st.Proxy.Tracker {
-		props = appendStatToProps(props, k, v.Value, "proxy.", regex, human)
+	for name, v := range st.Proxy.Tracker {
+		kind, ok := metrics[name]
+		debug.Assert(ok, name)
+		props = appendStatToProps(props, name, kind, v.Value, "proxy.", regex, human)
 	}
 	tgtStats := make(map[string]int64)
 	for _, tgt := range st.Target {
-		for k, v := range tgt.Tracker {
-			if strings.HasSuffix(k, ".time") {
-				continue
+		for name, v := range tgt.Tracker {
+			kind, ok := metrics[name]
+			debug.Assert(ok, name)
+
+			// aggregate counters, sizes, throughputs
+			if kind == stats.KindCounter || kind == stats.KindSize || kind == stats.KindThroughput ||
+				kind == stats.KindComputedThroughput {
+				if totalVal, ok := tgtStats[name]; ok {
+					v.Value += totalVal
+				}
 			}
-			if totalVal, ok := tgtStats[k]; ok {
-				v.Value += totalVal
-			}
-			tgtStats[k] = v.Value
+			tgtStats[name] = v.Value
 		}
 	}
-	// Replace all "*.ns" counters with their average values.
+	// compute latency averages
 	tgtCnt := int64(len(st.Target))
-	for k, v := range tgtStats {
-		if strings.HasSuffix(k, ".ns") {
-			tgtStats[k] = v / tgtCnt
+	for name, v := range tgtStats {
+		kind, ok := metrics[name]
+		debug.Assert(ok, name)
+		if kind == stats.KindLatency {
+			tgtStats[name] = v / tgtCnt
 		}
 	}
 
-	for k, v := range tgtStats {
-		props = appendStatToProps(props, k, v, "target.", regex, human)
+	// finally
+	for name, v := range tgtStats {
+		kind := metrics[name]
+		props = appendStatToProps(props, name, kind, v, "target.", regex, human)
 	}
 
 	sort.Slice(props, func(i, j int) bool {
