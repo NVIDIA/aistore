@@ -39,7 +39,7 @@ func DirSizeOnDisk(dirPath string) (uint64, error) {
 	out = out[:idx]
 	// `du` can return ',' as float separator what cannot be parsed properly.
 	out = strings.ReplaceAll(out, ",", ".")
-	size, err := cos.S2B(out)
+	size, err := cos.ParseSizeIEC(out)
 	if err != nil || size < 0 {
 		return 0, fmt.Errorf("invalid output format from 'du': %v [%s]", err, out)
 	}

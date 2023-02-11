@@ -12,19 +12,49 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// is used in cmn/config; is known to cmn/iter-fields parser
-// (compare w/ duration.go)
+// IEC (binary) units
+const (
+	KiB = 1024
+	MiB = 1024 * KiB
+	GiB = 1024 * MiB
+	TiB = 1024 * GiB
+)
 
-//////////
-// Size //
-//////////
+// IS (metric) units
+const (
+	KB = 1000
+	MB = 1000 * KB
+	GB = 1000 * MB
+	TB = 1000 * GB
+)
 
-type Size int64
+/////////////
+// SizeIEC //
+/////////////
 
-func (siz Size) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(siz.String()) }
-func (siz Size) String() string               { return B2S(int64(siz), 0) }
+// is used in cmn/config; is known*** to cmn/iter-fields parser (compare w/ duration.go)
 
-func (siz *Size) UnmarshalJSON(b []byte) (err error) {
+type SizeIEC int64
+
+var toBiBytes = map[string]int64{
+	"K":   KiB,
+	"KB":  KiB,
+	"KIB": KiB,
+	"M":   MiB,
+	"MB":  MiB,
+	"MIB": MiB,
+	"G":   GiB,
+	"GB":  GiB,
+	"GIB": GiB,
+	"T":   TiB,
+	"TB":  TiB,
+	"TIB": TiB,
+}
+
+func (siz SizeIEC) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(siz.String()) }
+func (siz SizeIEC) String() string               { return ToSizeIEC(int64(siz), 0) }
+
+func (siz *SizeIEC) UnmarshalJSON(b []byte) (err error) {
 	var (
 		n   int64
 		val string
@@ -32,16 +62,12 @@ func (siz *Size) UnmarshalJSON(b []byte) (err error) {
 	if err = jsoniter.Unmarshal(b, &val); err != nil {
 		return
 	}
-	n, err = S2B(val)
-	*siz = Size(n)
+	n, err = ParseSizeIEC(val)
+	*siz = SizeIEC(n)
 	return
 }
 
-//
-// helpers
-//
-
-func S2B(s string) (int64, error) {
+func ParseSizeIEC(s string) (int64, error) {
 	if s == "" {
 		return 0, nil
 	}
@@ -57,7 +83,7 @@ func S2B(s string) (int64, error) {
 	return int64(f), err
 }
 
-func B2S(b int64, digits int) string {
+func ToSizeIEC(b int64, digits int) string {
 	if b >= TiB {
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(TiB), "TiB")
 	}
@@ -72,5 +98,3 @@ func B2S(b int64, digits int) string {
 	}
 	return fmt.Sprintf("%dB", b)
 }
-
-func UnsignedB2S(b uint64, digits int) string { return B2S(int64(b), digits) }

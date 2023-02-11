@@ -377,8 +377,8 @@ func NewErrCapacityExceeded(highWM int64, totalBytesUsed, totalBytes uint64, use
 }
 
 func (e *ErrCapacityExceeded) Error() string {
-	suffix := fmt.Sprintf("total used %s out of %s", cos.B2S(int64(e.totalBytesUsed), 2),
-		cos.B2S(int64(e.totalBytes), 2))
+	suffix := fmt.Sprintf("total used %s out of %s", cos.ToSizeIEC(int64(e.totalBytesUsed), 2),
+		cos.ToSizeIEC(int64(e.totalBytes), 2))
 	if e.oos {
 		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
 			e.usedPct, suffix)

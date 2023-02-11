@@ -122,7 +122,7 @@ func (lom *LOM) StringEx() string {
 		s += ", " + lom.mpathInfo.String()
 	}
 	if lom.md.Size != 0 {
-		s += " size=" + cos.B2S(lom.md.Size, 1)
+		s += " size=" + cos.ToSizeIEC(lom.md.Size, 1)
 	}
 	if lom.md.Ver != "" {
 		s += " ver=" + lom.md.Ver

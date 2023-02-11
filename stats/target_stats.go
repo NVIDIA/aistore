@@ -329,10 +329,10 @@ func (r *Trunner) logDiskStats() {
 		if stats.Util < minLogDiskUtil {
 			continue
 		}
-		rbps := cos.B2S(stats.RBps, 0)
-		wbps := cos.B2S(stats.WBps, 0)
-		ravg := cos.B2S(stats.Ravg, 0)
-		wavg := cos.B2S(stats.Wavg, 0)
+		rbps := cos.ToSizeIEC(stats.RBps, 0)
+		wbps := cos.ToSizeIEC(stats.WBps, 0)
+		ravg := cos.ToSizeIEC(stats.Ravg, 0)
+		wavg := cos.ToSizeIEC(stats.Wavg, 0)
 		l := len(disk) + len(rbps) + len(wbps) + len(ravg) + len(wavg) + 64
 		buf := make([]byte, 0, l)
 		buf = append(buf, disk...)

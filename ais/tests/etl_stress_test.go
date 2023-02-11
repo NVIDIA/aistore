@@ -193,7 +193,7 @@ def transform(input_bytes):
 		}
 	)
 
-	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.B2S(int64(m.fileSize), 2))
+	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.ToSizeIEC(int64(m.fileSize), 2))
 	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanupAndSaveState()
 

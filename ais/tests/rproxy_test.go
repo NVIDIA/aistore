@@ -76,7 +76,7 @@ func extractSpeed(out []byte) int64 {
 			continue
 		}
 		words := strings.Split(lines[i], " ")
-		if spd, err := cos.S2B(words[len(words)-1]); err == nil {
+		if spd, err := cos.ParseSizeIEC(words[len(words)-1]); err == nil {
 			return spd
 		}
 	}
@@ -111,14 +111,14 @@ retry:
 	tassert.CheckFatal(t, err)
 
 	speedCold := extractSpeed(out)
-	tlog.Logf("Cold download speed:   %s\n", cos.B2S(speedCold, 1))
+	tlog.Logf("Cold download speed:   %s\n", cos.ToSizeIEC(speedCold, 1))
 	tassert.Fatalf(t, speedCold != 0, "Failed to detect cold download speed")
 
 	// at less than 100KBps we likely failed to download
 	if speedCold < 100*cos.KiB {
 		if testing.Short() {
 			fmt := "cold download speed %s is way too low indicating potential timeout"
-			tools.ShortSkipf(t, fmt, cos.B2S(speedCold, 1))
+			tools.ShortSkipf(t, fmt, cos.ToSizeIEC(speedCold, 1))
 		}
 		if maxRetries > 0 {
 			tlog.Logf("Warning: will retry (%d)\n", maxRetries)
@@ -174,13 +174,13 @@ retry:
 		tassert.Fatalf(t, speedJSON != 0, "Failed to detect speed for JSON download")
 	*/
 
-	tlog.Logf("Cold download speed:   %s\n", cos.B2S(speedCold, 1))
-	tlog.Logf("HTTP download speed:   %s\n", cos.B2S(speedHTTP, 1))
+	tlog.Logf("Cold download speed:   %s\n", cos.ToSizeIEC(speedCold, 1))
+	tlog.Logf("HTTP download speed:   %s\n", cos.ToSizeIEC(speedHTTP, 1))
 	/*
 		TODO: uncomment when target supports HTTPS client
 
-		tlog.Logf("HTTPS download speed:  %s\n", cos.B2S(speedHTTPS, 1))
-		tlog.Logf("JSON download speed:   %s\n", cos.B2S(speedJSON, 1))
+		tlog.Logf("HTTPS download speed:  %s\n", cos.ToSizeIEC(speedHTTPS, 1))
+		tlog.Logf("JSON download speed:   %s\n", cos.ToSizeIEC(speedJSON, 1))
 	*/
 	ratio := float64(speedHTTP) / float64(speedCold)
 	if ratio < 0.8 {

@@ -228,9 +228,9 @@ func (j *clnJ) run(providers []string) {
 		if size == 0 {
 			return
 		}
-		glog.Infof(f, j, cos.B2S(size, 1))
+		glog.Infof(f, j, cos.ToSizeIEC(size, 1))
 	} else {
-		glog.Errorf(f+", err %v", j, cos.B2S(size, 1), err)
+		glog.Errorf(f+", err %v", j, cos.ToSizeIEC(size, 1), err)
 	}
 }
 

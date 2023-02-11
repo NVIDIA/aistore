@@ -97,7 +97,7 @@ func (s *Stream) initCompression(extra *Extra) {
 	} else {
 		s.lz4s.sgl = mem.NewSGL(cos.KiB*64, cos.KiB*64)
 	}
-	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.B2S(int64(s.lz4s.blockMaxSize), 0))
+	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.ToSizeIEC(int64(s.lz4s.blockMaxSize), 0))
 }
 
 func (s *Stream) compressed() bool { return s.lz4s.s == s }

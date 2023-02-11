@@ -1,13 +1,15 @@
-// Package cos provides common low-level types and utilities for all aistore projects
+// Package aisloader
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package cos
+package aisloader
 
 import (
 	"flag"
 	"strconv"
 	"time"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -29,7 +31,7 @@ var (
 )
 
 func (b *BoolExt) Set(s string) (err error) {
-	b.Val, err = ParseBool(s)
+	b.Val, err = cos.ParseBool(s)
 	b.IsSet = true
 	return err
 }

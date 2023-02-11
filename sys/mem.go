@@ -38,10 +38,10 @@ func (mem *MemStat) Get() error {
 
 func (mem *MemStat) String() string {
 	var (
-		used      = cos.B2S(int64(mem.Used), 0)
-		free      = cos.B2S(int64(mem.Free), 0)
-		buffcache = cos.B2S(int64(mem.BuffCache), 0)
-		actfree   = cos.B2S(int64(mem.ActualFree), 0)
+		used      = cos.ToSizeIEC(int64(mem.Used), 0)
+		free      = cos.ToSizeIEC(int64(mem.Free), 0)
+		buffcache = cos.ToSizeIEC(int64(mem.BuffCache), 0)
+		actfree   = cos.ToSizeIEC(int64(mem.ActualFree), 0)
 	)
 	return fmt.Sprintf("used %s, free %s, buffcache %s, actfree %s", used, free, buffcache, actfree)
 }

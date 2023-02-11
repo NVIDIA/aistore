@@ -122,7 +122,7 @@ type (
 		loaderIDHashLen   uint
 		numEpochs         uint
 
-		duration cos.DurationExt // stop after the run for at least that much
+		duration DurationExt // stop after the run for at least that much
 
 		bp api.BaseParams
 
@@ -148,7 +148,7 @@ type (
 		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
 		etlSpecPath string // Path to a ETL spec to apply to each object.
 
-		cleanUp cos.BoolExt // cleanup i.e. remove and destroy everything created during bench
+		cleanUp BoolExt // cleanup i.e. remove and destroy everything created during bench
 
 		statsdProbe   bool
 		getLoaderID   bool
@@ -268,7 +268,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
-	cos.DurationExtVar(f, &p.duration, "duration", time.Minute,
+	DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
 			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
 			"totalputsize reached")
@@ -278,7 +278,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
 		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	cos.BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (mandatory: must be specified)")
+	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (mandatory: must be specified)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
@@ -360,13 +360,13 @@ func parseCmdLine() (params, error) {
 	rnd = rand.New(rand.NewSource(p.seed))
 
 	if p.putSizeUpperBoundStr != "" {
-		if p.putSizeUpperBound, err = cos.S2B(p.putSizeUpperBoundStr); err != nil {
+		if p.putSizeUpperBound, err = cos.ParseSizeIEC(p.putSizeUpperBoundStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse total PUT size %s: %v", p.putSizeUpperBoundStr, err)
 		}
 	}
 
 	if p.minSizeStr != "" {
-		if p.minSize, err = cos.S2B(p.minSizeStr); err != nil {
+		if p.minSize, err = cos.ParseSizeIEC(p.minSizeStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse min size %s: %v", p.minSizeStr, err)
 		}
 	} else {
@@ -374,7 +374,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.maxSizeStr != "" {
-		if p.maxSize, err = cos.S2B(p.maxSizeStr); err != nil {
+		if p.maxSize, err = cos.ParseSizeIEC(p.maxSizeStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse max size %s: %v", p.maxSizeStr, err)
 		}
 	} else {
@@ -405,12 +405,12 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.readOffStr != "" {
-		if p.readOff, err = cos.S2B(p.readOffStr); err != nil {
+		if p.readOff, err = cos.ParseSizeIEC(p.readOffStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse read offset %s: %v", p.readOffStr, err)
 		}
 	}
 	if p.readLenStr != "" {
-		if p.readLen, err = cos.S2B(p.readLenStr); err != nil {
+		if p.readLen, err = cos.ParseSizeIEC(p.readLenStr); err != nil {
 			return params{}, fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
 		}
 	}

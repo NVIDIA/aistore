@@ -354,7 +354,7 @@ func (f *field) SetValue(src any, force ...bool) error {
 					d, err = time.ParseDuration(s)
 					n = int64(d)
 				} else if dst.Type().Name() == "Size" /*cos.Size*/ {
-					n, err = cos.S2B(s)
+					n, err = cos.ParseSizeIEC(s)
 				}
 			}
 			if err != nil {

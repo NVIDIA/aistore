@@ -22,14 +22,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// IEC (binary) units
-const (
-	KiB = 1024
-	MiB = 1024 * KiB
-	GiB = 1024 * MiB
-	TiB = 1024 * GiB
-)
-
 const MLCG32 = 1103515245 // xxhash seed
 
 // permissions
@@ -52,21 +44,6 @@ type (
 
 	JSONRawMsgs map[string]jsoniter.RawMessage
 )
-
-var toBiBytes = map[string]int64{
-	"K":   KiB,
-	"KB":  KiB,
-	"KIB": KiB,
-	"M":   MiB,
-	"MB":  MiB,
-	"MIB": MiB,
-	"G":   GiB,
-	"GB":  GiB,
-	"GIB": GiB,
-	"T":   TiB,
-	"TB":  TiB,
-	"TIB": TiB,
-}
 
 // JSON is used to Marshal/Unmarshal API json messages and is initialized in init function.
 var JSON jsoniter.API

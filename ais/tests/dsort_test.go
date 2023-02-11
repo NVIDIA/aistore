@@ -202,7 +202,7 @@ func (df *dsortFramework) init() {
 		df.outputShardCnt = int(pt.Count())
 	} else {
 		outputShardSize := int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
-		df.outputShardSize = cos.B2S(outputShardSize, 0)
+		df.outputShardSize = cos.ToSizeIEC(outputShardSize, 0)
 		df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(outputShardSize)
 	}
 
@@ -987,7 +987,7 @@ func TestDistributedSortWithMemoryAndDisk(t *testing.T) {
 	// Get current memory
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+500*cos.MiB, 2)
+	df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+500*cos.MiB), 2)
 
 	tlog.Logf("starting distributed sort with using memory and disk (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()
@@ -1048,7 +1048,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 	// Get current memory
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
-	df.maxMemUsage = cos.UnsignedB2S(mem.ActualUsed+300*cos.MiB, 2)
+	df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+300*cos.MiB), 2)
 
 	tlog.Logf("starting distributed sort with using memory, disk and compression (max mem usage: %s)...\n", df.maxMemUsage)
 	df.start()

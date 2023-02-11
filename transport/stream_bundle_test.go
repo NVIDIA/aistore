@@ -150,10 +150,10 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		usePDU         bool
 	)
 	if nvs["compression"] != apc.CompressNever {
-		v, _ := cos.S2B(nvs["block"])
+		v, _ := cos.ParseSizeIEC(nvs["block"])
 		cos.Assert(v == cos.MiB*4 || v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
 		config := cmn.GCO.BeginUpdate()
-		config.Transport.LZ4BlockMaxSize = cos.Size(v)
+		config.Transport.LZ4BlockMaxSize = cos.SizeIEC(v)
 		cmn.GCO.CommitUpdate(config)
 		if err := config.Transport.Validate(); err != nil {
 			tassert.CheckFatal(t, err)

@@ -31,7 +31,7 @@ func TestBytesToStr(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		s := cos.B2S(tst.val, tst.num)
+		s := cos.ToSizeIEC(tst.val, tst.num)
 		if s != tst.str {
 			t.Errorf("Expected %s got %s", tst.str, s)
 		}
@@ -58,7 +58,7 @@ func TestStrToBytes(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		n, e := cos.S2B(tst.str)
+		n, e := cos.ParseSizeIEC(tst.str)
 		if e != nil {
 			t.Errorf("Failed to convert %s: %v", tst.str, e)
 		}

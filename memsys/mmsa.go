@@ -193,7 +193,7 @@ func (r *MMSA) String() string {
 func (r *MMSA) Str(mem *sys.MemStat) string {
 	sp := r.pressure2S(r.Pressure(mem))
 	if r.info == "" {
-		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.B2S(int64(r.MinFree), 0), cos.B2S(int64(r.lowWM), 0))
+		r.info = fmt.Sprintf("(min-free %s, low-wm %s)", cos.ToSizeIEC(int64(r.MinFree), 0), cos.ToSizeIEC(int64(r.lowWM), 0))
 	}
 	return fmt.Sprintf("%s[(%s), %s, %s]", r.Name, mem.String(), r.info, sp)
 }
@@ -344,7 +344,7 @@ func (r *MMSA) _large2slab(immediateSize int64) *Slab {
 func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
-		if minfree, err = cos.S2B(a); err != nil {
+		if minfree, err = cos.ParseSizeIEC(a); err != nil {
 			return fmt.Errorf("cannot parse AIS_MINMEM_FREE %q", a)
 		}
 		r.MinFree = uint64(minfree)

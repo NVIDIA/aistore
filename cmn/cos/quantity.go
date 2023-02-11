@@ -62,7 +62,7 @@ func ParseQuantity(quantity string) (ParsedQuantity, error) {
 		if parsedQ.Value == 0 || parsedQ.Value >= 100 {
 			return parsedQ, ErrInvalidQuantityPercent
 		}
-	} else if value, err := S2B(quantity); err != nil {
+	} else if value, err := ParseSizeIEC(quantity); err != nil {
 		return parsedQ, err
 	} else if value < 0 {
 		return parsedQ, ErrInvalidQuantityBytes
@@ -79,7 +79,7 @@ func (pq ParsedQuantity) String() string {
 	case QuantityPercent:
 		return fmt.Sprintf("%d%%", pq.Value)
 	case QuantityBytes:
-		return UnsignedB2S(pq.Value, 2)
+		return ToSizeIEC(int64(pq.Value), 2)
 	default:
 		AssertMsg(false, fmt.Sprintf("Unknown quantity type: %s", pq.Type))
 		return ""

@@ -90,14 +90,14 @@ func prettyBytes(n int64) string {
 	if n <= 0 { // process special case that B2S do not cover
 		return "-"
 	}
-	return cos.B2S(n, 1)
+	return cos.ToSizeIEC(n, 1)
 }
 
 func prettySpeed(n int64) string {
 	if n <= 0 {
 		return "-"
 	}
-	return cos.B2S(n, 2) + "/s"
+	return cos.ToSizeIEC(n, 2) + "/s"
 }
 
 // prettyDuration converts an integer representing a time in nano second to a string

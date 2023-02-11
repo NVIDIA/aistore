@@ -428,7 +428,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 		szTotal += sz
 	}
 	if szLen != 0 {
-		t.Logf("Average size of the bucket %s: %s\n", bck, cos.B2S(szTotal/int64(szLen), 1))
+		t.Logf("Average size of the bucket %s: %s\n", bck, cos.ToSizeIEC(szTotal/int64(szLen), 1))
 	}
 }
 

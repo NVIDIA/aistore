@@ -17,7 +17,7 @@ func TestSmoke(t *testing.T) {
 
 	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
 		for _, objSize := range objSizes {
-			name := fmt.Sprintf("size:%s", cos.B2S(int64(objSize), 0))
+			name := fmt.Sprintf("size:%s", cos.ToSizeIEC(int64(objSize), 0))
 			t.Run(name, func(t *testing.T) {
 				m := ioContext{
 					t:        t,

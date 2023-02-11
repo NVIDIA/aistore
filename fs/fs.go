@@ -1165,8 +1165,8 @@ func (cs *CapStatus) IsNil() bool { return cs.TotalUsed == 0 && cs.TotalAvail ==
 
 func (cs *CapStatus) String() (str string) {
 	var (
-		totalUsed  = cos.B2S(int64(cs.TotalUsed), 1)
-		totalAvail = cos.B2S(int64(cs.TotalAvail), 1)
+		totalUsed  = cos.ToSizeIEC(int64(cs.TotalUsed), 1)
+		totalAvail = cos.ToSizeIEC(int64(cs.TotalAvail), 1)
 	)
 	str = fmt.Sprintf("cap(used=%s, avail=%s, avg-use=%d%%, max-use=%d%%", totalUsed, totalAvail, cs.PctAvg, cs.PctMax)
 	if cs.Err != nil {

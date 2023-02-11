@@ -102,7 +102,7 @@ func BenchmarkObjPut(b *testing.B) {
 		{16 * cos.MiB},
 	}
 	for _, bench := range benches {
-		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
@@ -149,7 +149,7 @@ func BenchmarkObjAppend(b *testing.B) {
 	}
 
 	for _, bench := range benches {
-		b.Run(cos.B2S(bench.fileSize, 2), func(b *testing.B) {
+		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
 			defer cluster.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
@@ -210,7 +210,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 	}
 
 	for _, bench := range benches {
-		benchName := cos.B2S(bench.fileSize, 2)
+		benchName := cos.ToSizeIEC(bench.fileSize, 2)
 		if bench.chunked {
 			benchName += "-chunked"
 		}

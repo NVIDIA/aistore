@@ -206,7 +206,7 @@ func (r *MMSA) freeIdle() (total int64) {
 		}
 		total += freed
 		if verbose && freed > 0 {
-			glog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.B2S(freed, 1))
+			glog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
 		}
 	}
 	return
@@ -229,7 +229,7 @@ func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	if togc < mingc {
 		return
 	}
-	sgc := cos.B2S(togc, 1)
+	sgc := cos.ToSizeIEC(togc, 1)
 	if force {
 		glog.Warningf("%s: freeing %s to the OS (load %.2f)", r, sgc, avg.One)
 		cos.FreeMemToOS()

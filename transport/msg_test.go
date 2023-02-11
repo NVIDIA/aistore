@@ -93,7 +93,7 @@ func Test_MsgDryRun(t *testing.T) {
 				tsize += int64(msize)
 				if tsize-prevsize > total/2 {
 					prevsize = tsize
-					tlog.Logf("%s: %s\n", stream, cos.B2S(tsize, 0))
+					tlog.Logf("%s: %s\n", stream, cos.ToSizeIEC(tsize, 0))
 				}
 			}
 			stream.Fin()

@@ -139,7 +139,7 @@ func printMaxRingLen(mem *memsys.MMSA, c chan struct{}) {
 func memstress(mem *memsys.MMSA, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	sgls := make([]*memsys.SGL, 0, 128)
-	x := cos.B2S(siz, 1) + "/" + cos.B2S(tot, 1)
+	x := cos.ToSizeIEC(siz, 1) + "/" + cos.ToSizeIEC(tot, 1)
 	if id%100 == 0 && verbose {
 		if ttl > time.Millisecond {
 			tlog.Logf("%4d: %-19s ttl %v\n", id, x, ttl)

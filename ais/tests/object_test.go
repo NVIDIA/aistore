@@ -636,7 +636,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidation*/)
-	tlog.Logf("GET %s without MD5 validation: %v\n", cos.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without MD5 validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -651,7 +651,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidation*/)
-	tlog.Logf("GET %s with MD5 validation:    %v\n", cos.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s with MD5 validation:    %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 
 func TestHeadBucket(t *testing.T) {
@@ -1299,7 +1299,7 @@ func Test_checksum(t *testing.T) {
 
 	start := time.Now()
 	m.gets(false /*withValidate*/)
-	tlog.Logf("GET %s without any checksum validation: %v\n", cos.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s without any checksum validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
 
@@ -1314,7 +1314,7 @@ func Test_checksum(t *testing.T) {
 
 	start = time.Now()
 	m.gets(true /*withValidate*/)
-	tlog.Logf("GET %s and validate checksum: %v\n", cos.B2S(totalSize, 0), time.Since(start))
+	tlog.Logf("GET %s and validate checksum: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 
 func validateBucketProps(t *testing.T, expected *cmn.BucketPropsToUpdate, actual *cmn.BucketProps) {

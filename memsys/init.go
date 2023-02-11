@@ -199,7 +199,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		bufSize := r.slabIncStep * int64(i+1)
 		slab := &Slab{
 			m:       r,
-			tag:     r.Name + "." + cos.B2S(bufSize, 0),
+			tag:     r.Name + "." + cos.ToSizeIEC(bufSize, 0),
 			bufSize: bufSize,
 			get:     make([][]byte, 0, optDepth),
 			put:     make([][]byte, 0, optDepth),

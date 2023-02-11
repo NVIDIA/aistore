@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -191,15 +191,15 @@ type (
 
 	LogConf struct {
 		Level     string       `json:"level"`      // log level (aka verbosity)
-		MaxSize   cos.Size     `json:"max_size"`   // exceeding this size triggers log rotation
-		MaxTotal  cos.Size     `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
+		MaxSize   cos.SizeIEC  `json:"max_size"`   // exceeding this size triggers log rotation
+		MaxTotal  cos.SizeIEC  `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
 		StatsTime cos.Duration `json:"stats_time"` // log stats interval (must be a multiple of `PeriodConf.StatsTime`)
 	}
 	LogConfToUpdate struct {
 		Level     *string       `json:"level,omitempty"`
-		MaxSize   *cos.Size     `json:"max_size,omitempty"`
-		MaxTotal  *cos.Size     `json:"max_total,omitempty"`
+		MaxSize   *cos.SizeIEC  `json:"max_size,omitempty"`
+		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
 		FlushTime *cos.Duration `json:"flush_time,omitempty"`
 		StatsTime *cos.Duration `json:"stats_time,omitempty"`
 	}
@@ -505,30 +505,30 @@ type (
 		// lz4
 		// max uncompressed block size, one of [64K, 256K(*), 1M, 4M]
 		// fastcompression.blogspot.com/2013/04/lz4-streaming-format-final.html
-		LZ4BlockMaxSize  cos.Size `json:"lz4_block"`
-		LZ4FrameChecksum bool     `json:"lz4_frame_checksum"`
+		LZ4BlockMaxSize  cos.SizeIEC `json:"lz4_block"`
+		LZ4FrameChecksum bool        `json:"lz4_frame_checksum"`
 	}
 	TransportConfToUpdate struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
 		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
 		QuiesceTime      *cos.Duration `json:"quiescent,omitempty"`
-		LZ4BlockMaxSize  *cos.Size     `json:"lz4_block,omitempty"`
+		LZ4BlockMaxSize  *cos.SizeIEC  `json:"lz4_block,omitempty"`
 		LZ4FrameChecksum *bool         `json:"lz4_frame_checksum,omitempty"`
 	}
 
 	MemsysConf struct {
-		MinFree        cos.Size     `json:"min_free"`
-		DefaultBufSize cos.Size     `json:"default_buf"`
-		SizeToGC       cos.Size     `json:"to_gc"`
+		MinFree        cos.SizeIEC  `json:"min_free"`
+		DefaultBufSize cos.SizeIEC  `json:"default_buf"`
+		SizeToGC       cos.SizeIEC  `json:"to_gc"`
 		HousekeepTime  cos.Duration `json:"hk_time"`
 		MinPctTotal    int          `json:"min_pct_total"`
 		MinPctFree     int          `json:"min_pct_free"`
 	}
 	MemsysConfToUpdate struct {
-		MinFree        *cos.Size     `json:"min_free,omitempty"`
-		DefaultBufSize *cos.Size     `json:"default_buf,omitempty"`
-		SizeToGC       *cos.Size     `json:"to_gc,omitempty"`
+		MinFree        *cos.SizeIEC  `json:"min_free,omitempty"`
+		DefaultBufSize *cos.SizeIEC  `json:"default_buf,omitempty"`
+		SizeToGC       *cos.SizeIEC  `json:"to_gc,omitempty"`
 		HousekeepTime  *cos.Duration `json:"hk_time,omitempty"`
 		MinPctTotal    *int          `json:"min_pct_total,omitempty"`
 		MinPctFree     *int          `json:"min_pct_free,omitempty"`
@@ -1142,7 +1142,7 @@ func (c *ECConf) String() string {
 		return "Disabled"
 	}
 	objSizeLimit := c.ObjSizeLimit
-	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, cos.B2S(objSizeLimit, 0))
+	return fmt.Sprintf("%d:%d (%s)", c.DataSlices, c.ParitySlices, cos.ToSizeIEC(objSizeLimit, 0))
 }
 
 func (c *ECConf) RequiredEncodeTargets() int {
@@ -1321,7 +1321,7 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 				c.DefaultMaxMemUsage, err)
 		}
 	}
-	if _, err := cos.S2B(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
+	if _, err := cos.ParseSizeIEC(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
 		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)",
 			c.DSorterMemThreshold, err)
 	}
