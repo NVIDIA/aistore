@@ -1,6 +1,6 @@
 import json
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch, mock_open
 
 from aistore.sdk import utils
 from aistore.sdk.errors import AISError, ErrRemoteBckNotFound, ErrBckNotFound
@@ -72,3 +72,35 @@ class TestUtils(unittest.TestCase):
     @test_cases((0, 0.1), (-1, 0.1), (64, 1), (128, 2), (100000, 1562.5))
     def test_probing_frequency(self, test_case):
         self.assertEqual(test_case[1], utils.probing_frequency(test_case[0]))
+
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_validate_file(self, mock_exists, mock_is_file):
+        mock_exists.return_value = False
+        with self.assertRaises(ValueError):
+            utils.validate_file("any path")
+        mock_exists.return_value = True
+        mock_is_file.return_value = False
+        with self.assertRaises(ValueError):
+            utils.validate_file("any path")
+        mock_is_file.return_value = True
+        utils.validate_file("any path")
+
+    @patch("pathlib.Path.is_dir")
+    @patch("pathlib.Path.exists")
+    def test_validate_dir(self, mock_exists, mock_is_dir):
+        mock_exists.return_value = False
+        with self.assertRaises(ValueError):
+            utils.validate_directory("any path")
+        mock_exists.return_value = True
+        mock_is_dir.return_value = False
+        with self.assertRaises(ValueError):
+            utils.validate_directory("any path")
+        mock_is_dir.return_value = True
+        utils.validate_directory("any path")
+
+    def test_read_file_bytes(self):
+        data = b"Test data"
+        with patch("builtins.open", mock_open(read_data=data)):
+            res = utils.read_file_bytes("any path")
+        self.assertEqual(data, res)

@@ -1,8 +1,9 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
+from pathlib import Path
 from io import BufferedWriter
-from typing import NewType
+from typing import NewType, List
 import requests
 
 from aistore.sdk.const import (
@@ -18,6 +19,7 @@ from aistore.sdk.const import (
 )
 
 from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
+from aistore.sdk.utils import read_file_bytes, validate_directory, validate_file
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -117,39 +119,85 @@ class Object:
             writer.writelines(obj_stream)
         return obj_stream
 
-    def put(self, path: str = None, content: bytes = None) -> Header:
+    def put_content(self, content: bytes):
         """
-        Puts a local file or bytes as an object to a bucket in AIS storage.
+        Puts bytes as an object to a bucket in AIS storage.
 
         Args:
-            path (str): path to local file or bytes.
-            content (bytes): bytes to put as an object.
-
-        Returns:
-            Object properties
+            content (bytes): Bytes to put as an object.
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ConnectionError: Connection error
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
-            ValueError: Path and content are mutually exclusive
         """
-        if path and content:
-            raise ValueError("path and content are mutually exclusive")
+        self._put_data(self.name, content)
 
-        url = f"/objects/{ self._bck_name }/{ self.name }"
-        if path:
-            with open(path, "rb") as reader:
-                data = reader.read()
-        else:
-            data = content
-        return self._client.request(
+    def put_file(self, path: str = None):
+        """
+        Puts a local file as an object to a bucket in AIS storage.
+
+        Args:
+            path (str): Path to local file
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: The path provided is not a valid file
+        """
+        validate_file(path)
+        self._put_data(self.name, read_file_bytes(path))
+
+    def put_files(
+        self, path: str, prefix: str = "", pattern: str = "*", recursive: bool = False
+    ) -> List[str]:
+        """
+        Puts a filepath as an object to a bucket in AIS storage.
+
+        Args:
+            path (str): Local filepath
+            prefix (str, optional): Required prefix in names of all files to put
+            pattern (str, optional): Regex pattern to filter files
+            recursive (bool, optional): Whether to recurse through the provided path directories
+
+        Returns:
+            List of object names put to a bucket in AIS
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: The path provided is not a valid directory
+        """
+        validate_directory(path)
+        file_iterator = (
+            Path(path).rglob(pattern) if recursive else Path(path).glob(pattern)
+        )
+        obj_names = []
+        for file in file_iterator:
+            if file.is_file() and str(file.name).startswith(prefix):
+                relative_path = str(file.relative_to(path))
+                obj_name = (
+                    str(Path(self.name).joinpath(relative_path))
+                    if self.name
+                    else relative_path
+                )
+                self._put_data(obj_name, read_file_bytes(str(file)))
+                obj_names.append(obj_name)
+        return obj_names
+
+    def _put_data(self, obj_name: str, data: bytes):
+        url = f"objects/{ self._bck_name }/{ obj_name }"
+        self._client.request(
             HTTP_METHOD_PUT,
             path=url,
             params=self._qparams,
             data=data,
-        ).headers
+        )
 
     def promote(self, path: str, promote_options: PromoteOptions = None) -> Header:
         """

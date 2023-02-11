@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
+from pathlib import Path
+
 import pydantic.tools
 import requests
 
@@ -52,3 +54,46 @@ def probing_frequency(dur: int) -> float:
     freq = min(dur / 8.0, 1.0)
     freq = max(dur / 64.0, freq)
     return max(freq, 0.1)
+
+
+def read_file_bytes(filepath: str):
+    """
+    Given a filepath, read the content as bytes
+    Args:
+        filepath: Existing local filepath
+
+    Returns: Raw bytes
+    """
+    with open(filepath, "rb") as reader:
+        return reader.read()
+
+
+def _check_path_exists(path: str):
+    if not Path(path).exists():
+        raise ValueError("Provided path does not exist")
+
+
+def validate_file(path: str):
+    """
+    Validate that a file exists and is a file
+    Args:
+        path: Path to validate
+    Raises:
+        ValueError: If path does not exist or is not a file
+    """
+    _check_path_exists(path)
+    if not Path(path).is_file():
+        raise ValueError("Provided path is a directory, not a file")
+
+
+def validate_directory(path: str):
+    """
+    Validate that a directory exists and is a directory
+    Args:
+        path: Path to validate
+    Raises:
+        ValueError: If path does not exist or is not a directory
+    """
+    _check_path_exists(path)
+    if not Path(path).is_dir():
+        raise ValueError("Provided path is a file, not a directory")

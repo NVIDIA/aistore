@@ -1,11 +1,7 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
 import os
-import shutil
-
-# Default provider is AIS, so all Cloud-related tests are skipped.
-
 import random
 import unittest
 
@@ -14,30 +10,35 @@ from aistore.sdk.errors import AISError, ErrBckNotFound
 
 from aistore.sdk import Client
 from aistore.sdk.types import PromoteOptions
-from tests.utils import create_and_put_object, random_string, destroy_bucket
+from tests.utils import (
+    create_and_put_object,
+    random_string,
+    destroy_bucket,
+    cleanup_local,
+)
 from tests.integration import CLUSTER_ENDPOINT
 
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
+OBJ_NAME = "test-object"
 LOCAL_TEST_FILES = os.path.join(os.getcwd(), "object-ops-test")
 
 
-class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
+# pylint: disable=unused-variable
+class TestObjectOps(unittest.TestCase):
     def setUp(self) -> None:
         self.bck_name = random_string()
 
         self.client = Client(CLUSTER_ENDPOINT)
         self.bucket = self.client.bucket(self.bck_name)
         self.bucket.create()
+        cleanup_local(LOCAL_TEST_FILES)
 
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         destroy_bucket(self.client, self.bck_name)
         # Cleanup local files at end
-        try:
-            shutil.rmtree(LOCAL_TEST_FILES)
-        except FileNotFoundError:
-            pass
+        cleanup_local(LOCAL_TEST_FILES)
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
@@ -67,8 +68,111 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
             name_to_content[obj_name] = content
         return name_to_content
 
+    def test_put_content(self):
+        content = b"content for the object"
+        obj = self.bucket.object(OBJ_NAME)
+        obj.put_content(content)
+        res = obj.get()
+        self.assertEqual(content, res.read_all())
+
+    def test_put_file(self):
+        os.mkdir(LOCAL_TEST_FILES)
+        content = b"content for the object"
+        filename = os.path.join(LOCAL_TEST_FILES, "test_file")
+        with open(filename, "wb") as writer:
+            writer.write(content)
+        obj = self.bucket.object(OBJ_NAME)
+        obj.put_file(filename)
+        res = obj.get()
+        self.assertEqual(content, res.read_all())
+
+    def test_put_file_invalid(self):
+        with self.assertRaises(ValueError):
+            self.bucket.object("any").put_file("non-existent-file")
+        os.mkdir(LOCAL_TEST_FILES)
+        inner_dir = os.path.join(LOCAL_TEST_FILES, "inner_dir_not_file")
+        os.mkdir(inner_dir)
+        with self.assertRaises(ValueError):
+            self.bucket.object("any").put_file(inner_dir)
+
+    def test_put_files_invalid(self):
+        with self.assertRaises(ValueError):
+            self.bucket.object("any").put_files("non-existent-dir")
+        os.mkdir(LOCAL_TEST_FILES)
+        filename = os.path.join(LOCAL_TEST_FILES, "file_not_dir")
+        with open(filename, "w", encoding="utf-8"):
+            pass
+        with self.assertRaises(ValueError):
+            self.bucket.object("any").put_files(filename)
+
+    def test_put_files_default_args(self):
+        os.mkdir(LOCAL_TEST_FILES)
+        file_data = [b"test data to verify", b"data in second file"]
+        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
+        os.mkdir(file_dir)
+        expected_obj_data = {}
+        for index, data in enumerate(file_data):
+            filename = f"inner_file_{index}"
+            expected_obj_data[f"{OBJ_NAME}/{filename}"] = data
+            inner_filename = os.path.join(file_dir, filename)
+            with open(inner_filename, "wb") as file:
+                file.write(data)
+        obj = self.bucket.object(OBJ_NAME)
+        obj.put_files(file_dir)
+        for obj_name, expected_data in expected_obj_data.items():
+            res = self.bucket.object(obj_name).get()
+            self.assertEqual(expected_data, res.read_all())
+
+    def test_put_files_recursive(self):
+        os.mkdir(LOCAL_TEST_FILES)
+        file_data = [b"test data to verify", b"data in second file"]
+        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
+        os.mkdir(file_dir)
+
+        top_filename = "top_level_file.txt"
+        top_file = os.path.join(file_dir, top_filename)
+        inner_dir_name = "directory"
+        inner_dir = os.path.join(file_dir, inner_dir_name)
+        lower_filename = "lower_level_file.txt"
+        lower_file = os.path.join(inner_dir, lower_filename)
+        os.mkdir(inner_dir)
+
+        expected_obj_data = {
+            f"{OBJ_NAME}/{top_filename}": file_data[0],
+            f"{OBJ_NAME}/{inner_dir_name}/{lower_filename}": file_data[1],
+        }
+        with open(top_file, "wb") as file:
+            file.write(file_data[0])
+        with open(lower_file, "wb") as file:
+            file.write(file_data[1])
+
+        obj = self.bucket.object(OBJ_NAME)
+        obj.put_files(file_dir, recursive=True)
+
+        for obj_name, expected_data in expected_obj_data.items():
+            res = self.bucket.object(obj_name).get()
+            self.assertEqual(expected_data, res.read_all())
+
+    def test_put_files_filtered(self):
+        os.mkdir(LOCAL_TEST_FILES)
+        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
+        os.mkdir(file_dir)
+        included_filename = "prefix-file.txt"
+        excluded_by_pattern = "extra_top_file.py"
+        excluded_by_prefix = "non-prefix-file.txt"
+        for file in [included_filename, excluded_by_pattern, excluded_by_prefix]:
+            with open(os.path.join(file_dir, file), "wb"):
+                pass
+        obj = self.bucket.object(OBJ_NAME)
+        obj.put_files(file_dir, prefix="prefix-", pattern="*.txt")
+        self.bucket.object(f"{OBJ_NAME}/{included_filename}").get()
+        with self.assertRaises(AISError):
+            self.bucket.object(f"{OBJ_NAME}/{excluded_by_pattern}").get()
+        with self.assertRaises(AISError):
+            self.bucket.object(f"{OBJ_NAME}/{excluded_by_prefix}").get()
+
     def test_put_head_get(self):
-        objects = self._put_objects(10)
+        objects = self._put_objects(5)
         for obj_name, content in objects.items():
             properties = self.bucket.object(obj_name).head()
             self.assertEqual(properties[AIS_VERSION], "1")

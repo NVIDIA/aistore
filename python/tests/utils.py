@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 import string
 import tempfile
 
@@ -27,7 +28,7 @@ def create_and_put_object(
     with open(temp_file, "wb") as file:
         file.write(content)
         file.flush()
-        client.bucket(bck_name, provider=provider).object(obj_name).put(file.name)
+        client.bucket(bck_name, provider=provider).object(obj_name).put_file(file.name)
     return content
 
 
@@ -35,4 +36,11 @@ def destroy_bucket(client: Client, bck_name: str):
     try:
         client.bucket(bck_name).delete()
     except ErrBckNotFound:
+        pass
+
+
+def cleanup_local(path: str):
+    try:
+        shutil.rmtree(path)
+    except FileNotFoundError:
         pass

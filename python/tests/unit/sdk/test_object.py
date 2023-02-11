@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import Mock, patch, mock_open
+from pathlib import Path
+from unittest.mock import Mock, patch, mock_open, call
 
 from requests import Response
 from requests.structures import CaseInsensitiveDict
@@ -24,30 +25,33 @@ from aistore.sdk.const import (
 from aistore.sdk.object import Object
 from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
 
+BCK_NAME = "bucket name"
+OBJ_NAME = "object name"
+REQUEST_PATH = f"objects/{BCK_NAME}/{OBJ_NAME}"
 
-class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
+
+# pylint: disable=unused-variable
+class TestObject(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock()
-        self.bck_name = "bucket name"
-        self.obj_name = "object name"
         self.mock_bucket = Mock()
         self.mock_bucket.client = self.mock_client
-        self.mock_bucket.name = self.bck_name
+        self.mock_bucket.name = BCK_NAME
         self.mock_writer = Mock()
         self.mock_bucket.qparam = {}
         self.expected_params = {}
-        self.object = Object(self.mock_bucket, self.obj_name)
+        self.object = Object(self.mock_bucket, OBJ_NAME)
 
     def test_properties(self):
         self.assertEqual(self.mock_bucket, self.object.bucket)
-        self.assertEqual(self.obj_name, self.object.name)
+        self.assertEqual(OBJ_NAME, self.object.name)
 
     def test_head(self):
         self.object.head()
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_HEAD,
-            path=f"objects/{self.bck_name}/{self.obj_name}",
+            path=REQUEST_PATH,
             params=self.expected_params,
         )
 
@@ -107,50 +111,87 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(custom_metadata_dict, res.attributes.custom_metadata)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"objects/{self.bck_name}/{self.obj_name}",
+            path=REQUEST_PATH,
             params=self.expected_params,
             stream=True,
         )
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)
 
-    def test_put_conflicting_args(self):
-        self.assertRaises(
-            ValueError, self.object.put, path="something", content=b"something else"
-        )
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_put_file(self, mock_exists, mock_is_file):
+        mock_exists.return_value = True
+        mock_is_file.return_value = True
+        path = "any/filepath"
+        data = b"bytes in the file"
 
-    def test_put_default_args(self):
-        self.put_exec_assert(expected_data=None)
-
-    def test_put_path(self):
-        path = "path/to/data"
-        data = b"any-data-bytes"
         with patch("builtins.open", mock_open(read_data=data)):
-            self.put_exec_assert(expected_data=data, path=path)
+            self.object.put_file(path)
 
-    def test_put_content(self):
-        data = b"user-supplied-bytes"
-        self.put_exec_assert(expected_data=data, content=data)
-
-    def put_exec_assert(self, expected_data, **kwargs):
-        request_path = f"/objects/{self.bck_name}/{self.obj_name}"
-        expected_headers = "headers"
-        mock_headers = Mock()
-        mock_headers.headers = expected_headers
-        self.mock_client.request.return_value = mock_headers
-        res = self.object.put(**kwargs)
-        self.assertEqual(expected_headers, res)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT,
-            path=request_path,
+            path=REQUEST_PATH,
             params=self.expected_params,
-            data=expected_data,
+            data=data,
+        )
+
+    @patch("aistore.sdk.object.validate_directory")
+    @patch("aistore.sdk.object.read_file_bytes")
+    @patch("pathlib.Path.glob")
+    def test_put_files(self, mock_glob, mock_read, mock_validate_dir):
+        path = "directory"
+        file_1_name = "file_1_name"
+        file_2_name = "file_2_name"
+        path_1 = Mock()
+        path_1.is_file.return_value = True
+        path_1.relative_to.return_value = file_1_name
+        path_2 = Mock()
+        path_2.relative_to.return_value = file_2_name
+        path_2.is_file.return_value = True
+        file_1_data = b"bytes in the first file"
+        file_2_data = b"bytes in the second file"
+        mock_glob.return_value = [path_1, path_2]
+        expected_obj_names = [
+            f"{self.object.name}/{file_1_name}",
+            f"{self.object.name}/{file_2_name}",
+        ]
+        mock_read.side_effect = [file_1_data, file_2_data]
+
+        res = self.object.put_files(path)
+
+        mock_validate_dir.assert_called_with(path)
+        self.assertEqual(expected_obj_names, res)
+        expected_calls = [
+            call(
+                HTTP_METHOD_PUT,
+                path=str(Path(REQUEST_PATH).joinpath(file_1_name)),
+                params=self.expected_params,
+                data=file_1_data,
+            ),
+            call(
+                HTTP_METHOD_PUT,
+                path=str(Path(REQUEST_PATH).joinpath(file_2_name)),
+                params=self.expected_params,
+                data=file_2_data,
+            ),
+        ]
+        self.mock_client.request.assert_has_calls(expected_calls)
+
+    def test_put_content(self):
+        content = b"user-supplied-bytes"
+        self.object.put_content(content)
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_PUT,
+            path=REQUEST_PATH,
+            params=self.expected_params,
+            data=content,
         )
 
     def test_promote_default_args(self):
         filename = "promoted file"
         options = PromoteOptions()
-        expected_value = PromoteAPIArgs(source_path=filename, object_name=self.obj_name)
+        expected_value = PromoteAPIArgs(source_path=filename, object_name=OBJ_NAME)
         self.promote_exec_assert(filename, options, expected_value)
 
     def test_promote(self):
@@ -169,7 +210,7 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         )
         expected_value = PromoteAPIArgs(
             source_path=filename,
-            object_name=self.obj_name,
+            object_name=OBJ_NAME,
             target_id=target_id,
             recursive=recursive,
             overwrite_dest=overwrite_dest,
@@ -179,7 +220,7 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
         self.promote_exec_assert(filename, options, expected_value)
 
     def promote_exec_assert(self, filename, options, expected_value):
-        request_path = f"/objects/{self.bck_name}"
+        request_path = f"/objects/{BCK_NAME}"
         expected_json = ActionMsg(
             action=ACT_PROMOTE, name=filename, value=expected_value.get_json()
         ).dict()
@@ -193,7 +234,7 @@ class TestObject(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_delete(self):
         self.object.delete()
-        path = f"objects/{self.bck_name}/{self.obj_name}"
+        path = f"objects/{BCK_NAME}/{OBJ_NAME}"
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE, path=path, params=self.expected_params
         )
