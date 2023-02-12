@@ -7,7 +7,6 @@ package tmpls
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -409,9 +408,9 @@ var (
 	// - HelpTemplateFuncMap
 	// - `altMap template.FuncMap` below
 	funcMap = template.FuncMap{
-		"FormatBytesSig":    cos.B2S,
-		"FormatBytesUns":    cos.UnsignedB2S,
-		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", cos.B2S(u, 2)) },
+		"FormatBytesSig":    func(size int64, digits int) string { return fmtSize(size, UnitsIEC, digits) },         // TODO -- FIXME: units
+		"FormatBytesUns":    func(size uint64, digits int) string { return fmtSize(int64(size), UnitsIEC, digits) }, // ditto
+		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", fmtSize(u, UnitsIEC, 2)) },          // ditto
 		"IsUnsetTime":       isUnsetTime,
 		"IsFalse":           func(v bool) bool { return !v },
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
@@ -490,14 +489,6 @@ func Print(object any, writer io.Writer, outputTemplate string, altMap template.
 	}
 
 	return w.Flush()
-}
-
-func AltFuncMapSizeBytes() (m template.FuncMap) {
-	m = make(template.FuncMap, 2)
-	m["FormatBytesSig"] = func(b int64, _ int) string { return strconv.FormatInt(b, 10) }
-	m["FormatBytesUns"] = func(b uint64, _ int) string { return strconv.FormatInt(int64(b), 10) }
-	m["FormatMAM"] = func(u int64) string { return fmt.Sprintf("%-10d", u) }
-	return
 }
 
 ////////////////////////

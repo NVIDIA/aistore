@@ -25,8 +25,8 @@ import (
 var (
 	advancedCmdsFlags = map[string][]cli.Flag{
 		cmdGenShards: {
-			fileSizeFlag,
-			fileCountFlag,
+			dsortFsizeFlag,
+			dsortFcountFlag,
 			cleanupFlag,
 			concurrencyFlag,
 		},
@@ -66,7 +66,7 @@ var (
 func genShardsHandler(c *cli.Context) error {
 	const usage = "gen-shards \"ais://mybucket/trunk-{000..099}-abc.tar\""
 	var (
-		fileCnt   = parseIntFlag(c, fileCountFlag)
+		fileCnt   = parseIntFlag(c, dsortFcountFlag)
 		concLimit = parseIntFlag(c, concurrencyFlag)
 	)
 
@@ -87,7 +87,7 @@ func genShardsHandler(c *cli.Context) error {
 		template = strings.TrimSuffix(object, ext)
 	)
 
-	fileSize, err := parseByteFlagToInt(c, fileSizeFlag)
+	fileSize, err := parseHumanSizeFlag(c, dsortFsizeFlag)
 	if err != nil {
 		return err
 	}

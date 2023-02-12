@@ -83,18 +83,18 @@ func ParseSizeIEC(s string) (int64, error) {
 	return int64(f), err
 }
 
+// (compare w/ CLI `ToSizeIS`)
 func ToSizeIEC(b int64, digits int) string {
-	if b >= TiB {
+	switch {
+	case b >= TiB:
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(TiB), "TiB")
-	}
-	if b >= GiB {
+	case b >= GiB:
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(GiB), "GiB")
-	}
-	if b >= MiB {
+	case b >= MiB:
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(MiB), "MiB")
-	}
-	if b >= KiB {
+	case b >= KiB:
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(KiB), "KiB")
+	default:
+		return fmt.Sprintf("%dB", b)
 	}
-	return fmt.Sprintf("%dB", b)
 }

@@ -64,7 +64,7 @@ var (
 			syncFlag,
 		},
 		cmdDsort: {
-			specFileFlag,
+			dsortSpecFlag,
 		},
 		commandPrefetch: append(
 			baseLstRngFlags,
@@ -359,7 +359,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	limitBPH, err := parseByteFlagToInt(c, limitBytesPerHourFlag)
+	limitBPH, err := parseHumanSizeFlag(c, limitBytesPerHourFlag)
 	if err != nil {
 		return err
 	}
@@ -598,7 +598,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 func startDsortHandler(c *cli.Context) (err error) {
 	var (
 		id       string
-		specPath = parseStrFlag(c, specFileFlag)
+		specPath = parseStrFlag(c, dsortSpecFlag)
 	)
 	if c.NArg() == 0 && specPath == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)

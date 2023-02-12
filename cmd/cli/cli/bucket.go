@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -225,8 +226,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool,
-	fltPresence int) (cnt int) {
+func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool, fltPresence int) (cnt int) {
 	filtered := make(cmn.Bcks, 0, len(bcks))
 	for _, bck := range bcks {
 		if qbck.Contains(&bck) && matches(bck) {
@@ -311,17 +311,23 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 // (compare with showBucketSummary)
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
-		footer     lsbFooter
-		altMap     template.FuncMap
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		hideFooter = flagIsSet(c, noFooterFlag)
-		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+		footer      lsbFooter
+		altMap      template.FuncMap
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		hideFooter  = flagIsSet(c, noFooterFlag)
+		data        = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		actionWarn(c, errU.Error())
+		units = ""
+	}
 	for _, bck := range filtered {
 		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
-				fmt.Fprintf(c.App.Writer, "  %s, err: %s\n", bck.DisplayName(), herr.Message)
+				warn := fmt.Sprintf("%s, err: %s\n", bck.DisplayName(), herr.Message)
+				actionWarn(c, warn)
 			}
 			continue
 		}
@@ -338,9 +344,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		}
 		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
-	if flagIsSet(c, sizeInBytesFlag) {
-		altMap = tmpls.AltFuncMapSizeBytes()
-	}
+
+	altMap = tmpls.AltFuncMapSizeBytes(units)
 
 	if hideHeader {
 		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
@@ -360,13 +365,13 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if qbck.IsRemoteAIS() {
 		p = qbck.DisplayProvider()
 	}
+	apparentSize := tmpls.FmtStatValue("", stats.KindSize, int64(footer.size), units)
 	if footer.pobj+footer.robj != 0 {
 		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
-			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj,
-			cos.UnsignedB2S(footer.size, 2), footer.pct)
+			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj, apparentSize, footer.pct)
 	} else {
 		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, apparent size %s, used capacity %d%%] ========",
-			p, cos.Plural(footer.nb), footer.nb, s, cos.UnsignedB2S(footer.size, 2), footer.pct)
+			p, cos.Plural(footer.nb), footer.nb, s, apparentSize, footer.pct)
 	}
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
@@ -702,10 +707,12 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectL
 		altMap         template.FuncMap
 		tmpl           = objPropsTemplate(c, props, addCachedCol)
 		matched, other = objectFilter.filter(entries)
+		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
-	if flagIsSet(c, sizeInBytesFlag) {
-		altMap = tmpls.AltFuncMapSizeBytes()
+	if errU != nil {
+		return errU
 	}
+	altMap = tmpls.AltFuncMapSizeBytes(units)
 	err := tmpls.Print(matched, c.App.Writer, tmpl, altMap, false)
 	if err != nil {
 		return err

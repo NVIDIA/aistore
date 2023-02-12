@@ -440,7 +440,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	var (
 		verbose = flagIsSet(c, verboseFlag)
 		refresh = flagIsSet(c, refreshFlag)
-		logging = flagIsSet(c, logFlag)
+		logging = flagIsSet(c, dsortLogFlag)
 		usejs   = flagIsSet(c, jsonFlag)
 	)
 
@@ -479,7 +479,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 
 	rate := _refreshRate(c)
 	if logging {
-		file, err := cos.CreateFile(c.String(logFlag.Name))
+		file, err := cos.CreateFile(c.String(dsortLogFlag.Name))
 		if err != nil {
 			return err
 		}

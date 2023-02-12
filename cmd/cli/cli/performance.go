@@ -32,6 +32,7 @@ var (
 		allColumnsFlag,
 		noHeaderFlag,
 		regexColsFlag,
+		unitsFlag,
 	)
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
@@ -135,11 +136,15 @@ func showThroughputHandler(c *cli.Context) error {
 // (generic)
 func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) error {
 	var (
-		regex      *regexp.Regexp
-		regexStr   = parseStrFlag(c, regexColsFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		allCols    = flagIsSet(c, allColumnsFlag)
+		regex       *regexp.Regexp
+		regexStr    = parseStrFlag(c, regexColsFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		allCols     = flagIsSet(c, allColumnsFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return errU
+	}
 	sid, _, err := argNode(c)
 	if err != nil {
 		return err
@@ -163,7 +168,7 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 	if !averaging {
 		setLongRunParams(c, 72)
 
-		table, err := tmpls.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, allCols)
+		table, err := tmpls.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, units, allCols)
 		if err != nil {
 			return err
 		}
@@ -186,7 +191,7 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 
 		time.Sleep(sleep)
 
-		table, err := tmpls.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, allCols)
+		table, err := tmpls.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, units, allCols)
 		if err != nil {
 			return err
 		}

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -134,13 +135,23 @@ func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
 	return c.Duration(flagName)
 }
 
-func parseByteFlagToInt(c *cli.Context, flag cli.Flag) (int64, error) {
-	flagValue := parseStrFlag(c, flag.(cli.StringFlag))
-	b, err := cos.S2B(flagValue)
-	if err != nil {
-		return 0, fmt.Errorf("%s (%s) is invalid "+sizeUnits, flag.GetName(), flagValue)
+// enum { unitsSI, ... }
+func parseUnitsFlag(c *cli.Context, flag cli.StringFlag) (units string, err error) {
+	units = parseStrFlag(c, flag)
+	if err = tmpls.ValidateUnits(units); err != nil {
+		err = fmt.Errorf("%s=%s is invalid: %v", flprn(flag), units, err)
 	}
-	return b, nil
+	return
+}
+
+// NOTE: assuming IEC units
+func parseHumanSizeFlag(c *cli.Context, flag cli.StringFlag) (b int64, err error) {
+	flagValue := parseStrFlag(c, flag)
+	b, err = cos.ParseSizeIEC(flagValue)
+	if err != nil {
+		err = fmt.Errorf("%s=%s is invalid "+sizeUnitsIEC, flprn(flag), flagValue)
+	}
+	return
 }
 
 func parseChecksumFlags(c *cli.Context) []*cos.Cksum {

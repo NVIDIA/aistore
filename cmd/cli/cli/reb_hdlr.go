@@ -146,7 +146,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		id := fcyan(prevID)
 		if numMigratedObjs > 0 {
 			fmt.Fprintf(c.App.Writer, "%s: %d objects migrated (total size %s)\n",
-				id, numMigratedObjs, cos.B2S(sizeMigratedBytes, 1))
+				id, numMigratedObjs, cos.ToSizeIEC(sizeMigratedBytes, 1))
 		}
 		if !flagIsSet(c, allJobsFlag) {
 			if latestFinished && latestAborted {
@@ -178,8 +178,8 @@ func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %s\n",
 		st.snap.ID, st.tid,
-		st.snap.Stats.InObjs, cos.B2S(st.snap.Stats.InBytes, 2),
-		st.snap.Stats.OutObjs, cos.B2S(st.snap.Stats.OutBytes, 2),
+		st.snap.Stats.InObjs, cos.ToSizeIEC(st.snap.Stats.InBytes, 2),
+		st.snap.Stats.OutObjs, cos.ToSizeIEC(st.snap.Stats.OutBytes, 2),
 		startTime, endTime, tmpls.FmtXactStatus(st.snap),
 	)
 }

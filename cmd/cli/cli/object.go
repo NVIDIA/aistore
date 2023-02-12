@@ -91,10 +91,10 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
-	if offset, err = parseByteFlagToInt(c, offsetFlag); err != nil {
+	if offset, err = parseHumanSizeFlag(c, offsetFlag); err != nil {
 		return
 	}
-	if length, err = parseByteFlagToInt(c, lengthFlag); err != nil {
+	if length, err = parseHumanSizeFlag(c, lengthFlag); err != nil {
 		return
 	}
 
@@ -142,16 +142,16 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	objLen = oah.Size()
 
 	if flagIsSet(c, lengthFlag) && outFile != fileStdIO {
-		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.B2S(objLen, 2), objLen, outFile)
+		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.ToSizeIEC(objLen, 2), objLen, outFile)
 		return
 	}
 	if !silent && outFile != fileStdIO {
 		if archPath != "" {
 			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n",
-				archPath, bck, objName, outFile, cos.B2S(objLen, 2))
+				archPath, bck, objName, outFile, cos.ToSizeIEC(objLen, 2))
 		} else {
 			fmt.Fprintf(c.App.Writer, "GET %q from %s as %q [%s]\n",
-				objName, bck.DisplayName(), outFile, cos.B2S(objLen, 2))
+				objName, bck.DisplayName(), outFile, cos.ToSizeIEC(objLen, 2))
 		}
 	}
 	return
@@ -308,7 +308,7 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 		cksum  = cos.NewCksumHash(cksumType)
 		pi     = newProgIndicator(objName)
 	)
-	chunkSize, err := parseByteFlagToInt(c, chunkSizeFlag)
+	chunkSize, err := parseHumanSizeFlag(c, chunkSizeFlag)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 		return nil
 	}
 
-	tmpl := tmpls.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.B2S(totalSize, 2) + "\n"
+	tmpl := tmpls.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
 	if err = tmpls.Print(extSizes, c.App.Writer, tmpl, nil, false); err != nil {
 		return
 	}
@@ -605,7 +605,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck.DisplayName(), objName, cos.B2S(totalSize, 2))
+	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck.DisplayName(), objName, cos.ToSizeIEC(totalSize, 2))
 
 	return nil
 }
@@ -672,7 +672,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 		if !showProgress && time.Since(lastReport) > reportEvery {
 			fmt.Fprintf(
 				c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
-				total, 100*total/len(p.files), cos.B2S(size, 1), 100*size/p.totalSize,
+				total, 100*total/len(p.files), cos.ToSizeIEC(size, 1), 100*size/p.totalSize,
 			)
 			lastReport = time.Now()
 		}
@@ -827,7 +827,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 	case apc.GetPropsName:
 		v = op.Bck.DisplayName() + "/" + op.Name
 	case apc.GetPropsSize:
-		v = cos.B2S(op.Size, 2)
+		v = cos.ToSizeIEC(op.Size, 2)
 	case apc.GetPropsChecksum:
 		v = op.Cksum.String()
 	case apc.GetPropsAtime:

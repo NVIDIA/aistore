@@ -66,7 +66,7 @@ func waitForXactionCompletion(apiBP api.BaseParams, args xact.ArgsMsg) (err erro
 	return nil
 }
 
-func flattenXactStats(snap *cluster.Snap) nvpairList {
+func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 	props := make(nvpairList, 0, 16)
 	if snap == nil {
 		return props
@@ -91,21 +91,24 @@ func flattenXactStats(snap *cluster.Snap) nvpairList {
 		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
 	)
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
+		printtedVal := tmpls.FmtStatValue("", stats.KindSize, snap.Stats.Bytes, units)
 		props = append(props,
 			nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
-			nvpair{Name: "loc.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.Bytes)},
+			nvpair{Name: "loc.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.InObjs != 0 || snap.Stats.InBytes != 0 {
+		printtedVal := tmpls.FmtStatValue("", stats.KindSize, snap.Stats.InBytes, units)
 		props = append(props,
 			nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
-			nvpair{Name: "in.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.InBytes)},
+			nvpair{Name: "in.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
+		printtedVal := tmpls.FmtStatValue("", stats.KindSize, snap.Stats.OutBytes, units)
 		props = append(props,
 			nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
-			nvpair{Name: "out.obj.size", Value: formatStatHuman("", stats.KindSize, snap.Stats.OutBytes)},
+			nvpair{Name: "out.obj.size", Value: printtedVal},
 		)
 	}
 	// NOTE: extended stats
@@ -115,7 +118,7 @@ func flattenXactStats(snap *cluster.Snap) nvpairList {
 			if strings.HasSuffix(k, ".size") {
 				val := v.(string)
 				if i, err := strconv.ParseInt(val, 10, 64); err == nil {
-					value = cos.B2S(i, 2)
+					value = cos.ToSizeIEC(i, 2)
 				}
 			}
 			if value == "" {

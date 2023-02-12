@@ -19,7 +19,7 @@ import (
 
 var fred = color.New(color.FgHiRed)
 
-func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp,
+func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp, units string,
 	allCols bool) (*Table, error) {
 	// 1. columns
 	cols := make([]*header, 0, 32)
@@ -109,23 +109,12 @@ func NewPerformanceTab(st stats.DaemonStatusMap, smap *cluster.Smap, sid string,
 			}
 
 			// format value
-			var (
-				printedValue string
-				v, ok1       = ds.Tracker[h.name]
-				kind, ok2    = metrics[h.name]
-			)
-			debug.Assert(ok1, h.name)
-			debug.Assert(ok2, h.name)
-			switch {
-			case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
-				printedValue = cos.B2S(v.Value, 2) + "/s"
-			case kind == stats.KindLatency:
-				printedValue = fmtDuration(v.Value)
-			case strings.HasSuffix(h.name, ".size"):
-				printedValue = cos.B2S(v.Value, 2)
-			default:
-				printedValue = fmt.Sprintf("%d", v.Value)
-			}
+			v, ok := ds.Tracker[h.name]
+			debug.Assert(ok, h.name)
+			kind, ok := metrics[h.name]
+			debug.Assert(ok, h.name)
+			printedValue := FmtStatValue(h.name, kind, v.Value, units)
+
 			// add some color
 			if isErrCol(h.name) {
 				printedValue = fred.Sprintf("\t%s", printedValue)

@@ -33,13 +33,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools/docker"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
-	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 const (
@@ -961,27 +959,6 @@ func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 	return flat, err
 }
 
-func formatStatHuman(name, kind string, value int64) string {
-	if value == 0 {
-		return "0"
-	}
-	switch kind {
-	case stats.KindLatency:
-		dur := time.Duration(value)
-		return dur.String()
-	case stats.KindSize:
-		return cos.B2S(value, 2)
-	case stats.KindThroughput, stats.KindComputedThroughput:
-		return cos.B2S(value, 0) + "/s"
-	default:
-		if strings.HasSuffix(name, ".time") { // uptime
-			dur := time.Duration(value)
-			return duration.HumanDuration(dur)
-		}
-		return fmt.Sprintf("%d", value)
-	}
-}
-
 //////////////
 // dlSource //
 //////////////
@@ -1086,7 +1063,7 @@ func (*progIndicator) stop()  { fmt.Println("") }
 
 func (pi *progIndicator) printProgress(incr int64) {
 	fmt.Print("\033[u\033[K")
-	fmt.Printf("Uploaded %s: %s", pi.objName, cos.B2S(pi.sizeTransferred.Add(incr), 2))
+	fmt.Printf("Uploaded %s: %s", pi.objName, cos.ToSizeIEC(pi.sizeTransferred.Add(incr), 2))
 }
 
 func newProgIndicator(objName string) *progIndicator {

@@ -193,8 +193,8 @@ const (
 )
 
 const (
-	timeUnits = `ns, us (or µs), ms, s (default), m, h`
-	sizeUnits = `(IEC or SI units, e.g.: b, B, KB, KiB, MiB, mb, g, GB)`
+	timeUnits    = `ns, us (or µs), ms, s (default), m, h`
+	sizeUnitsIEC = `(IEC units, e.g.: b or B, KB or KiB, MiB or mb, g or GB or GiB, etc.)`
 )
 
 const nodeLogFlushName = "log.flush_time"
@@ -346,7 +346,7 @@ var (
 	//
 	refreshFlag = DurationFlag{
 		Name:  "refresh,repeat",
-		Usage: "interval for continuous monitoring, valid time units: " + timeUnits,
+		Usage: "interval for continuous monitoring (valid time units: " + timeUnits + ")",
 	}
 	countFlag = cli.IntFlag{
 		Name:  "count",
@@ -380,7 +380,15 @@ var (
 	}
 
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
-	rawFlag   = cli.BoolFlag{Name: "raw", Usage: "display exact values instead of human-readable ones"}
+
+	// units enum { unitsIEC, unitsSI, unitsRaw }
+	unitsFlag = cli.StringFlag{
+		Name: "units",
+		Usage: "show statistics using on of the following units of measurement: (iec, si, raw), where:\n" +
+			argsUsageIndent + argsUsageIndent + "iec - IEC format, e.g. KiB, MiB, GiB (default)\n" +
+			argsUsageIndent + argsUsageIndent + "si  - SI (metric) format, e.g., KB, MB, GB\n" +
+			argsUsageIndent + argsUsageIndent + "raw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
+	}
 
 	// Bucket
 	startAfterFlag = cli.StringFlag{
@@ -435,11 +443,11 @@ var (
 
 	timeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
 		Name:  "timeout",
-		Usage: "timeout, valid time units: " + timeUnits,
+		Usage: "timeout (valid time units: " + timeUnits + ")",
 	}
 	progressIntervalFlag = cli.StringFlag{ // TODO ditto
 		Name:  "progress-interval",
-		Usage: "progress interval for continuous monitoring, valid time units: " + timeUnits,
+		Usage: "progress interval for continuous monitoring (valid time units: " + timeUnits + ")",
 		Value: dload.DownloadProgressInterval.String(),
 	}
 
@@ -449,35 +457,36 @@ var (
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
 		Name:  "limit-bph",
-		Usage: "max downloaded size per target per hour " + sizeUnits,
+		Usage: "max downloaded size per target per hour " + sizeUnitsIEC,
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",
 		Usage: "path to file containing JSON array of object names to download",
 	}
-	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with cloud"}
+	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with Cloud"}
 
 	// dSort
-	fileSizeFlag = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files inside a shard"}
-	logFlag      = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	cleanupFlag  = cli.BoolFlag{
+	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
+	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
+	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
+	dsortSpecFlag   = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
+
+	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",
-		Usage: "remove old bucket and create it again (warning: removes all objects that were present in the old bucket)",
+		Usage: "remove old bucket and create it again (warning: removes the entire content of the old bucket)",
 	}
 	concurrencyFlag = cli.IntFlag{
 		Name: "conc", Value: 10,
 		Usage: "limits number of concurrent put requests and number of concurrent shards created",
 	}
-	fileCountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
-	specFileFlag  = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	// multi-object
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
 	templateFlag = cli.StringFlag{Name: "template", Usage: "template to select (matching) objects, e.g.: 'shard-{900..999}.tar'"}
 
 	// Object
-	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnits}
-	lengthFlag = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnits}
+	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnitsIEC}
+	lengthFlag = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnitsIEC}
 
 	// NOTE:
 	// In many cases, stating that a given object "is present" will sound more appropriate and,
@@ -520,16 +529,11 @@ var (
 			"(as seen from the target)",
 	}
 
-	sizeInBytesFlag = cli.BoolFlag{
-		Name:  "bytes",
-		Usage: "show sizes in bytes (ie., do not convert to KiB, MiB, GiB, etc.)",
-	}
-
 	yesFlag = cli.BoolFlag{Name: "yes,y", Usage: "assume 'yes' for all questions"}
 
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size " + sizeUnits, Value: "10MB",
+		Usage: "chunk size " + sizeUnitsIEC, Value: "10MiB",
 	}
 
 	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
@@ -585,7 +589,7 @@ var (
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 	expireFlag    = DurationFlag{
 		Name:  "expire,e",
-		Usage: "token expiration time, '0' - for never-expiring token. Valid time units: " + timeUnits,
+		Usage: "token expiration time, '0' - for never-expiring token (valid time units: " + timeUnits + ")",
 		Value: 24 * time.Hour,
 	}
 
@@ -608,7 +612,7 @@ var (
 	}
 	etlBucketRequestTimeout = DurationFlag{
 		Name:  "request-timeout",
-		Usage: "timeout for transforming a single object, valid time units: " + timeUnits,
+		Usage: "timeout for transforming a single object (valid time units: " + timeUnits + ")",
 	}
 	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
@@ -635,7 +639,7 @@ var (
 
 	waitTimeoutFlag = DurationFlag{
 		Name:  "wait-timeout",
-		Usage: "ais target waiting time for POD to become ready, valid time units: " + timeUnits,
+		Usage: "ais target waiting time for POD to become ready (valid time units: " + timeUnits + ")",
 	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",

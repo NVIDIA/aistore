@@ -58,7 +58,7 @@ func getBMD(c *cli.Context) error {
 				}
 				if props.EC.Enabled {
 					ec = fmt.Sprintf("%d/%d, %s", props.EC.DataSlices,
-						props.EC.ParitySlices, cos.B2S(props.EC.ObjSizeLimit, 0))
+						props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
 				}
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					provider, ns, bucket, props.BackendBck, copies, ec,
@@ -75,9 +75,13 @@ func getBMD(c *cli.Context) error {
 
 func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap, cfg *cmn.ClusterConfig, sid string) error {
 	var (
-		usejs      = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
+		usejs       = flagIsSet(c, jsonFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return errU
+	}
 	body := tmpls.StatusTemplateHelper{
 		Smap:      smap,
 		CluConfig: cfg,
@@ -87,24 +91,24 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap sta
 		},
 	}
 	if res, proxyOK := pstatusMap[sid]; proxyOK {
-		table := tmpls.NewDaeStatus(res, smap, apc.Proxy)
+		table := tmpls.NewDaeStatus(res, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if res, targetOK := tstatusMap[sid]; targetOK {
-		table := tmpls.NewDaeStatus(res, smap, apc.Target)
+		table := tmpls.NewDaeStatus(res, smap, apc.Target, units)
 		out := table.Template(hideHeader)
 		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Proxy {
-		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy)
+		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
 		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == apc.Target {
-		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target)
+		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 		out := table.Template(hideHeader)
 		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
 	} else if sid == "" {
-		tableP := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy)
-		tableT := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target)
+		tableP := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
+		tableT := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 
 		out := tableP.Template(false) + "\n"
 		out += tableT.Template(false) + "\n"

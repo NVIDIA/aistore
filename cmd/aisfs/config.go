@@ -96,7 +96,7 @@ func (c *Config) validate() (err error) {
 	if c.IO.WriteBufSize < 0 {
 		return fmt.Errorf("invalid io.write_buf_size value: %d: expected non-negative value", c.IO.WriteBufSize)
 	}
-	if v, err := cos.S2B(c.MemoryLimit); err != nil {
+	if v, err := cos.ParseSizeIEC(c.MemoryLimit); err != nil {
 		return fmt.Errorf("invalid memory_limit value: %q: %v", c.MemoryLimit, err)
 	} else if v < 0 {
 		return fmt.Errorf("invalid memory_limit value: %q: expected non-negative value", c.MemoryLimit)
@@ -105,7 +105,7 @@ func (c *Config) validate() (err error) {
 }
 
 func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
-	memoryLimit, _ := cos.S2B(c.MemoryLimit)
+	memoryLimit, _ := cos.ParseSizeIEC(c.MemoryLimit)
 	srvCfg.SkipVerifyCrt = c.Cluster.SkipVerifyCrt
 	srvCfg.TCPTimeout = c.Timeout.TCPTimeout
 	srvCfg.HTTPTimeout = c.Timeout.HTTPTimeout

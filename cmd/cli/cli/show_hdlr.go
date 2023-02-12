@@ -63,9 +63,10 @@ var (
 			regexFlag,
 			noHeaderFlag,
 			verboseFlag,
+			unitsFlag,
 			// download and dsort only
 			progressBarFlag,
-			logFlag,
+			dsortLogFlag,
 		),
 		cmdObject: {
 			objPropsFlag,
@@ -105,7 +106,7 @@ var (
 		),
 		cmdShowStats: {
 			jsonFlag,
-			rawFlag,
+			unitsFlag,
 			refreshFlag,
 			regexFlag,
 		},
@@ -533,10 +534,16 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 
 	l := len(dts)
 	var (
-		usejs      = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
-		err        error
+		err error
+
+		usejs       = flagIsSet(c, jsonFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		actionWarn(c, errU.Error())
+		units = ""
+	}
 	switch xargs.Kind {
 	case apc.ActECGet:
 		if hideHeader {
@@ -575,7 +582,7 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 		if len(dts[0].XactSnaps) == 0 {
 			continue
 		}
-		props := flattenXactStats(di.XactSnaps[0])
+		props := flattenXactStats(di.XactSnaps[0], units)
 		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
 		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
@@ -957,19 +964,13 @@ func showMpathHandler(c *cli.Context) error {
 	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 }
 
-func fmtStatValue(name, kind string, value int64, human bool) string {
-	if human {
-		return formatStatHuman(name, kind, value)
-	}
-	return fmt.Sprintf("%v", value) // raw
-}
-
-func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, human bool) nvpairList {
+func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, units string) nvpairList {
 	name = prefix + name
 	if regex != nil && !regex.MatchString(name) {
 		return props
 	}
-	return append(props, nvpair{Name: name, Value: fmtStatValue(name, kind, value, human)})
+	printtedVal := tmpls.FmtStatValue(name, kind, value, units)
+	return append(props, nvpair{Name: name, Value: printtedVal})
 }
 
 func showStatsHandler(c *cli.Context) (err error) {
@@ -1035,13 +1036,16 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	}
 
 	var (
-		human = !flagIsSet(c, rawFlag)
-		props = make(nvpairList, 0, len(ds.Tracker))
+		props       = make(nvpairList, 0, len(ds.Tracker))
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return errU
+	}
 	for name, v := range ds.Tracker {
 		kind, ok := metrics[name]
 		debug.Assert(ok, name)
-		props = appendStatToProps(props, name, kind, v.Value, "", regex, human)
+		props = appendStatToProps(props, name, kind, v.Value, "", regex, units)
 	}
 	sort.Slice(props, func(i, j int) bool {
 		return props[i].Name < props[j].Name
@@ -1069,10 +1073,12 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 		if regex != nil && !regex.MatchString(prefix) {
 			continue
 		}
+		memUsedPrinted := tmpls.FmtStatValue("", stats.KindSize, int64(mstat.Used), units)
+		memAvailPrinted := tmpls.FmtStatValue("", stats.KindSize, int64(mstat.Avail), units)
 		props = append(props,
 			nvpair{Name: prefix + "path", Value: mpath},
-			nvpair{Name: prefix + "used", Value: fmtStatValue("", stats.KindSize, int64(mstat.Used), human)},
-			nvpair{Name: prefix + "avail", Value: fmtStatValue("", stats.KindSize, int64(mstat.Avail), human)},
+			nvpair{Name: prefix + "used", Value: memUsedPrinted},
+			nvpair{Name: prefix + "avail", Value: memAvailPrinted},
 			nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 	}
 	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
@@ -1098,12 +1104,17 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
 	}
 
-	human := !flagIsSet(c, rawFlag)
-	props := make(nvpairList, 0, len(st.Proxy.Tracker))
+	var (
+		props       = make(nvpairList, 0, len(st.Proxy.Tracker))
+		units, errU = parseUnitsFlag(c, unitsFlag)
+	)
+	if errU != nil {
+		return errU
+	}
 	for name, v := range st.Proxy.Tracker {
 		kind, ok := metrics[name]
 		debug.Assert(ok, name)
-		props = appendStatToProps(props, name, kind, v.Value, "proxy.", regex, human)
+		props = appendStatToProps(props, name, kind, v.Value, "proxy.", regex, units)
 	}
 	tgtStats := make(map[string]int64)
 	for _, tgt := range st.Target {
@@ -1134,7 +1145,7 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 	// finally
 	for name, v := range tgtStats {
 		kind := metrics[name]
-		props = appendStatToProps(props, name, kind, v, "target.", regex, human)
+		props = appendStatToProps(props, name, kind, v, "target.", regex, units)
 	}
 
 	sort.Slice(props, func(i, j int) bool {

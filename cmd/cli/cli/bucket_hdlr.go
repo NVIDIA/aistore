@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"text/template"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -85,14 +84,14 @@ var (
 			listAnonymousFlag,
 			listArchFlag,
 			nameOnlyFlag,
-			sizeInBytesFlag,
+			unitsFlag,
 			bckSummaryFlag,
 		},
 
 		cmdSummary: {
 			listObjCachedFlag,
 			allObjsOrBcksFlag,
-			sizeInBytesFlag,
+			unitsFlag,
 			validateSummaryFlag,
 			verboseFlag,
 		},
@@ -316,16 +315,17 @@ func showBucketSummary(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	units, errU := parseUnitsFlag(c, unitsFlag)
+	if errU != nil {
+		return err
+	}
 	setLongRunParams(c)
 	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
 	if err != nil {
 		return err
 	}
 
-	var altMap template.FuncMap
-	if flagIsSet(c, sizeInBytesFlag) {
-		altMap = tmpls.AltFuncMapSizeBytes()
-	}
+	altMap := tmpls.AltFuncMapSizeBytes(units)
 	return tmpls.Print(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
 }
 
