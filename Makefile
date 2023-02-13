@@ -254,7 +254,7 @@ ci: spell-check fmt-check lint test-short ## Run CI related checkers and linters
 
 
 # Target for linters
-.PHONY: pylint-update lint-update lint fmt-check fmt-fix spell-check spell-fix cyclo msgp-update
+.PHONY: lint-update lint install-python-deps fmt-check fmt-fix spell-check spell-fix cyclo msgp-update
 
 ## Removes the previous version of `golangci-lint` and installs the latest (compare with lint-update-ci below)
 lint-update:
@@ -272,12 +272,11 @@ lint:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
 
-pylint-update:
-	@pip3 install pylint --upgrade
-
-fmt-check: ## Check code formatting
+install-python-deps:
+	@pip3 install -r ./python/aistore/common_requirements
+	
+fmt-check: install-python-deps ## Check code formatting
 	@ [[ $$(black --help) ]] || pip3 install black[jupyter]
-	@ [[ $$(pylint --help) ]] || pip3 install pylint
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" fmt
 
 fmt-fix: ## Fix code formatting

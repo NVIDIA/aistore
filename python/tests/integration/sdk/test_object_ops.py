@@ -93,7 +93,7 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         os.remove(filename)
 
     @unittest.skipIf(
-        not "localhost" in CLUSTER_ENDPOINT and not "127.0.0.1" in CLUSTER_ENDPOINT,
+        "localhost" not in CLUSTER_ENDPOINT and "127.0.0.1" not in CLUSTER_ENDPOINT,
         "Cannot test promote without access to AIS cluster file storage",
     )
     # pylint: disable=too-many-locals
@@ -108,11 +108,15 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
         # Create a folder in the current directory
         local_files_path = os.path.join(os.getcwd(), top_folder)
         os.mkdir(local_files_path)
-        with open(os.path.join(local_files_path, top_item), "w") as file:
+        with open(
+            os.path.join(local_files_path, top_item), "w", encoding="utf-8"
+        ) as file:
             file.write(top_item_contents)
         inner_folder = os.path.join(local_files_path, inner_folder)
         os.mkdir(inner_folder)
-        with open(os.path.join(inner_folder, inner_item), "w") as file:
+        with open(
+            os.path.join(inner_folder, inner_item), "w", encoding="utf-8"
+        ) as file:
             file.write(inner_item_contents)
 
         # Promote to AIS bucket
@@ -125,7 +129,9 @@ class TestObjectOps(unittest.TestCase):  # pylint: disable=unused-variable
 
         # Update local top item contents
         top_item_updated_contents = "new content in top file overwritten"
-        with open(os.path.join(local_files_path, top_item), "w") as file:
+        with open(
+            os.path.join(local_files_path, top_item), "w", encoding="utf-8"
+        ) as file:
             file.write(top_item_updated_contents)
 
         # Promote with recursion, delete source, overwrite destination

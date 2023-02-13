@@ -13,14 +13,14 @@ class TestObjectIterator(unittest.TestCase):  # pylint: disable=unused-variable
         self.obj_iterator = ObjectIterator(self.callable)
 
     def test_iter(self):
-        self.assertEqual(self.obj_iterator, self.obj_iterator.__iter__())
+        self.assertEqual(self.obj_iterator, iter(self.obj_iterator))
 
     def test_next_empty_resp(self):
         with self.assertRaises(StopIteration):
             self.callable_resp.get_entries.return_value = []
             self.callable_resp.uuid = ""
             self.callable_resp.continuation_token = ""
-            self.obj_iterator.__next__()
+            next(self.obj_iterator)
 
     def test_next_iterator_exhausted(self):
         entry_1 = Mock(BucketEntry)
@@ -28,11 +28,11 @@ class TestObjectIterator(unittest.TestCase):  # pylint: disable=unused-variable
         entry_3 = Mock(BucketEntry)
         self.callable_resp.get_entries.return_value = [entry_1, entry_2, entry_3]
         self.callable_resp.uuid = "UUID"
-        self.assertEqual(entry_1, self.obj_iterator.__next__())
-        self.assertEqual(entry_2, self.obj_iterator.__next__())
-        self.assertEqual(entry_3, self.obj_iterator.__next__())
+        self.assertEqual(entry_1, next(self.obj_iterator))
+        self.assertEqual(entry_2, next(self.obj_iterator))
+        self.assertEqual(entry_3, next(self.obj_iterator))
         with self.assertRaises(StopIteration):
-            self.obj_iterator.__next__()
+            next(self.obj_iterator)
 
     def test_next_multiple_pages(self):
         entry_1 = Mock(BucketEntry)
@@ -40,8 +40,8 @@ class TestObjectIterator(unittest.TestCase):  # pylint: disable=unused-variable
         entry_3 = Mock(BucketEntry)
         self.callable_resp.get_entries.side_effect = [[entry_1, entry_2], [entry_3]]
         self.callable_resp.uuid = ""
-        self.assertEqual(entry_1, self.obj_iterator.__next__())
-        self.assertEqual(entry_2, self.obj_iterator.__next__())
-        self.assertEqual(entry_3, self.obj_iterator.__next__())
+        self.assertEqual(entry_1, next(self.obj_iterator))
+        self.assertEqual(entry_2, next(self.obj_iterator))
+        self.assertEqual(entry_3, next(self.obj_iterator))
         with self.assertRaises(StopIteration):
-            self.obj_iterator.__next__()
+            next(self.obj_iterator)

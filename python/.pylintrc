@@ -92,9 +92,7 @@ disable=raw-checker-failed,
         deprecated-pragma,
         use-symbolic-message-instead,
         broad-except,
-        missing-module-docstring,
-        no-self-use,
-        no-name-in-module #Due to bug with pylint on 3.11 on builtin libs, remove when resolved
+        missing-module-docstring
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -482,11 +480,6 @@ allow-any-import-level=
 # Allow wildcard imports from modules that define __all__.
 allow-wildcard-with-all=no
 
-# Analyze import fallback blocks. This can be used to support both Python 2 and
-# 3 compatible code, which means that the block might have code that exists
-# only in one or another interpreter, leading to false positives when analyzed.
-analyze-fallback-blocks=no
-
 # Deprecated modules which should not be used, separated by a comma.
 deprecated-modules=
 
@@ -585,5 +578,5 @@ valid-metaclass-classmethod-first-arg=cls
 
 # Exceptions that will emit a warning when being caught. Defaults to
 # "BaseException, Exception".
-overgeneral-exceptions=BaseException,
-                       Exception
+overgeneral-exceptions=builtins.BaseException,
+                       builtins.Exception
