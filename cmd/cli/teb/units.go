@@ -23,6 +23,36 @@ const (
 	UnitsRaw = "raw"
 )
 
+type unitsCtx struct {
+	units string
+}
+
+func (ctx *unitsCtx) sizeSig(siz int64, digits int) string {
+	return FmtSize(siz, ctx.units, digits)
+}
+
+func (ctx *unitsCtx) sizeUns(siz uint64, digits int) string {
+	return FmtSize(int64(siz), ctx.units, digits)
+}
+
+func (ctx *unitsCtx) sizeMam(u int64) string {
+	return fmt.Sprintf("%-10s", FmtSize(u, ctx.units, 2))
+}
+
+func (ctx *unitsCtx) durMilli(dur cos.Duration) string {
+	return fmtMilli(dur, ctx.units)
+}
+
+func FuncMapUnits(units string) (m template.FuncMap) {
+	ctx := &unitsCtx{units}
+	m = make(template.FuncMap, 4)
+	m["FormatBytesSig"] = ctx.sizeSig
+	m["FormatBytesUns"] = ctx.sizeUns
+	m["FormatMAM"] = ctx.sizeMam
+	m["FormatMilli"] = ctx.durMilli
+	return
+}
+
 func ValidateUnits(units string) error {
 	switch units {
 	case "", UnitsIEC, UnitsSI, UnitsRaw:
@@ -32,20 +62,12 @@ func ValidateUnits(units string) error {
 	}
 }
 
-func AltFuncMapSizeBytes(units string) (m template.FuncMap) {
-	m = make(template.FuncMap, 3)
-	m["FormatBytesSig"] = func(size int64, digits int) string { return fmtSize(size, units, digits) }
-	m["FormatBytesUns"] = func(size uint64, digits int) string { return fmtSize(int64(size), units, digits) }
-	m["FormatMAM"] = func(u int64) string { return fmt.Sprintf("%-10s", fmtSize(u, units, 2)) }
-	return
-}
-
-func fmtSize(size int64, units string, digits int) string {
+func FmtSize(size int64, units string, digits int) string {
 	switch units {
 	case "", UnitsIEC:
 		return cos.ToSizeIEC(size, digits)
 	case UnitsSI:
-		return ToSizeSI(size, digits)
+		return toSizeSI(size, digits)
 	case UnitsRaw:
 		return strconv.FormatInt(size, 10)
 	default:
@@ -54,7 +76,7 @@ func fmtSize(size int64, units string, digits int) string {
 	}
 }
 
-func ToSizeSI(b int64, digits int) string {
+func toSizeSI(b int64, digits int) string {
 	switch {
 	case b >= cos.TB:
 		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(cos.TB), "TB")
@@ -75,19 +97,13 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		return "0"
 	}
 	// uptime
-	if strings.HasSuffix(name, ".time") {
-		if units == UnitsRaw {
-			return fmt.Sprintf("%dns", value)
-		}
-		dur := time.Duration(value)
-		return duration.HumanDuration(dur)
+	if strings.HasSuffix(name, ".time") || kind == stats.KindLatency {
+		return fmtDuration(value, units)
 	}
 	// units (enum)
 	switch units {
 	case UnitsRaw:
 		switch kind {
-		case stats.KindLatency:
-			return fmt.Sprintf("%dns", value)
 		case stats.KindSize:
 			return fmt.Sprintf("%dB", value)
 		case stats.KindThroughput, stats.KindComputedThroughput:
@@ -97,9 +113,6 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		}
 	case "", UnitsIEC:
 		switch kind {
-		case stats.KindLatency:
-			dur := time.Duration(value)
-			return dur.String()
 		case stats.KindSize:
 			return cos.ToSizeIEC(value, 2)
 		case stats.KindThroughput, stats.KindComputedThroughput:
@@ -109,17 +122,32 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		}
 	case UnitsSI:
 		switch kind {
-		case stats.KindLatency:
-			dur := time.Duration(value)
-			return dur.String()
 		case stats.KindSize:
-			return ToSizeSI(value, 2)
+			return toSizeSI(value, 2)
 		case stats.KindThroughput, stats.KindComputedThroughput:
-			return ToSizeSI(value, 2) + "/s"
+			return toSizeSI(value, 2) + "/s"
 		default:
 			return fmt.Sprintf("%d", value)
 		}
 	}
 	debug.Assert(false, units)
 	return ""
+}
+
+func fmtDuration(ns int64, units string) string {
+	if units == UnitsRaw {
+		return fmt.Sprintf("%dns", ns)
+	}
+	dur := time.Duration(ns)
+	if dur > 10*time.Second {
+		return duration.HumanDuration(dur)
+	}
+	return dur.String()
+}
+
+func fmtMilli(val cos.Duration, units string) string {
+	if units == UnitsRaw {
+		return fmt.Sprintf("%dns", val)
+	}
+	return cos.FormatMilli(time.Duration(val))
 }

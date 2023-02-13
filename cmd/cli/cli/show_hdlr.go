@@ -51,6 +51,7 @@ var (
 			longRunFlags,
 			jsonFlag,
 			noHeaderFlag,
+			unitsFlag,
 		),
 		cmdMountpath: append(
 			longRunFlags,
@@ -60,7 +61,7 @@ var (
 			longRunFlags,
 			jsonFlag,
 			allJobsFlag,
-			regexFlag,
+			regexJobsFlag,
 			noHeaderFlag,
 			verboseFlag,
 			unitsFlag,
@@ -108,7 +109,7 @@ var (
 			jsonFlag,
 			unitsFlag,
 			refreshFlag,
-			regexFlag,
+			regexStatsFlag,
 		},
 	}
 
@@ -290,7 +291,7 @@ func showJobsHandler(c *cli.Context) error {
 
 	var l int
 	l, err = showJobsDo(c, name, xid, daemonID, bck)
-	if err == nil && l == 0 {
+	if err == nil && l == 0 && !flagIsSet(c, allJobsFlag) {
 		n, h := qflprn(allJobsFlag), qflprn(cli.HelpFlag)
 		fmt.Fprintf(c.App.Writer, "No running jobs. "+
 			"Use %s to show all, %s <TAB-TAB> to select, %s for details.\n", n, n, h)
@@ -365,6 +366,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 			all         = flagIsSet(c, allJobsFlag)
 			onlyActive  = !all
 			xactKind, _ = xact.GetKindName(name)
+			regexStr    = parseStrFlag(c, regexJobsFlag)
 			xargs       = xact.ArgsMsg{
 				ID:          xid,
 				Kind:        xactKind,
@@ -373,13 +375,23 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 				OnlyRunning: onlyActive,
 			}
 		)
+		if regexStr != "" {
+			regex, err := regexp.Compile(regexStr)
+			if err != nil {
+				actionWarn(c, err.Error())
+				regex = nil
+			}
+			if regex != nil && !regex.MatchString(name) && !regex.MatchString(xactKind) {
+				return 0, nil
+			}
+		}
 		return xactList(c, xargs, caption)
 	}
 }
 
 func showDownloads(c *cli.Context, id string, caption bool) (int, error) {
 	if id == "" { // list all download jobs
-		return downloadJobsList(c, parseStrFlag(c, regexFlag), caption)
+		return downloadJobsList(c, parseStrFlag(c, regexJobsFlag), caption)
 	}
 	// display status of a download job identified by its JOB_ID
 	return 1, downloadJobStatus(c, id)
@@ -391,7 +403,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
 	if id == "" {
-		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexFlag), onlyActive)
+		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexJobsFlag), onlyActive)
 		l := len(list)
 		if err != nil || l == 0 {
 			return l, err
@@ -544,32 +556,33 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 		actionWarn(c, errU.Error())
 		units = ""
 	}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
 	switch xargs.Kind {
 	case apc.ActECGet:
 		if hideHeader {
-			return l, teb.Print(dts, teb.XactECGetNoHdrTmpl, teb.Jopts(usejs))
+			return l, teb.Print(dts, teb.XactECGetNoHdrTmpl, opts)
 		}
-		return l, teb.Print(dts, teb.XactECGetTmpl, teb.Jopts(usejs))
+		return l, teb.Print(dts, teb.XactECGetTmpl, opts)
 	case apc.ActECPut:
 		if hideHeader {
-			return l, teb.Print(dts, teb.XactECPutNoHdrTmpl, teb.Jopts(usejs))
+			return l, teb.Print(dts, teb.XactECPutNoHdrTmpl, opts)
 		}
-		return l, teb.Print(dts, teb.XactECPutTmpl, teb.Jopts(usejs))
+		return l, teb.Print(dts, teb.XactECPutTmpl, opts)
 	default:
 		switch {
 		case fromToBck && hideHeader:
-			err = teb.Print(dts, teb.XactNoHdrFromToTmpl, teb.Jopts(usejs))
+			err = teb.Print(dts, teb.XactNoHdrFromToTmpl, opts)
 		case fromToBck:
-			err = teb.Print(dts, teb.XactFromToTmpl, teb.Jopts(usejs))
+			err = teb.Print(dts, teb.XactFromToTmpl, opts)
 		case haveBck && hideHeader:
-			err = teb.Print(dts, teb.XactNoHdrBucketTmpl, teb.Jopts(usejs))
+			err = teb.Print(dts, teb.XactNoHdrBucketTmpl, opts)
 		case haveBck:
-			err = teb.Print(dts, teb.XactBucketTmpl, teb.Jopts(usejs))
+			err = teb.Print(dts, teb.XactBucketTmpl, opts)
 		default:
 			if hideHeader {
-				err = teb.Print(dts, teb.XactNoHdrNoBucketTmpl, teb.Jopts(usejs))
+				err = teb.Print(dts, teb.XactNoHdrNoBucketTmpl, opts)
 			} else {
-				err = teb.Print(dts, teb.XactNoBucketTmpl, teb.Jopts(usejs))
+				err = teb.Print(dts, teb.XactNoBucketTmpl, opts)
 			}
 		}
 	}
@@ -964,7 +977,7 @@ func showMpathHandler(c *cli.Context) error {
 		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
 	usejs := flagIsSet(c, jsonFlag)
-	return teb.Print(mpls, teb.TargetMpathListTmpl, teb.Jopts(usejs))
+	return teb.Print(mpls, teb.MpathListTmpl, teb.Jopts(usejs))
 }
 
 func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, units string) nvpairList {
@@ -997,7 +1010,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 	}
 	var (
 		refresh  = flagIsSet(c, refreshFlag)
-		regexStr = parseStrFlag(c, regexFlag)
+		regexStr = parseStrFlag(c, regexStatsFlag)
 		regex    *regexp.Regexp
 	)
 	if regexStr != "" {
@@ -1033,7 +1046,7 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	if flagIsSet(c, jsonFlag) {
 		opts := teb.Jopts(true)
 		if regex != nil {
-			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
+			warn := "option " + qflprn(regexStatsFlag) + " is only supported for tabular (non-JSON) output formatting"
 			actionWarn(c, warn)
 		}
 		return teb.Print(ds, teb.ConfigTmpl, opts)
@@ -1102,10 +1115,10 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 	usejs := flagIsSet(c, jsonFlag)
 	if usejs {
 		if regex != nil {
-			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
+			warn := "option " + qflprn(regexStatsFlag) + " is only supported for tabular (non-JSON) output formatting"
 			actionWarn(c, warn)
 		}
-		return teb.Print(st, teb.TargetMpathListTmpl, teb.Jopts(usejs))
+		return teb.Print(st, teb.MpathListTmpl, teb.Jopts(usejs))
 	}
 
 	var (

@@ -97,12 +97,12 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string)
 		if ds.MemCPUInfo.PctMemUsed == 0 {
 			memUsed = unknownVal
 		}
-		memAvail := fmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2)
+		memAvail := FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2)
 		if ds.MemCPUInfo.MemAvail == 0 {
 			memAvail = unknownVal
 		}
 		upns := ds.Tracker[stats.Uptime].Value
-		uptime := fmtDuration(upns)
+		uptime := fmtDuration(upns, units)
 		if upns == 0 {
 			uptime = unknownVal
 		}
@@ -171,12 +171,12 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap, units string)
 		row := []string{
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed),
-			fmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2),
+			FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2),
 			fmt.Sprintf("%.2f%%", calcCapPercentage(ds)),
-			fmtSize(int64(calcCap(ds)), units, 3),
+			FmtSize(int64(calcCap(ds)), units, 3),
 			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctCPUUsed),
 			fmtRebStatus(ds.RebSnap),
-			fmtDuration(ds.Tracker[stats.Uptime].Value),
+			fmtDuration(ds.Tracker[stats.Uptime].Value, units),
 			ds.K8sPodName,
 			ds.Status,
 			ds.Version,

@@ -121,9 +121,13 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap sta
 
 func daemonDiskStats(c *cli.Context, sid string) error {
 	var (
-		usejs      = flagIsSet(c, jsonFlag)
-		hideHeader = flagIsSet(c, noHeaderFlag)
+		usejs       = flagIsSet(c, jsonFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return errU
+	}
 	setLongRunParams(c)
 
 	_, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
@@ -141,10 +145,11 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		return err
 	}
 
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
 	if hideHeader {
-		err = teb.Print(diskStats, teb.DiskStatNoHdrTmpl, teb.Jopts(usejs))
+		err = teb.Print(diskStats, teb.DiskStatNoHdrTmpl, opts)
 	} else {
-		err = teb.Print(diskStats, teb.DiskStatsTmpl, teb.Jopts(usejs))
+		err = teb.Print(diskStats, teb.DiskStatsTmpl, opts)
 	}
 	return err
 }

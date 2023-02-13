@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/stats"
-	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 // low-level formatting routines and misc.
@@ -209,12 +208,6 @@ func extECPutStats(base *cluster.Snap) *ec.ExtECPutStats {
 // see also: cli.isUnsetTime and cli.fmtBucketCreatedTime
 func isUnsetTime(t time.Time) bool {
 	return t.IsZero()
-}
-
-func fmtDuration(ns int64) string { return duration.HumanDuration(time.Duration(ns)) }
-
-func fmtMilli(val cos.Duration) string {
-	return cos.FormatMilli(time.Duration(val))
 }
 
 func FmtStartEnd(start, end time.Time) (startS, endS string) {

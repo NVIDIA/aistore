@@ -152,7 +152,7 @@ var (
 var (
 	stopCmdsFlags = []cli.Flag{
 		allRunningJobsFlag,
-		regexFlag,
+		regexJobsFlag,
 	}
 	jobStopSub = cli.Command{
 		Name:         commandStop,
@@ -184,7 +184,7 @@ var (
 var (
 	removeCmdsFlags = []cli.Flag{
 		allFinishedJobsFlag,
-		regexFlag,
+		regexJobsFlag,
 	}
 	jobRemoveSub = cli.Command{
 		Name:  commandRemove,
@@ -670,7 +670,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	bckArgs := makeList(parseStrFlag(c, listBucketsFlag))
+	bckArgs := makeCommaSepList(parseStrFlag(c, listBucketsFlag))
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
 		bck, err := parseBckURI(c, bckArg, true /*require provider*/)
@@ -739,11 +739,11 @@ func stopJobHandler(c *cli.Context) error {
 		actionWarn(c, fmt.Sprintf("node ID %q will be ignored (waiting for a single target not supported)\n", daemonID))
 	}
 
-	regex := parseStrFlag(c, regexFlag)
+	regex := parseStrFlag(c, regexJobsFlag)
 
 	if xid != "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		warn := fmt.Sprintf("in presence of %s argument ('%s') flags %s and %s will be ignored",
-			jobIDArgument, xid, qflprn(allRunningJobsFlag), qflprn(regexFlag))
+			jobIDArgument, xid, qflprn(allRunningJobsFlag), qflprn(regexJobsFlag))
 		actionWarn(c, warn)
 	} else if xid == "" && (flagIsSet(c, allRunningJobsFlag) || regex != "") {
 		switch name {
@@ -751,11 +751,11 @@ func stopJobHandler(c *cli.Context) error {
 			// regex supported
 		case commandRebalance:
 			warn := fmt.Sprintf("global rebalance is global (ignoring %s and %s flags)",
-				qflprn(allRunningJobsFlag), qflprn(regexFlag))
+				qflprn(allRunningJobsFlag), qflprn(regexJobsFlag))
 			actionWarn(c, warn)
 		default:
 			if regex != "" {
-				warn := fmt.Sprintf("ignoring flag %s - not implemented yet", qflprn(regexFlag))
+				warn := fmt.Sprintf("ignoring flag %s - not implemented yet", qflprn(regexJobsFlag))
 				actionWarn(c, warn)
 			}
 		}
@@ -1143,7 +1143,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 //
 
 func removeDownloadHandler(c *cli.Context) error {
-	regex := parseStrFlag(c, regexFlag)
+	regex := parseStrFlag(c, regexJobsFlag)
 	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {
 		return removeDownloadRegex(c, regex)
 	}
@@ -1191,7 +1191,7 @@ func removeDownloadRegex(c *cli.Context, regex string) error {
 }
 
 func removeDsortHandler(c *cli.Context) error {
-	regex := parseStrFlag(c, regexFlag)
+	regex := parseStrFlag(c, regexJobsFlag)
 	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {
 		return removeDsortRegex(c, regex)
 	}

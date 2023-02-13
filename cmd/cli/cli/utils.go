@@ -280,7 +280,7 @@ func _refreshAvgRate(c *cli.Context) (sleep, averageOver time.Duration) {
 }
 
 // Users can pass in a comma-separated list
-func makeList(list string) []string {
+func makeCommaSepList(list string) []string {
 	cleanList := strings.Split(list, ",")
 	for ii, val := range cleanList {
 		cleanList[ii] = strings.TrimSpace(val)

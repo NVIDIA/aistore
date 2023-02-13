@@ -53,6 +53,7 @@ var (
 			createArchFlag,
 			archpathOptionalFlag,
 			skipVerCksumFlag,
+			unitsFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -286,7 +287,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
 	if list != "" {
-		msg.SelectObjsMsg.ObjNames = makeList(list)
+		msg.SelectObjsMsg.ObjNames = makeCommaSepList(list)
 		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
 	} else {
 		msg.SelectObjsMsg.Template = template

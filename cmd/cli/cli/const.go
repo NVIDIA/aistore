@@ -354,10 +354,21 @@ var (
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
+	//
+	// regex and friends
+	//
 	regexFlag     = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
 	regexColsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
 		Usage: "regular expression to select table columns (case-insensitive), e.g.: --regex \"put|err\"",
+	}
+	regexStatsFlag = cli.StringFlag{
+		Name:  regexFlag.Name,
+		Usage: "regular expression to select stats metrics, e.g.: --regex \"put|get\"",
+	}
+	regexJobsFlag = cli.StringFlag{
+		Name:  regexFlag.Name,
+		Usage: "regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",
 	}
 
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}

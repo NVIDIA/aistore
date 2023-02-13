@@ -10,7 +10,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -146,8 +145,8 @@ const (
 	XactNoHdrBucketTmpl = "{{range $daemon := . }}" + xactBucketBodyAll + "{{end}}"
 
 	xactBucketHdr     = "NODE\t ID\t KIND\t BUCKET\t OBJECTS\t BYTES\t START\t END\t STATE\n"
-	xactBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactBucketBodyOne + "{{end}}"
-	XactBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
+	xactBucketBodyAll = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactBucketBodyOne + "{{end}}"
+	xactBucketBodyOne = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{$xctn.Kind}}\t " +
 		"{{FormatBckName $xctn.Bck}}\t " +
@@ -189,11 +188,12 @@ const (
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatXactState $xctn}}\n"
 
-	XactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
-	XactECGetTmpl      = XactECGetStatsHdr + XactECGetNoHdrTmpl
-	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + XactECGetBody + "{{end}}"
-	XactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactECGetStatsBody + "{{end}}"
-	XactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactECGetTmpl      = xactECGetStatsHdr + XactECGetNoHdrTmpl
+	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + xactECGetBody + "{{end}}"
+
+	xactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
+	xactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
+	xactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -208,11 +208,12 @@ const (
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	XactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
-	XactECPutTmpl      = XactECPutStatsHdr + XactECPutNoHdrTmpl
-	XactECPutNoHdrTmpl = "{{range $daemon := . }}" + XactECPutBody + "{{end}}"
-	XactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + XactECPutStatsBody + "{{end}}"
-	XactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
+	XactECPutTmpl      = xactECPutStatsHdr + XactECPutNoHdrTmpl
+	XactECPutNoHdrTmpl = "{{range $daemon := . }}" + xactECPutBody + "{{end}}"
+
+	xactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
+	xactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECPutStatsBody + "{{end}}"
+	xactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
 		"{{if $xctn.Bck.Name}}{{FormatBckName $xctn.Bck}}{{else}}-{{end}}\t " +
 		"{{if (eq $xctn.Stats.Objs 0) }}-{{else}}{{$xctn.Stats.Objs}}{{end}}\t " +
@@ -263,7 +264,7 @@ const (
 
 	// For `object put` mass uploader. A caller adds to the template
 	// total count and size. That is why the template ends with \t
-	ExtensionTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +
+	MultiPutTmpl = "Files to upload:\nEXTENSION\t COUNT\t SIZE\n" +
 		"{{range $k, $v := . }}" +
 		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSig $v.Size 2}}\n" +
 		"{{end}}" +
@@ -328,11 +329,11 @@ const (
 		"{{ $bck }}\t{{ FormatACL $bck.Access }}\n" +
 		"{{end}}{{end}}"
 
-	// Command `search`
+	// `search`
 	SearchTmpl = "{{ JoinListNL . }}\n"
 
-	// Command `show mountpath`
-	TargetMpathListTmpl = "{{range $p := . }}" +
+	// `show mountpath`
+	MpathListTmpl = "{{range $p := . }}" +
 		"{{ $p.DaemonID }}\n" +
 		"{{if and (eq (len $p.Mpl.Available) 0) (eq (len $p.Mpl.Disabled) 0)}}" +
 		"\tNo mountpaths\n" +
@@ -386,34 +387,20 @@ type (
 )
 
 var (
-	// ObjectPropsMap matches ObjEntry field
-	ObjectPropsMap = map[string]string{
-		apc.GetPropsName:     "{{FormatNameArch $obj.Name $obj.Flags}}",
-		apc.GetPropsSize:     "{{FormatBytesSig $obj.Size 2}}",
-		apc.GetPropsChecksum: "{{$obj.Checksum}}",
-		apc.GetPropsAtime:    "{{$obj.Atime}}",
-		apc.GetPropsVersion:  "{{$obj.Version}}",
-		apc.GetPropsLocation: "{{$obj.Location}}",
-		apc.GetPropsCustom:   "{{FormatObjCustom $obj.Custom}}",
-		apc.GetPropsStatus:   "{{FormatObjStatus $obj}}",
-		apc.GetPropsCopies:   "{{$obj.Copies}}",
-		apc.GetPropsCached:   "{{FormatObjIsCached $obj}}",
-	}
-
 	// for extensions and override, see also:
-	// - AltFuncMapSizeBytes
+	// - FuncMapUnits
 	// - HelpTemplateFuncMap
 	// - `altMap template.FuncMap` below
 	funcMap = template.FuncMap{
-		"FormatBytesSig":    func(size int64, digits int) string { return fmtSize(size, UnitsIEC, digits) },         // TODO -- FIXME: units
-		"FormatBytesUns":    func(size uint64, digits int) string { return fmtSize(int64(size), UnitsIEC, digits) }, // ditto
-		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", fmtSize(u, UnitsIEC, 2)) },          // ditto
-		"IsUnsetTime":       isUnsetTime,
-		"IsFalse":           func(v bool) bool { return !v },
+		"FormatBytesSig":    func(size int64, digits int) string { return FmtSize(size, UnitsIEC, digits) },
+		"FormatBytesUns":    func(size uint64, digits int) string { return FmtSize(int64(size), UnitsIEC, digits) },
+		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, UnitsIEC, 2)) },
+		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, UnitsIEC) },
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
 		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
+		"IsUnsetTime":       isUnsetTime,
+		"IsFalse":           func(v bool) bool { return !v },
 		"FormatEC":          FmtEC,
-		"FormatDur":         fmtDuration,
 		"FormatObjStatus":   fmtObjStatus,
 		"FormatObjCustom":   fmtObjCustom,
 		"FormatObjIsCached": fmtObjIsCached,
@@ -422,7 +409,6 @@ var (
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
 		"FormatBckName":     func(bck cmn.Bck) string { return bck.DisplayName() },
-		"FormatMilli":       fmtMilli,
 		"JoinList":          fmtStringList,
 		"JoinListNL":        func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatACL":         fmtACL,

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -312,7 +311,6 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		footer      lsbFooter
-		altMap      template.FuncMap
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		hideFooter  = flagIsSet(c, noFooterFlag)
 		data        = make([]teb.ListBucketsTemplateHelper, 0, len(filtered))
@@ -345,8 +343,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		data = append(data, teb.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
 
-	altMap = teb.AltFuncMapSizeBytes(units)
-	opts := teb.Opts{AltMap: altMap}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
 	if hideHeader {
 		teb.Print(data, teb.ListBucketsBody, opts)
 	} else {
@@ -706,58 +703,33 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom,
 
 func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectListFilter, props string, addCachedCol bool) error {
 	var (
-		altMap         template.FuncMap
-		tmpl           = objPropsTemplate(c, props, addCachedCol)
+		hideHeader     = flagIsSet(c, noHeaderFlag)
 		matched, other = objectFilter.filter(entries)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
 		return errU
 	}
-	altMap = teb.AltFuncMapSizeBytes(units)
-	opts := teb.Opts{AltMap: altMap}
-	err := teb.Print(matched, tmpl, opts)
-	if err != nil {
+
+	propsList := makeCommaSepList(props)
+	tmpl := teb.ObjPropsTemplate(propsList, hideHeader, addCachedCol)
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
 	}
+
 	if flagIsSet(c, showUnmatchedFlag) {
 		unmatched := fcyan("\nNames that don't match:")
 		if len(other) == 0 {
 			fmt.Fprintln(c.App.Writer, unmatched+" none")
 		} else {
 			tmpl = unmatched + "\n" + tmpl
-			err = teb.Print(other, tmpl, opts)
+			if err := teb.Print(other, tmpl, opts); err != nil {
+				return err
+			}
 		}
 	}
-	return err
-}
-
-func objPropsTemplate(c *cli.Context, props string, addCachedCol bool) string {
-	var (
-		headSb    strings.Builder
-		bodySb    strings.Builder
-		propsList = makeList(props)
-	)
-	bodySb.WriteString("{{range $obj := .}}")
-	for _, field := range propsList {
-		format, ok := teb.ObjectPropsMap[field]
-		if !ok {
-			continue
-		}
-		if field == apc.GetPropsCached && !addCachedCol {
-			continue
-		}
-		columnName := strings.ToUpper(field)
-		headSb.WriteString(columnName + "\t ")
-		bodySb.WriteString(format + "\t ")
-	}
-	headSb.WriteString("\n")
-	bodySb.WriteString("\n{{end}}")
-
-	if flagIsSet(c, noHeaderFlag) {
-		return bodySb.String()
-	}
-	return headSb.String() + bodySb.String()
+	return nil
 }
 
 //////////////////////

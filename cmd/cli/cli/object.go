@@ -395,7 +395,7 @@ func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPre
 	return putMultipleObjects(c, allFiles, bck)
 }
 
-func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err error) {
+func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files found")
 	}
@@ -415,9 +415,16 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 		return nil
 	}
 
-	tmpl := teb.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
-	if err = teb.Print(extSizes, tmpl); err != nil {
-		return
+	var (
+		units, errU = parseUnitsFlag(c, unitsFlag)
+		tmpl        = teb.MultiPutTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
+		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	)
+	if errU != nil {
+		return errU
+	}
+	if err := teb.Print(extSizes, tmpl, opts); err != nil {
+		return err
 	}
 
 	// ask a user for confirmation
@@ -891,7 +898,7 @@ func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 // List handler
 func listOp(c *cli.Context, bck cmn.Bck) (err error) {
 	var (
-		fileList = makeList(parseStrFlag(c, listFlag))
+		fileList = makeCommaSepList(parseStrFlag(c, listFlag))
 		xid      string
 	)
 

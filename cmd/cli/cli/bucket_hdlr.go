@@ -326,7 +326,7 @@ func showBucketSummary(c *cli.Context) error {
 		return err
 	}
 
-	altMap := teb.AltFuncMapSizeBytes(units)
+	altMap := teb.FuncMapUnits(units)
 	opts := teb.Opts{AltMap: altMap}
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }

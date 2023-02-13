@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -27,7 +26,7 @@ const (
 )
 
 var (
-	showRebFlags = append(longRunFlags, allJobsFlag, noHeaderFlag)
+	showRebFlags = append(longRunFlags, allJobsFlag, noHeaderFlag, unitsFlag)
 
 	showCmdRebalance = cli.Command{
 		Name:      cmdRebalance,
@@ -41,14 +40,18 @@ var (
 // (implemented over Go text/tabwriter directly w/ no templates)
 func showRebalanceHandler(c *cli.Context) error {
 	var (
+		latestAborted, latestFinished bool
+
 		tw             = &tabwriter.Writer{}
 		keepMonitoring = flagIsSet(c, refreshFlag)
 		refreshRate    = _refreshRate(c)
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		xargs          = xact.ArgsMsg{Kind: apc.ActRebalance}
-
-		latestAborted, latestFinished bool
+		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		units = ""
+	}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
 
 	// [REB_ID] [NODE_ID]
@@ -126,14 +129,14 @@ func showRebalanceHandler(c *cli.Context) error {
 						fmt.Fprintln(tw, strings.Repeat("\t ", 9 /*colCount*/))
 						numMigratedObjs, sizeMigratedBytes = 0, 0
 					}
-					displayRebStats(tw, sts)
+					displayRebStats(tw, sts, units)
 				} else {
 					if prevID != "" && sts.snap.ID != prevID {
 						break
 					}
 					latestAborted = latestAborted || sts.snap.AbortedX
 					latestFinished = latestFinished || !sts.snap.EndTime.IsZero()
-					displayRebStats(tw, sts)
+					displayRebStats(tw, sts, units)
 				}
 				numMigratedObjs += sts.snap.Stats.Objs
 				sizeMigratedBytes += sts.snap.Stats.Bytes
@@ -146,7 +149,7 @@ func showRebalanceHandler(c *cli.Context) error {
 		id := fcyan(prevID)
 		if numMigratedObjs > 0 {
 			fmt.Fprintf(c.App.Writer, "%s: %d objects migrated (total size %s)\n",
-				id, numMigratedObjs, cos.ToSizeIEC(sizeMigratedBytes, 1))
+				id, numMigratedObjs, teb.FmtSize(sizeMigratedBytes, units, 1))
 		}
 		if !flagIsSet(c, allJobsFlag) {
 			if latestFinished && latestAborted {
@@ -173,13 +176,13 @@ func showRebalanceHandler(c *cli.Context) error {
 	return nil
 }
 
-func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
+func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap, units string) {
 	startTime, endTime := teb.FmtStartEnd(st.snap.StartTime, st.snap.EndTime)
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %s\n",
 		st.snap.ID, st.tid,
-		st.snap.Stats.InObjs, cos.ToSizeIEC(st.snap.Stats.InBytes, 2),
-		st.snap.Stats.OutObjs, cos.ToSizeIEC(st.snap.Stats.OutBytes, 2),
+		st.snap.Stats.InObjs, teb.FmtSize(st.snap.Stats.InBytes, units, 2),
+		st.snap.Stats.OutObjs, teb.FmtSize(st.snap.Stats.OutBytes, units, 2),
 		startTime, endTime, teb.FmtXactStatus(st.snap),
 	)
 }
