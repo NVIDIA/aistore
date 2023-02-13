@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -97,7 +97,7 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out stats.DaemonStatusMap) {
 			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[" + err.Error() + "]"}
 		}
 	} else if daeStatus.Status == "" {
-		daeStatus.Status = tmpls.NodeOnline
+		daeStatus.Status = teb.NodeOnline
 		switch {
 		case node.Flags.IsSet(cluster.NodeFlagMaint):
 			daeStatus.Status = apc.NodeMaintenance
@@ -111,9 +111,9 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out stats.DaemonStatusMap) {
 	mu.Unlock()
 }
 
-func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelper, error) {
+func getDiskStats(targets stats.DaemonStatusMap) ([]teb.DiskStatsTemplateHelper, error) {
 	var (
-		allStats = make([]tmpls.DiskStatsTemplateHelper, 0, len(targets))
+		allStats = make([]teb.DiskStatsTemplateHelper, 0, len(targets))
 		wg, _    = errgroup.WithContext(context.Background())
 		statsCh  = make(chan targetDiskStats, len(targets))
 	)
@@ -141,7 +141,7 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]tmpls.DiskStatsTemplateHelpe
 		targetID := diskStats.targetID
 		for diskName, diskStat := range diskStats.stats {
 			allStats = append(allStats,
-				tmpls.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
+				teb.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
 		}
 	}
 

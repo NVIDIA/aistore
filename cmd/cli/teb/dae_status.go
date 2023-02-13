@@ -1,8 +1,8 @@
-// Package tmpls provides the set of templates used to format output for the CLI.
+// Package teb contains templates and (templated) tables to format CLI output.
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package tmpls
+package teb
 
 import (
 	"fmt"

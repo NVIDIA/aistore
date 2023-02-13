@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -163,7 +163,7 @@ func searchCmdHdlr(c *cli.Context) error {
 		commands = findCmdMultiKey(c.Args())
 	}
 
-	return tmpls.Print(commands, c.App.Writer, tmpls.SearchTmpl, nil, false)
+	return teb.Print(commands, teb.SearchTmpl)
 }
 
 func searchBashCmplt(_ *cli.Context) {

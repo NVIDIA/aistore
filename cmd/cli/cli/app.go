@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -92,6 +93,8 @@ func Run(version, buildtime string, args []string) error {
 	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
 	buildTime = buildtime
 	a.init(version)
+	teb.Writer = os.Stdout
+
 	// run
 	if err := a.runOnce(args); err != nil {
 		return err

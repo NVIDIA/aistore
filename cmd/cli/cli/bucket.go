@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -251,7 +251,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 		footer     lsbFooter
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		hideFooter = flagIsSet(c, noFooterFlag)
-		data       = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+		data       = make([]teb.ListBucketsTemplateHelper, 0, len(filtered))
 	)
 	if !apc.IsFltPresent(fltPresence) {
 		bmd, err = api.GetBMD(apiBP)
@@ -285,12 +285,12 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 			props, _ = bmd.Get(cluster.CloneBck(&bck))
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
-		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
+		data = append(data, teb.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
 	}
 	if hideHeader {
-		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsBodyNoSummary, nil, false)
+		teb.Print(data, teb.ListBucketsBodyNoSummary)
 	} else {
-		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmplNoSummary, nil, false)
+		teb.Print(data, teb.ListBucketsTmplNoSummary)
 	}
 	if hideFooter {
 		return
@@ -315,7 +315,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		altMap      template.FuncMap
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		hideFooter  = flagIsSet(c, noFooterFlag)
-		data        = make([]tmpls.ListBucketsTemplateHelper, 0, len(filtered))
+		data        = make([]teb.ListBucketsTemplateHelper, 0, len(filtered))
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -342,15 +342,15 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		if bck.IsHTTP() {
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
-		data = append(data, tmpls.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
+		data = append(data, teb.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
 	}
 
-	altMap = tmpls.AltFuncMapSizeBytes(units)
-
+	altMap = teb.AltFuncMapSizeBytes(units)
+	opts := teb.Opts{AltMap: altMap}
 	if hideHeader {
-		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsBody, altMap, false)
+		teb.Print(data, teb.ListBucketsBody, opts)
 	} else {
-		tmpls.Print(data, c.App.Writer, tmpls.ListBucketsTmpl, altMap, false)
+		teb.Print(data, teb.ListBucketsTmpl, opts)
 	}
 
 	if hideFooter || footer.nbp <= 1 {
@@ -365,7 +365,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if qbck.IsRemoteAIS() {
 		p = qbck.DisplayProvider()
 	}
-	apparentSize := tmpls.FmtStatValue("", stats.KindSize, int64(footer.size), units)
+	apparentSize := teb.FmtStatValue("", stats.KindSize, int64(footer.size), units)
 	if footer.pobj+footer.robj != 0 {
 		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
 			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj, apparentSize, footer.pct)
@@ -411,7 +411,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	// NOTE: compare w/ `showObjProps()`
 	if flagIsSet(c, nameOnlyFlag) {
 		if len(props) > 2 {
-			warn := fmt.Sprintf("flag %s is incompatible with the value of %s", qflprn(nameOnlyFlag), qflprn(objPropsFlag))
+			warn := fmt.Sprintf("flag %s is incompatible with the value of %s",
+				qflprn(nameOnlyFlag), qflprn(objPropsFlag))
 			actionWarn(c, warn)
 		}
 		msg.SetFlag(apc.LsNameOnly)
@@ -595,7 +596,8 @@ func showBucketProps(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, jsonFlag) {
-		return tmpls.Print(p, c.App.Writer, "", nil, true)
+		opts := teb.Jopts(true)
+		return teb.Print(p, "", opts)
 	}
 
 	defProps, err := defaultBckProps(bck)
@@ -632,7 +634,7 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 					continue
 				}
 				if def.Name == apc.PropBucketCreated {
-					if p.Value != tmpls.NotSetVal {
+					if p.Value != teb.NotSetVal {
 						created, err := cos.S2UnixNano(p.Value)
 						if err == nil {
 							p.Value = fmtBucketCreatedTime(created)
@@ -649,7 +651,7 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 		}
 	}
 
-	return tmpls.Print(propList, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+	return teb.Print(propList, teb.PropsSimpleTmpl)
 }
 
 // Configure bucket as n-way mirror
@@ -712,8 +714,9 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectL
 	if errU != nil {
 		return errU
 	}
-	altMap = tmpls.AltFuncMapSizeBytes(units)
-	err := tmpls.Print(matched, c.App.Writer, tmpl, altMap, false)
+	altMap = teb.AltFuncMapSizeBytes(units)
+	opts := teb.Opts{AltMap: altMap}
+	err := teb.Print(matched, tmpl, opts)
 	if err != nil {
 		return err
 	}
@@ -723,7 +726,7 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectL
 			fmt.Fprintln(c.App.Writer, unmatched+" none")
 		} else {
 			tmpl = unmatched + "\n" + tmpl
-			err = tmpls.Print(other, c.App.Writer, tmpl, altMap, false)
+			err = teb.Print(other, tmpl, opts)
 		}
 	}
 	return err
@@ -737,7 +740,7 @@ func objPropsTemplate(c *cli.Context, props string, addCachedCol bool) string {
 	)
 	bodySb.WriteString("{{range $obj := .}}")
 	for _, field := range propsList {
-		format, ok := tmpls.ObjectPropsMap[field]
+		format, ok := teb.ObjectPropsMap[field]
 		if !ok {
 			continue
 		}

@@ -12,7 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
@@ -86,7 +86,7 @@ func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
 }
 
 // Gets Smap from a given node (`daemonID`) and displays it
-func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, usejs bool) error {
+func smapFromNode(primarySmap *cluster.Smap, sid string, usejs bool) error {
 	var (
 		smap         = primarySmap
 		err          error
@@ -105,9 +105,9 @@ func smapFromNode(c *cli.Context, primarySmap *cluster.Smap, sid string, usejs b
 			}
 		}
 	}
-	body := tmpls.SmapTemplateHelper{
+	body := teb.SmapTemplateHelper{
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
 	}
-	return tmpls.Print(body, c.App.Writer, tmpls.SmapTmpl, nil, usejs)
+	return teb.Print(body, teb.SmapTmpl, teb.Jopts(usejs))
 }

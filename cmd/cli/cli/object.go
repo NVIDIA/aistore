@@ -24,7 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -415,8 +415,8 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) (err err
 		return nil
 	}
 
-	tmpl := tmpls.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
-	if err = tmpls.Print(extSizes, c.App.Writer, tmpl, nil, false); err != nil {
+	tmpl := teb.ExtensionTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
+	if err = teb.Print(extSizes, tmpl); err != nil {
 		return
 	}
 
@@ -784,7 +784,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		return handleObjHeadError(err, bck, object, fltPresence)
 	}
 	if flagIsSet(c, jsonFlag) {
-		return tmpls.Print(objProps, c.App.Writer, tmpls.PropsSimpleTmpl, nil, true)
+		opts := teb.Jopts(true)
+		return teb.Print(objProps, teb.PropsSimpleTmpl, opts)
 	}
 	if flagIsSet(c, allPropsFlag) {
 		propsFlag = apc.GetPropsAll
@@ -810,7 +811,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	for _, name := range selectedProps {
 		if v := propVal(objProps, name); v != "" {
 			if name == apc.GetPropsAtime && isUnsetTime(c, v) {
-				v = tmpls.NotSetVal
+				v = teb.NotSetVal
 			}
 			propNVs = append(propNVs, nvpair{name, v})
 		}
@@ -819,7 +820,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		return propNVs[i].Name < propNVs[j].Name
 	})
 
-	return tmpls.Print(propNVs, c.App.Writer, tmpls.PropsSimpleTmpl, nil, false)
+	return teb.Print(propNVs, teb.PropsSimpleTmpl)
 }
 
 func propVal(op *cmn.ObjectProps, name string) (v string) {
@@ -839,17 +840,17 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 			debug.Assert(op.Present)
 			return
 		}
-		v = tmpls.FmtBool(op.Present)
+		v = teb.FmtBool(op.Present)
 	case apc.GetPropsCopies:
-		v = tmpls.FmtCopies(op.Mirror.Copies)
+		v = teb.FmtCopies(op.Mirror.Copies)
 		if len(op.Mirror.Paths) != 0 {
 			v += fmt.Sprintf(" %v", op.Mirror.Paths)
 		}
 	case apc.GetPropsEC:
-		v = tmpls.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
+		v = teb.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
 	case apc.GetPropsCustom:
 		if custom := op.GetCustomMD(); len(custom) == 0 {
-			v = tmpls.NotSetVal
+			v = teb.NotSetVal
 		} else {
 			v = cmn.CustomMD2S(custom)
 		}

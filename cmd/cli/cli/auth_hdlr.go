@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -478,7 +478,7 @@ func showAuthClusterHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	return tmpls.Print(list, c.App.Writer, tmpls.AuthNClusterTmpl, nil, false)
+	return teb.Print(list, teb.AuthNClusterTmpl)
 }
 
 func showAuthSingleRole(c *cli.Context, roleID string) error {
@@ -488,9 +488,9 @@ func showAuthSingleRole(c *cli.Context, roleID string) error {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return tmpls.Print([]*authn.Role{rInfo}, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
+		return teb.Print([]*authn.Role{rInfo}, teb.AuthNRoleTmpl)
 	}
-	return tmpls.Print(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
+	return teb.Print(rInfo, teb.AuthNRoleVerboseTmpl)
 }
 func showAuthAllRoles(c *cli.Context) error {
 	list, err := authn.GetAllRoles(authParams)
@@ -513,12 +513,12 @@ func showAuthAllRoles(c *cli.Context) error {
 				if i > 0 {
 					fmt.Fprintln(c.App.Writer)
 				}
-				tmpls.Print(rInfo, c.App.Writer, tmpls.AuthNRoleVerboseTmpl, nil, false)
+				teb.Print(rInfo, teb.AuthNRoleVerboseTmpl)
 			}
 		}
 		return nil
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.AuthNRoleTmpl, nil, false)
+	return teb.Print(list, teb.AuthNRoleTmpl)
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
@@ -545,12 +545,12 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 					if i > 0 {
 						fmt.Fprintln(c.App.Writer)
 					}
-					tmpls.Print(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
+					teb.Print(uInfo, teb.AuthNUserVerboseTmpl)
 				}
 			}
 			return nil
 		}
-		return tmpls.Print(list, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
+		return teb.Print(list, teb.AuthNUserTmpl)
 	}
 	uInfo, err := authn.GetUser(authParams, userID)
 	if err != nil {
@@ -558,9 +558,9 @@ func showAuthUserHandler(c *cli.Context) (err error) {
 	}
 	// verbose is the implicit default when showing one
 	if flagIsSet(c, nonverboseFlag) {
-		return tmpls.Print([]*authn.User{uInfo}, c.App.Writer, tmpls.AuthNUserTmpl, nil, false)
+		return teb.Print([]*authn.User{uInfo}, teb.AuthNUserTmpl)
 	}
-	return tmpls.Print(uInfo, c.App.Writer, tmpls.AuthNUserVerboseTmpl, nil, false)
+	return teb.Print(uInfo, teb.AuthNUserVerboseTmpl)
 }
 
 func addAuthRoleHandler(c *cli.Context) error {
@@ -706,9 +706,9 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 	}
 	usejs := flagIsSet(c, jsonFlag)
 	if usejs {
-		return tmpls.Print(conf, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
+		return teb.Print(conf, teb.PropsSimpleTmpl, teb.Jopts(usejs))
 	}
-	return tmpls.Print(list, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs)
+	return teb.Print(list, teb.PropsSimpleTmpl, teb.Jopts(usejs))
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
@@ -174,12 +174,12 @@ func showRebalanceHandler(c *cli.Context) error {
 }
 
 func displayRebStats(tw *tabwriter.Writer, st *targetRebSnap) {
-	startTime, endTime := tmpls.FmtStartEnd(st.snap.StartTime, st.snap.EndTime)
+	startTime, endTime := teb.FmtStartEnd(st.snap.StartTime, st.snap.EndTime)
 	fmt.Fprintf(tw,
 		"%s\t %s\t %d\t %s\t %d\t %s\t %s\t %s\t %s\n",
 		st.snap.ID, st.tid,
 		st.snap.Stats.InObjs, cos.ToSizeIEC(st.snap.Stats.InBytes, 2),
 		st.snap.Stats.OutObjs, cos.ToSizeIEC(st.snap.Stats.OutBytes, 2),
-		startTime, endTime, tmpls.FmtXactStatus(st.snap),
+		startTime, endTime, teb.FmtXactStatus(st.snap),
 	)
 }

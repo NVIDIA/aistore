@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -343,11 +343,11 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 	})
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
+	opts := teb.Jopts(flagIsSet(c, jsonFlag))
 	if hideHeader {
-		return l, tmpls.Print(list, c.App.Writer, tmpls.DownloadListNoHdrTmpl, nil, flagIsSet(c, jsonFlag))
+		return l, teb.Print(list, teb.DownloadListNoHdrTmpl, opts)
 	}
-
-	return l, tmpls.Print(list, c.App.Writer, tmpls.DownloadListTmpl, nil, flagIsSet(c, jsonFlag))
+	return l, teb.Print(list, teb.DownloadListTmpl, opts)
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {

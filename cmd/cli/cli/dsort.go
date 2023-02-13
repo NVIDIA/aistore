@@ -21,7 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -430,10 +430,10 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	if hideHeader {
-		return tmpls.Print(list, c.App.Writer, tmpls.DSortListNoHdrTmpl, nil, usejs)
+		return teb.Print(list, teb.DSortListNoHdrTmpl, teb.Jopts(usejs))
 	}
 
-	return tmpls.Print(list, c.App.Writer, tmpls.DSortListTmpl, nil, usejs)
+	return teb.Print(list, teb.DSortListTmpl, teb.Jopts(usejs))
 }
 
 func dsortJobStatus(c *cli.Context, id string) error {

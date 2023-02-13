@@ -1,14 +1,12 @@
-// Package tmpls provides the set of templates used to format output for the CLI.
+// Package teb contains templates and (templated) tables to format CLI output.
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package tmpls
+package teb
 
 import (
 	"fmt"
-	"io"
 	"strings"
-	"text/tabwriter"
 	"text/template"
 	"time"
 
@@ -19,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -451,45 +448,6 @@ var (
 		"Mod":      func(a, mod int) int { return a % mod },
 	}
 )
-
-// Main function to print formatted output
-// NOTE: if usejs, outputTemplate is ignored
-func Print(object any, writer io.Writer, outputTemplate string, altMap template.FuncMap, usejs bool) error {
-	if usejs {
-		if o, ok := object.(forMarshaler); ok {
-			object = o.forMarshal()
-		}
-		out, err := jsoniter.MarshalIndent(object, "", "    ")
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(writer, string(out))
-		return err
-	}
-
-	fmap := funcMap
-	if altMap != nil {
-		fmap = make(template.FuncMap, len(funcMap))
-		for k, v := range funcMap {
-			if altv, ok := altMap[k]; ok {
-				fmap[k] = altv
-			} else {
-				fmap[k] = v
-			}
-		}
-	}
-	tmpl, err := template.New("DisplayTemplate").Funcs(fmap).Parse(outputTemplate)
-	if err != nil {
-		return err
-	}
-
-	w := tabwriter.NewWriter(writer, 0, 8, 1, '\t', 0)
-	if err := tmpl.Execute(w, object); err != nil {
-		return err
-	}
-
-	return w.Flush()
-}
 
 ////////////////////////
 // SmapTemplateHelper //

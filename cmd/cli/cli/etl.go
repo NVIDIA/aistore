@@ -14,7 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -312,10 +312,10 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 
 	hideHeader := flagIsSet(c, noHeaderFlag)
 	if hideHeader {
-		return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListNoHdrTmpl, nil, false)
+		return l, teb.Print(list, teb.TransformListNoHdrTmpl)
 	}
 
-	return l, tmpls.Print(list, c.App.Writer, tmpls.TransformListTmpl, nil, false)
+	return l, teb.Print(list, teb.TransformListTmpl)
 }
 
 func etlShowInitMsgHandler(c *cli.Context) error {

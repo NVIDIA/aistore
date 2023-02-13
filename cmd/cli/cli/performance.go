@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -168,13 +168,13 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 	if !averaging {
 		setLongRunParams(c, 72)
 
-		table, err := tmpls.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, units, allCols)
+		table, err := teb.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, units, allCols)
 		if err != nil {
 			return err
 		}
 
 		out := table.Template(hideHeader)
-		return tmpls.Print(tstatusMap, c.App.Writer, out, nil, false /*usejs*/)
+		return teb.Print(tstatusMap, out)
 	}
 
 	var (
@@ -191,13 +191,13 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 
 		time.Sleep(sleep)
 
-		table, err := tmpls.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, units, allCols)
+		table, err := teb.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, units, allCols)
 		if err != nil {
 			return err
 		}
 
 		out := table.Template(hideHeader)
-		err = tmpls.Print(mapBeginUpdated, c.App.Writer, out, nil, false /*usejs*/)
+		err = teb.Print(mapBeginUpdated, out)
 		if err != nil {
 			return err
 		}

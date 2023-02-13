@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact"
@@ -235,7 +235,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
+func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 	type bucketHealth struct {
 		Bck           cmn.Bck
 		ObjectCnt     uint64
@@ -244,22 +244,23 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 	}
 	bcks, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
 	if err != nil {
-		return
+		return err
 	}
 	bckSums := make([]*bucketHealth, 0)
 	msg := &apc.LsoMsg{Flags: apc.LsAll}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
+
 	for _, bck := range bcks {
 		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
 			continue
 		}
 		var (
-			p       *cmn.BucketProps
 			objList *cmn.LsoResult
 			obj     *cmn.LsoEntry
 		)
-		if p, err = headBucket(bck, true /* don't add */); err != nil {
-			return
+		p, err := headBucket(bck, true /* don't add */)
+		if err != nil {
+			return err
 		}
 		copies := int16(p.Mirror.Copies)
 		stats := &bucketHealth{Bck: bck}
@@ -298,7 +299,7 @@ func checkObjectHealth(c *cli.Context, queryBcks cmn.QueryBcks) (err error) {
 
 		bckSums = append(bckSums, stats)
 	}
-	return tmpls.Print(bckSums, c.App.Writer, tmpls.BucketSummaryValidateTmpl, nil, false)
+	return teb.Print(bckSums, teb.BucketSummaryValidateTmpl)
 }
 
 func summaryBucketHandler(c *cli.Context) (err error) {
@@ -325,8 +326,9 @@ func showBucketSummary(c *cli.Context) error {
 		return err
 	}
 
-	altMap := tmpls.AltFuncMapSizeBytes(units)
-	return tmpls.Print(summaries, c.App.Writer, tmpls.BucketsSummariesTmpl, altMap, false)
+	altMap := teb.AltFuncMapSizeBytes(units)
+	opts := teb.Opts{AltMap: altMap}
+	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
 // NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
@@ -347,7 +349,7 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	}
 
 	fValidate := func() error {
-		return checkObjectHealth(c, queryBcks)
+		return checkObjectHealth(queryBcks)
 	}
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }

@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -90,7 +90,7 @@ func commandNotFoundError(c *cli.Context, cmd string) *errUsage {
 		context:       c,
 		message:       msg,
 		helpData:      c.App,
-		helpTemplate:  tmpls.ShortUsageTmpl,
+		helpTemplate:  teb.ShortUsageTmpl,
 		bottomMessage: didYouMeanMessage(c, cmd, similar, closestCommand, distance, trailingShow),
 	}
 }
@@ -173,7 +173,7 @@ func cannotExecuteError(c *cli.Context, err error, bottomMessage string) *errUsa
 		context:       c,
 		message:       err.Error(),
 		helpData:      c.Command,
-		helpTemplate:  tmpls.ShortUsageTmpl,
+		helpTemplate:  teb.ShortUsageTmpl,
 		bottomMessage: bottomMessage,
 	}
 }

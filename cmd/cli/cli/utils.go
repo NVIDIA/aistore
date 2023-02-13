@@ -28,7 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -114,7 +114,7 @@ func helpMessage(template string, data any) string {
 	w := bufio.NewWriter(&buf)
 
 	// Execute the template that generates command usage text
-	cli.HelpPrinterCustom(w, template, data, tmpls.HelpTemplateFuncMap)
+	cli.HelpPrinterCustom(w, template, data, teb.HelpTemplateFuncMap)
 	_ = w.Flush()
 
 	return buf.String()
@@ -728,12 +728,12 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 
 func fmtBucketCreatedTime(created int64) string {
 	if created == 0 {
-		return tmpls.NotSetVal
+		return teb.NotSetVal
 	}
 	return time.Unix(0, created).Format(time.RFC3339)
 }
 
-// compare with tmpls.isUnsetTime() and fmtBucketCreatedTime() above
+// compare with teb.isUnsetTime() and fmtBucketCreatedTime() above
 func isUnsetTime(c *cli.Context, ts string) bool {
 	t, err := time.Parse(time.RFC822, ts)
 	if err != nil {
@@ -846,7 +846,7 @@ func diffConfigs(actual, original nvpairList) []propDiff {
 				continue
 			}
 			if o.Value == a.Value {
-				item.Old = tmpls.NotSetVal
+				item.Old = teb.NotSetVal
 			} else {
 				item.Old = o.Value
 			}

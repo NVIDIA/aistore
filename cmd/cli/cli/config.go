@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -395,7 +395,7 @@ func showCLIConfigHandler(c *cli.Context) (err error) {
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
-	return tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return teb.Print(flat, teb.ConfigTmpl)
 }
 
 func setCLIConfigHandler(c *cli.Context) (err error) {

@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -547,29 +547,29 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 	switch xargs.Kind {
 	case apc.ActECGet:
 		if hideHeader {
-			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetNoHdrTmpl, nil, usejs)
+			return l, teb.Print(dts, teb.XactECGetNoHdrTmpl, teb.Jopts(usejs))
 		}
-		return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECGetTmpl, nil, usejs)
+		return l, teb.Print(dts, teb.XactECGetTmpl, teb.Jopts(usejs))
 	case apc.ActECPut:
 		if hideHeader {
-			return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECPutNoHdrTmpl, nil, usejs)
+			return l, teb.Print(dts, teb.XactECPutNoHdrTmpl, teb.Jopts(usejs))
 		}
-		return l, tmpls.Print(dts, c.App.Writer, tmpls.XactECPutTmpl, nil, usejs)
+		return l, teb.Print(dts, teb.XactECPutTmpl, teb.Jopts(usejs))
 	default:
 		switch {
 		case fromToBck && hideHeader:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrFromToTmpl, nil, usejs)
+			err = teb.Print(dts, teb.XactNoHdrFromToTmpl, teb.Jopts(usejs))
 		case fromToBck:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactFromToTmpl, nil, usejs)
+			err = teb.Print(dts, teb.XactFromToTmpl, teb.Jopts(usejs))
 		case haveBck && hideHeader:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrBucketTmpl, nil, usejs)
+			err = teb.Print(dts, teb.XactNoHdrBucketTmpl, teb.Jopts(usejs))
 		case haveBck:
-			err = tmpls.Print(dts, c.App.Writer, tmpls.XactBucketTmpl, nil, usejs)
+			err = teb.Print(dts, teb.XactBucketTmpl, teb.Jopts(usejs))
 		default:
 			if hideHeader {
-				err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoHdrNoBucketTmpl, nil, usejs)
+				err = teb.Print(dts, teb.XactNoHdrNoBucketTmpl, teb.Jopts(usejs))
 			} else {
-				err = tmpls.Print(dts, c.App.Writer, tmpls.XactNoBucketTmpl, nil, usejs)
+				err = teb.Print(dts, teb.XactNoBucketTmpl, teb.Jopts(usejs))
 			}
 		}
 	}
@@ -586,7 +586,7 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
 		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
-		if err := tmpls.Print(props, c.App.Writer, tmpls.PropsSimpleTmpl, nil, usejs); err != nil {
+		if err := teb.Print(props, teb.PropsSimpleTmpl, teb.Jopts(usejs)); err != nil {
 			return l, err
 		}
 	}
@@ -631,7 +631,7 @@ func showSmapHandler(c *cli.Context) error {
 	if sid != "" {
 		actionCptn(c, "Cluster map from: ", sname)
 	}
-	return smapFromNode(c, smap, sid, flagIsSet(c, jsonFlag))
+	return smapFromNode(smap, sid, flagIsSet(c, jsonFlag))
 }
 
 func showBMDHandler(c *cli.Context) (err error) {
@@ -672,12 +672,14 @@ func showClusterConfig(c *cli.Context, section string) error {
 	}
 
 	if usejs {
-		return tmpls.Print(cluConfig, c.App.Writer, "", nil, usejs)
+		return teb.Print(cluConfig, "", teb.Jopts(usejs))
 	}
 	flat := flattenConfig(cluConfig, section)
-	err = tmpls.Print(flat, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	err = teb.Print(flat, teb.ConfigTmpl)
 	if err == nil && section == "" {
-		actionDone(c, fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see '--help' for details)", flprn(jsonFlag)))
+		msg := fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see '--help' for details)",
+			flprn(jsonFlag))
+		actionDone(c, msg)
 	}
 	return err
 }
@@ -732,11 +734,12 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	if usejs {
+		opts := teb.Jopts(true)
 		warn := "option " + qflprn(jsonFlag) + " won't show node <=> cluster configuration differences, if any."
 		switch scope {
 		case cfgScopeLocal:
 			if section == "" {
-				return tmpls.Print(&config.LocalConfig, c.App.Writer, "", nil, true /* use JSON*/)
+				return teb.Print(&config.LocalConfig, "", opts)
 			}
 			if !printSectionJSON(c, &config.LocalConfig, section) {
 				fmt.Fprintln(c.App.Writer)
@@ -745,7 +748,7 @@ func showNodeConfig(c *cli.Context) error {
 		case cfgScopeInherited:
 			actionWarn(c, warn)
 			if section == "" {
-				return tmpls.Print(&config.ClusterConfig, c.App.Writer, "", nil, true)
+				return teb.Print(&config.ClusterConfig, "", opts)
 			}
 			if !printSectionJSON(c, &config.ClusterConfig, section) {
 				fmt.Fprintln(c.App.Writer)
@@ -754,13 +757,13 @@ func showNodeConfig(c *cli.Context) error {
 		default: // cfgScopeAll
 			if section == "" {
 				actionCptn(c, sname, " local config:")
-				if err := tmpls.Print(&config.LocalConfig, c.App.Writer, "", nil, true); err != nil {
+				if err := teb.Print(&config.LocalConfig, "", opts); err != nil {
 					return err
 				}
 				fmt.Fprintln(c.App.Writer)
 				actionCptn(c, sname, " inherited config:")
 				actionWarn(c, warn)
-				return tmpls.Print(&config.ClusterConfig, c.App.Writer, "", nil, true)
+				return teb.Print(&config.ClusterConfig, "", opts)
 			}
 			// fall through on purpose
 		}
@@ -790,7 +793,7 @@ func showNodeConfig(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, "PROPERTY\t VALUE\n\n")
 		return nil
 	}
-	return tmpls.Print(data, c.App.Writer, tmpls.DaemonConfigTmpl, nil, usejs)
+	return teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
 }
 
 func showNodeLogHandler(c *cli.Context) error {
@@ -887,7 +890,7 @@ func showRemoteAISHandler(c *cli.Context) error {
 		for _, ra := range all.A {
 			fmt.Fprintln(c.App.Writer)
 			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
-			err := smapFromNode(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
+			err := smapFromNode(ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
 			if err != nil {
 				actionWarn(c, err.Error())
 			}
@@ -961,7 +964,7 @@ func showMpathHandler(c *cli.Context) error {
 		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
 	})
 	usejs := flagIsSet(c, jsonFlag)
-	return tmpls.Print(mpls, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
+	return teb.Print(mpls, teb.TargetMpathListTmpl, teb.Jopts(usejs))
 }
 
 func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, units string) nvpairList {
@@ -969,7 +972,7 @@ func appendStatToProps(props nvpairList, name, kind string, value int64, prefix 
 	if regex != nil && !regex.MatchString(name) {
 		return props
 	}
-	printtedVal := tmpls.FmtStatValue(name, kind, value, units)
+	printtedVal := teb.FmtStatValue(name, kind, value, units)
 	return append(props, nvpair{Name: name, Value: printtedVal})
 }
 
@@ -1028,11 +1031,12 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 		return err
 	}
 	if flagIsSet(c, jsonFlag) {
+		opts := teb.Jopts(true)
 		if regex != nil {
 			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
 			actionWarn(c, warn)
 		}
-		return tmpls.Print(ds, c.App.Writer, tmpls.ConfigTmpl, nil, true)
+		return teb.Print(ds, teb.ConfigTmpl, opts)
 	}
 
 	var (
@@ -1052,7 +1056,7 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	})
 
 	if node.IsProxy() {
-		return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+		return teb.Print(props, teb.ConfigTmpl)
 	}
 
 	// target
@@ -1073,15 +1077,15 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 		if regex != nil && !regex.MatchString(prefix) {
 			continue
 		}
-		memUsedPrinted := tmpls.FmtStatValue("", stats.KindSize, int64(mstat.Used), units)
-		memAvailPrinted := tmpls.FmtStatValue("", stats.KindSize, int64(mstat.Avail), units)
+		memUsedPrinted := teb.FmtStatValue("", stats.KindSize, int64(mstat.Used), units)
+		memAvailPrinted := teb.FmtStatValue("", stats.KindSize, int64(mstat.Avail), units)
 		props = append(props,
 			nvpair{Name: prefix + "path", Value: mpath},
 			nvpair{Name: prefix + "used", Value: memUsedPrinted},
 			nvpair{Name: prefix + "avail", Value: memAvailPrinted},
 			nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
 	}
-	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return teb.Print(props, teb.ConfigTmpl)
 }
 
 func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
@@ -1101,7 +1105,7 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 			warn := "option " + qflprn(regexFlag) + " is only supported for tabular (non-JSON) output formatting"
 			actionWarn(c, warn)
 		}
-		return tmpls.Print(st, c.App.Writer, tmpls.TargetMpathListTmpl, nil, usejs)
+		return teb.Print(st, teb.TargetMpathListTmpl, teb.Jopts(usejs))
 	}
 
 	var (
@@ -1152,5 +1156,5 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 		return props[i].Name < props[j].Name
 	})
 
-	return tmpls.Print(props, c.App.Writer, tmpls.ConfigTmpl, nil, false)
+	return teb.Print(props, teb.ConfigTmpl)
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
@@ -40,7 +40,7 @@ func getBMD(c *cli.Context) error {
 		return err
 	}
 	if usejs {
-		return tmpls.Print(bmd, c.App.Writer, "", nil, usejs)
+		return teb.Print(bmd, "", teb.Jopts(usejs))
 	}
 
 	tw := &tabwriter.Writer{}
@@ -82,38 +82,38 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap sta
 	if errU != nil {
 		return errU
 	}
-	body := tmpls.StatusTemplateHelper{
+	body := teb.StatusTemplateHelper{
 		Smap:      smap,
 		CluConfig: cfg,
-		Status: tmpls.DaemonStatusTemplateHelper{
+		Status: teb.DaemonStatusTemplateHelper{
 			Pmap: pstatusMap,
 			Tmap: tstatusMap,
 		},
 	}
 	if res, proxyOK := pstatusMap[sid]; proxyOK {
-		table := tmpls.NewDaeStatus(res, smap, apc.Proxy, units)
+		table := teb.NewDaeStatus(res, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
-		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
+		return teb.Print(res, out, teb.Jopts(usejs))
 	} else if res, targetOK := tstatusMap[sid]; targetOK {
-		table := tmpls.NewDaeStatus(res, smap, apc.Target, units)
+		table := teb.NewDaeStatus(res, smap, apc.Target, units)
 		out := table.Template(hideHeader)
-		return tmpls.Print(res, c.App.Writer, out, nil, usejs)
+		return teb.Print(res, out, teb.Jopts(usejs))
 	} else if sid == apc.Proxy {
-		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
+		table := teb.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
-		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
+		return teb.Print(body, out, teb.Jopts(usejs))
 	} else if sid == apc.Target {
-		table := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
+		table := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 		out := table.Template(hideHeader)
-		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
+		return teb.Print(body, out, teb.Jopts(usejs))
 	} else if sid == "" {
-		tableP := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
-		tableT := tmpls.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
+		tableP := teb.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
+		tableT := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 
 		out := tableP.Template(false) + "\n"
 		out += tableT.Template(false) + "\n"
-		out += tmpls.ClusterSummary
-		return tmpls.Print(body, c.App.Writer, out, nil, usejs)
+		out += teb.ClusterSummary
+		return teb.Print(body, out, teb.Jopts(usejs))
 	}
 
 	return fmt.Errorf("expecting a valid NODE_ID or node type (\"proxy\" or \"target\"), got %q", sid)
@@ -142,9 +142,9 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 	}
 
 	if hideHeader {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatNoHdrTmpl, nil, usejs)
+		err = teb.Print(diskStats, teb.DiskStatNoHdrTmpl, teb.Jopts(usejs))
 	} else {
-		err = tmpls.Print(diskStats, c.App.Writer, tmpls.DiskStatsTmpl, nil, usejs)
+		err = teb.Print(diskStats, teb.DiskStatsTmpl, teb.Jopts(usejs))
 	}
 	return err
 }

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -138,7 +138,7 @@ func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
 // enum { unitsSI, ... }
 func parseUnitsFlag(c *cli.Context, flag cli.StringFlag) (units string, err error) {
 	units = parseStrFlag(c, flag)
-	if err = tmpls.ValidateUnits(units); err != nil {
+	if err = teb.ValidateUnits(units); err != nil {
 		err = fmt.Errorf("%s=%s is invalid: %v", flprn(flag), units, err)
 	}
 	return

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
-	"github.com/NVIDIA/aistore/cmd/cli/tmpls"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/urfave/cli"
 )
 
@@ -139,7 +139,7 @@ func resetAliasHandler(c *cli.Context) (err error) {
 	return
 }
 
-func showAliasHandler(c *cli.Context) (err error) {
+func showAliasHandler() (err error) {
 	aliases := make(nvpairList, 0, len(cfg.Aliases))
 	for k, v := range cfg.Aliases {
 		aliases = append(aliases, nvpair{Name: k, Value: v})
@@ -147,7 +147,7 @@ func showAliasHandler(c *cli.Context) (err error) {
 	sort.Slice(aliases, func(i, j int) bool {
 		return aliases[i].Name < aliases[j].Name
 	})
-	return tmpls.Print(aliases, c.App.Writer, tmpls.AliasTemplate, nil, false)
+	return teb.Print(aliases, teb.AliasTemplate)
 }
 
 func rmAliasHandler(c *cli.Context) (err error) {
