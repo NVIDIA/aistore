@@ -1,6 +1,6 @@
 import unittest
 from unittest import mock
-from unittest.mock import Mock
+from unittest.mock import Mock, call, patch
 
 from aistore.sdk.bucket import Bucket, Header
 from aistore.sdk.object_iterator import ObjectIterator
@@ -22,6 +22,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     ACT_ETL_BCK,
     QParamProvider,
+    HTTP_METHOD_PUT,
 )
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.request_client import RequestClient
@@ -370,6 +371,49 @@ class TestBucket(unittest.TestCase):
     def test_object(self):
         new_obj = self.ais_bck.object(obj_name="name")
         self.assertEqual(self.ais_bck, new_obj.bucket)
+
+    @patch("aistore.sdk.object.read_file_bytes")
+    @patch("aistore.sdk.object.validate_file")
+    @patch("aistore.sdk.bucket.validate_directory")
+    @patch("pathlib.Path.glob")
+    def test_put_files(
+        self, mock_glob, mock_validate_dir, mock_validate_file, mock_read
+    ):
+        path = "directory"
+        file_1_name = "file_1_name"
+        file_2_name = "file_2_name"
+        path_1 = Mock()
+        path_1.is_file.return_value = True
+        path_1.relative_to.return_value = file_1_name
+        path_2 = Mock()
+        path_2.relative_to.return_value = file_2_name
+        path_2.is_file.return_value = True
+        file_1_data = b"bytes in the first file"
+        file_2_data = b"bytes in the second file"
+        mock_glob.return_value = [path_1, path_2]
+        expected_obj_names = [file_1_name, file_2_name]
+        mock_read.side_effect = [file_1_data, file_2_data]
+
+        res = self.ais_bck.put_files(path)
+
+        mock_validate_dir.assert_called_with(path)
+        mock_validate_file.assert_has_calls([call(str(path_1)), call(str(path_2))])
+        self.assertEqual(expected_obj_names, res)
+        expected_calls = [
+            call(
+                HTTP_METHOD_PUT,
+                path=f"objects/{BCK_NAME}/{file_1_name}",
+                params=self.ais_bck_params,
+                data=file_1_data,
+            ),
+            call(
+                HTTP_METHOD_PUT,
+                path=f"objects/{BCK_NAME}/{file_2_name}",
+                params=self.ais_bck_params,
+                data=file_2_data,
+            ),
+        ]
+        self.mock_client.request.assert_has_calls(expected_calls)
 
 
 if __name__ == "__main__":

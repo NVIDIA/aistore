@@ -1,6 +1,5 @@
 import unittest
-from pathlib import Path
-from unittest.mock import Mock, patch, mock_open, call
+from unittest.mock import Mock, patch, mock_open
 
 from requests import Response
 from requests.structures import CaseInsensitiveDict
@@ -135,48 +134,6 @@ class TestObject(unittest.TestCase):
             params=self.expected_params,
             data=data,
         )
-
-    @patch("aistore.sdk.object.validate_directory")
-    @patch("aistore.sdk.object.read_file_bytes")
-    @patch("pathlib.Path.glob")
-    def test_put_files(self, mock_glob, mock_read, mock_validate_dir):
-        path = "directory"
-        file_1_name = "file_1_name"
-        file_2_name = "file_2_name"
-        path_1 = Mock()
-        path_1.is_file.return_value = True
-        path_1.relative_to.return_value = file_1_name
-        path_2 = Mock()
-        path_2.relative_to.return_value = file_2_name
-        path_2.is_file.return_value = True
-        file_1_data = b"bytes in the first file"
-        file_2_data = b"bytes in the second file"
-        mock_glob.return_value = [path_1, path_2]
-        expected_obj_names = [
-            f"{self.object.name}/{file_1_name}",
-            f"{self.object.name}/{file_2_name}",
-        ]
-        mock_read.side_effect = [file_1_data, file_2_data]
-
-        res = self.object.put_files(path)
-
-        mock_validate_dir.assert_called_with(path)
-        self.assertEqual(expected_obj_names, res)
-        expected_calls = [
-            call(
-                HTTP_METHOD_PUT,
-                path=str(Path(REQUEST_PATH).joinpath(file_1_name)),
-                params=self.expected_params,
-                data=file_1_data,
-            ),
-            call(
-                HTTP_METHOD_PUT,
-                path=str(Path(REQUEST_PATH).joinpath(file_2_name)),
-                params=self.expected_params,
-                data=file_2_data,
-            ),
-        ]
-        self.mock_client.request.assert_has_calls(expected_calls)
 
     def test_put_content(self):
         content = b"user-supplied-bytes"

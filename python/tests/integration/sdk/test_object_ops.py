@@ -32,7 +32,6 @@ class TestObjectOps(unittest.TestCase):
         self.client = Client(CLUSTER_ENDPOINT)
         self.bucket = self.client.bucket(self.bck_name)
         self.bucket.create()
-        cleanup_local(LOCAL_TEST_FILES)
 
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
@@ -94,82 +93,6 @@ class TestObjectOps(unittest.TestCase):
         inner_dir.mkdir()
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_file(inner_dir)
-
-    def test_put_files_invalid(self):
-        with self.assertRaises(ValueError):
-            self.bucket.object("any").put_files("non-existent-dir")
-        LOCAL_TEST_FILES.mkdir()
-        filename = LOCAL_TEST_FILES.joinpath("file_not_dir")
-        with open(filename, "w", encoding="utf-8"):
-            pass
-        with self.assertRaises(ValueError):
-            self.bucket.object("any").put_files(filename)
-
-    def test_put_files_default_args(self):
-        LOCAL_TEST_FILES.mkdir()
-        file_data = [b"test data to verify", b"data in second file"]
-        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
-        file_dir.mkdir()
-        expected_obj_data = {}
-        for index, data in enumerate(file_data):
-            filename = f"inner_file_{index}"
-            expected_obj_data[f"{OBJ_NAME}/{filename}"] = data
-            inner_filename = file_dir.joinpath(filename)
-            with open(inner_filename, "wb") as file:
-                file.write(data)
-        obj = self.bucket.object(OBJ_NAME)
-        obj.put_files(file_dir)
-        for obj_name, expected_data in expected_obj_data.items():
-            res = self.bucket.object(obj_name).get()
-            self.assertEqual(expected_data, res.read_all())
-
-    def test_put_files_recursive(self):
-        LOCAL_TEST_FILES.mkdir()
-        file_data = [b"test data to verify", b"data in second file"]
-        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
-        file_dir.mkdir()
-
-        top_filename = "top_level_file.txt"
-        top_file = file_dir.joinpath(top_filename)
-        inner_dir_name = "directory"
-        inner_dir = file_dir.joinpath(inner_dir_name)
-        lower_filename = "lower_level_file.txt"
-        lower_file = inner_dir.joinpath(lower_filename)
-        inner_dir.mkdir()
-
-        expected_obj_data = {
-            f"{OBJ_NAME}/{top_filename}": file_data[0],
-            f"{OBJ_NAME}/{inner_dir_name}/{lower_filename}": file_data[1],
-        }
-        with open(top_file, "wb") as file:
-            file.write(file_data[0])
-        with open(lower_file, "wb") as file:
-            file.write(file_data[1])
-
-        obj = self.bucket.object(OBJ_NAME)
-        obj.put_files("object-ops-test/test_put_files", recursive=True)
-
-        for obj_name, expected_data in expected_obj_data.items():
-            res = self.bucket.object(obj_name).get()
-            self.assertEqual(expected_data, res.read_all())
-
-    def test_put_files_filtered(self):
-        LOCAL_TEST_FILES.mkdir()
-        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
-        file_dir.mkdir()
-        included_filename = "prefix-file.txt"
-        excluded_by_pattern = "extra_top_file.py"
-        excluded_by_prefix = "non-prefix-file.txt"
-        for file in [included_filename, excluded_by_pattern, excluded_by_prefix]:
-            with open(Path(file_dir).joinpath(file), "wb"):
-                pass
-        obj = self.bucket.object(OBJ_NAME)
-        obj.put_files(file_dir, prefix="prefix-", pattern="*.txt")
-        self.bucket.object(f"{OBJ_NAME}/{included_filename}").get()
-        with self.assertRaises(AISError):
-            self.bucket.object(f"{OBJ_NAME}/{excluded_by_pattern}").get()
-        with self.assertRaises(AISError):
-            self.bucket.object(f"{OBJ_NAME}/{excluded_by_prefix}").get()
 
     def test_put_head_get(self):
         objects = self._put_objects(5)

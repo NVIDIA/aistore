@@ -3,6 +3,8 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
+
+from pathlib import Path
 from typing import Dict, List, NewType
 import requests
 
@@ -36,6 +38,7 @@ from aistore.sdk.types import (
     BucketList,
     Namespace,
 )
+from aistore.sdk.utils import validate_directory
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -423,6 +426,70 @@ class Bucket:
         return self.make_request(
             HTTP_METHOD_POST, ACT_ETL_BCK, value=value, params=params
         ).text
+
+    def put_files(
+        self,
+        path: str,
+        prefix_filter: str = "",
+        pattern: str = "*",
+        basename: bool = False,
+        obj_prefix: str = None,
+        recursive: bool = False,
+        dry_run: bool = False,
+        verbose: bool = True,
+    ) -> List[str]:
+        """
+        Puts files found in a given filepath as objects to a bucket in AIS storage.
+
+        Args:
+            path (str): Local filepath, can be relative or absolute
+            prefix_filter (str, optional): Required prefix in names of all files to put
+            pattern (str, optional): Regex pattern to filter files
+            basename (bool, optional): Whether to use the file names only as object names and omit the path information
+            obj_prefix (str, optional): Optional string to use as a prefix in the object name for all objects uploaded
+                No delimiter ("/", "-", etc.) is automatically applied between the obj_prefix and the object name
+            recursive (bool, optional): Whether to recurse through the provided path directories
+            dry_run (bool, optional): Option to only show expected behavior without an actual put operation
+            verbose (bool, optional): Whether to print upload info to standard output
+
+        Returns:
+            List of object names put to a bucket in AIS
+
+        Raises:
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.ReadTimeout: Timed out waiting response from AIStore
+            ValueError: The path provided is not a valid directory
+        """
+        validate_directory(path)
+        file_iterator = (
+            Path(path).rglob(pattern) if recursive else Path(path).glob(pattern)
+        )
+        obj_names = []
+        dry_run_prefix = "Dry-run enabled. Proposed action:" if dry_run else ""
+        for file in file_iterator:
+            if not file.is_file() or not str(file.name).startswith(prefix_filter):
+                continue
+            obj_name = self._get_uploaded_obj_name(file, path, basename, obj_prefix)
+            if not dry_run:
+                self.object(obj_name).put_file(str(file))
+            if verbose:
+                print(
+                    f"{dry_run_prefix} File {file} uploaded as object {obj_name} with size {file.stat().st_size}"
+                )
+            obj_names.append(obj_name)
+        print(
+            f"{dry_run_prefix} All files from {path} uploaded to bucket {self.provider}://{self.name}"
+        )
+        return obj_names
+
+    @staticmethod
+    def _get_uploaded_obj_name(file, root_path, basename, prefix):
+        obj_name = str(file.relative_to(root_path)) if not basename else file.name
+        if prefix:
+            return prefix + obj_name
+        return obj_name
 
     def object(self, obj_name: str):
         """
