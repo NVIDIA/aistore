@@ -736,7 +736,9 @@ func stopJobHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if daemonID != "" {
-		actionWarn(c, fmt.Sprintf("node ID %q will be ignored (waiting for a single target not supported)\n", daemonID))
+		warn := fmt.Sprintf("node ID %q will be ignored (stopping job on a given node not supported)\n",
+			daemonID)
+		actionWarn(c, warn)
 	}
 
 	regex := parseStrFlag(c, regexJobsFlag)

@@ -20,11 +20,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 	"golang.org/x/sync/errgroup"
 )
+
+type cluDiskStats struct {
+	tid   string
+	stats ios.AllDiskStats
+}
 
 // NOTE: target's metric names & kinds
 func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
@@ -111,14 +117,14 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out stats.DaemonStatusMap) {
 	mu.Unlock()
 }
 
-func getDiskStats(targets stats.DaemonStatusMap) ([]teb.DiskStatsTemplateHelper, error) {
+func getDiskStats(targets stats.DaemonStatusMap) ([]teb.DiskStatsHelper, error) {
 	var (
-		allStats = make([]teb.DiskStatsTemplateHelper, 0, len(targets))
+		allStats = make([]teb.DiskStatsHelper, 0, len(targets))
 		wg, _    = errgroup.WithContext(context.Background())
-		statsCh  = make(chan targetDiskStats, len(targets))
+		statsCh  = make(chan cluDiskStats, len(targets))
 	)
 
-	for targetID := range targets {
+	for tid := range targets {
 		wg.Go(func(targetID string) func() error {
 			return func() (err error) {
 				diskStats, err := api.GetTargetDiskStats(apiBP, targetID)
@@ -126,10 +132,10 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]teb.DiskStatsTemplateHelper,
 					return err
 				}
 
-				statsCh <- targetDiskStats{stats: diskStats, targetID: targetID}
+				statsCh <- cluDiskStats{stats: diskStats, tid: targetID}
 				return nil
 			}
-		}(targetID))
+		}(tid))
 	}
 
 	err := wg.Wait()
@@ -138,10 +144,13 @@ func getDiskStats(targets stats.DaemonStatusMap) ([]teb.DiskStatsTemplateHelper,
 		return nil, err
 	}
 	for diskStats := range statsCh {
-		targetID := diskStats.targetID
 		for diskName, diskStat := range diskStats.stats {
 			allStats = append(allStats,
-				teb.DiskStatsTemplateHelper{TargetID: targetID, DiskName: diskName, Stat: diskStat})
+				teb.DiskStatsHelper{
+					TargetID: diskStats.tid,
+					DiskName: diskName,
+					Stat:     diskStat,
+				})
 		}
 	}
 

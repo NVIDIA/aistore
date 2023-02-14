@@ -250,7 +250,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 		footer     lsbFooter
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		hideFooter = flagIsSet(c, noFooterFlag)
-		data       = make([]teb.ListBucketsTemplateHelper, 0, len(filtered))
+		data       = make([]teb.ListBucketsHelper, 0, len(filtered))
 	)
 	if !apc.IsFltPresent(fltPresence) {
 		bmd, err = api.GetBMD(apiBP)
@@ -284,7 +284,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 			props, _ = bmd.Get(cluster.CloneBck(&bck))
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
-		data = append(data, teb.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: &info})
+		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: &info})
 	}
 	if hideHeader {
 		teb.Print(data, teb.ListBucketsBodyNoSummary)
@@ -313,7 +313,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		footer      lsbFooter
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		hideFooter  = flagIsSet(c, noFooterFlag)
-		data        = make([]teb.ListBucketsTemplateHelper, 0, len(filtered))
+		data        = make([]teb.ListBucketsHelper, 0, len(filtered))
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -340,7 +340,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		if bck.IsHTTP() {
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
-		data = append(data, teb.ListBucketsTemplateHelper{Bck: bck, Props: props, Info: info})
+		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: info})
 	}
 
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}

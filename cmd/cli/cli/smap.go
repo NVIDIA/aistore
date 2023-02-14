@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/NVIDIA/aistore/api"
@@ -37,8 +38,14 @@ func getClusterMap(c *cli.Context) (*cluster.Smap, error) {
 	}
 	curSmap = smap
 	if smap.Primary.PubNet.URL != apiBP.URL {
-		actionWarn(c, fmt.Sprintf("changing %s from %q to %q",
-			env.AIS.Endpoint, smap.Primary.PubNet.URL, apiBP.URL))
+		if verboseWarnings() {
+			what := env.AIS.Endpoint
+			if os.Getenv(env.AIS.Endpoint) == "" {
+				what = "CLI config URL"
+			}
+			warn := fmt.Sprintf("changing %s from %q to %q", what, apiBP.URL, smap.Primary.PubNet.URL)
+			actionWarn(c, warn)
+		}
 		apiBP.URL = smap.Primary.PubNet.URL
 	}
 	return curSmap, nil
@@ -105,7 +112,7 @@ func smapFromNode(primarySmap *cluster.Smap, sid string, usejs bool) error {
 			}
 		}
 	}
-	body := teb.SmapTemplateHelper{
+	body := teb.SmapHelper{
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
 	}

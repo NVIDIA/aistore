@@ -77,13 +77,15 @@ const (
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Disk Stats
-	diskStatsHdr = "TARGET\t DISK\t READ\t WRITE\t UTIL %\n"
+	diskStatsHdr = "TARGET\t DISK\t READ\t READ(avg size)\t WRITE\t WRITE(avg size)\t UTIL %\n"
 
 	diskStatsBody = "{{ $value.TargetID }}\t " +
 		"{{ $value.DiskName }}\t " +
 		"{{ $stat := $value.Stat }}" +
 		"{{ FormatBytesSig $stat.RBps 2 }}/s\t " +
+		"{{ FormatBytesSig $stat.Ravg 2 }}\t " +
 		"{{ FormatBytesSig $stat.WBps 2 }}/s\t " +
+		"{{ FormatBytesSig $stat.Wavg 2 }}\t " +
 		"{{ $stat.Util }}%\n"
 
 	DiskStatNoHdrTmpl = "{{ range $key, $value := . }}" + diskStatsBody + "{{ end }}"
@@ -361,25 +363,25 @@ type (
 	forMarshaler interface {
 		forMarshal() any
 	}
-	DiskStatsTemplateHelper struct {
+	DiskStatsHelper struct {
 		TargetID string
 		DiskName string
 		Stat     ios.DiskStats
 	}
-	SmapTemplateHelper struct {
+	SmapHelper struct {
 		Smap         *cluster.Smap
 		ExtendedURLs bool
 	}
-	DaemonStatusTemplateHelper struct {
+	DaemonStatusHelper struct {
 		Pmap stats.DaemonStatusMap `json:"pmap"`
 		Tmap stats.DaemonStatusMap `json:"tmap"`
 	}
-	StatusTemplateHelper struct {
-		Smap      *cluster.Smap              `json:"smap"`
-		CluConfig *cmn.ClusterConfig         `json:"config"`
-		Status    DaemonStatusTemplateHelper `json:"status"`
+	StatusHelper struct {
+		Smap      *cluster.Smap      `json:"smap"`
+		CluConfig *cmn.ClusterConfig `json:"config"`
+		Status    DaemonStatusHelper `json:"status"`
 	}
-	ListBucketsTemplateHelper struct {
+	ListBucketsHelper struct {
 		Bck   cmn.Bck
 		Props *cmn.BucketProps
 		Info  *cmn.BsummResult
@@ -418,11 +420,11 @@ var (
 		"FormatXactState":   FmtXactStatus,
 		// for all stats.DaemonStatus structs in `h`: select specific field
 		// and make a slice, and then a string out of it
-		"OnlineStatus": func(h DaemonStatusTemplateHelper) string { return toString(h.onlineStatus()) },
-		"Deployments":  func(h DaemonStatusTemplateHelper) string { return toString(h.deployments()) },
-		"Versions":     func(h DaemonStatusTemplateHelper) string { return toString(h.versions()) },
-		"BuildTimes":   func(h DaemonStatusTemplateHelper) string { return toString(h.buildTimes()) },
-		"Rebalance":    func(h DaemonStatusTemplateHelper) string { return toString(h.rebalance()) },
+		"OnlineStatus": func(h DaemonStatusHelper) string { return toString(h.onlineStatus()) },
+		"Deployments":  func(h DaemonStatusHelper) string { return toString(h.deployments()) },
+		"Versions":     func(h DaemonStatusHelper) string { return toString(h.versions()) },
+		"BuildTimes":   func(h DaemonStatusHelper) string { return toString(h.buildTimes()) },
+		"Rebalance":    func(h DaemonStatusHelper) string { return toString(h.rebalance()) },
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
@@ -435,13 +437,13 @@ var (
 	}
 )
 
-////////////////////////
-// SmapTemplateHelper //
-////////////////////////
+////////////////
+// SmapHelper //
+////////////////
 
-var _ forMarshaler = SmapTemplateHelper{}
+var _ forMarshaler = SmapHelper{}
 
-func (sth SmapTemplateHelper) forMarshal() any {
+func (sth SmapHelper) forMarshal() any {
 	return sth.Smap
 }
 
@@ -467,21 +469,21 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 	return total
 }
 
-////////////////////////////////
-// DaemonStatusTemplateHelper //
-////////////////////////////////
+////////////////////////
+// DaemonStatusHelper //
+////////////////////////
 
 // for all stats.DaemonStatus structs: select specific field and append to the returned slice
 // (using the corresponding jtags here for no particular reason)
-func (h *DaemonStatusTemplateHelper) onlineStatus() []string { return h.toSlice("status") }
-func (h *DaemonStatusTemplateHelper) deployments() []string  { return h.toSlice("deployment") }
-func (h *DaemonStatusTemplateHelper) versions() []string     { return h.toSlice("ais_version") }
-func (h *DaemonStatusTemplateHelper) buildTimes() []string   { return h.toSlice("build_time") }
-func (h *DaemonStatusTemplateHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
-func (h *DaemonStatusTemplateHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
+func (h *DaemonStatusHelper) onlineStatus() []string { return h.toSlice("status") }
+func (h *DaemonStatusHelper) deployments() []string  { return h.toSlice("deployment") }
+func (h *DaemonStatusHelper) versions() []string     { return h.toSlice("ais_version") }
+func (h *DaemonStatusHelper) buildTimes() []string   { return h.toSlice("build_time") }
+func (h *DaemonStatusHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
+func (h *DaemonStatusHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
 
 // internal helper for the methods above
-func (h *DaemonStatusTemplateHelper) toSlice(jtag string) []string {
+func (h *DaemonStatusHelper) toSlice(jtag string) []string {
 	set := cos.NewStrSet()
 	for _, m := range []stats.DaemonStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {

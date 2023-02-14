@@ -1034,6 +1034,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 	}
 }
 
+// TODO -- FIXME: usable table instead of "ConfigTmpl = "PROPERTY\t VALUE\n"
 func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
 	ds, err := api.GetDaemonStats(apiBP, node)
 	if err != nil {
@@ -1101,6 +1102,7 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	return teb.Print(props, teb.ConfigTmpl)
 }
 
+// TODO -- FIXME: usable table instead of "ConfigTmpl = "PROPERTY\t VALUE\n"
 func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
 	st, err := api.GetClusterStats(apiBP)
 	if err != nil {

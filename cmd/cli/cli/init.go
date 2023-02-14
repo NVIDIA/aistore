@@ -6,13 +6,17 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/authn"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/urfave/cli"
 )
 
@@ -33,7 +37,7 @@ func Init() (err error) {
 func initClusterParams() {
 	loggedUserToken = authn.LoadToken("")
 
-	clusterURL = determineClusterURL(cfg)
+	clusterURL = _clusterURL(cfg)
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
@@ -63,6 +67,44 @@ func initClusterParams() {
 		Token:  loggedUserToken,
 		UA:     ua,
 	}
+}
+
+// resolving order:
+// 1. cfg.Cluster.URL; if empty:
+// 2. Proxy docker container IP address; if not successful:
+// 3. Docker default; if not present:
+// 4. Default as cfg.Cluster.DefaultAISHost
+func _clusterURL(cfg *config.Config) string {
+	if envURL := os.Getenv(env.AIS.Endpoint); envURL != "" {
+		return envURL
+	}
+	if cfg.Cluster.URL != "" {
+		return cfg.Cluster.URL
+	}
+
+	if docker.IsRunning() {
+		clustersIDs, err := docker.ClusterIDs()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
+			return cfg.Cluster.DefaultDockerHost
+		}
+
+		debug.Assert(len(clustersIDs) > 0, "There should be at least one cluster running, when docker running detected.")
+
+		proxyGateway, err := docker.ClusterEndpoint(clustersIDs[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, dockerErrMsgFmt, err, cfg.Cluster.DefaultDockerHost)
+			return cfg.Cluster.DefaultDockerHost
+		}
+
+		if len(clustersIDs) > 1 {
+			fmt.Fprintf(os.Stderr, "Multiple docker clusters running. Connected to %d via %s.\n", clustersIDs[0], proxyGateway)
+		}
+
+		return "http://" + proxyGateway + ":8080"
+	}
+
+	return cfg.Cluster.DefaultAISHost
 }
 
 func detectK8s() bool {

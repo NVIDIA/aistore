@@ -16,21 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
-)
-
-type (
-	targetDiskStats struct {
-		targetID string
-		stats    ios.AllDiskStats
-	}
-
-	targetRebSnap struct {
-		tid  string
-		snap *cluster.Snap
-	}
 )
 
 func getBMD(c *cli.Context) error {
@@ -82,10 +69,10 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap sta
 	if errU != nil {
 		return errU
 	}
-	body := teb.StatusTemplateHelper{
+	body := teb.StatusHelper{
 		Smap:      smap,
 		CluConfig: cfg,
-		Status: teb.DaemonStatusTemplateHelper{
+		Status: teb.DaemonStatusHelper{
 			Pmap: pstatusMap,
 			Tmap: tstatusMap,
 		},

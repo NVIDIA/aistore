@@ -30,7 +30,7 @@ const (
 	cliDescr = `If <TAB-TAB> completion doesn't work:
    * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
    * and run 'install.sh'.
-   To install CLI directly from GitHub, use ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
+   To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
 )
 
 const (
@@ -226,10 +226,6 @@ func (a *acli) init(version string) {
 	app.ErrWriter = a.errWriter
 	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
 	app.Description = cliDescr
-	cli.VersionFlag = cli.BoolFlag{
-		Name:  "version, V",
-		Usage: "print only the version",
-	}
 
 	a.setupCommands()
 }

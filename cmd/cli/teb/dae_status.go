@@ -41,7 +41,7 @@ func NewDaeStatus(st *stats.DaemonStatus, smap *cluster.Smap, daeType, units str
 	}
 }
 
-func NewDaeMapStatus(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, daeType, units string) *Table {
+func NewDaeMapStatus(ds *DaemonStatusHelper, smap *cluster.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
 		return newTableProxies(ds.Pmap, smap, units)
@@ -56,7 +56,7 @@ func NewDaeMapStatus(ds *DaemonStatusTemplateHelper, smap *cluster.Smap, daeType
 // proxy(ies)
 func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
-		h        = DaemonStatusTemplateHelper{Pmap: ps}
+		h        = DaemonStatusHelper{Pmap: ps}
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
@@ -124,7 +124,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string)
 // target(s)
 func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
-		h        = DaemonStatusTemplateHelper{Tmap: ts}
+		h        = DaemonStatusHelper{Tmap: ts}
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()

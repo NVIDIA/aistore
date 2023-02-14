@@ -28,9 +28,7 @@ type (
 		FillDiskStats(m AllDiskStats)
 	}
 
-	FsDisks      map[string]int64 // disk name => sector size
-	DiskStats    struct{ RBps, Ravg, WBps, Wavg, Util int64 }
-	AllDiskStats map[string]DiskStats
+	FsDisks map[string]int64 // disk name => sector size
 
 	MpathUtil sync.Map
 
