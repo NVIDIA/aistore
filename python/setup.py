@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 from pathlib import Path
 
@@ -13,7 +12,7 @@ ROOT_DIR = Path(__file__).parent.resolve()
 
 
 def _get_version() -> str:
-    init_file = os.path.join(ROOT_DIR, "aistore", "__init__.py")
+    init_file = ROOT_DIR.joinpath("aistore").joinpath("__init__.py")
     with open(init_file, encoding="UTF-8") as file:
         for line in file.read().splitlines():
             if line.startswith("__version__"):
@@ -38,7 +37,7 @@ if sys.version_info < (REQUIRED_MAJOR, REQUIRED_MINOR):
     sys.exit(error)
 
 # Read in README.md for our long_description
-with open(os.path.join(ROOT_DIR, "README.md"), encoding="utf-8") as f:
+with open(ROOT_DIR.joinpath("README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(

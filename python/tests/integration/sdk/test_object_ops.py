@@ -1,9 +1,9 @@
 #
 # Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
-import os
 import random
 import unittest
+from pathlib import Path
 
 from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH
 from aistore.sdk.errors import AISError, ErrBckNotFound
@@ -21,7 +21,7 @@ from tests.integration import CLUSTER_ENDPOINT
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
 OBJ_NAME = "test-object"
-LOCAL_TEST_FILES = os.path.join(os.getcwd(), "object-ops-test")
+LOCAL_TEST_FILES = Path().absolute().joinpath("object-ops-test")
 
 
 # pylint: disable=unused-variable
@@ -76,9 +76,9 @@ class TestObjectOps(unittest.TestCase):
         self.assertEqual(content, res.read_all())
 
     def test_put_file(self):
-        os.mkdir(LOCAL_TEST_FILES)
+        LOCAL_TEST_FILES.mkdir()
         content = b"content for the object"
-        filename = os.path.join(LOCAL_TEST_FILES, "test_file")
+        filename = LOCAL_TEST_FILES.joinpath("test_file")
         with open(filename, "wb") as writer:
             writer.write(content)
         obj = self.bucket.object(OBJ_NAME)
@@ -89,32 +89,32 @@ class TestObjectOps(unittest.TestCase):
     def test_put_file_invalid(self):
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_file("non-existent-file")
-        os.mkdir(LOCAL_TEST_FILES)
-        inner_dir = os.path.join(LOCAL_TEST_FILES, "inner_dir_not_file")
-        os.mkdir(inner_dir)
+        LOCAL_TEST_FILES.mkdir()
+        inner_dir = LOCAL_TEST_FILES.joinpath("inner_dir_not_file")
+        inner_dir.mkdir()
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_file(inner_dir)
 
     def test_put_files_invalid(self):
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_files("non-existent-dir")
-        os.mkdir(LOCAL_TEST_FILES)
-        filename = os.path.join(LOCAL_TEST_FILES, "file_not_dir")
+        LOCAL_TEST_FILES.mkdir()
+        filename = LOCAL_TEST_FILES.joinpath("file_not_dir")
         with open(filename, "w", encoding="utf-8"):
             pass
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_files(filename)
 
     def test_put_files_default_args(self):
-        os.mkdir(LOCAL_TEST_FILES)
+        LOCAL_TEST_FILES.mkdir()
         file_data = [b"test data to verify", b"data in second file"]
-        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
-        os.mkdir(file_dir)
+        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
+        file_dir.mkdir()
         expected_obj_data = {}
         for index, data in enumerate(file_data):
             filename = f"inner_file_{index}"
             expected_obj_data[f"{OBJ_NAME}/{filename}"] = data
-            inner_filename = os.path.join(file_dir, filename)
+            inner_filename = file_dir.joinpath(filename)
             with open(inner_filename, "wb") as file:
                 file.write(data)
         obj = self.bucket.object(OBJ_NAME)
@@ -124,18 +124,18 @@ class TestObjectOps(unittest.TestCase):
             self.assertEqual(expected_data, res.read_all())
 
     def test_put_files_recursive(self):
-        os.mkdir(LOCAL_TEST_FILES)
+        LOCAL_TEST_FILES.mkdir()
         file_data = [b"test data to verify", b"data in second file"]
-        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
-        os.mkdir(file_dir)
+        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
+        file_dir.mkdir()
 
         top_filename = "top_level_file.txt"
-        top_file = os.path.join(file_dir, top_filename)
+        top_file = file_dir.joinpath(top_filename)
         inner_dir_name = "directory"
-        inner_dir = os.path.join(file_dir, inner_dir_name)
+        inner_dir = file_dir.joinpath(inner_dir_name)
         lower_filename = "lower_level_file.txt"
-        lower_file = os.path.join(inner_dir, lower_filename)
-        os.mkdir(inner_dir)
+        lower_file = inner_dir.joinpath(lower_filename)
+        inner_dir.mkdir()
 
         expected_obj_data = {
             f"{OBJ_NAME}/{top_filename}": file_data[0],
@@ -147,21 +147,21 @@ class TestObjectOps(unittest.TestCase):
             file.write(file_data[1])
 
         obj = self.bucket.object(OBJ_NAME)
-        obj.put_files(file_dir, recursive=True)
+        obj.put_files("object-ops-test/test_put_files", recursive=True)
 
         for obj_name, expected_data in expected_obj_data.items():
             res = self.bucket.object(obj_name).get()
             self.assertEqual(expected_data, res.read_all())
 
     def test_put_files_filtered(self):
-        os.mkdir(LOCAL_TEST_FILES)
-        file_dir = os.path.join(LOCAL_TEST_FILES, "test_put_files")
-        os.mkdir(file_dir)
+        LOCAL_TEST_FILES.mkdir()
+        file_dir = LOCAL_TEST_FILES.joinpath("test_put_files")
+        file_dir.mkdir()
         included_filename = "prefix-file.txt"
         excluded_by_pattern = "extra_top_file.py"
         excluded_by_prefix = "non-prefix-file.txt"
         for file in [included_filename, excluded_by_pattern, excluded_by_prefix]:
-            with open(os.path.join(file_dir, file), "wb"):
+            with open(Path(file_dir).joinpath(file), "wb"):
                 pass
         obj = self.bucket.object(OBJ_NAME)
         obj.put_files(file_dir, prefix="prefix-", pattern="*.txt")
@@ -181,8 +181,8 @@ class TestObjectOps(unittest.TestCase):
                 self._test_get_obj(option, obj_name, content)
 
     def test_get_with_writer(self):
-        os.mkdir(LOCAL_TEST_FILES)
-        filename = os.path.join(LOCAL_TEST_FILES, "test_get_with_writer.txt")
+        LOCAL_TEST_FILES.mkdir()
+        filename = LOCAL_TEST_FILES.joinpath("test_get_with_writer.txt")
         objects = self._put_objects(10)
         all_content = b""
         for obj_name, content in objects.items():
@@ -194,7 +194,7 @@ class TestObjectOps(unittest.TestCase):
         with open(filename, "rb") as reader:
             output = reader.read()
             self.assertEqual(all_content, output)
-        os.remove(filename)
+        filename.unlink()
 
     @unittest.skipIf(
         "localhost" not in CLUSTER_ENDPOINT and "127.0.0.1" not in CLUSTER_ENDPOINT,
@@ -202,30 +202,26 @@ class TestObjectOps(unittest.TestCase):
     )
     # pylint: disable=too-many-locals
     def test_promote(self):
-        os.mkdir(LOCAL_TEST_FILES)
-        top_folder = os.path.join(LOCAL_TEST_FILES, "promote_folder")
+        LOCAL_TEST_FILES.mkdir()
+        top_folder = LOCAL_TEST_FILES.joinpath("promote_folder")
         top_item = "test_file_top"
         top_item_contents = "contents in the test file"
         inner_folder = "inner_folder"
         inner_item = "test_file_inner"
         inner_item_contents = "contents of the file in the inner folder"
         # Create a folder in the current directory
-        local_files_path = os.path.join(os.getcwd(), top_folder)
-        os.mkdir(local_files_path)
-        with open(
-            os.path.join(local_files_path, top_item), "w", encoding="utf-8"
-        ) as file:
+        local_files_path = Path().absolute().joinpath(top_folder)
+        local_files_path.mkdir()
+        with open(local_files_path.joinpath(top_item), "w", encoding="utf-8") as file:
             file.write(top_item_contents)
-        inner_folder = os.path.join(local_files_path, inner_folder)
-        os.mkdir(inner_folder)
-        with open(
-            os.path.join(inner_folder, inner_item), "w", encoding="utf-8"
-        ) as file:
+        inner_folder = local_files_path.joinpath(inner_folder)
+        inner_folder.mkdir()
+        with open(inner_folder.joinpath(inner_item), "w", encoding="utf-8") as file:
             file.write(inner_item_contents)
 
         # Promote to AIS bucket
         obj_name = "promoted_obj"
-        self.bucket.object(obj_name).promote(local_files_path)
+        self.bucket.object(obj_name).promote(str(local_files_path))
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
         top_object = self.bucket.object(obj_name + "/" + top_item).get()
@@ -233,16 +229,14 @@ class TestObjectOps(unittest.TestCase):
 
         # Update local top item contents
         top_item_updated_contents = "new content in top file overwritten"
-        with open(
-            os.path.join(local_files_path, top_item), "w", encoding="utf-8"
-        ) as file:
+        with open(local_files_path.joinpath(top_item), "w", encoding="utf-8") as file:
             file.write(top_item_updated_contents)
 
         # Promote with recursion, delete source, overwrite destination
         options = PromoteOptions(
             recursive=True, delete_source=True, overwrite_dest=True
         )
-        self.bucket.object(obj_name).promote(local_files_path, options)
+        self.bucket.object(obj_name).promote(str(local_files_path), options)
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
         expected_top_obj = obj_name + "/" + top_item
@@ -253,11 +247,11 @@ class TestObjectOps(unittest.TestCase):
         # Check source deleted
         top_level_files = [
             f
-            for f in os.listdir(top_folder)
-            if os.path.isfile(os.path.join(top_folder, f))
+            for f in Path(top_folder).glob("*")
+            if Path(top_folder).joinpath(f).is_file()
         ]
         self.assertEqual(0, len(top_level_files))
-        self.assertEqual(0, len(os.listdir(inner_folder)))
+        self.assertEqual(0, len(list(inner_folder.glob("*"))))
 
     def test_list_object_page(self):
         bucket_size = 110

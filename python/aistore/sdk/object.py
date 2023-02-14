@@ -119,7 +119,7 @@ class Object:
             writer.writelines(obj_stream)
         return obj_stream
 
-    def put_content(self, content: bytes):
+    def put_content(self, content: bytes) -> Header:
         """
         Puts bytes as an object to a bucket in AIS storage.
 
