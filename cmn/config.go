@@ -404,7 +404,7 @@ type (
 		ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
 		UseHTTPS        bool   `json:"use_https"`         // use HTTPS instead of HTTP
 		SkipVerify      bool   `json:"skip_verify"`       // skip HTTPS cert verification (used with self-signed certs)
-		Chunked         bool   `json:"chunked_transfer"`  // https://tools.ietf.org/html/rfc7230#page-36
+		Chunked         bool   `json:"chunked_transfer"`  // NOTE: not used Feb 2023
 	}
 	HTTPConfToUpdate struct {
 		Certificate     *string `json:"server_crt,omitempty"`
@@ -413,7 +413,7 @@ type (
 		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
 		UseHTTPS        *bool   `json:"use_https,omitempty"`
 		SkipVerify      *bool   `json:"skip_verify,omitempty"`
-		Chunked         *bool   `json:"chunked_transfer,omitempty"`
+		Chunked         *bool   `json:"chunked_transfer,omitempty"` // https://tools.ietf.org/html/rfc7230#page-36
 	}
 
 	FSHCConf struct {

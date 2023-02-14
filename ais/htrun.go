@@ -44,7 +44,6 @@ const ciePrefix = "cluster integrity error cie#"
 
 type htrun struct {
 	si        *cluster.Snode
-	logger    *log.Logger
 	keepalive keepaliver
 	statsT    stats.Tracker
 	netServ   struct {
@@ -67,15 +66,15 @@ type htrun struct {
 		cluster atomic.Int64 // mono.NanoTime() since cluster startup, zero prior to that
 		node    atomic.Int64 // ditto - for the node
 	}
-	gmm                 *memsys.MMSA // system pagesize-based memory manager and slab allocator
-	smm                 *memsys.MMSA // system MMSA for small-size allocations
-	electable           electable
-	inPrimaryTransition atomic.Bool
+	gmm *memsys.MMSA // system pagesize-based memory manager and slab allocator
+	smm *memsys.MMSA // system MMSA for small-size allocations
 }
 
 ///////////
 // htrun //
 ///////////
+
+func (*htrun) proxyElection(*VoteRecord) { debug.Assert(false) } // proxy-only
 
 func (h *htrun) DataClient() *http.Client { return h.client.data }
 
@@ -463,7 +462,7 @@ func (h *htrun) run() error {
 
 	// A wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
-	h.logger = log.New(&glogWriter{}, "net/http err: ", 0)
+	logger := log.New(&glogWriter{}, "net/http err: ", 0)
 	if config.HostNet.UseIntraControl || config.HostNet.UseIntraData {
 		var errCh chan error
 		if config.HostNet.UseIntraControl && config.HostNet.UseIntraData {
@@ -474,24 +473,24 @@ func (h *htrun) run() error {
 		if config.HostNet.UseIntraControl {
 			go func() {
 				addr := h.si.ControlNet.TCPEndpoint()
-				errCh <- h.netServ.control.listenAndServe(addr, h.logger)
+				errCh <- h.netServ.control.listenAndServe(addr, logger)
 			}()
 		}
 		if config.HostNet.UseIntraData {
 			go func() {
 				addr := h.si.DataNet.TCPEndpoint()
-				errCh <- h.netServ.data.listenAndServe(addr, h.logger)
+				errCh <- h.netServ.data.listenAndServe(addr, logger)
 			}()
 		}
 		go func() {
 			addr := h.pubListeningAddr(config)
-			errCh <- h.netServ.pub.listenAndServe(addr, h.logger)
+			errCh <- h.netServ.pub.listenAndServe(addr, logger)
 		}()
 		return <-errCh
 	}
 
 	addr := h.pubListeningAddr(config)
-	return h.netServ.pub.listenAndServe(addr, h.logger)
+	return h.netServ.pub.listenAndServe(addr, logger)
 }
 
 // testing environment excluding Kubernetes: listen on `host:port`

@@ -643,7 +643,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			mime:     dpq.archmime, // query.Get(apc.QparamArchmime)
 		}
 		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(apc.QparamIsGFNRequest)
-		goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked
+		// goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked NOTE: disabled - no need
 	}
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)

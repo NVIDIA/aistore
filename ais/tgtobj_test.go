@@ -239,11 +239,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			w := io.Discard
-			if !bench.chunked {
-				w = newDiscardRW()
-			}
-
+			w := newDiscardRW()
 			goi := &getObjInfo{
 				atime:   time.Now().UnixNano(),
 				t:       t,

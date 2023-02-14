@@ -176,10 +176,6 @@ type (
 		checkAll   bool
 	}
 
-	electable interface {
-		proxyElection(vr *VoteRecord)
-	}
-
 	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
 	aisMsg struct {
 		apc.ActMsg

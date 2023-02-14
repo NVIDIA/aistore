@@ -59,6 +59,10 @@ type (
 		daemonID string
 		err      error
 	}
+
+	electable interface {
+		proxyElection(vr *VoteRecord)
+	}
 )
 
 func voteInProgress() (xele cluster.Xact) {
@@ -68,9 +72,9 @@ func voteInProgress() (xele cluster.Xact) {
 	return
 }
 
-///////////////////
-// voting: proxy //
-///////////////////
+//
+// voting: proxy
+//
 
 // [METHOD] /v1/vote
 func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
@@ -343,9 +347,9 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
 	return errors
 }
 
-////////////////////
-// voting: target //
-////////////////////
+//
+// voting: target
+//
 
 // [METHOD] /v1/vote
 func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
@@ -367,9 +371,9 @@ func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-////////////////////////////
-// voting: common methods //
-////////////////////////////
+//
+// voting: common methods
+//
 
 func (h *htrun) onPrimaryFail() {
 	smap := h.owner.smap.get()
@@ -392,7 +396,7 @@ func (h *htrun) onPrimaryFail() {
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
-			cos.Assert(h.si.IsProxy())
+			debug.Assert(h.si.IsProxy())
 			glog.Infof("%s: starting election (candidate = self)", h.si)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
@@ -401,7 +405,7 @@ func (h *htrun) onPrimaryFail() {
 				Initiator: h.si.ID(),
 			}
 			vr.Smap = clone
-			h.electable.proxyElection(vr)
+			h.proxyElection(vr)
 			return
 		}
 

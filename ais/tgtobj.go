@@ -62,7 +62,7 @@ type (
 	}
 
 	getObjInfo struct {
-		w   io.Writer       // not necessarily http.ResponseWriter
+		w   http.ResponseWriter
 		ctx context.Context // context used when getting object from remote backend (access creds)
 
 		t   *target
@@ -830,11 +830,8 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 	defer func() {
 		cos.Close(lmfh)
 	}()
-	if resp, ok := goi.w.(http.ResponseWriter); ok {
-		hdr = resp.Header()
-	} else {
-		hdr = make(http.Header, 8) // (discard)
-	}
+
+	hdr = goi.w.Header()
 	if goi.ranges.Range != "" {
 		rsize := goi.lom.SizeBytes()
 		if goi.ranges.Size > 0 {
@@ -924,10 +921,9 @@ func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, rrange *
 }
 
 func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) error {
-	w := goi.w
-	if goi.chunked {
-		w = cos.WriterOnly{Writer: goi.w} // hide `ReadFrom` of the `http.ResponseWriter` (in re: sendfile)
-	}
+	// NOTE: hide `ReadFrom` of the `http.ResponseWriter`
+	// (in re: sendfile; see also cos.WriterOnly comment)
+	w := cos.WriterOnly{Writer: io.Writer(goi.w)}
 	written, err := io.CopyBuffer(w, r, buf)
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {

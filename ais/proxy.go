@@ -84,6 +84,7 @@ type (
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
+		inPrimaryTransition atomic.Bool
 	}
 )
 
@@ -166,7 +167,6 @@ func readProxyID(config *cmn.Config) (id string) {
 func (p *proxy) Run() error {
 	config := cmn.GCO.Get()
 	p.htrun.init(config)
-	p.htrun.electable = p
 	p.owner.bmd = newBMDOwnerPrx(config)
 	p.owner.etl = newEtlMDOwnerPrx(config)
 
