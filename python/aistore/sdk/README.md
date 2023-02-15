@@ -45,98 +45,8 @@ from aistore.sdk import Client
 client = Client("http://localhost:8080")
 ```
 
-The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. Here are a few ways to do so:
-
-```python
-# Check if AIS is deployed and running
-client.cluster().is_aistore_running()
-```
-
-```python
-# Get cluster information
-client.cluster().get_info()
-```
-
-```python
-# Create a bucket named "my-ais-bucket"
-client.bucket("my-ais-bucket").create()
-```
-
-```python
-# Delete bucket named "my-ais-bucket"
-client.bucket("my-ais-bucket").delete()
-```
-
-```python
-# Head bucket
-client.bucket("my-ais-bucket").head()
-```
-
-```python
-# Head object
-client.bucket("my-ais-bucket").object("my-object").head()
-```
-
-```python
-# Put Object
-client.bucket("my-ais-bucket").object("my-new-object").put("path-to-object")
-```
-
-```python
-# Get Object
-client.bucket("my-ais-bucket").object("my-new-object").get()
-```
-
-```python
-# Get Object with user-defined writer. This will stream the response into the provided writer
-with open("filename.txt", "wb") as file_writer:
-    client.bucket("my-ais-bucket").object("my-new-object").get(writer=file_writer)
-```
-
-> If you are using AIS buckets, you can simply omit the provider argument (defaults to ProviderAIS) when instantiating a bucket object (`client.bucket("my-ais-bucket").create()` is equivalent to `client.bucket("my-ais-bucket", provider="ais").create()`).
-
-**Working with multiple objects**
-
-AIS supports multi-object operations on groups of objects. An `ObjectGroup` can be created with one of:
-* a list of object names
-* an [ObjectRange](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object_range.py)
-* a string template.
-
-
-```python
-# Create Object Group by list of names
-my_objects = client.bucket("my-ais-bucket").objects(obj_names=["my-obj-1", "my-obj-2", "my-obj-3"])
-```
-
-```python
-# Create Object Group by ObjectRange
-my_object_range = ObjectRange(prefix="my-obj", min_index="1", max_index="3")
-my_objects = client.bucket("my-ais-bucket").objects(obj_range=my_object_range)
-```
-
-String templates can be passed directly to AIS following the [syntax described here](https://github.com/NVIDIA/aistore/blob/master/docs/batch.md#operations-on-multiple-selected-objects)
-```python
-# Create Object Group by Template String
-my_object_template = "my-obj-{1..3}"
-my_objects = client.bucket("my-ais-bucket").objects(obj_template=my_object_template)
-# More advanced template example with multiple ranges and defined steps
-complex_range = "my-obj-{0..10..2}-details-{1..9..2}-.file-extension"
-```
-
-```python
-# Delete Multiple Objects
-my_objects.delete()
-```
-
-```python
-# Evict Multiple Objects
-my_objects.evict()
-```
-
-```python
-# Prefetch Multiple Objects
-my_objects.prefetch()
-```
+The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
+See the [examples](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/sdk) and the [reference docs](https://aiatscale.org/docs/python-sdk) for more details
 
 **External Cloud Storage Buckets**
 
@@ -277,14 +187,9 @@ client.etl().delete(etl_name="etl-spec")
 
 ```
 
-Deleting an ETL deletes all pods created by Kuberenetes for the ETL as well as any specifications for the ETL on Kubernetes. Consequently, deleted ETLs cannot be started again and will need to be re-initialized.
+Deleting an ETL deletes all pods created by Kubernetes for the ETL as well as any specifications for the ETL on Kubernetes. Consequently, deleted ETLs cannot be started again and will need to be re-initialized.
 
 > For an interactive demo, refer [here](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/sdk/sdk-etl-tutorial.ipynb).
-
-### More Examples
-
-For more in-depth examples, please see [AIStore Python SDK Examples Directory](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/).
-
 
 ### API Documentation
 

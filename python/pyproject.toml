@@ -4,7 +4,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["aistore"]
-exclude = ["aistore/examples"]
 
 [tool.hatch.build.targets.sdist.force-include]
 "../LICENSE" = "LICENSE"

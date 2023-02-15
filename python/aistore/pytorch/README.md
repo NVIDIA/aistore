@@ -76,7 +76,7 @@ Iterable Datapipe that loads files from the AIS backends with the given list of 
 **Note:** 
 1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
 2) Input *must* be a list and direct URLs are not supported.
-3) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/python/aistore/sdk).
+3) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk).
 
 ### Example
 ```
@@ -88,3 +88,5 @@ list_of_files = AISFileListerIterDataPipe(url='http://ais-gateway-url:8080', sou
 
 files = AISFileLoaderIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=list_of_files) 
 ```
+
+For a more in-depth example, see [here](https://github.com/NVIDIA/aistore/blob/master/python/examples/aisio_pytorch_example.ipynb)
