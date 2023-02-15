@@ -194,7 +194,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		//
 		// FIXME: check capacity *prior* to starting
 		//
-		if cs := fs.GetCapStatus(); cs.Err != nil {
+		if cs := fs.Cap(); cs.Err != nil {
 			phaseInfo.adjuster.releaseSema(lom.Mountpath())
 			return cs.Err
 		}
@@ -344,7 +344,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	defer m.dsorter.postShardCreation(lom.Mountpath())
 
 	// TODO: check capacity *prior* to starting
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		return cs.Err
 	}
 

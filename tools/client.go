@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"path"
 	"sync"
 	"testing"
@@ -620,21 +619,6 @@ func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
 		return 0
 	}
 	return v.Value
-}
-
-// FIXME: obsolete - remove and reimpl. the test that calls it
-func GetDaemonStats(t *testing.T, u string) (stats map[string]any) {
-	bp := BaseAPIParams(u)
-	bp.Method = http.MethodGet
-	reqParams := &api.ReqParams{
-		BaseParams: bp,
-		Path:       apc.URLPathDae.S,
-		Query:      url.Values{apc.QparamWhat: {apc.GetWhatStats}},
-	}
-	status, err := reqParams.DoReqAny(&stats)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, status == http.StatusOK, "expecting status 200, got %d", status)
-	return
 }
 
 func GetDaemonConfig(t *testing.T, node *cluster.Snode) *cmn.Config {

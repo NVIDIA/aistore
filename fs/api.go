@@ -10,5 +10,18 @@ type (
 		Avail   uint64 `json:"avail,string"` // ditto
 		PctUsed int32  `json:"pct_used"`     // %% used (redundant ok)
 	}
-	MPCap map[string]Capacity // [mpath => Capacity]
+	// Capacity, Disks, Filesystem (CDF)
+	// (not to be confused with Cumulative Distribution Function)
+	CDF struct {
+		Capacity
+		Disks []string `json:"disks"` // owned disks (ios.FsDisks map => slice)
+		FS    string   `json:"fs"`    // cos.Fs + cos.FsID
+	}
+	// Target (cumulative) CDF
+	TargetCDF struct {
+		Mountpaths map[string]*CDF // mpath => [Capacity, Disks, FS (CDF)]
+		PctMax     int32           `json:"pct_max"` // max used (%)
+		PctAvg     int32           `json:"pct_avg"` // avg used (%)
+		CsErr      string          `json:"cs_err"`  // OOS or high-wm error message
+	}
 )

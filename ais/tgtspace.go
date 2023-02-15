@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -27,7 +27,7 @@ func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	if csRefreshed != nil {
 		cs = *csRefreshed
 	} else {
-		cs, err = fs.RefreshCapStatus(nil, nil)
+		cs, err = fs.CapRefresh(nil, nil)
 		if err != nil {
 			glog.Errorf("%s: %v", t, err)
 			return

@@ -157,7 +157,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		go j.run(providers)
 	}
 
-	parent.cs.a = fs.GetCapStatus()
+	parent.cs.a = fs.Cap()
 	if parent.cs.a.Err != nil {
 		glog.Warningf("%s started, %s", xcln, parent.cs.a.String())
 	} else {
@@ -173,7 +173,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		j.stop()
 	}
 	xcln.Finish(nil)
-	parent.cs.c, _ = fs.RefreshCapStatus(nil, nil)
+	parent.cs.c, _ = fs.CapRefresh(nil, nil)
 	if parent.cs.c.Err != nil {
 		glog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
 	} else {
@@ -300,7 +300,7 @@ func (j *clnJ) removeDeleted() (err error) {
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
 		return
 	}
-	j.p.cs.b, errCap = fs.RefreshCapStatus(nil, nil)
+	j.p.cs.b, errCap = fs.CapRefresh(nil, nil)
 	if err != nil {
 		glog.Errorf("%s: %v", j, errCap)
 	} else {

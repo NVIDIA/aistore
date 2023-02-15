@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -52,7 +52,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 // PUT /s3/<bucket-name>/<object-name>
 // [switch] mpt | put | copy
 func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, items []string) {
-	if cs := fs.GetCapStatus(); cs.OOS {
+	if cs := fs.Cap(); cs.OOS {
 		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}

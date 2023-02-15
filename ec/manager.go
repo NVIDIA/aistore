@@ -278,7 +278,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		return cs.Err
 	}
 	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
@@ -321,7 +321,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return ErrorECDisabled
 	}
 
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		return cs.Err
 	}
 	targetCnt := mgr.targetCnt.Load()

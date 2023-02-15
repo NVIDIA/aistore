@@ -270,7 +270,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		// stats and capacity
 		daeStats := t.statsT.GetWhatStats()
 		msg.Tracker = daeStats.Tracker
-		msg.Capacity = daeStats.MPCap
+		msg.TargetCDF = daeStats.TargetCDF
 
 		t.writeJSON(w, r, msg, httpdaeWhat)
 	case apc.GetWhatDiskStats:
@@ -649,7 +649,7 @@ func (t *target) _postBMD(tag string, rmbcks []*cluster.Bck) {
 		}
 	}
 	// since some buckets may have been destroyed
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		_ = t.OOS(nil)
 	}
 }

@@ -495,7 +495,7 @@ do:
 			errCode = http.StatusInternalServerError
 			return
 		}
-		cs = fs.GetCapStatus()
+		cs = fs.Cap()
 		if cs.OOS {
 			errCode, err = http.StatusInsufficientStorage, cs.Err
 			return
@@ -562,7 +562,7 @@ do:
 	// cold GET
 	if cold {
 		if cs.IsNil() {
-			cs = fs.GetCapStatus()
+			cs = fs.Cap()
 		}
 		if cs.OOS {
 			errCode, err = http.StatusInsufficientStorage, cs.Err

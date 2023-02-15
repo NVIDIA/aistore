@@ -168,7 +168,7 @@ func RunLRU(ini *IniLRU) {
 		j.joggers = joggers
 		go j.run(providers)
 	}
-	cs := fs.GetCapStatus()
+	cs := fs.Cap()
 	glog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs.String())
 	if ini.WG != nil {
 		ini.WG.Done()
@@ -180,7 +180,7 @@ func RunLRU(ini *IniLRU) {
 		j.stop()
 	}
 	xlru.Finish(nil)
-	cs = fs.GetCapStatus()
+	cs = fs.Cap()
 	glog.Infof("%s finished, %s", xlru, cs.String())
 }
 

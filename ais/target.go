@@ -193,7 +193,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(fshc)
 	t.fshc = fshc
 
-	if err := ts.InitCapacity(); err != nil { // goes after fs.New
+	if err := ts.InitCDF(); err != nil { // goes after fs.New
 		cos.ExitLogf("%s", err)
 	}
 
@@ -683,7 +683,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	} else if redelta := ptLatency(started.UnixNano(), apireq.dpq.ptime); redelta != 0 {
 		t.statsT.Add(stats.PutRedirLatency, redelta)
 	}
-	if cs := fs.GetCapStatus(); cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
+	if cs := fs.Cap(); cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 		cs = t.OOS(nil)
 		if cs.OOS {
 			// fail this write

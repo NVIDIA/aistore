@@ -582,28 +582,32 @@ func TestGetNodeStats(t *testing.T) {
 func TestGetClusterStats(t *testing.T) {
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
-	stats := tools.GetClusterStats(t, proxyURL)
+	cluStats := tools.GetClusterStats(t, proxyURL)
 
-	for k, v := range stats.Target {
-		tdstats := tools.GetDaemonStats(t, smap.Tmap[k].PubNet.URL)
-		tdcapstats := tdstats["capacity"].(map[string]any)
-		dcapstats := v.MPCap
-		for fspath, fstats := range dcapstats {
-			tfstats := tdcapstats[fspath].(map[string]any)
-			used, err := strconv.ParseInt(tfstats["used"].(string), 10, 64)
-			if err != nil {
-				t.Fatalf("Could not decode Target Stats: fstats.Used")
-			}
-			avail, err := strconv.ParseInt(tfstats["avail"].(string), 10, 64)
-			if err != nil {
-				t.Fatalf("Could not decode Target Stats: fstats.Avail")
-			}
-			pct := int64(tfstats["pct_used"].(float64))
-			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || pct != int64(fstats.PctUsed) {
-				t.Errorf("Stats are different when queried from Target and Proxy: "+
-					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
-					tfstats["used"], fstats.Used, tfstats["avail"],
-					fstats.Avail, tfstats["pct_used"], fstats.PctUsed)
+	for tid, vStats := range cluStats.Target {
+		tsi := smap.GetNode(tid)
+		tname := tsi.StringEx()
+		tassert.Fatalf(t, tsi != nil, "%s is nil", tid)
+		tStats, err := api.GetDaemonStats(baseParams, tsi)
+		tassert.CheckFatal(t, err)
+
+		vCDF := vStats.TargetCDF
+		tCDF := tStats.TargetCDF
+		if vCDF.PctMax != tCDF.PctMax || vCDF.PctAvg != tCDF.PctAvg {
+			t.Errorf("%s: stats are different: [%+v] vs [%+v]\n", tname, vCDF, tCDF)
+		}
+		if len(vCDF.Mountpaths) != len(tCDF.Mountpaths) {
+			t.Errorf("%s: num mountpaths is different: [%+v] vs [%+v]\n", tname, vCDF, tCDF)
+		}
+		var printed bool
+		for mpath := range vCDF.Mountpaths {
+			vcdf, tcdf := vCDF.Mountpaths[mpath], tCDF.Mountpaths[mpath]
+			s := tname + mpath
+			if vcdf.Capacity != tcdf.Capacity {
+				t.Errorf("%-30s capacity is different: [%+v] vs [%+v]\n", s, vcdf, tcdf)
+			} else if !printed {
+				tlog.Logf("%-30s %+v(%+v), %s\n", s, vcdf.Disks, tcdf.Disks, tcdf.FS)
+				printed = true
 			}
 		}
 	}
@@ -639,7 +643,7 @@ func TestLRU(t *testing.T) {
 	for k, v := range cluStats.Target {
 		filesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.n")
 		bytesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.size")
-		for _, c := range v.MPCap {
+		for _, c := range v.TargetCDF.Mountpaths {
 			usedPct = cos.MinI32(usedPct, c.PctUsed)
 		}
 	}

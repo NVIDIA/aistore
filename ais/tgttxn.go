@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -277,7 +277,7 @@ func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, 
 	}
 	// don't allow increasing num-copies when used cap is above high wm (let alone OOS)
 	if bck.Props.Mirror.Copies < newCopies {
-		cs := fs.GetCapStatus()
+		cs := fs.Cap()
 		err = cs.Err
 	}
 	return
@@ -364,7 +364,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
 	var (
 		body = cos.MustMarshal(msg.Value)
-		cs   = fs.GetCapStatus()
+		cs   = fs.Cap()
 	)
 	nprops = &cmn.BucketProps{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
@@ -452,7 +452,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 }
 
 func (t *target) validateBckRenTxn(bckFrom, bckTo *cluster.Bck, msg *aisMsg) error {
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		return cs.Err
 	}
 	if err := xreg.LimitedCoexistence(t.si, bckFrom, msg.Action, bckTo); err != nil {
@@ -507,7 +507,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		if err := bckFrom.Validate(); err != nil {
 			return "", err
 		}
-		if cs := fs.GetCapStatus(); cs.Err != nil {
+		if cs := fs.Cap(); cs.Err != nil {
 			return "", cs.Err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
@@ -624,7 +624,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		if err := bckFrom.Validate(); err != nil {
 			return xid, err
 		}
-		if cs := fs.GetCapStatus(); cs.Err != nil {
+		if cs := fs.Cap(); cs.Err != nil {
 			return xid, cs.Err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
@@ -729,7 +729,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 }
 
 func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) error {
-	if cs := fs.GetCapStatus(); cs.Err != nil {
+	if cs := fs.Cap(); cs.Err != nil {
 		return cs.Err
 	}
 	return xreg.LimitedCoexistence(t.si, bck, msg.Action)
@@ -768,7 +768,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		}
 		archMsg.Mime = mime // set it for xarch
 
-		if cs := fs.GetCapStatus(); cs.Err != nil {
+		if cs := fs.Cap(); cs.Err != nil {
 			return xid, cs.Err
 		}
 

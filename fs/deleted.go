@@ -71,7 +71,7 @@ func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 		}
 		return
 	}
-	cs := GetCapStatus()
+	cs := Cap()
 	if cs.Err != nil {
 		goto rm // not moving - removing
 	}

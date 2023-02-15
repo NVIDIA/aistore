@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -12,11 +12,13 @@ type FS struct {
 	FsID   FsID
 }
 
-func (fsi *FS) Equal(otherFsi FS) bool {
-	if fsi.Fs == "" || otherFsi.Fs == "" || fsi.FsType == "" || otherFsi.FsType == "" {
+func (fs *FS) String() string { return fs.Fs + "(" + fs.FsType + ")" }
+
+func (fs *FS) Equal(otherFs FS) bool {
+	if fs.Fs == "" || otherFs.Fs == "" || fs.FsType == "" || otherFs.FsType == "" {
 		return false
 	}
-	return fsi.FsID == otherFsi.FsID
+	return fs.FsID == otherFs.FsID
 }
 
 // syscall to check that path exists (see bench/lstat)

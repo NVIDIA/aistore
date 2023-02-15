@@ -88,7 +88,7 @@ const (
 type (
 	Trunner struct {
 		t           cluster.NodeMemCap
-		MPCap       fs.MPCap `json:"capacity"`
+		TargetCDF   fs.TargetCDF `json:"cdf"`
 		disk        ios.AllDiskStats
 		xln         string
 		statsRunner // the base (compare w/ Prunner)
@@ -135,10 +135,14 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	return &r.statsRunner.startedUp
 }
 
-func (r *Trunner) InitCapacity() error {
-	availableMountpaths, _ := fs.Get()
-	r.MPCap = make(fs.MPCap, len(availableMountpaths))
-	cs, err := fs.RefreshCapStatus(nil, r.MPCap)
+func (r *Trunner) InitCDF() error {
+	availableMountpaths := fs.GetAvail()
+	r.TargetCDF.Mountpaths = make(map[string]*fs.CDF, len(availableMountpaths))
+	for mpath := range availableMountpaths {
+		r.TargetCDF.Mountpaths[mpath] = &fs.CDF{}
+	}
+
+	cs, err := fs.CapRefresh(nil, &r.TargetCDF)
 	if err != nil {
 		return err
 	}
@@ -233,7 +237,7 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 
 func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
 	ds = r.statsRunner.GetWhatStats()
-	ds.MPCap = r.MPCap
+	ds.TargetCDF = r.TargetCDF
 	return
 }
 
@@ -278,12 +282,12 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 3. capacity
-	cs, updated, errfs := fs.CapPeriodic(now, config, r.MPCap)
+	cs, updated, errfs := fs.CapPeriodic(now, config, &r.TargetCDF)
 	if updated {
 		if cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 			r.t.OOS(&cs)
 		}
-		for mpath, fsCapacity := range r.MPCap {
+		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
 			ln := cos.MustMarshalToString(fsCapacity)
 			r.lines = append(r.lines, mpath+": "+ln)
 		}

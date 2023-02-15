@@ -43,8 +43,8 @@ type (
 
 	// REST API
 	DaemonStats struct {
-		Tracker copyTracker `json:"tracker"`
-		MPCap   fs.MPCap    `json:"capacity"`
+		Tracker   copyTracker  `json:"tracker"`
+		TargetCDF fs.TargetCDF `json:"capacity"`
 	}
 	ClusterStats struct {
 		Proxy  *DaemonStats            `json:"proxy"`
@@ -58,7 +58,7 @@ type (
 	DaemonStatus struct {
 		Snode          *cluster.Snode `json:"snode"`
 		Tracker        copyTracker    `json:"stats_tracker"`
-		Capacity       fs.MPCap       `json:"capacity"`
+		TargetCDF      fs.TargetCDF   `json:"mountpaths_info"`
 		RebSnap        *cluster.Snap  `json:"rebalance_snap,omitempty"`
 		Status         string         `json:"status"`
 		DeploymentType string         `json:"deployment"`

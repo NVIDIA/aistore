@@ -1001,13 +1001,13 @@ func moveMarkers(available MPI, from *Mountpath) {
 	// NOTE: `from` path must no longer be in the available mountpaths
 	_, ok := available[from.Path]
 	debug.Assert(!ok, from.String())
-	for _, mpath := range available {
+	for _, mi := range available {
 		ok = true
 		for _, fi := range finfos {
 			debug.Assert(!fi.IsDir(), fname.MarkersDir+"/"+fi.Name()) // marker is file
 			var (
 				fromPath = filepath.Join(from.Path, fname.MarkersDir, fi.Name())
-				toPath   = filepath.Join(mpath.Path, fname.MarkersDir, fi.Name())
+				toPath   = filepath.Join(mi.Path, fname.MarkersDir, fi.Name())
 			)
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
 			if err != nil && os.IsNotExist(err) {
@@ -1084,15 +1084,16 @@ func (mpi MPI) toSlice() []string {
 // capacity management
 //
 
-func GetCapStatus() (cs CapStatus) {
+func Cap() (cs CapStatus) {
 	mfs.cmu.RLock()
 	cs = mfs.cs
 	mfs.cmu.RUnlock()
 	return
 }
 
-func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error) {
+func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 	var (
+		errmsg         string
 		c              Capacity
 		availablePaths = GetAvail()
 	)
@@ -1113,14 +1114,27 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 		cs.TotalAvail += c.Avail
 		cs.PctMax = cos.MaxI32(cs.PctMax, c.PctUsed)
 		cs.PctAvg += c.PctUsed
-		if mpcap != nil {
-			mpcap[path] = c
+		if tcdf == nil {
+			continue
 		}
+		cdf := tcdf.Mountpaths[path]
+		if cdf == nil {
+			tcdf.Mountpaths[path] = &CDF{}
+			cdf = tcdf.Mountpaths[path]
+		}
+		cdf.Capacity = c
+		cdf.Disks = mi.Disks
+		cdf.FS = mi.FS.String()
 	}
 	cs.PctAvg /= int32(len(availablePaths))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
 		cs.Err = cmn.NewErrCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
+		errmsg = cs.Err.Error()
+	}
+	if tcdf != nil {
+		tcdf.PctMax, tcdf.PctAvg = cs.PctMax, cs.PctAvg
+		tcdf.CsErr = errmsg
 	}
 	// cached cap state
 	mfs.cmu.Lock()
@@ -1132,18 +1146,18 @@ func RefreshCapStatus(config *cmn.Config, mpcap MPCap) (cs CapStatus, err error)
 // NOTE: Is called only and exclusively by `stats.Trunner` providing
 //
 //	`config.Periodic.StatsTime` tick.
-func CapPeriodic(now int64, config *cmn.Config, mpcap MPCap) (cs CapStatus, updated bool, err error) {
+func CapPeriodic(now int64, config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, updated bool, err error) {
 	if now < mfs.csExpires.Load() {
 		return
 	}
-	cs, err = RefreshCapStatus(config, mpcap)
+	cs, err = CapRefresh(config, tcdf)
 	updated = err == nil
 	mfs.csExpires.Store(now + int64(cs._next(config)))
 	return
 }
 
 func CapStatusGetWhat() (fsInfo apc.CapacityInfo) {
-	cs := GetCapStatus()
+	cs := Cap()
 	fsInfo.Used = cs.TotalUsed
 	fsInfo.Total = cs.TotalUsed + cs.TotalAvail
 	fsInfo.PctUsed = float64(cs.PctAvg)
@@ -1173,7 +1187,7 @@ func (cs *CapStatus) String() (str string) {
 	return
 }
 
-// next time to RefreshCapStatus()
+// next time to CapRefresh()
 func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 	var (
 		util = int64(cs.PctMax)
