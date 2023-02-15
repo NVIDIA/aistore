@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func makeFsInfo(mpath string) (fsInfo FS, err error) {
+func makeFsInfo(mpath string) (fsInfo cos.FS, err error) {
 	var fsStats syscall.Statfs_t
 	if err := syscall.Statfs(mpath, &fsStats); err != nil {
 		return fsInfo, fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
@@ -27,7 +29,7 @@ func makeFsInfo(mpath string) (fsInfo FS, err error) {
 		return s
 	}
 
-	return FS{
+	return cos.FS{
 		Fs:     charsToString(fsStats.Fstypename[:]),
 		FsType: charsToString(fsStats.Mntfromname[:]),
 		FsID:   fsStats.Fsid.Val,
