@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -593,8 +593,8 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadClo
 
 func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	var (
+		oah       api.ObjAttrs
 		remAis    *remAis
-		op        *cmn.ObjectProps
 		remoteBck = lom.Bck().Clone()
 	)
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
@@ -608,19 +608,16 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		ObjName:    lom.ObjName,
 		Cksum:      lom.Checksum(),
 		Reader:     r.(cos.ReadOpenCloser),
-		Size:       uint64(lom.SizeBytes(true)), // _special_ because it's still workfile.
+		Size:       uint64(lom.SizeBytes(true)), // _special_ as it's still a workfile at this point
 	}
-	if err = api.PutObject(args); err != nil {
+	if oah, err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
-	// TODO: piggy-back props on PUT request to optimize-out HEAD call
-	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
-		errCode, err = extractErrCode(err, remAis.uuid)
-		return
-	}
+	// compare w/ lom.CopyAttrs
 	oa := lom.ObjAttrs()
-	*oa = op.ObjAttrs
+	*oa = oah.Attrs()
+
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	return
 }

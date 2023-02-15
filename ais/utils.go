@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -210,9 +211,106 @@ func validateHostname(hostname string) (err error) {
 	return
 }
 
-/////////////
-// helpers //
-/////////////
+// HTTP Range (aka Read Range)
+type (
+	htrange struct {
+		Start, Length int64
+	}
+	errRangeNoOverlap struct {
+		ranges []string // RFC 7233
+		size   int64    // [0, size)
+	}
+)
+
+func (r htrange) contentRange(size int64) string {
+	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
+}
+
+// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
+// all of the byte-range-spec values is greater than the content size.
+func (e *errRangeNoOverlap) Error() string {
+	msg := fmt.Sprintf("overlap with the content [0, %d)", e.size)
+	if len(e.ranges) == 1 {
+		return fmt.Sprintf("range %q does not %s", e.ranges[0], msg)
+	}
+	return fmt.Sprintf("none of the ranges %v %s", e.ranges, msg)
+}
+
+// ParseMultiRange parses a Range Header string as per RFC 7233.
+// ErrNoOverlap is returned if none of the ranges overlap with the [0, size) content.
+func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
+	var noOverlap bool
+	if !strings.HasPrefix(s, cos.HdrRangeValPrefix) {
+		return nil, fmt.Errorf("read range %q is invalid (prefix)", s)
+	}
+	allRanges := strings.Split(s[len(cos.HdrRangeValPrefix):], ",")
+	for _, ra := range allRanges {
+		ra = strings.TrimSpace(ra)
+		if ra == "" {
+			continue
+		}
+		i := strings.Index(ra, "-")
+		if i < 0 {
+			return nil, fmt.Errorf("read range %q is invalid (-)", s)
+		}
+		var (
+			r     htrange
+			start = strings.TrimSpace(ra[:i])
+			end   = strings.TrimSpace(ra[i+1:])
+		)
+		if start == "" {
+			// If no start is specified, end specifies the range start relative
+			// to the end of the file, and we are dealing with <suffix-length>
+			// which has to be a non-negative integer as per RFC 7233 Section 2.1 "Byte-Ranges".
+			if end == "" || end[0] == '-' {
+				return nil, fmt.Errorf("read range %q is invalid as per RFC 7233 Section 2.1", ra)
+			}
+			i, err := strconv.ParseInt(end, 10, 64)
+			if i < 0 || err != nil {
+				return nil, fmt.Errorf("read range %q is invalid (see RFC 7233 Section 2.1)", ra)
+			}
+			if i > size {
+				i = size
+			}
+			r.Start = size - i
+			r.Length = size - r.Start
+		} else {
+			i, err := strconv.ParseInt(start, 10, 64)
+			if err != nil || i < 0 {
+				return nil, fmt.Errorf("read range %q is invalid (start)", ra)
+			}
+			if i >= size {
+				// If the range begins after the size of the content it does not overlap.
+				noOverlap = true
+				continue
+			}
+			r.Start = i
+			if end == "" {
+				// If no end is specified, range extends to the end of the file.
+				r.Length = size - r.Start
+			} else {
+				i, err := strconv.ParseInt(end, 10, 64)
+				if err != nil || r.Start > i {
+					return nil, fmt.Errorf("read range %q is invalid (end)", ra)
+				}
+				if i >= size {
+					i = size - 1
+				}
+				r.Length = i - r.Start + 1
+			}
+		}
+		ranges = append(ranges, r)
+	}
+
+	if noOverlap && len(ranges) == 0 {
+		return nil, &errRangeNoOverlap{allRanges, size}
+	}
+	return ranges, nil
+}
+
+//
+// misc. helpers
+//
 
 func deploymentType() string {
 	if k8s.Detect() == nil {

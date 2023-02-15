@@ -139,7 +139,8 @@ func PutObjRR(bp api.BaseParams, bck cmn.Bck, objName string, objSize int64, cks
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
-	return api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
+	return err
 }
 
 func PutRR(tb testing.TB, bp api.BaseParams, objSize int64, cksumType string,

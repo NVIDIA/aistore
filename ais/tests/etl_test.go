@@ -186,7 +186,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(api.PutArgs{
+	_, err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		ObjName:    objName,
@@ -403,7 +403,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	reader, err := readers.NewRandReader(cos.MiB, cos.ChecksumMD5)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(api.PutArgs{
+	_, err = api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		ObjName:    objName,

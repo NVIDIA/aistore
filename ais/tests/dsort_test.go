@@ -1864,7 +1864,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				ObjName:    orderFileName,
 				Reader:     readers.NewBytesReader(buffer.Bytes()),
 			}
-			err = api.PutObject(args)
+			_, err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln("starting distributed sort...")

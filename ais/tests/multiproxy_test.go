@@ -703,7 +703,7 @@ func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string
 			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
-		if err = api.PutObject(putArgs); err != nil {
+		if _, err = api.PutObject(putArgs); err != nil {
 			return fmt.Errorf("error executing put: %v", err)
 		}
 		if _, err = api.GetObject(baseParams, bck, keyname, nil); err != nil {
@@ -773,7 +773,7 @@ loop:
 			Cksum:      reader.Cksum(),
 			Reader:     reader,
 		}
-		err = api.PutObject(putArgs)
+		_, err = api.PutObject(putArgs)
 		if err != nil {
 			errCh <- err
 			continue

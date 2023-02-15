@@ -391,8 +391,12 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 // it in the specified bucket.
 //
 // Assumes that `args.Reader` is already opened and ready for usage.
-func PutObject(args PutArgs) (err error) {
-	query := args.Bck.AddToQuery(nil)
+// Returns `ObjAttrs` that can be further used to get the size and other object metadata.
+func PutObject(args PutArgs) (oah ObjAttrs, err error) {
+	var (
+		resp  *http.Response
+		query = args.Bck.AddToQuery(nil)
+	)
 	if args.SkipVC {
 		query.Set(apc.QparamSkipVC, "true")
 	}
@@ -404,8 +408,11 @@ func PutObject(args PutArgs) (err error) {
 		reqArgs.Query = query
 		reqArgs.BodyR = args.Reader
 	}
-	_, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) //nolint:bodyclose // is closed inside
+	resp, err = DoWithRetry(args.BaseParams.Client, args.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)
+	if err == nil {
+		oah.wrespHeader = resp.Header
+	}
 	return
 }
 

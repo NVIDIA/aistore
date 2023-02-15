@@ -747,7 +747,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 			poi.restful = true
 			poi.t2t = t2tput
 		}
-		errCode, err = poi.do(r, apireq.dpq)
+		errCode, err = poi.do(w.Header(), r, apireq.dpq)
 		freePutObjInfo(poi)
 	}
 	if err != nil {

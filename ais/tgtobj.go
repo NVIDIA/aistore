@@ -50,6 +50,7 @@ type (
 		t          *target
 		lom        *cluster.LOM
 		cksumToUse *cos.Cksum // if available (not `none`), can be validated and will be stored
+		resphdr    http.Header
 
 		workFQN string // temp fqn to be renamed
 
@@ -127,13 +128,14 @@ type (
 	}
 )
 
-////////////////
-// PUT OBJECT //
-////////////////
+//
+// PUT(object)
+//
 
-func (poi *putObjInfo) do(r *http.Request, dpq *dpq) (int, error) {
+func (poi *putObjInfo) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
 	{
 		poi.r = r.Body
+		poi.resphdr = resphdr
 		poi.workFQN = fs.CSM.Gen(poi.lom, fs.WorkfileType, fs.WorkfilePut)
 		poi.cksumToUse = poi.lom.ObjAttrs().FromHeader(r.Header)
 		poi.owt = cmn.OwtPut // default
@@ -189,6 +191,10 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
 				cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
 			)
+			// via /s3 (TODO: revisit)
+			if poi.resphdr != nil {
+				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr)
+			}
 		}
 	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
 		// xaction in-objs counters, promote first
@@ -460,9 +466,9 @@ func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
 	return
 }
 
-////////////////
-// GET OBJECT //
-////////////////
+//
+// GET(object)
+//
 
 func (goi *getObjInfo) getObject() (errCode int, err error) {
 	debug.Assert(!goi.unlocked)
@@ -806,10 +812,9 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) boo
 
 func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
-		lmfh   *os.File
-		hdr    http.Header
-		rrange *cmn.HTTPRange
-		fqn    = goi.lom.FQN
+		lmfh *os.File
+		hrng *htrange
+		fqn  = goi.lom.FQN
 	)
 	if !coldGet && !goi.isGFN {
 		fqn = goi.lom.LBGet() // best-effort GET load balancing (see also mirror.findLeastUtilized())
@@ -831,13 +836,13 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 		cos.Close(lmfh)
 	}()
 
-	hdr = goi.w.Header()
+	hdr := goi.w.Header()
 	if goi.ranges.Range != "" {
 		rsize := goi.lom.SizeBytes()
 		if goi.ranges.Size > 0 {
 			rsize = goi.ranges.Size
 		}
-		if rrange, errCode, err = goi.parseRange(hdr, rsize); err != nil {
+		if hrng, errCode, err = goi.parseRange(hdr, rsize); err != nil {
 			return
 		}
 		if goi.archive.filename != "" {
@@ -846,12 +851,12 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 			return
 		}
 	}
-	errCode, err = goi.fini(fqn, lmfh, hdr, rrange, coldGet)
+	errCode, err = goi.fini(fqn, lmfh, hdr, hrng, coldGet)
 	return
 }
 
 // in particular, setup reader and writer and set headers
-func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, rrange *cmn.HTTPRange, coldGet bool) (errCode int, err error) {
+func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange, coldGet bool) (errCode int, err error) {
 	var (
 		slab   *memsys.Slab
 		buf    []byte
@@ -889,14 +894,14 @@ func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, rrange *
 		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 
 		buf, slab = goi.t.gmm.AllocSize(size)
-	case rrange != nil: // range
+	case hrng != nil: // range
 		cksumConf := goi.lom.CksumConf()
 		cksumRange := cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
-		size = rrange.Length
-		buf, slab = goi.t.gmm.AllocSize(rrange.Length)
-		reader = io.NewSectionReader(lmfh, rrange.Start, rrange.Length)
+		size = hrng.Length
+		buf, slab = goi.t.gmm.AllocSize(hrng.Length)
+		reader = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
 		if cksumRange {
-			sgl := slab.MMSA().NewSGL(rrange.Length, slab.Size())
+			sgl := slab.MMSA().NewSGL(hrng.Length, slab.Size())
 			defer func() {
 				sgl.Free()
 			}()
@@ -964,15 +969,14 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 	return nil
 }
 
-// parse, validate, set response header
-func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTPRange, errCode int, err error) {
-	var ranges []cmn.HTTPRange
-
-	ranges, err = cmn.ParseMultiRange(goi.ranges.Range, size)
+// parse & validate user-spec-ed goi.ranges, and set response header
+func (goi *getObjInfo) parseRange(resphdr http.Header, size int64) (hrng *htrange, errCode int, err error) {
+	var ranges []htrange
+	ranges, err = parseMultiRange(goi.ranges.Range, size)
 	if err != nil {
-		if _, ok := err.(*cmn.ErrRangeNoOverlap); ok {
+		if _, ok := err.(*errRangeNoOverlap); ok {
 			// https://datatracker.ietf.org/doc/html/rfc7233#section-4.2
-			hdr.Set(cos.HdrContentRange, fmt.Sprintf("%s*/%d", cos.HdrContentRangeValPrefix, size))
+			resphdr.Set(cos.HdrContentRange, fmt.Sprintf("%s*/%d", cos.HdrContentRangeValPrefix, size))
 		}
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
@@ -990,15 +994,17 @@ func (goi *getObjInfo) parseRange(hdr http.Header, size int64) (rrange *cmn.HTTP
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}
-	rrange = &ranges[0]
-	hdr.Set(cos.HdrAcceptRanges, "bytes")
-	hdr.Set(cos.HdrContentRange, rrange.ContentRange(size))
+
+	// set response header
+	hrng = &ranges[0]
+	resphdr.Set(cos.HdrAcceptRanges, "bytes")
+	resphdr.Set(cos.HdrContentRange, hrng.contentRange(size))
 	return
 }
 
-//////////////////////
-// APPEND (to file) //
-//////////////////////
+//
+// APPEND (to file)
+//
 
 func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err error) {
 	filePath := aoi.hi.filePath
@@ -1115,9 +1121,9 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) s
 	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
 }
 
-/////////////////
-// COPY OBJECT //
-/////////////////
+//
+// COPY(object)
+//
 
 func (coi *copyObjInfo) objsAdd(size int64, err error) {
 	if err == nil && coi.Xact != nil {
@@ -1418,9 +1424,9 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 	return nil
 }
 
-/////////////////////////
-// APPEND (to archive) //
-/////////////////////////
+//
+// APPEND (to archive)
+//
 
 func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
 	fh, err := cos.OpenTarForAppend(aaoi.lom.String(), fqn)
@@ -1513,9 +1519,9 @@ func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
 	return
 }
 
-///////////////
-// mem pools //
-///////////////
+//
+// mem pools
+//
 
 var (
 	goiPool, poiPool, coiPool, sndPool sync.Pool

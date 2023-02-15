@@ -63,7 +63,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.DisplayName())
 		for _, objName := range objList {
 			r, _ := readers.NewRandReader(objSize, cksumType)
-			err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bckFrom,
 				ObjName:    objName,

@@ -92,7 +92,7 @@ func TestObjectInvalidName(t *testing.T) {
 			case putOP:
 				reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
-				err = api.PutObject(api.PutArgs{
+				_, err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    test.objName,
@@ -143,15 +143,20 @@ func TestRemoteBucketObject(t *testing.T) {
 
 			switch test.ty {
 			case putOP:
-				err = api.PutObject(api.PutArgs{
+				var oah api.ObjAttrs
+				oah, err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    object,
 					Reader:     reader,
 				})
+				if err == nil {
+					oa := oah.Attrs()
+					tlog.Logf("PUT(%s/%s) attrs %s\n", bck.DisplayName(), object, oa.String())
+				}
 			case getOP:
 				if test.exists {
-					err = api.PutObject(api.PutArgs{
+					_, err = api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck,
 						ObjName:    object,
@@ -169,10 +174,9 @@ func TestRemoteBucketObject(t *testing.T) {
 				if err == nil {
 					t.Errorf("expected error when doing %s on non existing %q bucket", test.ty, bck)
 				}
-			} else {
-				if err != nil {
-					t.Errorf("expected no error when executing %s on existing %q bucket(err = %v)", test.ty, bck, err)
-				}
+			} else if err != nil {
+				t.Errorf("expected no error when executing %s on existing %q bucket(err = %v)",
+					test.ty, bck, err)
 			}
 		})
 	}
@@ -327,7 +331,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 
 	// PUT/GET/DEL Without ais bucket
 	tlog.Logf("Validating responses for non-existent ais bucket...\n")
-	err := api.PutObject(putArgsLocal)
+	_, err := api.PutObject(putArgsLocal)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
@@ -374,16 +378,16 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 
 	// PUT
 	tlog.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
-	err = api.PutObject(putArgsLocal)
+	_, err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.ObjName = fileName2
-	err = api.PutObject(putArgsLocal)
+	_, err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 
-	err = api.PutObject(putArgsRemote)
+	_, err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
 	putArgsRemote.ObjName = fileName2
-	err = api.PutObject(putArgsRemote)
+	_, err = api.PutObject(putArgsRemote)
 	tassert.CheckFatal(t, err)
 
 	// Check ais bucket has 2 objects
@@ -479,7 +483,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		ObjName:    fileName,
 		Reader:     readers.NewBytesReader(dataLocal),
 	}
-	err := api.PutObject(putArgs)
+	_, err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, 0)
@@ -492,7 +496,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		ObjName:    fileName,
 		Reader:     readers.NewBytesReader(dataRemote),
 	}
-	err = api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
 	resRemote, err := api.ListObjects(baseParams, bckRemote, msg, 0)
@@ -1150,7 +1154,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 	offset, length, expectedLength int64, checkEntireObjCksum bool) {
 	var (
 		w          = bytes.NewBuffer(nil)
-		hdr        = cmn.RangeHdr(offset, length)
+		hdr        = cmn.MakeRangeHdr(offset, length)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		fqn        = findObjOnDisk(bck, objName)
 		args       = api.GetArgs{Writer: w, Header: hdr}
@@ -1384,23 +1388,28 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		cksumValue := hex.EncodeToString(hasher.H.Sum(nil))
 		putArgs.Cksum = cos.NewCksum(cksumType, badCksumVal)
 		putArgs.ObjName = fileName
-		err := api.PutObject(putArgs)
+
+		_, err := api.PutObject(putArgs)
 		if err == nil {
 			t.Errorf("Bad checksum provided by the user, Expected an error")
 		}
+
 		_, err = api.HeadObject(baseParams, bckLocal, fileName, apc.FltExists)
 		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
 		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)
-		err = api.PutObject(putArgs)
+		oah, err := api.PutObject(putArgs)
 		if err != nil {
 			t.Errorf("Correct checksum provided, Err encountered %v", err)
 		}
-		_, err = api.HeadObject(baseParams, bckLocal, fileName, apc.FltPresent)
+		op, err := api.HeadObject(baseParams, bckLocal, fileName, apc.FltPresent)
 		if err != nil {
 			t.Errorf("Object %s does not exist despite correct checksum", fileName)
 		}
+		attrs1 := oah.Attrs()
+		attrs2 := op.ObjAttrs
+		tassert.Errorf(t, attrs1.Equal(&attrs2), "PUT(obj) attrs %s != %s HEAD\n", attrs1.String(), attrs2.String())
 	}
 }
 
@@ -1431,7 +1440,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 				for _, objName := range objList {
 					r, _ := readers.NewRandReader(objSize, cksumType)
-					err := api.PutObject(api.PutArgs{
+					_, err := api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),
 						ObjName:    objName,
@@ -1520,7 +1529,8 @@ func TestOperationsWithRanges(t *testing.T) {
 						continue
 					}
 					if len(objList.Entries) != totalFiles {
-						t.Errorf("Incorrect number of remaining objects: %d, should be %d", len(objList.Entries), totalFiles)
+						t.Errorf("Incorrect number of remaining objects: %d, should be %d",
+							len(objList.Entries), totalFiles)
 						continue
 					}
 

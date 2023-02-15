@@ -89,10 +89,7 @@ type (
 )
 
 // interface guard
-var (
-	_ cos.Runner = (*proxy)(nil)
-	_ electable  = (*proxy)(nil)
-)
+var _ cos.Runner = (*proxy)(nil)
 
 func (*proxy) Name() string     { return apc.Proxy } // as cos.Runner
 func (p *proxy) String() string { return p.si.String() }

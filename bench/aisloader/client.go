@@ -166,7 +166,7 @@ func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	return req.WithContext(httptrace.WithClientTrace(req.Context(), putter.tctx.trace)), nil
 }
 
-func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) error {
+func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (err error) {
 	var (
 		baseParams = api.BaseParams{
 			Client: httpClient,
@@ -184,7 +184,8 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 			SkipVC:     true,
 		}
 	)
-	return api.PutObject(args)
+	_, err = api.PutObject(args)
+	return
 }
 
 // PUT with HTTP trace
@@ -254,7 +255,7 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 		query.Add(apc.QparamUUID, etlName)
 	}
 	if length > 0 {
-		hdr = cmn.RangeHdr(offset, length)
+		hdr = cmn.MakeRangeHdr(offset, length)
 	}
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodGet,

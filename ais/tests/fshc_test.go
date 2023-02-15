@@ -135,7 +135,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 		tassert.CheckFatal(md.t, err)
 		for _, objName := range objList {
 			r, _ := readers.NewRandReader(md.fileSize, p.Cksum.Type)
-			err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(api.PutArgs{
 				BaseParams: md.baseParams,
 				Bck:        md.bck,
 				ObjName:    path.Join(fshcDir, objName),

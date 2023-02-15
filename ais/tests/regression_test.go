@@ -1001,7 +1001,7 @@ func TestStressDeleteRange(t *testing.T) {
 					Cksum:      reader.Cksum(),
 					Reader:     reader,
 				}
-				err = api.PutObject(putArgs)
+				_, err = api.PutObject(putArgs)
 				if err != nil {
 					errCh <- err
 				}

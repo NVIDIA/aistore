@@ -57,7 +57,6 @@ func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
 	return c
 }
 
-// essentially, t.doPut() for external use
 func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)

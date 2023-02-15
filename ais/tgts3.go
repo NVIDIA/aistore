@@ -189,7 +189,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		poi.skipVC = cmn.Features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}
-	errCode, err := poi.do(r, dpq)
+	errCode, err := poi.do(nil /*response hdr*/, r, dpq)
 	freePutObjInfo(poi)
 	if err != nil {
 		t.fsErr(err, lom.FQN)

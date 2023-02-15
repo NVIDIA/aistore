@@ -59,7 +59,7 @@ func putFile(size int64, cksumType string) error {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
-	err = api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
 	os.Remove(path.Join(dir, fn))
 	return err
 }
@@ -76,7 +76,8 @@ func putRand(size int64, cksumType string) error {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
-	return api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
+	return err
 }
 
 func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
@@ -92,7 +93,8 @@ func putSG(sgl *memsys.SGL, size int64, cksumType string) error {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
-	return api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
+	return err
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {

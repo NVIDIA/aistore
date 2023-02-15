@@ -52,7 +52,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 			Cksum:      r.Cksum(),
 			Reader:     r,
 		}
-		err = api.PutObject(putArgs)
+		_, err = api.PutObject(putArgs)
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bck, fname, err)
 		}

@@ -80,7 +80,8 @@ func TestETLTar2TFS3(t *testing.T) {
 		Cksum:      f.Cksum(),
 		Reader:     f,
 	}
-	tassert.CheckFatal(t, api.PutObject(putArgs))
+	_, err = api.PutObject(putArgs)
+	tassert.CheckFatal(t, err)
 	defer api.DeleteObject(baseParams, bck, tarObjName)
 
 	etlName := startTar2TfTransformer(t)
@@ -157,7 +158,8 @@ func TestETLTar2TFRanges(t *testing.T) {
 		Cksum:      f.Cksum(),
 		Reader:     f,
 	}
-	tassert.CheckFatal(t, api.PutObject(putArgs))
+	_, err = api.PutObject(putArgs)
+	tassert.CheckFatal(t, err)
 
 	etlName := startTar2TfTransformer(t)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, etlName) })

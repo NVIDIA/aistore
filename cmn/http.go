@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,12 +24,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type (
-	// HTTPRange specifies the byte range to be sent to the client.
-	HTTPRange struct {
-		Start, Length int64
-	}
+const (
+	RetryLogVerbose = iota
+	RetryLogQuiet
+	RetryLogOff
+)
 
+type (
 	// HreqArgs specifies HTTP request that we want to send.
 	// BodyR optimizes-out allocations - if non-nil and implements `io.Closer`, will always be closed by `client.Do`
 	HreqArgs struct {
@@ -59,28 +59,7 @@ type (
 		BackOff   bool // If requests should be retried less and less often.
 		IsClient  bool // true: client (e.g. dev tools, etc.)
 	}
-
-	ErrRangeNoOverlap struct {
-		ranges []string // RFC 7233
-		size   int64    // [0, size)
-	}
 )
-
-const (
-	RetryLogVerbose = iota
-	RetryLogQuiet
-	RetryLogOff
-)
-
-// ErrNoOverlap is returned by serveContent's parseRange if first-byte-pos of
-// all of the byte-range-spec values is greater than the content size.
-func (e *ErrRangeNoOverlap) Error() string {
-	msg := fmt.Sprintf("overlap with the content [0, %d)", e.size)
-	if len(e.ranges) == 1 {
-		return fmt.Sprintf("range %q does not %s", e.ranges[0], msg)
-	}
-	return fmt.Sprintf("none of the ranges %v %s", e.ranges, msg)
-}
 
 // PrependProtocol prepends protocol in URL in case it is missing.
 // By default it adds `http://` as prefix to the URL.
@@ -93,6 +72,16 @@ func PrependProtocol(url string, protocol ...string) string {
 		proto = protocol[0]
 	}
 	return proto + "://" + url
+}
+
+// (compare w/ htrange.contentRange)
+func MakeRangeHdr(start, length int64) (hdr http.Header) {
+	if start == 0 && length == 0 {
+		return hdr
+	}
+	hdr = make(http.Header, 1)
+	hdr.Set(cos.HdrRange, fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1))
+	return
 }
 
 // MatchItems splits URL path at "/" and matches resulting items against the specified, if any.
@@ -187,90 +176,6 @@ func copyHeaders(src http.Header, dst *http.Header) {
 			dst.Set(k, v)
 		}
 	}
-}
-
-func (r HTTPRange) ContentRange(size int64) string {
-	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)
-}
-
-// ParseMultiRange parses a Range Header string as per RFC 7233.
-// ErrNoOverlap is returned if none of the ranges overlap with the [0, size) content.
-func ParseMultiRange(s string, size int64) (ranges []HTTPRange, err error) {
-	var noOverlap bool
-	if !strings.HasPrefix(s, cos.HdrRangeValPrefix) {
-		return nil, fmt.Errorf("read range %q is invalid (prefix)", s)
-	}
-	allRanges := strings.Split(s[len(cos.HdrRangeValPrefix):], ",")
-	for _, ra := range allRanges {
-		ra = strings.TrimSpace(ra)
-		if ra == "" {
-			continue
-		}
-		i := strings.Index(ra, "-")
-		if i < 0 {
-			return nil, fmt.Errorf("read range %q is invalid (-)", s)
-		}
-		var (
-			r          HTTPRange
-			start, end = strings.TrimSpace(ra[:i]), strings.TrimSpace(ra[i+1:])
-		)
-		if start == "" {
-			// If no start is specified, end specifies the range start relative
-			// to the end of the file, and we are dealing with <suffix-length>
-			// which has to be a non-negative integer as per RFC 7233 Section 2.1 "Byte-Ranges".
-			if end == "" || end[0] == '-' {
-				return nil, fmt.Errorf("read range %q is invalid as per RFC 7233 Section 2.1", ra)
-			}
-			i, err := strconv.ParseInt(end, 10, 64)
-			if i < 0 || err != nil {
-				return nil, fmt.Errorf("read range %q is invalid (see RFC 7233 Section 2.1)", ra)
-			}
-			if i > size {
-				i = size
-			}
-			r.Start = size - i
-			r.Length = size - r.Start
-		} else {
-			i, err := strconv.ParseInt(start, 10, 64)
-			if err != nil || i < 0 {
-				return nil, fmt.Errorf("read range %q is invalid (start)", ra)
-			}
-			if i >= size {
-				// If the range begins after the size of the content it does not overlap.
-				noOverlap = true
-				continue
-			}
-			r.Start = i
-			if end == "" {
-				// If no end is specified, range extends to the end of the file.
-				r.Length = size - r.Start
-			} else {
-				i, err := strconv.ParseInt(end, 10, 64)
-				if err != nil || r.Start > i {
-					return nil, fmt.Errorf("read range %q is invalid (end)", ra)
-				}
-				if i >= size {
-					i = size - 1
-				}
-				r.Length = i - r.Start + 1
-			}
-		}
-		ranges = append(ranges, r)
-	}
-
-	if noOverlap && len(ranges) == 0 {
-		return nil, &ErrRangeNoOverlap{allRanges, size}
-	}
-	return ranges, nil
-}
-
-func RangeHdr(start, length int64) (hdr http.Header) {
-	if start == 0 && length == 0 {
-		return hdr
-	}
-	hdr = make(http.Header, 1)
-	hdr.Add(cos.HdrRange, fmt.Sprintf("%s%d-%d", cos.HdrRangeValPrefix, start, start+length-1))
-	return
 }
 
 func NetworkCallWithRetry(args *RetryArgs) (err error) {

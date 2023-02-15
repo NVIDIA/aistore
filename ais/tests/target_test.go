@@ -44,7 +44,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
-	if err := api.PutObject(putArgs); err == nil {
+	if _, err := api.PutObject(putArgs); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }

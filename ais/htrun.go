@@ -74,8 +74,6 @@ type htrun struct {
 // htrun //
 ///////////
 
-func (*htrun) proxyElection(*VoteRecord) { debug.Assert(false) } // proxy-only
-
 func (h *htrun) DataClient() *http.Client { return h.client.data }
 
 func (h *htrun) Snode() *cluster.Snode { return h.si }

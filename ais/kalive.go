@@ -140,7 +140,7 @@ func (tkr *talive) do() (stopped bool) {
 		return
 	}
 	if stopped = tkr.keepalive.do(smap, tkr.t.si); stopped {
-		tkr.t.onPrimaryFail()
+		tkr.t.onPrimaryFail(nil /*proxy*/)
 	}
 	return
 }
@@ -195,7 +195,7 @@ func (pkr *palive) do() (stopped bool) {
 		return
 	}
 	if stopped = pkr.keepalive.do(smap, pkr.p.si); stopped {
-		pkr.p.onPrimaryFail()
+		pkr.p.onPrimaryFail(pkr.p /*self*/)
 	}
 	return
 }
