@@ -311,7 +311,7 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	if !lom.Bprops().EC.Enabled {
 		return
 	}
-	debug.Assert(lom.FQN != "" && lom.MpathInfo().Path != "")
+	debug.Assert(lom.FQN != "" && lom.Mountpath().Path != "")
 	req := allocateReq(ActDelete, lom.LIF())
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
@@ -331,7 +331,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 		return cmn.ErrNotEnoughTargets
 	}
 
-	debug.Assert(lom.MpathInfo() != nil && lom.MpathInfo().Path != "")
+	debug.Assert(lom.Mountpath() != nil && lom.Mountpath().Path != "")
 	req := allocateReq(ActRestore, lom.LIF())
 	errCh := make(chan error) // unbuffered
 	req.ErrCh = errCh

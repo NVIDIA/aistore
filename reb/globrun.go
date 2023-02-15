@@ -491,13 +491,13 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	}
 
 	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range rargs.apaths {
+	for _, mi := range rargs.apaths {
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: reb.xctn(), wg: wg},
 			smap:       rargs.smap, ver: ver,
 		}
 		wg.Add(1)
-		go rl.jog(mpathInfo)
+		go rl.jog(mi)
 	}
 	wg.Wait()
 
@@ -694,12 +694,12 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 // rebJogger: global non-EC //
 //////////////////////////////
 
-func (rj *rebJogger) jog(mpathInfo *fs.MountpathInfo) {
+func (rj *rebJogger) jog(mi *fs.Mountpath) {
 	// the jogger is running in separate goroutine, so use defer to be
 	// sure that `Done` is called even if the jogger crashes to avoid hang up
 	defer rj.wg.Done()
 	{
-		rj.opts.Mi = mpathInfo
+		rj.opts.Mi = mi
 		rj.opts.CTs = []string{fs.ObjectType}
 		rj.opts.Callback = rj.visitObj
 		rj.opts.Sorted = false

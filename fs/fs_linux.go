@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // fqn2FsInfo is used only at startup to store file systems for each mountpath.
@@ -26,7 +28,7 @@ func fqn2FsInfo(fqn string) (fs, fsType string, err error) {
 	return strings.TrimSpace(info[0]), strings.TrimSpace(info[1]), nil
 }
 
-func makeFsInfo(mpath string) (fsInfo FilesystemInfo, err error) {
+func makeFsInfo(mpath string) (fsInfo cos.FS, err error) {
 	var fsStats syscall.Statfs_t
 	if err := syscall.Statfs(mpath, &fsStats); err != nil {
 		return fsInfo, fmt.Errorf("cannot statfs fspath %q, err: %w", mpath, err)
@@ -37,7 +39,7 @@ func makeFsInfo(mpath string) (fsInfo FilesystemInfo, err error) {
 		return fsInfo, err
 	}
 
-	return FilesystemInfo{Fs: fs, FsType: fsType, FsID: fsStats.Fsid.X__val}, nil
+	return cos.FS{Fs: fs, FsType: fsType, FsID: fsStats.Fsid.X__val}, nil
 }
 
 // DirectOpen opens a file with direct disk access (with OS caching disabled).

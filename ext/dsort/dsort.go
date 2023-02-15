@@ -49,8 +49,8 @@ type (
 		postExtraction()
 		postRecordDistribution()
 		createShardsLocally() (err error)
-		preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error
-		postShardCreation(mpathInfo *fs.MountpathInfo)
+		preShardCreation(shardName string, mi *fs.Mountpath) error
+		postShardCreation(mi *fs.Mountpath)
 		cleanup()
 		finalCleanup() error
 		loadContent() extract.LoadContentFunc
@@ -186,23 +186,23 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 			return err
 		}
 
-		phaseInfo.adjuster.acquireSema(lom.MpathInfo())
+		phaseInfo.adjuster.acquireSema(lom.Mountpath())
 		if m.aborted() {
-			phaseInfo.adjuster.releaseSema(lom.MpathInfo())
+			phaseInfo.adjuster.releaseSema(lom.Mountpath())
 			return newDSortAbortedError(m.ManagerUUID)
 		}
 		//
 		// FIXME: check capacity *prior* to starting
 		//
 		if cs := fs.GetCapStatus(); cs.Err != nil {
-			phaseInfo.adjuster.releaseSema(lom.MpathInfo())
+			phaseInfo.adjuster.releaseSema(lom.Mountpath())
 			return cs.Err
 		}
 
 		lom.Lock(false)
 		f, err := os.Open(lom.FQN)
 		if err != nil {
-			phaseInfo.adjuster.releaseSema(lom.MpathInfo())
+			phaseInfo.adjuster.releaseSema(lom.Mountpath())
 			lom.Unlock(false)
 			return errors.Errorf("unable to open local file, err: %v", err)
 		}
@@ -225,7 +225,7 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 		// next extractor goroutine.
 		m.addCompressionSizes(compressedSize, extractedSize)
 
-		phaseInfo.adjuster.releaseSema(lom.MpathInfo())
+		phaseInfo.adjuster.releaseSema(lom.Mountpath())
 		lom.Unlock(false)
 
 		m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
@@ -338,10 +338,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		return newDSortAbortedError(m.ManagerUUID)
 	}
 
-	if err := m.dsorter.preShardCreation(s.Name, lom.MpathInfo()); err != nil {
+	if err := m.dsorter.preShardCreation(s.Name, lom.Mountpath()); err != nil {
 		return err
 	}
-	defer m.dsorter.postShardCreation(lom.MpathInfo())
+	defer m.dsorter.postShardCreation(lom.Mountpath())
 
 	// TODO: check capacity *prior* to starting
 	if cs := fs.GetCapStatus(); cs.Err != nil {

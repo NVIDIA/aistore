@@ -34,8 +34,8 @@ var _ = Describe("LOM Xattributes", func() {
 	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	var (
-		copyMpathInfo *fs.MountpathInfo
-		mix           = fs.MountpathInfo{Path: xattrMpath}
+		copyMpathInfo *fs.Mountpath
+		mix           = fs.Mountpath{Path: xattrMpath}
 		bmdMock       = mock.NewBaseBownerMock(
 			cluster.NewBck(
 				bucketLocal, apc.AIS, cmn.NsGlobal,

@@ -217,7 +217,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 
 		mpaths      = fs.GetAvail()
 		counters    = make(map[string]*atomic.Int32, len(mpaths))
-		failOnMpath *fs.MountpathInfo
+		failOnMpath *fs.Mountpath
 		failed      atomic.Bool
 	)
 	defer os.RemoveAll(out.Dir)
@@ -231,11 +231,11 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
-			cnt := counters[lom.MpathInfo().Path].Inc()
+			cnt := counters[lom.Mountpath().Path].Inc()
 
 			// Fail only once, on one mpath.
 			if cnt == failAt && failed.CAS(false, true) {
-				failOnMpath = lom.MpathInfo()
+				failOnMpath = lom.Mountpath()
 				return fmt.Errorf("oops")
 			}
 			return nil

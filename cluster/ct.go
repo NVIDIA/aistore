@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -23,7 +23,7 @@ type CT struct {
 	contentType string
 	hrwFQN      string
 	bck         *Bck
-	mpathInfo   *fs.MountpathInfo
+	mi          *fs.Mountpath
 	uname       string
 	digest      uint64
 	size        int64
@@ -33,14 +33,14 @@ type CT struct {
 // interface guard
 var _ fs.PartsFQN = (*CT)(nil)
 
-func (ct *CT) FQN() string                  { return ct.fqn }
-func (ct *CT) ObjectName() string           { return ct.objName }
-func (ct *CT) ContentType() string          { return ct.contentType }
-func (ct *CT) Bck() *Bck                    { return ct.bck }
-func (ct *CT) Bucket() *cmn.Bck             { return (*cmn.Bck)(ct.bck) }
-func (ct *CT) MpathInfo() *fs.MountpathInfo { return ct.mpathInfo }
-func (ct *CT) SizeBytes() int64             { return ct.size }
-func (ct *CT) MtimeUnix() int64             { return ct.mtime }
+func (ct *CT) FQN() string              { return ct.fqn }
+func (ct *CT) ObjectName() string       { return ct.objName }
+func (ct *CT) ContentType() string      { return ct.contentType }
+func (ct *CT) Bck() *Bck                { return ct.bck }
+func (ct *CT) Bucket() *cmn.Bck         { return (*cmn.Bck)(ct.bck) }
+func (ct *CT) Mountpath() *fs.Mountpath { return ct.mi }
+func (ct *CT) SizeBytes() int64         { return ct.size }
+func (ct *CT) MtimeUnix() int64         { return ct.mtime }
 
 func (ct *CT) LoadFromFS() error {
 	st, err := os.Stat(ct.FQN())
@@ -93,7 +93,7 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		contentType: parsedFQN.ContentType,
 		hrwFQN:      hrwFQN,
 		bck:         CloneBck(&parsedFQN.Bck),
-		mpathInfo:   parsedFQN.MpathInfo,
+		mi:          parsedFQN.Mountpath,
 		digest:      parsedFQN.Digest,
 	}
 	if b != nil {
@@ -110,7 +110,7 @@ func NewCTFromBO(bck *cmn.Bck, objName string, b Bowner, ctType ...string) (ct *
 		}
 	}
 	var digest uint64
-	ct.mpathInfo, digest, err = HrwMpath(ct.bck.MakeUname(objName))
+	ct.mi, digest, err = HrwMpath(ct.bck.MakeUname(objName))
 	if err != nil {
 		return
 	}
@@ -131,7 +131,7 @@ func NewCTFromLOM(lom *LOM, ctType string) *CT {
 		objName:     lom.ObjName,
 		contentType: ctType,
 		bck:         lom.Bck(),
-		mpathInfo:   lom.mpathInfo,
+		mi:          lom.mi,
 		digest:      lom.mpathDigest,
 	}
 }
@@ -143,7 +143,7 @@ func (ct *CT) Clone(ctType string) *CT {
 		objName:     ct.objName,
 		contentType: ctType,
 		bck:         ct.bck,
-		mpathInfo:   ct.mpathInfo,
+		mi:          ct.mi,
 		digest:      ct.digest,
 	}
 }
@@ -162,7 +162,7 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 // save to workFQN; second, rename workFQN to ct.FQN. If unset, it writes
 // directly to ct.FQN
 func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (err error) {
-	bdir := ct.mpathInfo.MakePathBck(ct.Bucket())
+	bdir := ct.mi.MakePathBck(ct.Bucket())
 	if err := cos.Stat(bdir); err != nil {
 		return err
 	}

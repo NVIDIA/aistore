@@ -1,7 +1,7 @@
 // Package volume provides the volume abstraction and methods to configLoadVMD, store with redundancy,
 // and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package volume
 
@@ -118,7 +118,7 @@ func configInitMPI(tid string, config *cmn.Config) (err error) {
 		disabledPaths  = make(fs.MPI)
 	)
 	for path := range configPaths {
-		var mi *fs.MountpathInfo
+		var mi *fs.Mountpath
 		if mi, err = fs.NewMountpath(path); err != nil {
 			goto rerr
 		}
@@ -151,7 +151,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 	debug.Assert(vmd.DaemonID == tid)
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
-		var mi *fs.MountpathInfo
+		var mi *fs.Mountpath
 		mi, err = fs.NewMountpath(mpath)
 		if !fsMpathMD.Enabled {
 			if pass == 2 {
@@ -188,7 +188,7 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 			if mi.FsType != fsMpathMD.FsType || (mi.Fs != fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID) {
 				err = &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
-					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FilesystemInfo, *fsMpathMD),
+					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
 				}
 				if pass == 1 || ignoreMissingMountpath {
 					glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
@@ -199,10 +199,10 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 			}
 			if mi.Fs == fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID {
 				glog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
-					mpath, mi.FilesystemInfo, *fsMpathMD, pass)
+					mpath, mi.FS, *fsMpathMD, pass)
 			} else if mi.Fs != fsMpathMD.Fs && mi.FsID == fsMpathMD.FsID {
 				glog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v (pass %d)",
-					mpath, mi.FilesystemInfo, *fsMpathMD, pass)
+					mpath, mi.FS, *fsMpathMD, pass)
 			}
 		}
 

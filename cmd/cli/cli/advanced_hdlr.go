@@ -160,7 +160,8 @@ CreateShards:
 					Reader:     sgl,
 					SkipVC:     true,
 				}
-				return api.PutObject(putArgs)
+				_, err := api.PutObject(putArgs)
+				return err
 			}
 		}(shardNum, shardName))
 		shardNum++

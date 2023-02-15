@@ -1081,7 +1081,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.B
 			return
 		}
 	}
-	sliceFQN := lom.MpathInfo().MakePathFQN(bck.Bucket(), fs.ECSliceType, objName)
+	sliceFQN := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ECSliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
 		t.writeErrSilent(w, r, err, http.StatusNotFound)
@@ -1334,8 +1334,8 @@ func (t *target) fsErr(err error, filepath string) {
 	if !cmn.GCO.Get().FSHC.Enabled || !cos.IsIOError(err) {
 		return
 	}
-	mpathInfo, _ := fs.Path2Mpath(filepath)
-	if mpathInfo == nil {
+	mi, _ := fs.Path2Mpath(filepath)
+	if mi == nil {
 		return
 	}
 	if cos.IsErrOOS(err) {
@@ -1344,7 +1344,7 @@ func (t *target) fsErr(err error, filepath string) {
 		return
 	}
 	glog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)
-	keyName := mpathInfo.Path
+	keyName := mi.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})
 	t.fshc.OnErr(filepath)

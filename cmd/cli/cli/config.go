@@ -379,16 +379,16 @@ func resetNodeConfigHandler(c *cli.Context) error {
 
 func showCLIConfigHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, cliConfigPathFlag) {
-		_, err := fmt.Fprintf(c.App.Writer, "%s\n", config.Path())
-		return err
+		fmt.Fprintf(c.App.Writer, "%s\n", config.Path())
+		return
 	}
 	if flagIsSet(c, jsonFlag) {
-		out, err := jsonMarshalIndent(cfg)
-		if err != nil {
-			return err
+		out, errV := jsonMarshalIndent(cfg)
+		if errV != nil {
+			return errV
 		}
-		_, err = fmt.Fprintln(c.App.Writer, string(out))
-		return err
+		fmt.Fprintln(c.App.Writer, string(out))
+		return
 	}
 
 	flat := flattenConfig(cfg, "")

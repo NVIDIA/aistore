@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -51,32 +51,32 @@ func (reb *Reb) runECjoggers() {
 		cfg            = cmn.GCO.Get()
 		b              = reb.xctn().Bck()
 	)
-	for _, mpathInfo := range availablePaths {
+	for _, mi := range availablePaths {
 		bck := cmn.Bck{Provider: apc.AIS}
 		if b != nil {
 			bck = cmn.Bck{Name: b.Name, Provider: apc.AIS, Ns: b.Ns}
 		}
 		wg.Add(1)
-		go reb.jogEC(mpathInfo, &bck, wg)
+		go reb.jogEC(mi, &bck, wg)
 	}
 	for _, provider := range cfg.Backend.Providers {
-		for _, mpathInfo := range availablePaths {
+		for _, mi := range availablePaths {
 			bck := cmn.Bck{Provider: provider.Name}
 			if b != nil {
 				bck = cmn.Bck{Name: bck.Name, Provider: provider.Name, Ns: bck.Ns}
 			}
 			wg.Add(1)
-			go reb.jogEC(mpathInfo, &bck, wg)
+			go reb.jogEC(mi, &bck, wg)
 		}
 	}
 	wg.Wait()
 }
 
 // mountpath walker - walks through files in /meta/ directory
-func (reb *Reb) jogEC(mpathInfo *fs.MountpathInfo, bck *cmn.Bck, wg *sync.WaitGroup) {
+func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
 	defer wg.Done()
 	opts := &fs.WalkOpts{
-		Mi:       mpathInfo,
+		Mi:       mi,
 		CTs:      []string{fs.ECMetaType},
 		Callback: reb.walkEC,
 		Sorted:   false,

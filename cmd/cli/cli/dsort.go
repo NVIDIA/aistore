@@ -308,14 +308,11 @@ func (b *dsortPB) result() dsortResult {
 	}
 }
 
-func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, err error) {
+func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, errV error) {
 	resp, err := api.MetricsDSort(apiBP, jobID)
 	if err != nil {
 		return false, false, err
 	}
-
-	aborted = false
-	finished = true
 	if len(daemonIds) > 0 {
 		// Check if targets exist in the metric output.
 		for _, daemonID := range daemonIds {
@@ -330,18 +327,20 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 		}
 		resp = filterMap
 	}
+
+	// compute `aborted` and `finished`
+	finished = true
 	for _, targetMetrics := range resp {
 		aborted = aborted || targetMetrics.Aborted.Load()
 		finished = finished && targetMetrics.Creation.Finished
 	}
-	// NOTE: because of the still-open issue we use here Go-standard json, not jsoniter
+	// NOTE: because of the still-open issue we are using Go-standard json, not jsoniter
 	// https://github.com/json-iterator/go/issues/331
 	b, err := jsonStd.MarshalIndent(resp, "", "    ")
 	if err != nil {
 		return false, false, err
 	}
-
-	_, err = fmt.Fprintf(w, "%s\n", string(b))
+	fmt.Fprintln(w, string(b))
 	return
 }
 

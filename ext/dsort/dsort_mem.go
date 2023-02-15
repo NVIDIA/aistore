@@ -286,7 +286,7 @@ func (ds *dsorterMem) finalCleanup() error {
 
 func (*dsorterMem) postRecordDistribution() {}
 
-func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.MountpathInfo) error {
+func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error {
 	bsi := &buildingShardInfo{
 		shardName: shardName,
 	}
@@ -296,12 +296,12 @@ func (ds *dsorterMem) preShardCreation(shardName string, mpathInfo *fs.Mountpath
 		return err
 	}
 	ds.creationPhase.requestedShards <- shardName // we also need to inform ourselves
-	ds.creationPhase.adjuster.write.acquireSema(mpathInfo)
+	ds.creationPhase.adjuster.write.acquireSema(mi)
 	return nil
 }
 
-func (ds *dsorterMem) postShardCreation(mpathInfo *fs.MountpathInfo) {
-	ds.creationPhase.adjuster.write.releaseSema(mpathInfo)
+func (ds *dsorterMem) postShardCreation(mi *fs.Mountpath) {
+	ds.creationPhase.adjuster.write.releaseSema(mi)
 }
 
 func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
@@ -472,8 +472,8 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	if err != nil {
 		return
 	}
-	ds.creationPhase.adjuster.read.acquireSema(ct.MpathInfo())
-	defer ds.creationPhase.adjuster.read.releaseSema(ct.MpathInfo())
+	ds.creationPhase.adjuster.read.acquireSema(ct.Mountpath())
+	defer ds.creationPhase.adjuster.read.releaseSema(ct.Mountpath())
 
 	if ds.m.aborted() {
 		return newDSortAbortedError(ds.m.ManagerUUID)

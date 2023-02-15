@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -36,7 +36,7 @@ type (
 	walkFunc func(fqn string, de DirEntry) error
 
 	WalkOpts struct {
-		Mi       *MountpathInfo
+		Mi       *Mountpath
 		Callback walkFunc
 		Bck      cmn.Bck
 		Dir      string

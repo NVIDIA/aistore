@@ -286,7 +286,7 @@ func loadEtlMD(mpaths fs.MPI, path string) (mainEtlMD *etlMD) {
 	return
 }
 
-func loadEtlMDFromMpath(mpath *fs.MountpathInfo, path string) (etlMD *etlMD) {
+func loadEtlMDFromMpath(mpath *fs.Mountpath, path string) (etlMD *etlMD) {
 	var (
 		fpath = filepath.Join(mpath.Path, path)
 		err   error

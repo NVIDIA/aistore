@@ -71,8 +71,8 @@ func k8sShowEntireCluster(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprint(c.App.Writer, string(output))
-	return err
+	fmt.Fprint(c.App.Writer, string(output))
+	return
 }
 
 func k8sShowSingleDaemon(c *cli.Context) error {

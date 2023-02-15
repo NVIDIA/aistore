@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -25,7 +25,7 @@ type WalkBckOpts struct {
 type (
 	joggerBck struct {
 		workCh   chan *wbe
-		mi       *MountpathInfo
+		mi       *Mountpath
 		validate walkFunc
 		ctx      context.Context
 		opts     WalkOpts

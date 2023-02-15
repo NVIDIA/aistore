@@ -20,15 +20,15 @@ import (
 
 const deletedRoot = ".$deleted"
 
-func (mi *MountpathInfo) DeletedRoot() string {
+func (mi *Mountpath) DeletedRoot() string {
 	return filepath.Join(mi.Path, deletedRoot)
 }
 
-func (mi *MountpathInfo) TempDir(dir string) string {
+func (mi *Mountpath) TempDir(dir string) string {
 	return filepath.Join(mi.Path, deletedRoot, dir)
 }
 
-func (mi *MountpathInfo) RemoveDeleted(who string) (rerr error) {
+func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 	delroot := mi.DeletedRoot()
 	dentries, err := os.ReadDir(delroot)
 	if err != nil {
@@ -62,7 +62,7 @@ func (mi *MountpathInfo) RemoveDeleted(who string) (rerr error) {
 // MoveToDeleted removes directory in steps:
 // 1. Synchronously gets temporary directory name
 // 2. Synchronously renames old folder to temporary directory
-func (mi *MountpathInfo) MoveToDeleted(dir string) (err error) {
+func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 	var base, tmpBase, tmpDst string
 	err = cos.Stat(dir)
 	if err != nil {

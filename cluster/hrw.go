@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -153,7 +153,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 	return
 }
 
-func HrwMpath(uname string) (mi *fs.MountpathInfo, digest uint64, err error) {
+func HrwMpath(uname string) (mi *fs.Mountpath, digest uint64, err error) {
 	var (
 		max            uint64
 		availablePaths = fs.GetAvail()

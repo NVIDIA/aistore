@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -276,7 +276,7 @@ func TestMoveToDeleted(t *testing.T) {
 func TestMoveMarkers(t *testing.T) {
 	tests := []struct {
 		name string
-		f    func(string, ...func()) (*fs.MountpathInfo, error)
+		f    func(string, ...func()) (*fs.Mountpath, error)
 	}{
 		{name: "remove", f: fs.Remove},
 		{name: "disable", f: fs.Disable},
@@ -310,7 +310,7 @@ func initFS() {
 	fs.TestDisableValidation()
 }
 
-func createMountpath(t *testing.T) *fs.MountpathInfo {
+func createMountpath(t *testing.T) *fs.Mountpath {
 	mpathDir := t.TempDir()
 	tools.AddMpath(t, mpathDir)
 	mpaths := fs.GetAvail()
@@ -324,7 +324,7 @@ func BenchmarkMakePathFQN(b *testing.B) {
 			Provider: apc.Azure,
 			Ns:       cmn.Ns{Name: "name", UUID: "uuid"},
 		}
-		mi      = fs.MountpathInfo{Path: trand.String(200)}
+		mi      = fs.Mountpath{Path: trand.String(200)}
 		objName = trand.String(15)
 	)
 

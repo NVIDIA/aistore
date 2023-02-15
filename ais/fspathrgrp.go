@@ -38,7 +38,7 @@ func (g *fsprungroup) init(t *target, newVol bool) {
 
 // enableMpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err error) {
 	enabledMi, err = fs.EnableMpath(mpath, g.t.si.ID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
 		return
@@ -49,7 +49,7 @@ func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.MountpathInfo, er
 
 // attachMpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
-func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpath, err error) {
 	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD, force)
 	if err != nil || addedMi == nil {
 		return
@@ -59,7 +59,7 @@ func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpa
 	return
 }
 
-func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
+func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
 	// TODO 1: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
 	// TODO 2: Integrate with xreg.LimitedCoexistence
 	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, mi))
@@ -86,17 +86,17 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.MountpathInfo) {
 
 // disableMpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
-func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
+func (g *fsprungroup) disableMpath(mpath string, dontResilver bool) (*fs.Mountpath, error) {
 	return g.doDD(apc.ActMountpathDisable, fs.FlagBeingDisabled, mpath, dontResilver)
 }
 
 // detachMpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
-func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.MountpathInfo, error) {
+func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.Mountpath, error) {
 	return g.doDD(apc.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
 }
 
-func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (rmi *fs.MountpathInfo, err error) {
+func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (rmi *fs.Mountpath, err error) {
 	var numAvail int
 	if rmi, numAvail, err = fs.BeginDD(action, flags, mpath); err != nil {
 		return
@@ -145,7 +145,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	return
 }
 
-func (g *fsprungroup) postDD(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error) {
+func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error) {
 	// 1. handle error
 	if err == nil && xres != nil {
 		err = xres.AbortErr()

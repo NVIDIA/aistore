@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -40,7 +40,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 	}
 	debug.Assert(parsedFQN.ContentType == fs.ObjectType)
 	lom.FQN = fqn
-	lom.mpathInfo = parsedFQN.MpathInfo
+	lom.mi = parsedFQN.Mountpath
 	lom.mpathDigest = parsedFQN.Digest
 	lom.ObjName = parsedFQN.ObjName
 	lom.bck = *(*Bck)(&parsedFQN.Bck)
@@ -68,7 +68,7 @@ func (lom *LOM) InitCT(ct *CT) {
 	debug.Assert(ct.bck.Props != nil, ct.bck.String()+" must be initialized")
 	lom.FQN = ct.fqn
 	lom.HrwFQN = ct.hrwFQN
-	lom.mpathInfo = ct.mpathInfo
+	lom.mi = ct.mi
 	lom.mpathDigest = ct.digest
 	lom.ObjName = ct.objName
 	lom.bck = *ct.bck
@@ -81,11 +81,11 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	lom.mpathInfo, lom.mpathDigest, err = HrwMpath(lom.md.uname)
+	lom.mi, lom.mpathDigest, err = HrwMpath(lom.md.uname)
 	if err != nil {
 		return
 	}
-	lom.FQN = lom.mpathInfo.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
+	lom.FQN = lom.mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 	lom.HrwFQN = lom.FQN
 	return
 }
@@ -118,8 +118,8 @@ func (lom *LOM) str() (a string) {
 
 func (lom *LOM) StringEx() string {
 	s := "o[" + lom.bck.String() + "/" + lom.ObjName
-	if lom.mpathInfo != nil {
-		s += ", " + lom.mpathInfo.String()
+	if lom.mi != nil {
+		s += ", " + lom.mi.String()
 	}
 	if lom.md.Size != 0 {
 		s += " size=" + cos.ToSizeIEC(lom.md.Size, 1)

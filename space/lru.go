@@ -91,7 +91,7 @@ type (
 		ini     *IniLRU
 		stopCh  chan struct{}
 		joggers map[string]*lruJ
-		mi      *fs.MountpathInfo
+		mi      *fs.Mountpath
 		config  *cmn.Config
 		// runtime
 		throttle    bool

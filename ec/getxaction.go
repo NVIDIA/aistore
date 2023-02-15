@@ -163,9 +163,9 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 
 	debug.Assert(req.Action == ActRestore)
 
-	jogger, ok := r.getJoggers[lom.MpathInfo().Path]
+	jogger, ok := r.getJoggers[lom.Mountpath().Path]
 	if !ok {
-		debug.Assert(false, "invalid "+lom.MpathInfo().String())
+		debug.Assert(false, "invalid "+lom.Mountpath().String())
 	}
 	r.stats.updateQueue(len(jogger.workCh))
 	jogger.workCh <- req

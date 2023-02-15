@@ -259,13 +259,13 @@ CreateAllShards:
 	return group.Wait()
 }
 
-func (ds *dsorterGeneral) preShardCreation(_ string, mpathInfo *fs.MountpathInfo) error {
-	ds.creationPhase.adjuster.acquireSema(mpathInfo)
+func (ds *dsorterGeneral) preShardCreation(_ string, mi *fs.Mountpath) error {
+	ds.creationPhase.adjuster.acquireSema(mi)
 	return nil
 }
 
-func (ds *dsorterGeneral) postShardCreation(mpathInfo *fs.MountpathInfo) {
-	ds.creationPhase.adjuster.releaseSema(mpathInfo)
+func (ds *dsorterGeneral) postShardCreation(mi *fs.Mountpath) {
+	ds.creationPhase.adjuster.releaseSema(mi)
 }
 
 // loadContent returns function to load content from local storage (either disk or memory).

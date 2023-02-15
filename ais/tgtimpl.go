@@ -252,7 +252,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 		// located on the same filesystem. About "filesystem sharing" see also:
 		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
-		extraCopy = err != nil || !mi.FilesystemInfo.Equal(lom.MpathInfo().FilesystemInfo)
+		extraCopy = err != nil || !mi.FS.Equal(lom.Mountpath().FS)
 	}
 	if extraCopy {
 		workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfilePut)

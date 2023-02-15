@@ -132,9 +132,9 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 		return fmt.Errorf("invalid request's action %s for putxaction", req.Action)
 	}
 
-	jogger, ok := r.putJoggers[lom.MpathInfo().Path]
+	jogger, ok := r.putJoggers[lom.Mountpath().Path]
 	if !ok {
-		debug.Assert(false, "invalid "+lom.MpathInfo().String())
+		debug.Assert(false, "invalid "+lom.Mountpath().String())
 	}
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)

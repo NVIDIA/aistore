@@ -97,7 +97,7 @@ var _ = Describe("newConcAdjuster", func() {
 			perfectUtil  = int(cfg.Disk.DiskUtilMaxWM+cfg.Disk.DiskUtilHighWM) / 2
 		)
 		availablePaths := fs.GetAvail()
-		mpathInfo := availablePaths[testingConfigDir]
+		mi := availablePaths[testingConfigDir]
 
 		adjuster := newConcAdjuster(0, 1)
 
@@ -106,9 +106,9 @@ var _ = Describe("newConcAdjuster", func() {
 
 		for {
 			curLimit := calcSemaLimit(func() {
-				adjuster.acquireSema(mpathInfo)
+				adjuster.acquireSema(mi)
 			}, func() {
-				adjuster.releaseSema(mpathInfo)
+				adjuster.releaseSema(mi)
 			})
 
 			// If we get enough close we can just break

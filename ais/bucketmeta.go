@@ -443,7 +443,7 @@ func _loadBMD(path string) (bmd *bucketMD, err error) {
 	return
 }
 
-func loadBMDFromMpath(mpath *fs.MountpathInfo, path string) (bmd *bucketMD) {
+func loadBMDFromMpath(mpath *fs.Mountpath, path string) (bmd *bucketMD) {
 	var (
 		fpath = filepath.Join(mpath.Path, path)
 		err   error

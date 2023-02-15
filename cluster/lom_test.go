@@ -47,7 +47,7 @@ var _ = Describe("LOM", func() {
 
 	var (
 		mpaths []string
-		mis    []*fs.MountpathInfo
+		mis    []*fs.Mountpath
 
 		oldCloudProviders = cmn.GCO.Get().Backend.Providers
 	)
@@ -55,7 +55,7 @@ var _ = Describe("LOM", func() {
 	for i := 0; i < numMpaths; i++ {
 		mpath := fmt.Sprintf("%s/mpath%d", tmpDir, i)
 		mpaths = append(mpaths, mpath)
-		mis = append(mis, &fs.MountpathInfo{Path: mpath})
+		mis = append(mis, &fs.Mountpath{Path: mpath})
 		_ = cos.CreateDir(mpath)
 	}
 
@@ -137,7 +137,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bck().Provider).To(Equal(apc.AIS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.MpathInfo().Path).To(BeEquivalentTo(mpaths[0]))
+				Expect(lom.Mountpath().Path).To(BeEquivalentTo(mpaths[0]))
 				expectEqualBck(lom.Bucket(), &localBckA)
 				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 
@@ -156,7 +156,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bck().Provider).To(Equal(apc.AIS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.MpathInfo().Path).To(BeEquivalentTo(mpaths[0]))
+				Expect(lom.Mountpath().Path).To(BeEquivalentTo(mpaths[0]))
 				expectEqualBck(lom.Bucket(), &localBckA)
 				Expect(lom.ObjName).To(BeEquivalentTo(testObject))
 			})
@@ -191,7 +191,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bck().Provider).To(Equal(apc.AWS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.MpathInfo().Path).To(Equal(mpaths[0]))
+				Expect(lom.Mountpath().Path).To(Equal(mpaths[0]))
 				expectEqualBck(lom.Bucket(), &cloudBckA)
 				Expect(lom.ObjName).To(Equal(testObject))
 
@@ -210,7 +210,7 @@ var _ = Describe("LOM", func() {
 				Expect(lom.Bck().Provider).To(Equal(apc.AWS))
 
 				// from lom.go: redundant in-part; tradeoff to speed-up workfile name gen, etc.
-				Expect(lom.MpathInfo().Path).To(Equal(mpaths[0]))
+				Expect(lom.Mountpath().Path).To(Equal(mpaths[0]))
 				expectEqualBck(lom.Bucket(), &cloudBckA)
 				Expect(lom.ObjName).To(Equal(testObject))
 			})
@@ -1012,7 +1012,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomLocal.FQN).To(Equal(desiredLocalFQN))
 			Expect(lomLocal.Uname()).To(Equal(lomLocal.Bck().MakeUname(testObject)))
 			Expect(lomLocal.Bck().Provider).To(Equal(apc.AIS))
-			Expect(lomLocal.MpathInfo().Path).To(Equal(mpaths[0]))
+			Expect(lomLocal.Mountpath().Path).To(Equal(mpaths[0]))
 			expectEqualBck(lomLocal.Bucket(), &localSameBck)
 			Expect(lomLocal.ObjName).To(Equal(testObject))
 
@@ -1024,7 +1024,7 @@ var _ = Describe("LOM", func() {
 			Expect(lomCloud.FQN).To(Equal(desiredCloudFQN))
 			Expect(lomCloud.Uname()).To(Equal(lomCloud.Bck().MakeUname(testObject)))
 			Expect(lomCloud.Bck().Provider).To(Equal(apc.AWS))
-			Expect(lomCloud.MpathInfo().Path).To(Equal(mpaths[0]))
+			Expect(lomCloud.Mountpath().Path).To(Equal(mpaths[0]))
 			expectEqualBck(lomCloud.Bucket(), &cloudSameBck)
 			Expect(lomCloud.ObjName).To(Equal(testObject))
 

@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -54,8 +54,8 @@ var _ = Describe("Mirror", func() {
 		}
 		bck             = cluster.Bck{Name: testBucketName, Provider: apc.AIS, Ns: cmn.NsGlobal, Props: props}
 		bmdMock         = mock.NewBaseBownerMock(&bck)
-		mi              = fs.MountpathInfo{Path: mpath}
-		mi2             = fs.MountpathInfo{Path: mpath2}
+		mi              = fs.Mountpath{Path: mpath}
+		mi2             = fs.Mountpath{Path: mpath2}
 		bucketPath      = mi.MakePathCT(bck.Bucket(), fs.ObjectType)
 		defaultObjFQN   = mi.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)
 		expectedCopyFQN = mi2.MakePathFQN(bck.Bucket(), fs.ObjectType, testObjectName)

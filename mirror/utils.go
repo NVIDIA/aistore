@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -66,7 +66,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 	//  While copying we may find out that some copies do not exist -
 	//  these copies will be removed and `NumCopies()` will decrease.
 	for lom.NumCopies() < copies {
-		var mi *fs.MountpathInfo
+		var mi *fs.Mountpath
 		if mi = lom.LeastUtilNoCopy(); mi == nil {
 			err = fmt.Errorf("%s (copies=%d): cannot find dst mountpath", lom, lom.NumCopies())
 			return

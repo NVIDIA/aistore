@@ -98,7 +98,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		return
 	}
 
-	hdr := cmn.RangeHdr(offset, length)
+	hdr := cmn.MakeRangeHdr(offset, length)
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
 		silent = true
@@ -293,7 +293,7 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 		return err
 	}
 
-	err = api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
 
 	if flagIsSet(c, progressBarFlag) {
 		progress.Wait()
@@ -612,8 +612,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	_, _ = fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck.DisplayName(), objName, cos.ToSizeIEC(totalSize, 2))
-
+	fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck.DisplayName(), objName, cos.ToSizeIEC(totalSize, 2))
 	return nil
 }
 
@@ -697,7 +696,7 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 			if showProgress {
 				errSb.WriteString(str)
 			} else {
-				_, _ = fmt.Fprint(c.App.Writer, str)
+				fmt.Fprint(c.App.Writer, str)
 			}
 			errCount.Inc()
 			return
@@ -733,16 +732,16 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 			Reader:     countReader,
 			SkipVC:     flagIsSet(c, skipVerCksumFlag),
 		}
-		if err := api.PutObject(putArgs); err != nil {
+		if _, err := api.PutObject(putArgs); err != nil {
 			str := fmt.Sprintf("Failed to PUT object %q: %v\n", f.name, err)
 			if showProgress {
 				errSb.WriteString(str)
 			} else {
-				_, _ = fmt.Fprint(c.App.Writer, str)
+				fmt.Fprint(c.App.Writer, str)
 			}
 			errCount.Inc()
 		} else if verbose && !showProgress {
-			_, _ = fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
+			fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
 		}
 	}
 
@@ -754,14 +753,12 @@ func uploadFiles(c *cli.Context, p uploadParams) error {
 
 	if showProgress {
 		progress.Wait()
-		_, _ = fmt.Fprint(c.App.Writer, errSb.String())
+		fmt.Fprint(c.App.Writer, errSb.String())
 	}
-
 	if failed := errCount.Load(); failed != 0 {
 		return fmt.Errorf("failed to PUT %d object%s", failed, cos.Plural(int(failed)))
 	}
-
-	_, _ = fmt.Fprintf(c.App.Writer, "PUT %d object%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.bck.DisplayName())
+	fmt.Fprintf(c.App.Writer, "PUT %d object%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.bck.DisplayName())
 	return nil
 }
 

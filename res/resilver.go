@@ -1,6 +1,6 @@
 // Package res provides local volume resilvering upon mountpath-attach and similar
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package res
 
@@ -40,9 +40,9 @@ type (
 	Args struct {
 		UUID              string
 		Notif             *xact.NotifXact
-		Rmi               *fs.MountpathInfo
+		Rmi               *fs.Mountpath
 		Action            string
-		PostDD            func(rmi *fs.MountpathInfo, action string, xres *xs.Resilver, err error)
+		PostDD            func(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error)
 		SkipGlobMisplaced bool
 		SingleRmiJogger   bool
 	}
@@ -171,12 +171,12 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 		glog.Warning(err)
 		return
 	}
-	if destMpath.Path == ct.MpathInfo().Path {
+	if destMpath.Path == ct.Mountpath().Path {
 		return
 	}
 
 	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceType, ct.ObjectName())
-	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.MpathInfo(), destMpath, buf)
+	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.Mountpath(), destMpath, buf)
 	if err != nil {
 		return
 	}
@@ -203,7 +203,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.MountpathInfo, buf []byte) (string, string, error) {
+func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
@@ -258,10 +258,10 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 			return nil
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
-		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.MpathInfo(), newMpath.MpathInfo, buf)
+		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.Mountpath(), newMpath.Mountpath, buf)
 		if errEc != nil {
 			glog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
-				xname, lom, lom.MpathInfo().Path, newMpath.MpathInfo.Path, errEc)
+				xname, lom, lom.Mountpath().Path, newMpath.Mountpath.Path, errEc)
 			return nil
 		}
 	}
@@ -309,11 +309,11 @@ redo:
 			retries++
 			if retries > maxRetries {
 				hmi := "???"
-				if hlom != nil && hlom.MpathInfo() != nil {
-					hmi = hlom.MpathInfo().String()
+				if hlom != nil && hlom.Mountpath() != nil {
+					hmi = hlom.Mountpath().String()
 				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
-					xname, orig, orig.MpathInfo(), hmi, mi)
+					xname, orig, orig.Mountpath(), hmi, mi)
 				glog.Error(errHrw)
 				return
 			}
@@ -344,7 +344,7 @@ ret:
 	return nil
 }
 
-func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hlom *cluster.LOM, err error) {
+func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.Mountpath, buf []byte) (hlom *cluster.LOM, err error) {
 	if err = lom.Copy(mi, buf); err != nil {
 		return
 	}
@@ -353,7 +353,7 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.MountpathInfo, buf []byte) (hl
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
 		return
 	}
-	debug.Assert(hlom.MpathInfo().Path == mi.Path)
+	debug.Assert(hlom.Mountpath().Path == mi.Path)
 
 	// reload; cache iff write-policy != immediate
 	err = hlom.Load(!hlom.WritePolicy().IsImmediate() /*cache it*/, true /*locked*/)

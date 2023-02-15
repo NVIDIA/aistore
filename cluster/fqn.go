@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -26,7 +26,7 @@ func ResolveFQN(fqn string) (parsedFQN fs.ParsedFQN, hrwFQN string, err error) {
 
 func HrwFQN(bck *cmn.Bck, contentType, objName string) (fqn string, digest uint64, err error) {
 	var (
-		mi    *fs.MountpathInfo
+		mi    *fs.Mountpath
 		uname = bck.MakeUname(objName)
 	)
 	if mi, digest, err = HrwMpath(uname); err == nil {

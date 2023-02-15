@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -10,22 +10,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type FilesystemInfo struct {
-	Fs     string
-	FsType string
-	FsID   cos.FsID
-}
-
-func (fsi *FilesystemInfo) Equal(otherFsi FilesystemInfo) bool {
-	if fsi.Fs == "" || otherFsi.Fs == "" || fsi.FsType == "" || otherFsi.FsType == "" {
-		return false
-	}
-	return fsi.FsID == otherFsi.FsID
-}
-
-////////////
-// xattrs //
-////////////
+//
+// xattrs
+//
 
 // GetXattr gets xattr by name - see also the buffered version below
 func GetXattr(fqn, attrName string) ([]byte, error) {

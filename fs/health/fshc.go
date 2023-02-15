@@ -62,13 +62,13 @@ func (f *FSHC) Run() error {
 	for {
 		select {
 		case filePath := <-f.fileListCh:
-			mpathInfo, err := fs.Path2Mpath(filePath)
+			mi, err := fs.Path2Mpath(filePath)
 			if err != nil {
 				glog.Error(err)
 				break
 			}
 
-			f.runMpathTest(mpathInfo.Path, filePath)
+			f.runMpathTest(mi.Path, filePath)
 		case <-f.stopCh.Listen():
 			return nil
 		}

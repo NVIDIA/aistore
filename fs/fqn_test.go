@@ -1,6 +1,6 @@
 // Package fs_test provides tests for fs package
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs_test
 
@@ -279,7 +279,7 @@ func TestParseFQN(t *testing.T) {
 				return
 			}
 			var (
-				gotMpath, gotBck           = parsedFQN.MpathInfo.Path, parsedFQN.Bck
+				gotMpath, gotBck           = parsedFQN.Mountpath.Path, parsedFQN.Bck
 				gotContentType, gotObjName = parsedFQN.ContentType, parsedFQN.ObjName
 			)
 			if gotMpath != tt.wantMPath {
@@ -371,7 +371,7 @@ func TestMakeAndParseFQN(t *testing.T) {
 				t.Fatalf("failed to parse FQN: %v", err)
 			}
 			var (
-				gotMpath, gotBck           = parsedFQN.MpathInfo.Path, parsedFQN.Bck
+				gotMpath, gotBck           = parsedFQN.Mountpath.Path, parsedFQN.Bck
 				gotContentType, gotObjName = parsedFQN.ContentType, parsedFQN.ObjName
 			)
 			if gotMpath != tt.mpath {

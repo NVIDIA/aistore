@@ -72,7 +72,7 @@ type (
 		ctx       context.Context
 		syncGroup *joggerSyncGroup
 		opts      *JoggerGroupOpts
-		mi        *fs.MountpathInfo
+		mi        *fs.Mountpath
 		config    *cmn.Config
 		stopCh    cos.StopCh
 		bufs      [][]byte
@@ -149,7 +149,7 @@ func (jg *JoggerGroup) markFinished() {
 	}
 }
 
-func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.MountpathInfo) (j *jogger) {
+func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.Mountpath) (j *jogger) {
 	var syncGroup *joggerSyncGroup
 	if opts.Parallel > 1 {
 		var (

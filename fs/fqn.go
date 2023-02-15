@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -32,7 +32,7 @@ const (
 )
 
 type ParsedFQN struct {
-	MpathInfo   *MountpathInfo
+	Mountpath   *Mountpath
 	ContentType string
 	Bck         cmn.Bck
 	ObjName     string
@@ -46,7 +46,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 		rel           string
 		itemIdx, prev int
 	)
-	parsed.MpathInfo, rel, err = FQN2Mpath(fqn)
+	parsed.Mountpath, rel, err = FQN2Mpath(fqn)
 	if err != nil {
 		return
 	}
@@ -125,7 +125,7 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 }
 
 // FQN2Mpath matches FQN to mountpath and returns the mountpath and the relative path.
-func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error) {
+func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
 	availablePaths := GetAvail()
 	if len(availablePaths) == 0 {
 		err = cmn.ErrNoMountpaths
@@ -153,9 +153,9 @@ func FQN2Mpath(fqn string) (found *MountpathInfo, relativePath string, err error
 	return
 }
 
-// Path2Mpath takes in any file path (e.g., ../../a/b/c) and returns the matching `mpathInfo`,
+// Path2Mpath takes in any file path (e.g., ../../a/b/c) and returns the matching `mi`,
 // if exists
-func Path2Mpath(path string) (found *MountpathInfo, err error) {
+func Path2Mpath(path string) (found *Mountpath, err error) {
 	found, _, err = FQN2Mpath(filepath.Clean(path))
 	return
 }

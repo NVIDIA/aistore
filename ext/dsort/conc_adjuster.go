@@ -110,8 +110,8 @@ func newConcAdjuster(maxLimit, goroutineLimitCoef int) (ca *concAdjuster) {
 		maxLimit = calcMaxLimit()
 	}
 	limit := cos.Min(defaultConcFuncLimit, maxLimit)
-	for _, mpathInfo := range availablePaths {
-		adjusters[mpathInfo.Path] = newMpathAdjuster(limit, maxLimit)
+	for _, mi := range availablePaths {
+		adjusters[mi.Path] = newMpathAdjuster(limit, maxLimit)
 	}
 	ca = &concAdjuster{
 		defaultLimit:       limit,
@@ -172,13 +172,13 @@ func (ca *concAdjuster) stop() {
 	ca.stopCh.Close()
 }
 
-func (ca *concAdjuster) acquireSema(mpathInfo *fs.MountpathInfo) {
+func (ca *concAdjuster) acquireSema(mi *fs.Mountpath) {
 	ca.mu.Lock()
-	adjuster, ok := ca.adjusters[mpathInfo.Path]
+	adjuster, ok := ca.adjusters[mi.Path]
 	if !ok {
 		maxLimit := calcMaxLimit()
 		adjuster = newMpathAdjuster(ca.defaultLimit, maxLimit)
-		ca.adjusters[mpathInfo.Path] = adjuster
+		ca.adjusters[mi.Path] = adjuster
 
 		// Also we need to update goroutine semaphore size
 		diff := ca.goroutineLimitCoef * ca.defaultLimit
@@ -188,9 +188,9 @@ func (ca *concAdjuster) acquireSema(mpathInfo *fs.MountpathInfo) {
 	adjuster.funcCallsSema.Acquire()
 }
 
-func (ca *concAdjuster) releaseSema(mpathInfo *fs.MountpathInfo) {
+func (ca *concAdjuster) releaseSema(mi *fs.Mountpath) {
 	ca.mu.RLock()
-	adjuster := ca.adjusters[mpathInfo.Path]
+	adjuster := ca.adjusters[mi.Path]
 	ca.mu.RUnlock()
 	adjuster.funcCallsSema.Release()
 }

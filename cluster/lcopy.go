@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -68,12 +68,12 @@ func (lom *LOM) delCopyMd(copyFQN string) {
 }
 
 // NOTE: used only in tests
-func (lom *LOM) AddCopy(copyFQN string, mpi *fs.MountpathInfo) error {
+func (lom *LOM) AddCopy(copyFQN string, mpi *fs.Mountpath) error {
 	if lom.md.copies == nil {
 		lom.md.copies = make(fs.MPI, 2)
 	}
 	lom.md.copies[copyFQN] = mpi
-	lom.md.copies[lom.FQN] = lom.mpathInfo
+	lom.md.copies[lom.FQN] = lom.mi
 	return lom.syncMetaWithCopies()
 }
 
@@ -181,7 +181,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 		buf, slab      = T.PageMM().Alloc()
 	)
 	for path, mi := range availablePaths {
-		if path == lom.mpathInfo.Path {
+		if path == lom.mi.Path {
 			continue
 		}
 		fqn := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
@@ -221,7 +221,7 @@ func (lom *LOM) _restore(fqn string, buf []byte) (dst *LOM, err error) {
 
 // increment the object's num copies by (well) copying the former
 // (compare with lom.Copy2FQN below)
-func (lom *LOM) Copy(mi *fs.MountpathInfo, buf []byte) (err error) {
+func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 	var (
 		copyFQN = mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
 		workFQN = mi.MakePathFQN(lom.Bucket(), fs.WorkfileType, fs.WorkfileCopy+"."+lom.ObjName)
@@ -323,8 +323,8 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 			lom.md.copies = make(fs.MPI, 2)
 			dst.md.copies = make(fs.MPI, 2)
 		}
-		lom.md.copies[dstFQN], dst.md.copies[dstFQN] = dst.mpathInfo, dst.mpathInfo
-		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mpathInfo, lom.mpathInfo
+		lom.md.copies[dstFQN], dst.md.copies[dstFQN] = dst.mi, dst.mi
+		lom.md.copies[lom.FQN], dst.md.copies[lom.FQN] = lom.mi, lom.mi
 		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
@@ -359,7 +359,7 @@ func (lom *LOM) LBGet() (fqn string) {
 func (lom *LOM) leastUtilCopy() (fqn string) {
 	var (
 		mpathUtils = fs.GetAllMpathUtils()
-		minUtil    = mpathUtils.Get(lom.mpathInfo.Path)
+		minUtil    = mpathUtils.Get(lom.mi.Path)
 		copies     = lom.GetCopies()
 	)
 	fqn = lom.FQN
@@ -375,7 +375,7 @@ func (lom *LOM) leastUtilCopy() (fqn string) {
 
 // returns the least utilized mountpath that does _not_ have a copy of this `lom` yet
 // (compare with leastUtilCopy())
-func (lom *LOM) LeastUtilNoCopy() (mi *fs.MountpathInfo) {
+func (lom *LOM) LeastUtilNoCopy() (mi *fs.Mountpath) {
 	var (
 		availablePaths = fs.GetAvail()
 		mpathUtils     = fs.GetAllMpathUtils()
@@ -394,7 +394,7 @@ func (lom *LOM) LeastUtilNoCopy() (mi *fs.MountpathInfo) {
 
 func (lom *LOM) haveMpath(mpath string) bool {
 	if len(lom.md.copies) == 0 {
-		return lom.mpathInfo.Path == mpath
+		return lom.mi.Path == mpath
 	}
 	for _, mi := range lom.md.copies {
 		if mi.Path == mpath {
@@ -409,7 +409,7 @@ func (lom *LOM) haveMpath(mpath string) bool {
 // - checks hrw location first, and
 // - checks copies (if any) against the current configuation and available mountpaths;
 // - does not check `fstat` in either case (TODO: configurable or scrub);
-func (lom *LOM) ToMpath() (mi *fs.MountpathInfo, isHrw bool) {
+func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 	var (
 		availablePaths = fs.GetAvail()
 		hrwMi, _, err  = HrwMpath(lom.md.uname)
@@ -419,7 +419,7 @@ func (lom *LOM) ToMpath() (mi *fs.MountpathInfo, isHrw bool) {
 		return
 	}
 	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))
-	if lom.mpathInfo.Path != hrwMi.Path {
+	if lom.mi.Path != hrwMi.Path {
 		return hrwMi, true
 	}
 	mirror := lom.MirrorConf()

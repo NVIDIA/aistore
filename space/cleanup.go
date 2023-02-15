@@ -72,7 +72,7 @@ type (
 		ini     *IniCln
 		stopCh  chan struct{}
 		joggers map[string]*clnJ
-		mi      *fs.MountpathInfo
+		mi      *fs.Mountpath
 		config  *cmn.Config
 	}
 	clnFactory struct {

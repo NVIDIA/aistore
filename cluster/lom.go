@@ -47,7 +47,7 @@ type (
 	LOM struct {
 		bck         Bck
 		ObjName     string
-		mpathInfo   *fs.MountpathInfo
+		mi          *fs.Mountpath
 		FQN         string
 		HrwFQN      string // (=> main replica)
 		info        string
@@ -155,11 +155,11 @@ func (lom *LOM) CksumType() string            { return lom.bck.CksumConf().Type 
 func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
-func (lom *LOM) ObjectName() string           { return lom.ObjName }
-func (lom *LOM) Bck() *Bck                    { return &lom.bck }
-func (lom *LOM) Bucket() *cmn.Bck             { return (*cmn.Bck)(&lom.bck) }
-func (lom *LOM) MpathInfo() *fs.MountpathInfo { return lom.mpathInfo }
-func (lom *LOM) Location() string             { return T.String() + apc.LocationPropSepa + lom.mpathInfo.String() }
+func (lom *LOM) ObjectName() string       { return lom.ObjName }
+func (lom *LOM) Bck() *Bck                { return &lom.bck }
+func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
+func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
+func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
 func ParseObjLoc(loc string) (tname, mpname string) {
 	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
@@ -434,7 +434,7 @@ func (lom *LOM) Uncache(delDirty bool) {
 }
 
 func (lom *LOM) CacheIdx() int     { return fs.LcacheIdx(lom.mpathDigest) }
-func (lom *LOM) lcache() *sync.Map { return lom.mpathInfo.LomCache(lom.CacheIdx()) }
+func (lom *LOM) lcache() *sync.Map { return lom.mi.LomCache(lom.CacheIdx()) }
 
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	lcache = lom.lcache()
@@ -584,7 +584,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 		return
 	}
 	// slow path
-	bdir := lom.mpathInfo.MakePathBck(lom.Bucket())
+	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s(bdir %s): %w", lom, bdir, err)
 	}
@@ -598,7 +598,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 
 // (compare with cos.Rename)
 func (lom *LOM) RenameFile(workfqn string) error {
-	bdir := lom.mpathInfo.MakePathBck(lom.Bucket())
+	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
 		return fmt.Errorf("%s(bdir %s): %w", lom, bdir, err)
 	}

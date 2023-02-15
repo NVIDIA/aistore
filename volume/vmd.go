@@ -1,7 +1,7 @@
 // Package volume provides the volume abstraction and methods to bootstrap, store with redundancy,
 // and validate the corresponding metadata. AIS volume is built on top of mountpaths (fs package).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package volume
 
@@ -65,7 +65,7 @@ var _ jsp.Opts = (*VMD)(nil)
 
 func (*VMD) JspOpts() jsp.Options { return jsp.CCSign(cmn.MetaverVMD) }
 
-func (vmd *VMD) addMountpath(mi *fs.MountpathInfo, enabled bool) {
+func (vmd *VMD) addMountpath(mi *fs.Mountpath, enabled bool) {
 	vmd.Mountpaths[mi.Path] = &fsMpathMD{
 		Path:    mi.Path,
 		Enabled: enabled,

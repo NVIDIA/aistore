@@ -60,7 +60,7 @@ type (
 	PartsFQN interface {
 		ObjectName() string
 		Bucket() *cmn.Bck
-		MpathInfo() *MountpathInfo
+		Mountpath() *Mountpath
 		CacheIdx() int
 	}
 
@@ -105,7 +105,7 @@ func (f *contentSpecMgr) Gen(parts PartsFQN, contentType, prefix string) (fqn st
 		spec    = f.m[contentType]
 		objName = spec.GenUniqueFQN(parts.ObjectName(), prefix)
 	)
-	return parts.MpathInfo().MakePathFQN(parts.Bucket(), contentType, objName)
+	return parts.Mountpath().MakePathFQN(parts.Bucket(), contentType, objName)
 }
 
 // FileSpec returns the specification/attributes and information about the `fqn`

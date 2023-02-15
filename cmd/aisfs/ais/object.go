@@ -45,7 +45,7 @@ func (obj *Object) Put(r cos.ReadOpenCloser) (err error) {
 		ObjName:    obj.Name,
 		Reader:     r,
 	}
-	err = api.PutObject(putArgs)
+	_, err = api.PutObject(putArgs)
 	if err != nil {
 		err = newObjectIOError(err, "Put", obj.Name)
 	}
@@ -55,7 +55,7 @@ func (obj *Object) Put(r cos.ReadOpenCloser) (err error) {
 func (obj *Object) GetChunk(w io.Writer, offset, length int64) (n int64, err error) {
 	var (
 		oah     api.ObjAttrs
-		hdr     = cmn.RangeHdr(offset, length)
+		hdr     = cmn.MakeRangeHdr(offset, length)
 		getArgs = api.GetArgs{Writer: w, Header: hdr}
 	)
 	oah, err = api.GetObject(obj.apiParams, obj.bck, obj.Name, &getArgs)
