@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // Naming Convention:
@@ -235,7 +234,7 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.core.initProm(node)
 }
 
-func (r *Trunner) GetWhatStats() (ds *DaemonStats) {
+func (r *Trunner) GetWhatStats() (ds *Node) {
 	ds = r.statsRunner.GetWhatStats()
 	ds.TargetCDF = r.TargetCDF
 	return
@@ -245,8 +244,8 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	r.lines = r.lines[:0]
 
 	// 1. collect disk stats and populate the tracker
-	fs.FillDiskStats(r.disk)
 	s := r.core
+	fs.FillDiskStats(r.disk)
 	for disk, stats := range r.disk {
 		v := s.Tracker[nameRbps(disk)]
 		v.Value = stats.RBps
@@ -261,19 +260,17 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 2 copy stats, reset latencies, send via StatsD if configured
-	r.core.updateUptime(uptime)
-	r.core.promLock()
-	idle := r.core.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
-	r.core.promUnlock()
+	s.updateUptime(uptime)
+	s.promLock()
+	idle := s.copyT(r.ctracker, config.Disk.DiskUtilLowWM)
+	s.promUnlock()
 
 	if now >= r.nextLogTime && !idle {
-		// NOTE: sharing the same sgl w/ CoreStats.copyT
-		s.sgl.Reset()
-		err := jsoniter.NewEncoder(r.core.sgl).Encode(r.ctracker)
-		debug.AssertNoErr(err)
-
-		bytes := r.core.sgl.Bytes()
+		s.sgl.Reset() // NOTE: sharing the same sgl w/ CoreStats.copyT
+		r.ctracker.write(s.sgl)
+		bytes := s.sgl.Bytes()
 		r.lines = append(r.lines, string(bytes))
+
 		i := int64(config.Log.StatsTime)
 		if i == 0 {
 			i = dfltStatsLogInterval

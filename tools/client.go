@@ -606,14 +606,14 @@ func _waitReToStart(bp api.BaseParams) {
 	tlog.Logf("Warning: timed out (%v) waiting for rebalance or resilver to start\n", timeout)
 }
 
-func GetClusterStats(t *testing.T, proxyURL string) stats.ClusterStats {
+func GetClusterStats(t *testing.T, proxyURL string) stats.Cluster {
 	bp := BaseAPIParams(proxyURL)
 	scs, err := api.GetClusterStats(bp)
 	tassert.CheckFatal(t, err)
 	return scs
 }
 
-func GetNamedStatsVal(ds *stats.DaemonStats, name string) int64 {
+func GetNamedStatsVal(ds *stats.Node, name string) int64 {
 	v, ok := ds.Tracker[name]
 	if !ok {
 		return 0

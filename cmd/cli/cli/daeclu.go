@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/urfave/cli"
 )
 
@@ -60,7 +59,7 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap,
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb.DaemonStatusMap,
 	cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
@@ -123,7 +122,7 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		return err
 	}
 
-	targets := stats.DaemonStatusMap{sid: {}}
+	targets := teb.DaemonStatusMap{sid: {}}
 	if sid == "" {
 		targets = tstatusMap
 	}

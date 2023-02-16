@@ -174,7 +174,7 @@ func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err err
 // the previous time.
 //
 // - See also: `api.GetClusterStats`, stats/api.go
-func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.DaemonStats, err error) {
+func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{

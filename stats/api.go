@@ -35,31 +35,35 @@ type (
 
 		IncErr(metric string)
 
-		GetWhatStats() *DaemonStats
+		GetWhatStats() *Node
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
 		RegMetrics(node *cluster.Snode) // + init Prometheus, if configured
 	}
 
 	// REST API
-	DaemonStats struct {
+	Node struct {
 		Tracker   copyTracker  `json:"tracker"`
 		TargetCDF fs.TargetCDF `json:"capacity"`
 	}
-	ClusterStats struct {
-		Proxy  *DaemonStats            `json:"proxy"`
-		Target map[string]*DaemonStats `json:"target"`
+	Cluster struct {
+		Proxy  *Node            `json:"proxy"`
+		Target map[string]*Node `json:"target"`
 	}
-	ClusterStatsRaw struct {
-		Proxy  *DaemonStats    `json:"proxy"`
+	ClusterRaw struct {
+		Proxy  *Node           `json:"proxy"`
 		Target cos.JSONRawMsgs `json:"target"`
 	}
 
+	// (includes stats.Node and more)
 	DaemonStatus struct {
-		Snode          *cluster.Snode `json:"snode"`
-		Tracker        copyTracker    `json:"stats_tracker"`
-		TargetCDF      fs.TargetCDF   `json:"mountpaths_info"`
-		RebSnap        *cluster.Snap  `json:"rebalance_snap,omitempty"`
+		Snode *cluster.Snode `json:"snode"`
+		// Node
+		Tracker   copyTracker  `json:"stats_tracker"`
+		TargetCDF fs.TargetCDF `json:"mountpaths_info"`
+		// separately, rebalance stats
+		RebSnap *cluster.Snap `json:"rebalance_snap,omitempty"`
+		// assorted props
 		Status         string         `json:"status"`
 		DeploymentType string         `json:"deployment"`
 		Version        string         `json:"ais_version"`  // major.minor.build
@@ -68,5 +72,4 @@ type (
 		MemCPUInfo     cos.MemCPUInfo `json:"sys_info"`
 		SmapVersion    int64          `json:"smap_version,string"`
 	}
-	DaemonStatusMap map[string]*DaemonStatus // by SID (aka DaemonID)
 )

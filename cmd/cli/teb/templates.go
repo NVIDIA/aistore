@@ -392,8 +392,8 @@ type (
 		ExtendedURLs bool
 	}
 	DaemonStatusHelper struct {
-		Pmap stats.DaemonStatusMap `json:"pmap"`
-		Tmap stats.DaemonStatusMap `json:"tmap"`
+		Pmap DaemonStatusMap `json:"pmap"`
+		Tmap DaemonStatusMap `json:"tmap"`
 	}
 	StatusHelper struct {
 		Smap      *cluster.Smap      `json:"smap"`
@@ -497,7 +497,7 @@ func (h *DaemonStatusHelper) pods() []string         { return h.toSlice("k8s_pod
 // internal helper for the methods above
 func (h *DaemonStatusHelper) toSlice(jtag string) []string {
 	set := cos.NewStrSet()
-	for _, m := range []stats.DaemonStatusMap{h.Pmap, h.Tmap} {
+	for _, m := range []DaemonStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {
 			case "status":

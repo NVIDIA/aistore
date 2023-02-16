@@ -32,9 +32,9 @@ const (
 func NewDaeStatus(st *stats.DaemonStatus, smap *cluster.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
-		return newTableProxies(stats.DaemonStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableProxies(DaemonStatusMap{st.Snode.ID(): st}, smap, units)
 	case apc.Target:
-		return newTableTargets(stats.DaemonStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableTargets(DaemonStatusMap{st.Snode.ID(): st}, smap, units)
 	default:
 		debug.Assert(false)
 		return nil
@@ -54,7 +54,7 @@ func NewDaeMapStatus(ds *DaemonStatusHelper, smap *cluster.Smap, daeType, units 
 }
 
 // proxy(ies)
-func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableProxies(ps DaemonStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
 		h        = DaemonStatusHelper{Pmap: ps}
 		pods     = h.pods()
@@ -73,7 +73,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string)
 		table = newTable(cols...)
 	)
 
-	ids := statusMap2SortedNodes(ps)
+	ids := ps.sortedSIDs()
 
 	for _, sid := range ids {
 		ds := ps[sid]
@@ -122,7 +122,7 @@ func newTableProxies(ps stats.DaemonStatusMap, smap *cluster.Smap, units string)
 }
 
 // target(s)
-func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableTargets(ts DaemonStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
 		h        = DaemonStatusHelper{Tmap: ts}
 		pods     = h.pods()
@@ -144,7 +144,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap, units string)
 		}
 		table = newTable(cols...)
 	)
-	ids := statusMap2SortedNodes(ts)
+	ids := ts.sortedSIDs()
 
 	for _, sid := range ids {
 		ds := ts[sid]

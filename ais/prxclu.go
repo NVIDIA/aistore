@@ -264,7 +264,7 @@ func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what s
 	if targetStats == nil || erred {
 		return
 	}
-	out := &stats.ClusterStatsRaw{}
+	out := &stats.ClusterRaw{}
 	out.Target = targetStats
 	out.Proxy = p.statsT.GetWhatStats()
 	_ = p.writeJSON(w, r, out, what)

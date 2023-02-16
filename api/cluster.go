@@ -122,7 +122,7 @@ func GetClusterSysInfo(bp BaseParams) (info apc.ClusterSysInfo, err error) {
 // the previous time.
 //
 // - See also: `api.GetDaemonStats`, stats/api.go
-func GetClusterStats(bp BaseParams) (res stats.ClusterStats, err error) {
+func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -131,7 +131,7 @@ func GetClusterStats(bp BaseParams) (res stats.ClusterStats, err error) {
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
 	}
 
-	var rawStats stats.ClusterStatsRaw
+	var rawStats stats.ClusterRaw
 	_, err = reqParams.DoReqAny(&rawStats)
 	FreeRp(reqParams)
 	if err != nil {
@@ -139,9 +139,9 @@ func GetClusterStats(bp BaseParams) (res stats.ClusterStats, err error) {
 	}
 
 	res.Proxy = rawStats.Proxy
-	res.Target = make(map[string]*stats.DaemonStats)
+	res.Target = make(map[string]*stats.Node)
 	for tid := range rawStats.Target {
-		var ts stats.DaemonStats
+		var ts stats.Node
 		if err := jsoniter.Unmarshal(rawStats.Target[tid], &ts); err == nil {
 			res.Target[tid] = &ts
 		}

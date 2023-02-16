@@ -548,6 +548,29 @@ var (
 func (v copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
 func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarshal(b, &v.Value) }
 
+/////////////////
+// copyTracker //
+/////////////////
+
+// serialize itself (slightly more efficiently than JSON)
+func (ctracker copyTracker) write(sgl *memsys.SGL) {
+	var next bool
+	sgl.WriteByte('{')
+	for n, v := range ctracker {
+		if v.Value == 0 {
+			continue
+		}
+		if next {
+			sgl.WriteByte(',')
+		}
+		sgl.Write(cos.UnsafeB(n))
+		sgl.WriteByte(':')
+		sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10)))
+		next = true
+	}
+	sgl.WriteByte('}')
+}
+
 //////////////////
 // statsTracker //
 //////////////////
@@ -635,10 +658,10 @@ var (
 	_ prometheus.Collector = (*statsRunner)(nil)
 )
 
-func (r *statsRunner) GetWhatStats() *DaemonStats {
+func (r *statsRunner) GetWhatStats() *Node {
 	ctracker := make(copyTracker, 48)
 	r.core.copyCumulative(ctracker)
-	return &DaemonStats{Tracker: ctracker}
+	return &Node{Tracker: ctracker}
 }
 
 func (r *statsRunner) GetMetricNames() cos.StrKVs {
