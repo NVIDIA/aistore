@@ -172,7 +172,7 @@ func newTableTargets(ts stats.DaemonStatusMap, smap *cluster.Smap, units string)
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed),
 			FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2),
-			fmt.Sprintf("%.2f%%", calcCapPercentage(ds)),
+			fmt.Sprintf("%d%%", ds.TargetCDF.PctAvg),
 			FmtSize(int64(calcCap(ds)), units, 3),
 			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctCPUUsed),
 			fmtRebStatus(ds.RebSnap),

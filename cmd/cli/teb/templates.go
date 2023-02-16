@@ -77,7 +77,7 @@ const (
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Disk Stats
-	diskStatsHdr = "TARGET\t DISK\t READ\t READ(avg size)\t WRITE\t WRITE(avg size)\t UTIL %\n"
+	diskStatsHdr = "TARGET\t DISK\t READ\t READ(avg size)\t WRITE\t WRITE(avg size)\t UTIL(%)\n"
 
 	diskStatsBody = "{{ $value.TargetID }}\t " +
 		"{{ $value.DiskName }}\t " +
@@ -90,6 +90,18 @@ const (
 
 	DiskStatNoHdrTmpl = "{{ range $key, $value := . }}" + diskStatsBody + "{{ end }}"
 	DiskStatsTmpl     = diskStatsHdr + DiskStatNoHdrTmpl
+
+	// TargetCDF.Mountpaths
+	mountpathsHdr = "TARGET\t NUM MOUNTPATHS\t USED(avg%, max%)\t Disks/FileSystems\t STATUS\n"
+
+	MountpathsNoHdrTmpl = "{{ range $k, $v := . }}" + mountpathsBody + "{{ end }}"
+	MountpathsTmpl      = mountpathsHdr + MountpathsNoHdrTmpl
+
+	mountpathsBody = "{{ $k }}\t " +
+		"{{ len $v.TargetCDF.Mountpaths }}\t " +
+		"     " + "{{ $v.TargetCDF.PctMax }}% " + "  " + "{{ $v.TargetCDF.PctAvg }}%\t " +
+		"{{ FormatCDF $v.TargetCDF.Mountpaths }}\t" +
+		"{{if (IsEqS $v.TargetCDF.CsErr \"\")}}ok{{else}}{{$v.TargetCDF.CsErr}}{{end}}\n"
 
 	// Config
 	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
@@ -341,10 +353,17 @@ const (
 		"\tNo mountpaths\n" +
 		"{{else}}" +
 		"{{if ne (len $p.Mpl.Available) 0}}" +
-		"\tAvailable:\n" +
+		"\tUsed Capacity (all disks): avg {{$p.TargetCDF.PctAvg}}% max {{$p.TargetCDF.PctMax}}%\t " +
+		"{{if (IsEqS $p.TargetCDF.CsErr \"\")}}{{else}}{{$p.TargetCDF.CsErr}}{{end}}\n" +
 		"{{range $mp := $p.Mpl.Available }}" +
-		"\t\t{{ $mp }}\n" +
+		"\t\t{{ $mp }} " +
+
+		"{{range $k, $v := $p.TargetCDF.Mountpaths}}" +
+		"{{if (IsEqS $k $mp)}}{{$v.FS}}{{end}}" +
+		"{{end}}\n" +
+
 		"{{end}}{{end}}" +
+
 		"{{if ne (len $p.Mpl.Disabled) 0}}" +
 		"\tDisabled:\n" +
 		"{{range $mp := $p.Mpl.Disabled }}" +
@@ -394,14 +413,13 @@ var (
 	// - HelpTemplateFuncMap
 	// - `altMap template.FuncMap` below
 	funcMap = template.FuncMap{
+		// formatting
 		"FormatBytesSig":    func(size int64, digits int) string { return FmtSize(size, UnitsIEC, digits) },
 		"FormatBytesUns":    func(size uint64, digits int) string { return FmtSize(int64(size), UnitsIEC, digits) },
 		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, UnitsIEC, 2)) },
 		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, UnitsIEC) },
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
 		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
-		"IsUnsetTime":       isUnsetTime,
-		"IsFalse":           func(v bool) bool { return !v },
 		"FormatEC":          FmtEC,
 		"FormatObjStatus":   fmtObjStatus,
 		"FormatObjCustom":   fmtObjCustom,
@@ -411,15 +429,20 @@ var (
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
 		"FormatBckName":     func(bck cmn.Bck) string { return bck.DisplayName() },
-		"JoinList":          fmtStringList,
-		"JoinListNL":        func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"FormatACL":         fmtACL,
-		"ExtECGetStats":     extECGetStats,
-		"ExtECPutStats":     extECPutStats,
 		"FormatNameArch":    fmtNameArch,
 		"FormatXactState":   FmtXactStatus,
-		// for all stats.DaemonStatus structs in `h`: select specific field
-		// and make a slice, and then a string out of it
+		"FormatCDF":         fmtCDF,
+		//  misc. helpers
+		"IsUnsetTime":   isUnsetTime,
+		"IsEqS":         func(a, b string) bool { return a == b },
+		"IsFalse":       func(v bool) bool { return !v },
+		"JoinList":      fmtStringList,
+		"JoinListNL":    func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
+		"ExtECGetStats": extECGetStats,
+		"ExtECPutStats": extECPutStats,
+		// DaemonStatusHelper:
+		// select specific field and make a slice, and then a string out of it
 		"OnlineStatus": func(h DaemonStatusHelper) string { return toString(h.onlineStatus()) },
 		"Deployments":  func(h DaemonStatusHelper) string { return toString(h.deployments()) },
 		"Versions":     func(h DaemonStatusHelper) string { return toString(h.versions()) },
@@ -451,20 +474,9 @@ func (sth SmapHelper) forMarshal() any {
 // stats.DaemonStatus
 //
 
-func calcCapPercentage(daemon *stats.DaemonStatus) (total float64) {
-	for _, fs := range daemon.Capacity {
-		total += float64(fs.PctUsed)
-	}
-
-	if len(daemon.Capacity) == 0 {
-		return 0
-	}
-	return total / float64(len(daemon.Capacity))
-}
-
 func calcCap(daemon *stats.DaemonStatus) (total uint64) {
-	for _, fs := range daemon.Capacity {
-		total += fs.Avail
+	for _, cdf := range daemon.TargetCDF.Mountpaths {
+		total += cdf.Capacity.Avail
 	}
 	return total
 }

@@ -127,6 +127,7 @@ const (
 	cmdShowRemoteAIS  = "remote-cluster"
 	cmdShowStats      = "stats"
 	cmdMountpath      = "mountpath"
+	cmdCapacity       = "capacity"
 	cmdShowDisk       = apc.GetWhatDiskStats
 	cmdShowCounters   = "counters"
 	cmdShowThroughput = "throughput"
@@ -259,7 +260,7 @@ const (
 
 	// config
 	showConfigArgument = "cli | cluster [CONFIG SECTION OR PREFIX] |\n" +
-		"      NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]"
+		"      NODE_ID [ inherited | local | all [CONFIG SECTION OR PREFIX ] ]"
 	showClusterConfigArgument = "[CONFIG_SECTION]"
 	nodeConfigArgument        = nodeIDArgument + " " + keyValuePairsArgument
 

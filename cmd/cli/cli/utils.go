@@ -97,6 +97,7 @@ func argNode(c *cli.Context, shift ...int) (sid, sname string, err error) {
 	if len(shift) > 0 {
 		idx = shift[0]
 	}
+	// only if present
 	if c.NArg() > idx {
 		sid, sname, err = getNodeIDName(c, c.Args().Get(idx))
 	}

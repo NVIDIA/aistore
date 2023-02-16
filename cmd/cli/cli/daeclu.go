@@ -60,7 +60,8 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap, cfg *cmn.ClusterConfig, sid string) error {
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap stats.DaemonStatusMap,
+	cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)

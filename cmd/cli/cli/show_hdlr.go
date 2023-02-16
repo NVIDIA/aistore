@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -36,8 +37,9 @@ type (
 	}
 
 	targetMpath struct {
-		DaemonID string
-		Mpl      *apc.MountpathList
+		DaemonID  string
+		Mpl       *apc.MountpathList
+		TargetCDF fs.TargetCDF
 	}
 )
 
@@ -56,6 +58,11 @@ var (
 		cmdMountpath: append(
 			longRunFlags,
 			jsonFlag,
+		),
+		cmdCapacity: append(
+			longRunFlags,
+			noHeaderFlag,
+			unitsFlag,
 		),
 		commandJob: append(
 			longRunFlags,
@@ -140,6 +147,7 @@ var (
 		Subcommands: []cli.Command{
 			showCmdDisk,
 			showCmdMpath,
+			showCmdMpathCapacity,
 			showCmdStgSummary,
 		},
 	}
@@ -259,6 +267,14 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showCmdsFlags[cmdMountpath],
 		Action:       showMpathHandler,
+		BashComplete: suggestTargetNodes,
+	}
+	showCmdMpathCapacity = cli.Command{
+		Name:         cmdCapacity,
+		Usage:        "show target mountpaths, disks and used/available capacity",
+		ArgsUsage:    optionalTargetIDArgument,
+		Flags:        showCmdsFlags[cmdCapacity],
+		Action:       showMpathCapacityHandler,
 		BashComplete: suggestTargetNodes,
 	}
 )
@@ -709,7 +725,7 @@ func showNodeConfig(c *cli.Context) error {
 	}
 
 	sid, sname, err := argNode(c)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 	smap, err = getClusterMap(c)
@@ -806,7 +822,14 @@ func showNodeConfig(c *cli.Context) error {
 		fmt.Fprintf(c.App.Writer, "PROPERTY\t VALUE\n\n")
 		return nil
 	}
-	return teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
+	err = teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
+
+	if err == nil && section == "" {
+		msg := fmt.Sprintf("(Hint: to show specific section(s), use 'inherited [SECTION]' or 'all [SECTION]' with or without %s)",
+			flprn(jsonFlag))
+		actionDone(c, msg)
+	}
+	return err
 }
 
 func showNodeLogHandler(c *cli.Context) error {
@@ -921,12 +944,12 @@ func showMpathHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	smap, err = getClusterMap(c)
+	setLongRunParams(c)
+
+	smap, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
 	if err != nil {
 		return err
 	}
-
-	setLongRunParams(c)
 
 	if sid != "" {
 		node := smap.GetNode(sid)
@@ -955,8 +978,9 @@ func showMpathHandler(c *cli.Context) error {
 				erCh <- err
 			} else {
 				mpCh <- &targetMpath{
-					DaemonID: node.ID(),
-					Mpl:      mpl,
+					DaemonID:  node.ID(),
+					Mpl:       mpl,
+					TargetCDF: tstatusMap[node.ID()].TargetCDF,
 				}
 			}
 			wg.Done()
@@ -978,6 +1002,39 @@ func showMpathHandler(c *cli.Context) error {
 	})
 	usejs := flagIsSet(c, jsonFlag)
 	return teb.Print(mpls, teb.MpathListTmpl, teb.Jopts(usejs))
+}
+
+func showMpathCapacityHandler(c *cli.Context) error {
+	tid, _, err := argNode(c)
+	if err != nil {
+		return err
+	}
+	hideHeader := flagIsSet(c, noHeaderFlag)
+	units, errU := parseUnitsFlag(c, unitsFlag)
+	if errU != nil {
+		return err
+	}
+
+	setLongRunParams(c)
+
+	_, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
+	if err != nil {
+		return err
+	}
+	if tid != "" {
+		for sid := range tstatusMap {
+			if sid != tid {
+				delete(tstatusMap, sid)
+			}
+		}
+	}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: false}
+	if hideHeader {
+		err = teb.Print(tstatusMap, teb.MountpathsNoHdrTmpl, opts)
+	} else {
+		err = teb.Print(tstatusMap, teb.MountpathsTmpl, opts)
+	}
+	return err
 }
 
 func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, units string) nvpairList {
@@ -1076,15 +1133,15 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	// target
 	var (
 		idx         int
-		mpathSorted = make([]string, 0, len(ds.MPCap)) // sort
+		mpathSorted = make([]string, 0, len(ds.TargetCDF.Mountpaths)) // sort
 	)
-	for mpath := range ds.MPCap {
+	for mpath := range ds.TargetCDF.Mountpaths {
 		mpathSorted = append(mpathSorted, mpath)
 	}
 	sort.Strings(mpathSorted)
 	for _, mpath := range mpathSorted {
 		var (
-			mstat  = ds.MPCap[mpath]
+			mstat  = ds.TargetCDF.Mountpaths[mpath]
 			prefix = fmt.Sprintf("mountpath.%d.", idx)
 		)
 		idx++
