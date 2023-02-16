@@ -1,3 +1,7 @@
+import importlib.metadata
 from aistore.sdk.client import Client
 
-__version__ = "1.0.8"
+try:
+    __version__ = importlib.metadata.version("aistore")
+except ImportError:
+    pass

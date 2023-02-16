@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["aistore"]
+exclude = ["aistore/examples"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../LICENSE" = "LICENSE"
+
+[project]
+name = "aistore"
+version = "1.0.9"
+authors = [
+  { name="AIStore Team", email="ais@exchange.nvidia.com" },
+]
+description = "A (growing) set of client-side APIs to access and utilize clusters, buckets, and objects on AIStore."
+readme = "README.md"
+requires-python = ">=3.6"
+license = {text = "MIT License"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering"
+]
+
+dependencies = [
+    "requests",
+    "packaging",
+    "pydantic==1.9.0",
+    "cloudpickle==2.2.0"
+]
+
+keywords = [
+    "AIStore",
+    "Artificial Intelligence",
+    "Object Storage",
+    "Deep Learning",
+    "ETL",
+    "Petascale",
+    "High Performance",
+    "Lightweight Object Storage"
+]
+
+[project.optional-dependencies]
+pytorch = ["torch", "torchdata"]
+botocore = ["wrapt"]
+
+[project.urls]
+"Homepage" = "https://aiatscale.org"
+"Download" = "https://github.com/NVIDIA/aistore/tags"
+"Documentation" = "https://aiatscale.org/docs/"
+"Release notes" = "https://github.com/NVIDIA/aistore/releases/"
+"Source" = "https://github.com/NVIDIA/aistore/"
