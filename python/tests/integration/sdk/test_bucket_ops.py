@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 
 from aistore.sdk import Client
-from aistore.sdk.const import ProviderAIS
+from aistore.sdk.const import ProviderAIS, UTF_ENCODING
 from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider, AISError
 
 from tests.utils import create_and_put_object, random_string, cleanup_local
@@ -23,6 +23,7 @@ TOP_LEVEL_FILES = {
     "other_top_level_file.txt": b"other file test data to verify",
 }
 LOWER_LEVEL_FILES = {"lower_level_file.txt": b"data in inner file"}
+CLEANUP_TIMEOUT = 30
 
 
 def _create_files(folder, file_dict):
@@ -79,7 +80,7 @@ class TestBucketOps(unittest.TestCase):
         ]
         if len(object_names) > 0:
             job_id = cloud_bck.objects(obj_names=object_names).delete()
-            self.client.job().wait_for_job(job_id=job_id, timeout=30)
+            self.client.job(job_id).wait(timeout=CLEANUP_TIMEOUT)
 
     def test_bucket(self):
         res = self.client.cluster().list_buckets()
@@ -117,7 +118,7 @@ class TestBucketOps(unittest.TestCase):
         self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
-        self.client.job().wait_for_job(job_id=job_id)
+        self.client.job(job_id).wait()
 
         # check if objects name has changed
         self.client.bucket(to_bck_n).head()
@@ -144,7 +145,7 @@ class TestBucketOps(unittest.TestCase):
 
         job_id = self.client.bucket(from_bck).copy(to_bck)
         self.assertNotEqual(job_id, "")
-        self.client.job().wait_for_job(job_id=job_id)
+        self.client.job(job_id).wait()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -191,7 +192,7 @@ class TestBucketOps(unittest.TestCase):
             bucket.put_files("non-existent-dir")
         LOCAL_TEST_FILES.mkdir()
         filename = LOCAL_TEST_FILES.joinpath("file_not_dir")
-        with open(filename, "w", encoding="utf-8"):
+        with open(filename, "w", encoding=UTF_ENCODING):
             pass
         with self.assertRaises(ValueError):
             bucket.put_files(filename)

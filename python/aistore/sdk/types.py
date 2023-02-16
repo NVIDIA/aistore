@@ -299,18 +299,6 @@ class ETLDetails(BaseModel):
         return spec
 
 
-class PromoteOptions(BaseModel):
-    """
-    Represents the set of args to pass when making a promote request on an object
-    """
-
-    target_id: str = ""
-    recursive: bool = False
-    overwrite_dest: bool = False
-    delete_source: bool = False
-    src_not_file_share: bool = False
-
-
 class PromoteAPIArgs(BaseModel):
     """
     Represents the set of args the sdk will pass to AIStore when making a promote request and

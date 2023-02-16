@@ -59,15 +59,19 @@ class Client:
         """
         return Cluster(client=self._request_client)
 
-    def job(self):
+    def job(self, job_id: str = "", job_kind: str = ""):
         """
         Factory constructor for job object, which contains job-related functions.
         Does not make any HTTP request, only instantiates a job object.
 
+        Args:
+            job_id (str, optional): Optional ID for interacting with a specific job
+            job_kind (str, optional): Optional specific type of job empty for all kinds
+
         Returns:
             The job object created.
         """
-        return Job(client=self._request_client)
+        return Job(client=self._request_client, job_id=job_id, job_kind=job_kind)
 
     def etl(self):
         """

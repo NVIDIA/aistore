@@ -23,6 +23,7 @@ from aistore.sdk.const import (
     ACT_ETL_BCK,
     QParamProvider,
     HTTP_METHOD_PUT,
+    URL_PATH_BUCKETS,
 )
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.request_client import RequestClient
@@ -74,7 +75,7 @@ class TestBucket(unittest.TestCase):
         self.ais_bck.create()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=ActionMsg(action=ACT_CREATE_BCK).dict(),
             params=self.ais_bck.qparam,
         )
@@ -95,7 +96,7 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(expected_response, response)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=ActionMsg(action=ACT_MOVE_BCK).dict(),
             params=self.ais_bck_params,
         )
@@ -108,7 +109,7 @@ class TestBucket(unittest.TestCase):
         self.ais_bck.delete()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=ActionMsg(action=ACT_DESTROY_BCK).dict(),
             params=self.ais_bck.qparam,
         )
@@ -122,7 +123,7 @@ class TestBucket(unittest.TestCase):
             self.amz_bck.evict(keep_md=keep_md)
             self.mock_client.request.assert_called_with(
                 HTTP_METHOD_DELETE,
-                path=f"buckets/{BCK_NAME}",
+                path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
                 json=ActionMsg(action=ACT_EVICT_REMOTE_BCK).dict(),
                 params=self.amz_bck_params,
             )
@@ -134,7 +135,7 @@ class TestBucket(unittest.TestCase):
         headers = self.ais_bck.head()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_HEAD,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             params=self.ais_bck.qparam,
         )
         self.assertEqual(headers, mock_header.headers)
@@ -173,7 +174,7 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(expected_response, job_id)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=expected_action,
             params=self.ais_bck_params,
         )
@@ -218,7 +219,7 @@ class TestBucket(unittest.TestCase):
         result = self.ais_bck.list_objects(**kwargs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             res_model=BucketList,
             json=action,
             params=self.ais_bck_params,
@@ -309,7 +310,7 @@ class TestBucket(unittest.TestCase):
 
         call_1 = mock.call(
             HTTP_METHOD_GET,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             res_model=BucketList,
             json=ActionMsg(action=ACT_LIST, value=expected_act_value_1).dict(),
             params=self.ais_bck_params,
@@ -317,7 +318,7 @@ class TestBucket(unittest.TestCase):
 
         call_2 = mock.call(
             HTTP_METHOD_GET,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             res_model=BucketList,
             json=ActionMsg(action=ACT_LIST, value=expected_act_value_2).dict(),
             params=self.ais_bck_params,
@@ -362,7 +363,7 @@ class TestBucket(unittest.TestCase):
 
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
-            path=f"buckets/{BCK_NAME}",
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=expected_action,
             params=self.ais_bck_params,
         )

@@ -10,6 +10,11 @@ from aistore.sdk.const import (
     QParamProvider,
     ACT_LIST,
     ProviderAIS,
+    QParamSmap,
+    URL_PATH_DAEMON,
+    URL_PATH_BUCKETS,
+    URL_PATH_HEALTH,
+    QparamPrimaryReadyReb,
 )
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Smap, ActionMsg, BucketModel
@@ -26,7 +31,10 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         result = self.cluster.get_info()
         self.assertEqual(result, expected_result)
         self.mock_client.request_deserialize.assert_called_with(
-            HTTP_METHOD_GET, path="daemon", res_model=Smap, params={QParamWhat: "smap"}
+            HTTP_METHOD_GET,
+            path=URL_PATH_DAEMON,
+            res_model=Smap,
+            params={QParamWhat: QParamSmap},
         )
 
     def test_list_buckets(self):
@@ -47,7 +55,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(expected_result, res)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
-            path="buckets",
+            path=URL_PATH_BUCKETS,
             res_model=List[BucketModel],
             json=ActionMsg(action=ACT_LIST).dict(),
             params=expected_params,
@@ -58,6 +66,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertFalse(self.cluster.is_aistore_running())
 
     def test_is_aistore_running(self):
+        expected_params = {QparamPrimaryReadyReb: "true"}
         response = Mock()
         response.ok = True
         self.mock_client.request.return_value = response
@@ -65,3 +74,8 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         response.ok = False
         self.mock_client.request.return_value = response
         self.assertFalse(self.cluster.is_aistore_running())
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_GET,
+            path=URL_PATH_HEALTH,
+            params=expected_params,
+        )

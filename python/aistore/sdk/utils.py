@@ -6,6 +6,7 @@ from pathlib import Path
 import pydantic.tools
 import requests
 
+from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import AISError, ErrBckNotFound, ErrRemoteBckNotFound
 from aistore.sdk.types import HttpError
 
@@ -33,7 +34,7 @@ def handle_errors(resp: requests.Response):
     error_text = resp.text
     if isinstance(resp.text, bytes):
         try:
-            error_text = error_text.decode("utf-8")
+            error_text = error_text.decode(UTF_ENCODING)
         except UnicodeDecodeError:
             error_text = error_text.decode("iso-8859-1")
     if error_text != "":

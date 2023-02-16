@@ -1,3 +1,7 @@
+#
+# Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+#
+
 import unittest
 
 from aistore.sdk import Client
@@ -31,10 +35,12 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertIsInstance(res, Cluster)
 
     def test_job(self):
-        res = self.client.job()
-        self.assertEqual(self.endpoint, res.client.endpoint)
-        self.assertIsInstance(res.client, RequestClient)
+        job_id = "1234"
+        job_kind = "test kind"
+        res = self.client.job(job_id, job_kind)
         self.assertIsInstance(res, Job)
+        self.assertEqual(job_id, res.job_id)
+        self.assertEqual(job_kind, res.job_kind)
 
     def test_etl(self):
         res = self.client.etl()

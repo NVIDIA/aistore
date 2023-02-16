@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from aistore.sdk import Client
+from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import ErrBckNotFound
 
 
@@ -24,7 +25,7 @@ def create_and_put_object(
 ):
     obj_size = obj_size if obj_size else random.randrange(10, 20)
     obj_body = "".join(random.choices(string.ascii_letters, k=obj_size))
-    content = obj_body.encode("utf-8")
+    content = obj_body.encode(UTF_ENCODING)
     temp_file = Path(tempfile.gettempdir()).joinpath(os.urandom(24).hex())
     with open(temp_file, "wb") as file:
         file.write(content)

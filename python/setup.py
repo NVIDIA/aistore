@@ -5,6 +5,8 @@ from pathlib import Path
 
 from setuptools import setup, find_packages
 
+from aistore.sdk.const import UTF_ENCODING
+
 REQUIRED_MAJOR = 3
 REQUIRED_MINOR = 6
 
@@ -13,7 +15,7 @@ ROOT_DIR = Path(__file__).parent.resolve()
 
 def _get_version() -> str:
     init_file = ROOT_DIR.joinpath("aistore").joinpath("__init__.py")
-    with open(init_file, encoding="UTF-8") as file:
+    with open(init_file, encoding=UTF_ENCODING) as file:
         for line in file.read().splitlines():
             if line.startswith("__version__"):
                 delim = '"' if '"' in line else "'"
@@ -37,7 +39,7 @@ if sys.version_info < (REQUIRED_MAJOR, REQUIRED_MINOR):
     sys.exit(error)
 
 # Read in README.md for our long_description
-with open(ROOT_DIR.joinpath("README.md"), encoding="utf-8") as f:
+with open(ROOT_DIR.joinpath("README.md"), encoding=UTF_ENCODING) as f:
     long_description = f.read()
 
 setup(

@@ -117,7 +117,7 @@ class TestETLOps(unittest.TestCase):
         job_id = self.client.bucket(self.bck_name).transform(
             etl_name=ETL_NAME_SPEC, to_bck=temp_bck1
         )
-        self.client.job().wait_for_job(job_id)
+        self.client.job(job_id).wait()
 
         # Verify object counts of the original and transformed bucket are the same
         self.assertEqual(
@@ -142,7 +142,7 @@ class TestETLOps(unittest.TestCase):
             to_bck=temp_bck2,
             ext={"jpg": "txt"},
         )
-        self.client.job().wait_for_job(job_id)
+        self.client.job(job_id).wait()
 
         # Verify extension rename
         for obj_iter in self.client.bucket(temp_bck2).list_objects().get_entries():
@@ -219,14 +219,14 @@ class TestETLOps(unittest.TestCase):
         job_id = self.client.bucket(self.bck_name).transform(
             etl_name=ETL_NAME_CODE, to_bck="transformed-etl-hpush"
         )
-        self.client.job().wait_for_job(job_id)
+        self.client.job(job_id).wait()
         print("Transform bucket using HPUSH took ", time.time() - start_time)
 
         start_time = time.time()
         job_id = self.client.bucket(self.bck_name).transform(
             etl_name=ETL_NAME_CODE_IO, to_bck="transformed-etl-io"
         )
-        self.client.job().wait_for_job(job_id)
+        self.client.job(job_id).wait()
         print("Transform bucket using IO took ", time.time() - start_time)
 
         for key, value in content.items():

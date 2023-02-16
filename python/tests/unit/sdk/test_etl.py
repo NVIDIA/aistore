@@ -13,6 +13,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_DELETE,
+    URL_PATH_ETL,
+    UTF_ENCODING,
 )
 from aistore.sdk.etl import Etl, get_default_runtime
 from aistore.sdk.types import ETL, ETLDetails
@@ -47,9 +49,9 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     def init_spec_exec_assert(self, expected_action, **kwargs):
         template = "pod spec template"
-        expected_action["spec"] = base64.b64encode(template.encode("utf-8")).decode(
-            "utf-8"
-        )
+        expected_action["spec"] = base64.b64encode(
+            template.encode(UTF_ENCODING)
+        ).decode(UTF_ENCODING)
         expected_action["id"] = self.etl_name
         expected_response_text = "response text"
         mock_response = Mock()
@@ -60,7 +62,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT, path="etl", json=expected_action
+            HTTP_METHOD_PUT, path=URL_PATH_ETL, json=expected_action
         )
 
     def test_init_code_default_runtime(self):
@@ -86,7 +88,9 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "timeout": "5m",
             "funcs": {"transform": "transform"},
             "code": self.encode_fn(self.transform_fn, communication_type),
-            "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode("utf-8"),
+            "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode(
+                UTF_ENCODING
+            ),
         }
         self.init_code_exec_assert(expected_action)
 
@@ -100,8 +104,8 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         expected_dependencies = user_dependencies.copy()
         expected_dependencies.append("cloudpickle==2.2.0")
         expected_dep_str = base64.b64encode(
-            "\n".join(expected_dependencies).encode("utf-8")
-        ).decode("utf-8")
+            "\n".join(expected_dependencies).encode(UTF_ENCODING)
+        ).decode(UTF_ENCODING)
 
         expected_action = {
             "runtime": runtime,
@@ -127,10 +131,10 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     @staticmethod
     def encode_fn(func, comm_type):
-        transform = base64.b64encode(cloudpickle.dumps(func)).decode("utf-8")
+        transform = base64.b64encode(cloudpickle.dumps(func)).decode(UTF_ENCODING)
         io_comm_context = "transform()" if comm_type == "io" else ""
-        template = CODE_TEMPLATE.format(transform, io_comm_context).encode("utf-8")
-        return base64.b64encode(template).decode("utf-8")
+        template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
+        return base64.b64encode(template).decode(UTF_ENCODING)
 
     def init_code_exec_assert(self, expected_action, **kwargs):
         expected_action["id"] = self.etl_name
@@ -144,7 +148,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_PUT, path="etl", json=expected_action
+            HTTP_METHOD_PUT, path=URL_PATH_ETL, json=expected_action
         )
 
     def test_list(self):
@@ -153,7 +157,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         response = self.etl.list()
         self.assertEqual(mock_response, response)
         self.mock_client.request_deserialize.assert_called_with(
-            HTTP_METHOD_GET, path="etl", res_model=List[ETL]
+            HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETL]
         )
 
     def test_view(self):

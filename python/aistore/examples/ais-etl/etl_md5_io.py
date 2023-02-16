@@ -25,4 +25,4 @@ client.etl().init_code(
 job_id = client.bucket("from-bck").transform(
     etl_name="etl-md5-io-code", to_bck="to-bck", ext={"jpg": "txt"}
 )
-client.job().wait_for_job(job_id)
+client.job(job_id).wait()

@@ -5,11 +5,10 @@ import random
 import unittest
 from pathlib import Path
 
-from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH
+from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH, UTF_ENCODING
 from aistore.sdk.errors import AISError, ErrBckNotFound
 
 from aistore.sdk import Client
-from aistore.sdk.types import PromoteOptions
 from tests.utils import (
     create_and_put_object,
     random_string,
@@ -135,11 +134,15 @@ class TestObjectOps(unittest.TestCase):
         # Create a folder in the current directory
         local_files_path = Path().absolute().joinpath(top_folder)
         local_files_path.mkdir()
-        with open(local_files_path.joinpath(top_item), "w", encoding="utf-8") as file:
+        with open(
+            local_files_path.joinpath(top_item), "w", encoding=UTF_ENCODING
+        ) as file:
             file.write(top_item_contents)
         inner_folder = local_files_path.joinpath(inner_folder)
         inner_folder.mkdir()
-        with open(inner_folder.joinpath(inner_item), "w", encoding="utf-8") as file:
+        with open(
+            inner_folder.joinpath(inner_item), "w", encoding=UTF_ENCODING
+        ) as file:
             file.write(inner_item_contents)
 
         # Promote to AIS bucket
@@ -148,25 +151,31 @@ class TestObjectOps(unittest.TestCase):
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
         top_object = self.bucket.object(obj_name + "/" + top_item).get()
-        self.assertEqual(top_item_contents, top_object.read_all().decode("utf-8"))
+        self.assertEqual(top_item_contents, top_object.read_all().decode(UTF_ENCODING))
 
         # Update local top item contents
         top_item_updated_contents = "new content in top file overwritten"
-        with open(local_files_path.joinpath(top_item), "w", encoding="utf-8") as file:
+        with open(
+            local_files_path.joinpath(top_item), "w", encoding=UTF_ENCODING
+        ) as file:
             file.write(top_item_updated_contents)
 
         # Promote with recursion, delete source, overwrite destination
-        options = PromoteOptions(
-            recursive=True, delete_source=True, overwrite_dest=True
+        self.bucket.object(obj_name).promote(
+            str(local_files_path),
+            recursive=True,
+            delete_source=True,
+            overwrite_dest=True,
         )
-        self.bucket.object(obj_name).promote(str(local_files_path), options)
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
         expected_top_obj = obj_name + "/" + top_item
         top_obj = self.bucket.object(expected_top_obj).get()
-        self.assertEqual(top_item_updated_contents, top_obj.read_all().decode("utf-8"))
+        self.assertEqual(
+            top_item_updated_contents, top_obj.read_all().decode(UTF_ENCODING)
+        )
         inner_obj = self.bucket.object(obj_name + "/inner_folder/" + inner_item).get()
-        self.assertEqual(inner_item_contents, inner_obj.read_all().decode("utf-8"))
+        self.assertEqual(inner_item_contents, inner_obj.read_all().decode(UTF_ENCODING))
         # Check source deleted
         top_level_files = [
             f

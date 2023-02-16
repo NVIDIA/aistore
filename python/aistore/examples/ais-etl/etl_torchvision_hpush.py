@@ -42,7 +42,7 @@ client.etl().init_code(
 job_id = client.bucket("from-bck").transform(
     etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
 )
-client.job().wait_for_job(job_id)
+client.job(job_id).wait()
 
 # read the numpy array
 np.frombuffer(

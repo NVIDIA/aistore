@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
 import unittest
 
@@ -22,8 +22,8 @@ class TestJobOps(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_job_start(self):
         self.client.bucket(self.bck_name).create()
-        job_id = self.client.job().start(job_kind="lru")
-        self.client.job().wait_for_job(job_id=job_id)
+        job_id = self.client.job(job_kind="lru").start()
+        self.client.job(job_id=job_id).wait()
 
 
 if __name__ == "__main__":

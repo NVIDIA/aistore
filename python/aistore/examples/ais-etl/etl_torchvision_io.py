@@ -40,4 +40,4 @@ client.etl().init_code(
 job_id = client.bucket("from-bck").transform(
     etl_name="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
 )
-client.job().wait_for_job(job_id)
+client.job(job_id).wait()

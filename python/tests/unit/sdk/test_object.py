@@ -20,13 +20,14 @@ from aistore.sdk.const import (
     AIS_CUSTOM_MD,
     HTTP_METHOD_POST,
     ACT_PROMOTE,
+    URL_PATH_OBJECTS,
 )
 from aistore.sdk.object import Object
-from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
+from aistore.sdk.types import ObjStream, ActionMsg, PromoteAPIArgs
 
 BCK_NAME = "bucket name"
 OBJ_NAME = "object name"
-REQUEST_PATH = f"objects/{BCK_NAME}/{OBJ_NAME}"
+REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 
 
 # pylint: disable=unused-variable
@@ -147,9 +148,8 @@ class TestObject(unittest.TestCase):
 
     def test_promote_default_args(self):
         filename = "promoted file"
-        options = PromoteOptions()
         expected_value = PromoteAPIArgs(source_path=filename, object_name=OBJ_NAME)
-        self.promote_exec_assert(filename, options, expected_value)
+        self.promote_exec_assert(filename, expected_value)
 
     def test_promote(self):
         filename = "promoted file"
@@ -158,13 +158,6 @@ class TestObject(unittest.TestCase):
         overwrite_dest = True
         delete_source = True
         src_not_file_share = True
-        options = PromoteOptions(
-            target_id=target_id,
-            recursive=recursive,
-            overwrite_dest=overwrite_dest,
-            delete_source=delete_source,
-            src_not_file_share=src_not_file_share,
-        )
         expected_value = PromoteAPIArgs(
             source_path=filename,
             object_name=OBJ_NAME,
@@ -174,14 +167,22 @@ class TestObject(unittest.TestCase):
             delete_source=delete_source,
             src_not_file_share=src_not_file_share,
         )
-        self.promote_exec_assert(filename, options, expected_value)
+        self.promote_exec_assert(
+            filename,
+            expected_value,
+            target_id=target_id,
+            recursive=recursive,
+            overwrite_dest=overwrite_dest,
+            delete_source=delete_source,
+            src_not_file_share=src_not_file_share,
+        )
 
-    def promote_exec_assert(self, filename, options, expected_value):
-        request_path = f"/objects/{BCK_NAME}"
+    def promote_exec_assert(self, filename, expected_value, **kwargs):
+        request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
         expected_json = ActionMsg(
             action=ACT_PROMOTE, name=filename, value=expected_value.get_json()
         ).dict()
-        self.object.promote(filename, options)
+        self.object.promote(filename, **kwargs)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=request_path,
@@ -191,7 +192,6 @@ class TestObject(unittest.TestCase):
 
     def test_delete(self):
         self.object.delete()
-        path = f"objects/{BCK_NAME}/{OBJ_NAME}"
         self.mock_client.request.assert_called_with(
-            HTTP_METHOD_DELETE, path=path, params=self.expected_params
+            HTTP_METHOD_DELETE, path=REQUEST_PATH, params=self.expected_params
         )

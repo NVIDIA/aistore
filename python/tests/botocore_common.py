@@ -11,6 +11,7 @@ import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
 
+from aistore.sdk.const import UTF_ENCODING
 from tests import (
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
@@ -156,7 +157,9 @@ class BotocoreBaseTest(unittest.TestCase):
             self.s3.download_fileobj(
                 self.control_bucket, self.control_object, stream_str
             )
-            self.assertEqual(stream_str.getvalue().decode("utf-8"), "Hello, world!")
+            self.assertEqual(
+                stream_str.getvalue().decode(UTF_ENCODING), "Hello, world!"
+            )
 
     def test_caching(self):
         with MightRedirect(self.redirect_errors_expected):
@@ -164,12 +167,16 @@ class BotocoreBaseTest(unittest.TestCase):
             self.s3.download_fileobj(
                 self.control_bucket, self.control_object, stream_str
             )
-            self.assertEqual(stream_str.getvalue().decode("utf-8"), "Hello, world!")
+            self.assertEqual(
+                stream_str.getvalue().decode(UTF_ENCODING), "Hello, world!"
+            )
 
             self.s3.download_fileobj(
                 self.control_bucket, self.control_object, stream_str
             )
-            self.assertEqual(stream_str.getvalue().decode("utf-8"), "Hello, world!")
+            self.assertEqual(
+                stream_str.getvalue().decode(UTF_ENCODING), "Hello, world!"
+            )
 
     def test_object_delete(self):
         with MightRedirect(self.redirect_errors_expected):

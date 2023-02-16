@@ -12,6 +12,10 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
+    DEFAULT_ETL_COMM,
+    DEFAULT_ETL_TIMEOUT,
+    URL_PATH_ETL,
+    UTF_ENCODING,
 )
 from aistore.sdk.types import ETL, ETLDetails
 
@@ -46,8 +50,8 @@ class Etl:
         self,
         template: str,
         etl_name: str,
-        communication_type: str = "hpush",
-        timeout: str = "5m",
+        communication_type: str = DEFAULT_ETL_COMM,
+        timeout: str = DEFAULT_ETL_TIMEOUT,
     ):
         """
         Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
@@ -64,7 +68,9 @@ class Etl:
         """
 
         # spec
-        spec_encoded = base64.b64encode(template.encode("utf-8")).decode("utf-8")
+        spec_encoded = base64.b64encode(template.encode(UTF_ENCODING)).decode(
+            UTF_ENCODING
+        )
 
         action = {
             "spec": spec_encoded,
@@ -73,7 +79,7 @@ class Etl:
             "timeout": timeout,
         }
 
-        resp = self.client.request(HTTP_METHOD_PUT, path="etl", json=action)
+        resp = self.client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=action)
         return resp.text
 
     # pylint: disable=too-many-arguments
@@ -83,8 +89,8 @@ class Etl:
         etl_name: str,
         dependencies: List[str] = None,
         runtime: str = get_default_runtime(),
-        communication_type: str = "hpush",
-        timeout: str = "5m",
+        communication_type: str = DEFAULT_ETL_COMM,
+        timeout: str = DEFAULT_ETL_TIMEOUT,
         chunk_size: int = None,
     ):
         """
@@ -124,22 +130,22 @@ class Etl:
             action["chunk_size"] = chunk_size
 
         # code
-        transform = base64.b64encode(cloudpickle.dumps(transform)).decode("utf-8")
+        transform = base64.b64encode(cloudpickle.dumps(transform)).decode(UTF_ENCODING)
 
         io_comm_context = "transform()" if communication_type == "io" else ""
-        template = CODE_TEMPLATE.format(transform, io_comm_context).encode("utf-8")
-        action["code"] = base64.b64encode(template).decode("utf-8")
+        template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
+        action["code"] = base64.b64encode(template).decode(UTF_ENCODING)
 
         # dependencies
         if dependencies is None:
             dependencies = []
         dependencies.append("cloudpickle==2.2.0")
-        deps = "\n".join(dependencies).encode("utf-8")
-        action["dependencies"] = base64.b64encode(deps).decode("utf-8")
+        deps = "\n".join(dependencies).encode(UTF_ENCODING)
+        action["dependencies"] = base64.b64encode(deps).decode(UTF_ENCODING)
 
         resp = self.client.request(
             HTTP_METHOD_PUT,
-            path="etl",
+            path=URL_PATH_ETL,
             json=action,
         )
         return resp.text
@@ -154,7 +160,7 @@ class Etl:
             List[ETL]: A list of running ETLs
         """
         resp = self.client.request_deserialize(
-            HTTP_METHOD_GET, path="etl", res_model=List[ETL]
+            HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETL]
         )
         return resp
 
@@ -168,7 +174,7 @@ class Etl:
             ETLDetails: details of the ETL
         """
         resp = self.client.request_deserialize(
-            HTTP_METHOD_GET, path=f"etl/{ etl_name }", res_model=ETLDetails
+            HTTP_METHOD_GET, path=f"{URL_PATH_ETL}/{etl_name}", res_model=ETLDetails
         )
         return resp
 
@@ -181,7 +187,7 @@ class Etl:
         Args:
             etl_name (str): name of ETL
         """
-        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/start")
+        self.client.request(HTTP_METHOD_POST, path=f"{URL_PATH_ETL}/{etl_name}/start")
 
     def stop(self, etl_name: str):
         """
@@ -191,7 +197,7 @@ class Etl:
         Args:
             etl_name (str): name of ETL
         """
-        self.client.request(HTTP_METHOD_POST, path=f"etl/{ etl_name }/stop")
+        self.client.request(HTTP_METHOD_POST, path=f"{URL_PATH_ETL}/{etl_name}/stop")
 
     def delete(self, etl_name: str):
         """
@@ -203,4 +209,4 @@ class Etl:
         Args:
             etl_name (str): name of ETL
         """
-        self.client.request(HTTP_METHOD_DELETE, path=f"etl/{ etl_name }")
+        self.client.request(HTTP_METHOD_DELETE, path=f"{URL_PATH_ETL}/{etl_name}")

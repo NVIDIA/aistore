@@ -4,6 +4,7 @@ import boto3
 
 # pylint: disable=unused-import,unused-variable
 from aistore.botocore_patch import botocore
+from aistore.sdk.const import UTF_ENCODING
 from tests import AWS_ACCESS_KEY_ID, AWS_SESSION_TOKEN, AWS_SECRET_ACCESS_KEY
 
 from tests.integration import CLUSTER_ENDPOINT
@@ -46,7 +47,7 @@ class BotoTest(TestCase):
             self.client.get_object(Bucket=bucket_name, Key=key)
             .get("Body")
             .read()
-            .decode("utf-8")
+            .decode(UTF_ENCODING)
             for key, body in objects
         ]
         object_bodies = [body for key, body in objects]
@@ -86,7 +87,7 @@ class BotoTest(TestCase):
             },
         )
         response = self.client.get_object(Bucket=bucket_name, Key=key)
-        uploaded_data = response["Body"].read().decode("utf-8")
+        uploaded_data = response["Body"].read().decode(UTF_ENCODING)
         self.assertEqual(data, uploaded_data)
 
     def create_bucket(self):

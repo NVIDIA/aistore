@@ -15,9 +15,10 @@ from aistore.sdk.const import (
     QParamETLName,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
+    URL_PATH_OBJECTS,
 )
 
-from aistore.sdk.types import ObjStream, ActionMsg, PromoteOptions, PromoteAPIArgs
+from aistore.sdk.types import ObjStream, ActionMsg, PromoteAPIArgs
 from aistore.sdk.utils import read_file_bytes, validate_file
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -67,7 +68,7 @@ class Object:
         """
         return self._client.request(
             HTTP_METHOD_HEAD,
-            path=f"objects/{ self._bck_name}/{ self.name }",
+            path=f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }",
             params=self._qparams,
         ).headers
 
@@ -104,7 +105,7 @@ class Object:
             params[QParamETLName] = etl_name
         resp = self._client.request(
             HTTP_METHOD_GET,
-            path=f"objects/{ self._bck_name }/{ self.name }",
+            path=f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }",
             params=params,
             stream=True,
         )
@@ -150,7 +151,7 @@ class Object:
         self._put_data(self.name, read_file_bytes(path))
 
     def _put_data(self, obj_name: str, data: bytes):
-        url = f"objects/{ self._bck_name }/{ obj_name }"
+        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ obj_name }"
         self._client.request(
             HTTP_METHOD_PUT,
             path=url,
@@ -158,7 +159,16 @@ class Object:
             data=data,
         )
 
-    def promote(self, path: str, promote_options: PromoteOptions = None) -> Header:
+    # pylint: disable=too-many-arguments
+    def promote(
+        self,
+        path: str,
+        target_id: str = "",
+        recursive: bool = False,
+        overwrite_dest: bool = False,
+        delete_source: bool = False,
+        src_not_file_share: bool = False,
+    ) -> Header:
         """
         Promotes a file or folder an AIS target can access to a bucket in AIS storage.
         These files can be either on the physical disk of an AIS target itself or on a network file system
@@ -167,7 +177,11 @@ class Object:
 
         Args:
             path (str): Path to file or folder the AIS cluster can reach
-            promote_options (PromoteOptions, optional): Object containing additional options for promoting files
+            target_id (str, optional): Promote files from a specific target node
+            recursive (bool, optional): Recursively promote objects from files in directories inside the path
+            overwrite_dest (bool, optional): Overwrite objects already on AIS
+            delete_source (bool, optional): Delete the source files when done promoting
+            src_not_file_share (bool, optional): Optimize if the source is guaranteed to not be on a file share
 
         Returns:
             Object properties
@@ -179,19 +193,16 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
             AISError: Path does not exist on the AIS cluster storage
         """
-        url = f"/objects/{ self._bck_name }"
-        if promote_options is None:
-            value = PromoteAPIArgs(source_path=path, object_name=self.name).get_json()
-        else:
-            value = PromoteAPIArgs(
-                target_id=promote_options.target_id,
-                source_path=path,
-                object_name=self.name,
-                recursive=promote_options.recursive,
-                overwrite_dest=promote_options.overwrite_dest,
-                delete_source=promote_options.delete_source,
-                src_not_file_share=promote_options.src_not_file_share,
-            ).get_json()
+        url = f"{URL_PATH_OBJECTS}/{ self._bck_name }"
+        value = PromoteAPIArgs(
+            source_path=path,
+            object_name=self.name,
+            target_id=target_id,
+            recursive=recursive,
+            overwrite_dest=overwrite_dest,
+            delete_source=delete_source,
+            src_not_file_share=src_not_file_share,
+        ).get_json()
         json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).dict()
 
         return self._client.request(
@@ -214,6 +225,6 @@ class Object:
         """
         self._client.request(
             HTTP_METHOD_DELETE,
-            path=f"objects/{ self._bck_name }/{ self.name }",
+            path=f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }",
             params=self._qparams,
         )

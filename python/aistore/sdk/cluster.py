@@ -12,6 +12,10 @@ from aistore.sdk.const import (
     QParamWhat,
     QparamPrimaryReadyReb,
     QParamProvider,
+    QParamSmap,
+    URL_PATH_BUCKETS,
+    URL_PATH_HEALTH,
+    URL_PATH_DAEMON,
 )
 
 from aistore.sdk.types import BucketModel
@@ -49,9 +53,9 @@ class Cluster:
         """
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
-            path="daemon",
+            path=URL_PATH_DAEMON,
             res_model=Smap,
-            params={QParamWhat: "smap"},
+            params={QParamWhat: QParamSmap},
         )
 
     def list_buckets(self, provider: str = ProviderAIS):
@@ -76,7 +80,7 @@ class Cluster:
 
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
-            path="buckets",
+            path=URL_PATH_BUCKETS,
             res_model=List[BucketModel],
             json=action,
             params=params,
@@ -93,7 +97,9 @@ class Cluster:
         # compare with AIS Go API (api/cluster.go) for additional supported options
         params = {QparamPrimaryReadyReb: "true"}
         try:
-            resp = self.client.request(HTTP_METHOD_GET, path="health", params=params)
+            resp = self.client.request(
+                HTTP_METHOD_GET, path=URL_PATH_HEALTH, params=params
+            )
             return resp.ok
         except Exception:
             return False

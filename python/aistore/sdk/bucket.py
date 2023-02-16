@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     QParamBucketTo,
     QParamKeepBckMD,
     QParamProvider,
+    URL_PATH_BUCKETS,
 )
 
 from aistore.sdk.errors import InvalidBckProvider
@@ -197,7 +198,7 @@ class Bucket:
         """
         return self.client.request(
             HTTP_METHOD_HEAD,
-            path=f"buckets/{self.name}",
+            path=f"{URL_PATH_BUCKETS}/{self.name}",
             params=self.qparam,
         ).headers
 
@@ -289,7 +290,7 @@ class Bucket:
 
         return self.client.request_deserialize(
             HTTP_METHOD_GET,
-            path=f"buckets/{ self.name }",
+            path=f"{URL_PATH_BUCKETS}/{ self.name }",
             res_model=BucketList,
             json=action,
             params=self.qparam,
@@ -554,7 +555,7 @@ class Bucket:
         json_val = ActionMsg(action=action, value=value).dict()
         return self.client.request(
             method,
-            path=f"buckets/{self.name}",
+            path=f"{URL_PATH_BUCKETS}/{self.name}",
             json=json_val,
             params=params if params else self.qparam,
         )

@@ -12,6 +12,7 @@ from tests.utils import random_string, create_and_put_object
 
 # If remote bucket is not set, skip all cloud-related tests
 REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + ":")
+TEST_TIMEOUT = 30
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -67,7 +68,7 @@ class TestObjectGroupOps(unittest.TestCase):
 
     def delete_test_helper(self, object_group, expected_object_names):
         job_id = object_group.delete()
-        self.client.job().wait_for_job(job_id=job_id, timeout=30)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         existing_objects = self.bucket.list_objects(
             prefix=self.obj_prefix
         ).get_entries()
@@ -106,7 +107,7 @@ class TestObjectGroupOps(unittest.TestCase):
 
     def evict_test_helper(self, object_group, expected_cached, expected_total):
         job_id = object_group.evict()
-        self.client.job().wait_for_job(job_id=job_id, timeout=30)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
@@ -146,7 +147,7 @@ class TestObjectGroupOps(unittest.TestCase):
         self.evict_all_objects()
         # Fetch back a specific object group and verify cache status
         job_id = object_group.prefetch()
-        self.client.job().wait_for_job(job_id=job_id, timeout=30)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
@@ -158,7 +159,7 @@ class TestObjectGroupOps(unittest.TestCase):
 
     def evict_all_objects(self):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
-        self.client.job().wait_for_job(job_id=job_id, timeout=30)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         self.verify_cached_objects(10, [])
 
     def verify_cached_objects(self, expected_object_count, cached_range):

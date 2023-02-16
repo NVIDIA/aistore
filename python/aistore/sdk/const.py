@@ -4,10 +4,6 @@
 
 # pylint: disable=unused-variable,invalid-name
 
-TAR2TF = "tar2tf"
-OBJECTS = "objects"
-START = "start"
-
 # URL Params
 QParamArchpath = "archpath"
 QParamProvider = "provider"
@@ -17,6 +13,18 @@ QParamBucketTo = "bck_to"
 QparamPrimaryReadyReb = "prr"
 QParamETLName = "etl_name"
 QParamForce = "frc"
+
+# URL Param values
+QParamSmap = "smap"
+QParamStatus = "status"
+
+# URL paths
+URL_PATH_CLUSTER = "cluster"
+URL_PATH_BUCKETS = "buckets"
+URL_PATH_OBJECTS = "objects"
+URL_PATH_HEALTH = "health"
+URL_PATH_DAEMON = "daemon"
+URL_PATH_ETL = "etl"
 
 # Bucket providers
 ProviderAIS = "ais"
@@ -44,6 +52,7 @@ ACT_ETL_BCK = "etl-bck"
 ACT_DELETE_MULTIPLE_OBJ = "delete-listrange"
 ACT_EVICT_MULTIPLE_OBJ = "evict-listrange"
 ACT_PREFETCH_MULTIPLE_OBJ = "prefetch-listrange"
+ACT_START = "start"
 
 # Headers
 CONTENT_LENGTH = "content-length"
@@ -55,6 +64,12 @@ AIS_CUSTOM_MD = "ais-custom-md"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768
+DEFAULT_JOB_WAIT_TIMEOUT = 300
+DEFAULT_ETL_COMM = "hpush"
+DEFAULT_ETL_TIMEOUT = "5m"
+
+# ENCODING
+UTF_ENCODING = "utf-8"
 
 # templates for ETL
 
