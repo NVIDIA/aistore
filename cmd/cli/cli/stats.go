@@ -257,6 +257,11 @@ func _cluStatusMapPs(c *cli.Context, mapBegin teb.StatsAndStatusMap, metrics cos
 	// updating and returning mapBegin
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
+		if end == nil {
+			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", cluster.Tname(tid))
+			actionWarn(c, warn)
+			continue
+		}
 		for k, v := range begin.Tracker {
 			if kind, ok := metrics[k]; !ok || kind == stats.KindCounter { // skip counters, if any
 				continue
