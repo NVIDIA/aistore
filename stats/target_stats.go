@@ -234,8 +234,8 @@ func (r *Trunner) RegMetrics(node *cluster.Snode) {
 	r.core.initProm(node)
 }
 
-func (r *Trunner) GetWhatStats() (ds *Node) {
-	ds = r.statsRunner.GetWhatStats()
+func (r *Trunner) GetStats() (ds *Node) {
+	ds = r.statsRunner.GetStats()
 	ds.TargetCDF = r.TargetCDF
 	return
 }

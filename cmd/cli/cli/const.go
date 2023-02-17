@@ -65,10 +65,10 @@ const (
 	commandStart     = apc.ActXactStart
 	commandStop      = apc.ActXactStop
 
-	cmdSmap   = apc.GetWhatSmap
-	cmdBMD    = apc.GetWhatBMD
-	cmdConfig = apc.GetWhatConfig
-	cmdLog    = apc.GetWhatLog
+	cmdSmap   = apc.WhatSmap
+	cmdBMD    = apc.WhatBMD
+	cmdConfig = apc.WhatConfig
+	cmdLog    = apc.WhatLog
 	cmdBucket = "bucket"
 	cmdObject = "object"
 	cmdProps  = "props"
@@ -128,7 +128,7 @@ const (
 	cmdShowStats      = "stats"
 	cmdMountpath      = "mountpath"
 	cmdCapacity       = "capacity"
-	cmdShowDisk       = apc.GetWhatDiskStats
+	cmdShowDisk       = apc.WhatDiskStats
 	cmdShowCounters   = "counters"
 	cmdShowThroughput = "throughput"
 	cmdShowLatency    = "latency"

@@ -240,15 +240,15 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		httpdaeWhat = "httpdaeget-" + getWhat
 	)
 	switch getWhat {
-	case apc.GetWhatConfig, apc.GetWhatSmap, apc.GetWhatBMD, apc.GetWhatSmapVote,
-		apc.GetWhatSnode, apc.GetWhatLog, apc.GetWhatStats, apc.GetWhatMetricNames:
+	case apc.WhatConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
+		apc.WhatSnode, apc.WhatLog, apc.WhatNodeStats, apc.WhatMetricNames:
 		t.htrun.httpdaeget(w, r, query)
-	case apc.GetWhatSysInfo:
+	case apc.WhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: sys.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
-	case apc.GetWhatMountpaths:
+	case apc.WhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
-	case apc.GetWhatDaemonStatus:
+	case apc.WhatNodeStatsAndStatus:
 		var rebSnap *cluster.Snap
 		if entry := xreg.GetLatest(xact.Flt{Kind: apc.ActRebalance}); entry != nil {
 			if xctn := entry.Get(); xctn != nil {
@@ -256,8 +256,10 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		smap := t.owner.smap.get()
-		msg := &stats.DaemonStatus{
-			Snode:          t.htrun.si,
+		msg := &stats.NodeStatus{
+			Node: stats.Node{
+				Snode: t.htrun.si,
+			},
 			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
 			RebSnap:        rebSnap,
@@ -268,16 +270,16 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Status:         t._status(smap),
 		}
 		// stats and capacity
-		daeStats := t.statsT.GetWhatStats()
+		daeStats := t.statsT.GetStats()
 		msg.Tracker = daeStats.Tracker
 		msg.TargetCDF = daeStats.TargetCDF
 
 		t.writeJSON(w, r, msg, httpdaeWhat)
-	case apc.GetWhatDiskStats:
+	case apc.WhatDiskStats:
 		diskStats := make(ios.AllDiskStats)
 		fs.FillDiskStats(diskStats)
 		t.writeJSON(w, r, diskStats, httpdaeWhat)
-	case apc.GetWhatRemoteAIS:
+	case apc.WhatRemoteAIS:
 		var (
 			aisBackend = t.aisBackend()
 			refresh    = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
@@ -726,7 +728,7 @@ func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 		return nil, cmn.NewErrFailedTo(t, "get-primary-bmd", smap, err)
 	}
 	var (
-		what    = apc.GetWhatBMD
+		what    = apc.WhatBMD
 		q       = url.Values{apc.QparamWhat: []string{what}}
 		psi     = smap.Primary
 		path    = apc.URLPathDae.S
@@ -773,7 +775,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 		glog.Error(err)
 		return
 	}
-	msg := t.newAmsgStr("get-what="+apc.GetWhatBMD, newBucketMD)
+	msg := t.newAmsgStr("get-what="+apc.WhatBMD, newBucketMD)
 	if r != nil {
 		caller = r.Header.Get(apc.HdrCallerName)
 	}

@@ -54,12 +54,12 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	}
 	debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 
-	if what == apc.GetWhatAllRunningXacts {
+	if what == apc.WhatAllRunningXacts {
 		out := xreg.GetAllRunning(xactMsg.Kind)
 		t.writeJSON(w, r, out, what)
 		return
 	}
-	if what != apc.GetWhatQueryXactStats {
+	if what != apc.WhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}
@@ -119,7 +119,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string) {
-	if what != apc.GetWhatXactStats {
+	if what != apc.WhatXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return
 	}

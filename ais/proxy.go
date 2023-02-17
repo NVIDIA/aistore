@@ -2330,17 +2330,17 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch what {
-	case apc.GetWhatBMD:
+	case apc.WhatBMD:
 		if renamedBucket := query.Get(whatRenamedLB); renamedBucket != "" {
 			p.handlePendingRenamedLB(renamedBucket)
 		}
 		fallthrough // fallthrough
-	case apc.GetWhatConfig, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatLog,
-		apc.GetWhatStats, apc.GetWhatMetricNames:
+	case apc.WhatConfig, apc.WhatSmapVote, apc.WhatSnode, apc.WhatLog,
+		apc.WhatNodeStats, apc.WhatMetricNames:
 		p.htrun.httpdaeget(w, r, query)
-	case apc.GetWhatSysInfo:
+	case apc.WhatSysInfo:
 		p.writeJSON(w, r, sys.GetMemCPU(), what)
-	case apc.GetWhatSmap:
+	case apc.WhatSmap:
 		const max = 16
 		var (
 			smap  = p.owner.smap.get()
@@ -2364,10 +2364,12 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.writeJSON(w, r, smap, what)
-	case apc.GetWhatDaemonStatus:
+	case apc.WhatNodeStatsAndStatus:
 		smap := p.owner.smap.get()
-		msg := &stats.DaemonStatus{
-			Snode:          p.htrun.si,
+		msg := &stats.NodeStatus{
+			Node: stats.Node{
+				Snode: p.htrun.si,
+			},
 			SmapVersion:    smap.Version,
 			MemCPUInfo:     sys.GetMemCPU(),
 			DeploymentType: deploymentType(),
@@ -2376,7 +2378,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			K8sPodName:     os.Getenv(env.AIS.K8sPod),
 			Status:         p._status(smap),
 		}
-		daeStats := p.statsT.GetWhatStats()
+		daeStats := p.statsT.GetStats()
 		msg.Tracker = daeStats.Tracker
 
 		p.writeJSON(w, r, msg, what)
@@ -2540,7 +2542,7 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 			Method: http.MethodGet,
 			Base:   baseURL,
 			Path:   apc.URLPathDae.S,
-			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}},
+			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSmap}},
 		}
 		cargs.timeout = apc.DefaultTimeout
 		cargs.cresv = cresSM{} // -> smapX
@@ -3016,7 +3018,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   apc.URLPathDae.S,
-			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatSnode}},
+			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.cresv = cresND{} // -> cluster.Snode

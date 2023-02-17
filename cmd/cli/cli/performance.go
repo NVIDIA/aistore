@@ -180,7 +180,7 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 	var (
 		refresh            = flagIsSet(c, refreshFlag)
 		sleep, averageOver = _refreshAvgRate(c)
-		mapBegin           teb.DaemonStatusMap
+		mapBegin           teb.StatsAndStatusMap
 	)
 	// forever until Ctrl-C
 	for {

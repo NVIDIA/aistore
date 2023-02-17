@@ -1,6 +1,6 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -154,32 +154,34 @@ const (
 
 // QparamWhat enum.
 const (
-	GetWhatBMD           = "bmd"
-	GetWhatConfig        = "config"
-	GetWhatClusterConfig = "cluster_config"
-	GetWhatDaemonStatus  = "status"
-	GetWhatDiskStats     = "disk"
-	GetWhatMountpaths    = "mountpaths"
-	GetWhatRemoteAIS     = "remote"
-	GetWhatSmap          = "smap"
-	GetWhatSmapVote      = "smapvote"
-	GetWhatSnode         = "snode"
-	GetWhatStats         = "stats"
-	GetWhatMetricNames   = "metrics"
-	GetWhatSysInfo       = "sysinfo"
-	GetWhatTargetIPs     = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
-	GetWhatLog           = "log"
+	// cluster meta
+	WhatSmap = "smap"
+	WhatBMD  = "bmd"
+	// config
+	WhatConfig        = "config"
+	WhatClusterConfig = "cluster_config"
+	// stats
+	WhatNodeStats          = "stats"
+	WhatNodeStatsAndStatus = "status"
+	WhatMetricNames        = "metrics"
+	WhatDiskStats          = "disk"
+	// assorted
+	WhatMountpaths = "mountpaths"
+	WhatRemoteAIS  = "remote"
+	WhatSmapVote   = "smapvote"
+	WhatSysInfo    = "sysinfo"
+	WhatTargetIPs  = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
+	// log
+	WhatLog = "log"
 	// xactions
-	GetWhatOneXactStatus   = "status"      // IC status by uuid (returns a single matching xaction or none)
-	GetWhatAllXactStatus   = "status_all"  // ditto - all matching xactions
-	GetWhatXactStats       = "getxstats"   // stats: xaction by uuid
-	GetWhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
-	GetWhatAllRunningXacts = "running_all" // e.g. e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] ...
-)
-
-// Internal "what" values.
-const (
-	GetWhatICBundle = "ic_bundle"
+	WhatOneXactStatus   = "status"      // IC status by uuid (returns a single matching xaction or none)
+	WhatAllXactStatus   = "status_all"  // ditto - all matching xactions
+	WhatXactStats       = "getxstats"   // stats: xaction by uuid
+	WhatQueryXactStats  = "qryxstats"   // stats: all matching xactions
+	WhatAllRunningXacts = "running_all" // e.g. e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] ...
+	// internal
+	WhatSnode    = "snode"
+	WhatICBundle = "ic_bundle"
 )
 
 // QparamLogSev enum.

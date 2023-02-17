@@ -19,7 +19,7 @@ import (
 
 var fred = color.New(color.FgHiRed)
 
-func NewPerformanceTab(st DaemonStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp, units string,
+func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp, units string,
 	allCols bool) (*Table, error) {
 	// 1. columns
 	cols := make([]*header, 0, 32)
@@ -133,7 +133,7 @@ func NewPerformanceTab(st DaemonStatusMap, smap *cluster.Smap, sid string, metri
 func isErrCol(colName string) bool { return strings.HasPrefix(colName, stats.ErrPrefix) }
 
 // remove all-zeros columns
-func _zerout(cols []*header, st DaemonStatusMap) []*header {
+func _zerout(cols []*header, st StatsAndStatusMap) []*header {
 	for i := 0; i < len(cols); i++ {
 		var found bool
 		h := cols[i]
@@ -158,7 +158,7 @@ func _zerout(cols []*header, st DaemonStatusMap) []*header {
 	return cols
 }
 
-func _addStatus(cols []*header, st DaemonStatusMap) []*header {
+func _addStatus(cols []*header, st StatsAndStatusMap) []*header {
 	for _, ds := range st {
 		if ds.Status != NodeOnline {
 			cols = append(cols, &header{name: colStatus, hide: false})

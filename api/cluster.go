@@ -73,7 +73,7 @@ func GetClusterMap(bp BaseParams) (smap *cluster.Smap, err error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatSmap}}
 	}
 	_, err = reqParams.DoReqAny(&smap)
 	FreeRp(reqParams)
@@ -87,7 +87,7 @@ func GetNodeClusterMap(bp BaseParams, sid string) (smap *cluster.Smap, err error
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSmap}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatSmap}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
 	}
 	_, err = reqParams.DoReqAny(&smap)
@@ -102,7 +102,7 @@ func GetClusterSysInfo(bp BaseParams) (info apc.ClusterSysInfo, err error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatSysInfo}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatSysInfo}}
 	}
 	_, err = reqParams.DoReqAny(&info)
 	FreeRp(reqParams)
@@ -128,7 +128,7 @@ func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStats}}
 	}
 
 	var rawStats stats.ClusterRaw
@@ -155,7 +155,7 @@ func GetTargetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err er
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDiskStats}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatDiskStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{tid}}
 	}
 	_, err = reqParams.DoReqAny(&res)
@@ -169,7 +169,7 @@ func GetRemoteAIS(bp BaseParams) (remais cluster.Remotes, err error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatRemoteAIS}}
 	}
 	_, err = reqParams.DoReqAny(&remais)
 	FreeRp(reqParams)
@@ -278,7 +278,7 @@ func GetClusterConfig(bp BaseParams) (*cmn.ClusterConfig, error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatClusterConfig}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatClusterConfig}}
 	}
 
 	cluConfig := &cmn.ClusterConfig{}
@@ -297,7 +297,7 @@ func GetBMD(bp BaseParams) (*cluster.BMD, error) {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatBMD}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatBMD}}
 	}
 
 	bmd := &cluster.BMD{}
@@ -315,7 +315,7 @@ func AttachRemoteAIS(bp BaseParams, alias, u string) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathCluAttach.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatRemoteAIS}}
 		reqParams.Header = http.Header{
 			apc.HdrRemAisAlias: []string{alias},
 			apc.HdrRemAisURL:   []string{u},
@@ -330,7 +330,7 @@ func DetachRemoteAIS(bp BaseParams, alias string) error {
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathCluDetach.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatRemoteAIS}}
 		reqParams.Header = http.Header{apc.HdrRemAisAlias: []string{alias}}
 	}
 	err := reqParams.DoRequest()

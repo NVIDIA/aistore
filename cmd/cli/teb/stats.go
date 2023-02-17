@@ -12,9 +12,9 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-type DaemonStatusMap map[string]*stats.DaemonStatus // by node ID (SID)
+type StatsAndStatusMap map[string]*stats.NodeStatus // by node ID (SID)
 
-func (ds DaemonStatusMap) sortedSIDs() (ids []string) {
+func (ds StatsAndStatusMap) sortedSIDs() (ids []string) {
 	ids = make([]string, 0, len(ds))
 	for sid := range ds {
 		ids = append(ids, sid)

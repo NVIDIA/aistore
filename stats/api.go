@@ -35,7 +35,7 @@ type (
 
 		IncErr(metric string)
 
-		GetWhatStats() *Node
+		GetStats() *Node
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
 		RegMetrics(node *cluster.Snode) // + init Prometheus, if configured
@@ -43,8 +43,9 @@ type (
 
 	// REST API
 	Node struct {
-		Tracker   copyTracker  `json:"tracker"`
-		TargetCDF fs.TargetCDF `json:"capacity"`
+		Snode     *cluster.Snode `json:"snode"`
+		Tracker   copyTracker    `json:"tracker"`
+		TargetCDF fs.TargetCDF   `json:"capacity"`
 	}
 	Cluster struct {
 		Proxy  *Node            `json:"proxy"`
@@ -55,13 +56,9 @@ type (
 		Target cos.JSONRawMsgs `json:"target"`
 	}
 
-	// (includes stats.Node and more)
-	DaemonStatus struct {
-		Snode *cluster.Snode `json:"snode"`
-		// Node
-		Tracker   copyTracker  `json:"stats_tracker"`
-		TargetCDF fs.TargetCDF `json:"mountpaths_info"`
-		// separately, rebalance stats
+	// (includes stats.Node and more; NOTE: direct API call w/ no proxying)
+	NodeStatus struct {
+		Node
 		RebSnap *cluster.Snap `json:"rebalance_snap,omitempty"`
 		// assorted props
 		Status         string         `json:"status"`

@@ -997,26 +997,28 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		what = query.Get(apc.QparamWhat)
 	)
 	switch what {
-	case apc.GetWhatConfig:
+	case apc.WhatConfig:
 		body = cmn.GCO.Get()
-	case apc.GetWhatSmap:
+	case apc.WhatSmap:
 		body = h.owner.smap.get()
-	case apc.GetWhatBMD:
+	case apc.WhatBMD:
 		body = h.owner.bmd.get()
-	case apc.GetWhatSmapVote:
+	case apc.WhatSmapVote:
 		var err error
 		body, err = h.cluMeta(cmetaFillOpt{})
 		if err != nil {
 			glog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
-	case apc.GetWhatSnode:
+	case apc.WhatSnode:
 		body = h.si
-	case apc.GetWhatLog:
+	case apc.WhatLog:
 		h.sendlog(w, r, query)
 		return
-	case apc.GetWhatStats:
-		body = h.statsT.GetWhatStats()
-	case apc.GetWhatMetricNames:
+	case apc.WhatNodeStats:
+		statsNode := h.statsT.GetStats()
+		statsNode.Snode = h.si
+		body = statsNode
+	case apc.WhatMetricNames:
 		body = h.statsT.GetMetricNames()
 	default:
 		h.writeErrf(w, r, "invalid GET /daemon request: unrecognized what=%s", what)
@@ -1972,7 +1974,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 	return cmn.WriteErrJSON(w, r, out, err)
 }
 
-// (via apc.GetWhatDaemonStatus)
+// (via apc.WhatNodeStatsAndStatus)
 func (h *htrun) _status(smap *smapX) (daeStatus string) {
 	self := smap.GetNode(h.si.ID()) // updated flags
 	switch {

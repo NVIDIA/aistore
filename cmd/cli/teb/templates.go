@@ -29,7 +29,7 @@ const rebalanceExpirationTime = 5 * time.Minute
 const (
 	primarySuffix       = "[P]"
 	nonElectableSuffix  = "[n/e]"
-	specialStatusSuffix = "[x]" // (daeStatus, via apc.GetWhatDaemonStatus)
+	specialStatusSuffix = "[x]" // (daeStatus, via apc.WhatNodeStatsAndStatus)
 
 	NodeOnline = "online"
 )
@@ -391,14 +391,14 @@ type (
 		Smap         *cluster.Smap
 		ExtendedURLs bool
 	}
-	DaemonStatusHelper struct {
-		Pmap DaemonStatusMap `json:"pmap"`
-		Tmap DaemonStatusMap `json:"tmap"`
+	StatsAndStatusHelper struct {
+		Pmap StatsAndStatusMap `json:"pmap"`
+		Tmap StatsAndStatusMap `json:"tmap"`
 	}
 	StatusHelper struct {
-		Smap      *cluster.Smap      `json:"smap"`
-		CluConfig *cmn.ClusterConfig `json:"config"`
-		Status    DaemonStatusHelper `json:"status"`
+		Smap      *cluster.Smap        `json:"smap"`
+		CluConfig *cmn.ClusterConfig   `json:"config"`
+		Status    StatsAndStatusHelper `json:"status"`
 	}
 	ListBucketsHelper struct {
 		Bck   cmn.Bck
@@ -441,13 +441,13 @@ var (
 		"JoinListNL":    func(lst []string) string { return fmtStringListGeneric(lst, "\n") },
 		"ExtECGetStats": extECGetStats,
 		"ExtECPutStats": extECPutStats,
-		// DaemonStatusHelper:
+		// StatsAndStatusHelper:
 		// select specific field and make a slice, and then a string out of it
-		"OnlineStatus": func(h DaemonStatusHelper) string { return toString(h.onlineStatus()) },
-		"Deployments":  func(h DaemonStatusHelper) string { return toString(h.deployments()) },
-		"Versions":     func(h DaemonStatusHelper) string { return toString(h.versions()) },
-		"BuildTimes":   func(h DaemonStatusHelper) string { return toString(h.buildTimes()) },
-		"Rebalance":    func(h DaemonStatusHelper) string { return toString(h.rebalance()) },
+		"OnlineStatus": func(h StatsAndStatusHelper) string { return toString(h.onlineStatus()) },
+		"Deployments":  func(h StatsAndStatusHelper) string { return toString(h.deployments()) },
+		"Versions":     func(h StatsAndStatusHelper) string { return toString(h.versions()) },
+		"BuildTimes":   func(h StatsAndStatusHelper) string { return toString(h.buildTimes()) },
+		"Rebalance":    func(h StatsAndStatusHelper) string { return toString(h.rebalance()) },
 	}
 
 	AliasTemplate = "ALIAS\tCOMMAND\n{{range $alias := .}}" +
@@ -471,10 +471,10 @@ func (sth SmapHelper) forMarshal() any {
 }
 
 //
-// stats.DaemonStatus
+// stats.NodeStatus
 //
 
-func calcCap(daemon *stats.DaemonStatus) (total uint64) {
+func calcCap(daemon *stats.NodeStatus) (total uint64) {
 	for _, cdf := range daemon.TargetCDF.Mountpaths {
 		total += cdf.Capacity.Avail
 	}
@@ -482,22 +482,22 @@ func calcCap(daemon *stats.DaemonStatus) (total uint64) {
 }
 
 ////////////////////////
-// DaemonStatusHelper //
+// StatsAndStatusHelper //
 ////////////////////////
 
-// for all stats.DaemonStatus structs: select specific field and append to the returned slice
+// for all stats.NodeStatus structs: select specific field and append to the returned slice
 // (using the corresponding jtags here for no particular reason)
-func (h *DaemonStatusHelper) onlineStatus() []string { return h.toSlice("status") }
-func (h *DaemonStatusHelper) deployments() []string  { return h.toSlice("deployment") }
-func (h *DaemonStatusHelper) versions() []string     { return h.toSlice("ais_version") }
-func (h *DaemonStatusHelper) buildTimes() []string   { return h.toSlice("build_time") }
-func (h *DaemonStatusHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
-func (h *DaemonStatusHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
+func (h *StatsAndStatusHelper) onlineStatus() []string { return h.toSlice("status") }
+func (h *StatsAndStatusHelper) deployments() []string  { return h.toSlice("deployment") }
+func (h *StatsAndStatusHelper) versions() []string     { return h.toSlice("ais_version") }
+func (h *StatsAndStatusHelper) buildTimes() []string   { return h.toSlice("build_time") }
+func (h *StatsAndStatusHelper) rebalance() []string    { return h.toSlice("rebalance_snap") }
+func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_pod_name") }
 
 // internal helper for the methods above
-func (h *DaemonStatusHelper) toSlice(jtag string) []string {
+func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 	set := cos.NewStrSet()
-	for _, m := range []DaemonStatusMap{h.Pmap, h.Tmap} {
+	for _, m := range []StatsAndStatusMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {
 			case "status":

@@ -29,19 +29,19 @@ const (
 	colPodName   = "K8s POD"
 )
 
-func NewDaeStatus(st *stats.DaemonStatus, smap *cluster.Smap, daeType, units string) *Table {
+func NewDaeStatus(st *stats.NodeStatus, smap *cluster.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
-		return newTableProxies(DaemonStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableProxies(StatsAndStatusMap{st.Snode.ID(): st}, smap, units)
 	case apc.Target:
-		return newTableTargets(DaemonStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableTargets(StatsAndStatusMap{st.Snode.ID(): st}, smap, units)
 	default:
 		debug.Assert(false)
 		return nil
 	}
 }
 
-func NewDaeMapStatus(ds *DaemonStatusHelper, smap *cluster.Smap, daeType, units string) *Table {
+func NewDaeMapStatus(ds *StatsAndStatusHelper, smap *cluster.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
 		return newTableProxies(ds.Pmap, smap, units)
@@ -54,9 +54,9 @@ func NewDaeMapStatus(ds *DaemonStatusHelper, smap *cluster.Smap, daeType, units 
 }
 
 // proxy(ies)
-func newTableProxies(ps DaemonStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableProxies(ps StatsAndStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
-		h        = DaemonStatusHelper{Pmap: ps}
+		h        = StatsAndStatusHelper{Pmap: ps}
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()
@@ -122,9 +122,9 @@ func newTableProxies(ps DaemonStatusMap, smap *cluster.Smap, units string) *Tabl
 }
 
 // target(s)
-func newTableTargets(ts DaemonStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableTargets(ts StatsAndStatusMap, smap *cluster.Smap, units string) *Table {
 	var (
-		h        = DaemonStatusHelper{Tmap: ts}
+		h        = StatsAndStatusHelper{Tmap: ts}
 		pods     = h.pods()
 		status   = h.onlineStatus()
 		versions = h.versions()

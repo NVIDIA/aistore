@@ -658,7 +658,7 @@ var (
 	_ prometheus.Collector = (*statsRunner)(nil)
 )
 
-func (r *statsRunner) GetWhatStats() *Node {
+func (r *statsRunner) GetStats() *Node {
 	ctracker := make(copyTracker, 48)
 	r.core.copyCumulative(ctracker)
 	return &Node{Tracker: ctracker}

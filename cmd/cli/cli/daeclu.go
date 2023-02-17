@@ -59,7 +59,7 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb.DaemonStatusMap,
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb.StatsAndStatusMap,
 	cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)
@@ -72,7 +72,7 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb
 	body := teb.StatusHelper{
 		Smap:      smap,
 		CluConfig: cfg,
-		Status: teb.DaemonStatusHelper{
+		Status: teb.StatsAndStatusHelper{
 			Pmap: pstatusMap,
 			Tmap: tstatusMap,
 		},
@@ -122,7 +122,7 @@ func daemonDiskStats(c *cli.Context, sid string) error {
 		return err
 	}
 
-	targets := teb.DaemonStatusMap{sid: {}}
+	targets := teb.StatsAndStatusMap{sid: {}}
 	if sid == "" {
 		targets = tstatusMap
 	}

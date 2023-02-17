@@ -287,7 +287,7 @@ func (ic *ic) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch what {
-	case apc.GetWhatICBundle:
+	case apc.WhatICBundle:
 		bundle := icBundle{Smap: smap, OwnershipTbl: cos.MustMarshal(&ic.p.notifs)}
 		ic.p.writeJSON(w, r, bundle, what)
 	default:
@@ -421,7 +421,7 @@ func (ic *ic) syncICBundle() error {
 		cargs.req = cmn.HreqArgs{
 			Method: http.MethodGet,
 			Path:   apc.URLPathIC.S,
-			Query:  url.Values{apc.QparamWhat: []string{apc.GetWhatICBundle}},
+			Query:  url.Values{apc.QparamWhat: []string{apc.WhatICBundle}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.cresv = cresIC{} // -> icBundle

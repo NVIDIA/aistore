@@ -808,14 +808,14 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	debug.AssertNoErr(err)
 
 	query := make(url.Values)
-	query.Add(apc.QparamWhat, apc.GetWhatDaemonStatus)
+	query.Add(apc.QparamWhat, apc.WhatNodeStatsAndStatus)
 	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 	for _, response := range responses {
 		if response.err != nil {
 			return "", response.err
 		}
 
-		daemonStatus := stats.DaemonStatus{}
+		daemonStatus := stats.NodeStatus{}
 		if err := jsoniter.Unmarshal(response.res, &daemonStatus); err != nil {
 			return "", err
 		}

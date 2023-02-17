@@ -49,10 +49,10 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 }
 
 //
-// teb.DaemonStatusMap
+// teb.StatsAndStatusMap
 //
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.DaemonStatusMap, err error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StatsAndStatusMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return
 	}
@@ -64,16 +64,16 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
-		tstatusMap = make(teb.DaemonStatusMap, tcnt)
+		tstatusMap = make(teb.StatsAndStatusMap, tcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
-		pstatusMap = make(teb.DaemonStatusMap, pcnt)
+		pstatusMap = make(teb.StatsAndStatusMap, pcnt)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-		tstatusMap = make(teb.DaemonStatusMap, tcnt)
-		pstatusMap = make(teb.DaemonStatusMap, pcnt)
+		tstatusMap = make(teb.StatsAndStatusMap, tcnt)
+		pstatusMap = make(teb.StatsAndStatusMap, pcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	}
@@ -82,7 +82,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	return
 }
 
-func daeStatus(nodeMap cluster.NodeMap, out teb.DaemonStatusMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap cluster.NodeMap, out teb.StatsAndStatusMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
@@ -92,15 +92,17 @@ func daeStatus(nodeMap cluster.NodeMap, out teb.DaemonStatusMap, wg cos.WG, mu *
 	}
 }
 
-func _status(node *cluster.Snode, mu *sync.Mutex, out teb.DaemonStatusMap) {
-	daeStatus, err := api.GetDaemonStatus(apiBP, node)
+func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StatsAndStatusMap) {
+	daeStatus, err := api.GetStatsAndStatus(apiBP, node)
 	if err != nil {
+		daeStatus = &stats.NodeStatus{}
+		daeStatus.Snode = node
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
-			daeStatus = &stats.DaemonStatus{Snode: node, Status: herr.TypeCode}
+			daeStatus.Status = herr.TypeCode
 		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
-			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[errNodeNotFound]"}
+			daeStatus.Status = "[errNodeNotFound]"
 		} else {
-			daeStatus = &stats.DaemonStatus{Snode: node, Status: "[" + err.Error() + "]"}
+			daeStatus.Status = "[" + err.Error() + "]"
 		}
 	} else if daeStatus.Status == "" {
 		daeStatus.Status = teb.NodeOnline
@@ -117,7 +119,7 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out teb.DaemonStatusMap) {
 	mu.Unlock()
 }
 
-func getDiskStats(targets teb.DaemonStatusMap) ([]teb.DiskStatsHelper, error) {
+func getDiskStats(targets teb.StatsAndStatusMap) ([]teb.DiskStatsHelper, error) {
 	var (
 		allStats = make([]teb.DiskStatsHelper, 0, len(targets))
 		wg, _    = errgroup.WithContext(context.Background())
@@ -172,7 +174,7 @@ func getDiskStats(targets teb.DaemonStatusMap) ([]teb.DiskStatsHelper, error) {
 //
 
 // throughput as F(stats.DaemonStats)
-func _daeBps(node *cluster.Snode, metrics cos.StrKVs, statsBegin *stats.DaemonStats, averageOver time.Duration) error {
+func _daeBps(node *cluster.Snode, metrics cos.StrKVs, statsBegin *stats.Node, averageOver time.Duration) error {
 	time.Sleep(averageOver)
 
 	statsEnd, err := api.GetDaemonStats(apiBP, node)
@@ -197,7 +199,7 @@ func _daeBps(node *cluster.Snode, metrics cos.StrKVs, statsBegin *stats.DaemonSt
 }
 
 // troughput as F(stats.ClusterStats)
-func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.ClusterStats, averageOver time.Duration) error {
+func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.Cluster, averageOver time.Duration) error {
 	time.Sleep(averageOver)
 
 	statsEnd, err := api.GetClusterStats(apiBP)
@@ -228,11 +230,11 @@ func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.ClusterStats, averageOver
 	return nil
 }
 
-// units-per-second as F(teb.DaemonStatusMap)
-func _cluStatusMapPs(c *cli.Context, mapBegin teb.DaemonStatusMap, metrics cos.StrKVs,
-	averageOver time.Duration) (teb.DaemonStatusMap, teb.DaemonStatusMap, error) {
+// units-per-second as F(teb.StatsAndStatusMap)
+func _cluStatusMapPs(c *cli.Context, mapBegin teb.StatsAndStatusMap, metrics cos.StrKVs,
+	averageOver time.Duration) (teb.StatsAndStatusMap, teb.StatsAndStatusMap, error) {
 	var (
-		mapEnd  teb.DaemonStatusMap
+		mapEnd  teb.StatsAndStatusMap
 		err     error
 		seconds = cos.MaxI64(int64(averageOver.Seconds()), 1) // averaging per second
 	)

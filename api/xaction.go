@@ -90,7 +90,7 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatAllRunningXacts}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatAllRunningXacts}}
 	}
 	_, err = reqParams.DoReqAny(&out)
 	FreeRp(reqParams)
@@ -111,7 +111,7 @@ func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs XactMultiSnap, err 
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatQueryXactStats}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatQueryXactStats}}
 	}
 	_, err = reqParams.DoReqAny(&xs)
 	FreeRp(reqParams)
@@ -129,14 +129,14 @@ func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs XactMultiSnap, err 
 // if exists
 func GetOneXactionStatus(bp BaseParams, args xact.ArgsMsg) (status *nl.NotifStatus, err error) {
 	status = &nl.NotifStatus{}
-	q := url.Values{apc.QparamWhat: []string{apc.GetWhatOneXactStatus}}
+	q := url.Values{apc.QparamWhat: []string{apc.WhatOneXactStatus}}
 	err = getxst(status, q, bp, args)
 	return
 }
 
 // same as above, except that it returns _all_ matching xactions
 func GetAllXactionStatus(bp BaseParams, args xact.ArgsMsg, force bool) (matching nl.NotifStatusVec, err error) {
-	q := url.Values{apc.QparamWhat: []string{apc.GetWhatAllXactStatus}}
+	q := url.Values{apc.QparamWhat: []string{apc.WhatAllXactStatus}}
 	if force {
 		// (force just-in-time)
 		// for each args-selected xaction:

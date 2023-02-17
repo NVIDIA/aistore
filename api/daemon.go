@@ -30,7 +30,7 @@ func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, 
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatMountpaths}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMountpaths}}
 		reqParams.Header = http.Header{
 			apc.HdrNodeID:  []string{node.ID()},
 			apc.HdrNodeURL: []string{node.URL(cmn.NetPublic)},
@@ -131,7 +131,7 @@ func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, er
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatConfig}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	_, err = reqParams.DoReqAny(&config)
@@ -154,7 +154,7 @@ func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err err
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatMetricNames}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatMetricNames}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	_, err = reqParams.DoReqAny(&kvs)
@@ -180,7 +180,7 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err err
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatStats}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStats}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	_, err = reqParams.DoReqAny(&ds)
@@ -192,7 +192,7 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err err
 func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, error) {
 	w := args.Writer
 	q := make(url.Values, 3)
-	q.Set(apc.QparamWhat, apc.GetWhatLog)
+	q.Set(apc.QparamWhat, apc.WhatLog)
 	if args.Severity != "" {
 		q.Set(apc.QparamLogSev, args.Severity)
 	}
@@ -215,14 +215,14 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, 
 	return 0, err
 }
 
-// GetDaemonStatus returns information about specific node in a cluster.
-func GetDaemonStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.DaemonStatus, err error) {
+// Returns both node's stats and extended status
+func GetStatsAndStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.NodeStatus, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.GetWhatDaemonStatus}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStatsAndStatus}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	_, err = reqParams.DoReqAny(&daeStatus)

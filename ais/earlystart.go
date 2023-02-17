@@ -677,7 +677,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 	)
 	args.req = cmn.HreqArgs{
 		Path:  apc.URLPathDae.S,
-		Query: url.Values{apc.QparamWhat: []string{apc.GetWhatSmapVote}},
+		Query: url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}},
 	}
 	args.smap = bcastSmap
 	args.to = cluster.AllNodes

@@ -55,7 +55,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	)
 	// always allow as the flow involves intra-cluster redirect
 	// (ref 1377 for more context)
-	if what == apc.GetWhatOneXactStatus {
+	if what == apc.WhatOneXactStatus {
 		p.ic.xstatusOne(w, r)
 		return
 	}
@@ -65,26 +65,26 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch what {
-	case apc.GetWhatAllXactStatus:
+	case apc.WhatAllXactStatus:
 		p.ic.xstatusAll(w, r, query)
-	case apc.GetWhatQueryXactStats:
+	case apc.WhatQueryXactStats:
 		p.xquery(w, r, what, query)
-	case apc.GetWhatAllRunningXacts:
+	case apc.WhatAllRunningXacts:
 		p.xgetRunning(w, r, what, query)
-	case apc.GetWhatStats:
+	case apc.WhatNodeStats:
 		p.queryClusterStats(w, r, what, query)
-	case apc.GetWhatSysInfo:
+	case apc.WhatSysInfo:
 		p.queryClusterSysinfo(w, r, what, query)
-	case apc.GetWhatMountpaths:
+	case apc.WhatMountpaths:
 		p.queryClusterMountpaths(w, r, what, query)
-	case apc.GetWhatRemoteAIS:
+	case apc.WhatRemoteAIS:
 		all, err := p.getRemAises(true /*refresh*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 		p.writeJSON(w, r, all, what)
-	case apc.GetWhatTargetIPs:
+	case apc.WhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
 		var (
@@ -103,17 +103,17 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(buf.Bytes())
 
-	case apc.GetWhatClusterConfig:
+	case apc.WhatClusterConfig:
 		config := cmn.GCO.Get()
 		p.writeJSON(w, r, &config.ClusterConfig, what)
-	case apc.GetWhatBMD, apc.GetWhatSmapVote, apc.GetWhatSnode, apc.GetWhatSmap:
+	case apc.WhatBMD, apc.WhatSmapVote, apc.WhatSnode, apc.WhatSmap:
 		p.htrun.httpdaeget(w, r, query)
 	default:
 		p.writeErrf(w, r, fmtUnknownQue, what)
 	}
 }
 
-// apc.GetWhatQueryXactStats (NOTE: may poll for quiescence)
+// apc.WhatQueryXactStats (NOTE: may poll for quiescence)
 func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
@@ -145,7 +145,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 	p.writeJSON(w, r, targetResults, what)
 }
 
-// apc.GetWhatAllRunningXacts
+// apc.WhatAllRunningXacts
 func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var xactMsg xact.QueryMsg
 	if err := cmn.ReadJSON(w, r, &xactMsg); err != nil {
@@ -211,7 +211,7 @@ func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 	if errT != nil {
 		return nil, errT
 	}
-	q := url.Values{apc.QparamWhat: []string{apc.GetWhatRemoteAIS}}
+	q := url.Values{apc.QparamWhat: []string{apc.WhatRemoteAIS}}
 	if refresh {
 		q[apc.QparamClusterInfo] = []string{"true"} // handshake to check connectivity and get remote Smap
 	}
@@ -266,7 +266,8 @@ func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what s
 	}
 	out := &stats.ClusterRaw{}
 	out.Target = targetStats
-	out.Proxy = p.statsT.GetWhatStats()
+	out.Proxy = p.statsT.GetStats()
+	out.Proxy.Snode = p.si
 	_ = p.writeJSON(w, r, out, what)
 }
 
@@ -1210,7 +1211,7 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 
 func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
 	what := query.Get(apc.QparamWhat)
-	if what != apc.GetWhatRemoteAIS {
+	if what != apc.WhatRemoteAIS {
 		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
 		return
 	}
