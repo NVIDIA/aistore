@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -17,12 +18,43 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
+// default pathname: $HOME/.config/ais/cli
+
 const (
 	urlFmt           = "%s://%s:%d"
 	defaultAISIP     = "127.0.0.1"
 	defaultAISPort   = 8080
 	defaultAuthNPort = 52001
 	defaultDockerIP  = "172.50.0.2"
+)
+
+type (
+	ClusterConfig struct {
+		URL               string `json:"url"`
+		DefaultAISHost    string `json:"default_ais_host"`
+		DefaultDockerHost string `json:"default_docker_host"`
+		SkipVerifyCrt     bool   `json:"skip_verify_crt"`
+	}
+	TimeoutConfig struct {
+		TCPTimeoutStr  string        `json:"tcp_timeout"`
+		TCPTimeout     time.Duration `json:"-"`
+		HTTPTimeoutStr string        `json:"http_timeout"`
+		HTTPTimeout    time.Duration `json:"-"`
+	}
+	AuthConfig struct {
+		URL string `json:"url"`
+	}
+	AliasConfig cos.StrKVs // (see DefaultAliasConfig below)
+
+	// all of the above
+	Config struct {
+		Cluster         ClusterConfig `json:"cluster"`
+		Timeout         TimeoutConfig `json:"timeout"`
+		Auth            AuthConfig    `json:"auth"`
+		Aliases         AliasConfig   `json:"aliases"`
+		DefaultProvider string        `json:"default_provider,omitempty"`
+		NoColor         bool          `json:"no_color"`
+	}
 )
 
 var (
@@ -65,38 +97,37 @@ func init() {
 		Auth: AuthConfig{
 			URL: fmt.Sprintf(urlFmt, proto, defaultAISIP, defaultAuthNPort),
 		},
-		DefaultProvider: apc.AIS,
 		Aliases:         DefaultAliasConfig,
+		DefaultProvider: apc.AIS,
+		NoColor:         false,
 	}
 }
 
-type Config struct {
-	Cluster         ClusterConfig `json:"cluster"`
-	Timeout         TimeoutConfig `json:"timeout"`
-	Auth            AuthConfig    `json:"auth"`
-	Aliases         AliasConfig   `json:"aliases"`
-	DefaultProvider string        `json:"default_provider,omitempty"`
+/////////////////
+// AliasConfig //
+/////////////////
+
+func (a AliasConfig) String() (s string) {
+	b := cos.StrKVs(a)
+	keys := b.Keys()
+	sort.Strings(keys)
+
+	var next bool
+	s = "{"
+	for _, k := range keys {
+		if next {
+			s += "; "
+		}
+		s += k + " => '" + a[k] + "'"
+		next = true
+	}
+	s += "}"
+	return
 }
 
-type ClusterConfig struct {
-	URL               string `json:"url"`
-	DefaultAISHost    string `json:"default_ais_host"`
-	DefaultDockerHost string `json:"default_docker_host"`
-	SkipVerifyCrt     bool   `json:"skip_verify_crt"`
-}
-
-type TimeoutConfig struct {
-	TCPTimeoutStr  string        `json:"tcp_timeout"`
-	TCPTimeout     time.Duration `json:"-"`
-	HTTPTimeoutStr string        `json:"http_timeout"`
-	HTTPTimeout    time.Duration `json:"-"`
-}
-
-type AuthConfig struct {
-	URL string `json:"url"`
-}
-
-type AliasConfig map[string]string
+////////////
+// Config //
+////////////
 
 func (c *Config) validate() (err error) {
 	if c.Timeout.TCPTimeout, err = time.ParseDuration(c.Timeout.TCPTimeoutStr); err != nil {

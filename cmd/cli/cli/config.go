@@ -105,8 +105,10 @@ var (
 
 	// cli
 	clicfgCmd = cli.Command{
-		Name:  cmdCLI,
-		Usage: "display and change AIS CLI configuration",
+		Name:   cmdCLI,
+		Usage:  "display and change AIS CLI configuration",
+		Action: showCLIConfigHandler,
+		Flags:  clicfgCmdFlags[cmdCLIShow],
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdCLIShow,

@@ -93,7 +93,8 @@ func Run(version, buildtime string, args []string) error {
 	a := acli{app: cli.NewApp(), outWriter: os.Stdout, errWriter: os.Stderr, longRun: &longRun{}}
 	buildTime = buildtime
 	a.init(version)
-	teb.Writer = os.Stdout
+
+	teb.Init(os.Stdout, cfg.NoColor)
 
 	// run
 	if err := a.runOnce(args); err != nil {
@@ -195,36 +196,28 @@ func formatErr(err error) error {
 	}
 }
 
-func onBeforeCommand(c *cli.Context) error {
-	// While `color.NoColor = flagIsSet(c, noColorFlag)` looks shorter and
-	// better, it may ruin some output. Why: the library automatically
-	// disables coloring if TERM="dumb" or Stdout is redirected. In those
-	// cases, we should not override `NoColor` with `false` when the flag
-	// is not defined. So, here we can only disable coloring manually.
-	if flagIsSet(c, noColorFlag) {
-		color.NoColor = true
-	}
-	return nil
-}
-
 func (a *acli) init(version string) {
 	app := a.app
 
-	fcyan = color.New(color.FgHiCyan).SprintFunc()
-	fred = color.New(color.FgHiRed).SprintFunc()
+	if cfg.NoColor {
+		fcyan = fmt.Sprint
+		fred = fmt.Sprint
+	} else {
+		fcyan = color.New(color.FgHiCyan).SprintFunc()
+		fred = color.New(color.FgHiRed).SprintFunc()
+	}
 
 	app.Name = cliName
 	app.Usage = "AIS CLI: command-line management utility for AIStore"
 	app.Version = version
 	app.EnableBashCompletion = true
 	app.HideHelp = true
-	app.Flags = []cli.Flag{cli.HelpFlag, noColorFlag}
+	app.Flags = []cli.Flag{cli.HelpFlag}
 	app.CommandNotFound = commandNotFoundHandler
 	app.OnUsageError = onUsageErrorHandler
 	app.Metadata = map[string]any{metadata: a.longRun}
 	app.Writer = a.outWriter
 	app.ErrWriter = a.errWriter
-	app.Before = onBeforeCommand // to disable colors if `no-colors' is set
 	app.Description = cliDescr
 
 	a.setupCommands()

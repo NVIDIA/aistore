@@ -6,7 +6,6 @@ package teb
 
 import (
 	"fmt"
-	"io"
 	"text/tabwriter"
 	"text/template"
 
@@ -21,8 +20,6 @@ type Opts struct {
 }
 
 func Jopts(usejs bool) Opts { return Opts{UseJSON: usejs} }
-
-var Writer io.Writer
 
 // main func
 func Print(object any, templ string, aux ...Opts) error {

@@ -14,10 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/fatih/color"
 )
-
-var fred = color.New(color.FgHiRed)
 
 func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp, units string,
 	allCols bool) (*Table, error) {
@@ -79,7 +76,7 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 	// 7. apply color
 	for i := range cols {
 		if isErrCol(cols[i].name) {
-			printedColumns[i].name = fred.Sprintf("\t%s", printedColumns[i].name)
+			printedColumns[i].name = fred("\t%s", printedColumns[i].name)
 		}
 	}
 
@@ -117,7 +114,7 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 
 			// add some color
 			if isErrCol(h.name) {
-				printedValue = fred.Sprintf("\t%s", printedValue)
+				printedValue = fred("\t%s", printedValue)
 			}
 			row = append(row, printedValue)
 		}

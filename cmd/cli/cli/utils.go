@@ -791,7 +791,7 @@ func _toStr(v any) (s string) {
 			}
 		}
 	}
-	return fmt.Sprintf("%v", m)
+	return fmt.Sprintf("%v", m) // for custom formatting, see e.g. AliasConfig.String()
 }
 
 func diffConfigs(actual, original nvpairList) []propDiff {

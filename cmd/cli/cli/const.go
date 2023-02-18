@@ -328,12 +328,6 @@ var (
 			"all buckets (including remote buckets that are not present in the cluster)",
 	}
 
-	// coloring
-	noColorFlag = cli.BoolFlag{
-		Name:  "no-color",
-		Usage: "disable colored output",
-	}
-
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
 		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.: " +

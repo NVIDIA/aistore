@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
@@ -54,6 +55,7 @@ func (a *acli) getAliasCmd() cli.Command {
 }
 
 // initAliases reads cfg.Aliases and returns all aliases.
+// NOTE: for default alias config, see cmd/cli/config/config.go and `DefaultAliasConfig`
 func (a *acli) initAliases() (aliasCmds []cli.Command) {
 	for alias, orig := range cfg.Aliases {
 		cmd := a.resolveCmd(orig)
@@ -135,18 +137,20 @@ func resetAliasHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	fmt.Fprintln(c.App.Writer, "Aliases reset to default")
-	return
+	actionDone(c, "Command aliases reset to all defaults:\n")
+	return showAliasHandler(c)
 }
 
-func showAliasHandler() (err error) {
+// (compare w/ AliasConfig.String())
+func showAliasHandler(*cli.Context) (err error) {
+	b := cos.StrKVs(cfg.Aliases)
+	keys := b.Keys()
+	sort.Strings(keys)
+
 	aliases := make(nvpairList, 0, len(cfg.Aliases))
-	for k, v := range cfg.Aliases {
-		aliases = append(aliases, nvpair{Name: k, Value: v})
+	for _, k := range keys {
+		aliases = append(aliases, nvpair{Name: k, Value: cfg.Aliases[k]})
 	}
-	sort.Slice(aliases, func(i, j int) bool {
-		return aliases[i].Name < aliases[j].Name
-	})
 	return teb.Print(aliases, teb.AliasTemplate)
 }
 

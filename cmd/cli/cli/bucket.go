@@ -607,7 +607,7 @@ func showBucketProps(c *cli.Context) (err error) {
 func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
 	var (
 		defList nvpairList
-		colored = !flagIsSet(c, noColorFlag)
+		colored = !cfg.NoColor
 		compact = flagIsSet(c, compactPropFlag)
 	)
 	// List instead of map to keep properties in the same order always.
