@@ -55,13 +55,12 @@ const (
 
 // metrics
 const (
-	// KindCounter
+	// KindCounter:
 	// all basic counters are accompanied by the corresponding (ErrPrefix + kind) error count:
-	// "err.get.n", "err.put.n", etc.
-	// see: `IncErr`, `regCommon`
-	GetCount    = "get.n"    // object
-	PutCount    = "put.n"    // ditto
-	AppendCount = "append.n" // ditto
+	// "err.get.n", "err.put.n", etc. See also: `IncErr`, `regCommon`
+	GetCount    = "get.n"    // counts GET(object)
+	PutCount    = "put.n"    // ditto PUT
+	AppendCount = "append.n" // ditto etc.
 	DeleteCount = "del.n"    // ditto
 	RenameCount = "ren.n"    // ditto
 	ListCount   = "lst.n"    // list-objects

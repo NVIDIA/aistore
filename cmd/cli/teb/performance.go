@@ -16,8 +16,22 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, metrics cos.StrKVs, regex *regexp.Regexp, units string,
-	allCols bool) (*Table, error) {
+type PerfTabCtx struct {
+	Smap    *cluster.Smap
+	Sid     string         // single target, unless ""
+	Metrics cos.StrKVs     // metric (aka stats) names and kinds
+	Regex   *regexp.Regexp // filter column names (case-insensitive)
+	Units   string         // IEC, SI, raw
+	AllCols bool           // show all-zero columns
+	AvgSize bool           // compute average size on the fly (and show it), e.g.: `get.size/get.n`
+}
+
+func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
+	var n2n cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
+	if c.AvgSize {
+		n2n = make(cos.StrKVs, 2)
+	}
+
 	// 1. columns
 	cols := make([]*header, 0, 32)
 	for tid, ds := range st {
@@ -28,14 +42,14 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 		}
 		if ds.Tracker == nil { // (unlikely)
 			debug.Assert(false, tid)
-			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, smap))
+			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, c.Smap))
 		}
 
 		// statically
 		cols = append(cols, &header{name: colTarget, hide: false})
-		// selected by caller
+		// for subset of metrics selected by caller
 		for name := range ds.Tracker {
-			if _, ok := metrics[name]; ok {
+			if _, ok := c.Metrics[name]; ok {
 				cols = append(cols, &header{name: name, hide: false})
 			}
 		}
@@ -44,7 +58,7 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 	}
 
 	// 2. exclude zero columns unless (--all) requested
-	if !allCols {
+	if !c.AllCols {
 		cols = _zerout(cols, st)
 	}
 
@@ -62,15 +76,15 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 		}
 	})
 
-	// 4. add STATUS iff thetre's at least one node that isn't "online"
+	// 4. add STATUS column unless all nodes are online (`NodeOnline`)
 	cols = _addStatus(cols, st)
 
 	// 5. convert metric to column names
-	printedColumns := _rename(cols, metrics)
+	printedColumns := _metricsToColNames(cols, c.Metrics, n2n)
 
 	// 6. regex to filter columns, if spec-ed
-	if regex != nil {
-		cols, printedColumns = _filter(cols, printedColumns, regex)
+	if c.Regex != nil {
+		cols, printedColumns = _filter(cols, printedColumns, c.Regex)
 	}
 
 	// 7. apply color
@@ -80,21 +94,20 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 		}
 	}
 
-	// 8. sort targets
+	// 8. sort targets by IDs
 	tids := st.sortedSIDs()
 
-	// 9. construct empty table
+	// 9. construct an empty table
 	table := newTable(printedColumns...)
 
-	// and finally,
-	// 10. add rows
+	// 10. finally, add rows
 	for _, tid := range tids {
 		ds := st[tid]
-		if sid != "" && sid != tid {
+		if c.Sid != "" && c.Sid != tid {
 			continue
 		}
 		row := make([]string, 0, len(cols))
-		row = append(row, fmtDaemonID(tid, smap, ds.Status))
+		row = append(row, fmtDaemonID(tid, c.Smap, ds.Status))
 		for _, h := range cols[1:] {
 			if h.name == colStatus {
 				row = append(row, ds.Status)
@@ -108,13 +121,17 @@ func NewPerformanceTab(st StatsAndStatusMap, smap *cluster.Smap, sid string, met
 			// format value
 			v, ok := ds.Tracker[h.name]
 			debug.Assert(ok, h.name)
-			kind, ok := metrics[h.name]
+			kind, ok := c.Metrics[h.name]
 			debug.Assert(ok, h.name)
-			printedValue := FmtStatValue(h.name, kind, v.Value, units)
+			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
 
 			// add some color
 			if isErrCol(h.name) {
 				printedValue = fred("\t%s", printedValue)
+			} else if kind == stats.KindSize && c.AvgSize {
+				if v, ok := _compAvgSize(ds, h.name, v.Value, n2n); ok {
+					printedValue += "  " + FmtStatValue("", kind, v, c.Units)
+				}
 			}
 			row = append(row, printedValue)
 		}
@@ -155,6 +172,7 @@ func _zerout(cols []*header, st StatsAndStatusMap) []*header {
 	return cols
 }
 
+// (aternatively, could always add, conditionally hide)
 func _addStatus(cols []*header, st StatsAndStatusMap) []*header {
 	for _, ds := range st {
 		if ds.Status != NodeOnline {
@@ -166,14 +184,16 @@ func _addStatus(cols []*header, st StatsAndStatusMap) []*header {
 }
 
 // convert metric names to column names
-// (for naming conventions, lookup "naming" and "convention" in stats/*)
-func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
+// NOTE hard-coded translation constants `.lst` => LIST, et al.
+// for naming conventions, see "naming" or "convention" under stats/*
+func _metricsToColNames(cols []*header, metrics, n2n cos.StrKVs) (printedColumns []*header) {
 	printedColumns = make([]*header, len(cols))
-	for i, h := range cols {
+	for colIdx, h := range cols {
 		var (
-			name, kind string
-			ok         bool
-			parts      = strings.Split(h.name, ".")
+			name  string // resulting column name
+			kind  string
+			ok    bool
+			parts = strings.Split(h.name, ".")
 		)
 		if h.name == colTarget || h.name == colStatus {
 			name = h.name
@@ -199,8 +219,8 @@ func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
 			name = strings.ToUpper(parts[0])
 		}
 		// middle name (is every name in-between)
-		for i := 1; i < len(parts)-1; i++ {
-			name += "-" + strings.ToUpper(parts[i])
+		for j := 1; j < len(parts)-1; j++ {
+			name += "-" + strings.ToUpper(parts[j])
 		}
 
 		// suffix
@@ -210,10 +230,14 @@ func _rename(cols []*header, metrics cos.StrKVs) (printedColumns []*header) {
 		case kind == stats.KindLatency:
 			name += "(latency)"
 		case kind == stats.KindSize:
-			name += "(size)"
+			if n2n != nil && _present(cols, metrics, h.name, n2n) {
+				name += "(cumulative, average)"
+			} else {
+				name += "(size)"
+			}
 		}
 	add:
-		printedColumns[i] = &header{name: name, hide: cols[i].hide}
+		printedColumns[colIdx] = &header{name: name, hide: cols[colIdx].hide}
 	}
 
 	return
@@ -235,4 +259,36 @@ func _filter(cols, printedColumns []*header, regex *regexp.Regexp) ([]*header, [
 		i--
 	}
 	return cols, printedColumns
+}
+
+//
+// averaging (cumulative-size/cumulative-count)
+//
+
+func _present(cols []*header, metrics cos.StrKVs, ns string, n2n cos.StrKVs) bool {
+	i := strings.LastIndexByte(ns, '.')
+	if i < 0 {
+		return false
+	}
+	nc := ns[:i] + ".n"
+	for _, h := range cols {
+		if h.name == nc && metrics[h.name] == stats.KindCounter {
+			n2n[ns] = nc
+			return true
+		}
+	}
+	return false
+}
+
+// where ns and vs are cumulative size name and value, respectively
+func _compAvgSize(ds *stats.NodeStatus, ns string, vs int64, n2n cos.StrKVs) (avg int64, ok bool) {
+	var nc string // cumulative count
+	if nc, ok = n2n[ns]; !ok {
+		return
+	}
+	ok = false
+	if vc, exists := ds.Tracker[nc]; exists {
+		avg, ok = cos.DivRound(vs, vc.Value), true
+	}
+	return
 }

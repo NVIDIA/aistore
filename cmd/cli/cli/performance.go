@@ -33,6 +33,7 @@ var (
 		noHeaderFlag,
 		regexColsFlag,
 		unitsFlag,
+		averageSizeFlag,
 	)
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
@@ -133,13 +134,14 @@ func showThroughputHandler(c *cli.Context) error {
 	return showPerformanceTab(c, metrics, true /* with units-per-time averaging*/)
 }
 
-// (generic)
-func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) error {
+// (common use)
+func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, timeAverage bool) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		allCols     = flagIsSet(c, allColumnsFlag)
+		avgSize     = flagIsSet(c, averageSizeFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -165,10 +167,19 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
-	if !averaging {
+	if !timeAverage {
 		setLongRunParams(c, 72)
 
-		table, err := teb.NewPerformanceTab(tstatusMap, smap, sid, metrics, regex, units, allCols)
+		ctx := teb.PerfTabCtx{
+			Smap:    smap,
+			Sid:     sid,
+			Metrics: metrics,
+			Regex:   regex,
+			Units:   units,
+			AllCols: allCols,
+			AvgSize: avgSize,
+		}
+		table, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
 			return err
 		}
@@ -191,7 +202,16 @@ func showPerformanceTab(c *cli.Context, metrics cos.StrKVs, averaging bool) erro
 
 		time.Sleep(sleep)
 
-		table, err := teb.NewPerformanceTab(mapBeginUpdated, smap, sid, metrics, regex, units, allCols)
+		ctx := teb.PerfTabCtx{
+			Smap:    smap,
+			Sid:     sid,
+			Metrics: metrics,
+			Regex:   regex,
+			Units:   units,
+			AllCols: allCols,
+			AvgSize: avgSize,
+		}
+		table, err := teb.NewPerformanceTab(mapBeginUpdated, &ctx)
 		if err != nil {
 			return err
 		}

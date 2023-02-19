@@ -375,6 +375,8 @@ var (
 	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	nonverboseFlag  = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
 
+	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
+
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
 		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",
