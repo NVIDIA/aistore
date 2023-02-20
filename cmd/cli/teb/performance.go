@@ -65,11 +65,11 @@ func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
 	// 3. sort (remaining) columns and shift `err-*` columns to the right
 	sort.Slice(cols, func(i, j int) bool {
 		switch {
-		case isErrCol(cols[i].name) && isErrCol(cols[j].name):
+		case stats.IsErrMetric(cols[i].name) && stats.IsErrMetric(cols[j].name):
 			return cols[i].name < cols[j].name
-		case isErrCol(cols[i].name) && !isErrCol(cols[j].name):
+		case stats.IsErrMetric(cols[i].name) && !stats.IsErrMetric(cols[j].name):
 			return false
-		case !isErrCol(cols[i].name) && isErrCol(cols[j].name):
+		case !stats.IsErrMetric(cols[i].name) && stats.IsErrMetric(cols[j].name):
 			return true
 		default:
 			return cols[i].name < cols[j].name
@@ -89,7 +89,7 @@ func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
 
 	// 7. apply color
 	for i := range cols {
-		if isErrCol(cols[i].name) {
+		if stats.IsErrMetric(cols[i].name) {
 			printedColumns[i].name = fred("\t%s", printedColumns[i].name)
 		}
 	}
@@ -126,7 +126,7 @@ func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
 			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
 
 			// add some color
-			if isErrCol(h.name) {
+			if stats.IsErrMetric(h.name) {
 				printedValue = fred("\t%s", printedValue)
 			} else if kind == stats.KindSize && c.AvgSize {
 				if v, ok := _compAvgSize(ds, h.name, v.Value, n2n); ok {
@@ -143,8 +143,6 @@ func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
 //
 // utils/helpers
 //
-
-func isErrCol(colName string) bool { return strings.HasPrefix(colName, stats.ErrPrefix) }
 
 // remove all-zeros columns
 func _zerout(cols []*header, st StatsAndStatusMap) []*header {

@@ -22,23 +22,18 @@ import (
 
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
-func SetBucketProps(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate, query ...url.Values) (string, error) {
+func SetBucketProps(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (string, error) {
 	b := cos.MustMarshal(apc.ActMsg{Action: apc.ActSetBprops, Value: props})
-	return patchBucketProps(bp, bck, b, query...)
+	return patchBprops(bp, bck, b)
 }
 
 // ResetBucketProps resets the properties of a bucket to the global configuration.
-func ResetBucketProps(bp BaseParams, bck cmn.Bck, query ...url.Values) (string, error) {
+func ResetBucketProps(bp BaseParams, bck cmn.Bck) (string, error) {
 	b := cos.MustMarshal(apc.ActMsg{Action: apc.ActResetBprops})
-	return patchBucketProps(bp, bck, b, query...)
+	return patchBprops(bp, bck, b)
 }
 
-func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Values) (xid string, err error) {
-	var q url.Values
-	if len(query) > 0 {
-		q = query[0]
-	}
-	q = bck.AddToQuery(q)
+func patchBprops(bp BaseParams, bck cmn.Bck, body []byte) (xid string, err error) {
 	bp.Method = http.MethodPatch
 	path := apc.URLPathBuckets.Join(bck.Name)
 	reqParams := AllocRp()
@@ -47,7 +42,7 @@ func patchBucketProps(bp BaseParams, bck cmn.Bck, body []byte, query ...url.Valu
 		reqParams.Path = path
 		reqParams.Body = body
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = q
+		reqParams.Query = bck.AddToQuery(nil)
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)

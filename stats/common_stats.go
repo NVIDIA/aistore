@@ -56,8 +56,9 @@ const (
 // metrics
 const (
 	// KindCounter:
-	// all basic counters are accompanied by the corresponding (ErrPrefix + kind) error count:
-	// "err.get.n", "err.put.n", etc. See also: `IncErr`, `regCommon`
+	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
+	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
+	// See also: `IncErr`, `regCommon`
 	GetCount    = "get.n"    // counts GET(object)
 	PutCount    = "put.n"    // ditto PUT
 	AppendCount = "append.n" // ditto etc.
@@ -66,9 +67,9 @@ const (
 	ListCount   = "lst.n"    // list-objects
 
 	// statically defined err counts (NOTE: update regCommon when adding/updating)
-	ErrHTTPWriteCount = "err.http.write.n"
-	ErrDownloadCount  = "err.dl.n"
-	ErrPutMirrorCount = "err.put.mirror.n"
+	ErrHTTPWriteCount = errPrefix + "http.write.n"
+	ErrDownloadCount  = errPrefix + "dl.n"
+	ErrPutMirrorCount = errPrefix + "put.mirror.n"
 
 	// KindLatency
 	GetLatency       = "get.ns"
@@ -509,6 +510,30 @@ func (s *coreStats) copyCumulative(ctracker copyTracker) {
 	}
 }
 
+func (s *coreStats) reset(errorsOnly bool) {
+	if errorsOnly {
+		for name, v := range s.Tracker {
+			if IsErrMetric(name) {
+				debug.Assert(v.kind == KindCounter || v.kind == KindSize, name)
+				ratomic.StoreInt64(&v.Value, 0)
+			}
+		}
+		return
+	}
+
+	for _, v := range s.Tracker {
+		switch v.kind {
+		case KindLatency, KindThroughput:
+			v.mu.Lock()
+			v.Value, v.cumulative = 0, 0
+			v.mu.Unlock()
+		case KindCounter, KindSize, KindComputedThroughput, KindGauge:
+			ratomic.StoreInt64(&v.Value, 0)
+		default: // KindSpecial - do nothing
+		}
+	}
+}
+
 ////////////////
 // statsValue //
 ////////////////
@@ -627,12 +652,12 @@ func (tracker statsTracker) regCommon(node *cluster.Snode) {
 	tracker.reg(node, ListCount, KindCounter)
 
 	// basic error counters, respectively
-	tracker.reg(node, ErrPrefix+GetCount, KindCounter)
-	tracker.reg(node, ErrPrefix+PutCount, KindCounter)
-	tracker.reg(node, ErrPrefix+AppendCount, KindCounter)
-	tracker.reg(node, ErrPrefix+DeleteCount, KindCounter)
-	tracker.reg(node, ErrPrefix+RenameCount, KindCounter)
-	tracker.reg(node, ErrPrefix+ListCount, KindCounter)
+	tracker.reg(node, errPrefix+GetCount, KindCounter)
+	tracker.reg(node, errPrefix+PutCount, KindCounter)
+	tracker.reg(node, errPrefix+AppendCount, KindCounter)
+	tracker.reg(node, errPrefix+DeleteCount, KindCounter)
+	tracker.reg(node, errPrefix+RenameCount, KindCounter)
+	tracker.reg(node, errPrefix+ListCount, KindCounter)
 
 	// more error counters
 	tracker.reg(node, ErrHTTPWriteCount, KindCounter)
@@ -661,6 +686,10 @@ func (r *statsRunner) GetStats() *Node {
 	ctracker := make(copyTracker, 48)
 	r.core.copyCumulative(ctracker)
 	return &Node{Tracker: ctracker}
+}
+
+func (r *statsRunner) ResetStats(errorsOnly bool) {
+	r.core.reset(errorsOnly)
 }
 
 func (r *statsRunner) GetMetricNames() cos.StrKVs {
@@ -950,9 +979,9 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 }
 
 func (r *statsRunner) IncErr(metric string) {
-	if strings.HasPrefix(metric, ErrPrefix) { // e.g. ErrHTTPWriteCount
+	if IsErrMetric(metric) {
 		r.workCh <- cos.NamedVal64{Name: metric, Value: 1}
 	} else { // e.g. "err." + GetCount
-		r.workCh <- cos.NamedVal64{Name: ErrPrefix + metric, Value: 1}
+		r.workCh <- cos.NamedVal64{Name: errPrefix + metric, Value: 1}
 	}
 }

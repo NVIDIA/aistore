@@ -103,6 +103,7 @@ const (
 	cmdShutdown   = "shutdown"
 	cmdAttach     = "attach"
 	cmdDetach     = "detach"
+	cmdResetStats = "reset-stats"
 
 	// Cluster subcommands
 	cmdCluAttach = "remote-" + cmdAttach
@@ -136,8 +137,8 @@ const (
 	cmdShowSysCap     = "CPU-MEM-CAP"
 
 	// Bucket properties subcommands
-	cmdSetProps   = "set"
-	cmdResetProps = "reset"
+	cmdSetBprops   = "set"
+	cmdResetBprops = cmdReset
 
 	// Archive subcommands
 	cmdAppend = "append"
@@ -169,12 +170,12 @@ const (
 	// config subcommands
 	cmdCLI        = "cli"
 	cmdCLIShow    = commandShow
-	cmdCLISet     = cmdSetProps
-	cmdCLIReset   = cmdResetProps
+	cmdCLISet     = cmdSetBprops
+	cmdCLIReset   = cmdResetBprops
 	cmdAliasShow  = commandShow
 	cmdAliasRm    = commandRemove
 	cmdAliasSet   = cmdCLISet
-	cmdAliasReset = cmdResetProps
+	cmdAliasReset = cmdResetBprops
 )
 
 //
@@ -694,5 +695,10 @@ var (
 	cliConfigPathFlag = cli.BoolFlag{
 		Name:  "path",
 		Usage: "display path to the AIS CLI configuration",
+	}
+
+	errorsOnlyFlag = cli.BoolFlag{
+		Name:  "errors-only",
+		Usage: "reset only error counters",
 	}
 )

@@ -173,7 +173,10 @@ func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err err
 // as only the client knows _when_ exactly the same ".bps" metric was queried
 // the previous time.
 //
-// - See also: `api.GetClusterStats`, stats/api.go
+// See also:
+// - api.GetClusterStats
+// - api.GetStatsAndStatus (below)
+// - stats/api.go
 func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -188,7 +191,37 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err err
 	return ds, err
 }
 
-// GetDaemonLog returns log of a specific daemon in a cluster.
+// see also: ResetClusterStats
+func ResetDaemonStats(bp BaseParams, node *cluster.Snode, errorsOnly bool) (err error) {
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetStats, Value: errorsOnly})
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
+	}
+	err = reqParams.DoRequest()
+	FreeRp(reqParams)
+	return
+}
+
+// Returns both node's stats and extended status
+func GetStatsAndStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.NodeStatus, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStatsAndStatus}}
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
+	}
+	_, err = reqParams.DoReqAny(&daeStatus)
+	FreeRp(reqParams)
+	return daeStatus, err
+}
+
+// Returns log of a specific node in a cluster.
 func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, error) {
 	w := args.Writer
 	q := make(url.Values, 3)
@@ -215,21 +248,6 @@ func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, 
 	return 0, err
 }
 
-// Returns both node's stats and extended status
-func GetStatsAndStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.NodeStatus, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeStatsAndStatus}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
-	}
-	_, err = reqParams.DoReqAny(&daeStatus)
-	FreeRp(reqParams)
-	return daeStatus, err
-}
-
 // SetDaemonConfig, given key value pairs, sets the configuration accordingly for a specific node.
 func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...bool) error {
 	bp.Method = http.MethodPut
@@ -253,6 +271,7 @@ func SetDaemonConfig(bp BaseParams, nodeID string, nvs cos.StrKVs, transient ...
 }
 
 // ResetDaemonConfig resets the configuration for a specific node to the cluster configuration.
+// TODO: revisit access control
 func ResetDaemonConfig(bp BaseParams, nodeID string) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()

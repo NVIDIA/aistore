@@ -163,6 +163,19 @@ func GetTargetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err er
 	return
 }
 
+func ResetClusterStats(bp BaseParams, errorsOnly bool) (err error) {
+	bp.Method = http.MethodPut
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetStats, Value: errorsOnly})
+	}
+	err = reqParams.DoRequest()
+	FreeRp(reqParams)
+	return
+}
+
 func GetRemoteAIS(bp BaseParams) (remais cluster.Remotes, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

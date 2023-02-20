@@ -149,6 +149,9 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if err := t.owner.config.resetDaemonConfig(); err != nil {
 			t.writeErr(w, r, err)
 		}
+	case apc.ActResetStats:
+		errorsOnly := msg.Value.(bool)
+		t.statsT.ResetStats(errorsOnly)
 	case apc.ActShutdown:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return

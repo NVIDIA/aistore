@@ -61,6 +61,9 @@ var (
 			allJobsFlag,
 			noHeaderFlag,
 		},
+		cmdResetStats: {
+			errorsOnlyFlag,
+		},
 	}
 
 	startRebalance = cli.Command{
@@ -174,6 +177,14 @@ var (
 					},
 				},
 			},
+			{
+				Name:         cmdResetStats,
+				Usage:        "reset cluster or node stats (all cumulative metrics or only errors)",
+				ArgsUsage:    optionalNodeIDArgument,
+				Flags:        clusterCmdsFlags[cmdResetStats],
+				Action:       resetStatsHandler,
+				BashComplete: suggestAllNodes,
+			},
 		},
 	}
 )
@@ -186,7 +197,8 @@ func attachRemoteAISHandler(c *cli.Context) (err error) {
 	if err = api.AttachRemoteAIS(apiBP, alias, url); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Remote cluster (%s=%s) successfully attached\n", alias, url)
+	msg := fmt.Sprintf("Remote cluster (%s=%s) successfully attached", alias, url)
+	actionDone(c, msg)
 	return
 }
 
@@ -199,7 +211,8 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 	if err = api.DetachRemoteAIS(apiBP, alias); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Remote cluster %s successfully detached\n", alias)
+	msg := fmt.Sprintf("Remote cluster %s successfully detached", alias)
+	actionDone(c, msg)
 	return
 }
 
@@ -207,8 +220,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 	if err := api.ShutdownCluster(apiBP); err != nil {
 		return err
 	}
-
-	actionDone(c, "Cluster is successfully shutdown\n")
+	actionDone(c, "Cluster successfully shut down")
 	return
 }
 
@@ -223,7 +235,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
 		return err
 	}
-	actionDone(c, "Cluster successfully decommissioned\n")
+	actionDone(c, "Cluster successfully decommissioned")
 	return nil
 }
 
@@ -456,4 +468,37 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 	}
 	_, err = xactList(c, xargs, false)
 	return
+}
+
+func resetStatsHandler(c *cli.Context) error {
+	var (
+		errorsOnly      = flagIsSet(c, errorsOnlyFlag)
+		tag             = "stats"
+		sid, sname, err = argNode(c)
+	)
+	if err != nil {
+		return err
+	}
+	if errorsOnly {
+		tag = "error metrics"
+	}
+	// node
+	if sid != "" {
+		smap, errV := getClusterMap(c)
+		debug.AssertNoErr(errV)
+		node := smap.GetNode(sid)
+		if err := api.ResetDaemonStats(apiBP, node, errorsOnly); err != nil {
+			return err
+		}
+		msg := fmt.Sprintf("%s %s successfully reset", sname, tag)
+		actionDone(c, msg)
+		return nil
+	}
+	// cluster
+	if err := api.ResetClusterStats(apiBP, errorsOnly); err != nil {
+		return err
+	}
+	msg := fmt.Sprintf("Cluster %s successfully reset", tag)
+	actionDone(c, msg)
+	return nil
 }

@@ -810,6 +810,14 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
 		p.unreg(w, r, msg)
+	case apc.ActResetStats:
+		errorsOnly := msg.Value.(bool)
+		p.statsT.ResetStats(errorsOnly)
+
+		args := allocBcArgs()
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
+		p.bcastReqGroup(w, r, args, cluster.AllNodes)
+		freeBcArgs(args)
 	case apc.ActXactStart:
 		p.xstart(w, r, msg)
 	case apc.ActXactStop:
@@ -1083,9 +1091,6 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		opts apc.ActValRmNode
 		smap = p.owner.smap.get()
 	)
-	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-		return
-	}
 	if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return

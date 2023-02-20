@@ -6,6 +6,8 @@
 package stats
 
 import (
+	"strings"
+
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -24,7 +26,7 @@ const (
 	KindThroughput = "bw" // e.g. GetThroughput
 )
 
-const ErrPrefix = "err." // convention to be abided by
+const errPrefix = "err." // all error metric names (see `IsErrMetric` below)
 
 type (
 	Tracker interface {
@@ -36,6 +38,7 @@ type (
 		IncErr(metric string)
 
 		GetStats() *Node
+		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
 		RegMetrics(node *cluster.Snode) // + init Prometheus, if configured
@@ -70,3 +73,7 @@ type (
 		SmapVersion    int64          `json:"smap_version,string"`
 	}
 )
+
+func IsErrMetric(name string) bool {
+	return strings.HasPrefix(name, errPrefix) // e.g. name = ErrHTTPWriteCount
+}

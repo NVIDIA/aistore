@@ -61,10 +61,10 @@ var (
 			keepMDFlag,
 			verboseFlag,
 		),
-		cmdSetProps: {
+		cmdSetBprops: {
 			forceFlag,
 		},
-		cmdResetProps: {},
+		cmdResetBprops: {},
 
 		commandList: {
 			regexFlag,
@@ -187,20 +187,20 @@ var (
 				Action: showBckPropsHandler,
 				Subcommands: []cli.Command{
 					{
-						Name:      cmdSetProps,
+						Name:      cmdSetBprops,
 						Usage:     "update bucket properties",
 						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[cmdSetProps],
+						Flags:     bucketCmdsFlags[cmdSetBprops],
 						Action:    setPropsHandler,
 						BashComplete: bucketCompletions(
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
 						),
 					},
 					{
-						Name:      cmdResetProps,
+						Name:      cmdResetBprops,
 						Usage:     "reset bucket properties",
 						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[cmdResetProps],
+						Flags:     bucketCmdsFlags[cmdResetBprops],
 						Action:    resetPropsHandler,
 						BashComplete: bucketCompletions(
 							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},

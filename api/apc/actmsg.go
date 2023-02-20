@@ -39,6 +39,7 @@ const (
 	ActPutCopies      = "put-copies"
 	ActRebalance      = "rebalance"
 	ActRenameObject   = "rename-obj"
+	ActResetStats     = "reset-stats"
 	ActResetBprops    = "reset-bprops"
 	ActResetConfig    = "reset-config"
 	ActResilver       = "resilver"

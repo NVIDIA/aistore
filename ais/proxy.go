@@ -2414,6 +2414,9 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
 			p.writeErr(w, r, err)
 		}
+	case apc.ActResetStats:
+		errorsOnly := msg.Value.(bool)
+		p.statsT.ResetStats(errorsOnly)
 	case apc.ActDecommission:
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return

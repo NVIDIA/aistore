@@ -7,6 +7,7 @@ package cli
 
 import (
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -121,12 +122,11 @@ func showThroughputHandler(c *cli.Context) error {
 			continue
 		}
 		// but also take assorted error counters:
-		if name == stats.ErrPrefix+stats.GetCount ||
-			name == stats.ErrPrefix+stats.PutCount ||
-			name == stats.ErrPrefix+stats.ListCount ||
-			name == stats.ErrPutMirrorCount ||
-			name == stats.ErrHTTPWriteCount {
-			continue
+		if stats.IsErrMetric(name) {
+			if strings.Contains(name, "get") || strings.Contains(name, "put") ||
+				strings.Contains(name, "read") || strings.Contains(name, "write") {
+				continue
+			}
 		}
 		// otherwise
 		delete(metrics, name)

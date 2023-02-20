@@ -30,4 +30,5 @@ func (*StatsTracker) AddMany(...cos.NamedVal64)  {}
 func (*StatsTracker) RegMetrics(*cluster.Snode)  {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs { return nil }
 func (*StatsTracker) GetStats() *stats.Node      { return nil }
+func (*StatsTracker) ResetStats(bool)            {}
 func (*StatsTracker) IsPrometheus() bool         { return false }
