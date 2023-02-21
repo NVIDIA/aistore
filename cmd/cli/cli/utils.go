@@ -266,18 +266,6 @@ func _refreshRate(c *cli.Context) time.Duration {
 	return refreshRate // aka sleep
 }
 
-// same as above, plus the interval to compute units-per-second type metrics,
-// e.g. throughput
-func _refreshAvgRate(c *cli.Context) (sleep, averageOver time.Duration) {
-	sleep = _refreshRate(c)
-
-	averageOver = cos.MinDuration(cos.MaxDuration(sleep-time.Second, 2*time.Second), 10*time.Second)
-
-	// adjust to avoid oversleeping
-	sleep = cos.MaxDuration(10*time.Millisecond, sleep-averageOver)
-	return
-}
-
 // Users can pass in a comma-separated list
 func makeCommaSepList(list string) []string {
 	cleanList := strings.Split(list, ",")

@@ -186,7 +186,7 @@ const (
 	commandWait = "wait"
 
 	// Default values for long running operations
-	refreshRateDefault = time.Second
+	refreshRateDefault = 3 * time.Second
 	refreshRateMinDur  = time.Second
 	countDefault       = 1
 	countUnlimited     = -1

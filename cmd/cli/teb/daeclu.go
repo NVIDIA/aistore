@@ -32,9 +32,9 @@ const (
 func NewDaeStatus(st *stats.NodeStatus, smap *cluster.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
-		return newTableProxies(StatsAndStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableProxies(StStMap{st.Snode.ID(): st}, smap, units)
 	case apc.Target:
-		return newTableTargets(StatsAndStatusMap{st.Snode.ID(): st}, smap, units)
+		return newTableTargets(StStMap{st.Snode.ID(): st}, smap, units)
 	default:
 		debug.Assert(false)
 		return nil
@@ -54,7 +54,7 @@ func NewDaeMapStatus(ds *StatsAndStatusHelper, smap *cluster.Smap, daeType, unit
 }
 
 // proxy(ies)
-func newTableProxies(ps StatsAndStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableProxies(ps StStMap, smap *cluster.Smap, units string) *Table {
 	var (
 		h        = StatsAndStatusHelper{Pmap: ps}
 		pods     = h.pods()
@@ -122,7 +122,7 @@ func newTableProxies(ps StatsAndStatusMap, smap *cluster.Smap, units string) *Ta
 }
 
 // target(s)
-func newTableTargets(ts StatsAndStatusMap, smap *cluster.Smap, units string) *Table {
+func newTableTargets(ts StStMap, smap *cluster.Smap, units string) *Table {
 	var (
 		h        = StatsAndStatusHelper{Tmap: ts}
 		pods     = h.pods()

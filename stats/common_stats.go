@@ -157,7 +157,7 @@ type (
 			prom string // Prometheus label
 		}
 		Value      int64 `json:"v,string"`
-		numSamples int64
+		numSamples int64 // (log + StatsD) only
 		cumulative int64
 		mu         sync.RWMutex
 	}
@@ -392,7 +392,7 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			v.mu.Unlock()
 			// NOTE: ns => ms, and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
-			if !s.isPrometheus() && millis > 0 && strings.HasSuffix(name, ".ns") {
+			if !s.isPrometheus() && millis > 0 {
 				s.statsdC.AppMetric(metric{Type: statsd.Timer, Name: v.label.stsd, Value: float64(millis)}, s.sgl)
 			}
 		case KindThroughput:
@@ -423,43 +423,33 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
 				}
 			}
-		case KindCounter:
-			cnt := ratomic.LoadInt64(&v.Value)
-			if cnt > 0 {
-				if prev, ok := out[name]; !ok || prev.Value != cnt {
-					out[name] = copyValue{cnt}
-					if !ignore(name) {
-						idle = false
-					}
-				} else {
-					cnt = 0
+		case KindCounter, KindSize:
+			var (
+				val     = ratomic.LoadInt64(&v.Value)
+				changed bool
+			)
+			if prev, ok := out[name]; !ok || prev.Value != val {
+				changed = true
+				if !ignore(name) {
+					idle = false
 				}
+			}
+			if val > 0 {
+				out[name] = copyValue{val}
 			}
 			// StatsD iff changed
-			if !s.isPrometheus() && cnt > 0 {
-				s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: cnt}, s.sgl)
-			}
-		case KindSize:
-			siz := ratomic.LoadInt64(&v.Value)
-			if siz > 0 {
-				if prev, ok := out[name]; !ok || prev.Value != siz {
-					out[name] = copyValue{siz}
-					if !ignore(name) {
-						idle = false
-					}
+			if !s.isPrometheus() && changed {
+				if v.kind == KindCounter {
+					s.statsdC.AppMetric(metric{Type: statsd.Counter, Name: v.label.stsd, Value: val}, s.sgl)
 				} else {
-					siz = 0
+					// target only suffix
+					metricType := statsd.Counter
+					if v.label.comm == "dl" {
+						metricType = statsd.PersistentCounter
+					}
+					fv := roundMBs(val)
+					s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
 				}
-			}
-			// StatsD iff changed
-			if !s.isPrometheus() && siz > 0 {
-				// target only suffix
-				metricType := statsd.Counter
-				if v.label.comm == "dl" {
-					metricType = statsd.PersistentCounter
-				}
-				fv := roundMBs(siz)
-				s.statsdC.AppMetric(metric{Type: metricType, Name: v.label.stsd, Value: fv}, s.sgl)
 			}
 		case KindGauge:
 			val := ratomic.LoadInt64(&v.Value)

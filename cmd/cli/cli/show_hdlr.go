@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1068,26 +1069,28 @@ func showStatsHandler(c *cli.Context) (err error) {
 	var (
 		refresh  = flagIsSet(c, refreshFlag)
 		regexStr = parseStrFlag(c, regexStatsFlag)
+		sleep    = _refreshRate(c)
 		regex    *regexp.Regexp
 	)
+	if sleep < time.Second || sleep > time.Minute {
+		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
+	}
 	if regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
 		if err != nil {
 			return
 		}
 	}
-	sleep, averageOver := _refreshAvgRate(c)
 	for {
 		if node != nil {
-			err = showNodeStats(c, node, metrics, averageOver, regex)
+			err = showNodeStats(c, node, metrics, sleep, regex)
 		} else {
-			err = showAggregatedStats(c, metrics, averageOver, regex)
+			err = showAggregatedStats(c, metrics, sleep, regex)
 		}
 		if err != nil || !refresh {
 			return err
 		}
-
-		time.Sleep(sleep)
+		runtime.Gosched()
 	}
 }
 
@@ -1097,7 +1100,7 @@ func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, aver
 	if err != nil {
 		return err
 	}
-	// throughput (Bps)
+	// throughput size/s (NOTE: sleep inside)
 	if err := _daeBps(node, metrics, ds, averageOver); err != nil {
 		return err
 	}
@@ -1166,7 +1169,7 @@ func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Du
 		return err
 	}
 
-	// throughput (Bps)
+	// throughput size/s (NOTE: sleep inside)
 	if err := _cluStatsBps(metrics, st, averageOver); err != nil {
 		return err
 	}

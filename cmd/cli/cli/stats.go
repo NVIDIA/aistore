@@ -44,10 +44,10 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 }
 
 //
-// teb.StatsAndStatusMap
+// teb.StStMap
 //
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StatsAndStatusMap, err error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StStMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return
 	}
@@ -59,16 +59,16 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
-		tstatusMap = make(teb.StatsAndStatusMap, tcnt)
+		tstatusMap = make(teb.StStMap, tcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
-		pstatusMap = make(teb.StatsAndStatusMap, pcnt)
+		pstatusMap = make(teb.StStMap, pcnt)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-		tstatusMap = make(teb.StatsAndStatusMap, tcnt)
-		pstatusMap = make(teb.StatsAndStatusMap, pcnt)
+		tstatusMap = make(teb.StStMap, tcnt)
+		pstatusMap = make(teb.StStMap, pcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	}
@@ -77,7 +77,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	return
 }
 
-func daeStatus(nodeMap cluster.NodeMap, out teb.StatsAndStatusMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap cluster.NodeMap, out teb.StStMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
@@ -87,7 +87,7 @@ func daeStatus(nodeMap cluster.NodeMap, out teb.StatsAndStatusMap, wg cos.WG, mu
 	}
 }
 
-func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StatsAndStatusMap) {
+func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StStMap) {
 	daeStatus, err := api.GetStatsAndStatus(apiBP, node)
 	if err != nil {
 		daeStatus = &stats.NodeStatus{}
@@ -175,48 +175,20 @@ func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.Cluster, averageOver time
 	return nil
 }
 
-// units-per-second as F(teb.StatsAndStatusMap)
-func _cluStatusMapPs(c *cli.Context, mapBegin teb.StatsAndStatusMap, metrics cos.StrKVs,
-	averageOver time.Duration) (teb.StatsAndStatusMap, teb.StatsAndStatusMap, error) {
-	var (
-		mapEnd  teb.StatsAndStatusMap
-		err     error
-		seconds = cos.MaxI64(int64(averageOver.Seconds()), 1) // averaging per second
-	)
-	debug.Assert(seconds > 1) // expecting a few
-
-	if mapBegin == nil {
+func _cluStatusBeginEnd(c *cli.Context, ini teb.StStMap, sleep time.Duration) (b, e teb.StStMap, err error) {
+	b = ini
+	if b == nil {
 		// begin stats
-		if _, mapBegin, _, err = fillNodeStatusMap(c, apc.Target); err != nil {
+		if _, b, _, err = fillNodeStatusMap(c, apc.Target); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	time.Sleep(averageOver)
+	time.Sleep(sleep)
 
-	// post-interval stats
-	if _, mapEnd, _, err = fillNodeStatusMap(c, apc.Target); err != nil {
-		return nil, nil, err
-	}
-
-	// updating and returning mapBegin
-	for tid, begin := range mapBegin {
-		end := mapEnd[tid]
-		if end == nil {
-			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", cluster.Tname(tid))
-			actionWarn(c, warn)
-			continue
-		}
-		for k, v := range begin.Tracker {
-			if kind, ok := metrics[k]; !ok || kind == stats.KindCounter { // skip counters, if any
-				continue
-			}
-			vend := end.Tracker[k]
-			v.Value = (vend.Value - v.Value) / seconds
-			begin.Tracker[k] = v
-		}
-	}
-	return mapBegin, mapEnd, nil
+	// post-interval (end) stats
+	_, e, _, err = fillNodeStatusMap(c, apc.Target)
+	return
 }
 
 ////////////

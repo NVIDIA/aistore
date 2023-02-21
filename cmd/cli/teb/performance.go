@@ -26,7 +26,7 @@ type PerfTabCtx struct {
 	AvgSize bool           // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 }
 
-func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
+func NewPerformanceTab(st StStMap, c *PerfTabCtx) (*Table, error) {
 	var n2n cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
 	if c.AvgSize {
 		n2n = make(cos.StrKVs, 2)
@@ -145,7 +145,7 @@ func NewPerformanceTab(st StatsAndStatusMap, c *PerfTabCtx) (*Table, error) {
 //
 
 // remove all-zeros columns
-func _zerout(cols []*header, st StatsAndStatusMap) []*header {
+func _zerout(cols []*header, st StStMap) []*header {
 	for i := 0; i < len(cols); i++ {
 		var found bool
 		h := cols[i]
@@ -171,7 +171,7 @@ func _zerout(cols []*header, st StatsAndStatusMap) []*header {
 }
 
 // (aternatively, could always add, conditionally hide)
-func _addStatus(cols []*header, st StatsAndStatusMap) []*header {
+func _addStatus(cols []*header, st StStMap) []*header {
 	for _, ds := range st {
 		if ds.Status != NodeOnline {
 			cols = append(cols, &header{name: colStatus, hide: false})
