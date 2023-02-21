@@ -27,11 +27,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type cluDiskStats struct {
-	tid   string
-	stats ios.AllDiskStats
-}
-
 // NOTE: target's metric names & kinds
 func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 	smap, err := getClusterMap(c)
@@ -117,56 +112,6 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StatsAndStatusMap) {
 	mu.Lock()
 	out[node.ID()] = daeStatus
 	mu.Unlock()
-}
-
-func getDiskStats(targets teb.StatsAndStatusMap) ([]teb.DiskStatsHelper, error) {
-	var (
-		allStats = make([]teb.DiskStatsHelper, 0, len(targets))
-		wg, _    = errgroup.WithContext(context.Background())
-		statsCh  = make(chan cluDiskStats, len(targets))
-	)
-
-	for tid := range targets {
-		wg.Go(func(targetID string) func() error {
-			return func() (err error) {
-				diskStats, err := api.GetTargetDiskStats(apiBP, targetID)
-				if err != nil {
-					return err
-				}
-
-				statsCh <- cluDiskStats{stats: diskStats, tid: targetID}
-				return nil
-			}
-		}(tid))
-	}
-
-	err := wg.Wait()
-	close(statsCh)
-	if err != nil {
-		return nil, err
-	}
-	for diskStats := range statsCh {
-		for diskName, diskStat := range diskStats.stats {
-			allStats = append(allStats,
-				teb.DiskStatsHelper{
-					TargetID: diskStats.tid,
-					DiskName: diskName,
-					Stat:     diskStat,
-				})
-		}
-	}
-
-	sort.Slice(allStats, func(i, j int) bool {
-		if allStats[i].TargetID != allStats[j].TargetID {
-			return allStats[i].TargetID < allStats[j].TargetID
-		}
-		if allStats[i].DiskName != allStats[j].DiskName {
-			return allStats[i].DiskName < allStats[j].DiskName
-		}
-		return allStats[i].Stat.Util > allStats[j].Stat.Util
-	})
-
-	return allStats, nil
 }
 
 //
@@ -272,4 +217,82 @@ func _cluStatusMapPs(c *cli.Context, mapBegin teb.StatsAndStatusMap, metrics cos
 		}
 	}
 	return mapBegin, mapEnd, nil
+}
+
+////////////
+// dstats //
+////////////
+
+type (
+	dstats struct {
+		tid   string
+		stats ios.AllDiskStats
+	}
+	dstatsCtx struct {
+		tid string
+		ch  chan dstats
+	}
+)
+
+func (ctx *dstatsCtx) get() error {
+	diskStats, err := api.GetDiskStats(apiBP, ctx.tid)
+	if err != nil {
+		return err
+	}
+	ctx.ch <- dstats{stats: diskStats, tid: ctx.tid}
+	return nil
+}
+
+func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error) {
+	var (
+		targets = smap.Tmap
+		l       = smap.CountActiveTs()
+	)
+	if tid != "" {
+		tsi := smap.GetNode(tid)
+		if tsi.InMaintOrDecomm() {
+			return nil, fmt.Errorf("target %s is unaivailable at this point", tsi.StringEx())
+		}
+		targets = cluster.NodeMap{tid: tsi}
+		l = 1
+	}
+	allStats := make([]teb.DiskStatsHelper, 0, l)
+	ch := make(chan dstats, l)
+
+	wg, _ := errgroup.WithContext(context.Background())
+	for tid, tsi := range targets {
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		ctx := &dstatsCtx{ch: ch, tid: tid}
+		wg.Go(ctx.get)
+	}
+
+	err := wg.Wait()
+	close(ch)
+	if err != nil {
+		return nil, err
+	}
+	for diskStats := range ch {
+		for diskName, diskStat := range diskStats.stats {
+			allStats = append(allStats,
+				teb.DiskStatsHelper{
+					TargetID: diskStats.tid,
+					DiskName: diskName,
+					Stat:     diskStat,
+				})
+		}
+	}
+
+	sort.Slice(allStats, func(i, j int) bool {
+		if allStats[i].TargetID != allStats[j].TargetID {
+			return allStats[i].TargetID < allStats[j].TargetID
+		}
+		if allStats[i].DiskName != allStats[j].DiskName {
+			return allStats[i].DiskName < allStats[j].DiskName
+		}
+		return allStats[i].Stat.Util > allStats[j].Stat.Util
+	})
+
+	return allStats, nil
 }

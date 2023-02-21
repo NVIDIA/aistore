@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -146,20 +145,6 @@ func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 			res.Target[tid] = &ts
 		}
 	}
-	return
-}
-
-func GetTargetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatDiskStats}}
-		reqParams.Header = http.Header{apc.HdrNodeID: []string{tid}}
-	}
-	_, err = reqParams.DoReqAny(&res)
-	FreeRp(reqParams)
 	return
 }
 
