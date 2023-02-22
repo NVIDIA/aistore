@@ -2,7 +2,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
-
 import pydantic.tools
 import requests
 

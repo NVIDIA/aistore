@@ -3,10 +3,10 @@
 #
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
-    ACT_DELETE_MULTIPLE_OBJ,
-    ACT_PREFETCH_MULTIPLE_OBJ,
+    ACT_DELETE_OBJECTS,
+    ACT_PREFETCH_OBJECTS,
     HTTP_METHOD_POST,
-    ACT_EVICT_MULTIPLE_OBJ,
+    ACT_EVICT_OBJECTS,
 )
 from aistore.sdk.object_range import ObjectRange
 
@@ -62,7 +62,7 @@ class ObjectGroup:
         """
 
         return self.bck.make_request(
-            HTTP_METHOD_DELETE, ACT_DELETE_MULTIPLE_OBJ, value=self._determine_value()
+            HTTP_METHOD_DELETE, ACT_DELETE_OBJECTS, value=self._determine_value()
         ).text
 
     def evict(self):
@@ -84,7 +84,7 @@ class ObjectGroup:
         """
         self.bck.verify_cloud_bucket()
         return self.bck.make_request(
-            HTTP_METHOD_DELETE, ACT_EVICT_MULTIPLE_OBJ, value=self._determine_value()
+            HTTP_METHOD_DELETE, ACT_EVICT_OBJECTS, value=self._determine_value()
         ).text
 
     def prefetch(self):
@@ -106,7 +106,7 @@ class ObjectGroup:
         """
         self.bck.verify_cloud_bucket()
         return self.bck.make_request(
-            HTTP_METHOD_POST, ACT_PREFETCH_MULTIPLE_OBJ, value=self._determine_value()
+            HTTP_METHOD_POST, ACT_PREFETCH_OBJECTS, value=self._determine_value()
         ).text
 
     def _determine_value(self):

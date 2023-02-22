@@ -9,16 +9,19 @@ import cloudpickle
 import aistore
 from aistore.sdk.const import (
     HTTP_METHOD_PUT,
-    CODE_TEMPLATE,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_DELETE,
     URL_PATH_ETL,
     UTF_ENCODING,
+)
+from aistore.sdk.etl_const import (
+    CODE_TEMPLATE,
     ETL_COMM_HPUSH,
     ETL_COMM_HPULL,
     ETL_COMM_IO,
 )
+
 from aistore.sdk.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETL, ETLDetails
 

@@ -8,20 +8,20 @@ from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk.const import (
     ACT_CREATE_BCK,
     HTTP_METHOD_POST,
-    ProviderAmazon,
-    QParamBucketTo,
-    ProviderAIS,
+    PROVIDER_AMAZON,
+    QPARAM_BCK_TO,
+    PROVIDER_AIS,
     ACT_MOVE_BCK,
     ACT_DESTROY_BCK,
     HTTP_METHOD_DELETE,
-    QParamKeepBckMD,
+    QPARAM_KEEP_REMOTE,
     ACT_EVICT_REMOTE_BCK,
     HTTP_METHOD_HEAD,
     ACT_COPY_BCK,
     ACT_LIST,
     HTTP_METHOD_GET,
     ACT_ETL_BCK,
-    QParamProvider,
+    QPARAM_PROVIDER,
     HTTP_METHOD_PUT,
     URL_PATH_BUCKETS,
 )
@@ -42,7 +42,7 @@ NAMESPACE = "namespace"
 class TestBucket(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock(RequestClient)
-        self.amz_bck = Bucket(self.mock_client, BCK_NAME, provider=ProviderAmazon)
+        self.amz_bck = Bucket(self.mock_client, BCK_NAME, provider=PROVIDER_AMAZON)
         self.amz_bck_params = self.amz_bck.qparam.copy()
         self.ais_bck = Bucket(
             self.mock_client, BCK_NAME, namespace=Namespace(uuid="", name=NAMESPACE)
@@ -51,8 +51,8 @@ class TestBucket(unittest.TestCase):
 
     def test_default_props(self):
         bucket = Bucket(self.mock_client, BCK_NAME)
-        self.assertEqual({QParamProvider: ProviderAIS}, bucket.qparam)
-        self.assertEqual(ProviderAIS, bucket.provider)
+        self.assertEqual({QPARAM_PROVIDER: PROVIDER_AIS}, bucket.qparam)
+        self.assertEqual(PROVIDER_AIS, bucket.provider)
         self.assertIsNone(bucket.namespace)
 
     def test_properties(self):
@@ -60,11 +60,14 @@ class TestBucket(unittest.TestCase):
         expected_ns = Namespace(uuid="", name=NAMESPACE)
         client = RequestClient("test client name")
         bck = Bucket(
-            client=client, name=BCK_NAME, provider=ProviderAmazon, namespace=expected_ns
+            client=client,
+            name=BCK_NAME,
+            provider=PROVIDER_AMAZON,
+            namespace=expected_ns,
         )
         self.assertEqual(client, bck.client)
-        self.assertEqual(ProviderAmazon, bck.provider)
-        self.assertEqual({QParamProvider: ProviderAmazon}, bck.qparam)
+        self.assertEqual(PROVIDER_AMAZON, bck.provider)
+        self.assertEqual({QPARAM_PROVIDER: PROVIDER_AMAZON}, bck.qparam)
         self.assertEqual(BCK_NAME, bck.name)
         self.assertEqual(expected_ns, bck.namespace)
 
@@ -86,7 +89,7 @@ class TestBucket(unittest.TestCase):
     def test_rename_success(self):
         new_bck_name = "new_bucket"
         expected_response = "rename_op_123"
-        self.ais_bck_params[QParamBucketTo] = f"{ProviderAIS}/@#/{new_bck_name}/"
+        self.ais_bck_params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{new_bck_name}/"
         mock_response = Mock()
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response
@@ -119,7 +122,7 @@ class TestBucket(unittest.TestCase):
 
     def test_evict_success(self):
         for keep_md in [True, False]:
-            self.amz_bck_params[QParamKeepBckMD] = str(keep_md)
+            self.amz_bck_params[QPARAM_KEEP_REMOTE] = str(keep_md)
             self.amz_bck.evict(keep_md=keep_md)
             self.mock_client.request.assert_called_with(
                 HTTP_METHOD_DELETE,
@@ -142,7 +145,7 @@ class TestBucket(unittest.TestCase):
 
     def test_copy_default_params(self):
         action_value = {"prefix": "", "dry_run": False, "force": False}
-        self._copy_exec_assert("new_bck", ProviderAIS, action_value)
+        self._copy_exec_assert("new_bck", PROVIDER_AIS, action_value)
 
     def test_copy(self):
         prefix = "prefix-"
@@ -152,7 +155,7 @@ class TestBucket(unittest.TestCase):
 
         self._copy_exec_assert(
             "new_bck",
-            ProviderAmazon,
+            PROVIDER_AMAZON,
             action_value,
             prefix=prefix,
             dry_run=dry_run,
@@ -164,7 +167,7 @@ class TestBucket(unittest.TestCase):
         mock_response = Mock()
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response
-        self.ais_bck_params[QParamBucketTo] = f"{to_provider}/@#/{to_bck_name}/"
+        self.ais_bck_params[QPARAM_BCK_TO] = f"{to_provider}/@#/{to_bck_name}/"
         expected_action = ActionMsg(
             action=ACT_COPY_BCK, value=expected_act_value
         ).dict()
@@ -352,7 +355,7 @@ class TestBucket(unittest.TestCase):
 
     def _transform_exec_assert(self, etl_name, expected_act_value, **kwargs):
         to_bck = "new-bucket"
-        self.ais_bck_params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
+        self.ais_bck_params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
         expected_action = ActionMsg(action=ACT_ETL_BCK, value=expected_act_value).dict()
         expected_response = "job-id"
         mock_response = Mock()

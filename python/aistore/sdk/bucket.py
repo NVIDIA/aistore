@@ -4,6 +4,7 @@
 
 from __future__ import annotations  # pylint: disable=unused-variable
 
+import logging
 from pathlib import Path
 from typing import Dict, List, NewType
 import requests
@@ -21,10 +22,10 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_POST,
-    ProviderAIS,
-    QParamBucketTo,
-    QParamKeepBckMD,
-    QParamProvider,
+    PROVIDER_AIS,
+    QPARAM_BCK_TO,
+    QPARAM_KEEP_REMOTE,
+    QPARAM_PROVIDER,
     URL_PATH_BUCKETS,
 )
 
@@ -60,14 +61,14 @@ class Bucket:
         self,
         client: RequestClient,
         name: str,
-        provider: str = ProviderAIS,
+        provider: str = PROVIDER_AIS,
         namespace: Namespace = None,
     ):
         self._client = client
         self._name = name
         self._provider = provider
         self._namespace = namespace
-        self._qparam = {QParamProvider: provider}
+        self._qparam = {QPARAM_PROVIDER: provider}
 
     @property
     def client(self):
@@ -76,7 +77,7 @@ class Bucket:
 
     @property
     def qparam(self):
-        """The QParamProvider of this bucket."""
+        """Default query parameters to use with API calls from this bucket."""
         return self._qparam
 
     @property
@@ -153,7 +154,7 @@ class Bucket:
         """
         self._verify_ais_bucket()
         params = self.qparam.copy()
-        params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
+        params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
         resp = self.make_request(HTTP_METHOD_POST, ACT_MOVE_BCK, params=params)
         self._name = to_bck
         return resp.text
@@ -178,7 +179,7 @@ class Bucket:
         """
         self.verify_cloud_bucket()
         params = self.qparam.copy()
-        params[QParamKeepBckMD] = str(keep_md)
+        params[QPARAM_KEEP_REMOTE] = str(keep_md)
         self.make_request(HTTP_METHOD_DELETE, ACT_EVICT_REMOTE_BCK, params=params)
 
     def head(self) -> Header:
@@ -209,7 +210,7 @@ class Bucket:
         prefix: str = "",
         dry_run: bool = False,
         force: bool = False,
-        to_provider: str = ProviderAIS,
+        to_provider: str = PROVIDER_AIS,
     ) -> str:
         """
         Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -236,7 +237,7 @@ class Bucket:
         """
         value = {"prefix": prefix, "dry_run": dry_run, "force": force}
         params = self.qparam.copy()
-        params[QParamBucketTo] = f"{ to_provider }/@#/{ to_bck_name }/"
+        params[QPARAM_BCK_TO] = f"{ to_provider }/@#/{ to_bck_name }/"
         return self.make_request(
             HTTP_METHOD_POST, ACT_COPY_BCK, value=value, params=params
         ).text
@@ -424,7 +425,7 @@ class Bucket:
             value["ext"] = ext
 
         params = self.qparam.copy()
-        params[QParamBucketTo] = f"{ProviderAIS}/@#/{to_bck}/"
+        params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
         return self.make_request(
             HTTP_METHOD_POST, ACT_ETL_BCK, value=value, params=params
         ).text
@@ -470,19 +471,28 @@ class Bucket:
         )
         obj_names = []
         dry_run_prefix = "Dry-run enabled. Proposed action:" if dry_run else ""
+
+        logger = logging.getLogger(f"{__name__}.put_files")
+        logger.disabled = not verbose
         for file in file_iterator:
             if not file.is_file() or not str(file.name).startswith(prefix_filter):
                 continue
             obj_name = self._get_uploaded_obj_name(file, path, basename, obj_prefix)
             if not dry_run:
                 self.object(obj_name).put_file(str(file))
-            if verbose:
-                print(
-                    f"{dry_run_prefix} File {file} uploaded as object {obj_name} with size {file.stat().st_size}"
-                )
+            logger.info(
+                "%s File '%s' uploaded as object '%s' with size %s",
+                dry_run_prefix,
+                file,
+                obj_name,
+                file.stat().st_size,
+            )
             obj_names.append(obj_name)
-        print(
-            f"{dry_run_prefix} All files from {path} uploaded to bucket {self.provider}://{self.name}"
+        logger.info(
+            "%s Specified files from %s uploaded to bucket %s",
+            dry_run_prefix,
+            path,
+            f"{self.provider}://{self.name}",
         )
         return obj_names
 
@@ -565,12 +575,12 @@ class Bucket:
         """
         Verify the bucket provider is AIS
         """
-        if self.provider is not ProviderAIS:
+        if self.provider is not PROVIDER_AIS:
             raise InvalidBckProvider(self.provider)
 
     def verify_cloud_bucket(self):
         """
         Verify the bucket provider is a cloud provider
         """
-        if self.provider is ProviderAIS:
+        if self.provider is PROVIDER_AIS:
             raise InvalidBckProvider(self.provider)

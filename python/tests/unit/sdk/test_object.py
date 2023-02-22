@@ -8,8 +8,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_HEAD,
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_GET,
-    QParamArchpath,
-    QParamETLName,
+    QPARAM_ARCHPATH,
+    QPARAM_ETL_NAME,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
     CONTENT_LENGTH,
@@ -56,14 +56,14 @@ class TestObject(unittest.TestCase):
         )
 
     def test_get_default_params(self):
-        self.expected_params[QParamArchpath] = ""
+        self.expected_params[QPARAM_ARCHPATH] = ""
         self.get_exec_assert()
 
     def test_get(self):
         archpath_param = "archpath"
         etl_name = "etl"
-        self.expected_params[QParamArchpath] = archpath_param
-        self.expected_params[QParamETLName] = etl_name
+        self.expected_params[QPARAM_ARCHPATH] = archpath_param
+        self.expected_params[QPARAM_ETL_NAME] = etl_name
         self.get_exec_assert(
             archpath=archpath_param,
             chunk_size=DEFAULT_CHUNK_SIZE + 1,

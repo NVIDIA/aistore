@@ -9,7 +9,7 @@ import sys
 import time
 
 from aistore.sdk import Client
-from aistore.sdk.const import ETL_COMM_HPUSH, ETL_COMM_IO
+from aistore.sdk.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.etl_templates import MD5, ECHO
 from tests.integration import CLUSTER_ENDPOINT

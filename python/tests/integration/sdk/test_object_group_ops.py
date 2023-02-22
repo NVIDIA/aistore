@@ -4,14 +4,14 @@
 import unittest
 
 from aistore.sdk import Client
-from aistore.sdk.const import ProviderAIS
+from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.object_range import ObjectRange
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 from tests.utils import random_string, create_and_put_object
 
 # If remote bucket is not set, skip all cloud-related tests
-REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + ":")
+REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(PROVIDER_AIS + ":")
 TEST_TIMEOUT = 30
 
 
@@ -28,7 +28,7 @@ class TestObjectGroupOps(unittest.TestCase):
             provider, self.bck_name = REMOTE_BUCKET.split("://")
             self.bucket = self.client.bucket(self.bck_name, provider=provider)
         else:
-            provider = ProviderAIS
+            provider = PROVIDER_AIS
             self.bck_name = random_string()
             self.bucket = self.client.bucket(self.bck_name)
             self.bucket.create()
@@ -111,7 +111,7 @@ class TestObjectGroupOps(unittest.TestCase):
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
-        local_bucket = self.client.bucket(random_string(), provider=ProviderAIS)
+        local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).evict()
         with self.assertRaises(InvalidBckProvider):
@@ -151,7 +151,7 @@ class TestObjectGroupOps(unittest.TestCase):
         self.verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
-        local_bucket = self.client.bucket(random_string(), provider=ProviderAIS)
+        local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).prefetch()
         with self.assertRaises(InvalidBckProvider):

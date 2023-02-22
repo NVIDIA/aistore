@@ -3,6 +3,9 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
+
+import logging
+from datetime import datetime
 from typing import List
 import time
 
@@ -10,10 +13,10 @@ from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_PUT,
-    QParamWhat,
-    QParamForce,
+    QPARAM_WHAT,
+    QPARAM_FORCE,
     DEFAULT_JOB_WAIT_TIMEOUT,
-    QParamStatus,
+    PARAM_VALUE_STATUS,
     URL_PATH_CLUSTER,
     ACT_START,
 )
@@ -87,13 +90,14 @@ class Job:
                 only_running=only_running,
                 daemon_id=daemon_id,
             ).get_json(),
-            params={QParamWhat: QParamStatus},
+            params={QPARAM_WHAT: PARAM_VALUE_STATUS},
         )
 
     def wait(
         self,
         daemon_id: str = "",
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
+        verbose: bool = True,
     ):
         """
         Wait for a job to finish
@@ -101,6 +105,7 @@ class Job:
         Args:
             daemon_id (str, optional): Return jobs only running on the daemon_id.
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
+            verbose (bool, optional): Whether to log wait status to standard output
 
         Returns:
             None
@@ -112,17 +117,32 @@ class Job:
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
+        logger = logging.getLogger(f"{__name__}.wait")
+        logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
         while True:
             if passed > timeout:
                 raise Timeout("wait for job to finish")
             status = self.status(daemon_id=daemon_id)
-            if status.end_time != 0:
-                break
-            time.sleep(sleep_time)
-            passed += sleep_time
-            print(status)
+            if status.end_time == 0:
+                time.sleep(sleep_time)
+                passed += sleep_time
+                logger.info("Waiting on job '%s'...", status.uuid)
+                continue
+            end_time = datetime.fromtimestamp(status.end_time / 1e9).time()
+            if status.err:
+                logger.error(
+                    "Job '%s' failed at time '%s' with error: %s",
+                    status.uuid,
+                    end_time,
+                    status.err,
+                )
+            elif status.aborted:
+                logger.error("Job '%s' aborted at time '%s'", status.uuid, end_time)
+            else:
+                logger.info("Job '%s' finished at time '%s'", status.uuid, end_time)
+            break
 
     def start(
         self,
@@ -152,7 +172,7 @@ class Job:
         value = JobArgs(
             kind=self._job_kind, daemon_id=daemon_id, buckets=buckets
         ).get_json()
-        params = {QParamForce: "true"} if force else {}
+        params = {QPARAM_FORCE: "true"} if force else {}
         action = ActionMsg(action=ACT_START, value=value).dict()
 
         resp = self._client.request(

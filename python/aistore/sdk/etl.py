@@ -7,18 +7,23 @@ import base64
 from typing import Callable, List
 import cloudpickle
 from aistore.sdk.const import (
-    CODE_TEMPLATE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
-    DEFAULT_ETL_COMM,
-    DEFAULT_ETL_TIMEOUT,
     URL_PATH_ETL,
     UTF_ENCODING,
-    ETL_COMM_CODE,
-    ETL_COMM_SPEC,
 )
+from aistore.sdk.etl_const import (
+    ETL_SUPPORTED_PYTHON_VERSIONS,
+    DEFAULT_ETL_RUNTIME,
+    DEFAULT_ETL_COMM,
+    DEFAULT_ETL_TIMEOUT,
+    ETL_COMM_SPEC,
+    ETL_COMM_CODE,
+    CODE_TEMPLATE,
+)
+
 from aistore.sdk.types import ETL, ETLDetails
 
 
@@ -29,9 +34,9 @@ def _get_default_runtime():
         String of runtime
     """
     version = f"{sys.version_info.major}.{sys.version_info.minor}"
-    if version in ["3.10", "3.11"]:
+    if version in ETL_SUPPORTED_PYTHON_VERSIONS:
         return f"python{version}v2"
-    return "python3.8v2"
+    return DEFAULT_ETL_RUNTIME
 
 
 # pylint: disable=unused-variable

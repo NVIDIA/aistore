@@ -8,11 +8,11 @@ from typing import List
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
     ACT_LIST,
-    ProviderAIS,
-    QParamWhat,
-    QparamPrimaryReadyReb,
-    QParamProvider,
-    QParamSmap,
+    PROVIDER_AIS,
+    QPARAM_WHAT,
+    QPARAM_PRIMARY_READY_REB,
+    QPARAM_PROVIDER,
+    PARAM_VALUE_SMAP,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
     URL_PATH_DAEMON,
@@ -55,10 +55,10 @@ class Cluster:
             HTTP_METHOD_GET,
             path=URL_PATH_DAEMON,
             res_model=Smap,
-            params={QParamWhat: QParamSmap},
+            params={QPARAM_WHAT: PARAM_VALUE_SMAP},
         )
 
-    def list_buckets(self, provider: str = ProviderAIS):
+    def list_buckets(self, provider: str = PROVIDER_AIS):
         """
         Returns list of buckets in AIStore cluster.
 
@@ -75,7 +75,7 @@ class Cluster:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
-        params = {QParamProvider: provider}
+        params = {QPARAM_PROVIDER: provider}
         action = ActionMsg(action=ACT_LIST).dict()
 
         return self.client.request_deserialize(
@@ -95,7 +95,7 @@ class Cluster:
         """
 
         # compare with AIS Go API (api/cluster.go) for additional supported options
-        params = {QparamPrimaryReadyReb: "true"}
+        params = {QPARAM_PRIMARY_READY_REB: "true"}
         try:
             resp = self.client.request(
                 HTTP_METHOD_GET, path=URL_PATH_HEALTH, params=params

@@ -7,14 +7,14 @@ from pathlib import Path
 import requests
 
 from aistore.sdk import Client
-from aistore.sdk.const import ProviderAIS, UTF_ENCODING
+from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING
 from aistore.sdk.errors import ErrBckNotFound, InvalidBckProvider, AISError
 
 from tests.utils import create_and_put_object, random_string, cleanup_local
 from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
 
 # If remote bucket is not set, skip all cloud-related tests
-REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(ProviderAIS + ":")
+REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(PROVIDER_AIS + ":")
 LOCAL_TEST_FILES = Path().absolute().joinpath("object-ops-test")
 
 INNER_DIR = "directory"

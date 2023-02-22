@@ -11,8 +11,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_PUT,
-    QParamArchpath,
-    QParamETLName,
+    QPARAM_ARCHPATH,
+    QPARAM_ETL_NAME,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
@@ -100,9 +100,9 @@ class Object:
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
         params = self._qparams.copy()
-        params[QParamArchpath] = archpath
+        params[QPARAM_ARCHPATH] = archpath
         if etl_name:
-            params[QParamETLName] = etl_name
+            params[QPARAM_ETL_NAME] = etl_name
         resp = self._client.request(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }",

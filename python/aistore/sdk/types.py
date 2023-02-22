@@ -13,7 +13,7 @@ from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
-    ProviderAIS,
+    PROVIDER_AIS,
     CONTENT_LENGTH,
     AIS_CHECKSUM_TYPE,
     AIS_CHECKSUM_VALUE,
@@ -143,7 +143,7 @@ class BucketModel(BaseModel):
     """
 
     name: str
-    provider: str = ProviderAIS
+    provider: str = PROVIDER_AIS
     ns: Namespace = None
 
 

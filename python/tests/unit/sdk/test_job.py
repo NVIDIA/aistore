@@ -2,11 +2,11 @@ import unittest
 from unittest.mock import Mock, patch, call
 
 from aistore.sdk.const import (
-    QParamWhat,
-    QParamForce,
+    QPARAM_WHAT,
+    QPARAM_FORCE,
     HTTP_METHOD_GET,
     HTTP_METHOD_PUT,
-    QParamStatus,
+    PARAM_VALUE_STATUS,
     URL_PATH_CLUSTER,
     ACT_START,
 )
@@ -63,7 +63,7 @@ class TestJob(unittest.TestCase):
             path=URL_PATH_CLUSTER,
             res_model=JobStatus,
             json=expected_request_val,
-            params={QParamWhat: QParamStatus},
+            params={QPARAM_WHAT: PARAM_VALUE_STATUS},
         )
 
     @patch("aistore.sdk.job.time.sleep")
@@ -148,7 +148,7 @@ class TestJob(unittest.TestCase):
         self.job_start_exec_assert(
             self.job,
             expected_json,
-            {QParamForce: "true"},
+            {QPARAM_FORCE: "true"},
             daemon_id=daemon_id,
             force=True,
             buckets=buckets,

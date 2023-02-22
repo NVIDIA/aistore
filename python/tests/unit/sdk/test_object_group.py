@@ -3,10 +3,10 @@ from unittest.mock import Mock
 
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
-    ACT_DELETE_MULTIPLE_OBJ,
-    ACT_EVICT_MULTIPLE_OBJ,
+    ACT_DELETE_OBJECTS,
+    ACT_EVICT_OBJECTS,
     HTTP_METHOD_POST,
-    ACT_PREFETCH_MULTIPLE_OBJ,
+    ACT_PREFETCH_OBJECTS,
 )
 from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object_range import ObjectRange
@@ -63,7 +63,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_name_list.delete,
             HTTP_METHOD_DELETE,
-            ACT_DELETE_MULTIPLE_OBJ,
+            ACT_DELETE_OBJECTS,
             self.expected_name_list_value,
         )
 
@@ -71,7 +71,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_range.delete,
             HTTP_METHOD_DELETE,
-            ACT_DELETE_MULTIPLE_OBJ,
+            ACT_DELETE_OBJECTS,
             self.expected_range_value,
         )
 
@@ -79,7 +79,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_template.delete,
             HTTP_METHOD_DELETE,
-            ACT_DELETE_MULTIPLE_OBJ,
+            ACT_DELETE_OBJECTS,
             self.expected_range_template_value,
         )
 
@@ -87,7 +87,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_name_list.evict,
             HTTP_METHOD_DELETE,
-            ACT_EVICT_MULTIPLE_OBJ,
+            ACT_EVICT_OBJECTS,
             self.expected_name_list_value,
         )
 
@@ -95,7 +95,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_range.evict,
             HTTP_METHOD_DELETE,
-            ACT_EVICT_MULTIPLE_OBJ,
+            ACT_EVICT_OBJECTS,
             self.expected_range_value,
         )
 
@@ -103,7 +103,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_template.evict,
             HTTP_METHOD_DELETE,
-            ACT_EVICT_MULTIPLE_OBJ,
+            ACT_EVICT_OBJECTS,
             self.expected_range_template_value,
         )
 
@@ -111,7 +111,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_name_list.prefetch,
             HTTP_METHOD_POST,
-            ACT_PREFETCH_MULTIPLE_OBJ,
+            ACT_PREFETCH_OBJECTS,
             self.expected_name_list_value,
         )
 
@@ -119,7 +119,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_range.prefetch,
             HTTP_METHOD_POST,
-            ACT_PREFETCH_MULTIPLE_OBJ,
+            ACT_PREFETCH_OBJECTS,
             self.expected_range_value,
         )
 
@@ -127,7 +127,7 @@ class TestObjectGroup(unittest.TestCase):
         self.object_group_test_helper(
             self.object_group_template.prefetch,
             HTTP_METHOD_POST,
-            ACT_PREFETCH_MULTIPLE_OBJ,
+            ACT_PREFETCH_OBJECTS,
             self.expected_range_template_value,
         )
 

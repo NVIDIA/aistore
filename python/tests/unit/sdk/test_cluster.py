@@ -6,15 +6,15 @@ from aistore.sdk.bucket import Bucket
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
-    QParamWhat,
-    QParamProvider,
+    QPARAM_WHAT,
+    QPARAM_PROVIDER,
     ACT_LIST,
-    ProviderAIS,
-    QParamSmap,
+    PROVIDER_AIS,
+    PARAM_VALUE_SMAP,
     URL_PATH_DAEMON,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
-    QparamPrimaryReadyReb,
+    QPARAM_PRIMARY_READY_REB,
 )
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Smap, ActionMsg, BucketModel
@@ -34,16 +34,16 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             HTTP_METHOD_GET,
             path=URL_PATH_DAEMON,
             res_model=Smap,
-            params={QParamWhat: QParamSmap},
+            params={QPARAM_WHAT: PARAM_VALUE_SMAP},
         )
 
     def test_list_buckets(self):
         provider = "any-provider"
-        expected_params = {QParamProvider: provider}
+        expected_params = {QPARAM_PROVIDER: provider}
         self.list_buckets_exec_assert(expected_params, provider=provider)
 
     def test_list_buckets_default_param(self):
-        expected_params = {QParamProvider: ProviderAIS}
+        expected_params = {QPARAM_PROVIDER: PROVIDER_AIS}
         self.list_buckets_exec_assert(expected_params)
 
     def list_buckets_exec_assert(self, expected_params, **kwargs):
@@ -66,7 +66,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertFalse(self.cluster.is_aistore_running())
 
     def test_is_aistore_running(self):
-        expected_params = {QparamPrimaryReadyReb: "true"}
+        expected_params = {QPARAM_PRIMARY_READY_REB: "true"}
         response = Mock()
         response.ok = True
         self.mock_client.request.return_value = response

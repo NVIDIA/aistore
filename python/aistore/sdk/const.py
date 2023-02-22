@@ -2,21 +2,20 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-# pylint: disable=unused-variable,invalid-name
-
 # URL Params
-QParamArchpath = "archpath"
-QParamProvider = "provider"
-QParamWhat = "what"
-QParamKeepBckMD = "keep_md"
-QParamBucketTo = "bck_to"
-QparamPrimaryReadyReb = "prr"
-QParamETLName = "etl_name"
-QParamForce = "frc"
+# See api/apc/query.go
+QPARAM_WHAT = "what"
+QPARAM_ETL_NAME = "etl_name"
+QPARAM_PROVIDER = "provider"
+QPARAM_BCK_TO = "bck_to"
+QPARAM_KEEP_REMOTE = "keep_md"
+QPARAM_ARCHPATH = "archpath"
+QPARAM_FORCE = "frc"
+QPARAM_PRIMARY_READY_REB = "prr"
 
 # URL Param values
-QParamSmap = "smap"
-QParamStatus = "status"
+PARAM_VALUE_SMAP = "smap"
+PARAM_VALUE_STATUS = "status"
 
 # URL paths
 URL_PATH_CLUSTER = "cluster"
@@ -27,13 +26,15 @@ URL_PATH_DAEMON = "daemon"
 URL_PATH_ETL = "etl"
 
 # Bucket providers
-ProviderAIS = "ais"
-ProviderAmazon = "aws"
-ProviderGoogle = "gcp"
-ProviderHTTP = "ht"
-ProviderAzure = "azure"
-ProviderHDFS = "hdfs"
+# See api/apc/provider.go
+PROVIDER_AIS = "ais"
+PROVIDER_AMAZON = "aws"
+PROVIDER_AZURE = "azure"
+PROVIDER_GOOGLE = "gcp"
+PROVIDER_HDFS = "hdfs"
+PROVIDER_HTTP = "ht"
 
+# HTTP Methods
 HTTP_METHOD_GET = "get"
 HTTP_METHOD_POST = "post"
 HTTP_METHOD_DELETE = "delete"
@@ -41,17 +42,20 @@ HTTP_METHOD_PUT = "put"
 HTTP_METHOD_HEAD = "head"
 
 # Actions
-ACT_COPY_BCK = "copy-bck"
+# See api/apc/actmsg.go
 ACT_CREATE_BCK = "create-bck"
 ACT_DESTROY_BCK = "destroy-bck"
+ACT_COPY_BCK = "copy-bck"
+ACT_ETL_BCK = "etl-bck"
 ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
 ACT_LIST = "list"
-ACT_PROMOTE = "promote"
 ACT_MOVE_BCK = "move-bck"
-ACT_ETL_BCK = "etl-bck"
-ACT_DELETE_MULTIPLE_OBJ = "delete-listrange"
-ACT_EVICT_MULTIPLE_OBJ = "evict-listrange"
-ACT_PREFETCH_MULTIPLE_OBJ = "prefetch-listrange"
+ACT_PROMOTE = "promote"
+# Multi-object actions
+ACT_DELETE_OBJECTS = "delete-listrange"
+ACT_EVICT_OBJECTS = "evict-listrange"
+ACT_PREFETCH_OBJECTS = "prefetch-listrange"
+# Job actions
 ACT_START = "start"
 
 # Headers
@@ -65,32 +69,6 @@ AIS_CUSTOM_MD = "ais-custom-md"
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768
 DEFAULT_JOB_WAIT_TIMEOUT = 300
-DEFAULT_ETL_COMM = "hpush"
-DEFAULT_ETL_TIMEOUT = "5m"
 
 # ENCODING
 UTF_ENCODING = "utf-8"
-
-# ETL comm types
-# ext/etl/api.go Hpush
-ETL_COMM_HPUSH = "hpush"
-# ext/etl/api.go Hpull
-ETL_COMM_HPULL = "hpull"
-# ext/etl/api.go Hrev
-ETL_COMM_HREV = "hrev"
-# ext/etl/api.go HpushStdin
-ETL_COMM_IO = "io"
-
-ETL_COMM_CODE = [ETL_COMM_IO, ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
-ETL_COMM_SPEC = [ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
-
-
-# templates for ETL
-
-CODE_TEMPLATE = """
-import pickle
-import base64
-
-transform = pickle.loads(base64.b64decode('{}'))
-{}
-"""

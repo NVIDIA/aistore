@@ -6,7 +6,7 @@ from __future__ import annotations  # pylint: disable=unused-variable
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.const import (
-    ProviderAIS,
+    PROVIDER_AIS,
 )
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.request_client import RequestClient
@@ -28,7 +28,7 @@ class Client:
         self._request_client = RequestClient(endpoint)
 
     def bucket(
-        self, bck_name: str, provider: str = ProviderAIS, namespace: Namespace = None
+        self, bck_name: str, provider: str = PROVIDER_AIS, namespace: Namespace = None
     ):
         """
         Factory constructor for bucket object.
