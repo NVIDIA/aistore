@@ -71,7 +71,7 @@ def read_file_bytes(filepath: str):
 
 def _check_path_exists(path: str):
     if not Path(path).exists():
-        raise ValueError("Provided path does not exist")
+        raise ValueError(f"Path: {path} does not exist")
 
 
 def validate_file(path: str):
@@ -84,7 +84,7 @@ def validate_file(path: str):
     """
     _check_path_exists(path)
     if not Path(path).is_file():
-        raise ValueError("Provided path is a directory, not a file")
+        raise ValueError(f"Path: {path} is a directory, not a file")
 
 
 def validate_directory(path: str):
@@ -97,4 +97,4 @@ def validate_directory(path: str):
     """
     _check_path_exists(path)
     if not Path(path).is_dir():
-        raise ValueError("Provided path is a file, not a directory")
+        raise ValueError(f"Path: {path} is a file, not a directory")

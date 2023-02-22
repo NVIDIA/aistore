@@ -19,7 +19,7 @@ def etl():
 
 
 client.etl().init_code(
-    transform=etl, etl_name="etl-md5-io-code", communication_type="io"
+    transform=etl, etl_name="etl-md5-io-code", communication_type=ETL_COMM_IO
 )
 
 job_id = client.bucket("from-bck").transform(

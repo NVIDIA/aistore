@@ -31,7 +31,7 @@ class Object:
 
     Args:
         bucket (Bucket): Bucket to which this object belongs
-        obj_name (str): name of object
+        name (str): name of object
 
     """
 
@@ -44,7 +44,7 @@ class Object:
 
     @property
     def bucket(self):
-        """Bucket to which this object belongs"""
+        """Bucket containing this object"""
         return self._bucket
 
     @property

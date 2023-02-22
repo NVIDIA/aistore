@@ -11,6 +11,7 @@ from torchvision import transforms
 from PIL import Image
 
 from aistore import Client
+from aistore.sdk.const import ETL_COMM_IO
 
 client = Client("http://192.168.49.2:8080")
 
@@ -33,7 +34,7 @@ client.etl().init_code(
     transform=apply_image_transforms,
     etl_name="etl_torchvision_io",
     dependencies=deps,
-    communication_type="io",
+    communication_type=ETL_COMM_IO,
 )
 
 # Transform bucket with given ETL name

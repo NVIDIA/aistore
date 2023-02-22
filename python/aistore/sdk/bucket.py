@@ -396,9 +396,10 @@ class Bucket:
         ext: Dict[str, str] = None,
         force: bool = False,
         dry_run: bool = False,
-    ):
+    ) -> str:
         """
-        Transforms all objects in a bucket and puts them to destination bucket.
+        Visits all selected objects in the source bucket and for each object, puts the transformed
+        result to the destination bucket
 
         Args:
             etl_name (str): name of etl to be used for transformations
@@ -492,9 +493,9 @@ class Bucket:
             return prefix + obj_name
         return obj_name
 
-    def object(self, obj_name: str):
+    def object(self, obj_name: str) -> Object:
         """
-        Factory constructor for object belonging to this bucket.
+        Factory constructor for an object in this bucket.
         Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
         Args:
@@ -513,7 +514,7 @@ class Bucket:
         obj_names: list = None,
         obj_range: ObjectRange = None,
         obj_template: str = None,
-    ):
+    ) -> ObjectGroup:
         """
         Factory constructor for multiple objects belonging to this bucket.
 

@@ -9,6 +9,7 @@ import sys
 import time
 
 from aistore.sdk import Client
+from aistore.sdk.const import ETL_COMM_HPUSH, ETL_COMM_IO
 from aistore.sdk.errors import AISError, ErrBckNotFound
 from aistore.sdk.etl_templates import MD5, ECHO
 from tests.integration import CLUSTER_ENDPOINT
@@ -80,7 +81,7 @@ class TestETLOps(unittest.TestCase):
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
         self.client.etl().init_code(
-            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type="io"
+            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type=ETL_COMM_IO
         )
 
         obj_io = (
@@ -95,7 +96,7 @@ class TestETLOps(unittest.TestCase):
         self.client.etl().delete(etl_name=ETL_NAME_CODE_IO)
 
         # spec
-        template = MD5.format(communication_type="hpush")
+        template = MD5.format(communication_type=ETL_COMM_HPUSH)
         self.client.etl().init_spec(template=template, etl_name=ETL_NAME_SPEC)
 
         obj = (
@@ -131,7 +132,7 @@ class TestETLOps(unittest.TestCase):
         self.assertEqual(obj, md5_obj)
 
         # Start ETL with ECHO template
-        template = ECHO.format(communication_type="hpush")
+        template = ECHO.format(communication_type=ETL_COMM_HPUSH)
         self.client.etl().init_spec(template=template, etl_name=ETL_NAME_SPEC_COMP)
 
         temp_bck2 = random_string()
@@ -212,7 +213,7 @@ class TestETLOps(unittest.TestCase):
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
         self.client.etl().init_code(
-            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type="io"
+            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type=ETL_COMM_IO
         )
 
         start_time = time.time()

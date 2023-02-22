@@ -13,8 +13,8 @@ class ObjectRange:
         prefix (str): Prefix contained in all names of objects
         min_index (int): Starting index in the name of objects
         max_index (int): Last index in the name of all objects
-        pad_width (int): Left-pad indices with zeros up to the width provided, e.g. pad_width = 3 will transform 1
-            to 001
+        pad_width (int, optional): Left-pad indices with zeros up to the width provided, e.g. pad_width = 3 will
+            transform 1 to 001
         step (int, optional): Size of iterator steps between each item
         suffix (str, optional): Suffix at the end of all object names
     """

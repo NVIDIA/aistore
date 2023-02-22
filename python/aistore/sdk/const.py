@@ -71,6 +71,20 @@ DEFAULT_ETL_TIMEOUT = "5m"
 # ENCODING
 UTF_ENCODING = "utf-8"
 
+# ETL comm types
+# ext/etl/api.go Hpush
+ETL_COMM_HPUSH = "hpush"
+# ext/etl/api.go Hpull
+ETL_COMM_HPULL = "hpull"
+# ext/etl/api.go Hrev
+ETL_COMM_HREV = "hrev"
+# ext/etl/api.go HpushStdin
+ETL_COMM_IO = "io"
+
+ETL_COMM_CODE = [ETL_COMM_IO, ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
+ETL_COMM_SPEC = [ETL_COMM_HPUSH, ETL_COMM_HREV, ETL_COMM_HPULL]
+
+
 # templates for ETL
 
 CODE_TEMPLATE = """

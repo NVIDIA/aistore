@@ -16,11 +16,13 @@ from aistore.sdk.const import (
     DEFAULT_ETL_TIMEOUT,
     URL_PATH_ETL,
     UTF_ENCODING,
+    ETL_COMM_CODE,
+    ETL_COMM_SPEC,
 )
 from aistore.sdk.types import ETL, ETLDetails
 
 
-def get_default_runtime():
+def _get_default_runtime():
     """
     Determines etl runtime to use if not specified
     Returns:
@@ -33,6 +35,12 @@ def get_default_runtime():
 
 
 # pylint: disable=unused-variable
+def _validate_comm_type(given: str, valid: List[str]):
+    if given not in valid:
+        valid_str = ", ".join(valid)
+        raise ValueError(f"communication_type should be one of: {valid_str}")
+
+
 class Etl:
     """
     A class containing ETL-related functions.
@@ -62,10 +70,11 @@ class Etl:
                 For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
             etl_name (str): Name of new ETL
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
-            timeout (str): Timeout of the ETL (eg. 5m for 5 minutes)
+            timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
         Returns:
             etl_name (str): ETL name
         """
+        _validate_comm_type(communication_type, ETL_COMM_SPEC)
 
         # spec
         spec_encoded = base64.b64encode(template.encode(UTF_ENCODING)).decode(
@@ -88,7 +97,7 @@ class Etl:
         transform: Callable,
         etl_name: str,
         dependencies: List[str] = None,
-        runtime: str = get_default_runtime(),
+        runtime: str = _get_default_runtime(),
         communication_type: str = DEFAULT_ETL_COMM,
         timeout: str = DEFAULT_ETL_TIMEOUT,
         chunk_size: int = None,
@@ -105,14 +114,13 @@ class Etl:
                 (see ext/etl/runtime/all.go)
             communication_type (str): [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
                 hpush, io)
-            timeout (str): [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
+            timeout (str): [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
             chunk_size (int): Chunk size in bytes if transform function in streaming data.
                 (whole object is read by default)
         Returns:
             etl_name (str): ETL name
         """
-        if communication_type not in ["io", "hpush", "hrev", "hpull"]:
-            raise ValueError("communication_type should be in: hpull, hrev, hpush, io")
+        _validate_comm_type(communication_type, ETL_COMM_CODE)
 
         functions = {
             "transform": "transform",

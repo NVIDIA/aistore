@@ -15,8 +15,11 @@ from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     URL_PATH_ETL,
     UTF_ENCODING,
+    ETL_COMM_HPUSH,
+    ETL_COMM_HPULL,
+    ETL_COMM_IO,
 )
-from aistore.sdk.etl import Etl, get_default_runtime
+from aistore.sdk.etl import Etl, _get_default_runtime
 from aistore.sdk.types import ETL, ETLDetails
 
 
@@ -36,8 +39,12 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         }
         self.init_spec_exec_assert(expected_action)
 
+    def test_init_spec_invalid_comm(self):
+        with self.assertRaises(ValueError):
+            self.etl.init_spec("template", self.etl_name, communication_type="invalid")
+
     def test_init_spec(self):
-        communication_type = "io"
+        communication_type = ETL_COMM_HPUSH
         timeout = "6m"
         expected_action = {
             "communication": f"{communication_type}://",
@@ -77,13 +84,13 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             with patch.object(aistore.sdk.etl.sys, "version_info") as version_info:
                 version_info.major = version[0]
                 version_info.minor = version[1]
-                self.assertEqual(runtime, get_default_runtime())
+                self.assertEqual(runtime, _get_default_runtime())
 
     def test_init_code_default_params(self):
-        communication_type = "hpush"
+        communication_type = ETL_COMM_HPUSH
 
         expected_action = {
-            "runtime": get_default_runtime(),
+            "runtime": _get_default_runtime(),
             "communication": f"{communication_type}://",
             "timeout": "5m",
             "funcs": {"transform": "transform"},
@@ -94,9 +101,13 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         }
         self.init_code_exec_assert(expected_action)
 
+    def test_init_code_invalid_comm(self):
+        with self.assertRaises(ValueError):
+            self.etl.init_code(Mock(), self.etl_name, communication_type="invalid")
+
     def test_init_code(self):
         runtime = "python-non-default"
-        communication_type = "hpull"
+        communication_type = ETL_COMM_HPULL
         timeout = "6m"
         user_dependencies = ["pytorch"]
         chunk_size = "123"
@@ -132,7 +143,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     @staticmethod
     def encode_fn(func, comm_type):
         transform = base64.b64encode(cloudpickle.dumps(func)).decode(UTF_ENCODING)
-        io_comm_context = "transform()" if comm_type == "io" else ""
+        io_comm_context = "transform()" if comm_type == ETL_COMM_IO else ""
         template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
         return base64.b64encode(template).decode(UTF_ENCODING)
 

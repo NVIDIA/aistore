@@ -38,6 +38,8 @@ class ObjectGroup:
             raise ValueError(
                 "ObjectGroup accepts one and only one of: obj_names, obj_range, or obj_template"
             )
+        if obj_range and not isinstance(obj_range, ObjectRange):
+            raise TypeError("obj_range must be of type ObjectRange")
         self.obj_names = obj_names
         self.obj_range = obj_range
         self.obj_template = obj_template
