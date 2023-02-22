@@ -133,8 +133,6 @@ const (
 	cmdShowCounters   = "counters"
 	cmdShowThroughput = "throughput"
 	cmdShowLatency    = "latency"
-	cmdShowGET        = "GET"
-	cmdShowSysCap     = "CPU-MEM-CAP"
 
 	// Bucket properties subcommands
 	cmdSetBprops   = "set"
@@ -214,7 +212,7 @@ const (
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// Perf
-	showPerfArgument = "show performance counters, latency, throughput, utilization, and more"
+	showPerfArgument = "show performance counters, throughput, latency, and more (<TAB-TAB> to select specific view)"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"

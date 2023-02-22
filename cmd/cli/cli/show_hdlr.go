@@ -113,12 +113,12 @@ var (
 			logSevFlag,
 			logFlushFlag,
 		),
-		cmdShowStats: {
+		cmdShowStats: append(
+			longRunFlags,
 			jsonFlag,
 			unitsFlag,
-			refreshFlag,
 			regexStatsFlag,
-		},
+		),
 	}
 
 	showCmd = cli.Command{
@@ -1081,7 +1081,9 @@ func showStatsHandler(c *cli.Context) (err error) {
 			return
 		}
 	}
-	for {
+	longRun := &longRun{}
+	longRun.init(c)
+	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
 		if node != nil {
 			err = showNodeStats(c, node, metrics, sleep, regex)
 		} else {
@@ -1092,6 +1094,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 		}
 		runtime.Gosched()
 	}
+	return nil
 }
 
 // TODO -- FIXME: usable table instead of "ConfigTmpl = "PROPERTY\t VALUE\n"

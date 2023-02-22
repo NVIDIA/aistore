@@ -92,12 +92,9 @@ func argLast(c *cli.Context) (last string) {
 }
 
 // used together with `optionalTargetIDArgument` & `optionalNodeIDArgument`
-func argNode(c *cli.Context, shift ...int) (sid, sname string, err error) {
+func argNode(c *cli.Context) (sid, sname string, err error) {
+	// only if the first and present
 	var idx int
-	if len(shift) > 0 {
-		idx = shift[0]
-	}
-	// only if present
 	if c.NArg() > idx {
 		sid, sname, err = getNodeIDName(c, c.Args().Get(idx))
 	}

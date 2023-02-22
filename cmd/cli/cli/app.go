@@ -325,6 +325,23 @@ func (p *longRun) isSet() bool {
 	return p.refreshRate != 0
 }
 
+func (p *longRun) init(c *cli.Context) {
+	if flagIsSet(c, refreshFlag) {
+		p.refreshRate = parseDurationFlag(c, refreshFlag)
+		p.count = countUnlimited // unless counted (below)
+	}
+	if flagIsSet(c, countFlag) {
+		p.count = parseIntFlag(c, countFlag)
+		if p.count <= 0 {
+			n := flprn(countFlag)
+			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
+				n, p.count, n, countDefault)
+			actionWarn(c, warn)
+			p.count = countDefault
+		}
+	}
+}
+
 func setLongRunParams(c *cli.Context, footer ...int) bool {
 	params := c.App.Metadata[metadata].(*longRun)
 	if params.isSet() {
@@ -334,20 +351,7 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 	if len(footer) > 0 {
 		params.footer = footer[0]
 	}
-	if flagIsSet(c, refreshFlag) {
-		params.refreshRate = parseDurationFlag(c, refreshFlag)
-		params.count = countUnlimited // unless counted (below)
-	}
-	if flagIsSet(c, countFlag) {
-		params.count = parseIntFlag(c, countFlag)
-		if params.count <= 0 {
-			n := flprn(countFlag)
-			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
-				n, params.count, n, countDefault)
-			actionWarn(c, warn)
-			params.count = countDefault
-		}
-	}
+	params.init(c)
 	return true
 }
 

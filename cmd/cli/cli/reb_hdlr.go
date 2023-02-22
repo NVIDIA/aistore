@@ -83,8 +83,12 @@ func showRebalanceHandler(c *cli.Context) error {
 	}
 
 	// run until rebalance is completed
-	var printed bool
-	for {
+	var (
+		longRun = &longRun{}
+		printed bool
+	)
+	longRun.init(c)
+	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
 		rebSnaps, err := api.QueryXactionSnaps(apiBP, xargs)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {

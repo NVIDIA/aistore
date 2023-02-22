@@ -57,7 +57,6 @@ var (
 			showCounters,
 			showThroughput,
 			showLatency,
-			showGET,
 			showSysCap,
 		},
 	}
@@ -74,7 +73,7 @@ var (
 	}
 	showThroughput = cli.Command{
 		Name:         cmdShowThroughput,
-		Usage:        "TODO",
+		Usage:        "show GET and PUT throughput, associated (cumulative, average) sizes and counters",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showThroughputHandler,
@@ -82,23 +81,15 @@ var (
 	}
 	showLatency = cli.Command{
 		Name:         cmdShowLatency,
-		Usage:        "TODO",
+		Usage:        "show GET, PUT, and APPEND (request) latency and average sizes",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showLatencyHandler,
 		BashComplete: suggestTargetNodes,
 	}
-	showGET = cli.Command{
-		Name:         cmdShowGET,
-		Usage:        "TODO",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showPerfFlags,
-		Action:       showGETHandler,
-		BashComplete: suggestTargetNodes,
-	}
 	showSysCap = cli.Command{
-		Name:         cmdShowSysCap,
-		Usage:        "TODO",
+		Name:         cmdCapacity,
+		Usage:        "TBD",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showSysCapHandler,
@@ -106,7 +97,35 @@ var (
 	}
 )
 
-// show all non-zero counters _and_ sizes (unless allColumnsFlag)
+// TODO -- FIXME: to be continued
+func showPerfHandler(c *cli.Context) error {
+	if flagIsSet(c, refreshFlag) {
+		goto ret
+	}
+	actionCptn(c, cmdShowCounters+": ", cos.FormatNowStamp())
+	if err := showCountersHandler(c); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer)
+
+	actionCptn(c, cmdShowThroughput+": ", cos.FormatNowStamp())
+	if err := showThroughputHandler(c); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer)
+
+	actionCptn(c, cmdShowLatency+": ", cos.FormatNowStamp())
+	if err := showLatencyHandler(c); err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer)
+
+ret:
+	actionWarn(c, "To run continuously or multiple times, select specific view (use <TAB-TAB>)")
+	return nil
+}
+
+// show all non-zero counters _and_ sizes (unless `allColumnsFlag`)
 func showCountersHandler(c *cli.Context) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
@@ -227,7 +246,7 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 }
 
 // (common use)
-func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSize ...bool) error {
+func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, inclAvgSize ...bool) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
@@ -239,8 +258,8 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSiz
 	if errU != nil {
 		return errU
 	}
-	if len(alwaysShowAvgSize) > 0 {
-		avgSize = alwaysShowAvgSize[0] // true
+	if len(inclAvgSize) > 0 {
+		avgSize = inclAvgSize[0] // true
 	}
 	sid, _, err := argNode(c)
 	if err != nil {
@@ -265,7 +284,8 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSiz
 	if cb == nil {
 		setLongRunParams(c, 72)
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units, AllCols: allCols, AvgSize: avgSize}
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+			AllCols: allCols, AvgSize: avgSize}
 		table, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
 			return err
@@ -278,14 +298,16 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSiz
 	var (
 		refresh = flagIsSet(c, refreshFlag)
 		sleep   = _refreshRate(c)
+		longRun = &longRun{}
 		ini     teb.StstMap
 	)
 	if sleep < time.Second || sleep > time.Minute {
 		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
 	}
 
-	// until Ctrl-C
-	for {
+	// until --count or Ctrl-C
+	longRun.init(c)
+	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
 		mapBegin, mapEnd, err := _cluStatusBeginEnd(c, ini, sleep)
 		if err != nil {
 			return err
@@ -295,7 +317,8 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSiz
 
 		runtime.Gosched()
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units, AllCols: allCols, AvgSize: avgSize}
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+			AllCols: allCols, AvgSize: avgSize}
 		table, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {
 			return err
@@ -310,19 +333,10 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSiz
 
 		ini = mapEnd
 	}
+	return nil
 }
 
 // TODO -- FIXME: work in progress from here on ---------------
-
-func showPerfHandler(c *cli.Context) error {
-	_, _, err := argNode(c, 0)
-	return err
-}
-
-func showGETHandler(c *cli.Context) error {
-	_, _, err := argNode(c)
-	return err
-}
 
 func showSysCapHandler(c *cli.Context) error {
 	_, _, err := argNode(c)

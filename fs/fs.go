@@ -110,7 +110,7 @@ func NewMountpath(mpath string) (mi *Mountpath, err error) {
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
-	if err = cos.Stat(cleanMpath); err != nil {
+	if _, err = os.Stat(cleanMpath); err != nil {
 		return nil, cmn.NewErrNotFound("mountpath %q", mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
@@ -188,7 +188,7 @@ func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
 func (mi *Mountpath) CreateMissingBckDirs(bck *cmn.Bck) (err error) {
 	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
-		if err = cos.Stat(dir); err == nil {
+		if _, err = os.Stat(dir); err == nil {
 			continue
 		}
 		if err = cos.CreateDir(dir); err != nil {
@@ -208,7 +208,7 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 	if bcnt >= atMost {
 		return
 	}
-	if cos.Stat(fromPath) != nil {
+	if _, err := os.Stat(fromPath); err != nil {
 		return
 	}
 	if err := os.Rename(fromPath, backupPath); err != nil {
@@ -364,7 +364,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 	var num int
 	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
-		if err := cos.Stat(dir); err == nil {
+		if _, err := os.Stat(dir); err == nil {
 			if nilbmd {
 				// NOTE: e.g., has been decommissioned without proper cleanup, and rejoined
 				glog.Errorf("bucket %s: directory %s already exists but local BMD is nil - skipping...",
@@ -386,10 +386,6 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
-		}
-		if err := cos.Stat(dir); err != nil {
-			debug.AssertNoErr(err)
-			return num, fmt.Errorf("bucket %s: failed to fstat directory %s: %w", bck, dir, err)
 		}
 		num++
 	}
