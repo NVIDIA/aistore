@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -586,7 +587,8 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	// slow path
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
-		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
+		// TODO -- FIXME: fall-through instead of returning the fail - remove once tested!
+		glog.Errorf("%s (bdir %s): %v", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)
 	if err = cos.CreateDir(fdir); err != nil {

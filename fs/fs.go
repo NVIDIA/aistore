@@ -360,7 +360,8 @@ func (mi *Mountpath) makeDelPathBck(bck *cmn.Bck, bid uint64) string {
 }
 
 // Creates all CT directories for a given (mountpath, bck) - NOTE handling of empty dirs
-func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (num int, err error) {
+func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
+	var num int
 	for contentType := range CSM.m {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := cos.Stat(dir); err == nil {
@@ -385,6 +386,10 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (num int, err erro
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
+		}
+		if err := cos.Stat(dir); err != nil {
+			debug.AssertNoErr(err)
+			return num, fmt.Errorf("bucket %s: failed to fstat directory %s: %w", bck, dir, err)
 		}
 		num++
 	}
