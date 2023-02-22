@@ -586,7 +586,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	// slow path
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
-		return nil, fmt.Errorf("%s(bdir %s): %w", lom, bdir, err)
+		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)
 	if err = cos.CreateDir(fdir); err != nil {
@@ -600,7 +600,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 func (lom *LOM) RenameFile(workfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
-		return fmt.Errorf("%s(bdir %s): %w", lom, bdir, err)
+		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
 	}
 	if err := cos.Rename(workfqn, lom.FQN); err != nil {
 		return cmn.NewErrFailedTo(T, "rename", lom, err)

@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -423,6 +424,10 @@ write:
 	}
 
 	// ok
+	if cmn.Features.IsSet(feat.FsyncPUT) {
+		err = lmfh.Sync() // compare w/ cos.FlushClose
+		debug.AssertNoErr(err)
+	}
 	cos.Close(lmfh)
 	lmfh = nil
 	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()

@@ -179,7 +179,6 @@ func GetProxyReadiness(proxyURL string) error {
 
 // CreateBucketWithCleanup, destroys bucket if exists and creates new. The bucket is destroyed on test completion.
 func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BucketPropsToUpdate) {
-	DestroyBucket(tb, proxyURL, bck)
 	bp := BaseAPIParams(proxyURL)
 	err := api.CreateBucket(bp, bck, props)
 	tassert.CheckFatal(tb, err)

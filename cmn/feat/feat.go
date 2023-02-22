@@ -23,6 +23,7 @@ const (
 	SkipVC                    // skip loading existing object's metadata, Version and Checksum in particular
 	DontAutoDetectFshare      // when promoting NFS shares to AIS
 	ProvideS3APIViaRoot       // handle s3 compat via `aistore-hostname/` (default: `aistore-hostname/s3`)
+	FsyncPUT                  // when finalizing PUT(obj) fflush prior to (close, rename) sequence
 )
 
 var All = []string{
@@ -31,6 +32,7 @@ var All = []string{
 	"Skip-Loading-VersionChecksum-MD",
 	"Do-not-Auto-Detect-FileShare",
 	"Provide-S3-API-via-Root",
+	"Fsync-PUT",
 }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }
