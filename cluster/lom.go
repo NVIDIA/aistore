@@ -586,8 +586,10 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	}
 	// slow path
 	bdir := lom.mi.MakePathBck(lom.Bucket())
-	if err = cos.Stat(bdir); err != nil {
-		// TODO -- FIXME: fall-through instead of returning the fail - remove once tested!
+	// NOTE:
+	// - os.Stat instead of cos.Stat (ie., syscall.Stat)
+	// - FIXME: fall-through with log record instead of returning the fail
+	if _, err = os.Stat(bdir); err != nil {
 		glog.Errorf("%s (bdir %s): %v", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)

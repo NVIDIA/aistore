@@ -59,7 +59,7 @@ func getBMD(c *cli.Context) error {
 	return nil
 }
 
-func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb.StStMap,
+func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb.StstMap,
 	cfg *cmn.ClusterConfig, sid string) error {
 	var (
 		usejs       = flagIsSet(c, jsonFlag)

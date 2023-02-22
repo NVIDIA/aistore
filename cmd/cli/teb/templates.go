@@ -392,8 +392,8 @@ type (
 		ExtendedURLs bool
 	}
 	StatsAndStatusHelper struct {
-		Pmap StStMap `json:"pmap"`
-		Tmap StStMap `json:"tmap"`
+		Pmap StstMap `json:"pmap"`
+		Tmap StstMap `json:"tmap"`
 	}
 	StatusHelper struct {
 		Smap      *cluster.Smap        `json:"smap"`
@@ -497,7 +497,7 @@ func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_p
 // internal helper for the methods above
 func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 	set := cos.NewStrSet()
-	for _, m := range []StStMap{h.Pmap, h.Tmap} {
+	for _, m := range []StstMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {
 			case "status":

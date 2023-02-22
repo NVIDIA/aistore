@@ -44,10 +44,10 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 }
 
 //
-// teb.StStMap
+// teb.StstMap
 //
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StStMap, err error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return
 	}
@@ -59,16 +59,16 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	switch daeType {
 	case apc.Target:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), tcnt)
-		tstatusMap = make(teb.StStMap, tcnt)
+		tstatusMap = make(teb.StstMap, tcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 	case apc.Proxy:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt)
-		pstatusMap = make(teb.StStMap, pcnt)
+		pstatusMap = make(teb.StstMap, pcnt)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	default:
 		wg = cos.NewLimitedWaitGroup(sys.NumCPU(), pcnt+tcnt)
-		tstatusMap = make(teb.StStMap, tcnt)
-		pstatusMap = make(teb.StStMap, pcnt)
+		tstatusMap = make(teb.StstMap, tcnt)
+		pstatusMap = make(teb.StstMap, pcnt)
 		daeStatus(smap.Tmap, tstatusMap, wg, mu)
 		daeStatus(smap.Pmap, pstatusMap, wg, mu)
 	}
@@ -77,7 +77,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	return
 }
 
-func daeStatus(nodeMap cluster.NodeMap, out teb.StStMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap cluster.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *cluster.Snode) {
@@ -87,7 +87,7 @@ func daeStatus(nodeMap cluster.NodeMap, out teb.StStMap, wg cos.WG, mu *sync.Mut
 	}
 }
 
-func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StStMap) {
+func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StstMap) {
 	daeStatus, err := api.GetStatsAndStatus(apiBP, node)
 	if err != nil {
 		daeStatus = &stats.NodeStatus{}
@@ -175,7 +175,7 @@ func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.Cluster, averageOver time
 	return nil
 }
 
-func _cluStatusBeginEnd(c *cli.Context, ini teb.StStMap, sleep time.Duration) (b, e teb.StStMap, err error) {
+func _cluStatusBeginEnd(c *cli.Context, ini teb.StstMap, sleep time.Duration) (b, e teb.StstMap, err error) {
 	b = ini
 	if b == nil {
 		// begin stats

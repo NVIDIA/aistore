@@ -22,7 +22,13 @@ import (
 	"github.com/urfave/cli"
 )
 
-type perfcb func(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StStMap, elapsed time.Duration)
+type perfcb func(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration)
+
+// statically def (compare with counter and throughput tabs)
+var latabNames = []string{
+	stats.GetLatency, stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize,
+	stats.PutLatency, stats.PutSize, stats.PutCount,
+	stats.AppendLatency, stats.AppendCount}
 
 var perfCmd = cli.Command{
 	Name:  commandPerf,
@@ -116,7 +122,6 @@ func showCountersHandler(c *cli.Context) error {
 	return showPerfTab(c, selected, nil)
 }
 
-// TODO -- FIXME: compute and add SUM(disk)/disks per target (w/ maybe min, max)
 func showThroughputHandler(c *cli.Context) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {
@@ -138,7 +143,7 @@ func showThroughputHandler(c *cli.Context) error {
 }
 
 // update mapBegin <= (size/s)
-func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StStMap, elapsed time.Duration) {
+func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) {
 	seconds := cos.MaxI64(int64(elapsed.Seconds()), 1) // averaging per second
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
@@ -166,32 +171,22 @@ func showLatencyHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	warn := "using rather naive and inexact way to recompute latency based on the total elapsed time (to execute so many requests)"
-	actionWarn(c, warn)
-
-	selected := make(cos.StrKVs, len(metrics)>>1)
+	selected := make(cos.StrKVs, len(latabNames))
 	for name, kind := range metrics {
-		switch {
-		case kind == stats.KindLatency:
-			ncounter := name[:len(name)-1] // ".ns" => ".n"
-			// take the pair iff exists
-			if k, ok := metrics[ncounter]; ok && k == stats.KindCounter {
-				selected[name] = kind
-				selected[ncounter] = k
-			}
-		case stats.IsErrMetric(name): // ditto
-			if strings.Contains(name, "get") || strings.Contains(name, "put") ||
-				strings.Contains(name, "read") || strings.Contains(name, "write") {
+		if cos.StringInSlice(name, latabNames) {
+			selected[name] = kind
+		} else if stats.IsErrMetric(name) {
+			if strings.Contains(name, "get") || strings.Contains(name, "put") || strings.Contains(name, "append") {
 				selected[name] = kind
 			}
 		}
 	}
-	return showPerfTab(c, selected, _latency)
+	return showPerfTab(c, selected, _latency, true /*always show average size*/)
 }
 
 // update mapBegin <= (elapsed/num-samples)
-func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StStMap, elapsed time.Duration) {
+func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, _ time.Duration) {
+	var num int // num computed latencies
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
@@ -203,22 +198,36 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StStMap, 
 			if kind, ok := metrics[name]; !ok || kind != stats.KindLatency {
 				continue
 			}
+			vend := end.Tracker[name]
 			ncounter := name[:len(name)-1] // ".ns" => ".n"
+			switch name {
+			case stats.GetLatency:
+				ncounter = stats.GetCount
+			case stats.PutLatency:
+				ncounter = stats.PutCount
+			case stats.AppendLatency:
+				ncounter = stats.AppendCount
+			}
 			if cntBegin, ok1 := begin.Tracker[ncounter]; ok1 {
 				if cntEnd, ok2 := end.Tracker[ncounter]; ok2 && cntEnd.Value > cntBegin.Value {
-					v.Value = int64(elapsed) / (cntEnd.Value - cntBegin.Value)
+					// (cumulative-end-time - cumulative-begin-time) / num-requests
+					v.Value = (vend.Value - v.Value) / (cntEnd.Value - cntBegin.Value)
 					begin.Tracker[name] = v
+					num++
 					continue
 				}
-				v.Value = 0
-				begin.Tracker[name] = v
 			}
+			v.Value = 0
+			begin.Tracker[name] = v
 		}
+	}
+	if num == 0 {
+		actionWarn(c, "the cluster is idle, as far as assorted (GET, PUT, APPEND) metrics")
 	}
 }
 
 // (common use)
-func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb) error {
+func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, alwaysShowAvgSize ...bool) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
@@ -229,6 +238,9 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb) error {
 	)
 	if errU != nil {
 		return errU
+	}
+	if len(alwaysShowAvgSize) > 0 {
+		avgSize = alwaysShowAvgSize[0] // true
 	}
 	sid, _, err := argNode(c)
 	if err != nil {
@@ -266,7 +278,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb) error {
 	var (
 		refresh = flagIsSet(c, refreshFlag)
 		sleep   = _refreshRate(c)
-		ini     teb.StStMap
+		ini     teb.StstMap
 	)
 	if sleep < time.Second || sleep > time.Minute {
 		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
