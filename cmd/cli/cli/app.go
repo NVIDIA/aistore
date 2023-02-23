@@ -325,10 +325,12 @@ func (p *longRun) isSet() bool {
 	return p.refreshRate != 0
 }
 
-func (p *longRun) init(c *cli.Context) {
+func (p *longRun) init(c *cli.Context, runOnce bool) {
 	if flagIsSet(c, refreshFlag) {
 		p.refreshRate = parseDurationFlag(c, refreshFlag)
 		p.count = countUnlimited // unless counted (below)
+	} else if runOnce {
+		p.count = 1 // unless --count spec-ed (below)
 	}
 	if flagIsSet(c, countFlag) {
 		p.count = parseIntFlag(c, countFlag)
@@ -351,7 +353,7 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 	if len(footer) > 0 {
 		params.footer = footer[0]
 	}
-	params.init(c)
+	params.init(c, false)
 	return true
 }
 

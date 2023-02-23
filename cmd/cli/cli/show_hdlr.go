@@ -1082,7 +1082,7 @@ func showStatsHandler(c *cli.Context) (err error) {
 		}
 	}
 	longRun := &longRun{}
-	longRun.init(c)
+	longRun.init(c, true /*run once unless*/)
 	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
 		if node != nil {
 			err = showNodeStats(c, node, metrics, sleep, regex)

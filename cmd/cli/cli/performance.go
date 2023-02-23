@@ -22,21 +22,19 @@ import (
 	"github.com/urfave/cli"
 )
 
-type perfcb func(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration)
+type (
+	perfcb func(c *cli.Context,
+		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
+)
 
-// statically def (compare with counter and throughput tabs)
+// statically defined for `latency` tab (compare with counter and throughput tabs)
 var latabNames = []string{
 	stats.GetLatency, stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize,
 	stats.PutLatency, stats.PutSize, stats.PutCount,
 	stats.AppendLatency, stats.AppendCount}
 
-var perfCmd = cli.Command{
-	Name:  commandPerf,
-	Usage: showPerfArgument,
-	Subcommands: []cli.Command{
-		makeAlias(showCmdPeformance, "", true, commandShow),
-	},
-}
+// true when called by top-level handler
+var allPerfTabs bool
 
 var (
 	showPerfFlags = append(
@@ -47,6 +45,16 @@ var (
 		unitsFlag,
 		averageSizeFlag,
 	)
+
+	// alias
+	perfCmd = cli.Command{
+		Name:  commandPerf,
+		Usage: showPerfArgument,
+		Subcommands: []cli.Command{
+			makeAlias(showCmdPeformance, "", true, commandShow),
+		},
+	}
+	// `show performance` command
 	showCmdPeformance = cli.Command{
 		Name:      commandPerf,
 		Usage:     showPerfArgument,
@@ -63,9 +71,9 @@ var (
 	showCounters = cli.Command{
 		Name: cmdShowCounters,
 		Usage: "show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts;\n" +
-			argsUsageIndent + "numbers of list-objects requests;\n" +
-			argsUsageIndent + "(GET, PUT, etc.) cumulative and average sizes;\n" +
-			argsUsageIndent + "associated error counters, if any, and more.",
+			"\t\t" + argsUsageIndent + "numbers of list-objects requests;\n" +
+			"\t\t" + argsUsageIndent + "(GET, PUT, etc.) cumulative and average sizes;\n" +
+			"\t\t" + argsUsageIndent + "associated error counters, if any, and more.",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showCountersHandler,
@@ -81,7 +89,7 @@ var (
 	}
 	showLatency = cli.Command{
 		Name:         cmdShowLatency,
-		Usage:        "show GET, PUT, and APPEND (request) latency and average sizes",
+		Usage:        "show GET, PUT, and APPEND latencies and average sizes",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showLatencyHandler,
@@ -97,32 +105,33 @@ var (
 	}
 )
 
-// TODO -- FIXME: to be continued
 func showPerfHandler(c *cli.Context) error {
-	if flagIsSet(c, refreshFlag) {
-		goto ret
-	}
-	actionCptn(c, cmdShowCounters+": ", cos.FormatNowStamp())
+	allPerfTabs = true
+
 	if err := showCountersHandler(c); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.App.Writer)
 
-	actionCptn(c, cmdShowThroughput+": ", cos.FormatNowStamp())
 	if err := showThroughputHandler(c); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.App.Writer)
 
-	actionCptn(c, cmdShowLatency+": ", cos.FormatNowStamp())
 	if err := showLatencyHandler(c); err != nil {
 		return err
 	}
 	fmt.Fprintln(c.App.Writer)
 
-ret:
-	actionWarn(c, "To run continuously or multiple times, select specific view (use <TAB-TAB>)")
 	return nil
+}
+
+func perfCptn(c *cli.Context, tab string) {
+	if allPerfTabs {
+		stamp := cos.FormatNowStamp()
+		repeat := 40 - len(stamp) - len(tab)
+		actionCptn(c, tab, " "+strings.Repeat("-", repeat)+" "+stamp)
+	}
 }
 
 // show all non-zero counters _and_ sizes (unless `allColumnsFlag`)
@@ -138,7 +147,7 @@ func showCountersHandler(c *cli.Context) error {
 			selected[name] = kind
 		}
 	}
-	return showPerfTab(c, selected, nil)
+	return showPerfTab(c, selected, nil, cmdShowCounters)
 }
 
 func showThroughputHandler(c *cli.Context) error {
@@ -158,12 +167,15 @@ func showThroughputHandler(c *cli.Context) error {
 			}
 		}
 	}
-	return showPerfTab(c, selected, _throughput /* callback*/)
+	return showPerfTab(c, selected, _throughput /* callback*/, cmdShowThroughput)
 }
 
 // update mapBegin <= (size/s)
-func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) {
-	seconds := cos.MaxI64(int64(elapsed.Seconds()), 1) // averaging per second
+func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) (idle bool) {
+	var (
+		seconds = cos.MaxI64(int64(elapsed.Seconds()), 1) // averaging per second
+		num     int
+	)
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
@@ -178,8 +190,13 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 			vend := end.Tracker[name]
 			v.Value = (vend.Value - v.Value) / seconds
 			begin.Tracker[name] = v
+			if v.Value != 0 {
+				num++
+			}
 		}
 	}
+	idle = num == 0
+	return
 }
 
 // NOTE: two built-in assumptions: one cosmetic, another major
@@ -200,11 +217,11 @@ func showLatencyHandler(c *cli.Context) error {
 			}
 		}
 	}
-	return showPerfTab(c, selected, _latency, true /*always show average size*/)
+	return showPerfTab(c, selected, _latency, cmdShowLatency, true /*always show average size*/)
 }
 
 // update mapBegin <= (elapsed/num-samples)
-func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, _ time.Duration) {
+func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, _ time.Duration) (idle bool) {
 	var num int // num computed latencies
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
@@ -240,13 +257,12 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 			begin.Tracker[name] = v
 		}
 	}
-	if num == 0 {
-		actionWarn(c, "the cluster is idle, as far as assorted (GET, PUT, APPEND) metrics")
-	}
+	idle = num == 0
+	return
 }
 
 // (common use)
-func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, inclAvgSize ...bool) error {
+func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag string, inclAvgSize ...bool) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
@@ -281,20 +297,35 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, inclAvgSize ...b
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
+	// (1) no recompute; "long-run" (if spec-ed) via app.go
 	if cb == nil {
-		setLongRunParams(c, 72)
+		lfooter := 72
+		if allPerfTabs {
+			lfooter = 0
+		}
+		setLongRunParams(c, lfooter)
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
 			AllCols: allCols, AvgSize: avgSize}
-		table, err := teb.NewPerformanceTab(tstatusMap, &ctx)
+		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
 			return err
+		}
+
+		perfCptn(c, tag)
+		if num == 0 && tag == cmdShowCounters {
+			if regex == nil {
+				actionNote(c, "the cluster is completely idle: all collected counters have zero values\n")
+			} else {
+				actionNote(c, fmt.Sprintf("%q matching counters have zero values\n", regexStr))
+			}
 		}
 
 		out := table.Template(hideHeader)
 		return teb.Print(tstatusMap, out)
 	}
 
+	// (2) locally controlled "long-run" with `cb` recompute at each cycle
 	var (
 		refresh = flagIsSet(c, refreshFlag)
 		sleep   = _refreshRate(c)
@@ -305,28 +336,45 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, inclAvgSize ...b
 		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
 	}
 
-	// until --count or Ctrl-C
-	longRun.init(c)
+	longRun.init(c, true /*run once unless*/)
 	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
 		mapBegin, mapEnd, err := _cluStatusBeginEnd(c, ini, sleep)
 		if err != nil {
 			return err
 		}
 
-		cb(c, metrics, mapBegin, mapEnd, sleep) // call back to recompute
+		idle := cb(c, metrics, mapBegin, mapEnd, sleep) // call back to recompute
+		if !idle {
+			perfCptn(c, tag)
+		} else {
+			switch tag {
+			case cmdShowThroughput:
+				if regex == nil {
+					actionNote(c, "the cluster is idle throughput-wise (all throughput metrics have zero values)\n")
+				} else {
+					actionNote(c, fmt.Sprintf("%q matching throughput metrics have zero values\n", regexStr))
+				}
+			case cmdShowLatency:
+				if regex == nil {
+					actionNote(c, "the cluster is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
+				} else {
+					actionNote(c, fmt.Sprintf("%q matching latency metrics have zero values\n", regexStr))
+				}
+			}
+		}
 
 		runtime.Gosched()
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
 			AllCols: allCols, AvgSize: avgSize}
-		table, err := teb.NewPerformanceTab(mapBegin, &ctx)
+		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {
 			return err
 		}
 
 		out := table.Template(hideHeader)
 		err = teb.Print(mapBegin, out)
-		if err != nil || !refresh {
+		if err != nil || !refresh || allPerfTabs {
 			return err
 		}
 		printLongRunFooter(c.App.Writer, 36)

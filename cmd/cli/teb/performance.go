@@ -26,8 +26,11 @@ type PerfTabCtx struct {
 	AvgSize bool           // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 }
 
-func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, error) {
-	var n2n cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
+func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero metrics OR bad status*/, error) {
+	var (
+		num int        // num non-zero metrics
+		n2n cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
+	)
 	if c.AvgSize {
 		n2n = make(cos.StrKVs, 2)
 	}
@@ -42,7 +45,8 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, error) {
 		}
 		if ds.Tracker == nil { // (unlikely)
 			debug.Assert(false, tid)
-			return nil, fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, c.Smap))
+			err := fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, c.Smap))
+			return nil, 0, err
 		}
 
 		// statically
@@ -115,6 +119,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, error) {
 			}
 			if ds.Status != NodeOnline {
 				row = append(row, unknownVal)
+				num++
 				continue
 			}
 
@@ -124,6 +129,10 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, error) {
 			kind, ok := c.Metrics[h.name]
 			debug.Assert(ok, h.name)
 			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
+
+			if v.Value != 0 {
+				num++
+			}
 
 			// add some color
 			if stats.IsErrMetric(h.name) {
@@ -137,7 +146,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, error) {
 		}
 		table.addRow(row)
 	}
-	return table, nil
+	return table, num, nil
 }
 
 //

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -587,10 +586,10 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	// slow path
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	// NOTE:
-	// - os.Stat instead of cos.Stat (ie., syscall.Stat)
-	// - FIXME: fall-through with log record instead of returning the fail
+	// - os.Stat instead of cos.Stat (`syscall.Stat`)
+	// - one virtualized environment produces rare sporadic fail when there's none
 	if _, err = os.Stat(bdir); err != nil {
-		glog.Errorf("%s (bdir %s): %v", lom, bdir, err)
+		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)
 	if err = cos.CreateDir(fdir); err != nil {
