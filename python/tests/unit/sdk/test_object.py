@@ -180,7 +180,7 @@ class TestObject(unittest.TestCase):
     def promote_exec_assert(self, filename, expected_value, **kwargs):
         request_path = f"{URL_PATH_OBJECTS}/{BCK_NAME}"
         expected_json = ActionMsg(
-            action=ACT_PROMOTE, name=filename, value=expected_value.get_json()
+            action=ACT_PROMOTE, name=filename, value=expected_value.as_dict()
         ).dict()
         self.object.promote(filename, **kwargs)
         self.mock_client.request.assert_called_with(

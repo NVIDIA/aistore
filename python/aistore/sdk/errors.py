@@ -50,8 +50,8 @@ class Timeout(Exception):
     Raised when an operation takes too long to complete
     """
 
-    def __init__(self, action):
-        super().__init__(f"{action} timed out")
+    def __init__(self, action, message=""):
+        super().__init__(f"Timed out while waiting for {action}. {message}")
 
 
 # pylint: disable=unused-variable
@@ -62,3 +62,12 @@ class InvalidObjectRangeIndex(Exception):
 
     def __init__(self, message):
         super().__init__(f"Invalid argument provided for object range index: {message}")
+
+
+class JobInfoNotFound(Exception):
+    """
+    Raised when information on a job's status could not be found on the AIS cluster
+    """
+
+    def __init__(self, message):
+        super().__init__(f"Job information not found on the cluster: {message}")

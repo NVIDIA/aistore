@@ -46,3 +46,15 @@ def cleanup_local(path: str):
         shutil.rmtree(path)
     except FileNotFoundError:
         pass
+
+
+def create_and_put_objects(client, bucket, prefix, suffix, num_obj):
+    obj_names = [prefix + str(i) + suffix for i in range(num_obj)]
+    for obj_name in obj_names:
+        create_and_put_object(
+            client,
+            bck_name=bucket.name,
+            provider=bucket.provider,
+            obj_name=obj_name,
+        )
+    return obj_names

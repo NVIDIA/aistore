@@ -146,6 +146,12 @@ class BucketModel(BaseModel):
     provider: str = PROVIDER_AIS
     namespace: Namespace = None
 
+    def as_dict(self):
+        dict_rep = {"name": self.name, "provider": self.provider}
+        if self.namespace:
+            dict_rep["namespace"] = self.namespace
+        return dict_rep
+
 
 class JobArgs(BaseModel):
     """
@@ -159,7 +165,7 @@ class JobArgs(BaseModel):
     buckets: List[BucketModel] = None
     only_running: bool = False
 
-    def get_json(self):
+    def as_dict(self):
         return {
             "ID": self.id,
             "Kind": self.kind,
@@ -315,7 +321,7 @@ class PromoteAPIArgs(BaseModel):
     delete_source: bool = False
     src_not_file_share: bool = False
 
-    def get_json(self):
+    def as_dict(self):
         return {
             "tid": self.target_id,
             "src": self.source_path,
@@ -356,3 +362,44 @@ class JobSnapshot(BaseModel):
     stats: JobStats = None
     aborted: bool = False
     is_idle: bool = False
+
+
+class CopyBckMsg(BaseModel):
+    """
+    API message structure for copying a bucket
+    """
+
+    prefix: str
+    dry_run: bool
+    force: bool
+
+    def as_dict(self):
+        return {"prefix": self.prefix, "dry_run": self.dry_run, "force": self.force}
+
+
+class TransformBckMsg(BaseModel):
+    """
+    API message structure for requesting an etl transform on a bucket
+    """
+
+    etl_name: str
+    timeout: str
+
+
+class CopyMultiObj(BaseModel):
+    """
+    API message structure for copying multiple objects between buckets
+    """
+
+    to_bck: BucketModel
+    copy_msg: CopyBckMsg
+    continue_on_err: bool
+    object_selection: dict
+
+    def as_dict(self):
+        json_dict = self.object_selection
+        for key, val in self.copy_msg.as_dict().items():
+            json_dict[key] = val
+        json_dict["tobck"] = self.to_bck.as_dict()
+        json_dict["coer"] = self.continue_on_err
+        return json_dict

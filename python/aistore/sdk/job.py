@@ -22,7 +22,7 @@ from aistore.sdk.const import (
     ACT_START,
     WHAT_QUERY_XACT_STATS,
 )
-from aistore.sdk.errors import Timeout
+from aistore.sdk.errors import Timeout, JobInfoNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import JobStatus, JobArgs, ActionMsg, JobSnapshot, BucketModel
 from aistore.sdk.utils import probing_frequency
@@ -61,14 +61,12 @@ class Job:
 
     def status(
         self,
-        daemon_id: str = "",
         only_running: bool = False,
     ) -> JobStatus:
         """
         Return status of a job
 
         Args:
-            daemon_id (str, optional): Return jobs only running on the daemon_id.
             only_running (bool, optional):
                 True - return only currently running jobs
                 False - include finished and aborted jobs
@@ -87,17 +85,13 @@ class Job:
             path=URL_PATH_CLUSTER,
             res_model=JobStatus,
             json=JobArgs(
-                id=self._job_id,
-                kind=self._job_kind,
-                only_running=only_running,
-                daemon_id=daemon_id,
-            ).get_json(),
+                id=self._job_id, kind=self._job_kind, only_running=only_running
+            ).as_dict(),
             params={QPARAM_WHAT: WHAT_ONE_XACT_STATUS},
         )
 
     def wait(
         self,
-        daemon_id: str = "",
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
         verbose: bool = True,
     ):
@@ -105,7 +99,6 @@ class Job:
         Wait for a job to finish
 
         Args:
-            daemon_id (str, optional): Return jobs only running on the daemon_id.
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
 
@@ -125,8 +118,8 @@ class Job:
         sleep_time = probing_frequency(timeout)
         while True:
             if passed > timeout:
-                raise Timeout("wait for job to finish")
-            status = self.status(daemon_id=daemon_id)
+                raise Timeout("job to finish")
+            status = self.status()
             if status.end_time == 0:
                 time.sleep(sleep_time)
                 passed += sleep_time
@@ -148,7 +141,6 @@ class Job:
 
     def wait_for_idle(
         self,
-        daemon_id: str = "",
         timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
         verbose: bool = True,
     ):
@@ -156,7 +148,6 @@ class Job:
         Wait for a job to reach an idle state
 
         Args:
-            daemon_id (str, optional): Only check this specific target node for the idle job
             timeout (int, optional): The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
             verbose (bool, optional): Whether to log wait status to standard output
 
@@ -170,23 +161,46 @@ class Job:
             requests.ReadTimeout: Timed out waiting response from AIStore
             errors.Timeout: Timeout while waiting for the job to finish
         """
+        action = f"job '{self._job_id}' to reach idle state"
         logger = logging.getLogger(f"{__name__}.wait_for_idle")
         logger.disabled = not verbose
         passed = 0
         sleep_time = probing_frequency(timeout)
         while True:
+            snapshot_lists = self._query_job_snapshots().values()
+            snapshots = list(itertools.chain.from_iterable(snapshot_lists))
+            job_info_found = True
+            try:
+                if self._check_job_idle(snapshots):
+                    logger.info("Job '%s' reached idle state", self._job_id)
+                    return
+            except JobInfoNotFound:
+                logger.info("No information found for job %s, retrying", self._job_id)
+                job_info_found = False
             if passed > timeout:
-                raise Timeout("wait for job to reach idle")
-            snapshot_lists = self._query_job_snapshots(daemon_id=daemon_id).values()
-            snapshots = itertools.chain.from_iterable(snapshot_lists)
-            # If any targets are reporting the job not idle, continue waiting
-            if any(not snap.is_idle for snap in snapshots if snap.id == self._job_id):
-                time.sleep(sleep_time)
-                passed += sleep_time
-                logger.info("Waiting on job '%s' to reach idle state...", self._job_id)
+                if len(snapshots) == 0:
+                    raise Timeout(action, "No job information found.")
+                if not job_info_found:
+                    raise Timeout(
+                        action, f"No information found for job {self._job_id}."
+                    )
+                raise Timeout(action)
+            time.sleep(sleep_time)
+            passed += sleep_time
+            logger.info(action, self._job_id)
+
+    def _check_job_idle(self, snapshots):
+        job_found = False
+        for snap in snapshots:
+            if snap.id != self._job_id:
                 continue
-            logger.info("Job '%s' reached idle state", self._job_id)
-            break
+            # If any targets are reporting the job not idle, continue waiting
+            if not snap.is_idle:
+                return False
+            job_found = True
+        if not job_found:
+            raise JobInfoNotFound(f"No info found for job {self._job_id}")
+        return True
 
     def start(
         self,
@@ -198,7 +212,7 @@ class Job:
         Start a job and return its ID.
 
         Args:
-            daemon_id (str, optional): Return jobs only running on the daemon_id.
+            daemon_id (str, optional): For running a job that must run on a specific target node (e.g. resilvering).
             force (bool, optional): Override existing restrictions for a bucket (e.g., run LRU eviction even if the
                 bucket has LRU disabled).
             buckets (List[Bucket], optional): List of one or more buckets; applicable only for jobs that have bucket
@@ -226,17 +240,15 @@ class Job:
             else:
                 job_args.buckets = bucket_models
         params = {QPARAM_FORCE: "true"} if force else {}
-        action = ActionMsg(action=ACT_START, value=job_args.get_json()).dict()
+        action = ActionMsg(action=ACT_START, value=job_args.as_dict()).dict()
 
         resp = self._client.request(
             HTTP_METHOD_PUT, path=URL_PATH_CLUSTER, json=action, params=params
         )
         return resp.text
 
-    def _query_job_snapshots(self, daemon_id: str = "") -> Dict[str, List[JobSnapshot]]:
-        value = JobArgs(
-            id=self._job_id, kind=self._job_kind, daemon_id=daemon_id
-        ).get_json()
+    def _query_job_snapshots(self) -> Dict[str, List[JobSnapshot]]:
+        value = JobArgs(id=self._job_id, kind=self._job_kind).as_dict()
         params = {QPARAM_WHAT: WHAT_QUERY_XACT_STATS}
         return self._client.request_deserialize(
             HTTP_METHOD_GET,

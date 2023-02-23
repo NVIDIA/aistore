@@ -202,7 +202,7 @@ class Object:
             overwrite_dest=overwrite_dest,
             delete_source=delete_source,
             src_not_file_share=src_not_file_share,
-        ).get_json()
+        ).as_dict()
         json_val = ActionMsg(action=ACT_PROMOTE, name=path, value=value).dict()
 
         return self._client.request(

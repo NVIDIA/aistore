@@ -3,70 +3,47 @@
 #
 import unittest
 
-from aistore.sdk import Client
 from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.errors import InvalidBckProvider
 from aistore.sdk.object_range import ObjectRange
-from tests.integration import CLUSTER_ENDPOINT, REMOTE_BUCKET
-from tests.utils import random_string, create_and_put_object
-
-# If remote bucket is not set, skip all cloud-related tests
-REMOTE_SET = REMOTE_BUCKET != "" and not REMOTE_BUCKET.startswith(PROVIDER_AIS + ":")
-TEST_TIMEOUT = 30
+from tests.integration import REMOTE_SET, TEST_TIMEOUT
+from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
+from tests.utils import random_string
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
-class TestObjectGroupOps(unittest.TestCase):
+class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
-        self.client = Client(CLUSTER_ENDPOINT)
-        self.obj_prefix = f"test_object_group_prefix-{random_string(10)}-"
+        super().setUp()
         self.obj_suffix = "-suffix"
         self.obj_template = self.obj_prefix + "{1..8..2}" + self.obj_suffix
-
-        if REMOTE_SET:
-            self.cloud_objects = []
-            provider, self.bck_name = REMOTE_BUCKET.split("://")
-            self.bucket = self.client.bucket(self.bck_name, provider=provider)
-        else:
-            provider = PROVIDER_AIS
-            self.bck_name = random_string()
-            self.bucket = self.client.bucket(self.bck_name)
-            self.bucket.create()
 
         # Range selecting objects 1,3,5,7
         self.obj_range = ObjectRange(
             self.obj_prefix, 1, 8, step=2, suffix=self.obj_suffix
         )
-        self.obj_names = self.create_object_list(
-            self.obj_prefix, provider, self.obj_suffix, 10
-        )
-
-    def tearDown(self) -> None:
-        if REMOTE_SET:
-            self.bucket.objects(obj_names=self.cloud_objects).delete()
-        else:
-            self.bucket.delete()
+        self.obj_names = self._create_objects(10, suffix=self.obj_suffix)
 
     def test_delete_list(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self.delete_test_helper(object_group, [self.obj_names[0]])
+        self._delete_test_helper(object_group, [self.obj_names[0]])
 
     def test_delete_range(self):
         object_group = self.bucket.objects(obj_range=self.obj_range)
-        self.delete_group_helper(object_group)
+        self._delete_group_helper(object_group)
 
     def test_delete_template(self):
         object_group = self.bucket.objects(obj_template=self.obj_template)
-        self.delete_group_helper(object_group)
+        self._delete_group_helper(object_group)
 
-    def delete_group_helper(self, object_group):
+    def _delete_group_helper(self, object_group):
         expected_object_names = [
             self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
         ]
         expected_object_names.append(self.obj_prefix + "9" + self.obj_suffix)
-        self.delete_test_helper(object_group, expected_object_names)
+        self._delete_test_helper(object_group, expected_object_names)
 
-    def delete_test_helper(self, object_group, expected_object_names):
+    def _delete_test_helper(self, object_group, expected_object_names):
         job_id = object_group.delete()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         existing_objects = self.bucket.list_objects(
@@ -83,7 +60,7 @@ class TestObjectGroupOps(unittest.TestCase):
     )
     def test_evict_list(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self.evict_test_helper(object_group, [0], 10)
+        self._evict_test_helper(object_group, [0], 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -93,7 +70,7 @@ class TestObjectGroupOps(unittest.TestCase):
         object_group = self.bucket.objects(obj_range=self.obj_range)
         cached = list(range(0, 11, 2))
         cached.append(9)
-        self.evict_test_helper(object_group, cached, 10)
+        self._evict_test_helper(object_group, cached, 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -103,12 +80,12 @@ class TestObjectGroupOps(unittest.TestCase):
         object_group = self.bucket.objects(obj_template=self.obj_template)
         cached = list(range(0, 11, 2))
         cached.append(9)
-        self.evict_test_helper(object_group, cached, 10)
+        self._evict_test_helper(object_group, cached, 10)
 
-    def evict_test_helper(self, object_group, expected_cached, expected_total):
+    def _evict_test_helper(self, object_group, expected_cached, expected_total):
         job_id = object_group.evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self.verify_cached_objects(expected_total, expected_cached)
+        self._verify_cached_objects(expected_total, expected_cached)
 
     def test_evict_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
@@ -123,7 +100,7 @@ class TestObjectGroupOps(unittest.TestCase):
     )
     def test_prefetch_list(self):
         obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self.prefetch_test_helper(obj_group, range(1, 10), 10)
+        self._prefetch_test_helper(obj_group, range(1, 10), 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -132,7 +109,7 @@ class TestObjectGroupOps(unittest.TestCase):
     def test_prefetch_range(self):
         obj_group = self.bucket.objects(obj_range=self.obj_range)
         cached = list(range(1, 8, 2))
-        self.prefetch_test_helper(obj_group, cached, 10)
+        self._prefetch_test_helper(obj_group, cached, 10)
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -141,14 +118,14 @@ class TestObjectGroupOps(unittest.TestCase):
     def test_prefetch_template(self):
         obj_group = self.bucket.objects(obj_template=self.obj_template)
         cached = list(range(1, 8, 2))
-        self.prefetch_test_helper(obj_group, cached, 10)
+        self._prefetch_test_helper(obj_group, cached, 10)
 
-    def prefetch_test_helper(self, object_group, expected_cached, expected_total):
-        self.evict_all_objects()
+    def _prefetch_test_helper(self, object_group, expected_cached, expected_total):
+        self._evict_all_objects()
         # Fetch back a specific object group and verify cache status
         job_id = object_group.prefetch()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self.verify_cached_objects(expected_total, expected_cached)
+        self._verify_cached_objects(expected_total, expected_cached)
 
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
@@ -157,14 +134,25 @@ class TestObjectGroupOps(unittest.TestCase):
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_range=self.obj_range).prefetch()
 
-    def evict_all_objects(self):
+    def test_copy_objects(self):
+        to_bck_name = "destination-bucket"
+        to_bck = self._create_bucket(to_bck_name)
+        self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
+        self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
+
+        copy_job = self.bucket.objects(obj_range=self.obj_range).copy(to_bck.name)
+        self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        self.assertEqual(4, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
+
+    def _evict_all_objects(self):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self.verify_cached_objects(10, [])
+        self._verify_cached_objects(10, [])
 
-    def verify_cached_objects(self, expected_object_count, cached_range):
+    def _verify_cached_objects(self, expected_object_count, cached_range):
         """
-        List each of the objects verify the correct count and that all objects matching
+        List each of the objects and verify the correct count and that all objects matching
         the cached range are cached and all others are not
 
         Args:
@@ -180,22 +168,12 @@ class TestObjectGroupOps(unittest.TestCase):
         cached_names = {
             self.obj_prefix + str(x) + self.obj_suffix for x in cached_range
         }
+        cached_objs = []
+        evicted_objs = []
         for obj in objects:
-            self.assertTrue(obj.is_ok())
             if obj.name in cached_names:
-                self.assertTrue(obj.is_cached())
+                cached_objs.append(obj)
             else:
-                self.assertFalse(obj.is_cached())
-
-    def create_object_list(self, prefix, provider, suffix, length):
-        obj_names = [prefix + str(i) + suffix for i in range(length)]
-        for obj_name in obj_names:
-            create_and_put_object(
-                self.client,
-                bck_name=self.bck_name,
-                provider=provider,
-                obj_name=obj_name,
-            )
-        if REMOTE_SET:
-            self.cloud_objects.extend(obj_names)
-        return obj_names
+                evicted_objs.append(obj)
+        self._validate_objects_cached(cached_objs, True)
+        self._validate_objects_cached(evicted_objs, False)
