@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 		},
 	})
 	t.owner.bmd.putPersist(bmd, nil)
-	fs.CreateBucket("test", bck.Bucket(), false /*nilbmd*/)
+	fs.CreateBucket(bck.Bucket(), false /*nilbmd*/)
 
 	m.Run()
 }

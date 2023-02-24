@@ -168,7 +168,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	tMock = mock.NewTarget(bmd)
 
-	errs := fs.CreateBucket("testing", &bck, false /*nilbmd*/)
+	errs := fs.CreateBucket(&bck, false /*nilbmd*/)
 	if len(errs) > 0 {
 		tassert.CheckFatal(t, errs[0])
 	}

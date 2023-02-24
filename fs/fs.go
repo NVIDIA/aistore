@@ -910,7 +910,7 @@ func GetAvail() MPI {
 	return *availablePaths
 }
 
-func CreateBucket(op string, bck *cmn.Bck, nilbmd bool) (errs []error) {
+func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 	var (
 		availablePaths   = GetAvail()
 		totalDirs        = len(availablePaths) * len(CSM.m)
@@ -924,12 +924,7 @@ func CreateBucket(op string, bck *cmn.Bck, nilbmd bool) (errs []error) {
 			totalCreatedDirs += num
 		}
 	}
-	if errs == nil {
-		debug.Assert(totalCreatedDirs == totalDirs)
-		if glog.FastV(4, glog.SmoduleFS) {
-			glog.Infof("%s(create bucket dirs): %s, num=%d", op, bck, totalDirs)
-		}
-	}
+	debug.Assert(totalCreatedDirs == totalDirs || errs != nil)
 	return
 }
 

@@ -115,7 +115,7 @@ func daemonDiskStats(c *cli.Context, tid string) error {
 	if errU != nil {
 		return errU
 	}
-	setLongRunParams(c)
+	setLongRunParams(c, 72)
 
 	smap, err := getClusterMap(c)
 	if err != nil {

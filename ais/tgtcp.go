@@ -532,18 +532,15 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
-	var (
-		rmbcks []*cluster.Bck
-		bmd    = t.owner.bmd.get()
-	)
+	bmd := t.owner.bmd.get()
 	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
+
 	if msg.UUID == "" {
-		if rmbcks, err = t._applyBMD(newBMD, msg, payload); err == nil {
-			t._postBMD(tag, rmbcks)
-		}
+		err = t.applyBMD(newBMD, msg, payload, tag)
 		return
 	}
-	// before -- do -- after
+
+	// txn [before -- do -- after]
 	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
 		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
@@ -551,9 +548,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 		}
 		return
 	}
-	if rmbcks, err = t._applyBMD(newBMD, msg, payload); err == nil {
-		t._postBMD(tag, rmbcks)
-	}
+	err = t.applyBMD(newBMD, msg, payload, tag)
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
@@ -563,34 +558,48 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	return
 }
 
-// apply under lock
-func (t *target) _applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload) (rmbcks []*cluster.Bck, err error) {
-	var (
-		createErrs, destroyErrs []error
-		_, psi                  = t.getPrimaryURLAndSI(nil)
-	)
-	t.owner.bmd.Lock()
-	defer t.owner.bmd.Unlock()
+func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag string) error {
+	_, psi := t.getPrimaryURLAndSI(nil)
 
-	bmd := t.owner.bmd.get()
+	t.owner.bmd.Lock()
+	rmbcks, err := t._syncBMD(newBMD, msg, payload, psi)
+	t.owner.bmd.Unlock()
+
+	if err == nil {
+		t._postBMD(tag, rmbcks)
+	}
+	return err
+}
+
+// called under lock
+func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *cluster.Snode) (rmbcks []*cluster.Bck, err error) {
+	var (
+		createErrs  []error
+		destroyErrs []error
+		bmd         = t.owner.bmd.get()
+	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
 		cos.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
 		return
 	}
+	// check downgrade
 	if v := bmd.version(); newBMD.version() <= v {
 		if newBMD.version() < v {
 			err = newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return
 	}
+	nilbmd := bmd.version() == 0 // initial
 
 	// 1. create
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
-		errs := fs.CreateBucket("recv-bmd-"+msg.Action, bck.Bucket(), bmd.version() == 0 /*nilbmd*/)
-		createErrs = append(createErrs, errs...)
+		errs := fs.CreateBucket(bck.Bucket(), nilbmd)
+		if len(errs) > 0 {
+			createErrs = append(createErrs, errs...)
+		}
 		return false
 	})
 	if len(createErrs) > 0 {
