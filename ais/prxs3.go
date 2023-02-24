@@ -261,9 +261,25 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if _, err := p.doListRange(r.Method, bucket, &msg2, query); err != nil {
+	if _, err := p.doListRange(http.MethodDelete, bucket, &msg2, query); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
+	// TODO: The client wants the response containing two lists:
+	//    - Successfully deleted objects
+	//    - Failed delete calls with error message.
+	// AIS targets do not track this info. They report a single result:
+	// whether there were any errors while deleting objects.
+	// So, we fill only "Deleted successfully" response part.
+	// See: https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html
+	all := &s3.DeleteResult{Objs: make([]s3.DeletedObjInfo, 0, len(lrMsg.ObjNames))}
+	for _, name := range lrMsg.ObjNames {
+		all.Objs = append(all.Objs, s3.DeletedObjInfo{Key: name})
+	}
+	sgl := p.gmm.NewSGL(0)
+	all.MustMarshal(sgl)
+	w.Header().Set(cos.HdrContentType, cos.ContentXML)
+	sgl.WriteTo(w)
+	sgl.Free()
 }
 
 // HEAD /s3/<bucket-name>

@@ -100,6 +100,14 @@ type (
 		MaxUploads     int
 		IsTruncated    bool
 	}
+
+	// Deleted result: list of deleted objects and errors
+	DeletedObjInfo struct {
+		Key string `xml:"Key"`
+	}
+	DeleteResult struct {
+		Objs []DeletedObjInfo `xml:"Deleted"`
+	}
 )
 
 func ObjName(items []string) string { return path.Join(items[1:]...) }
@@ -208,6 +216,12 @@ func (r *ListPartsResult) MustMarshal(sgl *memsys.SGL) {
 }
 
 func (r *ListMptUploadsResult) MustMarshal(sgl *memsys.SGL) {
+	sgl.Write([]byte(xml.Header))
+	err := xml.NewEncoder(sgl).Encode(r)
+	debug.AssertNoErr(err)
+}
+
+func (r *DeleteResult) MustMarshal(sgl *memsys.SGL) {
 	sgl.Write([]byte(xml.Header))
 	err := xml.NewEncoder(sgl).Encode(r)
 	debug.AssertNoErr(err)
