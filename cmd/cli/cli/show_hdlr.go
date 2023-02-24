@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -113,12 +111,6 @@ var (
 			logSevFlag,
 			logFlushFlag,
 		),
-		cmdShowStats: append(
-			longRunFlags,
-			jsonFlag,
-			unitsFlag,
-			regexStatsFlag,
-		),
 	}
 
 	showCmd = cli.Command{
@@ -160,14 +152,6 @@ var (
 		Action:       showObjectHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
-	showCmdStats = cli.Command{ // TODO -- FIXME: provide via `ais show stats` as well, and include jobs somehow ============
-		Name:         cmdShowStats,
-		Usage:        "show cluster and node statistics",
-		ArgsUsage:    showStatsArgument,
-		Flags:        showCmdsFlags[cmdShowStats],
-		Action:       showStatsHandler,
-		BashComplete: suggestAllNodes,
-	}
 	showCmdCluster = cli.Command{
 		Name:         cmdCluster,
 		Usage:        "show cluster nodes and utilization",
@@ -199,7 +183,7 @@ var (
 				Flags:     showCmdsFlags[cmdConfig],
 				Action:    showClusterConfigHandler,
 			},
-			showCmdStats,
+			makeAlias(showCmdPeformance, cliName+" "+commandShow+" "+commandPerf, false /*silent*/, cmdShowStats),
 		},
 	}
 	showCmdBucket = cli.Command{
@@ -1036,203 +1020,4 @@ func showMpathCapacityHandler(c *cli.Context) error {
 		err = teb.Print(tstatusMap, teb.MountpathsTmpl, opts)
 	}
 	return err
-}
-
-func appendStatToProps(props nvpairList, name, kind string, value int64, prefix string, regex *regexp.Regexp, units string) nvpairList {
-	name = prefix + name
-	if regex != nil && !regex.MatchString(name) {
-		return props
-	}
-	printtedVal := teb.FmtStatValue(name, kind, value, units)
-	return append(props, nvpair{Name: name, Value: printtedVal})
-}
-
-func showStatsHandler(c *cli.Context) (err error) {
-	var (
-		sid     string
-		node    *cluster.Snode
-		smap    *cluster.Smap
-		metrics cos.StrKVs
-	)
-	if c.NArg() > 0 {
-		sid, _, err = argNode(c)
-		if err != nil {
-			return err
-		}
-		smap, err = getClusterMap(c)
-		debug.AssertNoErr(err)
-		node = smap.GetNode(sid)
-	}
-	if metrics, err = getMetricNames(c); err != nil {
-		return err
-	}
-	var (
-		refresh  = flagIsSet(c, refreshFlag)
-		regexStr = parseStrFlag(c, regexStatsFlag)
-		sleep    = _refreshRate(c)
-		regex    *regexp.Regexp
-	)
-	if sleep < time.Second || sleep > time.Minute {
-		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
-	}
-	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
-		if err != nil {
-			return
-		}
-	}
-	longRun := &longRun{}
-	longRun.init(c, true /*run once unless*/)
-	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
-		if node != nil {
-			err = showNodeStats(c, node, metrics, sleep, regex)
-		} else {
-			err = showAggregatedStats(c, metrics, sleep, regex)
-		}
-		if err != nil || !refresh {
-			return err
-		}
-		runtime.Gosched()
-	}
-	return nil
-}
-
-// TODO -- FIXME: usable table instead of "ConfigTmpl = "PROPERTY\t VALUE\n"
-func showNodeStats(c *cli.Context, node *cluster.Snode, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
-	ds, err := api.GetDaemonStats(apiBP, node)
-	if err != nil {
-		return err
-	}
-	// throughput size/s (NOTE: sleep inside)
-	if err := _daeBps(node, metrics, ds, averageOver); err != nil {
-		return err
-	}
-	if flagIsSet(c, jsonFlag) {
-		opts := teb.Jopts(true)
-		if regex != nil {
-			warn := "option " + qflprn(regexStatsFlag) + " is only supported for tabular (non-JSON) output formatting"
-			actionWarn(c, warn)
-		}
-		return teb.Print(ds, teb.ConfigTmpl, opts)
-	}
-
-	var (
-		props       = make(nvpairList, 0, len(ds.Tracker))
-		units, errU = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		return errU
-	}
-	for name, v := range ds.Tracker {
-		kind, ok := metrics[name]
-		debug.Assert(ok, name)
-		props = appendStatToProps(props, name, kind, v.Value, "", regex, units)
-	}
-	sort.Slice(props, func(i, j int) bool {
-		return props[i].Name < props[j].Name
-	})
-
-	if node.IsProxy() {
-		return teb.Print(props, teb.ConfigTmpl)
-	}
-
-	// target
-	var (
-		idx         int
-		mpathSorted = make([]string, 0, len(ds.TargetCDF.Mountpaths)) // sort
-	)
-	for mpath := range ds.TargetCDF.Mountpaths {
-		mpathSorted = append(mpathSorted, mpath)
-	}
-	sort.Strings(mpathSorted)
-	for _, mpath := range mpathSorted {
-		var (
-			mstat  = ds.TargetCDF.Mountpaths[mpath]
-			prefix = fmt.Sprintf("mountpath.%d.", idx)
-		)
-		idx++
-		if regex != nil && !regex.MatchString(prefix) {
-			continue
-		}
-		memUsedPrinted := teb.FmtStatValue("", stats.KindSize, int64(mstat.Used), units)
-		memAvailPrinted := teb.FmtStatValue("", stats.KindSize, int64(mstat.Avail), units)
-		props = append(props,
-			nvpair{Name: prefix + "path", Value: mpath},
-			nvpair{Name: prefix + "used", Value: memUsedPrinted},
-			nvpair{Name: prefix + "avail", Value: memAvailPrinted},
-			nvpair{Name: prefix + "%used", Value: fmt.Sprintf("%d", mstat.PctUsed)})
-	}
-	return teb.Print(props, teb.ConfigTmpl)
-}
-
-// TODO -- FIXME: usable table instead of "ConfigTmpl = "PROPERTY\t VALUE\n"
-func showAggregatedStats(c *cli.Context, metrics cos.StrKVs, averageOver time.Duration, regex *regexp.Regexp) error {
-	st, err := api.GetClusterStats(apiBP)
-	if err != nil {
-		return err
-	}
-
-	// throughput size/s (NOTE: sleep inside)
-	if err := _cluStatsBps(metrics, st, averageOver); err != nil {
-		return err
-	}
-
-	usejs := flagIsSet(c, jsonFlag)
-	if usejs {
-		if regex != nil {
-			warn := "option " + qflprn(regexStatsFlag) + " is only supported for tabular (non-JSON) output formatting"
-			actionWarn(c, warn)
-		}
-		return teb.Print(st, teb.MpathListTmpl, teb.Jopts(usejs))
-	}
-
-	var (
-		props       = make(nvpairList, 0, len(st.Proxy.Tracker))
-		units, errU = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		return errU
-	}
-	for name, v := range st.Proxy.Tracker {
-		kind, ok := metrics[name]
-		debug.Assert(ok, name)
-		props = appendStatToProps(props, name, kind, v.Value, "proxy.", regex, units)
-	}
-	tgtStats := make(map[string]int64)
-	for _, tgt := range st.Target {
-		for name, v := range tgt.Tracker {
-			kind, ok := metrics[name]
-			debug.Assert(ok, name)
-
-			// aggregate counters, sizes, throughputs
-			if kind == stats.KindCounter || kind == stats.KindSize || kind == stats.KindThroughput ||
-				kind == stats.KindComputedThroughput {
-				if totalVal, ok := tgtStats[name]; ok {
-					v.Value += totalVal
-				}
-			}
-			tgtStats[name] = v.Value
-		}
-	}
-	// compute latency averages
-	tgtCnt := int64(len(st.Target))
-	for name, v := range tgtStats {
-		kind, ok := metrics[name]
-		debug.Assert(ok, name)
-		if kind == stats.KindLatency {
-			tgtStats[name] = v / tgtCnt
-		}
-	}
-
-	// finally
-	for name, v := range tgtStats {
-		kind := metrics[name]
-		props = appendStatToProps(props, name, kind, v, "target.", regex, units)
-	}
-
-	sort.Slice(props, func(i, j int) bool {
-		return props[i].Name < props[j].Name
-	})
-
-	return teb.Print(props, teb.ConfigTmpl)
 }

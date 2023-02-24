@@ -398,8 +398,8 @@ var (
 	unitsFlag = cli.StringFlag{
 		Name: "units",
 		Usage: "show statistics using on of the following units of measurement: (iec, si, raw), where:\n" +
-			argsUsageIndent + argsUsageIndent + "iec - IEC format, e.g. KiB, MiB, GiB (default)\n" +
-			argsUsageIndent + argsUsageIndent + "si  - SI (metric) format, e.g., KB, MB, GB\n" +
+			argsUsageIndent + argsUsageIndent + "iec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
+			argsUsageIndent + argsUsageIndent + "si  - SI (metric) format, e.g.: KB, MB, GB\n" +
 			argsUsageIndent + argsUsageIndent + "raw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
 	}
 

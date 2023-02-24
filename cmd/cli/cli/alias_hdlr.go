@@ -115,7 +115,7 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Name = newName[0]
 	}
 	if !silentAlias {
-		cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
+		cmd.Usage += fmt.Sprintf("\n\nALIAS for:\n%s%s", argsUsageIndent, aliasFor)
 	}
 
 	// help is already added to the original, remove from cmd and all cmds

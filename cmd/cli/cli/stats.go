@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -117,63 +116,6 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StstMap) {
 //
 // throughput
 //
-
-// throughput as F(stats.DaemonStats)
-func _daeBps(node *cluster.Snode, metrics cos.StrKVs, statsBegin *stats.Node, averageOver time.Duration) error {
-	time.Sleep(averageOver)
-
-	statsEnd, err := api.GetDaemonStats(apiBP, node)
-	if err != nil {
-		return err
-	}
-	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
-	debug.Assert(seconds > 1)
-	for k, v := range statsBegin.Tracker {
-		vend := statsEnd.Tracker[k]
-		if metrics[k] == stats.KindThroughput {
-			if v.Value > 0 {
-				throughput := (vend.Value - v.Value) / seconds
-				v.Value = throughput
-			}
-		} else {
-			v.Value = vend.Value // more recent
-		}
-		statsBegin.Tracker[k] = v
-	}
-	return nil
-}
-
-// troughput as F(stats.ClusterStats)
-func _cluStatsBps(metrics cos.StrKVs, statsBegin stats.Cluster, averageOver time.Duration) error {
-	time.Sleep(averageOver)
-
-	statsEnd, err := api.GetClusterStats(apiBP)
-	if err != nil {
-		return err
-	}
-	seconds := cos.MaxI64(int64(averageOver.Seconds()), 1)
-	debug.Assert(seconds > 1)
-	for tid, begin := range statsBegin.Target {
-		end := statsEnd.Target[tid]
-		if begin == nil || end == nil {
-			return fmt.Errorf("%s seems to be offline", cluster.Tname(tid))
-		}
-		for name, v := range begin.Tracker {
-			vend := end.Tracker[name]
-			// (unlike stats.KindComputedThroughput)
-			if metrics[name] == stats.KindThroughput {
-				if v.Value > 0 {
-					throughput := (vend.Value - v.Value) / seconds
-					v.Value = throughput
-				}
-			} else {
-				v.Value = vend.Value // more timely
-			}
-			begin.Tracker[name] = v
-		}
-	}
-	return nil
-}
 
 func _cluStatusBeginEnd(c *cli.Context, ini teb.StstMap, sleep time.Duration) (b, e teb.StstMap, err error) {
 	b = ini
