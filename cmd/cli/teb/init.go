@@ -13,7 +13,9 @@ import (
 
 var Writer io.Writer
 
-var fred func(format string, a ...any) string // = color.New(color.FgHiRed)
+var (
+	fred func(format string, a ...any) string
+)
 
 func Init(w io.Writer, noColor bool) {
 	Writer = w

@@ -18,18 +18,20 @@ import (
 
 type PerfTabCtx struct {
 	Smap    *cluster.Smap
-	Sid     string         // single target, unless ""
-	Metrics cos.StrKVs     // metric (aka stats) names and kinds
-	Regex   *regexp.Regexp // filter column names (case-insensitive)
-	Units   string         // IEC, SI, raw
-	AllCols bool           // show all-zero columns
-	AvgSize bool           // compute average size on the fly (and show it), e.g.: `get.size/get.n`
+	Sid     string           // single target, unless ""
+	Metrics cos.StrKVs       // metric (aka stats) names and kinds
+	Regex   *regexp.Regexp   // filter column names (case-insensitive)
+	Units   string           // IEC, SI, raw
+	Totals  map[string]int64 // metrics to sum up (name => sum(column)), where the name is IN and the sum is OUT
+	AllCols bool             // show all-zero columns
+	AvgSize bool             // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 }
 
-func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero metrics OR bad status*/, error) {
+func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero metrics OR bad status*/, error) {
 	var (
-		num int        // num non-zero metrics
-		n2n cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
+		numNZ int        // num non-zero metrics
+		numTs int        // num active targets in `st`
+		n2n   cos.StrKVs // name of the KindSize metric => it's cumulative counter counterpart
 	)
 	if c.AvgSize {
 		n2n = make(cos.StrKVs, 2)
@@ -110,6 +112,9 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero me
 		if c.Sid != "" && c.Sid != tid {
 			continue
 		}
+		if ds.Status == NodeOnline {
+			numTs++
+		}
 		row := make([]string, 0, len(cols))
 		row = append(row, fmtDaemonID(tid, c.Smap, ds.Status))
 		for _, h := range cols[1:] {
@@ -119,7 +124,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero me
 			}
 			if ds.Status != NodeOnline {
 				row = append(row, unknownVal)
-				num++
+				numNZ++
 				continue
 			}
 
@@ -131,7 +136,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero me
 			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
 
 			if v.Value != 0 {
-				num++
+				numNZ++
 			}
 
 			// add some color
@@ -146,7 +151,29 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*num non-zero me
 		}
 		table.addRow(row)
 	}
-	return table, num, nil
+
+	// tally up
+	if c.Totals != nil && numNZ > 0 && numTs > 1 {
+		row := make([]string, 0, len(cols))
+		row = append(row, "Total cluster:")
+		for _, h := range cols[1:] {
+			if h.name == colStatus {
+				row = append(row, "")
+				continue
+			}
+			val, ok := c.Totals[h.name]
+			if ok {
+				kind, ok := c.Metrics[h.name]
+				debug.Assert(ok, h.name)
+				printedValue := FmtStatValue(h.name, kind, val, c.Units)
+				row = append(row, printedValue)
+			} else {
+				row = append(row, "")
+			}
+		}
+		table.addRow(row)
+	}
+	return table, numNZ, nil
 }
 
 //

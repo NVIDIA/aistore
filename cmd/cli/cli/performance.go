@@ -106,7 +106,12 @@ var (
 )
 
 func showPerfHandler(c *cli.Context) error {
-	allPerfTabs = true
+	allPerfTabs = true // global (TODO: consider passing as param)
+
+	if c.NArg() > 1 && strings.HasPrefix(c.Args().Get(1), "-") {
+		return fmt.Errorf("misplaced flags in %v (hint: change the order of arguments or %s specific view)",
+			c.Args(), tabtab)
+	}
 
 	if err := showCountersHandler(c); err != nil {
 		return err
@@ -147,11 +152,14 @@ func showCountersHandler(c *cli.Context) error {
 			selected[name] = kind
 		}
 	}
-	return showPerfTab(c, selected, nil, cmdShowCounters)
+	return showPerfTab(c, selected, nil, cmdShowCounters, nil, false)
 }
 
 func showThroughputHandler(c *cli.Context) error {
-	metrics, err := getMetricNames(c)
+	var (
+		totals       = make(map[string]int64, 4) // throughput metrics ("columns") to tally up
+		metrics, err = getMetricNames(c)
+	)
 	if err != nil {
 		return err
 	}
@@ -159,15 +167,23 @@ func showThroughputHandler(c *cli.Context) error {
 	for name, kind := range metrics {
 		switch {
 		case kind == stats.KindThroughput:
+			// 1. all throughput
 			selected[name] = kind
-		case stats.IsErrMetric(name): // but also take assorted error counters:
+			totals[name] = 0
+		case name == stats.GetSize || name == stats.GetColdSize || name == stats.PutSize ||
+			name == stats.GetCount || name == stats.GetColdCount || name == stats.PutCount:
+			// 2. to show average get/put sizes
+			selected[name] = kind
+		case stats.IsErrMetric(name):
+			// 3. errors
 			if strings.Contains(name, "get") || strings.Contains(name, "put") ||
 				strings.Contains(name, "read") || strings.Contains(name, "write") {
 				selected[name] = kind
 			}
 		}
 	}
-	return showPerfTab(c, selected, _throughput /* callback*/, cmdShowThroughput)
+	// `true` to show average get/put sizes
+	return showPerfTab(c, selected, _throughput /*cb*/, cmdShowThroughput, totals, true)
 }
 
 // update mapBegin <= (size/s)
@@ -217,7 +233,8 @@ func showLatencyHandler(c *cli.Context) error {
 			}
 		}
 	}
-	return showPerfTab(c, selected, _latency, cmdShowLatency, true /*always show average size*/)
+	// `true` to show (and put request latency numbers in perspective)
+	return showPerfTab(c, selected, _latency, cmdShowLatency, nil, true)
 }
 
 // update mapBegin <= (elapsed/num-samples)
@@ -261,21 +278,21 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 	return
 }
 
-// (common use)
-func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag string, inclAvgSize ...bool) error {
+// (main method)
+func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, totals map[string]int64, inclAvgSize bool) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		allCols     = flagIsSet(c, allColumnsFlag)
-		avgSize     = flagIsSet(c, averageSizeFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
 		return errU
 	}
-	if len(inclAvgSize) > 0 {
-		avgSize = inclAvgSize[0] // true
+	avgSize := flagIsSet(c, averageSizeFlag)
+	if inclAvgSize {
+		avgSize = true // caller override
 	}
 	sid, _, err := argNode(c)
 	if err != nil {
@@ -297,7 +314,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
-	// (1) no recompute; "long-run" (if spec-ed) via app.go
+	// (1) no recompute, no totals; "long-run" (if spec-ed) via app.go
 	if cb == nil {
 		lfooter := 72
 		if allPerfTabs {
@@ -306,6 +323,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag
 		setLongRunParams(c, lfooter)
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+			Totals:  totals,
 			AllCols: allCols, AvgSize: avgSize}
 		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
@@ -338,6 +356,10 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag
 
 	longRun.init(c, true /*run once unless*/)
 	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
+		for name := range totals { // reset
+			totals[name] = 0
+		}
+
 		mapBegin, mapEnd, err := _cluStatusBeginEnd(c, ini, sleep)
 		if err != nil {
 			return err
@@ -347,16 +369,20 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag
 		if !idle {
 			perfCptn(c, tag)
 		} else {
+			s := "cluster"
+			if sid != "" {
+				s = "target"
+			}
 			switch tag {
 			case cmdShowThroughput:
 				if regex == nil {
-					actionNote(c, "the cluster is idle throughput-wise (all throughput metrics have zero values)\n")
+					actionNote(c, "the "+s+" is idle throughput-wise (all throughput metrics have zero values)\n")
 				} else {
 					actionNote(c, fmt.Sprintf("%q matching throughput metrics have zero values\n", regexStr))
 				}
 			case cmdShowLatency:
 				if regex == nil {
-					actionNote(c, "the cluster is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
+					actionNote(c, "the "+s+" is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
 				} else {
 					actionNote(c, fmt.Sprintf("%q matching latency metrics have zero values\n", regexStr))
 				}
@@ -365,7 +391,19 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs /*selected*/, cb perfcb, tag
 
 		runtime.Gosched()
 
+		// tally up recomputed
+		if totals != nil {
+			for _, begin := range mapBegin {
+				for name, v := range begin.Tracker {
+					if _, ok := totals[name]; ok {
+						totals[name] += v.Value
+					}
+				}
+			}
+		}
+
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+			Totals:  totals,
 			AllCols: allCols, AvgSize: avgSize}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {

@@ -199,6 +199,12 @@ const (
 
 const nodeLogFlushName = "log.flush_time"
 
+const (
+	tabtab     = "press <TAB-TAB> to select"
+	tabHelpOpt = "press <TAB-TAB> to select, '--help' for options"
+	tabHelpDet = "press <TAB-TAB> to select, '--help' for details"
+)
+
 // `ArgsUsage`: argument placeholders in help messages
 const (
 	argsUsageIndent = "   "
@@ -212,7 +218,7 @@ const (
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// Perf
-	showPerfArgument = "show performance counters, throughput, latency, and more (<TAB-TAB> to select specific view)"
+	showPerfArgument = "show performance counters, throughput, latency, and more (" + tabtab + " specific view)"
 
 	// ETL
 	etlNameArgument     = "ETL_NAME"
