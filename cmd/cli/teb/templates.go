@@ -76,21 +76,6 @@ const (
 		"Version:\t{{ ( Versions .Status) }}\n  " +
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
-	// Disk Stats
-	diskStatsHdr = "TARGET\t DISK\t READ\t READ(avg size)\t WRITE\t WRITE(avg size)\t UTIL(%)\n"
-
-	diskStatsBody = "{{ $value.TargetID }}\t " +
-		"{{ $value.DiskName }}\t " +
-		"{{ $stat := $value.Stat }}" +
-		"{{ FormatBytesSig $stat.RBps 2 }}/s\t " +
-		"{{ FormatBytesSig $stat.Ravg 2 }}\t " +
-		"{{ FormatBytesSig $stat.WBps 2 }}/s\t " +
-		"{{ FormatBytesSig $stat.Wavg 2 }}\t " +
-		"{{ $stat.Util }}%\n"
-
-	DiskStatNoHdrTmpl = "{{ range $key, $value := . }}" + diskStatsBody + "{{ end }}"
-	DiskStatsTmpl     = diskStatsHdr + DiskStatNoHdrTmpl
-
 	// TargetCDF.Mountpaths
 	mountpathsHdr = "TARGET\t NUM MOUNTPATHS\t USED(avg%, max%)\t Disks/FileSystems\t STATUS\n"
 
@@ -386,6 +371,7 @@ type (
 		TargetID string
 		DiskName string
 		Stat     ios.DiskStats
+		Cluster  ios.DiskStats // totals and global averages
 	}
 	SmapHelper struct {
 		Smap         *cluster.Smap

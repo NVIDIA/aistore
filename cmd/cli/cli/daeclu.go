@@ -105,33 +105,3 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb
 
 	return fmt.Errorf("expecting a valid NODE_ID or node type (\"proxy\" or \"target\"), got %q", sid)
 }
-
-func daemonDiskStats(c *cli.Context, tid string) error {
-	var (
-		usejs       = flagIsSet(c, jsonFlag)
-		hideHeader  = flagIsSet(c, noHeaderFlag)
-		units, errU = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		return errU
-	}
-	setLongRunParams(c, 72)
-
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return err
-	}
-
-	diskStats, err := getDiskStats(smap, tid)
-	if err != nil {
-		return err
-	}
-
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
-	if hideHeader {
-		err = teb.Print(diskStats, teb.DiskStatNoHdrTmpl, opts)
-	} else {
-		err = teb.Print(diskStats, teb.DiskStatsTmpl, opts)
-	}
-	return err
-}

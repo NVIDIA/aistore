@@ -66,6 +66,7 @@ var (
 			showThroughput,
 			showLatency,
 			showSysCap,
+			makeAlias(showCmdDisk, "", true /*silent*/, cmdShowDisk),
 		},
 	}
 	showCounters = cli.Command{
@@ -323,7 +324,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		setLongRunParams(c, lfooter)
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
-			Totals:  totals,
+			Totals: totals, TotalsHeader: teb.TotalsHeader,
 			AllCols: allCols, AvgSize: avgSize}
 		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
@@ -382,7 +383,8 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 				}
 			case cmdShowLatency:
 				if regex == nil {
-					actionNote(c, "the "+s+" is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
+					actionNote(c,
+						"the "+s+" is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
 				} else {
 					actionNote(c, fmt.Sprintf("%q matching latency metrics have zero values\n", regexStr))
 				}
@@ -403,7 +405,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
-			Totals:  totals,
+			Totals: totals, TotalsHeader: teb.TotalsHeader,
 			AllCols: allCols, AvgSize: avgSize}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {

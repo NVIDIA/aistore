@@ -50,7 +50,6 @@ var (
 		),
 		cmdShowDisk: append(
 			longRunFlags,
-			jsonFlag,
 			noHeaderFlag,
 			unitsFlag,
 		),
@@ -264,6 +263,10 @@ var (
 	}
 )
 
+func showStorageHandler(c *cli.Context) (err error) {
+	return showDiskStats(c, "") // all targets, all disks
+}
+
 func showDisksHandler(c *cli.Context) error {
 	sid, sname, err := argNode(c)
 	if err != nil {
@@ -272,7 +275,49 @@ func showDisksHandler(c *cli.Context) error {
 	if getNodeType(c, sid) == apc.Proxy {
 		return fmt.Errorf("%s is a proxy (AIS gateways do not store user data and do not have any data drives)", sname)
 	}
-	return daemonDiskStats(c, sid)
+	return showDiskStats(c, sid)
+}
+
+func showDiskStats(c *cli.Context, tid string) error {
+	var (
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
+	)
+	if errU != nil {
+		return errU
+	}
+	setLongRunParams(c, 72)
+
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
+	}
+
+	dsh, err := getDiskStats(smap, tid)
+	if err != nil {
+		return err
+	}
+
+	// tally up
+	if l := len(dsh); l > 1 {
+		tally := teb.DiskStatsHelper{TargetID: "Total cluster:"}
+		for _, ds := range dsh {
+			tally.Stat.RBps += ds.Stat.RBps
+			tally.Stat.Ravg += ds.Stat.Ravg
+			tally.Stat.WBps += ds.Stat.WBps
+			tally.Stat.Wavg += ds.Stat.Wavg
+			tally.Stat.Util += ds.Stat.Util
+		}
+		tally.Stat.Ravg = cos.DivRound(tally.Stat.Ravg, int64(l))
+		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, int64(l))
+		tally.Stat.Util = cos.DivRound(tally.Stat.Util, int64(l))
+
+		dsh = append(dsh, tally)
+	}
+
+	table := teb.NewDiskTab(dsh, smap, units, teb.TotalsHeader)
+	out := table.Template(hideHeader)
+	return teb.Print(dsh, out)
 }
 
 // args [NAME] [JOB_ID] [NODE_ID] [BUCKET] may:
@@ -457,10 +502,6 @@ func showClusterHandler(c *cli.Context) (err error) {
 		return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, sid)
 	}
 	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, what)
-}
-
-func showStorageHandler(c *cli.Context) (err error) {
-	return daemonDiskStats(c, "") // all targets, all disks
 }
 
 func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {

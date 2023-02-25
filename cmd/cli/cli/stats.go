@@ -170,7 +170,7 @@ func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error)
 		targets = cluster.NodeMap{tid: tsi}
 		l = 1
 	}
-	allStats := make([]teb.DiskStatsHelper, 0, l)
+	dsh := make([]teb.DiskStatsHelper, 0, l)
 	ch := make(chan dstats, l)
 
 	wg, _ := errgroup.WithContext(context.Background())
@@ -187,26 +187,21 @@ func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error)
 	if err != nil {
 		return nil, err
 	}
-	for diskStats := range ch {
-		for diskName, diskStat := range diskStats.stats {
-			allStats = append(allStats,
-				teb.DiskStatsHelper{
-					TargetID: diskStats.tid,
-					DiskName: diskName,
-					Stat:     diskStat,
-				})
+	for res := range ch {
+		for name, stat := range res.stats {
+			dsh = append(dsh, teb.DiskStatsHelper{TargetID: res.tid, DiskName: name, Stat: stat})
 		}
 	}
 
-	sort.Slice(allStats, func(i, j int) bool {
-		if allStats[i].TargetID != allStats[j].TargetID {
-			return allStats[i].TargetID < allStats[j].TargetID
+	sort.Slice(dsh, func(i, j int) bool {
+		if dsh[i].TargetID != dsh[j].TargetID {
+			return dsh[i].TargetID < dsh[j].TargetID
 		}
-		if allStats[i].DiskName != allStats[j].DiskName {
-			return allStats[i].DiskName < allStats[j].DiskName
+		if dsh[i].DiskName != dsh[j].DiskName {
+			return dsh[i].DiskName < dsh[j].DiskName
 		}
-		return allStats[i].Stat.Util > allStats[j].Stat.Util
+		return dsh[i].Stat.Util > dsh[j].Stat.Util
 	})
 
-	return allStats, nil
+	return dsh, nil
 }
