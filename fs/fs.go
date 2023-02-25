@@ -64,7 +64,7 @@ type (
 	// MountedFS holds all mountpaths for the target.
 	MountedFS struct {
 		// Iostats for the available mountpaths
-		ios ios.IOStater
+		ios ios.IOS
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.
@@ -470,7 +470,7 @@ func (mi *Mountpath) _checkExists(availablePaths MPI) (err error) {
 }
 
 func (mi *Mountpath) _addEnabled(tid string, availablePaths MPI, config *cmn.Config) error {
-	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs)
+	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, config.TestingEnv())
 	if err != nil {
 		return err
 	}
@@ -529,23 +529,24 @@ func (mi *Mountpath) ClearDD() {
 /////////////////////
 
 // create a new singleton
-func New(allowSharedDisksAndNoDisks bool) {
+func New(num int, allowSharedDisksAndNoDisks bool) {
 	if allowSharedDisksAndNoDisks {
 		glog.Warningln("allowed disk sharing by multiple mountpaths and mountpaths with no disks")
 	}
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
-	mfs.ios = ios.New()
+	mfs.ios = ios.New(num)
 }
 
 // used only in tests
-func TestNew(iostater ios.IOStater) {
-	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: false}
+func TestNew(iostater ios.IOS) {
+	const num = 10
+	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, num), allowSharedDisksAndNoDisks: false}
 	if iostater == nil {
-		mfs.ios = ios.New()
+		mfs.ios = ios.New(num)
 	} else {
 		mfs.ios = iostater
 	}
-	PutMPI(make(MPI, 10), make(MPI, 10))
+	PutMPI(make(MPI, num), make(MPI, num))
 }
 
 func Decommission(mdOnly bool) {
@@ -794,8 +795,10 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 		debug.AssertNoErr(err)
 		return nil, err
 	}
+
+	config := cmn.GCO.Get()
 	availableCopy := _cloneOne(availablePaths)
-	mfs.ios.RemoveMpath(cleanMpath)
+	mfs.ios.RemoveMpath(cleanMpath, config.TestingEnv())
 	delete(availableCopy, cleanMpath)
 	delete(mfs.fsIDs, mi.FsID)
 
@@ -871,7 +874,9 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		availableCopy, disabledCopy := cloneMPI()
 		cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 		disabledCopy[cleanMpath] = mi
-		mfs.ios.RemoveMpath(cleanMpath)
+
+		config := cmn.GCO.Get()
+		mfs.ios.RemoveMpath(cleanMpath, config.TestingEnv())
 		delete(availableCopy, cleanMpath)
 		delete(mfs.fsIDs, mi.FsID)
 		moveMarkers(availableCopy, mi)

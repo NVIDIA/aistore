@@ -143,7 +143,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		tMock cluster.Target
 	)
 
-	mios := mock.NewIOStater()
+	mios := mock.NewIOS()
 	fs.TestNew(mios)
 	fs.TestDisableValidation()
 

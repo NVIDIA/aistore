@@ -213,7 +213,7 @@ func TestMountpathEnableAlreadyEnabled(t *testing.T) {
 }
 
 func TestMountpathsAddMultipleWithSameFSID(t *testing.T) {
-	fs.TestNew(mock.NewIOStater())
+	fs.TestNew(mock.NewIOS())
 
 	mpath := "/tmp/abc"
 	tools.AddMpath(t, mpath)
@@ -306,7 +306,7 @@ func TestMoveMarkers(t *testing.T) {
 }
 
 func initFS() {
-	fs.TestNew(mock.NewIOStater())
+	fs.TestNew(mock.NewIOS())
 	fs.TestDisableValidation()
 }
 

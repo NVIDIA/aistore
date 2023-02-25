@@ -47,7 +47,7 @@ func calcSemaLimit(acquire, release func()) int {
 }
 
 var _ = Describe("newConcAdjuster", func() {
-	mios := mock.NewIOStater()
+	mios := mock.NewIOS()
 
 	BeforeEach(func() {
 		err := cos.CreateDir(testingConfigDir)

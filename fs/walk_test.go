@@ -37,7 +37,7 @@ func TestWalkBck(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs.TestNew(mock.NewIOStater())
+			fs.TestNew(mock.NewIOS())
 			fs.TestDisableValidation()
 			_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 
@@ -124,7 +124,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 		mpaths        = make(map[string]*mpathMeta)
 	)
 
-	fs.TestNew(mock.NewIOStater())
+	fs.TestNew(mock.NewIOS())
 	fs.TestDisableValidation()
 	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
 

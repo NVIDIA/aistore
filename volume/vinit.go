@@ -24,7 +24,8 @@ func Init(t cluster.Target, config *cmn.Config,
 		vmd *VMD
 		tid = t.SID()
 	)
-	fs.New(allowSharedDisksAndNoDisks || (config.TestingEnv() && !useLoopbackDevs)) // new and empty
+	fs.New(len(config.FSP.Paths),
+		allowSharedDisksAndNoDisks || (config.TestingEnv() && !useLoopbackDevs)) // new and empty
 
 	// bootstrap from a local-config referenced location; two points:
 	// a) local-config is kept in-sync with mountpath changes (see ais/fspathgrp)
