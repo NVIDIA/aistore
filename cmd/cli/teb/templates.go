@@ -371,7 +371,6 @@ type (
 		TargetID string
 		DiskName string
 		Stat     ios.DiskStats
-		Cluster  ios.DiskStats // totals and global averages
 	}
 	SmapHelper struct {
 		Smap         *cluster.Smap

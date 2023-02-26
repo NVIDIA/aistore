@@ -14,14 +14,15 @@ import (
 var Writer io.Writer
 
 var (
-	fred func(format string, a ...any) string
+	fred, fcyan func(format string, a ...any) string
 )
 
 func Init(w io.Writer, noColor bool) {
 	Writer = w
 	if noColor {
-		fred = fmt.Sprintf
+		fred, fcyan = fmt.Sprintf, fmt.Sprintf
 	} else {
 		fred = color.New(color.FgHiRed).Sprintf
+		fcyan = color.New(color.FgHiCyan).Sprintf
 	}
 }

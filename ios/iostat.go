@@ -324,7 +324,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 	}
 
-	osDiskStats := readDiskStats(ios.disk2mpath, ios.disk2sysfn)
+	osDiskStats := readStats(ios.disk2mpath, ios.disk2sysfn)
 	for disk, mpath := range ios.disk2mpath {
 		ncache.rbps[disk] = 0
 		ncache.wbps[disk] = 0

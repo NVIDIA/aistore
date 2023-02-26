@@ -181,6 +181,11 @@ const (
 //
 
 const (
+	cluTotal = "---- CLUSTER:"
+	tgtTotal = "-------- SUM:"
+)
+
+const (
 	commandWait = "wait"
 
 	// Default values for long running operations
@@ -704,5 +709,10 @@ var (
 	errorsOnlyFlag = cli.BoolFlag{
 		Name:  "errors-only",
 		Usage: "reset only error counters",
+	}
+
+	diskSummaryFlag = cli.BoolFlag{
+		Name:  "summary",
+		Usage: "tally up individual target disks to show per-target read/write summary stats and average utilizations",
 	}
 )

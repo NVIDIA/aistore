@@ -16,18 +16,16 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
-const TotalsHeader = "Total cluster:"
-
 type PerfTabCtx struct {
-	Smap         *cluster.Smap
-	Sid          string           // single target, unless ""
-	Metrics      cos.StrKVs       // metric (aka stats) names and kinds
-	Regex        *regexp.Regexp   // filter column names (case-insensitive)
-	Units        string           // IEC, SI, raw
-	Totals       map[string]int64 // metrics to sum up (name => sum(column)), where the name is IN and the sum is OUT
-	TotalsHeader string
-	AllCols      bool // show all-zero columns
-	AvgSize      bool // compute average size on the fly (and show it), e.g.: `get.size/get.n`
+	Smap      *cluster.Smap
+	Sid       string           // single target, unless ""
+	Metrics   cos.StrKVs       // metric (aka stats) names and kinds
+	Regex     *regexp.Regexp   // filter column names (case-insensitive)
+	Units     string           // IEC, SI, raw
+	Totals    map[string]int64 // metrics to sum up (name => sum(column)), where the name is IN and the sum is OUT
+	TotalsHdr string
+	AllCols   bool // show all-zero columns
+	AvgSize   bool // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 }
 
 func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero metrics OR bad status*/, error) {
@@ -158,7 +156,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 	// tally up
 	if c.Totals != nil && numNZ > 0 && numTs > 1 {
 		row := make([]string, 0, len(cols))
-		row = append(row, c.TotalsHeader)
+		row = append(row, c.TotalsHdr)
 		for _, h := range cols[1:] {
 			if h.name == colStatus {
 				row = append(row, "")

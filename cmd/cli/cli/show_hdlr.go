@@ -52,6 +52,8 @@ var (
 			longRunFlags,
 			noHeaderFlag,
 			unitsFlag,
+			regexColsFlag,
+			diskSummaryFlag,
 		),
 		cmdMountpath: append(
 			longRunFlags,
@@ -280,7 +282,10 @@ func showDisksHandler(c *cli.Context) error {
 
 func showDiskStats(c *cli.Context, tid string) error {
 	var (
+		regex       *regexp.Regexp
+		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
+		summary     = flagIsSet(c, diskSummaryFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -292,15 +297,76 @@ func showDiskStats(c *cli.Context, tid string) error {
 	if err != nil {
 		return err
 	}
+	numTs := smap.CountActiveTs()
+	if numTs == 0 {
+		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
+	}
+	if tid != "" {
+		numTs = 1
+	}
+	if regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return err
+		}
+	}
 
 	dsh, err := getDiskStats(smap, tid)
 	if err != nil {
 		return err
 	}
 
+	// collapse target disks
+	if summary {
+		dnums := make(map[string]int, numTs)
+		for _, src := range dsh {
+			if _, ok := dnums[src.TargetID]; !ok {
+				dnums[src.TargetID] = 1
+			} else {
+				dnums[src.TargetID]++
+			}
+		}
+		tsums := make(map[string]*teb.DiskStatsHelper, numTs)
+		for _, src := range dsh {
+			dst, ok := tsums[src.TargetID]
+			if !ok {
+				dst = &teb.DiskStatsHelper{}
+				dn := dnums[src.TargetID]
+				dst.TargetID = src.TargetID
+				dst.DiskName = fmt.Sprintf("(%d disk%s)", dn, cos.Plural(dn))
+				tsums[src.TargetID] = dst
+			}
+			dst.Stat.RBps += src.Stat.RBps
+			dst.Stat.Ravg += src.Stat.Ravg
+			dst.Stat.WBps += src.Stat.WBps
+			dst.Stat.Wavg += src.Stat.Wavg
+			dst.Stat.Util += src.Stat.Util
+		}
+		for tid, dst := range tsums {
+			dn := int64(dnums[tid])
+			dst.Stat.Ravg = cos.DivRound(dst.Stat.Ravg, dn)
+			dst.Stat.Wavg = cos.DivRound(dst.Stat.Wavg, dn)
+			dst.Stat.Util = cos.DivRound(dst.Stat.Util, dn)
+		}
+		// finally, reappend & re-sort
+		dsh = dsh[:0]
+		for tid, dst := range tsums {
+			debug.Assert(tid == dst.TargetID)
+			dsh = append(dsh, *dst)
+		}
+		sort.Slice(dsh, func(i, j int) bool {
+			return dsh[i].TargetID < dsh[j].TargetID
+		})
+	}
+
 	// tally up
-	if l := len(dsh); l > 1 {
-		tally := teb.DiskStatsHelper{TargetID: "Total cluster:"}
+	var totalsHdr string
+	if l := int64(len(dsh)); l > 1 {
+		totalsHdr = cluTotal
+		if tid != "" {
+			totalsHdr = tgtTotal
+		}
+		tally := teb.DiskStatsHelper{TargetID: totalsHdr}
 		for _, ds := range dsh {
 			tally.Stat.RBps += ds.Stat.RBps
 			tally.Stat.Ravg += ds.Stat.Ravg
@@ -308,14 +374,14 @@ func showDiskStats(c *cli.Context, tid string) error {
 			tally.Stat.Wavg += ds.Stat.Wavg
 			tally.Stat.Util += ds.Stat.Util
 		}
-		tally.Stat.Ravg = cos.DivRound(tally.Stat.Ravg, int64(l))
-		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, int64(l))
-		tally.Stat.Util = cos.DivRound(tally.Stat.Util, int64(l))
+		tally.Stat.Ravg = cos.DivRound(tally.Stat.Ravg, l)
+		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, l)
+		tally.Stat.Util = cos.DivRound(tally.Stat.Util, l)
 
 		dsh = append(dsh, tally)
 	}
 
-	table := teb.NewDiskTab(dsh, smap, units, teb.TotalsHeader)
+	table := teb.NewDiskTab(dsh, smap, regex, units, totalsHdr)
 	out := table.Template(hideHeader)
 	return teb.Print(dsh, out)
 }

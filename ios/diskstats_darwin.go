@@ -23,8 +23,8 @@ var (
 	_ diskBlockStat = (*dblockStat)(nil)
 )
 
-// readDiskStats returns disk stats
-func readDiskStats(disks, _ cos.StrKVs) diskBlockStats {
+// readStats returns disk stats
+func readStats(disks, _ cos.StrKVs) diskBlockStats {
 	driveStats, err := iostat.ReadDriveStats()
 	if err != nil {
 		return diskBlockStats{}

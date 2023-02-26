@@ -61,24 +61,24 @@ func GetDiskstats() (output map[string]DiskStat) {
 
 		deviceName := fields[2]
 		output[deviceName] = DiskStat{
-			extractI64(fields[3]),
-			extractI64(fields[4]),
-			extractI64(fields[5]),
-			extractI64(fields[6]),
-			extractI64(fields[7]),
-			extractI64(fields[8]),
-			extractI64(fields[9]),
-			extractI64(fields[10]),
-			extractI64(fields[11]),
-			extractI64(fields[12]),
-			extractI64(fields[13]),
+			_exI64(fields[3]),
+			_exI64(fields[4]),
+			_exI64(fields[5]),
+			_exI64(fields[6]),
+			_exI64(fields[7]),
+			_exI64(fields[8]),
+			_exI64(fields[9]),
+			_exI64(fields[10]),
+			_exI64(fields[11]),
+			_exI64(fields[12]),
+			_exI64(fields[13]),
 		}
 	}
 
 	return output
 }
 
-func extractI64(field string) int64 {
+func _exI64(field string) int64 {
 	val, err := strconv.ParseInt(field, 10, 64)
 	if err != nil {
 		glog.Errorf("Failed to convert field value %q to int: %v \n",

@@ -311,7 +311,9 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 	if err != nil {
 		return err
 	}
-	if smap.CountActiveTs() == 0 {
+	if numTs := smap.CountActiveTs(); numTs == 1 || sid != "" {
+		totals = nil // sum implies multiple
+	} else if numTs == 0 {
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 	}
 
@@ -324,7 +326,6 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		setLongRunParams(c, lfooter)
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
-			Totals: totals, TotalsHeader: teb.TotalsHeader,
 			AllCols: allCols, AvgSize: avgSize}
 		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
@@ -394,6 +395,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		runtime.Gosched()
 
 		// tally up recomputed
+		totalsHdr := cluTotal
 		if totals != nil {
 			for _, begin := range mapBegin {
 				for name, v := range begin.Tracker {
@@ -405,7 +407,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
-			Totals: totals, TotalsHeader: teb.TotalsHeader,
+			Totals: totals, TotalsHdr: totalsHdr,
 			AllCols: allCols, AvgSize: avgSize}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {
