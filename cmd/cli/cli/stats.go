@@ -6,9 +6,6 @@
 package cli
 
 import (
-	"context"
-	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,11 +16,9 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
-	"golang.org/x/sync/errgroup"
 )
 
 // NOTE: target's metric names & kinds
@@ -131,77 +126,4 @@ func _cluStatusBeginEnd(c *cli.Context, ini teb.StstMap, sleep time.Duration) (b
 	// post-interval (end) stats
 	_, e, _, err = fillNodeStatusMap(c, apc.Target)
 	return
-}
-
-////////////
-// dstats //
-////////////
-
-type (
-	dstats struct {
-		tid   string
-		stats ios.AllDiskStats
-	}
-	dstatsCtx struct {
-		tid string
-		ch  chan dstats
-	}
-)
-
-func (ctx *dstatsCtx) get() error {
-	diskStats, err := api.GetDiskStats(apiBP, ctx.tid)
-	if err != nil {
-		return err
-	}
-	ctx.ch <- dstats{stats: diskStats, tid: ctx.tid}
-	return nil
-}
-
-func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error) {
-	var (
-		targets = smap.Tmap
-		l       = smap.CountActiveTs()
-	)
-	if tid != "" {
-		tsi := smap.GetNode(tid)
-		if tsi.InMaintOrDecomm() {
-			return nil, fmt.Errorf("target %s is unaivailable at this point", tsi.StringEx())
-		}
-		targets = cluster.NodeMap{tid: tsi}
-		l = 1
-	}
-	dsh := make([]teb.DiskStatsHelper, 0, l)
-	ch := make(chan dstats, l)
-
-	wg, _ := errgroup.WithContext(context.Background())
-	for tid, tsi := range targets {
-		if tsi.InMaintOrDecomm() {
-			continue
-		}
-		ctx := &dstatsCtx{ch: ch, tid: tid}
-		wg.Go(ctx.get)
-	}
-
-	err := wg.Wait()
-	close(ch)
-	if err != nil {
-		return nil, err
-	}
-	for res := range ch {
-		for name, stat := range res.stats {
-			dsh = append(dsh, teb.DiskStatsHelper{TargetID: res.tid, DiskName: name, Stat: stat})
-		}
-	}
-
-	sort.Slice(dsh, func(i, j int) bool {
-		if dsh[i].TargetID != dsh[j].TargetID {
-			return dsh[i].TargetID < dsh[j].TargetID
-		}
-		if dsh[i].DiskName != dsh[j].DiskName {
-			return dsh[i].DiskName < dsh[j].DiskName
-		}
-		return dsh[i].Stat.Util > dsh[j].Stat.Util
-	})
-
-	return dsh, nil
 }

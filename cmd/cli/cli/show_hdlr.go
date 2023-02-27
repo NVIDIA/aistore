@@ -59,11 +59,6 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		cmdCapacity: append(
-			longRunFlags,
-			noHeaderFlag,
-			unitsFlag,
-		),
 		commandJob: append(
 			longRunFlags,
 			jsonFlag,
@@ -255,14 +250,6 @@ var (
 		Action:       showMpathHandler,
 		BashComplete: suggestTargetNodes,
 	}
-	showCmdMpathCapacity = cli.Command{
-		Name:         cmdCapacity,
-		Usage:        "show target mountpaths, disks and used/available capacity",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[cmdCapacity],
-		Action:       showMpathCapacityHandler,
-		BashComplete: suggestTargetNodes,
-	}
 )
 
 func showStorageHandler(c *cli.Context) (err error) {
@@ -318,48 +305,11 @@ func showDiskStats(c *cli.Context, tid string) error {
 
 	// collapse target disks
 	if summary {
-		dnums := make(map[string]int, numTs)
-		for _, src := range dsh {
-			if _, ok := dnums[src.TargetID]; !ok {
-				dnums[src.TargetID] = 1
-			} else {
-				dnums[src.TargetID]++
-			}
-		}
-		tsums := make(map[string]*teb.DiskStatsHelper, numTs)
-		for _, src := range dsh {
-			dst, ok := tsums[src.TargetID]
-			if !ok {
-				dst = &teb.DiskStatsHelper{}
-				dn := dnums[src.TargetID]
-				dst.TargetID = src.TargetID
-				dst.DiskName = fmt.Sprintf("(%d disk%s)", dn, cos.Plural(dn))
-				tsums[src.TargetID] = dst
-			}
-			dst.Stat.RBps += src.Stat.RBps
-			dst.Stat.Ravg += src.Stat.Ravg
-			dst.Stat.WBps += src.Stat.WBps
-			dst.Stat.Wavg += src.Stat.Wavg
-			dst.Stat.Util += src.Stat.Util
-		}
-		for tid, dst := range tsums {
-			dn := int64(dnums[tid])
-			dst.Stat.Ravg = cos.DivRound(dst.Stat.Ravg, dn)
-			dst.Stat.Wavg = cos.DivRound(dst.Stat.Wavg, dn)
-			dst.Stat.Util = cos.DivRound(dst.Stat.Util, dn)
-		}
-		// finally, reappend & re-sort
-		dsh = dsh[:0]
-		for tid, dst := range tsums {
-			debug.Assert(tid == dst.TargetID)
-			dsh = append(dsh, *dst)
-		}
-		sort.Slice(dsh, func(i, j int) bool {
-			return dsh[i].TargetID < dsh[j].TargetID
-		})
+		collapseDisks(dsh, numTs)
 	}
 
 	// tally up
+	// TODO: check config.TestingEnv (or DeploymentType == apc.DeploymentDev)
 	var totalsHdr string
 	if l := int64(len(dsh)); l > 1 {
 		totalsHdr = cluTotal
@@ -1094,37 +1044,4 @@ func showMpathHandler(c *cli.Context) error {
 	})
 	usejs := flagIsSet(c, jsonFlag)
 	return teb.Print(mpls, teb.MpathListTmpl, teb.Jopts(usejs))
-}
-
-func showMpathCapacityHandler(c *cli.Context) error {
-	tid, _, err := argNode(c)
-	if err != nil {
-		return err
-	}
-	hideHeader := flagIsSet(c, noHeaderFlag)
-	units, errU := parseUnitsFlag(c, unitsFlag)
-	if errU != nil {
-		return err
-	}
-
-	setLongRunParams(c)
-
-	_, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
-	if err != nil {
-		return err
-	}
-	if tid != "" {
-		for sid := range tstatusMap {
-			if sid != tid {
-				delete(tstatusMap, sid)
-			}
-		}
-	}
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: false}
-	if hideHeader {
-		err = teb.Print(tstatusMap, teb.MountpathsNoHdrTmpl, opts)
-	} else {
-		err = teb.Print(tstatusMap, teb.MountpathsTmpl, opts)
-	}
-	return err
 }

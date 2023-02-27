@@ -65,7 +65,7 @@ var (
 			showCounters,
 			showThroughput,
 			showLatency,
-			showSysCap,
+			showCmdMpathCapacity,
 			makeAlias(showCmdDisk, "", true /*silent*/, cmdShowDisk),
 		},
 	}
@@ -96,12 +96,12 @@ var (
 		Action:       showLatencyHandler,
 		BashComplete: suggestTargetNodes,
 	}
-	showSysCap = cli.Command{
+	showCmdMpathCapacity = cli.Command{
 		Name:         cmdCapacity,
-		Usage:        "TBD",
+		Usage:        "show target mountpaths, disks, and used/available capacity",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
-		Action:       showSysCapHandler,
+		Action:       showMpathCapHandler,
 		BashComplete: suggestTargetNodes,
 	}
 )
@@ -403,6 +403,10 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 						totals[name] += v.Value
 					}
 				}
+				// avoid summing up with oneself
+				if begin.DeploymentType == apc.DeploymentDev {
+					break
+				}
 			}
 		}
 
@@ -426,9 +430,38 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 	return nil
 }
 
-// TODO -- FIXME: work in progress from here on ---------------
+// TODO: an option to show individual mountpaths: dirname, disk(s), and capacity per
+func showMpathCapHandler(c *cli.Context) error {
+	var (
+		regex       *regexp.Regexp
+		regexStr    = parseStrFlag(c, regexColsFlag)
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
+	)
+	if errU != nil {
+		return errU
+	}
+	tid, _, err := argNode(c)
+	if err != nil {
+		return err
+	}
+	if regexStr != "" {
+		regex, err = regexp.Compile(regexStr)
+		if err != nil {
+			return err
+		}
+	}
 
-func showSysCapHandler(c *cli.Context) error {
-	_, _, err := argNode(c)
-	return err
+	setLongRunParams(c, 72)
+
+	smap, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
+	if err != nil {
+		return err
+	}
+
+	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units}
+	table := teb.NewMpathCapTab(tstatusMap, &ctx) // TODO above
+
+	out := table.Template(hideHeader)
+	return teb.Print(tstatusMap, out)
 }

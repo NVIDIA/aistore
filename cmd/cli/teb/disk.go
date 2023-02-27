@@ -48,19 +48,19 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *cluster.Smap, regex *regexp.Regexp,
 		// disk stats are positional, not named - hence hardcoding
 
 		stat := ds.Stat
-		if _has(cols, colRead) {
+		if _idx(cols, colRead) >= 0 {
 			row = append(row, FmtStatValue("", stats.KindThroughput, stat.RBps, units))
 		}
-		if _has(cols, colReadAvg) {
+		if _idx(cols, colReadAvg) >= 0 {
 			row = append(row, FmtStatValue("", stats.KindSize, stat.Ravg, units))
 		}
-		if _has(cols, colWrite) {
+		if _idx(cols, colWrite) >= 0 {
 			row = append(row, FmtStatValue("", stats.KindThroughput, stat.WBps, units))
 		}
-		if _has(cols, colWriteAvg) {
+		if _idx(cols, colWriteAvg) >= 0 {
 			row = append(row, FmtStatValue("", stats.KindSize, stat.Wavg, units))
 		}
-		if _has(cols, colUtil) {
+		if _idx(cols, colUtil) >= 0 {
 			row = append(row, FmtStatValue("", "", stat.Util, units)+"%")
 		}
 
@@ -89,11 +89,11 @@ func _flt(cols []*header, regex *regexp.Regexp) []*header {
 	return cols
 }
 
-func _has(cols []*header, name string) bool {
+func _idx(cols []*header, name string) int {
 	for i := 0; i < len(cols); i++ {
 		if cols[i].name == name {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }

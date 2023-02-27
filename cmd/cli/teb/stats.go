@@ -5,10 +5,8 @@
 package teb
 
 import (
-	"fmt"
 	"sort"
 
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -21,12 +19,4 @@ func (ds StstMap) sortedSIDs() (ids []string) {
 	}
 	sort.Strings(ids)
 	return
-}
-
-func fmtCDF(cdfs map[string]*fs.CDF) string {
-	fses := make([]string, 0, len(cdfs))
-	for _, cdf := range cdfs {
-		fses = append(fses, cdf.FS)
-	}
-	return fmt.Sprintf("%v", fses)
 }

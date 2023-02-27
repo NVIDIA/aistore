@@ -76,18 +76,6 @@ const (
 		"Version:\t{{ ( Versions .Status) }}\n  " +
 		"Build:\t{{ ( BuildTimes .Status) }}\n"
 
-	// TargetCDF.Mountpaths
-	mountpathsHdr = "TARGET\t NUM MOUNTPATHS\t USED(avg%, max%)\t Disks/FileSystems\t STATUS\n"
-
-	MountpathsNoHdrTmpl = "{{ range $k, $v := . }}" + mountpathsBody + "{{ end }}"
-	MountpathsTmpl      = mountpathsHdr + MountpathsNoHdrTmpl
-
-	mountpathsBody = "{{ $k }}\t " +
-		"{{ len $v.TargetCDF.Mountpaths }}\t " +
-		"     " + "{{ $v.TargetCDF.PctMax }}% " + "  " + "{{ $v.TargetCDF.PctAvg }}%\t " +
-		"{{ FormatCDF $v.TargetCDF.Mountpaths }}\t" +
-		"{{if (IsEqS $v.TargetCDF.CsErr \"\")}}ok{{else}}{{$v.TargetCDF.CsErr}}{{end}}\n"
-
 	// Config
 	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
@@ -417,7 +405,6 @@ var (
 		"FormatACL":         fmtACL,
 		"FormatNameArch":    fmtNameArch,
 		"FormatXactState":   FmtXactStatus,
-		"FormatCDF":         fmtCDF,
 		//  misc. helpers
 		"IsUnsetTime":   isUnsetTime,
 		"IsEqS":         func(a, b string) bool { return a == b },
