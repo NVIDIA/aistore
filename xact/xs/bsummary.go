@@ -154,8 +154,9 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	summ.Bck.Copy(bck.Bucket())
 
 	// 1. always estimate on-disk size (is fast)
-	summ.TotalSize.OnDisk = r.sizeOnDisk(bck)
-	if msg.Fast {
+	var errCount uint64
+	summ.TotalSize.OnDisk, errCount = r.sizeOnDisk(bck)
+	if errCount == 0 && msg.Fast {
 		return
 	}
 
@@ -210,27 +211,28 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	return nil
 }
 
-func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (size uint64) {
+func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (size, ecnt uint64) {
 	var (
 		avail = fs.GetAvail()
 		wg    = cos.NewLimitedWaitGroup(4, len(avail))
 		psize = &size
+		pecnt = &ecnt
 		b     = bck.Bucket()
 	)
 	for _, mi := range avail {
 		bdir := mi.MakePathBck(b)
 		wg.Add(1)
-		go addDU(bdir, psize, wg)
+		go addDU(bdir, psize, pecnt, wg)
 	}
 	wg.Wait()
 	return
 }
 
-func addDU(bdir string, psize *uint64, wg cos.WG) {
+func addDU(bdir string, psize, pecnt *uint64, wg cos.WG) {
 	sz, err := ios.DirSizeOnDisk(bdir)
 	if err != nil {
 		glog.Errorf("dir-size %q: %v", bdir, err)
-		debug.Assertf(false, "dir-size %q: %v", bdir, err)
+		gatomic.AddUint64(pecnt, 1)
 	}
 	gatomic.AddUint64(psize, sz)
 	wg.Done()

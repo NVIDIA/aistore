@@ -29,6 +29,7 @@ func TestDirSize(t *testing.T) {
 	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	defer os.RemoveAll(name)
 
@@ -47,6 +48,7 @@ func TestDirFiles(t *testing.T) {
 	name, err := os.MkdirTemp("/tmp", t.Name())
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	defer os.RemoveAll(name)
 
@@ -55,6 +57,7 @@ func TestDirFiles(t *testing.T) {
 	subdir, err := os.MkdirTemp(name, "")
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
 	checkFileCount(t, name, 0)
@@ -73,6 +76,7 @@ func mkFile(t *testing.T, dir, fname string) (written int) {
 	f, err := os.Create(path.Join(dir, fname))
 	if err != nil {
 		t.Error(err)
+		return
 	}
 	size := cos.KiB * int(k)
 	written, err = f.Write(make([]byte, size))

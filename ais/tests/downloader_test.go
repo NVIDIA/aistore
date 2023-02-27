@@ -140,15 +140,19 @@ func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []stri
 	)
 }
 
-func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, shouldBeSkipped bool) {
+func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, expectedSkipped, bucketExists bool) {
 	id, err := api.DownloadSingle(tools.BaseAPIParams(), generateDownloadDesc(), bck, objName, link)
 	tassert.CheckError(t, err)
+	if !bucketExists {
+		// (virtualized & shared testing env vs metasync propagation time)
+		time.Sleep(6 * time.Second)
+	}
 	waitForDownload(t, id, time.Minute)
 	status, err := api.DownloadStatus(tools.BaseAPIParams(), id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, status.ErrorCnt == 0, "expected no errors during download, got: %d (errs: %v)", status.ErrorCnt, status.Errs)
-	if shouldBeSkipped {
-		tassert.Errorf(t, status.SkippedCnt == 1, "expected object to be [skipped: %t]", shouldBeSkipped)
+	if expectedSkipped {
+		tassert.Errorf(t, status.SkippedCnt == 1, "expected object to be [skipped: %t]", expectedSkipped)
 	} else {
 		tassert.Errorf(t, status.FinishedCnt == 1, "expected object to be finished")
 	}
@@ -907,7 +911,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	props := &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)}
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, props)
 
-	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
@@ -922,7 +926,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected: err!=nil, got: nil")
 	verifyProps(t, bck, objName, expectedSize, "1")
 
-	downloadObject(t, bck, objName, link, true /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, true /*expectedSkipped*/, true /*bucket exists*/)
 	newProps := verifyProps(t, bck, objName, expectedSize, "1")
 	tassert.Errorf(
 		t, oldProps.Atime == newProps.Atime,
@@ -949,7 +953,12 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 
 	clearDownloadList(t)
 
-	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, false /*destination bucket exists*/)
+
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, bck)
+	})
+
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
@@ -964,7 +973,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	tassert.Fatalf(t, err == nil, "expected: err nil, got: %v", err)
 	verifyProps(t, bck, objName, newSize, "2")
 
-	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	newProps := verifyProps(t, bck, objName, expectedSize, "3")
 	tassert.Errorf(
 		t, oldProps.Atime != newProps.Atime,
@@ -1021,10 +1030,10 @@ func TestDownloadSkipObject(t *testing.T) {
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
-	downloadObject(t, bck, objName, link, false /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
 
-	downloadObject(t, bck, objName, link, true /*shouldBeSkipped*/)
+	downloadObject(t, bck, objName, link, true /*expectedSkipped*/, true /*bucket exists*/)
 	newProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
 	tassert.Errorf(
 		t, oldProps.Atime == newProps.Atime,
