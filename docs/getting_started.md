@@ -281,7 +281,7 @@ For development, health-checking a new deployment, or for any other (functional 
 For example:
 
 ```console
-$ go test ./ais/tests -v -run=Mirror
+$ go test ./ais/test -v -run=Mirror
 ```
 
 The `go test` above will create an AIS bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
@@ -290,7 +290,7 @@ Alternatively, if you happen to have Amazon and/or Google Cloud account, make su
 For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
 
 ```console
-$ BUCKET=aws://myS3bucket go test ./ais/tests -v -run=download
+$ BUCKET=aws://myS3bucket go test ./ais/test -v -run=download
 ```
 
 To run all tests in the category [short tests](https://pkg.go.dev/testing#Short):
@@ -332,9 +332,9 @@ $ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\
 3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
 
 ```console
-$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCPbucket go test -v -p 1 -count 1 ./ais/tests -run=ListBuckets
+$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCPbucket go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
 
-$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go test -v -p 1 -count 1 ./ais/tests -run=ListBuckets
+$ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
 ```
 
 > Notice environment variables above: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.

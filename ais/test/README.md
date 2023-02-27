@@ -27,7 +27,7 @@ This will skip some long-running tests and run instead all unit tests, plus some
 To run individual tests:
 
 ```console
-$ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=Regression
-$ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=GetAndRe
-$ BUCKET=<bucket name> go test ./ais/tests -run=TestProxy/PrimaryCrash
+$ BUCKET=<bucket name> go test ./ais/test -v -p 1 -run=Regression
+$ BUCKET=<bucket name> go test ./ais/test -v -p 1 -run=GetAndRe
+$ BUCKET=<bucket name> go test ./ais/test -run=TestProxy/PrimaryCrash
 ```

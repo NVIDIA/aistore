@@ -293,6 +293,7 @@ func TestAppendObject(t *testing.T) {
 				oah.Size(), writer.String(), objSize, content,
 			)
 		})
+		time.Sleep(3 * time.Second)
 	}
 }
 

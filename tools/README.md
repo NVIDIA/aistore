@@ -1,6 +1,6 @@
 Package `tools` provides common methods and utilities for Go(lang) based **development** tools that cover:
 
-* integration tests (primarily, `ais/tests/*`),
+* integration tests (primarily, `ais/test/*`),
 * benchmarks (under `bench/`),
 * [`aisloader`](/docs/aisloader.md).
 
