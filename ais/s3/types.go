@@ -28,6 +28,7 @@ const defaultLastModified = 0 // When an object was not accessed yet
 type (
 	// List objects response
 	ListObjectResult struct {
+		Name                  string     `xml:"Name"`
 		Ns                    string     `xml:"xmlns,attr"`
 		Prefix                string     `xml:"Prefix"`
 		KeyCount              int        `xml:"KeyCount"` // number of objects in the response
@@ -131,8 +132,9 @@ func FillMsgFromS3Query(query url.Values, msg *apc.LsoMsg) {
 	}
 }
 
-func NewListObjectResult() *ListObjectResult {
+func NewListObjectResult(bucket string) *ListObjectResult {
 	return &ListObjectResult{
+		Name:     bucket,
 		Ns:       s3Namespace,
 		MaxKeys:  1000,
 		Contents: make([]*ObjInfo, 0),
@@ -167,7 +169,7 @@ func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {
 func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.LsoResult, lsmsg *apc.LsoMsg) {
 	r.KeyCount = len(bckList.Entries)
 	r.IsTruncated = bckList.ContinuationToken != ""
-	r.ContinuationToken = bckList.ContinuationToken
+	r.NextContinuationToken = bckList.ContinuationToken
 	for _, e := range bckList.Entries {
 		r.Add(e, lsmsg)
 	}

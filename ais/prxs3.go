@@ -335,7 +335,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
-	resp := s3.NewListObjectResult()
+	resp := s3.NewListObjectResult(bucket)
 	resp.ContinuationToken = lsmsg.ContinuationToken
 	resp.FillFromAisBckList(lst, lsmsg)
 	sgl := p.gmm.NewSGL(0)
