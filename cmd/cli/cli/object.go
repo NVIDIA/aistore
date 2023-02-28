@@ -15,9 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -31,16 +29,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
-	"github.com/vbauerster/mpb/v4/decor"
 )
-
-type uploadParams struct {
-	bck       cmn.Bck
-	files     []fileToObj
-	workerCnt int
-	refresh   time.Duration
-	totalSize int64
-}
 
 const (
 	dryRunExamplesCnt = 10
@@ -395,57 +384,6 @@ func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPre
 	return putMultipleObjects(c, allFiles, bck)
 }
 
-func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
-	if len(files) == 0 {
-		return fmt.Errorf("no files found")
-	}
-
-	// calculate total size, group by extension
-	totalSize, extSizes := groupByExt(files)
-	totalCount := int64(len(files))
-
-	if flagIsSet(c, dryRunFlag) {
-		i := 0
-		for ; i < dryRunExamplesCnt; i++ {
-			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", files[i].path, bck.DisplayName(), files[i].name)
-		}
-		if i < len(files) {
-			fmt.Fprintf(c.App.Writer, "(and %d more)\n", len(files)-i)
-		}
-		return nil
-	}
-
-	var (
-		units, errU = parseUnitsFlag(c, unitsFlag)
-		tmpl        = teb.MultiPutTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
-		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units)}
-	)
-	if errU != nil {
-		return errU
-	}
-	if err := teb.Print(extSizes, tmpl, opts); err != nil {
-		return err
-	}
-
-	// ask a user for confirmation
-	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, fmt.Sprintf("Proceed putting to %s?", bck)); !ok {
-			return errors.New("operation canceled")
-		}
-	}
-
-	refresh := calcPutRefresh(c)
-	numWorkers := parseIntFlag(c, concurrencyFlag)
-	params := uploadParams{
-		bck:       bck,
-		files:     files,
-		workerCnt: numWorkers,
-		refresh:   refresh,
-		totalSize: totalSize,
-	}
-	return uploadFiles(c, params)
-}
-
 // replace common abbreviations (such as `~/`) and return an absolute path
 func absPath(fileName string) (path string, err error) {
 	path = cos.ExpandPath(fileName)
@@ -627,138 +565,6 @@ func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
 	}
 
 	fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)
-	return nil
-}
-
-func uploadFiles(c *cli.Context, p uploadParams) error {
-	var (
-		errCount      atomic.Int32 // uploads failed so far
-		processedCnt  atomic.Int32 // files processed so far
-		processedSize atomic.Int64 // size of already processed files
-		mx            sync.Mutex
-
-		totalBars []*mpb.Bar
-		progress  *mpb.Progress
-
-		verbose      = flagIsSet(c, verboseFlag)
-		showProgress = flagIsSet(c, progressBarFlag)
-
-		errSb strings.Builder
-
-		wg          = cos.NewLimitedWaitGroup(p.workerCnt, 0)
-		lastReport  = time.Now()
-		reportEvery = p.refresh
-	)
-
-	if showProgress {
-		var (
-			filesBarArg = progressBarArgs{total: int64(len(p.files)), barText: "Uploaded files progress", barType: unitsArg}
-			sizeBarArg  = progressBarArgs{total: p.totalSize, barText: "Uploaded sizes progress", barType: sizeArg}
-		)
-		progress, totalBars = simpleProgressBar(filesBarArg, sizeBarArg)
-	}
-
-	finalizePut := func(f fileToObj) {
-		total := int(processedCnt.Inc())
-		size := processedSize.Add(f.size)
-
-		if showProgress {
-			totalBars[0].Increment()
-			// size bar sie updated in putOneFile
-		}
-
-		wg.Done()
-		if reportEvery == 0 {
-			return
-		}
-
-		// lock after releasing semaphore, so the next file can start
-		// uploading even if we are stuck on mutex for a while
-		mx.Lock()
-		if !showProgress && time.Since(lastReport) > reportEvery {
-			fmt.Fprintf(
-				c.App.Writer, "Uploaded %d(%d%%) objects, %s (%d%%).\n",
-				total, 100*total/len(p.files), cos.ToSizeIEC(size, 1), 100*size/p.totalSize,
-			)
-			lastReport = time.Now()
-		}
-		mx.Unlock()
-	}
-
-	putOneFile := func(f fileToObj) {
-		var bar *mpb.Bar
-
-		defer finalizePut(f)
-
-		reader, err := cos.NewFileHandle(f.path)
-		if err != nil {
-			str := fmt.Sprintf("Failed to open file %q: %v\n", f.path, err)
-			if showProgress {
-				errSb.WriteString(str)
-			} else {
-				fmt.Fprint(c.App.Writer, str)
-			}
-			errCount.Inc()
-			return
-		}
-
-		if showProgress && verbose {
-			bar = progress.AddBar(
-				f.size,
-				mpb.BarRemoveOnComplete(),
-				mpb.PrependDecorators(
-					decor.Name(f.name+" ", decor.WC{W: len(f.name) + 1, C: decor.DSyncWidthR}),
-					decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
-				),
-				mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
-			)
-		}
-
-		// keep track of single file upload bar, by tracking Read() call on file
-		updateBar := func(n int, err error) {
-			if showProgress {
-				totalBars[1].IncrBy(n)
-				if verbose {
-					bar.IncrBy(n)
-				}
-			}
-		}
-		countReader := cos.NewCallbackReadOpenCloser(reader, updateBar)
-
-		putArgs := api.PutArgs{
-			BaseParams: apiBP,
-			Bck:        p.bck,
-			ObjName:    f.name,
-			Reader:     countReader,
-			SkipVC:     flagIsSet(c, skipVerCksumFlag),
-		}
-		if _, err := api.PutObject(putArgs); err != nil {
-			str := fmt.Sprintf("Failed to PUT object %q: %v\n", f.name, err)
-			if showProgress {
-				errSb.WriteString(str)
-			} else {
-				fmt.Fprint(c.App.Writer, str)
-			}
-			errCount.Inc()
-		} else if verbose && !showProgress {
-			fmt.Fprintf(c.App.Writer, "%s -> %s\n", f.path, f.name)
-		}
-	}
-
-	for _, f := range p.files {
-		wg.Add(1)
-		go putOneFile(f)
-	}
-	wg.Wait()
-
-	if showProgress {
-		progress.Wait()
-		fmt.Fprint(c.App.Writer, errSb.String())
-	}
-	if failed := errCount.Load(); failed != 0 {
-		return fmt.Errorf("failed to PUT %d object%s", failed, cos.Plural(int(failed)))
-	}
-	fmt.Fprintf(c.App.Writer, "PUT %d object%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.bck.DisplayName())
 	return nil
 }
 
