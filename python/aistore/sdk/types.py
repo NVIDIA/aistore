@@ -144,7 +144,7 @@ class BucketModel(BaseModel):
 
     name: str
     provider: str = PROVIDER_AIS
-    ns: Namespace = None
+    namespace: Namespace = None
 
 
 class JobArgs(BaseModel):
@@ -155,6 +155,7 @@ class JobArgs(BaseModel):
     id: str = ""
     kind: str = ""
     daemon_id: str = ""
+    bucket: BucketModel = None
     buckets: List[BucketModel] = None
     only_running: bool = False
 
@@ -163,6 +164,7 @@ class JobArgs(BaseModel):
             "ID": self.id,
             "Kind": self.kind,
             "DaemonID": self.daemon_id,
+            "Bck": self.bucket,
             "Buckets": self.buckets,
             "OnlyRunning": self.only_running,
         }
@@ -323,3 +325,34 @@ class PromoteAPIArgs(BaseModel):
             "dls": self.delete_source,
             "notshr": self.src_not_file_share,
         }
+
+
+class JobStats(BaseModel):
+    """
+    Structure for job statistics
+    """
+
+    objects: int = 0
+    bytes: int = 0
+    out_objects: int = 0
+    out_bytes: int = 0
+    in_objects: int = 0
+    in_bytes: int = 0
+
+
+class JobSnapshot(BaseModel):
+    """
+    Structure for the data returned when querying a single job on a single target node
+    """
+
+    id: str = ""
+    kind: str = ""
+    start_time: str = ""
+    end_time: str = ""
+    bucket: BucketModel = None
+    source_bck: str = ""
+    dest_bck: str = ""
+    rebalance_id: str = ""
+    stats: JobStats = None
+    aborted: bool = False
+    is_idle: bool = False

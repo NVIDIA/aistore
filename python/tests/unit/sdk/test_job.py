@@ -6,7 +6,7 @@ from aistore.sdk.const import (
     QPARAM_FORCE,
     HTTP_METHOD_GET,
     HTTP_METHOD_PUT,
-    PARAM_VALUE_STATUS,
+    WHAT_ONE_XACT_STATUS,
     URL_PATH_CLUSTER,
     ACT_START,
 )
@@ -63,7 +63,7 @@ class TestJob(unittest.TestCase):
             path=URL_PATH_CLUSTER,
             res_model=JobStatus,
             json=expected_request_val,
-            params={QPARAM_WHAT: PARAM_VALUE_STATUS},
+            params={QPARAM_WHAT: WHAT_ONE_XACT_STATUS},
         )
 
     @patch("aistore.sdk.job.time.sleep")
@@ -139,9 +139,27 @@ class TestJob(unittest.TestCase):
         self.assertEqual(3, mock_status.call_count)
         self.assertEqual(2, mock_sleep.call_count)
 
-    def test_job_start(self):
+    def test_job_start_single_bucket(self):
         daemon_id = "daemon id"
-        buckets = [BucketModel(client=Mock(RequestClient), name="name")]
+        bucket = BucketModel(client=Mock(RequestClient), name="single bucket")
+        expected_json = JobArgs(
+            kind=self.job_kind, daemon_id=daemon_id, bucket=bucket
+        ).get_json()
+        self.job_start_exec_assert(
+            self.job,
+            expected_json,
+            {QPARAM_FORCE: "true"},
+            daemon_id=daemon_id,
+            force=True,
+            buckets=[bucket],
+        )
+
+    def test_job_start_bucket_list(self):
+        daemon_id = "daemon id"
+        buckets = [
+            BucketModel(client=Mock(RequestClient), name="first bucket"),
+            BucketModel(client=Mock(RequestClient), name="second bucket"),
+        ]
         expected_json = JobArgs(
             kind=self.job_kind, daemon_id=daemon_id, buckets=buckets
         ).get_json()

@@ -10,7 +10,7 @@ from aistore.sdk.const import (
     QPARAM_PROVIDER,
     ACT_LIST,
     PROVIDER_AIS,
-    PARAM_VALUE_SMAP,
+    WHAT_SMAP,
     URL_PATH_DAEMON,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
@@ -34,7 +34,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             HTTP_METHOD_GET,
             path=URL_PATH_DAEMON,
             res_model=Smap,
-            params={QPARAM_WHAT: PARAM_VALUE_SMAP},
+            params={QPARAM_WHAT: WHAT_SMAP},
         )
 
     def test_list_buckets(self):

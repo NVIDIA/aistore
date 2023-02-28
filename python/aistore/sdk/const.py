@@ -14,8 +14,10 @@ QPARAM_FORCE = "frc"
 QPARAM_PRIMARY_READY_REB = "prr"
 
 # URL Param values
-PARAM_VALUE_SMAP = "smap"
-PARAM_VALUE_STATUS = "status"
+# See api/apc/query.go
+WHAT_SMAP = "smap"
+WHAT_ONE_XACT_STATUS = "status"
+WHAT_QUERY_XACT_STATS = "qryxstats"
 
 # URL paths
 URL_PATH_CLUSTER = "cluster"

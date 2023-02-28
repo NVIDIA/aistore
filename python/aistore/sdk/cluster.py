@@ -12,7 +12,7 @@ from aistore.sdk.const import (
     QPARAM_WHAT,
     QPARAM_PRIMARY_READY_REB,
     QPARAM_PROVIDER,
-    PARAM_VALUE_SMAP,
+    WHAT_SMAP,
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
     URL_PATH_DAEMON,
@@ -55,7 +55,7 @@ class Cluster:
             HTTP_METHOD_GET,
             path=URL_PATH_DAEMON,
             res_model=Smap,
-            params={QPARAM_WHAT: PARAM_VALUE_SMAP},
+            params={QPARAM_WHAT: WHAT_SMAP},
         )
 
     def list_buckets(self, provider: str = PROVIDER_AIS):
