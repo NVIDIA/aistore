@@ -713,6 +713,10 @@ var (
 
 	diskSummaryFlag = cli.BoolFlag{
 		Name:  "summary",
-		Usage: "tally up individual target disks to show per-target read/write summary stats and average utilizations",
+		Usage: "tally up target disks to show per-target read/write summary stats and average utilizations",
+	}
+	mountpathFlag = cli.BoolFlag{
+		Name:  "mountpath",
+		Usage: "show target mountpaths with underlying disks and used/available capacities",
 	}
 )

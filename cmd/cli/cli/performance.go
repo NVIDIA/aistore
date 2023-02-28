@@ -100,7 +100,7 @@ var (
 		Name:         cmdCapacity,
 		Usage:        "show target mountpaths, disks, and used/available capacity",
 		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showPerfFlags,
+		Flags:        append(showPerfFlags, mountpathFlag),
 		Action:       showMpathCapHandler,
 		BashComplete: suggestTargetNodes,
 	}
@@ -430,12 +430,12 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 	return nil
 }
 
-// TODO: an option to show individual mountpaths: dirname, disk(s), and capacity per
 func showMpathCapHandler(c *cli.Context) error {
 	var (
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
+		showMpaths  = flagIsSet(c, mountpathFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -460,7 +460,7 @@ func showMpathCapHandler(c *cli.Context) error {
 	}
 
 	ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Regex: regex, Units: units}
-	table := teb.NewMpathCapTab(tstatusMap, &ctx) // TODO above
+	table := teb.NewMpathCapTab(tstatusMap, &ctx, showMpaths)
 
 	out := table.Template(hideHeader)
 	return teb.Print(tstatusMap, out)
