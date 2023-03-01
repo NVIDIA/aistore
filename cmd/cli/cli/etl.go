@@ -511,7 +511,7 @@ func etlBucketHandler(c *cli.Context) error {
 	tmplObjs := parseStrFlag(c, templateFlag)
 	listObjs := parseStrFlag(c, listFlag)
 	if listObjs != "" || tmplObjs != "" {
-		return multiObjBckCopy(c, fromBck, toBck, listObjs, tmplObjs, etlName)
+		return multiObjTCO(c, fromBck, toBck, listObjs, tmplObjs, etlName)
 	}
 
 	xid, err := api.ETLBucket(apiBP, fromBck, toBck, msg)

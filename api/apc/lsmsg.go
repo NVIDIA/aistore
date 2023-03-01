@@ -117,11 +117,13 @@ const (
 
 // NOTE: update when changing any of the above :NOTE
 var (
-	GetPropsMinimal      = []string{GetPropsName, GetPropsSize}
-	GetPropsDefaultAIS   = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
-	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsVersion, GetPropsCustom}
-	GetPropsAll          = append(GetPropsDefaultAIS,
-		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation)
+	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsCached}
+	GetPropsDefaultCloud = []string{GetPropsName, GetPropsSize, GetPropsCached,
+		GetPropsChecksum, GetPropsVersion, GetPropsCustom}
+
+	GetPropsDefaultAIS = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime}
+	GetPropsAll        = []string{GetPropsName, GetPropsSize, GetPropsChecksum, GetPropsAtime,
+		GetPropsVersion, GetPropsCached, GetPropsStatus, GetPropsCopies, GetPropsEC, GetPropsCustom, GetPropsLocation}
 )
 
 type LsoMsg struct {

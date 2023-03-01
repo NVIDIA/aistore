@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -43,12 +43,15 @@ type (
 	}
 )
 
-////////////////
+//////////////
 // LsoEntry //
-////////////////
+//////////////
 
-func (be *LsoEntry) CheckExists() bool  { return be.Flags&apc.EntryIsCached != 0 } // NOTE: "cached" and "present" are interchangeable
-func (be *LsoEntry) SetPresent()        { be.Flags |= apc.EntryIsCached }
+// NOTE: the terms "cached" and "present" are interchangeable
+// ("object is cached" == "is present" and vice versa)
+func (be *LsoEntry) CheckExists() bool { return be.Flags&apc.EntryIsCached != 0 }
+func (be *LsoEntry) SetPresent()       { be.Flags |= apc.EntryIsCached }
+
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
 func (be *LsoEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }

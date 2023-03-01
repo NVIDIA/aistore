@@ -123,8 +123,13 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	return nil
 }
 
-// Copy ais bucket
-func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
+// Copy bucket
+func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+	msg := &apc.CopyBckMsg{
+		Prefix: parseStrFlag(c, cpBckPrefixFlag),
+		DryRun: flagIsSet(c, cpBckDryRunFlag),
+		Force:  flagIsSet(c, forceFlag),
+	}
 	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {
 		return err
@@ -306,7 +311,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
 }
 
-// (compare with showBucketSummary)
+// (compare with `showBucketSummary` and `bsummSlow`)
 func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
 		footer      lsbFooter

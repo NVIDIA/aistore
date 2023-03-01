@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS buckets.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -321,7 +321,7 @@ func showBucketSummary(c *cli.Context) error {
 		return err
 	}
 	setLongRunParams(c)
-	summaries, err := getSummaries(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
+	summaries, err := bsummSlow(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
 	if err != nil {
 		return err
 	}
@@ -331,8 +331,8 @@ func showBucketSummary(c *cli.Context) error {
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
-// NOTE: always execute the "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
-func getSummaries(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
+// "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
+func bsummSlow(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
 	fDetails := func() (err error) {
 		msg := &cmn.BsummCtrlMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
 		summaries, err = api.GetBucketSummary(apiBP, qbck, msg)
@@ -354,21 +354,11 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
-func fullBckCopy(c *cli.Context, bckFrom, bckTo cmn.Bck) (err error) {
-	msg := &apc.CopyBckMsg{
-		Prefix: parseStrFlag(c, cpBckPrefixFlag),
-		DryRun: flagIsSet(c, cpBckDryRunFlag),
-		Force:  flagIsSet(c, forceFlag),
-	}
-
-	return copyBucket(c, bckFrom, bckTo, msg)
-}
-
-func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs string, etlName ...string) (err error) {
-	operation := "Copying objects"
+func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) (err error) {
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
+
 	var lrMsg cmn.SelectObjsMsg
 	if listObjs != "" {
 		lrMsg.ObjNames = strings.Split(listObjs, ",")
@@ -388,9 +378,12 @@ func multiObjBckCopy(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs 
 	}
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
-	var xid string
-	if len(etlName) != 0 {
-		msg.Name = etlName[0]
+	var (
+		xid       string
+		operation = "Copying objects"
+	)
+	if etlName != "" {
+		msg.Name = etlName
 		operation = "Transforming objects"
 		xid, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
@@ -426,22 +419,17 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}
 
-	if dryRun {
-		// TODO: once IC is integrated with copy-bck stats, show something more relevant, like stream of object names
-		// with destination which they would have been copied to. Then additionally, make output consistent with etl
-		// dry-run output.
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-	}
-
 	listObjs := parseStrFlag(c, listFlag)
 	tmplObjs := parseStrFlag(c, templateFlag)
 
 	// Full bucket copy
 	if listObjs == "" && tmplObjs == "" {
 		if dryRun {
+			// TODO: show object names with destinations, make the output consistent with etl dry-run
+			fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
 			actionDone(c, "[dry-run] Copying the entire bucket")
 		}
-		return fullBckCopy(c, bckFrom, bckTo)
+		return copyBucket(c, bckFrom, bckTo)
 	}
 
 	// Copy matching objects
@@ -455,9 +443,10 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		} else {
 			msg = fmt.Sprintf("[dry-run] Copying objects that match the pattern %q ...\n", tmplObjs)
 		}
+		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
 		actionDone(c, msg)
 	}
-	return multiObjBckCopy(c, bckFrom, bckTo, listObjs, tmplObjs)
+	return multiObjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/)
 }
 
 func mvBucketHandler(c *cli.Context) error {
