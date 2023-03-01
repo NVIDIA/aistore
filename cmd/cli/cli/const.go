@@ -246,7 +246,7 @@ const (
 
 	// Objects
 	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
-	putPromoteObjectArgument = "FILE|DIRECTORY BUCKET/[OBJECT_NAME]"
+	putPromoteObjectArgument = "FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]"
 	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
 	objectArgument           = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
@@ -350,7 +350,7 @@ var (
 	// longRunFlags
 	//
 	refreshFlag = DurationFlag{
-		Name:  "refresh,repeat",
+		Name:  "refresh",
 		Usage: "interval for continuous monitoring (valid time units: " + timeUnits + ")",
 	}
 	countFlag = cli.IntFlag{
@@ -380,10 +380,10 @@ var (
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
 	noFooterFlag = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
 
-	progressBarFlag = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
-	dryRunFlag      = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
-	verboseFlag     = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
-	nonverboseFlag  = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
+	progressFlag   = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	dryRunFlag     = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
+	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
+	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
 
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
 
@@ -463,9 +463,9 @@ var (
 		Name:  "timeout",
 		Usage: "timeout (valid time units: " + timeUnits + ")",
 	}
-	progressIntervalFlag = cli.StringFlag{ // TODO ditto
+	downloadProgressFlag = cli.StringFlag{ // TODO ditto
 		Name:  "progress-interval",
-		Usage: "progress interval for continuous monitoring (valid time units: " + timeUnits + ")",
+		Usage: "download progress interval for continuous monitoring (valid time units: " + timeUnits + ")",
 		Value: dload.DownloadProgressInterval.String(),
 	}
 
@@ -532,10 +532,10 @@ var (
 		Usage: "list public-access Cloud buckets that may disallow certain operations (e.g., 'HEAD(bucket)')",
 	}
 
-	enableFlag    = cli.BoolFlag{Name: "enable", Usage: "enable"}
-	disableFlag   = cli.BoolFlag{Name: "disable", Usage: "disable"}
-	recursiveFlag = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	rmRfFlag      = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}
+	disableFlag = cli.BoolFlag{Name: "disable", Usage: "disable"}
+	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
+	rmRfFlag    = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
@@ -590,6 +590,9 @@ var (
 		Name:  "include-src-bck",
 		Usage: "prefix names of archived objects with the source bucket name",
 	}
+
+	sourceBckFlag = cli.StringFlag{Name: "source-bck", Usage: "source bucket (to archive multiple objects from)"}
+
 	allowAppendToExistingFlag = cli.BoolFlag{
 		Name:  "append-to-arch",
 		Usage: "allow adding a list or a range of objects to an existing archive",
@@ -599,8 +602,6 @@ var (
 		Usage: "keep running archiving xaction in presence of errors in a any given multi-object transaction",
 	}
 	// end archive
-
-	sourceBckFlag = cli.StringFlag{Name: "source-bck", Usage: "source bucket"}
 
 	// AuthN
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}

@@ -6,7 +6,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -49,7 +48,7 @@ type (
 
 func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
 	if len(files) == 0 {
-		return fmt.Errorf("no files found")
+		return fmt.Errorf("no files to PUT (hint: check filename pattern and/or source directory name)")
 	}
 
 	// calculate total size, group by extension
@@ -81,8 +80,10 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
 
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, fmt.Sprintf("Proceed putting to %s?", bck)); !ok {
-			return errors.New("operation canceled")
+		l := len(files)
+		if ok := confirm(c, fmt.Sprintf("PUT %d file%s => %s?", l, cos.Plural(l), bck)); !ok {
+			fmt.Fprintln(c.App.Writer, "Operation canceled")
+			return nil
 		}
 	}
 
@@ -101,7 +102,7 @@ func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
 func uploadFiles(c *cli.Context, p *uploadParams) error {
 	u := &uploadCtx{
 		verbose:      flagIsSet(c, verboseFlag),
-		showProgress: flagIsSet(c, progressBarFlag),
+		showProgress: flagIsSet(c, progressFlag),
 		wg:           cos.NewLimitedWaitGroup(p.workerCnt, 0),
 		lastReport:   time.Now(),
 		reportEvery:  p.refresh,

@@ -68,7 +68,7 @@ var (
 			verboseFlag,
 			unitsFlag,
 			// download and dsort only
-			progressBarFlag,
+			progressFlag,
 			dsortLogFlag,
 		),
 		cmdObject: {

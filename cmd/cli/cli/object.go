@@ -151,7 +151,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	var (
 		target = parseStrFlag(c, targetIDFlag)
-		recurs = flagIsSet(c, recursiveFlag)
+		recurs = flagIsSet(c, recursFlag)
 	)
 	promoteArgs := &api.PromoteArgs{
 		BaseParams: apiBP,
@@ -244,7 +244,7 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 	}
 
 	reader = fh
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		fi, err := fh.Stat()
 		if err != nil {
 			return err
@@ -276,7 +276,7 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 			ArchPath: archPath,
 		}
 		err = api.AppendToArch(appendArchArgs)
-		if flagIsSet(c, progressBarFlag) {
+		if flagIsSet(c, progressFlag) {
 			progress.Wait()
 		}
 		return err
@@ -284,7 +284,7 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 
 	_, err = api.PutObject(putArgs)
 
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		progress.Wait()
 	}
 
@@ -302,7 +302,7 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 		return err
 	}
 
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		pi.start()
 	}
 	for {
@@ -325,7 +325,7 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 			break
 		}
 		reader = cos.NewByteHandle(b.Bytes())
-		if flagIsSet(c, progressBarFlag) {
+		if flagIsSet(c, progressFlag) {
 			actualChunkOffset := atomic.NewInt64(0)
 			reader = cos.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
 				if n == 0 {
@@ -355,7 +355,7 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 		}
 	}
 
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		pi.stop()
 	}
 	if cksumType != cos.ChecksumNone {
@@ -374,7 +374,7 @@ func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPre
 	allFiles := make([]fileToObj, 0, pt.Count())
 	pt.InitIter()
 	for file, hasNext := pt.Next(); hasNext; file, hasNext = pt.Next() {
-		files, err := generateFileList(file, trimPrefix, subdirName, flagIsSet(c, recursiveFlag))
+		files, err := listFiles(c, file, trimPrefix, subdirName, flagIsSet(c, recursFlag))
 		if err != nil {
 			return err
 		}
@@ -473,8 +473,8 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return nil
 	}
 
-	// 4. PUT multi-object list
-	files, err := generateFileList(path, "", objName, flagIsSet(c, recursiveFlag))
+	// 4. PUT directory
+	files, err := listFiles(c, path, "", objName, flagIsSet(c, recursFlag))
 	if err != nil {
 		return err
 	}
@@ -486,13 +486,13 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		bar        *mpb.Bar
 		p          *mpb.Progress
 		barText    = fmt.Sprintf("COMPOSE %d files as \"%s/%s\"", len(fileNames), bck.Name, objName)
-		filesToObj = make([]FileToObjSlice, len(fileNames))
+		filesToObj = make([]fileToObjSlice, len(fileNames))
 		sizes      = make(map[string]int64, len(fileNames))
-		totalSize  = int64(0)
+		totalSize  int64
 	)
 
 	for i, fileName := range fileNames {
-		filesToObj[i], err = generateFileList(fileName, "", "", flagIsSet(c, recursiveFlag))
+		filesToObj[i], err = listFiles(c, fileName, "", "", flagIsSet(c, recursFlag))
 		if err != nil {
 			return err
 		}
@@ -503,7 +503,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		}
 	}
 
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		var bars []*mpb.Bar
 		p, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: barText, total: totalSize})
 		bar = bars[0]

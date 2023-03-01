@@ -38,8 +38,8 @@ var (
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,
-			progressBarFlag,
-			recursiveFlag,
+			progressFlag,
+			recursFlag,
 			refreshFlag,
 			verboseFlag,
 			yesFlag,
@@ -59,7 +59,7 @@ var (
 			setNewCustomMDFlag,
 		},
 		commandPromote: {
-			recursiveFlag,
+			recursFlag,
 			overwriteFlag,
 			notFshareFlag,
 			deleteSrcFlag,
@@ -67,8 +67,8 @@ var (
 			verboseFlag,
 		},
 		commandConcat: {
-			recursiveFlag,
-			progressBarFlag,
+			recursFlag,
+			progressFlag,
 		},
 		commandCat: {
 			offsetFlag,

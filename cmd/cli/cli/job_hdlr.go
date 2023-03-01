@@ -57,8 +57,8 @@ var (
 			descJobFlag,
 			limitConnectionsFlag,
 			objectsListFlag,
-			progressIntervalFlag,
-			progressBarFlag,
+			downloadProgressFlag,
+			progressFlag,
 			waitFlag,
 			limitBytesPerHourFlag,
 			syncFlag,
@@ -168,7 +168,7 @@ var (
 var (
 	waitCmdsFlags = []cli.Flag{
 		refreshFlag,
-		progressBarFlag,
+		progressFlag,
 	}
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
@@ -329,7 +329,7 @@ func startDownloadHandler(c *cli.Context) error {
 		description      = parseStrFlag(c, descJobFlag)
 		timeout          = parseStrFlag(c, timeoutFlag)
 		objectsListPath  = parseStrFlag(c, objectsListFlag)
-		progressInterval = parseStrFlag(c, progressIntervalFlag)
+		progressInterval = parseStrFlag(c, downloadProgressFlag)
 		id               string
 	)
 	if c.NArg() == 0 {
@@ -485,7 +485,7 @@ func startDownloadHandler(c *cli.Context) error {
 
 	fmt.Fprintf(c.App.Writer, "Started download job %s\n", id)
 
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		return pbDownload(c, id)
 	}
 
@@ -564,7 +564,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 	} else if resp.FinishedTime.UnixNano() != 0 {
 		actionDownloaded(c, resp.FinishedCnt)
 	} else {
-		msg := toMonitorMsg(c, id, flprn(progressBarFlag)+"'")
+		msg := toMonitorMsg(c, id, flprn(progressFlag)+"'")
 		actionDone(c, msg)
 	}
 	return err
@@ -1063,7 +1063,7 @@ func waitJobHandler(c *cli.Context) error {
 
 func waitDownloadHandler(c *cli.Context, id string) error {
 	refreshRate := _refreshRate(c)
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
@@ -1099,7 +1099,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 
 func waitDsortHandler(c *cli.Context, id string) error {
 	refreshRate := _refreshRate(c)
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err

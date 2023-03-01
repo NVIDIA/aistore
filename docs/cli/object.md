@@ -15,6 +15,18 @@ This document contains `ais object` commands - the commands to read (GET), write
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [PUT object](#put-object)
+  - [Object names](#object-names)
+  - [Put single file](#put-single-file)
+  - [Put single file with checksum](#put-single-file-with-checksum)
+  - [Put single file with implicitly defined name](#put-single-file-with-implicitly-defined-name)
+  - [Put content from STDIN](#put-content-from-stdin)
+  - [Put directory](#put-directory)
+  - [Put directory with prefix added to destination object names](#put-directory-with-prefix-added-to-destination-object-names)
+  - [Put pattern-matching files from directory](#put-pattern-matching-files-from-directory)
+  - [Put a range of files](#put-a-range-of-files)
+  - [Dry-Run option](#dry-run-option)
+  - [Put multiple directories](#put-multiple-directories)
+  - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
 - [Append file to archive](#append-file-to-archive)
 - [Delete object](#delete-object)
 - [Evict object](#evict-object)
@@ -292,7 +304,6 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
 Put a single file `img1.tar` into local bucket `mybucket`, with a content checksum flag
 to override the default bucket checksum performed at the server side.
 
-
 ```console
 $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --crc32c 0767345f
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
@@ -318,7 +329,7 @@ $ ais object put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar --comput
 # PUT /home/user/bck/img1.tar => ais://mybucket/img-set-1.tar
 ```
 
-## Put single file without explicit name
+## Put single file with implicitly defined name
 
 Put a single file `~/bck/img1.tar` into bucket `mybucket`, without explicit name.
 
@@ -340,7 +351,7 @@ $ tar -xOzf ~/bck/img1.tar | ais object put - ais://mybucket/img1-unpacked
 # PUT /home/user/bck/img1.tar (as stdin) => ais://mybucket/img-unpacked
 ```
 
-## Put directory into bucket
+## Put directory
 
 Put two objects, `/home/user/bck/img1.tar` and `/home/user/bck/img2.zip`, into the root of bucket `mybucket`.
 Note that the path `/home/user/bck` is a shortcut for `/home/user/bck/*` and that recursion is disabled by default.
@@ -352,7 +363,26 @@ $ ais object put "/home/user/bck" ais://mybucket
 # PUT /home/user/bck/img2.tar => img2.zip
 ```
 
-## Put directory into bucket with directory prefix
+Alternatively, to reference source directory we can use relative (`../..`) naming.
+
+Also notice progress bar (the `--progress` flag) and `g*` wildcard that allows to select only the filenames that start with 'g'
+
+```console
+$ ais put "../../../../bin/g*" ais://vvv --progress
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 8       99.82MiB
+.0               2       46.28MiB
+TOTAL           10      146.10MiB
+Proceed putting to ais://vvv? [Y/N]: y
+Uploaded files progress                   10/10 [==============================================================] 100 %
+Uploaded sizes progress 146.10 MiB / 146.10 MiB [==============================================================] 100 %
+PUT 10 objects to "ais://vvv"
+```
+
+> NOTE double quotes to denote the `"../../../../bin/g*"` source above. With pattern matching, using quotation marks is a MUST. Single quotes can be used as well.
+
+## Put directory with prefix added to destination object names
 
 The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to object names.
 
@@ -365,8 +395,6 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir/
 # PUT /home/user/bck/extra/img3.zip => ais://mybucket/subdir/extra/img3.zip
 ```
 
-## Put directory into bucket with name prefix
-
 The same as above, but without trailing `/`.
 
 ```console
@@ -378,17 +406,44 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir
 # PUT /home/user/bck/extra/img3.zip => ais://mybucket/subdirextra/img3.zip
 ```
 
-## Put files from directory matching pattern
+## Put pattern-matching files from directory
 
 Same as above, except that only files matching pattern `*.tar` are PUT, so the final bucket content is `tars/img1.tar` and `tars/extra/img1.tar`.
 
+> NOTE double quotes to denote the source. With pattern matching, using quotation marks is a MUST. Single quotes can be used as well.
+
 ```console
-$ ais object put "~/bck/*.tar" ais://mybucket/tars/
+$ ais put "~/bck/*.tar" ais://mybucket/tars/
 # PUT /home/user/bck/img1.tar => ais://mybucket/tars/img1.tar
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/tars/extra/img1.tar
 ```
 
-## Put files with range
+Same as above with progress bar, recursion into nested directories, and matching characters anywhere in the filename:
+
+```console
+$ ais put "ais/*_t*" ais://vvv --progress --recursive
+Files to upload:
+EXTENSION        COUNT   SIZE
+.go              43      704.40KiB
+TOTAL            43      704.40KiB
+PUT 43 files => ais://vvv? [Y/N]: y
+
+Uploaded files progress                   43/43 [==============================================================] 100 %
+Uploaded sizes progress 704.40 KiB / 704.40 KiB [==============================================================] 100 %
+PUT 43 objects to "ais://vvv"
+```
+
+The result will look as follows:
+```console
+...
+test/target_test.go              1.55KiB
+test/various_test.go             510B
+test/xaction_test.go             2.61KiB
+tgtobj_test.go                   5.57KiB
+utils_test.go                    1.38KiB
+```
+
+## Put a range of files
 
 Put 9 files to `mybucket` using a range request. Note the formatting of object names.
 They exclude the longest parent directory of path which doesn't contain a template (`{a..b}`).
@@ -397,24 +452,25 @@ They exclude the longest parent directory of path which doesn't contain a templa
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 
 # NOTE: make sure to use double or sinle quotes around the range
+
 $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket -y
 9 objects put into "ais://mybucket" bucket
 ```
 
-## Put files with range and custom prefix
-
-Same as above, except object names have additional prefix `test${d1}${d2}.txt`.
+Same as above, except that destination object names will have additional prefix `test${d1}${d2}.txt`.
 
 ```bash
+# prep test files
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 
 $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
 
 9 objects put into "ais://mybucket" bucket
-# PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt and 8 more
+# PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt
+# (and 8 more)
 ```
 
-## Preview putting files with dry-run
+## Dry-Run option
 
 Preview the files that would be sent to the cluster, without actually putting them.
 
@@ -427,7 +483,7 @@ $ ais object put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
 (...)
 ```
 
-## PUT multiple directories
+## Put multiple directories
 
 Put multiple directories into the cluster with range syntax.
 
@@ -438,7 +494,7 @@ $ ais object put "dir{0..10}" ais://mybucket -y
 # PUT "/home/user/dir0/test0.txt" => b/dir0/test0.txt and 32 more
 ```
 
-## PUT multiple directories with the `--skip-vc` option
+## Put multiple directories with the `--skip-vc` option
 
 > The `--skip-vc` option allows AIS to skip loading existing object's metadata to perform metadata-associated processing (such as comparing source and destination checksums, for instance). In certain scenarios (e.g., massive uploading of new files that cannot be present in the bucket) this can help reduce PUT latency.
 
@@ -451,7 +507,6 @@ EXTENSION        COUNT   SIZE
 .txt             33      66B
 TOTAL            33      66B
 ```
-
 
 # Append file to archive
 

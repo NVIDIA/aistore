@@ -354,7 +354,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	debug.Assert(strings.HasPrefix(id, dload.PrefixJobID), id)
 
 	// with progress bar
-	if flagIsSet(c, progressBarFlag) {
+	if flagIsSet(c, progressFlag) {
 		refreshRate := _refreshRate(c)
 		downloadingResult, err := newDownloaderPB(apiBP, id, refreshRate).run()
 		if err != nil {

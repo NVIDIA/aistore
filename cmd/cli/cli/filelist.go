@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/urfave/cli"
 )
 
 type (
@@ -26,12 +27,16 @@ type (
 		Cnt  int64
 		Size int64
 	}
-)
-type FileToObjSlice []fileToObj
+	// recursive walk
+	walkCtx struct {
+		pattern      string
+		trimPrefix   string
+		appendPrefix string
+		files        []fileToObj
+	}
 
-func (a FileToObjSlice) Len() int           { return len(a) }
-func (a FileToObjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
-func (a FileToObjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+	fileToObjSlice []fileToObj
+)
 
 // removes base part from the path making object name from it.
 // Extra step - removing leading '/' if base does not end with it
@@ -40,10 +45,13 @@ func cutPrefixFromPath(path, base string) string {
 	return strings.TrimPrefix(str, "/")
 }
 
-// returns only files inside the 'path' directory that matches mask. No recursion
-func filesInDirByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, error) {
-	files := make([]fileToObj, 0)
-	dentries, err := os.ReadDir(path)
+// Returns files from the 'path' directory. No recursion.
+// If shell-filename matching pattern is used, includes only the matching files.
+func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error) {
+	var (
+		files         []fileToObj
+		dentries, err = os.ReadDir(path)
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +59,7 @@ func filesInDirByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj,
 		if dent.IsDir() || !dent.Type().IsRegular() {
 			continue
 		}
-		if matched, err := filepath.Match(mask, filepath.Base(dent.Name())); !matched || err != nil {
+		if matched, err := filepath.Match(pattern, filepath.Base(dent.Name())); !matched || err != nil {
 			continue
 		}
 		if finfo, err := dent.Info(); err == nil {
@@ -68,57 +76,38 @@ func filesInDirByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj,
 	return files, nil
 }
 
-// traverses the directory 'path' recursively and collects all files
-// with names that match mask
-func fileTreeByMask(path, trimPrefix, appendPrefix, mask string) ([]fileToObj, error) {
-	files := make([]fileToObj, 0)
-	walkf := func(fqn string, info os.FileInfo, err error) error {
-		if err != nil {
-			if os.IsPermission(err) {
-				return nil
-			}
-			if cmn.IsErrObjNought(err) {
-				return nil
-			}
-			return fmt.Errorf("filepath-walk invoked with err: %v", err)
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if matched, _ := filepath.Match(mask, filepath.Base(fqn)); !matched {
-			return nil
-		}
-
-		fo := fileToObj{
-			name: appendPrefix + cutPrefixFromPath(fqn, trimPrefix), // empty strings ignored
-			path: fqn,
-			size: info.Size(),
-		}
-		files = append(files, fo)
-		return nil
+// Recursively traverses the 'path' dir.
+// If shell-filename matching pattern is used, includes only the matching files.
+func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error) {
+	ctx := &walkCtx{
+		pattern:      pattern,
+		trimPrefix:   trimPrefix,
+		appendPrefix: appendPrefix,
 	}
-
-	if err := filepath.Walk(path, walkf); err != nil {
+	if err := filepath.Walk(path, ctx.do); err != nil {
 		return nil, err
 	}
-
-	return files, nil
+	return ctx.files, nil
 }
 
 // gets start path with optional wildcard at the end, base to generate
 // object names, and recursive flag, returns the list of files that matches
 // criteria (file path, object name, size for every file)
-func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
+func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
 	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
-
-	mask := ""
-	info, err := os.Stat(path)
+	var (
+		pattern   string
+		info, err = os.Stat(path)
+	)
 	if err != nil {
-		// the path must end with a base containing '*' and/or '?'
-		mask = filepath.Base(path)
-		wild := strings.Contains(mask, "*") || strings.Contains(mask, "?")
-		if !wild {
-			return nil, fmt.Errorf("path %s does not exist and is not a pattern (%q)", path, mask)
+		// expecting filename-matching pattern base
+		pattern = filepath.Base(path)
+		isPattern := strings.Contains(pattern, "*") ||
+			strings.Contains(pattern, "?") ||
+			strings.Contains(pattern, "\\")
+		if !isPattern {
+			warn := fmt.Sprintf("path %s is not a directory and does not appear to be a shell filename matching pattern (%q)", path, pattern)
+			actionWarn(c, warn)
 		}
 		path = filepath.Dir(path)
 		info, err = os.Stat(path)
@@ -142,20 +131,18 @@ func generateFileList(path, trimPrefix, appendPrefix string, recursive bool) ([]
 		}
 
 		// otherwise, the entire directory (note that '*' is applied automatically)
-		mask = "*"
+		pattern = "*"
 	}
 
 	// if trim prefix not specified by a called, cut the whole path from object name and use what's
-	// left in 'mask' part of a filename
+	// left in 'pattern' part of a filename
 	if trimPrefix == "" {
 		trimPrefix = path
 	}
-
 	if !recursive {
-		return filesInDirByMask(path, trimPrefix, appendPrefix, mask)
+		return listDir(path, trimPrefix, appendPrefix, pattern)
 	}
-
-	return fileTreeByMask(path, trimPrefix, appendPrefix, mask)
+	return listRecurs(path, trimPrefix, appendPrefix, pattern)
 }
 
 func groupByExt(files []fileToObj) (int64, map[string]counter) {
@@ -171,3 +158,40 @@ func groupByExt(files []fileToObj) (int64, map[string]counter) {
 	}
 	return totalSize, extSizes
 }
+
+/////////////
+// walkCtx //
+/////////////
+
+func (w *walkCtx) do(fqn string, info os.FileInfo, err error) error {
+	if err != nil {
+		if os.IsPermission(err) {
+			return nil
+		}
+		if cmn.IsErrObjNought(err) {
+			return nil
+		}
+		return fmt.Errorf("filepath-walk invoked with err: %v", err)
+	}
+	if info.IsDir() {
+		return nil
+	}
+	if matched, _ := filepath.Match(w.pattern, filepath.Base(fqn)); !matched {
+		return nil
+	}
+	fo := fileToObj{
+		name: w.appendPrefix + cutPrefixFromPath(fqn, w.trimPrefix), // empty strings ignored
+		path: fqn,
+		size: info.Size(),
+	}
+	w.files = append(w.files, fo)
+	return nil
+}
+
+////////////////////
+// fileToObjSlice //
+////////////////////
+
+func (a fileToObjSlice) Len() int           { return len(a) }
+func (a fileToObjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
+func (a fileToObjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
