@@ -25,7 +25,7 @@ import (
 type (
 	uploadParams struct {
 		bck       cmn.Bck
-		files     []fileToObj
+		files     []fobj
 		workerCnt int
 		refresh   time.Duration
 		totalSize int64
@@ -46,7 +46,7 @@ type (
 	}
 )
 
-func putMultipleObjects(c *cli.Context, files []fileToObj, bck cmn.Bck) error {
+func putMultipleObjects(c *cli.Context, files []fobj, bck cmn.Bck) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to PUT (hint: check filename pattern and/or source directory name)")
 	}
@@ -109,18 +109,18 @@ func uploadFiles(c *cli.Context, p *uploadParams) error {
 	}
 	if u.showProgress {
 		var (
-			filesBarArg = progressBarArgs{
+			filesBarArg = barArgs{
 				total:   int64(len(p.files)),
 				barText: "Uploaded files progress",
 				barType: unitsArg,
 			}
-			sizeBarArg = progressBarArgs{
+			sizeBarArg = barArgs{
 				total:   p.totalSize,
 				barText: "Uploaded sizes progress",
 				barType: sizeArg,
 			}
 		)
-		u.progress, u.totalBars = simpleProgressBar(filesBarArg, sizeBarArg)
+		u.progress, u.totalBars = simpleBar(filesBarArg, sizeBarArg)
 	}
 
 	for _, f := range p.files {
@@ -144,7 +144,7 @@ func uploadFiles(c *cli.Context, p *uploadParams) error {
 // uploadCtx //
 ///////////////
 
-func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fileToObj) {
+func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fobj) {
 	defer u.fini(c, p, f)
 
 	reader, err := cos.NewFileHandle(f.path)
@@ -209,7 +209,7 @@ func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fileToObj) {
 	}
 }
 
-func (u *uploadCtx) fini(c *cli.Context, p *uploadParams, f fileToObj) {
+func (u *uploadCtx) fini(c *cli.Context, p *uploadParams, f fobj) {
 	var (
 		total = int(u.processedCnt.Inc())
 		size  = u.processedSize.Add(f.size)

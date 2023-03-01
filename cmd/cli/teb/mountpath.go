@@ -133,7 +133,7 @@ func mpathRow(c *PerfTabCtx, cols []*header, mpath string, cdf *fs.CDF, row []st
 		row = append(row, strconv.Itoa(int(cdf.PctUsed))+"%")
 	}
 	if _idx(cols, colCapAvail) >= 0 {
-		row = append(row, FmtStatValue("", stats.KindSize, int64(cdf.Avail), c.Units))
+		row = append(row, FmtSize(int64(cdf.Avail), c.Units, 2))
 	}
 	if _idx(cols, colDisk) >= 0 {
 		if len(cdf.Disks) > 1 {
@@ -161,7 +161,7 @@ func numMpathsRow(ds *stats.NodeStatus, c *PerfTabCtx, cols []*header, row []str
 	}
 	if _idx(cols, colCapAvail) >= 0 {
 		avail := _sumupMpathsAvail(tcdf, ds.DeploymentType)
-		row = append(row, FmtStatValue("", stats.KindSize, int64(avail), c.Units))
+		row = append(row, FmtSize(int64(avail), c.Units, 2))
 	}
 	if i := _idx(cols, colDisksFS); i >= 0 {
 		row = append(row, _fmtMpathDisks(tcdf.Mountpaths, i))

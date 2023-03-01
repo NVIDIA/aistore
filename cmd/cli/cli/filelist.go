@@ -16,7 +16,7 @@ import (
 )
 
 type (
-	fileToObj struct {
+	fobj struct {
 		path string
 		name string
 		size int64
@@ -32,10 +32,10 @@ type (
 		pattern      string
 		trimPrefix   string
 		appendPrefix string
-		files        []fileToObj
+		files        []fobj
 	}
 
-	fileToObjSlice []fileToObj
+	fobjSlice []fobj // sortable
 )
 
 // removes base part from the path making object name from it.
@@ -47,9 +47,9 @@ func cutPrefixFromPath(path, base string) string {
 
 // Returns files from the 'path' directory. No recursion.
 // If shell-filename matching pattern is used, includes only the matching files.
-func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error) {
+func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) {
 	var (
-		files         []fileToObj
+		files         []fobj
 		dentries, err = os.ReadDir(path)
 	)
 	if err != nil {
@@ -65,7 +65,7 @@ func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error
 		if finfo, err := dent.Info(); err == nil {
 			debug.Assert(finfo.Name() == dent.Name())
 			fullPath := filepath.Join(path, dent.Name())
-			fo := fileToObj{
+			fo := fobj{
 				name: appendPrefix + cutPrefixFromPath(fullPath, trimPrefix), // empty strings ignored
 				path: fullPath,
 				size: finfo.Size(),
@@ -78,7 +78,7 @@ func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error
 
 // Recursively traverses the 'path' dir.
 // If shell-filename matching pattern is used, includes only the matching files.
-func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, error) {
+func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) {
 	ctx := &walkCtx{
 		pattern:      pattern,
 		trimPrefix:   trimPrefix,
@@ -93,7 +93,7 @@ func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fileToObj, er
 // gets start path with optional wildcard at the end, base to generate
 // object names, and recursive flag, returns the list of files that matches
 // criteria (file path, object name, size for every file)
-func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) ([]fileToObj, error) {
+func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) (fobjSlice, error) {
 	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
 	var (
 		pattern   string
@@ -125,8 +125,8 @@ func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive 
 				trimPrefix = filepath.Dir(path)
 			}
 			objName := cutPrefixFromPath(path, trimPrefix)
-			fo := fileToObj{name: appendPrefix + objName, path: path, size: info.Size()}
-			files := []fileToObj{fo}
+			fo := fobj{name: appendPrefix + objName, path: path, size: info.Size()}
+			files := []fobj{fo}
 			return files, nil
 		}
 
@@ -145,7 +145,7 @@ func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive 
 	return listRecurs(path, trimPrefix, appendPrefix, pattern)
 }
 
-func groupByExt(files []fileToObj) (int64, map[string]counter) {
+func groupByExt(files []fobj) (int64, map[string]counter) {
 	totalSize := int64(0)
 	extSizes := make(map[string]counter, 10)
 	for _, f := range files {
@@ -179,7 +179,7 @@ func (w *walkCtx) do(fqn string, info os.FileInfo, err error) error {
 	if matched, _ := filepath.Match(w.pattern, filepath.Base(fqn)); !matched {
 		return nil
 	}
-	fo := fileToObj{
+	fo := fobj{
 		name: w.appendPrefix + cutPrefixFromPath(fqn, w.trimPrefix), // empty strings ignored
 		path: fqn,
 		size: info.Size(),
@@ -188,10 +188,10 @@ func (w *walkCtx) do(fqn string, info os.FileInfo, err error) error {
 	return nil
 }
 
-////////////////////
-// fileToObjSlice //
-////////////////////
+///////////////
+// fobjSlice //
+///////////////
 
-func (a fileToObjSlice) Len() int           { return len(a) }
-func (a fileToObjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
-func (a fileToObjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a fobjSlice) Len() int           { return len(a) }
+func (a fobjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
+func (a fobjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

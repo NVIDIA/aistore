@@ -169,7 +169,7 @@ func newDSortPB(baseParams api.BaseParams, id string, refreshTime time.Duration)
 		id:          id,
 		apiBP:       baseParams,
 		refreshTime: refreshTime,
-		p:           mpb.New(mpb.WithWidth(progressBarWidth)),
+		p:           mpb.New(mpb.WithWidth(barWidth)),
 		phases:      newPhases(),
 		errors:      make([]string, 0),
 		warnings:    make([]string, 0),

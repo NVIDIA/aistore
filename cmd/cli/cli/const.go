@@ -247,7 +247,7 @@ const (
 	// Objects
 	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
 	putPromoteObjectArgument = "FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]"
-	concatObjectArgument     = "FILE|DIRECTORY [FILE|DIRECTORY...] BUCKET/OBJECT_NAME"
+	concatObjectArgument     = "FILE|DIRECTORY|DIRECTORY/PATTERN [FILE|DIRECTORY|DIRECTORY/PATTERN...] BUCKET/OBJECT_NAME"
 	objectArgument           = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
 	renameObjectArgument     = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"

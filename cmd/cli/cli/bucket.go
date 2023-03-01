@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -362,7 +361,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	if qbck.IsRemoteAIS() {
 		p = qbck.DisplayProvider()
 	}
-	apparentSize := teb.FmtStatValue("", stats.KindSize, int64(footer.size), units)
+	apparentSize := teb.FmtSize(int64(footer.size), units, 2)
 	if footer.pobj+footer.robj != 0 {
 		foot = fmt.Sprintf("Total: [%s bucket%s: %d%s, objects %d(%d), apparent size %s, used capacity %d%%] ========",
 			p, cos.Plural(footer.nb), footer.nb, s, footer.pobj, footer.robj, apparentSize, footer.pct)

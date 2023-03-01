@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -91,21 +90,21 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
 	)
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
-		printtedVal := teb.FmtStatValue("", stats.KindSize, snap.Stats.Bytes, units)
+		printtedVal := teb.FmtSize(snap.Stats.Bytes, units, 2)
 		props = append(props,
 			nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
 			nvpair{Name: "loc.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.InObjs != 0 || snap.Stats.InBytes != 0 {
-		printtedVal := teb.FmtStatValue("", stats.KindSize, snap.Stats.InBytes, units)
+		printtedVal := teb.FmtSize(snap.Stats.InBytes, units, 2)
 		props = append(props,
 			nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
 			nvpair{Name: "in.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
-		printtedVal := teb.FmtStatValue("", stats.KindSize, snap.Stats.OutBytes, units)
+		printtedVal := teb.FmtSize(snap.Stats.OutBytes, units, 2)
 		props = append(props,
 			nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
 			nvpair{Name: "out.obj.size", Value: printtedVal},

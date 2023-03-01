@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
@@ -34,8 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
-	"github.com/vbauerster/mpb/v4"
-	"github.com/vbauerster/mpb/v4/decor"
 )
 
 const (
@@ -64,13 +61,6 @@ var (
 )
 
 type (
-	progressBarArgs struct {
-		barType string
-		barText string
-		total   int64
-		options []mpb.BarOption
-	}
-
 	nvpair struct {
 		Name  string
 		Value string
@@ -592,41 +582,6 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 	}
 }
 
-func simpleProgressBar(args ...progressBarArgs) (*mpb.Progress, []*mpb.Bar) {
-	var (
-		progress = mpb.New(mpb.WithWidth(progressBarWidth))
-		bars     = make([]*mpb.Bar, 0, len(args))
-	)
-
-	for _, a := range args {
-		var argDecorators []decor.Decorator
-		switch a.barType {
-		case unitsArg:
-			argDecorators = []decor.Decorator{
-				decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}),
-				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
-			}
-		case sizeArg:
-			argDecorators = []decor.Decorator{
-				decor.Name(a.barText, decor.WC{W: len(a.barText) + 1, C: decor.DidentRight}),
-				decor.CountersKibiByte("% .2f / % .2f", decor.WCSyncWidth),
-			}
-		default:
-			debug.Assertf(false, "invalid argument: %s", a.barType)
-		}
-		options := make([]mpb.BarOption, 0, len(a.options)+2)
-		options = append(options, a.options...)
-		options = append(
-			options,
-			mpb.PrependDecorators(argDecorators...),
-			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
-		)
-		bars = append(bars, progress.AddBar(a.total, options...))
-	}
-
-	return progress, bars
-}
-
 func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 	if !verbose { // i.e., compact
 		propList = nvpairList{
@@ -901,19 +856,92 @@ func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 	return flat, err
 }
 
+func configPropList(scopes ...string) []string {
+	scope := apc.Cluster
+	if len(scopes) > 0 {
+		scope = scopes[0]
+	}
+	propList := make([]string, 0, 48)
+	err := cmn.IterFields(cmn.Config{}, func(tag string, _ cmn.IterField) (err error, b bool) {
+		propList = append(propList, tag)
+		return
+	}, cmn.IterOpts{Allowed: scope})
+	debug.AssertNoErr(err)
+	return propList
+}
+
+func parseHexOrUint(s string) (uint64, error) {
+	const hexPrefix = "0x"
+	if strings.HasPrefix(s, hexPrefix) {
+		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
+	}
+	return strconv.ParseUint(s, 10, 64)
+}
+
+// NOTE: as provider, AIS can be (local cluster | remote cluster) -
+// return only the former and handle remote case separately
+func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
+	sorted = make([]string, 0, len(apc.Providers))
+	for p := range apc.Providers {
+		for _, bck := range bcks {
+			if bck.Provider != p {
+				continue
+			}
+			if bck.IsAIS() {
+				sorted = append(sorted, p)
+			} else if p != apc.AIS {
+				sorted = append(sorted, p)
+			}
+			break
+		}
+	}
+	sort.Strings(sorted)
+	return
+}
+
+// `ais ls` and friends: allow for `provider:` shortcut
+func preparseBckObjURI(uri string) string {
+	if uri == "" {
+		return uri
+	}
+	p := strings.TrimSuffix(uri, ":")
+	if _, err := cmn.NormalizeProvider(p); err == nil {
+		return p + apc.BckProviderSeparator
+	}
+	return uri // unchanged
+}
+
+func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
+func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
+func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Note: ")+msg) }
+
+func actionCptn(c *cli.Context, prefix, msg string) {
+	if prefix == "" {
+		fmt.Fprintln(c.App.Writer, fcyan(msg))
+	} else {
+		fmt.Fprintln(c.App.Writer, fcyan(prefix)+msg)
+	}
+}
+
+// (more warning)
+func verboseWarnings() bool {
+	return os.Getenv(env.DEBUG) != "" // anything for now
+}
+
 //////////////
 // dlSource //
 //////////////
 
-type dlSourceBackend struct {
-	bck    cmn.Bck
-	prefix string
-}
-
-type dlSource struct {
-	link    string
-	backend dlSourceBackend
-}
+type (
+	dlSourceBackend struct {
+		bck    cmn.Bck
+		prefix string
+	}
+	dlSource struct {
+		link    string
+		backend dlSourceBackend
+	}
+)
 
 // Replace protocol (gs://, s3://, az://) with proper GCP/AWS/Azure URL
 func parseSource(rawURL string) (source dlSource, err error) {
@@ -988,98 +1016,4 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		link:    link,
 		backend: cloudSource,
 	}, err
-}
-
-///////////////////
-// progIndicator //
-///////////////////
-
-// TODO: integrate this with simpleProgressBar
-type progIndicator struct {
-	objName         string
-	sizeTransferred *atomic.Int64
-}
-
-func (*progIndicator) start() { fmt.Print("\033[s") }
-func (*progIndicator) stop()  { fmt.Println("") }
-
-func (pi *progIndicator) printProgress(incr int64) {
-	fmt.Print("\033[u\033[K")
-	fmt.Printf("Uploaded %s: %s", pi.objName, cos.ToSizeIEC(pi.sizeTransferred.Add(incr), 2))
-}
-
-func newProgIndicator(objName string) *progIndicator {
-	return &progIndicator{objName, atomic.NewInt64(0)}
-}
-
-func configPropList(scopes ...string) []string {
-	scope := apc.Cluster
-	if len(scopes) > 0 {
-		scope = scopes[0]
-	}
-	propList := make([]string, 0, 48)
-	err := cmn.IterFields(cmn.Config{}, func(tag string, _ cmn.IterField) (err error, b bool) {
-		propList = append(propList, tag)
-		return
-	}, cmn.IterOpts{Allowed: scope})
-	debug.AssertNoErr(err)
-	return propList
-}
-
-func parseHexOrUint(s string) (uint64, error) {
-	const hexPrefix = "0x"
-	if strings.HasPrefix(s, hexPrefix) {
-		return strconv.ParseUint(s[len(hexPrefix):], 16, 64)
-	}
-	return strconv.ParseUint(s, 10, 64)
-}
-
-// NOTE: as provider, AIS can be (local cluster | remote cluster) -
-// return only the former and handle remote case separately
-func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
-	sorted = make([]string, 0, len(apc.Providers))
-	for p := range apc.Providers {
-		for _, bck := range bcks {
-			if bck.Provider != p {
-				continue
-			}
-			if bck.IsAIS() {
-				sorted = append(sorted, p)
-			} else if p != apc.AIS {
-				sorted = append(sorted, p)
-			}
-			break
-		}
-	}
-	sort.Strings(sorted)
-	return
-}
-
-// `ais ls` and friends: allow for `provider:` shortcut
-func preparseBckObjURI(uri string) string {
-	if uri == "" {
-		return uri
-	}
-	p := strings.TrimSuffix(uri, ":")
-	if _, err := cmn.NormalizeProvider(p); err == nil {
-		return p + apc.BckProviderSeparator
-	}
-	return uri // unchanged
-}
-
-func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
-func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
-func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Note: ")+msg) }
-
-func actionCptn(c *cli.Context, prefix, msg string) {
-	if prefix == "" {
-		fmt.Fprintln(c.App.Writer, fcyan(msg))
-	} else {
-		fmt.Fprintln(c.App.Writer, fcyan(prefix)+msg)
-	}
-}
-
-// (more warning)
-func verboseWarnings() bool {
-	return os.Getenv(env.DEBUG) != "" // anything for now
 }

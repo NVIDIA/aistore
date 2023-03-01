@@ -52,13 +52,13 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *cluster.Smap, regex *regexp.Regexp,
 			row = append(row, FmtStatValue("", stats.KindThroughput, stat.RBps, units))
 		}
 		if _idx(cols, colReadAvg) >= 0 {
-			row = append(row, FmtStatValue("", stats.KindSize, stat.Ravg, units))
+			row = append(row, FmtSize(stat.Ravg, units, 2))
 		}
 		if _idx(cols, colWrite) >= 0 {
-			row = append(row, FmtStatValue("", stats.KindThroughput, stat.WBps, units))
+			row = append(row, FmtSize(stat.WBps, units, 2))
 		}
 		if _idx(cols, colWriteAvg) >= 0 {
-			row = append(row, FmtStatValue("", stats.KindSize, stat.Wavg, units))
+			row = append(row, FmtSize(stat.Wavg, units, 2))
 		}
 		if _idx(cols, colUtil) >= 0 {
 			row = append(row, FmtStatValue("", "", stat.Util, units)+"%")

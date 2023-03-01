@@ -61,7 +61,6 @@ type (
 const (
 	totalBarText          = "Files downloaded:"
 	unknownTotalIncrement = 2048
-	progressBarWidth      = 64
 	minTotalCnt           = 10
 )
 
@@ -101,7 +100,7 @@ func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Dura
 		apiBP:       baseParams,
 		refreshTime: refreshTime,
 		states:      make(map[string]*fileDownloadingState),
-		p:           mpb.New(mpb.WithWidth(progressBarWidth)),
+		p:           mpb.New(mpb.WithWidth(barWidth)),
 	}
 }
 
@@ -158,9 +157,9 @@ func (b *downloaderPB) start() (bool, error) {
 		barText += " (total estimated)"
 	}
 
-	if b.totalFilesCnt() > 1 {
+	if cnt := b.totalFilesCnt(); cnt > 1 {
 		b.totalBar = b.p.AddBar(
-			int64(b.totalFilesCnt()),
+			int64(cnt),
 			mpb.BarRemoveOnComplete(),
 			mpb.PrependDecorators(
 				decor.Name(barText, decor.WC{W: len(totalBarText) + 2, C: decor.DSyncWidthR}),
@@ -197,14 +196,16 @@ func (b *downloaderPB) updateBars(downloadStatus *dload.StatusResp) {
 	}
 }
 
+// finished files are those that are in b.states
+// but were not included in CurrentTasks of the status response
 func (b *downloaderPB) updateFinishedFiles(fileStates []dload.TaskDlInfo) {
-	// The finished files are those that are in b.states, but were not included in CurrentTasks of the status response
-	fileStatesMap := make(cos.StrSet)
+	var (
+		fileStatesMap = make(cos.StrSet, len(fileStates))
+		finishedFiles []string
+	)
 	for _, file := range fileStates {
 		fileStatesMap.Add(file.Name)
 	}
-
-	finishedFiles := make([]string, 0)
 	for name, state := range b.states {
 		_, ok := fileStatesMap[name]
 		if !ok {
@@ -212,9 +213,8 @@ func (b *downloaderPB) updateFinishedFiles(fileStates []dload.TaskDlInfo) {
 			finishedFiles = append(finishedFiles, name)
 		}
 	}
-
-	for _, finishedFile := range finishedFiles {
-		delete(b.states, finishedFile)
+	for _, f := range finishedFiles {
+		delete(b.states, f)
 	}
 }
 

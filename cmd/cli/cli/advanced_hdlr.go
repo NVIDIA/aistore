@@ -114,7 +114,7 @@ func genShardsHandler(c *cli.Context) error {
 	var (
 		// Progress bar
 		text     = "Shards created: "
-		progress = mpb.New(mpb.WithWidth(progressBarWidth))
+		progress = mpb.New(mpb.WithWidth(barWidth))
 		bar      = progress.AddBar(
 			pt.Count(),
 			mpb.PrependDecorators(

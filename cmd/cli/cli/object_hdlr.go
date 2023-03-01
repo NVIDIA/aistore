@@ -68,6 +68,7 @@ var (
 		},
 		commandConcat: {
 			recursFlag,
+			unitsFlag,
 			progressFlag,
 		},
 		commandCat: {
@@ -142,7 +143,7 @@ var (
 			},
 			{
 				Name:      commandConcat,
-				Usage:     "concatenate multiple files into a new, single object",
+				Usage:     "concatenate multiple files and/or directories (with or without matching pattern) as a new single object",
 				ArgsUsage: concatObjectArgument,
 				Flags:     objectCmdsFlags[commandConcat],
 				Action:    concatHandler,
@@ -263,13 +264,16 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 		list           = parseStrFlag(c, listFlag)
 	)
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
 	}
 	if template == "" && list == "" {
-		return missingArgumentsError(c, "either object list or template flag")
+		return missingArgumentsError(c,
+			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
+				flprn(listFlag), flprn(templateFlag)))
 	}
 	if template != "" && list != "" {
-		return incorrectUsageMsg(c, "list and template options are mutually exclusive")
+		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
+			flprn(listFlag), flprn(templateFlag)))
 	}
 	if bckTo, objName, err = parseBckObjectURI(c, c.Args().Get(0), true /*optional objName*/); err != nil {
 		return
@@ -308,7 +312,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func putRegularObjHandler(c *cli.Context) error {
+func putRegularObj(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "file to put", "destination object name in the form "+optionalObjectsArgument)
 	}
@@ -335,8 +339,7 @@ func putHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, createArchFlag) {
 		return createArchMultiObjHandler(c)
 	}
-
-	return putRegularObjHandler(c)
+	return putRegularObj(c)
 }
 
 func concatHandler(c *cli.Context) (err error) {
@@ -345,10 +348,11 @@ func concatHandler(c *cli.Context) (err error) {
 		objName string
 	)
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "at least one file to put", "object name in the form bucket/[object]")
+		return missingArgumentsError(c, "at least one file or directory to concatenate",
+			"destination object in the form "+optionalObjectsArgument)
 	}
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "object name in the form bucket/object")
+		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
 	}
 
 	fullObjName := c.Args().Get(len(c.Args()) - 1)
@@ -376,7 +380,7 @@ func promoteHandler(c *cli.Context) (err error) {
 	}
 
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "destination in the form bucket/[object]")
+		return missingArgumentsError(c, "destination in the form "+optionalObjectsArgument)
 	}
 
 	var (

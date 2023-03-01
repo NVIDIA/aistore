@@ -249,10 +249,11 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 		if err != nil {
 			return err
 		}
-
-		progress, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: objName, total: fi.Size()})
-		readCallback := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cos.NewCallbackReadOpenCloser(fh, readCallback)
+		// setup progress bar
+		args := barArgs{barType: sizeArg, barText: objName, total: fi.Size()}
+		progress, bars = simpleBar(args)
+		cb := func(n int, _ error) { bars[0].IncrBy(n) }
+		reader = cos.NewCallbackReadOpenCloser(fh, cb)
 	}
 
 	putArgs := api.PutArgs{
@@ -276,7 +277,7 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 			ArchPath: archPath,
 		}
 		err = api.AppendToArch(appendArchArgs)
-		if flagIsSet(c, progressFlag) {
+		if progress != nil {
 			progress.Wait()
 		}
 		return err
@@ -284,10 +285,9 @@ func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) err
 
 	_, err = api.PutObject(putArgs)
 
-	if flagIsSet(c, progressFlag) {
+	if progress != nil {
 		progress.Wait()
 	}
-
 	return err
 }
 
@@ -371,7 +371,7 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 }
 
 func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
-	allFiles := make([]fileToObj, 0, pt.Count())
+	allFiles := make([]fobj, 0, pt.Count())
 	pt.InitIter()
 	for file, hasNext := pt.Next(); hasNext; file, hasNext = pt.Next() {
 		files, err := listFiles(c, file, trimPrefix, subdirName, flagIsSet(c, recursFlag))
@@ -481,42 +481,54 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	return putMultipleObjects(c, files, bck)
 }
 
-func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) (err error) {
+func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {
+	const verb = "Compose"
 	var (
-		bar        *mpb.Bar
-		p          *mpb.Progress
-		barText    = fmt.Sprintf("COMPOSE %d files as \"%s/%s\"", len(fileNames), bck.Name, objName)
-		filesToObj = make([]fileToObjSlice, len(fileNames))
-		sizes      = make(map[string]int64, len(fileNames))
 		totalSize  int64
+		bar        *mpb.Bar
+		progress   *mpb.Progress
+		bname      = bck.DisplayName()
+		l          = len(fileNames)
+		fobjMatrix = make([]fobjSlice, l)
+		sizes      = make(map[string]int64, l) // or greater
 	)
-
 	for i, fileName := range fileNames {
-		filesToObj[i], err = listFiles(c, fileName, "", "", flagIsSet(c, recursFlag))
+		fsl, err := listFiles(c, fileName, "", "", flagIsSet(c, recursFlag))
 		if err != nil {
 			return err
 		}
-
-		sort.Sort(filesToObj[i])
-		for _, f := range filesToObj[i] {
+		sort.Sort(fsl)
+		for _, f := range fsl {
 			totalSize += f.size
+			sizes[f.path] = f.size
 		}
+		fobjMatrix[i] = fsl
 	}
-
+	// setup progress bar
 	if flagIsSet(c, progressFlag) {
-		var bars []*mpb.Bar
-		p, bars = simpleProgressBar(progressBarArgs{barType: sizeArg, barText: barText, total: totalSize})
+		switch l {
+		case 1:
+			fmt.Fprintf(c.App.Writer, "%s %q as %s/%s\n", verb, fileNames[0], bname, objName)
+		case 2, 3:
+			fmt.Fprintf(c.App.Writer, "%s %v as %s/%s\n", verb, fileNames, bname, objName)
+		default:
+			fmt.Fprintf(c.App.Writer, "%s %d pathnames as %s/%s\n", verb, l, bname, objName)
+		}
+		var (
+			bars []*mpb.Bar
+			args = barArgs{barType: sizeArg, barText: "Progress:", total: totalSize}
+		)
+		progress, bars = simpleBar(args)
 		bar = bars[0]
 	}
-
+	// do
 	var handle string
-	for _, filesSlice := range filesToObj {
-		for _, f := range filesSlice {
+	for _, fsl := range fobjMatrix {
+		for _, f := range fsl {
 			fh, err := cos.NewFileHandle(f.path)
 			if err != nil {
 				return err
 			}
-
 			appendArgs := api.AppendArgs{
 				BaseParams: apiBP,
 				Bck:        bck,
@@ -528,29 +540,32 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 			if err != nil {
 				return fmt.Errorf("%v. Object not created", err)
 			}
-
 			if bar != nil {
-				bar.IncrInt64(sizes[fh.Name()])
+				bar.IncrInt64(sizes[f.path])
 			}
 		}
 	}
 
-	if p != nil {
-		p.Wait()
+	if progress != nil {
+		progress.Wait()
 	}
-
-	err = api.FlushObject(api.FlushArgs{
+	err := api.FlushObject(api.FlushArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,
 		Handle:     handle,
 	})
-
 	if err != nil {
 		return fmt.Errorf("%v. Object not created", err)
 	}
 
-	fmt.Fprintf(c.App.Writer, "COMPOSE %s/%s, size %s\n", bck.DisplayName(), objName, cos.ToSizeIEC(totalSize, 2))
+	units, errU := parseUnitsFlag(c, unitsFlag)
+	if errU != nil {
+		actionWarn(c, errU.Error())
+		units = ""
+	}
+	fmt.Fprintf(c.App.Writer, "\nCreated %s/%s (size %s)\n",
+		bname, objName, teb.FmtSize(totalSize, units, 2))
 	return nil
 }
 
