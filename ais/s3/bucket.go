@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -66,10 +67,9 @@ func (r *ListBucketResult) Add(bck *cluster.Bck) {
 				b.Name, b.String, bck.Name, bck.Provider)
 		}
 	}
-	created := time.Unix(0, bck.Props.Created)
 	b := &Bucket{
 		Name:    bck.Name,
-		Created: created.Format(time.RFC3339),
+		Created: cos.FormatTime(time.Unix(0, bck.Props.Created), cos.ISO8601),
 		String:  "Provider: " + bck.Provider + warn,
 	}
 	r.Buckets = append(r.Buckets, b)
