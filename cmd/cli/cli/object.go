@@ -601,7 +601,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		selectedProps []string
 		fltPresence   = apc.FltPresentAnywhere
 	)
-	if flagIsSet(c, objNotCachedFlag) {
+	if flagIsSet(c, objNotCachedPropsFlag) {
 		fltPresence = apc.FltExists
 	}
 	objProps, err := api.HeadObject(apiBP, bck, object, fltPresence)
@@ -692,7 +692,7 @@ func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) 
 	var hint string
 	if cmn.IsStatusNotFound(err) {
 		if apc.IsFltPresent(fltPresence) {
-			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedFlag))
+			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
 		}
 		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
 	}

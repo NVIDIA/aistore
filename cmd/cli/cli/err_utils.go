@@ -206,8 +206,8 @@ func missingKeyValueError(c *cli.Context) *errUsage {
 	return missingArgumentsError(c, "attribute key=value pairs")
 }
 
-func objectNameArgumentNotSupported(c *cli.Context, objectName string) *errUsage {
-	msg := fmt.Sprintf("object name argument (%q) not supported", objectName)
+func objectNameArgNotExpected(c *cli.Context, objectName string) *errUsage {
+	msg := fmt.Sprintf("unexpected object name argument %q", objectName)
 	return _errUsage(c, msg)
 }
 

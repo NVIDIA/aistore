@@ -234,8 +234,8 @@ func removeObjectHandler(c *cli.Context) (err error) {
 		}
 
 		if objName == "" {
-			return incorrectUsageMsg(c, "%q or %q flag not set with a single bucket argument",
-				listFlag.Name, templateFlag.Name)
+			return incorrectUsageMsg(c, "use one of: (%s or %s or %s) to indicate _which_ objects to remove",
+				qflprn(listFlag), qflprn(templateFlag), qflprn(rmRfFlag))
 		}
 
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it

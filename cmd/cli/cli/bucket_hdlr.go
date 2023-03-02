@@ -47,13 +47,15 @@ var (
 			forceFlag,
 		},
 		commandCopy: {
-			cpBckDryRunFlag,
-			cpBckPrefixFlag,
+			copyDryRunFlag,
+			copyPrefixFlag,
 			templateFlag,
 			listFlag,
 			waitFlag,
 			continueOnErrorFlag,
 			forceFlag,
+			progressFlag,
+			copyObjNotCachedFlag,
 		},
 		commandEvict: append(
 			baseLstRngFlags,
@@ -310,7 +312,7 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 	return showBucketSummary(c)
 }
 
-// (compare with listBckTableWithSummary)
+// (compare with `listBckTableWithSummary`)
 func showBucketSummary(c *cli.Context) error {
 	queryBcks, err := parseQueryBckURI(c, c.Args().First())
 	if err != nil {
@@ -372,7 +374,7 @@ func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 		SelectObjsMsg: lrMsg,
 		ToBck:         toBck,
 	}
-	msg.DryRun = flagIsSet(c, cpBckDryRunFlag)
+	msg.DryRun = flagIsSet(c, copyDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
 		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
@@ -410,7 +412,7 @@ func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 }
 
 func copyBucketHandler(c *cli.Context) (err error) {
-	dryRun := flagIsSet(c, cpBckDryRunFlag)
+	dryRun := flagIsSet(c, copyDryRunFlag)
 	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
 	if err != nil {
 		return err
@@ -432,7 +434,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return copyBucket(c, bckFrom, bckTo)
 	}
 
-	// Copy matching objects
+	// multi-object copy
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
@@ -446,7 +448,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
 		actionDone(c, msg)
 	}
-	return multiObjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/)
+	return multiObjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/) // TODO -- FIXME: progress bar
 }
 
 func mvBucketHandler(c *cli.Context) error {

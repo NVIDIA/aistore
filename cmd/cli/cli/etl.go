@@ -50,8 +50,8 @@ var (
 		},
 		cmdBucket: {
 			etlExtFlag,
-			cpBckPrefixFlag,
-			cpBckDryRunFlag,
+			copyPrefixFlag,
+			copyDryRunFlag,
 			waitFlag,
 			etlBucketRequestTimeout,
 			templateFlag,
@@ -482,8 +482,8 @@ func etlBucketHandler(c *cli.Context) error {
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 		CopyBckMsg: apc.CopyBckMsg{
-			Prefix: parseStrFlag(c, cpBckPrefixFlag),
-			DryRun: flagIsSet(c, cpBckDryRunFlag),
+			Prefix: parseStrFlag(c, copyPrefixFlag),
+			DryRun: flagIsSet(c, copyDryRunFlag),
 		},
 	}
 
@@ -527,7 +527,7 @@ func etlBucketHandler(c *cli.Context) error {
 	if _, err := api.WaitForXactionIC(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
 		return err
 	}
-	if !flagIsSet(c, cpBckDryRunFlag) {
+	if !flagIsSet(c, copyDryRunFlag) {
 		return nil
 	}
 

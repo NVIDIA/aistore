@@ -176,7 +176,7 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck
 	case err != nil:
 		return cmn.Bck{}, err
 	case objName != "":
-		return cmn.Bck{}, objectNameArgumentNotSupported(c, objName)
+		return cmn.Bck{}, objectNameArgNotExpected(c, objName)
 	case bck.Name == "":
 		return cmn.Bck{}, incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	default:
@@ -198,7 +198,7 @@ func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
 	if err != nil {
 		return cmn.QueryBcks(bck), err
 	} else if objName != "" {
-		return cmn.QueryBcks(bck), objectNameArgumentNotSupported(c, objName)
+		return cmn.QueryBcks(bck), objectNameArgNotExpected(c, objName)
 	}
 	return cmn.QueryBcks(bck), nil
 }

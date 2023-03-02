@@ -72,9 +72,9 @@ var (
 			dsortLogFlag,
 		),
 		cmdObject: {
-			objPropsFlag,
+			objPropsFlag, // --props [list]
 			allPropsFlag,
-			objNotCachedFlag,
+			objNotCachedPropsFlag,
 			noHeaderFlag,
 			jsonFlag,
 		},
@@ -665,11 +665,10 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.Xact
 }
 
 func showObjectHandler(c *cli.Context) (err error) {
-	fullObjName := c.Args().Get(0) // empty string if no arg given
-
 	if c.NArg() < 1 {
-		return missingArgumentsError(c, "object name in format bucket/object")
+		return missingArgumentsError(c, "object name in the form "+objectArgument)
 	}
+	fullObjName := c.Args().Get(0)
 	bck, object, err := parseBckObjectURI(c, fullObjName)
 	if err != nil {
 		return err
@@ -748,8 +747,8 @@ func showClusterConfig(c *cli.Context, section string) error {
 	flat := flattenConfig(cluConfig, section)
 	err = teb.Print(flat, teb.ConfigTmpl)
 	if err == nil && section == "" {
-		msg := fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see '--help' for details)",
-			flprn(jsonFlag))
+		msg := fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see %s for details)",
+			flprn(jsonFlag), qflprn(cli.HelpFlag))
 		actionDone(c, msg)
 	}
 	return err

@@ -123,27 +123,49 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	return nil
 }
 
-// Copy bucket
+// TODO -- FIXME: `notCached`
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+	var (
+		showProgress = flagIsSet(c, progressFlag)
+		notCached    = flagIsSet(c, copyObjNotCachedFlag)
+		from, to     = fromBck.DisplayName(), toBck.DisplayName()
+	)
+	if fromBck.IsRemote() {
+		if notCached {
+			return fmt.Errorf("option %s is not implemented yet", qflprn(copyObjNotCachedFlag))
+		}
+		warn := fmt.Sprintf("copying only those objects from the remote %s that are present (\"cached\") in the cluster", from)
+		actionWarn(c, warn)
+	}
+	if showProgress && flagIsSet(c, copyDryRunFlag) {
+		warn := fmt.Sprintf("dry-run option is incompatible with %s - not implemented yet", qflprn(progressFlag))
+		actionWarn(c, warn)
+		showProgress = false
+	}
+	if showProgress {
+		return copyBucketProgress(c, fromBck, toBck)
+	}
+
 	msg := &apc.CopyBckMsg{
-		Prefix: parseStrFlag(c, cpBckPrefixFlag),
-		DryRun: flagIsSet(c, cpBckDryRunFlag),
+		Prefix: parseStrFlag(c, copyPrefixFlag),
+		DryRun: flagIsSet(c, copyDryRunFlag),
 		Force:  flagIsSet(c, forceFlag),
 	}
 	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {
 		return err
 	}
+
 	if !flagIsSet(c, waitFlag) {
-		baseMsg := fmt.Sprintf("Copying bucket %s => %s. ", fromBck, toBck)
+		baseMsg := fmt.Sprintf("Copying %s => %s. ", from, to)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying bucket", fromBck, toBck)
-	if err = waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, "copy", fromBck, toBck)
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
+	if err := waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
+		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err
 	}
 	actionDone(c, fmtXactSucceeded)

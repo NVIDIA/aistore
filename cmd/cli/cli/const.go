@@ -323,7 +323,7 @@ const (
 
 var (
 	// scope 'all'
-	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties"}
+	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties including custom (user-defined)"}
 	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
 	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
 	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
@@ -331,13 +331,14 @@ var (
 		Name:  scopeAll,
 		Usage: "when printing tables, show all columns including those that have only zero values",
 	}
-
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
 		Usage: "depending on context: all objects (including misplaced ones and copies) or " +
 			"all buckets (including remote buckets that are not present in the cluster)",
 	}
+	rmRfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
+	// obj props
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
 		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.: " +
@@ -521,9 +522,13 @@ var (
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present (\"cached\")",
 	}
-	objNotCachedFlag = cli.BoolFlag{
+	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",
-		Usage: "list or show properties of all objects from a remote bucket, including those that are not present (not \"cached\")",
+		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
+	}
+	copyObjNotCachedFlag = cli.BoolFlag{
+		Name:  objNotCachedPropsFlag.Name,
+		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\")",
 	}
 
 	// to anonymously list public-access Cloud buckets
@@ -535,7 +540,6 @@ var (
 	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}
 	disableFlag = cli.BoolFlag{Name: "disable", Usage: "disable"}
 	recursFlag  = cli.BoolFlag{Name: "recursive,r", Usage: "recursive operation"}
-	rmRfFlag    = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "delete successfully promoted source"}
@@ -613,11 +617,11 @@ var (
 	}
 
 	// Copy Bucket
-	cpBckDryRunFlag = cli.BoolFlag{
+	copyDryRunFlag = cli.BoolFlag{
 		Name:  "dry-run",
 		Usage: "show total size of new objects without really creating them",
 	}
-	cpBckPrefixFlag = cli.StringFlag{
+	copyPrefixFlag = cli.StringFlag{
 		Name:  "prefix",
 		Usage: "string to prepend every copied object's name, e.g.: '--prefix=abc/'",
 	}
