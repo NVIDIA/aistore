@@ -107,15 +107,19 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if err != nil {
 		return err
 	}
-	if !flagIsSet(c, waitFlag) {
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
-	if err := waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
+	if err := waitForXactionFinished(apiBP, xact.ArgsMsg{ID: xid, Timeout: timeout}); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
 		return err
 	}
@@ -156,15 +160,19 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		return err
 	}
 
-	if !flagIsSet(c, waitFlag) {
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		baseMsg := fmt.Sprintf("Copying %s => %s. ", from, to)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// wait
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
-	if err := waitForXactionCompletion(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
+	if err := waitForXactionFinished(apiBP, xact.ArgsMsg{ID: xid, Timeout: timeout}); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err
 	}

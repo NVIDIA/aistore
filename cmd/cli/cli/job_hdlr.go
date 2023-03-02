@@ -50,6 +50,7 @@ var (
 var (
 	startCommonFlags = []cli.Flag{
 		waitFlag,
+		waitJobXactFinishedFlag,
 	}
 	startSpecialFlags = map[string][]cli.Flag{
 		cmdDownload: {
@@ -60,6 +61,7 @@ var (
 			downloadProgressFlag,
 			progressFlag,
 			waitFlag,
+			waitJobXactFinishedFlag,
 			limitBytesPerHourFlag,
 			syncFlag,
 		},
@@ -78,9 +80,8 @@ var (
 
 	jobStartResilver = cli.Command{
 		Name: commandResilver,
-		Usage: "resilver user data on a given target or all targets " +
-			"(fix data redundancy with respect to bucket configuration, " +
-			"remove migrated objects and old/obsolete workfiles)",
+		Usage: "resilver user data on a given target (or all targets in the cluster): fix data redundancy\n" +
+			argsUsageIndent + "with respect to bucket configuration, remove migrated objects and old/obsolete workfiles",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        startCommonFlags,
 		Action:       startResilverHandler,
@@ -169,6 +170,7 @@ var (
 	waitCmdsFlags = []cli.Flag{
 		refreshFlag,
 		progressFlag,
+		waitJobXactFinishedFlag,
 	}
 	jobWaitSub = cli.Command{
 		Name:         commandWait,
@@ -308,20 +310,25 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 	}
 
 	xargs := xact.ArgsMsg{Kind: xname, Bck: bck, DaemonID: sid}
-	id, err := api.StartXaction(apiBP, xargs)
+	xid, err := api.StartXaction(apiBP, xargs)
 	if err != nil {
 		return err
 	}
-	if id != "" {
-		debug.Assert(cos.IsValidUUID(id), id)
-		msg := fmt.Sprintf("Started %s[%s]. %s", xname, id, toMonitorMsg(c, id, ""))
-		actionDone(c, msg)
+	if xid == "" {
+		warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
+			toShowMsg(c, "", "To investigate", false))
+		actionWarn(c, warn)
 		return nil
 	}
-	warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
-		toShowMsg(c, "", "To investigate", false))
-	actionWarn(c, warn)
-	return nil
+
+	debug.Assert(xact.IsValidUUID(xid), xid)
+	msg := fmt.Sprintf("Started %s[%s]. %s", xname, xid, toMonitorMsg(c, xid, ""))
+	actionDone(c, msg)
+
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		return nil
+	}
+	return waitJob(c, xname, xid, bck)
 }
 
 func startDownloadHandler(c *cli.Context) error {
@@ -489,7 +496,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return pbDownload(c, id)
 	}
 
-	if flagIsSet(c, waitFlag) {
+	if flagIsSet(c, waitFlag) || flagIsSet(c, waitJobXactFinishedFlag) {
 		return wtDownload(c, id)
 	}
 
@@ -572,10 +579,14 @@ func bgDownload(c *cli.Context, id string) (err error) {
 
 func waitDownload(c *cli.Context, id string) (err error) {
 	var (
-		aborted     bool
-		refreshRate = _refreshRate(c)
+		elapsed, timeout time.Duration
+		refreshRate      = _refreshRate(c)
+		qn               = fmt.Sprintf("%s[%s]", cmdDownload, id)
+		aborted          bool
 	)
-
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	for {
 		resp, err := api.DownloadStatus(apiBP, id, true)
 		if err != nil {
@@ -587,8 +598,11 @@ func waitDownload(c *cli.Context, id string) (err error) {
 			break
 		}
 		time.Sleep(refreshRate)
+		elapsed += refreshRate
+		if timeout != 0 && elapsed > timeout {
+			return fmt.Errorf("timed out waiting for %s", qn)
+		}
 	}
-
 	if aborted {
 		return fmt.Errorf("download job %s was aborted", id)
 	}
@@ -996,6 +1010,10 @@ func waitJobHandler(c *cli.Context) error {
 		name, _ = xid2Name(xid) // TODO: add waitETL
 	}
 
+	return waitJob(c, name, xid, bck)
+}
+
+func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 	// special wait
 	switch name {
 	case cmdDownload:
@@ -1026,8 +1044,12 @@ func waitJobHandler(c *cli.Context) error {
 		xargs       = xact.ArgsMsg{ID: xactID, Kind: xactKind}
 		refreshRate = _refreshRate(c)
 		total       time.Duration
+		timeout     time.Duration
 		prompted    bool
 	)
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	for {
 		status, err := api.GetOneXactionStatus(apiBP, xargs)
 		if err != nil {
@@ -1053,8 +1075,12 @@ func waitJobHandler(c *cli.Context) error {
 			prompted = true
 		}
 		time.Sleep(refreshRate)
-		if total += refreshRate; total > wasFast {
+		total += refreshRate
+		if total > wasFast {
 			fmt.Fprint(c.App.Writer, ".")
+		}
+		if timeout != 0 && total > timeout {
+			return fmt.Errorf("timed out waiting for %s", msg)
 		}
 	}
 	actionDone(c, "\n"+msg+" done.")
@@ -1074,9 +1100,13 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 
 	// poll at a refresh rate
 	var (
-		total time.Duration
-		qn    = fmt.Sprintf("%s[%s]", cmdDownload, id)
+		total   time.Duration
+		timeout time.Duration
+		qn      = fmt.Sprintf("%s[%s]", cmdDownload, id)
 	)
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	for {
 		resp, err := api.DownloadStatus(apiBP, id, true /*onlyActive*/)
 		if err != nil {
@@ -1092,6 +1122,10 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 			break
 		}
 		time.Sleep(refreshRate)
+		total += refreshRate
+		if timeout != 0 && total > timeout {
+			return fmt.Errorf("timed out waiting for %s", qn)
+		}
 	}
 	actionDone(c, "\n"+qn+" finished")
 	return nil
@@ -1110,9 +1144,13 @@ func waitDsortHandler(c *cli.Context, id string) error {
 
 	// poll at refresh rate
 	var (
-		qn    = fmt.Sprintf("%s[%s]", cmdDsort, id)
-		total time.Duration
+		total   time.Duration
+		timeout time.Duration
+		qn      = fmt.Sprintf("%s[%s]", cmdDsort, id)
 	)
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
 	for {
 		resp, err := api.MetricsDSort(apiBP, id)
 		if err != nil {
@@ -1132,6 +1170,10 @@ func waitDsortHandler(c *cli.Context, id string) error {
 			break
 		}
 		time.Sleep(refreshRate)
+		total += refreshRate
+		if timeout != 0 && total > timeout {
+			return fmt.Errorf("timed out waiting for %s", qn)
+		}
 	}
 	if total > wasFast {
 		fmt.Fprintln(c.App.Writer)

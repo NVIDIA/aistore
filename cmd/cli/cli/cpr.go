@@ -18,6 +18,8 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
+const timeoutNoChange = 10 * time.Second // when stats stop moving for so much time
+
 func copyBucketProgress(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	var (
 		size, objs int64
@@ -64,8 +66,14 @@ func copyBucketProgress(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	}
 
 	// 3. poll x-copy-bucket asynchronously and update progress
-	errCh := make(chan error, 1)
-	go _cpr(bars, objs, size, xid, from, to, errCh)
+	var (
+		timeout time.Duration
+		errCh   = make(chan error, 1)
+	)
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	go _cpr(bars, objs, size, xid, from, to, errCh, timeout)
 
 	progress.Wait()
 
@@ -78,17 +86,17 @@ func copyBucketProgress(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	return err
 }
 
-// TODO -- FIXME: draft
-func _cpr(bars []*mpb.Bar, totalObjs, totalSize int64, xid, from, to string, errCh chan error) {
+func _cpr(bars []*mpb.Bar, totalObjs, totalSize int64, xid, from, to string, errCh chan error, timeout time.Duration) {
 	var (
 		copiedObjs, copiedSize int64
 		rerr                   error
 		xargs                  = xact.ArgsMsg{ID: xid}
 		barObjs, barSize       = bars[0], bars[1]
-		// TODO -- FIXME: time management
-		elapsed         time.Duration
-		sleep           = time.Second
-		timeoutNoChange = 10 * time.Second
+
+		// time management (and see timeoutNoChange above)
+		sinceChanged time.Duration
+		totalWait    time.Duration
+		sleep        = time.Second
 	)
 outer:
 	for {
@@ -112,7 +120,7 @@ outer:
 				size += xsnap.Stats.Bytes
 				objs += xsnap.Stats.Objs
 				if xsnap.IsAborted() {
-					rerr = fmt.Errorf("failed to copy %s => %s: operation aborted", from, to)
+					rerr = fmt.Errorf("failed to copy %s => %s: job %q aborted", from, to, xid)
 					break outer
 				}
 				if xsnap.Running() {
@@ -124,12 +132,12 @@ outer:
 		if objs > copiedObjs {
 			barObjs.IncrInt64(objs - copiedObjs)
 			copiedObjs = objs
-			elapsed = 0 // reset here and below
+			sinceChanged = 0 // reset here and below
 		}
 		if size > copiedSize {
 			barSize.IncrInt64(size - copiedSize)
 			copiedSize = size
-			elapsed = 0
+			sinceChanged = 0
 		}
 		if copiedObjs >= totalObjs && copiedSize >= totalSize {
 			if nrunning > 0 {
@@ -144,19 +152,24 @@ outer:
 			if copiedObjs < totalObjs {
 				barObjs.IncrInt64(totalObjs - copiedObjs) // to 100%
 				copiedObjs = totalObjs
-				elapsed = 0
+				sinceChanged = 0
 			}
 			if copiedSize < totalSize {
-				barSize.IncrInt64(totalSize - copiedSize) // to 100%
+				barSize.IncrInt64(totalSize - copiedSize) // ditto
 				copiedSize = totalSize
-				elapsed = 0
+				sinceChanged = 0
 			}
 		}
 		time.Sleep(sleep)
-		elapsed += sleep
-		if elapsed > timeoutNoChange && copiedObjs < totalObjs {
-			rerr = fmt.Errorf("timeout with no apparent progress being made for %v (objs %d/%d, size %d/%d)",
-				elapsed, copiedObjs, totalObjs, copiedSize, totalSize)
+		totalWait += sleep
+		sinceChanged += sleep
+		if sinceChanged > timeoutNoChange && copiedObjs < totalObjs {
+			rerr = fmt.Errorf("copy-bucket[%s]: timeout with no apparent progress for %v (objs %d/%d, size %d/%d)",
+				xid, sinceChanged, copiedObjs, totalObjs, copiedSize, totalSize)
+			break
+		}
+		if timeout != 0 && totalWait > timeout {
+			rerr = fmt.Errorf("copy-bucket[%s]: timeout (%v) waiting for copy %s => %s to finish", xid, timeout, from, to)
 			break
 		}
 	}

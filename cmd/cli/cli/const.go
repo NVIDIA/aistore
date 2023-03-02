@@ -381,7 +381,7 @@ var (
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
 	noFooterFlag = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
 
-	progressFlag   = cli.BoolFlag{Name: "progress", Usage: "display progress bar"}
+	progressFlag   = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
 	dryRunFlag     = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
 	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
@@ -659,14 +659,18 @@ var (
 		Value: "transform", // NOTE: default name of the transform() function
 		Usage: "receives and _transforms_ the payload",
 	}
-
-	waitTimeoutFlag = DurationFlag{
+	// waiting
+	waitPodReadyTimeoutFlag = DurationFlag{
 		Name:  "wait-timeout",
 		Usage: "ais target waiting time for POD to become ready (valid time units: " + timeUnits + ")",
 	}
+	waitJobXactFinishedFlag = DurationFlag{
+		Name:  waitPodReadyTimeoutFlag.Name, // same as above
+		Usage: "maximum time to wait for job to finish; if omitted wait forever or Ctrl-C; valid time units: " + timeUnits,
+	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",
-		Usage: "wait until the operation is finished",
+		Usage: "wait for an asynchronous operation to finish (optionally, use '--wait-timeout' to limit the waiting time)",
 	}
 
 	// Node

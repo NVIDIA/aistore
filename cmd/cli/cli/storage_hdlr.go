@@ -19,7 +19,7 @@ var (
 	storageCmdFlags = map[string][]cli.Flag{
 		cmdStgCleanup: {
 			waitFlag,
-			waitTimeoutFlag,
+			waitJobXactFinishedFlag,
 		},
 	}
 
@@ -70,7 +70,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	if !flagIsSet(c, waitFlag) {
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		if id != "" {
 			fmt.Fprintf(c.App.Writer, "Started storage cleanup %q. %s\n", id, toMonitorMsg(c, id, ""))
 		} else {
@@ -81,8 +81,8 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 
 	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
 	wargs := xact.ArgsMsg{ID: id, Kind: apc.ActStoreCleanup}
-	if flagIsSet(c, waitTimeoutFlag) {
-		wargs.Timeout = parseDurationFlag(c, waitTimeoutFlag)
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		wargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	if err := api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		return err

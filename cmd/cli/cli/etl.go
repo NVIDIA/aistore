@@ -36,14 +36,14 @@ var (
 			commTypeFlag,
 			funcTransformFlag,
 			chunkSizeFlag,
-			waitTimeoutFlag,
+			waitPodReadyTimeoutFlag,
 			etlNameFlag,
 		},
 		cmdSpec: {
 			fromFileFlag,
 			commTypeFlag,
 			etlNameFlag,
-			waitTimeoutFlag,
+			waitPodReadyTimeoutFlag,
 		},
 		cmdStop: {
 			allRunningJobsFlag,
@@ -267,7 +267,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 			msg.CommTypeX += "://"
 		}
 	}
-	msg.Timeout = cos.Duration(parseDurationFlag(c, waitTimeoutFlag))
+	msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
 
 	// funcs
 	msg.Funcs.Transform = parseStrFlag(c, funcTransformFlag)

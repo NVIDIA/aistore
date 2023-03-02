@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -36,15 +37,14 @@ Usage examples:
 var (
 	// flags
 	bucketCmdsFlags = map[string][]cli.Flag{
-		commandRemove: {
-			ignoreErrorFlag,
-			yesFlag,
-		},
-		commandRename: {waitFlag},
 		commandCreate: {
 			ignoreErrorFlag,
 			bucketPropsFlag,
 			forceFlag,
+		},
+		commandRemove: {
+			ignoreErrorFlag,
+			yesFlag,
 		},
 		commandCopy: {
 			copyDryRunFlag,
@@ -52,10 +52,15 @@ var (
 			templateFlag,
 			listFlag,
 			waitFlag,
+			waitJobXactFinishedFlag,
 			continueOnErrorFlag,
 			forceFlag,
 			progressFlag,
 			copyObjNotCachedFlag,
+		},
+		commandRename: {
+			waitFlag,
+			waitJobXactFinishedFlag,
 		},
 		commandEvict: append(
 			baseLstRngFlags,
@@ -394,7 +399,7 @@ func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 	if err != nil {
 		return err
 	}
-	if !flagIsSet(c, waitFlag) {
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		baseMsg := fmt.Sprintf("%s %s => %s. ", operation, fromBck, toBck)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
@@ -402,7 +407,12 @@ func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 
 	// wait
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, operation, fromBck, toBck)
-	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects}
+
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Timeout: timeout}
 	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
 	} else {
@@ -459,7 +469,6 @@ func mvBucketHandler(c *cli.Context) error {
 	if bckFrom.Equal(&bckTo) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandRename, bckTo)
 	}
-
 	return mvBucket(c, bckFrom, bckTo)
 }
 
