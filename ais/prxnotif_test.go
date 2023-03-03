@@ -145,7 +145,7 @@ var _ = Describe("Notifications xaction test", func() {
 	var (
 		n       *notifs
 		smap    = &smapX{}
-		nl      nl.NotifListener
+		nl      nl.Listener
 		targets = getNodeMap(target1ID, target2ID)
 	)
 

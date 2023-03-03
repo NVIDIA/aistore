@@ -40,7 +40,7 @@ const (
 
 type (
 	listeners struct {
-		m map[string]nl.NotifListener // [UUID => NotifListener]
+		m map[string]nl.Listener // [UUID => NotifListener]
 		sync.RWMutex
 	}
 
@@ -49,9 +49,9 @@ type (
 		nls *listeners // running
 		fin *listeners // finished
 
-		added    []nl.NotifListener // reusable slice of `nl` to add to `nls`
-		removed  []nl.NotifListener // reusable slice of `nl` to remove from `nls`
-		finished []nl.NotifListener // reusable slice of `nl` to add to `fin`
+		added    []nl.Listener // reusable slice of `nl` to add to `nls`
+		removed  []nl.Listener // reusable slice of `nl` to remove from `nls`
+		finished []nl.Listener // reusable slice of `nl` to add to `fin`
 
 		smapVer int64
 		mu      sync.Mutex
@@ -65,7 +65,7 @@ type (
 
 	// receiver to start listening
 	notifListenMsg struct {
-		nl nl.NotifListener
+		nl nl.Listener
 	}
 	jsonNL struct {
 		Type string              `json:"type"`
@@ -93,9 +93,9 @@ func (n *notifs) init(p *proxy) {
 	n.nls = newListeners()
 	n.fin = newListeners()
 
-	n.added = make([]nl.NotifListener, 16)
-	n.removed = make([]nl.NotifListener, 16)
-	n.finished = make([]nl.NotifListener, 16)
+	n.added = make([]nl.Listener, 16)
+	n.removed = make([]nl.Listener, 16)
+	n.finished = make([]nl.Listener, 16)
 
 	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, notifsHousekeepT)
 	n.p.Sowner().Listeners().Reg(n)
@@ -106,7 +106,7 @@ func (n *notifs) init(p *proxy) {
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
 		notifMsg = &cluster.NotifMsg{}
-		nl       nl.NotifListener
+		nl       nl.Listener
 		errMsg   error
 		uuid     string
 		tid      = r.Header.Get(apc.HdrCallerID) // sender node ID
@@ -176,7 +176,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (*notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+func (*notifs) handleProgress(nl nl.Listener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
 	nl.Lock()
 	defer nl.Unlock()
 
@@ -191,7 +191,7 @@ func (*notifs) handleProgress(nl nl.NotifListener, tsi *cluster.Snode, data []by
 	return
 }
 
-func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+func (n *notifs) handleFinished(nl nl.Listener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
 	var (
 		stats   any
 		aborted bool
@@ -212,7 +212,7 @@ func (n *notifs) handleFinished(nl nl.NotifListener, tsi *cluster.Snode, data []
 }
 
 // start listening
-func (n *notifs) add(nl nl.NotifListener) (err error) {
+func (n *notifs) add(nl nl.Listener) (err error) {
 	debug.Assert(xact.IsValidUUID(nl.UUID()))
 	if nl.ActiveCount() == 0 {
 		return fmt.Errorf("cannot add %q with no active notifiers", nl)
@@ -227,7 +227,7 @@ func (n *notifs) add(nl nl.NotifListener) (err error) {
 	return
 }
 
-func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
+func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
 	if ok && bool(glog.FastV(4, glog.SmoduleAIS)) {
 		glog.Infoln("del " + nl.String())
@@ -235,7 +235,7 @@ func (n *notifs) del(nl nl.NotifListener, locked bool) (ok bool) {
 	return
 }
 
-func (n *notifs) entry(uuid string) nl.NotifListener {
+func (n *notifs) entry(uuid string) nl.Listener {
 	entry, exists := n.nls.entry(uuid)
 	if exists {
 		return entry
@@ -247,7 +247,7 @@ func (n *notifs) entry(uuid string) nl.NotifListener {
 	return nil
 }
 
-func (n *notifs) find(flt nlFilter) (nl nl.NotifListener) {
+func (n *notifs) find(flt nlFilter) (nl nl.Listener) {
 	if flt.ID != "" {
 		return n.entry(flt.ID)
 	}
@@ -259,7 +259,7 @@ func (n *notifs) find(flt nlFilter) (nl nl.NotifListener) {
 	return nl
 }
 
-func (n *notifs) findAll(flt nlFilter) (nls []nl.NotifListener) {
+func (n *notifs) findAll(flt nlFilter) (nls []nl.Listener) {
 	if flt.ID != "" {
 		if nl := n.entry(flt.ID); nl != nil {
 			nls = append(nls, nl)
@@ -286,7 +286,7 @@ func (n *notifs) size() (size int) {
 }
 
 // PRECONDITION: `nl` should be under lock.
-func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
+func (*notifs) markFinished(nl nl.Listener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
 	nl.MarkFinished(tsi)
 	if aborted {
 		nl.SetAborted()
@@ -301,7 +301,7 @@ func (*notifs) markFinished(nl nl.NotifListener, tsi *cluster.Snode, srcErr erro
 	return nl.ActiveCount() == 0 || aborted
 }
 
-func (n *notifs) done(nl nl.NotifListener) {
+func (n *notifs) done(nl nl.Listener) {
 	if !n.del(nl, false /*locked*/) {
 		// `nl` already removed from active map
 		return
@@ -335,7 +335,7 @@ func (n *notifs) done(nl nl.NotifListener) {
 	nl.Callback(nl, time.Now().UnixNano())
 }
 
-func abortReq(nl nl.NotifListener) cmn.HreqArgs {
+func abortReq(nl nl.Listener) cmn.HreqArgs {
 	if nl.Kind() == apc.ActDownload {
 		// downloader implements abort via http.MethodDelete
 		// and different messaging
@@ -371,7 +371,7 @@ func (n *notifs) housekeep() time.Duration {
 		n.nls.RUnlock()
 		return notifsHousekeepT
 	}
-	tempn := make(map[string]nl.NotifListener, n.nls.len())
+	tempn := make(map[string]nl.Listener, n.nls.len())
 	for uuid, nl := range n.nls.m {
 		tempn[uuid] = nl
 	}
@@ -387,7 +387,7 @@ func (n *notifs) housekeep() time.Duration {
 }
 
 // conditional: ask targets iff they delayed updating
-func (n *notifs) bcastGetStats(nl nl.NotifListener, dur time.Duration) {
+func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 	var (
 		config           = cmn.GCO.Get()
 		progressInterval = config.Periodic.NotifTime.D()
@@ -442,7 +442,7 @@ func (n *notifs) bcastGetStats(nl nl.NotifListener, dur time.Duration) {
 }
 
 func (n *notifs) getOwner(uuid string) (o string, exists bool) {
-	var nl nl.NotifListener
+	var nl nl.Listener
 	if nl = n.entry(uuid); nl != nil {
 		exists = true
 		o = nl.GetOwner()
@@ -467,7 +467,7 @@ func (n *notifs) ListenSmapChanged() {
 		return
 	}
 	var (
-		remnl = make(map[string]nl.NotifListener)
+		remnl = make(map[string]nl.Listener)
 		remid = make(cos.StrKVs)
 	)
 	for uuid, nl := range n.nls.m {
@@ -622,17 +622,17 @@ func (n *notifs) String() string {
 // listeners //
 ///////////////
 
-func newListeners() *listeners { return &listeners{m: make(map[string]nl.NotifListener, 64)} }
+func newListeners() *listeners { return &listeners{m: make(map[string]nl.Listener, 64)} }
 func (l *listeners) len() int  { return len(l.m) }
 
-func (l *listeners) entry(uuid string) (entry nl.NotifListener, exists bool) {
+func (l *listeners) entry(uuid string) (entry nl.Listener, exists bool) {
 	l.RLock()
 	entry, exists = l.m[uuid]
 	l.RUnlock()
 	return
 }
 
-func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
+func (l *listeners) add(nl nl.Listener, locked bool) (exists bool) {
 	if !locked {
 		l.Lock()
 	}
@@ -645,7 +645,7 @@ func (l *listeners) add(nl nl.NotifListener, locked bool) (exists bool) {
 	return
 }
 
-func (l *listeners) del(nl nl.NotifListener, locked bool) (ok bool) {
+func (l *listeners) del(nl nl.Listener, locked bool) (ok bool) {
 	if !locked {
 		l.Lock()
 	} else {
@@ -670,7 +670,7 @@ func (l *listeners) exists(uuid string) (ok bool) {
 // - returns the first one that's still running, if exists
 // - otherwise, returns the one that finished most recently
 // (compare with the below)
-func (l *listeners) find(flt nlFilter) (nl nl.NotifListener) {
+func (l *listeners) find(flt nlFilter) (nl nl.Listener) {
 	var ftime int64
 	l.RLock()
 	for _, listener := range l.m {
@@ -693,7 +693,7 @@ func (l *listeners) find(flt nlFilter) (nl nl.NotifListener) {
 }
 
 // returns all matches
-func (l *listeners) findAll(flt nlFilter) (nls []nl.NotifListener) {
+func (l *listeners) findAll(flt nlFilter) (nls []nl.Listener) {
 	l.RLock()
 	for _, listener := range l.m {
 		if flt.match(listener) {
@@ -708,7 +708,7 @@ func (l *listeners) findAll(flt nlFilter) (nls []nl.NotifListener) {
 // notifListenMsg //
 ////////////////////
 
-func newNLMsg(nl nl.NotifListener) *notifListenMsg {
+func newNLMsg(nl nl.Listener) *notifListenMsg {
 	return &notifListenMsg{nl: nl}
 }
 
@@ -736,7 +736,7 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 // Notification listener filter (nlFilter)
 //
 
-func (nf *nlFilter) match(nl nl.NotifListener) bool {
+func (nf *nlFilter) match(nl nl.Listener) bool {
 	if nl.UUID() == nf.ID {
 		return true
 	}

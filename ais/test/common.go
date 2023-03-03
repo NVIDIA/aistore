@@ -1095,13 +1095,13 @@ func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 }
 
 // xaction is running
-func xactSnapRunning(snaps api.XactMultiSnap) bool {
+func xactSnapRunning(snaps xact.MultiSnap) bool {
 	tid, _, err := snaps.RunningTarget("")
 	cos.AssertNoErr(err)
 	return tid != ""
 }
 
 // finished = did start in the past (use check above to confirm) and currently not running
-func xactSnapNotRunning(snaps api.XactMultiSnap) bool {
+func xactSnapNotRunning(snaps xact.MultiSnap) bool {
 	return !xactSnapRunning(snaps)
 }

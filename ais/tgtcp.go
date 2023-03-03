@@ -698,7 +698,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err erro
 	}
 	if !t.regstate.disabled.Load() {
 		notif := &xact.NotifXact{
-			NotifBase: nl.NotifBase{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		}
 		if msg.Action == apc.ActRebalance {
 			glog.Infof("%s: starting user-requested rebalance", t.si)

@@ -571,7 +571,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	nl.SetOwner(equalIC)
 	// cleanup upon failure via notification listener callback
 	// (note synchronous cleanup below)
-	nl.F = func(nl notif.NotifListener) {
+	nl.F = func(nl notif.Listener) {
 		if errNl := nl.Err(); errNl != nil {
 			if !ctx.terminate { // undo bmd.modify() - see above
 				glog.Error(errNl)

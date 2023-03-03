@@ -95,7 +95,7 @@ type (
 
 		smap  *smapX
 		msg   *apc.ActMsg
-		rebCB func(nl nl.NotifListener)
+		rebCB func(nl nl.Listener)
 		wait  bool
 	}
 )

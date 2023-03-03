@@ -5,6 +5,7 @@
 package xact
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -26,6 +27,18 @@ const (
 const (
 	LeftID  = "["
 	RightID = "]"
+)
+
+// global waiting tunables
+// (used in: `api.WaitForXactionIC` and `api.WaitForXactionNode`)
+const (
+	DefWaitTimeShort = time.Minute        // zero `ArgsMsg.Timeout` defaults to
+	DefWaitTimeLong  = 7 * 24 * time.Hour // when `ArgsMsg.Timeout` is negative
+	MaxProbingFreq   = 30 * time.Second   // as the name implies
+	MinPollTime      = 2 * time.Second    // ditto
+	MaxPollTime      = 2 * time.Minute    // can grow up to
+
+	NumConsecutiveIdle = 3 // number of consecutive 'idle' states (to exclude false-positive "is idle")
 )
 
 type (
@@ -61,6 +74,9 @@ type (
 		ID          string
 		Kind        string
 	}
+
+	// primarily: `api.QueryXactionSnaps`
+	MultiSnap map[string][]*cluster.Snap // by target ID (tid)
 )
 
 type (
@@ -81,7 +97,11 @@ type (
 	}
 )
 
-// `Table` is a static, public, and global Kind=>[Xaction Descriptor] map that contains
+////////////////
+// Descriptor //
+////////////////
+
+// `xact.Table` is a static, public, and global Kind=>[Xaction Descriptor] map that contains
 // xaction kinds and static properties, such as `Startable`, `Owned`, etc.
 // In particular, "startability" is narrowly defined as ability to start xaction
 // via `api.StartXaction`
@@ -366,4 +386,173 @@ func (flt Flt) Matches(xctn cluster.Xact) (yes bool) {
 		return false // ambiguity (cannot really compare)
 	}
 	return xctn.Bck().Equal(flt.Bck, true, true)
+}
+
+///////////////
+// MultiSnap //
+///////////////
+
+// NOTE: when xaction UUID is not specified: require the same kind _and_
+// a single running uuid (otherwise, IsAborted() et al. can only produce ambiguous results)
+func (xs MultiSnap) checkEmptyID(xid string) error {
+	var kind, uuid string
+	if xid != "" {
+		debug.Assert(IsValidUUID(xid), xid)
+		return nil
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if kind == "" {
+				kind = xsnap.Kind
+			} else if kind != xsnap.Kind {
+				return fmt.Errorf("invalid multi-snap Kind: %q vs %q", kind, xsnap.Kind)
+			}
+			if xsnap.Running() {
+				if uuid == "" {
+					uuid = xsnap.ID
+				} else if uuid != xsnap.ID {
+					return fmt.Errorf("invalid multi-snap UUID: %q vs %q", uuid, xsnap.ID)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (xs MultiSnap) GetUUIDs() []string {
+	uuids := make(cos.StrSet, 2)
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			uuids[xsnap.ID] = struct{}{}
+		}
+	}
+	return uuids.ToSlice()
+}
+
+func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *cluster.Snap, error) {
+	if err := xs.checkEmptyID(xid); err != nil {
+		return "", nil, err
+	}
+	for tid, snaps := range xs {
+		for _, xsnap := range snaps {
+			if (xid == xsnap.ID || xid == "") && xsnap.Running() {
+				return tid, xsnap, nil
+			}
+		}
+	}
+	return "", nil, nil
+}
+
+func (xs MultiSnap) IsAborted(xid string) (bool, error) {
+	if err := xs.checkEmptyID(xid); err != nil {
+		return false, err
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if (xid == xsnap.ID || xid == "") && xsnap.IsAborted() {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// (all targets, all xactions)
+func (xs MultiSnap) IsIdle(xid string) (found, idle bool) {
+	if xid != "" {
+		debug.Assert(IsValidUUID(xid), xid)
+		return xs._idle(xid)
+	}
+	uuids := xs.GetUUIDs()
+	idle = true
+	for _, xid = range uuids {
+		f, i := xs._idle(xid)
+		found = found || f
+		idle = idle && i
+	}
+	return
+}
+
+// (all targets, given xaction)
+func (xs MultiSnap) _idle(xid string) (found, idle bool) {
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xid == xsnap.ID {
+				found = true
+				// (one target, one xaction)
+				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.IsIdle() {
+					return true, false
+				}
+			}
+		}
+	}
+	idle = true // (read: not-idle not found)
+	return
+}
+
+func (xs MultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
+	if xid == "" {
+		uuids := xs.GetUUIDs()
+		debug.Assert(len(uuids) == 1, uuids)
+		xid = uuids[0]
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xid == xsnap.ID {
+				locObjs += xsnap.Stats.Objs
+				outObjs += xsnap.Stats.OutObjs
+				inObjs += xsnap.Stats.InObjs
+			}
+		}
+	}
+	return
+}
+
+func (xs MultiSnap) ByteCounts(xid string) (locBytes, outBytes, inBytes int64) {
+	if xid == "" {
+		uuids := xs.GetUUIDs()
+		debug.Assert(len(uuids) == 1, uuids)
+		xid = uuids[0]
+	}
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xid == xsnap.ID {
+				locBytes += xsnap.Stats.Bytes
+				outBytes += xsnap.Stats.OutBytes
+				inBytes += xsnap.Stats.InBytes
+			}
+		}
+	}
+	return
+}
+
+func (xs MultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
+	debug.Assert(IsValidUUID(xid), xid)
+	var (
+		start, end     time.Time
+		found, running bool
+	)
+	for _, snaps := range xs {
+		for _, xsnap := range snaps {
+			if xid == xsnap.ID {
+				found = true
+				running = running || xsnap.Running()
+				if !xsnap.StartTime.IsZero() {
+					if start.IsZero() || xsnap.StartTime.Before(start) {
+						start = xsnap.StartTime
+					}
+				}
+				if !xsnap.EndTime.IsZero() && xsnap.EndTime.After(end) {
+					end = xsnap.EndTime
+				}
+			}
+		}
+	}
+	if !found {
+		return 0, errors.New("xaction [" + xid + "] not found")
+	}
+	if running {
+		end = time.Now()
+	}
+	return end.Sub(start), nil
 }

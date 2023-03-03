@@ -18,19 +18,19 @@ import (
 
 type (
 	NotifXactListener struct {
-		nl.NotifListenerBase
+		nl.ListenerBase
 	}
 
 	NotifXact struct {
 		Xact cluster.Xact
-		nl.NotifBase
+		nl.Base
 	}
 )
 
 // interface guard
 var (
-	_ cluster.Notif    = (*NotifXact)(nil)
-	_ nl.NotifListener = (*NotifXactListener)(nil)
+	_ cluster.Notif = (*NotifXact)(nil)
+	_ nl.Listener   = (*NotifXactListener)(nil)
 )
 
 func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
@@ -38,7 +38,7 @@ func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bc
 		srcs = smap.Tmap.ActiveMap()
 	}
 	return &NotifXactListener{
-		NotifListenerBase: *nl.NewNLB(uuid, action, smap, srcs, 0, bck...),
+		ListenerBase: *nl.NewNLB(uuid, action, smap, srcs, 0, bck...),
 	}
 }
 

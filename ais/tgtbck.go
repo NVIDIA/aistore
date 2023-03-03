@@ -377,7 +377,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{
-			NotifBase: nl.NotifBase{
+			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,

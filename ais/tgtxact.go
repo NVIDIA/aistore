@@ -181,7 +181,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) e
 			glog.Errorf(erfmb, args.Kind, bck)
 		}
 		notif := &xact.NotifXact{
-			NotifBase: nl.NotifBase{
+			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,
@@ -204,7 +204,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) e
 		}
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{
-			NotifBase: nl.NotifBase{
+			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.callerNotifyFin,

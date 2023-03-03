@@ -218,7 +218,7 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 	}
 }
 
-func (p *proxy) dlstatus(nl nl.NotifListener) ([]byte, int, error) {
+func (p *proxy) dlstatus(nl nl.Listener) ([]byte, int, error) {
 	// bcast
 	p.notifs.bcastGetStats(nl, cmn.GCO.Get().Periodic.NotifTime.D())
 	stats := nl.NodeStats()

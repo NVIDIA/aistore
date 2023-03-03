@@ -41,7 +41,7 @@ const (
 
 type (
 	regIC struct {
-		nl    nl.NotifListener
+		nl    nl.Listener
 		smap  *smapX
 		query url.Values
 		msg   any
@@ -172,7 +172,7 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 	}
 	nls := ic.p.notifs.findAll(flt)
 
-	var vec nl.NotifStatusVec
+	var vec nl.StatusVec
 
 	if cos.IsParseBool(query.Get(apc.QparamForce)) {
 		// (force just-in-time)
@@ -201,7 +201,7 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 
 func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	var (
-		nl  nl.NotifListener
+		nl  nl.Listener
 		bck *cluster.Bck
 		msg = &xact.QueryMsg{}
 	)
@@ -374,7 +374,7 @@ func (ic *ic) registerEqual(a regIC) {
 	}
 }
 
-func (ic *ic) bcastListenIC(nl nl.NotifListener) {
+func (ic *ic) bcastListenIC(nl nl.Listener) {
 	var (
 		actMsg = apc.ActMsg{Action: apc.ActListenToNotif, Value: newNLMsg(nl)}
 		msg    = ic.p.newAmsg(&actMsg, nil)

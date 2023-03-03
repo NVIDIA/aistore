@@ -87,7 +87,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		dljob.AddNotif(&dload.NotifDownload{
-			NotifBase: nl.NotifBase{
+			Base: nl.Base{
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
 				Dsts:     []string{equalIC},

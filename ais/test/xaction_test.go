@@ -61,7 +61,7 @@ func TestXactionAllStatus(t *testing.T) {
 			}
 
 			// check fin time for all running
-			var aborted nl.NotifStatusVec
+			var aborted nl.StatusVec
 			for _, ns := range vec {
 				if ns.AbortedX {
 					tlog.Logf("%q is aborted but hasn't finished yet\n", ns.String())

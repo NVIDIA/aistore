@@ -1364,7 +1364,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		return
 	}
 	if lsmsg.UUID == "" {
-		var nl nl.NotifListener
+		var nl nl.Listener
 		lsmsg.UUID = cos.GenUUID()
 		if wantOnlyRemote {
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())

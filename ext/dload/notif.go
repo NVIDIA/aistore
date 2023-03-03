@@ -19,23 +19,23 @@ import (
 
 type (
 	NotifDownloadListerner struct {
-		nl.NotifListenerBase
+		nl.ListenerBase
 	}
 	NotifDownload struct {
-		nl.NotifBase
+		nl.Base
 		job jobif
 	}
 )
 
 // interface guard
 var (
-	_ nl.NotifListener = (*NotifDownloadListerner)(nil)
-	_ cluster.Notif    = (*NotifDownload)(nil)
+	_ nl.Listener   = (*NotifDownloadListerner)(nil)
+	_ cluster.Notif = (*NotifDownload)(nil)
 )
 
 func NewDownloadNL(jobID, action string, smap *cluster.Smap, progressInterval time.Duration) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		NotifListenerBase: *nl.NewNLB(jobID, action, smap, smap.Tmap.ActiveMap(), progressInterval),
+		ListenerBase: *nl.NewNLB(jobID, action, smap, smap.Tmap.ActiveMap(), progressInterval),
 	}
 }
 

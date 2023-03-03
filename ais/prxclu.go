@@ -1326,7 +1326,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 }
 
 // Callback: remove the node from the cluster if rebalance finished successfully
-func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *apc.ActMsg, si *cluster.Snode) {
+func (p *proxy) removeAfterRebalance(nl nl.Listener, msg *apc.ActMsg, si *cluster.Snode) {
 	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
 		var s string
 		if abrt {
@@ -1347,7 +1347,7 @@ func (p *proxy) removeAfterRebalance(nl nl.NotifListener, msg *apc.ActMsg, si *c
 // the method handles msg.Action == apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
 func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
 	var (
-		cb   nl.NotifCallback
+		cb   nl.Callback
 		smap = p.owner.smap.get()
 	)
 	if cnt := smap.CountActiveTs(); cnt < 2 {
@@ -1361,7 +1361,7 @@ func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID st
 		glog.Infof("%q %s and start rebalance", msg.Action, si)
 	}
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-		cb = func(nl nl.NotifListener) { p.removeAfterRebalance(nl, msg, si) }
+		cb = func(nl nl.Listener) { p.removeAfterRebalance(nl, msg, si) }
 	}
 	rmdCtx := &rmdModifier{
 		pre: func(_ *rmdModifier, clone *rebMD) {

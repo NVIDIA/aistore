@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -21,18 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
-
-// tunables
-const (
-	xactDefWaitTimeShort = time.Minute
-	xactDefWaitTimeLong  = 7 * 24 * time.Hour
-	xactMaxProbingFreq   = 30 * time.Second
-	xactMaxPollTime      = 2 * time.Minute
-	xactMinPollTime      = 2 * time.Second
-	numConsecutiveIdle   = 3 // number of consecutive 'idle' states
-)
-
-type XactMultiSnap map[string][]*cluster.Snap // by target ID (tid)
 
 // Start xaction
 func StartXaction(bp BaseParams, args xact.ArgsMsg) (xid string, err error) {
@@ -99,7 +86,7 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
-func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs XactMultiSnap, err error) {
+func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = Bool(true)
@@ -127,15 +114,15 @@ func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs XactMultiSnap, err 
 // any matching xaction that's currently running, or - if nothing's running -
 // the one that's finished most recently,
 // if exists
-func GetOneXactionStatus(bp BaseParams, args xact.ArgsMsg) (status *nl.NotifStatus, err error) {
-	status = &nl.NotifStatus{}
+func GetOneXactionStatus(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
+	status = &nl.Status{}
 	q := url.Values{apc.QparamWhat: []string{apc.WhatOneXactStatus}}
 	err = getxst(status, q, bp, args)
 	return
 }
 
 // same as above, except that it returns _all_ matching xactions
-func GetAllXactionStatus(bp BaseParams, args xact.ArgsMsg, force bool) (matching nl.NotifStatusVec, err error) {
+func GetAllXactionStatus(bp BaseParams, args xact.ArgsMsg, force bool) (matching nl.StatusVec, err error) {
 	q := url.Values{apc.QparamWhat: []string{apc.WhatAllXactStatus}}
 	if force {
 		// (force just-in-time)
@@ -171,35 +158,35 @@ func initPollingTimes(args xact.ArgsMsg) (time.Duration, time.Duration) {
 	total := args.Timeout
 	switch {
 	case args.Timeout == 0:
-		total = xactDefWaitTimeShort
+		total = xact.DefWaitTimeShort
 	case args.Timeout < 0:
-		total = xactDefWaitTimeLong
+		total = xact.DefWaitTimeLong
 	}
-	return total, cos.MinDuration(xactMaxProbingFreq, cos.ProbingFrequency(total))
+	return total, cos.MinDuration(xact.MaxProbingFreq, cos.ProbingFrequency(total))
 }
 
 func backoffPoll(dur time.Duration) time.Duration {
 	dur += dur / 2
-	return cos.MinDuration(xactMaxPollTime, dur)
+	return cos.MinDuration(xact.MaxPollTime, dur)
 }
 
 // WaitForXactionIC waits for a given xaction to complete.
 // Use it only for global xactions
 // (those that execute on all targets and report their status to IC, e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.NotifStatus, err error) {
+func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
 	return waitX(bp, args, nil)
 }
 
 // WaitForXactionNode waits for a given xaction to complete.
 // Use for xaction which can be launched on a single node and do not report their
 // statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
-func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(XactMultiSnap) bool) error {
+func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) bool) error {
 	debug.Assert(args.Kind != "" || xact.IsValidUUID(args.ID))
 	_, err := waitX(bp, args, fn)
 	return err
 }
 
-func waitX(bp BaseParams, args xact.ArgsMsg, fn func(XactMultiSnap) bool) (status *nl.NotifStatus, err error) {
+func waitX(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) bool) (status *nl.Status, err error) {
 	var (
 		elapsed      time.Duration
 		begin        = mono.NanoTime()
@@ -211,9 +198,9 @@ func waitX(bp BaseParams, args xact.ArgsMsg, fn func(XactMultiSnap) bool) (statu
 		var done bool
 		if fn == nil {
 			status, err = GetOneXactionStatus(bp, args)
-			done = err == nil && status.Finished() && elapsed >= xactMinPollTime
+			done = err == nil && status.Finished() && elapsed >= xact.MinPollTime
 		} else {
-			var snaps XactMultiSnap
+			var snaps xact.MultiSnap
 			snaps, err = QueryXactionSnaps(bp, args)
 			done = err == nil && fn(snaps)
 		}
@@ -237,11 +224,11 @@ func waitX(bp BaseParams, args xact.ArgsMsg, fn func(XactMultiSnap) bool) (statu
 func WaitForXactionIdle(bp BaseParams, args xact.ArgsMsg) error {
 	var idles int
 	args.OnlyRunning = true
-	check := func(snaps XactMultiSnap) bool {
-		found, idle := snaps.isAllIdle(args.ID)
+	check := func(snaps xact.MultiSnap) bool {
+		found, idle := snaps.IsIdle(args.ID)
 		if idle || !found { // TODO -- FIXME: !found may translate as "hasn't started yet"
 			idles++
-			return idles >= numConsecutiveIdle
+			return idles >= xact.NumConsecutiveIdle
 		}
 		idles = 0
 		return false
@@ -262,7 +249,7 @@ func WaitForXactionIdle(bp BaseParams, args xact.ArgsMsg) error {
 func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsummResults) error {
 	var (
 		uuid   string
-		sleep  = xactMinPollTime
+		sleep  = xact.MinPollTime
 		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
 		body   = cos.MustMarshal(actMsg)
 	)
@@ -296,175 +283,9 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsumm
 			break
 		}
 		time.Sleep(sleep)
-		if sleep < xactMaxProbingFreq {
+		if sleep < xact.MaxProbingFreq {
 			sleep += sleep / 2
 		}
 	}
 	return err
-}
-
-///////////////////
-// XactMultiSnap //
-///////////////////
-
-// NOTE: when xaction UUID is not specified: require the same kind _and_
-// a single running uuid (otherwise, IsAborted() et al. can only produce ambiguous results)
-func (xs XactMultiSnap) checkEmptyID(xid string) error {
-	var kind, uuid string
-	if xid != "" {
-		debug.Assert(xact.IsValidUUID(xid), xid)
-		return nil
-	}
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if kind == "" {
-				kind = xsnap.Kind
-			} else if kind != xsnap.Kind {
-				return fmt.Errorf("invalid multi-snap Kind: %q vs %q", kind, xsnap.Kind)
-			}
-			if xsnap.Running() {
-				if uuid == "" {
-					uuid = xsnap.ID
-				} else if uuid != xsnap.ID {
-					return fmt.Errorf("invalid multi-snap UUID: %q vs %q", uuid, xsnap.ID)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (xs XactMultiSnap) GetUUIDs() []string {
-	uuids := make(cos.StrSet, 2)
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			uuids[xsnap.ID] = struct{}{}
-		}
-	}
-	return uuids.ToSlice()
-}
-
-func (xs XactMultiSnap) RunningTarget(xid string) (string /*tid*/, *cluster.Snap, error) {
-	if err := xs.checkEmptyID(xid); err != nil {
-		return "", nil, err
-	}
-	for tid, snaps := range xs {
-		for _, xsnap := range snaps {
-			if (xid == xsnap.ID || xid == "") && xsnap.Running() {
-				return tid, xsnap, nil
-			}
-		}
-	}
-	return "", nil, nil
-}
-
-func (xs XactMultiSnap) IsAborted(xid string) (bool, error) {
-	if err := xs.checkEmptyID(xid); err != nil {
-		return false, err
-	}
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if (xid == xsnap.ID || xid == "") && xsnap.IsAborted() {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-func (xs XactMultiSnap) isAllIdle(xid string) (found, idle bool) {
-	if xid != "" {
-		debug.Assert(xact.IsValidUUID(xid), xid)
-		return xs.isOneIdle(xid)
-	}
-	uuids := xs.GetUUIDs()
-	idle = true
-	for _, xid = range uuids {
-		f, i := xs.isOneIdle(xid)
-		found = found || f
-		idle = idle && i
-	}
-	return
-}
-
-func (xs XactMultiSnap) isOneIdle(xid string) (found, idle bool) {
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if xid == xsnap.ID {
-				found = true
-				if xsnap.Started() && !xsnap.IsAborted() && !xsnap.IsIdle() {
-					return true, false
-				}
-			}
-		}
-	}
-	idle = true // read: not-idle not found
-	return
-}
-
-func (xs XactMultiSnap) ObjCounts(xid string) (locObjs, outObjs, inObjs int64) {
-	if xid == "" {
-		uuids := xs.GetUUIDs()
-		debug.Assert(len(uuids) == 1, uuids)
-		xid = uuids[0]
-	}
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if xid == xsnap.ID {
-				locObjs += xsnap.Stats.Objs
-				outObjs += xsnap.Stats.OutObjs
-				inObjs += xsnap.Stats.InObjs
-			}
-		}
-	}
-	return
-}
-
-func (xs XactMultiSnap) ByteCounts(xid string) (locBytes, outBytes, inBytes int64) {
-	if xid == "" {
-		uuids := xs.GetUUIDs()
-		debug.Assert(len(uuids) == 1, uuids)
-		xid = uuids[0]
-	}
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if xid == xsnap.ID {
-				locBytes += xsnap.Stats.Bytes
-				outBytes += xsnap.Stats.OutBytes
-				inBytes += xsnap.Stats.InBytes
-			}
-		}
-	}
-	return
-}
-
-func (xs XactMultiSnap) TotalRunningTime(xid string) (time.Duration, error) {
-	debug.Assert(xact.IsValidUUID(xid), xid)
-	var (
-		start, end     time.Time
-		found, running bool
-	)
-	for _, snaps := range xs {
-		for _, xsnap := range snaps {
-			if xid == xsnap.ID {
-				found = true
-				running = running || xsnap.Running()
-				if !xsnap.StartTime.IsZero() {
-					if start.IsZero() || xsnap.StartTime.Before(start) {
-						start = xsnap.StartTime
-					}
-				}
-				if !xsnap.EndTime.IsZero() && xsnap.EndTime.After(end) {
-					end = xsnap.EndTime
-				}
-			}
-		}
-	}
-	if !found {
-		return 0, errors.New("xaction [" + xid + "] not found")
-	}
-	if running {
-		end = time.Now()
-	}
-	return end.Sub(start), nil
 }
