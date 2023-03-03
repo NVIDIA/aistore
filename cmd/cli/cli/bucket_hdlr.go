@@ -56,6 +56,7 @@ var (
 			continueOnErrorFlag,
 			forceFlag,
 			progressFlag,
+			refreshFlag,
 			copyObjNotCachedFlag,
 		},
 		commandRename: {
@@ -361,60 +362,87 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
-func multiObjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) (err error) {
+func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 
-	var lrMsg cmn.SelectObjsMsg
+	// 1. list or template
+	var (
+		lrMsg   cmn.SelectObjsMsg
+		numObjs int64
+	)
 	if listObjs != "" {
 		lrMsg.ObjNames = strings.Split(listObjs, ",")
+		numObjs = int64(len(lrMsg.ObjNames))
 	} else {
-		if _, err = cos.NewParsedTemplate(tmplObjs); err != nil {
+		pt, err := cos.NewParsedTemplate(tmplObjs)
+		if err != nil {
 			return err
 		}
+		numObjs = pt.Count()
 		lrMsg.Template = tmplObjs
 	}
-	msg := cmn.TCObjsMsg{
-		SelectObjsMsg: lrMsg,
-		ToBck:         toBck,
-	}
+
+	// 2. TCO message
+	var msg = cmn.TCObjsMsg{SelectObjsMsg: lrMsg, ToBck: toBck}
 	msg.DryRun = flagIsSet(c, copyDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
 		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
 	}
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
+	// 3. start copying/transforming
 	var (
-		xid       string
-		operation = "Copying objects"
+		xid   string
+		xkind string
+		err   error
+		text  = "Copying objects"
 	)
 	if etlName != "" {
 		msg.Name = etlName
-		operation = "Transforming objects"
+		text = "Transforming objects"
+		xkind = apc.ActETLObjects
 		xid, err = api.ETLMultiObj(apiBP, fromBck, msg)
 	} else {
+		xkind = apc.ActCopyObjects
 		xid, err = api.CopyMultiObj(apiBP, fromBck, msg)
 	}
 	if err != nil {
 		return err
 	}
+
+	// 4. progress bar, if requested
+	var showProgress = flagIsSet(c, progressFlag)
+	if showProgress {
+		var cpr = cprCtx{
+			xid:  xid,
+			from: fromBck.DisplayName(),
+			to:   toBck.DisplayName(),
+		}
+		_, cpr.xname = xact.GetKindName(xkind)
+		cpr.totals.objs = numObjs
+		return cpr.multiobj(c, text)
+	}
+
+	// done
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		baseMsg := fmt.Sprintf("%s %s => %s. ", operation, fromBck, toBck)
+		baseMsg := fmt.Sprintf("%s %s => %s. ", text, fromBck, toBck)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
-	// wait
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, operation, fromBck, toBck)
-
+	// or wait
 	var timeout time.Duration
+
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, text, fromBck, toBck)
+
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Timeout: timeout}
+	wargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
 	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, operation, fromBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, text, fromBck, toBck)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
 	}
@@ -434,7 +462,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	listObjs := parseStrFlag(c, listFlag)
 	tmplObjs := parseStrFlag(c, templateFlag)
 
-	// Full bucket copy
+	// (I) bucket copy
 	if listObjs == "" && tmplObjs == "" {
 		if dryRun {
 			// TODO: show object names with destinations, make the output consistent with etl dry-run
@@ -444,7 +472,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return copyBucket(c, bckFrom, bckTo)
 	}
 
-	// multi-object copy
+	// (II) multi-object copy
 	if listObjs != "" && tmplObjs != "" {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
@@ -458,7 +486,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
 		actionDone(c, msg)
 	}
-	return multiObjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/) // TODO -- FIXME: progress bar
+	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/) // TODO -- FIXME: progress bar
 }
 
 func mvBucketHandler(c *cli.Context) error {

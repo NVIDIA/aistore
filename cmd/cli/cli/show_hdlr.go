@@ -557,9 +557,9 @@ func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {
 	return ll, nil
 }
 
-func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs api.XactMultiSnap) (int, error) {
+func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs xact.MultiSnap) (int, error) {
 	// first, extract snaps for: xargs.ID, Kind
-	filteredXs := make(api.XactMultiSnap, 8)
+	filteredXs := make(xact.MultiSnap, 8)
 	for tid, snaps := range xs {
 		for _, snap := range snaps {
 			if snap.ID != xargs.ID {

@@ -64,6 +64,7 @@ const (
 	commandSet       = "set"
 	commandStart     = apc.ActXactStart
 	commandStop      = apc.ActXactStop
+	commandWait      = "wait"
 
 	cmdSmap   = apc.WhatSmap
 	cmdBMD    = apc.WhatBMD
@@ -185,17 +186,16 @@ const (
 	tgtTotal = "-------- SUM:"
 )
 
+// Default durations and counts for long-running operations
+// (compare with `xact/api.go`)
 const (
-	commandWait = "wait"
-
-	// Default values for long running operations
 	refreshRateDefault = 3 * time.Second
 	refreshRateMinDur  = time.Second
 	countDefault       = 1
 	countUnlimited     = -1
-
-	NilValue = "none"
 )
+
+const NilValue = "none"
 
 const (
 	timeUnits    = `ns, us (or µs), ms, s (default), m, h`

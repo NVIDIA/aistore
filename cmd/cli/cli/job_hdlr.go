@@ -543,18 +543,14 @@ func actionDownloaded(c *cli.Context, cnt int) {
 }
 
 func bgDownload(c *cli.Context, id string) (err error) {
-	const (
-		checkTimeout  = 5 * time.Second
-		checkInterval = time.Second
-	)
 	var (
-		passed time.Duration
-		resp   *dload.StatusResp
+		resp           *dload.StatusResp
+		startedTimeout = cos.MaxDuration(5*time.Second, refreshRateMinDur*2)
 	)
-	// In a non-interactive mode, allow the downloader to start jobs before checking.
-	for passed < checkTimeout {
-		time.Sleep(checkInterval)
-		passed += checkInterval
+
+	// In a non-interactive mode, allow downloader to start before checking
+	for elapsed := time.Duration(0); elapsed < startedTimeout; elapsed += refreshRateMinDur {
+		time.Sleep(refreshRateMinDur)
 		resp, err = api.DownloadStatus(apiBP, id, true /*only active*/)
 		if err != nil {
 			return err

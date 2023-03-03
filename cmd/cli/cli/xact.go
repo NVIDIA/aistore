@@ -142,7 +142,7 @@ func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
 	return nil, nil
 }
 
-func queryXactions(xargs xact.ArgsMsg) (xs api.XactMultiSnap, err error) {
+func queryXactions(xargs xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	xs, err = api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return
@@ -184,10 +184,10 @@ func queryXactions(xargs xact.ArgsMsg) (xs api.XactMultiSnap, err error) {
 }
 
 //
-// api.XactMultiSnap regrouping helpers
+// xact.MultiSnap regrouping helpers
 //
 
-func extractXactKinds(xs api.XactMultiSnap) []string {
+func extractXactKinds(xs xact.MultiSnap) []string {
 	var out = make(cos.StrSet, 8)
 	for _, snaps := range xs {
 		for _, snap := range snaps {
@@ -200,7 +200,7 @@ func extractXactKinds(xs api.XactMultiSnap) []string {
 }
 
 // sorted by start time
-func extractXactIDsForKind(xs api.XactMultiSnap, xactKind string) (xactIDs []string) {
+func extractXactIDsForKind(xs xact.MultiSnap, xactKind string) (xactIDs []string) {
 	// prep. temp timedIDs
 	timedIDs := make(map[string]time.Time, 8)
 	for _, snaps := range xs {

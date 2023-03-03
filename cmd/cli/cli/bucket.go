@@ -147,7 +147,10 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		showProgress = false
 	}
 	if showProgress {
-		return copyBucketProgress(c, fromBck, toBck)
+		var cpr cprCtx
+		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
+		cpr.from, cpr.to = fromBck.DisplayName(), toBck.DisplayName()
+		return cpr.copyBucket(c, fromBck, toBck)
 	}
 
 	msg := &apc.CopyBckMsg{

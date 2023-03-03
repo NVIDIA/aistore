@@ -111,12 +111,12 @@ func uploadFiles(c *cli.Context, p *uploadParams) error {
 		var (
 			filesBarArg = barArgs{
 				total:   int64(len(p.files)),
-				barText: "Uploaded files progress",
+				barText: "Uploaded files:",
 				barType: unitsArg,
 			}
 			sizeBarArg = barArgs{
 				total:   p.totalSize,
-				barText: "Uploaded sizes progress",
+				barText: "Total size:    ",
 				barType: sizeArg,
 			}
 		)
