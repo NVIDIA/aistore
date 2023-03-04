@@ -106,16 +106,16 @@ func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive 
 			strings.Contains(pattern, "?") ||
 			strings.Contains(pattern, "\\")
 		if !isPattern {
-			warn := fmt.Sprintf("path %s is not a directory and does not appear to be a shell filename matching pattern (%q)", path, pattern)
+			warn := fmt.Sprintf("%q is not a directory and does not appear to be a shell filename matching pattern (%q)", path, pattern)
 			actionWarn(c, warn)
 		}
 		path = filepath.Dir(path)
 		info, err = os.Stat(path)
 		if err != nil {
-			return nil, fmt.Errorf("path %q does not exist", path)
+			return nil, fmt.Errorf("%q does not exist", path)
 		}
 		if !info.IsDir() {
-			return nil, fmt.Errorf("path %q is not a directory", path)
+			return nil, fmt.Errorf("%q is not a directory", path)
 		}
 	} else {
 		if !info.IsDir() { // one file without custom name

@@ -27,18 +27,21 @@ type cprCtx struct {
 	xid      string
 	from, to string
 	xname    string
+	loghdr   string
 	totals   struct {
 		objs int64
 		size int64
 	}
 	timeout, sleep time.Duration
+	// runtime
+	objs     int64
+	size     int64
+	sinceUpd time.Duration
 }
 
 func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
-	var (
-		qbck = cmn.QueryBcks(fromBck)
-	)
 	// 1. get summary
+	qbck := cmn.QueryBcks(fromBck)
 	summaries, err := bsummSlow(qbck, !flagIsSet(c, copyObjNotCachedFlag), true /*all buckets*/)
 	if err != nil {
 		return err
@@ -54,7 +57,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		if flagIsSet(c, copyObjNotCachedFlag) {
 			err = fmt.Errorf("source %s is empty, nothing to do", cpr.from)
 		} else {
-			err = fmt.Errorf("source %s has zero cached objects in the cluster, nothing to do"+
+			err = fmt.Errorf("source %s doesn't have any cached objects in the cluster, nothing to do"+
 				" (see %s for details)", cpr.from, qflprn(cli.HelpFlag))
 		}
 		return err
@@ -79,6 +82,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if err != nil {
 		return err
 	}
+	cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
 
 	// 3. poll x-copy-bucket asynchronously and update the progress
 	cpr.do(c)
@@ -122,28 +126,23 @@ func (cpr *cprCtx) do(c *cli.Context) {
 	cpr.sleep = _refreshRate(c) // refreshFlag or default
 
 	var (
-		copiedObjs, copiedSize int64
-		rerr                   error
-		xargs                  = xact.ArgsMsg{ID: cpr.xid}
-
-		// time management (and see timeoutNoChange above)
-		sinceChanged time.Duration
-		totalWait    time.Duration
-		loghdr       = fmt.Sprintf("%s[%s]", cpr.xname, cpr.xid)
+		rerr      error
+		totalWait time.Duration
+		xargs     = xact.ArgsMsg{ID: cpr.xid}
 	)
 outer:
 	for {
 		var (
-			size, objs int64
-			nrunning   int
-			xs, err    = queryXactions(xargs)
+			size, objs  int64
+			nrun, nidle int
+			xs, err     = queryXactions(xargs)
 		)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 				time.Sleep(refreshRateMinDur)
 				continue
 			}
-			rerr = fmt.Errorf("%s: failed to copy %s => %s: %v", loghdr, cpr.from, cpr.to, err)
+			rerr = fmt.Errorf("%s failed: %v", cpr.loghdr, err)
 			break
 		}
 		for _, snaps := range xs {
@@ -153,57 +152,45 @@ outer:
 				size += xsnap.Stats.Bytes
 				objs += xsnap.Stats.Objs
 				if xsnap.IsAborted() {
-					rerr = fmt.Errorf("%s: failed to copy %s => %s: aborted", loghdr, cpr.from, cpr.to)
+					rerr = fmt.Errorf("%s failed: aborted", cpr.loghdr)
 					break outer
 				}
 				if xsnap.Running() {
-					nrunning++
+					if xsnap.IsIdle() {
+						nidle++
+						// y, e := xact.CanIdle(cpr.xname) TODO -- FIXME
+					} else {
+						nrun++
+					}
 				}
 				break // expecting one from target
 			}
 		}
-		if objs > copiedObjs {
-			cpr.incObjs(objs - copiedObjs)
-			copiedObjs = objs
-			sinceChanged = 0 // reset here and below
-		}
-		if size > copiedSize {
-			cpr.incSize(size - copiedSize)
-			copiedSize = size
-			sinceChanged = 0
-		}
-		if copiedObjs >= cpr.totals.objs && copiedSize >= cpr.totals.size {
-			if nrunning > 0 {
+		cpr.updObjs(objs)
+		cpr.updSize(size)
+		if cpr.objs >= cpr.totals.objs && cpr.size >= cpr.totals.size {
+			if nrun > 0 {
 				time.Sleep(cpr.sleep)
 			}
-			break // NOTE: not waiting for all to finish or, same, nrunning == 0
+			break // NOTE: not waiting for all targets to finish
 		}
-		if nrunning == 0 {
-			if copiedObjs >= cpr.totals.objs && copiedSize >= cpr.totals.size {
+		if nrun == 0 {
+			if cpr.objs >= cpr.totals.objs && cpr.size >= cpr.totals.size {
 				break
 			}
-			if copiedObjs < cpr.totals.objs {
-				cpr.incObjs(cpr.totals.objs - copiedObjs) // to 100%
-				copiedObjs = cpr.totals.objs
-				sinceChanged = 0
-			}
-			if copiedSize < cpr.totals.size {
-				cpr.incSize(cpr.totals.size - copiedSize) // ditto
-				copiedSize = cpr.totals.size
-				sinceChanged = 0
-			}
+			// force bars -> 100%
+			cpr.updObjs(cpr.totals.objs)
+			cpr.updSize(cpr.totals.size)
 		}
 		time.Sleep(cpr.sleep)
 		totalWait += cpr.sleep
-		sinceChanged += cpr.sleep
-		if sinceChanged > timeoutNoChange && copiedObjs < cpr.totals.objs {
-			rerr = fmt.Errorf("%s: timeout with no apparent progress for %v (objs %d/%d, size %d/%d)",
-				loghdr, sinceChanged, copiedObjs, cpr.totals.objs, copiedSize, cpr.totals.size)
+		cpr.sinceUpd += cpr.sleep
+		if cpr.sinceUpd > timeoutNoChange && cpr.objs < cpr.totals.objs {
+			rerr = fmt.Errorf("%s: timeout with no apparent progress for %v (%s)", cpr.loghdr, cpr.sinceUpd, cpr.log())
 			break
 		}
 		if cpr.timeout != 0 && totalWait > cpr.timeout {
-			rerr = fmt.Errorf("%s: timed out (%v) waiting for copy %s => %s to finish",
-				loghdr, cpr.timeout, cpr.from, cpr.to)
+			rerr = fmt.Errorf("%s: timeout %v (%s)", cpr.loghdr, cpr.timeout, cpr.log())
 			break
 		}
 	}
@@ -217,16 +204,26 @@ outer:
 	}
 }
 
-func (cpr *cprCtx) incObjs(a int64) {
-	if cpr.barObjs != nil {
-		cpr.barObjs.IncrInt64(a)
+func (cpr *cprCtx) updObjs(objs int64) {
+	if objs <= cpr.objs {
+		return
 	}
+	if cpr.barObjs != nil {
+		cpr.barObjs.IncrInt64(objs - cpr.objs)
+	}
+	cpr.objs = objs
+	cpr.sinceUpd = 0
 }
 
-func (cpr *cprCtx) incSize(a int64) {
-	if cpr.barSize != nil {
-		cpr.barSize.IncrInt64(a)
+func (cpr *cprCtx) updSize(size int64) {
+	if size <= cpr.size {
+		return
 	}
+	if cpr.barSize != nil {
+		cpr.barSize.IncrInt64(size - cpr.size)
+	}
+	cpr.size = size
+	cpr.sinceUpd = 0
 }
 
 func (cpr *cprCtx) abortObjs() {
@@ -239,4 +236,8 @@ func (cpr *cprCtx) abortSize() {
 	if cpr.barSize != nil {
 		cpr.barSize.Abort(true)
 	}
+}
+
+func (cpr *cprCtx) log() string {
+	return fmt.Sprintf("objs %d/%d, size %d/%d", cpr.objs, cpr.totals.objs, cpr.size, cpr.totals.size)
 }

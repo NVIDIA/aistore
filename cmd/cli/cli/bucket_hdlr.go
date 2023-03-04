@@ -422,6 +422,7 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 		}
 		_, cpr.xname = xact.GetKindName(xkind)
 		cpr.totals.objs = numObjs
+		cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
 		return cpr.multiobj(c, text)
 	}
 

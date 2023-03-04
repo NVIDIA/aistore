@@ -312,7 +312,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func putRegularObj(c *cli.Context) error {
+func put(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, "file to put", "destination object name in the form "+optionalObjectsArgument)
 	}
@@ -332,14 +332,14 @@ func putRegularObj(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		return putDryRun(c, bck, objName, fileName)
 	}
-	return putObject(c, bck, objName, fileName)
+	return doPut(c, bck, objName, fileName)
 }
 
 func putHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, createArchFlag) {
 		return createArchMultiObjHandler(c)
 	}
-	return putRegularObj(c)
+	return put(c)
 }
 
 func concatHandler(c *cli.Context) (err error) {

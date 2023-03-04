@@ -24,6 +24,7 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Put directory with prefix added to destination object names](#put-directory-with-prefix-added-to-destination-object-names)
   - [Put pattern-matching files from directory](#put-pattern-matching-files-from-directory)
   - [Put a range of files](#put-a-range-of-files)
+  - [Put a list of files](#put-a-list-of-files)
   - [Dry-Run option](#dry-run-option)
   - [Put multiple directories](#put-multiple-directories)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
@@ -468,6 +469,18 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
 9 objects put into "ais://mybucket" bucket
 # PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt
 # (and 8 more)
+```
+
+## Put a list of files
+
+```console
+$ ais put "README.md,LICENSE" s3://abc
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 1       1.05KiB
+.md              1       11.24KiB
+TOTAL            2       12.29KiB
+PUT 2 files => s3://abc? [Y/N]: y
 ```
 
 ## Dry-Run option

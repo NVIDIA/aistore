@@ -420,7 +420,7 @@ func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	return nil
 }
 
-func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
@@ -449,9 +449,29 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return putRangeObjects(c, pt, bck, rangeTrimPrefix(pt), objName)
 	}
 
+	if _, err := os.Stat(path); err != nil {
+		// 3. PUT "comma,separate,list"
+		fnames := strings.Split(path, ",")
+		if len(fnames) > 1 && objName != "" {
+			return fmt.Errorf("cannot PUT %v => single object %s/%s", fnames, bck.DisplayName(), objName)
+		}
+		var (
+			files  fobjSlice
+			recurs = flagIsSet(c, recursFlag)
+		)
+		for _, n := range fnames {
+			fs, err := listFiles(c, n, "", objName, recurs)
+			if err != nil {
+				return err
+			}
+			files = append(files, fs...)
+		}
+		return putMultipleObjects(c, files, bck)
+	}
+
 	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
 		//
-		// 3. single-file PUT or APPEND-to-arch operation
+		// 4. PUT single file or APPEND-to-arch operation
 		//
 		if objName == "" {
 			// [CONVENTION]: if objName is not provided
@@ -473,7 +493,7 @@ func putObject(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return nil
 	}
 
-	// 4. PUT directory
+	// 5. PUT directory
 	files, err := listFiles(c, path, "", objName, flagIsSet(c, recursFlag))
 	if err != nil {
 		return err
