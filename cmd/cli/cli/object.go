@@ -370,20 +370,6 @@ func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, 
 	})
 }
 
-func putRangeObjects(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
-	allFiles := make([]fobj, 0, pt.Count())
-	pt.InitIter()
-	for file, hasNext := pt.Next(); hasNext; file, hasNext = pt.Next() {
-		files, err := listFiles(c, file, trimPrefix, subdirName, flagIsSet(c, recursFlag))
-		if err != nil {
-			return err
-		}
-		allFiles = append(allFiles, files...)
-	}
-
-	return putMultipleObjects(c, allFiles, bck)
-}
-
 // replace common abbreviations (such as `~/`) and return an absolute path
 func absPath(fileName string) (path string, err error) {
 	path = cos.ExpandPath(fileName)
@@ -438,41 +424,24 @@ func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return nil
 	}
 
-	// readable file, list, or range (must have abs path either way)
 	path, err := absPath(fileName)
 	if err != nil {
 		return err
 	}
 
-	// 2. template-specified range
+	// 2. inline "range" w/ no flag, e.g.: "/tmp/www/test{0..2}{0..2}.txt" ais://nnn/www
 	if pt, err := cos.ParseBashTemplate(path); err == nil {
-		return putRangeObjects(c, pt, bck, rangeTrimPrefix(pt), objName)
+		return putRange(c, pt, bck, rangeTrimPrefix(pt), objName /* subdir name */)
 	}
 
-	if _, err := os.Stat(path); err != nil {
-		// 3. PUT "comma,separate,list"
-		fnames := strings.Split(path, ",")
-		if len(fnames) > 1 && objName != "" {
-			return fmt.Errorf("cannot PUT %v => single object %s/%s", fnames, bck.DisplayName(), objName)
-		}
-		var (
-			files  fobjSlice
-			recurs = flagIsSet(c, recursFlag)
-		)
-		for _, n := range fnames {
-			fs, err := listFiles(c, n, "", objName, recurs)
-			if err != nil {
-				return err
-			}
-			files = append(files, fs...)
-		}
-		return putMultipleObjects(c, files, bck)
+	// 3. inline "list" w/ no flag: "FILE[,FILE...]" BUCKET/[OBJECT_NAME]
+	if _, err := os.Stat(fileName); err != nil {
+		fnames := strings.Split(fileName, ",")
+		return putList(c, fnames, bck, objName /* subdir name */)
 	}
 
+	// 4. put single file _or_ append to arch
 	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
-		//
-		// 4. PUT single file or APPEND-to-arch operation
-		//
 		if objName == "" {
 			// [CONVENTION]: if objName is not provided
 			// we use the filename as the destination object name
@@ -493,12 +462,43 @@ func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return nil
 	}
 
-	// 5. PUT directory
-	files, err := listFiles(c, path, "", objName, flagIsSet(c, recursFlag))
+	// 5. directory
+	files, err := lsFobj(c, path, "", objName, flagIsSet(c, recursFlag))
 	if err != nil {
 		return err
 	}
-	return putMultipleObjects(c, files, bck)
+	return putMultiObj(c, files, bck)
+}
+
+func putList(c *cli.Context, fnames []string, bck cmn.Bck, subdirName string) error {
+	var (
+		allFiles = make([]fobj, 0, len(fnames))
+		recurs   = flagIsSet(c, recursFlag)
+	)
+	for _, n := range fnames {
+		files, err := lsFobj(c, n, "", subdirName, recurs)
+		if err != nil {
+			return err
+		}
+		allFiles = append(allFiles, files...)
+	}
+	return putMultiObj(c, allFiles, bck)
+}
+
+func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
+	var (
+		allFiles = make([]fobj, 0, pt.Count())
+		recurs   = flagIsSet(c, recursFlag)
+	)
+	pt.InitIter()
+	for n, hasNext := pt.Next(); hasNext; n, hasNext = pt.Next() {
+		files, err := lsFobj(c, n, trimPrefix, subdirName, recurs)
+		if err != nil {
+			return err
+		}
+		allFiles = append(allFiles, files...)
+	}
+	return putMultiObj(c, allFiles, bck)
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {
@@ -513,7 +513,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		sizes      = make(map[string]int64, l) // or greater
 	)
 	for i, fileName := range fileNames {
-		fsl, err := listFiles(c, fileName, "", "", flagIsSet(c, recursFlag))
+		fsl, err := lsFobj(c, fileName, "", "", flagIsSet(c, recursFlag))
 		if err != nil {
 			return err
 		}
@@ -721,9 +721,8 @@ func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) 
 
 func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q and %q cannot be used together", listFlag.Name, templateFlag.Name)
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
-
 	if flagIsSet(c, listFlag) {
 		return listOp(c, bck)
 	}

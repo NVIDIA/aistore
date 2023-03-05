@@ -8,11 +8,14 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -93,7 +96,7 @@ var (
 	objectCmdPut = cli.Command{
 		Name:         commandPut,
 		Usage:        "put object(s)",
-		ArgsUsage:    putPromoteObjectArgument,
+		ArgsUsage:    putObjectArgument,
 		Flags:        objectCmdsFlags[commandPut],
 		Action:       putHandler,
 		BashComplete: putPromoteObjectCompletions,
@@ -136,7 +139,7 @@ var (
 			{
 				Name:         commandPromote,
 				Usage:        "promote files and directories (i.e., replicate files and convert them to objects)",
-				ArgsUsage:    putPromoteObjectArgument,
+				ArgsUsage:    promoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,
 				BashComplete: putPromoteObjectCompletions,
@@ -312,15 +315,50 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func put(c *cli.Context) error {
+func putHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "file to put", "destination object name in the form "+optionalObjectsArgument)
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	fileName := c.Args().Get(0)
-	if c.NArg() < 2 {
-		return missingArgumentsError(c, "destination object name in the form "+optionalObjectsArgument)
+	switch {
+	case flagIsSet(c, createArchFlag): // 1. archive
+		return createArchMultiObjHandler(c)
+	case c.NArg() == 1: // 2. BUCKET/[OBJECT_NAME] --list|--template
+		if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+		}
+		if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+			return missingArgSimple("FILE|DIRECTORY|DIRECTORY/PATTERN")
+		}
+		// destination
+		uri := c.Args().Get(0)
+		bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+		if err != nil {
+			return err
+		}
+
+		// putList | putRange
+		if flagIsSet(c, listFlag) {
+			listObjs := parseStrFlag(c, listFlag)
+			fnames := strings.Split(listObjs, ",")
+			return putList(c, fnames, bck, objName /* subdir name */)
+		}
+		tmplObjs := parseStrFlag(c, templateFlag)
+		pt, err := cos.NewParsedTemplate(tmplObjs)
+		if err != nil {
+			return err
+		}
+		return putRange(c, pt, bck, rangeTrimPrefix(pt), objName /* subdir name */)
+	default: // 3. FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]
+		return put(c)
 	}
-	uri := c.Args().Get(1)
+}
+
+func put(c *cli.Context) error {
+	debug.Assert(c.NArg() >= 2) // NArg() < 2 above
+	var (
+		fileName = c.Args().Get(0)
+		uri      = c.Args().Get(1)
+	)
 	if c.NArg() > 2 {
 		return incorrectUsageMsg(c, "too many arguments _or_ unrecognized option '%+v'", c.Args()[2:])
 	}
@@ -333,13 +371,6 @@ func put(c *cli.Context) error {
 		return putDryRun(c, bck, objName, fileName)
 	}
 	return doPut(c, bck, objName, fileName)
-}
-
-func putHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, createArchFlag) {
-		return createArchMultiObjHandler(c)
-	}
-	return put(c)
 }
 
 func concatHandler(c *cli.Context) (err error) {

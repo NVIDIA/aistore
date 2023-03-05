@@ -446,6 +446,10 @@ utils_test.go                    1.38KiB
 
 ## Put a range of files
 
+There are several equivalent ways to PUT a templated range of files:
+
+### Example 1.
+
 Put 9 files to `mybucket` using a range request. Note the formatting of object names.
 They exclude the longest parent directory of path which doesn't contain a template (`{a..b}`).
 
@@ -458,20 +462,33 @@ $ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket -y
 9 objects put into "ais://mybucket" bucket
 ```
 
-Same as above, except that destination object names will have additional prefix `test${d1}${d2}.txt`.
+### Example 2. PUT a range of files into virtial directory
+
+Same as above but in addition destination object names will have additional prefix `subdir/` (notice the trailing `/`)
+
+In other words, this PUT in affect creates a **virtual directory** inside destination `ais://mybucket`
 
 ```bash
 # prep test files
 $ for d1 in {0..2}; do for d2 in {0..2}; do echo "0" > ~/dir/test${d1}${d2}.txt; done; done
 
-$ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/dir/ -y
+$ ais object put "~/dir/test{0..2}{0..2}.txt" ais://mybucket/subdir/ -y
+```
 
-9 objects put into "ais://mybucket" bucket
-# PUT /home/user/dir/test00.txt => ais://mybucket/dir/test00.txt
-# (and 8 more)
+### Example 3.
+Finally, the same exact operation can be accomplished using `--template` option
+
+> `--template` is universally supported to specify a range of files or objects
+
+```console
+$ ais put ais://mybucket/dir/ -y --template "~/dir/test{0..2}{0..2}.txt"
 ```
 
 ## Put a list of files
+
+There are several equivalent ways to PUT a _list_ of files:
+
+### Example 1. Notice the double quotes (single quotes can be used as well)
 
 ```console
 $ ais put "README.md,LICENSE" s3://abc
@@ -481,6 +498,36 @@ EXTENSION        COUNT   SIZE
 .md              1       11.24KiB
 TOTAL            2       12.29KiB
 PUT 2 files => s3://abc? [Y/N]: y
+```
+
+### Example 2.
+
+Alternatively, the same can be done using the `--list` flag:
+
+> `--list` is universally supported to specify a list of files or objects
+
+```console
+$ ais put s3://abc --list "README.md,LICENSE"
+
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 1       1.05KiB
+.md              1       11.24KiB
+TOTAL            2       12.29KiB
+PUT 2 files => s3://abc? [Y/N]: y
+```
+
+### Example 3. PUT a list into virtual directory
+
+The only difference from the two examples above is: **trailing `/` in the destination name**.
+
+```console
+$ ais put ais://abc/subdir/ --list 'LICENSE,README.md' -y
+
+$ ais ls ais://abc
+NAME                     SIZE
+subdir/LICENSE           1.05KiB
+subdir/README.md         11.24KiB
 ```
 
 ## Dry-Run option

@@ -508,12 +508,18 @@ func etlBucketHandler(c *cli.Context) error {
 		msg.Ext = extMap
 	}
 
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+	}
+
+	// (I) either multi-object
 	tmplObjs := parseStrFlag(c, templateFlag)
 	listObjs := parseStrFlag(c, listFlag)
 	if listObjs != "" || tmplObjs != "" {
 		return multiobjTCO(c, fromBck, toBck, listObjs, tmplObjs, etlName)
 	}
 
+	// (II) or bucket
 	xid, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
 	if errV := handleETLHTTPError(err, etlName); errV != nil {
 		return errV

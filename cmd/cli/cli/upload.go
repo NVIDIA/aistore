@@ -46,7 +46,7 @@ type (
 	}
 )
 
-func putMultipleObjects(c *cli.Context, files []fobj, bck cmn.Bck) error {
+func putMultiObj(c *cli.Context, files []fobj, bck cmn.Bck) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to PUT (hint: check filename pattern and/or source directory name)")
 	}

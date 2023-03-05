@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -363,15 +364,13 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 }
 
 func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) error {
-	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
-
-	// 1. list or template
 	var (
 		lrMsg   cmn.SelectObjsMsg
 		numObjs int64
 	)
+	debug.Assert((listObjs == "" && tmplObjs != "") || (listObjs != "" && tmplObjs == ""))
+
+	// 1. list or template
 	if listObjs != "" {
 		lrMsg.ObjNames = strings.Split(listObjs, ",")
 		numObjs = int64(len(lrMsg.ObjNames))
@@ -459,12 +458,12 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if bckFrom.Equal(&bckTo) {
 		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 	}
-
-	listObjs := parseStrFlag(c, listFlag)
-	tmplObjs := parseStrFlag(c, templateFlag)
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+	}
 
 	// (I) bucket copy
-	if listObjs == "" && tmplObjs == "" {
+	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
 		if dryRun {
 			// TODO: show object names with destinations, make the output consistent with etl dry-run
 			fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
@@ -474,9 +473,9 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	}
 
 	// (II) multi-object copy
-	if listObjs != "" && tmplObjs != "" {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
+	listObjs := parseStrFlag(c, listFlag)
+	tmplObjs := parseStrFlag(c, templateFlag)
+
 	if dryRun {
 		var msg string
 		if listObjs != "" {

@@ -188,6 +188,13 @@ func incorrectUsageMsg(c *cli.Context, fmtString string, args ...any) *errUsage 
 	return _errUsage(c, msg)
 }
 
+func missingArgSimple(missingArgs ...string) error {
+	if len(missingArgs) == 1 {
+		return fmt.Errorf("missing %q argument", missingArgs[0])
+	}
+	return fmt.Errorf("missing %q arguments", missingArgs)
+}
+
 func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
 	var msg string
 	if len(missingArgs) == 1 && !strings.Contains(missingArgs[0], " ") {

@@ -245,13 +245,14 @@ const (
 	bucketNewArgument      = "NEW_BUCKET"
 
 	// Objects
-	getObjectArgument        = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
-	putPromoteObjectArgument = "FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]"
-	concatObjectArgument     = "FILE|DIRECTORY|DIRECTORY/PATTERN [FILE|DIRECTORY|DIRECTORY/PATTERN...] BUCKET/OBJECT_NAME"
-	objectArgument           = "BUCKET/OBJECT_NAME"
-	optionalObjectsArgument  = "BUCKET/[OBJECT_NAME]..."
-	renameObjectArgument     = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
-	appendToArchArgument     = "FILE BUCKET/OBJECT_NAME"
+	getObjectArgument       = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
+	putObjectArgument       = "[FILE|DIRECTORY|DIRECTORY/PATTERN] BUCKET/[OBJECT_NAME]"
+	promoteObjectArgument   = "FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]"
+	concatObjectArgument    = "FILE|DIRECTORY|DIRECTORY/PATTERN [FILE|DIRECTORY|DIRECTORY/PATTERN...] BUCKET/OBJECT_NAME"
+	objectArgument          = "BUCKET/OBJECT_NAME"
+	optionalObjectsArgument = "BUCKET/[OBJECT_NAME]..."
+	renameObjectArgument    = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
+	appendToArchArgument    = "FILE BUCKET/OBJECT_NAME"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 		argsUsageIndent +

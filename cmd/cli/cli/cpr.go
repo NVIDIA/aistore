@@ -133,9 +133,9 @@ func (cpr *cprCtx) do(c *cli.Context) {
 outer:
 	for {
 		var (
-			size, objs  int64
-			nrun, nidle int
-			xs, err     = queryXactions(xargs)
+			size, objs int64
+			nrun       int
+			xs, err    = queryXactions(xargs)
 		)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
@@ -157,8 +157,7 @@ outer:
 				}
 				if xsnap.Running() {
 					if xsnap.IsIdle() {
-						nidle++
-						// y, e := xact.CanIdle(cpr.xname) TODO -- FIXME
+						debug.Assert(xact.IdlesBeforeFinishing(cpr.xname))
 					} else {
 						nrun++
 					}

@@ -15,6 +15,9 @@ import (
 	"github.com/urfave/cli"
 )
 
+// walk locally accessible files and directories; handle file/dir matching wildcards and patterns
+// (no regex)
+
 type (
 	fobj struct {
 		path string
@@ -90,10 +93,13 @@ func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) 
 	return ctx.files, nil
 }
 
-// gets start path with optional wildcard at the end, base to generate
-// object names, and recursive flag, returns the list of files that matches
-// criteria (file path, object name, size for every file)
-func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) (fobjSlice, error) {
+// in:
+// - path with optional wildcard(s)
+// - base to generate object names
+// - recursive flag
+// returns:
+// - list of triplets (file or dir path, object name, size) that match
+func lsFobj(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) (fobjSlice, error) {
 	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
 	var (
 		pattern   string
@@ -106,7 +112,8 @@ func listFiles(c *cli.Context, path, trimPrefix, appendPrefix string, recursive 
 			strings.Contains(pattern, "?") ||
 			strings.Contains(pattern, "\\")
 		if !isPattern {
-			warn := fmt.Sprintf("%q is not a directory and does not appear to be a shell filename matching pattern (%q)", path, pattern)
+			warn := fmt.Sprintf("%q is not a directory and does not appear to be a shell filename matching pattern (%q)",
+				path, pattern)
 			actionWarn(c, warn)
 		}
 		path = filepath.Dir(path)

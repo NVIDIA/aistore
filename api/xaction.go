@@ -170,6 +170,8 @@ func backoffPoll(dur time.Duration) time.Duration {
 	return cos.MinDuration(xact.MaxPollTime, dur)
 }
 
+// TODO: use `xact.IdlesBeforeFinishing` to unify as a single WaitForXaction API
+
 // WaitForXactionIC waits for a given xaction to complete.
 // Use it only for global xactions
 // (those that execute on all targets and report their status to IC, e.g. rebalance).
