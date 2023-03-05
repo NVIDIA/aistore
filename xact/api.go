@@ -82,10 +82,10 @@ type (
 type (
 	Descriptor struct {
 		DisplayName string          // as implied
-		Access      apc.AccessAttrs // Access required by xctn (see: apc.Access*)
+		Access      apc.AccessAttrs // access permissions (see: apc.Access*)
 		Scope       int             // ScopeG (global), etc. - the enum above
-		Startable   bool            // determines if this xaction can be started via API
-		Metasync    bool            // true: changes and metasyncs cluster-wide meta
+		Startable   bool            // true if user can start this xaction (e.g., via `api.StartXaction`)
+		Metasync    bool            // true if this xaction changes (and metasyncs) cluster metadata
 		Owned       bool            // (for definition, see ais/ic.go)
 		RefreshCap  bool            // refresh capacity stats upon completion
 		Mountpath   bool            // is a mountpath-traversing ("jogger") xaction
@@ -94,6 +94,11 @@ type (
 		Rebalance  bool // moves data between nodes
 		Resilver   bool // moves data between mountpaths
 		MassiveBck bool // massive data copying (transforming, encoding) operation on a bucket
+
+		// xaction has an intermediate `idle` state whereby it becomes `idle` in-between
+		// requests - typically, for up to a few dozen seconds prior to finishing
+		// (see also: xact/demand.go)
+		Idles bool
 	}
 )
 
@@ -110,7 +115,7 @@ var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
 	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
-	apc.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true},
+	apc.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true, Idles: true},
 	apc.ActETLInline: {Scope: ScopeG, Startable: false, Mountpath: false},
 
 	// (one bucket) | (all buckets)
@@ -126,20 +131,23 @@ var Table = map[string]Descriptor{
 		Mountpath:   true,
 	},
 
-	// one target
+	// single target (node)
 	apc.ActResilver: {Scope: ScopeT, Startable: true, Mountpath: true, Resilver: true},
 
-	// xactions that run on (or in) a given bucket
-	apc.ActECGet:     {Scope: ScopeB, Startable: false},
-	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
-	apc.ActECRespond: {Scope: ScopeB, Startable: false},
-	apc.ActPutCopies: {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true},
+	// on-demand EC and n-way replication
+	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
+	apc.ActECGet:     {Scope: ScopeB, Startable: false, Idles: true},
+	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true},
+	apc.ActECRespond: {Scope: ScopeB, Startable: false, Idles: true},
+	apc.ActPutCopies: {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true},
+
+	// on-demand multi-object
+	apc.ActArchive:     {Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
+	apc.ActCopyObjects: {DisplayName: "copy-objects", Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
+	apc.ActETLObjects:  {DisplayName: "etl-objects", Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
 
 	// multi-object
-	apc.ActArchive:     {Scope: ScopeB, Startable: false, RefreshCap: true},
-	apc.ActCopyObjects: {DisplayName: "copy-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
-	apc.ActETLObjects:  {DisplayName: "etl-objects", Scope: ScopeB, Startable: false, RefreshCap: true},
-	apc.ActPromote:     {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
+	apc.ActPromote: {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
 	apc.ActEvictObjects: {
 		DisplayName: "evict-objects",
 		Scope:       ScopeB,
@@ -220,7 +228,7 @@ var Table = map[string]Descriptor{
 		MassiveBck:  true,
 	},
 
-	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true},
+	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true, Idles: true},
 
 	// cache management, internal usage
 	apc.ActLoadLomCache:   {DisplayName: "warm-up-metadata", Scope: ScopeB, Startable: true, Mountpath: true},
@@ -256,6 +264,12 @@ func GetKindName(kindOrName string) (kind, name string) {
 		name = kind
 	}
 	return
+}
+
+func IdlesBeforeFinishing(kindOrName string) bool {
+	_, dtor := getDtor(kindOrName)
+	debug.Assert(dtor != nil)
+	return dtor.Idles
 }
 
 func ListDisplayNames(onlyStartable bool) (names []string) {
