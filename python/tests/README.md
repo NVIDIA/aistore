@@ -56,19 +56,19 @@ Below are the recommended commands for running the test suites. Run these comman
 
 ---
 
-### SDK tests:
+### All SDK tests:
 
 `python -m pytest tests/unit/sdk tests/integration/sdk`
 
 
-#### Excluding ETL (ETL requires AIS cluster running on k8s)
+#### Integration only, excluding ETL (ETL requires AIS cluster running on k8s)
 
-`python -m pytest tests/unit/sdk tests/integration/sdk --ignore=tests/integration/sdk/test_etl_ops.py`
+`python -m pytest tests/integration/sdk -m "not etl"`
 
+#### Integration only, with ETL
 
-#### Integration only
+`python -m pytest tests/integration/sdk -m etl`
 
-`python -m pytest tests/integration/sdk`
 
 #### Unit only
 

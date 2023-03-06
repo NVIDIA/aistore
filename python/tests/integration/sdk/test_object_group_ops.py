@@ -1,7 +1,10 @@
 #
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
+import hashlib
 import unittest
+
+import pytest
 
 from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.errors import InvalidBckProvider
@@ -145,10 +148,42 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         self.assertEqual(4, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
 
+    @pytest.mark.etl
+    def test_transform_objects(self):
+        # Define an etl with code that hashes the contents of each object
+        etl_name = "etl-" + random_string(5)
+
+        def transform(input_bytes):
+            md5 = hashlib.md5()
+            md5.update(input_bytes)
+            return md5.hexdigest().encode()
+
+        self.client.etl().init_code(transform=transform, etl_name=etl_name)
+
+        to_bck_name = "destination-bucket"
+        to_bck = self._create_bucket(to_bck_name)
+        self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
+        self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
+
+        transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
+            to_bck.name, etl_name=etl_name
+        )
+        self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        # Get the md5 transform of each source object and verify the destination bucket contains those results
+        from_obj_hashes = [
+            transform(self.bucket.object(name).get().read_all())
+            for name in self.obj_names
+        ]
+        to_obj_values = [
+            to_bck.object(name).get().read_all() for name in self.obj_names
+        ]
+        self.assertEqual(to_obj_values, from_obj_hashes)
+
     def _evict_all_objects(self):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._verify_cached_objects(10, [])
+        self._check_all_objects_cached(10, expected_cached=False)
 
     def _verify_cached_objects(self, expected_object_count, cached_range):
         """
@@ -163,8 +198,6 @@ class TestObjectGroupOps(RemoteEnabledTest):
             props="name,cached", prefix=self.obj_prefix
         ).get_entries()
         self.assertEqual(expected_object_count, len(objects))
-
-        # All even numbers within the range should be cached
         cached_names = {
             self.obj_prefix + str(x) + self.obj_suffix for x in cached_range
         }

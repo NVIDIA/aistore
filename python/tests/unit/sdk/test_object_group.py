@@ -7,9 +7,13 @@ from aistore.sdk.const import (
     ACT_EVICT_OBJECTS,
     HTTP_METHOD_POST,
     ACT_PREFETCH_OBJECTS,
+    ACT_COPY_OBJECTS,
+    ACT_TRANSFORM_OBJECTS,
 )
+from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object_range import ObjectRange
+from aistore.sdk.types import BucketModel
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -131,10 +135,101 @@ class TestObjectGroup(unittest.TestCase):
             self.expected_range_template_value,
         )
 
+    def _copy_test_helper(self, starting_val, obj_group):
+        to_bck = "to-bucket"
+        expected_val = starting_val
+        expected_val["prefix"] = ""
+        expected_val["dry_run"] = False
+        expected_val["force"] = False
+        expected_val["tobck"] = BucketModel(name=to_bck).as_dict()
+        expected_val["coer"] = False
+        # Test default args
+        self.object_group_test_helper(
+            obj_group.copy,
+            HTTP_METHOD_POST,
+            ACT_COPY_OBJECTS,
+            expected_val,
+            to_bck=to_bck,
+        )
+        # Test provided optional args
+        to_provider = "any provider"
+        expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
+        expected_val["coer"] = True
+        self.object_group_test_helper(
+            obj_group.copy,
+            HTTP_METHOD_POST,
+            ACT_COPY_OBJECTS,
+            expected_val,
+            to_bck=to_bck,
+            to_provider=to_provider,
+            continue_on_error=True,
+        )
+
+    def test_copy_names(self):
+        self._copy_test_helper(
+            self.expected_name_list_value, self.object_group_name_list
+        )
+
+    def test_copy_range(self):
+        self._copy_test_helper(self.expected_range_value, self.object_group_range)
+
+    def test_copy_range_template(self):
+        self._copy_test_helper(
+            self.expected_range_template_value, self.object_group_template
+        )
+
+    def _transform_test_helper(self, starting_val, obj_group):
+        etl_name = "any active etl"
+        to_bck = "to-bucket"
+        expected_val = starting_val
+        expected_val["id"] = etl_name
+        expected_val["request_timeout"] = DEFAULT_ETL_TIMEOUT
+        expected_val["tobck"] = BucketModel(name=to_bck).as_dict()
+        expected_val["coer"] = False
+        # Test default args
+        self.object_group_test_helper(
+            obj_group.transform,
+            HTTP_METHOD_POST,
+            ACT_TRANSFORM_OBJECTS,
+            expected_val,
+            to_bck=to_bck,
+            etl_name=etl_name,
+        )
+        # Test provided optional args
+        timeout = "30s"
+        to_provider = "any provider"
+        expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
+        expected_val["coer"] = True
+        expected_val["request_timeout"] = timeout
+        self.object_group_test_helper(
+            obj_group.transform,
+            HTTP_METHOD_POST,
+            ACT_TRANSFORM_OBJECTS,
+            expected_val,
+            to_bck=to_bck,
+            to_provider=to_provider,
+            etl_name=etl_name,
+            timeout=timeout,
+            continue_on_error=True,
+        )
+
+    def test_transform_names(self):
+        self._transform_test_helper(
+            self.expected_name_list_value, self.object_group_name_list
+        )
+
+    def test_transform_range(self):
+        self._transform_test_helper(self.expected_range_value, self.object_group_range)
+
+    def test_transform_range_template(self):
+        self._transform_test_helper(
+            self.expected_range_template_value, self.object_group_template
+        )
+
     def object_group_test_helper(
-        self, object_group_function, http_method, action, expected_value
+        self, object_group_function, http_method, action, expected_value, **kwargs
     ):
-        resp_text = object_group_function()
+        resp_text = object_group_function(**kwargs)
         self.assertEqual(self.mock_response_text, resp_text)
         self.mock_bck.make_request.assert_called_with(
             http_method, action, value=expected_value

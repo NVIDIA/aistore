@@ -8,6 +8,11 @@ include = ["aistore"]
 [tool.hatch.build.targets.sdist.force-include]
 "../LICENSE" = "LICENSE"
 
+[tool.pytest.ini_options]
+markers = [
+    "etl: marks tests as using etl and therefore requiring k8s cluster",
+]
+
 [project]
 name = "aistore"
 version = "1.0.9"

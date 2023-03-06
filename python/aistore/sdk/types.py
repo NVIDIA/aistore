@@ -385,21 +385,29 @@ class TransformBckMsg(BaseModel):
     etl_name: str
     timeout: str
 
+    def as_dict(self):
+        return {"id": self.etl_name, "request_timeout": self.timeout}
 
-class CopyMultiObj(BaseModel):
+
+class TCMultiObj(BaseModel):
     """
-    API message structure for copying multiple objects between buckets
+    API message structure for transforming or copying multiple objects between buckets
     """
 
     to_bck: BucketModel
-    copy_msg: CopyBckMsg
+    copy_msg: CopyBckMsg = None
+    transform_msg: TransformBckMsg = None
     continue_on_err: bool
     object_selection: dict
 
     def as_dict(self):
         json_dict = self.object_selection
-        for key, val in self.copy_msg.as_dict().items():
-            json_dict[key] = val
+        if self.copy_msg:
+            for key, val in self.copy_msg.as_dict().items():
+                json_dict[key] = val
+        if self.transform_msg:
+            for key, val in self.transform_msg.as_dict().items():
+                json_dict[key] = val
         json_dict["tobck"] = self.to_bck.as_dict()
         json_dict["coer"] = self.continue_on_err
         return json_dict

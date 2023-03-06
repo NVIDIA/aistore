@@ -8,6 +8,8 @@ import hashlib
 import sys
 import time
 
+import pytest
+
 from aistore.sdk import Client
 from aistore.sdk.etl_const import ETL_COMM_HPUSH, ETL_COMM_IO
 from aistore.sdk.errors import AISError, ErrBckNotFound
@@ -55,6 +57,7 @@ class TestETLOps(unittest.TestCase):
             self.client.etl().delete(etl_name=etl.id)
 
     # pylint: disable=too-many-statements
+    @pytest.mark.etl
     def test_etl_apis(self):
         # code
         def transform(input_bytes):
@@ -188,6 +191,7 @@ class TestETLOps(unittest.TestCase):
         with self.assertRaises(AISError):
             self.client.etl().start(etl_name=ETL_NAME_SPEC)
 
+    @pytest.mark.etl
     def test_etl_apis_stress(self):
         num_objs = 200
         content = {}
@@ -247,6 +251,7 @@ class TestETLOps(unittest.TestCase):
             self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
             self.assertEqual(transform(bytes(value)), transformed_obj_io)
 
+    @pytest.mark.etl
     def test_etl_apis_stream(self):
         def transform(reader, writer):
             checksum = hashlib.md5()
@@ -270,6 +275,7 @@ class TestETLOps(unittest.TestCase):
         md5.update(self.content)
         self.assertEqual(obj, md5.hexdigest().encode())
 
+    @pytest.mark.etl
     def test_etl_api_xor(self):
         def transform(reader, writer):
             checksum = hashlib.md5()

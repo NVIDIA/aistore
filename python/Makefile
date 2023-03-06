@@ -55,7 +55,7 @@ python_sdk_tests: common_deps python_sdk_unit_tests python_sdk_integration_tests
 
 .PHONY: python_sdk_integration_tests
 python_sdk_integration_tests: common_deps
-	pytest -v tests/integration/sdk --ignore=tests/integration/sdk/test_etl_ops.py
+	pytest -v tests/integration/sdk -m "not etl"
 
 .PHONY: python_sdk_unit_tests
 python_sdk_unit_tests: common_deps
@@ -63,7 +63,7 @@ python_sdk_unit_tests: common_deps
 
 .PHONY: python_etl_tests
 python_etl_tests: common_deps
-	pytest -v -s tests/integration/sdk/test_etl_ops.py
+	pytest -v -s tests/integration/sdk/ -m etl
 
 # Tests for aistore.botocore_patch
 .PHONY: python_botocore_tests
