@@ -54,7 +54,7 @@ func (f DurationFlagVar) String() string {
 // construction via `FlagSet.Var` to override duration-parsing default
 func (f DurationFlag) ApplyWithError(set *flag.FlagSet) error {
 	fvar := DurationFlagVar(f)
-	parts := strings.Split(f.Name, ",")
+	parts := splitCsv(f.Name)
 	for _, name := range parts {
 		name = strings.Trim(name, " ")
 		set.Var(&fvar, name, f.Usage)
@@ -92,7 +92,8 @@ func fl1n(flagName string) string {
 	if strings.IndexByte(flagName, ',') < 0 {
 		return flagName
 	}
-	return strings.Split(flagName, ",")[0]
+	l := splitCsv(flagName)
+	return l[0]
 }
 
 func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {

@@ -362,20 +362,22 @@ func showJobsHandler(c *cli.Context) error {
 }
 
 func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, error) {
-	if name != "" {
+	if name == "" && xid != "" {
+		name, _ = xid2Name(xid)
+	}
+	if name != "" || xid != "" {
 		return _showJobs(c, name, xid, daemonID, bck, xid == "" /*caption*/)
 	}
 
 	// special (best-effort)
 	if xid != "" {
-		var otherID string
-		name, otherID = xid2Name(xid)
 		switch name {
 		case cmdDownload:
 			return _showJobs(c, cmdDownload, xid, daemonID, bck, false)
 		case cmdDsort:
 			return _showJobs(c, cmdDsort, xid, daemonID, bck, false)
 		case commandETL:
+			_, otherID := xid2Name(xid)
 			return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, false)
 		}
 	}
@@ -385,7 +387,7 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		err error
 	)
 	names := xact.ListDisplayNames(false /*only-startable*/)
-	names = append(names, dsort.DSortName)
+	names = append(names, dsort.DSortName) // NOTE: dsort isn't an x (the only exception)
 	sort.Strings(names)
 	for _, name = range names {
 		l, errV := _showJobs(c, name, "" /*xid*/, daemonID, bck, true)
@@ -425,7 +427,8 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 		return showETLs(c, xid, caption)
 	default:
 		var (
-			all         = flagIsSet(c, allJobsFlag)
+			// finished or not, always try to show when xid provided
+			all         = flagIsSet(c, allJobsFlag) || (xid != "" && xact.IsValidUUID(xid))
 			onlyActive  = !all
 			xactKind, _ = xact.GetKindName(name)
 			regexStr    = parseStrFlag(c, regexJobsFlag)

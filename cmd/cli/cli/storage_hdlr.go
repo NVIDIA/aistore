@@ -80,13 +80,12 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	}
 
 	fmt.Fprintf(c.App.Writer, "Started storage cleanup %s...\n", id)
-	wargs := xact.ArgsMsg{ID: id, Kind: apc.ActStoreCleanup}
 	if flagIsSet(c, waitJobXactFinishedFlag) {
-		wargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	if err := api.WaitForXactionIdle(apiBP, wargs); err != nil {
+	if err := waitXact(apiBP, xargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
-	return
+	return nil
 }

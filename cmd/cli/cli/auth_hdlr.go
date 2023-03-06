@@ -499,7 +499,8 @@ func showAuthAllRoles(c *cli.Context) error {
 	}
 	cluID := parseStrFlag(c, clusterFilterFlag)
 	if cluID != "" {
-		if list, err = filterRolesByCluster(list, strings.Split(cluID, ",")); err != nil {
+		l := splitCsv(cluID)
+		if list, err = filterRolesByCluster(list, l); err != nil {
 			return err
 		}
 	}

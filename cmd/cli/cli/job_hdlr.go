@@ -69,7 +69,7 @@ var (
 			dsortSpecFlag,
 		},
 		commandPrefetch: append(
-			baseLstRngFlags,
+			listrangeFlags,
 			dryRunFlag,
 		),
 		cmdLRU: {
@@ -680,7 +680,8 @@ func startLRUHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	bckArgs := makeCommaSepList(parseStrFlag(c, listBucketsFlag))
+	s := parseStrFlag(c, listBucketsFlag)
+	bckArgs := splitCsv(s)
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
 		bck, err := parseBckURI(c, bckArg, true /*require provider*/)
@@ -723,9 +724,8 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	}
 
 	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return listOrRangeOp(c, bck)
+		return listrange(c, bck)
 	}
-
 	return missingArgumentsError(c, "object list or range")
 }
 
@@ -1326,7 +1326,7 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	return
 }
 
-// disambiguate download/dsort job ID vs xaction UUID
+// [best effort] try to disambiguate download/dsort/etl job ID vs xaction UUID
 func xid2Name(xid string) (name, otherID string) {
 	switch {
 	case strings.HasPrefix(xid, dload.PrefixJobID):

@@ -21,14 +21,15 @@ import (
 const timeoutNoChange = 10 * time.Second // when stats stop moving for so much time
 
 type cprCtx struct {
-	errCh    chan error
-	barObjs  *mpb.Bar
-	barSize  *mpb.Bar
-	xid      string
-	from, to string
-	xname    string
-	loghdr   string
-	totals   struct {
+	errCh   chan error
+	barObjs *mpb.Bar
+	barSize *mpb.Bar
+	xid     string
+	from    string // from-bucket name or _the_ bucket name
+	to      string // to-bucket name (optional)
+	xname   string
+	loghdr  string
+	totals  struct {
 		objs int64
 		size int64
 	}
@@ -82,7 +83,11 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if err != nil {
 		return err
 	}
-	cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
+	if cpr.to != "" {
+		cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
+	} else {
+		cpr.loghdr = fmt.Sprintf("%s[%s] %s", cpr.xname, cpr.xid, cpr.from)
+	}
 
 	// 3. poll x-copy-bucket asynchronously and update the progress
 	cpr.do(c)

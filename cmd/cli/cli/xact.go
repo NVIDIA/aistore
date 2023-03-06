@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -50,14 +51,22 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 	return ""
 }
 
-// Wait for xaction to run for completion, warn if aborted
-func waitForXactionFinished(apiBP api.BaseParams, args xact.ArgsMsg) (err error) {
+// Wait for the caller's started xaction to run until finished _or_ idle (NOTE),
+// warn if aborted
+func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
+	debug.Assert(xact.IsValidUUID(args.ID))
+	kind, xname := xact.GetKindName(args.Kind)
+	debug.Assert(kind != "") // relying on it to decide between APIs
+	if xact.IdlesBeforeFinishing(kind) {
+		return api.WaitForXactionIdle(apiBP, args)
+	}
+	// otherwise, IC
 	status, err := api.WaitForXactionIC(apiBP, args)
 	if err != nil {
 		return err
 	}
 	if status.Aborted() {
-		return fmt.Errorf("xaction %q appears to be aborted", status.UUID)
+		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
 	}
 	return nil
 }

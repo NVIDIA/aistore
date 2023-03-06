@@ -7,10 +7,8 @@ package cli
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -436,7 +434,7 @@ func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 
 	// 3. inline "list" w/ no flag: "FILE[,FILE...]" BUCKET/[OBJECT_NAME]
 	if _, err := os.Stat(fileName); err != nil {
-		fnames := strings.Split(fileName, ",")
+		fnames := splitCsv(fileName)
 		return putList(c, fnames, bck, objName /* subdir name */)
 	}
 
@@ -635,7 +633,8 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	if flagIsSet(c, allPropsFlag) {
 		propsFlag = apc.GetPropsAll
 	} else if flagIsSet(c, objPropsFlag) {
-		propsFlag = strings.Split(parseStrFlag(c, objPropsFlag), ",")
+		s := parseStrFlag(c, objPropsFlag)
+		propsFlag = splitCsv(s)
 	}
 
 	// NOTE: three different defaults; compare w/ `listObjects()`
@@ -717,157 +716,6 @@ func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) 
 		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
 	}
 	return err
-}
-
-func listOrRangeOp(c *cli.Context, bck cmn.Bck) (err error) {
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
-	if flagIsSet(c, listFlag) {
-		return listOp(c, bck)
-	}
-	if flagIsSet(c, templateFlag) {
-		return rangeOp(c, bck)
-	}
-	return
-}
-
-// List handler
-func listOp(c *cli.Context, bck cmn.Bck) (err error) {
-	var (
-		fileList = makeCommaSepList(parseStrFlag(c, listFlag))
-		xid      string
-	)
-
-	if flagIsSet(c, dryRunFlag) {
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s\n", fileList)
-		return nil
-	}
-	var done string
-	switch c.Command.Name {
-	case commandRemove:
-		xid, err = api.DeleteList(apiBP, bck, fileList)
-		done = "removed"
-	case commandPrefetch:
-		if err = ensureHasProvider(bck); err != nil {
-			return
-		}
-		xid, err = api.PrefetchList(apiBP, bck, fileList)
-		done = "prefetched"
-	case commandEvict:
-		if err = ensureHasProvider(bck); err != nil {
-			return
-		}
-		xid, err = api.EvictList(apiBP, bck, fileList)
-		done = "evicted"
-	default:
-		debug.Assert(false, c.Command.Name)
-		return
-	}
-	if err != nil {
-		return
-	}
-	basemsg := fmt.Sprintf("%s %s from %s", fileList, done, bck)
-	if xid != "" {
-		basemsg += ". " + toMonitorMsg(c, xid, "")
-	}
-	fmt.Fprintln(c.App.Writer, basemsg)
-	return
-}
-
-// Range handler
-func rangeOp(c *cli.Context, bck cmn.Bck) (err error) {
-	var (
-		rangeStr = parseStrFlag(c, templateFlag)
-		pt       cos.ParsedTemplate
-		xid      string
-	)
-
-	if flagIsSet(c, dryRunFlag) {
-		pt, err = cos.ParseBashTemplate(rangeStr)
-		if err != nil {
-			fmt.Fprintf(c.App.Writer, "couldn't parse template %q locally; %s", rangeStr, err.Error())
-			return nil
-		}
-		objs := pt.ToSlice(dryRunExamplesCnt)
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s", objs)
-		if pt.Count() > dryRunExamplesCnt {
-			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
-		}
-		return
-	}
-	var done string
-	switch c.Command.Name {
-	case commandRemove:
-		xid, err = api.DeleteRange(apiBP, bck, rangeStr)
-		done = "removed"
-	case commandPrefetch:
-		if err = ensureHasProvider(bck); err != nil {
-			return
-		}
-		xid, err = api.PrefetchRange(apiBP, bck, rangeStr)
-		done = "prefetched"
-	case commandEvict:
-		if err = ensureHasProvider(bck); err != nil {
-			return
-		}
-		xid, err = api.EvictRange(apiBP, bck, rangeStr)
-		done = "evicted"
-	default:
-		debug.Assert(false, c.Command.Name)
-		return nil
-	}
-	if err != nil {
-		return
-	}
-
-	baseMsg := fmt.Sprintf("%s from %s objects in the range %q", done, bck, rangeStr)
-
-	if xid != "" {
-		baseMsg += ". " + toMonitorMsg(c, xid, "")
-	}
-	fmt.Fprintln(c.App.Writer, baseMsg)
-	return
-}
-
-// Multiple object arguments handler
-func multiObjOp(c *cli.Context, command string) error {
-	// stops iterating if encounters error
-	for _, uri := range c.Args() {
-		bck, objName, err := parseBckObjectURI(c, uri)
-		if err != nil {
-			return err
-		}
-		if _, err = headBucket(bck, false /* don't add */); err != nil {
-			return err
-		}
-
-		switch command {
-		case commandRemove:
-			if err := api.DeleteObject(apiBP, bck, objName); err != nil {
-				return err
-			}
-			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.DisplayName())
-		case commandEvict:
-			if !bck.IsRemote() {
-				const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
-				return errors.New(msg + "\n(Hint: use 'ais object rm' command to delete)")
-			}
-			if flagIsSet(c, dryRunFlag) {
-				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck.DisplayName(), objName)
-				continue
-			}
-			if err := api.EvictObject(apiBP, bck, objName); err != nil {
-				if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-					err = fmt.Errorf("object %s/%s does not exist (ie., not present or \"cached\")",
-						bck.DisplayName(), objName)
-				}
-				return err
-			}
-			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.DisplayName())
-		}
-	}
-	return nil
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {

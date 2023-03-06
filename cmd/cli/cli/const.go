@@ -337,7 +337,7 @@ var (
 		Usage: "depending on context: all objects (including misplaced ones and copies) or " +
 			"all buckets (including remote buckets that are not present in the cluster)",
 	}
-	rmRfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+	rmrfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
 	// obj props
 	objPropsFlag = cli.StringFlag{
@@ -500,9 +500,32 @@ var (
 		Usage: "limits number of concurrent put requests and number of concurrent shards created",
 	}
 
+	// waiting
+	waitPodReadyTimeoutFlag = DurationFlag{
+		Name:  "wait-timeout",
+		Usage: "ais target waiting time for POD to become ready (valid time units: " + timeUnits + ")",
+	}
+	waitJobXactFinishedFlag = DurationFlag{
+		Name:  waitPodReadyTimeoutFlag.Name, // same as above
+		Usage: "maximum time to wait for job to finish; if omitted wait forever or Ctrl-C; valid time units: " + timeUnits,
+	}
+	waitFlag = cli.BoolFlag{
+		Name:  "wait",
+		Usage: "wait for an asynchronous operation to finish (optionally, use '--wait-timeout' to limit the waiting time)",
+	}
+
 	// multi-object
 	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
 	templateFlag = cli.StringFlag{Name: "template", Usage: "template to select (matching) objects, e.g.: 'shard-{900..999}.tar'"}
+
+	listrangeFlags = []cli.Flag{
+		listFlag,
+		templateFlag,
+		waitFlag,
+		waitJobXactFinishedFlag,
+		progressFlag,
+		refreshFlag,
+	}
 
 	// Object
 	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnitsIEC}
@@ -660,19 +683,6 @@ var (
 		Value: "transform", // NOTE: default name of the transform() function
 		Usage: "receives and _transforms_ the payload",
 	}
-	// waiting
-	waitPodReadyTimeoutFlag = DurationFlag{
-		Name:  "wait-timeout",
-		Usage: "ais target waiting time for POD to become ready (valid time units: " + timeUnits + ")",
-	}
-	waitJobXactFinishedFlag = DurationFlag{
-		Name:  waitPodReadyTimeoutFlag.Name, // same as above
-		Usage: "maximum time to wait for job to finish; if omitted wait forever or Ctrl-C; valid time units: " + timeUnits,
-	}
-	waitFlag = cli.BoolFlag{
-		Name:  "wait",
-		Usage: "wait for an asynchronous operation to finish (optionally, use '--wait-timeout' to limit the waiting time)",
-	}
 
 	// Node
 	roleFlag = cli.StringFlag{
@@ -694,11 +704,6 @@ var (
 	rmUserDataFlag = cli.BoolFlag{
 		Name:  "rm-user-data",
 		Usage: "remove all user data when decommissioning node from the cluster",
-	}
-
-	baseLstRngFlags = []cli.Flag{
-		listFlag,
-		templateFlag,
 	}
 
 	transientFlag = cli.BoolFlag{

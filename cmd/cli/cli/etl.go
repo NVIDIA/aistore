@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -53,6 +54,7 @@ var (
 			copyPrefixFlag,
 			copyDryRunFlag,
 			waitFlag,
+			waitJobXactFinishedFlag,
 			etlBucketRequestTimeout,
 			templateFlag,
 			listFlag,
@@ -525,25 +527,33 @@ func etlBucketHandler(c *cli.Context) error {
 		return errV
 	}
 
-	if !flagIsSet(c, waitFlag) {
-		fmt.Fprintln(c.App.Writer, xid)
+	_, xname := xact.GetKindName(apc.ActETLBck)
+	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, fromBck, toBck)
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		fmt.Fprintln(c.App.Writer, text)
 		return nil
 	}
 
-	if _, err := api.WaitForXactionIC(apiBP, xact.ArgsMsg{ID: xid}); err != nil {
+	// wait
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	fmt.Fprintln(c.App.Writer, text+" ...")
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout}
+	if err := waitXact(apiBP, xargs); err != nil {
 		return err
 	}
 	if !flagIsSet(c, copyDryRunFlag) {
 		return nil
 	}
 
-	snaps, err := api.QueryXactionSnaps(apiBP, xact.ArgsMsg{ID: xid})
+	// [DRY-RUN]
+	snaps, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return err
 	}
-
 	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-
 	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 	fmt.Fprintf(c.App.Writer, "ETL object stats: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)

@@ -1,3 +1,3 @@
-^Renaming bucket ais://$BUCKET_1 => ais://$BUCKET_2 ...*$
+^rename-.*$
 Done.
-^Renaming bucket ais://$BUCKET_2 => ais://$BUCKET_1. To monitor.*$
+^rename-.*To monitor.*$

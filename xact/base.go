@@ -342,7 +342,14 @@ func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id
 
 func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }
 func S2RebID(id string) (int64, error) { return strconv.ParseInt(id[1:], 10, 64) }
-func IsValidRebID(id string) bool      { _, err := S2RebID(id); return err == nil }
+
+func IsValidRebID(id string) (valid bool) {
+	if len(id) > 1 {
+		_, err := S2RebID(id)
+		valid = err == nil
+	}
+	return
+}
 
 func CompareRebIDs(someID, fltID string) int {
 	ai, err := S2RebID(someID)

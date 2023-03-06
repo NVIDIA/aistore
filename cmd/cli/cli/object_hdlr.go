@@ -8,7 +8,6 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -22,8 +21,8 @@ import (
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: append(
-			baseLstRngFlags,
-			rmRfFlag,
+			listrangeFlags,
+			rmrfFlag,
 			verboseFlag,
 			yesFlag,
 		),
@@ -224,9 +223,9 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, bck)
+			return listrange(c, bck)
 		}
-		if flagIsSet(c, rmRfFlag) {
+		if flagIsSet(c, rmrfFlag) {
 			if !flagIsSet(c, yesFlag) {
 				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck)
 				if ok := confirm(c, "Proceed?", warn); !ok {
@@ -238,7 +237,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 		if objName == "" {
 			return incorrectUsageMsg(c, "use one of: (%s or %s or %s) to indicate _which_ objects to remove",
-				qflprn(listFlag), qflprn(templateFlag), qflprn(rmRfFlag))
+				qflprn(listFlag), qflprn(templateFlag), qflprn(rmrfFlag))
 		}
 
 		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
@@ -251,7 +250,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	}
 
 	// Object argument(s) given by the user; operation on given object(s).
-	return multiObjOp(c, commandRemove)
+	return multiobjArg(c, commandRemove)
 }
 
 func getHandler(c *cli.Context) (err error) {
@@ -294,7 +293,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 
 	if list != "" {
-		msg.SelectObjsMsg.ObjNames = makeCommaSepList(list)
+		msg.SelectObjsMsg.ObjNames = splitCsv(list)
 		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
 	} else {
 		msg.SelectObjsMsg.Template = template
@@ -339,7 +338,7 @@ func putHandler(c *cli.Context) (err error) {
 		// putList | putRange
 		if flagIsSet(c, listFlag) {
 			listObjs := parseStrFlag(c, listFlag)
-			fnames := strings.Split(listObjs, ",")
+			fnames := splitCsv(listObjs)
 			return putList(c, fnames, bck, objName /* subdir name */)
 		}
 		tmplObjs := parseStrFlag(c, templateFlag)

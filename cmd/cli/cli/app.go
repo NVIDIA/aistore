@@ -255,8 +255,8 @@ func (a *acli) enableSearch() {
 }
 
 func setupCommandHelp(commands []cli.Command) {
-	helps := strings.Split(cli.HelpFlag.GetName(), ",")
-	helpName := strings.TrimSpace(helps[0])
+	lst := splitCsv(cli.HelpFlag.GetName())
+	helpName := lst[0]
 	for i := range commands {
 		command := &commands[i]
 
@@ -276,8 +276,8 @@ func setupCommandHelp(commands []cli.Command) {
 
 func hasHelpFlag(commandFlags []cli.Flag, helpName string) bool {
 	for _, flag := range commandFlags {
-		for _, name := range strings.Split(flag.GetName(), ",") {
-			name = strings.TrimSpace(name)
+		lst := splitCsv(flag.GetName())
+		for _, name := range lst {
 			if name == helpName {
 				return true
 			}

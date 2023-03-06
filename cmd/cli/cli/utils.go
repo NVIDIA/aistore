@@ -254,12 +254,12 @@ func _refreshRate(c *cli.Context) time.Duration {
 }
 
 // Users can pass in a comma-separated list
-func makeCommaSepList(list string) []string {
-	cleanList := strings.Split(list, ",")
-	for ii, val := range cleanList {
-		cleanList[ii] = strings.TrimSpace(val)
+func splitCsv(s string) (lst []string) {
+	lst = strings.Split(s, ",")
+	for i, val := range lst {
+		lst[i] = strings.TrimSpace(val)
 	}
-	return cleanList
+	return
 }
 
 // Convert a list of "key value" and "key=value" pairs into a map
@@ -340,7 +340,8 @@ func parseBucketAccessValues(values []string, idx int) (access apc.AccessAttrs, 
 	// Case: `access GET,PUT`
 	if strings.Index(values[idx], ",") > 0 {
 		newIdx = idx + 1
-		for _, perm := range strings.Split(values[idx], ",") {
+		lst := splitCsv(values[idx])
+		for _, perm := range lst {
 			perm = strings.TrimSpace(perm)
 			if perm == "" {
 				continue
@@ -379,7 +380,7 @@ func parseFeatureFlags(v string) (res feat.Flags, err error) {
 	if v == "" || v == NilValue {
 		return 0, nil
 	}
-	values := strings.Split(v, ",")
+	values := splitCsv(v)
 	for _, v := range values {
 		var f feat.Flags
 		if f, err = feat.StrToFeat(v); err != nil {

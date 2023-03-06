@@ -10,15 +10,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
@@ -52,10 +49,10 @@ var (
 			copyPrefixFlag,
 			templateFlag,
 			listFlag,
-			waitFlag,
-			waitJobXactFinishedFlag,
 			continueOnErrorFlag,
 			forceFlag,
+			waitFlag,
+			waitJobXactFinishedFlag,
 			progressFlag,
 			refreshFlag,
 			copyObjNotCachedFlag,
@@ -65,7 +62,7 @@ var (
 			waitJobXactFinishedFlag,
 		},
 		commandEvict: append(
-			baseLstRngFlags,
+			listrangeFlags,
 			dryRunFlag,
 			keepMDFlag,
 			verboseFlag,
@@ -363,92 +360,6 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longCommandTime)
 }
 
-func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) error {
-	var (
-		lrMsg   cmn.SelectObjsMsg
-		numObjs int64
-	)
-	debug.Assert((listObjs == "" && tmplObjs != "") || (listObjs != "" && tmplObjs == ""))
-
-	// 1. list or template
-	if listObjs != "" {
-		lrMsg.ObjNames = strings.Split(listObjs, ",")
-		numObjs = int64(len(lrMsg.ObjNames))
-	} else {
-		pt, err := cos.NewParsedTemplate(tmplObjs)
-		if err != nil {
-			return err
-		}
-		numObjs = pt.Count()
-		lrMsg.Template = tmplObjs
-	}
-
-	// 2. TCO message
-	var msg = cmn.TCObjsMsg{SelectObjsMsg: lrMsg, ToBck: toBck}
-	msg.DryRun = flagIsSet(c, copyDryRunFlag)
-	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
-	}
-	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-
-	// 3. start copying/transforming
-	var (
-		xid   string
-		xkind string
-		err   error
-		text  = "Copying objects"
-	)
-	if etlName != "" {
-		msg.Name = etlName
-		text = "Transforming objects"
-		xkind = apc.ActETLObjects
-		xid, err = api.ETLMultiObj(apiBP, fromBck, msg)
-	} else {
-		xkind = apc.ActCopyObjects
-		xid, err = api.CopyMultiObj(apiBP, fromBck, msg)
-	}
-	if err != nil {
-		return err
-	}
-
-	// 4. progress bar, if requested
-	var showProgress = flagIsSet(c, progressFlag)
-	if showProgress {
-		var cpr = cprCtx{
-			xid:  xid,
-			from: fromBck.DisplayName(),
-			to:   toBck.DisplayName(),
-		}
-		_, cpr.xname = xact.GetKindName(xkind)
-		cpr.totals.objs = numObjs
-		cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)
-		return cpr.multiobj(c, text)
-	}
-
-	// done
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		baseMsg := fmt.Sprintf("%s %s => %s. ", text, fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
-		return nil
-	}
-
-	// or wait
-	var timeout time.Duration
-
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, text, fromBck, toBck)
-
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	wargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
-	if err = api.WaitForXactionIdle(apiBP, wargs); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, text, fromBck, toBck)
-	} else {
-		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
-	}
-	return err
-}
-
 func copyBucketHandler(c *cli.Context) (err error) {
 	dryRun := flagIsSet(c, copyDryRunFlag)
 	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
@@ -529,7 +440,7 @@ func evictHandler(c *cli.Context) (err error) {
 					objName, qflprn(listFlag), qflprn(templateFlag))
 			}
 			// List or range operation on a given bucket.
-			return listOrRangeOp(c, bck)
+			return listrange(c, bck)
 		}
 		if objName == "" {
 			// Evict entire bucket.
@@ -546,7 +457,7 @@ func evictHandler(c *cli.Context) (err error) {
 	}
 
 	// operation on a given object or objects.
-	return multiObjOp(c, commandEvict)
+	return multiobjArg(c, commandEvict)
 }
 
 func resetPropsHandler(c *cli.Context) error {

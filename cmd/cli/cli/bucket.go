@@ -107,9 +107,10 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if err != nil {
 		return err
 	}
+	_, xname := xact.GetKindName(apc.ActMoveBck)
+	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, fromBck, toBck)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		baseMsg := fmt.Sprintf("Renaming bucket %s => %s. ", fromBck, toBck)
-		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
+		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
@@ -118,8 +119,9 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Renaming bucket", fromBck, toBck)
-	if err := waitForXactionFinished(apiBP, xact.ArgsMsg{ID: xid, Timeout: timeout}); err != nil {
+	fmt.Fprintln(c.App.Writer, text+" ...")
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: timeout}
+	if err := waitXact(apiBP, xargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
 		return err
 	}
@@ -175,7 +177,8 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
-	if err := waitForXactionFinished(apiBP, xact.ArgsMsg{ID: xid, Timeout: timeout}); err != nil {
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: timeout}
+	if err := waitXact(apiBP, xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err
 	}
@@ -439,7 +442,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	)
 	if propsStr != "" {
 		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
-		props = strings.Split(propsStr, apc.LsPropsSepa)
+		props = splitCsv(propsStr) // split apc.LsPropsSepa
 	}
 
 	// NOTE: compare w/ `showObjProps()`
@@ -748,7 +751,7 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectL
 		return errU
 	}
 
-	propsList := makeCommaSepList(props)
+	propsList := splitCsv(props)
 	tmpl := teb.ObjPropsTemplate(propsList, hideHeader, addCachedCol)
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
 	if err := teb.Print(matched, tmpl, opts); err != nil {
