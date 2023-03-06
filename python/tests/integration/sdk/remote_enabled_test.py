@@ -31,7 +31,7 @@ class RemoteEnabledTest(unittest.TestCase):
             self.provider = provider
         else:
             self.provider = PROVIDER_AIS
-            self._create_bucket(self.bck_name)
+            self.bucket = self._create_bucket(self.bck_name)
 
     def tearDown(self) -> None:
         """

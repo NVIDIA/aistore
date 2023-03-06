@@ -187,7 +187,7 @@ class Job:
                 raise Timeout(action)
             time.sleep(sleep_time)
             passed += sleep_time
-            logger.info(action, self._job_id)
+            logger.info("Waiting for %s", action)
 
     def _check_job_idle(self, snapshots):
         job_found = False
