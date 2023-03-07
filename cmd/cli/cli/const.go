@@ -8,6 +8,7 @@
 package cli
 
 import (
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -212,7 +213,7 @@ const (
 
 // `ArgsUsage`: argument placeholders in help messages
 const (
-	argsUsageIndent = "   "
+	indent1 = "   " // see also indent?
 
 	// Job IDs (download, dsort)
 	jobIDArgument                 = "JOB_ID"
@@ -246,16 +247,16 @@ const (
 
 	// Objects
 	getObjectArgument       = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
-	putObjectArgument       = "[FILE|DIRECTORY|DIRECTORY/PATTERN] BUCKET/[OBJECT_NAME]"
-	promoteObjectArgument   = "FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]"
-	concatObjectArgument    = "FILE|DIRECTORY|DIRECTORY/PATTERN [FILE|DIRECTORY|DIRECTORY/PATTERN...] BUCKET/OBJECT_NAME"
+	putObjectArgument       = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
+	promoteObjectArgument   = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
+	concatObjectArgument    = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"
 	objectArgument          = "BUCKET/OBJECT_NAME"
-	optionalObjectsArgument = "BUCKET/[OBJECT_NAME]..."
+	optionalObjectsArgument = "BUCKET[/OBJECT_NAME]..."
 	renameObjectArgument    = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
-	appendToArchArgument    = "FILE BUCKET/OBJECT_NAME"
+	appendToArchArgument    = "FILE BUCKET[/OBJECT_NAME]"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
-		argsUsageIndent +
+		indent1 +
 		"mykey1=value1 mykey2=value2 OR '{\"mykey1\":\"value1\", \"mykey2\":\"value2\"}'"
 
 	// nodes
@@ -323,6 +324,9 @@ const (
 //
 
 var (
+	indent2 = strings.Repeat(indent1, 2)
+	indent4 = strings.Repeat(indent1, 4)
+
 	// scope 'all'
 	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties including custom (user-defined)"}
 	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
@@ -405,9 +409,9 @@ var (
 	unitsFlag = cli.StringFlag{
 		Name: "units",
 		Usage: "show statistics using on of the following units of measurement: (iec, si, raw), where:\n" +
-			argsUsageIndent + argsUsageIndent + "iec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
-			argsUsageIndent + argsUsageIndent + "si  - SI (metric) format, e.g.: KB, MB, GB\n" +
-			argsUsageIndent + argsUsageIndent + "raw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
+			indent4 + "iec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
+			indent4 + "si  - SI (metric) format, e.g.: KB, MB, GB\n" +
+			indent4 + "raw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
 	}
 
 	// Bucket

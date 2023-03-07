@@ -93,8 +93,11 @@ var (
 	}
 
 	objectCmdPut = cli.Command{
-		Name:         commandPut,
-		Usage:        "put object(s)",
+		Name: commandPut,
+		Usage: "PUT or APPEND one file, one directory, or multiple files or directories\n" +
+			indent4 + "with optional filename pattern (wildcard) matching and optional client-side computed checksum;\n" +
+			indent4 + "check numerous supported options including progress bar; when writing from STDIN use Ctrl-D to terminate;\n" +
+			indent4 + "APPEND to an existing (tar, tar.gz, zip, msgp) archive.",
 		ArgsUsage:    putObjectArgument,
 		Flags:        objectCmdsFlags[commandPut],
 		Action:       putHandler,
@@ -369,7 +372,7 @@ func put(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		return putDryRun(c, bck, objName, fileName)
 	}
-	return doPut(c, bck, objName, fileName)
+	return putAny(c, bck, objName, fileName)
 }
 
 func concatHandler(c *cli.Context) (err error) {

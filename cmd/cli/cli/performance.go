@@ -72,9 +72,9 @@ var (
 	showCounters = cli.Command{
 		Name: cmdShowCounters,
 		Usage: "show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts;\n" +
-			"\t\t" + argsUsageIndent + "numbers of list-objects requests;\n" +
-			"\t\t" + argsUsageIndent + "(GET, PUT, etc.) cumulative and average sizes;\n" +
-			"\t\t" + argsUsageIndent + "associated error counters, if any, and more.",
+			indent2 + "numbers of list-objects requests;\n" +
+			indent2 + "(GET, PUT, etc.) cumulative and average sizes;\n" +
+			indent2 + "associated error counters, if any, and more.",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showCountersHandler,

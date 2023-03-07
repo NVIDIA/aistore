@@ -155,7 +155,7 @@ func parseHumanSizeFlag(c *cli.Context, flag cli.StringFlag) (b int64, err error
 	return
 }
 
-func parseChecksumFlags(c *cli.Context) []*cos.Cksum {
+func parseCksumFlags(c *cli.Context) []*cos.Cksum {
 	cksums := []*cos.Cksum{}
 	for _, ckflag := range supportedCksumFlags {
 		if flagIsSet(c, ckflag) {

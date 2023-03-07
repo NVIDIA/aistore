@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -70,17 +71,24 @@ var (
 func appendArchHandler(c *cli.Context) error {
 	// src
 	if c.NArg() == 0 {
-		return missingArgumentsError(c, "file to append", "destination archive name in the form "+optionalObjectsArgument)
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	fileName := c.Args().Get(0)
 	path, err := absPath(fileName)
 	if err != nil {
 		return err
 	}
+	finfo, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if finfo.IsDir() {
+		return fmt.Errorf("%q is a directory", fileName)
+	}
 
 	// dst
 	if c.NArg() < 2 {
-		return missingArgumentsError(c, "destination archive name in the form "+optionalObjectsArgument)
+		return missingArgSimple("destination archive name in the form " + optionalObjectsArgument)
 	}
 	uri := c.Args().Get(1)
 	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
@@ -96,11 +104,10 @@ func appendArchHandler(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		return putDryRun(c, bck, objName, fileName)
 	}
-
-	if err := filePutOrAppend2Arch(c, bck, objName, path); err != nil {
+	archPath := parseStrFlag(c, archpathRequiredFlag)
+	if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
 		return err
 	}
-	archPath := parseStrFlag(c, archpathRequiredFlag)
 	actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
 	return nil
 }

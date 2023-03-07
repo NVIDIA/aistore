@@ -6,9 +6,7 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -214,160 +211,6 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 	return nil
 }
 
-func filePutOrAppend2Arch(c *cli.Context, bck cmn.Bck, objName, path string) error {
-	var (
-		reader   cos.ReadOpenCloser
-		progress *mpb.Progress
-		bars     []*mpb.Bar
-		cksum    *cos.Cksum
-	)
-	if flagIsSet(c, computeCksumFlag) {
-		bckProps, err := headBucket(bck, false /* don't add */)
-		if err != nil {
-			return err
-		}
-		cksum = cos.NewCksum(bckProps.Cksum.Type, "")
-	} else {
-		cksums := parseChecksumFlags(c)
-		if len(cksums) > 1 {
-			return fmt.Errorf("at most one checksum flags can be set (multi-checksum is not supported yet)")
-		}
-		if len(cksums) == 1 {
-			cksum = cksums[0]
-		}
-	}
-	fh, err := cos.NewFileHandle(path)
-	if err != nil {
-		return err
-	}
-
-	reader = fh
-	if flagIsSet(c, progressFlag) {
-		fi, err := fh.Stat()
-		if err != nil {
-			return err
-		}
-		// setup progress bar
-		args := barArgs{barType: sizeArg, barText: objName, total: fi.Size()}
-		progress, bars = simpleBar(args)
-		cb := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cos.NewCallbackReadOpenCloser(fh, cb)
-	}
-
-	putArgs := api.PutArgs{
-		BaseParams: apiBP,
-		Bck:        bck,
-		ObjName:    objName,
-		Reader:     reader,
-		Cksum:      cksum,
-		SkipVC:     flagIsSet(c, skipVerCksumFlag),
-	}
-
-	archPath := parseStrFlag(c, archpathOptionalFlag)
-	if archPath != "" {
-		fi, err := fh.Stat()
-		if err != nil {
-			return err
-		}
-		putArgs.Size = uint64(fi.Size())
-		appendArchArgs := api.AppendToArchArgs{
-			PutArgs:  putArgs,
-			ArchPath: archPath,
-		}
-		err = api.AppendToArch(appendArchArgs)
-		if progress != nil {
-			progress.Wait()
-		}
-		return err
-	}
-
-	_, err = api.PutObject(putArgs)
-
-	if progress != nil {
-		progress.Wait()
-	}
-	return err
-}
-
-func putSingleChunked(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) error {
-	var (
-		handle string
-		cksum  = cos.NewCksumHash(cksumType)
-		pi     = newProgIndicator(objName)
-	)
-	chunkSize, err := parseHumanSizeFlag(c, chunkSizeFlag)
-	if err != nil {
-		return err
-	}
-
-	if flagIsSet(c, progressFlag) {
-		pi.start()
-	}
-	for {
-		var (
-			// TODO: use MMSA
-			b      = bytes.NewBuffer(nil)
-			n      int64
-			err    error
-			reader cos.ReadOpenCloser
-		)
-		if cksumType != cos.ChecksumNone {
-			n, err = io.CopyN(cos.NewWriterMulti(cksum.H, b), r, chunkSize)
-		} else {
-			n, err = io.CopyN(b, r, chunkSize)
-		}
-		if err != nil && err != io.EOF {
-			return err
-		}
-		if n == 0 {
-			break
-		}
-		reader = cos.NewByteHandle(b.Bytes())
-		if flagIsSet(c, progressFlag) {
-			actualChunkOffset := atomic.NewInt64(0)
-			reader = cos.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
-				if n == 0 {
-					return
-				}
-				newChunkOffset := actualChunkOffset.Add(int64(n))
-				// `actualChunkOffset` is needed to not count the bytes read more than
-				// once upon redirection
-				if newChunkOffset > chunkSize {
-					// This part of the file was already read, so don't read it again
-					pi.printProgress(chunkSize - newChunkOffset + int64(n))
-					return
-				}
-				pi.printProgress(int64(n))
-			})
-		}
-		handle, err = api.AppendObject(api.AppendArgs{
-			BaseParams: apiBP,
-			Bck:        bck,
-			Object:     objName,
-			Handle:     handle,
-			Reader:     reader,
-			Size:       n,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	if flagIsSet(c, progressFlag) {
-		pi.stop()
-	}
-	if cksumType != cos.ChecksumNone {
-		cksum.Finalize()
-	}
-	return api.FlushObject(api.FlushArgs{
-		BaseParams: apiBP,
-		Bck:        bck,
-		Object:     objName,
-		Handle:     handle,
-		Cksum:      cksum.Clone(),
-	})
-}
-
 // replace common abbreviations (such as `~/`) and return an absolute path
 func absPath(fileName string) (path string, err error) {
 	path = cos.ExpandPath(fileName)
@@ -404,21 +247,27 @@ func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	return nil
 }
 
-func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
+	bname := bck.DisplayName()
+
 	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
-			return fmt.Errorf("destination object name is required when reading from STDIN")
+			return fmt.Errorf("STDIN source: destination object name (in %s) is required", c.Command.ArgsUsage)
 		}
-		p, err := headBucket(bck, false /* don't add */)
+		if !flagIsSet(c, chunkSizeFlag) {
+			warn := fmt.Sprintf("STDIN source: consider using %s flag", qflprn(chunkSizeFlag))
+			actionWarn(c, warn)
+		}
+		cksum, err := cksumToCompute(c, bck)
 		if err != nil {
 			return err
 		}
-		cksumType := p.Cksum.Type
-		if err := putSingleChunked(c, bck, objName, os.Stdin, cksumType); err != nil {
+		cksumType := cksum.Type() // can be none
+		if err := putAppendChunks(c, bck, objName, os.Stdin, cksumType); err != nil {
 			return err
 		}
-		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bck.DisplayName(), objName))
+		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bname, objName))
 		return nil
 	}
 
@@ -439,24 +288,28 @@ func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	}
 
 	// 4. put single file _or_ append to arch
-	if fh, err := os.Stat(path); err == nil && !fh.IsDir() {
+	if finfo, err := os.Stat(path); err == nil && !finfo.IsDir() {
 		if objName == "" {
 			// [CONVENTION]: if objName is not provided
 			// we use the filename as the destination object name
 			objName = filepath.Base(path)
 		}
 
-		// single-file PUT or - if archpath defined - APPEND to an existing archive
-		if err := filePutOrAppend2Arch(c, bck, objName, path); err != nil {
-			return err
+		archPath := parseStrFlag(c, archpathOptionalFlag)
+		// APPEND to an existing archive
+		if archPath != "" {
+			if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
+				return err
+			}
+			actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bname, objName, archPath))
+			return nil
 		}
 
-		archPath := parseStrFlag(c, archpathOptionalFlag)
-		if archPath == "" {
-			actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
-		} else {
-			actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
+		// single-file PUT
+		if err := putRegular(c, bck, objName, path, finfo); err != nil {
+			return err
 		}
+		actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bname, objName))
 		return nil
 	}
 
@@ -465,7 +318,7 @@ func doPut(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	if err != nil {
 		return err
 	}
-	return putMultiObj(c, files, bck)
+	return putFobjs(c, files, bck)
 }
 
 func putList(c *cli.Context, fnames []string, bck cmn.Bck, subdirName string) error {
@@ -480,7 +333,7 @@ func putList(c *cli.Context, fnames []string, bck cmn.Bck, subdirName string) er
 		}
 		allFiles = append(allFiles, files...)
 	}
-	return putMultiObj(c, allFiles, bck)
+	return putFobjs(c, allFiles, bck)
 }
 
 func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
@@ -496,7 +349,7 @@ func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, su
 		}
 		allFiles = append(allFiles, files...)
 	}
-	return putMultiObj(c, allFiles, bck)
+	return putFobjs(c, allFiles, bck)
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {

@@ -1,13 +1,13 @@
 echo "0123456789" > $OBJECT_1.txt
 ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
 
-ais object put $OBJECT_1.txt ais://$BUCKET_2/object_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
-ais object put $OBJECT_1.txt cloud://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "cloud""
+ais put $OBJECT_1.txt ais://$BUCKET_2/object_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
+ais put $OBJECT_1.txt cloud://$BUCKET_1/object_1.txt // FAIL "invalid backend provider "cloud""
 
 head -c 31971520 /dev/urandom | ais object put - ais://$BUCKET_1/rand.txt
-ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c 0767345f
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c badchecksum // FAIL "BAD DATA CHECKSUM: crc32c(badchecksum != 0767345f)"
+ais put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
+ais put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c 0767345f
+ais put $OBJECT_1.txt ais://$BUCKET_1/cksum --crc32c badchecksum // FAIL "BAD DATA CHECKSUM: crc32c(badchecksum != 0767345f)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --md5 3749f52bb326ae96782b42dc0a97b4c1
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --md5 badchecksum // FAIL "BAD DATA CHECKSUM: md5(badchecksum != 3749f52bb326ae96782b42dc0a97b4c1)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 c67c199595622dfbdc9e415c4a0ad6166eb49cbf74c6aac7bb3e958604d5ecb8
@@ -15,8 +15,8 @@ ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha256 badchecksum // FAIL 
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha512 e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --sha512 badchecksum // FAIL "BAD DATA CHECKSUM: sha512(badchecksum != e7da5269d4cd882deb8d7b7ca5cbf424047f56815fd7723123482e2931823a68d866627a449a55ca3a18f9c9ba7c8bb6219a028ba3ff5a5e905240907d087e40)"
 ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --compute-checksum
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --xxhash 05967d5390ac53b0
-ais object put $OBJECT_1.txt ais://$BUCKET_1/cksum --xxhash badchecksum // FAIL "BAD DATA CHECKSUM: xxhash(badchecksum != 05967d5390ac53b0)"
+ais put $OBJECT_1.txt ais://$BUCKET_1/cksum --xxhash 05967d5390ac53b0
+ais put $OBJECT_1.txt ais://$BUCKET_1/cksum --xxhash badchecksum // FAIL "BAD DATA CHECKSUM: xxhash(badchecksum != 05967d5390ac53b0)"
 
 ais object put $OBJECT_1.txt ais://$BUCKET_1/object_2.txt
 ais bucket ls ais://$BUCKET_1 --props size,version
@@ -24,8 +24,8 @@ ais bucket ls ais://$BUCKET_1 --props size,version
 echo "0" > $OBJECT_1.txt
 mkdir -p /tmp/dir1/dir2 && echo "0123456789" > /tmp/dir1/dir2/object_3.txt
 
-ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt // Bump the version of 'object_1.txt' object
-ais object put /tmp/dir1/dir2/object_3.txt ais://$BUCKET_1
+ais put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt // Bump the version of 'object_1.txt' object
+ais put /tmp/dir1/dir2/object_3.txt ais://$BUCKET_1
 ais bucket ls ais://$BUCKET_1 --props size,version
 
 rm -rf /tmp/dir1

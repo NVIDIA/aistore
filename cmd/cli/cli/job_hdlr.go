@@ -81,7 +81,7 @@ var (
 	jobStartResilver = cli.Command{
 		Name: commandResilver,
 		Usage: "resilver user data on a given target (or all targets in the cluster): fix data redundancy\n" +
-			argsUsageIndent + "with respect to bucket configuration, remove migrated objects and old/obsolete workfiles",
+			indent1 + "with respect to bucket configuration, remove migrated objects and old/obsolete workfiles",
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        startCommonFlags,
 		Action:       startResilverHandler,

@@ -6,7 +6,10 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,14 +26,15 @@ import (
 )
 
 type (
-	uploadParams struct {
+	uparams struct {
 		bck       cmn.Bck
 		files     []fobj
 		workerCnt int
 		refresh   time.Duration
+		cksum     *cos.Cksum
 		totalSize int64
 	}
-	uploadCtx struct {
+	uctx struct {
 		wg            cos.WG
 		errCount      atomic.Int32 // uploads failed so far
 		processedCnt  atomic.Int32 // files processed so far
@@ -46,7 +50,7 @@ type (
 	}
 )
 
-func putMultiObj(c *cli.Context, files []fobj, bck cmn.Bck) error {
+func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to PUT (hint: check filename pattern and/or source directory name)")
 	}
@@ -78,6 +82,11 @@ func putMultiObj(c *cli.Context, files []fobj, bck cmn.Bck) error {
 		return err
 	}
 
+	cksum, err := cksumToCompute(c, bck)
+	if err != nil {
+		return err
+	}
+
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
 		l := len(files)
@@ -86,21 +95,22 @@ func putMultiObj(c *cli.Context, files []fobj, bck cmn.Bck) error {
 			return nil
 		}
 	}
-
 	refresh := calcPutRefresh(c)
 	numWorkers := parseIntFlag(c, concurrencyFlag)
-	params := &uploadParams{
+	params := &uparams{
 		bck:       bck,
 		files:     files,
 		workerCnt: numWorkers,
 		refresh:   refresh,
+		cksum:     cksum,
 		totalSize: totalSize,
 	}
-	return uploadFiles(c, params)
+	return _putFobjs(c, params)
 }
 
-func uploadFiles(c *cli.Context, p *uploadParams) error {
-	u := &uploadCtx{
+// PUT fobj-s in parallel
+func _putFobjs(c *cli.Context, p *uparams) error {
+	u := &uctx{
 		verbose:      flagIsSet(c, verboseFlag),
 		showProgress: flagIsSet(c, progressFlag),
 		wg:           cos.NewLimitedWaitGroup(p.workerCnt, 0),
@@ -140,14 +150,14 @@ func uploadFiles(c *cli.Context, p *uploadParams) error {
 	return nil
 }
 
-///////////////
-// uploadCtx //
-///////////////
+//////////
+// uctx //
+//////////
 
-func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fobj) {
+func (u *uctx) put(c *cli.Context, p *uparams, f fobj) {
 	defer u.fini(c, p, f)
 
-	reader, err := cos.NewFileHandle(f.path)
+	fh, err := cos.NewFileHandle(f.path)
 	if err != nil {
 		str := fmt.Sprintf("Failed to open file %q: %v\n", f.path, err)
 		if u.showProgress {
@@ -187,12 +197,13 @@ func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fobj) {
 	}
 
 	var (
-		countReader = cos.NewCallbackReadOpenCloser(reader, updateBar /*progress callback*/)
+		countReader = cos.NewCallbackReadOpenCloser(fh, updateBar /*progress callback*/)
 		putArgs     = api.PutArgs{
 			BaseParams: apiBP,
 			Bck:        p.bck,
 			ObjName:    f.name,
 			Reader:     countReader,
+			Cksum:      p.cksum,
 			SkipVC:     flagIsSet(c, skipVerCksumFlag),
 		}
 	)
@@ -209,7 +220,7 @@ func (u *uploadCtx) put(c *cli.Context, p *uploadParams, f fobj) {
 	}
 }
 
-func (u *uploadCtx) fini(c *cli.Context, p *uploadParams, f fobj) {
+func (u *uctx) fini(c *cli.Context, p *uparams, f fobj) {
 	var (
 		total = int(u.processedCnt.Inc())
 		size  = u.processedSize.Add(f.size)
@@ -233,4 +244,187 @@ func (u *uploadCtx) fini(c *cli.Context, p *uploadParams, f fobj) {
 		u.lastReport = time.Now()
 	}
 	u.mx.Unlock()
+}
+
+//
+// TODO: revisit & unify
+//
+
+func cksumToCompute(c *cli.Context, bck cmn.Bck) (*cos.Cksum, error) {
+	if flagIsSet(c, computeCksumFlag) {
+		bckProps, err := headBucket(bck, false /* don't add */)
+		if err != nil {
+			return nil, err
+		}
+		return cos.NewCksum(bckProps.Cksum.Type, ""), nil
+	}
+	cksums := parseCksumFlags(c)
+	if len(cksums) > 1 {
+		return nil, fmt.Errorf("at most one checksum flag can be set (multi-checksum is not supported yet)")
+	}
+	if len(cksums) == 0 {
+		return nil, nil
+	}
+	return cksums[0], nil
+}
+
+func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.FileInfo) error {
+	var (
+		reader   cos.ReadOpenCloser
+		progress *mpb.Progress
+		bars     []*mpb.Bar
+		cksum    *cos.Cksum
+	)
+	cksum, err := cksumToCompute(c, bck)
+	if err != nil {
+		return err
+	}
+	fh, err := cos.NewFileHandle(path)
+	if err != nil {
+		return err
+	}
+	reader = fh
+	if flagIsSet(c, progressFlag) {
+		// setup progress bar
+		args := barArgs{barType: sizeArg, barText: objName, total: finfo.Size()}
+		progress, bars = simpleBar(args)
+		cb := func(n int, _ error) { bars[0].IncrBy(n) }
+		reader = cos.NewCallbackReadOpenCloser(fh, cb)
+	}
+
+	putArgs := api.PutArgs{
+		BaseParams: apiBP,
+		Bck:        bck,
+		ObjName:    objName,
+		Reader:     reader,
+		Cksum:      cksum,
+		SkipVC:     flagIsSet(c, skipVerCksumFlag),
+	}
+	_, err = api.PutObject(putArgs)
+	if progress != nil {
+		progress.Wait()
+	}
+	return err
+}
+
+func appendToArch(c *cli.Context, bck cmn.Bck, objName, path, archPath string, finfo os.FileInfo) error {
+	var (
+		reader   cos.ReadOpenCloser
+		progress *mpb.Progress
+		bars     []*mpb.Bar
+		cksum    *cos.Cksum
+	)
+	fh, err := cos.NewFileHandle(path)
+	if err != nil {
+		return err
+	}
+	reader = fh
+	if flagIsSet(c, progressFlag) {
+		fi, err := fh.Stat()
+		if err != nil {
+			return err
+		}
+		// setup progress bar
+		args := barArgs{barType: sizeArg, barText: objName, total: fi.Size()}
+		progress, bars = simpleBar(args)
+		cb := func(n int, _ error) { bars[0].IncrBy(n) }
+		reader = cos.NewCallbackReadOpenCloser(fh, cb)
+	}
+	putArgs := api.PutArgs{
+		BaseParams: apiBP,
+		Bck:        bck,
+		ObjName:    objName,
+		Reader:     reader,
+		Cksum:      cksum,
+		Size:       uint64(finfo.Size()),
+		SkipVC:     flagIsSet(c, skipVerCksumFlag),
+	}
+	appendArchArgs := api.AppendToArchArgs{
+		PutArgs:  putArgs,
+		ArchPath: archPath,
+	}
+	err = api.AppendToArch(appendArchArgs)
+	if progress != nil {
+		progress.Wait()
+	}
+	return err
+}
+
+// PUT fixed-sized chunks using `api.AppendObject` and `api.FlushObject`
+func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) error {
+	var (
+		handle string
+		cksum  = cos.NewCksumHash(cksumType)
+		pi     = newProgIndicator(objName)
+	)
+	chunkSize, err := parseHumanSizeFlag(c, chunkSizeFlag)
+	if err != nil {
+		return err
+	}
+
+	if flagIsSet(c, progressFlag) {
+		pi.start()
+	}
+	for {
+		var (
+			b      = bytes.NewBuffer(nil)
+			n      int64
+			err    error
+			reader cos.ReadOpenCloser
+		)
+		if cksumType != cos.ChecksumNone {
+			n, err = io.CopyN(cos.NewWriterMulti(cksum.H, b), r, chunkSize)
+		} else {
+			n, err = io.CopyN(b, r, chunkSize)
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if n == 0 {
+			break
+		}
+		reader = cos.NewByteHandle(b.Bytes())
+		if flagIsSet(c, progressFlag) {
+			actualChunkOffset := atomic.NewInt64(0)
+			reader = cos.NewCallbackReadOpenCloser(reader, func(n int, _ error) {
+				if n == 0 {
+					return
+				}
+				newChunkOffset := actualChunkOffset.Add(int64(n))
+				// `actualChunkOffset` is needed to not count the bytes read more than
+				// once upon redirection
+				if newChunkOffset > chunkSize {
+					// This part of the file was already read, so don't read it again
+					pi.printProgress(chunkSize - newChunkOffset + int64(n))
+					return
+				}
+				pi.printProgress(int64(n))
+			})
+		}
+		handle, err = api.AppendObject(api.AppendArgs{
+			BaseParams: apiBP,
+			Bck:        bck,
+			Object:     objName,
+			Handle:     handle,
+			Reader:     reader,
+			Size:       n,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	if flagIsSet(c, progressFlag) {
+		pi.stop()
+	}
+	if cksumType != cos.ChecksumNone {
+		cksum.Finalize()
+	}
+	return api.FlushObject(api.FlushArgs{
+		BaseParams: apiBP,
+		Bck:        bck,
+		Object:     objName,
+		Handle:     handle,
+		Cksum:      cksum.Clone(),
+	})
 }

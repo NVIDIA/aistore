@@ -428,7 +428,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 	default:
 		var (
 			// finished or not, always try to show when xid provided
-			all         = flagIsSet(c, allJobsFlag) || (xid != "" && xact.IsValidUUID(xid))
+			all         = flagIsSet(c, allJobsFlag) || xact.IsValidUUID(xid)
 			onlyActive  = !all
 			xactKind, _ = xact.GetKindName(name)
 			regexStr    = parseStrFlag(c, regexJobsFlag)

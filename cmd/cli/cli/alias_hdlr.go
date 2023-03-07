@@ -116,7 +116,7 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 	}
 	if !silentAlias {
 		if len(newName) > 0 && newName[0] == cmdShowStats { // FIXME: s/silentAlias/how-to-show/
-			cmd.Usage += fmt.Sprintf("\n\nALIAS for:\n%s%s", argsUsageIndent, aliasFor)
+			cmd.Usage += fmt.Sprintf("\n\nALIAS for:\n%s%s", indent1, aliasFor)
 		} else {
 			cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
 		}
