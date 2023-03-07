@@ -76,7 +76,7 @@ func extractSpeed(out []byte) int64 {
 			continue
 		}
 		words := strings.Split(lines[i], " ")
-		if spd, err := cos.ParseSizeIEC(words[len(words)-1]); err == nil {
+		if spd, err := cos.ParseSize(words[len(words)-1], cos.UnitsIEC); err == nil {
 			return spd
 		}
 	}

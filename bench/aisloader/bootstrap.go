@@ -360,13 +360,13 @@ func parseCmdLine() (params, error) {
 	rnd = rand.New(rand.NewSource(p.seed))
 
 	if p.putSizeUpperBoundStr != "" {
-		if p.putSizeUpperBound, err = cos.ParseSizeIEC(p.putSizeUpperBoundStr); err != nil {
+		if p.putSizeUpperBound, err = cos.ParseSize(p.putSizeUpperBoundStr, cos.UnitsIEC); err != nil {
 			return params{}, fmt.Errorf("failed to parse total PUT size %s: %v", p.putSizeUpperBoundStr, err)
 		}
 	}
 
 	if p.minSizeStr != "" {
-		if p.minSize, err = cos.ParseSizeIEC(p.minSizeStr); err != nil {
+		if p.minSize, err = cos.ParseSize(p.minSizeStr, cos.UnitsIEC); err != nil {
 			return params{}, fmt.Errorf("failed to parse min size %s: %v", p.minSizeStr, err)
 		}
 	} else {
@@ -374,7 +374,7 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.maxSizeStr != "" {
-		if p.maxSize, err = cos.ParseSizeIEC(p.maxSizeStr); err != nil {
+		if p.maxSize, err = cos.ParseSize(p.maxSizeStr, cos.UnitsIEC); err != nil {
 			return params{}, fmt.Errorf("failed to parse max size %s: %v", p.maxSizeStr, err)
 		}
 	} else {
@@ -405,12 +405,12 @@ func parseCmdLine() (params, error) {
 	}
 
 	if p.readOffStr != "" {
-		if p.readOff, err = cos.ParseSizeIEC(p.readOffStr); err != nil {
+		if p.readOff, err = cos.ParseSize(p.readOffStr, cos.UnitsIEC); err != nil {
 			return params{}, fmt.Errorf("failed to parse read offset %s: %v", p.readOffStr, err)
 		}
 	}
 	if p.readLenStr != "" {
-		if p.readLen, err = cos.ParseSizeIEC(p.readLenStr); err != nil {
+		if p.readLen, err = cos.ParseSize(p.readLenStr, cos.UnitsIEC); err != nil {
 			return params{}, fmt.Errorf("failed to parse read length %s: %v", p.readLenStr, err)
 		}
 	}

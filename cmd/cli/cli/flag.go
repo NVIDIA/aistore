@@ -145,14 +145,19 @@ func parseUnitsFlag(c *cli.Context, flag cli.StringFlag) (units string, err erro
 	return
 }
 
-// NOTE: assuming IEC units
-func parseHumanSizeFlag(c *cli.Context, flag cli.StringFlag) (b int64, err error) {
-	flagValue := parseStrFlag(c, flag)
-	b, err = cos.ParseSizeIEC(flagValue)
-	if err != nil {
-		err = fmt.Errorf("%s=%s is invalid "+sizeUnitsIEC, flprn(flag), flagValue)
+func parseSizeFlag(c *cli.Context, flag cli.StringFlag) (int64, error) {
+	var (
+		err   error
+		units string
+		val   = parseStrFlag(c, flag)
+	)
+	if flagIsSet(c, unitsFlag) {
+		units, err = parseUnitsFlag(c, unitsFlag)
+		if err != nil {
+			return 0, err
+		}
 	}
-	return
+	return cos.ParseSize(val, units)
 }
 
 func parseCksumFlags(c *cli.Context) []*cos.Cksum {

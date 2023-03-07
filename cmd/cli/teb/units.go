@@ -17,12 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/duration"
 )
 
-const (
-	UnitsIEC = "iec" // default
-	UnitsSI  = "si"  // NOTE: currently, SI system is CLI-only (compare with cmn/cos/size.go)
-	UnitsRaw = "raw"
-)
-
 type unitsCtx struct {
 	units string
 }
@@ -55,20 +49,20 @@ func FuncMapUnits(units string) (m template.FuncMap) {
 
 func ValidateUnits(units string) error {
 	switch units {
-	case "", UnitsIEC, UnitsSI, UnitsRaw:
+	case "", cos.UnitsIEC, cos.UnitsSI, cos.UnitsRaw:
 		return nil
 	default:
-		return fmt.Errorf("expecting one of: %q (default), %q, %q", UnitsIEC, UnitsSI, UnitsRaw)
+		return fmt.Errorf("invalid %q (expecting one of: %s, %s, %s or \"\")", units, cos.UnitsIEC, cos.UnitsSI, cos.UnitsRaw)
 	}
 }
 
 func FmtSize(size int64, units string, digits int) string {
 	switch units {
-	case "", UnitsIEC:
+	case "", cos.UnitsIEC:
 		return cos.ToSizeIEC(size, digits)
-	case UnitsSI:
+	case cos.UnitsSI:
 		return toSizeSI(size, digits)
-	case UnitsRaw:
+	case cos.UnitsRaw:
 		return strconv.FormatInt(size, 10)
 	default:
 		debug.Assert(false, units)
@@ -102,7 +96,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 	}
 	// units (enum)
 	switch units {
-	case UnitsRaw:
+	case cos.UnitsRaw:
 		switch kind {
 		case stats.KindSize:
 			return fmt.Sprintf("%dB", value)
@@ -111,7 +105,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		default:
 			return fmt.Sprintf("%d", value)
 		}
-	case "", UnitsIEC:
+	case "", cos.UnitsIEC:
 		switch kind {
 		case stats.KindSize:
 			return cos.ToSizeIEC(value, 2)
@@ -120,7 +114,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		default:
 			return fmt.Sprintf("%d", value)
 		}
-	case UnitsSI:
+	case cos.UnitsSI:
 		switch kind {
 		case stats.KindSize:
 			return toSizeSI(value, 2)
@@ -135,7 +129,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 }
 
 func fmtDuration(ns int64, units string) string {
-	if units == UnitsRaw {
+	if units == cos.UnitsRaw {
 		return fmt.Sprintf("%dns", ns)
 	}
 	dur := time.Duration(ns)
@@ -146,7 +140,7 @@ func fmtDuration(ns int64, units string) string {
 }
 
 func fmtMilli(val cos.Duration, units string) string {
-	if units == UnitsRaw {
+	if units == cos.UnitsRaw {
 		return fmt.Sprintf("%dns", val)
 	}
 	return cos.FormatMilli(time.Duration(val))

@@ -1321,7 +1321,7 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 				c.DefaultMaxMemUsage, err)
 		}
 	}
-	if _, err := cos.ParseSizeIEC(c.DSorterMemThreshold); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
+	if _, err := cos.ParseSize(c.DSorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
 		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)",
 			c.DSorterMemThreshold, err)
 	}

@@ -183,6 +183,11 @@ const (
 //
 
 const (
+	fileStdIO = "-" // STDIN (for `ais put`), STDOUT (for `ais put`)
+	discardIO = "/dev/null"
+)
+
+const (
 	cluTotal = "---- CLUSTER:"
 	tgtTotal = "-------- SUM:"
 )
@@ -531,9 +536,14 @@ var (
 		refreshFlag,
 	}
 
-	// Object
-	offsetFlag = cli.StringFlag{Name: "offset", Usage: "object read offset " + sizeUnitsIEC}
-	lengthFlag = cli.StringFlag{Name: "length", Usage: "object read length " + sizeUnitsIEC}
+	// read range (aka range read)
+	offsetFlag = cli.StringFlag{
+		Name:  "offset",
+		Usage: "object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)"}
+	lengthFlag = cli.StringFlag{
+		Name:  "length",
+		Usage: "object read length; default formatting: IEC (use '--units' to override)",
+	}
 
 	// NOTE:
 	// In many cases, stating that a given object "is present" will sound more appropriate and,

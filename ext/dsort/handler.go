@@ -804,7 +804,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 		moreThanThreshold = true
 	)
 
-	dsorterMemThreshold, err := cos.ParseSizeIEC(parsedRS.DSorterMemThreshold)
+	dsorterMemThreshold, err := cos.ParseSize(parsedRS.DSorterMemThreshold, cos.UnitsIEC)
 	debug.AssertNoErr(err)
 
 	query := make(url.Values)

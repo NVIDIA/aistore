@@ -255,7 +255,7 @@ const (
 		"{{range $k, $v := . }}" +
 		"{{$k}}\t {{$v.Cnt}}\t {{FormatBytesSig $v.Size 2}}\n" +
 		"{{end}}" +
-		"TOTAL\t"
+		"TOTAL\t "
 
 	ShortUsageTmpl = "{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}} - {{.Usage}}\n" +
 		"\n\tCOMMANDS:\t" +
@@ -387,10 +387,10 @@ var (
 	// - `altMap template.FuncMap` below
 	funcMap = template.FuncMap{
 		// formatting
-		"FormatBytesSig":    func(size int64, digits int) string { return FmtSize(size, UnitsIEC, digits) },
-		"FormatBytesUns":    func(size uint64, digits int) string { return FmtSize(int64(size), UnitsIEC, digits) },
-		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, UnitsIEC, 2)) },
-		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, UnitsIEC) },
+		"FormatBytesSig":    func(size int64, digits int) string { return FmtSize(size, cos.UnitsIEC, digits) },
+		"FormatBytesUns":    func(size uint64, digits int) string { return FmtSize(int64(size), cos.UnitsIEC, digits) },
+		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
+		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
 		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
 		"FormatEC":          FmtEC,

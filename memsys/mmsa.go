@@ -344,7 +344,7 @@ func (r *MMSA) _large2slab(immediateSize int64) *Slab {
 func (r *MMSA) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
-		if minfree, err = cos.ParseSizeIEC(a); err != nil {
+		if minfree, err = cos.ParseSize(a, cos.UnitsIEC); err != nil {
 			return fmt.Errorf("cannot parse AIS_MINMEM_FREE %q", a)
 		}
 		r.MinFree = uint64(minfree)

@@ -366,7 +366,7 @@ func startDownloadHandler(c *cli.Context) error {
 		return err
 	}
 
-	limitBPH, err := parseHumanSizeFlag(c, limitBytesPerHourFlag)
+	limitBPH, err := parseSizeFlag(c, limitBytesPerHourFlag)
 	if err != nil {
 		return err
 	}

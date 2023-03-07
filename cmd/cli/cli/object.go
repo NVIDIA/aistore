@@ -34,35 +34,23 @@ const (
 
 func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	var (
-		getArgs                api.GetArgs
-		oah                    api.ObjAttrs
-		bck                    cmn.Bck
-		objName, archPath      string
-		objLen, offset, length int64
+		getArgs api.GetArgs
+		oah     api.ObjAttrs
+		bck     cmn.Bck
+		objName string
 	)
-
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "bucket/object", "output file")
 	}
-
+	// source
 	uri := c.Args().Get(0)
 	if bck, objName, err = parseBckObjectURI(c, uri); err != nil {
 		return
 	}
-
 	// NOTE: skip HEAD-ing http (ht://) buckets
 	if !bck.IsHTTP() {
 		if _, err = headBucket(bck, false /* don't add */); err != nil {
 			return
-		}
-	}
-
-	archPath = parseStrFlag(c, archpathOptionalFlag)
-	if outFile == "" {
-		if archPath != "" {
-			outFile = filepath.Base(archPath)
-		} else {
-			outFile = filepath.Base(objName)
 		}
 	}
 
@@ -75,11 +63,42 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
-	if offset, err = parseHumanSizeFlag(c, offsetFlag); err != nil {
+
+	var offset, length int64
+	if offset, err = parseSizeFlag(c, offsetFlag); err != nil {
 		return
 	}
-	if length, err = parseHumanSizeFlag(c, lengthFlag); err != nil {
+	if length, err = parseSizeFlag(c, lengthFlag); err != nil {
 		return
+	}
+
+	// where to
+	archPath := parseStrFlag(c, archpathOptionalFlag)
+	if outFile == "" {
+		// archive
+		if archPath != "" {
+			outFile = filepath.Base(archPath)
+		} else {
+			outFile = filepath.Base(objName)
+		}
+	} else if outFile != fileStdIO {
+		finfo, errEx := os.Stat(outFile)
+		if errEx == nil {
+			// destination is: directory | file (confirm overwrite)
+			if finfo.IsDir() {
+				// archive
+				if archPath != "" {
+					outFile = filepath.Join(outFile, filepath.Base(archPath))
+				} else {
+					outFile = filepath.Join(outFile, filepath.Base(objName))
+				}
+			} else if finfo.Mode().IsRegular() && !flagIsSet(c, yesFlag) { // `/dev/null` is fine {
+				warn := fmt.Sprintf("overwrite existing %q", outFile)
+				if ok := confirm(c, warn); !ok {
+					return nil
+				}
+			}
+		}
 	}
 
 	hdr := cmn.MakeRangeHdr(offset, length)
@@ -123,7 +142,7 @@ func getObject(c *cli.Context, outFile string, silent bool) (err error) {
 		}
 		return
 	}
-	objLen = oah.Size()
+	objLen := oah.Size()
 
 	if flagIsSet(c, lengthFlag) && outFile != fileStdIO {
 		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.ToSizeIEC(objLen, 2), objLen, outFile)

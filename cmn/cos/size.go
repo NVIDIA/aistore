@@ -12,6 +12,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const (
+	UnitsIEC = "iec" // default
+	UnitsSI  = "si"  // NOTE: currently, SI system is CLI-only (compare with cmn/cos/size.go)
+	UnitsRaw = "raw"
+)
+
 // IEC (binary) units
 const (
 	KiB = 1024
@@ -36,7 +42,7 @@ const (
 
 type SizeIEC int64
 
-var toBiBytes = map[string]int64{
+var iecBytes = map[string]int64{
 	"K":   KiB,
 	"KB":  KiB,
 	"KIB": KiB,
@@ -51,6 +57,17 @@ var toBiBytes = map[string]int64{
 	"TIB": TiB,
 }
 
+var siBytes = map[string]int64{
+	"K":  KB,
+	"KB": KB,
+	"M":  MB,
+	"MB": MB,
+	"G":  GB,
+	"GB": GB,
+	"T":  TB,
+	"TB": TB,
+}
+
 func (siz SizeIEC) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(siz.String()) }
 func (siz SizeIEC) String() string               { return ToSizeIEC(int64(siz), 0) }
 
@@ -62,25 +79,9 @@ func (siz *SizeIEC) UnmarshalJSON(b []byte) (err error) {
 	if err = jsoniter.Unmarshal(b, &val); err != nil {
 		return
 	}
-	n, err = ParseSizeIEC(val)
+	n, err = ParseSize(val, UnitsIEC)
 	*siz = SizeIEC(n)
 	return
-}
-
-func ParseSizeIEC(s string) (int64, error) {
-	if s == "" {
-		return 0, nil
-	}
-	s = strings.ToUpper(s)
-	for k, v := range toBiBytes {
-		if ns := strings.TrimSuffix(s, k); ns != s {
-			f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
-			return int64(float64(v) * f), err
-		}
-	}
-	ns := strings.TrimSuffix(s, "B")
-	f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
-	return int64(f), err
 }
 
 // (compare w/ CLI `ToSizeIS`)
@@ -97,4 +98,35 @@ func ToSizeIEC(b int64, digits int) string {
 	default:
 		return fmt.Sprintf("%dB", b)
 	}
+}
+
+func ParseSize(size, units string) (int64, error) {
+	if size == "" {
+		return 0, nil
+	}
+	switch units {
+	case "", UnitsIEC: // NOTE default
+		return _parseSize(size, iecBytes)
+	case UnitsSI:
+		return _parseSize(size, siBytes)
+	case UnitsRaw:
+		return strconv.ParseInt(size, 10, 64)
+	}
+	return 0, fmt.Errorf("invalid %q (expecting one of: %s, %s, %s or \"\")", units, UnitsIEC, UnitsSI, UnitsRaw)
+}
+
+func _parseSize(s string, multipliers map[string]int64) (int64, error) {
+	s = strings.ToUpper(s)
+	for k, v := range multipliers {
+		if ns := strings.TrimSuffix(s, k); ns != s {
+			if strings.IndexByte(ns, '.') >= 0 {
+				f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
+				return int64(float64(v) * f), err
+			}
+			i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
+			return i * v, err
+		}
+	}
+	ns := strings.TrimSuffix(s, "B")
+	return strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
 }

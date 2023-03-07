@@ -72,7 +72,7 @@ func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck) error {
 
 	var (
 		units, errU = parseUnitsFlag(c, unitsFlag)
-		tmpl        = teb.MultiPutTmpl + strconv.FormatInt(totalCount, 10) + "\t" + cos.ToSizeIEC(totalSize, 2) + "\n"
+		tmpl        = teb.MultiPutTmpl + strconv.FormatInt(totalCount, 10) + "\t " + cos.ToSizeIEC(totalSize, 2) + "\n"
 		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units)}
 	)
 	if errU != nil {
@@ -357,7 +357,7 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 		cksum  = cos.NewCksumHash(cksumType)
 		pi     = newProgIndicator(objName)
 	)
-	chunkSize, err := parseHumanSizeFlag(c, chunkSizeFlag)
+	chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
 	if err != nil {
 		return err
 	}

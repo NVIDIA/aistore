@@ -32,7 +32,9 @@ var (
 			lengthFlag,
 			archpathOptionalFlag,
 			cksumFlag,
+			yesFlag,
 			checkObjCachedFlag,
+			unitsFlag,
 		},
 
 		commandPut: append(
@@ -84,8 +86,9 @@ var (
 
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
-		Name:         commandGet,
-		Usage:        "get object",
+		Name: commandGet,
+		Usage: "get an object, an archived file, or a range of bytes from AIS, and write it down locally\n" +
+			indent4 + "with destination options including: filename, directory, STDOUT ('-')",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -94,7 +97,7 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name: commandPut,
-		Usage: "PUT or APPEND one file, one directory, or multiple files or directories\n" +
+		Usage: "PUT or APPEND one file or one directory, or multiple files and directories\n" +
 			indent4 + "with optional filename pattern (wildcard) matching and optional client-side computed checksum;\n" +
 			indent4 + "check numerous supported options including progress bar; when writing from STDIN use Ctrl-D to terminate;\n" +
 			indent4 + "APPEND to an existing (tar, tar.gz, zip, msgp) archive.",
@@ -320,6 +323,12 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 func putHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	if flagIsSet(c, progressFlag) || flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
+		// --progress steals STDOUT while multi-object produces scary looking errors w/ no cluster
+		if _, err = api.GetClusterMap(apiBP); err != nil {
+			return
+		}
 	}
 	switch {
 	case flagIsSet(c, createArchFlag): // 1. archive

@@ -87,7 +87,7 @@ func genShardsHandler(c *cli.Context) error {
 		template = strings.TrimSuffix(object, ext)
 	)
 
-	fileSize, err := parseHumanSizeFlag(c, dsortFsizeFlag)
+	fileSize, err := parseSizeFlag(c, dsortFsizeFlag)
 	if err != nil {
 		return err
 	}

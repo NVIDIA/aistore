@@ -188,7 +188,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.Extension = rs.Extension
 
-	parsedRS.OutputShardSize, err = cos.ParseSizeIEC(rs.OutputShardSize)
+	parsedRS.OutputShardSize, err = cos.ParseSize(rs.OutputShardSize, cos.UnitsIEC)
 	if err != nil {
 		return nil, err
 	}

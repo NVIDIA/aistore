@@ -58,7 +58,7 @@ func TestStrToBytes(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		n, e := cos.ParseSizeIEC(tst.str)
+		n, e := cos.ParseSize(tst.str, cos.UnitsIEC)
 		if e != nil {
 			t.Errorf("Failed to convert %s: %v", tst.str, e)
 		}

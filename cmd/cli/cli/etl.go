@@ -253,7 +253,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
 
 	if flagIsSet(c, chunkSizeFlag) {
-		msg.ChunkSize, err = parseHumanSizeFlag(c, chunkSizeFlag)
+		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)
 		if err != nil {
 			return err
 		}

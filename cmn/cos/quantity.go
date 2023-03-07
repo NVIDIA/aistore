@@ -62,7 +62,7 @@ func ParseQuantity(quantity string) (ParsedQuantity, error) {
 		if parsedQ.Value == 0 || parsedQ.Value >= 100 {
 			return parsedQ, ErrInvalidQuantityPercent
 		}
-	} else if value, err := ParseSizeIEC(quantity); err != nil {
+	} else if value, err := ParseSize(quantity, UnitsIEC); err != nil {
 		return parsedQ, err
 	} else if value < 0 {
 		return parsedQ, ErrInvalidQuantityBytes
