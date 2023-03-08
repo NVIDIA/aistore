@@ -35,6 +35,11 @@ var (
 			yesFlag,
 			checkObjCachedFlag,
 			unitsFlag,
+			// multi-object options (passed to list-objects)
+			prefixFlag,
+			listArchFlag,
+			objLimitFlag,
+			verboseFlag,
 		},
 
 		commandPut: append(
@@ -87,8 +92,9 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name: commandGet,
-		Usage: "get an object, an archived file, or a range of bytes from AIS, and write it down locally\n" +
-			indent4 + "with destination options including: filename, directory, STDOUT ('-')",
+		Usage: "get an object, an archived file, or a range of bytes from the above; write the content locally\n" +
+			indent4 + "with destination options including: filename, directory, STDOUT ('-');\n" +
+			indent4 + "use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -259,11 +265,6 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	return multiobjArg(c, commandRemove)
 }
 
-func getHandler(c *cli.Context) (err error) {
-	outFile := c.Args().Get(1) // empty string if arg not given
-	return getObject(c, outFile, false /*silent*/)
-}
-
 func createArchMultiObjHandler(c *cli.Context) (err error) {
 	var (
 		bckTo, bckFrom cmn.Bck
@@ -389,9 +390,8 @@ func concatHandler(c *cli.Context) (err error) {
 		bck     cmn.Bck
 		objName string
 	)
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "at least one file or directory to concatenate",
-			"destination object in the form "+optionalObjectsArgument)
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() < 2 {
 		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
@@ -443,14 +443,10 @@ func setCustomPropsHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	uri := c.Args().First()
+	uri := c.Args().Get(0)
 	bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)
 	if err != nil {
 		return err
 	}
 	return setCustomProps(c, bck, objName)
-}
-
-func catHandler(c *cli.Context) (err error) {
-	return getObject(c, fileStdIO, true /*silent*/)
 }

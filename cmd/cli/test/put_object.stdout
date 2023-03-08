@@ -33,182 +33,182 @@ object_2.txt		 11B     1
 object_3.txt         11B     1
 rand.txt 30.49MiB 1
 "ais://$BUCKET_2" created
-GET "test0/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test0/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test0/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test0/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test0/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test1/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test1/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test1/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test1/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test1/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test2/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test2/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test2/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test2/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test2/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test3/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test3/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test3/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test3/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test3/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test4/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test4/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test4/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test4/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "test4/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_2.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25
-GET "subdir/test0/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test0/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test0/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test0/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test0/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test1/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test1/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test1/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test1/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test1/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test2/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test2/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test2/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test2/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test2/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test3/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test3/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test3/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test3/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test3/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test4/0/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test4/1/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test4/2/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test4/3/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
-GET "subdir/test4/4/test.txt" from ais://$BUCKET_2 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_2.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25
 "ais://$BUCKET_3" created
-GET "test0/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test0/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test0/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test1/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test1/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test1/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test2/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test2/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "test2/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_3.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 9
-GET "subdirtest0/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest0/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest0/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest1/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest1/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest1/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest2/0/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest2/1/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
-GET "subdirtest2/2/test.txt" from ais://$BUCKET_3 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_3.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 9
 "ais://$BUCKET_4" created
-GET "test0/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test0/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test0/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test0/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test0/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test1/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test1/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test1/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test1/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test1/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test2/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test2/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test2/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test2/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test2/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test3/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test3/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test3/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test3/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test3/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test4/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test4/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test4/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test4/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "test4/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_4.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25
-GET "subdir/test0/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test0/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test0/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test0/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test0/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test1/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test1/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test1/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test1/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test1/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test2/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test2/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test2/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test2/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test2/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test3/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test3/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test3/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test3/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test3/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test4/0/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test4/1/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test4/2/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test4/3/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
-GET "subdir/test4/4/test.txt" from ais://$BUCKET_4 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_4.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25
 "ais://$BUCKET_5" created
-GET "test0/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test0/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test0/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test0/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test0/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test1/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test1/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test1/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test1/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test1/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test2/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test2/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test2/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test2/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test2/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test3/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test3/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test3/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test3/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test3/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test4/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test4/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test4/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test4/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "test4/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
+^GET.*from ais://$BUCKET_5.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25
-GET "subdirtest0/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest0/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest0/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest0/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest0/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest1/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest1/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest1/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest1/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest1/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest2/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest2/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest2/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest2/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest2/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest3/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest3/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest3/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest3/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest3/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest4/0/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest4/1/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest4/2/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest4/3/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
-GET "subdirtest4/4/test.txt" from ais://$BUCKET_5 as "/dev/null" [1B]
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
+^GET.*$
 25

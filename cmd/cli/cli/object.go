@@ -7,7 +7,6 @@ package cli
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,136 +31,7 @@ const (
 	dryRunExplanation = "No modifications on the cluster"
 )
 
-func getObject(c *cli.Context, outFile string, silent bool) (err error) {
-	var (
-		getArgs api.GetArgs
-		oah     api.ObjAttrs
-		bck     cmn.Bck
-		objName string
-	)
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "bucket/object", "output file")
-	}
-	// source
-	uri := c.Args().Get(0)
-	if bck, objName, err = parseBckObjectURI(c, uri); err != nil {
-		return
-	}
-	// NOTE: skip HEAD-ing http (ht://) buckets
-	if !bck.IsHTTP() {
-		if _, err = headBucket(bck, false /* don't add */); err != nil {
-			return
-		}
-	}
-
-	// just check if a remote object is present (do not GET)
-	// TODO: archived files
-	if flagIsSet(c, checkObjCachedFlag) {
-		return isObjPresent(c, bck, objName)
-	}
-
-	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
-		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
-	}
-
-	var offset, length int64
-	if offset, err = parseSizeFlag(c, offsetFlag); err != nil {
-		return
-	}
-	if length, err = parseSizeFlag(c, lengthFlag); err != nil {
-		return
-	}
-
-	// where to
-	archPath := parseStrFlag(c, archpathOptionalFlag)
-	if outFile == "" {
-		// archive
-		if archPath != "" {
-			outFile = filepath.Base(archPath)
-		} else {
-			outFile = filepath.Base(objName)
-		}
-	} else if outFile != fileStdIO {
-		finfo, errEx := os.Stat(outFile)
-		if errEx == nil {
-			// destination is: directory | file (confirm overwrite)
-			if finfo.IsDir() {
-				// archive
-				if archPath != "" {
-					outFile = filepath.Join(outFile, filepath.Base(archPath))
-				} else {
-					outFile = filepath.Join(outFile, filepath.Base(objName))
-				}
-			} else if finfo.Mode().IsRegular() && !flagIsSet(c, yesFlag) { // `/dev/null` is fine {
-				warn := fmt.Sprintf("overwrite existing %q", outFile)
-				if ok := confirm(c, warn); !ok {
-					return nil
-				}
-			}
-		}
-	}
-
-	hdr := cmn.MakeRangeHdr(offset, length)
-	if outFile == fileStdIO {
-		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
-		silent = true
-	} else {
-		var file *os.File
-		if file, err = os.Create(outFile); err != nil {
-			return
-		}
-		defer func() {
-			file.Close()
-			if err != nil {
-				os.Remove(outFile)
-			}
-		}()
-		getArgs = api.GetArgs{Writer: file, Header: hdr}
-	}
-
-	if bck.IsHTTP() {
-		getArgs.Query = make(url.Values, 2)
-		getArgs.Query.Set(apc.QparamOrigURL, uri)
-	}
-	// TODO: validate
-	if archPath != "" {
-		if getArgs.Query == nil {
-			getArgs.Query = make(url.Values, 1)
-		}
-		getArgs.Query.Set(apc.QparamArchpath, archPath)
-	}
-
-	if flagIsSet(c, cksumFlag) {
-		oah, err = api.GetObjectWithValidation(apiBP, bck, objName, &getArgs)
-	} else {
-		oah, err = api.GetObject(apiBP, bck, objName, &getArgs)
-	}
-	if err != nil {
-		if cmn.IsStatusNotFound(err) && archPath == "" {
-			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
-		}
-		return
-	}
-	objLen := oah.Size()
-
-	if flagIsSet(c, lengthFlag) && outFile != fileStdIO {
-		fmt.Fprintf(c.App.ErrWriter, "Read range len=%s(%dB) as %q\n", cos.ToSizeIEC(objLen, 2), objLen, outFile)
-		return
-	}
-	if !silent && outFile != fileStdIO {
-		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q [%s]\n",
-				archPath, bck, objName, outFile, cos.ToSizeIEC(objLen, 2))
-		} else {
-			fmt.Fprintf(c.App.Writer, "GET %q from %s as %q [%s]\n",
-				objName, bck.DisplayName(), outFile, cos.ToSizeIEC(objLen, 2))
-		}
-	}
-	return
-}
-
 // Promote AIS-colocated files and directories to objects.
-
 func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	var (
 		target = parseStrFlag(c, targetIDFlag)
@@ -333,42 +203,55 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	}
 
 	// 5. directory
-	files, err := lsFobj(c, path, "", objName, flagIsSet(c, recursFlag))
+	recurs := flagIsSet(c, recursFlag)
+	files, err := lsFobj(c, path, "", objName, recurs)
 	if err != nil {
 		return err
 	}
-	return putFobjs(c, files, bck)
+	tag := _putFrom(fmt.Sprintf(" from %q", fileName), recurs)
+	return putFobjs(c, files, bck, tag)
 }
 
-func putList(c *cli.Context, fnames []string, bck cmn.Bck, subdirName string) error {
+func _putFrom(s string, recurs bool) (tag string) {
+	if recurs {
+		tag = s + "(recursive)"
+	} else {
+		tag = s + "(non-recursive)"
+	}
+	return
+}
+
+func putList(c *cli.Context, fnames []string, bck cmn.Bck, appendPrefixSubdir string) error {
 	var (
 		allFiles = make([]fobj, 0, len(fnames))
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	for _, n := range fnames {
-		files, err := lsFobj(c, n, "", subdirName, recurs)
+		files, err := lsFobj(c, n, "", appendPrefixSubdir, recurs)
 		if err != nil {
 			return err
 		}
 		allFiles = append(allFiles, files...)
 	}
-	return putFobjs(c, allFiles, bck)
+	tag := _putFrom(" ", recurs)
+	return putFobjs(c, allFiles, bck, tag)
 }
 
-func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, subdirName string) (err error) {
+func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
 	var (
 		allFiles = make([]fobj, 0, pt.Count())
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	pt.InitIter()
 	for n, hasNext := pt.Next(); hasNext; n, hasNext = pt.Next() {
-		files, err := lsFobj(c, n, trimPrefix, subdirName, recurs)
+		files, err := lsFobj(c, n, trimPrefix, appendPrefixSubdir, recurs)
 		if err != nil {
 			return err
 		}
 		allFiles = append(allFiles, files...)
 	}
-	return putFobjs(c, allFiles, bck)
+	tag := _putFrom(" ", recurs)
+	return putFobjs(c, allFiles, bck, tag)
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {

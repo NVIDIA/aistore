@@ -28,6 +28,7 @@ import (
 type (
 	uparams struct {
 		bck       cmn.Bck
+		fromTag   string
 		files     []fobj
 		workerCnt int
 		refresh   time.Duration
@@ -50,7 +51,7 @@ type (
 	}
 )
 
-func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck) error {
+func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck, fromTag string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("no files to PUT (hint: check filename pattern and/or source directory name)")
 	}
@@ -99,6 +100,7 @@ func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck) error {
 	numWorkers := parseIntFlag(c, concurrencyFlag)
 	params := &uparams{
 		bck:       bck,
+		fromTag:   fromTag,
 		files:     files,
 		workerCnt: numWorkers,
 		refresh:   refresh,
@@ -143,10 +145,11 @@ func _putFobjs(c *cli.Context, p *uparams) error {
 		u.progress.Wait()
 		fmt.Fprint(c.App.Writer, u.errSb.String())
 	}
-	if failed := u.errCount.Load(); failed != 0 {
-		return fmt.Errorf("failed to PUT %d object%s", failed, cos.Plural(int(failed)))
+	if numFailed := u.errCount.Load(); numFailed > 0 {
+		return fmt.Errorf("failed to PUT %d object%s", numFailed, cos.Plural(int(numFailed)))
 	}
-	fmt.Fprintf(c.App.Writer, "PUT %d object%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.bck.DisplayName())
+	msg := fmt.Sprintf("PUT %d object%s%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.fromTag, p.bck.DisplayName())
+	actionDone(c, msg)
 	return nil
 }
 

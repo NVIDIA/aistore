@@ -251,7 +251,7 @@ const (
 	bucketNewArgument      = "NEW_BUCKET"
 
 	// Objects
-	getObjectArgument       = "BUCKET/OBJECT_NAME [OUT_FILE|-]"
+	getObjectArgument       = "BUCKET[/OBJECT_NAME] [OUT_FILE|-]"
 	putObjectArgument       = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
 	promoteObjectArgument   = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
 	concatObjectArgument    = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"

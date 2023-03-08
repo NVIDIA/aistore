@@ -473,21 +473,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		msg.StartAfter = parseStrFlag(c, startAfterFlag)
 	}
 
-	pageSize := parseIntFlag(c, pageSizeFlag)
-	limit := parseIntFlag(c, objLimitFlag)
-	if pageSize < 0 {
-		return fmt.Errorf("page size (%d) cannot be negative", pageSize)
+	pageSize, limit, err := _setPage(c, bck)
+	if err != nil {
+		return err
 	}
-	if limit < 0 {
-		return fmt.Errorf("max object count (%d) cannot be negative", limit)
-	}
-	// set page size to limit if limit is less than page size
 	msg.PageSize = uint(pageSize)
-	if limit > 0 && (limit < pageSize || (limit < 1000 && pageSize == 0)) {
-		msg.PageSize = uint(limit)
-	}
 
-	// retrieve the bucket content page by page and print on the fly
+	// list bucket's objects page by page and print pages, one at a time
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
@@ -544,6 +536,31 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		return err
 	}
 	return printObjProps(c, objList.Entries, objectListFilter, msg.Props, addCachedCol)
+}
+
+func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
+	defaultPageSize := apc.DefaultPageSizeCloud
+	if bck.IsAIS() || bck.IsRemoteAIS() {
+		defaultPageSize = apc.DefaultPageSizeAIS
+	}
+	pageSize = parseIntFlag(c, pageSizeFlag)
+	if pageSize < 0 {
+		err = fmt.Errorf("page size (%d) cannot be negative", pageSize)
+		return
+	}
+	limit = parseIntFlag(c, objLimitFlag)
+	if limit < 0 {
+		err = fmt.Errorf("max object count (%d) cannot be negative", limit)
+		return
+	}
+	if limit == 0 {
+		return
+	}
+	// when limit "wins"
+	if limit < pageSize || (limit < defaultPageSize && pageSize == 0) {
+		pageSize = limit
+	}
+	return
 }
 
 // If both backend_bck.name and backend_bck.provider are present, use them.
