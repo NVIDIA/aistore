@@ -12,6 +12,12 @@ This document contains `ais object` commands - the commands to read (GET), write
 
 ## Table of Contents
 - [GET object](#get-object)
+  - [Save object to local file](#save-object-to-local-file)
+  - [Save object to local file with implied file name](#save-object-to-local-file-with-implied-file-name)
+  - [Get object and print it to standard output](#get-object-and-print-it-to-standard-output)
+  - [Check if object is _cached_](#check-if-object-is-cached)
+  - [Read range](#read-range)
+- [GET multiple objects](#get-multiple-objects)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [PUT object](#put-object)
@@ -58,7 +64,7 @@ Get an object from a bucket. If a local file of the same name exists, the local 
 
 `OUT_FILE`: filename in an existing directory or `-` for `stdout`
 
-## Save object to local file with explicit file name
+## Save object to local file
 
 Get the `imagenet_train-000010.tgz` object from the `imagenet` bucket and write it to a local file, `~/train-10.tgz`:
 
@@ -80,7 +86,7 @@ $ curl -L -X GET 'http://aistore/v1/objects/imagenet/magenet_train-000010.tgz?pr
 $ curl -L -X GET 'http://aistore/ais/imagenet/magenet_train-000010.tgz -o ~/train-10.tgz'
 ```
 
-## Save object to local file with implicit file name
+## Save object to local file with implied file name
 
 If `OUT_FILE` is omitted, the local file name is implied from the object name.
 
@@ -116,13 +122,24 @@ $ ais object get --cached ais://imagenet/imagenet_train-000010.tgz
 Cached: true
 ```
 
-### Read range
+## Read range
 
 Get the contents of object `list.txt` from `texts` bucket starting from offset `1024` length `1024` and save it as `~/list.txt` file:
 
 ```console
 $ ais object get --offset 1024 --length 1024 ais://texts/list.txt ~/list.txt
 Read 1.00KiB (1024 B)
+```
+
+# GET multiple objects
+
+Note that destination in this case is a local directory and that (an empty) prefix indicates getting entire bucket; see `--help` for details.
+
+```console
+$ ais get s3://abc /tmp/w --prefix "" --progress
+GET 60 objects from s3://abc to /tmp/w (size 92.47MiB) [Y/N]: y
+Objects:                     59/60 [============================================================>-] 98 %
+Total size:  63.00 MiB / 92.47 MiB [=========================================>--------------------] 68 %
 ```
 
 # Print object content

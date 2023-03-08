@@ -75,7 +75,7 @@ var (
 		commandList: {
 			regexFlag,
 			templateFlag,
-			prefixFlag,
+			listObjPrefixFlag,
 			pageSizeFlag,
 			objPropsFlag,
 			objLimitFlag,
@@ -136,7 +136,7 @@ var (
 	}
 	bucketObjCmdEvict = cli.Command{
 		Name:         commandEvict,
-		Usage:        "evict all or selected objects from a bucket",
+		Usage:        "evict all (default) or selected objects from remote bucket (to select, use --list or --template)",
 		ArgsUsage:    optionalObjectsArgument,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
@@ -428,7 +428,7 @@ func evictHandler(c *cli.Context) (err error) {
 
 	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
-		uri := c.Args().First()
+		uri := c.Args().Get(0)
 		bck, objName, err := parseBckObjectURI(c, uri, true)
 		if err != nil {
 			return err
@@ -606,7 +606,7 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)
 	default: // list objects
-		prefix := parseStrFlag(c, prefixFlag)
+		prefix := parseStrFlag(c, listObjPrefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
 		return listObjects(c, bck, prefix, listArch)
 	}

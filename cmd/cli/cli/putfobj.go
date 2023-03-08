@@ -40,7 +40,8 @@ type (
 		errCount      atomic.Int32 // uploads failed so far
 		processedCnt  atomic.Int32 // files processed so far
 		processedSize atomic.Int64 // size of already processed files
-		totalBars     []*mpb.Bar
+		barObjs       *mpb.Bar
+		barSize       *mpb.Bar
 		progress      *mpb.Progress
 		errSb         strings.Builder
 		lastReport    time.Time
@@ -121,18 +122,21 @@ func _putFobjs(c *cli.Context, p *uparams) error {
 	}
 	if u.showProgress {
 		var (
-			filesBarArg = barArgs{
+			filesBarArg = barArgs{ // bar[0]
 				total:   int64(len(p.files)),
 				barText: "Uploaded files:",
 				barType: unitsArg,
 			}
-			sizeBarArg = barArgs{
+			sizeBarArg = barArgs{ // bar[1]
 				total:   p.totalSize,
 				barText: "Total size:    ",
 				barType: sizeArg,
 			}
+			totalBars []*mpb.Bar
 		)
-		u.progress, u.totalBars = simpleBar(filesBarArg, sizeBarArg)
+		u.progress, totalBars = simpleBar(filesBarArg, sizeBarArg)
+		u.barObjs = totalBars[0]
+		u.barSize = totalBars[1]
 	}
 
 	for _, f := range p.files {
@@ -162,7 +166,7 @@ func (u *uctx) put(c *cli.Context, p *uparams, f fobj) {
 
 	fh, err := cos.NewFileHandle(f.path)
 	if err != nil {
-		str := fmt.Sprintf("Failed to open file %q: %v\n", f.path, err)
+		str := fmt.Sprintf("Failed to open %q: %v\n", f.path, err)
 		if u.showProgress {
 			u.errSb.WriteString(str)
 		} else {
@@ -189,12 +193,12 @@ func (u *uctx) put(c *cli.Context, p *uparams, f fobj) {
 				mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
 			)
 			updateBar = func(n int, _ error) {
-				u.totalBars[1].IncrBy(n)
+				u.barSize.IncrBy(n)
 				bar.IncrBy(n)
 			}
 		} else {
 			updateBar = func(n int, _ error) {
-				u.totalBars[1].IncrBy(n)
+				u.barSize.IncrBy(n)
 			}
 		}
 	}
@@ -229,7 +233,7 @@ func (u *uctx) fini(c *cli.Context, p *uparams, f fobj) {
 		size  = u.processedSize.Add(f.size)
 	)
 	if u.showProgress {
-		u.totalBars[0].Increment()
+		u.barObjs.Increment()
 	}
 	u.wg.Done()
 	if u.reportEvery == 0 {

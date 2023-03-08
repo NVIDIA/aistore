@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb/v4"
 )
 
 func catHandler(c *cli.Context) error {
@@ -38,7 +39,7 @@ func getHandler(c *cli.Context) error {
 	}
 	// source
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjectURI(c, uri, flagIsSet(c, prefixFlag) /*optObjName*/)
+	bck, objName, err := parseBckObjectURI(c, uri, flagIsSet(c, getObjPrefixFlag) /*optObjName*/)
 	if err != nil {
 		return err
 	}
@@ -46,10 +47,10 @@ func getHandler(c *cli.Context) error {
 	outFile := c.Args().Get(1)
 
 	// GET multiple
-	if flagIsSet(c, prefixFlag) {
+	if flagIsSet(c, getObjPrefixFlag) {
 		if objName != "" {
 			return fmt.Errorf("object name in %q and %s cannot be used together (hint: use directory as destination)",
-				uri, qflprn(prefixFlag))
+				uri, qflprn(getObjPrefixFlag))
 		}
 		return getMultiObj(c, bck, outFile)
 	}
@@ -65,12 +66,12 @@ func getHandler(c *cli.Context) error {
 
 func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	var (
-		prefix   = parseStrFlag(c, prefixFlag)
-		msg      = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsName}
+		prefix   = parseStrFlag(c, getObjPrefixFlag)
+		msg      = &apc.LsoMsg{Prefix: prefix}
 		listArch = flagIsSet(c, listArchFlag) // archived content
 	)
 	// setup list-objects msg and call
-	msg.SetFlag(apc.LsNameOnly)
+	msg.AddProps(apc.GetPropsMinimal...)
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
 	}
@@ -88,7 +89,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	if err != nil {
 		return err
 	}
-	// many to one
+	// can't do many to one
 	l := len(objList.Entries)
 	if l > 1 {
 		if outFile != "" && outFile != fileStdIO && outFile != discardIO {
@@ -99,30 +100,58 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 			}
 		}
 	}
-
+	// total size
+	var totalSize int64
+	for _, entry := range objList.Entries {
+		totalSize += entry.Size
+	}
 	// announce, confirm
 	var (
-		silent = !flagIsSet(c, verboseFlag)
-		cptn   = fmt.Sprintf("GET %d object%s from %s to %s", l, cos.Plural(l), bck.DisplayName(), outFile)
+		silent      = !flagIsSet(c, verboseFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	if errU != nil {
+		return err
+	}
+	cptn := fmt.Sprintf("GET %d object%s from %s to %s (size %s)", l, cos.Plural(l), bck.DisplayName(),
+		outFile, teb.FmtSize(totalSize, units, 2))
 	if flagIsSet(c, yesFlag) && (l > 1 || silent) {
 		fmt.Fprintln(c.App.Writer, cptn)
 	} else if ok := confirm(c, cptn); !ok {
 		return nil
 	}
-
+	// context to get in parallel
 	u := &uctx{
-		showProgress: false, // TODO -- FIXME: progress bar
+		showProgress: flagIsSet(c, progressFlag),
 		wg:           cos.NewLimitedWaitGroup(4, 0),
+	}
+	if u.showProgress {
+		var (
+			filesBarArg = barArgs{ // bar[0]
+				total:   int64(len(objList.Entries)),
+				barText: "Objects:    ",
+				barType: unitsArg,
+			}
+			sizeBarArg = barArgs{ // bar[1]
+				total:   totalSize,
+				barText: "Total size: ",
+				barType: sizeArg,
+			}
+			totalBars []*mpb.Bar
+		)
+		u.progress, totalBars = simpleBar(filesBarArg, sizeBarArg)
+		u.barObjs = totalBars[0]
+		u.barSize = totalBars[1]
 	}
 	for _, entry := range objList.Entries {
 		u.wg.Add(1)
-		go u.get(c, bck, entry.Name, outFile, silent)
+		go u.get(c, bck, entry.Name, outFile, entry.Size, silent)
 	}
 	u.wg.Wait()
 
 	if u.showProgress {
 		u.progress.Wait()
+		fmt.Fprint(c.App.Writer, u.errSb.String())
 	}
 	if numFailed := u.errCount.Load(); numFailed > 0 {
 		return fmt.Errorf("failed to GET %d object%s", numFailed, cos.Plural(int(numFailed)))
@@ -131,15 +160,23 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 }
 
 //////////
-// uctx (extension)
+// uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, objName, outFile string, size int64, silent bool) {
 	defer u.wg.Done()
 	err := getObject(c, bck, objName, outFile, silent)
 	if err != nil {
-		actionWarn(c, err.Error())
 		u.errCount.Inc()
+	}
+	if u.showProgress {
+		u.barObjs.IncrInt64(1)
+		u.barSize.IncrInt64(size)
+		if err != nil {
+			u.errSb.WriteString(err.Error() + "\n")
+		}
+	} else if err != nil {
+		actionWarn(c, err.Error())
 	}
 }
 

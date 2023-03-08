@@ -35,8 +35,11 @@ var (
 			yesFlag,
 			checkObjCachedFlag,
 			unitsFlag,
+			refreshFlag,
+			progressFlag,
 			// multi-object options (passed to list-objects)
-			prefixFlag,
+			getObjPrefixFlag,
+			getObjCachedFlag,
 			listArchFlag,
 			objLimitFlag,
 			verboseFlag,

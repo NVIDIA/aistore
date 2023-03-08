@@ -343,19 +343,34 @@ var (
 	}
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
-		Usage: "depending on context: all objects (including misplaced ones and copies) or " +
-			"all buckets (including remote buckets that are not present in the cluster)",
+		Usage: "depending on the context: all objects, including misplaced and copies\n" +
+			"\t\t\tor all buckets, including accessible remote (buckets) that are not present in the cluster",
 	}
 	rmrfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
 	// obj props
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
-		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.: " +
-			"'--props all', '--props name,size,cached', '--props ec,copies,custom,location'",
+		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.:\n" +
+			indent4 + "--props all\n" +
+			indent4 + "--props name,size,cached\n" +
+			indent4 + "--props \"ec, copies, custom, location\"",
 	}
 
-	prefixFlag = cli.StringFlag{Name: "prefix", Usage: "prefix to match"}
+	// prefix (to match)
+	listObjPrefixFlag = cli.StringFlag{
+		Name: "prefix",
+		Usage: "list objects that start with the specified prefix, e.g.:\n" +
+			indent4 + "--prefix a/b/c/\t- list virtual directory a/b/c\n" +
+			indent4 + "--prefix abc\t- list objects that have names starting with abc",
+	}
+	getObjPrefixFlag = cli.StringFlag{
+		Name: listObjPrefixFlag.Name,
+		Usage: "get objects that start with the specified prefix, e.g.:\n" +
+			indent4 + "--prefix a/b/c/\t- get virtual directory a/b/c\n" +
+			indent4 + "--prefix abc\t- get objects that have names starting with abc\n" +
+			indent4 + "--prefix \"\"\t- get entire bucket",
+	}
 
 	//
 	// longRunFlags
@@ -388,8 +403,8 @@ var (
 	}
 
 	jsonFlag     = cli.BoolFlag{Name: "json,j", Usage: "json input/output"}
-	noHeaderFlag = cli.BoolFlag{Name: "no-headers,no-header,H", Usage: "display tables without headers"}
-	noFooterFlag = cli.BoolFlag{Name: "no-footers,no-footer", Usage: "display tables without footers"}
+	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
+	noFooterFlag = cli.BoolFlag{Name: "no-footers", Usage: "display tables without footers"}
 
 	progressFlag   = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
 	dryRunFlag     = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
@@ -424,11 +439,10 @@ var (
 		Name:  "start-after",
 		Usage: "list bucket's content alphabetically starting with the first name _after_ the specified",
 	}
-	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object name count (0 - unlimited)", Value: 0}
+	objLimitFlag = cli.IntFlag{Name: "limit", Usage: "limit object name count (0 - unlimited)"}
 	pageSizeFlag = cli.IntFlag{
 		Name:  "page-size",
 		Usage: "maximum number of names per page (0 - the maximum is defined by the corresponding backend)",
-		Value: 0,
 	}
 	copiesFlag   = cli.IntFlag{Name: "copies", Usage: "number of object replicas", Value: 1, Required: true}
 	maxPagesFlag = cli.IntFlag{Name: "max-pages", Usage: "display up to this number pages of bucket objects"}
@@ -439,8 +453,8 @@ var (
 	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name: "summary",
-		Usage: "show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster " +
-			"(use '--all' option to override)",
+		Usage: "show bucket sizes and used capacity; by default applies only to buckets that are _present_ in the cluster " +
+			"('--all' to override)",
 	}
 	pagedFlag = cli.BoolFlag{
 		Name:  "paged",
@@ -456,7 +470,7 @@ var (
 
 	nameOnlyFlag = cli.BoolFlag{
 		Name:  "name-only",
-		Usage: "fast request to retrieve only the names of objects (if defined, '--props' value will be ignored)",
+		Usage: "faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)",
 	}
 
 	// Log severity (cmn.LogInfo, ....) enum
@@ -553,12 +567,16 @@ var (
 	// settings inherited from the cluster config, etc. etc.
 	// See also: apc.Flt* enum.
 	checkObjCachedFlag = cli.BoolFlag{
-		Name:  "cached",
-		Usage: "check if object from a remote bucket is present (aka \"cached\")",
+		Name:  "check-cached",
+		Usage: "check if a given object from a remote bucket is present (\"cached\") in AIS",
 	}
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
 		Usage: "list only those objects from a remote bucket that are present (\"cached\")",
+	}
+	getObjCachedFlag = cli.BoolFlag{
+		Name:  "cached",
+		Usage: "get only those objects from a remote bucket that are present (\"cached\") in AIS",
 	}
 	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",

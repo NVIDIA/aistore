@@ -204,8 +204,8 @@ comma-separated list of object properties including name, size, version, ##copie
 | `--limit` | `int` | limit object name count (0 - unlimited) | `0` |
 | `--show-unmatched` | `bool` | list objects that were not matched by regex and/or template | `false` |
 | `--all` | `bool` | depending on context: all objects (including misplaced ones and copies) _or_ all buckets (including remote buckets that are not present in the cluster) | `false` |
-| -no-headers, --no-header, -H | `bool` | display tables without headers | `false` |
-| --no-footers, --no-footer | `bool` | display tables without footers | `false` |
+| -no-headers, -H | `bool` | display tables without headers | `false` |
+| --no-footers | `bool` | display tables without footers | `false` |
 | `--paged` | `bool` | list objects page by page, one page at a time (see also '--page-size' and '--limit') | `false` |
 | `--max-pages` | `int` | display up to this number pages of bucket objects (default: 0) | `0` |
 | `--marker` | `string` | list bucket's content alphabetically starting with the first name _after_ the specified | `""` |
