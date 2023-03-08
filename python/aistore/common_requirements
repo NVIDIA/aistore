@@ -4,3 +4,4 @@ cloudpickle==2.2.0
 pylint==2.16.0
 typing_extensions==4.1.1
 requests==2.27.1
+humanize==4.6.0

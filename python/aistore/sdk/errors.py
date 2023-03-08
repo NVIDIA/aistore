@@ -45,6 +45,16 @@ class ErrBckNotFound(AISError):
 
 
 # pylint: disable=unused-variable
+class ErrBckAlreadyExists(AISError):
+    """
+    Raised when a bucket is created but already exists in AIS
+    """
+
+    def __init__(self, status_code, message):
+        super().__init__(status_code=status_code, message=message)
+
+
+# pylint: disable=unused-variable
 class Timeout(Exception):
     """
     Raised when an operation takes too long to complete

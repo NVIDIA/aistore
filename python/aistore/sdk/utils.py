@@ -2,11 +2,18 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
+
+import humanize
 import pydantic.tools
 import requests
 
 from aistore.sdk.const import UTF_ENCODING
-from aistore.sdk.errors import AISError, ErrBckNotFound, ErrRemoteBckNotFound
+from aistore.sdk.errors import (
+    AISError,
+    ErrBckNotFound,
+    ErrRemoteBckNotFound,
+    ErrBckAlreadyExists,
+)
 from aistore.sdk.types import HttpError
 
 
@@ -19,6 +26,8 @@ def _raise_error(text: str):
                 raise ErrRemoteBckNotFound(err.status, err.message)
             if "bucket" in err.message:
                 raise ErrBckNotFound(err.status, err.message)
+        if "already exists" in err.message:
+            raise ErrBckAlreadyExists(err.status, err.message)
     raise AISError(err.status, err.message)
 
 
@@ -97,3 +106,18 @@ def validate_directory(path: str):
     _check_path_exists(path)
     if not Path(path).is_dir():
         raise ValueError(f"Path: {path} is a file, not a directory")
+
+
+def get_file_size(file: Path) -> str:
+    """
+    Get the size of a file and return it in human-readable format
+    Args:
+        file: File to read
+
+    Returns:
+        Size of file as human-readable string
+
+    """
+    return (
+        humanize.naturalsize(file.stat().st_size) if file.stat().st_size else "unknown"
+    )

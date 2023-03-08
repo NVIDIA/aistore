@@ -25,7 +25,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     URL_PATH_BUCKETS,
 )
-from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.errors import InvalidBckProvider, ErrBckAlreadyExists, ErrBckNotFound
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
@@ -74,14 +74,27 @@ class TestBucket(unittest.TestCase):
     def test_create_invalid_provider(self):
         self.assertRaises(InvalidBckProvider, self.amz_bck.create)
 
-    def test_create_success(self):
-        self.ais_bck.create()
+    def _assert_bucket_created(self, bck):
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
             json=ActionMsg(action=ACT_CREATE_BCK).dict(),
             params=self.ais_bck.qparam,
         )
+        self.assertIsInstance(bck, Bucket)
+
+    def test_create_success(self):
+        res = self.ais_bck.create()
+        self._assert_bucket_created(res)
+
+    def test_create_already_exists(self):
+        already_exists_err = ErrBckAlreadyExists(400, "message")
+        self.mock_client.request.side_effect = already_exists_err
+        with self.assertRaises(ErrBckAlreadyExists):
+            self.ais_bck.create()
+
+        res = self.ais_bck.create(exist_ok=True)
+        self._assert_bucket_created(res)
 
     def test_rename_invalid_provider(self):
         self.assertRaises(InvalidBckProvider, self.amz_bck.rename, "new_name")
@@ -110,6 +123,18 @@ class TestBucket(unittest.TestCase):
 
     def test_delete_success(self):
         self.ais_bck.delete()
+        self.mock_client.request.assert_called_with(
+            HTTP_METHOD_DELETE,
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            json=ActionMsg(action=ACT_DESTROY_BCK).dict(),
+            params=self.ais_bck.qparam,
+        )
+
+    def test_delete_missing(self):
+        self.mock_client.request.side_effect = ErrBckNotFound(400, "not found")
+        with self.assertRaises(ErrBckNotFound):
+            Bucket(client=self.mock_client, name="missing-bucket").delete()
+        self.ais_bck.delete(missing_ok=True)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
@@ -389,9 +414,11 @@ class TestBucket(unittest.TestCase):
         path_1 = Mock()
         path_1.is_file.return_value = True
         path_1.relative_to.return_value = file_1_name
+        path_1.stat.return_value = Mock(st_size=123)
         path_2 = Mock()
         path_2.relative_to.return_value = file_2_name
         path_2.is_file.return_value = True
+        path_2.stat.return_value = Mock(st_size=4567)
         file_1_data = b"bytes in the first file"
         file_2_data = b"bytes in the second file"
         mock_glob.return_value = [path_1, path_2]

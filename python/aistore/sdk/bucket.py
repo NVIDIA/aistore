@@ -29,7 +29,11 @@ from aistore.sdk.const import (
     URL_PATH_BUCKETS,
 )
 
-from aistore.sdk.errors import InvalidBckProvider
+from aistore.sdk.errors import (
+    InvalidBckProvider,
+    ErrBckAlreadyExists,
+    ErrBckNotFound,
+)
 from aistore.sdk.object_range import ObjectRange
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.object_group import ObjectGroup
@@ -40,7 +44,7 @@ from aistore.sdk.types import (
     BucketList,
     Namespace,
 )
-from aistore.sdk.utils import validate_directory
+from aistore.sdk.utils import validate_directory, get_file_size
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
@@ -95,10 +99,13 @@ class Bucket:
         """The namespace for this bucket."""
         return self._namespace
 
-    def create(self):
+    def create(self, exist_ok=False):
         """
         Creates a bucket in AIStore cluster.
         Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
+
+        Args:
+            exist_ok (bool, optional): Ignore error if the cluster already contains this bucket
 
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
@@ -110,15 +117,23 @@ class Bucket:
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
         self._verify_ais_bucket()
-        self.make_request(HTTP_METHOD_POST, ACT_CREATE_BCK)
+        try:
+            self.make_request(HTTP_METHOD_POST, ACT_CREATE_BCK)
+        except ErrBckAlreadyExists as err:
+            if not exist_ok:
+                raise err
+        return self
 
-    def delete(self):
+    def delete(self, missing_ok=False):
         """
         Destroys bucket in AIStore cluster.
         In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster.
         Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
         (iff the bucket in question is, in fact, a Cloud bucket).
 
+        Args:
+            missing_ok (bool, optional): Ignore error if bucket does not exist
+
         Raises:
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             aistore.sdk.errors.InvalidBckProvider: Invalid bucket provider for requested operation
@@ -129,7 +144,11 @@ class Bucket:
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
         self._verify_ais_bucket()
-        self.make_request(HTTP_METHOD_DELETE, ACT_DESTROY_BCK)
+        try:
+            self.make_request(HTTP_METHOD_DELETE, ACT_DESTROY_BCK)
+        except ErrBckNotFound as err:
+            if not missing_ok:
+                raise err
 
     def rename(self, to_bck: str) -> str:
         """
@@ -485,7 +504,7 @@ class Bucket:
                 dry_run_prefix,
                 file,
                 obj_name,
-                file.stat().st_size,
+                get_file_size(file),
             )
             obj_names.append(obj_name)
         logger.info(

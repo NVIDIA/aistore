@@ -3,7 +3,12 @@ import unittest
 from unittest.mock import Mock, patch, mock_open
 
 from aistore.sdk import utils
-from aistore.sdk.errors import AISError, ErrRemoteBckNotFound, ErrBckNotFound
+from aistore.sdk.errors import (
+    AISError,
+    ErrRemoteBckNotFound,
+    ErrBckNotFound,
+    ErrBckAlreadyExists,
+)
 
 
 def test_cases(*args):
@@ -62,6 +67,14 @@ class TestUtils(unittest.TestCase):
         mock_text.decode.return_value = expected_text
         self.handle_err_exec_assert(ErrBckNotFound, 400, err_msg, mock_text)
 
+    def test_handle_error_bucket_exists(self):
+        err_msg = "bucket already exists"
+        err_status = 400
+        expected_text = json.dumps({"status": err_status, "message": err_msg})
+        mock_text = Mock(spec=bytes)
+        mock_text.decode.return_value = expected_text
+        self.handle_err_exec_assert(ErrBckAlreadyExists, 400, err_msg, mock_text)
+
     def handle_err_exec_assert(self, err_type, err_status, err_msg, mock_err_text):
         mock_response = Mock(text=mock_err_text)
         with self.assertRaises(err_type) as context:
@@ -104,3 +117,9 @@ class TestUtils(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=data)):
             res = utils.read_file_bytes("any path")
         self.assertEqual(data, res)
+
+    @test_cases((123, "123 Bytes"), (None, "unknown"))
+    def test_get_file_size(self, test_case):
+        mock_file = Mock()
+        mock_file.stat.return_value = Mock(st_size=test_case[0])
+        self.assertEqual(test_case[1], utils.get_file_size(mock_file))
