@@ -144,9 +144,8 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		if objName == "" {
 			return fmt.Errorf("STDIN source: destination object name (in %s) is required", c.Command.ArgsUsage)
 		}
-		if !flagIsSet(c, chunkSizeFlag) {
-			warn := fmt.Sprintf("STDIN source: consider using %s flag", qflprn(chunkSizeFlag))
-			actionWarn(c, warn)
+		if flagIsSet(c, verboseFlag) {
+			actionWarn(c, "To terminate input, press Ctrl-D two or more times")
 		}
 		cksum, err := cksumToCompute(c, bck)
 		if err != nil {

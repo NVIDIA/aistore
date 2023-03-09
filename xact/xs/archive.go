@@ -121,7 +121,7 @@ func (p *archFactory) Start() error {
 	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck /*from*/, 0 /*use default*/)
 
 	bmd := p.Args.T.Bowner().Get()
-	trname := fmt.Sprintf("arch-%s-%s-%d", p.Bck.Provider, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
+	trname := fmt.Sprintf("arch-%s%s-%s-%d", p.Bck.Provider, p.Bck.Ns, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
 	if err := p.newDM(trname, r.recv, 0 /*pdu*/); err != nil {
 		return err
 	}

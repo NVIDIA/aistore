@@ -813,8 +813,10 @@ func (flt Flt) Matches(xctn cluster.Xact) (yes bool) {
 	if len(flt.Buckets) > 0 {
 		debug.Assert(len(flt.Buckets) == 2)
 		from, to := xctn.FromTo()
-		debug.Assert(from != nil && to != nil)
-		return from.Equal(flt.Buckets[0], false, false) && to.Equal(flt.Buckets[1], false, false)
+		if from != nil { // XactArch special case
+			debug.Assert(to != nil)
+			return from.Equal(flt.Buckets[0], false, false) && to.Equal(flt.Buckets[1], false, false)
+		}
 	}
 
 	return xctn.Bck().Equal(flt.Bck, true, true)
