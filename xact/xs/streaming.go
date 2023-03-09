@@ -34,6 +34,7 @@ const (
 const (
 	waitRegRecv   = 4 * time.Second
 	waitUnregRecv = 2 * waitRegRecv
+	waitUnregMax  = 2 * waitUnregRecv
 
 	maxNumInParallel = 256
 )
@@ -50,6 +51,7 @@ type (
 		err cos.ErrValue
 		xact.DemandBase
 		wiCnt atomic.Int32
+		maxWt time.Duration
 	}
 )
 
@@ -162,6 +164,7 @@ func (r *streamingX) fin(err error, unreg bool) error {
 	r.Finish(err)
 
 	if unreg {
+		r.maxWt = 0
 		r.postponeUnregRx()
 	}
 	return err
@@ -170,10 +173,14 @@ func (r *streamingX) fin(err error, unreg bool) error {
 // compare w/ lso
 func (r *streamingX) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.wurr, waitUnregRecv) }
 
-func (r *streamingX) wurr() (d time.Duration) {
-	d = hk.UnregInterval
-	if r.wiCnt.Load() > 0 {
-		d = waitUnregRecv
+func (r *streamingX) wurr() time.Duration {
+	if cnt := r.wiCnt.Load(); cnt > 0 {
+		r.maxWt += waitUnregRecv
+		if r.maxWt < waitUnregMax {
+			return waitUnregRecv
+		}
+		glog.Errorf("%s: unreg timeout %v, cnt %d", r, r.maxWt, cnt)
 	}
-	return
+	r.p.dm.UnregRecv()
+	return hk.UnregInterval
 }
