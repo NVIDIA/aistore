@@ -356,7 +356,7 @@ func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
 }
 
 func calcPutRefresh(c *cli.Context) time.Duration {
-	refresh := 5 * time.Second
+	refresh := refreshRateDefault
 	if flagIsSet(c, verboseFlag) && !flagIsSet(c, refreshFlag) {
 		return 0
 	}

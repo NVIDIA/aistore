@@ -545,7 +545,7 @@ func actionDownloaded(c *cli.Context, cnt int) {
 func bgDownload(c *cli.Context, id string) (err error) {
 	var (
 		resp           *dload.StatusResp
-		startedTimeout = cos.MaxDuration(5*time.Second, refreshRateMinDur*2)
+		startedTimeout = cos.MaxDuration(dloadStartedTime, refreshRateMinDur*2)
 	)
 
 	// In a non-interactive mode, allow downloader to start before checking
@@ -982,8 +982,6 @@ func stopDsortHandler(c *cli.Context, id string) (err error) {
 //
 // `job wait`
 //
-
-const wasFast = 5 * time.Second // start printing "."(s)
 
 func waitJobHandler(c *cli.Context) error {
 	var shift int

@@ -344,7 +344,7 @@ func bsummSlow(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.A
 		summaries, err = api.GetBucketSummary(apiBP, qbck, msg)
 		return
 	}
-	err = cmn.WaitForFunc(fDetails, longCommandTime)
+	err = cmn.WaitForFunc(fDetails, longClientTimeout)
 	return
 }
 
@@ -357,7 +357,7 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	fValidate := func() error {
 		return checkObjectHealth(queryBcks)
 	}
-	return cmn.WaitForFunc(fValidate, longCommandTime)
+	return cmn.WaitForFunc(fValidate, longClientTimeout)
 }
 
 func copyBucketHandler(c *cli.Context) (err error) {

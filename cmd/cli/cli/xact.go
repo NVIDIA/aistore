@@ -152,6 +152,13 @@ func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
 }
 
 func queryXactions(xargs xact.ArgsMsg) (xs xact.MultiSnap, err error) {
+	orig := apiBP.Client.Timeout
+	if !xargs.OnlyRunning {
+		apiBP.Client.Timeout = cos.MinDuration(orig, longClientTimeout)
+		defer func(t time.Duration) {
+			apiBP.Client.Timeout = t
+		}(orig)
+	}
 	xs, err = api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return

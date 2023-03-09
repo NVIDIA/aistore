@@ -18,8 +18,6 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
-const timeoutNoChange = 10 * time.Second // when stats stop moving for so much time
-
 type cprCtx struct {
 	errCh   chan error
 	barObjs *mpb.Bar

@@ -125,8 +125,16 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
 	args.to = cluster.Targets
-	config := cmn.GCO.Get()
+
+	var (
+		config      = cmn.GCO.Get()
+		onlyRunning = xactMsg.OnlyRunning != nil && *xactMsg.OnlyRunning
+	)
 	args.timeout = config.Client.Timeout.D() // quiescence
+	if !onlyRunning {
+		args.timeout = config.Client.TimeoutLong.D()
+	}
+
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	targetResults, erred := p._queryResults(w, r, results)

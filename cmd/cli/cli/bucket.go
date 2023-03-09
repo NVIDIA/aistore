@@ -25,9 +25,6 @@ import (
 )
 
 const (
-	// max wait time for a function finishes before printing "Please wait"
-	longCommandTime = 10 * time.Second
-
 	fmtXactFailed      = "Failed to %s (%q => %q)\n"
 	fmtXactSucceeded   = "Done.\n"
 	fmtXactWaitStarted = "%s %s => %s ...\n"
@@ -530,7 +527,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	// list all pages up to a limit, show progress
-	ctx := api.NewProgressContext(cb, longCommandTime)
+	ctx := api.NewProgressContext(cb, listPagesCallbackTime)
 	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), ctx)
 	if err != nil {
 		return err

@@ -192,15 +192,6 @@ const (
 	tgtTotal = "-------- SUM:"
 )
 
-// Default durations and counts for long-running operations
-// (compare with `xact/api.go`)
-const (
-	refreshRateDefault = 3 * time.Second
-	refreshRateMinDur  = time.Second
-	countDefault       = 1
-	countUnlimited     = -1
-)
-
 const NilValue = "none"
 
 const (
@@ -478,7 +469,7 @@ var (
 	logFlushFlag = DurationFlag{
 		Name:  "log-flush",
 		Usage: "can be used in combination with " + qflprn(refreshFlag) + " to override configured '" + nodeLogFlushName + "'",
-		Value: 10 * time.Second,
+		Value: logFlushTime,
 	}
 
 	// Download
