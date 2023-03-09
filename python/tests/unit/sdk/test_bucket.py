@@ -246,8 +246,10 @@ class TestBucket(unittest.TestCase):
     def _list_objects_exec_assert(self, expected_act_value, **kwargs):
         action = ActionMsg(action=ACT_LIST, value=expected_act_value).dict()
 
-        return_val = Mock(BucketList)
-        self.mock_client.request_deserialize.return_value = return_val
+        object_names = ["obj_name", "obj_name2"]
+        mock_list = Mock(BucketList)
+        mock_list.entries = [BucketEntry(name=name) for name in object_names]
+        self.mock_client.request_deserialize.return_value = mock_list
         result = self.ais_bck.list_objects(**kwargs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
@@ -256,7 +258,8 @@ class TestBucket(unittest.TestCase):
             json=action,
             params=self.ais_bck_params,
         )
-        self.assertEqual(result, return_val)
+        self.assertEqual(result, mock_list)
+        self.assertEqual(object_names, [entry.object.name for entry in result.entries])
 
     def test_list_objects_iter(self):
         self.assertIsInstance(

@@ -23,7 +23,8 @@ from aistore.sdk.const import (
     URL_PATH_OBJECTS,
 )
 from aistore.sdk.object import Object
-from aistore.sdk.types import ObjStream, ActionMsg, PromoteAPIArgs
+from aistore.sdk.object_reader import ObjectReader
+from aistore.sdk.types import ActionMsg, PromoteAPIArgs
 
 BCK_NAME = "bucket name"
 OBJ_NAME = "object name"
@@ -66,13 +67,14 @@ class TestObject(unittest.TestCase):
         self.expected_params[QPARAM_ETL_NAME] = etl_name
         self.get_exec_assert(
             archpath=archpath_param,
-            chunk_size=DEFAULT_CHUNK_SIZE + 1,
+            chunk_size=3,
             etl_name=etl_name,
             writer=self.mock_writer,
         )
 
     def get_exec_assert(self, **kwargs):
-        content_length = 123
+        content = b"123456789"
+        content_length = 9
         ais_check_val = "xyz"
         ais_check_type = "md5"
         ais_atime = "time string"
@@ -91,18 +93,19 @@ class TestObject(unittest.TestCase):
                 AIS_CUSTOM_MD: custom_metadata,
             }
         )
-        client_response = Response()
-        client_response.headers = resp_headers
-        expected_obj = ObjStream(
+        mock_response = Mock(Response)
+        mock_response.headers = resp_headers
+        mock_response.iter_content.return_value = content
+        mock_response.raw = content
+        expected_obj = ObjectReader(
             response_headers=resp_headers,
-            stream=client_response,
-            chunk_size=kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE),
+            stream=mock_response,
         )
-        self.mock_client.request.return_value = client_response
+        self.mock_client.request.return_value = mock_response
 
         res = self.object.get(**kwargs)
 
-        self.assertEqual(expected_obj, res)
+        self.assertEqual(expected_obj.raw(), res.raw())
         self.assertEqual(content_length, res.attributes.size)
         self.assertEqual(ais_check_type, res.attributes.checksum_type)
         self.assertEqual(ais_check_val, res.attributes.checksum_value)
@@ -115,6 +118,14 @@ class TestObject(unittest.TestCase):
             params=self.expected_params,
             stream=True,
         )
+
+        # Use the object reader iterator to call the stream with the chunk size
+        for _ in res:
+            continue
+        mock_response.iter_content.assert_called_with(
+            chunk_size=kwargs.get("chunk_size", DEFAULT_CHUNK_SIZE)
+        )
+
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)
 

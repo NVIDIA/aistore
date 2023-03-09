@@ -47,6 +47,7 @@ from aistore.sdk.types import (
     CopyBckMsg,
     TransformBckMsg,
     TCBckMsg,
+    ListObjectsMsg,
 )
 from aistore.sdk.utils import validate_directory, get_file_size
 
@@ -302,22 +303,25 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {
-            "prefix": prefix,
-            "pagesize": page_size,
-            "uuid": uuid,
-            "props": props,
-            "continuation_token": continuation_token,
-        }
+        value = ListObjectsMsg(
+            prefix=prefix,
+            page_size=page_size,
+            uuid=uuid,
+            props=props,
+            continuation_token=continuation_token,
+        ).as_dict()
         action = ActionMsg(action=ACT_LIST, value=value).dict()
 
-        return self.client.request_deserialize(
+        bucket_list = self.client.request_deserialize(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{ self.name }",
             res_model=BucketList,
             json=action,
             params=self.qparam,
         )
+        for entry in bucket_list.entries:
+            entry.object = self.object(entry.name)
+        return bucket_list
 
     def list_objects_iter(
         self,

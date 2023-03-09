@@ -188,7 +188,7 @@ class TestObjectOps(unittest.TestCase):
     def test_list_object_page(self):
         bucket_size = 110
         tests = [
-            {"page_size": None, "resp_size": bucket_size},
+            {"resp_size": bucket_size},
             {"page_size": 7, "resp_size": 7},
             {"page_size": bucket_size * 2, "resp_size": bucket_size},
         ]
@@ -198,7 +198,11 @@ class TestObjectOps(unittest.TestCase):
             )
 
         for test in list(tests):
-            resp = self.bucket.list_objects(page_size=test["page_size"])
+            resp = (
+                self.bucket.list_objects(page_size=test["page_size"])
+                if "page_size" in test
+                else self.bucket.list_objects()
+            )
             self.assertEqual(len(resp.get_entries()), test["resp_size"])
 
     def test_list_all_objects(self):

@@ -17,8 +17,9 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
 )
+from aistore.sdk.object_reader import ObjectReader
 
-from aistore.sdk.types import ObjStream, ActionMsg, PromoteAPIArgs
+from aistore.sdk.types import ActionMsg, PromoteAPIArgs
 from aistore.sdk.utils import read_file_bytes, validate_file
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -78,7 +79,7 @@ class Object:
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
-    ) -> ObjStream:
+    ) -> ObjectReader:
         """
         Reads an object
 
@@ -109,14 +110,14 @@ class Object:
             params=params,
             stream=True,
         )
-        obj_stream = ObjStream(
+        obj_reader = ObjectReader(
             stream=resp,
             response_headers=resp.headers,
             chunk_size=chunk_size,
         )
         if writer:
-            writer.writelines(obj_stream)
-        return obj_stream
+            writer.writelines(obj_reader)
+        return obj_reader
 
     def put_content(self, content: bytes) -> Header:
         """
