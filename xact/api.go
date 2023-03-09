@@ -67,14 +67,6 @@ type (
 		Buckets     []cmn.Bck `json:"buckets,omitempty"`
 	}
 
-	// further simplified, non-JSON, internal AIS use
-	Flt struct {
-		Bck         *cluster.Bck
-		OnlyRunning *bool
-		ID          string
-		Kind        string
-	}
-
 	// primarily: `api.QueryXactionSnaps`
 	MultiSnap map[string][]*cluster.Snap // by target ID (tid)
 )
@@ -354,52 +346,6 @@ func (msg *QueryMsg) String() (s string) {
 		s += "-only-running"
 	}
 	return
-}
-
-/////////
-// Flt //
-/////////
-
-func (flt *Flt) String() string {
-	msg := QueryMsg{OnlyRunning: flt.OnlyRunning, Bck: flt.Bck.Clone(), ID: flt.ID, Kind: flt.Kind}
-	return msg.String()
-}
-
-func (flt Flt) Matches(xctn cluster.Xact) (yes bool) {
-	debug.Assert(IsValidKind(xctn.Kind()), xctn.String())
-	// running?
-	if flt.OnlyRunning != nil {
-		if *flt.OnlyRunning != xctn.Running() {
-			return false
-		}
-	}
-	// same ID?
-	if flt.ID != "" {
-		debug.Assert(cos.IsValidUUID(flt.ID) || IsValidRebID(flt.ID), flt.ID)
-		if yes = xctn.ID() == flt.ID; yes {
-			debug.Assert(xctn.Kind() == flt.Kind, xctn.String()+" vs same ID "+flt.String())
-		}
-		return
-	}
-	// kind?
-	if flt.Kind != "" {
-		debug.Assert(IsValidKind(flt.Kind), flt.Kind)
-		if xctn.Kind() != flt.Kind {
-			return false
-		}
-	}
-	// bucket?
-	if Table[xctn.Kind()].Scope != ScopeB {
-		return true // non single-bucket x
-	}
-	if flt.Bck == nil {
-		return true // the filter's not filtering out
-	}
-
-	if xctn.Bck() == nil {
-		return false // ambiguity (cannot really compare)
-	}
-	return xctn.Bck().Equal(flt.Bck, true, true)
 }
 
 ///////////////

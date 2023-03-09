@@ -249,7 +249,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 			return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 		}
 		xctn := rns.Entry.Get()
-		flt := xact.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
+		flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
 		xreg.DoAbort(flt, errors.New("make-n-copies"))
 		c.addNotif(xctn) // notify upon completion
 		xact.GoRunW(xctn)
@@ -331,14 +331,14 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 				return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 			}
 			xctn := rns.Entry.Get()
-			flt := xact.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
+			flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-mirror"))
 			c.addNotif(xctn) // notify upon completion
 			xact.GoRunW(xctn)
 			xid = xctn.ID()
 		}
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
-			flt := xact.Flt{Kind: apc.ActECEncode, Bck: c.bck}
+			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-ec"))
 			rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
 			if rns.Err != nil {
@@ -772,7 +772,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 			return xid, cs.Err
 		}
 
-		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom)
+		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom, bckTo)
 		if rns.Err != nil {
 			glog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xid, rns.Err

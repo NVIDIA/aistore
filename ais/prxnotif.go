@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -61,7 +62,7 @@ type (
 		Finished []*notifListenMsg `json:"finished"`
 	}
 
-	nlFilter xact.Flt
+	nlFilter xreg.Flt
 
 	// receiver to start listening
 	notifListenMsg struct {

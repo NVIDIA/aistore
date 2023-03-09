@@ -33,7 +33,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -529,10 +528,10 @@ func (h *htrun) stop(rmFromSmap bool) {
 		h.stopHTTPServer()
 		wg.Done()
 	}()
-	entry := xreg.GetRunning(xact.Flt{})
+	entry := xreg.GetRunning(xreg.Flt{})
 	if entry != nil {
 		time.Sleep(time.Second)
-		entry = xreg.GetRunning(xact.Flt{})
+		entry = xreg.GetRunning(xreg.Flt{})
 		if entry != nil {
 			glog.Warningf("Timed out waiting for %q to finish aborting", entry.Kind())
 		}

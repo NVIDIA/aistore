@@ -58,9 +58,9 @@ func (r *registry) regBckXact(entry Renewable) {
 
 // RenewBucketXact is general function to renew bucket xaction without any
 // additional or specific parameters.
-func RenewBucketXact(kind string, bck *cluster.Bck, args Args) (res RenewRes) {
+func RenewBucketXact(kind string, bck *cluster.Bck, args Args, buckets ...*cluster.Bck) (res RenewRes) {
 	e := dreg.bckXacts[kind].New(args, bck)
-	return dreg.renew(e, bck)
+	return dreg.renew(e, bck, buckets...)
 }
 
 func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {
@@ -114,11 +114,21 @@ func RenewPutMirror(t cluster.Target, lom *cluster.LOM) RenewRes {
 }
 
 func RenewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
-	return RenewBucketXact(kind, custom.BckTo /*NOTE: to not from*/, Args{T: t, Custom: custom, UUID: uuid})
+	return RenewBucketXact(
+		kind,
+		custom.BckTo, // prevent concurrent copy/transform => same dst
+		Args{T: t, Custom: custom, UUID: uuid},
+		custom.BckFrom, custom.BckTo, // find when renewing
+	)
 }
 
 func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewRes {
-	return RenewBucketXact(kind, custom.BckFrom, Args{T: t, Custom: custom, UUID: uuid})
+	return RenewBucketXact(
+		kind,
+		custom.BckFrom,
+		Args{T: t, Custom: custom, UUID: uuid},
+		custom.BckFrom, custom.BckTo, // (ditto)
+	)
 }
 
 func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {

@@ -73,8 +73,7 @@ func (p *tcoFactory) Start() error {
 	if p.kind == apc.ActETLObjects {
 		sizePDU = memsys.DefaultBufSize
 	}
-	bmd := p.Args.T.Bowner().Get()
-	trname := fmt.Sprintf("tco-%s-%s-%d", p.Bck.Provider, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
+	trname := "tco-" + p.UUID()
 	if err := p.newDM(trname, r.recv, sizePDU); err != nil {
 		return err
 	}

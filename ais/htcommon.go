@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
@@ -830,7 +829,7 @@ func _reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck, smap *smapX) (targ
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
 			// abort running ec-encode xaction, if exists
-			flt := xact.Flt{Kind: apc.ActECEncode, Bck: bck}
+			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: bck}
 			xreg.DoAbort(flt, errors.New("ec-disabled"))
 		}
 		return

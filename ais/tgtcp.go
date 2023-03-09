@@ -253,7 +253,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case apc.WhatNodeStatsAndStatus:
 		var rebSnap *cluster.Snap
-		if entry := xreg.GetLatest(xact.Flt{Kind: apc.ActRebalance}); entry != nil {
+		if entry := xreg.GetLatest(xreg.Flt{Kind: apc.ActRebalance}); entry != nil {
 			if xctn := entry.Get(); xctn != nil {
 				rebSnap = xctn.Snap()
 			}
@@ -622,12 +622,12 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 			}
 			present = true
 			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				flt := xact.Flt{Kind: apc.ActPutCopies, Bck: nbck}
+				flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: nbck}
 				xreg.DoAbort(flt, errors.New("apply-bmd"))
 				// NOTE: apc.ActMakeNCopies takes care of itself
 			}
 			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				flt := xact.Flt{Kind: apc.ActECEncode, Bck: nbck}
+				flt := xreg.Flt{Kind: apc.ActECEncode, Bck: nbck}
 				xreg.DoAbort(flt, errors.New("apply-bmd"))
 			}
 			return true

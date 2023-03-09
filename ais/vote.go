@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -62,7 +61,7 @@ type (
 )
 
 func voteInProgress() (xele cluster.Xact) {
-	if e := xreg.GetRunning(xact.Flt{Kind: apc.ActElection}); e != nil {
+	if e := xreg.GetRunning(xreg.Flt{Kind: apc.ActElection}); e != nil {
 		xele = e.Get()
 	}
 	return

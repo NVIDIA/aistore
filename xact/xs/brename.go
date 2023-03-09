@@ -106,7 +106,7 @@ func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *cluster.Bck) (x
 func (r *bckRename) Run(wg *sync.WaitGroup) {
 	var (
 		total time.Duration
-		flt   = xact.Flt{ID: r.rebID, Kind: apc.ActRebalance}
+		flt   = xreg.Flt{ID: r.rebID, Kind: apc.ActRebalance}
 		sleep = cos.ProbingFrequency(bmvAvgWait)
 	)
 	glog.Infoln(r.Name())
