@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, NewType
 import requests
 
+from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk.const import (
     ACT_COPY_BCK,
@@ -43,6 +44,9 @@ from aistore.sdk.types import (
     BucketEntry,
     BucketList,
     Namespace,
+    CopyBckMsg,
+    TransformBckMsg,
+    TCBckMsg,
 )
 from aistore.sdk.utils import validate_directory, get_file_size
 
@@ -226,7 +230,7 @@ class Bucket:
     def copy(
         self,
         to_bck_name: str,
-        prefix: str = "",
+        prepend: str = "",
         dry_run: bool = False,
         force: bool = False,
         to_provider: str = PROVIDER_AIS,
@@ -236,8 +240,7 @@ class Bucket:
 
         Args:
             to_bck_name (str): Name of the destination bucket
-            prefix (str, optional): If set, only the objects starting with
-                provider prefix will be copied
+            prepend (str, optional): Value to prepend to the name of copied objects
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
             force (bool, optional): Override existing destination bucket
@@ -254,7 +257,7 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {"prepend": prefix, "dry_run": dry_run, "force": force}
+        value = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force).as_dict()
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = f"{ to_provider }/@#/{ to_bck_name }/"
         return self.make_request(
@@ -412,6 +415,7 @@ class Bucket:
         self,
         etl_name: str,
         to_bck: str,
+        timeout: str = DEFAULT_ETL_TIMEOUT,
         prepend: str = "",
         ext: Dict[str, str] = None,
         force: bool = False,
@@ -424,7 +428,8 @@ class Bucket:
         Args:
             etl_name (str): name of etl to be used for transformations
             to_bck (str): destination bucket for transformations
-            prepend (str, optional): prepend to be added to resulting transformed objects
+            timeout (str, optional): Timeout of the ETL job (e.g. 5m for 5 minutes)
+            prepend (str, optional): Value to prepend to the name of resulting transformed objects
             ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
                 (i.e. {"jpg": "txt"})
             dry_run (bool, optional): determines if the copy should actually happen or not
@@ -433,15 +438,11 @@ class Bucket:
         Returns:
             Job ID (as str) that can be used to check the status of the operation
         """
-        value = {
-            "id": etl_name,
-            "prepend": prepend,
-            "force": force,
-            "dry_run": dry_run,
-        }
-
-        if ext:
-            value["ext"] = ext
+        value = TCBckMsg(
+            ext=ext,
+            transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
+            copy_msg=CopyBckMsg(prepend=prepend, force=force, dry_run=dry_run),
+        ).as_dict()
 
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"

@@ -15,7 +15,13 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_range import ObjectRange
-from aistore.sdk.types import TCMultiObj, BucketModel, CopyBckMsg, TransformBckMsg
+from aistore.sdk.types import (
+    TCMultiObj,
+    BucketModel,
+    CopyBckMsg,
+    TransformBckMsg,
+    TCBckMsg,
+)
 
 
 # pylint: disable=unused-variable
@@ -143,10 +149,10 @@ class ObjectGroup:
 
         """
         to_bck = BucketModel(name=to_bck, provider=to_provider)
-        copy_msg = CopyBckMsg(prefix="", dry_run=False, force=False)
+        copy_msg = CopyBckMsg(prepend="", dry_run=False, force=False)
         value = TCMultiObj(
             to_bck=to_bck,
-            copy_msg=copy_msg,
+            tc_msg=TCBckMsg(copy_msg=copy_msg),
             object_selection=self._determine_value(),
             continue_on_err=continue_on_error,
         ).as_dict()
@@ -189,7 +195,7 @@ class ObjectGroup:
         transform_msg = TransformBckMsg(etl_name=etl_name, timeout=timeout)
         value = TCMultiObj(
             to_bck=to_bck,
-            transform_msg=transform_msg,
+            tc_msg=TCBckMsg(transform_msg=transform_msg),
             object_selection=self._determine_value(),
             continue_on_err=continue_on_error,
         ).as_dict()

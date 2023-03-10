@@ -369,12 +369,12 @@ class CopyBckMsg(BaseModel):
     API message structure for copying a bucket
     """
 
-    prefix: str
+    prepend: str
     dry_run: bool
     force: bool
 
     def as_dict(self):
-        return {"prepend": self.prefix, "dry_run": self.dry_run, "force": self.force}
+        return {"prepend": self.prepend, "dry_run": self.dry_run, "force": self.force}
 
 
 class TransformBckMsg(BaseModel):
@@ -389,25 +389,44 @@ class TransformBckMsg(BaseModel):
         return {"id": self.etl_name, "request_timeout": self.timeout}
 
 
+class TCBckMsg(BaseModel):
+    """
+    API message structure for transforming or copying between buckets.
+    Can be used on its own for an entire bucket or encapsulated in TCMultiObj to apply only to a selection of objects
+    """
+
+    ext: Dict[str, str] = None
+    copy_msg: CopyBckMsg = None
+    transform_msg: TransformBckMsg = None
+
+    def as_dict(self):
+        dict_rep = {}
+        if self.ext:
+            dict_rep["ext"] = self.ext
+        if self.copy_msg:
+            for key, val in self.copy_msg.as_dict().items():
+                dict_rep[key] = val
+        if self.transform_msg:
+            for key, val in self.transform_msg.as_dict().items():
+                dict_rep[key] = val
+        return dict_rep
+
+
 class TCMultiObj(BaseModel):
     """
     API message structure for transforming or copying multiple objects between buckets
     """
 
     to_bck: BucketModel
-    copy_msg: CopyBckMsg = None
-    transform_msg: TransformBckMsg = None
+    tc_msg: TCBckMsg = None
     continue_on_err: bool
     object_selection: dict
 
     def as_dict(self):
-        json_dict = self.object_selection
-        if self.copy_msg:
-            for key, val in self.copy_msg.as_dict().items():
-                json_dict[key] = val
-        if self.transform_msg:
-            for key, val in self.transform_msg.as_dict().items():
-                json_dict[key] = val
-        json_dict["tobck"] = self.to_bck.as_dict()
-        json_dict["coer"] = self.continue_on_err
-        return json_dict
+        dict_rep = self.object_selection
+        if self.tc_msg:
+            for key, val in self.tc_msg.as_dict().items():
+                dict_rep[key] = val
+        dict_rep["tobck"] = self.to_bck.as_dict()
+        dict_rep["coer"] = self.continue_on_err
+        return dict_rep

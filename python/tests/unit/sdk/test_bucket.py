@@ -3,6 +3,7 @@ from unittest import mock
 from unittest.mock import Mock, call, patch
 
 from aistore.sdk.bucket import Bucket, Header
+from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_iterator import ObjectIterator
 
 from aistore.sdk.const import (
@@ -32,6 +33,9 @@ from aistore.sdk.types import (
     BucketList,
     BucketEntry,
     Namespace,
+    TCBckMsg,
+    TransformBckMsg,
+    CopyBckMsg,
 )
 
 BCK_NAME = "bucket_name"
@@ -182,7 +186,7 @@ class TestBucket(unittest.TestCase):
             "new_bck",
             PROVIDER_AMAZON,
             action_value,
-            prefix=prefix,
+            prepend=prefix,
             dry_run=dry_run,
             force=force,
         )
@@ -358,15 +362,14 @@ class TestBucket(unittest.TestCase):
         etl_name = "etl-name"
         prefix = "prefix-"
         ext = {"jpg": "txt"}
+        timeout = "4m"
         force = True
         dry_run = True
-        action_value = {
-            "id": etl_name,
-            "prepend": prefix,
-            "force": force,
-            "dry_run": dry_run,
-            "ext": ext,
-        }
+        action_value = TCBckMsg(
+            ext=ext,
+            transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
+            copy_msg=CopyBckMsg(prepend=prefix, force=force, dry_run=dry_run),
+        ).as_dict()
 
         self._transform_exec_assert(
             etl_name,
@@ -375,11 +378,18 @@ class TestBucket(unittest.TestCase):
             ext=ext,
             force=force,
             dry_run=dry_run,
+            timeout=timeout,
         )
 
     def test_transform_default_params(self):
         etl_name = "etl-name"
-        action_value = {"id": etl_name, "prepend": "", "force": False, "dry_run": False}
+        action_value = {
+            "id": etl_name,
+            "prepend": "",
+            "force": False,
+            "dry_run": False,
+            "request_timeout": DEFAULT_ETL_TIMEOUT,
+        }
 
         self._transform_exec_assert(etl_name, action_value)
 
