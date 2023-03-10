@@ -285,8 +285,8 @@ const (
 	showStatsArgument     = "[NODE_ID]"
 
 	// List command
-	listAnyCommandArgument = "[PROVIDER://][BUCKET_NAME]"
-	listObjCommandArgument = "[PROVIDER://]BUCKET_NAME"
+	listAnyCommandArgument = "PROVIDER:[//BUCKET_NAME]"
+	listObjCommandArgument = "PROVIDER://BUCKET_NAME"
 
 	// Auth
 	userLoginArgument = "USER_NAME"
@@ -539,8 +539,34 @@ var (
 	}
 
 	// multi-object
-	listFlag     = cli.StringFlag{Name: "list", Usage: "comma-separated list of object names, e.g.: 'o1,o2,o3'"}
-	templateFlag = cli.StringFlag{Name: "template", Usage: "template to select (matching) objects, e.g.: 'shard-{900..999}.tar'"}
+	listFlag = cli.StringFlag{
+		Name: "list",
+		Usage: "comma-separated list of object names, e.g.:\n" +
+			indent4 + "\t--list 'o1,o2,o3'\n" +
+			indent4 + "\t--list \"abc/1.tar, abc/1.cls, abc/1.jpeg\"",
+	}
+	listFileFlag = cli.StringFlag{
+		Name: "list",
+		Usage: "comma-separated list of file names, e.g.:\n" +
+			indent4 + "\t--list 'f1,f2,f3'\n" +
+			indent4 + "\t--list \"/home/abc/1.tar, /home/abc/1.cls, /home/abc/1.jpeg\"",
+	}
+	templateFlag = cli.StringFlag{
+		Name: "template",
+		Usage: "template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:\n" +
+			indent4 + "\t--template 'dir/subdir/'\n" +
+			indent4 + "\t--template 'shard-{1000..9999}.tar'\n" +
+			indent4 + "\t--template \"prefix-{0010..0013..2}-gap-{1..2}-suffix\"\n" +
+			indent4 + "\t--template \"prefix-{0010..9999..2}-suffix\"",
+	}
+	templateFileFlag = cli.StringFlag{
+		Name: "template",
+		Usage: "template to match file names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:\n" +
+			indent4 + "\t--template '/home/dir/subdir/'\n" +
+			indent4 + "\t--template 'shard-{1000..9999}.tar'\n" +
+			indent4 + "\t--template \"prefix-{0010..0013..2}-gap-{1..2}-suffix\"\n" +
+			indent4 + "\t--template \"prefix-{0010..9999..2}-suffix\"",
+	}
 
 	listrangeFlags = []cli.Flag{
 		listFlag,
@@ -682,8 +708,8 @@ var (
 	copyPrependFlag = cli.StringFlag{
 		Name: "prepend",
 		Usage: "prefix to prepend to every copied object name, e.g.:\n" +
-			indent4 + "--prepend=abc\t- prefix all copied object names with \"abc\"\n" +
-			indent4 + "--prepend=abc/\t- copy into virtual directory abc (notice trailing filepath separator)",
+			indent4 + "\t--prepend=abc\t- prefix all copied object names with \"abc\"\n" +
+			indent4 + "\t--prepend=abc/\t- copy objects into a virtual directory \"abc\" (note trailing filepath separator)",
 	}
 
 	// ETL

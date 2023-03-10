@@ -57,8 +57,8 @@ var (
 			yesFlag,
 			computeCksumFlag,
 			sourceBckFlag,
-			templateFlag,
-			listFlag,
+			templateFileFlag,
+			listFileFlag,
 			includeSrcBucketNameFlag,
 			allowAppendToExistingFlag,
 			continueOnErrorFlag,
@@ -95,9 +95,9 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name: commandGet,
-		Usage: "get an object, an archived file, or a range of bytes from the above; write the content locally\n" +
-			indent4 + "with destination options including: filename, directory, STDOUT ('-');\n" +
-			indent4 + "use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).",
+		Usage: "get an object, an archived file, or a range of bytes from the above, and in addition:\n" +
+			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-');\n" +
+			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,
@@ -106,10 +106,12 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name: commandPut,
-		Usage: "PUT or APPEND one file or one directory, or multiple files and directories\n" +
-			indent4 + "with optional filename pattern (wildcard) matching and optional client-side computed checksum;\n" +
-			indent4 + "check numerous supported options including progress bar; when writing from STDIN use Ctrl-D to terminate;\n" +
-			indent4 + "APPEND to an existing (tar, tar.gz, zip, msgp) archive.",
+		Usage: "PUT or APPEND one file or one directory, or multiple files and/or directories.\n" +
+			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select sources;\n" +
+			indent4 + "\t- request '--compute-checksum' to facilitate end-to-end protection;\n" +
+			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
+			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
+			indent4 + "\t- use '--archpath' to APPEND to an existing tar-formatted object.",
 		ArgsUsage:    putObjectArgument,
 		Flags:        objectCmdsFlags[commandPut],
 		Action:       putHandler,
@@ -328,7 +330,7 @@ func putHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if flagIsSet(c, progressFlag) || flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
+	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
 		// --progress steals STDOUT while multi-object produces scary looking errors w/ no cluster
 		if _, err = api.GetClusterMap(apiBP); err != nil {
 			return
@@ -338,10 +340,10 @@ func putHandler(c *cli.Context) (err error) {
 	case flagIsSet(c, createArchFlag): // 1. archive
 		return createArchMultiObjHandler(c)
 	case c.NArg() == 1: // 2. BUCKET/[OBJECT_NAME] --list|--template
-		if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+		if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
+			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))
 		}
-		if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+		if !flagIsSet(c, listFileFlag) && !flagIsSet(c, templateFileFlag) {
 			return missingArgSimple("FILE|DIRECTORY|DIRECTORY/PATTERN")
 		}
 		// destination
@@ -352,12 +354,12 @@ func putHandler(c *cli.Context) (err error) {
 		}
 
 		// putList | putRange
-		if flagIsSet(c, listFlag) {
-			listObjs := parseStrFlag(c, listFlag)
+		if flagIsSet(c, listFileFlag) {
+			listObjs := parseStrFlag(c, listFileFlag)
 			fnames := splitCsv(listObjs)
 			return putList(c, fnames, bck, objName /* subdir name */)
 		}
-		tmplObjs := parseStrFlag(c, templateFlag)
+		tmplObjs := parseStrFlag(c, templateFileFlag)
 		pt, err := cos.NewParsedTemplate(tmplObjs)
 		if err != nil {
 			return err

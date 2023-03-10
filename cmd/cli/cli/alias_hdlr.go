@@ -115,11 +115,7 @@ func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...st
 		cmd.Name = newName[0]
 	}
 	if !silentAlias {
-		if len(newName) > 0 && newName[0] == cmdShowStats { // FIXME: s/silentAlias/how-to-show/
-			cmd.Usage += fmt.Sprintf("\n\nALIAS for:\n%s%s", indent1, aliasFor)
-		} else {
-			cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
-		}
+		cmd.Usage = fmt.Sprintf("(alias for %q) %s", aliasFor, cmd.Usage)
 	}
 
 	// help is already added to the original, remove from cmd and all cmds
