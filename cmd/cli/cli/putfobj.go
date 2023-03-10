@@ -358,20 +358,12 @@ func appendToArch(c *cli.Context, bck cmn.Bck, objName, path, archPath string, f
 }
 
 // PUT fixed-sized chunks using `api.AppendObject` and `api.FlushObject`
-func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string) error {
+func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string, chunkSize int64) error {
 	var (
 		handle string
 		cksum  = cos.NewCksumHash(cksumType)
 		pi     = newProgIndicator(objName)
 	)
-	chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
-	if err != nil {
-		return err
-	}
-	if chunkSize == 0 {
-		chunkSize = defaultChunkSize
-	}
-
 	if flagIsSet(c, progressFlag) {
 		pi.start()
 	}

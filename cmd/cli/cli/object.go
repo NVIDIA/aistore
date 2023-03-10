@@ -144,6 +144,17 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		if objName == "" {
 			return fmt.Errorf("STDIN source: destination object name (in %s) is required", c.Command.ArgsUsage)
 		}
+		chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
+		if err != nil {
+			return err
+		}
+		if flagIsSet(c, chunkSizeFlag) && chunkSize == 0 {
+			return fmt.Errorf("chunk size (in %s) cannot be zero (%s recommended)",
+				qflprn(chunkSizeFlag), teb.FmtSize(defaultChunkSize, cos.UnitsIEC, 0))
+		}
+		if chunkSize == 0 {
+			chunkSize = defaultChunkSize
+		}
 		if flagIsSet(c, verboseFlag) {
 			actionWarn(c, "To terminate input, press Ctrl-D two or more times")
 		}
@@ -152,7 +163,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 			return err
 		}
 		cksumType := cksum.Type() // can be none
-		if err := putAppendChunks(c, bck, objName, os.Stdin, cksumType); err != nil {
+		if err := putAppendChunks(c, bck, objName, os.Stdin, cksumType, chunkSize); err != nil {
 			return err
 		}
 		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bname, objName))
