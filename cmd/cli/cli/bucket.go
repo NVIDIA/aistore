@@ -153,9 +153,9 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	}
 
 	msg := &apc.CopyBckMsg{
-		Prefix: parseStrFlag(c, copyPrefixFlag),
-		DryRun: flagIsSet(c, copyDryRunFlag),
-		Force:  flagIsSet(c, forceFlag),
+		Prepend: parseStrFlag(c, copyPrependFlag),
+		DryRun:  flagIsSet(c, copyDryRunFlag),
+		Force:   flagIsSet(c, forceFlag),
 	}
 	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {

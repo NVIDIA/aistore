@@ -138,7 +138,7 @@ class TestObjectGroup(unittest.TestCase):
     def _copy_test_helper(self, starting_val, obj_group):
         to_bck = "to-bucket"
         expected_val = starting_val
-        expected_val["prefix"] = ""
+        expected_val["prepend"] = ""
         expected_val["dry_run"] = False
         expected_val["force"] = False
         expected_val["tobck"] = BucketModel(name=to_bck).as_dict()

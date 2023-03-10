@@ -368,6 +368,9 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 	if err != nil {
 		return err
 	}
+	if chunkSize == 0 {
+		chunkSize = defaultChunkSize
+	}
 
 	if flagIsSet(c, progressFlag) {
 		pi.start()

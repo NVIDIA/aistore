@@ -28,6 +28,7 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Put content from STDIN](#put-content-from-stdin)
   - [Put directory](#put-directory)
   - [Put directory with prefix added to destination object names](#put-directory-with-prefix-added-to-destination-object-names)
+  - [PUT multiple files into virtual directory, track progress](#put-multiple-files-into-virtual-directory-track-progress)
   - [Put pattern-matching files from directory](#put-pattern-matching-files-from-directory)
   - [Put a range of files](#put-a-range-of-files)
   - [Put a list of files](#put-a-list-of-files)
@@ -405,7 +406,7 @@ PUT 10 objects to "ais://vvv"
 The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to object names.
 
 ```console
-$ ais object put "/home/user/bck" ais://mybucket/subdir/
+$ ais put /home/user/bck ais://mybucket/subdir/
 
 # PUT /home/user/bck/img1.tar => ais://mybucket/subdir/img1.tar
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdir/img2.zip
@@ -422,6 +423,35 @@ $ ais object put "/home/user/bck" ais://mybucket/subdir
 # PUT /home/user/bck/img2.tar => ais://mybucket/subdirimg2.zip
 # PUT /home/user/bck/extra/img1.tar => ais://mybucket/subdirextra/img1.tar
 # PUT /home/user/bck/extra/img3.zip => ais://mybucket/subdirextra/img3.zip
+```
+
+## Put multiple files into virtual directory, track progress
+
+Same as above with source files in double quotes below, and with progress bar:
+
+> List of sources that you want to upload can (a) comprize any number (and any mix) of comma-separated files and/or directories, and (b) must be embedded in double or single quotes.
+
+```console
+$ ais put "README.md, LICENSE" ais://aaa/my-virt-dir/ --progress -y
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 1       1.05KiB
+.md              1       11.24KiB
+TOTAL            2       12.29KiB
+Uploaded files:                   2/2 [==============================================================] 100 %
+Total size:     12.29 KiB / 12.29 KiB [==============================================================] 100 %
+PUT 2 objects (non-recursive) to "ais://aaa"
+```
+
+> Note '/' suffix in `my-virt-dir/` above - without trailing filepath separator we would simply get a longer filename (filenames) at the root of the destination bucket.
+
+We can now list them in the bucket `ais://aaa` the way we would list a directory:
+
+```console
+$ ais ls ais://aaa --prefix my-virt-dir
+NAME                     SIZE
+my-virt-dir/LICENSE      1.05KiB
+my-virt-dir/README.md    11.24KiB
 ```
 
 ## Put pattern-matching files from directory

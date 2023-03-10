@@ -1056,7 +1056,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 		newHandle = combineAppendHandle(aoi.t.si.ID(), filePath, aoi.hi.partialCksum)
 	case apc.FlushOp:
 		if filePath == "" {
-			err = errors.New("handle not provided")
+			err = fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", aoi.hi)
 			errCode = http.StatusBadRequest
 			return
 		}

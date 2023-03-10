@@ -14,9 +14,9 @@ import (
 // copy & (offline) transform bucket to bucket
 type (
 	CopyBckMsg struct {
-		Prefix string `json:"prefix"`  // Prefix added to each resulting object.
-		DryRun bool   `json:"dry_run"` // Don't perform any PUT
-		Force  bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
+		Prepend string `json:"prepend"` // destination naming, as in: dest-obj-name = Prepend + source-obj-name
+		DryRun  bool   `json:"dry_run"` // Don't perform any PUT
+		Force   bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
 	}
 	Transform struct {
 		Name    string       `json:"id,omitempty"`
@@ -55,8 +55,8 @@ func (msg *TCBMsg) ToName(name string) string {
 			}
 		}
 	}
-	if msg.Prefix != "" {
-		name = msg.Prefix + name
+	if msg.Prepend != "" {
+		name = msg.Prepend + name
 	}
 	return name
 }

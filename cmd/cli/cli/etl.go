@@ -37,6 +37,7 @@ var (
 			commTypeFlag,
 			funcTransformFlag,
 			chunkSizeFlag,
+			unitsFlag,
 			waitPodReadyTimeoutFlag,
 			etlNameFlag,
 		},
@@ -51,7 +52,7 @@ var (
 		},
 		cmdBucket: {
 			etlExtFlag,
-			copyPrefixFlag,
+			copyPrependFlag,
 			copyDryRunFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
@@ -484,8 +485,8 @@ func etlBucketHandler(c *cli.Context) error {
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 		CopyBckMsg: apc.CopyBckMsg{
-			Prefix: parseStrFlag(c, copyPrefixFlag),
-			DryRun: flagIsSet(c, copyDryRunFlag),
+			Prepend: parseStrFlag(c, copyPrependFlag),
+			DryRun:  flagIsSet(c, copyDryRunFlag),
 		},
 	}
 

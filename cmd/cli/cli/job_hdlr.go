@@ -54,16 +54,17 @@ var (
 	}
 	startSpecialFlags = map[string][]cli.Flag{
 		cmdDownload: {
-			timeoutFlag,
+			dloadTimeoutFlag,
 			descJobFlag,
 			limitConnectionsFlag,
 			objectsListFlag,
-			downloadProgressFlag,
+			dloadProgressFlag,
 			progressFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
 			limitBytesPerHourFlag,
 			syncFlag,
+			unitsFlag,
 		},
 		cmdDsort: {
 			dsortSpecFlag,
@@ -73,7 +74,7 @@ var (
 			dryRunFlag,
 		),
 		cmdLRU: {
-			listBucketsFlag,
+			lruBucketsFlag,
 			forceFlag,
 		},
 	}
@@ -334,9 +335,9 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 func startDownloadHandler(c *cli.Context) error {
 	var (
 		description      = parseStrFlag(c, descJobFlag)
-		timeout          = parseStrFlag(c, timeoutFlag)
+		timeout          = parseStrFlag(c, dloadTimeoutFlag)
 		objectsListPath  = parseStrFlag(c, objectsListFlag)
-		progressInterval = parseStrFlag(c, downloadProgressFlag)
+		progressInterval = parseStrFlag(c, dloadProgressFlag)
 		id               string
 	)
 	if c.NArg() == 0 {
@@ -668,7 +669,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 }
 
 func startLRUHandler(c *cli.Context) (err error) {
-	if !flagIsSet(c, listBucketsFlag) {
+	if !flagIsSet(c, lruBucketsFlag) {
 		return startXactionHandler(c)
 	}
 
@@ -680,7 +681,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	s := parseStrFlag(c, listBucketsFlag)
+	s := parseStrFlag(c, lruBucketsFlag)
 	bckArgs := splitCsv(s)
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {

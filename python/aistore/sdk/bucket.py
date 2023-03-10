@@ -254,7 +254,7 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = {"prefix": prefix, "dry_run": dry_run, "force": force}
+        value = {"prepend": prefix, "dry_run": dry_run, "force": force}
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = f"{ to_provider }/@#/{ to_bck_name }/"
         return self.make_request(
@@ -412,7 +412,7 @@ class Bucket:
         self,
         etl_name: str,
         to_bck: str,
-        prefix: str = "",
+        prepend: str = "",
         ext: Dict[str, str] = None,
         force: bool = False,
         dry_run: bool = False,
@@ -424,7 +424,7 @@ class Bucket:
         Args:
             etl_name (str): name of etl to be used for transformations
             to_bck (str): destination bucket for transformations
-            prefix (str, optional): prefix to be added to resulting transformed objects
+            prepend (str, optional): prepend to be added to resulting transformed objects
             ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
                 (i.e. {"jpg": "txt"})
             dry_run (bool, optional): determines if the copy should actually happen or not
@@ -435,7 +435,7 @@ class Bucket:
         """
         value = {
             "id": etl_name,
-            "prefix": prefix,
+            "prepend": prepend,
             "force": force,
             "dry_run": dry_run,
         }

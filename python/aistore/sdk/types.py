@@ -374,7 +374,7 @@ class CopyBckMsg(BaseModel):
     force: bool
 
     def as_dict(self):
-        return {"prefix": self.prefix, "dry_run": self.dry_run, "force": self.force}
+        return {"prepend": self.prefix, "dry_run": self.dry_run, "force": self.force}
 
 
 class TransformBckMsg(BaseModel):

@@ -2485,7 +2485,7 @@ func TestCopyBucketSimple(t *testing.T) {
 	}
 
 	t.Run("Stats", func(t *testing.T) { f(); testCopyBucketStats(t, srcBck, m) })
-	t.Run("Prefix", func(t *testing.T) { f(); testCopyBucketPrefix(t, srcBck, m) })
+	t.Run("Prepend", func(t *testing.T) { f(); testCopyBucketPrepend(t, srcBck, m) })
 	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m) })
 	t.Run("DryRun", func(t *testing.T) { f(); testCopyBucketDryRun(t, srcBck, m) })
 }
@@ -2517,14 +2517,14 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		expectedBytesCnt, locBytes, outBytes, inBytes)
 }
 
-func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
-		cpyPrefix = "cpyprefix" + trand.String(5)
+		cpyPrefix = "cpy/virt" + trand.String(5) + "/"
 		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
 
-	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: cpyPrefix})
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prepend: cpyPrefix})
 	tassert.CheckFatal(t, err)
 	defer tools.DestroyBucket(t, proxyURL, dstBck)
 

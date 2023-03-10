@@ -169,14 +169,14 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(headers, mock_header.headers)
 
     def test_copy_default_params(self):
-        action_value = {"prefix": "", "dry_run": False, "force": False}
+        action_value = {"prepend": "", "dry_run": False, "force": False}
         self._copy_exec_assert("new_bck", PROVIDER_AIS, action_value)
 
     def test_copy(self):
         prefix = "prefix-"
         dry_run = True
         force = True
-        action_value = {"prefix": prefix, "dry_run": dry_run, "force": force}
+        action_value = {"prepend": prefix, "dry_run": dry_run, "force": force}
 
         self._copy_exec_assert(
             "new_bck",
@@ -362,19 +362,24 @@ class TestBucket(unittest.TestCase):
         dry_run = True
         action_value = {
             "id": etl_name,
-            "prefix": prefix,
+            "prepend": prefix,
             "force": force,
             "dry_run": dry_run,
             "ext": ext,
         }
 
         self._transform_exec_assert(
-            etl_name, action_value, prefix=prefix, ext=ext, force=force, dry_run=dry_run
+            etl_name,
+            action_value,
+            prepend=prefix,
+            ext=ext,
+            force=force,
+            dry_run=dry_run,
         )
 
     def test_transform_default_params(self):
         etl_name = "etl-name"
-        action_value = {"id": etl_name, "prefix": "", "force": False, "dry_run": False}
+        action_value = {"id": etl_name, "prepend": "", "force": False, "dry_run": False}
 
         self._transform_exec_assert(etl_name, action_value)
 

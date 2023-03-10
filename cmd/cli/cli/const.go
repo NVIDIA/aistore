@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
@@ -195,6 +196,10 @@ const (
 const NilValue = "none"
 
 const (
+	defaultChunkSize = 10 * cos.MiB
+)
+
+const (
 	timeUnits    = `ns, us (or µs), ms, s (default), m, h`
 	sizeUnitsIEC = `(IEC units, e.g.: b or B, KB or KiB, MiB or mb, g or GB or GiB, etc.)`
 )
@@ -367,8 +372,9 @@ var (
 	// longRunFlags
 	//
 	refreshFlag = DurationFlag{
-		Name:  "refresh",
-		Usage: "interval for continuous monitoring (valid time units: " + timeUnits + ")",
+		Name: "refresh",
+		Usage: "interval for continuous monitoring;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	countFlag = cli.IntFlag{
 		Name:  "count",
@@ -456,7 +462,6 @@ var (
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}
 	paritySlicesFlag = cli.IntFlag{Name: "parity-slices,parity,p", Usage: "number of parity slices", Required: true}
-	listBucketsFlag  = cli.StringFlag{Name: "buckets", Usage: "comma-separated list of bucket names, e.g.: 'b1,b2,b3'"}
 	compactPropFlag  = cli.BoolFlag{Name: "compact,c", Usage: "display properties grouped in human-readable mode"}
 
 	nameOnlyFlag = cli.BoolFlag{
@@ -475,13 +480,15 @@ var (
 	// Download
 	descJobFlag = cli.StringFlag{Name: "description,desc", Usage: "job description"}
 
-	timeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
-		Name:  "timeout",
-		Usage: "timeout (valid time units: " + timeUnits + ")",
+	dloadTimeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
+		Name: "download-timeout",
+		Usage: "time limit on downloading a single file;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 	}
-	downloadProgressFlag = cli.StringFlag{ // TODO ditto
-		Name:  "progress-interval",
-		Usage: "download progress interval for continuous monitoring (valid time units: " + timeUnits + ")",
+	dloadProgressFlag = cli.StringFlag{ // TODO ditto
+		Name: "progress-interval",
+		Usage: "download progress interval for continuous monitoring;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 		Value: dload.DownloadProgressInterval.String(),
 	}
 
@@ -490,8 +497,9 @@ var (
 		Usage: "max number of connections each target can make concurrently (up to num mountpaths)",
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
-		Name:  "limit-bph",
-		Usage: "max downloaded size per target per hour " + sizeUnitsIEC,
+		Name: "limit-bph",
+		Usage: "maximum download speed, as in: maximum size per target (node) per hour (see '--units'), e.g.:\n" +
+			indent4 + "\t--limit-bph 1MiB or, same, --limit-bph 1048576",
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",
@@ -516,16 +524,18 @@ var (
 
 	// waiting
 	waitPodReadyTimeoutFlag = DurationFlag{
-		Name:  "wait-timeout",
-		Usage: "ais target waiting time for POD to become ready (valid time units: " + timeUnits + ")",
+		Name: "timeout",
+		Usage: "ais target waiting time for POD to become ready;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitJobXactFinishedFlag = DurationFlag{
-		Name:  waitPodReadyTimeoutFlag.Name, // same as above
-		Usage: "maximum time to wait for job to finish; if omitted wait forever or Ctrl-C; valid time units: " + timeUnits,
+		Name: "timeout",
+		Usage: "maximum time to wait for a job to finish; if omitted wait forever or Ctrl-C;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitFlag = cli.BoolFlag{
 		Name:  "wait",
-		Usage: "wait for an asynchronous operation to finish (optionally, use '--wait-timeout' to limit the waiting time)",
+		Usage: "wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)",
 	}
 
 	// multi-object
@@ -602,7 +612,7 @@ var (
 
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size " + sizeUnitsIEC, Value: "10MiB",
+		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (see '--units'; e.g.: 1MiB or, same, 1048576)",
 	}
 
 	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
@@ -625,7 +635,7 @@ var (
 
 	// archive
 	listArchFlag   = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
-	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "archive a list or a range of objects"}
+	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "archive a given list ('--list') or range ('--template') of objects"}
 
 	archpathOptionalFlag = cli.StringFlag{
 		Name:  "archpath",
@@ -658,8 +668,9 @@ var (
 	tokenFileFlag = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file"}
 	passwordFlag  = cli.StringFlag{Name: "password,p", Value: "", Usage: "user password"}
 	expireFlag    = DurationFlag{
-		Name:  "expire,e",
-		Usage: "token expiration time, '0' - for never-expiring token (valid time units: " + timeUnits + ")",
+		Name: "expire,e",
+		Usage: "token expiration time, '0' - for never-expiring token;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 		Value: 24 * time.Hour,
 	}
 
@@ -668,9 +679,11 @@ var (
 		Name:  "dry-run",
 		Usage: "show total size of new objects without really creating them",
 	}
-	copyPrefixFlag = cli.StringFlag{
-		Name:  "prefix",
-		Usage: "string to prepend every copied object's name, e.g.: '--prefix=abc/'",
+	copyPrependFlag = cli.StringFlag{
+		Name: "prepend",
+		Usage: "prefix to prepend to every copied object name, e.g.:\n" +
+			indent4 + "--prepend=abc\t- prefix all copied object names with \"abc\"\n" +
+			indent4 + "--prepend=abc/\t- copy into virtual directory abc (notice trailing filepath separator)",
 	}
 
 	// ETL
@@ -681,8 +694,9 @@ var (
 		Required: true,
 	}
 	etlBucketRequestTimeout = DurationFlag{
-		Name:  "request-timeout",
-		Usage: "timeout for transforming a single object (valid time units: " + timeUnits + ")",
+		Name: "etl-timeout",
+		Usage: "timeout transforming a single object;\n" +
+			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	fromFileFlag = cli.StringFlag{
 		Name:     "from-file",
@@ -756,5 +770,13 @@ var (
 	mountpathFlag = cli.BoolFlag{
 		Name:  "mountpath",
 		Usage: "show target mountpaths with underlying disks and used/available capacities",
+	}
+
+	// LRU
+	lruBucketsFlag = cli.StringFlag{
+		Name: "buckets",
+		Usage: "comma-separated list of bucket names, e.g.:\n" +
+			indent1 + "\t\t\t--buckets 'ais://b1,ais://b2,ais://b3'\n" +
+			indent1 + "\t\t\t--buckets \"gs://b1, s3://b2\"",
 	}
 )
