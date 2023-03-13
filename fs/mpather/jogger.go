@@ -1,13 +1,15 @@
 // Package mpather provides per-mountpath concepts.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mpather
 
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
@@ -41,13 +43,14 @@ const (
 )
 
 type (
-	JoggerGroupOpts struct {
+	JgroupOpts struct {
 		T                     cluster.Target
 		onFinish              func()
 		VisitObj              func(lom *cluster.LOM, buf []byte) error
 		VisitCT               func(ct *cluster.CT, buf []byte) error
 		Slab                  *memsys.Slab
 		Bck                   cmn.Bck
+		Prefix                string
 		CTs                   []string
 		DoLoad                LoadType // if specified, lom.Load(lock type)
 		Parallel              int      // num parallel calls
@@ -56,10 +59,10 @@ type (
 		Throttle              bool     // true: pace itself depending on disk utilization
 	}
 
-	// JoggerGroup runs jogger per mountpath which walk the entire bucket and
+	// Jgroup runs jogger per mountpath which walk the entire bucket and
 	// call callback on each of the encountered object. When jogger encounters
 	// error it stops and informs other joggers about the error (so they stop too).
-	JoggerGroup struct {
+	Jgroup struct {
 		wg          *errgroup.Group
 		joggers     map[string]*jogger
 		finishedCh  cos.StopCh // when all joggers are done
@@ -71,8 +74,10 @@ type (
 	jogger struct {
 		ctx       context.Context
 		syncGroup *joggerSyncGroup
-		opts      *JoggerGroupOpts
+		opts      *JgroupOpts
 		mi        *fs.Mountpath
+		bdir      string // mi.MakePath(bck)
+		objPrefix string // fully-qualified prefix, as in: join(bdir, opts.Prefix)
 		config    *cmn.Config
 		stopCh    cos.StopCh
 		bufs      [][]byte
@@ -86,70 +91,70 @@ type (
 	}
 )
 
-func NewJoggerGroup(opts *JoggerGroupOpts, selectedMpaths ...string) *JoggerGroup {
+func NewJoggerGroup(opts *JgroupOpts, selectedMpaths ...string) *Jgroup {
 	var (
-		joggers                       map[string]*jogger
-		availablePaths, disabledPaths = fs.Get()
-		wg, ctx                       = errgroup.WithContext(context.Background())
-		l                             = len(selectedMpaths)
+		joggers             map[string]*jogger
+		available, disabled = fs.Get()
+		wg, ctx             = errgroup.WithContext(context.Background())
+		l                   = len(selectedMpaths)
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
 	if l == 0 {
-		joggers = make(map[string]*jogger, len(availablePaths))
+		joggers = make(map[string]*jogger, len(available))
 	} else {
 		joggers = make(map[string]*jogger, l)
 	}
-	for _, mi := range availablePaths {
+	for _, mi := range available {
 		if l == 0 {
 			joggers[mi.Path] = newJogger(ctx, opts, mi)
 			continue
 		}
 		for _, mpath := range selectedMpaths {
-			if mi, ok := availablePaths[mpath]; ok {
+			if mi, ok := available[mpath]; ok {
 				joggers[mi.Path] = newJogger(ctx, opts, mi)
 			}
 		}
 	}
-	jg := &JoggerGroup{wg: wg, joggers: joggers}
+	jg := &Jgroup{wg: wg, joggers: joggers}
 	jg.finishedCh.Init()
 	opts.onFinish = jg.markFinished
 
 	// NOTE: this jogger group is a no-op
 	if len(joggers) == 0 {
 		glog.Errorf("%v: avail=%v, disabled=%v, selected=%v",
-			cmn.ErrNoMountpaths, availablePaths, disabledPaths, selectedMpaths)
+			cmn.ErrNoMountpaths, available, disabled, selectedMpaths)
 		jg.finishedCh.Close()
 	}
 	return jg
 }
 
-func (jg *JoggerGroup) Num() int { return len(jg.joggers) }
+func (jg *Jgroup) Num() int { return len(jg.joggers) }
 
-func (jg *JoggerGroup) Run() {
+func (jg *Jgroup) Run() {
 	for _, jogger := range jg.joggers {
 		jg.wg.Go(jogger.run)
 	}
 }
 
-func (jg *JoggerGroup) Stop() error {
+func (jg *Jgroup) Stop() error {
 	for _, jogger := range jg.joggers {
 		jogger.abort()
 	}
 	return jg.wg.Wait()
 }
 
-func (jg *JoggerGroup) ListenFinished() <-chan struct{} {
+func (jg *Jgroup) ListenFinished() <-chan struct{} {
 	return jg.finishedCh.Listen()
 }
 
-func (jg *JoggerGroup) markFinished() {
+func (jg *Jgroup) markFinished() {
 	if n := jg.finishedCnt.Inc(); n == uint32(len(jg.joggers)) {
 		jg.finishedCh.Close()
 	}
 }
 
-func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.Mountpath) (j *jogger) {
+func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath) (j *jogger) {
 	var syncGroup *joggerSyncGroup
 	if opts.Parallel > 1 {
 		var (
@@ -173,6 +178,10 @@ func newJogger(ctx context.Context, opts *JoggerGroupOpts, mi *fs.Mountpath) (j 
 		mi:        mi,
 		config:    cmn.GCO.Get(),
 		syncGroup: syncGroup,
+	}
+	if opts.Prefix != "" {
+		j.bdir = mi.MakePathCT(&j.opts.Bck, fs.ObjectType) // this mountpath's bucket dir that contains objects
+		j.objPrefix = filepath.Join(j.bdir, opts.Prefix)
 	}
 	j.stopCh.Init()
 	return
@@ -246,8 +255,15 @@ func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 }
 
 func (j *jogger) jog(fqn string, de fs.DirEntry) error {
-	var bufPosition int
-
+	if j.objPrefix != "" && strings.HasPrefix(fqn, j.bdir) {
+		if de.IsDir() {
+			if !cmn.DirHasOrIsPrefix(fqn, j.objPrefix) {
+				return filepath.SkipDir
+			}
+		} else if !strings.HasPrefix(fqn, j.objPrefix) {
+			return nil
+		}
+	}
 	if de.IsDir() {
 		return nil
 	}
@@ -256,6 +272,7 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 		return err
 	}
 
+	var bufPosition int
 	if j.syncGroup == nil {
 		if err := j.visitFQN(fqn, j.getBuf(0)); err != nil {
 			return err

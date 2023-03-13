@@ -284,11 +284,10 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
 
-	// tradeoff: encoding small object might require just 1 additional target available
-	// we will start xaction to satisfy this request
+	// compromise: encoding a small object requires fewer targets
 	if required := lom.Bprops().EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
-		glog.Warningf("not enough targets to encode the object; actual: %v, required: %v", targetCnt, required)
-		return cmn.ErrNotEnoughTargets
+		return fmt.Errorf("%v: %d targets required to erasure code %s (have %d)",
+			cmn.ErrNotEnoughTargets, required, lom, targetCnt)
 	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
@@ -327,8 +326,8 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	targetCnt := mgr.targetCnt.Load()
 	// NOTE: Restore replica object is done with GFN, safe to always abort.
 	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
-		glog.Warningf("not enough targets to restore the object; actual: %v, required: %v", targetCnt, required)
-		return cmn.ErrNotEnoughTargets
+		return fmt.Errorf("%v: %d targets required to EC-restore %s (have %d)",
+			cmn.ErrNotEnoughTargets, required, lom, targetCnt)
 	}
 
 	debug.Assert(lom.Mountpath() != nil && lom.Mountpath().Path != "")

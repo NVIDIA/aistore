@@ -100,11 +100,11 @@ func (res *Res) RunResilver(args Args) {
 
 	// jogger group
 	var (
-		jg        *mpather.JoggerGroup
+		jg        *mpather.Jgroup
 		slab, err = res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		jctx      = &joggerCtx{xres: xres, t: res.t}
 
-		opts = &mpather.JoggerGroupOpts{
+		opts = &mpather.JgroupOpts{
 			T:                     res.t,
 			CTs:                   []string{fs.ObjectType, fs.ECSliceType},
 			VisitObj:              jctx.visitObj,
@@ -141,7 +141,7 @@ func (res *Res) RunResilver(args Args) {
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func (res *Res) wait(jg *mpather.JoggerGroup, xres *xs.Resilver) (err error) {
+func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 	tsi := res.t.Snode()
 	for {
 		select {

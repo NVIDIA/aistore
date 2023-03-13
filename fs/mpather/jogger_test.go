@@ -1,6 +1,6 @@
 // Package mpather provides per-mountpath concepts.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mpather_test
 
@@ -38,7 +38,7 @@ func TestJoggerGroup(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -84,7 +84,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 	slab, err := mmsa.GetSlab(memsys.PageSize)
 	tassert.CheckFatal(t, err)
 
-	baseJgOpts := &mpather.JoggerGroupOpts{
+	baseJgOpts := &mpather.JgroupOpts{
 		T:    out.T,
 		Bck:  out.Bck,
 		CTs:  []string{fs.ObjectType},
@@ -139,7 +139,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -178,7 +178,7 @@ func TestJoggerGroupError(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -226,7 +226,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		counters[failOnMpath.Path] = atomic.NewInt32(0)
 	}
 
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -280,7 +280,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	for _, ct := range cts {
 		counters[ct] = atomic.NewInt32(0)
 	}
-	jg := mpather.NewJoggerGroup(&mpather.JoggerGroupOpts{
+	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: cts,

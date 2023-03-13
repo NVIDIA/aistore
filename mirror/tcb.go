@@ -144,10 +144,11 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 	if e.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
-	mpopts := &mpather.JoggerGroupOpts{
+	mpopts := &mpather.JgroupOpts{
 		T:        e.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
+		Prefix:   e.args.Msg.Prefix,
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,

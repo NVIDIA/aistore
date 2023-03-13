@@ -136,7 +136,7 @@ var (
 	}
 	bucketObjCmdEvict = cli.Command{
 		Name:         commandEvict,
-		Usage:        "evict all (default) or selected objects from remote bucket (to select, use --list or --template)",
+		Usage:        "evict all (default) or selected objects from remote bucket (to select, use '--list' or '--template')",
 		ArgsUsage:    optionalObjectsArgument,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
@@ -144,7 +144,7 @@ var (
 	}
 	bucketCmdCopy = cli.Command{
 		Name:         commandCopy,
-		Usage:        "copy bucket",
+		Usage:        "copy entire bucket or selected objects (to select, use '--list' or '--template')",
 		ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument,
 		Flags:        bucketCmdsFlags[commandCopy],
 		Action:       copyBucketHandler,

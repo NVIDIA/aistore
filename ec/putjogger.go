@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -221,10 +222,11 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	if !req.IsCopy {
 		reqTargets += ecConf.DataSlices
 	}
-	targetCnt := len(c.parent.smap.Get().Tmap)
+	smap := c.parent.smap.Get()
+	targetCnt := smap.CountActiveTs()
 	if targetCnt < reqTargets {
-		return fmt.Errorf("object %s requires %d targets to encode, only %d found",
-			lom, reqTargets, targetCnt)
+		return fmt.Errorf("%v: given EC config (d=%d, p=%d), %d targets required to encode %s (have %d, %s)",
+			cmn.ErrNotEnoughTargets, ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
 	}
 
 	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)

@@ -1757,8 +1757,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 // ============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg,
-	s string, origBody ...[]byte) (forf bool) {
+func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, s string, origBody ...[]byte) (forf bool) {
 	var (
 		body []byte
 		smap = p.owner.smap.get()
@@ -1813,10 +1812,11 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
+	pname := smap.Primary.StringEx()
 	if msg != nil {
-		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, smap.Primary.StringEx())
+		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
 	} else {
-		glog.Infof("%s: forwarding %q to the primary %s", p, s, smap.Primary.StringEx())
+		glog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true

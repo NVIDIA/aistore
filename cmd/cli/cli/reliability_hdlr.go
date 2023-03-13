@@ -25,8 +25,9 @@ var (
 
 	storageSvcCmds = []cli.Command{
 		{
-			Name:         commandMirror,
-			Usage:        "configure and start mirroring a bucket",
+			Name: commandMirror,
+			Usage: "configure and trigger n-way mirror (replication) of a given bucket, where\n" +
+				indent4 + "\tthe number of copies must be greater equal 1 and less or equal number of target mountpaths",
 			ArgsUsage:    bucketArgument,
 			Flags:        storageSvcCmdsFlags[commandMirror],
 			Action:       setCopiesHandler,

@@ -61,7 +61,7 @@ func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 
 func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
 	r = &xactLLC{}
-	mpopts := &mpather.JoggerGroupOpts{
+	mpopts := &mpather.JgroupOpts{
 		T:        t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: func(*cluster.LOM, []byte) error { return nil },

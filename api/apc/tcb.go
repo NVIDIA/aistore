@@ -15,6 +15,7 @@ import (
 type (
 	CopyBckMsg struct {
 		Prepend string `json:"prepend"` // destination naming, as in: dest-obj-name = Prepend + source-obj-name
+		Prefix  string `json:"prefix"`  // prefix to select matching _source_ objects or virtual directories
 		DryRun  bool   `json:"dry_run"` // Don't perform any PUT
 		Force   bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
 	}

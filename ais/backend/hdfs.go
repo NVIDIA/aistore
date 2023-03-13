@@ -135,10 +135,10 @@ func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.
 		objName := strings.TrimPrefix(strings.TrimPrefix(path, bck.Props.Extra.HDFS.RefDirectory), string(filepath.Separator))
 		if msg.Prefix != "" {
 			if fi.IsDir() {
-				if !cmn.DirNameContainsPrefix(objName, msg.Prefix) {
+				if !cmn.DirHasOrIsPrefix(objName, msg.Prefix) {
 					return skipDir(fi)
 				}
-			} else if !cmn.ObjNameContainsPrefix(objName, msg.Prefix) {
+			} else if !cmn.ObjHasPrefix(objName, msg.Prefix) {
 				return skipDir(fi)
 			}
 		}

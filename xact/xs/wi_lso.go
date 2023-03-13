@@ -67,7 +67,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 		return nil
 	}
 
-	if !cmn.DirNameContainsPrefix(ct.ObjectName(), wi.msg.Prefix) {
+	if !cmn.DirHasOrIsPrefix(ct.ObjectName(), wi.msg.Prefix) {
 		return filepath.SkipDir
 	}
 
@@ -83,7 +83,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 
 // Returns true if LOM is to be included in the result set.
 func (wi *walkInfo) match(lom *cluster.LOM) bool {
-	if !cmn.ObjNameContainsPrefix(lom.ObjName, wi.msg.Prefix) {
+	if !cmn.ObjHasPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
 	if wi.msg.ContinuationToken != "" && cmn.TokenGreaterEQ(wi.msg.ContinuationToken, lom.ObjName) {

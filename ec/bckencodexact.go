@@ -92,7 +92,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		return
 	}
 
-	opts := &mpather.JoggerGroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:        r.t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,

@@ -666,9 +666,23 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActMsg) (xid string, err err
 	if err != nil {
 		return
 	}
-	if ecConf.DataSlices == nil || *ecConf.DataSlices < 1 ||
-		ecConf.ParitySlices == nil || *ecConf.ParitySlices < 1 {
-		err = errors.New("invalid number of slices")
+	if ecConf.DataSlices == nil {
+		err = errors.New("missing number of data slices")
+		return
+	}
+	if ecConf.ParitySlices == nil {
+		err = errors.New("missing number of parity slices")
+		return
+	}
+	dataSlices, paritySlices := *ecConf.DataSlices, *ecConf.ParitySlices
+	if dataSlices < 1 || paritySlices < 1 {
+		err = fmt.Errorf("invalid EC configuration (d=%d, p=%d), bucket %s", dataSlices, paritySlices, bck)
+		return
+	}
+	smap := p.owner.smap.get()
+	if numTs := smap.CountActiveTs(); dataSlices+paritySlices+1 > numTs {
+		err = fmt.Errorf("%v: EC config (d=%d, p=%d) for bucket %s requires %d targets, have %d (%s)",
+			cmn.ErrNotEnoughTargets, dataSlices, paritySlices, bck, dataSlices+paritySlices+1, numTs, smap)
 		return
 	}
 	if !nlp.TryLock(cmn.Timeout.CplaneOperation() / 2) {
