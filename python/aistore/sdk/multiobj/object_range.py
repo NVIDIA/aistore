@@ -1,11 +1,15 @@
 #
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
+from typing import Iterator
+
+from aistore.sdk import utils
 from aistore.sdk.errors import InvalidObjectRangeIndex
+from aistore.sdk.multiobj.object_collection import ObjectCollection
 
 
 # pylint: disable=unused-variable,too-few-public-methods
-class ObjectRange:
+class ObjectRange(ObjectCollection):
     """
     Class representing a range of object names
 
@@ -23,8 +27,8 @@ class ObjectRange:
     def __init__(
         self,
         prefix: str,
-        min_index: int,
-        max_index: int,
+        min_index: int = None,
+        max_index: int = None,
         pad_width: int = 0,
         step: int = 1,
         suffix: str = "",
@@ -33,8 +37,13 @@ class ObjectRange:
         self._step = step
         self._suffix = suffix
         self._validate_indices(min_index, max_index, pad_width)
-        self._min_index = str(min_index).zfill(pad_width)
-        self._max_index = str(max_index).zfill(pad_width)
+        min_set = isinstance(min_index, int)
+        if self._suffix and not min_set:
+            raise ValueError("Suffix cannot be used without indices")
+        self._min_index = str(min_index).zfill(pad_width) if min_set else None
+        self._max_index = (
+            str(max_index).zfill(pad_width) if isinstance(min_index, int) else None
+        )
 
     @staticmethod
     def _validate_indices(min_index, max_index, pad_width):
@@ -45,6 +54,14 @@ class ObjectRange:
         Raises:
             InvalidObjectRangeIndex: If the indices passed to the range are not valid
         """
+        indices = [isinstance(min_index, int), isinstance(max_index, int)]
+        if not all(indices):
+            if any(indices):
+                raise InvalidObjectRangeIndex(
+                    "Provide both min_index and max_index or neither"
+                )
+            return
+
         if min_index >= max_index:
             raise InvalidObjectRangeIndex(f"{min_index} must be less than {max_index}")
         if pad_width != 0 and len(str(min_index)) > pad_width:
@@ -52,5 +69,20 @@ class ObjectRange:
                 f"Number of digits in min index {min_index} must not be greater than pad width {pad_width}"
             )
 
+    def _indices_set(self) -> bool:
+        if all([self._min_index, self._max_index]):
+            return True
+        return False
+
     def __str__(self) -> str:
-        return f"{self._prefix}{{{self._min_index}..{self._max_index}..{self._step}}}{self._suffix}"
+        if self._indices_set():
+            return f"{self._prefix}{{{self._min_index}..{self._max_index}..{self._step}}}{self._suffix}"
+        return f"{self._prefix}"
+
+    def __iter__(self) -> Iterator[str]:
+        if not self._indices_set():
+            raise RuntimeError("Cannot iterate over object range with no indices")
+        return utils.expand_braces(str(self))
+
+    def get_value(self):
+        return {"template": str(self)}

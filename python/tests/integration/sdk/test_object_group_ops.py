@@ -8,7 +8,6 @@ import pytest
 
 from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.errors import InvalidBckProvider
-from aistore.sdk.object_range import ObjectRange
 from tests.integration import REMOTE_SET, TEST_TIMEOUT
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import random_string
@@ -18,84 +17,32 @@ from tests.utils import random_string
 class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
-        self.obj_suffix = "-suffix"
-        self.obj_template = self.obj_prefix + "{1..8..2}" + self.obj_suffix
+        self.obj_names = self._create_objects(10, suffix="-suffix")
 
-        # Range selecting objects 1,3,5,7
-        self.obj_range = ObjectRange(
-            self.obj_prefix, 1, 8, step=2, suffix=self.obj_suffix
-        )
-        self.obj_names = self._create_objects(10, suffix=self.obj_suffix)
-
-    def test_delete_list(self):
+    def test_delete(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self._delete_test_helper(object_group, [self.obj_names[0]])
-
-    def test_delete_range(self):
-        object_group = self.bucket.objects(obj_range=self.obj_range)
-        self._delete_group_helper(object_group)
-
-    def test_delete_template(self):
-        object_group = self.bucket.objects(obj_template=self.obj_template)
-        self._delete_group_helper(object_group)
-
-    def _delete_group_helper(self, object_group):
-        expected_object_names = [
-            self.obj_prefix + str(x) + self.obj_suffix for x in range(0, 9, 2)
-        ]
-        expected_object_names.append(self.obj_prefix + "9" + self.obj_suffix)
-        self._delete_test_helper(object_group, expected_object_names)
-
-    def _delete_test_helper(self, object_group, expected_object_names):
         job_id = object_group.delete()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
         existing_objects = self.bucket.list_objects(
             prefix=self.obj_prefix
         ).get_entries()
-        self.assertEqual(len(expected_object_names), len(existing_objects))
-
-        existing_object_names = [x.name for x in existing_objects]
-        self.assertEqual(expected_object_names, existing_object_names)
+        self.assertEqual(1, len(existing_objects))
+        self.assertEqual(self.obj_names[0], existing_objects[0].name)
 
     @unittest.skipIf(
         not REMOTE_SET,
         "Remote bucket is not set",
     )
-    def test_evict_list(self):
+    def test_evict(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self._evict_test_helper(object_group, [0], 10)
-
-    @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
-    )
-    def test_evict_range(self):
-        object_group = self.bucket.objects(obj_range=self.obj_range)
-        cached = list(range(0, 11, 2))
-        cached.append(9)
-        self._evict_test_helper(object_group, cached, 10)
-
-    @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
-    )
-    def test_evict_template(self):
-        object_group = self.bucket.objects(obj_template=self.obj_template)
-        cached = list(range(0, 11, 2))
-        cached.append(9)
-        self._evict_test_helper(object_group, cached, 10)
-
-    def _evict_test_helper(self, object_group, expected_cached, expected_total):
         job_id = object_group.evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._verify_cached_objects(expected_total, expected_cached)
+        self._verify_cached_objects(10, [0])
 
     def test_evict_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).evict()
-        with self.assertRaises(InvalidBckProvider):
-            local_bucket.objects(obj_range=self.obj_range).evict()
 
     @unittest.skipIf(
         not REMOTE_SET,
@@ -103,39 +50,16 @@ class TestObjectGroupOps(RemoteEnabledTest):
     )
     def test_prefetch_list(self):
         obj_group = self.bucket.objects(obj_names=self.obj_names[1:])
-        self._prefetch_test_helper(obj_group, range(1, 10), 10)
-
-    @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
-    )
-    def test_prefetch_range(self):
-        obj_group = self.bucket.objects(obj_range=self.obj_range)
-        cached = list(range(1, 8, 2))
-        self._prefetch_test_helper(obj_group, cached, 10)
-
-    @unittest.skipIf(
-        not REMOTE_SET,
-        "Remote bucket is not set",
-    )
-    def test_prefetch_template(self):
-        obj_group = self.bucket.objects(obj_template=self.obj_template)
-        cached = list(range(1, 8, 2))
-        self._prefetch_test_helper(obj_group, cached, 10)
-
-    def _prefetch_test_helper(self, object_group, expected_cached, expected_total):
         self._evict_all_objects()
         # Fetch back a specific object group and verify cache status
-        job_id = object_group.prefetch()
+        job_id = obj_group.prefetch()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._verify_cached_objects(expected_total, expected_cached)
+        self._verify_cached_objects(10, range(1, 10))
 
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
         with self.assertRaises(InvalidBckProvider):
             local_bucket.objects(obj_names=[]).prefetch()
-        with self.assertRaises(InvalidBckProvider):
-            local_bucket.objects(obj_range=self.obj_range).prefetch()
 
     def test_copy_objects(self):
         to_bck_name = "destination-bucket"
@@ -143,10 +67,15 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
 
-        copy_job = self.bucket.objects(obj_range=self.obj_range).copy(to_bck.name)
+        new_prefix = "prefix-"
+        copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
+            to_bck.name, prepend=new_prefix
+        )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
-        self.assertEqual(4, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
+        self.assertEqual(
+            4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
+        )
 
     @pytest.mark.etl
     def test_transform_objects(self):
@@ -162,11 +91,12 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         to_bck_name = "destination-bucket"
         to_bck = self._create_bucket(to_bck_name)
+        new_prefix = "prefix-"
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
         self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
 
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
-            to_bck.name, etl_name=etl_name
+            to_bck.name, etl_name=etl_name, prepend=new_prefix
         )
         self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
@@ -176,7 +106,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
             for name in self.obj_names
         ]
         to_obj_values = [
-            to_bck.object(name).get().read_all() for name in self.obj_names
+            to_bck.object(new_prefix + name).get().read_all() for name in self.obj_names
         ]
         self.assertEqual(to_obj_values, from_obj_hashes)
 
@@ -198,9 +128,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
             props="name,cached", prefix=self.obj_prefix
         ).get_entries()
         self.assertEqual(expected_object_count, len(objects))
-        cached_names = {
-            self.obj_prefix + str(x) + self.obj_suffix for x in cached_range
-        }
+        cached_names = {self.obj_prefix + str(x) + "-suffix" for x in cached_range}
         cached_objs = []
         evicted_objs = []
         for obj in objects:

@@ -35,9 +35,8 @@ from aistore.sdk.errors import (
     ErrBckAlreadyExists,
     ErrBckNotFound,
 )
-from aistore.sdk.object_range import ObjectRange
+from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.object_group import ObjectGroup
 from aistore.sdk.object import Object
 from aistore.sdk.types import (
     ActionMsg,

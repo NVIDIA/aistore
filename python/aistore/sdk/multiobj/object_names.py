@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+#
+from typing import List, Iterator, Dict
+
+from aistore.sdk.multiobj.object_collection import ObjectCollection
+
+
+class ObjectNames(ObjectCollection):
+    """
+    A collection of object names, provided as a list of strings
+    """
+
+    def __init__(self, names: List[str]):
+        self._names = names
+
+    def get_value(self) -> Dict[str, any]:
+        return {"objnames": self._names}
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._names)

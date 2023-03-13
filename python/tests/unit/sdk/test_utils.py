@@ -123,3 +123,32 @@ class TestUtils(unittest.TestCase):
         mock_file = Mock()
         mock_file.stat.return_value = Mock(st_size=test_case[0])
         self.assertEqual(test_case[1], utils.get_file_size(mock_file))
+
+    @test_cases(
+        ("prefix-", ["prefix-"], None),
+        ("prefix-{}", ["prefix-{}"], None),
+        ("prefix-{0..1..2..3}", ["prefix-{0..1..2..3}"], None),
+        ("prefix-{0..1..2}}", [], ValueError),
+        (
+            "prefix-{1..6..2}-gap-{12..14..1}-suffix",
+            [
+                "prefix-1-gap-12-suffix",
+                "prefix-1-gap-13-suffix",
+                "prefix-1-gap-14-suffix",
+                "prefix-3-gap-12-suffix",
+                "prefix-3-gap-13-suffix",
+                "prefix-3-gap-14-suffix",
+                "prefix-5-gap-12-suffix",
+                "prefix-5-gap-13-suffix",
+                "prefix-5-gap-14-suffix",
+            ],
+            None,
+        ),
+    )
+    def test_expand_braces(self, test_case):
+        input_str, output, expected_error = test_case
+        if not expected_error:
+            self.assertEqual(output, list(utils.expand_braces(input_str)))
+        else:
+            with self.assertRaises(expected_error):
+                utils.expand_braces(input_str)

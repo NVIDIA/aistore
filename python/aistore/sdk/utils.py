@@ -2,7 +2,9 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
+from typing import Iterator
 
+import braceexpand
 import humanize
 import pydantic.tools
 import requests
@@ -121,3 +123,18 @@ def get_file_size(file: Path) -> str:
     return (
         humanize.naturalsize(file.stat().st_size) if file.stat().st_size else "unknown"
     )
+
+
+def expand_braces(template: str) -> Iterator[str]:
+    """
+    Given a string template, apply bash-style brace expansion to return a list of strings
+    Args:
+        template: Valid brace expansion input, e.g. prefix-{0..10..2}-gap-{11..15}-suffix
+
+    Returns:
+        Iterator of brace expansion output
+
+    """
+    # pylint: disable = fixme
+    # TODO Build custom expansion to validate consistent with cmn/cos/template.go TemplateRange
+    return braceexpand.braceexpand(template)
