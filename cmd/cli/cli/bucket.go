@@ -154,6 +154,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 
 	msg := &apc.CopyBckMsg{
 		Prepend: parseStrFlag(c, copyPrependFlag),
+		Prefix:  parseStrFlag(c, copyObjPrefixFlag),
 		DryRun:  flagIsSet(c, copyDryRunFlag),
 		Force:   flagIsSet(c, forceFlag),
 	}

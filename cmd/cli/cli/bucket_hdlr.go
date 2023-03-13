@@ -47,6 +47,7 @@ var (
 		commandCopy: {
 			copyDryRunFlag,
 			copyPrependFlag,
+			copyObjPrefixFlag,
 			templateFlag,
 			listFlag,
 			continueOnErrorFlag,

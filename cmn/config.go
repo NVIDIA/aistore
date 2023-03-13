@@ -1129,7 +1129,7 @@ func (c *ECConf) ValidateAsProps(arg ...any) (err error) {
 	if required <= targetCnt {
 		return
 	}
-	err = fmt.Errorf("%v: EC configuration (%d data and %d parity slices) requires at least %d (have %d)",
+	err = fmt.Errorf("%v: EC configuration (d=%d, p=%d slices) requires at least %d targets (have %d)",
 		ErrNotEnoughTargets, c.DataSlices, c.ParitySlices, required, targetCnt)
 	if c.ParitySlices > targetCnt {
 		return

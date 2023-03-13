@@ -357,15 +357,21 @@ var (
 	listObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
 		Usage: "list objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "--prefix a/b/c/\t- list virtual directory a/b/c\n" +
-			indent4 + "--prefix abc\t- list objects that have names starting with abc",
+			indent4 + "\t--prefix a/b/c - list virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with c",
 	}
 	getObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
 		Usage: "get objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "--prefix a/b/c/\t- get virtual directory a/b/c\n" +
-			indent4 + "--prefix abc\t- get objects that have names starting with abc\n" +
-			indent4 + "--prefix \"\"\t- get entire bucket",
+			indent4 + "\t--prefix a/b/c - get virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with c;\n" +
+			indent4 + "\t--prefix \"\" - get entire bucket",
+	}
+	copyObjPrefixFlag = cli.StringFlag{
+		Name: "prefix",
+		Usage: "copy objects that start with the specified prefix, e.g.:\n" +
+			indent4 + "\t--prefix a/b/c - copy virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with c",
 	}
 
 	//
