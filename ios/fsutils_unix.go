@@ -25,12 +25,14 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 
 // - on-disk size is sometimes referred to as "apparent size"
 // - NOTE: ignore exec error: `du` exits with status 1 if encounters non-regular file that can't be accessed (perm)
-func DirSizeOnDisk(dirPath string) (uint64, error) {
+// - `withNonDirPrefix` is allowed to match nothing
+func DirSizeOnDisk(dirPath string, withNonDirPrefix bool) (uint64, error) {
 	cmd := exec.Command("du", "-bc", dirPath, "2>/dev/null")
 	out, err := cmd.Output()
 	if len(out) == 0 {
 		return 0, fmt.Errorf("failed to 'du %s': %v", dirPath, err)
 	}
+	err = nil                                 // (see above)
 	lines := strings.Split(string(out), "\n") // NOTE: on Windows, use instead strings.FieldsFunc('\n' and '\r')
 	if n := len(lines); n > 8 {
 		lines = lines[n-8:]
@@ -42,7 +44,10 @@ func DirSizeOnDisk(dirPath string) (uint64, error) {
 			return uint64(_parseTotal(s)), nil
 		}
 	}
-	return 0, fmt.Errorf("failed to parse 'du %s': ...%v", dirPath, lines)
+	if !withNonDirPrefix {
+		err = fmt.Errorf("failed to parse 'du %s': ...%v", dirPath, lines)
+	}
+	return 0, err
 }
 
 func _parseTotal(s string) (size int64) {

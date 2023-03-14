@@ -95,26 +95,21 @@ var (
 			bckSummaryFlag,
 		},
 
-		cmdSummary: {
-			listObjCachedFlag,
-			allObjsOrBcksFlag,
-			unitsFlag,
-			validateSummaryFlag,
-			verboseFlag,
-		},
 		cmdLRU: {
 			enableFlag,
 			disableFlag,
 		},
 	}
 
+	bckSummaryFlags = append(storageSummFlags, validateSummaryFlag)
+
 	// commands
 	bucketsObjectsCmdList = cli.Command{
 		Name:         commandList,
 		Usage:        "list buckets, objects in buckets, and files in objects formatted as archives",
-		Action:       listAnyHandler,
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
+		Action:       listAnyHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 
@@ -122,7 +117,7 @@ var (
 		Name:         cmdSummary,
 		Usage:        "generate and display bucket summary",
 		ArgsUsage:    optionalBucketArgument,
-		Flags:        bucketCmdsFlags[cmdSummary],
+		Flags:        bckSummaryFlags,
 		Action:       summaryBucketHandler,
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
@@ -314,39 +309,7 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 		return showMisplacedAndMore(c)
 	}
 
-	return showBucketSummary(c)
-}
-
-// (compare with `listBckTableWithSummary`)
-func showBucketSummary(c *cli.Context) error {
-	queryBcks, err := parseQueryBckURI(c, c.Args().First())
-	if err != nil {
-		return err
-	}
-	units, errU := parseUnitsFlag(c, unitsFlag)
-	if errU != nil {
-		return err
-	}
-	setLongRunParams(c)
-	summaries, err := bsummSlow(queryBcks, flagIsSet(c, listObjCachedFlag), flagIsSet(c, allObjsOrBcksFlag))
-	if err != nil {
-		return err
-	}
-
-	altMap := teb.FuncMapUnits(units)
-	opts := teb.Opts{AltMap: altMap}
-	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
-}
-
-// "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
-func bsummSlow(qbck cmn.QueryBcks, cachedObjs, allBuckets bool) (summaries cmn.AllBsummResults, err error) {
-	fDetails := func() (err error) {
-		msg := &cmn.BsummCtrlMsg{ObjCached: cachedObjs, BckPresent: !allBuckets, Fast: false}
-		summaries, err = api.GetBucketSummary(apiBP, qbck, msg)
-		return
-	}
-	err = cmn.WaitForFunc(fDetails, longClientTimeout)
-	return
+	return summaryStorageHandler(c)
 }
 
 func showMisplacedAndMore(c *cli.Context) (err error) {
@@ -604,6 +567,14 @@ func listAnyHandler(c *cli.Context) error {
 		fltPresence := apc.FltPresent
 		if flagIsSet(c, allObjsOrBcksFlag) {
 			fltPresence = apc.FltExists
+		}
+		if flagIsSet(c, bckSummaryFlag) {
+			if !apc.IsFltPresent(fltPresence) && bck.Provider != apc.AIS {
+				warn := fmt.Sprintf("cannot _summarize_ non-present buckets and/or remote content - ignoring flag %s "+
+					"(hint: use 'ais show storage')\n", qflprn(allObjsOrBcksFlag))
+				actionWarn(c, warn)
+				fltPresence = apc.FltPresent
+			}
 		}
 		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)
 	default: // list objects

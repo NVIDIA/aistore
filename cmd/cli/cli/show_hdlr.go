@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -44,21 +43,6 @@ type (
 
 var (
 	showCmdsFlags = map[string][]cli.Flag{
-		commandStorage: append(
-			longRunFlags,
-			jsonFlag,
-		),
-		cmdShowDisk: append(
-			longRunFlags,
-			noHeaderFlag,
-			unitsFlag,
-			regexColsFlag,
-			diskSummaryFlag,
-		),
-		cmdMountpath: append(
-			longRunFlags,
-			jsonFlag,
-		),
 		commandJob: append(
 			longRunFlags,
 			jsonFlag,
@@ -131,7 +115,7 @@ var (
 		Name:      commandStorage,
 		Usage:     "show storage usage and utilization, disks and mountpaths",
 		ArgsUsage: optionalTargetIDArgument,
-		Flags:     showCmdsFlags[commandStorage],
+		Flags:     storageFlags[commandStorage],
 		Action:    showStorageHandler,
 		Subcommands: []cli.Command{
 			showCmdDisk,
@@ -224,117 +208,7 @@ var (
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,
 	}
-
-	// `show storage` sub-commands
-	showCmdDisk = cli.Command{
-		Name:         cmdShowDisk,
-		Usage:        "show disk utilization and read/write statistics",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[cmdShowDisk],
-		Action:       showDisksHandler,
-		BashComplete: suggestTargetNodes,
-	}
-	showCmdStgSummary = cli.Command{
-		Name:         cmdSummary,
-		Usage:        "show bucket sizes and %% of used capacity on a per-bucket basis",
-		ArgsUsage:    listAnyCommandArgument,
-		Flags:        storageCmdFlags[cmdSummary],
-		Action:       showBucketSummary,
-		BashComplete: bucketCompletions(bcmplop{}),
-	}
-	showCmdMpath = cli.Command{
-		Name:         cmdMountpath,
-		Usage:        "show target mountpaths",
-		ArgsUsage:    optionalTargetIDArgument,
-		Flags:        showCmdsFlags[cmdMountpath],
-		Action:       showMpathHandler,
-		BashComplete: suggestTargetNodes,
-	}
 )
-
-func showStorageHandler(c *cli.Context) (err error) {
-	return showDiskStats(c, "") // all targets, all disks
-}
-
-func showDisksHandler(c *cli.Context) error {
-	sid, sname, err := argNode(c)
-	if err != nil {
-		return err
-	}
-	if getNodeType(c, sid) == apc.Proxy {
-		return fmt.Errorf("%s is a proxy (AIS gateways do not store user data and do not have any data drives)", sname)
-	}
-	return showDiskStats(c, sid)
-}
-
-func showDiskStats(c *cli.Context, tid string) error {
-	var (
-		regex       *regexp.Regexp
-		regexStr    = parseStrFlag(c, regexColsFlag)
-		hideHeader  = flagIsSet(c, noHeaderFlag)
-		summary     = flagIsSet(c, diskSummaryFlag)
-		units, errU = parseUnitsFlag(c, unitsFlag)
-	)
-	if errU != nil {
-		return errU
-	}
-	setLongRunParams(c, 72)
-
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return err
-	}
-	numTs := smap.CountActiveTs()
-	if numTs == 0 {
-		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
-	}
-	if tid != "" {
-		numTs = 1
-	}
-	if regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
-		if err != nil {
-			return err
-		}
-	}
-
-	dsh, err := getDiskStats(smap, tid)
-	if err != nil {
-		return err
-	}
-
-	// collapse target disks
-	if summary {
-		collapseDisks(dsh, numTs)
-	}
-
-	// tally up
-	// TODO: check config.TestingEnv (or DeploymentType == apc.DeploymentDev)
-	var totalsHdr string
-	if l := int64(len(dsh)); l > 1 {
-		totalsHdr = cluTotal
-		if tid != "" {
-			totalsHdr = tgtTotal
-		}
-		tally := teb.DiskStatsHelper{TargetID: totalsHdr}
-		for _, ds := range dsh {
-			tally.Stat.RBps += ds.Stat.RBps
-			tally.Stat.Ravg += ds.Stat.Ravg
-			tally.Stat.WBps += ds.Stat.WBps
-			tally.Stat.Wavg += ds.Stat.Wavg
-			tally.Stat.Util += ds.Stat.Util
-		}
-		tally.Stat.Ravg = cos.DivRound(tally.Stat.Ravg, l)
-		tally.Stat.Wavg = cos.DivRound(tally.Stat.Wavg, l)
-		tally.Stat.Util = cos.DivRound(tally.Stat.Util, l)
-
-		dsh = append(dsh, tally)
-	}
-
-	table := teb.NewDiskTab(dsh, smap, regex, units, totalsHdr)
-	out := table.Template(hideHeader)
-	return teb.Print(dsh, out)
-}
 
 // args [NAME] [JOB_ID] [NODE_ID] [BUCKET] may:
 // - be omitted, in part or in total, and may
@@ -977,73 +851,4 @@ func showRemoteAISHandler(c *cli.Context) error {
 		}
 	}
 	return nil
-}
-
-func showMpathHandler(c *cli.Context) error {
-	var (
-		smap            *cluster.Smap
-		nodes           []*cluster.Snode
-		sid, sname, err = argNode(c)
-	)
-	if err != nil {
-		return err
-	}
-	setLongRunParams(c)
-
-	smap, tstatusMap, _, err := fillNodeStatusMap(c, apc.Target)
-	if err != nil {
-		return err
-	}
-
-	if sid != "" {
-		node := smap.GetNode(sid)
-		if node.IsProxy() {
-			return fmt.Errorf("node %s is a proxy (expecting target)", sname)
-		}
-		nodes = []*cluster.Snode{node}
-	} else {
-		nodes = make(cluster.Nodes, 0, len(smap.Tmap))
-		for _, tgt := range smap.Tmap {
-			nodes = append(nodes, tgt)
-		}
-	}
-
-	var (
-		l    = len(nodes)
-		wg   = cos.NewLimitedWaitGroup(sys.NumCPU(), l)
-		mpCh = make(chan *targetMpath, l)
-		erCh = make(chan error, l)
-	)
-	for _, node := range nodes {
-		wg.Add(1)
-		go func(node *cluster.Snode) {
-			mpl, err := api.GetMountpaths(apiBP, node)
-			if err != nil {
-				erCh <- err
-			} else {
-				mpCh <- &targetMpath{
-					DaemonID:  node.ID(),
-					Mpl:       mpl,
-					TargetCDF: tstatusMap[node.ID()].TargetCDF,
-				}
-			}
-			wg.Done()
-		}(node)
-	}
-	wg.Wait()
-	close(erCh)
-	close(mpCh)
-	for err := range erCh {
-		return err
-	}
-
-	mpls := make([]*targetMpath, 0, len(nodes))
-	for mp := range mpCh {
-		mpls = append(mpls, mp)
-	}
-	sort.Slice(mpls, func(i, j int) bool {
-		return mpls[i].DaemonID < mpls[j].DaemonID // ascending by node id
-	})
-	usejs := flagIsSet(c, jsonFlag)
-	return teb.Print(mpls, teb.MpathListTmpl, teb.Jopts(usejs))
 }

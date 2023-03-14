@@ -39,12 +39,23 @@ type cprCtx struct {
 }
 
 func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
-	// 1. get summary
+	// 1. get from-bck summary
 	qbck := cmn.QueryBcks(fromBck)
-	summaries, err := bsummSlow(qbck, !flagIsSet(c, copyObjNotCachedFlag), true /*all buckets*/)
+	ctx := &bsummCtx{
+		qbck:    qbck,
+		timeout: longClientTimeout,
+	}
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	ctx.msg.Prefix = msg.Prefix
+	ctx.msg.ObjCached = !flagIsSet(c, copyObjNotCachedFlag)
+	ctx.msg.BckPresent = false
+	summaries, err := ctx.slow()
 	if err != nil {
 		return err
 	}
+
 	for _, res := range summaries {
 		debug.Assertf(res.Bck.Equal(&fromBck), "%s != %s", res.Bck, fromBck)
 		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)

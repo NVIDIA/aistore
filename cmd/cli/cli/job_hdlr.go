@@ -122,14 +122,6 @@ var (
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
 			{
-				Name:         cmdStgCleanup,
-				Usage:        "cleanup storage: remove migrated and deleted objects, old/obsolete workfiles",
-				ArgsUsage:    listAnyCommandArgument,
-				Flags:        storageCmdFlags[cmdStgCleanup],
-				Action:       cleanupStorageHandler,
-				BashComplete: bucketCompletions(bcmplop{}),
-			},
-			{
 				Name:  commandETL,
 				Usage: "start ETL",
 				Subcommands: []cli.Command{
@@ -144,6 +136,7 @@ var (
 				Flags:  clusterCmdsFlags[commandStart],
 				Action: startClusterRebalanceHandler,
 			},
+			cleanupCmd,
 			jobStartResilver,
 			// NOTE: append all `startableXactions`
 		},

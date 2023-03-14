@@ -385,9 +385,9 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 
 	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
 	if hideHeader {
-		teb.Print(data, teb.ListBucketsBody, opts)
+		teb.Print(data, teb.ListBucketsSummBody, opts)
 	} else {
-		teb.Print(data, teb.ListBucketsTmpl, opts)
+		teb.Print(data, teb.ListBucketsSummTmpl, opts)
 	}
 
 	if hideFooter || footer.nbp <= 1 {

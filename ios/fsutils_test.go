@@ -35,7 +35,7 @@ func TestDirSize(t *testing.T) {
 
 	size := mkFile(t, name, "file.txt")
 
-	totalSize, err := ios.DirSizeOnDisk(name)
+	totalSize, err := ios.DirSizeOnDisk(name, false /*withNonDirPrefix*/)
 	if err != nil {
 		t.Error(err)
 	}

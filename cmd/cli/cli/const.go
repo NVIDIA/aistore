@@ -328,7 +328,9 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
+	//
 	// scope 'all'
+	//
 	allPropsFlag        = cli.BoolFlag{Name: scopeAll, Usage: "all object properties including custom (user-defined)"}
 	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
 	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
@@ -341,6 +343,10 @@ var (
 		Name: scopeAll,
 		Usage: "depending on the context: all objects, including misplaced and copies\n" +
 			"\t\t\tor all buckets, including accessible remote (buckets) that are not present in the cluster",
+	}
+	allBcksFlag = cli.BoolFlag{
+		Name:  scopeAll,
+		Usage: "all buckets, including accessible remote buckets that are not present in the cluster",
 	}
 	rmrfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 
@@ -357,21 +363,27 @@ var (
 	listObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
 		Usage: "list objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "\t--prefix a/b/c - list virtual directory a/b/c and/or objects from the virtual directory\n" +
-			indent4 + "\ta/b that have their names (relative to this directory) starting with c",
+			indent4 + "\t'--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter c",
 	}
 	getObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
 		Usage: "get objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "\t--prefix a/b/c - get virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\t'--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with c;\n" +
-			indent4 + "\t--prefix \"\" - get entire bucket",
+			indent4 + "\t'--prefix \"\"' - get entire bucket",
 	}
 	copyObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
 		Usage: "copy objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "\t--prefix a/b/c - copy virtual directory a/b/c and/or objects from the virtual directory\n" +
-			indent4 + "\ta/b that have their names (relative to this directory) starting with c",
+			indent4 + "\t'--prefix a/b/c' - copy virtual directory a/b/c and/or objects from the virtual directory\n" +
+			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter c",
+	}
+	bsummPrefixFlag = cli.StringFlag{
+		Name: "prefix",
+		Usage: "for each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
+			indent4 + "\t'--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory\n" +
+			indent4 + "\ta/b that have names (relative to this directory) starting with the letter c",
 	}
 
 	//
@@ -455,9 +467,8 @@ var (
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
 	}
 	bckSummaryFlag = cli.BoolFlag{
-		Name: "summary",
-		Usage: "show bucket sizes and used capacity; by default applies only to buckets that are _present_ in the cluster " +
-			"('--all' to override)",
+		Name:  "summary",
+		Usage: "show bucket sizes and used capacity; applies _only_ to buckets and objects that are _present_ in the cluster",
 	}
 	pagedFlag = cli.BoolFlag{
 		Name:  "paged",

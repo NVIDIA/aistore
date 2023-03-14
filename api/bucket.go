@@ -94,8 +94,9 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 // - includes usage, capacity, other statistics
 // - is obtained via GetBucketInfo() API
 // - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
-// NOTE:
-// - the API utilizes HEAD method (compare with HeadBucket above) and always executes the _fast_ version of the summary
+//
+// NOTE: the API utilizes HEAD method (compare with HeadBucket) and always executes the (cached-only, fast)
+// version of the bucket summary
 func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
 	var (
 		hdr  http.Header

@@ -157,7 +157,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	// 1. always estimate on-disk size (is fast)
 	var errCount uint64
 	summ.TotalSize.OnDisk, errCount = r.sizeOnDisk(bck, msg.Prefix)
-	if errCount == 0 && msg.Fast {
+	if errCount != 0 && msg.Fast {
 		return
 	}
 
@@ -221,24 +221,28 @@ func (*bsummXact) sizeOnDisk(bck *cluster.Bck, prefix string) (size, ecnt uint64
 		b     = bck.Bucket()
 	)
 	for _, mi := range avail {
-		var dirPath string
+		var (
+			dirPath          string
+			withNonDirPrefix bool
+		)
 		if prefix == "" {
 			dirPath = mi.MakePathBck(b)
 		} else {
 			dirPath = filepath.Join(mi.MakePathCT(b, fs.ObjectType), prefix)
 			if cos.Stat(dirPath) != nil {
-				dirPath += "*" // prefix is _not_ a directory
+				dirPath += "*"          // prefix is _not_ a directory
+				withNonDirPrefix = true // ok to fail matching
 			}
 		}
 		wg.Add(1)
-		go addDU(dirPath, psize, pecnt, wg)
+		go addDU(dirPath, psize, pecnt, wg, withNonDirPrefix)
 	}
 	wg.Wait()
 	return
 }
 
-func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG) {
-	sz, err := ios.DirSizeOnDisk(dirPath)
+func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG, withNonDirPrefix bool) {
+	sz, err := ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 	if err != nil {
 		glog.Error(err)
 		gatomic.AddUint64(pecnt, 1)

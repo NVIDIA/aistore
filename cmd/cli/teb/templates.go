@@ -216,14 +216,14 @@ const (
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	ListBucketsHdr  = "NAME\t PRESENT\t OBJECTS (cached, remote)\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
-	ListBucketsBody = "{{range $k, $v := . }}" +
+	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
+	ListBucketsSummBody = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\t " +
-		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.ObjCount.Present}} {{$v.Info.ObjCount.Remote}}{{end}}\t " +
+		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.ObjCount.Present}} {{end}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{FormatBytesUns $v.Info.TotalSize.OnDisk 2}} {{FormatBytesUns $v.Info.TotalSize.PresentObjs 2}}{{end}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
-	ListBucketsTmpl = ListBucketsHdr + ListBucketsBody
+	ListBucketsSummTmpl = listBucketsSummHdr + ListBucketsSummBody
 
 	ListBucketsHdrNoSummary  = "NAME\t PRESENT\n"
 	ListBucketsBodyNoSummary = "{{range $k, $v := . }}" +
@@ -232,13 +232,9 @@ const (
 	ListBucketsTmplNoSummary = ListBucketsHdrNoSummary + ListBucketsBodyNoSummary
 
 	// Bucket summary templates
-	BucketsSummariesFastTmpl = "NAME\t APPARENT SIZE\t USAGE(%)\n" + bucketsSummariesFastBody
-	bucketsSummariesFastBody = "{{range $k, $v := . }}" +
-		"{{FormatBckName $v.Bck}}\t {{FormatBytesUns $v.TotalSize.OnDisk 2}}\t {{$v.UsedPct}}%\n" +
-		"{{end}}"
 	BucketsSummariesTmpl = "NAME\t OBJECTS (cached, remote)\t OBJECT SIZES (min, avg, max)\t TOTAL OBJECT SIZE (cached, remote)\t USAGE(%)\n" +
-		bucketsSummariesBody
-	bucketsSummariesBody = "{{range $k, $v := . }}" +
+		BucketsSummariesBody
+	BucketsSummariesBody = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{$v.ObjCount.Present}} {{$v.ObjCount.Remote}}\t " +
 		"{{FormatMAM $v.ObjSize.Min}} {{FormatMAM $v.ObjSize.Avg}} {{FormatMAM $v.ObjSize.Max}}\t " +
 		"{{FormatBytesUns $v.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.TotalSize.RemoteObjs 2}}\t {{$v.UsedPct}}%\n" +
