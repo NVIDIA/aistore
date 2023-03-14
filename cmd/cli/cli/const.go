@@ -348,9 +348,9 @@ var (
 	objPropsFlag = cli.StringFlag{
 		Name: "props",
 		Usage: "comma-separated list of object properties including name, size, version, copies, and more; e.g.:\n" +
-			indent4 + "--props all\n" +
-			indent4 + "--props name,size,cached\n" +
-			indent4 + "--props \"ec, copies, custom, location\"",
+			indent4 + "\t--props all\n" +
+			indent4 + "\t--props name,size,cached\n" +
+			indent4 + "\t--props \"ec, copies, custom, location\"",
 	}
 
 	// prefix (to match)
@@ -432,9 +432,9 @@ var (
 	unitsFlag = cli.StringFlag{
 		Name: "units",
 		Usage: "show statistics using on of the following units of measurement: (iec, si, raw), where:\n" +
-			indent4 + "iec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
-			indent4 + "si  - SI (metric) format, e.g.: KB, MB, GB\n" +
-			indent4 + "raw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
+			indent4 + "\tiec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
+			indent4 + "\tsi  - SI (metric) format, e.g.: KB, MB, GB\n" +
+			indent4 + "\traw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
 	}
 
 	// Bucket

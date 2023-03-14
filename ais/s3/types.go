@@ -125,8 +125,8 @@ func FillMsgFromS3Query(query url.Values, msg *apc.LsoMsg) {
 	if token = query.Get("continuation-token"); token != "" {
 		msg.ContinuationToken = token
 	}
-	// start-after makes sense only on first call. For the next call,
-	// when continuation-token is set, start-after is ignored
+	// `start-after` is used only when starting to list pages, subsequent next-page calls
+	// utilize `continuation-token`
 	if after := query.Get("start-after"); after != "" && token == "" {
 		msg.StartAfter = after
 	}

@@ -7,6 +7,7 @@ package xs
 
 import (
 	"errors"
+	"path/filepath"
 	"sync"
 	gatomic "sync/atomic"
 	"unsafe"
@@ -155,13 +156,13 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 
 	// 1. always estimate on-disk size (is fast)
 	var errCount uint64
-	summ.TotalSize.OnDisk, errCount = r.sizeOnDisk(bck)
+	summ.TotalSize.OnDisk, errCount = r.sizeOnDisk(bck, msg.Prefix)
 	if errCount == 0 && msg.Fast {
 		return
 	}
 
 	// 2. walk local pages
-	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Flags: apc.LsObjCached}
+	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: msg.Prefix, Flags: apc.LsObjCached}
 	npg := newNpgCtx(r.t, bck, lsmsg, r.LomAdd)
 	for {
 		npg.page.Entries = allocLsoEntries()
@@ -191,7 +192,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	debug.Assert(bck.IsRemote())
 
 	// 3. npg remote
-	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize}
+	lsmsg = &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: msg.Prefix}
 	for {
 		npg := newNpgCtx(r.t, bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()
@@ -211,7 +212,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	return nil
 }
 
-func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (size, ecnt uint64) {
+func (*bsummXact) sizeOnDisk(bck *cluster.Bck, prefix string) (size, ecnt uint64) {
 	var (
 		avail = fs.GetAvail()
 		wg    = cos.NewLimitedWaitGroup(4, len(avail))
@@ -220,18 +221,26 @@ func (*bsummXact) sizeOnDisk(bck *cluster.Bck) (size, ecnt uint64) {
 		b     = bck.Bucket()
 	)
 	for _, mi := range avail {
-		bdir := mi.MakePathBck(b)
+		var dirPath string
+		if prefix == "" {
+			dirPath = mi.MakePathBck(b)
+		} else {
+			dirPath = filepath.Join(mi.MakePathCT(b, fs.ObjectType), prefix)
+			if cos.Stat(dirPath) != nil {
+				dirPath += "*" // prefix is _not_ a directory
+			}
+		}
 		wg.Add(1)
-		go addDU(bdir, psize, pecnt, wg)
+		go addDU(dirPath, psize, pecnt, wg)
 	}
 	wg.Wait()
 	return
 }
 
-func addDU(bdir string, psize, pecnt *uint64, wg cos.WG) {
-	sz, err := ios.DirSizeOnDisk(bdir)
+func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG) {
+	sz, err := ios.DirSizeOnDisk(dirPath)
 	if err != nil {
-		glog.Errorf("dir-size %q: %v", bdir, err)
+		glog.Error(err)
 		gatomic.AddUint64(pecnt, 1)
 	}
 	gatomic.AddUint64(psize, sz)

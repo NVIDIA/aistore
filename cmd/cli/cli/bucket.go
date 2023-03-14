@@ -133,6 +133,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		notCached    = flagIsSet(c, copyObjNotCachedFlag)
 		from, to     = fromBck.DisplayName(), toBck.DisplayName()
 	)
+	// more validation
 	if fromBck.IsRemote() {
 		if notCached {
 			return fmt.Errorf("option %s is not implemented yet", qflprn(copyObjNotCachedFlag))
@@ -145,19 +146,20 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		actionWarn(c, warn)
 		showProgress = false
 	}
-	if showProgress {
-		var cpr cprCtx
-		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
-		cpr.from, cpr.to = fromBck.DisplayName(), toBck.DisplayName()
-		return cpr.copyBucket(c, fromBck, toBck)
-	}
-
+	// copy: with/wo progress/wait
 	msg := &apc.CopyBckMsg{
 		Prepend: parseStrFlag(c, copyPrependFlag),
 		Prefix:  parseStrFlag(c, copyObjPrefixFlag),
 		DryRun:  flagIsSet(c, copyDryRunFlag),
 		Force:   flagIsSet(c, forceFlag),
 	}
+	if showProgress {
+		var cpr cprCtx
+		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
+		cpr.from, cpr.to = fromBck.DisplayName(), toBck.DisplayName()
+		return cpr.copyBucket(c, fromBck, toBck, msg)
+	}
+
 	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {
 		return err

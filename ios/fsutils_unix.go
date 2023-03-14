@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"golang.org/x/sys/unix"
 )
@@ -25,25 +24,37 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 }
 
 // - on-disk size is sometimes referred to as "apparent size"
-// - ignore errors since `du` exits with status 1 if it encounters a file that couldn't be accessed (permissions)
+// - NOTE: ignore exec error: `du` exits with status 1 if encounters non-regular file that can't be accessed (perm)
 func DirSizeOnDisk(dirPath string) (uint64, error) {
-	outputBytes, err := exec.Command("du", "-sh", dirPath, "2>/dev/null").Output()
-	out := string(outputBytes)
-	if out == "" {
-		return 0, fmt.Errorf("failed to get on-disk size of %q: %v", dirPath, err)
+	cmd := exec.Command("du", "-bc", dirPath, "2>/dev/null")
+	out, err := cmd.Output()
+	if len(out) == 0 {
+		return 0, fmt.Errorf("failed to 'du %s': %v", dirPath, err)
 	}
-	idx := strings.Index(out, "\t")
-	if idx == -1 {
-		return 0, fmt.Errorf("invalid output format from 'du': [%s]", out)
+	lines := strings.Split(string(out), "\n") // NOTE: on Windows, use instead strings.FieldsFunc('\n' and '\r')
+	if n := len(lines); n > 8 {
+		lines = lines[n-8:]
 	}
-	out = out[:idx]
-	// `du` can return ',' as float separator what cannot be parsed properly.
-	out = strings.ReplaceAll(out, ",", ".")
-	size, err := cos.ParseSize(out, cos.UnitsIEC)
-	if err != nil || size < 0 {
-		return 0, fmt.Errorf("invalid output format from 'du': %v [%s]", err, out)
+	// e.g.: "12345   total"
+	for i := len(lines) - 1; i >= 0; i-- {
+		s := lines[i]
+		if strings.HasSuffix(s, "total") && s[0] > '0' && s[0] <= '9' {
+			return uint64(_parseTotal(s)), nil
+		}
 	}
-	return uint64(size), nil
+	return 0, fmt.Errorf("failed to parse 'du %s': ...%v", dirPath, lines)
+}
+
+func _parseTotal(s string) (size int64) {
+	var err error
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			size, err = strconv.ParseInt(s[:i], 10, 64)
+			debug.AssertNoErr(err)
+			break
+		}
+	}
+	return
 }
 
 func DirFileCount(dirPath string) (int, error) {

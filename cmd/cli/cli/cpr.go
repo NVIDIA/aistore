@@ -38,7 +38,7 @@ type cprCtx struct {
 	sinceUpd time.Duration
 }
 
-func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
 	// 1. get summary
 	qbck := cmn.QueryBcks(fromBck)
 	summaries, err := bsummSlow(qbck, !flagIsSet(c, copyObjNotCachedFlag), true /*all buckets*/)
@@ -72,11 +72,6 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	progress, bars = simpleBar(objsArg, sizeArg)
 	cpr.barObjs, cpr.barSize = bars[0], bars[1]
 
-	msg := &apc.CopyBckMsg{
-		Prepend: parseStrFlag(c, copyPrependFlag),
-		DryRun:  flagIsSet(c, copyDryRunFlag),
-		Force:   flagIsSet(c, forceFlag),
-	}
 	cpr.xid, err = api.CopyBucket(apiBP, fromBck, toBck, msg)
 	if err != nil {
 		return err
