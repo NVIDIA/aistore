@@ -8,6 +8,7 @@ import braceexpand
 import humanize
 import pydantic.tools
 import requests
+from pydantic import BaseModel
 
 from aistore.sdk.const import UTF_ENCODING
 from aistore.sdk.errors import (
@@ -16,7 +17,20 @@ from aistore.sdk.errors import (
     ErrRemoteBckNotFound,
     ErrBckAlreadyExists,
 )
-from aistore.sdk.types import HttpError
+
+
+class HttpError(BaseModel):
+    """
+    Represents the errors returned by the API
+    """
+
+    status: int
+    message: str = ""
+    method: str = ""
+    url_path: str = ""
+    remote_addr: str = ""
+    caller: str = ""
+    node: str = ""
 
 
 def _raise_error(text: str):

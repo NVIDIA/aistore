@@ -5,6 +5,7 @@ from unittest.mock import Mock, call, patch
 from aistore.sdk.bucket import Bucket, Header
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_iterator import ObjectIterator
+from aistore.sdk import ListObjectFlag
 
 from aistore.sdk.const import (
     ACT_CREATE_BCK,
@@ -224,12 +225,17 @@ class TestBucket(unittest.TestCase):
         uuid = "1234"
         props = "name"
         continuation_token = "token"
+        flags = [ListObjectFlag.CACHED, ListObjectFlag.DELETED]
+        flag_value = "5"
+        target_id = "target-node"
         expected_act_value = {
             "prefix": prefix,
             "pagesize": page_size,
             "uuid": uuid,
             "props": props,
             "continuation_token": continuation_token,
+            "flags": flag_value,
+            "target": target_id,
         }
         self._list_objects_exec_assert(
             expected_act_value,
@@ -238,6 +244,8 @@ class TestBucket(unittest.TestCase):
             uuid=uuid,
             props=props,
             continuation_token=continuation_token,
+            flags=flags,
+            target=target_id,
         )
 
     def test_list_objects_default_params(self):
@@ -247,6 +255,8 @@ class TestBucket(unittest.TestCase):
             "uuid": "",
             "props": "",
             "continuation_token": "",
+            "flags": "0",
+            "target": "",
         }
         self._list_objects_exec_assert(expected_act_value)
 
@@ -279,12 +289,17 @@ class TestBucket(unittest.TestCase):
         prefix = "prefix-"
         page_size = 5
         props = "name"
+        flags = [ListObjectFlag.CACHED, ListObjectFlag.DELETED]
+        flag_value = "5"
+        target_id = "target-node"
         expected_act_value_1 = {
             "prefix": prefix,
             "pagesize": page_size,
             "uuid": "",
             "props": props,
             "continuation_token": "",
+            "flags": flag_value,
+            "target": target_id,
         }
         expected_act_value_2 = {
             "prefix": prefix,
@@ -292,6 +307,8 @@ class TestBucket(unittest.TestCase):
             "uuid": list_1_id,
             "props": props,
             "continuation_token": list_1_cont,
+            "flags": flag_value,
+            "target": target_id,
         }
         self._list_all_objects_exec_assert(
             list_1_id,
@@ -301,6 +318,8 @@ class TestBucket(unittest.TestCase):
             prefix=prefix,
             page_size=page_size,
             props=props,
+            flags=flags,
+            target=target_id,
         )
 
     def test_list_all_objects_default_params(self):
@@ -312,6 +331,8 @@ class TestBucket(unittest.TestCase):
             "uuid": "",
             "props": "",
             "continuation_token": "",
+            "flags": "0",
+            "target": "",
         }
         expected_act_value_2 = {
             "prefix": "",
@@ -319,6 +340,8 @@ class TestBucket(unittest.TestCase):
             "uuid": list_1_id,
             "props": "",
             "continuation_token": list_1_cont,
+            "flags": "0",
+            "target": "",
         }
         self._list_all_objects_exec_assert(
             list_1_id, list_1_cont, expected_act_value_1, expected_act_value_2

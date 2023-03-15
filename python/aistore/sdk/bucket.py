@@ -48,6 +48,7 @@ from aistore.sdk.types import (
     TCBckMsg,
     ListObjectsMsg,
 )
+from aistore.sdk.list_object_flag import ListObjectFlag
 from aistore.sdk.utils import validate_directory, get_file_size
 
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
@@ -276,6 +277,8 @@ class Bucket:
         page_size: int = 0,
         uuid: str = "",
         continuation_token: str = "",
+        flags: List[ListObjectFlag] = None,
+        target: str = "",
     ) -> BucketList:
         """
         Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
@@ -293,6 +296,9 @@ class Bucket:
                 Defaults to "0" - return maximum number of objects.
             uuid (str, optional): Job ID, required to get the next page of objects
             continuation_token (str, optional): Marks the object to start reading the next page
+            flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
+             request
+            target(str, optional): Only list objects on this specific target node
 
         Returns:
             BucketList: the page of objects in the bucket and the continuation token to get the next page
@@ -306,12 +312,15 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
+
         value = ListObjectsMsg(
             prefix=prefix,
             page_size=page_size,
             uuid=uuid,
             props=props,
             continuation_token=continuation_token,
+            flags=[] if flags is None else flags,
+            target=target,
         ).as_dict()
         action = ActionMsg(action=ACT_LIST, value=value).dict()
 
@@ -331,6 +340,8 @@ class Bucket:
         prefix: str = "",
         props: str = "",
         page_size: int = 0,
+        flags: List[ListObjectFlag] = None,
+        target: str = "",
     ) -> ObjectIterator:
         """
         Returns an iterator for all objects in bucket
@@ -345,6 +356,9 @@ class Bucket:
                     more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
+            flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
+             request
+            target(str, optional): Only list objects on this specific target node
 
         Returns:
             ObjectIterator: object iterator
@@ -360,7 +374,13 @@ class Bucket:
 
         def fetch_objects(uuid, token):
             return self.list_objects(
-                prefix, props, page_size, uuid=uuid, continuation_token=token
+                prefix,
+                props,
+                page_size,
+                uuid=uuid,
+                continuation_token=token,
+                flags=flags,
+                target=target,
             )
 
         return ObjectIterator(fetch_objects)
@@ -370,6 +390,8 @@ class Bucket:
         prefix: str = "",
         props: str = "",
         page_size: int = 0,
+        flags: List[ListObjectFlag] = None,
+        target: str = "",
     ) -> List[BucketEntry]:
         """
         Returns a list of all objects in bucket
@@ -384,6 +406,9 @@ class Bucket:
                     more than 5,000 objects in a single page.
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
+            flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
+             request
+            target(str, optional): Only list objects on this specific target node
 
         Returns:
             List[BucketEntry]: list of objects in bucket
@@ -407,6 +432,8 @@ class Bucket:
                 page_size=page_size,
                 uuid=uuid,
                 continuation_token=continuation_token,
+                flags=flags,
+                target=target,
             )
             if obj_list:
                 obj_list = obj_list + resp.get_entries()

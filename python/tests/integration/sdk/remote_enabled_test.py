@@ -39,8 +39,6 @@ class RemoteEnabledTest(unittest.TestCase):
         """
         Cleanup after each test, destroy the bucket if it exists
         """
-        for bck in self.buckets:
-            destroy_bucket(self.client, bck)
         if REMOTE_SET:
             entries = self.bucket.list_all_objects(prefix=self.obj_prefix)
             obj_names = [entry.name for entry in entries]
@@ -48,6 +46,8 @@ class RemoteEnabledTest(unittest.TestCase):
             if len(obj_names) > 0:
                 job_id = self.bucket.objects(obj_names=obj_names).delete()
                 self.client.job(job_id).wait(timeout=CLEANUP_TIMEOUT)
+        for bck in self.buckets:
+            destroy_bucket(self.client, bck)
 
     def _create_bucket(self, bck_name, provider=PROVIDER_AIS):
         """

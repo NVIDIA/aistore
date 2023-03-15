@@ -6,8 +6,10 @@ from pathlib import Path
 
 import requests
 
+from aistore.sdk import ListObjectFlag
 from aistore.sdk.const import PROVIDER_AIS, UTF_ENCODING
-from aistore.sdk.errors import InvalidBckProvider, AISError
+from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
+
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 
 from tests.utils import random_string, cleanup_local
@@ -54,60 +56,60 @@ class TestBucketOps(RemoteEnabledTest):
         new_bck_name = random_string(10)
         res = self.client.cluster().list_buckets()
         count = len(res)
-        self.create_bucket(new_bck_name)
+        self._create_bucket(new_bck_name)
         res = self.client.cluster().list_buckets()
         count_new = len(res)
         self.assertEqual(count + 1, count_new)
 
-    def create_bucket(self, bck_name):
-        self.buckets.append(bck_name)
-        bucket = self.client.bucket(bck_name)
-        bucket.create()
-        return bucket
+    def test_bucket_invalid_name(self):
+        with self.assertRaises(ErrBckNotFound):
+            self.client.bucket("INVALID_BCK_NAME").list_objects()
 
-    def test_head_bucket(self):
+    def test_bucket_invalid_aws_name(self):
+        with self.assertRaises(AISError):
+            self.client.bucket("INVALID_BCK_NAME", "aws").list_objects()
+
+    def test_head(self):
         try:
             self.bucket.head()
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
 
-    def test_rename_bucket(self):
-        from_bck_n = self.bck_name + "from"
-        to_bck_n = self.bck_name + "to"
-        self.create_bucket(from_bck_n)
+    def test_rename(self):
+        from_bck_name = self.bck_name + "from"
+        to_bck_name = self.bck_name + "to"
+        from_bck = self._create_bucket(from_bck_name)
         res = self.client.cluster().list_buckets()
-        count = len(res)
+        bucket_count = len(res)
 
-        bck_obj = self.client.bucket(from_bck_n)
-        self.assertEqual(bck_obj.name, from_bck_n)
-        job_id = bck_obj.rename(to_bck=to_bck_n)
+        self.assertEqual(from_bck_name, from_bck.name)
+        job_id = from_bck.rename(to_bck=to_bck_name)
         self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
         self.client.job(job_id).wait()
 
-        # check if objects name has changed
-        self.client.bucket(to_bck_n).head()
-
         # new bucket should be created and accessible
-        self.assertEqual(bck_obj.name, to_bck_n)
+        to_bck = self.client.bucket(to_bck_name)
+        to_bck.head()
+        self.assertEqual(to_bck_name, to_bck.name)
 
         # old bucket should be inaccessible
         try:
-            self.client.bucket(from_bck_n).head()
+            from_bck.head()
         except requests.exceptions.HTTPError as err:
             self.assertEqual(err.response.status_code, 404)
 
         # length of buckets before and after rename should be same
         res = self.client.cluster().list_buckets()
         count_new = len(res)
-        self.assertEqual(count, count_new)
+        self.assertEqual(bucket_count, count_new)
 
-    def test_copy_bucket(self):
+    def test_copy(self):
         from_bck_name = self.bck_name + "from"
         to_bck_name = self.bck_name + "to"
-        from_bck = self.create_bucket(from_bck_name)
-        to_bck = self.create_bucket(to_bck_name)
+        from_bck = self._create_bucket(from_bck_name)
+        to_bck = self._create_bucket(to_bck_name)
         prefix = "prefix-"
         new_prefix = "new-"
         content = b"test"
@@ -127,12 +129,12 @@ class TestBucketOps(RemoteEnabledTest):
         not REMOTE_SET,
         "Remote bucket is not set",
     )
-    def test_evict_bucket(self):
+    def test_evict(self):
         self._create_objects(num_obj=1)
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
         ).get_entries()
-        self.verify_objects_cache_status(objects, True)
+        self._verify_objects_cache_status(objects, True)
 
         self.bucket.evict()
 
@@ -140,27 +142,24 @@ class TestBucketOps(RemoteEnabledTest):
             props="name,cached", prefix=self.obj_prefix
         ).get_entries()
         self.assertEqual(1, len(objects))
-        self.verify_objects_cache_status(objects, False)
+        self._verify_objects_cache_status(objects, False)
 
-    def test_evict_bucket_local(self):
+    def test_evict_local(self):
         # If the bucket is local, eviction should fail
         if not REMOTE_SET:
             with self.assertRaises(InvalidBckProvider):
                 self.bucket.evict()
             return
         # Create a local bucket to test with if self.bucket is a cloud bucket
-        local_bucket = self.create_bucket(self.bck_name + "-local")
+        local_bucket = self._create_bucket(self.bck_name + "-local")
         with self.assertRaises(InvalidBckProvider):
             local_bucket.evict()
 
-    def verify_objects_cache_status(self, objects, expected_status):
+    def _verify_objects_cache_status(self, objects, expected_status):
         self.assertTrue(len(objects) > 0)
         for obj in objects:
             self.assertTrue(obj.is_ok())
-            if expected_status:
-                self.assertTrue(obj.is_cached())
-            else:
-                self.assertFalse(obj.is_cached())
+            self.assertEqual(expected_status, obj.is_cached())
 
     def test_put_files_invalid(self):
         with self.assertRaises(ValueError):
@@ -238,6 +237,68 @@ class TestBucketOps(RemoteEnabledTest):
         self.bucket.put_files(LOCAL_TEST_FILES, dry_run=True, prepend=self.obj_prefix)
         # Verify the put files call does not actually create objects
         self._verify_obj_res(TOP_LEVEL_FILES, expect_err=True)
+
+    def test_list_objects(self):
+        bucket_size = 110
+        tests = [
+            {"resp_size": bucket_size},
+            {"page_size": 7, "resp_size": 7},
+            {"page_size": bucket_size * 2, "resp_size": bucket_size},
+        ]
+        self._create_objects(bucket_size)
+
+        for test in list(tests):
+            resp = (
+                self.bucket.list_objects(
+                    page_size=test["page_size"], prefix=self.obj_prefix
+                )
+                if "page_size" in test
+                else self.bucket.list_objects(prefix=self.obj_prefix)
+            )
+            self.assertEqual(len(resp.get_entries()), test["resp_size"])
+
+    def test_list_all_objects(self):
+        bucket_size = 110
+        short_page_len = 17
+        self._create_objects(bucket_size)
+        objects = self.bucket.list_all_objects(prefix=self.obj_prefix)
+        self.assertEqual(len(objects), bucket_size)
+        objects = self.bucket.list_all_objects(
+            page_size=short_page_len, prefix=self.obj_prefix
+        )
+        self.assertEqual(len(objects), bucket_size)
+
+    def test_list_object_iter(self):
+        bucket_size = 110
+        obj_names = set(self._create_objects(bucket_size))
+
+        # Empty iterator if there are no objects matching the prefix.
+        obj_iter = self.bucket.list_objects_iter(prefix="invalid-obj-")
+        self.assertEqual(0, len(list(obj_iter)))
+
+        # Read all `bucket_size` objects by prefix.
+        obj_iter = self.bucket.list_objects_iter(page_size=15, prefix=self.obj_prefix)
+        for obj in obj_iter:
+            obj_names.remove(obj.name)
+        self.assertEqual(0, len(obj_names))
+
+    def test_list_object_flags(self):
+        num_obj = 10
+        self._create_objects(num_obj)
+        objects = self.bucket.list_all_objects(
+            flags=[ListObjectFlag.NAME_ONLY, ListObjectFlag.CACHED],
+            prefix=self.obj_prefix,
+        )
+        self.assertEqual(num_obj, len(objects))
+        for obj in objects:
+            self.assertEqual(0, obj.size)
+
+        objects = self.bucket.list_all_objects(
+            flags=[ListObjectFlag.NAME_SIZE], prefix=self.obj_prefix
+        )
+        self.assertEqual(num_obj, len(objects))
+        for obj in objects:
+            self.assertTrue(obj.size > 0)
 
 
 if __name__ == "__main__":

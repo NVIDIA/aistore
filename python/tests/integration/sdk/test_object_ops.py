@@ -6,7 +6,6 @@ import unittest
 from pathlib import Path
 
 from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH, UTF_ENCODING
-from aistore.sdk.errors import AISError, ErrBckNotFound
 
 from aistore.sdk import Client
 from tests.utils import (
@@ -185,60 +184,7 @@ class TestObjectOps(unittest.TestCase):
         self.assertEqual(0, len(top_level_files))
         self.assertEqual(0, len(list(inner_folder.glob("*"))))
 
-    def test_list_object_page(self):
-        bucket_size = 110
-        tests = [
-            {"resp_size": bucket_size},
-            {"page_size": 7, "resp_size": 7},
-            {"page_size": bucket_size * 2, "resp_size": bucket_size},
-        ]
-        for obj_id in range(bucket_size):
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
-            )
-
-        for test in list(tests):
-            resp = (
-                self.bucket.list_objects(page_size=test["page_size"])
-                if "page_size" in test
-                else self.bucket.list_objects()
-            )
-            self.assertEqual(len(resp.get_entries()), test["resp_size"])
-
-    def test_list_all_objects(self):
-        bucket_size = 110
-        short_page_len = 17
-        for obj_id in range(bucket_size):
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
-            )
-        objects = self.bucket.list_all_objects()
-        self.assertEqual(len(objects), bucket_size)
-        objects = self.bucket.list_all_objects(page_size=short_page_len)
-        self.assertEqual(len(objects), bucket_size)
-
-    def test_list_object_iter(self):
-        bucket_size = 110
-        objects = {}
-        for obj_id in range(bucket_size):
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
-            )
-            objects[f"obj-{ obj_id }"] = 1
-
-        # Read all `bucket_size` objects by prefix.
-        obj_iter = self.bucket.list_objects_iter(page_size=15, prefix="obj-")
-        for obj in obj_iter:
-            del objects[obj.name]
-        self.assertEqual(len(objects), 0)
-
-        # Empty iterator if there are no objects matching the prefix.
-        obj_iter = self.bucket.list_objects_iter(prefix="invalid-obj-")
-        for obj in obj_iter:
-            objects[obj.name] = 1
-        self.assertEqual(len(objects), 0)
-
-    def test_obj_delete(self):
+    def test_delete(self):
         bucket_size = 10
         delete_cnt = 7
 
@@ -254,27 +200,3 @@ class TestObjectOps(unittest.TestCase):
             self.bucket.object(f"obj-{ obj_id + 1 }").delete()
         objects = self.bucket.list_objects()
         self.assertEqual(len(objects.get_entries()), bucket_size - delete_cnt)
-
-    def test_empty_bucket(self):
-        objects = self.bucket.list_objects()
-        self.assertEqual(len(objects.get_entries()), 0)
-
-    def test_bucket_with_no_matching_prefix(self):
-        bucket_size = 10
-        objects = self.bucket.list_objects()
-        self.assertEqual(len(objects.get_entries()), 0)
-        for obj_id in range(bucket_size):
-            create_and_put_object(
-                self.client, bck_name=self.bck_name, obj_name=f"obj-{ obj_id }"
-            )
-
-        objects = self.client.bucket(self.bck_name).list_objects(prefix="TEMP")
-        self.assertEqual(len(objects.get_entries()), 0)
-
-    def test_invalid_bck_name(self):
-        with self.assertRaises(ErrBckNotFound):
-            self.client.bucket("INVALID_BCK_NAME").list_objects()
-
-    def test_invalid_bck_name_for_aws(self):
-        with self.assertRaises(AISError):
-            self.client.bucket("INVALID_BCK_NAME", "aws").list_objects()

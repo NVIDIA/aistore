@@ -10,6 +10,7 @@ from typing import Any, Mapping, List, Optional, Dict
 from pydantic import BaseModel, validator
 
 from aistore.sdk.const import PROVIDER_AIS
+from aistore.sdk.list_object_flag import ListObjectFlag
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring
@@ -32,20 +33,6 @@ class ActionMsg(BaseModel):
     action: str
     name: str = ""
     value: Any = None
-
-
-class HttpError(BaseModel):
-    """
-    Represents the errors returned by the API
-    """
-
-    status: int
-    message: str = ""
-    method: str = ""
-    url_path: str = ""
-    remote_addr: str = ""
-    caller: str = ""
-    node: str = ""
 
 
 class NetInfo(BaseModel):
@@ -301,6 +288,8 @@ class ListObjectsMsg(BaseModel):
     uuid: str
     props: str
     continuation_token: str
+    flags: List[ListObjectFlag]
+    target: str
 
     def as_dict(self):
         return {
@@ -309,6 +298,8 @@ class ListObjectsMsg(BaseModel):
             "uuid": self.uuid,
             "props": self.props,
             "continuation_token": self.continuation_token,
+            "flags": str(ListObjectFlag.join_flags(self.flags)),
+            "target": self.target,
         }
 
 
