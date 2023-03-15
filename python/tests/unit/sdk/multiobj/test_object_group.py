@@ -89,6 +89,7 @@ class TestObjectGroup(unittest.TestCase):
     def _copy_test_helper(self, starting_val, obj_group):
         to_bck = "to-bucket"
         expected_val = starting_val
+        expected_val["prefix"] = ""
         expected_val["prepend"] = ""
         expected_val["dry_run"] = False
         expected_val["force"] = False
@@ -104,8 +105,8 @@ class TestObjectGroup(unittest.TestCase):
         )
         # Test provided optional args
         to_provider = "any provider"
-        prefix = "prefix-"
-        expected_val["prepend"] = prefix
+        prepend_val = "new_prefix-"
+        expected_val["prepend"] = prepend_val
         expected_val["force"] = True
         expected_val["dry_run"] = True
         expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
@@ -116,7 +117,7 @@ class TestObjectGroup(unittest.TestCase):
             ACT_COPY_OBJECTS,
             expected_val,
             to_bck=to_bck,
-            prepend=prefix,
+            prepend=prepend_val,
             force=True,
             dry_run=True,
             to_provider=to_provider,
@@ -139,6 +140,7 @@ class TestObjectGroup(unittest.TestCase):
         etl_name = "any active etl"
         to_bck = "to-bucket"
         expected_val = starting_val
+        expected_val["prefix"] = ""
         expected_val["prepend"] = ""
         expected_val["dry_run"] = False
         expected_val["force"] = False
@@ -157,11 +159,11 @@ class TestObjectGroup(unittest.TestCase):
         )
         # Test provided optional args
         timeout = "30s"
-        prefix = "prefix-"
+        prepend_val = "new_prefix-"
         to_provider = "any provider"
         expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
         expected_val["coer"] = True
-        expected_val["prepend"] = prefix
+        expected_val["prepend"] = prepend_val
         expected_val["request_timeout"] = timeout
         expected_val["dry_run"] = True
         expected_val["force"] = True
@@ -172,7 +174,7 @@ class TestObjectGroup(unittest.TestCase):
             expected_val,
             to_bck=to_bck,
             to_provider=to_provider,
-            prepend=prefix,
+            prepend=prepend_val,
             etl_name=etl_name,
             timeout=timeout,
             dry_run=True,

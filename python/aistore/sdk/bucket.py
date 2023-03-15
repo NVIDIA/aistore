@@ -230,6 +230,7 @@ class Bucket:
     def copy(
         self,
         to_bck_name: str,
+        prefix_filter: str = "",
         prepend: str = "",
         dry_run: bool = False,
         force: bool = False,
@@ -240,6 +241,7 @@ class Bucket:
 
         Args:
             to_bck_name (str): Name of the destination bucket
+            prefix_filter (str, optional): Only copy objects that share this prefix
             prepend (str, optional): Value to prepend to the name of copied objects
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
@@ -257,7 +259,9 @@ class Bucket:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        value = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force).as_dict()
+        value = CopyBckMsg(
+            prefix=prefix_filter, prepend=prepend, dry_run=dry_run, force=force
+        ).as_dict()
         params = self.qparam.copy()
         params[QPARAM_BCK_TO] = f"{ to_provider }/@#/{ to_bck_name }/"
         return self.make_request(
@@ -459,7 +463,7 @@ class Bucket:
         prefix_filter: str = "",
         pattern: str = "*",
         basename: bool = False,
-        obj_prefix: str = None,
+        prepend: str = None,
         recursive: bool = False,
         dry_run: bool = False,
         verbose: bool = True,
@@ -472,8 +476,8 @@ class Bucket:
             prefix_filter (str, optional): Required prefix in names of all files to put
             pattern (str, optional): Regex pattern to filter files
             basename (bool, optional): Whether to use the file names only as object names and omit the path information
-            obj_prefix (str, optional): Optional string to use as a prefix in the object name for all objects uploaded
-                No delimiter ("/", "-", etc.) is automatically applied between the obj_prefix and the object name
+            prepend (str, optional): Optional string to use as a prefix in the object name for all objects uploaded
+                No delimiter ("/", "-", etc.) is automatically applied between the prepend value and the object name
             recursive (bool, optional): Whether to recurse through the provided path directories
             dry_run (bool, optional): Option to only show expected behavior without an actual put operation
             verbose (bool, optional): Whether to print upload info to standard output
@@ -500,7 +504,7 @@ class Bucket:
         for file in file_iterator:
             if not file.is_file() or not str(file.name).startswith(prefix_filter):
                 continue
-            obj_name = self._get_uploaded_obj_name(file, path, basename, obj_prefix)
+            obj_name = self._get_uploaded_obj_name(file, path, basename, prepend)
             if not dry_run:
                 self.object(obj_name).put_file(str(file))
             logger.info(
@@ -520,10 +524,10 @@ class Bucket:
         return obj_names
 
     @staticmethod
-    def _get_uploaded_obj_name(file, root_path, basename, prefix):
+    def _get_uploaded_obj_name(file, root_path, basename, prepend):
         obj_name = str(file.relative_to(root_path)) if not basename else file.name
-        if prefix:
-            return prefix + obj_name
+        if prepend:
+            return prepend + obj_name
         return obj_name
 
     def object(self, obj_name: str) -> Object:

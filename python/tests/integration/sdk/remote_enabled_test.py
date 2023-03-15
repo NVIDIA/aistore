@@ -6,6 +6,8 @@ from aistore import Client
 from tests.integration import REMOTE_SET, REMOTE_BUCKET, CLUSTER_ENDPOINT
 from tests.utils import random_string, destroy_bucket, create_and_put_objects
 
+CLEANUP_TIMEOUT = 30
+
 
 class RemoteEnabledTest(unittest.TestCase):
     """
@@ -40,7 +42,12 @@ class RemoteEnabledTest(unittest.TestCase):
         for bck in self.buckets:
             destroy_bucket(self.client, bck)
         if REMOTE_SET:
-            self.bucket.objects(obj_names=self.cloud_objects).delete()
+            entries = self.bucket.list_all_objects(prefix=self.obj_prefix)
+            obj_names = [entry.name for entry in entries]
+            obj_names.extend(self.cloud_objects)
+            if len(obj_names) > 0:
+                job_id = self.bucket.objects(obj_names=obj_names).delete()
+                self.client.job(job_id).wait(timeout=CLEANUP_TIMEOUT)
 
     def _create_bucket(self, bck_name, provider=PROVIDER_AIS):
         """

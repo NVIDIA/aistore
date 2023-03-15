@@ -277,12 +277,18 @@ class CopyBckMsg(BaseModel):
     API message structure for copying a bucket
     """
 
+    prefix: str = ""
     prepend: str
     dry_run: bool
     force: bool
 
     def as_dict(self):
-        return {"prepend": self.prepend, "dry_run": self.dry_run, "force": self.force}
+        return {
+            "prefix": self.prefix,
+            "prepend": self.prepend,
+            "dry_run": self.dry_run,
+            "force": self.force,
+        }
 
 
 class ListObjectsMsg(BaseModel):

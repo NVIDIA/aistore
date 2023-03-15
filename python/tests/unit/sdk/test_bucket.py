@@ -173,20 +173,27 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(headers, mock_header.headers)
 
     def test_copy_default_params(self):
-        action_value = {"prepend": "", "dry_run": False, "force": False}
+        action_value = {"prefix": "", "prepend": "", "dry_run": False, "force": False}
         self._copy_exec_assert("new_bck", PROVIDER_AIS, action_value)
 
     def test_copy(self):
-        prefix = "prefix-"
+        prefix_filter = "existing-"
+        prepend_val = "prefix-"
         dry_run = True
         force = True
-        action_value = {"prepend": prefix, "dry_run": dry_run, "force": force}
+        action_value = {
+            "prefix": prefix_filter,
+            "prepend": prepend_val,
+            "dry_run": dry_run,
+            "force": force,
+        }
 
         self._copy_exec_assert(
             "new_bck",
             PROVIDER_AMAZON,
             action_value,
-            prepend=prefix,
+            prefix_filter=prefix_filter,
+            prepend=prepend_val,
             dry_run=dry_run,
             force=force,
         )
@@ -363,7 +370,7 @@ class TestBucket(unittest.TestCase):
 
     def test_transform(self):
         etl_name = "etl-name"
-        prefix = "prefix-"
+        prepend_val = "prefix-"
         ext = {"jpg": "txt"}
         timeout = "4m"
         force = True
@@ -371,13 +378,13 @@ class TestBucket(unittest.TestCase):
         action_value = TCBckMsg(
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
-            copy_msg=CopyBckMsg(prepend=prefix, force=force, dry_run=dry_run),
+            copy_msg=CopyBckMsg(prepend=prepend_val, force=force, dry_run=dry_run),
         ).as_dict()
 
         self._transform_exec_assert(
             etl_name,
             action_value,
-            prepend=prefix,
+            prepend=prepend_val,
             ext=ext,
             force=force,
             dry_run=dry_run,
@@ -388,6 +395,7 @@ class TestBucket(unittest.TestCase):
         etl_name = "etl-name"
         action_value = {
             "id": etl_name,
+            "prefix": "",
             "prepend": "",
             "force": False,
             "dry_run": False,
