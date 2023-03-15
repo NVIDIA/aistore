@@ -56,7 +56,7 @@ var (
 
 // color
 var (
-	fred, fcyan func(a ...any) string
+	fred, fcyan, fblue, fgreen func(a ...any) string
 )
 
 // `ais help [COMMAND]`
@@ -196,9 +196,13 @@ func (a *acli) init(version string) {
 	if cfg.NoColor {
 		fcyan = fmt.Sprint
 		fred = fmt.Sprint
+		fblue = fmt.Sprint
+		fgreen = fmt.Sprint
 	} else {
 		fcyan = color.New(color.FgHiCyan).SprintFunc()
 		fred = color.New(color.FgHiRed).SprintFunc()
+		fblue = color.New(color.FgHiBlue).SprintFunc()
+		fgreen = color.New(color.FgHiGreen).SprintFunc()
 	}
 
 	app.Name = cliName

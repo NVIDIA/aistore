@@ -74,7 +74,7 @@ var (
 		cmdResetBprops: {},
 
 		commandList: {
-			regexFlag,
+			regexLsAnyFlag,
 			templateFlag,
 			listObjPrefixFlag,
 			pageSizeFlag,
@@ -571,7 +571,7 @@ func listAnyHandler(c *cli.Context) error {
 		if flagIsSet(c, bckSummaryFlag) {
 			if !apc.IsFltPresent(fltPresence) && bck.Provider != apc.AIS {
 				warn := fmt.Sprintf("cannot _summarize_ non-present buckets and/or remote content - ignoring flag %s "+
-					"(hint: use 'ais show storage')\n", qflprn(allObjsOrBcksFlag))
+					"(hint: use 'ais storage summary')\n", qflprn(allObjsOrBcksFlag))
 				actionWarn(c, warn)
 				fltPresence = apc.FltPresent
 			}

@@ -913,7 +913,7 @@ func preparseBckObjURI(uri string) string {
 
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
 func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
-func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Note: ")+msg) }
+func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fblue("Note: ")+msg) }
 
 func actionCptn(c *cli.Context, prefix, msg string) {
 	if prefix == "" {

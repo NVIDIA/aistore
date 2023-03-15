@@ -104,7 +104,9 @@ func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) (snamePlus 
 	return
 }
 
-func fmtSmapVer(v int64) string { return fmt.Sprintf("v%d", v) }
+func fmtSmap(smap *cluster.Smap) string {
+	return fmt.Sprintf("version %d, UUID %s, primary %s", smap.Version, smap.UUID, smap.Primary.StringEx())
+}
 
 func fmtStringList(lst []string) string {
 	if len(lst) == 0 {

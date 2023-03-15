@@ -99,7 +99,7 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb
 
 		out := tableP.Template(false) + "\n"
 		out += tableT.Template(false) + "\n"
-		out += teb.ClusterSummary
+		out += fgreen("Summary:") + "\n" + teb.ClusterSummary
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
 

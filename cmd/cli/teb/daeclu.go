@@ -85,7 +85,7 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 				unknownVal,
 				unknownVal,
 				ds.K8sPodName,
-				ds.Status,
+				fcyan(ds.Status),
 				ds.Version,
 				ds.BuildTime,
 			}
@@ -160,7 +160,7 @@ func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
 				unknownVal,
 				unknownVal,
 				ds.K8sPodName,
-				ds.Status,
+				fcyan(ds.Status),
 				ds.Version,
 				ds.BuildTime,
 			}

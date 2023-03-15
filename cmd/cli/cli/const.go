@@ -214,7 +214,7 @@ const (
 
 // `ArgsUsage`: argument placeholders in help messages
 const (
-	indent1 = "   " // see also indent?
+	indent1 = "   " // indent4 et al.
 
 	// Job IDs (download, dsort)
 	jobIDArgument                 = "JOB_ID"
@@ -341,8 +341,9 @@ var (
 	}
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
-		Usage: "depending on the context: all objects, including misplaced and copies\n" +
-			"\t\t\tor all buckets, including accessible remote (buckets) that are not present in the cluster",
+		Usage: "depending on the context:\n" +
+			indent4 + "\t- all objects in a given bucket, including misplaced and copies, or\n" +
+			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster",
 	}
 	allBcksFlag = cli.BoolFlag{
 		Name:  scopeAll,
@@ -403,7 +404,14 @@ var (
 	//
 	// regex and friends
 	//
-	regexFlag     = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+	regexFlag = cli.StringFlag{Name: "regex", Usage: "regular expression to match and select items in question"}
+
+	regexLsAnyFlag = cli.StringFlag{
+		Name: regexFlag.Name,
+		Usage: "regular expression; use it to match either bucket names or objects in a given bucket, e.g.:\n" +
+			indent4 + "\tais ls --regex \"(m|n)\"\t- match buckets such as ais://nnn, s3://mmm, etc.;\n" +
+			indent4 + "\tais ls ais://nnn --regex \"^A\"\t- match object names starting with letter A",
+	}
 	regexColsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
 		Usage: "regular expression to select table columns (case-insensitive), e.g.: --regex \"put|err\"",

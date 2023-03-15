@@ -207,7 +207,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		regex  *regexp.Regexp
 		fmatch = func(_ cmn.Bck) bool { return true }
 	)
-	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
+	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
 		if err != nil {
 			return
@@ -266,10 +266,17 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 
 // `ais ls`, `ais ls s3:` and similar
 func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool, fltPresence int) (cnt int) {
-	filtered := make(cmn.Bcks, 0, len(bcks))
+	var (
+		filtered = make(cmn.Bcks, 0, len(bcks))
+		unique   = make(cos.StrSet, len(bcks))
+	)
 	for _, bck := range bcks {
 		if qbck.Contains(&bck) && matches(bck) {
-			filtered = append(filtered, bck)
+			uname := bck.MakeUname("")
+			if _, ok := unique[uname]; !ok {
+				filtered = append(filtered, bck)
+				unique[uname] = struct{}{}
+			}
 		}
 	}
 	if cnt = len(filtered); cnt == 0 {
@@ -801,7 +808,7 @@ func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
 		objFilter.addFilter(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
 	}
 
-	if regexStr := parseStrFlag(c, regexFlag); regexStr != "" {
+	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
 			return nil, err

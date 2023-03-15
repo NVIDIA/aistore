@@ -64,17 +64,17 @@ const (
 	//
 	// Cluster
 	//
+	indent1 = "   "
 
-	ClusterSummary = "Summary:\n  Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n  " +
-		"Targets:\t{{len .Smap.Tmap}}\n  " +
-		"Primary:\t{{.Smap.Primary.StringEx}}\n  " +
-		"Smap:\t{{FormatSmapVersion .Smap.Version}}\n  " +
-		"Deployment:\t{{ ( Deployments .Status) }}\n  " +
-		"Status:\t{{ ( OnlineStatus .Status) }}\n  " +
-		"Rebalance:\t{{ ( Rebalance .Status) }}\n  " +
-		"Authentication:\t{{ .CluConfig.Auth.Enabled }}\n  " +
-		"Version:\t{{ ( Versions .Status) }}\n  " +
-		"Build:\t{{ ( BuildTimes .Status) }}\n"
+	ClusterSummary = indent1 + "Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n" +
+		indent1 + "Targets:\t{{len .Smap.Tmap}}\n" +
+		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
+		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
+		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
+		indent1 + "Rebalance:\t{{ ( Rebalance .Status) }}\n" +
+		indent1 + "Authentication:\t{{if .CluConfig.Auth.Enabled}}enabled{{else}}disabled{{end}}\n" +
+		indent1 + "Version:\t{{ ( Versions .Status) }}\n" +
+		indent1 + "Build:\t{{ ( BuildTimes .Status) }}\n"
 
 	// Config
 	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
@@ -394,7 +394,7 @@ var (
 		"FormatObjCustom":   fmtObjCustom,
 		"FormatObjIsCached": fmtObjIsCached,
 		"FormatDaemonID":    fmtDaemonID,
-		"FormatSmapVersion": fmtSmapVer,
+		"FormatSmap":        fmtSmap,
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
 		"FormatBckName":     func(bck cmn.Bck) string { return bck.DisplayName() },
@@ -464,12 +464,28 @@ func (h *StatsAndStatusHelper) pods() []string         { return h.toSlice("k8s_p
 
 // internal helper for the methods above
 func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
+	if jtag == "status" {
+		counts := make(map[string]int, 2)
+		for _, m := range []StstMap{h.Pmap, h.Tmap} {
+			for _, s := range m {
+				if _, ok := counts[s.Status]; !ok {
+					counts[s.Status] = 0
+				}
+				counts[s.Status]++
+			}
+		}
+		res := make([]string, 0, len(counts))
+		for status, count := range counts {
+			res = append(res, fmt.Sprintf("%d %s", count, status))
+		}
+		return res
+	}
+
+	// all other tags
 	set := cos.NewStrSet()
 	for _, m := range []StstMap{h.Pmap, h.Tmap} {
 		for _, s := range m {
 			switch jtag {
-			case "status":
-				set.Add(s.Status)
 			case "deployment":
 				set.Add(s.DeploymentType)
 			case "ais_version":
