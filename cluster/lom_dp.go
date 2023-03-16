@@ -6,12 +6,13 @@ package cluster
 
 import (
 	"context"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// NOTE: compare with etl/dp.go
+// NOTE: compare with ext/etl/dp.go
 
 const ldpact = ".LDP.Reader"
 
@@ -66,7 +67,21 @@ func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 		return nil, nil, loadErr
 	}
 
-	// Stream the object directly from remote backend
-	reader, _, _, err := T.Backend(lom.Bck()).GetObjReader(context.Background(), lom)
-	return cos.NopOpener(reader), lom, err
+	// cold GetObjReader and return oah (holder) to represent non-existing object
+	lom.SetAtimeUnix(time.Now().UnixNano())
+	oah := &cmn.ObjAttrs{
+		Ver:   "",            // TODO: differentiate between copying (same version) vs. transforming
+		Cksum: cos.NoneCksum, // will likely reassign (below)
+		Atime: lom.AtimeUnix(),
+	}
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(oah.SetSize))
+	reader, expCksum, _, err := T.Backend(lom.Bck()).GetObjReader(ctx, lom)
+
+	if lom.Checksum() != nil {
+		oah.Cksum = lom.Checksum()
+	} else if expCksum != nil {
+		oah.Cksum = expCksum
+	}
+	return cos.NopOpener(reader), oah, err
 }

@@ -95,6 +95,11 @@ func (oa *ObjAttrs) AtimeUnix() int64          { return oa.Atime }
 func (oa *ObjAttrs) Checksum() *cos.Cksum      { return oa.Cksum }
 func (oa *ObjAttrs) SetCksum(ty, val string)   { oa.Cksum = cos.NewCksum(ty, val) }
 
+func (oa *ObjAttrs) SetSize(size int64) {
+	debug.Assert(oa.Size == 0)
+	oa.Size = size
+}
+
 //
 // custom metadata
 //

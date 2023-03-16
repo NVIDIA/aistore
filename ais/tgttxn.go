@@ -490,7 +490,7 @@ func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
 	if err := msg.Validate(true); err != nil {
 		return nil, err
 	}
-	return etl.NewOfflineDataProvider(msg, t.si)
+	return etl.NewOfflineDP(msg, t.si)
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting

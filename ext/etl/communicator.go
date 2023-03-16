@@ -50,7 +50,7 @@ type (
 		OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
 
 		// OfflineTransform interface implementations realize offline ETL.
-		// OfflineTransform is driven by `OfflineDataProvider` - not to confuse
+		// OfflineTransform is driven by `OfflineDP` - not to confuse
 		// with GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
 		OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)

@@ -1212,17 +1212,21 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 // COPY READER //
 /////////////////
 
-// copyReader puts a new object to a cluster, according to a reader taken from coi.DP.Reader(lom) The reader returned
-// from coi.DP is responsible for any locking or source LOM, if necessary. If the reader doesn't take any locks, it has
-// to consider object content changing in the middle of copying.
+// copyReader writes a new object that it reads using a special reader returned by
+// coi.DP.Reader(lom).
 //
-// LOM can be meta of a cloud object. It creates some problems. However, it's DP who is responsible for providing a reader,
-// so DP should tak any steps necessary to do so. It includes handling cold get, warm get etc.
+// The reader is responsible for any read-locking of the source LOM, if necessary.
+// (If the reader doesn't rlock the object's content may be subject to changing in the middle
+// of copying/transforming, etc.)
 //
-// If destination bucket is remote bucket, copyReader will always create a cached copy of an object on one of the
-// targets as well as make put to the relevant backend provider.
+// LOM can be a "pure" metadata of a (non-existing) Cloud object. Accordingly, DP's reader must
+// be able to hande cold get, warm get, etc.
 //
-// TODO: consider adding support for _not_ storing (aka "caching") an object from bucket that has remote backend.
+// If destination bucket is remote, copyReader will:
+// - create a local replica of the object on one of the targets, and
+// - PUT to the relevant backend
+// An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
+// further debated.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser
@@ -1312,10 +1316,10 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
 	}
-	if coi.DP == nil { // read from local file
+	if coi.DP == nil {
 		var reader cos.ReadOpenCloser
 		if coi.owt != cmn.OwtPromote {
-			// migrate/replicate
+			// 1. migrate/replicate lom
 			lom.Lock(false)
 			err := lom.Load(false /*cache it*/, true /*locked*/)
 			if err != nil {
@@ -1331,7 +1335,7 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 			}
 			size = lom.SizeBytes()
 		} else {
-			// promote
+			// 2. promote local file
 			debug.Assert(!coi.dryRun)
 			debug.Assert(sargs.owt == cmn.OwtPromote)
 			fh, err := cos.NewFileHandle(lom.FQN)
@@ -1352,6 +1356,8 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 		sargs.reader = reader
 		sargs.objAttrs = lom
 	} else {
+		// 3. get a reader for this object - utilize backend's `GetObjReader`
+		// unless the object is present
 		if sargs.reader, sargs.objAttrs, err = coi.DP.Reader(lom); err != nil {
 			return
 		}

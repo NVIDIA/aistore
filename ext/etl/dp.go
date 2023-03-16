@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -14,29 +14,31 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-type OfflineDataProvider struct {
+// NOTE: compare with cluster/lom_dp.go
+
+type OfflineDP struct {
 	tcbMsg         *apc.TCBMsg
 	comm           Communicator
 	requestTimeout time.Duration
 }
 
 // interface guard
-var _ cluster.DP = (*OfflineDataProvider)(nil)
+var _ cluster.DP = (*OfflineDP)(nil)
 
-func NewOfflineDataProvider(msg *apc.TCBMsg, lsnode *cluster.Snode) (*OfflineDataProvider, error) {
+func NewOfflineDP(msg *apc.TCBMsg, lsnode *cluster.Snode) (*OfflineDP, error) {
 	comm, err := GetCommunicator(msg.Transform.Name, lsnode)
 	if err != nil {
 		return nil, err
 	}
-	pr := &OfflineDataProvider{tcbMsg: msg, comm: comm}
+	pr := &OfflineDP{tcbMsg: msg, comm: comm}
 	pr.requestTimeout = time.Duration(msg.Transform.Timeout)
 	return pr, nil
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
+func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
 	var (
-		r   cos.ReadCloseSizer
+		r   cos.ReadCloseSizer // note: +sizer
 		err error
 	)
 	debug.Assert(dp.tcbMsg != nil)
@@ -57,9 +59,10 @@ func (dp *OfflineDataProvider) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn
 	if err != nil {
 		return nil, nil, err
 	}
+	lom.SetAtimeUnix(time.Now().UnixNano())
 	oah := &cmn.ObjAttrs{
 		Size:  r.Size(),
-		Ver:   "",            // after ETL a new object
+		Ver:   "",            // transformed object - current version does not apply
 		Cksum: cos.NoneCksum, // TODO: checksum
 		Atime: lom.AtimeUnix(),
 	}
