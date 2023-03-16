@@ -507,7 +507,7 @@ var (
 
 	dloadTimeoutFlag = cli.StringFlag{ // TODO -- FIXME: must be DurationFlag
 		Name: "download-timeout",
-		Usage: "time limit on downloading a single file;\n" +
+		Usage: "server-side time limit for downloading a single file from remote source;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	dloadProgressFlag = cli.StringFlag{ // TODO ditto

@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -76,7 +77,11 @@ func (j *jogger) jog() {
 		j.task.init()
 		j.mtx.Unlock()
 
-		t.download()
+		lom := cluster.AllocLOM(t.obj.objName)
+		t.download(lom)
+		cluster.FreeLOM(lom)
+		t.cancel()
+
 		t.job.throttler().release()
 
 		j.mtx.Lock()

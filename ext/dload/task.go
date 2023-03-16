@@ -41,6 +41,7 @@ type singleTask struct {
 	currentSize atomic.Int64       // current file size (updated as the download progresses)
 	totalSize   atomic.Int64       // total size (nonzero iff Content-Length header was provided by the source)
 	downloadCtx context.Context    // w/ cancel function
+	getCtx      context.Context    // w/ timeout and size
 	cancel      context.CancelFunc // to cancel the download after the request commences
 }
 
@@ -65,11 +66,7 @@ func (task *singleTask) init() {
 	task.downloadCtx, task.cancel = context.WithCancel(context.Background())
 }
 
-func (task *singleTask) download() {
-	defer task.cancel()
-
-	lom := cluster.AllocLOM(task.obj.objName)
-	defer cluster.FreeLOM(lom)
+func (task *singleTask) download(lom *cluster.LOM) {
 	err := lom.InitBck(task.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
@@ -110,6 +107,8 @@ func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration
 	ctx, cancel := context.WithTimeout(task.downloadCtx, timeout)
 	defer cancel()
 
+	task.getCtx = ctx
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, task.obj.link, http.NoBody)
 	if err != nil {
 		return true, err
@@ -131,7 +130,7 @@ func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration
 		return false, cmn.NewErrHTTP(req, errors.New("nil error w/ bad status"), resp.StatusCode)
 	}
 
-	r := task.wrapReader(ctx, resp.Body)
+	r := task.wrapReader(resp.Body)
 	size := attrsFromLink(task.obj.link, resp, lom)
 	task.setTotalSize(size)
 
@@ -190,20 +189,6 @@ func (task *singleTask) downloadLocal(lom *cluster.LOM) (err error) {
 	return err
 }
 
-func (task *singleTask) wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {
-	// Create a custom reader to monitor progress every time we read from response body stream.
-	r = &progressReader{
-		r: r,
-		reporter: func(n int64) {
-			task.currentSize.Add(n)
-			nl.OnProgress(task.job.Notif())
-		},
-	}
-	// Wrap around throttler reader (noop if throttling is disabled).
-	r = task.job.throttler().wrapReader(ctx, r)
-	return r
-}
-
 func (task *singleTask) setTotalSize(size int64) {
 	if size > 0 {
 		task.totalSize.Store(size)
@@ -219,9 +204,10 @@ func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
 	// Set custom context values (used by `ais/backend/*`).
 	ctx, cancel := context.WithTimeout(task.downloadCtx, task.initialTimeout())
 	defer cancel()
-	wrapReader := func(r io.ReadCloser) io.ReadCloser { return task.wrapReader(ctx, r) }
-	ctx = context.WithValue(ctx, cos.CtxReadWrapper, cos.ReadWrapperFunc(wrapReader))
+
+	ctx = context.WithValue(ctx, cos.CtxReadWrapper, task.wrapReader)
 	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(task.setTotalSize))
+	task.getCtx = ctx
 
 	// Do final GET (prefetch) request.
 	_, err := task.xdl.t.GetCold(ctx, lom, cmn.OwtGetTryLock)
@@ -235,6 +221,20 @@ func (task *singleTask) initialTimeout() time.Duration {
 		timeout = task.job.Timeout()
 	}
 	return timeout
+}
+
+func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
+	// Create a custom reader to monitor progress every time we read from response body stream.
+	r = &progressReader{
+		r: r,
+		reporter: func(n int64) {
+			task.currentSize.Add(n)
+			nl.OnProgress(task.job.Notif())
+		},
+	}
+	// Wrap around throttler reader (noop if throttling is disabled).
+	r = task.job.throttler().wrapReader(task.getCtx, r)
+	return r
 }
 
 // Probably we need to extend the persistent database (db.go) so that it will contain
