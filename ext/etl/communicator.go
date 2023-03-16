@@ -208,12 +208,13 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { c.xctn.OutObjsAdd(1, int64(i)) },
+		ReadCb: func(n int, err error) { c.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			c.xctn.InObjsAdd(1, size)
+			c.xctn.InObjsAdd(1, 0)
+			c.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}), nil
 }
@@ -296,12 +297,13 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(i int, err error) { pc.xctn.OutObjsAdd(1, int64(i)) },
+		ReadCb: func(n int, err error) { pc.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			pc.xctn.InObjsAdd(1, size)
+			pc.xctn.InObjsAdd(1, 0)
+			pc.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}), nil
 }
@@ -337,11 +339,11 @@ func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 		return cmn.NewErrAborted(rc.String(), "online", err)
 	}
 
-	size, err := determineSize(bck, objName)
+	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return err
 	}
-	rc.xctn.InObjsAdd(1, size)
+	rc.xctn.OutObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	redirectURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
@@ -350,7 +352,7 @@ func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	size, err := determineSize(bck, objName)
+	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return nil, err
 	}
@@ -364,11 +366,11 @@ func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 //////////////////
 
 func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
-	size, err := determineSize(bck, objName)
+	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return err
 	}
-	pc.xctn.InObjsAdd(1, size)
+	pc.xctn.OutObjsAdd(1, size)
 
 	// TODO: Is there way to determine `rc.stats.outBytes`?
 	path := transformerPath(bck, objName)
@@ -379,7 +381,7 @@ func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 func (pc *revProxyComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	size, err := determineSize(bck, objName)
+	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +423,7 @@ func transformerPath(bck *cluster.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func determineSize(bck *cluster.Bck, objName string) (int64, error) {
+func lomLoad(bck *cluster.Bck, objName string) (int64, error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {

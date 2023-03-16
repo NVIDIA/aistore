@@ -233,8 +233,8 @@ func (xctn *Base) EndTime() time.Time {
 // upon completion, all xactions optionally notify listener(s) and refresh local capacity stats
 func (xctn *Base) onFinished(err error) {
 	// notifications
-	if n := xctn.Notif(); n != nil {
-		nl.OnFinished(n, err)
+	if xctn.notif != nil {
+		nl.OnFinished(xctn.notif, err)
 	}
 	xactRecord := Table[xctn.kind]
 	if xactRecord.RefreshCap {
@@ -246,17 +246,10 @@ func (xctn *Base) onFinished(err error) {
 	IncFinished() // in re: HK cleanup long-time finished
 }
 
-func (xctn *Base) Notif() (n cluster.Notif) {
-	if xctn.notif == nil {
-		return
-	}
-	return xctn.notif
-}
-
 func (xctn *Base) AddNotif(n cluster.Notif) {
 	xctn.notif = n.(*NotifXact)
-	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)
-	debug.Assert(!n.Upon(cluster.UponProgress) || xctn.notif.P != nil)
+	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)        // always fin-notif and points to self
+	debug.Assert(!n.Upon(cluster.UponProgress) || xctn.notif.P != nil) // progress notification is optional
 }
 
 // atomically set end-time
