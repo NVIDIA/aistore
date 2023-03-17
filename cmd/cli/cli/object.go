@@ -142,7 +142,8 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
-			return fmt.Errorf("STDIN source: destination object name (in %s) is required", c.Command.ArgsUsage)
+			return fmt.Errorf("when writing directly from standard input destination object name (in %s) is required",
+				c.Command.ArgsUsage)
 		}
 		chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
 		if err != nil {
@@ -347,8 +348,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		actionWarn(c, errU.Error())
 		units = ""
 	}
-	fmt.Fprintf(c.App.Writer, "\nCreated %s/%s (size %s)\n",
-		bname, objName, teb.FmtSize(totalSize, units, 2))
+	fmt.Fprintf(c.App.Writer, "\nCreated %s/%s (size %s)\n", bname, objName, teb.FmtSize(totalSize, units, 2))
 	return nil
 }
 

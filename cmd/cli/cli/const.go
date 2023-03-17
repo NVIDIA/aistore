@@ -451,10 +451,10 @@ var (
 	// units enum { unitsIEC, unitsSI, unitsRaw }
 	unitsFlag = cli.StringFlag{
 		Name: "units",
-		Usage: "show statistics using on of the following units of measurement: (iec, si, raw), where:\n" +
+		Usage: "show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:\n" +
 			indent4 + "\tiec - IEC format, e.g.: KiB, MiB, GiB (default)\n" +
 			indent4 + "\tsi  - SI (metric) format, e.g.: KB, MB, GB\n" +
-			indent4 + "\traw - do not convert to human-readable format, show exact (raw) values (nanoseconds, bytes)",
+			indent4 + "\traw - do not convert to (or from) human-readable format",
 	}
 
 	// Bucket
@@ -523,8 +523,10 @@ var (
 	}
 	limitBytesPerHourFlag = cli.StringFlag{
 		Name: "limit-bph",
-		Usage: "maximum download speed, as in: maximum size per target (node) per hour (see '--units'), e.g.:\n" +
-			indent4 + "\t--limit-bph 1MiB or, same, --limit-bph 1048576",
+		Usage: "maximum download speed, or more exactly: maximum download size per target (node) per hour, e.g.:\n" +
+			indent4 + "\t'--limit-bph 1GiB' (or same: '--limit-bph 1073741824');\n" +
+			indent4 + "\tthe value is parsed in accordance with the '--units' (see '--units' for details);\n" +
+			indent4 + "\tomitting the flag or (same) specifying '--limit-bph 0' means that download won't be throttled",
 	}
 	objectsListFlag = cli.StringFlag{
 		Name:  "object-list,from",

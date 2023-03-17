@@ -200,10 +200,10 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return incorrectUsageMsg(c, "%q and %q flags both need to be set", lengthFlag.Name, offsetFlag.Name)
 	}
-	if offset, err = parseSizeFlag(c, offsetFlag); err != nil {
+	if offset, err = parseSizeFlag(c, offsetFlag, units); err != nil {
 		return
 	}
-	if length, err = parseSizeFlag(c, lengthFlag); err != nil {
+	if length, err = parseSizeFlag(c, lengthFlag, units); err != nil {
 		return
 	}
 

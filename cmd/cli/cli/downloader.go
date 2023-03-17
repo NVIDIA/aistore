@@ -105,15 +105,18 @@ func newDownloaderPB(baseParams api.BaseParams, id string, refreshTime time.Dura
 }
 
 func (b *downloaderPB) run() (downloadingResult, error) {
-	finished, err := b.start()
+	finishedEarly, err := b.start()
 	if err != nil {
 		return downloadingResult{}, err
 	}
-	if finished {
+	if finishedEarly {
 		return b.result(), nil
 	}
 
 	// All files = finished ones + ones that had downloading errors
+	// TODO: factor in:
+	// 1) no-change in downloaded stats for more than `timeoutNoChange`
+	// 2) resp.JobFinished()
 	for !b.jobFinished() {
 		time.Sleep(b.refreshTime)
 
@@ -126,14 +129,14 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 			b.aborted = true
 			break
 		}
-		b.updateBars(resp)
+		b.updateBarsAndStatus(resp)
 	}
 
 	b.cleanBars()
 	return b.result(), nil
 }
 
-func (b *downloaderPB) start() (bool, error) {
+func (b *downloaderPB) start() (bool /*finishedE early*/, error) {
 	resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 	if err != nil {
 		return false, err
@@ -163,8 +166,7 @@ func (b *downloaderPB) start() (bool, error) {
 		b.totalBar.IncrBy(b.finishedFiles + b.errFiles)
 	}
 
-	b.updateBars(resp)
-
+	b.updateBarsAndStatus(resp)
 	return false, nil
 }
 
@@ -178,7 +180,7 @@ func (b *downloaderPB) updateStatus(resp *dload.StatusResp) {
 	b.aborted = resp.Aborted
 }
 
-func (b *downloaderPB) updateBars(downloadStatus *dload.StatusResp) {
+func (b *downloaderPB) updateBarsAndStatus(downloadStatus *dload.StatusResp) {
 	fileStates := downloadStatus.CurrentTasks
 
 	b.updateFinishedFiles(fileStates)

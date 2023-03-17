@@ -222,9 +222,10 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 }
 
 func etlInitCodeHandler(c *cli.Context) (err error) {
-	msg := &etl.InitCodeMsg{}
-
-	fromFile := parseStrFlag(c, fromFileFlag)
+	var (
+		msg      = &etl.InitCodeMsg{}
+		fromFile = parseStrFlag(c, fromFileFlag)
+	)
 	if fromFile == "" {
 		return fmt.Errorf("flag %s cannot be empty", qflprn(fromFileFlag))
 	}

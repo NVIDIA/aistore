@@ -145,13 +145,15 @@ func parseUnitsFlag(c *cli.Context, flag cli.StringFlag) (units string, err erro
 	return
 }
 
-func parseSizeFlag(c *cli.Context, flag cli.StringFlag) (int64, error) {
+func parseSizeFlag(c *cli.Context, flag cli.StringFlag, unitsParsed ...string) (int64, error) {
 	var (
 		err   error
 		units string
 		val   = parseStrFlag(c, flag)
 	)
-	if flagIsSet(c, unitsFlag) {
+	if len(unitsParsed) > 0 {
+		units = unitsParsed[0]
+	} else if flagIsSet(c, unitsFlag) {
 		units, err = parseUnitsFlag(c, unitsFlag)
 		if err != nil {
 			return 0, err
