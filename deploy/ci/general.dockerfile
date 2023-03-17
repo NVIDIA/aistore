@@ -23,7 +23,7 @@ RUN kubectl version --client
 
 # Cache all dependencies and install the linter.
 RUN git clone --depth=1 https://github.com/NVIDIA/aistore.git && cd aistore && \
-    go mod download && \
+    go mod download && cd cmd/cli && go mod download && cd ../.. && cd cmd/aisfs && go mod download && cd ../.. \
     make lint-update-ci && \
     make install-python-deps && \
     cd .. && rm -rf aistore
