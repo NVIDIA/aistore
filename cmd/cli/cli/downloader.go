@@ -126,7 +126,6 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 			b.aborted = true
 			break
 		}
-
 		b.updateBars(resp)
 	}
 
@@ -140,13 +139,7 @@ func (b *downloaderPB) start() (bool, error) {
 		return false, err
 	}
 
-	b.finishedFiles = resp.FinishedCnt
-	b.totalFiles = resp.Total
-	b.scheduledFiles = resp.ScheduledCnt
-	b.errFiles = resp.ErrorCnt
-
-	b.allDispatched = resp.AllDispatched
-	b.aborted = resp.Aborted
+	b.updateStatus(resp)
 
 	if b.jobFinished() {
 		return true, err
@@ -175,6 +168,16 @@ func (b *downloaderPB) start() (bool, error) {
 	return false, nil
 }
 
+func (b *downloaderPB) updateStatus(resp *dload.StatusResp) {
+	b.finishedFiles = resp.FinishedCnt
+	b.totalFiles = resp.Total
+	b.scheduledFiles = resp.ScheduledCnt
+	b.errFiles = resp.ErrorCnt
+
+	b.allDispatched = resp.AllDispatched
+	b.aborted = resp.Aborted
+}
+
 func (b *downloaderPB) updateBars(downloadStatus *dload.StatusResp) {
 	fileStates := downloadStatus.CurrentTasks
 
@@ -189,10 +192,11 @@ func (b *downloaderPB) updateBars(downloadStatus *dload.StatusResp) {
 
 		b.updateFileBar(newState, oldState)
 	}
+
+	b.updateStatus(downloadStatus)
+
 	if downloadStatus.TotalCnt() > 1 {
 		b.updateTotalBar(downloadStatus.FinishedCnt+downloadStatus.ErrorCnt, downloadStatus.TotalCnt())
-		b.finishedFiles = downloadStatus.FinishedCnt
-		b.errFiles = downloadStatus.ErrorCnt
 	}
 }
 
@@ -282,7 +286,9 @@ func (b *downloaderPB) cleanBars() {
 		state.bar.SetTotal(state.total, true)
 	}
 
-	b.totalBar.SetTotal(int64(b.totalFiles), true)
+	if b.totalBar != nil {
+		b.totalBar.SetTotal(int64(b.totalFiles), true)
+	}
 
 	b.p.Wait()
 }
