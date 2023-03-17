@@ -17,7 +17,7 @@ import (
 // NOTE: compare with cluster/lom_dp.go
 
 type OfflineDP struct {
-	tcbMsg         *apc.TCBMsg
+	tcbmsg         *apc.TCBMsg
 	comm           Communicator
 	requestTimeout time.Duration
 }
@@ -30,7 +30,7 @@ func NewOfflineDP(msg *apc.TCBMsg, lsnode *cluster.Snode) (*OfflineDP, error) {
 	if err != nil {
 		return nil, err
 	}
-	pr := &OfflineDP{tcbMsg: msg, comm: comm}
+	pr := &OfflineDP{tcbmsg: msg, comm: comm}
 	pr.requestTimeout = time.Duration(msg.Transform.Timeout)
 	return pr, nil
 }
@@ -41,7 +41,7 @@ func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsH
 		r   cos.ReadCloseSizer // note: +sizer
 		err error
 	)
-	debug.Assert(dp.tcbMsg != nil)
+	debug.Assert(dp.tcbmsg != nil)
 	call := func() (int, error) {
 		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
@@ -49,7 +49,7 @@ func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsH
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Action:    "read [" + dp.tcbMsg.Transform.Name + "]-transformed " + lom.FullName(),
+		Action:    "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.FullName(),
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,

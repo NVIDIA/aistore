@@ -139,11 +139,11 @@ func (args *bckInitArgs) init() (errCode int, err error) {
 
 	// if permissions are not explicitly specified check the default (msg.Action => permissions)
 	if args.perms == 0 && args.msg != nil {
-		xactRecord, ok := xact.Table[args.msg.Action]
-		if !ok || xactRecord.Access == 0 {
+		dtor, ok := xact.Table[args.msg.Action]
+		if !ok || dtor.Access == 0 {
 			return
 		}
-		args.perms = xactRecord.Access
+		args.perms = dtor.Access
 	}
 	errCode, err = args.access(bck)
 	return

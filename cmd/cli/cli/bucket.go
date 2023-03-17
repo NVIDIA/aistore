@@ -126,21 +126,11 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	return nil
 }
 
-// TODO -- FIXME: `notCached`
 func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	var (
 		showProgress = flagIsSet(c, progressFlag)
-		notCached    = flagIsSet(c, copyObjNotCachedFlag)
 		from, to     = fromBck.DisplayName(), toBck.DisplayName()
 	)
-	// more validation
-	if fromBck.IsRemote() {
-		if notCached {
-			return fmt.Errorf("option %s is not implemented yet", qflprn(copyObjNotCachedFlag))
-		}
-		warn := fmt.Sprintf("copying only those objects from the remote %s that are present (\"cached\") in the cluster", from)
-		actionWarn(c, warn)
-	}
 	if showProgress && flagIsSet(c, copyDryRunFlag) {
 		warn := fmt.Sprintf("dry-run option is incompatible with %s - not implemented yet", qflprn(progressFlag))
 		actionWarn(c, warn)
@@ -153,19 +143,32 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		DryRun:  flagIsSet(c, copyDryRunFlag),
 		Force:   flagIsSet(c, forceFlag),
 	}
+	fltPresence := apc.FltPresent
+	if flagIsSet(c, copyObjNotCachedFlag) {
+		fltPresence = apc.FltExists
+	}
 	if showProgress {
 		var cpr cprCtx
 		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
 		cpr.from, cpr.to = fromBck.DisplayName(), toBck.DisplayName()
-		return cpr.copyBucket(c, fromBck, toBck, msg)
+		return cpr.copyBucket(c, fromBck, toBck, msg, fltPresence)
 	}
 
-	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg)
+	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg, fltPresence)
 	if err != nil {
 		return err
 	}
+	// NOTE: may've transitioned TCB => TCO
+	kind := apc.ActCopyBck
+	if !apc.IsFltPresent(fltPresence) {
+		kind, _, err = getKindNameForID(xid, kind)
+		if err != nil {
+			return err
+		}
+	}
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		/// TODO: unify vs e2e: ("%s[%s] %s => %s", kind, xid, from, to)
 		baseMsg := fmt.Sprintf("Copying %s => %s. ", from, to)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
@@ -177,7 +180,7 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: timeout}
+	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
 	if err := waitXact(apiBP, xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err

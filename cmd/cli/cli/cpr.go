@@ -38,7 +38,7 @@ type cprCtx struct {
 	sinceUpd time.Duration
 }
 
-func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) error {
+func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltPresence int) error {
 	// 1. get from-bck summary
 	qbck := cmn.QueryBcks(fromBck)
 	ctx := &bsummCtx{
@@ -73,7 +73,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 		return err
 	}
 
-	// 2. setup progress
+	// 2. setup progress bar
 	var (
 		progress *mpb.Progress
 		bars     []*mpb.Bar
@@ -83,9 +83,16 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 	progress, bars = simpleBar(objsArg, sizeArg)
 	cpr.barObjs, cpr.barSize = bars[0], bars[1]
 
-	cpr.xid, err = api.CopyBucket(apiBP, fromBck, toBck, msg)
+	cpr.xid, err = api.CopyBucket(apiBP, fromBck, toBck, msg, fltPresence)
 	if err != nil {
 		return err
+	}
+	// NOTE: may've transitioned TCB => TCO
+	if !apc.IsFltPresent(fltPresence) {
+		_, cpr.xname, err = getKindNameForID(cpr.xid, cpr.xname)
+		if err != nil {
+			return err
+		}
 	}
 	if cpr.to != "" {
 		cpr.loghdr = fmt.Sprintf("%s[%s] %s => %s", cpr.xname, cpr.xid, cpr.from, cpr.to)

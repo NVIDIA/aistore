@@ -19,7 +19,7 @@ const ldpact = ".LDP.Reader"
 type (
 	// data provider
 	DP interface {
-		Reader(lom *LOM) (reader cos.ReadOpenCloser, objMeta cmn.ObjAttrsHolder, err error)
+		Reader(lom *LOM) (reader cos.ReadOpenCloser, oah cmn.ObjAttrsHolder, err error)
 	}
 
 	LDP struct{}

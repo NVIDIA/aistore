@@ -130,6 +130,9 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 		return false
 	}
 
+	if m.Version == 0 {
+		m.Version = 1 // on-the-fly (e.g. via PUT remote) w/ brand-new cluster
+	}
 	p.SetProvider(bck.Provider)
 	p.BID = bck.MaskBID(m.Version)
 	p.Created = time.Now().UnixNano()

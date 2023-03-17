@@ -5,8 +5,9 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,70 +19,85 @@ import (
 // The source and the destination buckets are defined as `fromBck` and `toBck`, respectively
 // (not necessarily distinct)
 // For supported archiving formats, see `cos.ArchExtensions`.
-// NOTE: compare with `api.AppendToArch`
+//
+// See also: api.AppendToArch
 func CreateArchMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
-	return doListRangeRequest(bp, fromBck, apc.ActArchive, msg)
+	bp.Method = http.MethodPut
+	q := fromBck.AddToQuery(nil)
+	return dolr(bp, fromBck, apc.ActArchive, msg, q)
 }
 
-func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xid string, err error) {
-	return doListRangeRequest(bp, fromBck, apc.ActCopyObjects, msg)
+// `fltPresence` applies exclusively to remote `fromBck` (is ignored if the source is ais://)
+// and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
+
+func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+	bp.Method = http.MethodPost
+	q := fromBck.AddToQuery(nil)
+	if len(fltPresence) > 0 {
+		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
+	}
+	return dolr(bp, fromBck, apc.ActCopyObjects, msg, q)
 }
 
-func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg) (xid string, err error) {
-	return doListRangeRequest(bp, fromBck, apc.ActETLObjects, msg)
+func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+	bp.Method = http.MethodPost
+	q := fromBck.AddToQuery(nil)
+	if len(fltPresence) > 0 {
+		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
+	}
+	return dolr(bp, fromBck, apc.ActETLObjects, msg, q)
 }
 
 // DeleteList sends request to remove a list of objects from a bucket.
 func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) {
-	deleteMsg := cmn.SelectObjsMsg{ObjNames: filesList}
-	return doListRangeRequest(bp, bck, apc.ActDeleteObjects, deleteMsg)
+	bp.Method = http.MethodDelete
+	q := bck.AddToQuery(nil)
+	msg := cmn.SelectObjsMsg{ObjNames: filesList}
+	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
 // DeleteRange sends request to remove a range of objects from a bucket.
 func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
-	deleteMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(bp, bck, apc.ActDeleteObjects, deleteMsg)
-}
-
-// PrefetchList sends request to prefetch a list of objects from a remote bucket.
-func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
-	prefetchMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
-	return doListRangeRequest(bp, bck, apc.ActPrefetchObjects, prefetchMsg)
-}
-
-// PrefetchRange sends request to prefetch a range of objects from a remote bucket.
-func PrefetchRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
-	prefetchMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(bp, bck, apc.ActPrefetchObjects, prefetchMsg)
+	bp.Method = http.MethodDelete
+	q := bck.AddToQuery(nil)
+	msg := cmn.SelectObjsMsg{Template: rng}
+	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
 // EvictList sends request to evict a list of objects from a remote bucket.
 func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
-	evictMsg := cmn.SelectObjsMsg{ObjNames: fileslist}
-	return doListRangeRequest(bp, bck, apc.ActEvictObjects, evictMsg)
+	bp.Method = http.MethodDelete
+	q := bck.AddToQuery(nil)
+	msg := cmn.SelectObjsMsg{ObjNames: fileslist}
+	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
 // EvictRange sends request to evict a range of objects from a remote bucket.
 func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
-	evictMsg := cmn.SelectObjsMsg{Template: rng}
-	return doListRangeRequest(bp, bck, apc.ActEvictObjects, evictMsg)
+	bp.Method = http.MethodDelete
+	q := bck.AddToQuery(nil)
+	msg := cmn.SelectObjsMsg{Template: rng}
+	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
-// Handles multi-object (delete, prefetch, evict) operations
-// as well as (archive, copy and ETL) transactions
-func doListRangeRequest(bp BaseParams, bck cmn.Bck, action string, msg any) (xid string, err error) {
+// PrefetchList sends request to prefetch a list of objects from a remote bucket.
+func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
+	bp.Method = http.MethodPost
 	q := bck.AddToQuery(nil)
-	switch action {
-	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		bp.Method = http.MethodDelete
-	case apc.ActPrefetchObjects, apc.ActCopyObjects, apc.ActETLObjects:
-		bp.Method = http.MethodPost
-	case apc.ActArchive:
-		bp.Method = http.MethodPut
-	default:
-		err = fmt.Errorf("invalid action %q", action)
-		return
-	}
+	msg := cmn.SelectObjsMsg{ObjNames: fileslist}
+	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
+}
+
+// PrefetchRange sends request to prefetch a range of objects from a remote bucket.
+func PrefetchRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
+	bp.Method = http.MethodPost
+	q := bck.AddToQuery(nil)
+	msg := cmn.SelectObjsMsg{Template: rng}
+	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
+}
+
+// multi-object list-range (delete, prefetch, evict, archive, copy, and etl)
+func dolr(bp BaseParams, bck cmn.Bck, action string, msg any, q url.Values) (xid string, err error) {
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp

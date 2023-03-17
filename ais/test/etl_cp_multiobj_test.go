@@ -81,7 +81,7 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 		objList        = pt.ToSlice()
 		objCnt         = len(objList)
 		requestTimeout = 30 * time.Second
-		tcoMsg         = cmn.TCObjsMsg{
+		tcomsg         = cmn.TCObjsMsg{
 			TCBMsg: apc.TCBMsg{
 				Transform: apc.Transform{
 					Name:    etlName,
@@ -92,13 +92,13 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 		}
 	)
 	if opType == "list" {
-		tcoMsg.SelectObjsMsg.ObjNames = objList
+		tcomsg.SelectObjsMsg.ObjNames = objList
 	} else {
-		tcoMsg.SelectObjsMsg.Template = fileRange
+		tcomsg.SelectObjsMsg.Template = fileRange
 	}
 
 	tlog.Logf("Start offline ETL[%s]\n", etlName)
-	xid, err := api.ETLMultiObj(baseParams, fromBck, tcoMsg)
+	xid, err := api.ETLMultiObj(baseParams, fromBck, tcomsg)
 	tassert.CheckFatal(t, err)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}

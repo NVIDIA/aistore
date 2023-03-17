@@ -51,6 +51,7 @@ type (
 var (
 	_ cluster.Xact   = (*XactTCObjs)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
+	_ lrwi           = (*tcowi)(nil)
 )
 
 ////////////////

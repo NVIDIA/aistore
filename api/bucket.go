@@ -90,6 +90,9 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 }
 
 // Bucket information - a runtime addendum to `BucketProps`.
+//
+// `fltPresence` - as per QparamFltPresence enum (see api/apc/query.go)
+//
 // Unlike `cmn.BucketProps` properties (which are user configurable), bucket runtime info:
 // - includes usage, capacity, other statistics
 // - is obtained via GetBucketInfo() API
@@ -144,7 +147,9 @@ func headerr2msg(bck cmn.Bck, err error) error {
 }
 
 // ListBuckets returns buckets for provided query, where
-// `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... }
+//
+// `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
+//
 // (ListBuckets must not be confused with `ListObjects()` and friends below).
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	q := make(url.Values, 4)
@@ -174,6 +179,8 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 
 // QueryBuckets is a little convenience helper. It returns true if the selection contains
 // at least one bucket that satisfies the (qbck) criteria.
+//
+// `fltPresence` - as per QparamFltPresence enum (see api/apc/query.go)
 func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, error) {
 	bcks, err := ListBuckets(bp, qbck, fltPresence)
 	return len(bcks) > 0, err
@@ -258,13 +265,25 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 //     bucket, etc.
 //   - Copying multiple buckets to the same destination bucket is also permitted.
 //
-// Returns xaction ID if successful, an error otherwise.
-func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg) (xid string, err error) {
+// `fltPresence` applies exclusively to remote `fromBck` and is ignored if the source is ais://
+// The value is enum { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
+// Namely:
+// * apc.FltExists        - copy all objects, including those that are not (present) in AIS
+// * apc.FltPresent 	  - copy the current `fromBck` content in the cluster (default)
+// * apc.FltExistsOutside - copy only those remote objects that are not (present) in AIS
+//
+// msg.Prefix, if specified, applies always and regardless.
+//
+// Returns xaction ID if successful, an error otherwise. See also closely related api.ETLBucket
+func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltPresence ...int) (xid string, err error) {
 	if err = toBck.Validate(); err != nil {
 		return
 	}
 	q := fromBck.AddToQuery(nil)
 	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
+	if len(fltPresence) > 0 {
+		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
+	}
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{

@@ -99,38 +99,38 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			dp    cluster.DP
-			tcmsg = &apc.TCBMsg{}
+			dp     cluster.DP
+			tcbmsg = &apc.TCBMsg{}
 		)
-		if err := cos.MorphMarshal(c.msg.Value, tcmsg); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, tcbmsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLBck {
 			var err error
-			if dp, err = t.etlDP(tcmsg); err != nil {
+			if dp, err = t.etlDP(tcbmsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcb(c, tcmsg, dp)
+		xid, err = t.tcb(c, tcbmsg, dp)
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
 			dp     cluster.DP
-			tcoMsg = &cmn.TCObjsMsg{}
+			tcomsg = &cmn.TCObjsMsg{}
 		)
-		if err := cos.MorphMarshal(c.msg.Value, tcoMsg); err != nil {
+		if err := cos.MorphMarshal(c.msg.Value, tcomsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, c.msg.Value, err)
 			return
 		}
 		if msg.Action == apc.ActETLObjects {
 			var err error
-			if dp, err = t.etlDP(&tcoMsg.TCBMsg); err != nil {
+			if dp, err = t.etlDP(&tcomsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
 		}
-		xid, err = t.tcobjs(c, tcoMsg, dp)
+		xid, err = t.tcobjs(c, tcomsg, dp)
 	case apc.ActECEncode:
 		xid, err = t.ecEncode(c)
 	case apc.ActArchive:

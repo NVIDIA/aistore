@@ -1034,10 +1034,10 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apiItems[0]
-	p.hpostBucket(w, r, msg, bucket)
+	p._bckpost(w, r, msg, bucket)
 }
 
-func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bucket string) {
+func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bucket string) {
 	var (
 		query    = r.URL.Query()
 		bck, err = newBckFromQ(bucket, query, nil)
@@ -1064,8 +1064,8 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	}
 
 	// only the primary can do metasync
-	xactRecord := xact.Table[msg.Action]
-	if xactRecord.Metasync {
+	dtor := xact.Table[msg.Action]
+	if dtor.Metasync {
 		if p.forwardCP(w, r, msg, bucket) {
 			return
 		}
@@ -1120,23 +1120,24 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		w.Write([]byte(xid))
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			xid     string
-			bckTo   *cluster.Bck
-			tcbMsg  = &apc.TCBMsg{}
-			errCode int
+			bckTo       *cluster.Bck
+			tcbmsg      = &apc.TCBMsg{}
+			xid         string
+			errCode     int
+			fltPresence = apc.FltPresent
 		)
 		switch msg.Action {
 		case apc.ActETLBck:
-			if err := cos.MorphMarshal(msg.Value, tcbMsg); err != nil {
+			if err := cos.MorphMarshal(msg.Value, tcbmsg); err != nil {
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
-			if err := tcbMsg.Validate(true); err != nil {
+			if err := tcbmsg.Validate(true); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
 		case apc.ActCopyBck:
-			if err = cos.MorphMarshal(msg.Value, &tcbMsg.CopyBckMsg); err != nil {
+			if err = cos.MorphMarshal(msg.Value, &tcbmsg.CopyBckMsg); err != nil {
 				p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 				return
 			}
@@ -1150,25 +1151,35 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bck)
 			return
 		}
-		// NOTE: not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
+		//
+		// not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
+		//
 		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
 		bckToArgs.createAIS = true
 		if errCode, err = bckToArgs.init(); err != nil && errCode != http.StatusNotFound {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
-		// NOTE: creating remote on the fly
+		//
+		// creating remote on the fly
+		//
 		if errCode == http.StatusNotFound && bckTo.IsRemote() {
 			if bckTo, err = bckToArgs.try(); err != nil {
 				return
 			}
 		}
-		if bckTo.IsHTTP() {
-			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
-			return
+		// start x-tcb or x-tco
+		if v := query.Get(apc.QparamFltPresence); v != "" {
+			fltPresence, _ = strconv.Atoi(v)
 		}
-		glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
-		if xid, err = p.tcb(bck, bckTo, msg, tcbMsg.DryRun); err != nil {
+		if !apc.IsFltPresent(fltPresence) && bck.IsRemote() && !bck.IsHTTP() {
+			xid, err = p.tcbtco(bck, bckTo, msg, tcbmsg, fltPresence)
+		} else {
+			glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
+			xid, err = p.tcb(bck, bckTo, msg, tcbmsg.DryRun)
+		}
+
+		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1176,14 +1187,14 @@ func (p *proxy) hpostBucket(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
 			xid    string
-			tcoMsg = &cmn.TCObjsMsg{}
+			tcomsg = &cmn.TCObjsMsg{}
 			bckTo  *cluster.Bck
 		)
-		if err = cos.MorphMarshal(msg.Value, tcoMsg); err != nil {
+		if err = cos.MorphMarshal(msg.Value, tcomsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo = cluster.CloneBck(&tcoMsg.ToBck)
+		bckTo = cluster.CloneBck(&tcomsg.ToBck)
 		if err = bckTo.Init(p.owner.bmd); err != nil {
 			p.writeErr(w, r, err)
 			return

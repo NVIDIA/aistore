@@ -1139,19 +1139,19 @@ func (coi *copyObjInfo) objsAdd(size int64, err error) {
 func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	debug.Assert(coi.DP == nil)
 
-	// remote to remote: no need to create local copies - use copyReader
 	if lom.Bck().IsRemote() || coi.BckTo.IsRemote() {
+		// when either one or both buckets are remote
 		coi.DP = &cluster.LDP{}
 		return coi.copyReader(lom, objNameTo)
 	}
 
-	// remote
 	smap := coi.t.owner.smap.Get()
 	tsi, err := cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), smap)
 	if err != nil {
 		return 0, err
 	}
 	if tsi.ID() != coi.t.si.ID() {
+		// dst location is tsi
 		return coi.sendRemote(lom, objNameTo, tsi)
 	}
 
@@ -1164,7 +1164,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 		return lom.SizeBytes(), nil
 	}
 
-	// local
+	// copy here
 	dst := cluster.AllocLOM(objNameTo)
 	defer cluster.FreeLOM(dst)
 	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
@@ -1228,36 +1228,41 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
-	var (
-		reader cos.ReadOpenCloser
-		tsi    *cluster.Snode
-	)
+	var tsi *cluster.Snode
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
 	if tsi.ID() != coi.t.si.ID() {
-		// remote
+		// remote dst
 		return coi.sendRemote(lom, objNameTo, tsi)
 	}
 
-	// local
-	if err = lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		return
-	}
 	if coi.dryRun {
 		// discard the reader and be done
 		return coi.dryRunCopyReader(lom)
 	}
+
+	// local dst (NOTE: no assumpions on whether the (src) lom is present)
 	dst := cluster.AllocLOM(objNameTo)
-	defer cluster.FreeLOM(dst)
+	size, err = coi.putReader(lom, dst)
+	cluster.FreeLOM(dst)
+
+	return
+}
+
+func (coi *copyObjInfo) putReader(lom, dst *cluster.LOM) (size int64, err error) {
+	var (
+		reader cos.ReadOpenCloser
+		oah    cmn.ObjAttrsHolder
+	)
 	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return
 	}
-	if lom.Bck().Equal(coi.BckTo, true, true) {
-		dst.SetVersion(lom.Version())
+	if reader, oah, err = coi.DP.Reader(lom); err != nil {
+		return
 	}
-	if reader, _, err = coi.DP.Reader(lom); err != nil {
-		return 0, err
+	if lom.Bck().Equal(coi.BckTo, true, true) {
+		dst.SetVersion(oah.Version())
 	}
 	params := cluster.AllocPutObjParams()
 	{
@@ -1277,7 +1282,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 		return
 	}
 	// xaction stats: inc locally processed (and see data mover for in and out objs)
-	size = lom.SizeBytes()
+	size = oah.SizeBytes()
 	return
 }
 

@@ -283,6 +283,7 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 }
 
 // HeadObject returns object properties; can be conventionally used to establish in-cluster presence.
+// `fltPresence` - as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
 func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cmn.ObjectProps, error) {
 	bp.Method = http.MethodHead
 

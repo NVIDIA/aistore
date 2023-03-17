@@ -16,8 +16,8 @@ type (
 	CopyBckMsg struct {
 		Prepend string `json:"prepend"` // destination naming, as in: dest-obj-name = Prepend + source-obj-name
 		Prefix  string `json:"prefix"`  // prefix to select matching _source_ objects or virtual directories
-		DryRun  bool   `json:"dry_run"` // Don't perform any PUT
-		Force   bool   `json:"force"`   // Force running in presence of a potential "limited coexistence" type conflict
+		DryRun  bool   `json:"dry_run"` // traverse the source, skip writing destination
+		Force   bool   `json:"force"`   // force running in presence of "limited coexistence" conflict
 	}
 	Transform struct {
 		Name    string       `json:"id,omitempty"`

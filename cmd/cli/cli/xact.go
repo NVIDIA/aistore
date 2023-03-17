@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -69,6 +71,38 @@ func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
 		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
 	}
 	return nil
+}
+
+func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr error) {
+	xargs := xact.ArgsMsg{ID: xid}
+	status, err := api.GetOneXactionStatus(apiBP, xargs) // via IC
+	if err == nil {
+		kind, xname = xact.GetKindName(status.Kind)
+		return
+	}
+	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
+		// 2nd attempt assuming xaction in question `IdlesBeforeFinishing`
+		time.Sleep(time.Second)
+		xs, err := queryXactions(xargs)
+		if err != nil {
+			rerr = err
+			return
+		}
+		for _, snaps := range xs {
+			if len(snaps) > 0 {
+				debug.Assert(snaps[0].ID == xid)
+				kind = snaps[0].Kind
+				_, xname = xact.GetKindName(kind)
+				return
+			}
+		}
+	}
+	if len(otherKind) > 0 {
+		rerr = fmt.Errorf("x-%s?[%s] not found", otherKind[0], xid)
+	} else {
+		rerr = fmt.Errorf("x-???[%s] not found", xid)
+	}
+	return
 }
 
 func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
