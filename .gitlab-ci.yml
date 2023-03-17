@@ -100,7 +100,7 @@ build:linux:
   stage: build
   tags:
     - ais
-  timeout: 5m
+  timeout: 10m
   <<: *default_only_def
   script:
     - MODE="" make node # Build node without backends in production mode.
@@ -119,7 +119,7 @@ lint:linux:
   stage: build
   tags:
     - ais
-  timeout: 5m
+  timeout: 10m
   <<: *default_only_def
   script:
     - make lint
