@@ -220,7 +220,7 @@ func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 			// - if `feat.DontHeadRemote` is globally enabled you could still use
 			// `api.CreateBucket` to override (or disable it via `api.SetClusterConfig`)
 			cmn.Features = cmn.GCO.Get().Features
-			args.p.writeErrSilent(args.w, args.r, err, errCode)
+			args.p.writeErr(args.w, args.r, err, errCode, Silent)
 			return
 		}
 	default:

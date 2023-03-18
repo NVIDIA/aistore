@@ -21,7 +21,7 @@ import (
 // [METHOD] /v1/etl
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if err := k8s.Detect(); err != nil {
-		t.writeErrSilent(w, r, err)
+		t.writeErr(w, r, err, 0, Silent)
 		return
 	}
 	switch {
@@ -177,7 +177,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 	health, err := etl.PodHealth(t, etlName)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)
 		}
@@ -190,7 +190,7 @@ func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName stri
 	metricMsg, err := etl.PodMetrics(t, etlName)
 	if err != nil {
 		if cmn.IsErrNotFound(err) {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)
 		}
@@ -200,22 +200,26 @@ func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName stri
 }
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
-	items, err := cmn.MatchItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
+	var items []string
+	items, err = cmn.MatchItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
 	if err != nil {
-		return secret, bck, objName, err
+		return
 	}
 	secret = items[0]
 	// Encoding is done in `transformerPath`.
-	uname, err := url.PathUnescape(items[1])
+	var uname string
+	uname, err = url.PathUnescape(items[1])
 	if err != nil {
-		return secret, bck, objName, err
+		return
 	}
 	var b cmn.Bck
 	b, objName = cmn.ParseUname(uname)
-	if err := b.Validate(); err != nil {
-		return secret, bck, objName, err
-	} else if objName == "" {
-		return secret, bck, objName, fmt.Errorf("object name is missing")
+	if err = b.Validate(); err != nil {
+		return
+	}
+	if objName == "" {
+		err = fmt.Errorf("etl-parse-req: object name is missing (bucket %s)", b)
+		return
 	}
 	bck = cluster.CloneBck(&b)
 	return
@@ -265,6 +269,10 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lom := cluster.AllocLOM(objName)
-	t.headObject(w, r, r.URL.Query(), bck, lom)
+	errCode, err := t.objhead(w.Header(), r.URL.Query(), bck, lom)
 	cluster.FreeLOM(lom)
+	if err != nil {
+		// always silent (compare w/ httpobjhead)
+		t.writeErr(w, r, err, errCode, Silent)
+	}
 }

@@ -845,46 +845,47 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	lom := cluster.AllocLOM(objName)
-	t.headObject(w, r, query, bck, lom)
+	errCode, err := t.objhead(w.Header(), query, bck, lom)
 	cluster.FreeLOM(lom)
+	if err == nil {
+		return
+	}
+	if cos.IsParseBool(query.Get(apc.QparamSilent)) {
+		t.writeErr(w, r, err, errCode, Silent)
+	} else {
+		t.writeErr(w, r, err, errCode)
+	}
 }
 
-// headObject is main function to head the object. It doesn't check request origin,
-// so it must be done by the caller (if necessary).
-func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Values, bck *cluster.Bck, lom *cluster.LOM) {
+func (t *target) objhead(hdr http.Header, query url.Values, bck *cluster.Bck, lom *cluster.LOM) (errCode int, err error) {
 	var (
-		invalidHandler = t.writeErr
-		hdr            = w.Header()
-		fltPresence    int
-		silent         = cos.IsParseBool(query.Get(apc.QparamSilent))
-		exists         = true
-		hasEC          bool
+		fltPresence int
+		exists      = true
+		hasEC       bool
 	)
-	if silent {
-		invalidHandler = t.writeErrSilent
-	}
 	if tmp := query.Get(apc.QparamFltPresence); tmp != "" {
 		var erp error
 		fltPresence, erp = strconv.Atoi(tmp)
 		debug.AssertNoErr(erp)
 	}
-	if err := lom.InitBck(bck.Bucket()); err != nil {
-		invalidHandler(w, r, err)
+	if err = lom.InitBck(bck.Bucket()); err != nil {
+		if cmn.IsErrBucketNought(err) {
+			errCode = http.StatusNotFound
+		}
 		return
 	}
-	err := lom.Load(true /*cache it*/, false /*locked*/)
+	err = lom.Load(true /*cache it*/, false /*locked*/)
 	if err == nil {
 		if apc.IsFltNoProps(fltPresence) {
 			return
 		}
 		if fltPresence == apc.FltExistsOutside {
-			err := fmt.Errorf("%s is present (flt %d=\"outside\")", lom.FullName(), fltPresence)
-			invalidHandler(w, r, err)
+			err = fmt.Errorf("%s is present (flt %d=\"outside\")", lom.FullName(), fltPresence)
 			return
 		}
 	} else {
 		if !cmn.IsObjNotExist(err) {
-			invalidHandler(w, r, err)
+			errCode = http.StatusNotFound
 			return
 		}
 		exists = false
@@ -895,9 +896,8 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 
 	if !exists {
 		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			err := cmn.NewErrNotFound("%s: object %s", t, lom.FullName())
-			invalidHandler(w, r, err, http.StatusNotFound)
-			return
+			err = cmn.NewErrNotFound("%s: object %s", t, lom.FullName())
+			return http.StatusNotFound, err
 		}
 	}
 
@@ -934,15 +934,18 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		}
 	} else {
 		// cold HEAD
-		objAttrs, errCode, err := t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
+		var oa *cmn.ObjAttrs
+		oa, errCode, err = t.Backend(lom.Bck()).HeadObj(context.Background(), lom)
 		if err != nil {
-			invalidHandler(w, r, cmn.NewErrFailedTo(t, "HEAD", lom, err), errCode)
+			if errCode != http.StatusNotFound {
+				err = cmn.NewErrFailedTo(t, "HEAD", lom, err)
+			}
 			return
 		}
 		if apc.IsFltNoProps(fltPresence) {
 			return
 		}
-		op.ObjAttrs = *objAttrs
+		op.ObjAttrs = *oa
 		op.ObjAttrs.Atime = 0
 	}
 
@@ -973,6 +976,7 @@ func (t *target) headObject(w http.ResponseWriter, r *http.Request, query url.Va
 		return nil, false
 	})
 	debug.AssertNoErr(errIter)
+	return
 }
 
 // PATCH /v1/objects/<bucket-name>/<object-name>
@@ -1052,16 +1056,16 @@ func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
-			t.writeErrSilent(w, r, err)
+			t.writeErr(w, r, err, Silent)
 			return
 		}
 	}
 	md, err := ec.ObjectMetadata(bck, objName)
 	if err != nil {
 		if os.IsNotExist(err) {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
-			t.writeErrSilent(w, r, err, http.StatusInternalServerError)
+			t.writeErr(w, r, err, http.StatusInternalServerError, Silent)
 		}
 		return
 	}
@@ -1084,7 +1088,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.B
 	sliceFQN := lom.Mountpath().MakePathFQN(bck.Bucket(), fs.ECSliceType, objName)
 	finfo, err := os.Stat(sliceFQN)
 	if err != nil {
-		t.writeErrSilent(w, r, err, http.StatusNotFound)
+		t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		return
 	}
 	file, err := os.Open(sliceFQN)

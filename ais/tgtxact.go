@@ -67,7 +67,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	if xactMsg.Bck.Name != "" {
 		bck = cluster.CloneBck(&xactMsg.Bck)
 		if err := bck.Init(t.owner.bmd); err != nil {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
 		}
 	}
@@ -133,7 +133,7 @@ func (t *target) xget(w http.ResponseWriter, r *http.Request, what, uuid string)
 		return
 	}
 	err = cmn.NewErrXactNotFoundError("[" + uuid + "]")
-	t.writeErrSilent(w, r, err, http.StatusNotFound)
+	t.writeErr(w, r, err, http.StatusNotFound, Silent)
 }
 
 func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xactQuery xreg.Flt) {
@@ -143,7 +143,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 		return
 	}
 	if _, ok := err.(*cmn.ErrXactionNotFound); ok {
-		t.writeErrSilent(w, r, err, http.StatusNotFound)
+		t.writeErr(w, r, err, http.StatusNotFound, Silent)
 	} else {
 		t.writeErr(w, r, err)
 	}

@@ -940,7 +940,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
-					p.writeErrSilent(w, r, err, http.StatusServiceUnavailable)
+					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
 				}
 				return
 			}

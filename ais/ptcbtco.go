@@ -55,7 +55,7 @@ func (p *proxy) tcbtco(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, tcbmsg *apc
 	}
 	tcomsg.SelectObjsMsg.ObjNames = names
 
-	// 5. multi-obj action
+	// 5. tco (multi-obj) action
 	altmsg = &apc.ActMsg{Action: apc.ActCopyObjects, Value: tcomsg}
 	if msg.Action == apc.ActETLBck {
 		altmsg.Action = apc.ActETLObjects

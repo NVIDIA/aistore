@@ -1100,36 +1100,24 @@ func _sev2logname(sev string) (log string, err error) {
 // HTTP err + spec message + code + stats
 //
 
+const Silent = 1
+
 func (*htrun) writeErr(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	cmn.WriteErr(w, r, err, errCode...)
+	cmn.WriteErr(w, r, err, errCode...) // [errCode[, silent]]
 }
 
 func (*htrun) writeErrMsg(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	cmn.WriteErrMsg(w, r, msg, errCode...)
+	cmn.WriteErrMsg(w, r, msg, errCode...) // [errCode[, silent]]
 }
 
-func (h *htrun) writeErrSilent(w http.ResponseWriter, r *http.Request, err error, errCode ...int) {
-	const _silent = 1
-	if len(errCode) == 0 {
-		h.writeErr(w, r, err, http.StatusBadRequest, _silent)
-	} else {
-		h.writeErr(w, r, err, errCode[0], _silent)
-	}
-}
-
-func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int,
-	format string, a ...any) {
+func (h *htrun) writeErrSilentf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
-	h.writeErrSilent(w, r, err, errCode)
+	h.writeErr(w, r, err, errCode, Silent)
 }
 
 func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
 	h.writeErrMsg(w, r, err.Error(), errCode)
-}
-
-func (h *htrun) writeErrStatusSilentf(w http.ResponseWriter, r *http.Request, errCode int, format string, a ...any) {
-	h.writeErrSilent(w, r, fmt.Errorf(format, a...), errCode)
 }
 
 func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...any) {

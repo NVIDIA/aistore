@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -602,10 +601,8 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 			m: reb, xreb: reb.xctn(),
 			wg: &sync.WaitGroup{},
 		}, smap: rargs.smap}
-		query  = url.Values{}
 		loghdr = reb.logHdr(rargs.id, rargs.smap)
 	)
-	query.Set(apc.QparamSilent, "true")
 	for _, lomAck := range reb.lomAcks() {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {

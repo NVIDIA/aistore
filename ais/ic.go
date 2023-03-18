@@ -81,9 +81,11 @@ begin:
 	}
 	if selfIC {
 		if !exists && !retry {
-			ic.p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found (%s)", uuid, smap.StrIC(ic.p.si))
+			err := fmt.Errorf("x-[%s] not found (%s)", uuid, smap.StrIC(ic.p.si))
+			ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return true
-		} else if retry {
+		}
+		if retry {
 			withRetry(cmn.Timeout.CplaneOperation(), func() bool {
 				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
@@ -225,7 +227,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	if msg.Bck.Name != "" {
 		bck = cluster.CloneBck(&msg.Bck)
 		if err := bck.Init(ic.p.owner.bmd); err != nil {
-			ic.p.writeErrSilent(w, r, err, http.StatusNotFound)
+			ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
 		}
 	}
@@ -236,7 +238,8 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	})
 	if nl == nil {
 		smap := ic.p.owner.smap.get()
-		ic.p.writeErrStatusSilentf(w, r, http.StatusNotFound, "%s, %s", smap.StrIC(ic.p.si), msg)
+		err := fmt.Errorf("nl not found: %s, %s", smap.StrIC(ic.p.si), msg)
+		ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 		return
 	}
 

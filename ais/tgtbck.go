@@ -292,7 +292,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 	if xctn == nil {
 		err := cmn.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
 		if silent {
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		}
@@ -472,7 +472,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		ctx = context.WithValue(ctx, cos.CtxOriginalURL, originalURL)
 		if !inBMD && originalURL == "" {
 			err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
-			t.writeErrSilent(w, r, err, http.StatusNotFound)
+			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
 		}
 	}
@@ -482,11 +482,11 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		if !inBMD {
 			if code == http.StatusNotFound {
 				err = cmn.NewErrRemoteBckNotFound(apireq.bck.Bucket())
-				t.writeErrSilent(w, r, err, code)
+				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
 				if cos.IsParseBool(apireq.query.Get(apc.QparamSilent)) {
-					t.writeErrSilent(w, r, err, code)
+					t.writeErr(w, r, err, code, Silent)
 				} else {
 					t.writeErr(w, r, err, code)
 				}
