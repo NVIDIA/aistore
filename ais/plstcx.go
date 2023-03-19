@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -80,7 +81,48 @@ func (c *lstcx) do() (string, error) {
 	cnt := cos.Min(len(names), 10)
 	glog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
 
-	// TODO -- FIXME: cycle thru pages
+	c.tcomsg.TxnUUID, err = p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
+	if lst.ContinuationToken != "" {
+		c.lsmsg.ContinuationToken = lst.ContinuationToken
+		go c.pages(smap)
+	}
+	return c.tcomsg.TxnUUID, err
+}
 
-	return p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
+// pages 2..last
+func (c *lstcx) pages(smap *smapX) {
+	p := c.p
+	for {
+		// next page
+		lst, err := p.lsObjsR(c.bckFrom, &c.lsmsg, smap, true /*wantOnlyRemote*/)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		if len(lst.Entries) == 0 {
+			return
+		}
+
+		// next tcomsg
+		names := make([]string, 0, len(lst.Entries))
+		for _, e := range lst.Entries {
+			names = append(names, e.Name)
+		}
+		c.tcomsg.ListRange.ObjNames = names
+
+		// next tco action
+		c.altmsg.Value = &c.tcomsg
+		xid, err := p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		debug.Assertf(c.tcomsg.TxnUUID == xid, "%q vs %q", c.tcomsg.TxnUUID, xid)
+
+		// last page?
+		if lst.ContinuationToken == "" {
+			return
+		}
+		c.lsmsg.ContinuationToken = lst.ContinuationToken
+	}
 }

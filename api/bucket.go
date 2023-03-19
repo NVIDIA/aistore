@@ -452,13 +452,13 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 			progress.callback(progress)
 		}
 
-		if page.ContinuationToken == "" { // Listed all objects.
+		if page.ContinuationToken == "" { // listed all pages
 			lsmsg.ContinuationToken = ""
 			break
 		}
 
 		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
-		cos.Assert(cos.IsValidUUID(page.UUID))
+		debug.Assert(cos.IsValidUUID(page.UUID))
 		lsmsg.UUID = page.UUID
 		lsmsg.ContinuationToken = page.ContinuationToken
 	}

@@ -218,9 +218,9 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cos.ParsedTemplate
 	)
-	pt, err = cos.ParseBashTemplate(rangeStr)
+	pt, err = cos.NewParsedTemplate(rangeStr) // NOTE: prefix w/ no range is fine
 	if err != nil {
-		fmt.Fprintf(c.App.Writer, "invalid template %q: %v", rangeStr, err)
+		fmt.Fprintf(c.App.Writer, "invalid template %q: %v\n", rangeStr, err)
 		return
 	}
 	// [DRY-RUN]
@@ -228,7 +228,7 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 		objs := pt.ToSlice(dryRunExamplesCnt)
 		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s", objs)
 		if pt.Count() > dryRunExamplesCnt {
-			fmt.Fprintf(c.App.Writer, "(and %d more)", pt.Count()-dryRunExamplesCnt)
+			fmt.Fprintf(c.App.Writer, "(and %d more)\n", pt.Count()-dryRunExamplesCnt)
 		}
 		return
 	}
