@@ -76,7 +76,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("[%s] %s => %s\n", template, bckFrom.DisplayName(), bckTo.DisplayName())
-		msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: bckTo}
+		msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
 		xid, err = api.CopyMultiObj(baseParams, bckFrom, msg)
 		tassert.CheckFatal(t, err)
 	}
@@ -164,7 +164,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(list []string, iter int) {
-						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{ObjNames: list}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						} else {
@@ -177,7 +177,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 					start := rand.Intn(m.num - numToCopy)
 					go func(start, iter int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-						msg := cmn.TCObjsMsg{SelectObjsMsg: cmn.SelectObjsMsg{Template: template}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: toBck}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						} else {

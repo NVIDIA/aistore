@@ -241,7 +241,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 
 	var (
 		msg   = apc.ActMsg{Action: apc.ActDeleteObjects}
-		lrMsg = &cmn.SelectObjsMsg{ObjNames: make([]string, 0, len(objList.Object))}
+		lrMsg = &cmn.ListRange{ObjNames: make([]string, 0, len(objList.Object))}
 	)
 	for _, obj := range objList.Object {
 		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)
@@ -249,7 +249,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	msg.Value = lrMsg
 
 	// Marshal+Unmashal to new struct:
-	// hack to make `doListRange` treat `listMsg` as `map[string]interface`
+	// hack to convince `p.listrange` treat `listMsg` as `map[string]interface`
 	var (
 		msg2  apc.ActMsg
 		bt    = cos.MustMarshal(&msg)
@@ -261,7 +261,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if _, err := p.doListRange(http.MethodDelete, bucket, &msg2, query); err != nil {
+	if _, err := p.listrange(http.MethodDelete, bucket, &msg2, query); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
 	// TODO: The client wants the response containing two lists:

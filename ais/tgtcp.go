@@ -1078,7 +1078,7 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
-	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentAnywhere))
+	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentCluster))
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodHead,

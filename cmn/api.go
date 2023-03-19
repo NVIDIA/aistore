@@ -146,7 +146,7 @@ type (
 // Multi-object (list|range) operations
 type (
 	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
-	SelectObjsMsg struct {
+	ListRange struct {
 		Template string   `json:"template"`
 		ObjNames []string `json:"objnames"`
 	}
@@ -160,7 +160,7 @@ type (
 		FromBckName string `json:"-"`
 		ArchName    string `json:"archname"` // must have one of the cos.ArchExtensions
 		Mime        string `json:"mime"`     // user-specified mime type takes precedence if defined
-		SelectObjsMsg
+		ListRange
 		InclSrcBname          bool `json:"isbn"` // include source bucket name into the names of archived objects
 		AllowAppendToExisting bool `json:"aate"` // allow adding a list or a range of objects to an existing archive
 		ContinueOnError       bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
@@ -169,7 +169,7 @@ type (
 	//  Multi-object copy & transform (see also: TCBMsg)
 	TCObjsMsg struct {
 		ToBck Bck `json:"tobck"`
-		SelectObjsMsg
+		ListRange
 		TxnUUID string `json:"-"`
 		apc.TCBMsg
 		ContinueOnError bool `json:"coer"` // ditto
@@ -385,13 +385,13 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 }
 
 ///////////////////
-// SelectObjsMsg //
+// ListRange //
 ///////////////////
 
-// NOTE: to operate on an entire bucket use empty `SelectObjsMsg{}`
+// NOTE: to operate on an entire bucket use empty `ListRange{}`
 
-func (lrm *SelectObjsMsg) IsList() bool      { return len(lrm.ObjNames) > 0 }
-func (lrm *SelectObjsMsg) HasTemplate() bool { return lrm.Template != "" }
+func (lrm *ListRange) IsList() bool      { return len(lrm.ObjNames) > 0 }
+func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 
 ////////////////
 // ArchiveMsg //

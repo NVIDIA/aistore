@@ -92,9 +92,9 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 		}
 	)
 	if opType == "list" {
-		tcomsg.SelectObjsMsg.ObjNames = objList
+		tcomsg.ListRange.ObjNames = objList
 	} else {
-		tcomsg.SelectObjsMsg.Template = fileRange
+		tcomsg.ListRange.Template = fileRange
 	}
 
 	tlog.Logf("Start offline ETL[%s]\n", etlName)

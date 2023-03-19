@@ -32,19 +32,18 @@ func NewTarget(bo cluster.Bowner) *TargetMock {
 
 func (t *TargetMock) Bowner() cluster.Bowner { return t.BO }
 
-func (*TargetMock) Sname() string                 { return "tmock" }
-func (*TargetMock) SID() string                   { return "mock-id" }
-func (*TargetMock) String() string                { return "tmock" }
-func (*TargetMock) Snode() *cluster.Snode         { return nil }
-func (*TargetMock) ClusterStarted() bool          { return true }
-func (*TargetMock) NodeStarted() bool             { return true }
-func (*TargetMock) DataClient() *http.Client      { return http.DefaultClient }
-func (*TargetMock) Sowner() cluster.Sowner        { return nil }
-func (*TargetMock) GetAllRunning(string) []string { return nil }
+func (*TargetMock) Sname() string            { return "tmock" }
+func (*TargetMock) SID() string              { return "mock-id" }
+func (*TargetMock) String() string           { return "tmock" }
+func (*TargetMock) Snode() *cluster.Snode    { return nil }
+func (*TargetMock) ClusterStarted() bool     { return true }
+func (*TargetMock) NodeStarted() bool        { return true }
+func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
+func (*TargetMock) Sowner() cluster.Sowner   { return nil }
+func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
+func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
-func (*TargetMock) PageMM() *memsys.MMSA { return memsys.PageMM() }
-func (*TargetMock) ByteMM() *memsys.MMSA { return memsys.ByteMM() }
-
+func (*TargetMock) GetAllRunning(string, bool) ([]string, []string)             { return nil, nil }
 func (*TargetMock) PutObject(*cluster.LOM, *cluster.PutObjectParams) error      { return nil }
 func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error) { return 0, nil }
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                       { return 0, nil }

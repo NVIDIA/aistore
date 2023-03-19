@@ -889,7 +889,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *cluster.Bck, lo
 			return
 		}
 		exists = false
-		if fltPresence == apc.FltPresentAnywhere {
+		if fltPresence == apc.FltPresentCluster {
 			exists = lom.RestoreToLocation()
 		}
 	}

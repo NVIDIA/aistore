@@ -52,7 +52,7 @@ func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg, fltPresence 
 func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	bp.Method = http.MethodDelete
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{ObjNames: filesList}
+	msg := cmn.ListRange{ObjNames: filesList}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
@@ -60,7 +60,7 @@ func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) 
 func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodDelete
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{Template: rng}
+	msg := cmn.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
 
@@ -68,7 +68,7 @@ func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	bp.Method = http.MethodDelete
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{ObjNames: fileslist}
+	msg := cmn.ListRange{ObjNames: fileslist}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
@@ -76,7 +76,7 @@ func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodDelete
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{Template: rng}
+	msg := cmn.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
 
@@ -84,7 +84,7 @@ func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	bp.Method = http.MethodPost
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{ObjNames: fileslist}
+	msg := cmn.ListRange{ObjNames: fileslist}
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }
 
@@ -92,7 +92,7 @@ func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error
 func PrefetchRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodPost
 	q := bck.AddToQuery(nil)
-	msg := cmn.SelectObjsMsg{Template: rng}
+	msg := cmn.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }
 

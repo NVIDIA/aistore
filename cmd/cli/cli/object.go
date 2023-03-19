@@ -382,7 +382,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	var (
 		propsFlag     []string
 		selectedProps []string
-		fltPresence   = apc.FltPresentAnywhere
+		fltPresence   = apc.FltPresentCluster
 	)
 	if flagIsSet(c, objNotCachedPropsFlag) {
 		fltPresence = apc.FltExists

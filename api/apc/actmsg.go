@@ -50,7 +50,7 @@ const (
 	ActStartGFN       = "start-gfn"
 	ActStoreCleanup   = "cleanup-store"
 
-	// multi-object (via `SelectObjsMsg`)
+	// multi-object (via `ListRange`)
 	ActCopyObjects     = "copy-listrange"
 	ActDeleteObjects   = "delete-listrange"
 	ActETLObjects      = "etl-listrange"

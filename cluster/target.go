@@ -46,7 +46,7 @@ type (
 		OOS(*fs.CapStatus) fs.CapStatus
 
 		// Running now
-		GetAllRunning(xactKind string) []string
+		GetAllRunning(xactKind string, separateIdle bool) (running, idle []string)
 	}
 
 	// a node that can also write objects

@@ -54,8 +54,9 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	}
 	debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 
+	// TODO: always return both running & idle, propagate the (api) change throughout
 	if what == apc.WhatAllRunningXacts {
-		out := xreg.GetAllRunning(xactMsg.Kind)
+		out, _ := xreg.GetAllRunning(xactMsg.Kind, false /*separate idle*/)
 		t.writeJSON(w, r, out, what)
 		return
 	}
@@ -194,7 +195,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) e
 	// 2. with bucket
 	case apc.ActPrefetchObjects:
 		var (
-			smsg = &cmn.SelectObjsMsg{}
+			smsg = &cmn.ListRange{}
 		)
 		rns := xreg.RenewPrefetch(args.ID, t, bck, smsg)
 		if rns.Err != nil {

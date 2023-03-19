@@ -810,7 +810,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, fmtNotRemote, bck.Name)
 			return
 		}
-		if xid, err = p.doListRange(r.Method, bck.Name, msg, apireq.query); err != nil {
+		if xid, err = p.listrange(r.Method, bck.Name, msg, apireq.query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1173,12 +1173,24 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			fltPresence, _ = strconv.Atoi(v)
 		}
 		if !apc.IsFltPresent(fltPresence) && bck.IsRemote() && !bck.IsHTTP() {
-			xid, err = p.tcbtco(bck, bckTo, msg, tcbmsg, fltPresence)
+			if fltPresence == apc.FltExistsOutside {
+				// TODO: upon request
+				err = fmt.Errorf("(flt %d=\"outside\") not implemented yet", fltPresence)
+				p.writeErr(w, r, err, http.StatusNotImplemented)
+				return
+			}
+			lstcx := &lstcx{
+				p:       p,
+				bckFrom: bck,
+				bckTo:   bckTo,
+				amsg:    msg,
+				tcbmsg:  tcbmsg,
+			}
+			xid, err = lstcx.do()
 		} else {
 			glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
 			xid, err = p.tcb(bck, bckTo, msg, tcbmsg.DryRun)
 		}
-
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1227,7 +1239,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		var xid string
-		if xid, err = p.doListRange(r.Method, bucket, msg, query); err != nil {
+		if xid, err = p.listrange(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2192,7 +2204,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 	p.statsT.Inc(stats.RenameCount)
 }
 
-func (p *proxy) doListRange(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
+func (p *proxy) listrange(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {
 	var (
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsg(msg, nil, cos.GenUUID())

@@ -24,7 +24,7 @@ import (
 // x-TCO: multi-object transform or copy
 func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	var (
-		lrMsg   cmn.SelectObjsMsg
+		lrMsg   cmn.ListRange
 		numObjs int64
 	)
 	debug.Assert((listObjs == "" && tmplObjs != "") || (listObjs != "" && tmplObjs == ""))
@@ -43,7 +43,7 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 	}
 
 	// 2. TCO message
-	var msg = cmn.TCObjsMsg{SelectObjsMsg: lrMsg, ToBck: toBck}
+	var msg = cmn.TCObjsMsg{ListRange: lrMsg, ToBck: toBck}
 	msg.DryRun = flagIsSet(c, copyDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
 		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)

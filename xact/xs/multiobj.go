@@ -49,7 +49,7 @@ type (
 		xctn    lrxact
 		t       cluster.Target
 		ctx     context.Context
-		msg     *cmn.SelectObjsMsg
+		msg     *cmn.ListRange
 		freeLOM bool // free LOM upon return from lriterator.do()
 	}
 )
@@ -59,7 +59,7 @@ type (
 	evdFactory struct {
 		xreg.RenewBase
 		xctn *evictDelete
-		msg  *cmn.SelectObjsMsg
+		msg  *cmn.ListRange
 		kind string
 	}
 	evictDelete struct {
@@ -69,7 +69,7 @@ type (
 	prfFactory struct {
 		xreg.RenewBase
 		xctn *prefetch
-		msg  *cmn.SelectObjsMsg
+		msg  *cmn.ListRange
 	}
 	prefetch struct {
 		lriterator
@@ -95,7 +95,7 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *cmn.SelectObjsMsg, freeLOM bool) {
+func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *cmn.ListRange, freeLOM bool) {
 	r.xctn = xctn
 	r.t = t
 	r.ctx = context.Background()
@@ -236,7 +236,7 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 //////////////////
 
 func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	msg := args.Custom.(*cmn.SelectObjsMsg)
+	msg := args.Custom.(*cmn.ListRange)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	np := &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
 	return np
@@ -254,7 +254,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.SelectObjsMsg) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRange) (ed *evictDelete) {
 	ed = &evictDelete{}
 	ed.lriterator.init(ed, xargs.T, msg, true /*freeLOM*/)
 	ed.InitBase(xargs.UUID, kind, bck)
@@ -301,7 +301,7 @@ func (r *evictDelete) Snap() (snap *cluster.Snap) {
 //////////////
 
 func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
-	msg := args.Custom.(*cmn.SelectObjsMsg)
+	msg := args.Custom.(*cmn.ListRange)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	np := &prfFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return np
@@ -329,7 +329,7 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.SelectObjsMsg) (prf *prefetch) {
+func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRange) (prf *prefetch) {
 	prf = &prefetch{}
 	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
 	prf.InitBase(xargs.UUID, kind, bck)

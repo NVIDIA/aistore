@@ -232,7 +232,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				lrit    = &lriterator{}
 				freeLOM = false // not delegating to iterator
 			)
-			lrit.init(r, r.p.T, &msg.SelectObjsMsg, freeLOM)
+			lrit.init(r, r.p.T, &msg.ListRange, freeLOM)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {

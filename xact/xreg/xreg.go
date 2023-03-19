@@ -162,20 +162,40 @@ outer:
 	return
 }
 
-func GetAllRunning(kind string) []string {
-	return dreg.entries.getAllRunning(kind)
+func GetAllRunning(kind string, separateIdle bool) ([]string, []string) {
+	return dreg.entries.getAllRunning(kind, separateIdle)
 }
 
-func (e *entries) getAllRunning(kind string) (out []string) {
+func (e *entries) getAllRunning(kind string, separateIdle bool) (running, idle []string) {
 	for _, entry := range e.active {
-		xctn := entry.Get()
-		k := xctn.Kind()
-		if (kind == "" || kind == k) && xctn.Running() {
-			xqn := k + xact.LeftID + xctn.ID() + xact.RightID // e.g. "make-n-copies[fGhuvvn7t]"
-			out = append(out, xqn)
+		var (
+			xctn = entry.Get()
+			k    = xctn.Kind()
+		)
+		if kind != "" && kind != k {
+			continue
+		}
+		if !xctn.Running() {
+			continue
+		}
+		var (
+			xqn    = k + xact.LeftID + xctn.ID() + xact.RightID // e.g. "make-n-copies[fGhuvvn7t]"
+			isIdle bool
+		)
+		if separateIdle {
+			if _, ok := xctn.(xact.Demand); ok {
+				isIdle = xctn.Snap().IsIdle()
+			}
+		}
+		if isIdle {
+			idle = append(idle, xqn)
+		} else {
+			running = append(running, xqn)
 		}
 	}
-	return sort.StringSlice(out)
+	sort.Strings(running)
+	sort.Strings(idle)
+	return
 }
 
 func GetRunning(flt Flt) Renewable { return dreg.getRunning(flt) }

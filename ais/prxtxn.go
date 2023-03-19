@@ -611,8 +611,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string
 
 	// 3. commit
 	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	if xid != "" {
-		// happens to grab cluster-wide ID
+	if err == nil {
 		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
 	}
 	return
@@ -767,7 +766,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 	// commit
 	xid, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
 	if xid != "" {
-		// happens to grab cluster-wide ID
+		// cluster-wide UUID
 		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
 	}
 	return

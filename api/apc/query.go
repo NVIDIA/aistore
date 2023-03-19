@@ -73,24 +73,25 @@ const (
 )
 
 // QparamFltPresence enum.
-// Descibes both buckets and objects with respect to their existence/presence
-// (or non-existence/non-presence) in a given AIS cluster.
 //
-// (Terminology: "FltPresent*" here refers to availability (i.e., "presence") in the cluster.)
+// Descibes both buckets and objects with respect to their existence/presence (or non-existence/non-presence)
+// in AIS cluster.
+//
+// "FltPresent*" refers to availability ("presence") in the cluster. For details, see the values and comments below.
 //
 // Remote object or bucket that is currently not present can still be accessed with
 // the very first access making it "present", etc.
 const (
-	FltExists          = iota // (object | bucket) exists inside and/or outside
-	FltExistsNoProps          // same as above but no need to return props/info
-	FltPresent                // bucket: is present; object: present and properly located
-	FltPresentNoProps         // same as above but no need to return props/info
-	FltPresentAnywhere        // objects: present anywhere/anyhow _in_ the cluster (replica, ec-slices, misplaced)
-	FltExistsOutside          // not present - exists outside cluster, e.g. cloud bucket
+	FltExists         = iota // (object | bucket) exists inside and/or outside cluster
+	FltExistsNoProps         // same as above but no need to return props/info
+	FltPresent               // bucket: is present | object: present and properly located
+	FltPresentNoProps        // same as above but no need to return props/info
+	FltPresentCluster        // objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
+	FltExistsOutside         // not present - exists _outside_ cluster
 )
 
 func IsFltPresent(v int) bool {
-	return v == FltPresent || v == FltPresentNoProps || v == FltPresentAnywhere
+	return v == FltPresent || v == FltPresentNoProps || v == FltPresentCluster
 }
 
 func IsFltNoProps(v int) bool {

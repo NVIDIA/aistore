@@ -304,16 +304,23 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 6. running xactions
 	if !idle {
-		kindIds := r.t.GetAllRunning("")
-		if len(kindIds) > 0 {
-			ln := "running: " + strings.Join(kindIds, " ")
-			if ln != r.xln {
-				r.lines = append(r.lines, ln)
-				r.xln = ln
+		var (
+			ln     string
+			rs, is = r.t.GetAllRunning("", true /*separate idle*/)
+		)
+		if len(rs) > 0 {
+			ln = "running: " + strings.Join(rs, " ")
+			if len(is) > 0 {
+				ln += "; "
 			}
-		} else {
-			r.xln = ""
 		}
+		if len(is) > 0 {
+			ln += "idle: " + strings.Join(is, " ")
+		}
+		if ln != "" && ln != r.xln {
+			r.lines = append(r.lines, ln)
+		}
+		r.xln = ln
 	}
 
 	// 7. and, finally
