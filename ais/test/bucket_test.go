@@ -2212,6 +2212,7 @@ func TestCopyBucket(t *testing.T) {
 		dstBckHasObjects bool // determines if destination bucket contains any objects before copy or not
 		multipleDests    bool // determines if there are multiple destinations to which objects are copied
 		onlyLong         bool
+		evictRemoteSrc   bool
 	}{
 		// ais -> ais
 		{srcRemote: false, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: false},
@@ -2227,6 +2228,10 @@ func TestCopyBucket(t *testing.T) {
 		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, multipleDests: true},
 		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: true, multipleDests: true},
 
+		// evicted remote -> ais
+		{srcRemote: true, dstRemote: false, dstBckExist: false, dstBckHasObjects: false, evictRemoteSrc: true},
+		{srcRemote: true, dstRemote: false, dstBckExist: true, dstBckHasObjects: false, evictRemoteSrc: true},
+
 		// ais -> remote
 		{srcRemote: false, dstRemote: true, dstBckExist: true, dstBckHasObjects: false},
 	}
@@ -2235,11 +2240,15 @@ func TestCopyBucket(t *testing.T) {
 		// Bucket must exist when we require it to have objects.
 		cos.Assert(test.dstBckExist || !test.dstBckHasObjects)
 
-		// We only have 1 remote bucket available (cliBck), coping from the same bucket to the same bucket would fail.
-		// TODO: remove this limitation and add remote -> remote test cases.
+		// in integration tests, we only have 1 remote bucket (cliBck)
+		// (TODO: add remote -> remote)
 		cos.Assert(!test.srcRemote || !test.dstRemote)
 
 		testName := fmt.Sprintf("src-remote=%t/dst-remote=%t/", test.srcRemote, test.dstRemote)
+		if test.evictRemoteSrc {
+			cos.Assert(test.srcRemote)
+			testName = fmt.Sprintf("src-remote-evicted/dst-remote=%t/", test.dstRemote)
+		}
 		if test.dstBckExist {
 			testName += "present/"
 			if test.dstBckHasObjects {
@@ -2354,26 +2363,46 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 			} else if bckTest.IsRemote() {
 				srcm.remotePuts(false /*evict*/)
-				defer srcm.del()
-
 				srcBckList, err = api.ListObjects(baseParams, srcm.bck, nil, 0)
 				tassert.CheckFatal(t, err)
+				if test.evictRemoteSrc {
+					tlog.Logf("evicting %s\n", srcm.bck)
+					err := api.EvictRemoteBucket(baseParams, srcm.bck, false /*keep md*/)
+					tassert.CheckFatal(t, err)
+				}
+				defer srcm.del()
 			} else {
 				panic(bckTest)
 			}
 
 			xactIDs := make([]string, len(dstms))
 			for idx, dstm := range dstms {
+				var (
+					uuid string
+					err  error
+					cmsg = &apc.CopyBckMsg{Force: true}
+				)
 				tlog.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
-				uuid, err := api.CopyBucket(baseParams, srcm.bck, dstm.bck, &apc.CopyBckMsg{Force: true})
+				if test.evictRemoteSrc {
+					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg, apc.FltExists)
+				} else {
+					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg)
+				}
 				xactIDs[idx] = uuid
 				tassert.CheckFatal(t, err)
 			}
 
 			for _, uuid := range xactIDs {
-				args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: copyBucketTimeout}
-				_, err = api.WaitForXactionIC(baseParams, args)
-				tassert.CheckFatal(t, err)
+				if test.evictRemoteSrc {
+					// wait for TCO idle (different x-kind)
+					args := xact.ArgsMsg{ID: uuid, Timeout: copyBucketTimeout}
+					err := api.WaitForXactionIdle(baseParams, args)
+					tassert.CheckFatal(t, err)
+				} else {
+					args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: copyBucketTimeout}
+					_, err := api.WaitForXactionIC(baseParams, args)
+					tassert.CheckFatal(t, err)
+				}
 			}
 
 			for _, dstm := range dstms {

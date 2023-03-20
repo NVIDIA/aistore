@@ -325,7 +325,6 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 }
 
 func copyBucketHandler(c *cli.Context) (err error) {
-	dryRun := flagIsSet(c, copyDryRunFlag)
 	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
 	if err != nil {
 		return err
@@ -337,6 +336,7 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
 
+	dryRun := flagIsSet(c, copyDryRunFlag)
 	// (I) bucket copy
 	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
 		if dryRun {

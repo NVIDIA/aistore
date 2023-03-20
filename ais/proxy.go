@@ -1153,6 +1153,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 		//
 		// not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
+		// (see a), b) below)
 		//
 		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
 		bckToArgs.createAIS = true
@@ -1161,12 +1162,13 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		//
-		// creating remote on the fly
+		// a) creating (BMD-wise) remote destination on the fly
 		//
 		if errCode == http.StatusNotFound && bckTo.IsRemote() {
 			if bckTo, err = bckToArgs.try(); err != nil {
 				return
 			}
+			errCode = 0
 		}
 		// start x-tcb or x-tco
 		if v := query.Get(apc.QparamFltPresence); v != "" {
@@ -1179,6 +1181,16 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				p.writeErr(w, r, err, http.StatusNotImplemented)
 				return
 			}
+			//
+			// b) creating ais destination on the fly (TODO: unify w/ p.tcb duplicating bprops)
+			//
+			if errCode == http.StatusNotFound {
+				debug.Assert(bckTo.Props == nil && !bckTo.IsRemote())
+				if bckTo, err = bckToArgs.try(); err != nil {
+					return
+				}
+			}
+			debug.Assert(bckTo.Props != nil)
 			lstcx := &lstcx{
 				p:       p,
 				bckFrom: bck,
@@ -1381,14 +1393,24 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		lsmsg.SetFlag(apc.LsObjCached)
 	}
 
-	tsi, listRemote, wantOnlyRemote, err := p.lsoFlowControls(bck, lsmsg, smap)
+	var (
+		err                        error
+		tsi                        *cluster.Snode
+		lst                        *cmn.LsoResult
+		newls                      bool
+		listRemote, wantOnlyRemote bool
+	)
+	if lsmsg.UUID == "" {
+		lsmsg.UUID = cos.GenUUID()
+		newls = true
+	}
+	tsi, listRemote, wantOnlyRemote, err = p._lsofc(bck, lsmsg, smap)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	if lsmsg.UUID == "" {
+	if newls {
 		var nl nl.Listener
-		lsmsg.UUID = cos.GenUUID()
 		if wantOnlyRemote {
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())
 		} else {
@@ -1403,7 +1425,6 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		return
 	}
 
-	var lst *cmn.LsoResult
 	if listRemote {
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
@@ -1412,7 +1433,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
-		lst, err = p.lsObjsR(bck, lsmsg, smap, wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, wantOnlyRemote)
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -1439,16 +1460,15 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	lst.Entries = nil
 	lst = nil
 
-	delta := mono.SinceNano(beg)
 	p.statsT.AddMany(
 		cos.NamedVal64{Name: stats.ListCount, Value: 1},
-		cos.NamedVal64{Name: stats.ListLatency, Value: delta},
+		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
 	)
 }
 
 // list-objects flow control helper
-func (p *proxy) lsoFlowControls(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *cluster.Snode,
-	listRemote, wantOnlyRemote bool, err error) {
+func (p *proxy) _lsofc(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *cluster.Snode, listRemote, wantOnlyRemote bool,
+	err error) {
 	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	if !listRemote {
 		return
@@ -1458,7 +1478,7 @@ func (p *proxy) lsoFlowControls(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX
 	// designate one target to carry-out backend.list-objects
 	if lsmsg.SID != "" {
 		tsi = smap.GetTarget(lsmsg.SID)
-		if tsi == nil {
+		if tsi == nil || tsi.InMaintOrDecomm() {
 			err = &errNodeNotFound{"list-objects failure", lsmsg.SID, p.si, smap}
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
@@ -1472,6 +1492,7 @@ func (p *proxy) lsoFlowControls(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX
 		}
 		return
 	}
+
 	if tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap); err == nil {
 		lsmsg.SID = tsi.ID()
 	}
@@ -2118,14 +2139,13 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOnlyRemote bool) (allEntries *cmn.LsoResult, err error) {
+func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *cluster.Snode, wantOnlyRemote bool) (*cmn.LsoResult, error) {
 	var (
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjTimeout.D()
 		aisMsg     = p.newAmsgActVal(apc.ActList, &lsmsg)
-		args       = allocBcArgs()
-		results    sliceResults
 	)
+	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
@@ -2133,23 +2153,19 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOn
 		Body:   cos.MustMarshal(aisMsg),
 	}
 
+	var results sliceResults
 	if wantOnlyRemote {
-		nl := p.notifs.entry(lsmsg.UUID)
-		debug.Assert(nl != nil)
-		for _, si := range nl.Notifiers() {
-			cargs := allocCargs()
-			{
-				cargs.si = si
-				cargs.req = args.req
-				cargs.timeout = reqTimeout
-				cargs.cresv = cresLso{} // -> cmn.LsoResult
-			}
-			res := p.call(cargs)
-			freeCargs(cargs)
-			results = make(sliceResults, 1)
-			results[0] = res
-			break
+		cargs := allocCargs()
+		{
+			cargs.si = tsi
+			cargs.req = args.req
+			cargs.timeout = reqTimeout
+			cargs.cresv = cresLso{} // -> cmn.LsoResult
 		}
+		res := p.call(cargs)
+		freeCargs(cargs)
+		results = make(sliceResults, 1)
+		results[0] = res
 	} else {
 		args.timeout = reqTimeout
 		args.smap = smap
@@ -2166,7 +2182,7 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOn
 			continue
 		}
 		if res.err != nil {
-			err = res.toErr()
+			err := res.toErr()
 			freeBcastRes(results)
 			return nil, err
 		}
@@ -2174,11 +2190,7 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, wantOn
 	}
 	freeBcastRes(results)
 
-	allEntries = cmn.MergeLso(resLists, 0)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Objects after merge: %d, token: %q", len(allEntries.Entries), allEntries.ContinuationToken)
-	}
-	return allEntries, nil
+	return cmn.MergeLso(resLists, 0), nil
 }
 
 func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *apc.ActMsg) {

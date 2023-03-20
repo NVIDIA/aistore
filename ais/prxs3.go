@@ -326,7 +326,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	)
 	if listRemote {
-		lst, err = p.lsObjsR(bck, lsmsg, p.owner.smap.get(), false /*wantOnlyRemote*/) // atime
+		lst, err = p.lsObjsR(bck, lsmsg, p.owner.smap.get(), nil /*designated target*/, false)
 	} else {
 		lst, err = p.lsObjsA(bck, lsmsg)
 	}
