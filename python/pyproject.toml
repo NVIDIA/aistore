@@ -15,7 +15,7 @@ markers = [
 
 [project]
 name = "aistore"
-version = "1.0.10"
+version = "1.1.0"
 authors = [
   { name="AIStore Team", email="ais@exchange.nvidia.com" },
 ]
