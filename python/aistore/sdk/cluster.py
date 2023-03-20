@@ -3,7 +3,7 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
-from typing import List
+from typing import List, Optional
 
 from aistore.sdk.const import (
     HTTP_METHOD_GET,
@@ -16,9 +16,12 @@ from aistore.sdk.const import (
     URL_PATH_BUCKETS,
     URL_PATH_HEALTH,
     URL_PATH_DAEMON,
+    URL_PATH_CLUSTER,
+    WHAT_ALL_XACT_STATUS,
+    WHAT_ALL_RUNNING_STATUS,
 )
 
-from aistore.sdk.types import BucketModel
+from aistore.sdk.types import BucketModel, JobStatus, JobQuery
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import ActionMsg, Smap
 
@@ -84,6 +87,47 @@ class Cluster:
             res_model=List[BucketModel],
             json=action,
             params=params,
+        )
+
+    def list_jobs_status(self, job_kind="", target_id="") -> List[JobStatus]:
+        """
+        List the status of jobs on the cluster
+
+        Args:
+            job_kind (str, optional): Only show jobs of a particular type
+            target_id (str, optional): Limit to jobs on a specific target node
+
+        Returns:
+            List of JobStatus objects
+        """
+        res = self._client.request_deserialize(
+            HTTP_METHOD_GET,
+            path=URL_PATH_CLUSTER,
+            res_model=Optional[List[JobStatus]],
+            json=JobQuery(kind=job_kind, target=target_id).as_dict(),
+            params={QPARAM_WHAT: WHAT_ALL_XACT_STATUS},
+        )
+        if res is None:
+            return []
+        return res
+
+    def list_running_jobs(self, job_kind="", target_id="") -> List[str]:
+        """
+        List the currently running jobs on the cluster
+
+        Args:
+            job_kind (str, optional): Only show jobs of a particular type
+            target_id (str, optional): Limit to jobs on a specific target node
+
+        Returns:
+            List of jobs in the format job_kind[job_id]
+        """
+        return self._client.request_deserialize(
+            HTTP_METHOD_GET,
+            path=URL_PATH_CLUSTER,
+            res_model=List[str],
+            json=JobQuery(kind=job_kind, target=target_id, active=True).as_dict(),
+            params={QPARAM_WHAT: WHAT_ALL_RUNNING_STATUS},
         )
 
     def is_aistore_running(self) -> bool:

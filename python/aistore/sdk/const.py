@@ -17,6 +17,8 @@ QPARAM_PRIMARY_READY_REB = "prr"
 # See api/apc/query.go
 WHAT_SMAP = "smap"
 WHAT_ONE_XACT_STATUS = "status"
+WHAT_ALL_XACT_STATUS = "status_all"
+WHAT_ALL_RUNNING_STATUS = "running_all"
 WHAT_QUERY_XACT_STATS = "qryxstats"
 
 # URL paths

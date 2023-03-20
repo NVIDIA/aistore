@@ -61,18 +61,12 @@ class Job:
 
     def status(
         self,
-        only_running: bool = False,
     ) -> JobStatus:
         """
         Return status of a job
 
-        Args:
-            only_running (bool, optional):
-                True - return only currently running jobs
-                False - include finished and aborted jobs
-
         Returns:
-            The job description.
+            The job status including id, finish time, and error info.
 
         Raises:
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
@@ -80,13 +74,13 @@ class Job:
             requests.ConnectionTimeout: Timed out connecting to AIStore
             requests.ReadTimeout: Timed out waiting response from AIStore
         """
+        if not self._job_id:
+            raise ValueError("Cannot query status on a job without an assigned ID")
         return self._client.request_deserialize(
             HTTP_METHOD_GET,
             path=URL_PATH_CLUSTER,
             res_model=JobStatus,
-            json=JobArgs(
-                id=self._job_id, kind=self._job_kind, only_running=only_running
-            ).as_dict(),
+            json=JobArgs(id=self._job_id, kind=self._job_kind).as_dict(),
             params={QPARAM_WHAT: WHAT_ONE_XACT_STATUS},
         )
 

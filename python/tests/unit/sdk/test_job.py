@@ -32,27 +32,12 @@ class TestJob(unittest.TestCase):
         self.assertEqual(self.job_id, self.job.job_id)
         self.assertEqual(self.job_kind, self.job.job_kind)
 
-    def test_job_status_default_params(self):
-        expected_request_val = JobArgs().as_dict()
-        self.job_status_exec_assert(self.default_job, expected_request_val)
-
     def test_job_status(self):
-        only_running = True
-
-        expected_request_val = JobArgs(
-            id=self.job_id, kind=self.job_kind, only_running=only_running
-        ).as_dict()
-        self.job_status_exec_assert(
-            self.job,
-            expected_request_val,
-            only_running=only_running,
-        )
-
-    def job_status_exec_assert(self, job, expected_request_val, **kwargs):
+        expected_request_val = JobArgs(id=self.job_id, kind=self.job_kind).as_dict()
         returned_status = JobStatus()
         self.mock_client.request_deserialize.return_value = returned_status
 
-        res = job.status(**kwargs)
+        res = self.job.status()
 
         self.assertEqual(returned_status, res)
         self.mock_client.request_deserialize.assert_called_with(
@@ -62,6 +47,11 @@ class TestJob(unittest.TestCase):
             json=expected_request_val,
             params={QPARAM_WHAT: WHAT_ONE_XACT_STATUS},
         )
+
+    def test_job_status_no_id(self):
+        job_no_id = Job(self.mock_client)
+        with self.assertRaises(ValueError):
+            job_no_id.status()
 
     @patch("aistore.sdk.job.time.sleep")
     @patch("aistore.sdk.job.Job.status")

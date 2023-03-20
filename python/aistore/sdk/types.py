@@ -140,7 +140,6 @@ class JobArgs(BaseModel):
     daemon_id: str = ""
     bucket: BucketModel = None
     buckets: List[BucketModel] = None
-    only_running: bool = False
 
     def as_dict(self):
         return {
@@ -149,7 +148,23 @@ class JobArgs(BaseModel):
             "DaemonID": self.daemon_id,
             "Bck": self.bucket,
             "Buckets": self.buckets,
-            "OnlyRunning": self.only_running,
+        }
+
+
+class JobQuery(BaseModel):
+    """
+    Structure to send the API when querying the cluster for multiple jobs
+    """
+
+    active: bool = False
+    kind: str = ""
+    target: str = ""
+
+    def as_dict(self):
+        return {
+            "kind": self.kind,
+            "node": self.target,
+            "show_active": self.active,
         }
 
 
