@@ -9,6 +9,10 @@ from aistore.sdk.multiobj.object_collection import ObjectCollection
 class ObjectNames(ObjectCollection):
     """
     A collection of object names, provided as a list of strings
+
+    Args:
+         names (List[str]): A list of object names
+
     """
 
     def __init__(self, names: List[str]):

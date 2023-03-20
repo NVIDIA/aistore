@@ -46,7 +46,7 @@ client = Client("http://localhost:8080")
 ```
 
 The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
-See the [examples](https://github.com/NVIDIA/aistore/blob/master/python/aistore/examples/sdk) and the [reference docs](https://aiatscale.org/docs/python-sdk) for more details
+See the [examples](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk) and the [reference docs](https://aiatscale.org/docs/python-sdk) for more details
 
 **External Cloud Storage Buckets**
 

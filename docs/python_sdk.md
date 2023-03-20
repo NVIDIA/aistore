@@ -40,6 +40,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [list\_objects\_iter](#bucket.Bucket.list_objects_iter)
     * [list\_all\_objects](#bucket.Bucket.list_all_objects)
     * [transform](#bucket.Bucket.transform)
+    * [put\_files](#bucket.Bucket.put_files)
     * [object](#bucket.Bucket.object)
     * [objects](#bucket.Bucket.objects)
     * [make\_request](#bucket.Bucket.make_request)
@@ -50,15 +51,41 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [name](#object.Object.name)
     * [head](#object.Object.head)
     * [get](#object.Object.get)
-    * [put](#object.Object.put)
+    * [put\_content](#object.Object.put_content)
+    * [put\_file](#object.Object.put_file)
+    * [promote](#object.Object.promote)
     * [delete](#object.Object.delete)
-* [object\_group](#object_group)
-  * [ObjectGroup](#object_group.ObjectGroup)
-    * [delete](#object_group.ObjectGroup.delete)
-    * [evict](#object_group.ObjectGroup.evict)
-    * [prefetch](#object_group.ObjectGroup.prefetch)
+* [multiobj.object\_group](#multiobj.object_group)
+  * [ObjectGroup](#multiobj.object_group.ObjectGroup)
+    * [delete](#multiobj.object_group.ObjectGroup.delete)
+    * [evict](#multiobj.object_group.ObjectGroup.evict)
+    * [prefetch](#multiobj.object_group.ObjectGroup.prefetch)
+    * [copy](#multiobj.object_group.ObjectGroup.copy)
+    * [transform](#multiobj.object_group.ObjectGroup.transform)
+    * [list\_names](#multiobj.object_group.ObjectGroup.list_names)
+* [multiobj.object\_names](#multiobj.object_names)
+  * [ObjectNames](#multiobj.object_names.ObjectNames)
+* [multiobj.object\_range](#multiobj.object_range)
+  * [ObjectRange](#multiobj.object_range.ObjectRange)
+* [multiobj.object\_template](#multiobj.object_template)
+  * [ObjectTemplate](#multiobj.object_template.ObjectTemplate)
+* [job](#job)
+  * [Job](#job.Job)
+    * [job\_id](#job.Job.job_id)
+    * [job\_kind](#job.Job.job_kind)
+    * [status](#job.Job.status)
+    * [wait](#job.Job.wait)
+    * [wait\_for\_idle](#job.Job.wait_for_idle)
+    * [start](#job.Job.start)
+* [object\_reader](#object_reader)
+  * [ObjectReader](#object_reader.ObjectReader)
+    * [attributes](#object_reader.ObjectReader.attributes)
+    * [read\_all](#object_reader.ObjectReader.read_all)
+    * [raw](#object_reader.ObjectReader.raw)
+    * [\_\_iter\_\_](#object_reader.ObjectReader.__iter__)
+* [object\_iterator](#object_iterator)
+  * [ObjectIterator](#object_iterator.ObjectIterator)
 * [etl](#etl)
-  * [get\_default\_runtime](#etl.get_default_runtime)
   * [Etl](#etl.Etl)
     * [client](#etl.Etl.client)
     * [init\_spec](#etl.Etl.init_spec)
@@ -89,7 +116,7 @@ AIStore client for managing buckets, objects, ETL jobs
 
 ```python
 def bucket(bck_name: str,
-           provider: str = ProviderAIS,
+           provider: str = PROVIDER_AIS,
            namespace: Namespace = None)
 ```
 
@@ -127,11 +154,17 @@ Does not make any HTTP request, only instantiates a cluster object.
 ### job
 
 ```python
-def job()
+def job(job_id: str = "", job_kind: str = "")
 ```
 
 Factory constructor for job object, which contains job-related functions.
 Does not make any HTTP request, only instantiates a job object.
+
+**Arguments**:
+
+- `job_id` _str, optional_ - Optional ID for interacting with a specific job
+- `job_kind` _str, optional_ - Optional specific type of job empty for all kinds
+  
 
 **Returns**:
 
@@ -201,7 +234,7 @@ Returns state of AIS cluster, including the detailed information about its nodes
 ### list\_buckets
 
 ```python
-def list_buckets(provider: str = ProviderAIS)
+def list_buckets(provider: str = PROVIDER_AIS)
 ```
 
 Returns list of buckets in AIStore cluster.
@@ -275,7 +308,7 @@ The client bound to this bucket.
 def qparam()
 ```
 
-The QParamProvider of this bucket.
+Default query parameters to use with API calls from this bucket.
 
 <a id="bucket.Bucket.provider"></a>
 
@@ -315,11 +348,16 @@ The namespace for this bucket.
 ### create
 
 ```python
-def create()
+def create(exist_ok=False)
 ```
 
 Creates a bucket in AIStore cluster.
 Can only create a bucket for AIS provider on localized cluster. Remote cloud buckets do not support creation.
+
+**Arguments**:
+
+- `exist_ok` _bool, optional_ - Ignore error if the cluster already contains this bucket
+  
 
 **Raises**:
 
@@ -336,13 +374,18 @@ Can only create a bucket for AIS provider on localized cluster. Remote cloud buc
 ### delete
 
 ```python
-def delete()
+def delete(missing_ok=False)
 ```
 
 Destroys bucket in AIStore cluster.
 In all cases removes both the bucket's content _and_ the bucket's metadata from the cluster.
 Note: AIS will _not_ call the remote backend provider to delete the corresponding Cloud bucket
 (iff the bucket in question is, in fact, a Cloud bucket).
+
+**Arguments**:
+
+- `missing_ok` _bool, optional_ - Ignore error if bucket does not exist
+  
 
 **Raises**:
 
@@ -443,10 +486,11 @@ Requests bucket properties.
 
 ```python
 def copy(to_bck_name: str,
-         prefix: str = "",
+         prefix_filter: str = "",
+         prepend: str = "",
          dry_run: bool = False,
          force: bool = False,
-         to_provider: str = ProviderAIS) -> str
+         to_provider: str = PROVIDER_AIS) -> str
 ```
 
 Returns job ID that can be used later to check the status of the asynchronous operation.
@@ -454,8 +498,8 @@ Returns job ID that can be used later to check the status of the asynchronous op
 **Arguments**:
 
 - `to_bck_name` _str_ - Name of the destination bucket
-- `prefix` _str, optional_ - If set, only the objects starting with
-  provider prefix will be copied
+- `prefix_filter` _str, optional_ - Only copy objects that share this prefix
+- `prepend` _str, optional_ - Value to prepend to the name of copied objects
 - `dry_run` _bool, optional_ - Determines if the copy should actually
   happen or not
 - `force` _bool, optional_ - Override existing destination bucket
@@ -485,7 +529,9 @@ def list_objects(prefix: str = "",
                  props: str = "",
                  page_size: int = 0,
                  uuid: str = "",
-                 continuation_token: str = "") -> BucketList
+                 continuation_token: str = "",
+                 flags: List[ListObjectFlag] = None,
+                 target: str = "") -> BucketList
 ```
 
 Returns a structure that contains a page of objects, job ID, and continuation token (to read the next page, if
@@ -504,6 +550,9 @@ available).
   Defaults to "0" - return maximum number of objects.
 - `uuid` _str, optional_ - Job ID, required to get the next page of objects
 - `continuation_token` _str, optional_ - Marks the object to start reading the next page
+- `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
+  request
+  target(str, optional): Only list objects on this specific target node
   
 
 **Returns**:
@@ -528,7 +577,9 @@ available).
 ```python
 def list_objects_iter(prefix: str = "",
                       props: str = "",
-                      page_size: int = 0) -> ObjectIterator
+                      page_size: int = 0,
+                      flags: List[ListObjectFlag] = None,
+                      target: str = "") -> ObjectIterator
 ```
 
 Returns an iterator for all objects in bucket
@@ -544,6 +595,9 @@ Returns an iterator for all objects in bucket
   more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects
+- `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
+  request
+  target(str, optional): Only list objects on this specific target node
   
 
 **Returns**:
@@ -567,7 +621,9 @@ Returns an iterator for all objects in bucket
 ```python
 def list_all_objects(prefix: str = "",
                      props: str = "",
-                     page_size: int = 0) -> List[BucketEntry]
+                     page_size: int = 0,
+                     flags: List[ListObjectFlag] = None,
+                     target: str = "") -> List[BucketEntry]
 ```
 
 Returns a list of all objects in bucket
@@ -583,6 +639,9 @@ Returns a list of all objects in bucket
   more than 5,000 objects in a single page.
 - `NOTE` - If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
   Defaults to "0" - return maximum number objects
+- `flags` _List[ListObjectFlag], optional_ - Optional list of ListObjectFlag enums to include as flags in the
+  request
+  target(str, optional): Only list objects on this specific target node
   
 
 **Returns**:
@@ -606,19 +665,22 @@ Returns a list of all objects in bucket
 ```python
 def transform(etl_name: str,
               to_bck: str,
-              prefix: str = "",
+              timeout: str = DEFAULT_ETL_TIMEOUT,
+              prepend: str = "",
               ext: Dict[str, str] = None,
               force: bool = False,
-              dry_run: bool = False)
+              dry_run: bool = False) -> str
 ```
 
-Transforms all objects in a bucket and puts them to destination bucket.
+Visits all selected objects in the source bucket and for each object, puts the transformed
+result to the destination bucket
 
 **Arguments**:
 
 - `etl_name` _str_ - name of etl to be used for transformations
 - `to_bck` _str_ - destination bucket for transformations
-- `prefix` _str, optional_ - prefix to be added to resulting transformed objects
+- `timeout` _str, optional_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
+- `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
 - `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
   (i.e. {"jpg": "txt"})
 - `dry_run` _bool, optional_ - determines if the copy should actually happen or not
@@ -629,15 +691,58 @@ Transforms all objects in a bucket and puts them to destination bucket.
 
   Job ID (as str) that can be used to check the status of the operation
 
+<a id="bucket.Bucket.put_files"></a>
+
+### put\_files
+
+```python
+def put_files(path: str,
+              prefix_filter: str = "",
+              pattern: str = "*",
+              basename: bool = False,
+              prepend: str = None,
+              recursive: bool = False,
+              dry_run: bool = False,
+              verbose: bool = True) -> List[str]
+```
+
+Puts files found in a given filepath as objects to a bucket in AIS storage.
+
+**Arguments**:
+
+- `path` _str_ - Local filepath, can be relative or absolute
+- `prefix_filter` _str, optional_ - Required prefix in names of all files to put
+- `pattern` _str, optional_ - Regex pattern to filter files
+- `basename` _bool, optional_ - Whether to use the file names only as object names and omit the path information
+- `prepend` _str, optional_ - Optional string to use as a prefix in the object name for all objects uploaded
+  No delimiter ("/", "-", etc.) is automatically applied between the prepend value and the object name
+- `recursive` _bool, optional_ - Whether to recurse through the provided path directories
+- `dry_run` _bool, optional_ - Option to only show expected behavior without an actual put operation
+- `verbose` _bool, optional_ - Whether to print upload info to standard output
+  
+
+**Returns**:
+
+  List of object names put to a bucket in AIS
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `ValueError` - The path provided is not a valid directory
+
 <a id="bucket.Bucket.object"></a>
 
 ### object
 
 ```python
-def object(obj_name: str)
+def object(obj_name: str) -> Object
 ```
 
-Factory constructor for object belonging to this bucket.
+Factory constructor for an object in this bucket.
 Does not make any HTTP request, only instantiates an object in a bucket owned by the client.
 
 **Arguments**:
@@ -656,7 +761,7 @@ Does not make any HTTP request, only instantiates an object in a bucket owned by
 ```python
 def objects(obj_names: list = None,
             obj_range: ObjectRange = None,
-            obj_template: str = None)
+            obj_template: str = None) -> ObjectGroup
 ```
 
 Factory constructor for multiple objects belonging to this bucket.
@@ -720,7 +825,7 @@ A class representing an object of a bucket bound to a client.
 **Arguments**:
 
 - `bucket` _Bucket_ - Bucket to which this object belongs
-- `obj_name` _str_ - name of object
+- `name` _str_ - name of object
 
 <a id="object.Object.bucket"></a>
 
@@ -731,7 +836,7 @@ A class representing an object of a bucket bound to a client.
 def bucket()
 ```
 
-Bucket to which this object belongs
+Bucket containing this object
 
 <a id="object.Object.name"></a>
 
@@ -775,7 +880,7 @@ Requests object properties.
 def get(archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
-        writer: BufferedWriter = None) -> ObjStream
+        writer: BufferedWriter = None) -> ObjectReader
 ```
 
 Reads an object
@@ -802,20 +907,77 @@ Reads an object
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 
-<a id="object.Object.put"></a>
+<a id="object.Object.put_content"></a>
 
-### put
+### put\_content
 
 ```python
-def put(path: str = None, content: bytes = None) -> Header
+def put_content(content: bytes) -> Header
 ```
 
-Puts a local file or bytes as an object to a bucket in AIS storage.
+Puts bytes as an object to a bucket in AIS storage.
 
 **Arguments**:
 
-- `path` _str_ - path to local file or bytes.
-- `content` _bytes_ - bytes to put as an object.
+- `content` _bytes_ - Bytes to put as an object.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="object.Object.put_file"></a>
+
+### put\_file
+
+```python
+def put_file(path: str = None)
+```
+
+Puts a local file as an object to a bucket in AIS storage.
+
+**Arguments**:
+
+- `path` _str_ - Path to local file
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `ValueError` - The path provided is not a valid file
+
+<a id="object.Object.promote"></a>
+
+### promote
+
+```python
+def promote(path: str,
+            target_id: str = "",
+            recursive: bool = False,
+            overwrite_dest: bool = False,
+            delete_source: bool = False,
+            src_not_file_share: bool = False) -> Header
+```
+
+Promotes a file or folder an AIS target can access to a bucket in AIS storage.
+These files can be either on the physical disk of an AIS target itself or on a network file system
+the cluster can access.
+See more info here: https://aiatscale.org/blog/2022/03/17/promote
+
+**Arguments**:
+
+- `path` _str_ - Path to file or folder the AIS cluster can reach
+- `target_id` _str, optional_ - Promote files from a specific target node
+- `recursive` _bool, optional_ - Recursively promote objects from files in directories inside the path
+- `overwrite_dest` _bool, optional_ - Overwrite objects already on AIS
+- `delete_source` _bool, optional_ - Delete the source files when done promoting
+- `src_not_file_share` _bool, optional_ - Optimize if the source is guaranteed to not be on a file share
   
 
 **Returns**:
@@ -829,7 +991,7 @@ Puts a local file or bytes as an object to a bucket in AIS storage.
 - `requests.ConnectionError` - Connection error
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
-- `ValueError` - Path and content are mutually exclusive
+- `AISError` - Path does not exist on the AIS cluster storage
 
 <a id="object.Object.delete"></a>
 
@@ -854,7 +1016,7 @@ Delete an object from a bucket.
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 - `requests.exceptions.HTTPError(404)` - The object does not exist
 
-<a id="object_group.ObjectGroup"></a>
+<a id="multiobj.object_group.ObjectGroup"></a>
 
 ## Class: ObjectGroup
 
@@ -862,7 +1024,8 @@ Delete an object from a bucket.
 class ObjectGroup()
 ```
 
-A class representing multiple objects within the same bucket. Only one of obj_names or obj_range should be provided.
+A class representing multiple objects within the same bucket. Only one of obj_names, obj_range, or obj_template
+should be provided.
 
 **Arguments**:
 
@@ -871,7 +1034,7 @@ A class representing multiple objects within the same bucket. Only one of obj_na
 - `obj_range` _ObjectRange, optional_ - Range defining which object names in the bucket should be included
 - `obj_template` _str, optional_ - String argument to pass as template value directly to api
 
-<a id="object_group.ObjectGroup.delete"></a>
+<a id="multiobj.object_group.ObjectGroup.delete"></a>
 
 ### delete
 
@@ -895,7 +1058,7 @@ Deletes a list or range of objects in a bucket
 
   Job ID (as str) that can be used to check the status of the operation
 
-<a id="object_group.ObjectGroup.evict"></a>
+<a id="multiobj.object_group.ObjectGroup.evict"></a>
 
 ### evict
 
@@ -920,7 +1083,7 @@ NOTE: only Cloud buckets can be evicted.
 
   Job ID (as str) that can be used to check the status of the operation
 
-<a id="object_group.ObjectGroup.prefetch"></a>
+<a id="multiobj.object_group.ObjectGroup.prefetch"></a>
 
 ### prefetch
 
@@ -945,19 +1108,389 @@ NOTE: only Cloud buckets can be prefetched.
 
   Job ID (as str) that can be used to check the status of the operation
 
-<a id="etl.get_default_runtime"></a>
+<a id="multiobj.object_group.ObjectGroup.copy"></a>
 
-### get\_default\_runtime
+### copy
 
 ```python
-def get_default_runtime()
+def copy(to_bck: str,
+         to_provider: str = PROVIDER_AIS,
+         prepend: str = "",
+         continue_on_error: bool = False,
+         dry_run: bool = False,
+         force: bool = False)
 ```
 
-Determines etl runtime to use if not specified
+Copies a list or range of objects in a bucket
+
+**Arguments**:
+
+- `to_bck` _str_ - Name of the destination bucket
+- `to_provider` _str, optional_ - Name of destination bucket provider
+- `prepend` _str, optional_ - Value to prepend to the name of copied objects
+- `continue_on_error` _bool, optional_ - Whether to continue if there is an error copying a single object
+- `dry_run` _bool, optional_ - Skip performing the copy and just log the intended actions
+- `force` _bool, optional_ - Force this job to run over others in case it conflicts
+  (see "limited coexistence" and xact/xreg/xreg.go)
+  
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
 
 **Returns**:
 
-  String of runtime
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="multiobj.object_group.ObjectGroup.transform"></a>
+
+### transform
+
+```python
+def transform(to_bck: str,
+              etl_name: str,
+              timeout: str = DEFAULT_ETL_TIMEOUT,
+              to_provider: str = PROVIDER_AIS,
+              prepend: str = "",
+              continue_on_error: bool = False,
+              dry_run: bool = False,
+              force: bool = False)
+```
+
+Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
+
+**Arguments**:
+
+- `to_bck` _str_ - Name of the destination bucket
+- `etl_name` _str_ - Name of existing ETL to apply
+- `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
+- `to_provider` _str, optional_ - Name of destination bucket provider
+- `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
+- `continue_on_error` _bool, optional_ - Whether to continue if there is an error transforming a single object
+- `dry_run` _bool, optional_ - Skip performing the transform and just log the intended actions
+- `force` _bool, optional_ - Force this job to run over others in case it conflicts
+  (see "limited coexistence" and xact/xreg/xreg.go)
+  
+
+**Raises**:
+
+- `aistore.sdk.errors.AISError` - All other types of errors with AIStore
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.exceptions.HTTPError` - Service unavailable
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="multiobj.object_group.ObjectGroup.list_names"></a>
+
+### list\_names
+
+```python
+def list_names() -> List[str]
+```
+
+List all the object names included in this group of objects
+
+**Returns**:
+
+  List of object names
+
+<a id="multiobj.object_names.ObjectNames"></a>
+
+## Class: ObjectNames
+
+```python
+class ObjectNames(ObjectCollection)
+```
+
+A collection of object names, provided as a list of strings
+
+**Arguments**:
+
+- `names` _List[str]_ - A list of object names
+
+<a id="multiobj.object_range.ObjectRange"></a>
+
+## Class: ObjectRange
+
+```python
+class ObjectRange(ObjectCollection)
+```
+
+Class representing a range of object names
+
+**Arguments**:
+
+- `prefix` _str_ - Prefix contained in all names of objects
+- `min_index` _int_ - Starting index in the name of objects
+- `max_index` _int_ - Last index in the name of all objects
+- `pad_width` _int, optional_ - Left-pad indices with zeros up to the width provided, e.g. pad_width = 3 will
+  transform 1 to 001
+- `step` _int, optional_ - Size of iterator steps between each item
+- `suffix` _str, optional_ - Suffix at the end of all object names
+
+<a id="multiobj.object_template.ObjectTemplate"></a>
+
+## Class: ObjectTemplate
+
+```python
+class ObjectTemplate(ObjectCollection)
+```
+
+A collection of object names specified by a template in the bash brace expansion format
+
+**Arguments**:
+
+- `template` _str_ - A string template that defines the names of objects to include in the collection
+
+<a id="job.Job"></a>
+
+## Class: Job
+
+```python
+class Job()
+```
+
+A class containing job-related functions.
+
+**Arguments**:
+
+- `client` _RequestClient_ - Client for interfacing with AIS cluster
+- `job_id` _str, optional_ - ID of a specific job, empty for all jobs
+- `job_kind` _str, optional_ - Specific kind of job, empty for all kinds
+
+<a id="job.Job.job_id"></a>
+
+### job\_id
+
+```python
+@property
+def job_id()
+```
+
+Return job id
+
+<a id="job.Job.job_kind"></a>
+
+### job\_kind
+
+```python
+@property
+def job_kind()
+```
+
+Return job kind
+
+<a id="job.Job.status"></a>
+
+### status
+
+```python
+def status(only_running: bool = False) -> JobStatus
+```
+
+Return status of a job
+
+**Arguments**:
+
+  only_running (bool, optional):
+  True - return only currently running jobs
+  False - include finished and aborted jobs
+  
+
+**Returns**:
+
+  The job description.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="job.Job.wait"></a>
+
+### wait
+
+```python
+def wait(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT, verbose: bool = True)
+```
+
+Wait for a job to finish
+
+**Arguments**:
+
+- `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
+- `verbose` _bool, optional_ - Whether to log wait status to standard output
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `errors.Timeout` - Timeout while waiting for the job to finish
+
+<a id="job.Job.wait_for_idle"></a>
+
+### wait\_for\_idle
+
+```python
+def wait_for_idle(timeout: int = DEFAULT_JOB_WAIT_TIMEOUT,
+                  verbose: bool = True)
+```
+
+Wait for a job to reach an idle state
+
+**Arguments**:
+
+- `timeout` _int, optional_ - The maximum time to wait for the job, in seconds. Default timeout is 5 minutes.
+- `verbose` _bool, optional_ - Whether to log wait status to standard output
+  
+
+**Returns**:
+
+  None
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+- `errors.Timeout` - Timeout while waiting for the job to finish
+
+<a id="job.Job.start"></a>
+
+### start
+
+```python
+def start(daemon_id: str = "",
+          force: bool = False,
+          buckets: List[Bucket] = None) -> str
+```
+
+Start a job and return its ID.
+
+**Arguments**:
+
+- `daemon_id` _str, optional_ - For running a job that must run on a specific target node (e.g. resilvering).
+- `force` _bool, optional_ - Override existing restrictions for a bucket (e.g., run LRU eviction even if the
+  bucket has LRU disabled).
+- `buckets` _List[Bucket], optional_ - List of one or more buckets; applicable only for jobs that have bucket
+  scope (for details on job types, see `Table` in xact/api.go).
+  
+
+**Returns**:
+
+  The running job ID.
+  
+
+**Raises**:
+
+- `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
+- `requests.ConnectionError` - Connection error
+- `requests.ConnectionTimeout` - Timed out connecting to AIStore
+- `requests.ReadTimeout` - Timed out waiting response from AIStore
+
+<a id="object_reader.ObjectReader"></a>
+
+## Class: ObjectReader
+
+```python
+class ObjectReader()
+```
+
+Represents the data returned by the API when getting an object, including access to the content stream and object
+attributes
+
+<a id="object_reader.ObjectReader.attributes"></a>
+
+### attributes
+
+```python
+@property
+def attributes() -> ObjectAttributes
+```
+
+Object metadata attributes
+
+**Returns**:
+
+  Object attributes parsed from the headers returned by AIS
+
+<a id="object_reader.ObjectReader.read_all"></a>
+
+### read\_all
+
+```python
+def read_all() -> bytes
+```
+
+Read all byte data from the object content stream.
+This uses a bytes cast which makes it slightly slower and requires all object content to fit in memory at once
+
+**Returns**:
+
+  Object content as bytes
+
+<a id="object_reader.ObjectReader.raw"></a>
+
+### raw
+
+```python
+def raw() -> bytes
+```
+
+Returns: Raw byte stream of object content
+
+<a id="object_reader.ObjectReader.__iter__"></a>
+
+### \_\_iter\_\_
+
+```python
+def __iter__() -> Iterator[bytes]
+```
+
+Creates a generator to read the stream content in chunks
+
+**Returns**:
+
+  An iterator with access to the next chunk of bytes
+
+<a id="object_iterator.ObjectIterator"></a>
+
+## Class: ObjectIterator
+
+```python
+class ObjectIterator()
+```
+
+Represents an iterable that will fetch all objects from a bucket, querying as needed with the specified function
+
+**Arguments**:
+
+- `list_objects` _Callable_ - Function returning a BucketList from an AIS cluster
 
 <a id="etl.Etl"></a>
 
@@ -987,8 +1520,8 @@ The client bound to this ETL object.
 ```python
 def init_spec(template: str,
               etl_name: str,
-              communication_type: str = "hpush",
-              timeout: str = "5m")
+              communication_type: str = DEFAULT_ETL_COMM,
+              timeout: str = DEFAULT_ETL_TIMEOUT)
 ```
 
 Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
@@ -1000,7 +1533,7 @@ Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
   For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
 - `etl_name` _str_ - Name of new ETL
 - `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
-- `timeout` _str_ - Timeout of the ETL (eg. 5m for 5 minutes)
+- `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
 
 **Returns**:
 
@@ -1014,9 +1547,9 @@ Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
 def init_code(transform: Callable,
               etl_name: str,
               dependencies: List[str] = None,
-              runtime: str = get_default_runtime(),
-              communication_type: str = "hpush",
-              timeout: str = "5m",
+              runtime: str = _get_default_runtime(),
+              communication_type: str = DEFAULT_ETL_COMM,
+              timeout: str = DEFAULT_ETL_TIMEOUT,
               chunk_size: int = None)
 ```
 
@@ -1032,7 +1565,7 @@ Initializes ETL based on the provided source code. Returns etl_name.
   (see ext/etl/runtime/all.go)
 - `communication_type` _str_ - [optional, default="hpush"] Communication type of the ETL (options: hpull, hrev,
   hpush, io)
-- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL (e.g. 5m for 5 minutes)
+- `timeout` _str_ - [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data.
   (whole object is read by default)
 

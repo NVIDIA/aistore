@@ -91,5 +91,5 @@ generate-docs:
 	@ [[ $$(pipx --help) ]] || $(PIP) install pipx; $(PYTHON) -m pipx ensurepath --force
 	@ [[ $$(pydoc-markdown --help) ]] || pipx install --force pydoc-markdown[novella]
 	@ echo "$$PREFIX" > $(DOCFILE)
-	@ pydoc-markdown -I ./aistore/sdk -m client -m cluster -m bucket -m object -m object_group -m etl '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(DOCFILE)
+	@ pydoc-markdown -I ./aistore/sdk -m client -m cluster -m bucket -m object -m multiobj.object_group -m multiobj.object_names -m multiobj.object_range -m multiobj.object_template -m job -m object_reader -m object_iterator -m etl '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(DOCFILE)
 	@ sed -i -e 's/####/###/g' $(DOCFILE)

@@ -77,5 +77,3 @@ _site/
 
 # JetBrains
 .idea
-
-python/aistore/examples/.ipynb_checkpoints/aisio_pytorch_example-checkpoint.ipynb
