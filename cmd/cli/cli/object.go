@@ -389,7 +389,14 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	}
 	objProps, err := api.HeadObject(apiBP, bck, object, fltPresence)
 	if err != nil {
-		return handleObjHeadError(err, bck, object, fltPresence)
+		if !cmn.IsStatusNotFound(err) {
+			return err
+		}
+		var hint string
+		if apc.IsFltPresent(fltPresence) {
+			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
+		}
+		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
 	}
 	if flagIsSet(c, jsonFlag) {
 		opts := teb.Jopts(true)
@@ -469,18 +476,6 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 		debug.Assert(false, name)
 	}
 	return
-}
-
-// This function is needed to print a nice error message for the user
-func handleObjHeadError(err error, bck cmn.Bck, object string, fltPresence int) error {
-	var hint string
-	if cmn.IsStatusNotFound(err) {
-		if apc.IsFltPresent(fltPresence) {
-			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
-		}
-		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
-	}
-	return err
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {

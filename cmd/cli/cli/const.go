@@ -335,7 +335,9 @@ var (
 	allJobsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "all jobs, including finished and aborted"}
 	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
 	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
-	allColumnsFlag      = cli.BoolFlag{
+	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+
+	allColumnsFlag = cli.BoolFlag{
 		Name:  scopeAll,
 		Usage: "when printing tables, show all columns including those that have only zero values",
 	}
@@ -349,7 +351,10 @@ var (
 		Name:  scopeAll,
 		Usage: "all buckets, including accessible remote buckets that are not present in the cluster",
 	}
-	rmrfFlag = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+	copyAllObjsFlag = cli.BoolFlag{
+		Name:  scopeAll,
+		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",
+	}
 
 	// obj props
 	objPropsFlag = cli.StringFlag{
@@ -603,6 +608,12 @@ var (
 		progressFlag,
 		refreshFlag,
 	}
+	listrangeFileFlags = []cli.Flag{
+		listFileFlag,
+		templateFileFlag,
+		progressFlag,
+		refreshFlag,
+	}
 
 	// read range (aka range read)
 	offsetFlag = cli.StringFlag{
@@ -632,15 +643,11 @@ var (
 		Name:  "cached",
 		Usage: "get only those objects from a remote bucket that are present (\"cached\") in AIS",
 	}
+	// when '--all' is used for/by another flag
 	objNotCachedPropsFlag = cli.BoolFlag{
 		Name:  "not-cached",
 		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
 	}
-	copyObjNotCachedFlag = cli.BoolFlag{
-		Name:  objNotCachedPropsFlag.Name,
-		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\")",
-	}
-
 	// to anonymously list public-access Cloud buckets
 	listAnonymousFlag = cli.BoolFlag{
 		Name:  "anonymous",
@@ -665,7 +672,7 @@ var (
 
 	chunkSizeFlag = cli.StringFlag{
 		Name:  "chunk-size",
-		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (see '--units'; e.g.: 1MiB or, same, 1048576)",
+		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 1MiB or 1048576; see '--units')",
 	}
 
 	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
@@ -674,7 +681,6 @@ var (
 		Name:  "skip-vc",
 		Usage: "skip loading object metadata (and the associated checksum & version related processing)",
 	}
-	supportedCksumFlags = initSupportedCksumFlags()
 
 	// auth
 	descRoleFlag      = cli.StringFlag{Name: "description,desc", Usage: "role description"}

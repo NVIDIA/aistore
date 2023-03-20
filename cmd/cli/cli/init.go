@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/tools/docker"
-	"github.com/urfave/cli"
 )
 
 var loggedUserToken string
@@ -111,19 +110,4 @@ func detectK8s() bool {
 	cmd := exec.Command("which", "kubectl")
 	err := cmd.Run()
 	return err == nil
-}
-
-func initSupportedCksumFlags() (flags []cli.Flag) {
-	checksums := cos.SupportedChecksums()
-	flags = make([]cli.Flag, 0, len(checksums)-1)
-	for _, cksum := range checksums {
-		if cksum == cos.ChecksumNone {
-			continue
-		}
-		flags = append(flags, cli.StringFlag{
-			Name:  cksum,
-			Usage: fmt.Sprintf("hex encoded string of the %s checksum", cksum),
-		})
-	}
-	return
 }

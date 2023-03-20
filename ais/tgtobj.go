@@ -360,9 +360,10 @@ func (poi *putObjInfo) write() (err error) {
 		writer  io.Writer
 		writers = make([]io.Writer, 0, 4)
 		cksums  = struct {
-			store *cos.CksumHash // store with LOM
-			given *cos.CksumHash // compute additionally
-			expct *cos.Cksum     // and validate against `expct` if required/available
+			store     *cos.CksumHash // store with LOM
+			expct     *cos.Cksum     // caller-provided (aka "end-to-end protection")
+			compt     *cos.CksumHash // compute to validate `expct` - iff provided
+			finalized bool           // to avoid computing the same checksum type twice
 		}{}
 		ckconf = poi.lom.CksumConf()
 	)
@@ -391,14 +392,21 @@ func (poi *putObjInfo) write() (err error) {
 	}
 
 	// compute checksum and save it as part of the object metadata
-	cksums.store = cos.NewCksumHash(ckconf.Type)
+	// additional scenarios:
+	// - validate-cold-get + cksums.expct (validate against cloud checksum)
+	// - object migrated + `ckconf.ValidateObjMove`
+
+	cksums.store = cos.NewCksumHash(ckconf.Type) // always according to the bucket
 	writers = append(writers, cksums.store.H)
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() && poi.validateCksum(ckconf) {
-		// if validate-cold-get and the cksum is provided we should also check md5 hash (aws, gcp)
-		// or if the object is migrated, and `ckconf.ValidateObjMove` we should check with existing checksum
 		cksums.expct = poi.cksumToUse
-		cksums.given = cos.NewCksumHash(poi.cksumToUse.Type())
-		writers = append(writers, cksums.given.H)
+		if poi.cksumToUse.Type() == cksums.store.Type() {
+			cksums.compt = cksums.store
+		} else {
+			// otherwise, compute separately
+			cksums.compt = cos.NewCksumHash(poi.cksumToUse.Type())
+			writers = append(writers, cksums.compt.H)
+		}
 	}
 write:
 	if len(writers) == 0 {
@@ -411,10 +419,11 @@ write:
 		return
 	}
 	// validate
-	if cksums.given != nil {
-		cksums.given.Finalize()
-		if !cksums.given.Equal(cksums.expct) {
-			err = cos.NewBadDataCksumError(cksums.expct, &cksums.given.Cksum, poi.lom.String())
+	if cksums.compt != nil {
+		cksums.finalized = cksums.compt == cksums.store
+		cksums.compt.Finalize()
+		if !cksums.compt.Equal(cksums.expct) {
+			err = cos.NewBadDataCksumError(cksums.expct, &cksums.compt.Cksum, poi.lom.String())
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				cos.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -432,7 +441,9 @@ write:
 	lmfh = nil
 	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
-		cksums.store.Finalize()
+		if !cksums.finalized {
+			cksums.store.Finalize()
+		}
 		poi.lom.SetCksum(&cksums.store.Cksum)
 	}
 	return

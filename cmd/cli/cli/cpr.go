@@ -49,7 +49,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	ctx.msg.Prefix = msg.Prefix
-	ctx.msg.ObjCached = !flagIsSet(c, copyObjNotCachedFlag)
+	ctx.msg.ObjCached = !flagIsSet(c, copyAllObjsFlag)
 	ctx.msg.BckPresent = false
 	summaries, err := ctx.slow()
 	if err != nil {
@@ -64,7 +64,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 
 	if cpr.totals.objs == 0 {
 		debug.Assert(cpr.totals.size == 0)
-		if flagIsSet(c, copyObjNotCachedFlag) {
+		if flagIsSet(c, copyAllObjsFlag) {
 			err = fmt.Errorf("source %s is empty, nothing to do", cpr.from)
 		} else {
 			err = fmt.Errorf("source %s doesn't have any cached objects in the cluster, nothing to do"+

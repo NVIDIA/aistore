@@ -253,28 +253,6 @@ func (u *uctx) fini(c *cli.Context, p *uparams, f fobj) {
 	u.mx.Unlock()
 }
 
-//
-// TODO: revisit & unify
-//
-
-func cksumToCompute(c *cli.Context, bck cmn.Bck) (*cos.Cksum, error) {
-	if flagIsSet(c, computeCksumFlag) {
-		bckProps, err := headBucket(bck, false /* don't add */)
-		if err != nil {
-			return nil, err
-		}
-		return cos.NewCksum(bckProps.Cksum.Type, ""), nil
-	}
-	cksums := parseCksumFlags(c)
-	if len(cksums) > 1 {
-		return nil, fmt.Errorf("at most one checksum flag can be set (multi-checksum is not supported yet)")
-	}
-	if len(cksums) == 0 {
-		return nil, nil
-	}
-	return cksums[0], nil
-}
-
 func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.FileInfo) error {
 	var (
 		reader   cos.ReadOpenCloser
@@ -429,4 +407,56 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 		Handle:     handle,
 		Cksum:      cksum.Clone(),
 	})
+}
+
+//
+// PUT checksum
+//
+
+func initPutObjCksumFlags() (flags []cli.Flag) {
+	checksums := cos.SupportedChecksums()
+	flags = make([]cli.Flag, 0, len(checksums)-1)
+	for _, cksum := range checksums {
+		if cksum == cos.ChecksumNone {
+			continue
+		}
+		flags = append(flags, cli.StringFlag{
+			Name: cksum,
+			Usage: fmt.Sprintf("expected hex encoded %s checksum of the stored object (to facilitate end-to-end protection)",
+				cksum),
+		})
+	}
+	return
+}
+
+func cksumToCompute(c *cli.Context, bck cmn.Bck) (*cos.Cksum, error) {
+	// bucket-configured checksum takes precedence
+	if flagIsSet(c, computeCksumFlag) {
+		bckProps, err := headBucket(bck, false /* don't add */)
+		if err != nil {
+			return nil, err
+		}
+		return cos.NewCksum(bckProps.Cksum.Type, ""), nil
+	}
+	// otherwise, one of the supported iff requested
+	cksums := altCksumToComp(c)
+	if len(cksums) > 1 {
+		return nil, fmt.Errorf("at most one checksum flag can be set (multi-checksum is not supported yet)")
+	}
+	if len(cksums) == 0 {
+		return nil, nil
+	}
+	return cksums[0], nil
+}
+
+// in addition to computeCksumFlag
+// an alternative way to specify expected PUT checksum
+func altCksumToComp(c *cli.Context) []*cos.Cksum {
+	cksums := []*cos.Cksum{}
+	for _, ckflag := range putObjCksumFlags {
+		if flagIsSet(c, ckflag) { // this one
+			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
+		}
+	}
+	return cksums
 }

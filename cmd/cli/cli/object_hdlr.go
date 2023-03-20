@@ -34,7 +34,6 @@ var (
 			cksumFlag,
 			yesFlag,
 			checkObjCachedFlag,
-			unitsFlag,
 			refreshFlag,
 			progressFlag,
 			// multi-object options (passed to list-objects)
@@ -42,30 +41,29 @@ var (
 			getObjCachedFlag,
 			listArchFlag,
 			objLimitFlag,
+			unitsFlag,
 			verboseFlag,
 		},
 
 		commandPut: append(
-			supportedCksumFlags,
+			listrangeFileFlags,
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,
-			progressFlag,
 			recursFlag,
-			refreshFlag,
 			verboseFlag,
 			yesFlag,
-			computeCksumFlag,
-			sourceBckFlag,
-			templateFileFlag,
-			listFileFlag,
 			includeSrcBucketNameFlag,
-			allowAppendToExistingFlag,
 			continueOnErrorFlag,
-			createArchFlag,
-			archpathOptionalFlag,
-			skipVerCksumFlag,
 			unitsFlag,
+			// arch
+			sourceBckFlag,
+			archpathOptionalFlag,
+			createArchFlag,
+			allowAppendToExistingFlag,
+			// cksum
+			skipVerCksumFlag,
+			computeCksumFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -104,6 +102,8 @@ var (
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
 
+	putObjCksumFlags = initPutObjCksumFlags()
+
 	objectCmdPut = cli.Command{
 		Name: commandPut,
 		Usage: "PUT or APPEND one file or one directory, or multiple files and/or directories.\n" +
@@ -113,7 +113,7 @@ var (
 			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
 			indent4 + "\t- use '--archpath' to APPEND to an existing tar-formatted object.",
 		ArgsUsage:    putObjectArgument,
-		Flags:        objectCmdsFlags[commandPut],
+		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
 		BashComplete: putPromoteObjectCompletions,
 	}

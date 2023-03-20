@@ -143,10 +143,14 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 		DryRun:  flagIsSet(c, copyDryRunFlag),
 		Force:   flagIsSet(c, forceFlag),
 	}
+
+	// by default, copying objects in the cluster, with an option to override
+	// TODO: FltExistsOutside maybe later
 	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyObjNotCachedFlag) {
+	if flagIsSet(c, copyAllObjsFlag) {
 		fltPresence = apc.FltExists
 	}
+
 	if showProgress {
 		var cpr cprCtx
 		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)

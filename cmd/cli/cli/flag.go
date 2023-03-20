@@ -161,13 +161,3 @@ func parseSizeFlag(c *cli.Context, flag cli.StringFlag, unitsParsed ...string) (
 	}
 	return cos.ParseSize(val, units)
 }
-
-func parseCksumFlags(c *cli.Context) []*cos.Cksum {
-	cksums := []*cos.Cksum{}
-	for _, ckflag := range supportedCksumFlags {
-		if flagIsSet(c, ckflag) {
-			cksums = append(cksums, cos.NewCksum(ckflag.GetName(), parseStrFlag(c, ckflag)))
-		}
-	}
-	return cksums
-}

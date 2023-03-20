@@ -25,10 +25,10 @@ import (
 var (
 	advancedCmdsFlags = map[string][]cli.Flag{
 		cmdGenShards: {
-			dsortFsizeFlag,
-			dsortFcountFlag,
 			cleanupFlag,
 			concurrencyFlag,
+			dsortFsizeFlag,
+			dsortFcountFlag,
 		},
 	}
 
