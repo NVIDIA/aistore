@@ -205,7 +205,7 @@ func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
 	ctx, cancel := context.WithTimeout(task.downloadCtx, task.initialTimeout())
 	defer cancel()
 
-	ctx = context.WithValue(ctx, cos.CtxReadWrapper, task.wrapReader)
+	ctx = context.WithValue(ctx, cos.CtxReadWrapper, cos.ReadWrapperFunc(task.wrapReader))
 	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(task.setTotalSize))
 	task.getCtx = ctx
 
