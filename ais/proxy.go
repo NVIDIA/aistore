@@ -44,7 +44,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const fmtNotRemote = "%q appears to be ais bucket (expecting remote)"
+const (
+	fmtNotRemote = "%q appears to be ais bucket (expecting remote)"
+	lsotag       = "list-objects"
+)
 
 type (
 	ClusterMountpathsRaw struct {
@@ -536,6 +539,10 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// list objects
+		// NOTE #1: TODO: currently, always primary - hrw redirect vs scenario
+		if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
+			return
+		}
 		var (
 			err   error
 			lsmsg apc.LsoMsg
@@ -1370,8 +1377,8 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, beg int64) {
-	const tag = "list-objects"
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActMsg,
+	lsmsg *apc.LsoMsg, beg int64) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
@@ -1409,19 +1416,25 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		p.writeErr(w, r, err)
 		return
 	}
+	var nl nl.Listener
 	if newls {
-		var nl nl.Listener
 		if wantOnlyRemote {
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())
 		} else {
 			// bcast
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
 		}
-		nl.SetHrwOwner(&smap.Smap)
+		// NOTE #2: TODO: currently, always primary - hrw redirect vs scenario
+		nl.SetOwner(smap.Primary.ID())
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}
 
 	if p.ic.reverseToOwner(w, r, lsmsg.UUID, amsg) {
+		debug.Assert(p.si.ID() != smap.Primary.ID())
+		if newls {
+			// cleanup right away
+			p.notifs.del(nl, false)
+		}
 		return
 	}
 
@@ -1429,7 +1442,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 		if lsmsg.StartAfter != "" {
 			// TODO: remote AIS first, then Cloud
 			err = fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
-				tag, lsmsg.StartAfter, bck)
+				lsotag, lsmsg.StartAfter, bck)
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
@@ -1448,10 +1461,10 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	debug.Assert(lst != nil)
 
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, lst, tag) {
+		if !p.writeMsgPack(w, lst, lsotag) {
 			return
 		}
-	} else if !p.writeJSON(w, r, lst, tag) {
+	} else if !p.writeJSON(w, r, lst, lsotag) {
 		return
 	}
 
@@ -1479,7 +1492,7 @@ func (p *proxy) _lsofc(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *c
 	if lsmsg.SID != "" {
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
-			err = &errNodeNotFound{"list-objects failure", lsmsg.SID, p.si, smap}
+			err = &errNodeNotFound{lsotag + " failure", lsmsg.SID, p.si, smap}
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err

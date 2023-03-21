@@ -28,16 +28,8 @@ import (
 )
 
 // Notification "receiver"
-// TODO: UponProgress as periodic (byte-count, object-count)
-// TODO: batch housekeeping for pending notifications
-// TODO: add an option to enforce 'if one notifier fails all fail'
-// TODO: housekeeping: broadcast in a separate goroutine
 
-const (
-	notifsName       = "p-notifs"
-	notifsHousekeepT = 2 * time.Minute
-	notifsRemoveMult = 3 // time-to-keep multiplier (time = notifsRemoveMult * notifsHousekeepT)
-)
+const notifsName = "p-notifs"
 
 type (
 	listeners struct {
@@ -98,7 +90,7 @@ func (n *notifs) init(p *proxy) {
 	n.removed = make([]nl.Listener, 16)
 	n.finished = make([]nl.Listener, 16)
 
-	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, notifsHousekeepT)
+	hk.Reg(notifsName+hk.NameSuffix, n.housekeep, hk.PruneActiveIval)
 	n.p.Sowner().Listeners().Reg(n)
 }
 
@@ -361,7 +353,11 @@ func (n *notifs) housekeep() time.Duration {
 	now := time.Now().UnixNano()
 	n.fin.Lock()
 	for _, nl := range n.fin.m {
-		if time.Duration(now-nl.EndTime()) > notifsRemoveMult*notifsHousekeepT {
+		timeout := hk.DelOldIval
+		if nl.Kind() == apc.ActList {
+			timeout = hk.OldAgeLsoNotif
+		}
+		if time.Duration(now-nl.EndTime()) > timeout {
 			n.fin.del(nl, true /*locked*/)
 		}
 	}
@@ -370,7 +366,7 @@ func (n *notifs) housekeep() time.Duration {
 	n.nls.RLock() // TODO: atomic instead
 	if n.nls.len() == 0 {
 		n.nls.RUnlock()
-		return notifsHousekeepT
+		return hk.PruneActiveIval
 	}
 	tempn := make(map[string]nl.Listener, n.nls.len())
 	for uuid, nl := range n.nls.m {
@@ -378,13 +374,13 @@ func (n *notifs) housekeep() time.Duration {
 	}
 	n.nls.RUnlock()
 	for _, nl := range tempn {
-		n.bcastGetStats(nl, notifsHousekeepT)
+		n.bcastGetStats(nl, hk.PruneActiveIval)
 	}
 	// cleanup temp cloned notifs
 	for u := range tempn {
 		delete(tempn, u)
 	}
-	return notifsHousekeepT
+	return hk.PruneActiveIval
 }
 
 // conditional: ask targets iff they delayed updating
@@ -414,7 +410,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)
 			if err != nil {
-				glog.Errorf("%s: failed to parse stats from %s, err: %v", n.p.si, res.si, err)
+				glog.Errorf("%s: failed to parse stats from %s, err: %v", n.p.si, res.si.StringEx(), err)
 				continue
 			}
 			nl.Lock()
@@ -428,12 +424,12 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 				// likely didn't start yet - skipping
 				continue
 			}
-			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si)
+			err := fmt.Errorf("%s: %s not found at %s", n.p.si, nl, res.si.StringEx())
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si, res.err)
+			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si.StringEx(), res.err)
 		}
 	}
 	freeBcastRes(results)

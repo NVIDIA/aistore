@@ -23,12 +23,6 @@ import (
 
 // TODO: some of these constants must be configurable or derived from the config
 const (
-	hkDelOldIval      = 10 * time.Minute // hk cleanup old entries
-	hkPruneActiveIval = 2 * time.Minute  // hk prune active entries
-
-	oldAgeLso = 2 * time.Minute // when list-objects is considered 'old'
-	oldAgeX   = time.Hour       // when all the rest is
-
 	initialCap       = 256 // initial capacity
 	keepOldThreshold = 256 // keep so many
 
@@ -382,7 +376,7 @@ func (r *registry) incFinished() { r.finDelta.Inc() }
 
 func (r *registry) hkPruneActive() time.Duration {
 	if r.finDelta.Swap(0) == 0 {
-		return hkPruneActiveIval
+		return hk.PruneActiveIval
 	}
 	e := &r.entries
 	e.mtx.Lock()
@@ -398,7 +392,7 @@ func (r *registry) hkPruneActive() time.Duration {
 		e.active = e.active[:l]
 	}
 	e.mtx.Unlock()
-	return hkPruneActiveIval
+	return hk.PruneActiveIval
 }
 
 func (r *registry) hkDelOld() time.Duration {
@@ -418,7 +412,7 @@ func (r *registry) hkDelOld() time.Duration {
 			continue
 		}
 		if xctn.Finished() {
-			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= oldAgeLso {
+			if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeLso {
 				toRemove = append(toRemove, xctn.ID())
 			}
 		}
@@ -432,7 +426,7 @@ func (r *registry) hkDelOld() time.Duration {
 				continue
 			}
 			if xctn.Finished() {
-				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= oldAgeX {
+				if sinceFin := now.Sub(xctn.EndTime()); sinceFin >= hk.OldAgeX {
 					toRemove = append(toRemove, xctn.ID())
 					cnt++
 					if numNonLso-cnt <= keepOldThreshold {
@@ -445,7 +439,7 @@ func (r *registry) hkDelOld() time.Duration {
 	r.entries.mtx.RUnlock()
 
 	if len(toRemove) == 0 {
-		return hkDelOldIval
+		return hk.DelOldIval
 	}
 
 	// cleanup
@@ -454,7 +448,7 @@ func (r *registry) hkDelOld() time.Duration {
 		r.entries.del(id)
 	}
 	r.entries.mtx.Unlock()
-	return hkDelOldIval
+	return hk.DelOldIval
 }
 
 func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {

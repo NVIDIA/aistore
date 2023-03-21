@@ -44,7 +44,6 @@ type Listener interface {
 	String() string
 	GetOwner() string
 	SetOwner(string)
-	SetHrwOwner(smap *cluster.Smap)
 	LastUpdated(si *cluster.Snode) int64
 	ProgressInterval() time.Duration
 
@@ -231,16 +230,6 @@ func (nlb *ListenerBase) String() string {
 		return fmt.Sprintf("%s(cnt=%d/%d)", hdr, finCount, len(nlb.Srcs))
 	}
 	return hdr
-}
-
-// effectively, cache owner
-func (nlb *ListenerBase) SetHrwOwner(smap *cluster.Smap) {
-	psiOwner, err := cluster.HrwIC(smap, nlb.UUID())
-	if err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	nlb.SetOwner(psiOwner.ID())
 }
 
 ////////////
