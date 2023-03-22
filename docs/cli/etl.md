@@ -29,7 +29,7 @@ For background on AIS-ETL, getting-started steps, working examples, and tutorial
 
 ## Init ETL with spec
 
-`ais etl init spec --from-file=SPEC_FILE --name=UNIQUE_ID [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]` or `ais job start etl init`
+`ais etl init spec --from-file=SPEC_FILE --name=UNIQUE_ID [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]` or `ais start etl init`
 
 Init ETL with Pod YAML specification file. The `--name` CLI flag is used as a unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
@@ -119,14 +119,14 @@ It is possible to pass an additional parameter to specify a particular `TARGET_I
 
 ## Stop ETL
 
-`ais etl stop ETL_NAME` or, same, `ais job stop etl`
+`ais etl stop ETL_NAME` or, same, `ais stop etl`
 
 Stop ETL with the specified id.
 
 
 ## Start ETL
 
-`ais etl start ETL_NAME` or, same, `ais job start etl`
+`ais etl start ETL_NAME` or, same, `ais start etl`
 
 Start ETL with the specified id.
 
@@ -185,7 +185,7 @@ Transform every object from `src_bucket` with ETL and put new objects to `dst_bu
 ```console
 $ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket
 MMi9l8Z11
-$ ais job wait xaction MMi9l8Z11
+$ ais wait xaction MMi9l8Z11
 ```
 
 #### Transform bucket with ETL
@@ -209,13 +209,13 @@ $ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --template "s
 The same as above, but objects will have `etl-` prefix and objects with extension `.in1` will have `.out1` extension, objects with extension `.in2` will have `.out2` extension.
 
 ```console
-$ ais bucket ls ais://src_bucket --props=name
+$ ais ls ais://src_bucket --props=name
 NAME
 obj1.in1
 obj2.in2
 (...)
 $ ais etl bucket transformer-md5 ais://src_bucket ais://dst_bucket --ext="{in1:out1, in2:out2}" --prefix="etl-" --wait
-$ ais bucket ls ais://dst_bucket --props=name
+$ ais ls ais://dst_bucket --props=name
 NAME
 etl-obj1.out1
 etl-obj2.out2
@@ -228,7 +228,7 @@ Dry-run won't perform any actions but rather just show what would be transformed
 This is useful for preparing the actual run.
 
 ```console
-$ ais bucket ls ais://src_bucket --props=name,size
+$ ais ls ais://src_bucket --props=name,size
 NAME        SIZE
 obj1.in1    10MiB
 obj2.in2    10MiB

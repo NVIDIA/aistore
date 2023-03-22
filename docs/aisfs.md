@@ -127,8 +127,8 @@ Using [AIS CLI](/docs/cli.md) create an ais bucket, download several objects
 and place them into the bucket:
 
 ```console
-$ ais bucket create mybucket
-$ ais job start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz" ais://mybucket/
+$ ais create mybucket
+$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000010}.tgz" ais://mybucket/
 Ys78ND09g
 $ ais show job download Ys78ND09g --progress # wait for download to finish
 ```

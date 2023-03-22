@@ -162,7 +162,7 @@ $ ais --no-color ls ais://bck --props all
 $ ais --no-color ls --props all ais://bck
 $
 $ # Incorrect usage of a global option.
-$ ais bucket ls ais://bck --props all --no-color
+$ ais ls ais://bck --props all --no-color
 ```
 
 ## Backend Provider

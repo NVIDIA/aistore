@@ -45,7 +45,7 @@ Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 ```console
 $ ais advanced gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
 Shards created: 10/10 [==============================================================] 100 %
-$ ais bucket ls ais://dsort-testing
+$ ais ls ais://dsort-testing
 NAME		SIZE		VERSION
 shard-0.tar	25.05MiB	1
 shard-1.tar	25.05MiB	1
@@ -67,7 +67,7 @@ Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_00
 ```console
 $ ais advanced gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
 Shards created: 100/100 [==============================================================] 100 %
-$ ais bucket ls ais://dsort-testing
+$ ais ls ais://dsort-testing
 NAME				SIZE	VERSION
 super_shard_000_last.tgz	1.25MiB	1
 super_shard_001_last.tgz	1.25MiB	1

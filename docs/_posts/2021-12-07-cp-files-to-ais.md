@@ -31,7 +31,7 @@ shard-999.tar
 $ python3 -m http.server --bind 0.0.0.0 51061
 
 # use AIS CLI to make sure the files are readable
-$ ais object get http://localhost:51061/abc/hello-world
+$ ais get http://localhost:51061/abc/hello-world
 
 # Step 2. get all files in the range 'shard-{001..999}.tar'
 # =========================================================
@@ -42,7 +42,7 @@ $ ais ls ht://
 ht://ZDE1YzE0NzhiNWFkMQ
 
 # run batch `prefetch` job to load bash-expansion templated names from this bucket
-$ ais job start prefetch ht://ZDE1YzE0NzhiNWFkMQ --template 'shard-{001..999}.tar'
+$ ais start prefetch ht://ZDE1YzE0NzhiNWFkMQ --template 'shard-{001..999}.tar'
 ```
 
 Here we run Python's own `http.server` to listen on port `51061` and serve the files from the directory that we have previously `cd`-ed into (`/tmp`, in the example).
@@ -74,7 +74,7 @@ $ go run htserver.go
 # `hostname` below indicates the hostname or IP address of the machine where
 # we are running `go run htserver.go`;
 # also note that the destination bucket `ais://abc` will be created iff it doesn't exist
-$ ais job start download "http://hostname:52062/abc/shard-{001..010}.tar" ais://abc
+$ ais start download "http://hostname:52062/abc/shard-{001..010}.tar" ais://abc
 GUsQcjEPY
 Run `ais show job download GUsQcjEPY --progress` to monitor the progress.
 

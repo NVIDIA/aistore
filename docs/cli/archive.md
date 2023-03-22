@@ -35,7 +35,7 @@ As such, `archive create` is one of the supported [multi-object operations](/doc
 
 Also note that `ais put` command with its `--archive` option provides an alternative way to archive multiple objects:
 
-* [`ais object put BUCKET/OBJECT --archive`](/docs/cli/object.md##archive-multiple-objects)
+* [`ais put BUCKET/OBJECT --archive`](/docs/cli/object.md##archive-multiple-objects)
 
 For the most recently updated list of supported archival formats, please see:
 

@@ -29,7 +29,7 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 
 ## Create bucket
 
-`ais bucket create BUCKET [BUCKET...]`
+`ais create BUCKET [BUCKET...]`
 
 Create bucket(s).
 
@@ -40,7 +40,7 @@ Create bucket(s).
 Create buckets `bucket_name1` and `bucket_name2`, both with AIS provider.
 
 ```console
-$ ais bucket create ais://bucket_name1 ais://bucket_name2
+$ ais create ais://bucket_name1 ais://bucket_name2
 "ais://bucket_name1" bucket created
 "ais://bucket_name2" bucket created
 ```
@@ -50,7 +50,7 @@ $ ais bucket create ais://bucket_name1 ais://bucket_name2
 Create bucket `bucket_name` in `ml` namespace.
 
 ```console
-$ ais bucket create ais://#ml/bucket_name
+$ ais create ais://#ml/bucket_name
 "ais://#ml/bucket_name" bucket created
 ```
 
@@ -59,14 +59,14 @@ $ ais bucket create ais://#ml/bucket_name
 Create bucket `bucket_name` in global namespace of AIS remote cluster with `Bghort1l` UUID.
 
 ```console
-$ ais bucket create ais://@Bghort1l/bucket_name
+$ ais create ais://@Bghort1l/bucket_name
 "ais://@Bghort1l/bucket_name" bucket created
 ```
 
 Create bucket `bucket_name` in `ml` namespace of AIS remote cluster with `Bghort1l` UUID.
 
 ```console
-$ ais bucket create ais://@Bghort1l#ml/bucket_name
+$ ais create ais://@Bghort1l#ml/bucket_name
 "ais://@Bghort1l#ml/bucket_name" bucket created
 ```
 
@@ -76,11 +76,11 @@ Create bucket `bucket_name` with custom properties specified.
 
 ```console
 $ # Key-value format
-$ ais bucket create ais://@Bghort1l/bucket_name --props="mirror.enabled=true mirror.copies=2"
+$ ais create ais://@Bghort1l/bucket_name --props="mirror.enabled=true mirror.copies=2"
 "ais://@Bghort1l/bucket_name" bucket created
 $
 $ # JSON format
-$ ais bucket create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
+$ ais create ais://@Bghort1l/bucket_name --props='{"versioning": {"enabled": true, "validate_warm_get": true}}'
 "ais://@Bghort1l/bucket_name" bucket created
 ```
 
@@ -90,7 +90,7 @@ Create bucket `bucket_name` in HDFS backend with bucket pointing to `/yt8m` dire
 More info about HDFS buckets can be found [here](/docs/providers.md#hdfs-provider).
 
 ```console
-$ ais bucket create hdfs://bucket_name --props="extra.hdfs.ref_directory=/yt8m"
+$ ais create hdfs://bucket_name --props="extra.hdfs.ref_directory=/yt8m"
 "hdfs://bucket_name" bucket created
 ```
 
@@ -98,7 +98,7 @@ $ ais bucket create hdfs://bucket_name --props="extra.hdfs.ref_directory=/yt8m"
 #### Incorrect buckets creation
 
 ```console
-$ ais bucket create aws://bucket_name
+$ ais create aws://bucket_name
 Create bucket "aws://bucket_name" failed: creating a bucket for any of the cloud or HTTP providers is not supported
 ```
 
@@ -156,23 +156,23 @@ Operation "destroy-bck" is not supported by "aws://bucket_name"
 
 ## List buckets
 
-`ais bucket ls`
+`ais ls`
 
 List all buckets.
 
-`ais bucket ls --regex "ngn*"`
+`ais ls --regex "ngn*"`
 
 List all buckets matching the `ngn*` regex expression.
 
-`ais bucket ls aws://` or `ais bucket ls ais://`
+`ais ls aws://` or `ais ls ais://`
 
 List all buckets for the specific provider.
 
-`ais bucket ls ais://#name`
+`ais ls ais://#name`
 
 List all buckets for the `ais` provider and `name` namespace.
 
-`ais bucket ls ais://@uuid#namespace`
+`ais ls ais://@uuid#namespace`
 
 List all buckets for the `ais` provider and `uuid#namespace` namespace.
 `uuid` should be equal to remote cluster UUID and `namespace` is optional name of the remote namespace (if `namespace` not provided the global namespace will be used).
@@ -186,7 +186,7 @@ List all buckets for the `ais` provider and `uuid#namespace` namespace.
 
 ## List objects
 
-`ais ls <BUCKET>` (or, same, `ais bucket ls <BUCKET>`)
+`ais ls <BUCKET>` (or, same, `ais ls <BUCKET>`)
 
 List all or some objects in `<BUCKET>`.
 
@@ -224,7 +224,7 @@ comma-separated list of object properties including name, size, version, ##copie
 List objects in the AIS bucket `bucket_name`.
 
 ```console
-$ ais bucket ls ais://bucket_name
+$ ais ls ais://bucket_name
 NAME		SIZE
 shard-0.tar	16.00KiB
 shard-1.tar	16.00KiB
@@ -234,7 +234,7 @@ shard-1.tar	16.00KiB
 List objects in the remote bucket `bucket_name`.
 
 ```console
-ais bucket ls aws://bucket_name
+ais ls aws://bucket_name
 NAME		SIZE
 shard-0.tar	16.00KiB
 shard-1.tar	16.00KiB
@@ -259,7 +259,7 @@ coco-train2014-seg-000003.tar    958.22MiB     113024d5def81365cbb6c404c908efb1 
 List objects in the bucket `bucket_name` and `ml` namespace contained on AIS remote cluster with `Bghort1l` UUID.
 
 ```console
-$ ais bucket ls ais://@Bghort1l#ml/bucket_name
+$ ais ls ais://@Bghort1l#ml/bucket_name
 NAME		SIZE		VERSION
 shard-0.tar	16.00KiB	1
 shard-1.tar	16.00KiB	1
@@ -271,7 +271,7 @@ shard-1.tar	16.00KiB	1
 List objects which match given prefix.
 
 ```console
-$ ais bucket ls ais://bucket_name --prefix "shard-1"
+$ ais ls ais://bucket_name --prefix "shard-1"
 NAME		SIZE		VERSION
 shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
@@ -341,7 +341,7 @@ TDXBNBEZNl.tar   8.50KiB
 qFpwOOifUe.tar   8.50KiB
 thmdpZXetG.tar   8.50KiB
 
-$ ais object get gcp://wrQkliptRt/qFpwOOifUe.tar /tmp/qFpwOOifUe.tar
+$ ais get gcp://wrQkliptRt/qFpwOOifUe.tar /tmp/qFpwOOifUe.tar
 GET "qFpwOOifUe.tar" from bucket "gcp://wrQkliptRt" as "/tmp/qFpwOOifUe.tar" [8.50KiB]
 
 $ ais ls gs://wrQkliptRt --props all
@@ -386,7 +386,7 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 
 ## Copy bucket
 
-`ais bucket cp SRC_BUCKET DST_BUCKET`
+`ais cp SRC_BUCKET DST_BUCKET`
 
 Copy an existing bucket to a new bucket.
 The destination bucket must exist when:
@@ -412,7 +412,7 @@ Flags `--list` and `--template` are mutually exclusive.
 Copy AIS bucket `src_bucket` to AIS bucket `dst_bucket`.
 
 ```console
-$ ais bucket cp ais://src_bucket ais://dst_bucket
+$ ais cp ais://src_bucket ais://dst_bucket
 Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
 To check the status, run: ais show job xaction copy-bck ais://dst_bucket
 ```
@@ -422,7 +422,7 @@ To check the status, run: ais show job xaction copy-bck ais://dst_bucket
 The same as above, but wait until copying is finished.
 
 ```console
-$ ais bucket cp ais://src_bucket ais://dst_bucket --wait
+$ ais cp ais://src_bucket ais://dst_bucket --wait
 ```
 
 #### Copy cloud bucket to another cloud bucket
@@ -431,11 +431,11 @@ Copy AWS bucket `src_bucket` to AWS bucket `dst_bucket`.
 
 ```console
 # Make sure that both buckets exist.
-$ ais bucket ls aws://
+$ ais ls aws://
 AWS Buckets (2)
   aws://src_bucket
   aws://dst_bucket
-$ ais bucket cp aws://src_bucket aws://dst_bucket
+$ ais cp aws://src_bucket aws://dst_bucket
 Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
 To check the status, run: ais show job xaction copy-bck aws://dst_bucket
 ```
@@ -445,7 +445,7 @@ To check the status, run: ais show job xaction copy-bck aws://dst_bucket
 Copy objects `obj1.tar` and `obj1.info` from bucket `ais://bck1` to `ais://bck2`, and wait until the operation finishes.
 
 ```console
-$ ais bucket cp ais://bck1 ais://bck2 --list obj1.tar,obj1.info --wait
+$ ais cp ais://bck1 ais://bck2 --list obj1.tar,obj1.info --wait
 copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
 copying objects operation succeeded.
 ```
@@ -454,7 +454,7 @@ Copy object with pattern matching: copy `obj2`, `obj3`, and `obj4` from `ais://b
 Do not wait for the operation is done.
 
 ```console
-$ ais bucket cp ais://bck1 ais://bck2 --template "obj{2..4}"
+$ ais cp ais://bck1 ais://bck2 --template "obj{2..4}"
 copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
 To check the status, run: ais show job xaction copy-bck ais://bck2
 ```
@@ -526,7 +526,7 @@ ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB
 
 ## Start N-way Mirroring
 
-`ais job start mirror BUCKET --copies <value>`
+`ais start mirror BUCKET --copies <value>`
 
 Start an extended action to bring a given bucket to a certain redundancy level (`value` copies). Read more about this feature [here](/docs/storage_svcs.md#n-way-mirror).
 
@@ -740,10 +740,10 @@ In examples a cluster with 6 targets is used:
 
 ```console
 $ # Creating a bucket
-$ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
+$ ais create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
 Create bucket "ais://bck" failed: EC config (6 data, 4 parity) slices requires at least 11 targets (have 6)
 $
-$ ais bucket create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
+$ ais create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
 "ais://bck" bucket created
 $
 $ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help

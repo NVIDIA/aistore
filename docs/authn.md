@@ -48,9 +48,9 @@ ClusterOwner-myclu      Admin access to WayZWN_f4[myclu]
 Guest-myclu             Read-only access to buckets in WayZWN_f4[myclu]
 
 # 3. Create a bucket (to further demonstrate access permissions in action)
-$ ais bucket create ais://nnn
+$ ais create ais://nnn
 "ais://nnn" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
-$ ais object put README.md ais://nnn
+$ ais put README.md ais://nnn
 PUT "README.md" to ais://nnn
 
 4. Create a new role. A named role is, ultimately, a combination of access permissions
@@ -100,10 +100,10 @@ NAME             SIZE
 README.md        8.96KiB
 
 # However:
-$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais bucket create ais://mmm
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais create ais://mmm
 Failed to create "ais://mmm": insufficient permissions
 
-$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais object put LICENSE ais://nnn
+$ AIS_AUTHN_TOKEN_FILE=/tmp/new-user.token ais put LICENSE ais://nnn
 Insufficient permissions
 ```
 

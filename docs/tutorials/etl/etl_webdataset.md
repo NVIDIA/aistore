@@ -37,9 +37,9 @@ $ tar -tvf imagenet-train-000999.tar | head -n 5
 -r--r--r-- bigdata/bigdata      3 2020-06-25 11:11 0877232.cls
 -r--r--r-- bigdata/bigdata 104484 2020-06-25 11:11 0877232.jpg
 -r--r--r-- bigdata/bigdata      3 2020-06-25 11:11 0600062.cls
-$ ais bucket create ais://imagenet
+$ ais create ais://imagenet
 "ais://imagenet" bucket created
-$ ais object put imagenet-train-000999.tar ais://imagenet
+$ ais put imagenet-train-000999.tar ais://imagenet
 PUT "imagenet-train-000999.tar" into bucket "ais://imagenet"
 ```
 

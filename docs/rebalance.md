@@ -109,7 +109,7 @@ NODE             ID      KIND            BUCKET  OBJECTS         BYTES          
 
 
 ```console
-$ ais job start rebalance
+$ ais start rebalance
 ```
 
 ## Automated Resilvering

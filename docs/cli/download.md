@@ -20,7 +20,7 @@ AIS Downloader is intended for downloading massive numbers of files (objects) an
 
 ## Start download job
 
-`ais job start download SOURCE DESTINATION`
+`ais start download SOURCE DESTINATION`
 
 or, same:
 
@@ -67,10 +67,10 @@ If the `DESTINATION` bucket doesn't exist, a new bucket with the default propert
 Download object `ubuntu-18.04.1-desktop-amd64.iso` from the specified HTTP location and saves it in `ubuntu` bucket, named as `ubuntu-18.04.1.iso`
 
 ```bash
-$ ais bucket create ubuntu
+$ ais create ubuntu
 ubuntu bucket created
 
-$ ais job start download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso
+$ ais start download http://releases.ubuntu.com/18.04.1/ubuntu-18.04.1-desktop-amd64.iso ais://ubuntu/ubuntu-18.04.1.iso
 cudIYMAqg
 Run `ais show job download cudIYMAqg` to monitor the progress of downloading.
 
@@ -79,7 +79,7 @@ Files downloaded:              0/1 [--------------------------------------------
 ubuntu-18.04.1.iso 431.7MiB/1.8GiB [============>--------------------------------------------] 23 %
 All files successfully downloaded.
 
-$ ais bucket ls ais://ubuntu
+$ ais ls ais://ubuntu
 Name			Size	Version
 ubuntu-18.04.1.iso	1.82GiB	1
 ```
@@ -89,9 +89,9 @@ ubuntu-18.04.1.iso	1.82GiB	1
 Download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-000000.tgz` to `gs://lpr-vision/imagenet/imagenet_train-000140.tgz` and saves them in `local-lpr` bucket, inside `imagenet` subdirectory.
 
 ```bash
-$ ais bucket create local-lpr
+$ ais create local-lpr
 "local-lpr" bucket created
-$ ais job start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/
+$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
 $ ais show job download QdwOYMAqg
@@ -147,9 +147,9 @@ Download all objects in the range from `gs://lpr-vision/imagenet/imagenet_train-
 Since each target can make only 1 concurrent connection we only see 4 files being downloaded (started on a cluster with 4 targets).
 
 ```bash
-$ ais bucket create local-lpr
+$ ais create local-lpr
 local-lpr bucket created
-$ ais job start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/ --conns=1
+$ ais start download "gs://lpr-vision/imagenet/imagenet_train-{000000..000140}.tgz" ais://local-lpr/imagenet/ --conns=1
 QdwOYMAqg
 $ ais show job download QdwOYMAqg --progress
 Files downloaded:                              0/141 [-------------------------------------------------------------]  0 %
@@ -164,7 +164,7 @@ imagenet/imagenet_train-000013.tgz   1.0MiB/946.7MiB [--------------------------
 Download all objects from another AIS cluster (`172.100.10.10:8080`), from bucket `imagenet` in the range from `imagenet_train-0022` to `imagenet_train-0140` and saves them on the local AIS cluster into `local-lpr` bucket, inside `set_1` subdirectory.
 
 ```bash
-$ ais job start download "ais://172.100.10.10:8080/imagenet/imagenet_train-{0022..0140}.tgz" ais://local-lpr/set_1/
+$ ais start download "ais://172.100.10.10:8080/imagenet/imagenet_train-{0022..0140}.tgz" ais://local-lpr/set_1/
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
 $ ais show job download QdwOYMAqg --progress --refresh 500ms
@@ -188,7 +188,7 @@ $ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
-$ ais job start download gs://lpr-vision ais://lpr-vision-copy
+$ ais start download gs://lpr-vision ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
 ```
@@ -200,36 +200,36 @@ By default, the downloader just downloads new objects or updates the outdated on
 To change this behavior, you can specify `--sync` flag to enforce downloader to remove cached objects which are no longer present in the cloud.
 
 ```console
-$ ais bucket ls --no-headers gcp://lpr-vision | wc -l
+$ ais ls --no-headers gcp://lpr-vision | wc -l
 50
 $ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
-$ ais bucket ls --no-headers --cached ais://lpr-vision-copy | wc -l
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 0
-$ ais job start download gs://lpr-vision ais://lpr-vision-copy
+$ ais start download gs://lpr-vision ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
-$ ais job wait download QdwOYMAqg
-$ ais bucket ls --no-headers --cached ais://lpr-vision-copy | wc -l
+$ ais wait download QdwOYMAqg
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 50
 $ # Remove some objects from `gcp://lpr-vision`
-$ ais bucket ls --no-headers gcp://lpr-vision | wc -l
+$ ais ls --no-headers gcp://lpr-vision | wc -l
 40
-$ ais bucket ls --no-headers --cached ais://lpr-vision-copy | wc -l
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 50
-$ ais job start download --sync gs://lpr-vision ais://lpr-vision-copy
+$ ais start download --sync gs://lpr-vision ais://lpr-vision-copy
 fjwiIEMfa
 Run `ais show job download fjwiIEMfa` to monitor the progress of downloading.
-$ ais job wait download fjwiIEMfa
-$ ais bucket ls --no-headers --cached ais://lpr-vision-copy | wc -l
+$ ais wait download fjwiIEMfa
+$ ais ls --no-headers --cached ais://lpr-vision-copy | wc -l
 40
-$ diff <(ais bucket ls gcp://lpr-vision) <(ais bucket ls --cached ais://lpr-vision-copy) | wc -l
+$ diff <(ais ls gcp://lpr-vision) <(ais ls --cached ais://lpr-vision-copy) | wc -l
 0
 ```
 
-> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais job start download` can be expressed as `ais start download`, while `ais job wait download Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
+> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait download Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
 #### Download GCP bucket objects with prefix
 
@@ -241,7 +241,7 @@ $ ais bucket props set ais://lpr-vision-copy backend_bck=gcp://lpr-vision
 Bucket props successfully updated
 "backend_bck.name" set to:"lpr-vision" (was:"")
 "backend_bck.provider" set to:"gcp" (was:"")
-$ ais job start download gs://lpr-vision/dir/prefix- ais://lpr-vision-copy
+$ ais start download gs://lpr-vision/dir/prefix- ais://lpr-vision-copy
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
 ```
@@ -254,7 +254,7 @@ The source and each object name from the file are concatenated (with `/`) to get
 ```bash
 $ cat objects.txt
 ["imagenet/imagenet_train-000013.tgz", "imagenet/imagenet_train-000024.tgz"]
-$ ais job start download gs://lpr-vision ais://local-lpr --object-list=objects.txt
+$ ais start download gs://lpr-vision ais://local-lpr --object-list=objects.txt
 QdwOYMAqg
 Run `ais show job download QdwOYMAqg` to monitor the progress of downloading.
 $ # `gs://lpr-vision/imagenet/imagenet_train-000013.tgz` and `gs://lpr-vision/imagenet/imagenet_train-000024.tgz` have been requested
@@ -266,7 +266,7 @@ imagenet_train-000023.tgz  38.5MiB/945.9MiB [==>--------------------------------
 
 ## Stop download job
 
-`ais job stop download JOB_ID`
+`ais stop download JOB_ID`
 
 Stop download job with given `JOB_ID`.
 
@@ -319,7 +319,7 @@ fjwiIEMfa	 Finished	 0	 downloads range lpr-bucket from gcp://lpr-bucket
 
 ## Wait for download job
 
-`ais job wait download JOB_ID`
+`ais wait download JOB_ID`
 
 Wait for the download job with given `JOB_ID` to finish.
 

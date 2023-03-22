@@ -78,10 +78,10 @@ same.
 ! ais config cli set cluster.url=http://localhost:51080
 
 # create bucket using AIS CLI
-! ais bucket create caltech256
+! ais create caltech256
 
 # put the downloaded dataset in the created AIS bucket
-! ais object put -r -y <path_to_dataset> ais://caltech256/
+! ais put -r -y <path_to_dataset> ais://caltech256/
 ```
 
 > OUTPUT:<br>"ais://caltech256" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)<br>

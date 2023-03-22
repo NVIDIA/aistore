@@ -191,17 +191,17 @@ Example of HDFS provider configuration:
 
 After the HDFS is set up, and the binary is built with HDFS provider, we can see everything in action.
 ```console
-$ ais bucket create hdfs://yt8m --props="extra.hdfs.ref_directory=/part1/video"
+$ ais create hdfs://yt8m --props="extra.hdfs.ref_directory=/part1/video"
 "hdfs://yt8m" bucket created
-$ ais bucket ls hdfs://
+$ ais ls hdfs://
 HDFS Buckets (1)
   hdfs://yt8m
-$ ais object put 1.mp4 hdfs://yt8m/1.mp4
+$ ais put 1.mp4 hdfs://yt8m/1.mp4
 PUT "1.mp4" into bucket "hdfs://yt8m"
-$ ais bucket ls hdfs://yt8m
+$ ais ls hdfs://yt8m
 NAME	 SIZE
 1.mp4	 76.31KiB
-$ ais object get hdfs://yt8m/1.mp4 video.mp4
+$ ais get hdfs://yt8m/1.mp4 video.mp4
 GET "1.mp4" from bucket "hdfs://yt8m" as "video.mp4" [76.31KiB]
 ```
 

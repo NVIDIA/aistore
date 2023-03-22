@@ -28,7 +28,7 @@ Put randomly generated shards into a bucket. The main use case for this command 
 
 ## Start dSort job
 
-`ais job start dsort JOB_SPEC` or `ais job start dsort -f <PATH_TO_JOB_SPEC>`
+`ais start dsort JOB_SPEC` or `ais start dsort -f <PATH_TO_JOB_SPEC>`
 
 Start new dSort job with the provided specification.
 Specification should be provided by either argument or `-f` flag - providing both argument and flag will result in error.
@@ -102,7 +102,7 @@ Assuming that `dsort_spec.json` contains:
 You can start dSort job with:
 
 ```console
-$ ais job start dsort -f dsort_spec.json
+$ ais start dsort -f dsort_spec.json
 JGHEoo89gg
 ```
 
@@ -112,7 +112,7 @@ Command defined below starts basic shuffle job for **input** shards with names `
 Each of the **output** shards will have at least `10240` bytes (`10KB`) and will be named `new-shard-0000.tar`, `new-shard-0001.tar`, ...
 
 ```console
-$ ais job start dsort -f - <<EOM
+$ ais start dsort -f - <<EOM
 extension: .tar
 bck:
     name: dsort-testing
@@ -187,7 +187,7 @@ shard-1.tar:
 You can run:
 
 ```console
-$ ais job start dsort '{
+$ ais start dsort '{
     "extension": ".tar",
     "bck": {name: "dsort-testing"},
     "input_format": "shard-{0..9}",
@@ -332,7 +332,7 @@ $ ais show job dsort 5JjIuGemR --json | jq 'to_entries[] | [.key, .value.shard_c
 
 ## Stop dSort job
 
-`ais job stop dsort JOB_ID`
+`ais stop dsort JOB_ID`
 
 Stop the dSort job with given `JOB_ID`.
 
@@ -344,7 +344,7 @@ Remove the finished dSort job with given `JOB_ID` from the job list.
 
 ## Wait for dSort job
 
-`ais job wait dsort JOB_ID`
+`ais wait dsort JOB_ID`
 
 or, same:
 

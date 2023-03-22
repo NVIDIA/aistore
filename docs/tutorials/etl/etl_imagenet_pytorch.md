@@ -44,9 +44,9 @@ $ tar -tvf raw-train.tar | head -n 5
 -rw-r--r--  0 aditya86 users   12891 Jul  4  2012 n02085620_10621.JPEG
 -rw-r--r--  0 aditya86 users   34837 Jul  4  2012 n02085620_1073.JPEG
 -rw-r--r--  0 aditya86 users   18126 Jul  4  2012 n02085620_10976.JPEG
-$ ais bucket create ais://imagenet
+$ ais create ais://imagenet
 "ais://imagenet" bucket created
-$ ais object put raw-train.tar imagenet
+$ ais put raw-train.tar imagenet
 PUT "raw-train.tar" into bucket "imagenet"
 ```
 

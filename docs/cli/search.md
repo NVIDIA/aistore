@@ -51,7 +51,7 @@ Search commands using `--regex` flag
 
 ```command
 $ ais search --regex "mv|cp"
-ais bucket cp
+ais cp
 ais bucket mv
 ais object mv
 ```

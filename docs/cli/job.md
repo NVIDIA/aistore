@@ -13,7 +13,7 @@ Batch operations that run asynchronously and may take many seconds (minutes, or 
 
 All supported *jobs* run asynchronously, have one of the enumerated kinds, start/stop times, and common (generic) statistics.
 
-> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais job start download` can be expressed as `ais start download`, while `ais job wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
+> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
 > For additional information, please refer to this [readme](/xaction/README.md).
 
@@ -28,7 +28,7 @@ All supported *jobs* run asynchronously, have one of the enumerated kinds, start
 
 ## Start job
 
-`ais job start <JOB_NAME> [arguments...]`
+`ais start <JOB_NAME> [arguments...]`
 
 Start a certain job. Some jobs require additional arguments such as bucket name to execute.
 
@@ -43,7 +43,7 @@ Note: `job start download|dsort` have slightly different options. Please see the
 Starts LRU xaction on all nodes
 
 ```console
-$ ais job start lru
+$ ais start lru
 Started "lru" xaction.
 ```
 An administrator may choose to run LRU on a subset of buckets. This can be achieved by using the `--buckets` flag to provide a comma-separated list of buckets, for instance `--buckets bck1,gcp://bck2`, on which LRU needs to be performed.
@@ -51,26 +51,26 @@ Additionally, the `--force`(`-f`) option can be used to override the bucket's `l
 
 **Note:** To ensure safety, the force flag (`-f`) only works when a list of buckets is provided.
 ```console
-$ ais job start lru --buckets ais://buck1,aws://buck2 -f
+$ ais start lru --buckets ais://buck1,aws://buck2 -f
 ```
 
 ## Stop job
 
-`ais job stop [NAME] [JOB_ID] [NODE_ID] [BUCKET]`
+`ais stop [NAME] [JOB_ID] [NODE_ID] [BUCKET]`
 
 Stop a single job or multiple jobs.
 
 ### Examples stopping a single job:
 
-* `ais job stop download JOB_ID`
-* `ais job stop JOB_ID`
-* `ais job stop dsort JOB_ID`
+* `ais stop download JOB_ID`
+* `ais stop JOB_ID`
+* `ais stop dsort JOB_ID`
 
 ### Examples stopping multiple jobs:
 
-* `ais job stop download --all`              # stop all downloads
-* `ais job stop copy-bucket ais://abc --all` # stop all `copy-bucket` jobs where the destination bucket is ais://abc
-* `ais job stop resilver t[rt2erGhbr]`       # ask target  t[rt2erGhbr] to stop resilvering
+* `ais stop download --all`              # stop all downloads
+* `ais stop copy-bucket ais://abc --all` # stop all `copy-bucket` jobs where the destination bucket is ais://abc
+* `ais stop resilver t[rt2erGhbr]`       # ask target  t[rt2erGhbr] to stop resilvering
 
 and more.
 
@@ -85,7 +85,7 @@ Note: `job stop download|dsort` have slightly different options. Please see thei
 Stops currently running LRU eviction.
 
 ```console
-$ ais job stop lru
+$ ais stop lru
 Stopped LRU eviction.
 ```
 
@@ -197,7 +197,7 @@ out.obj.size             0
 
 ## Wait for job
 
-`ais job wait [NAME] [JOB_ID] [NODE_ID] [BUCKET]`
+`ais wait [NAME] [JOB_ID] [NODE_ID] [BUCKET]`
 
 Wait for the specified job to finish.
 
@@ -213,14 +213,14 @@ Wait for the specified job to finish.
 
 ## Distributed Sort
 
-`ais job start dsort` or `ais start dsort`
+`ais start dsort` or `ais start dsort`
 
 Run [dSort](/docs/dsort.md).
 [Further reference for this command can be found here.](dsort.md)
 
 ## Downloader
 
-`ais job start download` or `ais start download`
+`ais start download` or `ais start download`
 
 Run the AIS [Downloader](/docs/README.md).
 [Further reference for this command can be found here.](downloader.md)

@@ -175,7 +175,7 @@ Say, an S3-based client performs a GET or a PUT operation and calculates `md5` o
 To enable MD5 checksum at bucket creation time:
 
 ```console
-$ ais bucket create ais://bck --props="checksum.type=md5"
+$ ais create ais://bck --props="checksum.type=md5"
 "ais://bck2" bucket created
 
 $ ais show bucket ais://bck | grep checksum
@@ -200,17 +200,17 @@ Example when access time is undefined (not set):
 
 ```console
 # create AIS bucket with AWS backend bucket (for supported backends and details see docs/providers.md)
-$ ais bucket create ais://bck
+$ ais create ais://bck
 $ ais bucket props ais://bck backend_bck=aws://bckaws
 $ ais bucket props ais://bck checksum.type=md5
 
 # put an object using native ais API and note access time (same as creation time in this case)
-$ ais object put object.txt ais://bck/obj-ais
+$ ais put object.txt ais://bck/obj-ais
 
 # put object with s3cmd - the request bypasses ais, so no access time in the `ls` results
 $ s3cmd put object.txt s3://bck/obj-aws --host=localhost:51080 --host-bucket="localhost:51080/s3/%(bucket)"
 
-$ ais bucket ls ais://bck --props checksum,size,atime
+$ ais ls ais://bck --props checksum,size,atime
 NAME            CHECKSUM                                SIZE            ATIME
 obj-ais         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB        08 Dec 20 11:25 PST
 obj-aws         a103a20a4e8a207fe7ba25eeb2634c96        69.99KiB
@@ -315,13 +315,13 @@ Use any S3 client to access an AIS bucket. Examples below use standard AWS CLI. 
 
 ```shell
 # check that AIS cluster has no buckets, and create a new one
-$ ais bucket ls ais://
+$ ais ls ais://
 AIS Buckets (0)
 $ s3cmd --host http://localhost:51080/s3 s3 mb s3://bck1
 make_bucket: bck1
 
 # list buckets via native CLI
-$ ais bucket ls ais://
+$ ais ls ais://
 AIS Buckets (1)
 ```
 
@@ -447,13 +447,13 @@ and a few more. The following table summarizes S3 APIs and provides the correspo
 
 | API | AIS CLI and comments | [s3cmd](https://github.com/s3tools/s3cmd) | [aws CLI](https://aws.amazon.com/cli) |
 | --- | --- | --- | --- |
-| Create bucket | `ais bucket create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
+| Create bucket | `ais create ais://bck` (note: consider using S3 default `md5` checksum - see [discussion](#object-checksum) and examples below) | `s3cmd mb` | `aws s3 mb` |
 | Head bucket | `ais bucket show ais://bck` | `s3cmd info s3://bck` | `aws s3api head-bucket` |
 | Destroy bucket (aka "remove bucket") | `ais bucket rm ais://bck` | `s3cmd rb`, `aws s3 rb` ||
 | List buckets | `ais ls ais://` (or, same: `ais ls ais:`) | `s3cmd ls s3://` | `aws s3 ls s3://` |
-| PUT object | `ais object put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..` |
-| GET object | `ais object get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..` |
-| GET object(range) | `ais object get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..` |
+| PUT object | `ais put filename ais://bck/obj` | `s3cmd put ...` | `aws s3 cp ..` |
+| GET object | `ais get ais://bck/obj filename` | `s3cmd get ...` | `aws s3 cp ..` |
+| GET object(range) | `ais get ais://bck/obj --offset 0 --length 10` | **Not supported** | `aws s3api get-object --range= ..` |
 | HEAD object | `ais object show ais://bck/obj` | `s3cmd info s3://bck/obj` | `aws s3api head-object` |
 | List objects in a bucket | `ais ls ais://bck` | `s3cmd ls s3://bucket-name/` | `aws s3 ls s3://bucket-name/` |
 | Copy object in a given bucket or between buckets | S3 API is fully supported; we have yet to implement our native CLI to copy objects (we do copy buckets, though) | **Limited support**: `s3cmd` performs GET followed by PUT instead of AWS API call | `aws s3api copy-object ...` calls copy object API |

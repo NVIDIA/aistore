@@ -179,7 +179,7 @@ docker run -d \
 Once the container is running and the cluster is deployed, you can verify that your AWS buckets are accessible by the newly deployed AIS cluster:
 
 ```console
-$ AIS_ENDPOINT="http://localhost:51080" ais bucket ls
+$ AIS_ENDPOINT="http://localhost:51080" ais ls
 
 AWS Buckets (28)
   aws://sample-bucket-1

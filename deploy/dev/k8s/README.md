@@ -184,7 +184,7 @@ NAME           READY   STATUS    RESTARTS   AGE
 ais-proxy-0    1/1     Running   0          7m59s
 ais-target-0   1/1     Running   0          6m48s
 $ # ais is running
-$ ais bucket create test-bucket
+$ ais create test-bucket
 "test-bucket" bucket created
 $ cat > sample
 This is a sample data
@@ -193,7 +193,7 @@ This is a sample data
 4. Putting sample object
 
 ```console
-$ ais object put sample test-bucket/test-obj
+$ ais put sample test-bucket/test-obj
 PUT "test-obj" into bucket "test-bucket"
 ```
 

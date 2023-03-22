@@ -84,7 +84,7 @@ via the (attached) local cluster. For example:
 
 ```console
 # create bucket by "pointing" the CLI i(directly) to the remote cluster:
-$ AIS_ENDPOINT=http://127.0.0.1:11080 ais bucket create ais://abc
+$ AIS_ENDPOINT=http://127.0.0.1:11080 ais create ais://abc
 
 # PUT an object into remote cluster's bucket:
 $ AIS_ENDPOINT=http://127.0.0.1:11080 ais put README.md ais://abc

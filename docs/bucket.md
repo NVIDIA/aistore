@@ -94,10 +94,10 @@ Bucket creation operation allows to override the **inherited defaults**, which i
 Example specifying (non-default) bucket properties at creation time:
 
 ```console
-$ ais bucket create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.copies=4"
+$ ais create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.copies=4"
 
 # or, same using JSON:
-$ ais bucket create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
+$ ais create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
 ### Inherited Bucket Properties and LRU
@@ -171,7 +171,7 @@ For details, see [S3 compatibility](s3compat.md#s3-compatibility).
 To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
 ```console
-$ ais bucket create yt8m
+$ ais create yt8m
 $ ais bucket mv ais://yt8m ais://yt8m_extended
 $ ais bucket rm ais://yt8m_extended
 ```
@@ -247,7 +247,7 @@ $ # List all buckets in all remote clusters
 $ # Notice the syntax: by convention, we use `@` to prefix remote cluster UUIDs, and so
 $ # `ais://@` translates as "AIS backend provider, any remote cluster"
 $
-$ ais bucket ls ais://@
+$ ais ls ais://@
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
@@ -257,7 +257,7 @@ $
 $ # List all buckets in the remote cluster with UUID = MCBgkFqp
 $ # Notice the syntax: `ais://@some-string` translates as "remote AIS cluster with alias or UUID equal some-string"
 $
-$ ais bucket ls ais://@MCBgkFqp
+$ ais ls ais://@MCBgkFqp
 AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet
 	  ais://@MCBgkFqp/coco
@@ -265,7 +265,7 @@ AIS Buckets (4)
 	  ais://@MCBgkFqp/imagenet-inflated
 $
 $ # List all buckets with name matching the regex pattern "tes*"
-$ ais bucket ls --regex "tes*"
+$ ais ls --regex "tes*"
 AWS Buckets (3)
   aws://test1
   aws://test2
@@ -273,14 +273,14 @@ AWS Buckets (3)
 $
 $ # We can conveniently keep using our previously selected alias for the remote cluster -
 $ # The following lists selected remote bucket using the cluster's alias:
-$ ais bucket ls ais://@teamZ/imagenet-augmented
+$ ais ls ais://@teamZ/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
 train-002.tgz     136.44KiB
 ...
 $
 $ # The same, but this time using the cluster's UUID:
-$ ais bucket ls ais://@MCBgkFqp/imagenet-augmented
+$ ais ls ais://@MCBgkFqp/imagenet-augmented
 NAME              SIZE
 train-001.tgz     153.52KiB
 train-002.tgz     136.44KiB
@@ -303,11 +303,11 @@ The example shows accessing a private GCP bucket and a public GCP one without us
 
 ```console
 $ # Listing objects of a private bucket
-$ ais bucket ls gs://ais-ic
+$ ais ls gs://ais-ic
 Bucket "gcp://ais-ic" does not exist
 $
 $ # Listing a public bucket
-$ ais bucket ls gs://pub-images --limit 3
+$ ais ls gs://pub-images --limit 3
 NAME                         SIZE
 images-shard.ipynb           101.94KiB
 images-train-000000.tar      964.77MiB
@@ -319,19 +319,19 @@ Run downloader to copy data from a public Cloud bucket to an AIS bucket and then
 Example shows how to download data from public Google storage:
 
 ```console
-$ ais bucket create ais://images
+$ ais create ais://images
 "ais://images" bucket created
-$ ais job start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
+$ ais start download "gs://pub-images/images-train-{000000..000001}.tar" ais://images/
 Z8WkHxwIrr
 Run `ais show job download Z8WkHxwIrr` to monitor the progress of downloading.
-$ ais job wait download Z8WkHxwIrr # or, same: ais wait Z8WkHxwIrr
-$ ais bucket ls ais://images
+$ ais wait download Z8WkHxwIrr # or, same: ais wait Z8WkHxwIrr
+$ ais ls ais://images
 NAME                         SIZE
 images-train-000000.tar      964.77MiB
 images-train-000001.tar      964.74MiB
 ```
 
-> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais job start download` can be expressed as `ais start download`, while `ais job wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
+> Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
 ### Remote AIS cluster
 
@@ -366,21 +366,21 @@ $ curl -sL --max-redirs 3 -x localhost:8080 --noproxy "$(curl -s localhost:8080/
 
 Alternatively, an object can also be downloaded using the `get` and `cat` CLI commands.
 ```console
-$ ais object get http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
+$ ais get http://storage.googleapis.com/minikube/minikube-0.7.iso.sha256 minikube-0.7.iso.sha256
 ```
 
 This will cache shard object inside the AIStore cluster.
 We can confirm this by listing available buckets and checking the content:
 
 ```console
-$ ais bucket ls
+$ ais ls
 AIS Buckets (1)
   ais://local-bck
 AWS Buckets (1)
   aws://ais-test
 HTTP(S) Buckets (1)
   ht://ZDdhNTYxZTkyMzhkNjk3NA (http://storage.googleapis.com/minikube/)
-$ ais bucket ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                                 SIZE
 minikube-0.6.iso.sha256	              65B
 ```
@@ -392,7 +392,7 @@ In our example, bucket `ht://ZDdhNTYxZTkyMzhkNjk3NA` will be associated with `ht
 Therefore, we can interchangeably use the associated URL for listing the bucket as show below.
 
 ```console
-$ ais bucket ls http://storage.googleapis.com/minikube
+$ ais ls http://storage.googleapis.com/minikube
 NAME                                  SIZE
 minikube-0.6.iso.sha256	              65B
 ```
@@ -403,7 +403,7 @@ Such connection between bucket and URL allows downloading content without provid
 
 ```console
 $ ais object cat ht://ZDdhNTYxZTkyMzhkNjk3NA/minikube-0.7.iso.sha256 > /dev/null # cache another object
-$ ais bucket ls ht://ZDdhNTYxZTkyMzhkNjk3NA
+$ ais ls ht://ZDdhNTYxZTkyMzhkNjk3NA
 NAME                     SIZE
 minikube-0.6.iso.sha256  65B
 minikube-0.7.iso.sha256  65B
@@ -420,7 +420,7 @@ Objects are prefetched or evicted using [List/Range Operations](batch.md#listran
 For example, to use a [list operation](batch.md#list) to prefetch 'o1', 'o2', and, 'o3' from Amazon S3 remote bucket `abc`, run:
 
 ```console
-$ ais job start prefetch aws://abc --list o1,o2,o3
+$ ais start prefetch aws://abc --list o1,o2,o3
 ```
 
 To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects in the remote bucket `abc` from AIS, which names begin with the prefix `__tst/test-`, run:
@@ -462,7 +462,7 @@ However, the extra-copying involved may prove to be time and/or space consuming.
 For example:
 
 ```console
-$ ais bucket create abc
+$ ais create abc
 "abc" bucket created
 $ ais bucket props set ais://abc backend_bck=gcp://xyz
 Bucket props successfully updated
@@ -473,22 +473,22 @@ After that, you can access all objects from `gcp://xyz` via `ais://abc`. **On-de
 For example:
 
 ```console
-$ ais bucket ls gcp://xyz
+$ ais ls gcp://xyz
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 shard-1.tar	 2.50KiB	 1
-$ ais bucket ls ais://abc
+$ ais ls ais://abc
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 shard-1.tar	 2.50KiB	 1
-$ ais object get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
+$ ais get ais://abc/shard-0.tar /dev/null # cache/prefetch cloud object
 "shard-0.tar" has the size 2.50KiB (2560 B)
-$ ais bucket ls ais://abc --cached
+$ ais ls ais://abc --cached
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 $ ais bucket props set ais://abc backend_bck=none # disconnect backend bucket
 Bucket props successfully updated
-$ ais bucket ls ais://abc
+$ ais ls ais://abc
 NAME		 SIZE		 VERSION
 shard-0.tar	 2.50KiB	 1
 ```

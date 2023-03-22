@@ -80,7 +80,7 @@ $ ais auth login -p pass user
 Token(/home/ubuntu/.config/ais/cli/auth.token)
 
 $ # Create bucket as a regular user
-$ ais bucket create ais://bck1
+$ ais create ais://bck1
 
 $ # Removing a user requires admin's token, pass a path to the token to CLI
 $ AIS_AUTHN_TOKEN_FILE=./admin.token ais auth rm user tmpUser1
