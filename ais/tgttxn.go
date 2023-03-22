@@ -538,6 +538,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 			return "", err
 		}
 		txnTcb := txn.(*txnTCB)
+
 		if c.query.Get(apc.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 				txnTcb.xtcb.TxnAbort()
@@ -546,6 +547,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		} else {
 			t.transactions.find(c.uuid, apc.ActCommit)
 		}
+
 		custom := txnTcb.xtcb.Args()
 		if custom.Phase != apc.ActBegin {
 			err = fmt.Errorf("%s: %s is already running", t, txnTcb) // never here
@@ -668,9 +670,20 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 			return xid, err
 		}
 		txnTco := txn.(*txnTCObjs)
+		var done bool
+		if c.query.Get(apc.QparamWaitMetasync) != "" {
+			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
+				txnTco.xtco.TxnAbort()
+				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
+			}
+			done = true
+		}
+
 		txnTco.xtco.Do(txnTco.msg)
 		xid = txnTco.xtco.ID()
-		t.transactions.find(c.uuid, apc.ActCommit)
+		if !done {
+			t.transactions.find(c.uuid, apc.ActCommit)
+		}
 	default:
 		debug.Assert(false)
 	}

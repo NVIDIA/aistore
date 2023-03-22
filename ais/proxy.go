@@ -539,7 +539,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// list objects
-		// NOTE #1: TODO: currently, always primary - hrw redirect vs scenario
+		// NOTE #1: TODO: currently, always primary - hrw redirect vs scenarios***
 		if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
 			return
 		}
@@ -1158,25 +1158,15 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bck)
 			return
 		}
-		//
-		// not calling `initAndTry` - delegating bucket props cloning to the `p.tcb` below
-		// (see a), b) below)
-		//
-		bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
-		bckToArgs.createAIS = true
-		if errCode, err = bckToArgs.init(); err != nil && errCode != http.StatusNotFound {
-			p.writeErr(w, r, err, errCode)
+
+		bckTo, errCode, err = p.initBckTo(w, r, query, bckTo)
+		if err != nil {
 			return
 		}
-		//
-		// a) creating (BMD-wise) remote destination on the fly
-		//
-		if errCode == http.StatusNotFound && bckTo.IsRemote() {
-			if bckTo, err = bckToArgs.try(); err != nil {
-				return
-			}
-			errCode = 0
+		if errCode == http.StatusNotFound {
+			glog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
 		}
+
 		// start x-tcb or x-tco
 		if v := query.Get(apc.QparamFltPresence); v != "" {
 			fltPresence, _ = strconv.Atoi(v)
@@ -1188,16 +1178,6 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				p.writeErr(w, r, err, http.StatusNotImplemented)
 				return
 			}
-			//
-			// b) creating ais destination on the fly (TODO: unify w/ p.tcb duplicating bprops)
-			//
-			if errCode == http.StatusNotFound {
-				debug.Assert(bckTo.Props == nil && !bckTo.IsRemote())
-				if bckTo, err = bckToArgs.try(); err != nil {
-					return
-				}
-			}
-			debug.Assert(bckTo.Props != nil)
 			lstcx := &lstcx{
 				p:       p,
 				bckFrom: bck,
@@ -1217,26 +1197,36 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		w.Write([]byte(xid))
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			xid    string
-			tcomsg = &cmn.TCObjsMsg{}
-			bckTo  *cluster.Bck
+			xid     string
+			tcomsg  = &cmn.TCObjsMsg{}
+			bckTo   *cluster.Bck
+			errCode int
+			eq      bool
 		)
 		if err = cos.MorphMarshal(msg.Value, tcomsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
 		bckTo = cluster.CloneBck(&tcomsg.ToBck)
-		if err = bckTo.Init(p.owner.bmd); err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
+
 		if bck.Equal(bckTo, true, true) {
+			eq = true
 			glog.Warningf("multi-obj %s within the same bucket %q", msg.Action, bck)
 		}
 		if bckTo.IsHTTP() {
 			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
 			return
 		}
+		if !eq {
+			bckTo, errCode, err = p.initBckTo(w, r, query, bckTo)
+			if err != nil {
+				return
+			}
+			if errCode == http.StatusNotFound {
+				glog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
+			}
+		}
+
 		glog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
 		if xid, err = p.tcobjs(bck, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
@@ -1282,6 +1272,27 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
+}
+
+// init existing or create remote
+// not calling `initAndTry` - delegating ais:from// props cloning to the separate method
+func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Values,
+	bckTo *cluster.Bck) (*cluster.Bck, int, error) {
+	bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
+	bckToArgs.createAIS = true
+	errCode, err := bckToArgs.init()
+	if err != nil && errCode != http.StatusNotFound {
+		p.writeErr(w, r, err, errCode)
+		return nil, 0, err
+	}
+	// creating (BMD-wise) remote destination on the fly
+	if errCode == http.StatusNotFound && bckTo.IsRemote() {
+		if bckTo, err = bckToArgs.try(); err != nil {
+			return nil, 0, err
+		}
+		errCode = 0
+	}
+	return bckTo, errCode, nil
 }
 
 // POST { apc.ActCreateBck } /v1/buckets/bucket-name
@@ -1424,7 +1435,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 			// bcast
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
 		}
-		// NOTE #2: TODO: currently, always primary - hrw redirect vs scenario
+		// NOTE #2: TODO: currently, always primary - hrw redirect vs scenarios***
 		nl.SetOwner(smap.Primary.ID())
 		p.ic.registerEqual(regIC{nl: nl, smap: smap, msg: amsg})
 	}

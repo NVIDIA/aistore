@@ -535,7 +535,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 
 	// 2. begin
 	var (
-		waitmsync = !dryRun
+		waitmsync = !dryRun && !existsTo
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
@@ -543,16 +543,16 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 		return
 	}
 
-	// 3. update BMD locally & metasync updated BMD
-	ctx := &bmdModifier{
-		pre:   bmodTCB,
-		final: p.bmodSync,
-		msg:   msg,
-		txnID: c.uuid,
-		bcks:  []*cluster.Bck{bckFrom, bckTo},
-		wait:  waitmsync,
-	}
-	if !dryRun {
+	// 3. create dst bucket if doesn't exist - clone bckFrom props
+	if !dryRun && !existsTo {
+		ctx := &bmdModifier{
+			pre:   bmodTCB,
+			final: p.bmodSync,
+			msg:   msg,
+			txnID: c.uuid,
+			bcks:  []*cluster.Bck{bckFrom, bckTo},
+			wait:  waitmsync,
+		}
 		bmd, err = p.owner.bmd.modify(ctx)
 		if err != nil {
 			debug.AssertNoErr(err)
@@ -563,6 +563,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 		if !ctx.terminate {
 			debug.Assert(!existsTo)
 			c.req.Query.Set(apc.QparamWaitMetasync, "true")
+		} else {
+			existsTo = true // creation race (extremely unlikely)
 		}
 	}
 
@@ -573,7 +575,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	// (note synchronous cleanup below)
 	nl.F = func(nl notif.Listener) {
 		if errNl := nl.Err(); errNl != nil {
-			if !ctx.terminate { // undo bmd.modify() - see above
+			if !existsTo { // undo metasync above
 				glog.Error(errNl)
 				_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
 			}
@@ -584,8 +586,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	// 5. commit
 	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
-	if err != nil {
-		// cleanup
+	if err != nil && !existsTo {
+		// rm the one that we just created
 		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
 	}
 	return
@@ -599,9 +601,10 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string
 		err = cmn.NewErrBckNotFound(bckFrom.Bucket())
 		return
 	}
+	_, existsTo := bmd.Get(bckTo)
 	// 2. begin
 	var (
-		waitmsync = false
+		waitmsync = !existsTo
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
@@ -609,8 +612,37 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string
 		return
 	}
 
-	// 3. commit
+	// 3. create dst bucket if doesn't exist - clone bckFrom props
+	if !existsTo {
+		ctx := &bmdModifier{
+			pre:   bmodTCB,
+			final: p.bmodSync,
+			msg:   msg,
+			txnID: c.uuid,
+			bcks:  []*cluster.Bck{bckFrom, bckTo},
+			wait:  waitmsync,
+		}
+		bmd, err = p.owner.bmd.modify(ctx)
+		if err != nil {
+			debug.AssertNoErr(err)
+			err = c.bcastAbort(bckFrom, err)
+			return
+		}
+		c.msg.BMDVersion = bmd.version()
+		if !ctx.terminate {
+			debug.Assert(!existsTo)
+			c.req.Query.Set(apc.QparamWaitMetasync, "true")
+		} else {
+			existsTo = true // creation race (extremely unlikely)
+		}
+	}
+
+	// 4. commit
 	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	if err != nil && !existsTo {
+		// rm the one that we just created
+		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
+	}
 	if err == nil {
 		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
 	}

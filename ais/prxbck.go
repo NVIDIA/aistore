@@ -47,7 +47,7 @@ type bckInitArgs struct {
 	dontHeadRemote bool // do not HEAD remote bucket (to find out whether it exists and/or get properties)
 	tryHeadRemote  bool // when listing objects anonymously (via ListObjsMsg.Flags LsTryHeadRemote)
 	isPresent      bool // the bucket is confirmed to be present (in the cluster's BMD)
-	exists         bool // remote bucket is confirmed to be exist
+	exists         bool // remote bucket is confirmed to exist
 	modified       bool // bucket-defining control structure got modified
 }
 
