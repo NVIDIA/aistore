@@ -41,11 +41,11 @@ func TestETLMultiObj(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 
 		bck   = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
-		toBck = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
+		bckTo = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
 	)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+	tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 
 	for i := 0; i < objCnt; i++ {
 		r, _ := readers.NewRandReader(objSize, cksumType)
@@ -64,13 +64,13 @@ func TestETLMultiObj(t *testing.T) {
 
 	for _, ty := range []string{"range", "list"} {
 		t.Run(ty, func(t *testing.T) {
-			testETLMultiObj(t, transformer, bck, toBck,
+			testETLMultiObj(t, transformer, bck, bckTo,
 				"test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
 		})
 	}
 }
 
-func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileRange, opType string) {
+func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileRange, opType string) {
 	pt, err := cos.ParseBashTemplate(fileRange)
 	tassert.CheckFatal(t, err)
 
@@ -88,7 +88,7 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 					Timeout: cos.Duration(requestTimeout),
 				},
 			},
-			ToBck: toBck,
+			ToBck: bckTo,
 		}
 	)
 	if opType == "list" {
@@ -98,19 +98,19 @@ func testETLMultiObj(t *testing.T, etlName string, fromBck, toBck cmn.Bck, fileR
 	}
 
 	tlog.Logf("Start offline ETL[%s]\n", etlName)
-	xid, err := api.ETLMultiObj(baseParams, fromBck, tcomsg)
+	xid, err := api.ETLMultiObj(baseParams, bckFrom, tcomsg)
 	tassert.CheckFatal(t, err)
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, wargs)
 	tassert.CheckFatal(t, err)
 
-	list, err := api.ListObjects(baseParams, toBck, nil, 0)
+	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
 	for _, objName := range objList {
-		err := api.DeleteObject(baseParams, toBck, objName)
+		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
-		tlog.Logf("%s/%s\n", toBck.Name, objName)
+		tlog.Logf("%s/%s\n", bckTo.Name, objName)
 	}
 }

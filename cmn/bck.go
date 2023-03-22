@@ -279,14 +279,21 @@ func (b *Bck) ValidateName() (err error) {
 	return
 }
 
-func (b *Bck) DisplayName() string {
+// canonical name, with or without object
+func (b *Bck) Cname(objname string) (s string) {
 	sch := apc.ToScheme(b.Provider)
 	if b.Ns.IsGlobal() {
-		return sch + apc.BckProviderSeparator + b.Name
+		s = sch + apc.BckProviderSeparator + b.Name
+	} else {
+		s = fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, b.Ns, b.Name)
 	}
-	return fmt.Sprintf("%s%s%s/%s", sch, apc.BckProviderSeparator, b.Ns, b.Name)
+	if objname == "" {
+		return
+	}
+	return s + string(filepath.Separator) + objname
 }
 
+// translation from s3: gs: scheme back to aws, gcp, etc.
 func (b *Bck) DisplayProvider() (p string) {
 	p = apc.DisplayProvider(b.Provider)
 	if b.IsRemoteAIS() {

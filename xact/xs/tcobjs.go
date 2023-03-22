@@ -58,8 +58,8 @@ var (
 // tcoFactory //
 ////////////////
 
-func (p *tcoFactory) New(args xreg.Args, fromBck *cluster.Bck) xreg.Renewable {
-	np := &tcoFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: fromBck}, kind: p.kind}}
+func (p *tcoFactory) New(args xreg.Args, bckFrom *cluster.Bck) xreg.Renewable {
+	np := &tcoFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bckFrom}, kind: p.kind}}
 	np.args = args.Custom.(*xreg.TCObjsArgs)
 	return np
 }

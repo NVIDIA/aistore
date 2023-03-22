@@ -245,11 +245,11 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			if m.bck.IsRemote() {
 				defer m.del(-1)
 			}
-			toBck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-			tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			bckTo := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+			tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 
 			if test.list {
-				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, toBck)
+				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, bckTo)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
@@ -265,7 +265,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 						}
 					}
 					go func(archName string, list []string) {
-						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
 						msg.ListRange.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
@@ -274,12 +274,12 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 					}(archName, list)
 				}
 			} else {
-				tlog.Logf("Archive %d ranges %s => %s\n", numArchs, m.bck, toBck)
+				tlog.Logf("Archive %d ranges %s => %s\n", numArchs, m.bck, bckTo)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start int) {
-						msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
@@ -298,10 +298,10 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 			api.WaitForXactionIdle(baseParams, flt)
 
-			tlog.Logf("List %s\n", toBck)
+			tlog.Logf("List %s\n", bckTo)
 			msg := &apc.LsoMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
 			tassert.CheckFatal(t, err)
 			for _, en := range objList.Entries {
 				tlog.Logf("%s: %dB\n", en.Name, en.Size)
@@ -310,7 +310,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
 			msg.SetFlag(apc.LsArchDir)
-			objList, err = api.ListObjects(baseParams, toBck, msg, 0)
+			objList, err = api.ListObjects(baseParams, bckTo, msg, 0)
 			tassert.CheckFatal(t, err)
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*numInArch
@@ -342,9 +342,9 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 						apc.QparamArchmime: []string{mime},
 					},
 				}
-				oah, err := api.GetObject(baseParams, toBck, objName, &getArgs)
+				oah, err := api.GetObject(baseParams, bckTo, objName, &getArgs)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", toBck.Name, objName, apc.QparamArchpath, en.Name, oah.Size(), err)
+					t.Errorf("%s/%s?%s=%s(%dB): %v", bckTo.Name, objName, apc.QparamArchpath, en.Name, oah.Size(), err)
 				}
 			}
 		})
@@ -353,11 +353,11 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 
 func TestAppendToArch(t *testing.T) {
 	var (
-		fromBck = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		toBck   = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bckFrom = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bckTo   = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		m       = ioContext{
 			t:       t,
-			bck:     fromBck,
+			bck:     bckFrom,
 			num:     10,
 			prefix:  "archive/",
 			ordered: true,
@@ -384,8 +384,8 @@ func TestAppendToArch(t *testing.T) {
 	for _, test := range subtests {
 		tname := fmt.Sprintf("%s/multi=%t", test.ext, test.multi)
 		t.Run(tname, func(t *testing.T) {
-			tools.CreateBucketWithCleanup(t, proxyURL, fromBck, nil)
-			tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+			tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 			m.initWithCleanup()
 			m.puts()
 
@@ -404,7 +404,7 @@ func TestAppendToArch(t *testing.T) {
 					list = append(list, m.objNames[rand.Intn(m.num)])
 				}
 				go func(archName string, list []string) {
-					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName}
+					msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
 					msg.ListRange.ObjNames = list
 
 					_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
@@ -417,7 +417,7 @@ func TestAppendToArch(t *testing.T) {
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
 			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, toBck, lsmsg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, lsmsg, 0)
 			tassert.CheckFatal(t, err)
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
@@ -429,10 +429,10 @@ func TestAppendToArch(t *testing.T) {
 					for j := 0; j < numAdd; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
-					msg := cmn.ArchiveMsg{ToBck: toBck, ArchName: archName, AllowAppendToExisting: true}
+					msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName, AllowAppendToExisting: true}
 					msg.ListRange.ObjNames = list
 					go func() {
-						_, err = api.CreateArchMultiObj(baseParams, fromBck, msg)
+						_, err = api.CreateArchMultiObj(baseParams, bckFrom, msg)
 						tassert.CheckError(t, err)
 					}()
 				} else {
@@ -440,7 +440,7 @@ func TestAppendToArch(t *testing.T) {
 						reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
 						putArgs := api.PutArgs{
 							BaseParams: baseParams,
-							Bck:        toBck,
+							Bck:        bckTo,
 							ObjName:    archName,
 							Reader:     reader,
 							Size:       fileSize,
@@ -460,7 +460,7 @@ func TestAppendToArch(t *testing.T) {
 			}
 
 			lsmsg.SetFlag(apc.LsArchDir)
-			objList, err = api.ListObjects(baseParams, toBck, lsmsg, 0)
+			objList, err = api.ListObjects(baseParams, bckTo, lsmsg, 0)
 			tassert.CheckError(t, err)
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)

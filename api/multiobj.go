@@ -16,36 +16,36 @@ import (
 
 // CreateArchMultiObj allows to archive multiple objects.
 // The option to append multiple objects to an existing archive is also supported.
-// The source and the destination buckets are defined as `fromBck` and `toBck`, respectively
+// The source and the destination buckets are defined as `bckFrom` and `bckTo`, respectively
 // (not necessarily distinct)
 // For supported archiving formats, see `cos.ArchExtensions`.
 //
 // See also: api.AppendToArch
-func CreateArchMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
+func CreateArchMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
 	bp.Method = http.MethodPut
-	q := fromBck.AddToQuery(nil)
-	return dolr(bp, fromBck, apc.ActArchive, msg, q)
+	q := bckFrom.AddToQuery(nil)
+	return dolr(bp, bckFrom, apc.ActArchive, msg, q)
 }
 
-// `fltPresence` applies exclusively to remote `fromBck` (is ignored if the source is ais://)
+// `fltPresence` applies exclusively to remote `bckFrom` (is ignored if the source is ais://)
 // and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 
-func CopyMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := fromBck.AddToQuery(nil)
+	q := bckFrom.AddToQuery(nil)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
-	return dolr(bp, fromBck, apc.ActCopyObjects, msg, q)
+	return dolr(bp, bckFrom, apc.ActCopyObjects, msg, q)
 }
 
-func ETLMultiObj(bp BaseParams, fromBck cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := fromBck.AddToQuery(nil)
+	q := bckFrom.AddToQuery(nil)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
-	return dolr(bp, fromBck, apc.ActETLObjects, msg, q)
+	return dolr(bp, bckFrom, apc.ActETLObjects, msg, q)
 }
 
 // DeleteList sends request to remove a list of objects from a bucket.

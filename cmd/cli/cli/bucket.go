@@ -96,16 +96,16 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 }
 
 // Rename ais bucket
-func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
-	if _, err := headBucket(fromBck, true /* don't add */); err != nil {
+func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
+	if _, err := headBucket(bckFrom, true /* don't add */); err != nil {
 		return err
 	}
-	xid, err := api.RenameBucket(apiBP, fromBck, toBck)
+	xid, err := api.RenameBucket(apiBP, bckFrom, bckTo)
 	if err != nil {
 		return err
 	}
 	_, xname := xact.GetKindName(apc.ActMoveBck)
-	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, fromBck, toBck)
+	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, bckFrom, bckTo)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		actionDone(c, text+". "+toMonitorMsg(c, xid, ""))
 		return nil
@@ -119,17 +119,17 @@ func mvBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: timeout}
 	if err := waitXact(apiBP, xargs); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", fromBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", bckFrom, bckTo)
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)
 	return nil
 }
 
-func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
+func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	var (
 		showProgress = flagIsSet(c, progressFlag)
-		from, to     = fromBck.DisplayName(), toBck.DisplayName()
+		from, to     = bckFrom.DisplayName(), bckTo.DisplayName()
 	)
 	if showProgress && flagIsSet(c, copyDryRunFlag) {
 		warn := fmt.Sprintf("dry-run option is incompatible with %s - not implemented yet", qflprn(progressFlag))
@@ -154,11 +154,11 @@ func copyBucket(c *cli.Context, fromBck, toBck cmn.Bck) error {
 	if showProgress {
 		var cpr cprCtx
 		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
-		cpr.from, cpr.to = fromBck.DisplayName(), toBck.DisplayName()
-		return cpr.copyBucket(c, fromBck, toBck, msg, fltPresence)
+		cpr.from, cpr.to = bckFrom.DisplayName(), bckTo.DisplayName()
+		return cpr.copyBucket(c, bckFrom, bckTo, msg, fltPresence)
 	}
 
-	xid, err := api.CopyBucket(apiBP, fromBck, toBck, msg, fltPresence)
+	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
 	if err != nil {
 		return err
 	}

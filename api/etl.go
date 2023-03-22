@@ -157,30 +157,30 @@ func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.
 // - visit all (matching) source objects; for each object:
 // - read it, transform using the specified (ID-ed) ETL, and write the result to dst bucket
 //
-// `fltPresence` applies exclusively to remote `fromBck` (is ignoredmotherwise)
+// `fltPresence` applies exclusively to remote `bckFrom` (is ignoredmotherwise)
 // and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 // Namely:
 // * apc.FltExists        - copy all objects, including those that are not (present) in AIS
-// * apc.FltPresent 	  - copy the current `fromBck` content in the cluster (default)
+// * apc.FltPresent 	  - copy the current `bckFrom` content in the cluster (default)
 // * apc.FltExistsOutside - copy only those remote objects that are not (present) in AIS
 //
 // msg.Prefix, if specified, applies always and regardless.
 //
 // Returns xaction ID if successful, an error otherwise. See also: api.CopyBucket
-func ETLBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (xid string, err error) {
-	if err = toBck.Validate(); err != nil {
+func ETLBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresence ...int) (xid string, err error) {
+	if err = bckTo.Validate(); err != nil {
 		return
 	}
 	bp.Method = http.MethodPost
-	q := fromBck.AddToQuery(nil)
-	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
+	q := bckFrom.AddToQuery(nil)
+	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Path = apc.URLPathBuckets.Join(bckFrom.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActETLBck, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q

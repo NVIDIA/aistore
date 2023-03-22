@@ -6,6 +6,7 @@ package integration
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
@@ -514,7 +515,7 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 		proxyURL    = tools.RandomProxyURL(t)
 		baseParams  = tools.BaseAPIParams(proxyURL)
-		origEntries = make(map[string]*cmn.LsoEntry, 1500)
+		origEntries = make(map[string]*cmn.LsoEntry, m.num)
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -559,13 +560,24 @@ func TestShutdownListObjects(t *testing.T) {
 		tools.WaitForRebalAndResil(t, baseParams)
 	})
 
-	// Wait for reb, shutdown to complete.
-	tools.WaitForRebalAndResil(t, baseParams)
-	tassert.CheckError(t, err)
+	if origTargetCount > 1 {
+		time.Sleep(time.Second)
+		for i := 0; i < 10; i++ {
+			status, err := api.WaitForXactionIC(baseParams, xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout})
+			if err == nil {
+				tlog.Logf("%v\n", status)
+				break
+			}
+			herr := cmn.Err2HTTPErr(err)
+			tassert.Fatalf(t, herr != nil, "herr is nil")
+			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
+			time.Sleep(time.Second)
+		}
+	}
+
 	err = tools.WaitForNodeToTerminate(pid, nodeOffTimeout)
 	tassert.CheckError(t, err)
-	m.smap, err = tools.WaitForClusterState(proxyURL, "target in maintenance",
-		m.smap.Version, 0, origTargetCount-1, tsi.ID())
+	m.smap, err = tools.WaitForClusterState(proxyURL, "target shutdown", m.smap.Version, 0, origTargetCount-1, tsi.ID())
 	tassert.CheckError(t, err)
 
 	// 3. Check if we can list all the objects.

@@ -296,16 +296,16 @@ func InitCode(t *testing.T, bp api.BaseParams, msg etl.InitCodeMsg) (xid string)
 	return
 }
 
-func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, fromBck, toBck cmn.Bck, msg *apc.TCBMsg) string {
-	xid, err := api.ETLBucket(bp, fromBck, toBck, msg)
+func ETLBucketWithCleanup(t *testing.T, bp api.BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg) string {
+	xid, err := api.ETLBucket(bp, bckFrom, bckTo, msg)
 	tassert.CheckFatal(t, err)
 
 	t.Cleanup(func() {
-		tools.DestroyBucket(t, bp.URL, toBck)
+		tools.DestroyBucket(t, bp.URL, bckTo)
 	})
 
 	tlog.Logf("ETL[%s]: running %s => %s xaction %q\n",
-		msg.Transform.Name, fromBck.DisplayName(), toBck.DisplayName(), xid)
+		msg.Transform.Name, bckFrom.Cname(""), bckTo.Cname(""), xid)
 	return xid
 }
 

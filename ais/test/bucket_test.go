@@ -868,7 +868,7 @@ func TestListObjectsProps(t *testing.T) {
 			if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
 				s = "enabled"
 			}
-			tlog.Logf("%s: versioning is %s\n", m.bck.DisplayName(), s)
+			tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
 		}
 		checkProps := func(useCache bool, props []string, f func(en *cmn.LsoEntry)) {
 			msg := &apc.LsoMsg{PageSize: 100}
@@ -927,8 +927,7 @@ func TestListObjectsProps(t *testing.T) {
 				[]string{apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies}, func(en *cmn.LsoEntry) {
 					tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 					if bck.IsAIS() || remoteVersioning {
-						tassert.Errorf(t, en.Version != "",
-							"version is not set: "+m.bck.DisplayName()+"/"+en.Name)
+						tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
 					}
 					tassert.Errorf(t, en.Copies > 0, "copies is not set")
 
@@ -949,8 +948,7 @@ func TestListObjectsProps(t *testing.T) {
 			checkProps(useCache, apc.GetPropsAll, func(en *cmn.LsoEntry) {
 				tassert.Errorf(t, en.Size != 0, "size is not set")
 				if bck.IsAIS() || remoteVersioning {
-					tassert.Errorf(t, en.Version != "",
-						"version is not set: "+m.bck.DisplayName()+"/"+en.Name)
+					tassert.Errorf(t, en.Version != "", "version is not set: "+m.bck.Cname(en.Name))
 				}
 				tassert.Errorf(t, en.Checksum != "", "checksum is not set")
 				tassert.Errorf(t, en.Atime != "", "atime is not set")
@@ -982,7 +980,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 	if remoteVersioning = p.Versioning.Enabled; remoteVersioning {
 		s = "enabled"
 	}
-	tlog.Logf("%s: versioning is %s\n", m.bck.DisplayName(), s)
+	tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
 
 	m.initWithCleanup()
 
@@ -1201,7 +1199,7 @@ func TestListObjects(t *testing.T) {
 				for _, en := range lst.Entries {
 					e, exists := objs.Load(en.Name)
 					if !exists {
-						t.Errorf("failed to locate %s/%s in bucket %s", bck.DisplayName(), en.Name, bck)
+						t.Errorf("failed to locate %s", bck.Cname(en.Name))
 						continue
 					}
 
@@ -1214,12 +1212,12 @@ func TestListObjects(t *testing.T) {
 					}
 
 					if en.Version == empty.Version {
-						t.Errorf("%s/%s version is empty (not set)", bck.DisplayName(), en.Name)
+						t.Errorf("%s version is empty (not set)", bck.Cname(en.Name))
 					} else if en.Checksum == empty.Checksum ||
 						en.Atime == empty.Atime ||
 						en.Flags == empty.Flags ||
 						en.Copies == empty.Copies {
-						t.Errorf("some fields of %s/%s are empty (not set): %#v", bck.DisplayName(), en.Name, en)
+						t.Errorf("some fields of %s are empty (not set): %#v", bck.Cname(en.Name), en)
 					}
 				}
 

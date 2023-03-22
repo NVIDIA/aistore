@@ -682,7 +682,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	} else {
 		glog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
 			r.p.T, page.UUID, page.ContinuationToken, len(page.Entries),
-			hdr.SID, hdr.Bck.DisplayName(), string(hdr.Opaque), err)
+			hdr.SID, hdr.Bck.Cname(""), string(hdr.Opaque), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 	}
 	slab.Free(buf)

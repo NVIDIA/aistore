@@ -248,7 +248,7 @@ def transform(input_bytes):
 			tassert.CheckFatal(t, err)
 			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Transforming bucket %s took %s\n", bckFrom.DisplayName(), total)
+			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
 
 			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
 			tassert.CheckFatal(t, err)
@@ -268,7 +268,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 	)
 	m.bck = bckFrom
 
-	tlog.Logf("Preparing source bucket %s\n", bckFrom.DisplayName())
+	tlog.Logf("Preparing source bucket %s\n", bckFrom.Cname(""))
 	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 	m.initWithCleanupAndSaveState()
 
@@ -279,7 +279,7 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 		tetl.StopAndDeleteETL(t, baseParams, etlName)
 	})
 
-	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.DisplayName())
+	tlog.Logf("Start offline ETL[%s] => %s\n", etlName, bckTo.Cname(""))
 	msg := &apc.TCBMsg{Transform: apc.Transform{Name: etlName}, CopyBckMsg: apc.CopyBckMsg{Force: true}}
 	xid = tetl.ETLBucketWithCleanup(t, baseParams, bckFrom, bckTo, msg)
 	return

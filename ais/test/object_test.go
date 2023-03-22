@@ -152,7 +152,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				})
 				if err == nil {
 					oa := oah.Attrs()
-					tlog.Logf("PUT(%s/%s) attrs %s\n", bck.DisplayName(), object, oa.String())
+					tlog.Logf("PUT(%s) attrs %s\n", bck.Cname(object), oa.String())
 				}
 			case getOP:
 				if test.exists {

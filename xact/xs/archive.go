@@ -84,7 +84,7 @@ type (
 		streamingX
 		workCh  chan *cmn.ArchiveMsg
 		config  *cmn.Config
-		toBck   *cluster.Bck
+		bckTo   *cluster.Bck
 		pending struct {
 			m map[string]*archwi
 			sync.RWMutex
@@ -195,9 +195,9 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	// most of the time there'll be a single dst bucket for the lifetime
 	// TODO: extend `cluster.Xact` for one-source-to-many-destination buckets
-	if r.toBck == nil {
+	if r.bckTo == nil {
 		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
-			r.toBck = cluster.CloneBck(&wi.msg.ToBck)
+			r.bckTo = cluster.CloneBck(&wi.msg.ToBck)
 		}
 	}
 
@@ -393,8 +393,8 @@ func (r *XactArch) String() (s string) {
 }
 
 func (r *XactArch) FromTo() (src, dst *cluster.Bck) {
-	if r.toBck != nil {
-		src, dst = r.Bck(), r.toBck
+	if r.bckTo != nil {
+		src, dst = r.Bck(), r.bckTo
 	}
 	return
 }

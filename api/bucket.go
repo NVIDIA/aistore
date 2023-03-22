@@ -255,9 +255,9 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 	return err
 }
 
-// CopyBucket copies existing `fromBck` bucket to the destination `toBck` thus,
-// effectively, creating a copy of the `fromBck`.
-//   - AIS will create `toBck` on the fly but only if the destination bucket does not
+// CopyBucket copies existing `bckFrom` bucket to the destination `bckTo` thus,
+// effectively, creating a copy of the `bckFrom`.
+//   - AIS will create `bckTo` on the fly but only if the destination bucket does not
 //     exist and _is_ provided by AIStore; 3rd party backend destination must exist -
 //     otherwise the copy operation won't be successful.
 //   - There are no limitations on copying buckets across Backend providers:
@@ -265,22 +265,22 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 //     bucket, etc.
 //   - Copying multiple buckets to the same destination bucket is also permitted.
 //
-// `fltPresence` applies exclusively to remote `fromBck` and is ignored if the source is ais://
+// `fltPresence` applies exclusively to remote `bckFrom` and is ignored if the source is ais://
 // The value is enum { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 // Namely:
 // * apc.FltExists        - copy all objects, including those that are not (present) in AIS
-// * apc.FltPresent 	  - copy the current `fromBck` content in the cluster (default)
+// * apc.FltPresent 	  - copy the current `bckFrom` content in the cluster (default)
 // * apc.FltExistsOutside - copy only those remote objects that are not (present) in AIS
 //
 // msg.Prefix, if specified, applies always and regardless.
 //
 // Returns xaction ID if successful, an error otherwise. See also closely related api.ETLBucket
-func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltPresence ...int) (xid string, err error) {
-	if err = toBck.Validate(); err != nil {
+func CopyBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltPresence ...int) (xid string, err error) {
+	if err = bckTo.Validate(); err != nil {
 		return
 	}
-	q := fromBck.AddToQuery(nil)
-	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
+	q := bckFrom.AddToQuery(nil)
+	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -288,7 +288,7 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltP
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Path = apc.URLPathBuckets.Join(bckFrom.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActCopyBck, Value: msg})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
@@ -298,19 +298,19 @@ func CopyBucket(bp BaseParams, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltP
 	return
 }
 
-// RenameBucket renames fromBck as toBck.
+// RenameBucket renames bckFrom as bckTo.
 // Returns xaction ID if successful, an error otherwise.
-func RenameBucket(bp BaseParams, fromBck, toBck cmn.Bck) (xid string, err error) {
-	if err = toBck.Validate(); err != nil {
+func RenameBucket(bp BaseParams, bckFrom, bckTo cmn.Bck) (xid string, err error) {
+	if err = bckTo.Validate(); err != nil {
 		return
 	}
 	bp.Method = http.MethodPost
-	q := fromBck.AddToQuery(nil)
-	_ = toBck.AddUnameToQuery(q, apc.QparamBckTo)
+	q := bckFrom.AddToQuery(nil)
+	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(fromBck.Name)
+		reqParams.Path = apc.URLPathBuckets.Join(bckFrom.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMoveBck})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q

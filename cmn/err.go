@@ -110,7 +110,7 @@ type (
 		role    string
 		mmcount int // maintenance mode
 	}
-	ErrXactionNotFound struct {
+	ErrXactNotFound struct {
 		cause string
 	}
 	ErrObjDefunct struct {
@@ -474,14 +474,19 @@ func (e *ErrNoNodes) Error() (s string) {
 	return
 }
 
-// ErrXactionNotFound
+// ErrXactNotFound
 
-func (e *ErrXactionNotFound) Error() string {
+func (e *ErrXactNotFound) Error() string {
 	return "xaction " + e.cause + " not found"
 }
 
-func NewErrXactNotFoundError(cause string) *ErrXactionNotFound {
-	return &ErrXactionNotFound{cause: cause}
+func NewErrXactNotFoundError(cause string) *ErrXactNotFound {
+	return &ErrXactNotFound{cause: cause}
+}
+
+func IsErrXactNotFound(err error) bool {
+	_, ok := err.(*ErrXactNotFound)
+	return ok
 }
 
 // ErrObjDefunct
@@ -711,6 +716,15 @@ func IsErrBucketNought(err error) bool {
 
 func IsErrObjNought(err error) bool {
 	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+}
+
+// used internally to report http.StatusNotFound _iff_ status is not set (is zero)
+func isErrNotFoundExtended(err error) bool {
+	return IsErrNotFound(err) ||
+		IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
+		IsObjNotExist(err) ||
+		IsErrMountpathNotFound(err) ||
+		IsErrXactNotFound(err)
 }
 
 // usage: lom.Load() (compare w/ IsNotExist)
@@ -964,13 +978,18 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 		l      = len(opts)
 		status = http.StatusBadRequest
 	)
+
+	// assign status (in order of priority)
 	if IsErrNotFound(err) {
 		status = http.StatusNotFound
 	} else if l > 0 {
 		status = opts[0]
 	} else if errf, ok := err.(*ErrFailedTo); ok {
 		status = errf.status
+	} else if isErrNotFoundExtended(err) {
+		status = http.StatusNotFound
 	}
+
 	herr.init(r, err, status)
 	herr.write(w, r, l > 1)
 	FreeHterr(herr)

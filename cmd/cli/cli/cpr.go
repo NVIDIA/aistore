@@ -38,9 +38,9 @@ type cprCtx struct {
 	sinceUpd time.Duration
 }
 
-func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.CopyBckMsg, fltPresence int) error {
+func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltPresence int) error {
 	// 1. get from-bck summary
-	qbck := cmn.QueryBcks(fromBck)
+	qbck := cmn.QueryBcks(bckFrom)
 	ctx := &bsummCtx{
 		qbck:    qbck,
 		timeout: longClientTimeout,
@@ -57,7 +57,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 	}
 
 	for _, res := range summaries {
-		debug.Assertf(res.Bck.Equal(&fromBck), "%s != %s", res.Bck, fromBck)
+		debug.Assertf(res.Bck.Equal(&bckFrom), "%s != %s", res.Bck, bckFrom)
 		cpr.totals.size += int64(res.TotalSize.PresentObjs + res.TotalSize.RemoteObjs)
 		cpr.totals.objs += int64(res.ObjCount.Present + res.ObjCount.Remote)
 	}
@@ -83,7 +83,7 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, fromBck, toBck cmn.Bck, msg *apc.C
 	progress, bars = simpleBar(objsArg, sizeArg)
 	cpr.barObjs, cpr.barSize = bars[0], bars[1]
 
-	cpr.xid, err = api.CopyBucket(apiBP, fromBck, toBck, msg, fltPresence)
+	cpr.xid, err = api.CopyBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
 	if err != nil {
 		return err
 	}

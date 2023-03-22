@@ -475,12 +475,12 @@ func etlBucketHandler(c *cli.Context) error {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	etlName := c.Args().Get(0)
-	fromBck, toBck, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
+	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
 	if err != nil {
 		return err
 	}
-	if fromBck.Equal(&toBck) {
-		return fmt.Errorf("cannot transform bucket %q onto itself", fromBck)
+	if bckFrom.Equal(&bckTo) {
+		return fmt.Errorf("cannot transform bucket %q onto itself", bckFrom)
 	}
 
 	msg := &apc.TCBMsg{
@@ -520,17 +520,17 @@ func etlBucketHandler(c *cli.Context) error {
 	tmplObjs := parseStrFlag(c, templateFlag)
 	listObjs := parseStrFlag(c, listFlag)
 	if listObjs != "" || tmplObjs != "" {
-		return multiobjTCO(c, fromBck, toBck, listObjs, tmplObjs, etlName)
+		return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 	}
 
 	// (II) or bucket
-	xid, err := api.ETLBucket(apiBP, fromBck, toBck, msg)
+	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, msg)
 	if errV := handleETLHTTPError(err, etlName); errV != nil {
 		return errV
 	}
 
 	_, xname := xact.GetKindName(apc.ActETLBck)
-	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, fromBck, toBck)
+	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, bckFrom, bckTo)
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		fmt.Fprintln(c.App.Writer, text)
 		return nil

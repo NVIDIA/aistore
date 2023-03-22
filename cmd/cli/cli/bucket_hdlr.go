@@ -324,21 +324,38 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longClientTimeout)
 }
 
+// via (I) x-copy-bucket ("full bucket") _or_ (II) x-copy-listrange ("multi-object")
+// Notice a certain usable redundancy:
+// (I)  `ais cp from to --prefix abc"
+// is the same as:
+// (II) `ais cp from to --template abc"
 func copyBucketHandler(c *cli.Context) (err error) {
 	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
 	if err != nil {
 		return err
 	}
-	if bckFrom.Equal(&bckTo) {
-		return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
-	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
+	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
+		return err
+	}
+	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
+		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
+			return err
+		}
+		warn := fmt.Sprintf("destination bucket %s doesn't exist and will be created with configuration copied from the source (%s))",
+			bckFrom, bckTo)
+		actionWarn(c, warn)
+	}
 
 	dryRun := flagIsSet(c, copyDryRunFlag)
+
 	// (I) bucket copy
 	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+		if bckFrom.Equal(&bckTo) {
+			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
+		}
 		if dryRun {
 			// TODO: show object names with destinations, make the output consistent with etl dry-run
 			fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)

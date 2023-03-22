@@ -195,7 +195,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 	tassert.CheckFatal(t, err)
 
 	if !cached {
-		tlog.Logf("Evicting object %s/%s\n", bck.DisplayName(), objName)
+		tlog.Logf("Evicting object %s\n", bck.Cname(objName))
 		err := api.EvictObject(baseParams, bck, objName)
 		tassert.CheckFatal(t, err)
 	}

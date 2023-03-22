@@ -143,7 +143,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 		t.writeJSON(w, r, stats, what)
 		return
 	}
-	if _, ok := err.(*cmn.ErrXactionNotFound); ok {
+	if cmn.IsErrXactNotFound(err) {
 		t.writeErr(w, r, err, http.StatusNotFound, Silent)
 	} else {
 		t.writeErr(w, r, err)

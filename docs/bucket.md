@@ -171,7 +171,7 @@ For details, see [S3 compatibility](s3compat.md#s3-compatibility).
 To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
 ```console
-$ ais create yt8m
+$ ais create ais://yt8m
 $ ais bucket mv ais://yt8m ais://yt8m_extended
 $ ais bucket rm ais://yt8m_extended
 ```

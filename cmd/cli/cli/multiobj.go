@@ -22,7 +22,7 @@ import (
 )
 
 // x-TCO: multi-object transform or copy
-func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etlName string) error {
+func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	var (
 		lrMsg   cmn.ListRange
 		numObjs int64
@@ -43,7 +43,7 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 	}
 
 	// 2. TCO message
-	var msg = cmn.TCObjsMsg{ListRange: lrMsg, ToBck: toBck}
+	var msg = cmn.TCObjsMsg{ListRange: lrMsg, ToBck: bckTo}
 	msg.DryRun = flagIsSet(c, copyDryRunFlag)
 	if flagIsSet(c, etlBucketRequestTimeout) {
 		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
@@ -61,10 +61,10 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 		msg.Name = etlName
 		text = "Transforming objects"
 		xkind = apc.ActETLObjects
-		xid, err = api.ETLMultiObj(apiBP, fromBck, msg)
+		xid, err = api.ETLMultiObj(apiBP, bckFrom, msg)
 	} else {
 		xkind = apc.ActCopyObjects
-		xid, err = api.CopyMultiObj(apiBP, fromBck, msg)
+		xid, err = api.CopyMultiObj(apiBP, bckFrom, msg)
 	}
 	if err != nil {
 		return err
@@ -75,8 +75,8 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 	if showProgress {
 		var cpr = cprCtx{
 			xid:  xid,
-			from: fromBck.DisplayName(),
-			to:   toBck.DisplayName(),
+			from: bckFrom.DisplayName(),
+			to:   bckTo.DisplayName(),
 		}
 		_, cpr.xname = xact.GetKindName(xkind)
 		cpr.totals.objs = numObjs
@@ -86,7 +86,7 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 
 	// done
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		baseMsg := fmt.Sprintf("%s %s => %s. ", text, fromBck, toBck)
+		baseMsg := fmt.Sprintf("%s %s => %s. ", text, bckFrom, bckTo)
 		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 		return nil
 	}
@@ -94,14 +94,14 @@ func multiobjTCO(c *cli.Context, fromBck, toBck cmn.Bck, listObjs, tmplObjs, etl
 	// or wait
 	var timeout time.Duration
 
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, text, fromBck, toBck)
+	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, text, bckFrom, bckTo)
 
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	xargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
 	if err = waitXact(apiBP, xargs); err != nil {
-		fmt.Fprintf(c.App.Writer, fmtXactFailed, text, fromBck, toBck)
+		fmt.Fprintf(c.App.Writer, fmtXactFailed, text, bckFrom, bckTo)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
 	}

@@ -276,7 +276,7 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 
 func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget bool) {
 	if xid != "" {
-		actionCptn(c, name, fmt.Sprintf(" job %s:", xid))
+		actionCptn(c, jobName(name, xid), "")
 		return
 	}
 

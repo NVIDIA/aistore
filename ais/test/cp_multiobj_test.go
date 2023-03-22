@@ -60,7 +60,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		objList = append(objList, fmt.Sprintf("test/a-%04d", i))
 	}
 	for i := 0; i < 5; i++ {
-		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.DisplayName())
+		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.Cname(""))
 		for _, objName := range objList {
 			r, _ := readers.NewRandReader(objSize, cksumType)
 			_, err := api.PutObject(api.PutArgs{
@@ -75,7 +75,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 
 		rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
-		tlog.Logf("[%s] %s => %s\n", template, bckFrom.DisplayName(), bckTo.DisplayName())
+		tlog.Logf("[%s] %s => %s\n", template, bckFrom.Cname(""), bckTo.Cname(""))
 		msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
 		xid, err = api.CopyMultiObj(baseParams, bckFrom, msg)
 		tassert.CheckFatal(t, err)
@@ -94,7 +94,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		objName := fmt.Sprintf("test/a-%04d", i)
 		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
-		tlog.Logf("%s/%s\n", bckTo.DisplayName(), objName)
+		tlog.Logf("%s\n", bckTo.Cname(objName))
 	}
 }
 
@@ -117,7 +117,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			prefix:  "copy-multiobj/",
 			ordered: true,
 		}
-		toBck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bckTo     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		subtests  = []struct {
@@ -142,7 +142,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			// TODO -- FIXME: swapping the source and the destination here because
 			// of the current unidirectional limitation: ais => remote ais
 			if m.bck.IsRemoteAIS() {
-				m.bck, toBck = toBck, m.bck
+				m.bck, bckTo = bckTo, m.bck
 				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 			}
 
@@ -152,10 +152,10 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 				defer m.del()
 			}
 			// TODO -- FIXME: create ais destination on the fly (feature)
-			if !toBck.Equal(&m.bck) && toBck.IsAIS() {
-				tools.CreateBucketWithCleanup(t, proxyURL, toBck, nil)
+			if !bckTo.Equal(&m.bck) && bckTo.IsAIS() {
+				tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 			}
-			tlog.Logf("Start copying multiple objects %s => %s ...\n", m.bck, toBck)
+			tlog.Logf("Start copying multiple objects %s => %s ...\n", m.bck, bckTo)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
@@ -164,7 +164,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(list []string, iter int) {
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						} else {
@@ -177,7 +177,7 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 					start := rand.Intn(m.num - numToCopy)
 					go func(start, iter int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: toBck}
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
 						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
 							erv.Store(err)
 						} else {
@@ -194,9 +194,9 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 
 			msg := &apc.LsoMsg{Prefix: m.prefix}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, toBck, msg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
 			tassert.CheckFatal(t, err)
-			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", toBck, m.prefix, len(objList.Entries))
+			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", bckTo, m.prefix, len(objList.Entries))
 		})
 	}
 }
