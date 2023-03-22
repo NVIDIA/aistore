@@ -371,3 +371,29 @@ class TCMultiObj(BaseModel):
         dict_rep["tobck"] = self.to_bck.as_dict()
         dict_rep["coer"] = self.continue_on_err
         return dict_rep
+
+
+class ArchiveMultiObj(BaseModel):
+    """
+    API message structure for multi-object archive requests
+    """
+
+    archive_name: str
+    to_bck: BucketModel = None
+    mime: str = None
+    include_source_name = False
+    allow_append = False
+    continue_on_err = False
+    object_selection: dict
+
+    def as_dict(self):
+        dict_rep = self.object_selection
+        dict_rep["archname"] = self.archive_name
+        dict_rep["isbn"] = self.include_source_name
+        dict_rep["aate"] = self.allow_append
+        dict_rep["coer"] = self.continue_on_err
+        if self.mime:
+            dict_rep["mime"] = self.mime
+        if self.to_bck:
+            dict_rep["tobck"] = self.to_bck
+        return dict_rep

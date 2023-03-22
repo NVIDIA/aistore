@@ -3,6 +3,8 @@
 #
 import hashlib
 import unittest
+import tarfile
+import io
 
 import pytest
 
@@ -76,6 +78,41 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.assertEqual(
             4, len(to_bck.list_all_objects(prefix=new_prefix + self.obj_prefix))
         )
+
+    def test_archive_objects_without_copy(self):
+        self._archive_exec_assert(self.bucket, self.bucket)
+
+    def test_archive_objects_with_copy(self):
+        dest_bck = self._create_bucket(random_string())
+        self._archive_exec_assert(
+            self.bucket,
+            dest_bck,
+            to_bck_name=dest_bck.name,
+            to_bck_provider=dest_bck.provider,
+        )
+
+    def _archive_exec_assert(self, src_bck, res_bck, **kwargs):
+        arch_name = "my_arch.tar"
+        archived_names = self.obj_names[1:5]
+        expected_contents = {}
+        for name in archived_names:
+            expected_contents[name] = src_bck.object(obj_name=name).get().read_all()
+
+        arch_job = src_bck.objects(obj_names=archived_names).archive(
+            archive_name=arch_name, **kwargs
+        )
+        self.client.job(job_id=arch_job).wait_for_idle(timeout=TEST_TIMEOUT)
+
+        # Read the tar archive and assert the object names and contents match
+        res_bytes = res_bck.object(arch_name).get().read_all()
+        with tarfile.open(fileobj=io.BytesIO(res_bytes), mode="r") as tar:
+            member_names = []
+            for member in tar.getmembers():
+                inner_file = tar.extractfile(member)
+                self.assertEqual(expected_contents[member.name], inner_file.read())
+                inner_file.close()
+                member_names.append(member.name)
+            self.assertEqual(set(archived_names), set(member_names))
 
     @pytest.mark.etl
     def test_transform_objects(self):

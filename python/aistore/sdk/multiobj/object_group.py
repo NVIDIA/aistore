@@ -5,14 +5,16 @@ import logging
 from typing import List
 
 from aistore.sdk.const import (
+    PROVIDER_AIS,
     HTTP_METHOD_DELETE,
+    HTTP_METHOD_POST,
+    HTTP_METHOD_PUT,
     ACT_DELETE_OBJECTS,
     ACT_PREFETCH_OBJECTS,
-    HTTP_METHOD_POST,
     ACT_EVICT_OBJECTS,
     ACT_COPY_OBJECTS,
-    PROVIDER_AIS,
     ACT_TRANSFORM_OBJECTS,
+    ACT_ARCHIVE_OBJECTS,
 )
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj.object_names import ObjectNames
@@ -24,6 +26,7 @@ from aistore.sdk.types import (
     CopyBckMsg,
     TransformBckMsg,
     TCBckMsg,
+    ArchiveMultiObj,
 )
 
 
@@ -248,6 +251,51 @@ class ObjectGroup:
         ).as_dict()
         return self.bck.make_request(
             HTTP_METHOD_POST, ACT_TRANSFORM_OBJECTS, value=value
+        ).text
+
+    def archive(
+        self,
+        archive_name: str,
+        mime: str = "",
+        to_bck_name: str = "",
+        to_bck_provider: str = PROVIDER_AIS,
+        include_source_name: bool = False,
+        allow_append: bool = False,
+        continue_on_err: bool = False,
+    ):
+        """
+        Create or append to an archive
+
+        Args:
+            archive_name (str): Name of archive to create or append
+            mime (str, optional): MIME type of the content
+            to_bck (str, optional): Destination bucket, defaults to current bucket
+            to_bck_provider (str, optinal): Provider of destination bucket, if given
+            include_source_name (bool, optional): Include the source bucket name in the archived objects' names
+            allow_append (bool, optional): Allow appending to an existing archive
+            continue_on_err (bool, optional): Whether to continue if there is an error archiving a single object
+
+        Returns:
+            Job ID (as str) that can be used to check the status of the operation
+
+        """
+        if to_bck_name:
+            to_bck = BucketModel(name=to_bck_name, provider=to_bck_provider).as_dict()
+        else:
+            to_bck = BucketModel(
+                name=self.bck.name, provider=self.bck.provider
+            ).as_dict()
+        val = ArchiveMultiObj(
+            object_selection=self._obj_collection.get_value(),
+            archive_name=archive_name,
+            mime=mime,
+            to_bck=to_bck,
+            include_source_name=include_source_name,
+            allow_append=allow_append,
+            continue_on_err=continue_on_err,
+        ).as_dict()
+        return self.bck.make_request(
+            HTTP_METHOD_PUT, ACT_ARCHIVE_OBJECTS, value=val
         ).text
 
     def list_names(self) -> List[str]:

@@ -61,6 +61,7 @@ ACT_EVICT_OBJECTS = "evict-listrange"
 ACT_PREFETCH_OBJECTS = "prefetch-listrange"
 ACT_COPY_OBJECTS = "copy-listrange"
 ACT_TRANSFORM_OBJECTS = "etl-listrange"
+ACT_ARCHIVE_OBJECTS = "archive"
 # Job actions
 ACT_START = "start"
 

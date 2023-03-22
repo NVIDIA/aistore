@@ -9,16 +9,21 @@ from aistore.sdk.const import (
     ACT_PREFETCH_OBJECTS,
     ACT_COPY_OBJECTS,
     ACT_TRANSFORM_OBJECTS,
+    ACT_ARCHIVE_OBJECTS,
+    PROVIDER_AMAZON,
+    HTTP_METHOD_PUT,
 )
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
-from aistore.sdk.types import BucketModel
+from aistore.sdk.types import BucketModel, ArchiveMultiObj
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
 class TestObjectGroup(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_bck = Mock()
+        self.mock_bck.name = "mock-bucket"
+        self.mock_bck.provider = "mock-bck-provider"
         self.mock_response_text = "Response Text"
         mock_response = Mock()
         mock_response.text = self.mock_response_text
@@ -196,3 +201,51 @@ class TestObjectGroup(unittest.TestCase):
 
     def test_list_names(self):
         self.assertEqual(self.obj_names, self.object_group.list_names())
+
+    def test_archive_default_params(self):
+        archive_name = "test-arch"
+        expected_value = ArchiveMultiObj(
+            object_selection=self.expected_value,
+            archive_name=archive_name,
+            to_bck=BucketModel(
+                name=self.mock_bck.name, provider=self.mock_bck.provider
+            ),
+        ).as_dict()
+        self.object_group_test_helper(
+            self.object_group.archive,
+            HTTP_METHOD_PUT,
+            ACT_ARCHIVE_OBJECTS,
+            expected_value=expected_value,
+            archive_name=archive_name,
+        )
+
+    def test_archive(self):
+        archive_name = "test-arch"
+        to_bck = "dest-bck-name"
+        to_provider = PROVIDER_AMAZON
+        mime = "text"
+        include_source = True
+        allow_append = True
+        continue_on_err = True
+        expected_value = ArchiveMultiObj(
+            object_selection=self.expected_value,
+            archive_name=archive_name,
+            to_bck=BucketModel(name=to_bck, provider=to_provider),
+            mime=mime,
+            include_source_name=include_source,
+            allow_append=allow_append,
+            continue_on_err=continue_on_err,
+        ).as_dict()
+        self.object_group_test_helper(
+            self.object_group.archive,
+            HTTP_METHOD_PUT,
+            ACT_ARCHIVE_OBJECTS,
+            expected_value=expected_value,
+            archive_name=archive_name,
+            to_bck_name=to_bck,
+            to_bck_provider=to_provider,
+            mime=mime,
+            include_source_name=include_source,
+            allow_append=allow_append,
+            continue_on_err=continue_on_err,
+        )
