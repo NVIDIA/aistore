@@ -108,7 +108,7 @@ func appendArchHandler(c *cli.Context) error {
 	if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
 		return err
 	}
-	actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
+	actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
 	return nil
 }
 

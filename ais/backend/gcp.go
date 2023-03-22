@@ -281,7 +281,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
 	if verbose {
-		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
+		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
 }

@@ -142,7 +142,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}
-	debug.Assert(lom.FullName() == msg.FullName()) // relying on it
+	debug.Assertf(lom.FullName() == msg.FullName(), "%s vs %s", lom.FullName(), msg.FullName()) // relying on it
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.Gen(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)

@@ -616,7 +616,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -691,7 +691,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s (append: %v)", r.Method, bck.Name, objName, si, appendTyProvided)
+		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si, appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -725,7 +725,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1784,7 +1784,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1812,7 +1812,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s/%s => %s", r.Method, bck.Name, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -2230,7 +2230,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, 
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%q %s/%s => %s", msg.Action, bck.Name, objName, si)
+		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si)
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.

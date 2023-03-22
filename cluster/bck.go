@@ -86,6 +86,7 @@ func (b *Bck) IsQuery() bool                      { return (*cmn.Bck)(b).IsQuery
 func (b *Bck) RemoteBck() *cmn.Bck                { return (*cmn.Bck)(b).RemoteBck() }
 func (b *Bck) Validate() error                    { return (*cmn.Bck)(b).Validate() }
 func (b *Bck) MakeUname(name string) string       { return (*cmn.Bck)(b).MakeUname(name) }
+func (b *Bck) Cname(name string) string           { return (*cmn.Bck)(b).Cname(name) }
 func (b *Bck) IsEmpty() bool                      { return (*cmn.Bck)(b).IsEmpty() }
 func (b *Bck) AddToQuery(q url.Values) url.Values { return (*cmn.Bck)(b).AddToQuery(q) }
 

@@ -395,7 +395,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3 COPY: %s %s/%s => %s/%v %s", r.Method, bckSrc, objName, bckDst, items, si)
+		glog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -430,7 +430,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -468,7 +468,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -545,7 +545,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3 %s %s/%s => %s", r.Method, bucket, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 
 	p.reverseNodeRequest(w, r, si)
@@ -578,7 +578,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("AISS3: %s %s/%s => %s", r.Method, bck, objName, si)
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)

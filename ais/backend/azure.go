@@ -167,10 +167,10 @@ func _toErr(azureError error, bck *cmn.Bck, objName string) (bool, int, error) {
 	case azblob.ServiceCodeContainerNotFound:
 		return true, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
 	case azblob.ServiceCodeBlobNotFound:
-		err := fmt.Errorf("%s/%s not found", bck, objName)
+		err := fmt.Errorf("%s not found", bck.Cname(objName))
 		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
 	case azblob.ServiceCodeInvalidResourceName:
-		err := fmt.Errorf("%s/%s not found", bck, objName)
+		err := fmt.Errorf("%s not found", bck.Cname(objName))
 		return false, http.StatusNotFound, cmn.NewErrHTTP(nil, err, http.StatusNotFound)
 	default:
 		resp := stgErr.Response()

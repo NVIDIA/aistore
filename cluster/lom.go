@@ -168,7 +168,7 @@ func ParseObjLoc(loc string) (tname, mpname string) {
 }
 
 // see also: transport.ObjHdr.FullName()
-func (lom *LOM) FullName() string { return filepath.Join(lom.bck.Name, lom.ObjName) }
+func (lom *LOM) FullName() string { return lom.bck.Cname(lom.ObjName) }
 
 func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 	if bprops := lom.Bprops(); bprops == nil {

@@ -324,63 +324,6 @@ func showMisplacedAndMore(c *cli.Context) (err error) {
 	return cmn.WaitForFunc(fValidate, longClientTimeout)
 }
 
-// via (I) x-copy-bucket ("full bucket") _or_ (II) x-copy-listrange ("multi-object")
-// Notice a certain usable redundancy:
-// (I)  `ais cp from to --prefix abc"
-// is the same as:
-// (II) `ais cp from to --template abc"
-func copyBucketHandler(c *cli.Context) (err error) {
-	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
-	if err != nil {
-		return err
-	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
-	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
-		return err
-	}
-	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
-		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
-			return err
-		}
-		warn := fmt.Sprintf("destination bucket %s doesn't exist and will be created with configuration copied from the source (%s))",
-			bckFrom, bckTo)
-		actionWarn(c, warn)
-	}
-
-	dryRun := flagIsSet(c, copyDryRunFlag)
-
-	// (I) bucket copy
-	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		if bckFrom.Equal(&bckTo) {
-			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
-		}
-		if dryRun {
-			// TODO: show object names with destinations, make the output consistent with etl dry-run
-			fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-			actionDone(c, "[dry-run] Copying the entire bucket")
-		}
-		return copyBucket(c, bckFrom, bckTo)
-	}
-
-	// (II) multi-object copy
-	listObjs := parseStrFlag(c, listFlag)
-	tmplObjs := parseStrFlag(c, templateFlag)
-
-	if dryRun {
-		var msg string
-		if listObjs != "" {
-			msg = fmt.Sprintf("[dry-run] Copying %q ...\n", listObjs)
-		} else {
-			msg = fmt.Sprintf("[dry-run] Copying objects that match the pattern %q ...\n", tmplObjs)
-		}
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
-		actionDone(c, msg)
-	}
-	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, "" /*etlName*/) // TODO -- FIXME: progress bar
-}
-
 func mvBucketHandler(c *cli.Context) error {
 	bckFrom, bckTo, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/)
 	if err != nil {
@@ -478,11 +421,11 @@ func lruBucketHandler(c *cli.Context) error {
 func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
 	const fmts = "Bucket %q: LRU is already %s, nothing to do\n"
 	if toggle && p.LRU.Enabled {
-		fmt.Fprintf(c.App.Writer, fmts, bck.DisplayName(), "enabled")
+		fmt.Fprintf(c.App.Writer, fmts, bck.Cname(""), "enabled")
 		return
 	}
 	if !toggle && !p.LRU.Enabled {
-		fmt.Fprintf(c.App.Writer, fmts, bck.DisplayName(), "disabled")
+		fmt.Fprintf(c.App.Writer, fmts, bck.Cname(""), "disabled")
 		return
 	}
 	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.StrKVs{"lru.enabled": strconv.FormatBool(toggle)})
@@ -531,7 +474,7 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 			return herr
 		}
 		helpMsg := fmt.Sprintf("To show bucket properties, run '%s %s %s %s'",
-			cliName, commandShow, cmdBucket, bck.DisplayName())
+			cliName, commandShow, cmdBucket, bck.Cname(""))
 		return newAdditionalInfoError(err, helpMsg)
 	}
 	showDiff(c, currProps, allNewProps)
@@ -542,10 +485,10 @@ func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, upd
 func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 	args := c.Args().Tail()
 	if len(args) == 1 && !isJSON(args[0]) {
-		fmt.Fprintf(c.App.Writer, "Bucket %q: property %q, nothing to do\n", bck.DisplayName(), args[0])
+		fmt.Fprintf(c.App.Writer, "Bucket %q: property %q, nothing to do\n", bck.Cname(""), args[0])
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Bucket %q already has the same values of props, nothing to do\n", bck.DisplayName())
+	fmt.Fprintf(c.App.Writer, "Bucket %q already has the same values of props, nothing to do\n", bck.Cname(""))
 }
 
 func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {

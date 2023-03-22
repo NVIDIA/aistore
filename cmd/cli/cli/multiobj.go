@@ -75,8 +75,8 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 	if showProgress {
 		var cpr = cprCtx{
 			xid:  xid,
-			from: bckFrom.DisplayName(),
-			to:   bckTo.DisplayName(),
+			from: bckFrom.Cname(""),
+			to:   bckTo.Cname(""),
 		}
 		_, cpr.xname = xact.GetKindName(xkind)
 		cpr.totals.objs = numObjs
@@ -133,7 +133,7 @@ func listrange(c *cli.Context, bck cmn.Bck) (err error) {
 		var cpr = cprCtx{
 			xname:  xname,
 			xid:    xid,
-			from:   bck.DisplayName(),
+			from:   bck.Cname(""),
 			loghdr: text,
 		}
 		cpr.totals.objs = num
@@ -171,7 +171,8 @@ func _listOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, e
 		fileList = splitCsv(arg)
 	)
 	if flagIsSet(c, dryRunFlag) {
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s\n", fileList)
+		limitedLineWriter(c.App.Writer,
+			dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.Cname("")+"/%s\n", fileList)
 		return
 	}
 	var action string
@@ -207,7 +208,7 @@ func _listOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, e
 		s = fmt.Sprintf("%v...", fileList[:4])
 	}
 	_, xname = xact.GetKindName(kind)
-	text = fmt.Sprintf("%s[%s]: %s %s from %s", xname, xid, s, action, bck.DisplayName())
+	text = fmt.Sprintf("%s[%s]: %s %s from %s", xname, xid, s, action, bck.Cname(""))
 	return
 }
 
@@ -226,7 +227,8 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 	// [DRY-RUN]
 	if flagIsSet(c, dryRunFlag) {
 		objs := pt.ToSlice(dryRunExamplesCnt)
-		limitedLineWriter(c.App.Writer, dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.DisplayName()+"/%s", objs)
+		limitedLineWriter(c.App.Writer,
+			dryRunExamplesCnt, strings.ToUpper(c.Command.Name)+" "+bck.Cname("")+"/%s", objs)
 		if pt.Count() > dryRunExamplesCnt {
 			fmt.Fprintf(c.App.Writer, "(and %d more)\n", pt.Count()-dryRunExamplesCnt)
 		}
@@ -262,7 +264,7 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 	}
 	num = pt.Count()
 	_, xname = xact.GetKindName(kind)
-	text = fmt.Sprintf("%s[%s]: %s %q from %s", xname, xid, action, rangeStr, bck.DisplayName())
+	text = fmt.Sprintf("%s[%s]: %s %q from %s", xname, xid, action, rangeStr, bck.Cname(""))
 	return
 }
 
@@ -283,24 +285,23 @@ func multiobjArg(c *cli.Context, command string) error {
 			if err := api.DeleteObject(apiBP, bck, objName); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.Cname(""))
 		case commandEvict:
 			if !bck.IsRemote() {
 				const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
 				return errors.New(msg + "\n(Hint: use 'ais object rm' command to delete)")
 			}
 			if flagIsSet(c, dryRunFlag) {
-				fmt.Fprintf(c.App.Writer, "EVICT: %s/%s\n", bck.DisplayName(), objName)
+				fmt.Fprintf(c.App.Writer, "Evict: %s\n", bck.Cname(objName))
 				continue
 			}
 			if err := api.EvictObject(apiBP, bck, objName); err != nil {
 				if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-					err = fmt.Errorf("object %s/%s does not exist (ie., not present or \"cached\")",
-						bck.DisplayName(), objName)
+					err = fmt.Errorf("object %s does not exist (not \"cached\")", bck.Cname(objName))
 				}
 				return err
 			}
-			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.Cname(""))
 		}
 	}
 	return nil

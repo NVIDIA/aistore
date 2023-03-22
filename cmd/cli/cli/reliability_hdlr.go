@@ -59,10 +59,10 @@ func setCopiesHandler(c *cli.Context) (err error) {
 	copies := c.Int(copiesFlag.Name)
 	if p.Mirror.Copies == int64(copies) {
 		if copies > 1 && p.Mirror.Enabled {
-			fmt.Fprintf(c.App.Writer, "Bucket %q is already %d-way mirror, nothing to do\n", bck.DisplayName(), copies)
+			fmt.Fprintf(c.App.Writer, "Bucket %q is already %d-way mirror, nothing to do\n", bck.Cname(""), copies)
 			return
 		} else if copies < 2 {
-			fmt.Fprintf(c.App.Writer, "Bucket %q is already configured with no redundancy, nothing to do\n", bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "Bucket %q is already configured with no redundancy, nothing to do\n", bck.Cname(""))
 			return
 		}
 	}
@@ -86,7 +86,7 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 	if p.EC.Enabled {
 		// EC-encode is called automatically when EC is enabled. Changing
 		// data or parity numbers on the fly is unsupported yet.
-		fmt.Fprintf(c.App.Writer, "Bucket %q is already erasure-coded\n", bck.DisplayName())
+		fmt.Fprintf(c.App.Writer, "Bucket %q is already erasure-coded\n", bck.Cname(""))
 		return
 	}
 

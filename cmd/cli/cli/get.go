@@ -113,8 +113,8 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	if errU != nil {
 		return err
 	}
-	cptn := fmt.Sprintf("GET %d object%s from %s to %s (size %s)", l, cos.Plural(l), bck.DisplayName(),
-		outFile, teb.FmtSize(totalSize, units, 2))
+	cptn := fmt.Sprintf("GET %d object%s from %s to %s (total size %s)",
+		l, cos.Plural(l), bck.Cname(""), outFile, teb.FmtSize(totalSize, units, 2))
 	if flagIsSet(c, yesFlag) && (l > 1 || silent) {
 		fmt.Fprintln(c.App.Writer, cptn)
 	} else if ok := confirm(c, cptn); !ok {
@@ -274,7 +274,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) && archPath == "" {
-			err = fmt.Errorf("object \"%s/%s\" does not exist", bck, objName)
+			err = fmt.Errorf("%q does not exist", bck.Cname(objName))
 		}
 		return
 	}
@@ -289,19 +289,19 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	if silent || outFile == fileStdIO {
 		return
 	}
-	bn := bck.DisplayName()
+	bn := bck.Cname("")
 	if outFile == discardIO {
 		if archPath != "" {
-			fmt.Fprintf(c.App.Writer, "GET and discard: %q from archive \"%s/%s\" (size %s)\n",
-				archPath, bn, objName, sz)
+			fmt.Fprintf(c.App.Writer, "GET and discard: %q from archive %q (size %s)\n",
+				archPath, bck.Cname(objName), sz)
 		} else {
 			fmt.Fprintf(c.App.Writer, "GET and discard: %q from %s (size %s)\n", objName, bn, sz)
 		}
 		return
 	}
 	if archPath != "" {
-		fmt.Fprintf(c.App.Writer, "GET %q from archive \"%s/%s\" as %q (size %s)\n",
-			archPath, bn, objName, outFile, sz)
+		fmt.Fprintf(c.App.Writer, "GET %q from archive %q as %q (size %s)\n",
+			archPath, bck.Cname(objName), outFile, sz)
 	} else {
 		fmt.Fprintf(c.App.Writer, "GET %q from %s as %q (size %s)\n", objName, bn, outFile, sz)
 	}

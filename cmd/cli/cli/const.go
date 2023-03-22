@@ -754,7 +754,7 @@ var (
 	}
 	etlBucketRequestTimeout = DurationFlag{
 		Name: "etl-timeout",
-		Usage: "timeout transforming a single object;\n" +
+		Usage: "server-side timeout transforming a single object;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	fromFileFlag = cli.StringFlag{

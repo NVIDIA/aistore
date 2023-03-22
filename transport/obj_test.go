@@ -328,7 +328,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	}
 }
 
-func Test_OnSendCallback(t *testing.T) {
+func Test_nSendCallback(t *testing.T) {
 	objectCnt := 10000
 	if testing.Short() {
 		objectCnt = 1000
@@ -759,6 +759,7 @@ func genStaticHeader(random *rand.Rand) (hdr transport.ObjHdr) {
 func genRandomHeader(random *rand.Rand, usePDU bool) (hdr transport.ObjHdr) {
 	x := random.Int63()
 	hdr.Bck.Name = strconv.FormatInt(x, 10)
+	hdr.Bck.Provider = apc.AIS
 	hdr.ObjName = path.Join(hdr.Bck.Name, strconv.FormatInt(math.MaxInt64-x, 10))
 
 	pos := x % int64(len(text))

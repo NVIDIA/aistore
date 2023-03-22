@@ -387,7 +387,7 @@ func startDownloadHandler(c *cli.Context) error {
 			return err
 		}
 		warn := fmt.Sprintf("destination bucket %s doesn't exist. Bucket with default properties will be created.",
-			basePayload.Bck.DisplayName())
+			basePayload.Bck.Cname(""))
 		actionWarn(c, warn)
 	}
 
@@ -897,7 +897,7 @@ func stopXactionKind(c *cli.Context, xactKind, xname string, bck cmn.Bck) error 
 func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	var sb string
 	if !bck.IsQuery() {
-		sb = fmt.Sprintf(", %s", bck.DisplayName())
+		sb = fmt.Sprintf(", %s", bck.Cname(""))
 	}
 	switch {
 	case xactKind != "" && xactID != "":

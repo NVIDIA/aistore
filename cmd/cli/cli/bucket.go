@@ -62,7 +62,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 		return fmt.Errorf("failed to create %q: %v", bck, err)
 	}
 	// NOTE: see docs/bucket.md#default-bucket-properties
-	fmt.Fprintf(c.App.Writer, "%q created\n", bck.DisplayName())
+	fmt.Fprintf(c.App.Writer, "%q created\n", bck.Cname(""))
 	return
 }
 
@@ -79,7 +79,7 @@ func destroyBuckets(c *cli.Context, buckets []cmn.Bck) (err error) {
 			}
 		}
 		if err = api.DestroyBucket(apiBP, bck); err == nil {
-			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "%q destroyed\n", bck.Cname(""))
 			continue
 		}
 		if cmn.IsStatusNotFound(err) {
@@ -126,77 +126,10 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	return nil
 }
 
-func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
-	var (
-		showProgress = flagIsSet(c, progressFlag)
-		from, to     = bckFrom.DisplayName(), bckTo.DisplayName()
-	)
-	if showProgress && flagIsSet(c, copyDryRunFlag) {
-		warn := fmt.Sprintf("dry-run option is incompatible with %s - not implemented yet", qflprn(progressFlag))
-		actionWarn(c, warn)
-		showProgress = false
-	}
-	// copy: with/wo progress/wait
-	msg := &apc.CopyBckMsg{
-		Prepend: parseStrFlag(c, copyPrependFlag),
-		Prefix:  parseStrFlag(c, copyObjPrefixFlag),
-		DryRun:  flagIsSet(c, copyDryRunFlag),
-		Force:   flagIsSet(c, forceFlag),
-	}
-
-	// by default, copying objects in the cluster, with an option to override
-	// TODO: FltExistsOutside maybe later
-	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyAllObjsFlag) {
-		fltPresence = apc.FltExists
-	}
-
-	if showProgress {
-		var cpr cprCtx
-		_, cpr.xname = xact.GetKindName(apc.ActCopyBck)
-		cpr.from, cpr.to = bckFrom.DisplayName(), bckTo.DisplayName()
-		return cpr.copyBucket(c, bckFrom, bckTo, msg, fltPresence)
-	}
-
-	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
-	if err != nil {
-		return err
-	}
-	// NOTE: may've transitioned TCB => TCO
-	kind := apc.ActCopyBck
-	if !apc.IsFltPresent(fltPresence) {
-		kind, _, err = getKindNameForID(xid, kind)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		/// TODO: unify vs e2e: ("%s[%s] %s => %s", kind, xid, from, to)
-		baseMsg := fmt.Sprintf("Copying %s => %s. ", from, to)
-		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
-		return nil
-	}
-
-	// wait
-	var timeout time.Duration
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
-	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
-		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
-		return err
-	}
-	actionDone(c, fmtXactSucceeded)
-	return nil
-}
-
 // Evict remote bucket
 func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintf(c.App.Writer, "EVICT: %q\n", bck.DisplayName())
+		fmt.Fprintf(c.App.Writer, "Evict: %q\n", bck.Cname(""))
 		return
 	}
 	if err = ensureHasProvider(bck); err != nil {
@@ -205,7 +138,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck.DisplayName())
+	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck.Cname(""))
 	return
 }
 
@@ -378,7 +311,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
-				warn := fmt.Sprintf("%s, err: %s\n", bck.DisplayName(), herr.Message)
+				warn := fmt.Sprintf("%s, err: %s\n", bck.Cname(""), herr.Message)
 				actionWarn(c, warn)
 			}
 			continue
@@ -730,9 +663,9 @@ func configureNCopies(c *cli.Context, bck cmn.Bck, copies int) (err error) {
 	}
 	var baseMsg string
 	if copies > 1 {
-		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.DisplayName(), copies)
+		baseMsg = fmt.Sprintf("Configured %s as %d-way mirror. ", bck.Cname(""), copies)
 	} else {
-		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.DisplayName())
+		baseMsg = fmt.Sprintf("Configured %s for single-replica (no redundancy). ", bck.Cname(""))
 	}
 	actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
 	return
@@ -744,7 +677,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	if xid, err = api.ECEncodeBucket(apiBP, bck, data, parity); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.DisplayName())
+	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
 	actionDone(c, msg+toMonitorMsg(c, xid, ""))
 	return
 }

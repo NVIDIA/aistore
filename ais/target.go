@@ -783,7 +783,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	errCode, err := t.DeleteObject(lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			t.writeErrSilentf(w, r, http.StatusNotFound, "object %s/%s doesn't exist", lom.Bucket(), lom.ObjName)
+			t.writeErrSilentf(w, r, http.StatusNotFound, "%s doesn't exist", lom.FullName())
 		} else {
 			t.writeErr(w, r, err, errCode)
 		}
@@ -1102,7 +1102,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.B
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cos.Close(file)
 	if err != nil {
-		glog.Errorf("Failed to send slice %s/%s: %v", bck, objName, err)
+		glog.Errorf("Failed to send slice %s: %v", bck.Cname(objName), err)
 	}
 }
 

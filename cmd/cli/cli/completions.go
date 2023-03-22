@@ -382,7 +382,7 @@ mloop:
 				}
 			}
 		}
-		fmt.Printf("%s%s\n", b.DisplayName(), sep)
+		fmt.Printf("%s%s\n", b.Cname(""), sep)
 	}
 }
 

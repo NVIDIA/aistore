@@ -307,7 +307,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
 	if verbose {
-		glog.Infof("[head_object] %s/%s", cloudBck, lom.ObjName)
+		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
 }

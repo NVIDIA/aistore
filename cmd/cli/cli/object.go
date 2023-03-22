@@ -62,7 +62,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		s2 = fmt.Sprintf(", xaction ID %q", xid)
 	}
 	// alternatively, print(fmtXactStatusCheck, apc.ActPromote, ...)
-	msg := fmt.Sprintf("%spromoted %q => %s%s\n", s1, fqn, bck.DisplayName(), s2)
+	msg := fmt.Sprintf("%spromoted %q => %s%s\n", s1, fqn, bck.Cname(""), s2)
 	actionDone(c, msg)
 	return nil
 }
@@ -94,8 +94,8 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 	if err = api.SetObjectCustomProps(apiBP, bck, objName, props, setNewCustom); err != nil {
 		return
 	}
-	msg := fmt.Sprintf("Custom props successfully updated (to show updates, run 'ais show object %s/%s --props=all').",
-		bck, objName)
+	msg := fmt.Sprintf("Custom props successfully updated (to show updates, run 'ais show object %s --props=all').",
+		bck.Cname(objName))
 	actionDone(c, msg)
 	return nil
 }
@@ -129,16 +129,14 @@ func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	}
 	archPath := parseStrFlag(c, archpathOptionalFlag)
 	if archPath == "" {
-		actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bck.DisplayName(), objName))
+		actionDone(c, fmt.Sprintf("PUT %q => %s\n", fileName, bck.Cname(objName)))
 	} else {
-		actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bck.DisplayName(), objName, archPath))
+		actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
 	}
 	return nil
 }
 
 func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
-	bname := bck.DisplayName()
-
 	// 1. STDIN
 	if fileName == "-" {
 		if objName == "" {
@@ -167,7 +165,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		if err := putAppendChunks(c, bck, objName, os.Stdin, cksumType, chunkSize); err != nil {
 			return err
 		}
-		actionDone(c, fmt.Sprintf("PUT (stdin) => %s/%s\n", bname, objName))
+		actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", bck.Cname(objName)))
 		return nil
 	}
 
@@ -201,7 +199,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 			if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
 				return err
 			}
-			actionDone(c, fmt.Sprintf("APPEND %q to %s/%s as %s\n", fileName, bname, objName, archPath))
+			actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
 			return nil
 		}
 
@@ -209,7 +207,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		if err := putRegular(c, bck, objName, path, finfo); err != nil {
 			return err
 		}
-		actionDone(c, fmt.Sprintf("PUT %q => %s/%s\n", fileName, bname, objName))
+		actionDone(c, fmt.Sprintf("PUT %q => %s\n", fileName, bck.Cname(objName)))
 		return nil
 	}
 
@@ -271,10 +269,10 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		totalSize  int64
 		bar        *mpb.Bar
 		progress   *mpb.Progress
-		bname      = bck.DisplayName()
 		l          = len(fileNames)
 		fobjMatrix = make([]fobjSlice, l)
 		sizes      = make(map[string]int64, l) // or greater
+		name       = bck.Cname(objName)
 	)
 	for i, fileName := range fileNames {
 		fsl, err := lsFobj(c, fileName, "", "", flagIsSet(c, recursFlag))
@@ -292,11 +290,11 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	if flagIsSet(c, progressFlag) {
 		switch l {
 		case 1:
-			fmt.Fprintf(c.App.Writer, "%s %q as %s/%s\n", verb, fileNames[0], bname, objName)
+			fmt.Fprintf(c.App.Writer, "%s %q as %s\n", verb, fileNames[0], name)
 		case 2, 3:
-			fmt.Fprintf(c.App.Writer, "%s %v as %s/%s\n", verb, fileNames, bname, objName)
+			fmt.Fprintf(c.App.Writer, "%s %v as %s\n", verb, fileNames, name)
 		default:
-			fmt.Fprintf(c.App.Writer, "%s %d pathnames as %s/%s\n", verb, l, bname, objName)
+			fmt.Fprintf(c.App.Writer, "%s %d pathnames as %s\n", verb, l, name)
 		}
 		var (
 			bars []*mpb.Bar
@@ -348,7 +346,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		actionWarn(c, errU.Error())
 		units = ""
 	}
-	fmt.Fprintf(c.App.Writer, "\nCreated %s/%s (size %s)\n", bname, objName, teb.FmtSize(totalSize, units, 2))
+	fmt.Fprintf(c.App.Writer, "\nCreated %s (size %s)\n", name, teb.FmtSize(totalSize, units, 2))
 	return nil
 }
 
@@ -396,7 +394,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		if apc.IsFltPresent(fltPresence) {
 			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
 		}
-		return fmt.Errorf("%q not found in %s%s", object, bck.DisplayName(), hint)
+		return fmt.Errorf("%q not found in %s%s", object, bck.Cname(""), hint)
 	}
 	if flagIsSet(c, jsonFlag) {
 		opts := teb.Jopts(true)
@@ -442,7 +440,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 func propVal(op *cmn.ObjectProps, name string) (v string) {
 	switch name {
 	case apc.GetPropsName:
-		v = op.Bck.DisplayName() + "/" + op.Name
+		v = op.Bck.Cname(op.Name)
 	case apc.GetPropsSize:
 		v = cos.ToSizeIEC(op.Size, 2)
 	case apc.GetPropsChecksum:
@@ -501,9 +499,9 @@ func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	if cnt == l {
 		if flagIsSet(c, verboseFlag) {
 			fmt.Fprintln(c.App.Writer, "=====")
-			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.Cname(""))
 		} else {
-			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.DisplayName())
+			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.Cname(""))
 		}
 	} else {
 		fmt.Fprintf(c.App.Writer, "Failed to delete %d object%s from %s: (%d total, %d deleted)\n",

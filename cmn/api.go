@@ -8,7 +8,6 @@ package cmn
 import (
 	"fmt"
 	"math"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -397,4 +396,4 @@ func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 // ArchiveMsg //
 ////////////////
 
-func (msg *ArchiveMsg) FullName() string { return filepath.Join(msg.ToBck.Name, msg.ArchName) }
+func (msg *ArchiveMsg) FullName() string { return msg.ToBck.Cname(msg.ArchName) }

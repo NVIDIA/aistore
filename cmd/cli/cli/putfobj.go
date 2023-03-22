@@ -64,7 +64,7 @@ func putFobjs(c *cli.Context, files []fobj, bck cmn.Bck, fromTag string) error {
 	if flagIsSet(c, dryRunFlag) {
 		i := 0
 		for ; i < dryRunExamplesCnt; i++ {
-			fmt.Fprintf(c.App.Writer, "PUT %q => \"%s/%s\"\n", files[i].path, bck.DisplayName(), files[i].name)
+			fmt.Fprintf(c.App.Writer, "PUT %q => %q\n", files[i].path, bck.Cname(files[i].name))
 		}
 		if i < len(files) {
 			fmt.Fprintf(c.App.Writer, "(and %d more)\n", len(files)-i)
@@ -152,7 +152,7 @@ func _putFobjs(c *cli.Context, p *uparams) error {
 	if numFailed := u.errCount.Load(); numFailed > 0 {
 		return fmt.Errorf("failed to PUT %d object%s", numFailed, cos.Plural(int(numFailed)))
 	}
-	msg := fmt.Sprintf("PUT %d object%s%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.fromTag, p.bck.DisplayName())
+	msg := fmt.Sprintf("PUT %d object%s%s to %q\n", len(p.files), cos.Plural(len(p.files)), p.fromTag, p.bck.Cname(""))
 	actionDone(c, msg)
 	return nil
 }
@@ -215,7 +215,7 @@ func (u *uctx) put(c *cli.Context, p *uparams, f fobj) {
 		}
 	)
 	if _, err := api.PutObject(putArgs); err != nil {
-		str := fmt.Sprintf("Failed to PUT %q => %s: %v\n", f.name, p.bck.DisplayName(), err)
+		str := fmt.Sprintf("Failed to PUT %s: %v\n", p.bck.Cname(f.name), err)
 		if u.showProgress {
 			u.errSb.WriteString(str)
 		} else {

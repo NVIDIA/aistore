@@ -397,7 +397,7 @@ var (
 		"FormatSmap":        fmtSmap,
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
-		"FormatBckName":     func(bck cmn.Bck) string { return bck.DisplayName() },
+		"FormatBckName":     func(bck cmn.Bck) string { return bck.Cname("") },
 		"FormatACL":         fmtACL,
 		"FormatNameArch":    fmtNameArch,
 		"FormatXactState":   FmtXactStatus,

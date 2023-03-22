@@ -318,11 +318,11 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 		time.Sleep(time.Second)
 		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentNoProps)
 		if err == nil {
-			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.DisplayName()+"/"+objName)
+			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.Cname(objName))
 			return nil
 		}
 	}
-	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.DisplayName()+"/"+objName)
+	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.Cname(objName))
 	return nil
 }
 

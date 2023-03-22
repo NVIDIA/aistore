@@ -5,7 +5,7 @@ rm -f $OBJECT_1.txt
 
 # Negative Testing
 ais object get ais://$BUCKET_2/object_1.txt $OBJECT_1.txt // FAIL "bucket "ais://$BUCKET_2" does not exist"
-ais object get ais://$BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL "object "ais://$BUCKET_1/object_2.txt" does not exist"
+ais object get ais://$BUCKET_1/object_2.txt $OBJECT_1.txt // FAIL ""ais://$BUCKET_1/object_2.txt" does not exist"
 ais object get aws://$BUCKET_1/object_1.txt $OBJECT_1.txt // FAIL
 
 # Positive Testing

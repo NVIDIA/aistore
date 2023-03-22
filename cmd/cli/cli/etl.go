@@ -11,19 +11,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/fatih/color"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 )
 
@@ -51,15 +47,19 @@ var (
 			allRunningJobsFlag,
 		},
 		cmdBucket: {
+			copyAllObjsFlag,
+			continueOnErrorFlag,
 			etlExtFlag,
+			forceFlag,
 			copyPrependFlag,
+			copyObjPrefixFlag,
 			copyDryRunFlag,
-			waitFlag,
-			waitJobXactFinishedFlag,
 			etlBucketRequestTimeout,
 			templateFlag,
 			listFlag,
-			continueOnErrorFlag,
+			// TODO: progressFlag,
+			waitFlag,
+			waitJobXactFinishedFlag,
 		},
 		cmdStart: {},
 	}
@@ -118,7 +118,7 @@ var (
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "perform bucket-to-bucket transform (\"offline transformation\")",
+		Usage:        "transform entire bucket or selected objects (to select, use '--list' or '--template')",
 		ArgsUsage:    etlNameArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[cmdBucket],
@@ -468,111 +468,4 @@ func etlObjectHandler(c *cli.Context) error {
 
 	err := api.ETLObject(apiBP, etlName, bck, objName, w)
 	return handleETLHTTPError(err, etlName)
-}
-
-func etlBucketHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-	etlName := c.Args().Get(0)
-	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
-	if err != nil {
-		return err
-	}
-	if bckFrom.Equal(&bckTo) {
-		return fmt.Errorf("cannot transform bucket %q onto itself", bckFrom)
-	}
-
-	msg := &apc.TCBMsg{
-		Transform: apc.Transform{Name: etlName},
-		CopyBckMsg: apc.CopyBckMsg{
-			Prepend: parseStrFlag(c, copyPrependFlag),
-			DryRun:  flagIsSet(c, copyDryRunFlag),
-		},
-	}
-
-	if flagIsSet(c, etlExtFlag) {
-		mapStr := parseStrFlag(c, etlExtFlag)
-		extMap := make(cos.StrKVs, 1)
-		if err = jsoniter.UnmarshalFromString(mapStr, &extMap); err != nil {
-			// add quotation marks and reparse
-			tmp := strings.ReplaceAll(mapStr, " ", "")
-			tmp = strings.ReplaceAll(tmp, "{", "{\"")
-			tmp = strings.ReplaceAll(tmp, "}", "\"}")
-			tmp = strings.ReplaceAll(tmp, ":", "\":\"")
-			tmp = strings.ReplaceAll(tmp, ",", "\",\"")
-			if jsoniter.UnmarshalFromString(tmp, &extMap) == nil {
-				err = nil
-			}
-		}
-		if err != nil {
-			return fmt.Errorf("Invalid format --%s=%q. Usage examples: {jpg:txt}, \"{in1:out1,in2:out2}\"",
-				etlExtFlag.GetName(), mapStr)
-		}
-		msg.Ext = extMap
-	}
-
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
-
-	// (I) either multi-object
-	tmplObjs := parseStrFlag(c, templateFlag)
-	listObjs := parseStrFlag(c, listFlag)
-	if listObjs != "" || tmplObjs != "" {
-		return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
-	}
-
-	// (II) or bucket
-	xid, err := api.ETLBucket(apiBP, bckFrom, bckTo, msg)
-	if errV := handleETLHTTPError(err, etlName); errV != nil {
-		return errV
-	}
-
-	_, xname := xact.GetKindName(apc.ActETLBck)
-	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, bckFrom, bckTo)
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		fmt.Fprintln(c.App.Writer, text)
-		return nil
-	}
-
-	// wait
-	var timeout time.Duration
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	fmt.Fprintln(c.App.Writer, text+" ...")
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
-		return err
-	}
-	if !flagIsSet(c, copyDryRunFlag) {
-		return nil
-	}
-
-	// [DRY-RUN]
-	snaps, err := api.QueryXactionSnaps(apiBP, xargs)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
-	fmt.Fprintf(c.App.Writer, "ETL object stats: locally transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
-	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
-	fmt.Fprintf(c.App.Writer, "ETL byte stats: locally transformed=%d, sent=%d, received=%d", locBytes, outBytes, inBytes)
-	return nil
-}
-
-func handleETLHTTPError(err error, etlName string) error {
-	if err == nil {
-		return nil
-	}
-	if herr, ok := err.(*cmn.ErrHTTP); ok {
-		// TODO: How to find out if it's transformation not found, and not object not found?
-		if herr.Status == http.StatusNotFound && strings.Contains(herr.Error(), etlName) {
-			return fmt.Errorf("ETL[%s] not found; try starting new ETL with:\nais %s %s <spec>",
-				etlName, commandETL, cmdInit)
-		}
-	}
-	return err
 }
