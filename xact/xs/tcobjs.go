@@ -254,21 +254,14 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 		params.DP = wi.r.args.DP
 		params.Xact = wi.r
 	}
-	size, err := lri.t.CopyObject(lom, params, wi.msg.DryRun)
+	// NOTE:
+	// under ETL, the returned sizes of transformed objects are unknown (cos.ContentLengthUnknown)
+	// until after the transformation; here we are disregarding the size anyway as the stats
+	// are done elsewhere
+	_, err := lri.t.CopyObject(lom, params, wi.msg.DryRun)
 	slab.Free(buf)
 	cluster.FreeCpObjParams(params)
 	if err != nil {
-		if !cmn.IsObjNotExist(err) {
-			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
-		}
-		return
-	}
-	if size != cos.ContentLengthUnknown {
-		return
-	}
-	// under ETL, sizes of transformed objects are unknown until after the transformation
-	// TODO: support precise post-transform byte count
-	if err := lom.Load(false /*cacheit*/, false /*locked*/); err != nil {
-		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+		wi.r.raiseErr(err, wi.msg.ContinueOnError)
 	}
 }

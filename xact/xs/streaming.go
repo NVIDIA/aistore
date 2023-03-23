@@ -109,19 +109,23 @@ func (r *streamingX) TxnAbort() {
 	r.Base.Finish(err)
 }
 
-func (r *streamingX) raiseErr(err error, errCode int, contOnErr bool) {
+func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
+	var s string
 	if cmn.IsErrAborted(err) {
 		if verbose {
 			glog.Warningf("%s[%s] aborted", r.p.T, r)
 		}
 		return
 	}
-	err = fmt.Errorf("%s[%s]: %w (code=%d)", r.p.T, r, err, errCode)
+	err = fmt.Errorf("%s[%s]: %w", r.p.T, r, err)
+	if len(errCode) > 0 {
+		s = fmt.Sprintf(" (%d)", errCode[0])
+	}
 	if contOnErr {
-		glog.Warningf("%v - ignoring...", err)
+		glog.WarningDepth(1, err.Error()+s+" - continuing...")
 		return
 	}
-	glog.Errorf("%v - terminating...", err)
+	glog.ErrorDepth(1, err.Error()+s+" - storing...")
 	r.err.Store(err)
 }
 

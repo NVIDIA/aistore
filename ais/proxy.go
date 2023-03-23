@@ -1164,6 +1164,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		if errCode == http.StatusNotFound {
+			if p.forwardCP(w, r, msg, bucket) { // to create
+				return
+			}
 			glog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
 		}
 
@@ -1223,6 +1226,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				return
 			}
 			if errCode == http.StatusNotFound {
+				if p.forwardCP(w, r, msg, bucket) { // to create
+					return
+				}
 				glog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
 			}
 		}

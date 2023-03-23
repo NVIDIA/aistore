@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
@@ -121,22 +122,33 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		subtests  = []struct {
-			list bool
+			list      bool
+			createDst bool
 		}{
-			{true}, {false},
+			{true, true},
+			{false, true},
+
+			{true, false},
+			{false, false},
 		}
 	)
 	if m.bck.IsRemoteAIS() { // see TODO below
 		subtests = []struct {
-			list bool
+			list      bool
+			createDst bool
 		}{
-			{mono.NanoTime()&0x1 != 0},
+			{mono.NanoTime()&0x1 != 0, true},
 		}
 	}
 	for _, test := range subtests {
 		tname := "list"
 		if !test.list {
 			tname = "range"
+		}
+		if test.createDst {
+			tname += "/dst"
+		} else {
+			tname += "/no-dst"
 		}
 		t.Run(tname, func(t *testing.T) {
 			// TODO -- FIXME: swapping the source and the destination here because
@@ -147,21 +159,40 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			}
 
 			m.initWithCleanup()
-			m.puts()
 			if m.bck.IsCloud() {
 				defer m.del()
 			}
-			// TODO -- FIXME: create ais destination on the fly (feature)
 			if !bckTo.Equal(&m.bck) && bckTo.IsAIS() {
-				tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
+				if test.createDst {
+					tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
+				} else {
+					t.Cleanup(func() {
+						tools.DestroyBucket(t, proxyURL, bckTo)
+					})
+				}
 			}
-			tlog.Logf("Start copying multiple objects %s => %s ...\n", m.bck, bckTo)
+
+			m.puts()
+
+			tlog.Logf("%s: %s => %s %d objects\n", t.Name(), m.bck, bckTo, numToCopy)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					list := make([]string, 0, numToCopy)
 					for j := 0; j < numToCopy; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
+					}
+					if !test.createDst && i == 0 {
+						// serialize the very first batch as it entails creating destination bucket
+						// behind the scenes
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
+						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
+							erv.Store(err)
+						} else {
+							tlog.Logf("%2d: cp list %d objects\n", i, numToCopy)
+						}
+						time.Sleep(5 * time.Second)
+						continue
 					}
 					go func(list []string, iter int) {
 						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
@@ -175,6 +206,18 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 			} else {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					start := rand.Intn(m.num - numToCopy)
+					if !test.createDst && i == 0 {
+						// (ditto)
+						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
+						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
+						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
+							erv.Store(err)
+						} else {
+							tlog.Logf("%2d: cp range [%s]\n", i, template)
+						}
+						time.Sleep(2 * time.Second)
+						continue
+					}
 					go func(start, iter int) {
 						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
 						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}

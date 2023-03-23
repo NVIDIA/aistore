@@ -139,7 +139,7 @@ func (p *archFactory) Start() error {
 func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	lom := cluster.AllocLOM(msg.ArchName)
 	if err = lom.InitBck(&msg.ToBck); err != nil {
-		r.raiseErr(err, 0, msg.ContinueOnError)
+		r.raiseErr(err, msg.ContinueOnError)
 		return
 	}
 	debug.Assertf(lom.Cname() == msg.Cname(), "%s vs %s", lom.Cname(), msg.Cname()) // relying on it
@@ -152,7 +152,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	wi.refc.Store(int32(smap.CountTargets() - 1))
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
-		r.raiseErr(err, 0, msg.ContinueOnError)
+		r.raiseErr(err, msg.ContinueOnError)
 		return
 	}
 
@@ -339,9 +339,9 @@ func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) er
 
 func (r *XactArch) finalize(wi *archwi) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
-		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), 0, wi.msg.ContinueOnError)
+		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), wi.msg.ContinueOnError)
 	} else if q == cluster.QuiTimeout {
-		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), 0, wi.msg.ContinueOnError)
+		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), wi.msg.ContinueOnError)
 	}
 
 	r.pending.Lock()
@@ -354,7 +354,7 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	if err != nil {
 		wi.abortAppend(err)
-		r.raiseErr(err, errCode, wi.msg.ContinueOnError)
+		r.raiseErr(err, wi.msg.ContinueOnError, errCode)
 	}
 }
 
@@ -418,12 +418,12 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			wi.r.raiseErr(err, wi.msg.ContinueOnError)
 			return
 		}
 		coldGet = lom.Bck().IsRemote()
 		if !coldGet {
-			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			wi.r.raiseErr(err, wi.msg.ContinueOnError)
 			return
 		}
 	}
@@ -434,7 +434,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
 				return
 			}
-			wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+			wi.r.raiseErr(err, wi.msg.ContinueOnError)
 			return
 		}
 	}
@@ -442,7 +442,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	fh, err := cos.NewFileHandle(lom.FQN)
 	debug.AssertNoErr(err)
 	if err != nil {
-		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+		wi.r.raiseErr(err, wi.msg.ContinueOnError)
 		return
 	}
 	if t.SID() != wi.tsi.ID() {
@@ -454,7 +454,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	if err != nil {
-		wi.r.raiseErr(err, 0, wi.msg.ContinueOnError)
+		wi.r.raiseErr(err, wi.msg.ContinueOnError)
 	}
 }
 
