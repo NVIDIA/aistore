@@ -26,6 +26,8 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const bidUnknownTTL = 2 * time.Minute // comment below; TODO: unify and move to config along w/ lom cache
+
 const nodeXattrID = "user.ais.daemon_id"
 
 // enum Mountpath.Flags
@@ -938,8 +940,27 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 		n              int
 		availablePaths = GetAvail()
 		count          = len(availablePaths)
+		now            time.Time
 	)
 	for _, mi := range availablePaths {
+		// normally, unique bucket ID (aka BID) must be known
+		// - i.e., non-zero (and unique);
+		// zero ID indicates that either we are in the middle of bucket
+		// creation OR the latter was interrupted (and txn-create aborted) -
+		// thus, prior to going ahead with deletion:
+		if bid == 0 {
+			bdir := mi.MakePathBck(bck)
+			if finfo, erc := os.Stat(bdir); erc == nil {
+				mtime := finfo.ModTime()
+				if now.IsZero() {
+					now = time.Now()
+				}
+				if mtime.After(now) || now.Sub(mtime) < bidUnknownTTL {
+					return fmt.Errorf("%s %q: unknown BID with %q age below ttl (%v)", op, bck, bdir, mtime)
+				}
+			}
+		}
+
 		mi.evictLomBucketCache(bck)
 		dir := mi.makeDelPathBck(bck, bid)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
