@@ -12,6 +12,7 @@ QPARAM_KEEP_REMOTE = "keep_md"
 QPARAM_ARCHPATH = "archpath"
 QPARAM_FORCE = "frc"
 QPARAM_PRIMARY_READY_REB = "prr"
+QPARAM_NAMESPACE = "namespace"
 
 # URL Param values
 # See api/apc/query.go

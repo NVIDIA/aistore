@@ -83,7 +83,7 @@ class TestBucketOps(RemoteEnabledTest):
         bucket_count = len(res)
 
         self.assertEqual(from_bck_name, from_bck.name)
-        job_id = from_bck.rename(to_bck=to_bck_name)
+        job_id = from_bck.rename(to_bck_name=to_bck_name)
         self.assertNotEqual(job_id, "")
 
         # wait for rename to finish
@@ -117,7 +117,7 @@ class TestBucketOps(RemoteEnabledTest):
         from_bck.object(expected_name).put_content(content)
         from_bck.object("notprefix-obj").put_content(content)
 
-        job_id = from_bck.copy(to_bck_name, prefix_filter=prefix, prepend=new_prefix)
+        job_id = from_bck.copy(to_bck, prefix_filter=prefix, prepend=new_prefix)
 
         self.assertNotEqual(job_id, "")
         self.client.job(job_id).wait()

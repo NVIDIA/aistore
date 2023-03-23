@@ -6,6 +6,7 @@ Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 import hashlib
 from aistore import Client
+from aistore.sdk import Bucket
 
 client = Client("http://192.168.49.2:8080")
 
@@ -19,6 +20,6 @@ def transform(input_bytes):
 client.etl().init_code(transform=transform, etl_name="etl-md5")
 
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-md5", to_bck="to-bck", ext={"jpg": "txt"}
+    etl_name="etl-md5", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}
 )
 client.job(job_id).wait()

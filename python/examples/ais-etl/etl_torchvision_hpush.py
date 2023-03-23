@@ -12,6 +12,7 @@ import torch
 import numpy as np
 
 from aistore import Client
+from aistore.sdk import Bucket
 
 client = Client("http://192.168.49.2:8080")
 
@@ -40,7 +41,7 @@ client.etl().init_code(
 
 # Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="etl-img-to-npy", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
 )
 client.job(job_id).wait()
 

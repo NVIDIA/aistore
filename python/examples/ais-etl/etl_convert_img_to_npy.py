@@ -26,15 +26,13 @@ client.etl().init_code(
     transform=transform, etl_name="etl-img-to-npy", dependencies=deps
 )
 
+to_bck = client.bucket("to-bck")
+
 # Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-img-to-npy", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="etl-img-to-npy", to_bck=to_bck, ext={"jpg": "npy"}
 )
 client.job(job_id).wait()
 
-# load a object from transformed bucket
-print(
-    np.frombuffer(
-        client.bucket("to-bck").object("obj-id.npy").get().read_all(), dtype=np.uint8
-    )
-)
+# load an object from transformed bucket
+print(np.frombuffer(to_bck.object("obj-id.npy").get().read_all(), dtype=np.uint8))

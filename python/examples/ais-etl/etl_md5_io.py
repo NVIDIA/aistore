@@ -8,6 +8,9 @@ from aistore import Client
 import hashlib
 import sys
 
+from aistore.sdk import Bucket
+from aistore.sdk.etl_const import ETL_COMM_IO
+
 client = Client("http://192.168.49.2:8080")
 
 
@@ -23,6 +26,6 @@ client.etl().init_code(
 )
 
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-md5-io-code", to_bck="to-bck", ext={"jpg": "txt"}
+    etl_name="etl-md5-io-code", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}
 )
 client.job(job_id).wait()

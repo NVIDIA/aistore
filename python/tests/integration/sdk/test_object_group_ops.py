@@ -71,7 +71,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
         new_prefix = "prefix-"
         copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
-            to_bck.name, prepend=new_prefix
+            to_bck, prepend=new_prefix
         )
         self.client.job(job_id=copy_job).wait_for_idle(timeout=TEST_TIMEOUT)
 
@@ -84,12 +84,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
 
     def test_archive_objects_with_copy(self):
         dest_bck = self._create_bucket(random_string())
-        self._archive_exec_assert(
-            self.bucket,
-            dest_bck,
-            to_bck_name=dest_bck.name,
-            to_bck_provider=dest_bck.provider,
-        )
+        self._archive_exec_assert(self.bucket, dest_bck, to_bck=dest_bck)
 
     def _archive_exec_assert(self, src_bck, res_bck, **kwargs):
         arch_name = "my_arch.tar"
@@ -133,7 +128,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
 
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
-            to_bck.name, etl_name=etl_name, prepend=new_prefix
+            to_bck, etl_name=etl_name, prepend=new_prefix
         )
         self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
 

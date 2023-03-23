@@ -26,6 +26,7 @@ from aistore.sdk.const import (
     PROVIDER_AIS,
     QPARAM_BCK_TO,
     QPARAM_KEEP_REMOTE,
+    QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     URL_PATH_BUCKETS,
 )
@@ -42,6 +43,7 @@ from aistore.sdk.types import (
     ActionMsg,
     BucketEntry,
     BucketList,
+    BucketModel,
     Namespace,
     CopyBckMsg,
     TransformBckMsg,
@@ -54,7 +56,7 @@ from aistore.sdk.utils import validate_directory, get_file_size
 Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable,too-many-public-methods
 class Bucket:
     """
     A class representing a bucket that contains user data.
@@ -68,8 +70,8 @@ class Bucket:
 
     def __init__(
         self,
-        client: RequestClient,
         name: str,
+        client: RequestClient = None,
         provider: str = PROVIDER_AIS,
         namespace: Namespace = None,
     ):
@@ -78,29 +80,31 @@ class Bucket:
         self._provider = provider
         self._namespace = namespace
         self._qparam = {QPARAM_PROVIDER: provider}
+        if self.namespace:
+            self._qparam[QPARAM_NAMESPACE] = namespace.get_path()
 
     @property
-    def client(self):
+    def client(self) -> RequestClient:
         """The client bound to this bucket."""
         return self._client
 
     @property
-    def qparam(self):
+    def qparam(self) -> Dict:
         """Default query parameters to use with API calls from this bucket."""
         return self._qparam
 
     @property
-    def provider(self):
+    def provider(self) -> str:
         """The provider for this bucket."""
         return self._provider
 
     @property
-    def name(self):
+    def name(self) -> str:
         """The name of this bucket."""
         return self._name
 
     @property
-    def namespace(self):
+    def namespace(self) -> Namespace:
         """The namespace for this bucket."""
         return self._namespace
 
@@ -155,14 +159,14 @@ class Bucket:
             if not missing_ok:
                 raise err
 
-    def rename(self, to_bck: str) -> str:
+    def rename(self, to_bck_name: str) -> str:
         """
         Renames bucket in AIStore cluster.
         Only works on AIS buckets. Returns job ID that can be used later to check the status of the asynchronous
             operation.
 
         Args:
-            to_bck (str): New bucket name for bucket to be renamed as
+            to_bck_name (str): New bucket name for bucket to be renamed as
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -178,9 +182,11 @@ class Bucket:
         """
         self._verify_ais_bucket()
         params = self.qparam.copy()
-        params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
+        params[QPARAM_BCK_TO] = Bucket(
+            name=to_bck_name, namespace=self.namespace
+        ).get_path()
         resp = self.make_request(HTTP_METHOD_POST, ACT_MOVE_BCK, params=params)
-        self._name = to_bck
+        self._name = to_bck_name
         return resp.text
 
     def evict(self, keep_md: bool = False):
@@ -230,24 +236,22 @@ class Bucket:
     # pylint: disable=too-many-arguments
     def copy(
         self,
-        to_bck_name: str,
+        to_bck: Bucket,
         prefix_filter: str = "",
         prepend: str = "",
         dry_run: bool = False,
         force: bool = False,
-        to_provider: str = PROVIDER_AIS,
     ) -> str:
         """
         Returns job ID that can be used later to check the status of the asynchronous operation.
 
         Args:
-            to_bck_name (str): Name of the destination bucket
+            to_bck (Bucket): Destination bucket
             prefix_filter (str, optional): Only copy objects that share this prefix
             prepend (str, optional): Value to prepend to the name of copied objects
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
             force (bool, optional): Override existing destination bucket
-            to_provider (str, optional): Name of destination bucket provider
 
         Returns:
             Job ID (as str) that can be used to check the status of the operation
@@ -264,7 +268,7 @@ class Bucket:
             prefix=prefix_filter, prepend=prepend, dry_run=dry_run, force=force
         ).as_dict()
         params = self.qparam.copy()
-        params[QPARAM_BCK_TO] = f"{ to_provider }/@#/{ to_bck_name }/"
+        params[QPARAM_BCK_TO] = to_bck.get_path()
         return self.make_request(
             HTTP_METHOD_POST, ACT_COPY_BCK, value=value, params=params
         ).text
@@ -448,7 +452,7 @@ class Bucket:
     def transform(
         self,
         etl_name: str,
-        to_bck: str,
+        to_bck: Bucket,
         timeout: str = DEFAULT_ETL_TIMEOUT,
         prepend: str = "",
         ext: Dict[str, str] = None,
@@ -479,7 +483,7 @@ class Bucket:
         ).as_dict()
 
         params = self.qparam.copy()
-        params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
+        params[QPARAM_BCK_TO] = to_bck.get_path()
         return self.make_request(
             HTTP_METHOD_POST, ACT_ETL_BCK, value=value, params=params
         ).text
@@ -617,8 +621,13 @@ class Bucket:
             Response from the server
 
         """
+        if self._client is None:
+            raise ValueError(
+                "Bucket requires a client to use functions. Try defining a client and accessing this bucket with "
+                "client.bucket()"
+            )
         json_val = ActionMsg(action=action, value=value).dict()
-        return self.client.request(
+        return self._client.request(
             method,
             path=f"{URL_PATH_BUCKETS}/{self.name}",
             json=json_val,
@@ -638,3 +647,21 @@ class Bucket:
         """
         if self.provider is PROVIDER_AIS:
             raise InvalidBckProvider(self.provider)
+
+    def get_path(self) -> str:
+        """
+        Get the path representation of this bucket
+        """
+        namespace_path = self.namespace.get_path() if self.namespace else "@#"
+        return f"{ self.provider }/{ namespace_path }/{ self.name }/"
+
+    def as_model(self) -> BucketModel:
+        """
+        Return a data-model of the bucket
+
+        Returns:
+            BucketModel representation
+        """
+        return BucketModel(
+            name=self.name, namespace=self.namespace, provider=self.provider
+        )

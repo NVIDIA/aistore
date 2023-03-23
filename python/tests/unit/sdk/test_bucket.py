@@ -8,23 +8,24 @@ from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk import ListObjectFlag
 
 from aistore.sdk.const import (
-    ACT_CREATE_BCK,
-    HTTP_METHOD_POST,
-    PROVIDER_AMAZON,
-    QPARAM_BCK_TO,
-    PROVIDER_AIS,
-    ACT_MOVE_BCK,
-    ACT_DESTROY_BCK,
-    HTTP_METHOD_DELETE,
-    QPARAM_KEEP_REMOTE,
-    ACT_EVICT_REMOTE_BCK,
-    HTTP_METHOD_HEAD,
     ACT_COPY_BCK,
-    ACT_LIST,
-    HTTP_METHOD_GET,
+    ACT_CREATE_BCK,
+    ACT_DESTROY_BCK,
     ACT_ETL_BCK,
+    ACT_EVICT_REMOTE_BCK,
+    ACT_LIST,
+    ACT_MOVE_BCK,
+    PROVIDER_AMAZON,
+    PROVIDER_AIS,
+    QPARAM_BCK_TO,
+    QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
+    QPARAM_KEEP_REMOTE,
+    HTTP_METHOD_DELETE,
+    HTTP_METHOD_GET,
+    HTTP_METHOD_HEAD,
     HTTP_METHOD_PUT,
+    HTTP_METHOD_POST,
     URL_PATH_BUCKETS,
 )
 from aistore.sdk.errors import InvalidBckProvider, ErrBckAlreadyExists, ErrBckNotFound
@@ -40,29 +41,28 @@ from aistore.sdk.types import (
 )
 
 BCK_NAME = "bucket_name"
-NAMESPACE = "namespace"
 
 
 # pylint: disable=too-many-public-methods,unused-variable
 class TestBucket(unittest.TestCase):
     def setUp(self) -> None:
         self.mock_client = Mock(RequestClient)
-        self.amz_bck = Bucket(self.mock_client, BCK_NAME, provider=PROVIDER_AMAZON)
-        self.amz_bck_params = self.amz_bck.qparam.copy()
-        self.ais_bck = Bucket(
-            self.mock_client, BCK_NAME, namespace=Namespace(uuid="", name=NAMESPACE)
+        self.amz_bck = Bucket(
+            name=BCK_NAME, client=self.mock_client, provider=PROVIDER_AMAZON
         )
+        self.amz_bck_params = self.amz_bck.qparam.copy()
+        self.ais_bck = Bucket(name=BCK_NAME, client=self.mock_client)
         self.ais_bck_params = self.ais_bck.qparam.copy()
 
     def test_default_props(self):
-        bucket = Bucket(self.mock_client, BCK_NAME)
+        bucket = Bucket(name=BCK_NAME, client=self.mock_client)
         self.assertEqual({QPARAM_PROVIDER: PROVIDER_AIS}, bucket.qparam)
         self.assertEqual(PROVIDER_AIS, bucket.provider)
         self.assertIsNone(bucket.namespace)
 
     def test_properties(self):
         self.assertEqual(self.mock_client, self.ais_bck.client)
-        expected_ns = Namespace(uuid="", name=NAMESPACE)
+        expected_ns = Namespace(uuid="ns-id", name="ns-name")
         client = RequestClient("test client name")
         bck = Bucket(
             client=client,
@@ -72,7 +72,13 @@ class TestBucket(unittest.TestCase):
         )
         self.assertEqual(client, bck.client)
         self.assertEqual(PROVIDER_AMAZON, bck.provider)
-        self.assertEqual({QPARAM_PROVIDER: PROVIDER_AMAZON}, bck.qparam)
+        self.assertEqual(
+            {
+                QPARAM_PROVIDER: PROVIDER_AMAZON,
+                QPARAM_NAMESPACE: expected_ns.get_path(),
+            },
+            bck.qparam,
+        )
         self.assertEqual(BCK_NAME, bck.name)
         self.assertEqual(expected_ns, bck.namespace)
 
@@ -174,8 +180,14 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(headers, mock_header.headers)
 
     def test_copy_default_params(self):
+        dest_bck = Bucket(
+            client=self.mock_client,
+            name="test-bck",
+            namespace=Namespace(uuid="namespace-id", name="ns-name"),
+            provider="any-provider",
+        )
         action_value = {"prefix": "", "prepend": "", "dry_run": False, "force": False}
-        self._copy_exec_assert("new_bck", PROVIDER_AIS, action_value)
+        self._copy_exec_assert(dest_bck, action_value)
 
     def test_copy(self):
         prefix_filter = "existing-"
@@ -190,8 +202,7 @@ class TestBucket(unittest.TestCase):
         }
 
         self._copy_exec_assert(
-            "new_bck",
-            PROVIDER_AMAZON,
+            self.ais_bck,
             action_value,
             prefix_filter=prefix_filter,
             prepend=prepend_val,
@@ -199,17 +210,17 @@ class TestBucket(unittest.TestCase):
             force=force,
         )
 
-    def _copy_exec_assert(self, to_bck_name, to_provider, expected_act_value, **kwargs):
+    def _copy_exec_assert(self, to_bck, expected_act_value, **kwargs):
         expected_response = "copy-action-id"
         mock_response = Mock()
         mock_response.text = expected_response
         self.mock_client.request.return_value = mock_response
-        self.ais_bck_params[QPARAM_BCK_TO] = f"{to_provider}/@#/{to_bck_name}/"
+        self.ais_bck_params[QPARAM_BCK_TO] = to_bck.get_path()
         expected_action = ActionMsg(
             action=ACT_COPY_BCK, value=expected_act_value
         ).dict()
 
-        job_id = self.ais_bck.copy(to_bck_name, to_provider=to_provider, **kwargs)
+        job_id = self.ais_bck.copy(to_bck=to_bck, **kwargs)
 
         self.assertEqual(expected_response, job_id)
         self.mock_client.request.assert_called_with(
@@ -428,8 +439,8 @@ class TestBucket(unittest.TestCase):
         self._transform_exec_assert(etl_name, action_value)
 
     def _transform_exec_assert(self, etl_name, expected_act_value, **kwargs):
-        to_bck = "new-bucket"
-        self.ais_bck_params[QPARAM_BCK_TO] = f"{PROVIDER_AIS}/@#/{to_bck}/"
+        to_bck = Bucket(name="new-bucket")
+        self.ais_bck_params[QPARAM_BCK_TO] = to_bck.get_path()
         expected_action = ActionMsg(action=ACT_ETL_BCK, value=expected_act_value).dict()
         expected_response = "job-id"
         mock_response = Mock()
@@ -494,6 +505,44 @@ class TestBucket(unittest.TestCase):
             ),
         ]
         self.mock_client.request.assert_has_calls(expected_calls)
+
+    def test_get_path(self):
+        namespace = Namespace(uuid="ns-id", name="ns-name")
+        bucket = Bucket(name=BCK_NAME, namespace=namespace, provider=PROVIDER_AMAZON)
+        expected_path = (
+            f"{PROVIDER_AMAZON}/@{namespace.uuid}#{namespace.name}/{bucket.name}/"
+        )
+        self.assertEqual(expected_path, bucket.get_path())
+        self.assertEqual(f"{PROVIDER_AIS}/@#/{bucket.name}/", self.ais_bck.get_path())
+
+    def test_make_request_no_client(self):
+        bucket = Bucket(name="name")
+        with self.assertRaises(ValueError):
+            bucket.make_request("method", "action")
+
+    def test_make_request_default_params(self):
+        method = "method"
+        action = "action"
+        self.ais_bck.make_request(method, action)
+        self.mock_client.request.assert_called_with(
+            method,
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            json=ActionMsg(action=action, value=None).dict(),
+            params=self.ais_bck.qparam,
+        )
+
+    def test_make_request(self):
+        method = "method"
+        action = "action"
+        value = "value"
+        params = {"qparamkey": "qparamval"}
+        self.ais_bck.make_request(method, action, value, params)
+        self.mock_client.request.assert_called_with(
+            method,
+            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            json=ActionMsg(action=action, value=value).dict(),
+            params=params,
+        )
 
 
 if __name__ == "__main__":

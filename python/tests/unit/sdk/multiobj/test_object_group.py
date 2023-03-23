@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
+from aistore.sdk import Bucket
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     ACT_DELETE_OBJECTS,
@@ -15,7 +16,7 @@ from aistore.sdk.const import (
 )
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
-from aistore.sdk.types import BucketModel, ArchiveMultiObj
+from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
 
 
 # pylint: disable=unused-variable,too-many-instance-attributes
@@ -28,6 +29,15 @@ class TestObjectGroup(unittest.TestCase):
         mock_response = Mock()
         mock_response.text = self.mock_response_text
         self.mock_bck.make_request.return_value = mock_response
+        self.mock_bck_model = BucketModel(
+            name=self.mock_bck.name, provider=self.mock_bck.provider
+        )
+        self.mock_bck.as_model.return_value = self.mock_bck_model
+        namespace = Namespace(name="ns-name", uuid="ns-id")
+        provider = "any provider"
+        self.dest_bucket = Bucket(
+            name="to-bucket", namespace=namespace, provider=provider
+        )
 
         self.obj_names = ["obj-1", "obj-2"]
         self.object_group = ObjectGroup(self.mock_bck, obj_names=self.obj_names)
@@ -91,94 +101,81 @@ class TestObjectGroup(unittest.TestCase):
             self.expected_value,
         )
 
-    def _copy_test_helper(self, starting_val, obj_group):
-        to_bck = "to-bucket"
-        expected_val = starting_val
-        expected_val["prefix"] = ""
-        expected_val["prepend"] = ""
-        expected_val["dry_run"] = False
-        expected_val["force"] = False
-        expected_val["tobck"] = BucketModel(name=to_bck).as_dict()
-        expected_val["coer"] = False
+    def test_copy(self):
+        self.expected_value["prefix"] = ""
+        self.expected_value["prepend"] = ""
+        self.expected_value["dry_run"] = False
+        self.expected_value["force"] = False
+        self.expected_value["tobck"] = self.dest_bucket.as_model()
+        self.expected_value["coer"] = False
         # Test default args
         self.object_group_test_helper(
-            obj_group.copy,
+            self.object_group.copy,
             HTTP_METHOD_POST,
             ACT_COPY_OBJECTS,
-            expected_val,
-            to_bck=to_bck,
+            self.expected_value,
+            to_bck=self.dest_bucket,
         )
         # Test provided optional args
-        to_provider = "any provider"
         prepend_val = "new_prefix-"
-        expected_val["prepend"] = prepend_val
-        expected_val["force"] = True
-        expected_val["dry_run"] = True
-        expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
-        expected_val["coer"] = True
+        self.expected_value["prepend"] = prepend_val
+        self.expected_value["force"] = True
+        self.expected_value["dry_run"] = True
+        self.expected_value["coer"] = True
         self.object_group_test_helper(
-            obj_group.copy,
+            self.object_group.copy,
             HTTP_METHOD_POST,
             ACT_COPY_OBJECTS,
-            expected_val,
-            to_bck=to_bck,
+            self.expected_value,
+            to_bck=self.dest_bucket,
             prepend=prepend_val,
             force=True,
             dry_run=True,
-            to_provider=to_provider,
             continue_on_error=True,
         )
-
-    def test_copy(self):
-        self._copy_test_helper(self.expected_value, self.object_group)
 
     @patch("aistore.sdk.multiobj.object_group.logging")
     def test_copy_dry_run(self, mock_logging):
         mock_logger = Mock()
         mock_logging.getLogger.return_value = mock_logger
 
-        self.object_group.copy(to_bck="to_bck", dry_run=True)
+        self.object_group.copy(to_bck=self.dest_bucket, dry_run=True)
 
         mock_logger.info.assert_called()
 
-    def _transform_test_helper(self, starting_val, obj_group):
+    def test_transform(self):
         etl_name = "any active etl"
-        to_bck = "to-bucket"
-        expected_val = starting_val
-        expected_val["prefix"] = ""
-        expected_val["prepend"] = ""
-        expected_val["dry_run"] = False
-        expected_val["force"] = False
-        expected_val["id"] = etl_name
-        expected_val["request_timeout"] = DEFAULT_ETL_TIMEOUT
-        expected_val["tobck"] = BucketModel(name=to_bck).as_dict()
-        expected_val["coer"] = False
+        self.expected_value["prefix"] = ""
+        self.expected_value["prepend"] = ""
+        self.expected_value["dry_run"] = False
+        self.expected_value["force"] = False
+        self.expected_value["id"] = etl_name
+        self.expected_value["request_timeout"] = DEFAULT_ETL_TIMEOUT
+        self.expected_value["tobck"] = self.dest_bucket.as_model()
+        self.expected_value["coer"] = False
         # Test default args
         self.object_group_test_helper(
-            obj_group.transform,
+            self.object_group.transform,
             HTTP_METHOD_POST,
             ACT_TRANSFORM_OBJECTS,
-            expected_val,
-            to_bck=to_bck,
+            self.expected_value,
+            to_bck=self.dest_bucket,
             etl_name=etl_name,
         )
         # Test provided optional args
         timeout = "30s"
         prepend_val = "new_prefix-"
-        to_provider = "any provider"
-        expected_val["tobck"] = BucketModel(name=to_bck, provider=to_provider).as_dict()
-        expected_val["coer"] = True
-        expected_val["prepend"] = prepend_val
-        expected_val["request_timeout"] = timeout
-        expected_val["dry_run"] = True
-        expected_val["force"] = True
+        self.expected_value["coer"] = True
+        self.expected_value["prepend"] = prepend_val
+        self.expected_value["request_timeout"] = timeout
+        self.expected_value["dry_run"] = True
+        self.expected_value["force"] = True
         self.object_group_test_helper(
-            obj_group.transform,
+            self.object_group.transform,
             HTTP_METHOD_POST,
             ACT_TRANSFORM_OBJECTS,
-            expected_val,
-            to_bck=to_bck,
-            to_provider=to_provider,
+            self.expected_value,
+            to_bck=self.dest_bucket,
             prepend=prepend_val,
             etl_name=etl_name,
             timeout=timeout,
@@ -187,15 +184,14 @@ class TestObjectGroup(unittest.TestCase):
             continue_on_error=True,
         )
 
-    def test_transform(self):
-        self._transform_test_helper(self.expected_value, self.object_group)
-
     @patch("aistore.sdk.multiobj.object_group.logging")
     def test_transform_dry_run(self, mock_logging):
         mock_logger = Mock()
         mock_logging.getLogger.return_value = mock_logger
 
-        self.object_group.transform(to_bck="to_bck", etl_name="any etl", dry_run=True)
+        self.object_group.transform(
+            to_bck=self.dest_bucket, etl_name="any etl", dry_run=True
+        )
 
         mock_logger.info.assert_called()
 
@@ -207,9 +203,7 @@ class TestObjectGroup(unittest.TestCase):
         expected_value = ArchiveMultiObj(
             object_selection=self.expected_value,
             archive_name=archive_name,
-            to_bck=BucketModel(
-                name=self.mock_bck.name, provider=self.mock_bck.provider
-            ),
+            to_bck=self.mock_bck_model,
         ).as_dict()
         self.object_group_test_helper(
             self.object_group.archive,
@@ -221,8 +215,10 @@ class TestObjectGroup(unittest.TestCase):
 
     def test_archive(self):
         archive_name = "test-arch"
-        to_bck = "dest-bck-name"
-        to_provider = PROVIDER_AMAZON
+        namespace = Namespace(name="ns-name", uuid="ns-id")
+        to_bck = Bucket(
+            name="dest-bck-name", namespace=namespace, provider=PROVIDER_AMAZON
+        )
         mime = "text"
         include_source = True
         allow_append = True
@@ -230,7 +226,7 @@ class TestObjectGroup(unittest.TestCase):
         expected_value = ArchiveMultiObj(
             object_selection=self.expected_value,
             archive_name=archive_name,
-            to_bck=BucketModel(name=to_bck, provider=to_provider),
+            to_bck=to_bck.as_model(),
             mime=mime,
             include_source_name=include_source,
             allow_append=allow_append,
@@ -242,8 +238,7 @@ class TestObjectGroup(unittest.TestCase):
             ACT_ARCHIVE_OBJECTS,
             expected_value=expected_value,
             archive_name=archive_name,
-            to_bck_name=to_bck,
-            to_bck_provider=to_provider,
+            to_bck=to_bck,
             mime=mime,
             include_source_name=include_source,
             allow_append=allow_append,

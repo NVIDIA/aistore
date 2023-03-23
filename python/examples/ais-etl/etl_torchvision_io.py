@@ -11,6 +11,7 @@ from torchvision import transforms
 from PIL import Image
 
 from aistore import Client
+from aistore.sdk import Bucket
 from aistore.sdk.const import ETL_COMM_IO
 
 client = Client("http://192.168.49.2:8080")
@@ -39,6 +40,6 @@ client.etl().init_code(
 
 # Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
-    etl_name="torchvision_io1", to_bck="to-bck", ext={"jpg": "npy"}
+    etl_name="torchvision_io1", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
 )
 client.job(job_id).wait()

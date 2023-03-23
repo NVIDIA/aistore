@@ -5,7 +5,6 @@ import logging
 from typing import List
 
 from aistore.sdk.const import (
-    PROVIDER_AIS,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_POST,
     HTTP_METHOD_PUT,
@@ -22,7 +21,6 @@ from aistore.sdk.multiobj.object_range import ObjectRange
 from aistore.sdk.multiobj.object_template import ObjectTemplate
 from aistore.sdk.types import (
     TCMultiObj,
-    BucketModel,
     CopyBckMsg,
     TransformBckMsg,
     TCBckMsg,
@@ -142,8 +140,7 @@ class ObjectGroup:
     # pylint: disable=too-many-arguments
     def copy(
         self,
-        to_bck: str,
-        to_provider: str = PROVIDER_AIS,
+        to_bck: "Bucket",
         prepend: str = "",
         continue_on_error: bool = False,
         dry_run: bool = False,
@@ -153,8 +150,7 @@ class ObjectGroup:
         Copies a list or range of objects in a bucket
 
         Args:
-            to_bck (str): Name of the destination bucket
-            to_provider (str, optional): Name of destination bucket provider
+            to_bck (Bucket): Destination bucket
             prepend (str, optional): Value to prepend to the name of copied objects
             continue_on_error (bool, optional): Whether to continue if there is an error copying a single object
             dry_run (bool, optional): Skip performing the copy and just log the intended actions
@@ -177,15 +173,14 @@ class ObjectGroup:
             logger = logging.getLogger(f"{__name__}.copy")
             logger.info(
                 "Copy dry-run. Running with dry_run=False will copy the following objects from bucket '%s' to '%s': %s",
-                f"{self.bck.provider}://{self.bck.name}",
-                f"{to_provider}://{to_bck}",
+                f"{self.bck.get_path()}",
+                f"{to_bck.get_path()}",
                 list(self._obj_collection),
             )
-
-        to_bck = BucketModel(name=to_bck, provider=to_provider)
         copy_msg = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force)
+
         value = TCMultiObj(
-            to_bck=to_bck,
+            to_bck=to_bck.as_model(),
             tc_msg=TCBckMsg(copy_msg=copy_msg),
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
@@ -197,10 +192,9 @@ class ObjectGroup:
     # pylint: disable=too-many-arguments
     def transform(
         self,
-        to_bck: str,
+        to_bck: "Bucket",
         etl_name: str,
         timeout: str = DEFAULT_ETL_TIMEOUT,
-        to_provider: str = PROVIDER_AIS,
         prepend: str = "",
         continue_on_error: bool = False,
         dry_run: bool = False,
@@ -210,10 +204,9 @@ class ObjectGroup:
         Performs ETL operation on a list or range of objects in a bucket, placing the results in the destination bucket
 
         Args:
-            to_bck (str): Name of the destination bucket
+            to_bck (Bucket): Destination bucket
             etl_name (str): Name of existing ETL to apply
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
-            to_provider (str, optional): Name of destination bucket provider
             prepend (str, optional): Value to prepend to the name of resulting transformed objects
             continue_on_error (bool, optional): Whether to continue if there is an error transforming a single object
             dry_run (bool, optional): Skip performing the transform and just log the intended actions
@@ -240,11 +233,10 @@ class ObjectGroup:
                 list(self._obj_collection),
             )
 
-        to_bck = BucketModel(name=to_bck, provider=to_provider)
         copy_msg = CopyBckMsg(prepend=prepend, dry_run=dry_run, force=force)
         transform_msg = TransformBckMsg(etl_name=etl_name, timeout=timeout)
         value = TCMultiObj(
-            to_bck=to_bck,
+            to_bck=to_bck.as_model(),
             tc_msg=TCBckMsg(transform_msg=transform_msg, copy_msg=copy_msg),
             object_selection=self._obj_collection.get_value(),
             continue_on_err=continue_on_error,
@@ -257,8 +249,7 @@ class ObjectGroup:
         self,
         archive_name: str,
         mime: str = "",
-        to_bck_name: str = "",
-        to_bck_provider: str = PROVIDER_AIS,
+        to_bck: "Bucket" = None,
         include_source_name: bool = False,
         allow_append: bool = False,
         continue_on_err: bool = False,
@@ -269,8 +260,7 @@ class ObjectGroup:
         Args:
             archive_name (str): Name of archive to create or append
             mime (str, optional): MIME type of the content
-            to_bck (str, optional): Destination bucket, defaults to current bucket
-            to_bck_provider (str, optinal): Provider of destination bucket, if given
+            to_bck (Bucket, optional): Destination bucket, defaults to current bucket
             include_source_name (bool, optional): Include the source bucket name in the archived objects' names
             allow_append (bool, optional): Allow appending to an existing archive
             continue_on_err (bool, optional): Whether to continue if there is an error archiving a single object
@@ -279,17 +269,11 @@ class ObjectGroup:
             Job ID (as str) that can be used to check the status of the operation
 
         """
-        if to_bck_name:
-            to_bck = BucketModel(name=to_bck_name, provider=to_bck_provider).as_dict()
-        else:
-            to_bck = BucketModel(
-                name=self.bck.name, provider=self.bck.provider
-            ).as_dict()
         val = ArchiveMultiObj(
             object_selection=self._obj_collection.get_value(),
             archive_name=archive_name,
             mime=mime,
-            to_bck=to_bck,
+            to_bck=to_bck.as_model() if to_bck else self.bck.as_model(),
             include_source_name=include_source_name,
             allow_append=allow_append,
             continue_on_err=continue_on_err,

@@ -9,20 +9,12 @@ from typing import Any, Mapping, List, Optional, Dict
 
 from pydantic import BaseModel, validator
 
+from aistore.sdk.namespace import Namespace
 from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.list_object_flag import ListObjectFlag
 
 
 # pylint: disable=too-few-public-methods,unused-variable,missing-function-docstring
-
-
-class Namespace(BaseModel):
-    """
-    A bucket namespace
-    """
-
-    uuid: str = ""
-    name: str = ""
 
 
 class ActionMsg(BaseModel):
@@ -379,7 +371,7 @@ class ArchiveMultiObj(BaseModel):
     """
 
     archive_name: str
-    to_bck: BucketModel = None
+    to_bck: BucketModel
     mime: str = None
     include_source_name = False
     allow_append = False
@@ -395,5 +387,5 @@ class ArchiveMultiObj(BaseModel):
         if self.mime:
             dict_rep["mime"] = self.mime
         if self.to_bck:
-            dict_rep["tobck"] = self.to_bck
+            dict_rep["tobck"] = self.to_bck.as_dict()
         return dict_rep
