@@ -154,6 +154,7 @@ func TestCreateMultiObjArch(t *testing.T) {
 	})
 }
 
+// TODO: review aborting (test.abrt) timing logic
 func testMobjArch(t *testing.T, bck *cluster.Bck) {
 	var (
 		numPuts = 100
@@ -249,7 +250,6 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 			tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 
 			if test.list {
-				tlog.Logf("Archive %d lists %s => %s\n", numArchs, m.bck, bckTo)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
@@ -264,28 +264,29 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 							list = append(list, m.objNames[rand.Intn(m.num)])
 						}
 					}
-					go func(archName string, list []string) {
+					go func(archName string, list []string, i int) {
 						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
 						msg.ListRange.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
-						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
-					}(archName, list)
+						tlog.Logf("[%s] %2d: arch list %d objects %s => %s\n", xids, i, len(list), m.bck, bckTo)
+					}(archName, list, i)
 				}
 			} else {
-				tlog.Logf("Archive %d ranges %s => %s\n", numArchs, m.bck, bckTo)
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
-					go func(archName string, start int) {
+					go func(archName string, start, i int) {
 						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
-						_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
-					}(archName, start)
+						tlog.Logf("[%s] %2d: arch range %s %s => %s\n", xids, i, msg.ListRange.Template, m.bck, bckTo)
+					}(archName, start, i)
 				}
 			}
 
@@ -296,6 +297,10 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				api.AbortXaction(baseParams, flt)
 			}
 
+			// NOTE: observe
+			if test.ext == cos.ExtZip || test.ext == cos.ExtMsgpack {
+				time.Sleep(5 * time.Second)
+			}
 			api.WaitForXactionIdle(baseParams, flt)
 
 			tlog.Logf("List %s\n", bckTo)

@@ -17,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+const UUIDSepa = ","
+
 const (
 	ScopeG  = iota + 1 // cluster
 	ScopeB             // bucket

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -58,24 +59,36 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 	return
 }
 
-// returns xaction UUID or empty
-// NOTE: global ID can be further reinforced by _not_ ignoring empty returns, i.e.,
-// requiring that each responding target returns a valid ID and all IDs are equal.
-// Likely, an additional condition that a caller must be able to ask for.
-func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid string, err error) {
-	globalID := true // cluster-wide xaction ID
+// returns cluster-wide (global) xaction UUID or - for assorted multi-object (list|range) xactions
+// that can be run concurrently - comma-separated list of UUIDs
+func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid string, all []string, err error) {
+	same4all := true
 	results := c.bcast(apc.ActCommit, timeout)
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
 			glog.Errorf("Failed to commit %q %s: %v %s", c.msg.Action, what, err, c.msg)
+			xid = ""
 			break
 		}
-		if globalID {
+		resID := res.header.Get(apc.HdrXactionID)
+		if same4all {
 			if xid == "" {
-				xid = res.header.Get(apc.HdrXactionID)
-			} else if xid != res.header.Get(apc.HdrXactionID) {
-				xid, globalID = "", false
+				xid = resID
+			} else if xid != resID {
+				all = append(all, xid, resID)
+				xid, same4all = "", false
+			}
+		} else {
+			var found bool
+			for _, id := range all {
+				if resID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				all = append(all, resID)
 			}
 		}
 	}
@@ -216,7 +229,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *cluster.Bck, remoteHdr http.H
 	}
 
 	// 4. commit
-	_, err := c.commit(bck, c.cmtTout(waitmsync))
+	_, _, err := c.commit(bck, c.cmtTout(waitmsync))
 	if err != nil {
 		p.undoCreateBucket(msg, bck)
 	}
@@ -295,7 +308,7 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *cluster.Bck) (xid string, err 
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	xid, _, err = c.commit(bck, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
@@ -394,7 +407,8 @@ func (p *proxy) setBucketProps(msg *apc.ActMsg, bck *cluster.Bck, nprops *cmn.Bu
 	}
 
 	// 5. commit
-	return c.commit(bck, c.cmtTout(waitmsync))
+	xid, _, rerr := c.commit(bck, c.cmtTout(waitmsync))
+	return xid, rerr
 }
 
 // compare w/ bmodUpdateProps
@@ -481,7 +495,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid 
 
 	// 5. commit
 	c.req.Body = cos.MustMarshal(c.msg)
-	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
 		glog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
@@ -584,7 +598,7 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
-	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil && !existsTo {
 		// rm the one that we just created
@@ -638,15 +652,17 @@ func (p *proxy) tcobjs(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string
 	}
 
 	// 4. commit
-	xid, err = c.commit(bckFrom, c.cmtTout(waitmsync))
+	var all []string
+	xid, all, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	if err != nil && !existsTo {
 		// rm the one that we just created
 		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
+		return
 	}
-	if err == nil {
-		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
+	if err != nil || xid != "" {
+		return
 	}
-	return
+	return strings.Join(all, xact.UUIDSepa), nil
 }
 
 func bmodTCB(ctx *bmdModifier, clone *bucketMD) error {
@@ -767,7 +783,7 @@ func (p *proxy) ecEncode(bck *cluster.Bck, msg *apc.ActMsg) (xid string, err err
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 6. commit
-	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	xid, _, err = c.commit(bck, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	return
 }
@@ -788,7 +804,11 @@ func bmodUpdateProps(ctx *bmdModifier, clone *bucketMD) error {
 	return nil
 }
 
+// NOTE: returning a single global UUID or, in a concurrent batch-executing operation,
+// a comma-separated list
 func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
+	var all []string // all xaction UUIDs
+
 	// begin
 	c := p.prepTxnClient(msg, bckFrom, false /*waitmsync*/)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
@@ -796,12 +816,11 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 		return
 	}
 	// commit
-	xid, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
-	if xid != "" {
-		// cluster-wide UUID
-		glog.Infof("%s: x-%s[%s]", p, msg.Action, xid)
+	xid, all, err = c.commit(bckFrom, c.cmtTout(false /*waitmsync*/))
+	if err != nil || xid != "" {
+		return
 	}
-	return
+	return strings.Join(all, xact.UUIDSepa), nil
 }
 
 // maintenance: { begin -- enable GFN -- commit -- start rebalance }
@@ -928,7 +947,7 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *cluster.Bck) error {
 	}
 
 	// 3. Commit
-	_, err := c.commit(bck, c.cmtTout(waitmsync))
+	_, _, err := c.commit(bck, c.cmtTout(waitmsync))
 	return err
 }
 
@@ -996,7 +1015,7 @@ func (p *proxy) promote(bck *cluster.Bck, msg *apc.ActMsg, tsi *cluster.Snode) (
 	}
 
 	// commit
-	xid, err = c.commit(bck, c.cmtTout(waitmsync))
+	xid, _, err = c.commit(bck, c.cmtTout(waitmsync))
 	debug.Assertf(noXact || xid == c.uuid, "noXact=%t, committed %q vs generated %q", noXact, xid, c.uuid)
 	return
 }
