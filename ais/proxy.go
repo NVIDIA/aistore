@@ -45,7 +45,7 @@ import (
 )
 
 const (
-	fmtNotRemote = "%q appears to be ais bucket (expecting remote)"
+	fmtNotRemote = "%q is AIS (ais://) bucket - expecting remote bucket"
 	lsotag       = "list-objects"
 )
 
@@ -1054,19 +1054,14 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		return
 	}
 
-	if bck.IsRemoteAIS() {
-		switch msg.Action {
-		case apc.ActInvalListCache: // drop
-		default: // forward to remote AIS as is
+	if msg.Action == apc.ActCreateBck {
+		if bck.IsRemoteAIS() {
+			// create bucket (remais)
 			p.reverseReqRemote(w, r, msg, bck.Bucket(), query)
 			return
 		}
-	}
-
-	// POST /bucket operations (this cluster)
-
-	if msg.Action == apc.ActCreateBck {
-		p.hpostCreateBucket(w, r, query, msg, bck)
+		// create bucket (this cluster)
+		p._bcr(w, r, query, msg, bck)
 		return
 	}
 
@@ -1077,6 +1072,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 	}
+
+	// POST /bucket operations (this cluster)
 
 	// Initialize bucket; if doesn't exist try creating it on the fly
 	// but only if it's a remote bucket (and user did not explicitly disallowed).
@@ -1098,15 +1095,15 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			return
 		}
 		if !bckFrom.IsAIS() && bckFrom.Backend() == nil {
-			p.writeErrf(w, r, "source bucket %q must be an AIS bucket", bckFrom)
+			p.writeErrf(w, r, "can only rename AIS ('ais://') bucket (%q is not)", bckFrom)
 			return
 		}
 		if bckTo.IsRemote() {
-			p.writeErrf(w, r, "destination bucket %q must be an AIS bucket", bckTo)
+			p.writeErrf(w, r, "can only rename to AIS ('ais://') bucket (%q is remote)", bckTo)
 			return
 		}
-		if bckFrom.Name == bckTo.Name {
-			p.writeErrf(w, r, "cannot rename bucket %q as %q", bckFrom, bckTo)
+		if bckFrom.Equal(bckTo, false, false) {
+			p.writeErrf(w, r, "cannot rename bucket %q to itself (%q)", bckFrom, bckTo)
 			return
 		}
 
@@ -1302,7 +1299,7 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 }
 
 // POST { apc.ActCreateBck } /v1/buckets/bucket-name
-func (p *proxy) hpostCreateBucket(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *cluster.Bck) {
+func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *cluster.Bck) {
 	var (
 		remoteHdr http.Header
 		bucket    = bck.Name

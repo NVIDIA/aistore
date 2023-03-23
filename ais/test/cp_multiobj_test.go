@@ -121,25 +121,24 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 		bckTo     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
 		numToCopy = cos.Min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
-		subtests  = []struct {
-			list      bool
-			createDst bool
+		// test randomization
+		maybe    = mono.NanoTime()&0x1 != 0
+		maybeNot = !maybe
+		//
+		// total tests = (num runProviderTests) * (num subtests)
+		//
+		subtests = []struct {
+			list           bool
+			createDst      bool
+			evictRemoteSrc bool
 		}{
-			{true, true},
-			{false, true},
+			{list: true, createDst: true},
+			{list: false, createDst: true},
 
-			{true, false},
-			{false, false},
+			{list: maybe, createDst: false},
+			{list: maybeNot, createDst: false, evictRemoteSrc: true},
 		}
 	)
-	if m.bck.IsRemoteAIS() { // see TODO below
-		subtests = []struct {
-			list      bool
-			createDst bool
-		}{
-			{mono.NanoTime()&0x1 != 0, true},
-		}
-	}
 	for _, test := range subtests {
 		tname := "list"
 		if !test.list {
@@ -150,14 +149,10 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 		} else {
 			tname += "/no-dst"
 		}
+		if m.bck.IsRemote() && test.evictRemoteSrc {
+			tname += "/evict-remote-src"
+		}
 		t.Run(tname, func(t *testing.T) {
-			// TODO -- FIXME: swapping the source and the destination here because
-			// of the current unidirectional limitation: ais => remote ais
-			if m.bck.IsRemoteAIS() {
-				m.bck, bckTo = bckTo, m.bck
-				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
-			}
-
 			m.initWithCleanup()
 			if m.bck.IsCloud() {
 				defer m.del()
@@ -174,59 +169,74 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 
 			m.puts()
 
+			if m.bck.IsRemote() && test.evictRemoteSrc {
+				tlog.Logf("evicting %s\n", m.bck)
+				err := api.EvictRemoteBucket(baseParams, m.bck, false /*keep md*/)
+				tassert.CheckFatal(t, err)
+			}
+
 			tlog.Logf("%s: %s => %s %d objects\n", t.Name(), m.bck, bckTo, numToCopy)
 			var erv atomic.Value
 			if test.list {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					list := make([]string, 0, numToCopy)
+					flst := func(i int, list []string) {
+						var (
+							err error
+							xid string
+							msg = cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
+						)
+						if m.bck.IsRemote() && test.evictRemoteSrc {
+							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
+						} else {
+							xid, err = api.CopyMultiObj(baseParams, m.bck, msg)
+						}
+						if err != nil {
+							erv.Store(err)
+						} else {
+							tlog.Logf("[%s] %2d: cp list %d objects\n", xid, i, numToCopy)
+						}
+					}
 					for j := 0; j < numToCopy; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					if !test.createDst && i == 0 {
 						// serialize the very first batch as it entails creating destination bucket
 						// behind the scenes
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
-						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
-							erv.Store(err)
-						} else {
-							tlog.Logf("%2d: cp list %d objects\n", i, numToCopy)
-						}
-						time.Sleep(5 * time.Second)
+						flst(i, list)
+						time.Sleep(time.Second)
 						continue
 					}
-					go func(list []string, iter int) {
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
-						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
-							erv.Store(err)
-						} else {
-							tlog.Logf("%2d: cp list %d objects\n", iter, numToCopy)
-						}
-					}(list, i)
+					go flst(i, list)
 				}
 			} else {
 				for i := 0; i < numToCopy && erv.Load() == nil; i++ {
 					start := rand.Intn(m.num - numToCopy)
-					if !test.createDst && i == 0 {
-						// (ditto)
-						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
-						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
+					ftmpl := func(start int, i int) {
+						var (
+							err      error
+							xid      string
+							template = fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
+							msg      = cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
+						)
+						if m.bck.IsRemote() && test.evictRemoteSrc {
+							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
+						} else {
+							xid, err = api.CopyMultiObj(baseParams, m.bck, msg)
+						}
+						if err != nil {
 							erv.Store(err)
 						} else {
-							tlog.Logf("%2d: cp range [%s]\n", i, template)
+							tlog.Logf("[%s] %2d: cp range [%s]\n", xid, i, template)
 						}
-						time.Sleep(2 * time.Second)
+					}
+					if !test.createDst && i == 0 {
+						// (ditto serialize)
+						ftmpl(start, i)
+						time.Sleep(time.Second)
 						continue
 					}
-					go func(start, iter int) {
-						template := fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-						msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
-						if _, err := api.CopyMultiObj(baseParams, m.bck, msg); err != nil {
-							erv.Store(err)
-						} else {
-							tlog.Logf("%2d: cp range [%s]\n", iter, template)
-						}
-					}(start, i)
+					go ftmpl(start, i)
 				}
 			}
 			if erv.Load() != nil {
