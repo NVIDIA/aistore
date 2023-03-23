@@ -109,7 +109,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 // Used when processing object deletion request
 func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	if glog.FastV(4, glog.SmoduleEC) {
-		glog.Infof("Delete request for %s/%s", bck.Name, objName)
+		glog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
 	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
@@ -170,7 +170,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *clu
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			glog.Errorf("%s failed to delete %s/%s: %v", r.t, bck.Name, hdr.ObjName, err)
+			glog.Errorf("%s failed to delete %s: %v", r.t, bck.Cname(hdr.ObjName), err)
 		}
 	case reqGet:
 		err := r.trySendCT(iReq, hdr, bck)
@@ -198,13 +198,13 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			glog.Errorf("%s: no metadata for %s", r.t, hdr.FullName())
+			glog.Errorf("%s: no metadata for %s", r.t, hdr.Cname())
 			return
 		}
 
 		if glog.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
-				iReq.meta.SliceID, hdr.FullName(), meta.ObjVersion, meta.CksumValue)
+				iReq.meta.SliceID, hdr.Cname(), meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.NewPack()
 		if iReq.isSlice {

@@ -49,7 +49,7 @@ func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsH
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Action:    "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.FullName(),
+		Action:    "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname(),
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,

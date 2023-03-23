@@ -111,6 +111,6 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	for _, objName := range objList {
 		err := api.DeleteObject(baseParams, bckTo, objName)
 		tassert.CheckError(t, err)
-		tlog.Logf("%s/%s\n", bckTo.Name, objName)
+		tlog.Logf("%s\n", bckTo.Cname(objName))
 	}
 }

@@ -369,7 +369,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *cluster.Snode, client *http
 	}
 	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, cmn.NewErrNotFound("object %s/%s", bck, objName)
+		return nil, cmn.NewErrNotFound(bck.Cname(objName))
 	} else if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
 	}
@@ -465,8 +465,8 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
 		if !lom.EqCksum(args.Cksum) {
-			return fmt.Errorf("mismatched hash for %s/%s, version %s, hash calculated %s/md %s",
-				lom.Bucket(), lom.ObjName, lom.Version(), args.Cksum, lom.Checksum())
+			err = cos.NewBadDataCksumError(args.Cksum, lom.Checksum(), lom.Cname())
+			return
 		}
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)

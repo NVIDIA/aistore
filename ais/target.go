@@ -783,7 +783,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	errCode, err := t.DeleteObject(lom, evict)
 	if err != nil {
 		if errCode == http.StatusNotFound {
-			t.writeErrSilentf(w, r, http.StatusNotFound, "%s doesn't exist", lom.FullName())
+			t.writeErrSilentf(w, r, http.StatusNotFound, "%s doesn't exist", lom.Cname())
 		} else {
 			t.writeErr(w, r, err, errCode)
 		}
@@ -880,7 +880,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *cluster.Bck, lo
 			return
 		}
 		if fltPresence == apc.FltExistsOutside {
-			err = fmt.Errorf("%s is present (flt %d=\"outside\")", lom.FullName(), fltPresence)
+			err = fmt.Errorf("%s is present (flt %d=\"outside\")", lom.Cname(), fltPresence)
 			return
 		}
 	} else {
@@ -896,7 +896,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *cluster.Bck, lo
 
 	if !exists {
 		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			err = cmn.NewErrNotFound("%s: object %s", t, lom.FullName())
+			err = cmn.NewErrNotFound("%s: object %s", t, lom.Cname())
 			return http.StatusNotFound, err
 		}
 	}

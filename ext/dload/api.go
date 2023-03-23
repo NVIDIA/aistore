@@ -377,7 +377,7 @@ func (b *SingleBody) Describe() string {
 	if b.Description != "" {
 		return b.Description
 	}
-	return fmt.Sprintf("%s -> %s/%s", b.Link, b.Bck, b.ObjName)
+	return fmt.Sprintf("%s -> %s", b.Link, b.Bck.Cname(b.ObjName))
 }
 
 func (b *SingleBody) String() string {

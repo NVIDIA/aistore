@@ -556,7 +556,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	copiesToNumObjects := make(map[int]int)
 	for _, entry := range objectList.Entries {
 		if entry.Atime == "" {
-			m.t.Errorf("%s/%s: access time is empty", m.bck, entry.Name)
+			m.t.Errorf("%s: access time is empty", m.bck.Cname(entry.Name))
 		}
 		total++
 		if greaterOk && int(entry.Copies) > expectedCopies {

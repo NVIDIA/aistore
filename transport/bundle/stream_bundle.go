@@ -150,7 +150,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cl
 	} else if nodes != nil && len(nodes) == 0 {
 		err = fmt.Errorf("no destinations %s => .../%s", sb.lsnode, sb.trname)
 	} else if obj.IsUnsized() && sb.extra.SizePDU == 0 {
-		err = fmt.Errorf("[%s/%s] sending unsized object supported only with PDUs", obj.Hdr.Bck, obj.Hdr.ObjName)
+		err = fmt.Errorf("[%s] sending unsized object supported only with PDUs", obj.Hdr.Cname())
 	}
 
 	if err != nil {

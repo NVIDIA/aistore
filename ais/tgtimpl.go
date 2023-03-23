@@ -175,7 +175,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.FullName(), owt, err, errCode)
+		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
 		return
 	}
 
@@ -195,7 +195,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		} else {
 			errCode = http.StatusInternalServerError
 			lom.Unlock(true)
-			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.FullName(), owt, err)
+			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.Cname(), owt, err)
 		}
 	}
 	return

@@ -290,7 +290,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	c.parent.t.ByteMM().Free(hdr.Opaque)
 	if err != nil {
-		glog.Errorf("failed to send o[%s]: %v", hdr.FullName(), err)
+		glog.Errorf("failed to send o[%s]: %v", hdr.Cname(), err)
 	}
 	c.parent.DecPending()
 }
@@ -498,7 +498,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, 
 			data.release()
 		}
 		if err != nil {
-			glog.Errorf("Failed to send %s: %v", hdr.FullName(), err)
+			glog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
 		}
 	}
 

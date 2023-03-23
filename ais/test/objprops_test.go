@@ -54,7 +54,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		}
 		_, err = api.PutObject(putArgs)
 		if err != nil {
-			t.Errorf("Failed to put new data to object %s/%s, err: %v", bck, fname, err)
+			t.Errorf("Failed to PUT new data to object %s: %v", bck.Cname(fname), err)
 		}
 	}
 
@@ -74,15 +74,15 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		newVersions[m.Name] = m.Version
 
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
+			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if !versionEnabled {
 			continue
 		}
 		if ver == m.Version {
-			t.Fatalf("%s/%s: version was expected to update", bck, m.Name)
+			t.Fatalf("%s: version was expected to update", bck.Cname(m.Name))
 		} else if m.Version == "" {
-			t.Fatalf("%s/%s: version is empty", bck, m.Name)
+			t.Fatalf("%s: version is empty", bck.Cname(m.Name))
 		}
 	}
 
@@ -95,7 +95,7 @@ func propsReadObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList map[st
 	for objName := range objList {
 		_, err := api.GetObject(baseParams, bck, objName, nil)
 		if err != nil {
-			t.Errorf("Failed to read %s/%s: %v", bck, objName, err)
+			t.Errorf("Failed to GET %s: %v", bck.Cname(objName), err)
 			continue
 		}
 	}
@@ -122,7 +122,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
-		tlog.Logf("    %s/%s\n", bck, fname)
+		tlog.Logf("    %s\n", bck.Cname(fname))
 		if len(toEvictList) >= toEvict {
 			break
 		}
@@ -151,7 +151,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tlog.Logf("%s/%s [%d] - cached: [%v], atime [%v]\n", bck, m.Name, m.Flags, m.CheckExists(), m.Atime)
+		tlog.Logf("%s [%d] - cached: [%v], atime [%v]\n", bck.Cname(m.Name), m.Flags, m.CheckExists(), m.Atime)
 
 		// e.g. misplaced replica
 		if !m.IsStatusOK() {
@@ -160,10 +160,10 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 
 		if _, wasEvicted := evictMap[m.Name]; wasEvicted {
 			if m.Atime != "" {
-				t.Errorf("Evicted object %s/%s still has atime %q", bck, m.Name, m.Atime)
+				t.Errorf("Evicted %s still has atime %q", bck.Cname(m.Name), m.Atime)
 			}
 			if m.CheckExists() {
-				t.Errorf("Evicted object %s/%s is still marked as cached one", bck, m.Name)
+				t.Errorf("Evicted %s is still marked as _cached_", bck.Cname(m.Name))
 			}
 		}
 
@@ -172,9 +172,9 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		}
 
 		if m.Version == "" {
-			t.Errorf("%s/%s: version is empty", bck, m.Name)
+			t.Errorf("%s: version is empty", bck.Cname(m.Name))
 		} else if m.Version != oldVersion {
-			t.Errorf("%s/%s: version has changed from %s to %s", bck, m.Name, oldVersion, m.Version)
+			t.Errorf("%s: version has changed from %s to %s", bck.Cname(m.Name), oldVersion, m.Version)
 		}
 	}
 }
@@ -196,18 +196,18 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 			continue
 		}
 		if !m.CheckExists() {
-			t.Errorf("%s/%s:not marked as cached one", bck, m.Name)
+			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {
-			t.Errorf("%s/%s: access time is empty", bck, m.Name)
+			t.Errorf("%s: access time is empty", bck.Cname(m.Name))
 		}
 		if !versionEnabled {
 			continue
 		}
 		if m.Version == "" {
-			t.Errorf("Failed to read %s/%s version", bck, m.Name)
+			t.Errorf("Failed to read %s version", bck.Cname(m.Name))
 		} else if version != m.Version {
-			t.Errorf("%s/%s versions mismatch: expected [%s], have[%s]", bck, m.Name, version, m.Version)
+			t.Errorf("%s versions mismatch: expected [%s], have[%s]", bck.Cname(m.Name), version, m.Version)
 		}
 	}
 }
@@ -271,16 +271,16 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		}
 		objFound++
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
+			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {
-			t.Errorf("%s/%s: access time is empty", bck, m.Name)
+			t.Errorf("%s: access time is empty", bck.Cname(m.Name))
 		}
 		if !versionEnabled {
 			continue
 		}
 		if version != m.Version {
-			t.Errorf("%s/%s post-rebalance version mismatch: have [%s], expected [%s]", bck, m.Name, m.Version, version)
+			t.Errorf("%s post-rebalance version mismatch: have [%s], expected [%s]", bck.Cname(m.Name), m.Version, version)
 		}
 	}
 
@@ -379,20 +379,20 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 	// PUT objects must have all properties set: atime, cached, version
 	filesList := make(map[string]string)
 	for _, m := range reslist.Entries {
-		tlog.Logf("%s/%s initial version:\t%q\n", bck, m.Name, m.Version)
+		tlog.Logf("%s initial version:\t%q\n", bck.Cname(m.Name), m.Version)
 
 		if !m.CheckExists() && bck.IsRemote() {
-			t.Errorf("%s/%s: not marked as cached one", bck, m.Name)
+			t.Errorf("%s: not marked as _cached_", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {
-			t.Errorf("%s/%s: access time is empty", bck, m.Name)
+			t.Errorf("%s: access time is empty", bck.Cname(m.Name))
 		}
 		filesList[m.Name] = m.Version
 		if !versionEnabled {
 			continue
 		}
 		if m.Version == "" {
-			t.Fatalf("Failed to read %s/%s version", bck, m.Name)
+			t.Fatalf("Failed to read %s version", bck.Cname(m.Name))
 		}
 	}
 
@@ -523,7 +523,7 @@ func TestObjProps(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			for _, objName := range m.objNames {
-				tlog.Logf("checking %s/%s object props...\n", m.bck, objName)
+				tlog.Logf("checking %s props...\n", m.bck.Cname(objName))
 
 				flt := apc.FltPresent
 				if test.checkPresent {
@@ -570,7 +570,7 @@ func TestObjProps(t *testing.T) {
 					}
 					if test.evict {
 						tassert.Errorf(t, props.Atime == 0,
-							"expected %s/%s access time to be empty (not cached)", m.bck, objName)
+							"expected %s access time to be empty (not cached)", m.bck.Cname(objName))
 					} else {
 						tassert.Errorf(t, props.Atime != 0, "expected access time to be set (cached)")
 					}

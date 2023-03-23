@@ -167,8 +167,8 @@ func ParseObjLoc(loc string) (tname, mpname string) {
 	return
 }
 
-// see also: transport.ObjHdr.FullName()
-func (lom *LOM) FullName() string { return lom.bck.Cname(lom.ObjName) }
+// see also: transport.ObjHdr.Cname()
+func (lom *LOM) Cname() string { return lom.bck.Cname(lom.ObjName) }
 
 func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 	if bprops := lom.Bprops(); bprops == nil {
@@ -370,7 +370,7 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 		return
 	}
 	bid := lom.Bprops().BID
-	debug.Assert(bid != 0, lom.FullName())
+	debug.Assert(bid != 0, lom.Cname())
 	if bid == 0 {
 		return
 	}

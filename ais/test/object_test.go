@@ -1163,7 +1163,7 @@ func verifyValidRanges(t *testing.T, proxyURL string, bck cmn.Bck, cksumType, ob
 	oah, err := api.GetObjectWithValidation(baseParams, bck, objName, &args)
 	if err != nil {
 		if !checkEntireObjCksum {
-			t.Errorf("Failed to get object %s/%s! Error: %v", bck, objName, err)
+			t.Errorf("Failed to GET %s: %v", bck.Cname(objName), err)
 		} else {
 			if ckErr, ok := err.(*cmn.ErrInvalidCksum); ok {
 				file, err := os.Open(fqn)

@@ -142,7 +142,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		r.raiseErr(err, 0, msg.ContinueOnError)
 		return
 	}
-	debug.Assertf(lom.FullName() == msg.FullName(), "%s vs %s", lom.FullName(), msg.FullName()) // relying on it
+	debug.Assertf(lom.Cname() == msg.Cname(), "%s vs %s", lom.Cname(), msg.Cname()) // relying on it
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.Gen(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
@@ -168,7 +168,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 				err = fmt.Errorf("unsupported archive type %s, only %s is supported", msg.Mime, cos.ExtTar)
 			}
 		} else {
-			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T, msg.FullName())
+			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T, msg.Cname())
 		}
 		if err != nil {
 			return

@@ -230,7 +230,7 @@ func (obj *Obj) IsUnsized() bool    { return obj.Hdr.IsUnsized() }
 func (obj *Obj) Size() int64 { return obj.Hdr.ObjSize() }
 
 func (obj *Obj) String() string {
-	s := fmt.Sprintf("sobj-%s", obj.Hdr.FullName())
+	s := fmt.Sprintf("sobj-%s", obj.Hdr.Cname())
 	if obj.IsHeaderOnly() {
 		return s
 	}
@@ -241,7 +241,7 @@ func (obj *Obj) SetPrc(n int) {
 	obj.prc = atomic.NewInt64(int64(n))
 }
 
-func (hdr *ObjHdr) FullName() string { return hdr.Bck.Cname(hdr.ObjName) } // see also: lom.FullName()
+func (hdr *ObjHdr) Cname() string { return hdr.Bck.Cname(hdr.ObjName) } // see also: lom.Cname()
 
 func (hdr *ObjHdr) IsUnsized() bool    { return hdr.ObjAttrs.Size == SizeUnknown }
 func (hdr *ObjHdr) IsHeaderOnly() bool { return hdr.ObjAttrs.Size == 0 }

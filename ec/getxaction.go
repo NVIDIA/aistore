@@ -122,7 +122,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluste
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			glog.Errorf("No writer for %s/%s", bck.Name, objName)
+			glog.Errorf("No writer for %s", bck.Cname(objName))
 			return
 		}
 

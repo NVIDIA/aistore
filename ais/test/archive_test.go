@@ -138,7 +138,7 @@ func TestGetFromArchive(t *testing.T) {
 						},
 					}
 					oah, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
-					tlog.Logf("%s/%s?%s=%s(%dB)\n", m.bck.Name, objname, apc.QparamArchpath, randomName, oah.Size())
+					tlog.Logf("%s?%s=%s(%dB)\n", m.bck.Cname(objname), apc.QparamArchpath, randomName, oah.Size())
 					tassert.CheckFatal(t, err)
 				}
 			})
@@ -344,7 +344,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				}
 				oah, err := api.GetObject(baseParams, bckTo, objName, &getArgs)
 				if err != nil {
-					t.Errorf("%s/%s?%s=%s(%dB): %v", bckTo.Name, objName, apc.QparamArchpath, en.Name, oah.Size(), err)
+					t.Errorf("%s?%s=%s(%dB): %v", bckTo.Cname(objName), apc.QparamArchpath, en.Name, oah.Size(), err)
 				}
 			}
 		})

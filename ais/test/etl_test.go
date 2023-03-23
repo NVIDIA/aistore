@@ -161,7 +161,7 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	tassert.CheckFatal(t, err)
 	defer fho.Close()
 
-	tlog.Logf("GET %s/%s via etl[%s]\n", bck, objName, etlName)
+	tlog.Logf("GET %s via etl[%s]\n", bck.Cname(objName), etlName)
 	err = api.ETLObject(baseParams, etlName, bck, objName, fho)
 	tassert.CheckFatal(t, err)
 

@@ -771,7 +771,7 @@ gfn:
 	if err != nil {
 		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom, err)
 	} else {
-		err = cmn.NewErrNotFound("%s: %s", goi.t.si, goi.lom.FullName())
+		err = cmn.NewErrNotFound("%s: %s", goi.t.si, goi.lom.Cname())
 	}
 	errCode = http.StatusNotFound
 	return
@@ -1001,7 +1001,7 @@ func (goi *getObjInfo) parseRange(resphdr http.Header, size int64) (hrng *htrang
 		return
 	}
 	if len(ranges) > 1 {
-		err = cmn.NewErrUnsupp("multi-range read", goi.lom.FullName())
+		err = cmn.NewErrUnsupp("multi-range read", goi.lom.Cname())
 		errCode = http.StatusRequestedRangeNotSatisfiable
 		return
 	}

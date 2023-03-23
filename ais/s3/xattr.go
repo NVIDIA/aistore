@@ -28,7 +28,7 @@ func OffsetSorted(lom *cluster.LOM, partNum int64) (off, size int64, status int,
 		return -1, 0, http.StatusNotFound, fmt.Errorf("%s: multipart state not found", lom)
 	}
 
-	off, size, err = mpt._offSorted(lom.FullName(), partNum)
+	off, size, err = mpt._offSorted(lom.Cname(), partNum)
 	return
 }
 

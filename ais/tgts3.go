@@ -268,7 +268,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 			return
 		}
 		if bck.IsAIS() {
-			s3.WriteErr(w, r, cmn.NewErrNotFound("%s: object %s", t.si, lom.FullName()), 0)
+			s3.WriteErr(w, r, cmn.NewErrNotFound("%s: object %s", t.si, lom.Cname()), 0)
 			return
 		}
 	}
@@ -328,7 +328,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	errCode, err = t.DeleteObject(lom, false)
 	if err != nil {
-		name := lom.FullName()
+		name := lom.Cname()
 		if errCode == http.StatusNotFound {
 			s3.WriteErr(w, r, cmn.NewErrNotFound("%s: %s", t.si, name), http.StatusNotFound)
 		} else {

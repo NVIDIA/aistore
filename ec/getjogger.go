@@ -831,9 +831,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
 		if err != nil {
 			if mdExists {
-				glog.Errorf("No EC meta %s from %s: %v", ctx.lom.FullName(), si, err)
+				glog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
 			} else if glog.FastV(4, glog.SmoduleEC) {
-				glog.Infof("No EC meta %s from %s: %v", ctx.lom.FullName(), si, err)
+				glog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
 			}
 			return
 		}

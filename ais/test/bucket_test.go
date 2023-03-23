@@ -2475,7 +2475,7 @@ func TestCopyBucket(t *testing.T) {
 						}
 					}
 					if !found {
-						t.Fatalf("%s/%s is missing in the copied objects", srcm.bck, a.Name)
+						t.Fatalf("%s is missing in the copied objects", srcm.bck.Cname(a.Name))
 					}
 				}
 			}
@@ -3093,13 +3093,13 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 						_, err = api.GetObject(baseParams, m.bck, objName, nil)
 					}
 					if err != nil {
-						t.Errorf("%s/%s corruption detected but not resolved, mirror=%t, ec=%t\n",
-							m.bck, objName, mirrored, eced)
+						t.Errorf("%s corruption detected but not resolved, mirror=%t, ec=%t\n",
+							m.bck.Cname(objName), mirrored, eced)
 					}
 				}
 			} else {
 				if err == nil && cksumType != cos.ChecksumNone {
-					t.Errorf("%s/%s corruption undetected\n", m.bck, objName)
+					t.Errorf("%s corruption undetected\n", m.bck.Cname(objName))
 				}
 			}
 		}

@@ -85,12 +85,12 @@ func CheckObjIsPresent(proxyURL string, bck cmn.Bck, objName string) bool {
 }
 
 // Put sends a PUT request to the given URL
-func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, errCh chan error) {
+func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, errCh chan error) {
 	bp := BaseAPIParams(proxyURL)
 	putArgs := api.PutArgs{
 		BaseParams: bp,
 		Bck:        bck,
-		ObjName:    object,
+		ObjName:    objName,
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
@@ -99,7 +99,7 @@ func Put(proxyURL string, bck cmn.Bck, object string, reader readers.Reader, err
 		return
 	}
 	if errCh == nil {
-		fmt.Printf("PUT %s/%s failed, err: %v (nil error channel)\n", bck, object, err)
+		fmt.Printf("Failed to PUT %s: %v (nil error channel)\n", bck.Cname(objName), err)
 	} else {
 		errCh <- err
 	}
@@ -273,7 +273,7 @@ func WaitForObjectToBeDowloaded(bp api.BaseParams, bck cmn.Bck, objName string, 
 	maxTime := time.Now().Add(timeout)
 	for {
 		if time.Now().After(maxTime) {
-			return fmt.Errorf("timed out (%v) waiting for %s/%s downloaded", timeout, bck, objName)
+			return fmt.Errorf("timed out (%v) waiting for %s download", timeout, bck.Cname(objName))
 		}
 		reslist, err := api.ListObjects(bp, bck, &apc.LsoMsg{}, 0)
 		if err != nil {

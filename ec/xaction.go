@@ -202,7 +202,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		r.t.ByteMM().Free(hdr.Opaque)
 		if err != nil {
-			glog.Errorf("Failed to send %s: %v", hdr.FullName(), err)
+			glog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
 		}
 		r.DecPending()
 	}

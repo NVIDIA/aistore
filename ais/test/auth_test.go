@@ -72,7 +72,7 @@ func TestAuthObj(t *testing.T) {
 		ObjName:    objName,
 	})
 	tassert.CheckFatal(t, err)
-	tlog.Logf("used token[%s...] to PUT %s/%s\n", authBP.Token[:16], bck.String(), objName)
+	tlog.Logf("used token[%s...] to PUT %s\n", authBP.Token[:16], bck.Cname(objName))
 }
 
 func TestAuthBck(t *testing.T) {

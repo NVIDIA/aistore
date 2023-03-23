@@ -140,7 +140,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		return err
 	}
 	if ack.rebID != reb.RebID() {
-		glog.Warningf("received %s: %s", hdr.FullName(), reb.warnID(ack.rebID, ack.daemonID))
+		glog.Warningf("received %s: %s", hdr.Cname(), reb.warnID(ack.rebID, ack.daemonID))
 		return nil
 	}
 	tsid := ack.daemonID // the sender
@@ -236,7 +236,7 @@ func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) (err error
 	ack := &ecAck{}
 	err = unpacker.ReadAny(ack)
 	if err != nil {
-		glog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.FullName(), err)
+		glog.Errorf("Failed to unmarshal EC ACK for %s: %v", hdr.Cname(), err)
 	}
 	return
 }
@@ -351,12 +351,12 @@ func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reade
 	if req.action == rebActUpdateMD {
 		err := reb.receiveMD(req, hdr)
 		if err != nil {
-			glog.Errorf("failed to receive MD for %s: %v", hdr.FullName(), err)
+			glog.Errorf("failed to receive MD for %s: %v", hdr.Cname(), err)
 		}
 		return err
 	}
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
-		glog.Errorf("failed to receive CT for %s: %v", hdr.FullName(), err)
+		glog.Errorf("failed to receive CT for %s: %v", hdr.Cname(), err)
 		return err
 	}
 	return nil

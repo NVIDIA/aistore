@@ -396,4 +396,4 @@ func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 // ArchiveMsg //
 ////////////////
 
-func (msg *ArchiveMsg) FullName() string { return msg.ToBck.Cname(msg.ArchName) }
+func (msg *ArchiveMsg) Cname() string { return msg.ToBck.Cname(msg.ArchName) }
