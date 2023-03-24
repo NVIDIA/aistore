@@ -2289,6 +2289,8 @@ func TestCopyBucket(t *testing.T) {
 				}
 				baseParams = tools.BaseAPIParams()
 			)
+			tools.DestroyBucket(t, proxyURL, srcm.bck)
+			tools.DestroyBucket(t, proxyURL, dstms[0].bck)
 
 			if test.multipleDests {
 				dstms = append(dstms, &ioContext{
@@ -2299,6 +2301,7 @@ func TestCopyBucket(t *testing.T) {
 						Provider: apc.AIS,
 					},
 				})
+				tools.DestroyBucket(t, proxyURL, dstms[1].bck)
 			}
 			bckTest := cmn.Bck{Provider: apc.AIS, Ns: cmn.NsGlobal}
 			if test.srcRemote {

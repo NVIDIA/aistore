@@ -7,7 +7,6 @@ package integration
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -67,7 +66,6 @@ var (
 		{"ICSyncOwnTbl", icSyncOwnershipTable},
 		{"ICSinglePrimaryRevamp", icSinglePrimaryRevamp},
 		{"ICStressMonitorXactMultiICFail", icStressMonitorXactMultiICFail},
-		{"ICStressCachedXactions", icStressCachedXactions},
 	}
 )
 
@@ -1610,77 +1608,6 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 	// 3. Start multiple xactions and poll random proxy for status till xaction is complete
 	wg := startCPBckAndWait(t, m.bck, numCopyXacts)
 	wg.Wait()
-}
-
-func icStressCachedXactions(t *testing.T) {
-	// TODO -- FIXME: to stress test xactions need list-objects notifications (ref. #922)
-	t.Skipf("skipping %s (currently, list-objects does not generate IC notifications)", t.Name())
-
-	var (
-		m = ioContext{
-			t:        t,
-			num:      5000,
-			fileSize: cos.KiB,
-		}
-
-		proxyURL        = tools.GetPrimaryURL()
-		baseParams      = tools.BaseAPIParams(proxyURL)
-		smap            = tools.GetClusterMap(t, proxyURL)
-		numListObjXacts = 20 // number of list obj xactions to run in parallel
-	)
-
-	m.initWithCleanup()
-	m.puts()
-
-	// 2. Kill and restore random IC members in background
-	stopCh := cos.NewStopCh()
-	krWg := &sync.WaitGroup{}
-	krWg.Add(1)
-	go killRestoreIC(t, smap, stopCh, krWg)
-	defer func() {
-		// Stop the background kill and restore task
-		stopCh.Close()
-		krWg.Wait()
-	}()
-
-	// 3. Start multiple list obj range operation in background
-	wg := startListObjRange(t, baseParams, m.bck, numListObjXacts, m.num, 500, 10)
-	wg.Wait()
-}
-
-// Expects objects to be numbered as {%04d}; BaseParams of primary proxy
-//
-//nolint:unused // will be used when icStressCachedXaction test is enabled
-func startListObjRange(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, numJobs, numObjs, rangeSize int,
-	pageSize uint) *sync.WaitGroup {
-	tassert.Fatalf(t, numObjs > rangeSize,
-		"number of objects (%d) should be greater than range size (%d)", numObjs, rangeSize)
-	wg := &sync.WaitGroup{}
-	for i := 0; i < numJobs; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// Start list object xactions with a small lag
-			time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
-			var (
-				after = fmt.Sprintf("%04d", rand.Intn(numObjs-1-rangeSize))
-				msg   = &apc.LsoMsg{PageSize: pageSize, StartAfter: after}
-			)
-
-			resList, err := api.ListObjects(baseParams, bck, msg, uint(rangeSize))
-			if err == nil {
-				tassert.Errorf(t, len(resList.Entries) == rangeSize, "should list %d objects", rangeSize)
-				return
-			}
-			if cmn.IsStatusBadGateway(err) {
-				// TODO : handle cache owner getting killed
-				return
-			}
-			tassert.Errorf(t, err == nil, "List objects %s failed, err = %v", bck, err)
-		}()
-	}
-	return wg
 }
 
 func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup {

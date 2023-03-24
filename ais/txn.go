@@ -227,12 +227,12 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 		}
 	}
 	if !running {
-		if rndzvs, ok := txns.rendezvous[msg.UUID]; ok {
-			rndzvs.err = &txnError{err: err}
-			txns.rendezvous[msg.UUID] = rndzvs
-		} else {
+		rndzvs, ok := txns.rendezvous[msg.UUID]
+		if !ok {
 			goto rerr
 		}
+		rndzvs.err = &txnError{err: err}
+		txns.rendezvous[msg.UUID] = rndzvs
 	}
 	txns.Unlock()
 	return

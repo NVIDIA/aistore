@@ -77,32 +77,32 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
-		} else if header.Typeflag == tar.TypeReg {
-			data := cos.NewSizedReader(tr, header.Size)
-
-			extractMethod := ExtractToMem
-			if toDisk {
-				extractMethod = ExtractToDisk
-			}
-			extractMethod.Set(ExtractToWriter)
-
-			args := extractRecordArgs{
-				shardName:     lom.ObjName,
-				fileType:      filetype.DSortFileType,
-				recordName:    header.Name,
-				r:             data,
-				w:             tw,
-				metadata:      bmeta,
-				extractMethod: extractMethod,
-				offset:        offset,
-				buf:           buf,
-			}
-			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-				return extractedSize, extractedCount, err
-			}
-		} else {
+		}
+		if header.Typeflag != tar.TypeReg {
 			glog.Warningf("Unrecognized header typeflag in tar: %s", string(header.Typeflag))
 			continue
+		}
+
+		data := cos.NewSizedReader(tr, header.Size)
+		extractMethod := ExtractToMem
+		if toDisk {
+			extractMethod = ExtractToDisk
+		}
+		extractMethod.Set(ExtractToWriter)
+
+		args := extractRecordArgs{
+			shardName:     lom.ObjName,
+			fileType:      filetype.DSortFileType,
+			recordName:    header.Name,
+			r:             data,
+			w:             tw,
+			metadata:      bmeta,
+			extractMethod: extractMethod,
+			offset:        offset,
+			buf:           buf,
+		}
+		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
+			return extractedSize, extractedCount, err
 		}
 
 		extractedSize += size

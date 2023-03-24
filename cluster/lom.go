@@ -300,14 +300,15 @@ recomp:
 	// retry: load from disk and check again
 	reloaded = true
 	if _, err = lom.lmfsReload(true); err == nil && lom.md.Cksum != nil {
-		if cksumType == lom.md.Cksum.Ty() {
-			if cksums.comp.Equal(lom.md.Cksum) {
-				return
-			}
-		} else { // type changed
+		// type changed - recompute
+		if cksumType != lom.md.Cksum.Ty() {
 			cksums.stor = lom.md.Cksum
 			cksumType = lom.CksumType()
 			goto recomp
+		}
+		// otherwise, check
+		if cksums.comp.Equal(lom.md.Cksum) {
+			return
 		}
 	}
 ex:

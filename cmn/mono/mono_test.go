@@ -1,6 +1,6 @@
 // Package mono_test contains standard vs monotonic clock benchmark
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mono_test
 
@@ -16,7 +16,7 @@ import (
 func BenchmarkFast(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			mono.Since(mono.NanoTime())
+			_ = mono.Since(mono.NanoTime())
 		}
 	})
 }
@@ -24,7 +24,7 @@ func BenchmarkFast(b *testing.B) {
 func BenchmarkStd(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			mono.Since(time.Now().UnixNano())
+			_ = mono.Since(time.Now().UnixNano())
 		}
 	})
 }

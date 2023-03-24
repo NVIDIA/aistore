@@ -421,10 +421,6 @@ var (
 		Name:  regexFlag.Name,
 		Usage: "regular expression to select table columns (case-insensitive), e.g.: --regex \"put|err\"",
 	}
-	regexStatsFlag = cli.StringFlag{
-		Name:  regexFlag.Name,
-		Usage: "regular expression to select stats metrics, e.g.: --regex \"put|get\"",
-	}
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,
 		Usage: "regular expression to select jobs by name, kind, or description, e.g.: --regex \"ec|mirror|elect\"",

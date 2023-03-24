@@ -551,12 +551,11 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
 	for _, target := range m.smap.Tmap {
-		if selectedTarget == nil {
-			selectedTarget = target
-		} else {
+		if selectedTarget != nil {
 			killTarget = target
 			break
 		}
+		selectedTarget = target
 	}
 	mpList, err := api.GetMountpaths(baseParams, selectedTarget)
 	tassert.CheckFatal(t, err)

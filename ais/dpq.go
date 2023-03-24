@@ -60,8 +60,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 		} else {
 			query = ""
 		}
-		if i := strings.Index(key, "="); i >= 0 {
-			key, value = key[:i], key[i+1:]
+		if k, v, ok := strings.Cut(key, "="); ok {
+			key, value = k, v
 		}
 		// supported URL query parameters explicitly named below; attempt to parse anything
 		// outside this list will fail

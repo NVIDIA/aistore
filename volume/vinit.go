@@ -89,7 +89,6 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 	vmd, err = loadVMD(tid, nil)
 	if err != nil {
 		glog.Warning(err) // TODO: handle
-		err = nil
 	}
 	if vmd != nil {
 		curVersion = vmd.Version

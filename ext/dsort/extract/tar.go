@@ -1,6 +1,6 @@
 // Package extract provides provides functions for working with compressed files
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
@@ -170,30 +170,29 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
-		} else if header.Typeflag == tar.TypeReg {
-			data := cos.NewSizedReader(tr, header.Size)
-
-			extractMethod := ExtractToMem
-			if toDisk {
-				extractMethod = ExtractToDisk
-			}
-
-			args := extractRecordArgs{
-				shardName:     lom.ObjName,
-				fileType:      fs.ObjectType,
-				recordName:    header.Name,
-				r:             data,
-				metadata:      bmeta,
-				extractMethod: extractMethod,
-				offset:        offset,
-				buf:           buf,
-			}
-			if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-				return extractedSize, extractedCount, err
-			}
-		} else {
+		}
+		if header.Typeflag != tar.TypeReg {
 			glog.Warningf("Unrecognized header typeflag in tar: %s", string(header.Typeflag))
 			continue
+		}
+
+		data := cos.NewSizedReader(tr, header.Size)
+		extractMethod := ExtractToMem
+		if toDisk {
+			extractMethod = ExtractToDisk
+		}
+		args := extractRecordArgs{
+			shardName:     lom.ObjName,
+			fileType:      fs.ObjectType,
+			recordName:    header.Name,
+			r:             data,
+			metadata:      bmeta,
+			extractMethod: extractMethod,
+			offset:        offset,
+			buf:           buf,
+		}
+		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
+			return extractedSize, extractedCount, err
 		}
 
 		extractedSize += size

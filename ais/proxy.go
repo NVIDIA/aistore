@@ -267,54 +267,68 @@ func (p *proxy) recvCluMetaBytes(action string, body []byte, caller string) erro
 	return p.recvCluMeta(&cm, action, caller)
 }
 
-func (p *proxy) recvCluMeta(cluMeta *cluMeta, action, caller string) (err error) {
-	msg := p.newAmsgStr(action, cluMeta.BMD)
-
+// TODO: unify w/ t.recvCluMetaBytes
+func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
+	var (
+		msg  = p.newAmsgStr(action, cm.BMD)
+		errs []error
+	)
 	// Config
-	debug.Assert(cluMeta.Config != nil)
-	if err = p.receiveConfig(cluMeta.Config, msg, nil, caller); err != nil {
-		if isErrDowngrade(err) {
-			err = nil
-		} else {
+	debug.Assert(cm.Config != nil)
+	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
+		if !isErrDowngrade(err) {
+			errs = append(errs, err)
 			glog.Error(err)
 		}
-		// Received outdated/invalid config in cluMeta, ignore by setting to `nil`.
-		cluMeta.Config = nil
-		// fall through
+	} else {
+		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Config)
 	}
 	// Smap
-	if err = p.receiveSmap(cluMeta.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
+	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.Smap, err))
+			errs = append(errs, err)
+			glog.Error(err)
 		}
-	} else {
-		glog.Infof("%s: synch %s", p, cluMeta.Smap)
+	} else if cm.Smap != nil {
+		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Smap)
 	}
 	// BMD
-	if err = p.receiveBMD(cluMeta.BMD, msg, nil, caller); err != nil {
+	if err := p.receiveBMD(cm.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.BMD, err))
+			errs = append(errs, err)
+			glog.Error(err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p, cluMeta.BMD)
+		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.BMD)
 	}
 	// RMD
-	if err = p.receiveRMD(cluMeta.RMD, msg, caller); err != nil {
+	if err := p.receiveRMD(cm.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.RMD, err))
+			errs = append(errs, err)
+			glog.Error(err)
 		}
 	} else {
-		glog.Infof("%s: synch %s", p, cluMeta.RMD)
+		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.RMD)
 	}
 	// EtlMD
-	if err = p.receiveEtlMD(cluMeta.EtlMD, msg, nil, caller, nil); err != nil {
+	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, caller, nil); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Error(cmn.NewErrFailedTo(p, "sync", cluMeta.EtlMD, err))
+			errs = append(errs, err)
+			glog.Error(err)
 		}
-	} else {
-		glog.Infof("%s: synch %s", p, cluMeta.EtlMD)
+	} else if cm.EtlMD != nil {
+		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.EtlMD)
 	}
-	return
+
+	switch {
+	case errs == nil:
+		return nil
+	case len(errs) == 1:
+		return errs[0]
+	default:
+		s := fmt.Sprintf("%v", errs)
+		return cmn.NewErrFailedTo(p, action, "clumeta", errors.New(s))
+	}
 }
 
 // stop proxy runner and return => rungroup.run

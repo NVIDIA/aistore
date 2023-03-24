@@ -664,7 +664,6 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err erro
 				return
 			}
 			glog.Errorf("%v - ignoring since force=%t", err, force)
-			err = nil
 		}
 	}
 	mfs.mu.Lock()

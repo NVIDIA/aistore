@@ -58,26 +58,27 @@ func (t *target) joinCluster(action string, primaryURLs ...string) (status int, 
 	return
 }
 
-func (t *target) recvCluMetaBytes(action string, body []byte, caller string) (err error) {
-	var cm cluMeta
-	err = jsoniter.Unmarshal(body, &cm)
-	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "reg-meta", cos.BHead(body), err)
-		return
+// TODO: unify w/ p.recvCluMeta
+// do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
+func (t *target) recvCluMetaBytes(action string, body []byte, caller string) error {
+	var (
+		cm   cluMeta
+		errs []error
+	)
+	if err := jsoniter.Unmarshal(body, &cm); err != nil {
+		return fmt.Errorf(cmn.FmtErrUnmarshal, t, "clumeta", cos.BHead(body), err)
 	}
 	msg := t.newAmsgStr(action, cm.BMD)
 
 	// Config
 	debug.Assert(cm.Config != nil)
-	if err = t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
-		if isErrDowngrade(err) {
-			err = nil
-		} else {
+	if err := t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
+		if !isErrDowngrade(err) {
+			errs = append(errs, err)
 			glog.Error(err)
 		}
-		// Received outdated/invalid config in cm, ignore by setting to `nil`.
-		cm.Config = nil
-		// fall through
+	} else {
+		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Config)
 	}
 
 	// There's a window of time between:
@@ -88,25 +89,33 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) (er
 	reb.ActivateTimedGFN()
 
 	// BMD
-	if err = t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
-		if isErrDowngrade(err) {
-			err = nil
-		} else {
+	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
+		if !isErrDowngrade(err) {
+			errs = append(errs, err)
 			glog.Error(err)
 		}
+	} else {
+		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
 	}
 	// Smap
-	if err = t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
-		if isErrDowngrade(err) {
-			err = nil
-		} else {
+	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
+		if !isErrDowngrade(err) {
+			errs = append(errs, err)
 			glog.Error(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
 		}
-	} else {
-		glog.Infof("%s: synch %s", t, t.owner.smap.get())
+	} else if cm.Smap != nil {
+		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
 	}
-	return
-	// Do not receive RMD: `receiveRMD` runs extra jobs and checks specific for metasync.
+
+	switch {
+	case errs == nil:
+		return nil
+	case len(errs) == 1:
+		return errs[0]
+	default:
+		s := fmt.Sprintf("%v", errs)
+		return cmn.NewErrFailedTo(t, action, "clumeta", errors.New(s))
+	}
 }
 
 // [METHOD] /v1/daemon

@@ -456,7 +456,7 @@ func (m *Smap) IsDuplicate(nsi *Snode) (osi *Snode, err error) {
 }
 
 func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bool) {
-	sameOrigin, sameVersion, eq = true, true, true
+	sameOrigin, sameVersion = true, true
 	if m.UUID != "" && other.UUID != "" && m.UUID != other.UUID {
 		sameOrigin = false
 	} else {
@@ -469,8 +469,7 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 		sameVersion = false
 	}
 	if m.Primary == nil || other.Primary == nil || !m.Primary.Equals(other.Primary) {
-		eq = false
-		return
+		return // eq == false
 	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
 	return
