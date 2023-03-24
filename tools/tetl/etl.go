@@ -261,7 +261,7 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(xid), "expected valid xaction ID, got %q", xid)
 
-	tlog.Logf("ETL[%s]: running xaction %q\n", etlName, xid)
+	tlog.Logf("ETL %q: running x-etl-spec[%s]\n", etlName, xid)
 
 	// reread `InitMsg` and compare with the specified
 	etlMsg, err := api.ETLGetInitMsg(bp, etlName)
