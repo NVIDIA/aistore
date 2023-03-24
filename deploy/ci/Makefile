@@ -6,8 +6,8 @@ IMAGE_TAG=latest
 all: build push
 
 build:
-	docker build --no-cache -t $(REGISTRY_URL)/$(CI_IMAGE):$(IMAGE_TAG) -f general.dockerfile .
-	docker build --no-cache -t $(REGISTRY_URL)/$(HDFS_CI_IMAGE):$(IMAGE_TAG) -f hdfs.dockerfile .
+	docker build --network host --no-cache -t $(REGISTRY_URL)/$(CI_IMAGE):$(IMAGE_TAG) -f general.dockerfile .
+	docker build --network host --no-cache -t $(REGISTRY_URL)/$(HDFS_CI_IMAGE):$(IMAGE_TAG) -f hdfs.dockerfile .
 
 push:
 	docker push $(REGISTRY_URL)/$(CI_IMAGE):$(IMAGE_TAG)
