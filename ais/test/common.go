@@ -211,7 +211,16 @@ func (m *ioContext) puts(ignoreErrs ...bool) {
 		ignoreErr = ignoreErrs[0]
 	}
 	if !m.silent {
-		tlog.Logf("PUT %d objects => %s\n", m.num, m.bck)
+		var s, k string
+		if m.fixedSize {
+			s = fmt.Sprintf(" (size %d)", m.fileSize)
+		} else if m.fileSize > 0 {
+			s = fmt.Sprintf(" (approx. size %d)", m.fileSize)
+		}
+		if k = m.prefix; k != "" {
+			k = "/" + k + "*"
+		}
+		tlog.Logf("PUT %d objects%s => %s%s\n", m.num, s, m.bck, k)
 	}
 	m.objNames, m.numPutErrs, err = tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  m.proxyURL,

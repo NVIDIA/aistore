@@ -2492,11 +2492,11 @@ func TestCopyBucket(t *testing.T) {
 
 func TestCopyBucketSimple(t *testing.T) {
 	var (
-		srcBck = cmn.Bck{Name: "cpybck_src", Provider: apc.AIS}
+		srcBck = cmn.Bck{Name: "cpybck_src" + cos.GenTie(), Provider: apc.AIS}
 
 		m = &ioContext{
 			t:         t,
-			num:       1000,
+			num:       500, // x 2
 			fileSize:  512,
 			fixedSize: true,
 			bck:       srcBck,
@@ -2511,6 +2511,9 @@ func TestCopyBucketSimple(t *testing.T) {
 	m.initWithCleanup()
 
 	m.puts()
+	m.prefix = "subdir/"
+	m.puts()
+	m.num *= 2
 
 	f := func() {
 		list, err := api.ListObjects(baseParams, srcBck, nil, 0)
@@ -2520,6 +2523,7 @@ func TestCopyBucketSimple(t *testing.T) {
 
 	t.Run("Stats", func(t *testing.T) { f(); testCopyBucketStats(t, srcBck, m) })
 	t.Run("Prepend", func(t *testing.T) { f(); testCopyBucketPrepend(t, srcBck, m) })
+	t.Run("Prefix", func(t *testing.T) { f(); testCopyBucketPrefix(t, srcBck, m, m.num/2) })
 	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m) })
 	t.Run("DryRun", func(t *testing.T) { f(); testCopyBucketDryRun(t, srcBck, m) })
 }
@@ -2566,7 +2570,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, proxyURL, dstBck)
 	})
 
-	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
+	tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck, dstBck)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2576,6 +2580,31 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d to be copied, got %d", m.num, len(list.Entries))
 	for _, e := range list.Entries {
 		tassert.Fatalf(t, strings.HasPrefix(e.Name, cpyPrefix), "expected %q to have prefix %q", e.Name, cpyPrefix)
+	}
+}
+
+func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected int) {
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	var (
+		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
+	)
+
+	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prefix: m.prefix})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
+
+	tlog.Logf("Wating for x-%s[%s] %s => %s\n", apc.ActCopyBck, xid, srcBck, dstBck)
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
+	_, err = api.WaitForXactionIC(baseParams, args)
+	tassert.CheckFatal(t, err)
+
+	list, err := api.ListObjects(baseParams, dstBck, nil, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == expected, "expected %d to be copied, got %d", m.num, len(list.Entries))
+	for _, e := range list.Entries {
+		tassert.Fatalf(t, strings.HasPrefix(e.Name, m.prefix), "expected %q to have prefix %q", e.Name, m.prefix)
 	}
 }
 
