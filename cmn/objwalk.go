@@ -25,7 +25,7 @@ func SortLso(bckEntries LsoEntries) {
 	sort.Slice(bckEntries, entryLess)
 }
 
-func dedupLso(entries LsoEntries, maxSize uint) ([]*LsoEntry, string) {
+func DedupLso(entries LsoEntries, maxSize uint) ([]*LsoEntry, string) {
 	var (
 		token    string
 		j        int
@@ -79,7 +79,7 @@ func ConcatLso(lists []*LsoResult, maxSize uint) (objs *LsoResult) {
 	SortLso(objs.Entries)
 
 	// Remove duplicates
-	objs.Entries, objs.ContinuationToken = dedupLso(objs.Entries, maxSize)
+	objs.Entries, objs.ContinuationToken = DedupLso(objs.Entries, maxSize)
 	return
 }
 
@@ -99,7 +99,7 @@ func MergeLso(lists []*LsoResult, maxSize uint) *LsoResult {
 	continuationToken := resList.ContinuationToken
 	if len(lists) == 1 {
 		SortLso(resList.Entries)
-		resList.Entries, _ = dedupLso(resList.Entries, maxSize)
+		resList.Entries, _ = DedupLso(resList.Entries, maxSize)
 		resList.ContinuationToken = continuationToken
 		return resList
 	}
@@ -137,7 +137,7 @@ func MergeLso(lists []*LsoResult, maxSize uint) *LsoResult {
 		resList.Entries = append(resList.Entries, v)
 	}
 	SortLso(resList.Entries)
-	resList.Entries, _ = dedupLso(resList.Entries, maxSize)
+	resList.Entries, _ = DedupLso(resList.Entries, maxSize)
 	resList.ContinuationToken = continuationToken
 	return resList
 }

@@ -466,7 +466,30 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
 	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
 		if de.IsDir() {
-			return r.walk.wi.processDir(fqn)
+			err := r.walk.wi.processDir(fqn)
+			if err != nil || !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+				return err
+			}
+
+			ct, err := cluster.NewCTFromFQN(fqn, nil)
+			if err != nil {
+				return nil
+			}
+			relPath := ct.ObjectName()
+			if cmn.ObjHasPrefix(relPath, r.walk.wi.msg.Prefix) {
+				suffix := strings.TrimPrefix(relPath, r.walk.wi.msg.Prefix)
+				if strings.Contains(suffix, "/") {
+					// We are deeper than it is allowed by prefix, skip dir's content
+					return filepath.SkipDir
+				}
+				entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
+				select {
+				case r.walk.pageCh <- entry:
+					/* do nothing */
+				case <-r.walk.stopCh.Listen():
+					return errStopped
+				}
+			}
 		}
 		return nil
 	}
@@ -487,6 +510,15 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	msg := r.walk.wi.lsmsg()
 	if entry.Name <= msg.StartAfter {
 		return nil
+	}
+	if r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+		// Check if the object is nested deeper than it is allowed.
+		// Do not return SkipDir in this case as it may result in missing
+		// directories and objects in the response.
+		relName := strings.TrimPrefix(entry.Name, r.walk.wi.msg.Prefix)
+		if strings.Contains(relName, "/") {
+			return nil
+		}
 	}
 
 	select {

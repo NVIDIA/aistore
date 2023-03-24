@@ -3279,3 +3279,64 @@ func TestBucketListAndSummary(t *testing.T) {
 		})
 	}
 }
+
+func TestListObjectsNoRecursion(t *testing.T) {
+	type test struct {
+		prefix string
+		count  int
+	}
+	var (
+		bck = cmn.Bck{
+			Name:     t.Name() + "Bucket",
+			Provider: apc.AIS,
+		}
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		objs       = []string{
+			"img001", "vid001",
+			"img-test/obj1", "img-test/vid1", "img-test/pics/obj01",
+			"img003", "img-test/pics/vid01"}
+		tests = []test{
+			{prefix: "", count: 4},
+			{prefix: "img", count: 3},
+			{prefix: "img-test", count: 1},
+			{prefix: "img-test/", count: 3},
+			{prefix: "img-test/v", count: 1},
+			{prefix: "img-test/pics/", count: 2},
+		}
+	)
+
+	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	for _, nm := range objs {
+		objectSize := int64(rand.Intn(256) + 20)
+		reader, _ := readers.NewRandReader(objectSize, cos.ChecksumNone)
+		_, err := api.PutObject(api.PutArgs{
+			BaseParams: baseParams,
+			Bck:        bck,
+			ObjName:    nm,
+			Reader:     reader,
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	msg := &apc.LsoMsg{Props: apc.GetPropsName}
+	lst, err := api.ListObjects(baseParams, bck, msg, 0)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(lst.Entries) == len(objs), "Invalid number of objects %d vs %d", len(lst.Entries), len(objs))
+
+	for idx, tst := range tests {
+		msg := &apc.LsoMsg{Flags: apc.LsNoRecursion, Prefix: tst.prefix, Props: apc.GetPropsName}
+		lst, err := api.ListObjects(baseParams, bck, msg, 0)
+		tassert.CheckFatal(t, err)
+
+		if tst.count == len(lst.Entries) {
+			continue
+		}
+		tlog.Logf("Failed test #%d (prefix %s). Expected %d, got %d\n",
+			idx, tst.prefix, tst.count, len(lst.Entries))
+		for idx, en := range lst.Entries {
+			tlog.Logf("%d. %s (%v)\n", idx, en.Name, en.Flags)
+		}
+		tassert.Errorf(t, false, "[%s] Invalid number of objects %d (expected %d)", tst.prefix, len(lst.Entries), tst.count)
+	}
+}

@@ -2177,6 +2177,12 @@ end:
 	if uint(len(entries)) >= pageSize {
 		allEntries.ContinuationToken = entries[len(entries)-1].Name
 	}
+	// In case of recursion is disabled, the result includes directories.
+	// As there is no way to use HRW for directories, it is possible that
+	// a few targets return the same directory in their responses.
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		allEntries.Entries, _ = cmn.DedupLso(allEntries.Entries, uint(len(entries)))
+	}
 	return allEntries, nil
 }
 

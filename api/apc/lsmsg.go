@@ -73,6 +73,14 @@ const (
 	// simply forwards it to the associated remote backend and delivers the results as is to the
 	// requesting proxy and, subsequently, to client.
 	LsWantOnlyRemoteProps
+
+	// List entries without recursion, the result includes matching directories
+	// TODO: works only with AIS bucket. Need to fix:
+	// - update AIS CLI and allow a user to list a bucket non-recursively
+	// - check the flag with 'Cached' flag
+	// - forbid combinations(if any exists) with other flags that do not work
+	// - pass correct value to the backend in case of a Cloud bucket
+	LsNoRecursion
 )
 
 // List objects default page size
@@ -92,6 +100,7 @@ const (
 	// Flags
 	EntryIsCached = 1 << (EntryStatusBits + 1)
 	EntryInArch   = 1 << (EntryStatusBits + 2)
+	EntryIsDir    = 1 << (EntryStatusBits + 3)
 )
 
 // ObjEntry.Flags field

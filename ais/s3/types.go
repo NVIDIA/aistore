@@ -28,15 +28,16 @@ const defaultLastModified = 0 // When an object was not accessed yet
 type (
 	// List objects response
 	ListObjectResult struct {
-		Name                  string     `xml:"Name"`
-		Ns                    string     `xml:"xmlns,attr"`
-		Prefix                string     `xml:"Prefix"`
-		KeyCount              int        `xml:"KeyCount"` // number of objects in the response
-		MaxKeys               int        `xml:"MaxKeys"`
-		IsTruncated           bool       `xml:"IsTruncated"`           // true if there are more pages to read
-		ContinuationToken     string     `xml:"ContinuationToken"`     // original ContinuationToken
-		NextContinuationToken string     `xml:"NextContinuationToken"` // NextContinuationToken to read the next page
-		Contents              []*ObjInfo `xml:"Contents"`              // list of objects
+		Name                  string          `xml:"Name"`
+		Ns                    string          `xml:"xmlns,attr"`
+		Prefix                string          `xml:"Prefix"`
+		KeyCount              int             `xml:"KeyCount"` // number of objects in the response
+		MaxKeys               int             `xml:"MaxKeys"`
+		IsTruncated           bool            `xml:"IsTruncated"`              // true if there are more pages to read
+		ContinuationToken     string          `xml:"ContinuationToken"`        // original ContinuationToken
+		NextContinuationToken string          `xml:"NextContinuationToken"`    // NextContinuationToken to read the next page
+		Contents              []*ObjInfo      `xml:"Contents"`                 // list of objects
+		CommonPrefixes        []*CommonPrefix `xml:"CommonPrefixes,omitempty"` // list of directories of the same level (used in non-recursive mode)
 	}
 	ObjInfo struct {
 		Key          string `xml:"Key"`
@@ -44,6 +45,9 @@ type (
 		ETag         string `xml:"ETag"`
 		Size         int64  `xml:"Size"`
 		Class        string `xml:"StorageClass"`
+	}
+	CommonPrefix struct {
+		Prefix string `xml:"Prefix"`
 	}
 
 	// Response for object copy request
@@ -114,21 +118,25 @@ type (
 func ObjName(items []string) string { return path.Join(items[1:]...) }
 
 func FillMsgFromS3Query(query url.Values, msg *apc.LsoMsg) {
-	mxStr := query.Get("max-keys")
+	mxStr := query.Get(QparamMaxKeys)
 	if pageSize, err := strconv.Atoi(mxStr); err == nil && pageSize > 0 {
 		msg.PageSize = uint(pageSize)
 	}
-	if prefix := query.Get("prefix"); prefix != "" {
+	if prefix := query.Get(QparamPrefix); prefix != "" {
 		msg.Prefix = prefix
 	}
 	var token string
-	if token = query.Get("continuation-token"); token != "" {
+	if token = query.Get(QparamContinuationToken); token != "" {
 		msg.ContinuationToken = token
 	}
 	// `start-after` is used only when starting to list pages, subsequent next-page calls
 	// utilize `continuation-token`
-	if after := query.Get("start-after"); after != "" && token == "" {
+	if after := query.Get(QparamStartAfter); after != "" && token == "" {
 		msg.StartAfter = after
+	}
+	// TODO: check that the delimiter is '/' and raise an error otherwise
+	if delimiter := query.Get(QparamDelimiter); delimiter != "" {
+		msg.SetFlag(apc.LsNoRecursion)
 	}
 }
 
@@ -148,7 +156,11 @@ func (r *ListObjectResult) MustMarshal(sgl *memsys.SGL) {
 }
 
 func (r *ListObjectResult) Add(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) {
-	r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
+	if entry.Flags&apc.EntryIsDir == 0 {
+		r.Contents = append(r.Contents, entryToS3(entry, lsmsg))
+	} else {
+		r.CommonPrefixes = append(r.CommonPrefixes, &CommonPrefix{Prefix: entry.Name + "/"})
+	}
 }
 
 func entryToS3(entry *cmn.LsoEntry, lsmsg *apc.LsoMsg) *ObjInfo {

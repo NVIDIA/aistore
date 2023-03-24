@@ -6,12 +6,17 @@ package s3
 
 const (
 	// AWS URL params
-	QparamVersioning  = "versioning"
-	QparamLifecycle   = "lifecycle"
-	QparamCORS        = "cors"
-	QparamPolicy      = "policy"
-	QparamACL         = "acl"
-	QparamMultiDelete = "delete"
+	QparamVersioning        = "versioning"
+	QparamLifecycle         = "lifecycle"
+	QparamCORS              = "cors"
+	QparamPolicy            = "policy"
+	QparamACL               = "acl"
+	QparamMultiDelete       = "delete"
+	QparamMaxKeys           = "max-keys"
+	QparamPrefix            = "prefix"
+	QparamContinuationToken = "continuation-token"
+	QparamStartAfter        = "start-after"
+	QparamDelimiter         = "delimiter"
 
 	// multipart
 	QparamMptUploads        = "uploads"
