@@ -171,7 +171,11 @@ func testCopyMobj(t *testing.T, bck *cluster.Bck) {
 
 			if m.bck.IsRemote() && test.evictRemoteSrc {
 				tlog.Logf("evicting %s\n", m.bck)
-				err := api.EvictRemoteBucket(baseParams, m.bck, false /*keep md*/)
+				//
+				// evict all _cached_ data from the "local" cluster
+				// keep the src bucket in the "local" BMD though
+				//
+				err := api.EvictRemoteBucket(baseParams, m.bck, true)
 				tassert.CheckFatal(t, err)
 			}
 

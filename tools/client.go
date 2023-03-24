@@ -187,6 +187,7 @@ func CreateBucketWithCleanup(tb testing.TB, proxyURL string, bck cmn.Bck, props 
 	})
 }
 
+// is usually called to cleanup (via tb.Cleanup)
 func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 	bp := BaseAPIParams(proxyURL)
 	exists, err := api.QueryBuckets(bp, cmn.QueryBcks(bck), apc.FltExists)

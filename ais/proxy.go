@@ -756,7 +756,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	bckArgs.createAIS = false
 	if msg.Action == apc.ActEvictRemoteBck {
 		var errCode int
-		bckArgs.dontHeadRemote = true
+		bckArgs.dontHeadRemote = true // unconditionally
 		errCode, err = bckArgs.init()
 		if err != nil {
 			if errCode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(err) {

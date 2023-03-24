@@ -190,8 +190,9 @@ func TestHttpProviderObjectGet(t *testing.T) {
 		w          = bytes.NewBuffer(nil)
 		getArgs    = api.GetArgs{Writer: w}
 	)
-	_ = api.DestroyBucket(baseParams, hbo.Bck)
-	defer api.DestroyBucket(baseParams, hbo.Bck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, hbo.Bck)
+	})
 
 	// get using the HTTP API
 	getArgs.Query = make(url.Values, 1)

@@ -2165,7 +2165,9 @@ func TestRenameBucketWithBackend(t *testing.T) {
 			Name:     api.String(cliBck.Name),
 			Provider: api.String(cliBck.Provider),
 		}})
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	srcProps, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
@@ -2336,8 +2338,9 @@ func TestCopyBucket(t *testing.T) {
 			} else { // cleanup
 				for _, dstm := range dstms {
 					if !dstm.bck.IsRemote() {
-						tools.DestroyBucket(t, dstm.proxyURL, dstm.bck)
-						defer tools.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+						t.Cleanup(func() {
+							tools.DestroyBucket(t, dstm.proxyURL, dstm.bck)
+						})
 					}
 				}
 			}
@@ -2365,7 +2368,11 @@ func TestCopyBucket(t *testing.T) {
 				tassert.CheckFatal(t, err)
 				if test.evictRemoteSrc {
 					tlog.Logf("evicting %s\n", srcm.bck)
-					err := api.EvictRemoteBucket(baseParams, srcm.bck, false /*keep md*/)
+					//
+					// evict all _cached_ data from the "local" cluster
+					// keep the src bucket in the "local" BMD though
+					//
+					err := api.EvictRemoteBucket(baseParams, srcm.bck, true /*keep empty src bucket in the BMD*/)
 					tassert.CheckFatal(t, err)
 				}
 				defer srcm.del()
@@ -2522,7 +2529,9 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
 	_, err = api.WaitForXactionIC(baseParams, args)
@@ -2553,7 +2562,9 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Prepend: cpyPrefix})
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}
@@ -2573,7 +2584,9 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
 	tassert.CheckError(t, err)
-	defer tools.DestroyBucket(t, m.proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, m.proxyURL, dstBck)
+	})
 
 	time.Sleep(time.Second)
 
@@ -2599,7 +2612,9 @@ func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	tlog.Logf("Wating for x-%s[%s]\n", apc.ActCopyBck, xid)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: time.Minute}

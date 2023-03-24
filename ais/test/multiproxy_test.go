@@ -1484,7 +1484,9 @@ func icSyncOwnershipTable(t *testing.T) {
 	// Start any xaction and get ID.
 	xid, err := api.CopyBucket(baseParams, src, dstBck, nil)
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	// Killing an IC member, should add a new IC member.
 	// Select IC member which is not primary and kill.
@@ -1555,7 +1557,9 @@ func icSinglePrimaryRevamp(t *testing.T) {
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck}
 
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, dstBck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, dstBck)
+	})
 
 	// Restart all killed nodes and check for xaction status.
 	for _, cmd := range nodesToRestore {

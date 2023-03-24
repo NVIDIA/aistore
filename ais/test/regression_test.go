@@ -295,8 +295,9 @@ func TestRenameBucket(t *testing.T) {
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
 			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-			tools.DestroyBucket(t, proxyURL, renamedBck) // cleanup post Ctrl-C etc.
-			defer tools.DestroyBucket(t, proxyURL, renamedBck)
+			t.Cleanup(func() {
+				tools.DestroyBucket(t, proxyURL, renamedBck)
+			})
 
 			bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: bck.Provider}, apc.FltPresent)
 			tassert.CheckFatal(t, err)

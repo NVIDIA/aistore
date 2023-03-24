@@ -297,10 +297,7 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				api.AbortXaction(baseParams, flt)
 			}
 
-			// NOTE: observe
-			if test.ext == cos.ExtZip || test.ext == cos.ExtMsgpack {
-				time.Sleep(5 * time.Second)
-			}
+			time.Sleep(5 * time.Second) // TODO: remove
 			api.WaitForXactionIdle(baseParams, flt)
 
 			tlog.Logf("List %s\n", bckTo)

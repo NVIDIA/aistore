@@ -150,7 +150,6 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	}
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	defer tools.DestroyBucket(t, proxyURL, bck)
 
 	tlog.Logln("PUT object")
 	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)

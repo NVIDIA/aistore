@@ -198,18 +198,19 @@ func (b Bck) Equal(other *Bck) bool {
 	return b.Name == other.Name && b.Provider == other.Provider && b.Ns == other.Ns
 }
 
-func (b Bck) String() string {
+func (b Bck) String() (s string) {
 	if b.Ns.IsGlobal() {
 		if b.Provider == "" {
 			return b.Name
 		}
-		return apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Name
+		s = apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Name
+	} else {
+		s = apc.ToScheme(b.Provider) + apc.BckProviderSeparator + b.Ns.String() + "/" + b.Name
 	}
-	p := b.Provider
-	if p == "" {
-		p = apc.NormalizeProvider("")
+	if back := b.Backend(); back != nil {
+		s += "->" + back.String()
 	}
-	return fmt.Sprintf("%s%s%s/%s", apc.ToScheme(p), apc.BckProviderSeparator, b.Ns, b.Name)
+	return s
 }
 
 // unique name => Bck (use MakeUname above to perform the reverse translation)
@@ -429,7 +430,7 @@ func (qbck QueryBcks) String() string {
 	if qbck.Name == "" {
 		p := qbck.Provider
 		if p == "" {
-			p = apc.NormalizeProvider("")
+			p = apc.AIS // querying default = apc.NormalizeProvider("")
 		}
 		if qbck.Ns.IsGlobal() {
 			return apc.ToScheme(p) + apc.BckProviderSeparator

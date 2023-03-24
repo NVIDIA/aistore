@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +94,7 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid str
 		}
 	}
 	freeBcastRes(results)
+	sort.Strings(all)
 	return
 }
 

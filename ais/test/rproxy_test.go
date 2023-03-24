@@ -133,7 +133,9 @@ retry:
 	tassert.CheckFatal(t, err)
 	bck, err = detectNewBucket(bckList, bckListNew)
 	tassert.CheckFatal(t, err)
-	defer tools.DestroyBucket(t, proxyURL, bck)
+	t.Cleanup(func() {
+		tools.DestroyBucket(t, proxyURL, bck)
+	})
 
 	pathCached := findObjOnDisk(bck, gcsFilename)
 	tassert.Fatalf(t, pathCached != "", "object was not downloaded")
