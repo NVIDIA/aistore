@@ -231,12 +231,7 @@ func headLink(link string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := clientForURL(link).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	cos.Close(resp.Body)
-	return resp, nil
+	return clientForURL(link).Do(req)
 }
 
 // Use all available metadata including {size, version, ETag, MD5, CRC}
@@ -248,6 +243,7 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 		if errHead != nil {
 			return false, errHead
 		}
+		resp.Body.Close()
 		oa = &cmn.ObjAttrs{}
 		oa.Size = attrsFromLink(dst.Link, resp, oa)
 	} else {

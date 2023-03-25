@@ -124,7 +124,7 @@ func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration
 	if err != nil {
 		return false, err
 	}
-	defer cos.Close(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		return false, cmn.NewErrHTTP(req, errors.New("nil error w/ bad status"), resp.StatusCode)

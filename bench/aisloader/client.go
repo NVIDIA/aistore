@@ -279,7 +279,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	if err != nil {
 		return 0, err
 	}
-	defer cos.Close(resp.Body)
+	defer resp.Body.Close()
 
 	if validate {
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
