@@ -23,7 +23,7 @@ const (
 	unknownVal = "-"
 	NotSetVal  = "-"
 
-	unknownNodeStatus = "n/a"
+	UnknownStatusVal = "n/a"
 )
 
 const rebalanceExpirationTime = 5 * time.Minute
@@ -472,7 +472,7 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 			for _, s := range m {
 				status := s.Status
 				if status == "" {
-					status = unknownNodeStatus
+					status = UnknownStatusVal
 				}
 				if _, ok := counts[status]; !ok {
 					counts[status] = 0
@@ -517,7 +517,7 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 	}
 	res := set.ToSlice()
 	if len(res) == 0 {
-		res = []string{unknownNodeStatus}
+		res = []string{UnknownStatusVal}
 	}
 	return res
 }

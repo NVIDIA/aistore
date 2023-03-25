@@ -223,7 +223,7 @@ func (r *XactTCObjs) Name() string {
 }
 
 func (r *XactTCObjs) String() string {
-	return fmt.Sprintf("%s => %s", r.streamingX.String(), r.args.BckTo)
+	return r.streamingX.String() + " => " + r.args.BckTo.String()
 }
 
 func (r *XactTCObjs) FromTo() (*cluster.Bck, *cluster.Bck) { return r.args.BckFrom, r.args.BckTo }

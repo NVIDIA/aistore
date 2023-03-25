@@ -385,9 +385,9 @@ func (r *XactArch) Name() (s string) {
 }
 
 func (r *XactArch) String() (s string) {
-	s = r.streamingX.String()
-	if src, dst := r.FromTo(); src != nil {
-		s += " => " + dst.String()
+	s = r.streamingX.String() + " => "
+	if r.wiCnt.Load() > 0 && r.bckTo != nil {
+		s += r.bckTo.String()
 	}
 	return
 }

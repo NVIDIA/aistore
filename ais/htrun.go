@@ -1706,7 +1706,7 @@ func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *cluster.Snode)
 func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
 	var (
 		sleep, total, rediscover time.Duration
-		healthTimeout            = cmn.Timeout.CplaneOperation()
+		healthTimeout            = config.Timeout.CplaneOperation.D()
 		query                    = url.Values{apc.QparamAskPrimary: []string{"true"}}
 	)
 	for {

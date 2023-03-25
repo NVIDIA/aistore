@@ -814,7 +814,7 @@ func showRemoteAISHandler(c *cli.Context) error {
 		fmt.Fprintln(tw, "UUID\tURL\tAlias\tPrimary\tSmap\tTargets\tUptime")
 	}
 	for _, ra := range all.A {
-		uptime := "n/a"
+		uptime := teb.UnknownStatusVal
 		bp := api.BaseParams{
 			Client: defaultHTTPClient,
 			URL:    ra.URL,
@@ -830,11 +830,15 @@ func showRemoteAISHandler(c *cli.Context) error {
 				ra.UUID, ra.URL, ra.Alias, ra.Smap.Primary, ra.Smap.Version, ra.Smap.CountTargets(), uptime)
 		} else {
 			url := ra.URL
-			if url[0] == '[' {
-				url = strings.Replace(url, "[", "<", 1)
-				url = strings.Replace(url, "]", ">", 1)
+			if len(url) > 0 && url[0] == '[' && !strings.Contains(url, " ") {
+				url = strings.Replace(url, "[", "", 1)
+				url = strings.Replace(url, "]", "", 1)
 			}
-			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", ra.UUID, url, ra.Alias, "n/a", "n/a", "n/a", uptime)
+			fmt.Fprintf(tw, "<%s>\t%s\t%s\t%s\t%s\t%s\t%s\n", ra.UUID, url, ra.Alias,
+				teb.UnknownStatusVal, teb.UnknownStatusVal, teb.UnknownStatusVal, uptime)
+
+			warn := fmt.Sprintf(warnRemAisOffline, url)
+			actionWarn(c, warn+"\n")
 		}
 	}
 	tw.Flush()
@@ -842,6 +846,8 @@ func showRemoteAISHandler(c *cli.Context) error {
 	if flagIsSet(c, verboseFlag) {
 		for _, ra := range all.A {
 			if ra.Smap == nil {
+				// if ra.UUID == apc.RemAisDefunct { // DEBUG
+				// }
 				continue
 			}
 			fmt.Fprintln(c.App.Writer)
