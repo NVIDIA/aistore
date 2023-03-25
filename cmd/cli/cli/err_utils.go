@@ -199,7 +199,7 @@ func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {
 	var msg string
 	if len(missingArgs) == 1 && !strings.Contains(missingArgs[0], " ") {
 		arg := missingArgs[0]
-		if arg[0] == '[' {
+		if len(arg) > 0 && arg[0] == '[' {
 			arg = arg[1 : len(arg)-1]
 		}
 		msg = fmt.Sprintf("missing %q argument", arg)

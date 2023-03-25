@@ -183,12 +183,11 @@ var (
 		BashComplete: showConfigCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
-		Name:         cmdShowRemoteAIS,
-		Usage:        "show attached AIS clusters",
-		ArgsUsage:    "",
-		Flags:        showCmdsFlags[cmdShowRemoteAIS],
-		Action:       showRemoteAISHandler,
-		BashComplete: suggestTargetNodes, // NOTE: not using remais.smap yet
+		Name:      cmdShowRemoteAIS,
+		Usage:     "show attached AIS clusters",
+		ArgsUsage: "",
+		Flags:     showCmdsFlags[cmdShowRemoteAIS],
+		Action:    showRemoteAISHandler,
 	}
 
 	showCmdLog = cli.Command{
@@ -842,6 +841,9 @@ func showRemoteAISHandler(c *cli.Context) error {
 
 	if flagIsSet(c, verboseFlag) {
 		for _, ra := range all.A {
+			if ra.Smap == nil {
+				continue
+			}
 			fmt.Fprintln(c.App.Writer)
 			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
 			err := smapFromNode(ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))

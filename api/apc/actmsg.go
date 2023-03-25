@@ -115,6 +115,10 @@ const (
 	NodeDecommission = "decommission"
 )
 
+const (
+	RemAisDefunct = "defunct" // uuid configured offline
+)
+
 // ActMsg is a JSON-formatted control structures used in a majority of API calls
 type (
 	ActMsg struct {

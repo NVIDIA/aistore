@@ -22,6 +22,8 @@ import (
 const (
 	unknownVal = "-"
 	NotSetVal  = "-"
+
+	unknownNodeStatus = "n/a"
 )
 
 const rebalanceExpirationTime = 5 * time.Minute
@@ -468,10 +470,14 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 		counts := make(map[string]int, 2)
 		for _, m := range []StstMap{h.Pmap, h.Tmap} {
 			for _, s := range m {
-				if _, ok := counts[s.Status]; !ok {
-					counts[s.Status] = 0
+				status := s.Status
+				if status == "" {
+					status = unknownNodeStatus
 				}
-				counts[s.Status]++
+				if _, ok := counts[status]; !ok {
+					counts[status] = 0
+				}
+				counts[status]++
 			}
 		}
 		res := make([]string, 0, len(counts))
@@ -487,11 +493,17 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 		for _, s := range m {
 			switch jtag {
 			case "deployment":
-				set.Add(s.DeploymentType)
+				if s.DeploymentType != "" { // (node offline)
+					set.Add(s.DeploymentType)
+				}
 			case "ais_version":
-				set.Add(s.Version)
+				if s.Version != "" { // ditto
+					set.Add(s.Version)
+				}
 			case "build_time":
-				set.Add(s.BuildTime)
+				if s.BuildTime != "" { // ditto
+					set.Add(s.BuildTime)
+				}
 			case "k8s_pod_name":
 				set.Add(s.K8sPodName)
 			case "rebalance_snap":
@@ -503,5 +515,9 @@ func (h *StatsAndStatusHelper) toSlice(jtag string) []string {
 			}
 		}
 	}
-	return set.ToSlice()
+	res := set.ToSlice()
+	if len(res) == 0 {
+		res = []string{unknownNodeStatus}
+	}
+	return res
 }
