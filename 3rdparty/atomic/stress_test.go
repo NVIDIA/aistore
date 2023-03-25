@@ -42,8 +42,6 @@ var _stressTests = map[string]func() func(){
 	"u32":      stressUint32,
 	"u64/std":  stressStdUint64,
 	"u64":      stressUint64,
-	"f32":      stressFloat32,
-	"f64":      stressFloat64,
 	"bool":     stressBool,
 	"duration": stressDuration,
 }
@@ -205,24 +203,6 @@ func stressUint64() func() {
 		atom.CAS(1, 0)
 		atom.Swap(5)
 		atom.Store(1)
-	}
-}
-
-func stressFloat32() func() {
-	var atom Float32
-	return func() {
-		atom.Load()
-		atom.CAS(1.0, 0.1)
-		atom.Store(1.0)
-	}
-}
-
-func stressFloat64() func() {
-	var atom Float64
-	return func() {
-		atom.Load()
-		atom.CAS(1.0, 0.1)
-		atom.Store(1.0)
 	}
 }
 

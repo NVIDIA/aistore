@@ -24,15 +24,14 @@ package atomic
 
 import (
 	"encoding/json"
-	"math"
 	"sync/atomic"
 	"time"
 )
 
 // Int32 is an atomic wrapper around an int32.
 type Int32 struct {
-	noCopy noCopy
-	v      int32
+	_ noCopy
+	v int32
 }
 
 // NewInt32 creates an Int32.
@@ -81,6 +80,7 @@ func (i *Int32) Swap(n int32) int32 {
 }
 
 // Int64 is an atomic wrapper around an int64.
+// TODO -- FIXME: align64 as per /usr/local/go/src/sync/atomic/type.go
 type Int64 struct {
 	_ noCopy
 	v int64
@@ -297,32 +297,6 @@ func boolToInt(b bool) uint32 {
 		return 1
 	}
 	return 0
-}
-
-// Float64 is an atomic wrapper around float64.
-type Float64 struct {
-	_ noCopy
-	v uint64
-}
-
-// NewFloat64 creates a Float64.
-func NewFloat64(f float64) *Float64 {
-	return &Float64{v: math.Float64bits(f)}
-}
-
-// Load atomically loads the wrapped value.
-func (f *Float64) Load() float64 {
-	return math.Float64frombits(atomic.LoadUint64(&f.v))
-}
-
-// Store atomically stores the passed value.
-func (f *Float64) Store(s float64) {
-	atomic.StoreUint64(&f.v, math.Float64bits(s))
-}
-
-// CAS is an atomic compare-and-swap.
-func (f *Float64) CAS(old, new float64) bool {
-	return atomic.CompareAndSwapUint64(&f.v, math.Float64bits(old), math.Float64bits(new))
 }
 
 // Duration is an atomic wrapper around time.Duration

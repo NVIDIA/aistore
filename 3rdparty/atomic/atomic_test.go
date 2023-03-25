@@ -127,28 +127,6 @@ var _ = Describe("Primitive atomics tests", func() {
 		Expect(prev).To(BeFalse())
 	})
 
-	It("should properly perform basic operations on Float32", func() {
-		atom := NewFloat32(4.2)
-
-		Expect(atom.Load()).To(Equal(float32(4.2)))
-
-		Expect(atom.CAS(4.2, 0.5)).To(BeTrue())
-		Expect(atom.Load()).To(Equal(float32(0.5)))
-		Expect(atom.CAS(0.0, 1.5)).To(BeFalse())
-		Expect(atom.Load()).To(Equal(float32(0.5)))
-	})
-
-	It("should properly perform basic operations on Float64", func() {
-		atom := NewFloat64(4.2)
-
-		Expect(atom.Load()).To(Equal(float64(4.2)))
-
-		Expect(atom.CAS(4.2, 0.5)).To(BeTrue())
-		Expect(atom.Load()).To(Equal(float64(0.5)))
-		Expect(atom.CAS(0.0, 1.5)).To(BeFalse())
-		Expect(atom.Load()).To(Equal(float64(0.5)))
-	})
-
 	It("should properly perform basic operations on Duration", func() {
 		atom := NewDuration(5 * time.Minute)
 
