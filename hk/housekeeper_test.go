@@ -10,7 +10,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/hk"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

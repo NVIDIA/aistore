@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 )
 
 // internal EC stats in raw format: only counters

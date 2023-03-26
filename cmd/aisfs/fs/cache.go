@@ -11,8 +11,8 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/OneOfOne/xxhash"
 	"github.com/jacobsa/fuse/fuseops"

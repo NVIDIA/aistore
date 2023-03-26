@@ -109,7 +109,7 @@ func (c *Config) writeTo(srvCfg *fs.ServerConfig) {
 	srvCfg.SkipVerifyCrt = c.Cluster.SkipVerifyCrt
 	srvCfg.TCPTimeout = c.Timeout.TCPTimeout
 	srvCfg.HTTPTimeout = c.Timeout.HTTPTimeout
-	srvCfg.SyncInterval.Store(c.Periodic.SyncInterval)
+	srvCfg.SyncInterval.Store(int64(c.Periodic.SyncInterval))
 	srvCfg.MemoryLimit.Store(uint64(memoryLimit))
 	srvCfg.MaxWriteBufSize.Store(c.IO.WriteBufSize)
 }

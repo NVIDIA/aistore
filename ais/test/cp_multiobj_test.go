@@ -7,10 +7,10 @@ package integration
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"

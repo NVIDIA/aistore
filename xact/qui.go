@@ -7,8 +7,8 @@ package xact
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 )
 
 // common ref-counted quiescence

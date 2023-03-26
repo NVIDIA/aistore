@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync/atomic"
 	"syscall"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -33,7 +33,7 @@ type (
 //////////////
 
 func (ea *ErrValue) Store(err error) {
-	if ea.cnt.Inc() == 1 {
+	if ea.cnt.Add(1) == 1 {
 		ea.Value.Store(err)
 	}
 }

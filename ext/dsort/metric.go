@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )

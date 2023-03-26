@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"

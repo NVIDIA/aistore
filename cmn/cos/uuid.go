@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/teris-io/shortid"
 )
 

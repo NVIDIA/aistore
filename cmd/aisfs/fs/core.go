@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/aisfs/ais"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/jacobsa/fuse"
@@ -65,7 +65,7 @@ type (
 		// Timeouts, tunables...
 		TCPTimeout      time.Duration
 		HTTPTimeout     time.Duration
-		SyncInterval    atomic.Duration
+		SyncInterval    atomic.Int64
 		MemoryLimit     atomic.Uint64
 		MaxWriteBufSize atomic.Int64
 	}

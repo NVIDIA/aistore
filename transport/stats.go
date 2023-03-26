@@ -6,7 +6,7 @@
 package transport
 
 import (
-	"github.com/NVIDIA/aistore/3rdparty/atomic"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
