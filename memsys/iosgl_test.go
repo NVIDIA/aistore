@@ -9,10 +9,10 @@ package memsys
 import (
 	"bytes"
 	"io"
-	"math/rand"
 	"testing/iotest"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -22,7 +22,7 @@ var _ = Describe("SGL", func() {
 
 	randReader := func(size int64) ([]byte, io.Reader) {
 		buf := make([]byte, size)
-		rand.Read(buf)
+		cryptorand.Read(buf)
 		return buf, bytes.NewBuffer(buf)
 	}
 

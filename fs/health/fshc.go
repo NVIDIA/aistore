@@ -155,7 +155,7 @@ func tryWriteFile(mpath string, fileSize int64) error {
 	if err := cos.CreateDir(tmpDir); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", tmpDir, err)
 	}
-	tmpFileName := filepath.Join(tmpDir, "fshc-try-write-"+cos.RandStringStrong(10))
+	tmpFileName := filepath.Join(tmpDir, "fshc-try-write-"+cos.CryptoRandS(10))
 	tmpFile, err := fs.DirectOpen(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, cos.PermRWR)
 	if err != nil {
 		return fmt.Errorf("failed to create %s, err: %w", ftag, err)

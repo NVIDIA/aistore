@@ -5,7 +5,6 @@
 package etl
 
 import (
-	"crypto/rand"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +48,7 @@ var _ = Describe("CommunicatorTest", func() {
 
 	BeforeEach(func() {
 		// Generate random data.
-		_, err := rand.Read(transformData)
+		_, err := cryptorand.Read(transformData)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize the filesystem and directories.
@@ -138,7 +138,7 @@ var _ = Describe("CommunicatorTest", func() {
 // Creates a file with random content.
 func createRandomFile(fileName string, size int64) error {
 	b := make([]byte, size)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := cryptorand.Read(b); err != nil {
 		return err
 	}
 	f, err := cos.CreateFile(fileName)

@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
@@ -21,20 +22,30 @@ const (
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
-type cryptoRandSource struct{}
+///////////
+// crand //
+///////////
 
-var srnd rand.Source = &cryptoRandSource{}
+type crand struct{}
 
-func (*cryptoRandSource) Int63() int64 {
+var crnd rand.Source = &crand{}
+
+func (*crand) Int63() int64 {
 	var buf [8]byte
 	// crypto/rand uses syscalls or reads from /dev/random (or /dev/urandom) to get random bytes.
 	// See https://golang.org/pkg/crypto/rand/#pkg-variables for more.
 	_, err := cryptorand.Read(buf[:])
-	AssertNoErr(err)
+	debug.AssertNoErr(err)
 	return int64(binary.LittleEndian.Uint64(buf[:]))
 }
 
-func (*cryptoRandSource) Seed(int64) {}
+func (*crand) Seed(int64) {}
+
+func CryptoRandS(n int) string { return RandStringWithSrc(crnd, n) }
+
+//
+// misc. rand utils
+//
 
 func RandStringWithSrc(src rand.Source, n int) string {
 	b := make([]byte, n)
@@ -51,10 +62,6 @@ func RandStringWithSrc(src rand.Source, n int) string {
 		remain--
 	}
 	return string(b)
-}
-
-func RandStringStrong(n int) string {
-	return RandStringWithSrc(srnd, n)
 }
 
 func NowRand() *rand.Rand {

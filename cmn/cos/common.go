@@ -7,7 +7,6 @@ package cos
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"reflect"
 	"runtime"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -49,7 +47,6 @@ type (
 var JSON jsoniter.API
 
 func init() {
-	rand.Seed(mono.NanoTime())
 	rtie.Store(1013)
 
 	jsonConf := jsoniter.Config{

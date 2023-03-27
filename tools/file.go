@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -182,7 +183,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 			f, err := cos.CreateFile(fqn)
 			tassert.CheckFatal(t, err)
-			_, _ = rand.Read(buf)
+			_, _ = cryptorand.Read(buf)
 			_, err = f.Write(buf)
 			f.Close()
 			tassert.CheckFatal(t, err)

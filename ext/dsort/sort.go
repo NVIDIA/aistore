@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -61,6 +61,7 @@ func (s *alphaByKey) Less(i, j int) bool {
 
 // sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
 func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
+	var rnd *rand.Rand
 	if algo.Kind == SortKindNone {
 		return nil
 	} else if algo.Kind == SortKindShuffle {
@@ -72,9 +73,9 @@ func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
 			cos.AssertNoErr(err)
 		}
 
-		rand.Seed(seed)
+		rnd = rand.New(rand.NewSource(seed))
 		for i := 0; i < r.Len(); i++ { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-			j := rand.Intn(i + 1)
+			j := rnd.Intn(i + 1)
 			r.Swap(i, j)
 		}
 	} else {

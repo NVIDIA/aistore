@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
@@ -130,7 +130,7 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	)
 
 	buf := make([]byte, 256)
-	_, err := rand.Read(buf)
+	_, err := cryptorand.Read(buf)
 	tassert.CheckFatal(t, err)
 	r := bytes.NewReader(buf)
 

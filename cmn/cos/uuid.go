@@ -6,7 +6,6 @@ package cos
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/teris-io/shortid"
@@ -29,7 +28,7 @@ const (
 
 var (
 	sid  *shortid.Shortid
-	rtie atomic.Int32
+	rtie atomic.Uint32
 )
 
 func InitShortID(seed uint64) {
@@ -44,11 +43,13 @@ func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
 	if !isAlpha(uuid[0]) {
-		h = string(rune('A' + rand.Int()%26))
+		tie := int(rtie.Add(1))
+		h = string(rune('A' + tie%26))
 	}
 	c := uuid[len(uuid)-1]
 	if c == '-' || c == '_' {
-		t = string(rune('a' + rand.Int()%26))
+		tie := int(rtie.Add(1))
+		t = string(rune('a' + tie%26))
 	}
 	return h + uuid + t
 }
@@ -74,13 +75,13 @@ func ValidateNiceID(id string, minlen int, tag string) (err error) {
 // Daemon ID
 //
 
-func GenDaemonID() string              { return RandStringStrong(lenDaemonID) }
+func GenDaemonID() string              { return CryptoRandS(lenDaemonID) }
 func ValidateDaemonID(id string) error { return ValidateNiceID(id, lenDaemonID, "node ID") }
 
 // (when config.TestingEnv)
 func GenTestingDaemonID(suffix string) string {
 	l := Max(lenDaemonID-len(suffix), 3)
-	return RandStringStrong(l) + suffix
+	return CryptoRandS(l) + suffix
 }
 
 //

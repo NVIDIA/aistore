@@ -19,7 +19,7 @@ func TestRandStringStrongSmoke(t *testing.T) {
 	)
 
 	for i := 0; i < iterations; i++ {
-		ss.Add(cos.RandStringStrong(stringLength))
+		ss.Add(cos.CryptoRandS(stringLength))
 	}
 	tassert.Fatalf(t, len(ss) == iterations, "expected to generate %d unique strings, got %d", iterations, len(ss))
 }

@@ -26,7 +26,7 @@ var (
 
 func init() {
 	reg = &registry{m: make(map[string]Communicator)}
-	reqSecret = cos.RandStringStrong(10)
+	reqSecret = cos.CryptoRandS(10)
 }
 
 func (r *registry) add(name string, c Communicator) (err error) {

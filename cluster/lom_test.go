@@ -5,7 +5,6 @@
 package cluster_test
 
 import (
-	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -1063,7 +1063,7 @@ func createTestFile(fqn string, size int) {
 
 	if size > 0 {
 		buff := make([]byte, size)
-		_, _ = rand.Read(buff)
+		_, _ = cryptorand.Read(buff)
 		_, err := testFile.Write(buff)
 		_ = testFile.Close()
 

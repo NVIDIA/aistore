@@ -629,7 +629,7 @@ func setupBucket(runParams *params) error {
 		return nil
 	}
 	if runParams.bck.Name == "" {
-		runParams.bck.Name = cos.RandStringStrong(8)
+		runParams.bck.Name = cos.CryptoRandS(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
 	} else if nbck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
 		if objName != "" {

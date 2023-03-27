@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/tools/cryptorand"
 )
 
 type (
@@ -51,7 +52,7 @@ func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err 
 	var b bytes.Buffer
 	if buf == nil {
 		buf = make([]byte, fileSize)
-		if _, err = rand.Read(buf); err != nil {
+		if _, err = cryptorand.Read(buf); err != nil {
 			return
 		}
 	}
@@ -77,7 +78,7 @@ func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
 		w io.Writer
 		b = make([]byte, fileSize)
 	)
-	if _, err = rand.Read(b); err != nil {
+	if _, err = cryptorand.Read(b); err != nil {
 		return
 	}
 	header := new(zip.FileHeader)
