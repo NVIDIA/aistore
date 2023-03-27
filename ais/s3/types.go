@@ -31,13 +31,13 @@ type (
 		Name                  string          `xml:"Name"`
 		Ns                    string          `xml:"xmlns,attr"`
 		Prefix                string          `xml:"Prefix"`
-		KeyCount              int             `xml:"KeyCount"` // number of objects in the response
-		MaxKeys               int             `xml:"MaxKeys"`
+		KeyCount              int             `xml:"KeyCount"`                 // number of object names in the response
+		MaxKeys               int             `xml:"MaxKeys"`                  // "The maximum number of keys returned ..." (s3)
 		IsTruncated           bool            `xml:"IsTruncated"`              // true if there are more pages to read
 		ContinuationToken     string          `xml:"ContinuationToken"`        // original ContinuationToken
 		NextContinuationToken string          `xml:"NextContinuationToken"`    // NextContinuationToken to read the next page
 		Contents              []*ObjInfo      `xml:"Contents"`                 // list of objects
-		CommonPrefixes        []*CommonPrefix `xml:"CommonPrefixes,omitempty"` // list of directories of the same level (used in non-recursive mode)
+		CommonPrefixes        []*CommonPrefix `xml:"CommonPrefixes,omitempty"` // list of dirs (used with `apc.LsNoRecursion`)
 	}
 	ObjInfo struct {
 		Key          string `xml:"Key"`

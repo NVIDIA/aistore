@@ -421,9 +421,8 @@ func initPutObjCksumFlags() (flags []cli.Flag) {
 			continue
 		}
 		flags = append(flags, cli.StringFlag{
-			Name: cksum,
-			Usage: fmt.Sprintf("expected hex encoded %s checksum of the stored object (to facilitate end-to-end protection)",
-				cksum),
+			Name:  cksum,
+			Usage: fmt.Sprintf("compute client-side %s checksum\n"+putObjCksumText, cksum),
 		})
 	}
 	return
@@ -431,7 +430,7 @@ func initPutObjCksumFlags() (flags []cli.Flag) {
 
 func cksumToCompute(c *cli.Context, bck cmn.Bck) (*cos.Cksum, error) {
 	// bucket-configured checksum takes precedence
-	if flagIsSet(c, computeCksumFlag) {
+	if flagIsSet(c, putObjDfltCksumFlag) {
 		bckProps, err := headBucket(bck, false /* don't add */)
 		if err != nil {
 			return nil, err

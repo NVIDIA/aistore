@@ -63,7 +63,7 @@ var (
 			allowAppendToExistingFlag,
 			// cksum
 			skipVerCksumFlag,
-			computeCksumFlag,
+			putObjDfltCksumFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -101,8 +101,6 @@ var (
 		Action:       getHandler,
 		BashComplete: bucketCompletions(bcmplop{separator: true}),
 	}
-
-	putObjCksumFlags = initPutObjCksumFlags()
 
 	objectCmdPut = cli.Command{
 		Name: commandPut,

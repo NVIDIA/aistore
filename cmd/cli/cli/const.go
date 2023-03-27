@@ -671,8 +671,16 @@ var (
 		Usage: "chunk size in IEC or SI units, or \"raw\" bytes (e.g.: 1MiB or 1048576; see '--units')",
 	}
 
-	cksumFlag        = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
-	computeCksumFlag = cli.BoolFlag{Name: "compute-checksum", Usage: "compute checksum configured for the bucket"}
+	cksumFlag = cli.BoolFlag{Name: "checksum", Usage: "validate checksum"}
+
+	putObjCksumText     = indent4 + "\tand provide it as part of the PUT request for subsequent validation on the server side"
+	putObjCksumFlags    = initPutObjCksumFlags()
+	putObjDfltCksumFlag = cli.BoolFlag{
+		Name: "compute-checksum",
+		Usage: "[end-to-end protection] compute client-side checksum configured for the destination bucket\n" +
+			putObjCksumText,
+	}
+
 	skipVerCksumFlag = cli.BoolFlag{
 		Name:  "skip-vc",
 		Usage: "skip loading object metadata (and the associated checksum & version related processing)",

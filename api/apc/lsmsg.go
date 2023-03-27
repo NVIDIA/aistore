@@ -74,12 +74,11 @@ const (
 	// requesting proxy and, subsequently, to client.
 	LsWantOnlyRemoteProps
 
-	// List entries without recursion, the result includes matching directories
-	// TODO: works only with AIS bucket. Need to fix:
-	// - update AIS CLI and allow a user to list a bucket non-recursively
-	// - check the flag with 'Cached' flag
-	// - forbid combinations(if any exists) with other flags that do not work
-	// - pass correct value to the backend in case of a Cloud bucket
+	// List bucket entries without recursion (POSIX-wise). Note that the result in this case
+	// will include matching directories.
+	// TODO: works only with AIS bucket and only via S3 (no CLI yet). More exactly:
+	// - update AIS CLI to support non-recursive list-objects operation
+	// - when listing remote bucket, call backend (`Backend()`) to list non-recursively
 	LsNoRecursion
 )
 
