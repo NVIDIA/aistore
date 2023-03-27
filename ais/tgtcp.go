@@ -541,11 +541,16 @@ func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 }
 
 func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag, caller string, silent bool) (err error) {
-	bmd := t.owner.bmd.get()
-	glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(bmd.Version, msg, caller))
-
+	var oldVer int64
 	if msg.UUID == "" {
-		err = t.applyBMD(newBMD, msg, payload, tag)
+		oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
+		if newBMD.Version > oldVer {
+			if err == nil {
+				glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(oldVer, msg, caller))
+			} else {
+				glog.Errorf("%s: error %v receiving %s%s", t, err, newBMD.StringEx(), _msdetail(oldVer, msg, caller))
+			}
+		}
 		return
 	}
 
@@ -557,7 +562,18 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 		}
 		return
 	}
-	err = t.applyBMD(newBMD, msg, payload, tag)
+	oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
+	// log
+	switch {
+	case err != nil:
+		glog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), caller, msg.Action, msg.UUID)
+	case newBMD.Version > oldVer:
+		glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(oldVer, msg, caller))
+	case newBMD.Version == oldVer:
+		glog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
+			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
+	}
+	// --after]
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
@@ -567,21 +583,22 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	return
 }
 
-func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag string) error {
+func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag string) (int64, error) {
 	_, psi := t.getPrimaryURLAndSI(nil)
 
 	t.owner.bmd.Lock()
-	rmbcks, err := t._syncBMD(newBMD, msg, payload, psi)
+	rmbcks, oldVer, err := t._syncBMD(newBMD, msg, payload, psi)
 	t.owner.bmd.Unlock()
 
-	if err == nil {
+	if err == nil && oldVer < newBMD.Version {
 		t._postBMD(tag, rmbcks)
 	}
-	return err
+	return oldVer, err
 }
 
-// called under lock
-func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *cluster.Snode) (rmbcks []*cluster.Bck, err error) {
+// executes under lock
+func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *cluster.Snode) (rmbcks []*cluster.Bck,
+	oldVer int64, err error) {
 	var (
 		createErrs  []error
 		destroyErrs []error
@@ -592,8 +609,8 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		return
 	}
 	// check downgrade
-	if v := bmd.version(); newBMD.version() <= v {
-		if newBMD.version() < v {
+	if oldVer = bmd.version(); newBMD.version() <= oldVer {
+		if newBMD.version() < oldVer {
 			err = newErrDowngrade(t.si, bmd.StringEx(), newBMD.StringEx())
 		}
 		return

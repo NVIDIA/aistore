@@ -97,10 +97,12 @@ func _panic(a ...any) {
 		if _, file, line, ok := runtime.Caller(i); !ok {
 			break
 		} else {
+			// alternatively, the entire stack w/ full pathnames
 			if !strings.Contains(file, "aistore") {
 				break
 			}
 			f := filepath.Base(file)
+
 			if buffer.Len() > len(msg) {
 				buffer.WriteString(" <- ")
 			}

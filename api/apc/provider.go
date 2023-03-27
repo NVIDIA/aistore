@@ -6,7 +6,6 @@ package apc
 
 import (
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 // Backend Provider enum
@@ -47,7 +46,6 @@ func IsRemoteProvider(p string) bool {
 }
 
 func ToScheme(p string) string {
-	debug.Assert(IsProvider(p))
 	switch p {
 	case AWS:
 		return S3Scheme
