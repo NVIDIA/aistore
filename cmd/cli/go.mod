@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore/cmd/cli
 
-go 1.19
+go 1.20
 
 // direct
 require (

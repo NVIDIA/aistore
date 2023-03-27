@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:/usr/local/go/bin:${PATH}"
-ENV GOLANG_VERSION="1.19"
+ENV GOLANG_VERSION="1.20"
 ENV HADOOP_VERSION="3.3.2"
 
 RUN apt-get update -yq

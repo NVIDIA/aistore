@@ -1,6 +1,6 @@
 module github.com/NVIDIA/aistore
 
-go 1.19
+go 1.20
 
 // Direct dependencies
 require (

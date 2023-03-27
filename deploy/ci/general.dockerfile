@@ -1,4 +1,4 @@
-FROM golang:1.19
+FROM golang:1.20
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"

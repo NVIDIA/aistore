@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/mock"
@@ -109,7 +108,7 @@ func TestWalkBck(t *testing.T) {
 }
 
 func TestWalkBckSkipDir(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
+	rnd := cos.NowRand()
 	type (
 		mpathMeta struct {
 			total int
@@ -119,7 +118,7 @@ func TestWalkBckSkipDir(t *testing.T) {
 
 	var (
 		bck           = cmn.Bck{Name: "name", Provider: apc.AIS}
-		mpathCnt      = 5 + rand.Int()%5
+		mpathCnt      = 5 + rnd.Int()%5
 		minObjectsCnt = 10
 		mpaths        = make(map[string]*mpathMeta)
 	)

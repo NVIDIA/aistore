@@ -7,7 +7,6 @@ package integration
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"strconv"
 	"testing"
@@ -133,8 +132,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		goto fail
 	}
-
-	rand.Seed(time.Now().UnixNano())
 
 	m.Run()
 	return
