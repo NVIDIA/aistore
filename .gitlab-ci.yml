@@ -333,7 +333,7 @@ test:short:assorted:k8s:
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
     BUCKET: "gs://ais-ci-kube"
     TESTS_DIR: "ais/test"
-    RE: "ETLBucket"
+    RE: "ETLAnyToAny|ETLMultiObj"
   script:
     - export NUM_TARGET=3
     - export NUM_PROXY=3

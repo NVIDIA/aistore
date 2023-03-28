@@ -6,6 +6,7 @@ package integration
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,13 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/tools/tlog"
-	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -28,7 +29,7 @@ func TestETLMultiObj(t *testing.T) {
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (
-		objCnt      = 50
+		objCnt      = 100
 		copyCnt     = 20
 		rangeStart  = 10
 		transformer = tetl.MD5
@@ -39,34 +40,96 @@ func TestETLMultiObj(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-
-		bck   = cmn.Bck{Name: "etloffline", Provider: apc.AIS}
-		bckTo = cmn.Bck{Name: "etloffline-out-" + trand.String(5), Provider: apc.AIS}
+		bcktests   = []struct {
+			srcRemote      bool
+			evictRemoteSrc bool
+			dstRemote      bool
+		}{
+			{false, false, false},
+			{true, false, false},
+			{true, true, false},
+			{false, false, true},
+		}
 	)
-
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
-	tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
-
-	for i := 0; i < objCnt; i++ {
-		r, _ := readers.NewRandReader(objSize, cksumType)
-		_, err := api.PutObject(api.PutArgs{
-			BaseParams: baseParams,
-			Bck:        bck,
-			ObjName:    fmt.Sprintf("test/a-%04d", i),
-			Reader:     r,
-			Size:       objSize,
-		})
-		tassert.CheckFatal(t, err)
-	}
 
 	_ = tetl.InitSpec(t, baseParams, transformer, etlCommType)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
-	for _, ty := range []string{"range", "list"} {
-		t.Run(ty, func(t *testing.T) {
-			testETLMultiObj(t, transformer, bck, bckTo,
-				"test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
-		})
+	for _, bcktest := range bcktests {
+		m := ioContext{
+			t:         t,
+			num:       objCnt,
+			fileSize:  512,
+			fixedSize: true, // see checkETLStats below
+		}
+		if bcktest.srcRemote {
+			m.bck = cliBck
+			m.deleteRemoteBckObjs = true
+		} else {
+			m.bck = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+		}
+		m.initWithCleanup()
+
+		if bcktest.srcRemote {
+			if bcktest.evictRemoteSrc {
+				tlog.Logf("evicting %s\n", m.bck)
+				//
+				// evict all _cached_ data from the "local" cluster
+				// keep the src bucket in the "local" BMD though
+				//
+				err := api.EvictRemoteBucket(baseParams, m.bck, true /*keep empty src bucket in the BMD*/)
+				tassert.CheckFatal(t, err)
+			}
+		}
+
+		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck)
+		for i := 0; i < objCnt; i++ {
+			r, _ := readers.NewRandReader(objSize, cksumType)
+			_, err := api.PutObject(api.PutArgs{
+				BaseParams: baseParams,
+				Bck:        m.bck,
+				ObjName:    fmt.Sprintf("test/a-%04d", i),
+				Reader:     r,
+				Size:       objSize,
+			})
+			tassert.CheckFatal(t, err)
+		}
+
+		for _, ty := range []string{"range", "list"} {
+			tname := fmt.Sprintf("%s-%s-%s", transformer, strings.TrimSuffix(etlCommType, "://"), ty)
+			if bcktest.srcRemote {
+				if bcktest.evictRemoteSrc {
+					tname += "/from-evicted-remote"
+				} else {
+					tname += "/from-remote"
+				}
+			} else {
+				debug.Assert(!bcktest.evictRemoteSrc)
+				tname += "/from-ais"
+			}
+			if bcktest.dstRemote {
+				tname += "/to-remote"
+			} else {
+				tname += "/to-ais"
+			}
+			t.Run(tname, func(t *testing.T) {
+				var bckTo cmn.Bck
+				if bcktest.dstRemote {
+					bckTo = cliBck
+					dstm := ioContext{t: t, bck: bckTo}
+					dstm.del()
+					t.Cleanup(func() { dstm.del() })
+				} else {
+					bckTo = cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
+					// NOTE: ais will create dst bucket on the fly
+
+					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+				}
+				testETLMultiObj(t, transformer, m.bck, bckTo,
+					"test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
+			})
+		}
 	}
 }
 

@@ -396,14 +396,14 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 		got[:cos.Min(len(got), 16)])
 }
 
-func TestETLBucket(t *testing.T) {
+func TestETLAnyToAnyBucket(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
-		objCnt     = 10
+		objCnt     = 100
 
 		bcktests = []struct {
 			srcRemote      bool
@@ -413,6 +413,7 @@ func TestETLBucket(t *testing.T) {
 			{false, false, false},
 			{true, false, false},
 			{true, true, false},
+			{false, false, true},
 		}
 		tests = []testObjConfig{
 			{transformer: tetl.Echo, comm: etl.Hpull, onlyLong: true},
@@ -480,7 +481,18 @@ func TestETLBucket(t *testing.T) {
 				tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
 				_ = tetl.InitSpec(t, baseParams, etlName, test.comm)
 
-				bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
+				var bckTo cmn.Bck
+				if bcktest.dstRemote {
+					bckTo = cliBck
+					dstm := ioContext{t: t, bck: bckTo}
+					dstm.del()
+					t.Cleanup(func() { dstm.del() })
+				} else {
+					bckTo = cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
+					// NOTE: ais will create dst bucket on the fly
+
+					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+				}
 				testETLBucket(t, baseParams, etlName, &m, bckTo, time.Minute, false, bcktest.evictRemoteSrc)
 			})
 		}
@@ -610,7 +622,6 @@ def transform(input_bytes: bytes) -> bytes:
 
 	m.initWithCleanup()
 
-	tlog.Logf("PUT objects => source bucket %s\n", m.bck)
 	m.puts()
 
 	for _, testType := range []string{"etl_object", "etl_bucket"} {
