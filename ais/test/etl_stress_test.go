@@ -70,7 +70,9 @@ def transform(input_bytes):
 
 	_ = tetl.InitCode(t, baseParams, msg)
 
-	testETLBucket(t, msg.Name(), m.bck, m.num, 0 /*skip bytes check*/, time.Duration(etlBucketTimeout))
+	bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
+	testETLBucket(t, baseParams, msg.Name(), &m, bckTo, time.Duration(etlBucketTimeout),
+		true /* skip byte-count check*/, false /* remote src evicted */)
 }
 
 func TestETLBucketAbort(t *testing.T) {
@@ -91,7 +93,7 @@ func TestETLBucketAbort(t *testing.T) {
 	tlog.Logf("Aborting ETL xaction %q\n", xid)
 	err := api.AbortXaction(baseParams, args)
 	tassert.CheckFatal(t, err)
-	err = tetl.WaitForAborted(baseParams, xid, 5*time.Minute)
+	err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	etls, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)
@@ -137,7 +139,7 @@ func TestETLTargetDown(t *testing.T) {
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
 
-	err = tetl.WaitForAborted(baseParams, xid, 5*time.Minute)
+	err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
 	tassert.CheckFatal(t, err)
 	tetl.WaitForContainersStopped(t, baseParams)
 }
@@ -240,7 +242,7 @@ def transform(input_bytes):
 			tetl.ReportXactionStatus(baseParams, xid, etlDoneCh, 2*time.Minute, m.num)
 
 			tlog.Logln("Waiting for ETL to finish")
-			err = tetl.WaitForFinished(baseParams, xid, 15*time.Minute)
+			err = tetl.WaitForFinished(baseParams, xid, apc.ActETLBck, 15*time.Minute)
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 

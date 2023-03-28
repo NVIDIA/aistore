@@ -185,32 +185,39 @@ func WaitForContainersStopped(t *testing.T, bp api.BaseParams) {
 	tassert.CheckFatal(t, err)
 }
 
-func WaitForAborted(bp api.BaseParams, xid string, timeout time.Duration) error {
-	return waitForXactDone(bp, xid, timeout, true)
-}
-
-func WaitForFinished(bp api.BaseParams, xid string, timeout time.Duration) error {
-	return waitForXactDone(bp, xid, timeout, false)
-}
-
-func waitForXactDone(bp api.BaseParams, xid string, timeout time.Duration, waitForAbort bool) error {
-	action := "finished"
-	if waitForAbort {
-		action = "aborted"
-	}
-
-	tlog.Logf("Waiting for ETL xaction to be %s...\n", action)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout /* total timeout */}
+func WaitForAborted(bp api.BaseParams, xid, kind string, timeout time.Duration) error {
+	tlog.Logf("Waiting for ETL x-%s[%s] to abort...\n", kind, xid)
+	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
 	status, err := api.WaitForXactionIC(bp, args)
 	if err == nil {
-		if waitForAbort && !status.Aborted() {
-			return fmt.Errorf("expected ETL xaction to be aborted")
+		if !status.Aborted() {
+			err = fmt.Errorf("expected ETL x-%s[%s] status to indicate 'abort', got: %+v", kind, xid, status)
 		}
-		tlog.Logf("ETL xaction %s successfully\n", action)
-		return nil
+		return err
 	}
+	tlog.Logf("Aborting ETL x-%s[%s]\n", kind, xid)
 	if abortErr := api.AbortXaction(bp, args); abortErr != nil {
-		tlog.Logf("Nested error: failed to abort ETL xaction upon wait failue; err %v\n", abortErr)
+		tlog.Logf("Nested error: failed to abort upon api.wait failure: %v\n", abortErr)
+	}
+	return err
+}
+
+// NOTE: relies on x-kind to choose the waiting method
+// TODO -- FIXME: remove and simplify - here and everywhere
+func WaitForFinished(bp api.BaseParams, xid, kind string, timeout time.Duration) (err error) {
+	tlog.Logf("Waiting for ETL x-%s[%s] to finish...\n", kind, xid)
+	args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout /* total timeout */}
+	if xact.IdlesBeforeFinishing(kind) {
+		err = api.WaitForXactionIdle(bp, args)
+	} else {
+		_, err = api.WaitForXactionIC(bp, args)
+	}
+	if err == nil {
+		return
+	}
+	tlog.Logf("Aborting ETL x-%s[%s]\n", kind, xid)
+	if abortErr := api.AbortXaction(bp, args); abortErr != nil {
+		tlog.Logf("Nested error: failed to abort upon api.wait failure: %v\n", abortErr)
 	}
 	return err
 }

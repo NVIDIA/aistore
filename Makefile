@@ -226,15 +226,17 @@ endif
 test-bench: ## Run benchmarking tests
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-bench
 
-
 test-envcheck:
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-env
 
-test-short: test-envcheck ## Run short tests (requires BUCKET variable to be set)
+test-short: test-envcheck ## Run short tests
 	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-short
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
-test-long: test-envcheck ## Run all (long) tests (requires BUCKET variable to be set)
+test-assorted: test-envcheck # Run specific tests
+	@RE="ETLBucket|ETLConnectionError|ETLInitCode" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
+
+test-long: test-envcheck ## Run all integration tests
 	@RE="$(RE)" BUCKET="$(BUCKET)" TESTS_DIR="$(TESTS_DIR)" AIS_ENDPOINT="$(AIS_ENDPOINT)" $(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" test-long
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 

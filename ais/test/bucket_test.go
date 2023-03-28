@@ -2401,6 +2401,7 @@ func TestCopyBucket(t *testing.T) {
 			}
 
 			for _, uuid := range xactIDs {
+				// TODO -- FIXME: remove/simplify-out this `if` here and elsewhere
 				if test.evictRemoteSrc {
 					// wait for TCO idle (different x-kind)
 					args := xact.ArgsMsg{ID: uuid, Timeout: copyBucketTimeout}

@@ -157,7 +157,7 @@ func ETLObject(bp BaseParams, etlName string, bck cmn.Bck, objName string, w io.
 // - visit all (matching) source objects; for each object:
 // - read it, transform using the specified (ID-ed) ETL, and write the result to dst bucket
 //
-// `fltPresence` applies exclusively to remote `bckFrom` (is ignoredmotherwise)
+// `fltPresence` applies exclusively to remote `bckFrom` (is ignored otherwise)
 // and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 // Namely:
 // * apc.FltExists        - copy all objects, including those that are not (present) in AIS
