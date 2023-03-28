@@ -278,7 +278,9 @@ test:long:aisloader:
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
 
+#
 # Kubernetes stages
+#
 
 .test_k8s_short_template: &test_k8s_short_def
   stage: test-short
@@ -314,6 +316,30 @@ test:short:k8s:
     - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-short
+    - status=$? make kill && exit $status
+
+#  e.g. RE: "ETLBucket|ETLConnectionError|ETLInitCode" (or any other regex to select tests)
+test:short:assorted:k8s:
+  stage: test-short
+  tags:
+    - ais-k8s
+  timeout: 30m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+  variables:
+    GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
+    BUCKET: "gs://ais-ci-kube"
+    TESTS_DIR: "ais/test"
+    RE: "ETLBucket"
+  script:
+    - export NUM_TARGET=3
+    - export NUM_PROXY=3
+    - echo "${GOOGLE_APPLICATION_CREDENTIALS_JSON}" > "${GOOGLE_APPLICATION_CREDENTIALS}"
+    - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
+    - make test-run
     - status=$? make kill && exit $status
 
 test:long:k8s:
