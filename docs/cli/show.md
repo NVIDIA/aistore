@@ -11,9 +11,42 @@ redirect_from:
 
 AIS CLI `show` command can universally be used to view summaries and details on a cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below). The command is a "hub" for all information-viewing commands that are currently supported.
 
-All `show` commands have been aliased to their respective top-level commands for ease of use. This means that running `ais show cluster` is equivalent to running `ais cluster show`.
+For easy usage, all `show` commands have been aliased to their respective top-level counterparts:
+
+```console
+$ ais show <command>
+
+# is equivalent to:
+
+$ ais <command> show
+```
+
+Running `ais show cluster` is the same as `ais cluster show`, and so on. And one more example of two identical commands:
+
+```console
+$ ais show performance
+$ ais performance show
+```
+
+> As a general rule, instead remembering any of the above (and/or below), simply type (for instance) `ais perf<TAB-TAB>` and press `<TAB-TAB>` followed by `Enter`.
+
+> When part-typing, part-TABing a sequence of words that constitute an AIS command, you can stop at any time and type `--help`. This will display short usage description, command-line options, examples, and other extended context.
+
+> As far as usage examples, another way to quickly find them would be a good-and-old keyword search. E.g., `grep -n "ais.*cp" docs/cli/*.md`, and similar. Additional ways and useful tricks (including `ais search`) are also mentioned elsewhere in the docs.
+
+As far as `ais show` itself, the command currently extends as follows:
+
+```console
+$ ais show <TAB-TAB>
+auth             bucket           performance      rebalance        remote-cluster   log
+object           cluster          storage          config           job
+
+```
+
+In other words, there are currently 11 subcommands that are briefly described in the rest of this text.
 
 ## Table of Contents
+- [`ais show performance`](#ais-show-performance)
 - [`ais show auth`](#ais-show-auth)
 - [`ais show bucket`](#ais-show-bucket)
 - [`ais show object`](#ais-show-object)
@@ -25,7 +58,81 @@ All `show` commands have been aliased to their respective top-level commands for
 - [`ais show rebalance`](#ais-show-rebalance)
 - [`ais show log`](#ais-show-log)
 
-The following commands have aliases. In other words, they can be accessed through `ais show <command>` and also `ais <command> show`.
+## `ais show performance`
+
+The command has 5 subcommands:
+
+```console
+$ ais show performance
+counters     throughput   latency      capacity     disk
+
+```
+
+The command provides a quick single-shot overview of cluster performance. If you type `ais show performance` and instead of `<TAB-TAB>` hit `Enter`, the command will show performance counters, aggregated cluster throughput statistics, and the other 3 tables (latency, capacity, disk IO) - in sequence, one after another.
+
+The command's help screen follows below - notice the command-line options (aka flags):
+
+```console
+$ ais show performance --help
+NAME:
+   ais show performance - show performance counters, throughput, latency, and more (press <TAB-TAB> to select specific view)
+
+USAGE:
+   ais show performance command [command options] [TARGET_ID]
+
+COMMANDS:
+   counters    show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
+               - numbers of list-objects requests;
+               - (GET, PUT, etc.) cumulative and average sizes;
+               - associated error counters, if any, and more.
+   throughput  show GET and PUT throughput, associated (cumulative, average) sizes and counters
+   latency     show GET, PUT, and APPEND latencies and average sizes
+   capacity    show target mountpaths, disks, and used/available capacity
+   disk        show disk utilization and read/write statistics
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --all             when printing tables, show all columns including those that have only zero values
+   --no-headers, -H  display tables without headers
+   --regex value     regular expression to select table columns (case-insensitive), e.g.: --regex "put|err"
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --average-size    show average GET, PUT, etc. request size
+   --help, -h        show help
+```
+
+As one would maybe expect, `--refresh`, `--units` and all the other listed flags universally work across all `performance` subcommands.
+
+For instance, you could continuously run several screens to simultaneously display a variety of performance-related aspects:
+
+```console
+# screen #1
+
+$ ais show performance counters --refresh 5
+```
+
+```console
+# screen #2
+
+$ ais show performance throughput --refresh 5
+```
+
+and so on - all with 5 seconds interval, or any other interval(s) of your choosing.
+
+As far as continuous monitoring goes, this will provide a good overview. A poor-man's addition, if you will, to the (supported) tools such as Grafana and Prometheus, but available out of the box. That's a plus.
+
+### What's running
+
+Use `ais show performance` and its variations in combination with `ais show job` (and variations). The latter shows what's running in the cluster, and thus combining the two may make sense.
+
+### See also:
+
+* [AIS metrics](/docs/metrics.md)
+* [Prometheus](/docs/prometheus.md)
 
 ## `ais show auth`
 The following subcommands are currently supported:
@@ -52,7 +159,7 @@ Show object details.
 ## `ais show cluster`
 Show cluster.
 
-The command supports a variety of sub-commands and scoping options:
+The command supports a variety of subcommands and scoping options:
 
 ```console
 # ais show cluster <TAB-TAB>
@@ -64,9 +171,9 @@ bmd   config   proxy   smap   stats   target    [DAEMON_ID ...]
 ## `ais show storage`
 Show storage usage and utilization in the cluster. Show disks and mountpaths - for a single selected node or for all storage nodes.
 
-When run with no sub-commands, `ais show storage` defaults to `ais show storage disk`.
+When run with no subcommands, `ais show storage` defaults to `ais show storage disk`.
 
-In addition, the command support the following sub-commands:
+In addition, the command support the following subcommands:
 
 ```console
 # ais show storage <TAB-TAB>
