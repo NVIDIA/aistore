@@ -11,6 +11,8 @@ redirect_from:
 
 In this example, we will see how to use ETL to preprocess the images of ImageNet using [WebDataset](https://github.com/webdataset/webdataset), a PyTorch Dataset implementation providing efficient access to datasets stored in POSIX tar archives.
 
+`Note: ETL is still in development so some steps may not work exactly as written below.`
+
 ## Overview
 
 This tutorial consists of couple steps:
@@ -46,7 +48,7 @@ PUT "imagenet-train-000999.tar" into bucket "ais://imagenet"
 ## Prepare ETL code
 
 As we have ImageNet prepared now we need an ETL code that will do the transformation.
-Here we will use `io://` communicator type with  `python3` runtime to install `torch`, `torchvision` and `webdataset` packages.
+Here we will use `io://` communicator type with `python3.11v2` runtime to install `torchvision` and `webdataset` packages.
 
 Our transform code will look like this (`code.py`):
 ```python
@@ -86,8 +88,7 @@ The idea here is that we unpack the tarball, process each image and save it as a
 To make sure that the code runs we need to specify required dependencies (`deps.txt`):
 ```
 git+https://github.com/tmbdev/webdataset.git
-torch==1.6.0
-torchvision==0.7.0
+torchvision==0.15.1
 PyYAML==5.4.1
 ```
 
@@ -95,7 +96,7 @@ PyYAML==5.4.1
 
 Now we can build the ETL:
 ```console
-$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3 --comm-type="io://"
+$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3.11v2 --comm-type="io://"
 f90r81wR0
 $ ais etl object f90r81wR0 imagenet/imagenet-train-000999.tar preprocessed-train.tar
 $ tar -tvf preprocessed-train.tar | head -n 6

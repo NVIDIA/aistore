@@ -84,26 +84,19 @@ Say we now want to instead move an *uncompressed* version of TinyImageNet to AIS
 
 As opposed to traditional file storage systems which operate on the concept of multi-level directories and sub-directories, object storage systems, such as AIStore, maintain a *strict* two-level hierarchy of *buckets* and *objects*. However, we can still maintain a "symbolic" directory by manipulating how we name the data.
 
-We can move the dataset to an AIStore bucket while preserving the directory-based structure of the dataset with a few extra imports and a bit of extra Python programming:
+We can move the dataset to an AIStore bucket while preserving the directory-based structure of the dataset by using the bucket `put_files` command along with the `recursive` option:
 
 ```python
-import glob
-import os
-
 BUCKET_NAME = "tinyimagenet_uncompressed"
 TINYIMAGENET_DIR = <local-path-to-dataset> + "/tinyimagenet/"
 
 # Create a new bucket [BUCKET_NAME] to store dataset
-client.bucket(BUCKET_NAME).create()
+bucket = client.bucket(BUCKET_NAME).create()
 
-for FILENAME in set(glob.iglob(TINYIMAGENET_DIR + '**/**', recursive=True)):
-    if os.path.isfile(FILENAME):
-        OBJ_NAME = FILENAME[len(TINYIMAGENET_DIR):]
-        # Puts a file [FILENAME] into bucket [BUCKET_NAME] as an object with name [OBJ_NAME] ([OBJ_NAME] includes "symbolic" directory/path)
-        client.bucket(BUCKET_NAME).object(OBJ_NAME).put(FILENAME)
+bucket.put_files(TINYIMAGENET_DIR, recursive=True)
 
 # Verify object put operations
-client.bucket(BUCKET_NAME).list_objects().get_entries()
+bucket.list_objects().get_entries()
 ```
 
 ### Getting Data From AIStore

@@ -13,6 +13,9 @@ In this example, we will see how ETL can be used to do something as simple as co
 We will go over two ways of starting ETL to achieve our goal.
 Get ready!
 
+
+`Note: ETL is still in development so some steps may not work exactly as written below.`
+
 ## Prerequisites
 
 * AIStore cluster deployed on Kubernetes. We recommend following guide below.
@@ -26,7 +29,7 @@ There are three ways of approaching this problem:
 
 1. **Simplified flow**
 
-    In this example, we will be using `python3` runtime.
+    In this example, we will be using `python3.11v2` runtime.
     In simplified flow, we are only expected to write a simple `transform` function, which can look like this (`code.py`):
 
     ```python
@@ -42,12 +45,12 @@ There are three ways of approaching this problem:
 
     Once we have the `transform` function defined, we can use CLI to build and initialize ETL:
     ```console
-    $ ais etl init code --from-file=code.py --runtime=python3 --name=transformer-md5
+    $ ais etl init code --from-file=code.py --runtime=python3.11v2 --name=transformer-md5
     transformer-md5
     ```
 
 2. **Simplified flow with input/output**
-   Similar to the above example, we will be using the `python3` runtime.
+   Similar to the above example, we will be using the `python3.11v2` runtime.
    However, the python code in this case expects data as standard input and writes the output bytes to standard output, as shown in the following `code.py`:
 
    ```python
@@ -62,7 +65,7 @@ There are three ways of approaching this problem:
 
    We can now use the CLI to build and initialize ETL with `io://` communicator type:
    ```console
-   $ ais etl init code --from-file=code.py --runtime=python3 --comm-type="io://" --name="compute-md5"
+   $ ais etl init code --from-file=code.py --runtime=python3.11v2 --comm-type="io://" --name="compute-md5"
    compute-md5
    ```
 

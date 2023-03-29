@@ -14,6 +14,8 @@ The following GIF presents the whole operation:
 
 ![etl-imagenet](../../images/etl-imagenet.gif)
 
+`Note: ETL is still in development so some steps may not work exactly as written below.`
+
 ## Overview
 
 This tutorial consists of couple steps:
@@ -35,7 +37,7 @@ Here is a general overview of these steps:
 ## Prepare dataset
 
 Before we start writing code, let's put an example tarball file with ImageNet images to the AIStore.
-The tarball we will be using is `n02085620.tar` (saved as `raw-train.tar`) from [ILSVRC2012_img_train_t3.tar](http://www.image-net.org/challenges/LSVRC/2012/dd31405981ef5f776aa17412e1f0c112/ILSVRC2012_img_train_t3.tar).
+The tarball we will be using is `n02085620.tar` (saved as `raw-train.tar`) from [ILSVRC2012_img_train_t3.tar](https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_train_t3.tar).
 
 ```console
 $ tar -tvf raw-train.tar | head -n 5
@@ -53,11 +55,11 @@ PUT "raw-train.tar" into bucket "imagenet"
 ## Prepare ETL code
 
 As we have ImageNet prepared now we need an ETL code that will do the transformation.
-Here we will use `python3` runtime to install `torch` and `torchvision` packages.
+Here we will use `python3` runtime to install the `torchvision` package.
 
 Our transform code will look like this (`code.py`):
 ```python
-import torch, tarfile, io
+import tarfile, io
 from PIL import Image
 from torchvision import transforms
 
@@ -97,15 +99,14 @@ The idea here is that we unpack the tarball, process each image and save it into
 
 To make sure that the code runs we need to specify required dependencies (`deps.txt`):
 ```
-torch==1.6.0
-torchvision==0.7.0
+torchvision==0.15.1
 ```
 
 ## Transform dataset
 
 Now we can build the ETL:
 ```console
-$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3 --name="pytorch-transformer"
+$ ais etl init code --from-file=code.py --deps-file=deps.txt --runtime=python3.11v2 --name="pytorch-transformer"
 pytorch-transformer
 $ ais etl object pytorch-transformer imagenet/raw-train.tar preprocessed-train.tar
 $ tar -tvf preprocessed-train.tar | head -n 5
