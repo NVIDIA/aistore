@@ -126,18 +126,20 @@ func TestETLMultiObj(t *testing.T) {
 
 					t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
 				}
-				testETLMultiObj(t, transformer, m.bck, bckTo,
-					"test/a-"+fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1), ty)
+				template := "test/a-" +
+					fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
+				testETLMultiObj(t, transformer, m.bck, bckTo, template, ty, bcktest.evictRemoteSrc)
 			})
 		}
 	}
 }
 
-func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileRange, opType string) {
+func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileRange, opType string, evictRemoteSrc bool) {
 	pt, err := cos.ParseBashTemplate(fileRange)
 	tassert.CheckFatal(t, err)
 
 	var (
+		xid        string
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 
@@ -160,9 +162,15 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 		tcomsg.ListRange.Template = fileRange
 	}
 
-	tlog.Logf("Start offline ETL[%s]\n", etlName)
-	xid, err := api.ETLMultiObj(baseParams, bckFrom, tcomsg)
+	tlog.Logf("Starting multi-object ETL[%s] ...\n", etlName)
+	if evictRemoteSrc {
+		xid, err = api.ETLMultiObj(baseParams, bckFrom, tcomsg, apc.FltExists)
+	} else {
+		xid, err = api.ETLMultiObj(baseParams, bckFrom, tcomsg)
+	}
 	tassert.CheckFatal(t, err)
+
+	tlog.Logf("Running x-etl[%s]: %s => %s ...\n", xid, bckFrom.Cname(""), bckTo.Cname(""))
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}
 	err = api.WaitForXactionIdle(baseParams, wargs)
