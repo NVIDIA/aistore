@@ -7,15 +7,77 @@ redirect_from:
  - /docs/cli/job.md/
 ---
 
-# CLI Reference for Job (xaction) management
+# Introduction, background, definitions
 
-Batch operations that run asynchronously and may take many seconds (minutes, or even hours) to execute are called eXtended actions or xactions.
+Batch operations that run asynchronously and may take seconds (minutes, hours, etc.) to execute - are called eXtended actions (xactions).
 
-All supported *jobs* run asynchronously, have one of the enumerated kinds, start/stop times, and common (generic) statistics.
+Internally, `xaction` is an abstraction at the root of inheritance hierarchy that also contains specific user-visible jobs: `copy-bucket`, `evict-objects`, and many more.
+
+> For the most recently updated list of all supported jobs and their respective compile-time properties, see the [source](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108)
+
+**All jobs run asynchronously, have start and stop times, and common generic statistics**
+
+Further, each and every job kind has its own display name, access permissions, scope (bucket and/or global), and a number of boolean properties - examples including:
+
+| Property | Description |
+| --- | --- |
+| `Startable` | true if user can start this job via generic jobi-start API |
+| `RefreshCap` | the system must refresh capacity stats upon the job's completion |
+
+Many kinds of jobs can be manually started via generic job API (which's in turn utilized by the `ais start` command - see next).
+
+Notable exceptions include electing new primary and listing objects in a given bucket - in both of those cases, there's a separate, more convenient and intuitive API that does the job, so to speak.
 
 > Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
-> For additional information, please refer to this [readme](/xaction/README.md).
+Rest of this document covers starting, stopping, and otherwise managing job kinds and specific job instances. For [job monitoring](/docs/cli/show.md#ais-show-job), please use `ais show job` command and its numerous subcommands and options.
+
+* [`ais show job`](/docs/cli/show.md#ais-show-job)
+
+### See also
+
+- [static descriptors (source code)](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108)
+- [`xact` package README](/xact/README.md).
+- [`batch jobs`](/docs/batch.md)
+- [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
+- [CLI: `download` from any remote source](/docs/cli/download.md)
+- [built-in `rebalance`](/docs/rebalance.md)
+
+# `ais job` command
+
+Has the following static completions aka subcommands:
+
+```console
+$ ais job <TAB-TAB>
+start   stop    wait    rm     show
+
+```
+and further:
+
+```console
+$ ais job --help
+NAME:
+   ais job - monitor, query, start/stop and manage jobs and eXtended actions (xactions)
+
+USAGE:
+   ais job command [command options] [arguments...]
+
+COMMANDS:
+   start  run batch job
+   stop   terminate a single batch job or multiple jobs (press <TAB-TAB> to select, '--help' for options)
+   wait   wait for a specific batch job to complete (press <TAB-TAB> to select, '--help' for options)
+   rm     cleanup finished jobs
+   show   show running and finished jobs ('--all' for all, or press <TAB-TAB> to select, '--help' for options)
+
+OPTIONS:
+   --help, -h  show help
+```
+
+Notice, though, that `start`, stop`, and `wait` (verbs) have shorter versions, e.g.:
+
+* `ais start` is a built-in alias for `ais job start`, and so on.
+
+> For all configured pre-built and user-defined aliases (aka "shortcuts"), run `ais alias` or `ais alias --help`
 
 ## Table of Contents
 - [Start job](#start-job)

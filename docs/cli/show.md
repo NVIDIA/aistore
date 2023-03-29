@@ -164,7 +164,7 @@ $ ais show job t[Kritxhbt] xhcTyUfJF
 
 In both cases, we are asking a specific target node (denoted as `NODE_ID` in the command's help) for a specific job ID (denoted as `JOB_ID`).
 
-Selection-wise, this would be the case of ultimate specificity. Accordingly, on the opposite side of the spectrum then would be something like this:
+Selection-wise, this would be the case of ultimate specificity. Accordingly, on the opposite side of the spectrum would be something like:
 
 ```console
 $ ais show job --all
