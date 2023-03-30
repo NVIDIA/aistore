@@ -31,7 +31,6 @@ func init() {
 			glog.Error(err)
 		}
 	}
-	cache = &procCache{procs: make(map[int]*ProcStats, 1)}
 }
 
 func Containerized() bool { return containerized }

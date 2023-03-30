@@ -33,13 +33,6 @@ type (
 	StrSet map[string]struct{}
 	StrKVs map[string]string
 
-	MemCPUInfo struct {
-		MemUsed    uint64  `json:"mem_used"`
-		MemAvail   uint64  `json:"mem_avail"`
-		PctMemUsed float64 `json:"pct_mem_used"`
-		PctCPUUsed float64 `json:"pct_cpu_used"`
-	}
-
 	JSONRawMsgs map[string]jsoniter.RawMessage
 )
 

@@ -20,7 +20,7 @@ const (
 	colMemAvail  = "MEM AVAIL"
 	colCapUsed   = "CAP USED(%)"
 	colCapAvail  = "CAP AVAIL"
-	colCPUUsed   = "CPU USED(%)"
+	colLoadAvg   = "LOAD AVERAGE"
 	colRebalance = "REBALANCE"
 	colUptime    = "UPTIME"
 	colStatus    = "STATUS"
@@ -64,6 +64,7 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 			{name: colProxy},
 			{name: colMemUsed},
 			{name: colMemAvail},
+			{name: colLoadAvg},
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
 			{name: colStatus, hide: len(status) == 1 && status[0] == NodeOnline},
@@ -84,6 +85,7 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 				unknownVal,
 				unknownVal,
 				unknownVal,
+				unknownVal,
 				ds.K8sPodName,
 				fcyan(ds.Status),
 				ds.Version,
@@ -94,12 +96,11 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 		}
 
 		memUsed := fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed)
-		if ds.MemCPUInfo.PctMemUsed == 0 {
-			memUsed = unknownVal
-		}
 		memAvail := FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2)
-		if ds.MemCPUInfo.MemAvail == 0 {
-			memAvail = unknownVal
+		load := fmt.Sprintf("[%.1f %.1f %.1f]", ds.MemCPUInfo.LoadAvg.One, ds.MemCPUInfo.LoadAvg.Five, ds.MemCPUInfo.LoadAvg.Fifteen)
+		// older version
+		if ds.MemCPUInfo.LoadAvg.One == 0 && ds.MemCPUInfo.LoadAvg.Five == 0 && ds.MemCPUInfo.LoadAvg.Fifteen == 0 {
+			load = UnknownStatusVal
 		}
 		upns := ds.Tracker[stats.Uptime].Value
 		uptime := fmtDuration(upns, units)
@@ -110,6 +111,7 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
 			memUsed,
 			memAvail,
+			load,
 			uptime,
 			ds.K8sPodName,
 			ds.Status,
@@ -134,7 +136,7 @@ func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
 			{name: colMemAvail},
 			{name: colCapUsed},
 			{name: colCapAvail},
-			{name: colCPUUsed},
+			{name: colLoadAvg},
 			{name: colRebalance, hide: len(h.rebalance()) == 0},
 			{name: colUptime},
 			{name: colPodName, hide: len(pods) == 1 && pods[0] == ""},
@@ -168,15 +170,33 @@ func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
 			continue
 		}
 
+		memUsed := fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed)
+		memAvail := FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2)
+		upns := ds.Tracker[stats.Uptime].Value
+		uptime := fmtDuration(upns, units)
+		if upns == 0 {
+			uptime = unknownVal
+		}
+		load := fmt.Sprintf("[%.1f %.1f %.1f]", ds.MemCPUInfo.LoadAvg.One, ds.MemCPUInfo.LoadAvg.Five, ds.MemCPUInfo.LoadAvg.Fifteen)
+		// older version
+		if ds.MemCPUInfo.LoadAvg.One == 0 && ds.MemCPUInfo.LoadAvg.Five == 0 && ds.MemCPUInfo.LoadAvg.Fifteen == 0 {
+			load = UnknownStatusVal
+		}
+		capUsed := fmt.Sprintf("%d%%", ds.TargetCDF.PctAvg)
+		v := calcCap(ds)
+		capAvail := FmtSize(int64(v), units, 3)
+		if v == 0 {
+			capUsed, capAvail = UnknownStatusVal, UnknownStatusVal
+		}
 		row := []string{
 			fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
-			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed),
-			FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2),
-			fmt.Sprintf("%d%%", ds.TargetCDF.PctAvg),
-			FmtSize(int64(calcCap(ds)), units, 3),
-			fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctCPUUsed),
+			memUsed,
+			memAvail,
+			capUsed,
+			capAvail,
+			load,
 			fmtRebStatus(ds.RebSnap),
-			fmtDuration(ds.Tracker[stats.Uptime].Value, units),
+			uptime,
 			ds.K8sPodName,
 			ds.Status,
 			ds.Version,

@@ -31,7 +31,6 @@ import (
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -256,7 +255,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		apc.WhatSnode, apc.WhatLog, apc.WhatNodeStats, apc.WhatMetricNames:
 		t.htrun.httpdaeget(w, r, query)
 	case apc.WhatSysInfo:
-		tsysinfo := apc.TSysInfo{MemCPUInfo: sys.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
+		tsysinfo := apc.TSysInfo{MemCPUInfo: apc.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
 	case apc.WhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
@@ -273,7 +272,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				Snode: t.htrun.si,
 			},
 			SmapVersion:    smap.Version,
-			MemCPUInfo:     sys.GetMemCPU(),
+			MemCPUInfo:     apc.GetMemCPU(),
 			RebSnap:        rebSnap,
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,

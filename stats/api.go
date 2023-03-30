@@ -8,6 +8,7 @@ package stats
 import (
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -69,7 +70,7 @@ type (
 		Version        string         `json:"ais_version"`  // major.minor.build
 		BuildTime      string         `json:"build_time"`   // YYYY-MM-DD HH:MM:SS-TZ
 		K8sPodName     string         `json:"k8s_pod_name"` // (via ais-k8s/operator `MY_POD` env var)
-		MemCPUInfo     cos.MemCPUInfo `json:"sys_info"`
+		MemCPUInfo     apc.MemCPUInfo `json:"sys_info"`
 		SmapVersion    int64          `json:"smap_version,string"`
 	}
 )

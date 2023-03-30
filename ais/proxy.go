@@ -38,7 +38,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
@@ -2421,7 +2420,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		apc.WhatNodeStats, apc.WhatMetricNames:
 		p.htrun.httpdaeget(w, r, query)
 	case apc.WhatSysInfo:
-		p.writeJSON(w, r, sys.GetMemCPU(), what)
+		p.writeJSON(w, r, apc.GetMemCPU(), what)
 	case apc.WhatSmap:
 		const max = 16
 		var (
@@ -2453,7 +2452,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				Snode: p.htrun.si,
 			},
 			SmapVersion:    smap.Version,
-			MemCPUInfo:     sys.GetMemCPU(),
+			MemCPUInfo:     apc.GetMemCPU(),
 			DeploymentType: deploymentType(),
 			Version:        daemon.version,
 			BuildTime:      daemon.buildTime,
