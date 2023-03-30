@@ -40,6 +40,9 @@ class TestETLOps(unittest.TestCase):
             obj_name=self.obj_name,
             obj_size=self.obj_size,
         )
+        create_and_put_object(
+            client=self.client, bck_name=self.bck_name, obj_name="obj2.jpg"
+        )
 
         self.current_etl_count = len(self.client.etl().list())
 
@@ -102,14 +105,15 @@ class TestETLOps(unittest.TestCase):
         temp_bck1 = self.client.bucket(random_string()).create()
 
         # Transform Bucket with MD5 Template
-        job_id = self.bucket.transform(etl_name=ETL_NAME_SPEC, to_bck=temp_bck1)
+        job_id = self.bucket.transform(
+            etl_name=ETL_NAME_SPEC, to_bck=temp_bck1, prefix_filter="temp-"
+        )
         self.client.job(job_id).wait()
 
-        # Verify object counts of the original and transformed bucket are the same
-        self.assertEqual(
-            len(self.bucket.list_objects().get_entries()),
-            len(temp_bck1.list_objects().get_entries()),
-        )
+        starting_obj = self.bucket.list_objects().get_entries()
+        transformed_obj = temp_bck1.list_objects().get_entries()
+        # Should transform only the object defined by the prefix filter
+        self.assertEqual(len(starting_obj) - 1, len(transformed_obj))
 
         md5_obj = temp_bck1.object(self.obj_name).get().read_all()
 

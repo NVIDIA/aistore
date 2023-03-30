@@ -405,6 +405,7 @@ class TestBucket(unittest.TestCase):
     def test_transform(self):
         etl_name = "etl-name"
         prepend_val = "prefix-"
+        prefix_filter = "required-prefix-"
         ext = {"jpg": "txt"}
         timeout = "4m"
         force = True
@@ -412,13 +413,16 @@ class TestBucket(unittest.TestCase):
         action_value = TCBckMsg(
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
-            copy_msg=CopyBckMsg(prepend=prepend_val, force=force, dry_run=dry_run),
+            copy_msg=CopyBckMsg(
+                prefix=prefix_filter, prepend=prepend_val, force=force, dry_run=dry_run
+            ),
         ).as_dict()
 
         self._transform_exec_assert(
             etl_name,
             action_value,
             prepend=prepend_val,
+            prefix_filter=prefix_filter,
             ext=ext,
             force=force,
             dry_run=dry_run,

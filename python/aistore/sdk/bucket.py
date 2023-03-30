@@ -247,7 +247,7 @@ class Bucket:
 
         Args:
             to_bck (Bucket): Destination bucket
-            prefix_filter (str, optional): Only copy objects that share this prefix
+            prefix_filter (str, optional): Only copy objects with names starting with this prefix
             prepend (str, optional): Value to prepend to the name of copied objects
             dry_run (bool, optional): Determines if the copy should actually
                 happen or not
@@ -454,6 +454,7 @@ class Bucket:
         etl_name: str,
         to_bck: Bucket,
         timeout: str = DEFAULT_ETL_TIMEOUT,
+        prefix_filter: str = "",
         prepend: str = "",
         ext: Dict[str, str] = None,
         force: bool = False,
@@ -467,6 +468,7 @@ class Bucket:
             etl_name (str): name of etl to be used for transformations
             to_bck (str): destination bucket for transformations
             timeout (str, optional): Timeout of the ETL job (e.g. 5m for 5 minutes)
+            prefix_filter (str, optional): Only transform objects with names starting with this prefix
             prepend (str, optional): Value to prepend to the name of resulting transformed objects
             ext (Dict[str, str], optional): dict of new extension followed by extension to be replaced
                 (i.e. {"jpg": "txt"})
@@ -479,7 +481,9 @@ class Bucket:
         value = TCBckMsg(
             ext=ext,
             transform_msg=TransformBckMsg(etl_name=etl_name, timeout=timeout),
-            copy_msg=CopyBckMsg(prepend=prepend, force=force, dry_run=dry_run),
+            copy_msg=CopyBckMsg(
+                prefix=prefix_filter, prepend=prepend, force=force, dry_run=dry_run
+            ),
         ).as_dict()
 
         params = self.qparam.copy()
@@ -504,7 +508,7 @@ class Bucket:
 
         Args:
             path (str): Local filepath, can be relative or absolute
-            prefix_filter (str, optional): Required prefix in names of all files to put
+            prefix_filter (str, optional): Only put files with names starting with this prefix
             pattern (str, optional): Regex pattern to filter files
             basename (bool, optional): Whether to use the file names only as object names and omit the path information
             prepend (str, optional): Optional string to use as a prefix in the object name for all objects uploaded
