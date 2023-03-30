@@ -22,6 +22,8 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [client](#cluster.Cluster.client)
     * [get\_info](#cluster.Cluster.get_info)
     * [list\_buckets](#cluster.Cluster.list_buckets)
+    * [list\_jobs\_status](#cluster.Cluster.list_jobs_status)
+    * [list\_running\_jobs](#cluster.Cluster.list_running_jobs)
     * [is\_aistore\_running](#cluster.Cluster.is_aistore_running)
 * [bucket](#bucket)
   * [Bucket](#bucket.Bucket)
@@ -45,6 +47,8 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [objects](#bucket.Bucket.objects)
     * [make\_request](#bucket.Bucket.make_request)
     * [verify\_cloud\_bucket](#bucket.Bucket.verify_cloud_bucket)
+    * [get\_path](#bucket.Bucket.get_path)
+    * [as\_model](#bucket.Bucket.as_model)
 * [object](#object)
   * [Object](#object.Object)
     * [bucket](#object.Object.bucket)
@@ -62,6 +66,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [prefetch](#multiobj.object_group.ObjectGroup.prefetch)
     * [copy](#multiobj.object_group.ObjectGroup.copy)
     * [transform](#multiobj.object_group.ObjectGroup.transform)
+    * [archive](#multiobj.object_group.ObjectGroup.archive)
     * [list\_names](#multiobj.object_group.ObjectGroup.list_names)
 * [multiobj.object\_names](#multiobj.object_names)
   * [ObjectNames](#multiobj.object_names.ObjectNames)
@@ -257,6 +262,46 @@ Returns list of buckets in AIStore cluster.
 - `requests.ConnectionTimeout` - Timed out connecting to AIStore
 - `requests.ReadTimeout` - Timed out waiting response from AIStore
 
+<a id="cluster.Cluster.list_jobs_status"></a>
+
+### list\_jobs\_status
+
+```python
+def list_jobs_status(job_kind="", target_id="") -> List[JobStatus]
+```
+
+List the status of jobs on the cluster
+
+**Arguments**:
+
+- `job_kind` _str, optional_ - Only show jobs of a particular type
+- `target_id` _str, optional_ - Limit to jobs on a specific target node
+  
+
+**Returns**:
+
+  List of JobStatus objects
+
+<a id="cluster.Cluster.list_running_jobs"></a>
+
+### list\_running\_jobs
+
+```python
+def list_running_jobs(job_kind="", target_id="") -> List[str]
+```
+
+List the currently running jobs on the cluster
+
+**Arguments**:
+
+- `job_kind` _str, optional_ - Only show jobs of a particular type
+- `target_id` _str, optional_ - Limit to jobs on a specific target node
+  
+
+**Returns**:
+
+  List of jobs in the format job_kind[job_id]
+
 <a id="cluster.Cluster.is_aistore_running"></a>
 
 ### is\_aistore\_running
@@ -294,7 +339,7 @@ A class representing a bucket that contains user data.
 
 ```python
 @property
-def client()
+def client() -> RequestClient
 ```
 
 The client bound to this bucket.
@@ -305,7 +350,7 @@ The client bound to this bucket.
 
 ```python
 @property
-def qparam()
+def qparam() -> Dict
 ```
 
 Default query parameters to use with API calls from this bucket.
@@ -316,7 +361,7 @@ Default query parameters to use with API calls from this bucket.
 
 ```python
 @property
-def provider()
+def provider() -> str
 ```
 
 The provider for this bucket.
@@ -327,7 +372,7 @@ The provider for this bucket.
 
 ```python
 @property
-def name()
+def name() -> str
 ```
 
 The name of this bucket.
@@ -338,7 +383,7 @@ The name of this bucket.
 
 ```python
 @property
-def namespace()
+def namespace() -> Namespace
 ```
 
 The namespace for this bucket.
@@ -402,7 +447,7 @@ Note: AIS will _not_ call the remote backend provider to delete the correspondin
 ### rename
 
 ```python
-def rename(to_bck: str) -> str
+def rename(to_bck_name: str) -> str
 ```
 
 Renames bucket in AIStore cluster.
@@ -411,7 +456,7 @@ operation.
 
 **Arguments**:
 
-- `to_bck` _str_ - New bucket name for bucket to be renamed as
+- `to_bck_name` _str_ - New bucket name for bucket to be renamed as
   
 
 **Returns**:
@@ -485,25 +530,23 @@ Requests bucket properties.
 ### copy
 
 ```python
-def copy(to_bck_name: str,
+def copy(to_bck: Bucket,
          prefix_filter: str = "",
          prepend: str = "",
          dry_run: bool = False,
-         force: bool = False,
-         to_provider: str = PROVIDER_AIS) -> str
+         force: bool = False) -> str
 ```
 
 Returns job ID that can be used later to check the status of the asynchronous operation.
 
 **Arguments**:
 
-- `to_bck_name` _str_ - Name of the destination bucket
-- `prefix_filter` _str, optional_ - Only copy objects that share this prefix
+- `to_bck` _Bucket_ - Destination bucket
+- `prefix_filter` _str, optional_ - Only copy objects with names starting with this prefix
 - `prepend` _str, optional_ - Value to prepend to the name of copied objects
 - `dry_run` _bool, optional_ - Determines if the copy should actually
   happen or not
 - `force` _bool, optional_ - Override existing destination bucket
-- `to_provider` _str, optional_ - Name of destination bucket provider
   
 
 **Returns**:
@@ -664,8 +707,9 @@ Returns a list of all objects in bucket
 
 ```python
 def transform(etl_name: str,
-              to_bck: str,
+              to_bck: Bucket,
               timeout: str = DEFAULT_ETL_TIMEOUT,
+              prefix_filter: str = "",
               prepend: str = "",
               ext: Dict[str, str] = None,
               force: bool = False,
@@ -680,6 +724,7 @@ result to the destination bucket
 - `etl_name` _str_ - name of etl to be used for transformations
 - `to_bck` _str_ - destination bucket for transformations
 - `timeout` _str, optional_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
+- `prefix_filter` _str, optional_ - Only transform objects with names starting with this prefix
 - `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
 - `ext` _Dict[str, str], optional_ - dict of new extension followed by extension to be replaced
   (i.e. {"jpg": "txt"})
@@ -711,7 +756,7 @@ Puts files found in a given filepath as objects to a bucket in AIS storage.
 **Arguments**:
 
 - `path` _str_ - Local filepath, can be relative or absolute
-- `prefix_filter` _str, optional_ - Required prefix in names of all files to put
+- `prefix_filter` _str, optional_ - Only put files with names starting with this prefix
 - `pattern` _str, optional_ - Regex pattern to filter files
 - `basename` _bool, optional_ - Whether to use the file names only as object names and omit the path information
 - `prepend` _str, optional_ - Optional string to use as a prefix in the object name for all objects uploaded
@@ -811,6 +856,30 @@ def verify_cloud_bucket()
 ```
 
 Verify the bucket provider is a cloud provider
+
+<a id="bucket.Bucket.get_path"></a>
+
+### get\_path
+
+```python
+def get_path() -> str
+```
+
+Get the path representation of this bucket
+
+<a id="bucket.Bucket.as_model"></a>
+
+### as\_model
+
+```python
+def as_model() -> BucketModel
+```
+
+Return a data-model of the bucket
+
+**Returns**:
+
+  BucketModel representation
 
 <a id="object.Object"></a>
 
@@ -1113,8 +1182,7 @@ NOTE: only Cloud buckets can be prefetched.
 ### copy
 
 ```python
-def copy(to_bck: str,
-         to_provider: str = PROVIDER_AIS,
+def copy(to_bck: "Bucket",
          prepend: str = "",
          continue_on_error: bool = False,
          dry_run: bool = False,
@@ -1125,8 +1193,7 @@ Copies a list or range of objects in a bucket
 
 **Arguments**:
 
-- `to_bck` _str_ - Name of the destination bucket
-- `to_provider` _str, optional_ - Name of destination bucket provider
+- `to_bck` _Bucket_ - Destination bucket
 - `prepend` _str, optional_ - Value to prepend to the name of copied objects
 - `continue_on_error` _bool, optional_ - Whether to continue if there is an error copying a single object
 - `dry_run` _bool, optional_ - Skip performing the copy and just log the intended actions
@@ -1153,10 +1220,9 @@ Copies a list or range of objects in a bucket
 ### transform
 
 ```python
-def transform(to_bck: str,
+def transform(to_bck: "Bucket",
               etl_name: str,
               timeout: str = DEFAULT_ETL_TIMEOUT,
-              to_provider: str = PROVIDER_AIS,
               prepend: str = "",
               continue_on_error: bool = False,
               dry_run: bool = False,
@@ -1167,10 +1233,9 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 
 **Arguments**:
 
-- `to_bck` _str_ - Name of the destination bucket
+- `to_bck` _Bucket_ - Destination bucket
 - `etl_name` _str_ - Name of existing ETL to apply
 - `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
-- `to_provider` _str, optional_ - Name of destination bucket provider
 - `prepend` _str, optional_ - Value to prepend to the name of resulting transformed objects
 - `continue_on_error` _bool, optional_ - Whether to continue if there is an error transforming a single object
 - `dry_run` _bool, optional_ - Skip performing the transform and just log the intended actions
@@ -1186,6 +1251,35 @@ Performs ETL operation on a list or range of objects in a bucket, placing the re
 - `requests.exceptions.HTTPError` - Service unavailable
 - `requests.RequestException` - "There was an ambiguous exception that occurred while handling..."
 - `requests.ReadTimeout` - Timed out receiving response from AIStore
+  
+
+**Returns**:
+
+  Job ID (as str) that can be used to check the status of the operation
+
+<a id="multiobj.object_group.ObjectGroup.archive"></a>
+
+### archive
+
+```python
+def archive(archive_name: str,
+            mime: str = "",
+            to_bck: "Bucket" = None,
+            include_source_name: bool = False,
+            allow_append: bool = False,
+            continue_on_err: bool = False)
+```
+
+Create or append to an archive
+
+**Arguments**:
+
+- `archive_name` _str_ - Name of archive to create or append
+- `mime` _str, optional_ - MIME type of the content
+- `to_bck` _Bucket, optional_ - Destination bucket, defaults to current bucket
+- `include_source_name` _bool, optional_ - Include the source bucket name in the archived objects' names
+- `allow_append` _bool, optional_ - Allow appending to an existing archive
+- `continue_on_err` _bool, optional_ - Whether to continue if there is an error archiving a single object
   
 
 **Returns**:
@@ -1297,21 +1391,14 @@ Return job kind
 ### status
 
 ```python
-def status(only_running: bool = False) -> JobStatus
+def status() -> JobStatus
 ```
 
 Return status of a job
 
-**Arguments**:
-
-  only_running (bool, optional):
-  True - return only currently running jobs
-  False - include finished and aborted jobs
-  
-
 **Returns**:
 
-  The job description.
+  The job status including id, finish time, and error info.
   
 
 **Raises**:
