@@ -50,20 +50,51 @@ This document contains `ais object` commands - the commands to read (GET), write
 
 # GET object
 
-`ais get BUCKET/OBJECT_NAME [OUT_FILE]`
+The command is very useful in terms getting your data out of the cluster. In its brief description:
 
-Get an object from a bucket. If a local file of the same name exists, the local file will be *overwritten without confirmation*.
+`ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]`
 
-## Options
+there's a
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--offset` | `string` | Read offset, which can end with size suffix (k, MB, GiB, ...) | `""` |
-| `--length` | `string` | Read length, which can end with size suffix (k, MB, GiB, ...) |  `""` |
-| `--checksum` | `bool` | Validate the checksum of the object | `false` |
-| `--cached` | `bool` | Check if object from a remote bucket is present (ie., cached) in the cluster. | `false` |
+* bucket source with an optional object name (`BUCKET[/OBJECT_NAME]`), and
+* the destination (but also optional) `[OUT_FILE]` or standard output (`-`)
 
-`OUT_FILE`: filename in an existing directory or `-` for `stdout`
+Here's how it goes and what gives:
+
+```console
+$ ais get --help
+NAME:
+   ais get - (alias for "object get") get an object, an archived file, or a range of bytes from the above, and in addition:
+           - write the content locally with destination options including: filename, directory, STDOUT ('-');
+           - use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).
+
+USAGE:
+   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]
+
+OPTIONS:
+   --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --length value    object read length; default formatting: IEC (use '--units' to override)
+   --archpath value  filename in archive
+   --checksum        validate checksum
+   --yes, -y         assume 'yes' for all questions
+   --check-cached    check if a given object from a remote bucket is present ("cached") in AIS
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress        show progress bar(s) and progress of execution in real time
+   --prefix value    get objects that start with the specified prefix, e.g.:
+                     '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
+                     a/b that have their names (relative to this directory) starting with c;
+                     '--prefix ""' - get entire bucket
+   --cached          get only those objects from a remote bucket that are present ("cached") in AIS
+   --archive         list archived content (see docs/archive.md for details)
+   --limit value     limit object name count (0 - unlimited) (default: 0)
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --verbose, -v     verbose
+   --help, -h        show help
+```
 
 ## Save object to local file
 
@@ -243,36 +274,83 @@ ec          2:2[replicated]
 
 # PUT object
 
-`ais put -|FILE|DIRECTORY BUCKET/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+Briefly:
 
-Put a file, an entire directory of files, or content from STDIN (`-`) into the specified bucket. If an object of the same name exists,
-the object will be overwritten without confirmation.
+`ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]`<sup>[1](#ft1)</sup>
 
-If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size, and checks if the bucket is empty. Then it shows all gathered info to the user and asks for confirmation to continue. 
+writes a single file, an entire directory (of files), or a typed content directly from STDIN (`-`) - into the specified (destination) bucket.
+
+Notice the optional `[/PATTERN]` - a regular shell filename-matching primitive  - to select files from the source directory.
+
+If an object of the same name exists, the object will be overwritten without confirmation
+
+> but only if is different, content-wise - writing identical bits is optimized-out
+
+If CLI detects that a user is going to put more than one file, it calculates the total number of files, total data size, and checks if the bucket is empty.
+
+Then it shows all gathered info to the user and asks for confirmation to continue.
+
 Confirmation request can be disabled with the option `--yes` for use in scripts.
+
+When writing from `STDIN`, type Ctrl-D to terminate the input.
 
 ## Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--chunk-size` 	| `string`   | chunk size used for each request (all IEC and SI units are supported, e.g.: b, B, KB, KiB, k, MiB, mb, etc.) | "10MB" |
-| `--conc` 		| `int`      | limits number of concurrent put requests and number of concurrent shards created | 10 |
-| `--dry-run`   	| `bool`     | preview the results without really running the action |
-| `--progress`  	| `bool`     | display progress bar |
-| `--recursive, -r`	| `bool`     | recursive operation |
-| `--refresh`      	| `duration` | refresh interval for continuous monitoring, valid time units: 'ns', 'us', 'ms', 's', 'm', and 'h' | 1s |
-| `--verbose, -v`  	| `bool`     | verbose |
-| `--yes, -y`      	| `bool`     | assume 'yes' for all questions |
-| `--compute-checksum` 	| `bool`     | compute checksum configured for the bucket |
-| `--source-bck`	| `string`   | source bucket |
-| `--template` 		| `string`   | template for matching object names, e.g.: 'shard-{900..999}.tar' |
-| `--list` 		| `string`   | comma-separated list of object names, e.g.: 'o1,o2,o3' |
-| `--include-src-bck`  	| `bool`     | include source bucket name into the names of archived objects from this bucket |
-| `--append-to-arch`	| `bool`     | allow adding a list or a range of objects to an existing archive |
-| `--cont-on-err`   	| `bool`     | keep running archiving xaction in presence of errors in a any given multi-object transaction |
-| `--archive`       	| `bool`     | archive a list or a range of objects |
-| `--archpath` 		| `string`   | filename in archive |
-| `--skip-vc` 	 	| `bool`     | skip loading object metadata (and the associated checksum & version related processing) |
+```console
+$ ais put --help
+NAME:
+   ais put - (alias for "object put") PUT or APPEND one file or one directory, or multiple files and/or directories.
+              - use optional shell filename pattern (wildcard) to match/select sources;
+              - request '--compute-checksum' to facilitate end-to-end protection;
+              - progress bar via '--progress' to show runtime execution (uploaded files count and size);
+              - when writing directly from standard input use Ctrl-D to terminate;
+              - use '--archpath' to APPEND to an existing tar-formatted object.
+
+USAGE:
+   ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]
+
+OPTIONS:
+   --list value        comma-separated list of file names, e.g.:
+                       --list 'f1,f2,f3'
+                       --list "/home/abc/1.tar, /home/abc/1.cls, /home/abc/1.jpeg"
+   --template value    template to match file names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
+                       --template '/home/dir/subdir/'
+                       --template 'shard-{1000..9999}.tar'
+                       --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                       --template "prefix-{0010..9999..2}-suffix"
+   --progress          show progress bar(s) and progress of execution in real time
+   --refresh value     interval for continuous monitoring;
+                       valid time units: ns, us (or µs), ms, s (default), m, h
+   --chunk-size value  chunk size in IEC or SI units, or "raw" bytes (e.g.: 1MiB or 1048576; see '--units')
+   --conc value        limits number of concurrent put requests and number of concurrent shards created (default: 10)
+   --dry-run           preview the results without really running the action
+   --recursive, -r     recursive operation
+   --verbose, -v       verbose
+   --yes, -y           assume 'yes' for all questions
+   --include-src-bck   prefix names of archived objects with the source bucket name
+   --cont-on-err       keep running archiving xaction in presence of errors in a any given multi-object transaction
+   --units value       show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                       iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                       si  - SI (metric) format, e.g.: KB, MB, GB
+                       raw - do not convert to (or from) human-readable format
+   --source-bck value  source bucket (to archive multiple objects from)
+   --archpath value    filename in archive
+   --archive           archive a given list ('--list') or range ('--template') of objects
+   --append-to-arch    allow adding a list or a range of objects to an existing archive
+   --skip-vc           skip loading object metadata (and the associated checksum & version related processing)
+   --compute-checksum  [end-to-end protection] compute client-side checksum configured for the destination bucket
+   --crc32c value      compute client-side crc32c checksum
+                       and provide it as part of the PUT request for subsequent validation on the server side
+   --md5 value         compute client-side md5 checksum
+                       and provide it as part of the PUT request for subsequent validation on the server side
+   --sha256 value      compute client-side sha256 checksum
+                       and provide it as part of the PUT request for subsequent validation on the server side
+   --sha512 value      compute client-side sha512 checksum
+                       and provide it as part of the PUT request for subsequent validation on the server side
+   --xxhash value      compute client-side xxhash checksum
+                       and provide it as part of the PUT request for subsequent validation on the server side
+   --help, -h          show help
+```
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
  Symbols `*` and `?` can be used only in a file name pattern. Directory names cannot include wildcards. Only a file name is matched, not full file path, so `/home/user/*.tar --recursive` matches not only `.tar` files inside `/home/user` but any `.tar` file in any `/home/user/` subdirectory.

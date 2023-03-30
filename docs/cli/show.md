@@ -7,7 +7,7 @@ redirect_from:
  - /docs/cli/show.md/
 ---
 
-# CLI Reference for `show` commands
+# `ais show` command
 
 AIS CLI `show` command can universally be used to view summaries and details on a cluster and its nodes, buckets and objects, running and finished jobs - in short, _all_ managed entities (see below). The command is a "hub" for all information-viewing commands that are currently supported.
 
@@ -15,26 +15,28 @@ For easy usage, all `show` commands have been aliased to their respective top-le
 
 ```console
 $ ais show <command>
-
-# is equivalent to:
-
+```
+is equivalent to:
+```console
 $ ais <command> show
 ```
 
-Running `ais show cluster` is the same as `ais cluster show`, and so on. And one more example of two identical commands:
+Running `ais show cluster` is the same as `ais cluster show`, and so on. And one more example of the identical twins:
 
 ```console
 $ ais show performance
 $ ais performance show
 ```
 
-> As a general rule, instead remembering any of the above (and/or below), simply type (for instance) `ais perf<TAB-TAB>` and press `<TAB-TAB>` followed by `Enter`.
+> As a general rule, instead of remembering any of the above (as well as any of the below), type (e.g.) `ais perf<TAB-TAB>` and press `Enter`.
 
-> When part-typing, part-TABing a sequence of words that constitute an AIS command, you can stop at any time and type `--help`. This will display short usage description, command-line options, examples, and other extended context.
+> You can also hit <TAB-TAB>` maybe a few more times while typing a few more letters in between. Any combination will work.
 
-> As far as usage examples, another way to quickly find them would be a good-and-old keyword search. E.g., `grep -n "ais.*cp" docs/cli/*.md`, and similar. Additional ways and useful tricks (including `ais search`) are also mentioned elsewhere in the docs.
+> When part-typing, part-TABing a sequence of words that (will eventually) constitute a valid AIS CLI command, type `--help` at any time. This will display short description, command-line options, usage examples, and other context-sensitive information.
 
-As far as `ais show` itself, the command currently extends as follows:
+> For usage examples, another way to quickly find them would be a good-and-old keyword search. E.g., `cd aistore; grep -n "ais.*cp" docs/cli/*.md`, and similar. Additional useful tricks (including `ais search`) are also mentioned elsewhere in these docs.
+
+As far as `ais show`, the command currently extends as follows:
 
 ```console
 $ ais show <TAB-TAB>
@@ -48,10 +50,10 @@ In other words, there are currently 11 subcommands that are briefly described in
 ## Table of Contents
 - [`ais show performance`](#ais-show-performance)
 - [`ais show job`](#ais-show-job)
+- [`ais show cluster`](#ais-show-cluster)
 - [`ais show auth`](#ais-show-auth)
 - [`ais show bucket`](#ais-show-bucket)
 - [`ais show object`](#ais-show-object)
-- [`ais show cluster`](#ais-show-cluster)
 - [`ais show storage`](#ais-show-storage)
 - [`ais show config`](#ais-show-config)
 - [`ais show remote-cluster`](#ais-show-remote-cluster)
@@ -315,6 +317,91 @@ qVJt8087         g15     rebalance       694             1.02MiB         13:40:5
 - [reading, writing, and listing archives](/docs/cli/object.md)
 - [copying buckets](/docs/cli/bucket.md#copy-bucket)
 
+## `ais show cluster`
+
+The first command to think of when deploying a new cluster. Useful as well when looking for the shortest quickest summary of what's running and what's going on. The subcommands and brief description follows:
+
+```console
+# ais show cluster <TAB-TAB>
+proxy    target   smap     bmd      config   stats
+```
+
+```console
+$ ais show cluster --help
+NAME:
+   ais show cluster - show cluster nodes and utilization
+
+USAGE:
+   ais show cluster command [command options] [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]
+
+COMMANDS:
+   smap    show Smap (cluster map)
+   bmd     show BMD (bucket metadata)
+   config  show cluster and node configuration
+   stats   (alias for "ais show performance") show performance counters, throughput, latency, and more (press <TAB-TAB> to select specific view)
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --json, -j        json input/output
+   --no-headers, -H  display tables without headers
+   --help, -h        show help
+```
+
+### Example usage with no parameters and a _different_ endpoint
+
+```console
+$ export AIS_ENDPOINT=http://10.0.1.148:51080
+$ ais show cluster
+
+PROXY            MEM USED(%)     MEM AVAIL       UPTIME  K8s POD         STATUS
+p[EciZrNdH][P]   0.01%           363.51GiB       94d     ais-proxy-2     online
+p[HPpnlgpj]      0.01%           363.66GiB       94d     ais-proxy-0     online
+p[LZOkYuAf]      0.01%           362.62GiB       94d     ais-proxy-8     online
+p[NXDmWuAV]      0.01%           363.68GiB       94d     ais-proxy-6     online
+p[OzRhyuOB]      0.01%           363.73GiB       94d     ais-proxy-4     online
+p[WwpvNugq]      0.01%           363.17GiB       94d     ais-proxy-9     online
+p[cAQpRMET]      0.01%           363.56GiB       94d     ais-proxy-1     online
+p[eYQteCHG]      0.01%           363.81GiB       94d     ais-proxy-7     online
+p[ehkGLcSD]      0.01%           363.57GiB       94d     ais-proxy-3     online
+p[reZqfbjy]      0.01%           363.67GiB       94d     ais-proxy-5     online
+
+TARGET           MEM USED(%)     MEM AVAIL       CAP USED(%)     CAP AVAIL       CPU USED(%)    UPTIME   K8s POD         STATUS
+t[KopwySra]      0.15%           363.54GiB       77.67%          31.825TiB       15.38%         94d      ais-target-1    online
+t[MgHbIvNG]      0.16%           363.65GiB       77.00%          30.941TiB       14.06%         94d      ais-target-4    online
+t[WoLgoQEW]      0.16%           363.72GiB       78.00%          31.763TiB       17.67%         94d      ais-target-7    online
+t[fXFQnenn]      0.11%           363.83GiB       78.00%          31.751TiB       18.12%         94d      ais-target-6    online
+t[fwKlswQP]      0.16%           363.62GiB       78.33%          31.758TiB       19.81%         94d      ais-target-5    online
+t[tFUiHCCO]      0.16%           363.76GiB       79.00%          31.617TiB       19.47%         94d      ais-target-8    online
+t[tfNkAtFk]      0.16%           363.55GiB       77.33%          31.875TiB       19.70%         94d      ais-target-2    online
+t[uxvpIDPc]      0.15%           362.57GiB       77.67%          31.846TiB       16.56%         94d      ais-target-0    online
+t[vAWmZZPv]      0.11%           363.68GiB       78.67%          31.608TiB       23.09%         94d      ais-target-3    online
+t[wSJzGVnU]      0.10%           363.33GiB       76.67%          30.972TiB       17.13%         94d      ais-target-9    online
+
+Summary:
+   Proxies:             10 (0 unelectable)
+   Targets:             10
+   Cluster Map:         version 1512, UUID AGetvIKTz, primary p[EciZrNdH]
+   Deployment:          K8s
+   Status:              20 online
+   Rebalance:           n/a
+   Authentication:      disabled
+   Version:             3.12.85636aa
+   Build:               2022-11-16T17:55:50+0000
+```
+
+> `AIS_ENDPOINT` is part of the `AIS_**` [environment](https://github.com/NVIDIA/aistore/blob/master/api/env/ais.go).
+
+> `AIS_ENDPOINT` can point to any AIS gateway (proxy) in a given cluster. Does not necessarily have to be the _primary_ gateway.
+
+> For CLI, in particular, `AIS_ENDPOINT` overrides cluster's endpoint that's currently configured. To view or change the configured endpoint (or any other CLI configuration item), run `ais config cli`.
+
+### See also
+
+* [`ais cluster` command](cluster.md#cluster-or-daemon-status)
+
+
 ## `ais show auth`
 The following subcommands are currently supported:
 
@@ -337,18 +424,6 @@ Show bucket properties.
 Show object details.
 
 [Refer to `ais object` documentation for details and examples.](object.md#show-object-properties)
-
-## `ais show cluster`
-Show cluster.
-
-The command supports a variety of subcommands and scoping options:
-
-```console
-# ais show cluster <TAB-TAB>
-bmd   config   proxy   smap   stats   target    [DAEMON_ID ...]
-```
-
-[Refer to `ais cluster` documentation for details and examples.](cluster.md#cluster-or-daemon-status)
 
 ## `ais show storage`
 Show storage usage and utilization in the cluster. Show disks and mountpaths - for a single selected node or for all storage nodes.

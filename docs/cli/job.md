@@ -11,9 +11,9 @@ redirect_from:
 
 Batch operations that run asynchronously and may take seconds (minutes, hours, etc.) to execute - are called eXtended actions (xactions).
 
-Internally, `xaction` is an abstraction at the root of inheritance hierarchy that also contains specific user-visible jobs: `copy-bucket`, `evict-objects`, and many more.
+Internally, `xaction` is an abstraction at the root of the inheritance hierarchy that also contains specific user-visible jobs: `copy-bucket`, `evict-objects`, and more.
 
-> For the most recently updated list of all supported jobs and their respective compile-time properties, see the [source](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108)
+> For the most recently updated list of all supported jobs and their respective compile-time properties, see the [source](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108).
 
 **All jobs run asynchronously, have start and stop times, and common generic statistics**
 
