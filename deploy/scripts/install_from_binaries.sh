@@ -89,23 +89,37 @@ if [ ! -w "$dstdir" ]; then
 fi
 
 echo "Installing aisloader => $dstdir/aisloader"
-if [[ ${release} != "latest" ]]; then
-  curl -Lo aisloader https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64
-  chmod +x aisloader
-else
-  curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/aisloader-linux-amd64.tar.gz
-  tar -xzvf aisloader-linux-amd64.tar.gz
-fi
+case ${release} in
+  latest|"")
+    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/aisloader-linux-amd64.tar.gz
+    tar -xzvf aisloader-linux-amd64.tar.gz
+    ;;
+  v1.3.15|3.13)
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/aisloader-linux-amd64.tar.gz
+    tar -xzvf aisloader-linux-amd64.tar.gz
+    ;;
+  *)
+    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/aisloader-linux-amd64
+    chmod +x aisloader
+    ;;
+esac
 $SUDO mv ./aisloader $dstdir/.
 
 echo "Installing CLI => $dstdir/ais"
-if [[ ${release} != "latest" ]]; then
-  curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64
-  chmod +x ais
-else
-  curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/ais-linux-amd64.tar.gz
-  tar -xzvf ais-linux-amd64.tar.gz
-fi
+case ${release} in
+  latest|"")
+    curl -LO https://github.com/NVIDIA/aistore/releases/latest/download/ais-linux-amd64.tar.gz
+    tar -xzvf ais-linux-amd64.tar.gz
+    ;;
+  v1.3.15|3.13)
+    curl -LO https://github.com/NVIDIA/aistore/releases/download/v1.3.15/ais-linux-amd64.tar.gz
+    tar -xzvf ais-linux-amd64.tar.gz
+    ;;
+  *)
+    curl -Lo ais https://github.com/NVIDIA/aistore/releases/download/$release/ais-linux-amd64
+    chmod +x ais
+    ;;
+esac
 $SUDO mv ./ais $dstdir/.
 
 install_completions
