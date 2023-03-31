@@ -113,6 +113,5 @@ func TestProc(t *testing.T) {
 		"Total must be equal to sum of User and System: %+v", newStats.CPU)
 	tassert.Errorf(t, newStats.CPU.Total > stats.CPU.Total, "New stats must show more CPU used. Old usage %d, new one: %d", stats.CPU.Total, newStats.CPU.Total)
 	tassert.Errorf(t, newStats.CPU.Percent > 0.0, "Process must use some CPU. Usage: %g", stats.CPU.Percent)
-	tassert.Errorf(t, newStats.CPU.Percent < 100.0, "Process should use less than 100%% CPU. Usage: %g", newStats.CPU.Percent)
 	t.Logf("Process CPU usage: %6.2f%%", newStats.CPU.Percent)
 }

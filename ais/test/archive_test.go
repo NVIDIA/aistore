@@ -297,33 +297,39 @@ func testMobjArch(t *testing.T, bck *cluster.Bck) {
 				api.AbortXaction(baseParams, flt)
 			}
 
-			time.Sleep(5 * time.Second) // TODO: remove
-			api.WaitForXactionIdle(baseParams, flt)
+			for ii := 0; ii < 2; ii++ {
+				// TODO: calibrate x-archive reporting 'idle'
+				// (too early in presence of multiple concurrent requests)
+				time.Sleep(3 * time.Second)
+				api.WaitForXactionIdle(baseParams, flt)
 
-			tlog.Logf("List %s\n", bckTo)
+				tlog.Logf("List %s\n", bckTo)
+				msg := &apc.LsoMsg{Prefix: "test_"}
+				msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+				objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
+				tassert.CheckFatal(t, err)
+				for _, en := range objList.Entries {
+					tlog.Logf("%s: %dB\n", en.Name, en.Size)
+				}
+				num := len(objList.Entries)
+				if num < numArchs && ii == 0 {
+					tlog.Logf("Warning: expected %d, have %d - retrying...\n", numArchs, num)
+					time.Sleep(7 * time.Second) // TODO: ditto
+					continue
+				}
+				tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+				break
+			}
+
 			msg := &apc.LsoMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
+			msg.SetFlag(apc.LsArchDir)
 			objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
 			tassert.CheckFatal(t, err)
-			for _, en := range objList.Entries {
-				tlog.Logf("%s: %dB\n", en.Name, en.Size)
-			}
 			num := len(objList.Entries)
-			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
-
-			msg.SetFlag(apc.LsArchDir)
-			objList, err = api.ListObjects(baseParams, bckTo, msg, 0)
-			tassert.CheckFatal(t, err)
-			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*numInArch
 
-			if test.ext == cos.ExtMsgpack { // TODO -- FIXME: remove
-				if num != expectedNum {
-					tlog.Logf("expected %d, have %d\n", expectedNum, num)
-				}
-			} else {
-				tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
-			}
+			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
 
 			var (
 				objName string
