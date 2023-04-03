@@ -24,7 +24,7 @@ from aistore.sdk.etl_const import (
     CODE_TEMPLATE,
 )
 
-from aistore.sdk.types import ETL, ETLDetails
+from aistore.sdk.types import ETL, ETLDetails, InitCodeETLArgs, InitSpecETLArgs
 
 
 def _get_default_runtime():
@@ -77,7 +77,7 @@ class Etl:
             communication_type (str): Communication type of the ETL (options: hpull, hrev, hpush)
             timeout (str): Timeout of the ETL job (e.g. 5m for 5 minutes)
         Returns:
-            etl_name (str): ETL name
+            Job ID string associated with this ETL
         """
         _validate_comm_type(communication_type, ETL_COMM_SPEC)
 
@@ -86,15 +86,14 @@ class Etl:
             UTF_ENCODING
         )
 
-        action = {
-            "spec": spec_encoded,
-            "id": etl_name,
-            "communication": f"{communication_type}://",
-            "timeout": timeout,
-        }
+        value = InitSpecETLArgs(
+            spec=spec_encoded,
+            etl_name=etl_name,
+            communication_type=communication_type,
+            timeout=timeout,
+        ).as_dict()
 
-        resp = self.client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=action)
-        return resp.text
+        return self.client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=value).text
 
     # pylint: disable=too-many-arguments
     def init_code(
@@ -123,45 +122,45 @@ class Etl:
             chunk_size (int): Chunk size in bytes if transform function in streaming data.
                 (whole object is read by default)
         Returns:
-            etl_name (str): ETL name
+            Job ID string associated with this ETL
         """
         _validate_comm_type(communication_type, ETL_COMM_CODE)
 
+        # code functions to call
         functions = {
             "transform": "transform",
         }
-
-        action = {
-            "id": etl_name,
-            "runtime": runtime,
-            "communication": f"{communication_type}://",
-            "timeout": timeout,
-            "funcs": functions,
-        }
-
-        if chunk_size:
-            action["chunk_size"] = chunk_size
 
         # code
         transform = base64.b64encode(cloudpickle.dumps(transform)).decode(UTF_ENCODING)
 
         io_comm_context = "transform()" if communication_type == "io" else ""
         template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
-        action["code"] = base64.b64encode(template).decode(UTF_ENCODING)
+        code_str = base64.b64encode(template).decode(UTF_ENCODING)
 
         # dependencies
         if dependencies is None:
             dependencies = []
         dependencies.append("cloudpickle==2.2.0")
         deps = "\n".join(dependencies).encode(UTF_ENCODING)
-        action["dependencies"] = base64.b64encode(deps).decode(UTF_ENCODING)
+        deps_str = base64.b64encode(deps).decode(UTF_ENCODING)
 
-        resp = self.client.request(
+        value = InitCodeETLArgs(
+            etl_name=etl_name,
+            runtime=runtime,
+            communication_type=communication_type,
+            timeout=timeout,
+            dependencies=deps_str,
+            functions=functions,
+            code=code_str,
+            chunk_size=chunk_size,
+        ).as_dict()
+
+        return self.client.request(
             HTTP_METHOD_PUT,
             path=URL_PATH_ETL,
-            json=action,
-        )
-        return resp.text
+            json=value,
+        ).text
 
     def list(self) -> List[ETLDetails]:
         """

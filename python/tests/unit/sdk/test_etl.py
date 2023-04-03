@@ -63,7 +63,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             template.encode(UTF_ENCODING)
         ).decode(UTF_ENCODING)
         expected_action["id"] = self.etl_name
-        expected_response_text = "response text"
+        expected_response_text = self.etl_name
         mock_response = Mock()
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
@@ -113,7 +113,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         communication_type = ETL_COMM_HPULL
         timeout = "6m"
         user_dependencies = ["pytorch"]
-        chunk_size = "123"
+        chunk_size = 123
 
         expected_dependencies = user_dependencies.copy()
         expected_dependencies.append("cloudpickle==2.2.0")
@@ -158,7 +158,9 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
 
-        response = self.etl.init_code(self.transform_fn, self.etl_name, **kwargs)
+        response = self.etl.init_code(
+            transform=self.transform_fn, etl_name=self.etl_name, **kwargs
+        )
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(

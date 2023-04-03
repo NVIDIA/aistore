@@ -8,6 +8,7 @@ from aistore.sdk.errors import (
     ErrRemoteBckNotFound,
     ErrBckNotFound,
     ErrBckAlreadyExists,
+    ErrETLAlreadyExists,
 )
 
 
@@ -49,31 +50,20 @@ class TestUtils(unittest.TestCase):
         mock_text.decode.return_value = expected_text
         self.handle_err_exec_assert(AISError, err_status, err_msg, mock_text)
 
-    @test_cases("cloud bucket does not exist", "remote bucket does not exist")
-    def test_handle_error_no_remote_bucket(self, err_msg):
+    @test_cases(
+        ("cloud bucket does not exist", ErrRemoteBckNotFound),
+        ("remote bucket does not exist", ErrRemoteBckNotFound),
+        ("bucket does not exist", ErrBckNotFound),
+        ("bucket already exists", ErrBckAlreadyExists),
+        ("etl already exists", ErrETLAlreadyExists),
+    )
+    def test_handle_error_no_remote_bucket(self, test_case):
+        err_msg, expected_err = test_case
         err_status = 400
         expected_text = json.dumps({"status": err_status, "message": err_msg})
         mock_text = Mock(spec=bytes)
         mock_text.decode.return_value = expected_text
-        self.handle_err_exec_assert(
-            ErrRemoteBckNotFound, err_status, err_msg, mock_text
-        )
-
-    def test_handle_error_no_bucket(self):
-        err_msg = "bucket does not exist"
-        err_status = 400
-        expected_text = json.dumps({"status": err_status, "message": err_msg})
-        mock_text = Mock(spec=bytes)
-        mock_text.decode.return_value = expected_text
-        self.handle_err_exec_assert(ErrBckNotFound, 400, err_msg, mock_text)
-
-    def test_handle_error_bucket_exists(self):
-        err_msg = "bucket already exists"
-        err_status = 400
-        expected_text = json.dumps({"status": err_status, "message": err_msg})
-        mock_text = Mock(spec=bytes)
-        mock_text.decode.return_value = expected_text
-        self.handle_err_exec_assert(ErrBckAlreadyExists, 400, err_msg, mock_text)
+        self.handle_err_exec_assert(expected_err, err_status, err_msg, mock_text)
 
     def handle_err_exec_assert(self, err_type, err_status, err_msg, mock_err_text):
         mock_response = Mock(text=mock_err_text)

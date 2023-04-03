@@ -209,6 +209,58 @@ class ETLDetails(BaseModel):
         return spec
 
 
+class InitETLArgs(BaseModel):
+    """
+    Represents the args shared by ETL initialization with code or spec
+    """
+
+    etl_name: str
+    communication_type: str
+    timeout: str
+
+
+class InitSpecETLArgs(InitETLArgs):
+    """
+    Represents the set of args the sdk will pass to AIStore when making a request to initialize an ETL with a spec
+    """
+
+    spec: str
+
+    def as_dict(self):
+        return {
+            "id": self.etl_name,
+            "timeout": self.timeout,
+            "communication": f"{self.communication_type}://",
+            "spec": self.spec,
+        }
+
+
+class InitCodeETLArgs(InitETLArgs):
+    """
+    Represents the set of args the sdk will pass to AIStore when making a request to initialize an ETL with code
+    """
+
+    runtime: str
+    dependencies: str
+    functions: Dict[str, str]
+    code: str
+    chunk_size: int = None
+
+    def as_dict(self):
+        dict_rep = {
+            "id": self.etl_name,
+            "runtime": self.runtime,
+            "communication": f"{self.communication_type}://",
+            "timeout": self.timeout,
+            "funcs": self.functions,
+            "code": self.code,
+            "dependencies": self.dependencies,
+        }
+        if self.chunk_size:
+            dict_rep["chunk_size"] = self.chunk_size
+        return dict_rep
+
+
 class PromoteAPIArgs(BaseModel):
     """
     Represents the set of args the sdk will pass to AIStore when making a promote request and

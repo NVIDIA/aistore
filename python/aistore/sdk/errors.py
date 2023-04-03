@@ -55,6 +55,16 @@ class ErrBckAlreadyExists(AISError):
 
 
 # pylint: disable=unused-variable
+class ErrETLAlreadyExists(AISError):
+    """
+    Raised when an ETL is created but already exists in AIS
+    """
+
+    def __init__(self, status_code, message):
+        super().__init__(status_code=status_code, message=message)
+
+
+# pylint: disable=unused-variable
 class Timeout(Exception):
     """
     Raised when an operation takes too long to complete

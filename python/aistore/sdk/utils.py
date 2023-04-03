@@ -16,6 +16,7 @@ from aistore.sdk.errors import (
     ErrBckNotFound,
     ErrRemoteBckNotFound,
     ErrBckAlreadyExists,
+    ErrETLAlreadyExists,
 )
 
 
@@ -43,7 +44,10 @@ def _raise_error(text: str):
             if "bucket" in err.message:
                 raise ErrBckNotFound(err.status, err.message)
         if "already exists" in err.message:
-            raise ErrBckAlreadyExists(err.status, err.message)
+            if "bucket" in err.message:
+                raise ErrBckAlreadyExists(err.status, err.message)
+            if "etl" in err.message:
+                raise ErrETLAlreadyExists(err.status, err.message)
     raise AISError(err.status, err.message)
 
 
