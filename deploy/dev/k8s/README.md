@@ -30,13 +30,13 @@ Our [scripts](/deploy/dev/k8s) use Docker as the driver. This document shows how
 
 1. Have Linux/macOS installed on your Laptop/Machine/VirtualMachine.
 2. [Install](https://docs.docker.com/engine/install/) Docker.
-3. Ensure that your `$USER` is added to the `docker` group and re-login.
+3. Ensure that your `$USER` is added to the `docker` group.
 
 ```console
 $ sudo usermod -aG docker $USER && newgrp docker
-$ # relogin if needed
-$ sudo service docker start
 ```
+4. Install [minikube](https://minikube.sigs.k8s.io/docs/start/).
+5. Install [kubectl](https://kubernetes.io/docs/tasks/tools/).
 
 >  **Note:  Running minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
    operations try running with VPN disabled.**
