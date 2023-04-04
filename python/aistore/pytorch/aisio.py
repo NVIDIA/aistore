@@ -100,11 +100,14 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     -   This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
     -   Input must be a list and direct URLs are not supported.
     -   This internally uses AIStore Python SDK.
+    -   An `etl_name` can be provided to run an existing ETL on the AIS cluster.
+        See https://github.com/NVIDIA/aistore/blob/master/docs/etl.md for more info on AIStore ETL.
 
     Args:
         source_datapipe(IterDataPipe[str]): a DataPipe that contains URLs/URL prefixes to objects
         length(int): length of the datapipe
         url(str): AIStore endpoint
+        etl_name (str, optional): Optional etl on the AIS cluster to apply to each object
 
     Example:
         >>> from torchdata.datapipes.iter import IterableWrapper, AISFileLister,AISFileLoader
@@ -121,12 +124,17 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     """
 
     def __init__(
-        self, source_datapipe: IterDataPipe[str], url: str, length: int = -1
+        self,
+        source_datapipe: IterDataPipe[str],
+        url: str,
+        length: int = -1,
+        etl_name: str = None,
     ) -> None:
         _assert_aistore()
         self.source_datapipe: IterDataPipe[str] = source_datapipe
         self.length = length
         self.client = Client(url)
+        self.etl_name = etl_name
 
     def __iter__(self) -> Iterator[Tuple[str, StreamWrapper]]:
         for url in self.source_datapipe:
@@ -134,7 +142,7 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
             yield url, StreamWrapper(
                 self.client.bucket(bck_name=bck_name, provider=provider)
                 .object(obj_name=obj_name)
-                .get()
+                .get(etl_name=self.etl_name)
                 .raw()
             )
 

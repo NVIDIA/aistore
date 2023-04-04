@@ -37,15 +37,20 @@ class AISBaseClass:
 
 class AISDataset(AISBaseClass, Dataset):
     """
-    A map-style dataset for objects in AIS
+    A map-style dataset for objects in AIS.
+    If `etl_name` is provided, that ETL must already exist on the AIStore cluster
 
     Args:
-        client_url(str): AIS endpoint URL
-        urls_list(str or List[str]): single or list of url prefixes to load data
+        client_url (str): AIS endpoint URL
+        urls_list (str or List[str]): single or list of url prefixes to load data
+        etl_name (str, optional): Optional etl on the AIS cluster to apply to each object
     """
 
-    def __init__(self, client_url: str, urls_list: Union[str, List[str]]):
+    def __init__(
+        self, client_url: str, urls_list: Union[str, List[str]], etl_name=None
+    ):
         AISBaseClass.__init__(self, client_url, urls_list)
+        self.etl_name = etl_name
 
     def __len__(self):
         return len(self._object_info)
@@ -58,7 +63,7 @@ class AISDataset(AISBaseClass, Dataset):
                 provider=self._object_info[index]["provider"],
             )
             .object(obj_name=object_name)
-            .get()
+            .get(etl_name=self.etl_name)
             .read_all()
         )
         return object_name, obj
