@@ -111,7 +111,7 @@ $ ais advanced preload ais://bucket
 
 ## Remove node from Smap
 
-`ais advanced remove-from-smap DAEMON_ID`
+`ais advanced remove-from-smap NODE_ID`
 
 Immediately remove node from the cluster map.
 

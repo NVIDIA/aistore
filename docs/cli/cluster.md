@@ -13,10 +13,37 @@ The `ais cluster` command supports the following subcommands:
 
 ```console
 $ ais cluster <TAB-TAB>
-add-remove-nodes  decommission  rebalance  remote-attach  remote-detach  set-primary  show  shutdown
+show               remote-detach      set-primary        decommission       reset-stats
+remote-attach      rebalance          shutdown           add-remove-nodes
 ```
 
-As always, each above subcommand will have its own help and usage examples - the latter possibly spread across multiple documents.
+Alternatively, use `--help` to show subcommands with brief descriptions:
+
+```console
+$ ais cluster --help
+NAME:
+   ais cluster - monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
+
+USAGE:
+   ais cluster command [command options] [arguments...]
+
+COMMANDS:
+   show              show cluster nodes and utilization
+   remote-attach     attach remote ais cluster
+   remote-detach     detach remote ais cluster
+   rebalance
+   set-primary       select a new primary proxy/gateway
+   shutdown          shutdown cluster
+   decommission      decommission entire cluster
+   add-remove-nodes  manage cluster membership (scale up or down)
+   reset-stats       reset cluster or node stats (all cumulative metrics or only errors)
+
+OPTIONS:
+   --help, -h  show help
+
+```
+
+As always, each subcommand will have its own help and usage examples (the latter possibly spread across multiple documents).
 
 > For any keyword or text of any kind, you can easily look up examples and descriptions (if available) via a simple `find`, for instance:
 
@@ -34,7 +61,7 @@ For background, usage examples, and details, please see [this document](/docs/le
 This section lists cluster and node management operations within the AIS CLI, via `ais cluster`.
 
 ## Table of Contents
-- [Cluster or Daemon status](#cluster-or-daemon-status)
+- [Cluster and Node status](#cluster-and-node-status)
 - [Show cluster map](#show-cluster-map)
 - [Show cluster stats](#show-cluster-stats)
 - [Show disk stats](#show-disk-stats)
@@ -45,14 +72,73 @@ This section lists cluster and node management operations within the AIS CLI, vi
   - [Detach remote cluster](#detach-remote-cluster)
   - [Show remote clusters](#show-remote-clusters)
 
-## Cluster or Daemon status
+## Cluster and Node status
 
-`ais show cluster [DAEMON_TYPE|DAEMON_ID]`
+The command has a rather long(ish) short description and multiple subcommands:
 
-Display information about `DAEMON_ID` or all nodes of `DAEMON_TYPE`. `DAEMON_TYPE` is either `proxy` or `target`.
-If you give no arguments to `ais show cluster`, information about all daemons in the AIS cluster is displayed.
+```console
+$ ais show cluster --help
+NAME:
+   ais show cluster - show cluster nodes and utilization
 
-> Note: Like all other `ais show` commands, `ais show cluster` is aliased to `ais cluster show` for ease of use.
+USAGE:
+   ais show cluster command [command options] [NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] |
+                       [smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]
+
+COMMANDS:
+   smap    show Smap (cluster map)
+   bmd     show BMD (bucket metadata)
+   config  show cluster and node configuration
+   stats   (alias for "ais show performance") show performance counters, throughput, latency, and more (press <TAB-TAB> to select specific view)
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --json, -j        json input/output
+   --no-headers, -H  display tables without headers
+   --help, -h        show help
+```
+
+To quickly exemplify, let's assume the cluster has a (target) node called `t[xyz]`. Then:
+
+
+### show cluster: all nodes (including t[xyz]) and gateways, as well as deployed version and runtime stats
+```console
+$ ais show cluster
+```
+
+### show all target (nodes) and, again, runtime statistics, software version, deployment type, K8s pods, and more
+```console
+$ ais show cluster target
+```
+
+### show specific target
+```console
+$ ais show cluster target t[xyz]
+```
+
+### ask specific target to show its cluster map
+```console
+$ ais show cluster smap t[xyz]
+```
+
+and so on and so forth.
+
+### Notes
+
+> The last example (above) may potentially make sense when troubleshooting. Otherwise, by design and implementation, cluster map (`Smap`), bucket metadata (`BMD`), and all other cluster-level metadata exists in identical protected and versioned replicas on all nodes at any given point in time.
+
+> Still, to display cluster map in its (JSON) fullness, run:
+
+```console
+$ ais show cluster smap --json
+```
+
+> `--json` option is almost universally supported in CLI
+
+> Similar to all other `show` commands, `ais show cluster` is aliased as `ais cluster show`.
+
 > Both variations are used interchangeably throughout the documentation.
 
 ### Options

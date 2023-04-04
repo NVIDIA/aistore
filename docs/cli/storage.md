@@ -14,6 +14,28 @@ $ ais storage <TAB-TAB>
 cleanup     disk        mountpath   summary     validate
 ```
 
+Alternatively (or in addition), run with `--help` to view subcommands and short descriptions, both:
+
+```console
+$ ais storage --help
+NAME:
+   ais storage - monitor and manage clustered storage
+
+USAGE:
+   ais storage command [command options] [arguments...]
+
+COMMANDS:
+   show       show storage usage and utilization, disks and mountpaths
+   summary    show bucket sizes and %% of used capacity on a per-bucket basis
+   validate   check buckets for misplaced objects and objects that have insufficient numbers of copies or EC slices
+   mountpath  show and attach/detach target mountpaths
+   disk       show disk utilization and read/write statistics
+   cleanup    perform storage cleanup: remove deleted objects and old/obsolete workfiles
+
+OPTIONS:
+   --help, -h  show help
+```
+
 As always, each subcommand (above) will have its own help and usage examples - the latter possibly spread across multiple markdowns.
 
 > You can easily look up examples and descriptions of any keyword via a simple `find`, for instance:
@@ -139,25 +161,54 @@ You can manage and monitor (i.e., `show`) disks and mountpaths using `ais storag
 
 ## Show disks
 
-`ais storage disk show [DAEMON_ID]`
+`ais storage disk show [TARGET_ID]`
 
 or, same:
 
-`ais show storage disk [DAEMON_ID]`
+`ais show storage disk [TARGET_ID]`
 
 ## Show mountpaths
 
-`ais storage mountpath show [DAEMON_ID]`
+As the name implies, the syntax:
 
-or, same:
+`ais show storage mountpath [TARGET_ID]`
 
-`ais show storage mountpath [DAEMON_ID]`
+for example:
+
+```console
+$ ais show storage mountpath t[TqPtghbiRw]
+
+TqPtghbiRw
+        Used Capacity (all disks): avg 15% max 18%
+                                                /ais/mp1/2 /dev/nvme0n1(xfs)
+                                                /ais/mp2/2 /dev/nvme1n1(xfs)
+                                                /ais/mp3/2 /dev/nvme2n1(xfs)
+                                                /ais/mp4/2 /dev/nvme3n1(xfs)
+```
+
+As always, `--help` will also list supported options. Note in particular the option to run continuously and periodically:
+
+```console
+$ ais show storage mountpath --help
+NAME:
+   ais show storage mountpath - show target mountpaths
+
+USAGE:
+   ais show storage mountpath [command options] [TARGET_ID]
+
+OPTIONS:
+   --refresh value  interval for continuous monitoring;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value    used together with '--refresh' to limit the number of generated reports (default: 0)
+   --json, -j       json input/output
+   --help, -h       show help
+```
 
 Show mountpaths for a given target or all targets.
 
 > **Ease of Usage** notice: like all other `ais show` commands, `ais show storage mountpath` is an alias (or a shortcut) - in this specific case - for `ais storage mountpath show`.
 
-### Examples
+### Examples (_slightly outdated_)
 
 ```console
 $ ais storage mountpath show 12356t8085
@@ -186,7 +237,7 @@ $ ais storage mountpath show
 
 ## Attach mountpath
 
-`ais storage mountpath attach DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
+`ais storage mountpath attach TARGET_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
 
 Attach a mountpath on a specified target to AIS storage.
 
@@ -198,7 +249,7 @@ $ ais storage mountpath attach 12367t8080=/data/dir
 
 ## Detach mountpath
 
-`ais storage mountpath detach DAEMON_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
+`ais storage mountpath detach TARGET_ID=MOUNTPATH [DAEMONID=MOUNTPATH...]`
 
 Detach a mountpath on a specified target from AIS storage.
 

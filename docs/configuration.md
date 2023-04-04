@@ -27,15 +27,11 @@ Majority of the configuration knobs can be changed at runtime (and at any time).
 
 ## CLI
 
-For the most part, commands to view and update (CLI, cluster, node) configuration can be found in:
-
-* [here](/docs/cli/config.md).
+For the most part, commands to view and update (CLI, cluster, node) configuration can be found [here](/docs/cli/config.md).
 
 The [same document](docs/cli/config.md) also contains a brief theory of operation, command descriptions, numerous usage examples, and more.
 
-**IMPORTANT NOTE**
-
-As an input, CLI accepts both plain text and JSON-formatted values. For the latter, make sure to embed the (JSON value) argument into single quotes, e.g.:
+> **Important:** as an input, CLI accepts both plain text and JSON-formatted values. For the latter, make sure to embed the (JSON value) argument into single quotes, e.g.:
 
 ```console
 $ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'

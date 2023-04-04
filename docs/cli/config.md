@@ -7,14 +7,35 @@ redirect_from:
  - /docs/cli/config.md/
 ---
 
-This document details AIStore configuration management using AIS CLI.
-
-Generally, there are two main commands, each having multiple subcommands and sub-subcommands:
+Primarily, there are two main configuration-managing commands, each having multiple subcommands and sub-subcommands:
 
 1. `ais config`		- show and update configuration
 2. `ais show config`	- show configuration
 
 > As always, the subcommands of the `ais config` and, respectively, `ais show config` will reveal themselves as completions (upon `<TAB-TAB>`).
+
+In brief:
+
+```console
+$ ais config --help
+NAME:
+   ais config - configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)
+
+USAGE:
+   ais config command [command options] [arguments...]
+
+COMMANDS:
+   show     show CLI, cluster, or node configurations (nodes inherit cluster and have local)
+   cluster  configure AIS cluster
+   node     configure AIS node
+   reset    reset (cluster | node | CLI) configuration to system defaults
+   cli      display and change AIS CLI configuration
+
+OPTIONS:
+   --help, -h  show help
+```
+
+> As always, `ais config show` is an alias for `ais show config` - both can be used interchangeably.
 
 Here's a quick usage example:
 
@@ -107,7 +128,7 @@ NAME:
 
 USAGE:
    ais show config [command options] cli | cluster [CONFIG SECTION OR PREFIX] |
-      DAEMON_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]
+      NODE_ID [ cluster | local | all [CONFIG SECTION OR PREFIX ] ]
 
 OPTIONS:
    --json, -j  json input/output
@@ -125,7 +146,7 @@ inherited   local
 
 As stated above, the command further splits as follows:
 
-`ais show config cluster` or `ais show config cli` or `ais show config [DAEMON_ID]`
+`ais show config cluster` or `ais show config cli` or `ais show config [NODE_ID]`
 
 Node configuration consists of two parts:
 
@@ -146,7 +167,7 @@ Display the cluster configuration. If `CONFIG_PREFIX` is given, only that config
 
 ### Node configuration
 
-`ais show config DAEMON_ID [CONFIG_PREFIX]`
+`ais show config NODE_ID [CONFIG_PREFIX]`
 
 Display the actual daemon configuration. If `CONFIG_PREFIX` is given, only the configurations matching the prefix will be shown.
 The output includes extra column with global values. Some values in the column have special meaning:
@@ -280,11 +301,11 @@ Config has been updated successfully.
 
 ## Update node configuration
 
-`ais config node DAEMON_ID inherited NAME=VALUE [NAME=VALUE...]`
+`ais config node NODE_ID inherited NAME=VALUE [NAME=VALUE...]`
 
 or
 
-`ais config node DAEMON_ID local NAME=VALUE [NAME=VALUE...]`
+`ais config node NODE_ID local NAME=VALUE [NAME=VALUE...]`
 
 
 Usually, the steps:
@@ -306,7 +327,7 @@ Config has been updated successfully.
 
 ## Reset configuration
 
-`ais config reset [DAEMON_ID]`
+`ais config reset [NODE_ID]`
 
 Reset configuration for a specific daemon or the entire cluster back to the cluster configuration.
 That is, all local overrides will be removed and the cluster configuration will be applied to all nodes.
