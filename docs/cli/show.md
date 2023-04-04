@@ -21,12 +21,7 @@ is equivalent to:
 $ ais <command> show
 ```
 
-Running `ais show cluster` is the same as `ais cluster show`, and so on. And one more example of the identical twins:
-
-```console
-$ ais show performance
-$ ais performance show
-```
+> For instance, `ais performance show` is an alias for `ais show performance` - both can be used interchangeably.
 
 > As a general rule, instead of remembering any of the above (as well as any of the below), type (e.g.) `ais perf<TAB-TAB>` and press `Enter`.
 
@@ -34,7 +29,7 @@ $ ais performance show
 
 > When part-typing, part-TABing a sequence of words that (will eventually) constitute a valid AIS CLI command, type `--help` at any time. This will display short description, command-line options, usage examples, and other context-sensitive information.
 
-> For usage examples, another way to quickly find them would be a good-and-old keyword search. E.g., `cd aistore; grep -n "ais.*cp" docs/cli/*.md`, and similar. Additional useful tricks (including `ais search`) are also mentioned elsewhere in these docs.
+> For usage examples, another way to quickly find them would be a good-and-old keyword search. E.g., `cd aistore; grep -n "ais.*cp" docs/cli/*.md`, and similar. Additional useful tricks (including `ais search`) are also mentioned elsewhere in the documentation.
 
 As far as `ais show`, the command currently extends as follows:
 
@@ -434,7 +429,31 @@ In addition, the command support the following subcommands:
 
 ```console
 # ais show storage <TAB-TAB>
-disk   mountpath   summary      [DAEMON_ID ...]
+disk        mountpath   capacity    summary
+```
+
+And with brief subcommand descriptions:
+
+```console
+$ ais show storage --help
+NAME:
+   ais show storage - show storage usage and utilization, disks and mountpaths
+
+USAGE:
+   ais show storage command [command options] [TARGET_ID]
+
+COMMANDS:
+   disk       show disk utilization and read/write statistics
+   mountpath  show target mountpaths
+   capacity   show target mountpaths, disks, and used/available capacity
+   summary    show bucket sizes and %% of used capacity on a per-bucket basis
+
+OPTIONS:
+   --refresh value  interval for continuous monitoring;
+                    valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value    used together with '--refresh' to limit the number of generated reports (default: 0)
+   --json, -j       json input/output
+   --help, -h       show help
 ```
 
 [Refer to `ais storage` documentation for details and examples.](storage.md)

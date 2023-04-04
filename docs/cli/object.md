@@ -226,8 +226,7 @@ Supported properties:
       `PARITY` - the number of parity slices, and `MODE` is protection mode selected for the object: `replicated` - object has `PARITY` replicas on other targets,
       `encoded`  the object is erasure coded and other targets contains only encoded slices
 
-> Note: Like many other `ais show` commands, `ais show object` is aliased to `ais object show` for ease of use.
-> Both of these commands are used interchangeably throughout the documentation.
+> `ais object show` is an for `ais object show` - both can be used interchangeably.
 
 ## Show default object properties
 

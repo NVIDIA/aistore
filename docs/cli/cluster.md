@@ -137,9 +137,7 @@ $ ais show cluster smap --json
 
 > `--json` option is almost universally supported in CLI
 
-> Similar to all other `show` commands, `ais show cluster` is aliased as `ais cluster show`.
-
-> Both variations are used interchangeably throughout the documentation.
+> Similar to all other `show` commands, `ais cluster show` is an alias for `ais cluster show`. Both can be used interchangeably.
 
 ### Options
 
@@ -178,10 +176,21 @@ Summary:
 
 ## Show cluster map
 
-`ais show cluster smap [DAEMON_ID]`
+`ais show cluster smap [NODE_ID]`
 
-Show a copy of the cluster map (smap) present on `DAEMON_ID`.
-If `DAEMON_ID` is not set, it will show the smap of the daemon that the `AIS_ENDPOINT` points at by default.
+Show a copy of the cluster map (Smap) stored on `NODE_ID`.
+
+If `NODE_ID` is not given, show cluster map from (primary or secondary) proxy "pointed to" by your local CLI configuration (`ais config cli`) or `AIS_ENDPOINT` environment.
+
+> Note that cluster map (`Smap`), bucket metadata (`BMD`), and all other cluster-level metadata exists in identical protected and versioned replicas on all nodes at any given point in time.
+
+Useful variations include `ais show cluster smap --json` (to see the unabridged version), and also:
+
+```console
+$ ais show cluster smap --refresh 5
+```
+
+The latter will periodically (until Ctrl-C) show cluster map in 5-second intervals - might be useful in presence of any kind of membership changes (e.g., cluster startup).
 
 ### Options
 
@@ -224,180 +233,77 @@ Proxies: 5       Targets: 5      Smap Version: 14
 
 ## Show cluster stats
 
-`ais show cluster stats [DAEMON_ID] [STATS_FILTER]`
+`ais show cluster stats` is a alias for `ais show performance`.
 
-Show current (live) statistics, including:
-* utilization percentages
-* used and available storage capacity
-* variety of latencies, including list-objects and intra-cluster control comm.
-* networking stats (transmitted and received object numbers and total bytes), and more.
-
-For a broader background and details, please see [Monitoring AIStore with Prometheus](/docs/prometheus.md).
-
-You can give a specific node (denoted by `DAEMON_ID`) as the argument for `ais show cluster stats` to narrow the scope of the statistics, or you can view stats for the entire cluster. 
-In the latter case, the command displays aggregated counters and cluster-wide averages, where applicable.
-
-### Options
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--json, -j` | `bool` | JSON format           | `false` |
-| `--raw`    | `bool` | display exact raw statistics values instead of human-readable ones | `false` |
-| `--refresh` | `duration` | refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds). Press `Ctrl+C` to stop monitoring | ` ` |
-
-### Examples
-
-Monitor cluster performance with a 10 seconds refresh interval:
+The latter is the primary implementation, and the preferred way to investigate cluster performance, while `ais show cluster stats` is retained in part for convenience and in part for backward compatibility.
 
 ```console
-$ ais show cluster stats --refresh 10s
-PROPERTY                         VALUE
-proxy.get.n                      60000
-proxy.kalive.ns                  72.651942ms
-proxy.lst.n                      1
-proxy.lst.ns                     10.17283ms
-proxy.put.n                      86531
-proxy.up.ns.time                 5m30s
-target.append.ns                 0
-target.disk.sda.avg.rsize        298636
-target.disk.sda.avg.wsize        1077943
-target.disk.sda.util             33
-...
-target.stream.in.n               24168
-target.stream.in.size            149.39MiB
-target.stream.out.n              24168
-target.stream.out.size           110.23MiB
+$ ais show cluster stats <TAB-TAB>
+counters     throughput   latency      capacity     disk
+
+$ ais show cluster stats --help
+NAME:
+   ais show cluster stats - (alias for "ais show performance") show performance counters, throughput, latency, and more (press <TAB-TAB> to select specific view)
+
+USAGE:
+   ais show cluster stats command [command options] [TARGET_ID]
+
+COMMANDS:
+   counters    show (GET, PUT, DELETE, RENAME, EVICT, APPEND) object counts, as well as:
+               - numbers of list-objects requests;
+               - (GET, PUT, etc.) cumulative and average sizes;
+               - associated error counters, if any, and more.
+   throughput  show GET and PUT throughput, associated (cumulative, average) sizes and counters
+   latency     show GET, PUT, and APPEND latencies and average sizes
+   capacity    show target mountpaths, disks, and used/available capacity
+   disk        show disk utilization and read/write statistics
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --all             when printing tables, show all columns including those that have only zero values
+   --no-headers, -H  display tables without headers
+   --regex value     regular expression to select table columns (case-insensitive), e.g.: --regex "put|err"
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --average-size    show average GET, PUT, etc. request size
+   --help, -h        show help
 ```
 
-Monitor intra-cluster networking at a 3s seconds interval:
+See also:
 
-```console
-$ ais show cluster stats streams --refresh 3s
-
-target.stream.in.n          41288
-target.stream.in.size       4.01GiB
-target.stream.out.n         41288
-target.stream.out.size      194.98MiB
-```
-
-Use `--raw` option:
-
-```console
-$ ais cluster show stats target.dl --raw
-
-PROPERTY         VALUE
-target.dl.ns     228747302
-target.dl.size   848700
-
-$ ais cluster show stats target.dl
-PROPERTY         VALUE
-target.dl.ns     228.747302ms
-target.dl.size   828.81KiB
-```
-
-Excerpt from global stats to show both proxy and target grouping:
-
-```console
-$ ais cluster show stats --raw
-
-PROPERTY                         VALUE
-proxy.get.n                      90
-proxy.get.ns                     0
-proxy.lst.n                      5
-proxy.lst.ns                     17250254
-...
-target.dl.ns                     228747302
-target.dl.size                   848700
-target.get.bps                   422657829
-target.get.n                     90
-target.get.ns                    33319026
-```
-
-Detailed node statistics:
-
-```console
-$ ais cluster show stats t[sCFgt15AB]
-
-PROPERTY                 VALUE
-append.ns                0
-dl.ns                    229.142325ms
-dl.size                  132.61KiB
-dsort.creation.req.ns    0
-dsort.creation.resp.ns   0
-err.dl.n                 4
-err.get.n                14
-get.bps                  74MiB/s
-get.n                    19
-get.ns                   36.782125ms
-get.redir.ns             459.786µs
-kalive.ns                619.869272ms
-kalive.ns.max            0
-kalive.ns.min            0
-lst.n                    7
-lst.ns                   3.695827ms
-put.n                    40
-put.ns                   485.817135ms
-put.redir.ns             75.654033ms
-stream.in.n              139
-stream.out.n             175
-stream.out.size          283.90MiB
-up.ns.time               169m
-mountpath.0.path         /tmp/ais/mp1/8
-mountpath.0.used         21.64GiB
-mountpath.0.avail        28.33GiB
-mountpath.0.%used        43
-...
-```
-
-Filtering to show only those metrics that contain specific substring
-
-```console
-$ ais show cluster stats t[sCFgt15AB] put --raw
-
-PROPERTY         VALUE
-put.n            183864
-put.ns           42711506911
-put.redir.ns     105969
-
-# And the same in human-readable format
-$ ais show cluster stats t[sCFgt15AB] put
-PROPERTY         VALUE
-put.n            183864
-put.ns           42.711506911s
-put.redir.ns     0.106ms
-```
-
-Monitor node's statistics with a 2 seconds refresh interval
-
-```console
-$ ais cluster show stats t[sCFgt15AB] put --refresh 2s
-
-PROPERTY         VALUE
-put.n            24
-put.ns           306.935732ms
-put.redir.ns     106.648013ms
-
-PROPERTY         VALUE
-put.n            24
-put.ns           306.935732ms
-put.redir.ns     106.648013ms
-
-PROPERTY         VALUE
-put.n            26
-put.ns           327.711826ms
-put.redir.ns     108.714872ms
-
-PROPERTY         VALUE
-put.n            32
-put.ns           416.776232ms
-put.redir.ns     115.384523ms
-```
+* [ais show performance`](/docs/cli/show.md) 
 
 ## Show disk stats
 
-`ais show storage disk [TARGET_ID]`
+`ais show storage disk [TARGET_ID]` - show disk utilization and read/write statistics
 
-Show the disk stats of the `TARGET_ID`. If `TARGET_ID` isn't given, disk stats for all targets will be shown.
+```console
+$ ais show storage disk --help
+NAME:
+   ais show storage disk - show disk utilization and read/write statistics
+
+USAGE:
+   ais show storage disk [command options] [TARGET_ID]
+
+OPTIONS:
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --no-headers, -H  display tables without headers
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --regex value     regular expression to select table columns (case-insensitive), e.g.: --regex "put|err"
+   --summary         tally up target disks to show per-target read/write summary stats and average utilizations
+   --help, -h        show help
+```
+
+When `TARGET_ID` is not given, disk stats for all targets will be shown and aggregated.
 
 ### Options
 
@@ -459,14 +365,14 @@ Proxy with ID "23kfa10f" successfully joined the cluster.
 
 **Temporarily remove an existing node from the cluster:**
 
-`ais cluster add-remove-nodes start-maintenance DAEMON_ID`
-`ais cluster add-remove-nodes stop-maintenance DAEMON_ID`
+`ais cluster add-remove-nodes start-maintenance NODE_ID`
+`ais cluster add-remove-nodes stop-maintenance NODE_ID`
 
 Starting maintenance puts the node in maintenance mode, and the cluster gradually transitions to
 operating without the specified node (which is labeled `maintenance` in the cluster map). Stopping
 maintenance will revert this.
 
-`ais cluster add-remove-nodes shutdown DAEMON_ID`
+`ais cluster add-remove-nodes shutdown NODE_ID`
 
 Shutting down a node will put the node in maintenance mode first, and then shut down the `aisnode`
 process on the node.
@@ -474,7 +380,7 @@ process on the node.
 
 **Permanently remove an existing node from the cluster:**
 
-`ais cluster add-remove-nodes decommission DAEMON_ID`
+`ais cluster add-remove-nodes decommission NODE_ID`
 
 Decommissioning a node will safely remove a node from the cluster by triggering a cluster-wide
 rebalance first. This can be avoided by specifying `--no-rebalance`.

@@ -37,7 +37,9 @@ OPTIONS:
 
 > As always, `ais config show` is an alias for `ais show config` - both can be used interchangeably.
 
-Here's a quick usage example:
+Here's a couple quick usage examples:
+
+### Example: show config, update config
 
 ```console
 # show `ais config` subcommands:
@@ -59,6 +61,36 @@ $ ais config cluster checksum=md5
 # using JSON-formatted values, update backend configuration;
 # for supported backend providers, see docs/providers.md
 $ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+```
+
+> **Notice** single quotes above. Single or double quotes are required when the value contains spaces and/or wildcards. But single quotes, in particular, are strongly recommended when the value itself contains double quotes.
+
+### Example: show specific config section (flat and JSON)
+
+```console
+$ ais show cluster config ec
+PROPERTY                 VALUE
+ec.objsize_limit         262144
+ec.compression           never
+ec.bundle_multiplier     2
+ec.data_slices           1
+ec.parity_slices         1
+ec.enabled               false
+ec.disk_only             false
+
+# same in JSON:
+
+$ ais show config cluster ec --json
+
+    "ec": {
+        "objsize_limit": 262144,
+        "compression": "never",
+        "bundle_multiplier": 2,
+        "data_slices": 1,
+        "parity_slices": 1,
+        "enabled": false,
+        "disk_only": false
+    }
 ```
 
 Further, as far as configuration, AIS supports **inheritance** and **local override**.

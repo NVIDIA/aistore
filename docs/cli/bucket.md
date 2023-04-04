@@ -712,8 +712,7 @@ By default, a certain compact form of bucket props sections is presented.
 When `PROP_PREFIX` is set, only props that start with `PROP_PREFIX` will be displayed.
 Useful `PROP_PREFIX` are: `access, checksum, ec, lru, mirror, provider, versioning`.
 
-> Note: Like many other `ais show` commands, `ais show bucket` is aliased to `ais bucket show` for ease of use.
-> Both of these commands are used interchangeably throughout the documentation.
+> `ais bucket show` is an alias for `ais show bucket` - both can be used interchangeably.
 
 ### Options
 
