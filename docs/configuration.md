@@ -27,11 +27,36 @@ Majority of the configuration knobs can be changed at runtime (and at any time).
 
 ## CLI
 
-For AIStore configuration management using AIS CLI, please see:
+For the most part, commands to view and update (CLI, cluster, node) configuration can be found in:
 
-* [Commands to view and update configs](/docs/cli/config.md)
+* [here](/docs/cli/config.md).
 
-The document also contains brief theory of operation and many usage examples.
+The [same document](docs/cli/config.md) also contains a brief theory of operation, command descriptions, numerous usage examples, and more.
+
+**IMPORTANT NOTE**
+
+As an input, CLI accepts both plain text and JSON-formatted values. For the latter, make sure to embed the (JSON value) argument into single quotes, e.g.:
+
+```console
+$ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+```
+
+To show the update in plain text and JSON:
+
+```console
+$ ais config cluster backend.conf --json
+
+    "backend": {"aws":{},"gcp":{}}
+
+$ ais config cluster backend.conf
+PROPERTY         VALUE
+backend.conf     map[aws:map[] gcp:map[]]
+```
+
+See also:
+
+* [Backend providers and supported backends](/docs/providers.md)
+
 
 ## Configuring for production
 

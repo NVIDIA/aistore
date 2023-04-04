@@ -11,14 +11,13 @@ redirect_from:
 
 Training deep learning (DL) models on petascale datasets is essential for achieving competitive and state-of-the-art performance in applications such as speech, video analytics, and object recognition. However, existing distributed filesystems were not developed for the access patterns and usability requirements of DL jobs.
 
-In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore and components, and then compare system performance experimentally using image classification workloads and storing training data on a variety of backends. For details, please see:
+In this [white paper](https://arxiv.org/abs/2001.01858) we describe AIStore (AIS) and components, and then compare system performance experimentally using image classification workloads and storing training data on a variety of backends.
 
-* AIStore [white paper](https://arxiv.org/abs/2001.01858).
-* IEEE BigData 2019 [poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
+See also:
 
-Also, for insights and specific requirements from a deep-learning perspective, please watch:
-
-* [Introduction to Large Scale Deep Learning](https://www.youtube.com/watch?v=kNuA2wflygM&list=PL0dsKxFNMcX4XcB0w1Wm-pvSfQu-eWM26)
+* [blog](https://aiatscale.org/blog)
+* [white paper](https://arxiv.org/abs/2001.01858)
+* [at-a-glance poster](https://storagetarget.files.wordpress.com/2019/12/deep-learning-large-scale-phys-poster-1.pdf)
 
 The rest of this document is structured as follows:
 
@@ -51,17 +50,19 @@ The rest of this document is structured as follows:
    - it is safe to execute the 4 listed operations (enable, disable, attach, detach) at any point during runtime;
    - in a typical deployment, the total number of mountpaths would compute as a direct product of (number of storage targets) x (number of disks in each target).
 
-* [Xaction](/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, sometimes hours) to execute are called *eXtended actions* or simply *xactions*. CLI docs refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
+* [Xaction](/xact/README.md) - asynchronous batch operations that may take many seconds (minutes, hours, etc.) to execute - are called *eXtended actions* or simply *xactions*. CLI and [CLI documentation](/docs/cli) refers to such operations as **jobs** - the more familiar term that can be used interchangeably. Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, archiving multiple objects, copying buckets, and many more. All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 
 ## At a glance
 
-Following is a high-level block diagram with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIStore aggregates arbitrary numbers of storage servers with local drives, whereby each drive is formatted with a local filesystem (e.g., xfs or zfs).
+Following is a high-level block diagram with an emphasis on supported frontend and backend APIs, and the capability to scale-out horizontally. The picture also tries to make the point that AIS aggregates arbitrary numbers of storage servers with local drive(s), whereby each drive is formatted with a local filesystem of choice (e.g., xfs or zfs).
 
 ![At-a-Glance](images/ais-block.png)
 
+All user data is at any point in time equally [balanced](/docs/rebalance.md) across all storage nodes (aka "targets"). Which, combined with zero (I/O routing and metadata processing) overhead, provides for linear scale with no limitation on the total number of aggregated storage drives.
+
 ## ETL
 
-AIStore is a hyper-converged architecture tailored specifically to run AI apps. To that end, we are supporting [ETL offload](/etl/README.md): the capability to run custom extract-transform-load workloads close to data on (and by) the storage cluster:
+AIStore is a hyper-converged architecture tailored specifically to run [extract-transform-load](/ext/etl/README.md) workloads - run them close to data and on (and by) all storage nodes in parallel:
 
 ![etl-v3.3](images/etl-v3.3.png)
 
@@ -72,9 +73,8 @@ For background and further references, see:
 
 ## Recently Added
 
-- [v3.11](https://github.com/NVIDIA/aistore/releases/tag/3.11)
-- [v3.10](https://github.com/NVIDIA/aistore/releases/tag/3.10)
-- [v3.9](https://github.com/NVIDIA/aistore/releases/tag/3.9)
+- [v3.16](https://github.com/NVIDIA/aistore/releases/tag/v1.3.16)
+- [v3.12](https://github.com/NVIDIA/aistore/releases/tag/v1.3.15)
 
 ## Design Philosophy
 

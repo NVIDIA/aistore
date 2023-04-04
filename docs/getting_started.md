@@ -65,6 +65,7 @@ The rest of this document is structured as follows:
   - [Demo](#demo)
   - [Running Local Playground remotely](#running-local-playground-remotely)
 - [Make](#make)
+- [System environment variables](#system-environment-variables)
 - [Multiple deployment options](#multiple-deployment-options)
   - [Kubernetes deployments](#kubernetes-deployments)
   - [Minimal all-in-one-docker Deployment](#minimal-all-in-one-docker-deployment)
@@ -194,6 +195,32 @@ $ make kill clean
 # Stop and then deploy (non-interactively) cluster consisting of 7 targets (4 mountpaths each) and 2 proxies; build `aisnode` executable with the support for GCP and AWS backends
 $ make kill deploy <<< $'7\n2\n4\ny\ny\nn\nn\n0\n'
 ```
+
+## System environment variables
+
+The variables include `AIS_ENDPOINT`, `AIS_AUTHN_TOKEN_FILE`, and [more](/api/env).
+
+Almost in all cases, there's an "AIS_" prefix (hint: `git grep AIS_`).
+
+And in all cases with no exception, the variable takes presedence over the corresponding configuration, if exists. For instance:
+
+```console
+AIS_ENDPOINT=https://10.0.1.138 ais show cluster
+```
+
+overrides the default endpoint as per `ais config cli` or (same) `ais config cli --json`
+
+> Endpoints are equally provided by each and every running AIS gateway (aka "proxy") and each endpoint can be (equally) used to acess the cluster. To find out what's currently configured, run (e.g.):
+
+```console
+$ ais config node <NODE> local host_net --json
+```
+
+where `NODE` is, effectively, any clustered proxy (that'll show up if you type `ais config node` and press `<TAB-TAB>`).
+
+Other variables, such as `AIS_IS_PRIMARY` and `AIS_USE_HTTPS` can prove to be useful at deployment time for the most part.
+
+For developers, `AIS_DEBUG="fs=4,reb=4,transport=1"` (for instance) would allow to selectively raise and/or reduce logging verbosity on a per module bases - modules `fs` , `reb`, and `transport` in this particular case.
 
 ## Multiple deployment options
 
