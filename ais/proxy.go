@@ -2307,8 +2307,28 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	smap := p.owner.smap.get()
 	si := smap.GetNode(nodeID)
 	if si != nil && si.InMaintOrDecomm() {
-		// e.g. scenario: node shutdown when we transition through states
-		glog.Warningf("%s: %s is in maintenance or decommissioned - proceeding anyway...", p.si, si.StringEx())
+		daeStatus := "inactive"
+		switch {
+		case si.Flags.IsSet(cluster.NodeFlagMaint):
+			daeStatus = apc.NodeMaintenance
+		case si.Flags.IsSet(cluster.NodeFlagDecomm):
+			daeStatus = apc.NodeDecommission
+		}
+		if r.Method == http.MethodGet {
+			what := r.URL.Query().Get(apc.QparamWhat)
+			if what == apc.WhatNodeStatsAndStatus {
+				// skip reversing, return status as per Smap
+				msg := &stats.NodeStatus{
+					Node:   stats.Node{Snode: si},
+					Status: daeStatus,
+				}
+				p.writeJSON(w, r, msg, what)
+				return
+			}
+		}
+		// otherwise, warn and go ahead
+		// (e.g. scenario: shutdown when transitioning through states)
+		glog.Warningf("%s: %s status is: %s", p.si, si.StringEx(), daeStatus)
 	}
 
 	// access control
