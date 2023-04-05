@@ -67,6 +67,7 @@ See also:
 
 | Command | Use Case |
 |---------|----------|
+| [`ais help`](/docs/cli/help.md) | All top-level commands and brief descriptions; version and build; general usage guidelines. |
 | [`ais advanced`](/docs/cli/advanced.md) | Special commands for developers and advanced usage. |
 | [`ais alias`](/docs/cli/alias.md) | User-defined command aliases. |
 | [`ais archive`](/docs/cli/archive.md) | Read, write, and list archives (i.e., objects formatted as TAR, TGZ, ZIP, etc.) |
@@ -75,11 +76,11 @@ See also:
 | [`ais cluster`](/docs/cli/cluster.md) | Monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc. |
 | [`ais config`](/docs/cli/config.md) | Set local/global AIS cluster configurations. |
 | [`ais etl`](/docs/cli/etl.md) | Execute custom transformations on objects. |
-| [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka extended actions or xactions). |
-| [`ais object`](/docs/cli/object.md) | PUT (write), GET (read), list, move (rename) and other operations on objects in a given bucket. |
+| [`ais job`](/docs/cli/job.md) | Query and manage jobs (aka eXtended actions or `xactions`). |
+| [`ais object`](/docs/cli/object.md) | PUT and GET (write and read), APPEND, archive, concat, list (buckets, objects), move, evict, promote, ... |
 | [`ais search`](/docs/cli/search.md) | Search `ais` commands. |
-| [`ais show`](/docs/cli/show.md) | Show information about buckets, jobs, all other managed entities in the cluster and the cluster itself. |
-| [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis, attach/detach mountpaths (disks), run certain bucket validation logic, and more. |
+| [`ais show`](/docs/cli/show.md) | Monitor anything and everything: performance (all aspects), buckets, jobs, remote clusters, and more. |
+| [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis (num objects and sizes), attach/detach mountpaths (disks). |
 {: .nobreak}
 
 Other CLI documentation:
@@ -132,7 +133,7 @@ If you update config via `ais config cli set` command (or even simply change the
 To get the list of supported commands, run:
 
 ```console
-$ ais --help
+$ ais help
 ```
 
 > Alternatively, you could start making use of auto-completions by typing `ais ` and pressing TAB key two times in a row.

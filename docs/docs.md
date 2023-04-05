@@ -12,25 +12,35 @@ redirect_from:
 - [Brief overview](/README.md)
 - [In-depth overview](/docs/overview.md)
 - [Getting started](/docs/getting_started.md)
-- [CLI](/docs/cli.md)
-- [Documentation](/docs/)
+- [CLI: overview, getting started](/docs/cli.md)
+- [CLI: reference guide](/docs/cli.md#cli-reference)
 - [Blogs](https://aiatscale.org/blog)
 - [Deployment](https://github.com/NVIDIA/aistore/tree/master/deploy)
 
 ### Guides and References
 
+- [Getting Started](/docs/getting_started.md)
+- [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
-  - [Go (language) API](/docs/http_api.md)
-  - [Python SDK reference](/docs/python_sdk.md)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) (and [pip package](https://pypi.org/project/aistore/))
+  - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore), and also:
+    - [pip package](https://pypi.org/project/aistore/)
+    - [reference guide](/docs/python_sdk.md)
   - [REST API](/docs/http_api.md)
     - [Easy URL](/docs/easy_url.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)
+  - [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch)
 - [CLI](/docs/cli.md)
-  - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
-  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
+  - [`ais help`](/docs/cli/help.md)
+  - [Monitoring](/docs/cli/show.md)
+    - [`ais show cluster`](/docs/cli/show.md)
+    - [`ais show performance`](/docs/cli/show.md)
+    - [`ais show job`](/docs/cli/show.md)
+  - [Reference guide](/docs/cli.md#cli-reference)
+  - [Buckets: create, destroy, list, copy, rename, transform, configure, evict](/docs/cli/bucket.md)
+  - [GET, PUT, APPEND, PROMOTE, cat/concat, evict, set custom metadata, and other operations on objects](/docs/cli/object.md)
   - [Cluster and node management](/docs/cli/cluster.md)
   - [Mountpath (disk) management](/docs/cli/storage.md)
   - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
@@ -57,30 +67,33 @@ redirect_from:
   - [Backend providers](/docs/providers.md)
   - [Buckets](/docs/bucket.md)
 - Storage Services
+  - [CLI: `ais show storage` and subcommands](/docs/cli/show.md)
+  - [CLI: `ais storage` and subcommands](/docs/cli/storage.md)
   - [Storage Services](/docs/storage_svcs.md)
   - [Checksumming: brief theory of operations](/docs/checksum.md)
   - [S3 compatibility](/docs/s3compat.md)
 - Cluster Management
+  - [CLI: `ais cluster` and subcommands](/docs/cli/show.md)
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)
   - [Global Rebalance](/docs/rebalance.md)
   - [Troubleshooting](/docs/troubleshooting.md)
 - Configuration
   - [Configuration](/docs/configuration.md)
-  - [CLI to view and update cluster and node config](/docs/cli/config.md)
+  - [CLI: `ais config`](/docs/cli/config.md)
 - Observability
   - [Observability](/docs/metrics.md)
   - [Prometheus](/docs/prometheus.md)
-- For developers
+  - [CLI: `ais show performance`](/docs/cli/show.md)
+- For users and developers
   - [Getting started](/docs/getting_started.md)
-  - [Go (language) API](/docs/http_api.md)
   - [Docker](/docs/docker_main.md)
   - [Useful scripts](/docs/development.md)
   - Profiling, race-detecting, and more
 - Batch operations
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xact/README.md)
-  - [CLI: job management](/docs/cli/job.md)
+  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
 - Topics
   - [System files](/docs/sysfiles.md)
   - [`aisnode` command line](/docs/command_line.md)

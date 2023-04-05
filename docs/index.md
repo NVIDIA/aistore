@@ -14,7 +14,7 @@ redirect_from:
 
 AIStore (AIS for short) is a built from scratch, lightweight storage stack tailored for AI apps. It's an elastic cluster that can grow and shrink at runtime and can be ad-hoc deployed, with or without Kubernetes, anywhere from a single Linux machine to a bare-metal cluster of any size.
 
-AIS consistently shows balanced I/O distribution and **linear scalability** across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the development is also driven by the ideas to [offload dataset transformations](https://aiatscale.org/blog/2021/10/21/ais-etl-1).
+AIS consistently shows balanced I/O distribution and **linear scalability** across arbitrary numbers of clustered nodes. The ability to scale linearly with each added disk was, and remains, one of the main incentives. Much of the initial design was also driven by the ideas to [offload](https://aiatscale.org/blog) custom dataset transformations (often referred to as [ETL](https://aiatscale.org/blog/2021/10/21/ais-etl-1)). And finally, since AIS is a software system that aggregates Linux machines to provide storage for user data, there's the requirement number one: reliability and data protection.
 
 ## Features
 
@@ -37,9 +37,11 @@ AIS runs natively on Kubernetes and features open format - thus, the freedom to 
 
 For developers and data scientists, there's also:
 * native [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api) that we utilize in a variety of tools including [CLI](/docs/cli.md) and [Load Generator](/docs/aisloader.md);
-* native [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore/sdk)([reference docs](/docs/python_sdk.md))
+* native [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore/sdk)
+  - [Python SDK reference guide](/docs/python_sdk.md)
 * [PyTorch integration](https://github.com/NVIDIA/aistore/tree/master/python/aistore/pytorch) and usage examples
-* [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch) for using AIS as an S3 client
+* [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch) for interoperability with AWS SDK for Python (aka [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) client
+  - and other [Botocore](https://github.com/boto/botocorehttps://github.com/boto/botocore) derivatives.
 
 For the original AIStore **white paper** and design philosophy, for introduction to large-scale deep learning and the most recently added features, please see [AIStore Overview](/docs/overview.md) (where you can also find six alternative ways to work with existing datasets). Videos and **animated presentations** can be found at [videos](/docs/videos.md).
 
@@ -104,22 +106,29 @@ With a little effort, they all could be extracted and used outside.
 - [Technical Blog](https://aiatscale.org/blog)
 - API and SDK
   - [Go (language) API](https://github.com/NVIDIA/aistore/tree/master/api)
-  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) (and [pip package](https://pypi.org/project/aistore/))
+  - [Python SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore), and also:
+    - [pip package](https://pypi.org/project/aistore/)
+    - [reference guide](/docs/python_sdk.md)
   - [REST API](/docs/http_api.md)
     - [Easy URL](/docs/easy_url.md)
 - Amazon S3
   - [`s3cmd` client](/docs/s3cmd.md)
   - [S3 compatibility](/docs/s3compat.md)
+  - [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch)
 - [CLI](/docs/cli.md)
-  - [Create, destroy, list, copy, rename, transform, configure, evict buckets](/docs/cli/bucket.md)
-  - [GET, PUT, APPEND, PROMOTE, and other operations on objects](/docs/cli/object.md)
+  - [`ais help`](/docs/cli/help.md)
+  - [Reference guide](/docs/cli.md#cli-reference)
+  - [Monitoring](/docs/cli/show.md)
+    - [`ais show cluster`](/docs/cli/show.md)
+    - [`ais show performance`](/docs/cli/show.md)
+    - [`ais show job`](/docs/cli/show.md)
   - [Cluster and node management](/docs/cli/cluster.md)
   - [Mountpath (disk) management](/docs/cli/storage.md)
   - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
   - [Start, stop, and monitor downloads](/docs/cli/download.md)
   - [Distributed shuffle](/docs/cli/dsort.md)
   - [User account and access management](/docs/cli/auth.md)
-  - [Job (aka `xaction`) management](/docs/cli/job.md)
+  - [Jobs](/docs/cli/job.md)
 - Security and Access Control
   - [Authentication Server (AuthN)](/docs/authn.md)
 - Tutorials
@@ -139,21 +148,25 @@ With a little effort, they all could be extracted and used outside.
   - [Backend providers](/docs/providers.md)
   - [Buckets](/docs/bucket.md)
 - Storage Services
+  - [CLI: `ais show storage` and subcommands](/docs/cli/show.md)
+  - [CLI: `ais storage` and subcommands](/docs/cli/storage.md)
   - [Storage Services](/docs/storage_svcs.md)
   - [Checksumming: brief theory of operations](/docs/checksum.md)
   - [S3 compatibility](/docs/s3compat.md)
 - Cluster Management
+  - [CLI: `ais cluster` and subcommands](/docs/cli/show.md)
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)
   - [Global Rebalance](/docs/rebalance.md)
   - [Troubleshooting](/docs/troubleshooting.md)
 - Configuration
   - [Configuration](/docs/configuration.md)
-  - [CLI to view and update cluster and node config](/docs/cli/config.md)
+  - [CLI: `ais config`](/docs/cli/config.md)
 - Observability
   - [Observability](/docs/metrics.md)
   - [Prometheus](/docs/prometheus.md)
-- For developers
+  - [CLI: `ais show performance`](/docs/cli/show.md)
+- For users and developers
   - [Getting started](/docs/getting_started.md)
   - [Docker](/docs/docker_main.md)
   - [Useful scripts](/docs/development.md)
@@ -161,7 +174,7 @@ With a little effort, they all could be extracted and used outside.
 - Batch operations
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xact/README.md)
-  - [CLI: job management](/docs/cli/job.md)
+  - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
 - Topics
   - [System files](/docs/sysfiles.md)
   - [`aisnode` command line](/docs/command_line.md)
