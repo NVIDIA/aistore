@@ -48,12 +48,12 @@ Since prerequisites boil down to, essentially, having Linux with a disk the depl
 
 | Option | Objective |
 | --- | ---|
-| [Local playground](/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
+| [Local playground](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md#local-playground) | AIS developers and development, Linux or Mac OS |
 | Minimal production-ready deployment | This option utilizes preinstalled docker image and is targeting first-time users or researchers (who could immediately start training their models on smaller datasets) |
-| [Easy automated GCP/GKE deployment](/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
+| [Easy automated GCP/GKE deployment](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md#kubernetes-deployments) | Developers, first-time users, AI researchers |
 | [Large-scale production deployment](https://github.com/NVIDIA/ais-k8s) | Requires Kubernetes and is provided via a separate repository: [ais-k8s](https://github.com/NVIDIA/ais-k8s) |
 
-Further, there's the capability referred to as [global namespace](/docs/providers.md#remote-ais-cluster): given HTTP(S) connectivity, AIS clusters can be easily interconnected to "see" each other's datasets. Hence, the idea to start "small" to gradually and incrementally build high-performance shared capacity.
+Further, there's the capability referred to as [global namespace](https://github.com/NVIDIA/aistore/blob/master/docs/providers.md#remote-ais-cluster): given HTTP(S) connectivity, AIS clusters can be easily interconnected to "see" each other's datasets. Hence, the idea to start "small" to gradually and incrementally build high-performance shared capacity.
 
 > For detailed discussion on supported deployments, please refer to [Getting Started](/docs/getting_started.md).
 
@@ -108,7 +108,7 @@ With a little effort, they all could be extracted and used outside.
   - [Boto3 support](https://github.com/NVIDIA/aistore/tree/master/python/aistore/botocore_patch)
 - [CLI](/docs/cli.md)
   - [`ais help`](/docs/cli/help.md)
-  - [Reference guide](/docs/cli.md#cli-reference)
+  - [Reference guide](https://github.com/NVIDIA/aistore/blob/master/docs/cli.md#cli-reference)
   - [Monitoring](/docs/cli/show.md)
     - [`ais show cluster`](/docs/cli/show.md)
     - [`ais show performance`](/docs/cli/show.md)
@@ -174,7 +174,7 @@ With a little effort, they all could be extracted and used outside.
   - [File access (experimental)](/docs/aisfs.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
-  - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)
+  - [AIS Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
 
 ## License
 

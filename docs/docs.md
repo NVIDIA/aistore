@@ -13,7 +13,7 @@ redirect_from:
 - [In-depth overview](/docs/overview.md)
 - [Getting started](/docs/getting_started.md)
 - [CLI: overview, getting started](/docs/cli.md)
-- [CLI: reference guide](/docs/cli.md#cli-reference)
+- [CLI: reference guide](https://github.com/NVIDIA/aistore/blob/master/docs/cli.md#cli-reference)
 - [Blogs](https://aiatscale.org/blog)
 - [Deployment](https://github.com/NVIDIA/aistore/tree/master/deploy)
 
@@ -102,4 +102,4 @@ redirect_from:
   - [File access (experimental)](/docs/aisfs.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
-  - [AIS Buckets: definition, operations, properties](/docs/bucket.md#bucket)
+  - [AIS Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
