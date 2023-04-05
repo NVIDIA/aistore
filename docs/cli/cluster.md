@@ -17,10 +17,12 @@ show               remote-detach      set-primary        decommission       rese
 remote-attach      rebalance          shutdown           add-remove-nodes
 ```
 
+> **Important:** the commands above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
+
 Alternatively, use `--help` to show subcommands with brief descriptions:
 
 ```console
-$ ais cluster --help
+$ ais cluster  --help
 NAME:
    ais cluster - monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
 
@@ -31,16 +33,12 @@ COMMANDS:
    show              show cluster nodes and utilization
    remote-attach     attach remote ais cluster
    remote-detach     detach remote ais cluster
-   rebalance
+   rebalance         administratively start and stop global rebalance; show global rebalance
    set-primary       select a new primary proxy/gateway
-   shutdown          shutdown cluster
+   shutdown          shut down entire cluster
    decommission      decommission entire cluster
-   add-remove-nodes  manage cluster membership (scale up or down)
+   add-remove-nodes  manage cluster membership (add/remove nodes, temporarily or permanently)
    reset-stats       reset cluster or node stats (all cumulative metrics or only errors)
-
-OPTIONS:
-   --help, -h  show help
-
 ```
 
 As always, each subcommand will have its own help and usage examples (the latter possibly spread across multiple documents).

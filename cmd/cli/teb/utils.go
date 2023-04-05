@@ -104,6 +104,29 @@ func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) (snamePlus 
 	return
 }
 
+func fmtProxiesSumm(smap *cluster.Smap) string {
+	cnt, act := len(smap.Pmap), smap.CountActivePs()
+	if cnt != act {
+		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
+	}
+	une := smap.CountNonElectable()
+	if une == 0 {
+		if cnt == 1 {
+			return fmt.Sprintf("%d", cnt)
+		}
+		return fmt.Sprintf("%d (all electable)", cnt)
+	}
+	return fmt.Sprintf("%d (%d unelectable)", cnt, smap.CountNonElectable())
+}
+
+func fmtTargetsSumm(smap *cluster.Smap) string {
+	cnt, act := len(smap.Tmap), smap.CountActiveTs()
+	if cnt != act {
+		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
+	}
+	return fmt.Sprintf("%d", cnt)
+}
+
 func fmtSmap(smap *cluster.Smap) string {
 	return fmt.Sprintf("version %d, UUID %s, primary %s", smap.Version, smap.UUID, smap.Primary.StringEx())
 }

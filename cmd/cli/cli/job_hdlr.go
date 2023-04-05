@@ -318,7 +318,10 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 	}
 
 	debug.Assert(xact.IsValidUUID(xid), xid)
-	msg := fmt.Sprintf("Started %s[%s]. %s", xname, xid, toMonitorMsg(c, xid, ""))
+	msg := "Started global rebalance. To monitor the progress, run 'ais show rebalance'"
+	if xname != apc.ActRebalance {
+		msg = fmt.Sprintf("Started %s[%s]. %s", xname, xid, toMonitorMsg(c, xid, ""))
+	}
 	actionDone(c, msg)
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {

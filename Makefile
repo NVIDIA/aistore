@@ -178,7 +178,7 @@ kill: ## Kill all locally deployed clusters (all targets and all proxies)
 ifndef CLI_VERSION
 	@echo "Warning: missing CLI (ais) executable for proper graceful shutdown"
 else
-	@ais cluster shutdown 2>/dev/null || true
+	@ais cluster shutdown -y 2>/dev/null || true
 endif
 	@"$(DEPLOY_DIR)/kill.sh"
 

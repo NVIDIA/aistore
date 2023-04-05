@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	fmtRebalanceStarted = "Started rebalance %q (to monitor, run 'ais show rebalance %s').\n"
+	fmtRebalanceStarted = "Started rebalance %q (to monitor, run 'ais show rebalance').\n"
 
 	roleProxyShort  = "p"
 	roleTargetShort = "t"
@@ -32,18 +32,21 @@ var (
 		cmdCluConfig: {
 			transientFlag,
 		},
-		cmdShutdown: {},
-		cmdPrimary:  {},
+		cmdShutdown: {
+			yesFlag,
+		},
+		cmdPrimary: {},
 		cmdJoin: {
 			roleFlag,
 		},
 		cmdStartMaint: {
 			noRebalanceFlag,
+			yesFlag,
 		},
 		cmdShutdown + ".node": {
 			noRebalanceFlag,
-			noShutdownFlag,
 			rmUserDataFlag,
+			yesFlag,
 		},
 		cmdNodeDecommission + ".node": {
 			noRebalanceFlag,
@@ -100,7 +103,8 @@ var (
 				BashComplete: suggestRemote,
 			},
 			{
-				Name: cmdRebalance,
+				Name:  cmdRebalance,
+				Usage: "administratively start and stop global rebalance; show global rebalance",
 				Subcommands: []cli.Command{
 					startRebalance,
 					stopRebalance,
@@ -121,9 +125,10 @@ var (
 				Action:       setPrimaryHandler,
 				BashComplete: suggestProxyNodes,
 			},
+			// cluster level
 			{
 				Name:   cmdShutdown,
-				Usage:  "shutdown cluster",
+				Usage:  "shut down entire cluster",
 				Flags:  clusterCmdsFlags[cmdShutdown],
 				Action: clusterShutdownHandler,
 			},
@@ -133,9 +138,10 @@ var (
 				Flags:  clusterCmdsFlags[cmdClusterDecommission],
 				Action: clusterDecommissionHandler,
 			},
+			// node level
 			{
 				Name:  cmdMembership,
-				Usage: "manage cluster membership (scale up or down)",
+				Usage: "manage cluster membership (add/remove nodes, temporarily or permanently)",
 				Subcommands: []cli.Command{
 					{
 						Name:      cmdJoin,
@@ -169,7 +175,7 @@ var (
 					},
 					{
 						Name:         cmdShutdown,
-						Usage:        "shutdown a node",
+						Usage:        "shutdown a node (gracefully or immediately)",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,
@@ -216,7 +222,21 @@ func detachRemoteAISHandler(c *cli.Context) (err error) {
 	return
 }
 
+// (compare with node-level `nodeMaintShutDecommHandler` operations)
+
 func clusterShutdownHandler(c *cli.Context) (err error) {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
+	}
+	if !flagIsSet(c, yesFlag) {
+		warn := fmt.Sprintf("shutting down cluster (UUID=%s, primary=[%s, %s])",
+			smap.UUID, smap.Primary.ID(), smap.Primary.PubNet.URL)
+		actionWarn(c, warn)
+		if ok := confirm(c, "Proceed?"); !ok {
+			return nil
+		}
+	}
 	if err := api.ShutdownCluster(apiBP); err != nil {
 		return err
 	}
@@ -225,9 +245,15 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 }
 
 func clusterDecommissionHandler(c *cli.Context) error {
-	// ask confirmation
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err
+	}
 	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, "Proceed?", "about to permanently decommission AIS cluster. The operation cannot be undone!"); !ok {
+		warn := fmt.Sprintf("about to permanently decommission cluster (UUID=%s, primary=[%s, %s]).",
+			smap.UUID, smap.Primary.ID(), smap.Primary.PubNet.URL)
+		actionWarn(c, warn)
+		if ok := confirm(c, "The operation cannot be undone. Proceed?"); !ok {
 			return nil
 		}
 	}
@@ -295,11 +321,12 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	fmt.Fprintf(c.App.Writer, "Node %s successfully joined the cluster\n", sname)
 
 	if rebID != "" {
-		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, rebID, rebID)
+		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, rebID)
 	}
 	return
 }
 
+// (compare w/ cluster-level clusterDecommissionHandler & clusterShutdownHandler)
 func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -327,18 +354,12 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		actValue      = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
-		fmt.Fprintf(c.App.Writer,
-			"Beware: performing %q and _not_ running global rebalance may lead to a loss of data!\n", action)
+		warn := fmt.Sprintf("executing %q and _not_ running global rebalance may lead to a loss of data!", action)
+		actionWarn(c, warn)
 		fmt.Fprintln(c.App.Writer,
-			"To rebalance the cluster manually at a later time, please run: `ais job start rebalance`")
+			"To rebalance the cluster manually at a later time, run: `ais start rebalance`")
 	}
 	if action == cmdNodeDecommission {
-		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
-			if ok := confirm(c, "Proceed?", warn); !ok {
-				return nil
-			}
-		}
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData
 	} else {
@@ -352,23 +373,41 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	}
 	switch action {
 	case cmdStartMaint:
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("about to put node %s in maintenance mode", sname)
+			if ok := confirm(c, "Proceed?", warn); !ok {
+				return nil
+			}
+		}
 		xid, err = api.StartMaintenance(apiBP, actValue)
 	case cmdStopMaint:
 		xid, err = api.StopMaintenance(apiBP, actValue)
 	case cmdNodeDecommission:
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
+			if ok := confirm(c, "Proceed?", warn); !ok {
+				return nil
+			}
+		}
 		xid, err = api.DecommissionNode(apiBP, actValue)
 	case cmdShutdown:
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("about to shut down node %s", sname)
+			if ok := confirm(c, "Proceed?", warn); !ok {
+				return nil
+			}
+		}
 		xid, err = api.ShutdownNode(apiBP, actValue)
 	}
 	if err != nil {
 		return err
 	}
 	if xid != "" {
-		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid, xid)
+		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, xid)
 	}
 	switch action {
 	case cmdStopMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now active (maintenance done)\n", sname)
+		fmt.Fprintf(c.App.Writer, "%s is now active\n", sname)
 	case cmdNodeDecommission:
 		if skipRebalance || node.IsProxy() {
 			fmt.Fprintf(c.App.Writer, "%s has been decommissioned (permanently removed from the cluster)\n", sname)
@@ -378,13 +417,15 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		}
 	case cmdShutdown:
 		if skipRebalance || node.IsProxy() {
-			fmt.Fprintf(c.App.Writer, "%s has been shutdown\n", sname)
+			fmt.Fprintf(c.App.Writer, "%s has been shut down\n", sname)
 		} else {
 			fmt.Fprintf(c.App.Writer,
-				"%s is shutting down, please wait for cluster rebalancing to finish...\n", sname)
+				"%s is shutting down, please wait for cluster rebalancing to finish\n", sname)
 		}
+		fmt.Fprintf(c.App.Writer, "\nNote: the node %s is _not_ decommissioned - it remains in the cluster map and can be manually\n", sname)
+		fmt.Fprintf(c.App.Writer, "restarted at any later time (and subsequently activated via '%s' operation).\n", cmdStopMaint)
 	case cmdStartMaint:
-		fmt.Fprintf(c.App.Writer, "%s is now in maintenance\n", sname)
+		fmt.Fprintf(c.App.Writer, "%s is now in maintenance mode\n", sname)
 	}
 	return nil
 }

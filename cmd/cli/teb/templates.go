@@ -68,8 +68,8 @@ const (
 	//
 	indent1 = "   "
 
-	ClusterSummary = indent1 + "Proxies:\t{{len .Smap.Pmap}} ({{ .Smap.CountNonElectable }} unelectable)\n" +
-		indent1 + "Targets:\t{{len .Smap.Tmap}}\n" +
+	ClusterSummary = indent1 + "Proxies:\t{{FormatProxiesSumm .Smap}}\n" +
+		indent1 + "Targets:\t{{FormatTargetsSumm .Smap}}\n" +
 		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
@@ -397,6 +397,8 @@ var (
 		"FormatObjIsCached": fmtObjIsCached,
 		"FormatDaemonID":    fmtDaemonID,
 		"FormatSmap":        fmtSmap,
+		"FormatProxiesSumm": fmtProxiesSumm,
+		"FormatTargetsSumm": fmtTargetsSumm,
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
 		"FormatBckName":     func(bck cmn.Bck) string { return bck.Cname("") },
