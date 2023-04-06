@@ -175,7 +175,6 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		wi, ok := r.pending.m[txnUUID]
 		r.pending.RUnlock()
 		if !ok {
-			debug.Assert(!r.err.IsNil()) // see cleanup
 			return r.err.Err()
 		}
 		refc := wi.refc.Dec()

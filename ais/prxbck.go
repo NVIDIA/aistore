@@ -209,7 +209,11 @@ func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 	case cmn.IsErrBckNotFound(err):
 		debug.Assert(bck.IsAIS())
 		if !args.createAIS {
-			args.p.writeErr(args.w, args.r, err, errCode)
+			if args.perms == apc.AceBckHEAD {
+				args.p.writeErr(args.w, args.r, err, errCode, Silent)
+			} else {
+				args.p.writeErr(args.w, args.r, err, errCode)
+			}
 			return
 		}
 	case cmn.IsErrRemoteBckNotFound(err):
