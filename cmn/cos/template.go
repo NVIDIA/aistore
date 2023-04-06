@@ -57,6 +57,8 @@ const (
 	templateNonPositiveStep = "'step' is non-positive"
 )
 
+var ErrEmptyTemplate = errors.New("empty range template")
+
 func newErrTemplate(msg, template string) error {
 	return &ErrTemplate{msg: "\"" + template + "\": " + msg}
 }
@@ -69,7 +71,7 @@ func (e *ErrTemplate) Error() string { return e.msg }
 
 func NewParsedTemplate(template string) (ParsedTemplate, error) {
 	if template == "" {
-		return ParsedTemplate{}, errors.New("empty range template")
+		return ParsedTemplate{}, ErrEmptyTemplate
 	}
 	if parsed, err := ParseBashTemplate(template); err == nil {
 		return parsed, nil

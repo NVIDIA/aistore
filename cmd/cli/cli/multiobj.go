@@ -27,12 +27,13 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 		lrMsg   cmn.ListRange
 		numObjs int64
 	)
-	debug.Assert((listObjs == "" && tmplObjs != "") || (listObjs != "" && tmplObjs == ""))
-
 	// 1. list or template
 	if listObjs != "" {
 		lrMsg.ObjNames = splitCsv(listObjs)
 		numObjs = int64(len(lrMsg.ObjNames))
+	} else if tmplObjs == "" {
+		// motivation: copy the entire bucket via x-tco rather than x-tcb
+		// (compare with copying or transforming not "cached" data from remote buckets, etc.)
 	} else {
 		pt, err := cos.NewParsedTemplate(tmplObjs)
 		if err != nil {

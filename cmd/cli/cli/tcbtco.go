@@ -287,5 +287,5 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
 		actionDone(c, msg)
 	}
-	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName) // TODO: progress bar
+	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 }

@@ -127,6 +127,10 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				err = lrit.iterateList(wi, smap)
 			} else {
 				err = lrit.iterateRange(wi, smap)
+				if err == cos.ErrEmptyTemplate {
+					// motivation: copy the entire bucket via x-tco rather than x-tcb
+					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
+				}
 			}
 			if r.IsAborted() || err != nil {
 				goto fin
