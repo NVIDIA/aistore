@@ -7,7 +7,28 @@ redirect_from:
  - /docs/cli/advanced.md/
 ---
 
-# CLI Reference for `advanced` commands
+# `ais advanced` commands
+
+Commands for special use cases (e.g. scripting) and *advanced* usage scenarios, whereby a certain level of understanding of possible consequences is implied and required:
+
+```console
+$ ais advanced --help
+NAME:
+   ais advanced - special commands intended for development and advanced usage
+
+USAGE:
+   ais advanced command [command options] [arguments...]
+
+COMMANDS:
+   gen-shards        generate and write random TAR shards, e.g.:
+                     - gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1
+                     - gen-shards 'gs://bucket2/shard-{01..20..2}.tgz' - 10 random gzipped tarfiles to Cloud bucket
+                     (notice quotation marks in both cases)
+   resilver          resilver user data on a given target (or all targets in the cluster): fix data redundancy
+                     with respect to bucket configuration, remove migrated objects and old/obsolete workfiles
+   preload           preload object metadata into in-memory cache
+   remove-from-smap  immediately remove node from cluster map (advanced usage - potential data loss!)
+```
 
 AIS CLI features a number of miscellaneous and advanced-usage commands.
 

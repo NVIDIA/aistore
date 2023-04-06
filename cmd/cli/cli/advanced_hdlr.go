@@ -39,7 +39,9 @@ var (
 			{
 				Name: cmdGenShards,
 				Usage: "generate and write random TAR shards, e.g.:\n" +
-					"\t'ais://abc/shard-{001..999}.tar' - write 999 random shards (shard-001 thru shard-999) to bucket ais://abc",
+					indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
+					indent4 + "\t- gen-shards 'gs://bucket2/shard-{01..20..2}.tgz' - 10 random gzipped tarfiles to Cloud bucket\n" +
+					indent4 + "\t(notice quotation marks in both cases)",
 				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
 				Flags:     advancedCmdsFlags[cmdGenShards],
 				Action:    genShardsHandler,
@@ -54,7 +56,7 @@ var (
 			},
 			{
 				Name:         cmdRmSmap,
-				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss)",
+				Usage:        "immediately remove node from cluster map (advanced usage - potential data loss!)",
 				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
 				BashComplete: suggestAllNodes,

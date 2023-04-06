@@ -174,8 +174,11 @@ var (
 						BashComplete: suggestAllNodes,
 					},
 					{
-						Name:         cmdShutdown,
-						Usage:        "shutdown a node (gracefully or immediately)",
+						Name: cmdShutdown,
+						Usage: "shutdown a node, gracefully or immediately;\n" +
+							indent4 + "\tnote: upon shutdown the node won't be decommissioned - it'll remain in the cluster map\n" +
+							indent4 + "\tand can be manually restarted to rejoin the cluster at any later time;\n" +
+							indent4 + "\tsee also: 'ais advanced " + cmdRmSmap + "'",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdShutdown+".node"],
 						Action:       nodeMaintShutDecommHandler,

@@ -7,9 +7,9 @@ redirect_from:
  - /docs/cli/cluster.md/
 ---
 
-# Introduction
+# `ais cluster` command
 
-The `ais cluster` command supports the following subcommands:
+The command has the following subcommands:
 
 ```console
 $ ais cluster <TAB-TAB>
@@ -17,7 +17,7 @@ show               remote-detach      set-primary        decommission       rese
 remote-attach      rebalance          shutdown           add-remove-nodes
 ```
 
-> **Important:** the commands above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
+> **Important:** with the single exception of [`add-remove-nodes`](#adding-removing-nodes), all the other the commands listed above operate on the level of the **entire** cluster. Node level operations (e.g., shutting down a given selected node, etc.) can be found under `add-remove-nodes`.
 
 Alternatively, use `--help` to show subcommands with brief descriptions:
 
@@ -55,8 +55,29 @@ Scaling down can be done gracefully or forcefully, and also temporarily or perma
 
 For background, usage examples, and details, please see [this document](/docs/leave_cluster.md).
 
-# CLI Reference for Cluster and Node (Daemon) management
-This section lists cluster and node management operations within the AIS CLI, via `ais cluster`.
+# Adding/removing nodes
+
+The corresponding functionality can be found under the subcommand called `add-remove-nodes`:
+
+```console
+$ ais cluster add-remove-nodes --help
+NAME:
+   ais cluster add-remove-nodes - manage cluster membership (add/remove nodes, temporarily or permanently)
+
+USAGE:
+   ais cluster add-remove-nodes command [command options] [arguments...]
+
+COMMANDS:
+   join               add a node to the cluster
+   start-maintenance  put node in maintenance mode, temporarily suspend its operation
+   stop-maintenance   activate node by taking it back from "maintenance"
+   decommission       safely and permanently remove node from the cluster
+
+   shutdown           shutdown a node, gracefully or immediately;
+                      note: upon shutdown the node won't be decommissioned - it'll remain in the cluster map
+                      and can be manually restarted to rejoin the cluster at any later time;
+                      see also: 'ais advanced remove-from-smap'
+```
 
 ## Table of Contents
 - [Cluster and Node status](#cluster-and-node-status)
