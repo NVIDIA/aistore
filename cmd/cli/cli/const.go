@@ -47,6 +47,7 @@ const (
 	cmdGenShards = "gen-shards"
 	cmdPreload   = "preload"
 	cmdRmSmap    = "remove-from-smap"
+	cmdRandNode  = "random-node"
 )
 
 // - 2nd level subcommands (mostly, verbs)

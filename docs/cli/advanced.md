@@ -28,6 +28,7 @@ COMMANDS:
                      with respect to bucket configuration, remove migrated objects and old/obsolete workfiles
    preload           preload object metadata into in-memory cache
    remove-from-smap  immediately remove node from cluster map (advanced usage - potential data loss!)
+   random-node       print random node ID (by default, random target)
 ```
 
 AIS CLI features a number of miscellaneous and advanced-usage commands.

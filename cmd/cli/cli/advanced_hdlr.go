@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -60,6 +61,16 @@ var (
 				ArgsUsage:    nodeIDArgument,
 				Action:       removeNodeFromSmap,
 				BashComplete: suggestAllNodes,
+			},
+			{
+				Name:   cmdRandNode,
+				Usage:  "print random node ID (by default, random target)",
+				Action: randNode,
+				BashComplete: func(c *cli.Context) {
+					if c.NArg() == 0 {
+						fmt.Println(apc.Proxy, apc.Target)
+					}
+				},
 			},
 		},
 	}
@@ -211,4 +222,24 @@ func removeNodeFromSmap(c *cli.Context) error {
 		return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
 	}
 	return api.RemoveNodeFromSmap(apiBP, sid)
+}
+
+func randNode(c *cli.Context) error {
+	var (
+		si        *cluster.Snode
+		smap, err = getClusterMap(c)
+	)
+	if err != nil {
+		return err
+	}
+	if c.NArg() > 0 && c.Args().Get(0) == apc.Proxy {
+		si, err = smap.GetRandProxy(false) // _not_ excluding primary
+	} else {
+		si, err = smap.GetRandTarget()
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(c.App.Writer, si.ID())
+	return nil
 }
