@@ -263,7 +263,7 @@ test:long:hdfs:
   script:
     - bash deploy/ci/setup_hdfs.sh
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --hdfs
-    - ais bucket create "${BUCKET}" --bucket-props="extra.hdfs.ref_directory=/"
+    - ais bucket create "${BUCKET}" --props="extra.hdfs.ref_directory=/"
     - make test-long
 
 test:long:aisloader:

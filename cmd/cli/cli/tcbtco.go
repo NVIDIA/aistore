@@ -251,7 +251,7 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 			return err
 		}
 		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
-			bckFrom, bckTo)
+			bckTo, bckFrom)
 		actionWarn(c, warn)
 	}
 

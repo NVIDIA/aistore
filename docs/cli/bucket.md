@@ -881,10 +881,10 @@ In examples a cluster with 6 targets is used:
 
 ```console
 $ # Creating a bucket
-$ ais create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
+$ ais create ais://bck --props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4"
 Create bucket "ais://bck" failed: EC config (6 data, 4 parity) slices requires at least 11 targets (have 6)
 $
-$ ais create ais://bck --bucket-props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
+$ ais create ais://bck --props "ec.enabled=true ec.data_slices=6 ec.parity_slices=4" --force
 "ais://bck" bucket created
 $
 $ # If the number of targets is less than or equal to ec.parity_slices even `--force` does not help
