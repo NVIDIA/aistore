@@ -357,7 +357,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		actValue      = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
-		warn := fmt.Sprintf("executing %q and _not_ running global rebalance may lead to a loss of data!", action)
+		warn := fmt.Sprintf("executing %q _and_ not running global rebalance may lead to a loss of data!", action)
 		actionWarn(c, warn)
 		fmt.Fprintln(c.App.Writer,
 			"To rebalance the cluster manually at a later time, run: `ais start rebalance`")

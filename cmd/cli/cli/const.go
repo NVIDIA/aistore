@@ -44,10 +44,11 @@ const (
 
 // advanced command and subcommands
 const (
-	cmdGenShards = "gen-shards"
-	cmdPreload   = "preload"
-	cmdRmSmap    = "remove-from-smap"
-	cmdRandNode  = "random-node"
+	cmdGenShards     = "gen-shards"
+	cmdPreload       = "preload"
+	cmdRmSmap        = "remove-from-smap"
+	cmdRandNode      = "random-node"
+	cmdRandMountpath = "random-mountpath"
 )
 
 // - 2nd level subcommands (mostly, verbs)

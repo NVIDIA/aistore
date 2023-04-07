@@ -37,7 +37,6 @@ As far as `ais show`, the command currently extends as follows:
 $ ais show <TAB-TAB>
 auth             bucket           performance      rebalance        remote-cluster   log
 object           cluster          storage          config           job
-
 ```
 
 In other words, there are currently 11 subcommands that are briefly described in the rest of this text.
@@ -62,7 +61,6 @@ The command has 5 subcommands:
 ```console
 $ ais show performance
 counters     throughput   latency      capacity     disk
-
 ```
 
 The command provides a quick single-shot overview of cluster performance. If you type `ais show performance` and instead of `<TAB-TAB>` hit `Enter`, the command will show performance counters, aggregated cluster throughput statistics, and the other 3 tables (latency, capacity, disk IO) - in sequence, one after another.
@@ -128,7 +126,7 @@ Use `ais show performance` and its variations in combination with `ais show job`
 
 ### See also
 
-* [AIS metrics](/docs/metrics.md)
+* [Observability](/docs/metrics.md)
 * [Prometheus](/docs/prometheus.md)
 
 ## `ais show job`

@@ -2,11 +2,14 @@
 ais bucket rm ais://src-ec ais://dst -y 2>/dev/null
 
 ## create erasure-coded bucket
-## NOTE: must have enough (i.e., 5 in this case) nodes in the cluster
+## NOTE: must have enough nodes in the cluster (i.e., 5 or more nodes in this case)
 ais create ais://src-ec --props "ec.enabled=true ec.data_slices=3 ec.parity_slices=1 ec.objsize_limit=0" || \
 exit 1
 
+## generate a large number (say, 999) tar shards
 ais advanced gen-shards 'ais://src-ec/shard-{001..999}.tar'
+
+## list-objects to confirm
 num=$(ais ls ais://src-ec --no-headers | wc -l)
 [[ $num == 999 ]] || { echo "FAIL: $num != 999"; exit 1; }
 
@@ -16,12 +19,13 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+## run forever or Ctrl-C
 while true
 do
-  ## 1. start copying all
+  ## 1. start copying
   ais cp ais://src-ec ais://dst --template ""
 
-  ## randomize event timing
+  ## randomize event timing: traffic vs cluster losing a node
   sleep $((RANDOM % 5))
 
   ## 2. remove a random node immediately (no rebalance!)
@@ -35,11 +39,12 @@ do
   ais cluster add-remove-nodes stop-maintenance $node
   ais wait rebalance
 
-  ## 5. check the the numbers
+  ## 5. check numbers
   res=$(ais ls ais://src-ec --no-headers | wc -l)
   [[ $num == $res ]] || { echo "FAIL: source $num != $res"; exit 1; }
-  res=$(ais ls ais://dst --no-headers | wc -l)
-  [[ $num == $res ]] || { echo "FAIL: post-rebalance destination $num != $res"; exit 1; }
+  ## alternatively, using summary:
+  res=$(ais ls ais://dst --no-headers --summary | awk '{print $3}')
+  [[ $num == $res ]] || { echo "FAIL: destination $num != $res"; exit 1; }
 
   ## 6. cleanup and repeat
   ais bucket rm ais://dst -y

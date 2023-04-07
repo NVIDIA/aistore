@@ -523,7 +523,7 @@ func listAnyHandler(c *cli.Context) error {
 			return err
 		}
 		return showObjProps(c, bck, objName)
-	case bck.Name == "": // list buckets
+	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list bucket(s)
 		fltPresence := apc.FltPresent
 		if flagIsSet(c, allObjsOrBcksFlag) {
 			fltPresence = apc.FltExists

@@ -72,6 +72,12 @@ var (
 					}
 				},
 			},
+			{
+				Name:         cmdRandMountpath,
+				Usage:        "print a random mountpath from a given target",
+				Action:       randMountpath,
+				BashComplete: suggestTargetNodes,
+			},
 		},
 	}
 )
@@ -241,5 +247,31 @@ func randNode(c *cli.Context) error {
 		return err
 	}
 	fmt.Fprintln(c.App.Writer, si.ID())
+	return nil
+}
+
+func randMountpath(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, c.Command.ArgsUsage)
+	}
+	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	if err != nil {
+		return err
+	}
+	smap, err := getClusterMap(c)
+	debug.AssertNoErr(err)
+	tsi := smap.GetTarget(sid)
+	if tsi == nil {
+		return fmt.Errorf("%s is not a target node (expecting target)", sname)
+	}
+	daeStatus, err := api.GetStatsAndStatus(apiBP, tsi)
+	if err != nil {
+		return err
+	}
+	cdf := daeStatus.Node.TargetCDF
+	for mpath := range cdf.Mountpaths {
+		fmt.Fprintln(c.App.Writer, mpath)
+		break
+	}
 	return nil
 }
