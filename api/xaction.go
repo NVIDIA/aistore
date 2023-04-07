@@ -155,90 +155,6 @@ func getxst(out any, q url.Values, bp BaseParams, args xact.ArgsMsg) (err error)
 	return
 }
 
-func initPollingTimes(args xact.ArgsMsg) (time.Duration, time.Duration) {
-	total := args.Timeout
-	switch {
-	case args.Timeout == 0:
-		total = xact.DefWaitTimeShort
-	case args.Timeout < 0:
-		total = xact.DefWaitTimeLong
-	}
-	return total, cos.MinDuration(xact.MaxProbingFreq, cos.ProbingFrequency(total))
-}
-
-func backoffPoll(dur time.Duration) time.Duration {
-	dur += dur / 2
-	return cos.MinDuration(xact.MaxPollTime, dur)
-}
-
-// TODO: use `xact.IdlesBeforeFinishing` to unify as a single WaitForXaction API
-
-// WaitForXactionIC waits for a given xaction to complete.
-// Use it only for global xactions
-// (those that execute on all targets and report their status to IC, e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
-	return waitX(bp, args, nil)
-}
-
-// WaitForXactionNode waits for a given xaction to complete.
-// Use for xaction which can be launched on a single node and do not report their
-// statuses(e.g resilver) to IC or to check specific xaction states (e.g Idle).
-func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) bool) error {
-	debug.Assert(args.Kind != "" || xact.IsValidUUID(args.ID))
-	_, err := waitX(bp, args, fn)
-	return err
-}
-
-func waitX(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) bool) (status *nl.Status, err error) {
-	var (
-		elapsed      time.Duration
-		begin        = mono.NanoTime()
-		total, sleep = initPollingTimes(args)
-		ctx, cancel  = context.WithTimeout(context.Background(), total)
-	)
-	defer cancel()
-	for {
-		var done bool
-		if fn == nil {
-			status, err = GetOneXactionStatus(bp, args)
-			done = err == nil && status.Finished() && elapsed >= xact.MinPollTime
-		} else {
-			var snaps xact.MultiSnap
-			snaps, err = QueryXactionSnaps(bp, args)
-			done = err == nil && fn(snaps)
-		}
-		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
-		if done || !canRetry /*fail*/ {
-			return
-		}
-		time.Sleep(sleep)
-		elapsed = mono.Since(begin)
-		sleep = backoffPoll(sleep)
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			break
-		}
-	}
-}
-
-// WaitForXactionIdle waits for a given on-demand xaction to be idle.
-func WaitForXactionIdle(bp BaseParams, args xact.ArgsMsg) error {
-	var idles int
-	args.OnlyRunning = true
-	check := func(snaps xact.MultiSnap) bool {
-		found, idle := snaps.IsIdle(args.ID)
-		if idle || !found { // TODO -- FIXME: !found may translate as "hasn't started yet"
-			idles++
-			return idles >= xact.NumConsecutiveIdle
-		}
-		idles = 0
-		return false
-	}
-	return WaitForXactionNode(bp, args, check)
-}
-
 // Wait for bucket summary:
 //  1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
 //     asynchronous task. The destination returns ID of a newly created task
@@ -291,4 +207,107 @@ func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsumm
 		}
 	}
 	return err
+}
+
+//
+// TODO: use `xact.IdlesBeforeFinishing` to provide a single unified wait-for API
+//
+
+type consIdle struct {
+	xid string
+	cnt int
+}
+
+func (ci *consIdle) check(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
+	found, idle := snaps.IsIdle(ci.xid)
+	if idle || !found {
+		ci.cnt++
+		// TODO: !found may mean "hasn't started yet" unless it's a "won't start"
+		// situation; resetting frequency only if found
+		done, resetProbeFreq = ci.cnt >= xact.NumConsecutiveIdle, found
+		return
+	}
+	ci.cnt = 0
+	return
+}
+
+// WaitForXactionIdle waits for a given on-demand xaction to be idle.
+func WaitForXactionIdle(bp BaseParams, args xact.ArgsMsg) error {
+	ci := &consIdle{xid: args.ID}
+	args.OnlyRunning = true
+	return WaitForXactionNode(bp, args, ci.check)
+}
+
+// WaitForXactionIC waits for a given xaction to complete.
+// Use it only for global xactions
+// (those that execute on all targets and report their status to IC, e.g. rebalance).
+func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
+	return _waitx(bp, args, nil)
+}
+
+// WaitForXactionNode waits for a given xaction to complete.
+// Use for xactions that do _not_ report their status to IC members, namely:
+// - xact.IdlesBeforeFinishing()
+// - x-resilver (as it usually runs on a single node)
+func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
+	debug.Assert(args.Kind != "" || xact.IsValidUUID(args.ID))
+	_, err := _waitx(bp, args, fn)
+	return err
+}
+
+// TODO: `status` is currently always nil when we wait with a (`fn`) callback
+// TODO: un-defer cancel()
+func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) (status *nl.Status, err error) {
+	var (
+		elapsed         time.Duration
+		begin           = mono.NanoTime()
+		total, maxSleep = _times(args)
+		sleep           = xact.MinPollTime
+		ctx, cancel     = context.WithTimeout(context.Background(), total)
+	)
+	defer cancel()
+	for {
+		var done bool
+		if fn == nil {
+			status, err = GetOneXactionStatus(bp, args)
+			done = err == nil && status.Finished() && elapsed >= xact.MinPollTime
+		} else {
+			var (
+				snaps          xact.MultiSnap
+				resetProbeFreq bool
+			)
+			snaps, err = QueryXactionSnaps(bp, args)
+			if err == nil {
+				done, resetProbeFreq = fn(snaps)
+				if resetProbeFreq {
+					sleep = xact.MinPollTime
+				}
+			}
+		}
+		canRetry := err == nil || cos.IsRetriableConnErr(err) || cmn.IsStatusServiceUnavailable(err)
+		if done || !canRetry /*fail*/ {
+			return
+		}
+		time.Sleep(sleep)
+		elapsed = mono.Since(begin)
+		sleep = cos.MinDuration(maxSleep, sleep+sleep/2)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			break
+		}
+	}
+}
+
+func _times(args xact.ArgsMsg) (time.Duration, time.Duration) {
+	total := args.Timeout
+	switch {
+	case args.Timeout == 0:
+		total = xact.DefWaitTimeShort
+	case args.Timeout < 0:
+		total = xact.DefWaitTimeLong
+	}
+	return total, cos.MinDuration(xact.MaxProbingFreq, cos.ProbingFrequency(total))
 }

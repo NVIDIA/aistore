@@ -20,22 +20,26 @@ while true
 do
   ## 1. start copying all
   ais cp ais://src-ec ais://dst --template ""
-  sleep $((2 + RANDOM % 2))
 
-  ## 2. remove random node - immediately
+  ## randomize event timing
+  sleep $((RANDOM % 5))
+
+  ## 2. remove a random node immediately (no rebalance!)
   node=$(ais advanced random-node)
   ais cluster add-remove-nodes start-maintenance $node --no-rebalance -y
 
   ## 3. wait for the copying job to finish
-  ais wait copy-listrange
+  ais wait copy-objects
 
   ## 4. activate and join back
   ais cluster add-remove-nodes stop-maintenance $node
   ais wait rebalance
 
-  ## 5. check the destination for the number of copies
+  ## 5. check the the numbers
+  res=$(ais ls ais://src-ec --no-headers | wc -l)
+  [[ $num == $res ]] || { echo "FAIL: source $num != $res"; exit 1; }
   res=$(ais ls ais://dst --no-headers | wc -l)
-  [[ $num == $res ]] || { echo "FAIL: destination $num != $res"; exit 1; }
+  [[ $num == $res ]] || { echo "FAIL: post-rebalance destination $num != $res"; exit 1; }
 
   ## 6. cleanup and repeat
   ais bucket rm ais://dst -y

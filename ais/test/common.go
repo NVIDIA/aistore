@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -1106,13 +1107,16 @@ func detectNewBucket(oldList, newList cmn.Bcks) (cmn.Bck, error) {
 }
 
 // xaction is running
-func xactSnapRunning(snaps xact.MultiSnap) bool {
+func xactSnapRunning(snaps xact.MultiSnap) (running, resetProbeFreq bool) {
 	tid, _, err := snaps.RunningTarget("")
-	cos.AssertNoErr(err)
-	return tid != ""
+	debug.AssertNoErr(err)
+	running = tid != ""
+	resetProbeFreq = !running // e.g. idle
+	return
 }
 
 // finished = did start in the past (use check above to confirm) and currently not running
-func xactSnapNotRunning(snaps xact.MultiSnap) bool {
-	return !xactSnapRunning(snaps)
+func xactSnapNotRunning(snaps xact.MultiSnap) (bool, bool) {
+	running, resetProbeFreq := xactSnapRunning(snaps)
+	return !running, resetProbeFreq
 }

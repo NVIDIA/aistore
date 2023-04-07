@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -1020,11 +1019,18 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 		}
 		return waitDsortHandler(c, xid /*job ID*/)
 	}
-
-	// common wait
+	// TODO: niy
+	if flagIsSet(c, refreshFlag) {
+		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(refreshFlag))
+		actionWarn(c, warn)
+	} else if flagIsSet(c, progressFlag) {
+		warn := fmt.Sprintf("ignoring flag %s  - not fully implemented yet", qflprn(progressFlag))
+		actionWarn(c, warn)
+	}
+	// x-wait
 	var (
-		xactID          = xid
-		xname, xactKind string
+		xactID, xname = xid, name
+		xactKind      string
 	)
 	if name != "" {
 		xactKind, xname = xact.GetKindName(name)
@@ -1032,51 +1038,16 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 			return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
 		}
 	}
-	var (
-		msg         = formatXactMsg(xactID, xname, bck)
-		xargs       = xact.ArgsMsg{ID: xactID, Kind: xactKind}
-		refreshRate = _refreshRate(c)
-		total       time.Duration
-		timeout     time.Duration
-		prompted    bool
-	)
+	xargs := xact.ArgsMsg{ID: xactID, Kind: xactKind}
 	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	for {
-		status, err := api.GetOneXactionStatus(apiBP, xargs)
-		if err != nil {
-			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-				actionWarn(c, msg+" not found")
-				return nil
-			}
-			return err
-		}
-		xactID = status.UUID
-		msg = formatXactMsg(xactID, xname, bck)
-		if status.Aborted() {
-			if total > wasFast {
-				fmt.Fprintln(c.App.Writer)
-			}
-			return fmt.Errorf("%s was aborted", msg)
-		}
-		if status.Finished() {
-			break
-		}
-		if !prompted {
-			fmt.Fprintf(c.App.Writer, "Waiting for %s ", msg)
-			prompted = true
-		}
-		time.Sleep(refreshRate)
-		total += refreshRate
-		if total > wasFast {
-			fmt.Fprint(c.App.Writer, ".")
-		}
-		if timeout != 0 && total > timeout {
-			return fmt.Errorf("timed out waiting for %s", msg)
-		}
+	msg := formatXactMsg(xactID, xname, bck)
+	fmt.Fprintf(c.App.Writer, "Waiting for "+msg+" ...")
+	err := waitXact(apiBP, xargs)
+	if err == nil {
+		actionDone(c, " done.")
 	}
-	actionDone(c, "\n"+msg+" done.")
 	return nil
 }
 

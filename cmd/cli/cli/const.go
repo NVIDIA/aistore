@@ -559,7 +559,7 @@ var (
 	}
 	waitJobXactFinishedFlag = DurationFlag{
 		Name: "timeout",
-		Usage: "maximum time to wait for a job to finish; if omitted wait forever or Ctrl-C;\n" +
+		Usage: "maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;\n" +
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	waitFlag = cli.BoolFlag{
