@@ -13,6 +13,7 @@ redirect_from:
   - [Default Bucket Properties](#default-bucket-properties)
   - [Inherited Bucket Properties and LRU](#inherited-bucket-properties-and-lru)
   - [Backend Provider](#backend-provider)
+- [List Buckets](#list-buckets)
 - [AIS Bucket](#ais-bucket)
   - [CLI: create, rename and, destroy ais bucket](#cli-create-rename-and-destroy-ais-bucket)
   - [CLI: specifying and listing remote buckets](#cli-specifying-and-listing-remote-buckets)
@@ -28,9 +29,8 @@ redirect_from:
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Bucket Access Attributes](#bucket-access-attributes)
 - [List Objects](#list-objects)
-  - [Options](#list-options)
-- [Query Objects](#experimental-query-objects)
-  - [Options](#query-options)
+  - [Options](#options)
+  - [Results](#results)
 
 ## Bucket
 
@@ -154,6 +154,29 @@ Backend provider is realized as an optional parameter in the GET, PUT, APPEND, D
 
 For API reference, please refer [to the RESTful API and examples](http_api.md).
 The rest of this document serves to further explain features and concepts specific to storage buckets.
+
+## List Buckets
+
+To list all buckets, both _present_ in the cluster and remote, simply run:
+
+* `ais ls --all`
+
+Other useful variations of the command include:
+
+* `ais ls s3`            - list only those s3 buckets that are _present_ in the cluster
+* `ais ls gs`            - GCP buckets
+* `ais ls ais`           - list _all_ AIS buckets
+* `ais ls ais://@ --all` - list _all_ remote AIS buckets (i.e., buckets in all remote AIS clusters currently attached)
+
+And more:
+
+* `ais ls s3: --all --regex abc`  - list _all_ s3 buckets that match a given regex ("abc", in the example) 
+* `ais ls gs: --summary`          - report usage statistics: numbers of objects and total sizes
+
+### See also
+
+* `ais ls --help`
+* [CLI: `ais ls`](/docs/cli/bucket.md)
 
 ## AIS Bucket
 
@@ -566,18 +589,18 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "set-bpro
 
 ## List Objects
 
+> Note: some of the following content **may be outdated**. For the most recent updates, please check [`ais ls`](https://github.com/NVIDIA/aistore/blob/master/docs/cli/bucket.md#list-objects) CLI.
+
 ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
+
+> Go [ListObjects](https://github.com/NVIDIA/aistore/blob/master/api/bucket.go) API
 
 When a cluster is rebalancing, the returned list of objects can be incomplete due to objects are being migrated.
 The returned [result](#list-result) has non-zero value(the least significant bit is set to `1`) to indicate that the list was generated when the cluster was unstable.
 To get the correct list, either re-request the list after the rebalance ends or read the list with [the option](#list-options) `SelectMisplaced` enabled.
 In the latter case, the list may contain duplicated entries.
 
-When using proxy cache (experimental) immutability of a bucket is assumed between subsequent ListObjects request.
-If a bucket has been updated after ListObjects request, a user should call ListObjectsInvalidateCache API to get correct ListObjects results.
-This is the temporary requirement and will be removed in next AIS versions.
-
-### List Options
+### Options
 
 The properties-and-options specifier must be a JSON-encoded structure, for instance `{"props": "size"}` (see examples).
 An empty structure `{}` results in getting just the names of the objects (from the specified bucket) with no other metadata.
@@ -592,7 +615,6 @@ An empty structure `{}` results in getting just the names of the objects (from t
 | `continuation_token` | The token identifying the next page to retrieve | Returned in the `ContinuationToken` field from a call to ListObjects that does not retrieve all keys. When the last key is retrieved, `ContinuationToken` will be the empty string. |
 | `time_format` | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | `flags` | Advanced filter options | A bit field of [ListObjsMsg extended flags](/cmn/api.go). |
-| [experimental] `use_cache` | Enables caching | With this option enabled, subsequent requests to list objects for the given bucket will be served from cache without traversing disks. For now implementation is limited to caching results for buckets which content doesn't change, otherwise the cache will be in stale state. |
 
 ListObjsMsg extended flags:
 
@@ -617,7 +639,7 @@ a misplaced one (from original location) and real one (from the new location).
 
  <a name="ft1">1</a>) The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (`""`). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a1)
 
-### List result
+### Results
 
 The result may contain all bucket objects(if a bucket is small) or only the current page. The struct includes fields:
 
@@ -627,35 +649,3 @@ The result may contain all bucket objects(if a bucket is small) or only the curr
 | Entries | `entries` | A page of objects and their properties |
 | ContinuationToken | `continuation_token` | The token to request the next page of objects. Empty value means that it is the last page |
 | Flags | `flags` | Extra information - a bit-mask field. `0x0001` bit indicates that a rebalance was running at the time the list was generated |
-
-## [experimental] Query Objects
-
-QueryObjects API is extension of list objects.
-Alongside listing names and properties of the objects, it also allows filtering and selecting specific sets of objects.
-
-At the high level, the idea is that a proxy dispatches a request to targets which produce output that is returned and combined by the proxy.
-
-![](images/query_high.png)
-
-*(Proxy combines and sorts the outputs returned by all targets)*
-
-
-When a target receives a request from the proxy, it traverses disks applying the specified filters and selections.
-
-![](images/query_target.png)
-
-*(Objects marked green supposedly pass all the filtering and selection, whereas red objects - do not)*
-
-### Query Options
-
-The options for init message describe the most important values of the query.
-
-| Property/Option | Description | Value |
-| --- | --- | --- |
-| `outer_select.prefix` | Prefix which all returned objects must have | For example, `prefix = "my/directory/structure/"` will include object `object_name = "my/directory/structure/object1.txt"` but will not `object_name = "my/directory/object2.txt"` |
-| `outer_select.objects_source` | Template that object names must match to | For example `objects_source = "object{00..99}.tar"` will include object `object_name = "object49.tar"` but will not `object_name = "object0.tgz"` |
-| `inner_select.props` | Properties of objects to return | A comma-separated list containing any combination of: `name, size, version, checksum, atime, location, copies, ec, status`. |
-| `from.bucket` | Bucket in which query should be executed | |
-| `where.filter` | Filter to apply when traversing objects | Filter is recursive data structure that can describe multiple filters which should be applied. |
-
-Init message returns `handle` that should be used in NextQueryResults API call.
