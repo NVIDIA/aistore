@@ -8,7 +8,7 @@ categories: aistore performance etl
 
 There's an old trick that never quite gets old: you run a high-velocity exercise that generates a massive amount of traffic through some sort of a multi-part system, whereby some of those parts are (spectacularly) getting killed and periodically recovered.
 
-TL;DR a simple illustration (and see detailed comments inside):
+TL;DR a simple demonstration that does exactly that (and see detailed comments inside):
 
 | Script | Action |
 | --- | --- |
@@ -22,7 +22,7 @@ But when the traffic is running and the parts are getting periodically killed an
 
 > `ais show performance --help` for details
 
-That is, (un)timely disruption on the one hand, and observation, on the other - specifically to see whether the combined throughput dips at any point (it does). And by how much, slash how long (depends).
+That is, (un)timely disruption on the one hand, and observation, on the other - specifically to see whether the combined throughput dips at any point (it does). And by how much, how long (it depends).
 
 There's one problem though: vanilla copying may sound dull and mundane. Frankly, it is totally unexciting, even when coincided with all the rebalancing/rebuilding runtime drama behind the scenes.
 
@@ -34,6 +34,10 @@ And so, to make it marginally more interesting - but also to increase usability 
 $ ais ls s3
 No "s3://" matching buckets in the cluster. Use '--all' option to list _all_ buckets.
 
+$ ais storage summary s3://src --all
+NAME             OBJECTS (cached, remote)
+s3://src                  0       1430
+
 $ ais ls gs
 No "gs://" matching buckets in the cluster. Use '--all' option to list _all_ buckets.
 
@@ -43,7 +47,9 @@ Copied objects:              277/1430 [===========>-----------------------------
 Copied size:    277.00 KiB / 1.40 MiB [===========>--------------------------------------------------] 19 %
 ```
 
-The first two `ais ls` commands briefly establish non-existence - the fact that there are no Amazon and Google buckets in the cluster _right now_.
+The first three commands briefly establish non-existence - the fact that there are no Amazon and Google buckets in the cluster _right now_.
+
+> `ais storage summary` command (and its close relative `ais ls --summary`) will also report that the source is visible/accessible and conveniently compute object numbers and total sizes (not shown).
 
 But because "existence" may come with all sorts of connotations the term is: [presence](https://aiatscale.org/blog/2022/11/13/relnotes-3.12). We say "present" or "not present" in reference to remote buckets and/or data in those buckets, whereby the latter may or may not be currently present in part or in whole.
 
@@ -72,6 +78,24 @@ The first step deploys user containers on each clustered node. More precisely, t
 That was the first step - the second is virtually identical to copying (see previous section). It'll read remote dataset from Amazon S3, transform it, and place the result into another (e.g., Google) cloud.
 
 > As a quick aside, anything that aistore reads or writes remotely aistore also stores. _Storing_ is always done in full accordance with the configured redundancy and other applicable bucket policies and - secondly - all subsequent access to the same content (that previously was remote) gets _terminated_ inside the cluster.
+
+## Despite node and drive failures
+
+The [scripts](https://github.com/NVIDIA/aistore/tree/master/ais/test/scripts) above periodically fail and recover nodes and disks. But we could also go ahead and replace `ais cp` command with its `ais etl` counterpart - that is, replace dataset replication with dataset (offline) transformation, while leaving everything else intact.
+
+We could do even more - select a job:
+
+```console
+$ ais start <TAB-TAB>
+prefetch           dsort              etl                cleanup            mirror             warm-up-metadata   move-bck
+download           lru                rebalance          resilver           ec-encode          copy-bck
+```
+
+and run it while simultaneously taking out nodes and disks. It'll run and, given enough redundancy in the system, it'll recover and will keep going.
+
+**NOTE:**
+
+The ability to recover is much more fundamental than any specific [job kind](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108-L230) that's already supported today or will be added in the future.
 
 ## The Upshot
 
