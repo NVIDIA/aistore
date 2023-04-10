@@ -33,7 +33,7 @@ Technically, the service supports running user-provided ETL containers **and** c
 
 * For technical blogs with in-depth background and working real-life examples, see:
   - [ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
-  - [ETL: Using AIS/PyTorch connector to transform ImageNet](https://aiatscale.org/blog/2021/10/22/ais-etl-2)
+  - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk)
   - [ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
 * For step-by-step tutorials, see:
   - [PyTorch ImageNet preprocessing](/docs/tutorials/etl/etl_imagenet_pytorch.md)
