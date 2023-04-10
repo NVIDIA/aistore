@@ -93,7 +93,8 @@ var (
 		Flags:        etlSubFlags[cmdStart],
 	}
 	initCmdETL = cli.Command{
-		Name: cmdInit,
+		Name:  cmdInit,
+		Usage: "start ETL job: 'spec' job (requires pod yaml specification) or 'code' job (with transforming function or script in a local file)",
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdSpec,
