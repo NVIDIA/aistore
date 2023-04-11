@@ -23,7 +23,11 @@ ETL_SUPPORTED_PYTHON_VERSIONS = ["3.10", "3.11"]
 CODE_TEMPLATE = """
 import pickle
 import base64
+import importlib
 
+for mod in {}:
+    importlib.import_module(mod)
+    
 transform = pickle.loads(base64.b64decode('{}'))
 {}
 """

@@ -5,7 +5,9 @@ import sys
 
 import base64
 from typing import Callable, List
+
 import cloudpickle
+
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -101,6 +103,7 @@ class Etl:
         transform: Callable,
         etl_name: str,
         dependencies: List[str] = None,
+        preimported_modules: List[str] = None,
         runtime: str = _get_default_runtime(),
         communication_type: str = DEFAULT_ETL_COMM,
         timeout: str = DEFAULT_ETL_TIMEOUT,
@@ -113,6 +116,8 @@ class Etl:
             transform (Callable): Transform function of the ETL
             etl_name (str): Name of new ETL
             dependencies (list[str]): Python dependencies to install
+            preimported_modules (list[str]): Modules to import before running the transform function. This can
+             be necessary in cases where the modules used both attempt to import each other circularly
             runtime (str): [optional, default= V2 implementation of the current python version if supported, else
                 python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
                 (see ext/etl/runtime/all.go)
@@ -131,28 +136,16 @@ class Etl:
             "transform": "transform",
         }
 
-        # code
-        transform = base64.b64encode(cloudpickle.dumps(transform)).decode(UTF_ENCODING)
-
-        io_comm_context = "transform()" if communication_type == "io" else ""
-        template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
-        code_str = base64.b64encode(template).decode(UTF_ENCODING)
-
-        # dependencies
-        if dependencies is None:
-            dependencies = []
-        dependencies.append("cloudpickle==2.2.0")
-        deps = "\n".join(dependencies).encode(UTF_ENCODING)
-        deps_str = base64.b64encode(deps).decode(UTF_ENCODING)
-
         value = InitCodeETLArgs(
             etl_name=etl_name,
             runtime=runtime,
             communication_type=communication_type,
             timeout=timeout,
-            dependencies=deps_str,
+            dependencies=self._encode_dependencies(dependencies),
             functions=functions,
-            code=code_str,
+            code=self._encode_transform(
+                transform, preimported_modules, communication_type
+            ),
             chunk_size=chunk_size,
         ).as_dict()
 
@@ -222,3 +215,26 @@ class Etl:
             etl_name (str): name of ETL
         """
         self.client.request(HTTP_METHOD_DELETE, path=f"{URL_PATH_ETL}/{etl_name}")
+
+    @staticmethod
+    def _encode_transform(
+        transform: Callable,
+        preimported_modules: List[str] = None,
+        comm_type: str = None,
+    ):
+        transform = base64.b64encode(cloudpickle.dumps(transform)).decode(UTF_ENCODING)
+
+        io_comm_context = "transform()" if comm_type == "io" else ""
+        modules = preimported_modules if preimported_modules else []
+        template = CODE_TEMPLATE.format(modules, transform, io_comm_context).encode(
+            UTF_ENCODING
+        )
+        return base64.b64encode(template).decode(UTF_ENCODING)
+
+    @staticmethod
+    def _encode_dependencies(dependencies: List[str]):
+        if dependencies is None:
+            dependencies = []
+        dependencies.append("cloudpickle==2.2.0")
+        deps = "\n".join(dependencies).encode(UTF_ENCODING)
+        return base64.b64encode(deps).decode(UTF_ENCODING)

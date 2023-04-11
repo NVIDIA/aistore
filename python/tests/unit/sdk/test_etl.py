@@ -97,7 +97,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "communication": f"{communication_type}://",
             "timeout": "5m",
             "funcs": {"transform": "transform"},
-            "code": self.encode_fn(self.transform_fn, communication_type),
+            "code": self.encode_fn([], self.transform_fn, communication_type),
             "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode(
                 UTF_ENCODING
             ),
@@ -112,6 +112,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         runtime = "python-non-default"
         communication_type = ETL_COMM_HPULL
         timeout = "6m"
+        preimported = ["pytorch"]
         user_dependencies = ["pytorch"]
         chunk_size = 123
 
@@ -126,12 +127,13 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "communication": f"{communication_type}://",
             "timeout": timeout,
             "funcs": {"transform": "transform"},
-            "code": self.encode_fn(self.transform_fn, communication_type),
+            "code": self.encode_fn(preimported, self.transform_fn, communication_type),
             "dependencies": expected_dep_str,
             "chunk_size": chunk_size,
         }
         self.init_code_exec_assert(
             expected_action,
+            preimported_modules=preimported,
             dependencies=user_dependencies,
             runtime=runtime,
             communication_type=communication_type,
@@ -144,10 +146,12 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         print("example action")
 
     @staticmethod
-    def encode_fn(func, comm_type):
+    def encode_fn(preimported_modules, func, comm_type):
         transform = base64.b64encode(cloudpickle.dumps(func)).decode(UTF_ENCODING)
         io_comm_context = "transform()" if comm_type == ETL_COMM_IO else ""
-        template = CODE_TEMPLATE.format(transform, io_comm_context).encode(UTF_ENCODING)
+        template = CODE_TEMPLATE.format(
+            preimported_modules, transform, io_comm_context
+        ).encode(UTF_ENCODING)
         return base64.b64encode(template).decode(UTF_ENCODING)
 
     def init_code_exec_assert(self, expected_action, **kwargs):
