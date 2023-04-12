@@ -26,6 +26,7 @@ type PerfTabCtx struct {
 	TotalsHdr string
 	AllCols   bool // show all-zero columns
 	AvgSize   bool // compute average size on the fly (and show it), e.g.: `get.size/get.n`
+	Idle      bool // currently idle
 }
 
 func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero metrics OR bad status*/, error) {
@@ -153,27 +154,41 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 		table.addRow(row)
 	}
 
+	if c.Totals == nil || numTs <= 1 {
+		return table, numNZ, nil
+	}
+
 	// tally up
-	if c.Totals != nil && numNZ > 0 && numTs > 1 {
-		row := make([]string, 0, len(cols))
-		row = append(row, c.TotalsHdr)
-		for _, h := range cols[1:] {
-			if h.name == colStatus {
-				row = append(row, "")
-				continue
-			}
-			val, ok := c.Totals[h.name]
-			if ok {
-				kind, ok := c.Metrics[h.name]
-				debug.Assert(ok, h.name)
-				printedValue := FmtStatValue(h.name, kind, val, c.Units)
-				row = append(row, printedValue)
+	var (
+		row   = make([]string, 0, len(cols))
+		added bool
+	)
+	row = append(row, c.TotalsHdr)
+	for _, h := range cols[1:] {
+		if h.name == colStatus {
+			row = append(row, "")
+			continue
+		}
+		val, ok := c.Totals[h.name]
+		if c.Idle || numNZ == 0 {
+			if !added {
+				row = append(row, "idle")
+				added = true
 			} else {
 				row = append(row, "")
 			}
+			continue
 		}
-		table.addRow(row)
+		if ok {
+			kind, ok := c.Metrics[h.name]
+			debug.Assert(ok, h.name)
+			printedValue := FmtStatValue(h.name, kind, val, c.Units)
+			row = append(row, printedValue)
+		} else {
+			row = append(row, "")
+		}
 	}
+	table.addRow(row)
 	return table, numNZ, nil
 }
 

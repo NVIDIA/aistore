@@ -191,8 +191,8 @@ const (
 )
 
 const (
-	cluTotal = "---- CLUSTER:"
-	tgtTotal = "-------- SUM:"
+	cluTotal = "--- Cluster:"
+	tgtTotal = "------- Sum:"
 )
 
 const NilValue = "none"

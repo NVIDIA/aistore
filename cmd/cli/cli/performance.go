@@ -8,7 +8,6 @@ package cli
 import (
 	"fmt"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -133,11 +132,10 @@ func showPerfHandler(c *cli.Context) error {
 }
 
 func perfCptn(c *cli.Context, tab string) {
-	if allPerfTabs {
-		stamp := cos.FormatNowStamp()
-		repeat := 40 - len(stamp) - len(tab)
-		actionCptn(c, tab, " "+strings.Repeat("-", repeat)+" "+stamp)
-	}
+	stamp := cos.FormatNowStamp()
+	repeat := 40 - len(stamp) - len(tab)
+	s := " " + strings.Repeat("-", repeat) + " " + stamp
+	actionCptn(c, tab, s)
 }
 
 // show all non-zero counters _and_ sizes (unless `allColumnsFlag`)
@@ -205,11 +203,12 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 				continue
 			}
 			vend := end.Tracker[name]
+			if vend.Value <= v.Value {
+				continue
+			}
 			v.Value = (vend.Value - v.Value) / seconds
 			begin.Tracker[name] = v
-			if v.Value != 0 {
-				num++
-			}
+			num++
 		}
 	}
 	idle = num == 0
@@ -311,6 +310,16 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 	if err != nil {
 		return err
 	}
+
+	params := getLongRunParams(c)
+	if params != nil {
+		if params.mapBegin == nil {
+			params.mapBegin = tstatusMap
+		} else {
+			params.mapEnd = tstatusMap
+		}
+	}
+
 	if numTs := smap.CountActiveTs(); numTs == 1 || sid != "" {
 		totals = nil // sum implies multiple
 	} else if numTs == 0 {
@@ -332,7 +341,9 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 			return err
 		}
 
-		perfCptn(c, tag)
+		if allPerfTabs {
+			perfCptn(c, tag)
+		}
 		if num == 0 && tag == cmdShowCounters {
 			if regex == nil {
 				actionNote(c, "the cluster is completely idle: all collected counters have zero values\n")
@@ -345,54 +356,39 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		return teb.Print(tstatusMap, out)
 	}
 
-	// (2) locally controlled "long-run" with `cb` recompute at each cycle
+	// (2) `cb` recompute at each cycle
+	if params != nil && params.mapEnd == nil {
+		return nil // won't be nil starting next long-run iteration
+	}
 	var (
 		refresh = flagIsSet(c, refreshFlag)
 		sleep   = _refreshRate(c)
-		longRun = &longRun{}
-		ini     teb.StstMap
+		cntRun  = &longRun{mapBegin: tstatusMap}
 	)
 	if sleep < time.Second || sleep > time.Minute {
 		return fmt.Errorf("invalid %s value, got %v, expecting [1s - 1m]", qflprn(refreshFlag), sleep)
 	}
 
-	longRun.init(c, true /*run once unless*/)
-	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
+	cntRun.init(c, true /*run once unless*/)
+	for countdown := cntRun.count; countdown > 0 || cntRun.isForever(); countdown-- {
+		var mapBegin, mapEnd teb.StstMap
+
 		for name := range totals { // reset
 			totals[name] = 0
 		}
 
-		mapBegin, mapEnd, err := _cluStatusBeginEnd(c, ini, sleep)
-		if err != nil {
-			return err
+		if params != nil {
+			mapBegin, mapEnd = params.mapBegin, params.mapEnd
+		} else {
+			mapBegin, mapEnd, err = _cluStatusBeginEnd(c, cntRun.mapBegin, sleep)
+			if err != nil {
+				return err
+			}
+			cntRun.mapBegin = mapEnd
 		}
 
 		idle := cb(c, metrics, mapBegin, mapEnd, sleep) // call back to recompute
-		if !idle {
-			perfCptn(c, tag)
-		} else {
-			s := "cluster"
-			if sid != "" {
-				s = "target"
-			}
-			switch tag {
-			case cmdShowThroughput:
-				if regex == nil {
-					actionNote(c, "the "+s+" is idle throughput-wise (all throughput metrics have zero values)\n")
-				} else {
-					actionNote(c, fmt.Sprintf("%q matching throughput metrics have zero values\n", regexStr))
-				}
-			case cmdShowLatency:
-				if regex == nil {
-					actionNote(c,
-						"the "+s+" is idle latency-wise (all GET, PUT, APPEND latency metrics have zero values)\n")
-				} else {
-					actionNote(c, fmt.Sprintf("%q matching latency metrics have zero values\n", regexStr))
-				}
-			}
-		}
-
-		runtime.Gosched()
+		perfCptn(c, tag)
 
 		// tally up recomputed
 		totalsHdr := cluTotal
@@ -403,16 +399,13 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 						totals[name] += v.Value
 					}
 				}
-				// avoid summing up with oneself
-				if begin.DeploymentType == apc.DeploymentDev {
-					break
-				}
+				// TODO: avoid summing up with oneself - check TargetCDF mountpaths
 			}
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
 			Totals: totals, TotalsHdr: totalsHdr,
-			AllCols: allCols, AvgSize: avgSize}
+			AllCols: allCols, AvgSize: avgSize, Idle: idle}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {
 			return err
@@ -424,8 +417,6 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 			return err
 		}
 		printLongRunFooter(c.App.Writer, 36)
-
-		ini = mapEnd
 	}
 	return nil
 }

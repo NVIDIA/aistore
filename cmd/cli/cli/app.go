@@ -49,10 +49,11 @@ type (
 		longRun   *longRun
 	}
 	longRun struct {
-		count       int
-		footer      int
-		refreshRate time.Duration
-		offset      int64
+		count            int
+		footer           int
+		refreshRate      time.Duration
+		offset           int64
+		mapBegin, mapEnd teb.StstMap
 	}
 )
 
@@ -124,6 +125,8 @@ func (a *acli) runForever(args []string) error {
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
+		a.longRun.mapBegin = a.longRun.mapEnd
+		a.longRun.mapEnd = nil
 	}
 }
 
@@ -361,6 +364,14 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 	}
 	params.init(c, false)
 	return true
+}
+
+func getLongRunParams(c *cli.Context) *longRun {
+	params := c.App.Metadata[metadata].(*longRun)
+	if !params.isSet() {
+		return nil
+	}
+	return params
 }
 
 func addLongRunOffset(c *cli.Context, off int64) {

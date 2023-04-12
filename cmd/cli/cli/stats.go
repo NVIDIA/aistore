@@ -102,7 +102,7 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 		minx, err := strconv.Atoi(mmx[1])
 		debug.AssertNoErr(err)
 		if minc != minx {
-			incompat := minc-minx > 1 || minc-minx < 1
+			incompat := minc-minx > 1 || minc-minx < -1
 			verWarn(c, ds.Node.Snode, role, ds.Version, expected, incompat)
 			return false
 		}
