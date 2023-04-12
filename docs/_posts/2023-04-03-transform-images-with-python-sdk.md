@@ -6,19 +6,18 @@ author: Aaron Wilson
 categories: aistore etl pytorch python
 ---
 
-With recent updates to the Python SDK, it's easier than ever to load data into AIS, transform it, and use it for training with PyTorch. In this post, we'll demonstrate how to do that with a small dataset of images. 
+With recent updates to the Python SDK, it's easier than ever to load data into AIS, transform it, and use it for training with PyTorch. In this post, we'll demonstrate how to do that with a small dataset of images.
 
-In a previous series of posts, we transformed the ImageNet dataset using a mixture of CLI and SDK commands. For background, you can view these posts below, but note that much of the syntax is out of date: 
+In a previous series of posts, we transformed the ImageNet dataset using a mixture of CLI and SDK commands. For background, you can view these posts below, but note that much of the syntax is out of date:
 
 * [AIStore & ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
 * [AIStore & ETL: Using AIS/PyTorch connector to transform ImageNet (post #2)](https://aiatscale.org/blog/2021/10/22/ais-etl-2)
 
-
 ## Setup
 
-As we did in the posts above, we'll assume that an instance of AIStore has been already deployed on Kubernetes. All the code below will expect an `AIS_ENDPOINT` environment variable set to the cluster's endpoint. 
+As we did in the posts above, we'll assume that an instance of AIStore has been already deployed on Kubernetes. All the code below will expect an `AIS_ENDPOINT` environment variable set to the cluster's endpoint.
 
-> To set up a local Kubernetes cluster with Minikube, checkout the [docs here](https://gitlab-master.nvidia.com/aistorage/aistore/-/blob/master/deploy/dev/k8s/README.md). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/). 
+> To set up a local Kubernetes cluster with Minikube, checkout the [docs here](https://gitlab-master.nvidia.com/aistorage/aistore/-/blob/master/deploy/dev/k8s/README.md). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/).
 
 We'll be using PyTorch's `torchvision` to transform [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/) - as illustrated:
 
@@ -71,7 +70,7 @@ load_data()
 
 ![example cat image](/assets/transform_images_sdk/Bengal_171.jpg)
 
-The class for this image can also be found in the annotations data: 
+The class for this image can also be found in the annotations data:
 
 ```console
 Bengal_171 6 1 2
@@ -84,7 +83,7 @@ Breed: 2 (Bengal)
 
 ## Transforming the data
 
-Now that the data is in place, we need to define the transformation we want to apply before training on the data. Below we will deploy transformation code on an ETL K8s container. Once this code is deployed as an ETL in AIS, it can be applied to buckets or objects to transform them on the cluster. 
+Now that the data is in place, we need to define the transformation we want to apply before training on the data. Below we will deploy transformation code on an ETL K8s container. Once this code is deployed as an ETL in AIS, it can be applied to buckets or objects to transform them on the cluster.
 
 ```python
 def etl():
@@ -110,7 +109,7 @@ def etl():
 
 ## Initializing
 
-We will use `python3` (`python:3.10`) *runtime* and install the `torchvision` package to run the `etl` function above. When using the Python SDK `init_code`, it will automatically select the current version of Python (if supported) as the runtime for compatibility with the code passed in. To use a different runtime, check out the `init_spec` option. 
+We will use `python3` (`python:3.10`) *runtime* and install the `torchvision` package to run the `etl` function above. When using the Python SDK `init_code`, it will automatically select the current version of Python (if supported) as the runtime for compatibility with the code passed in. To use a different runtime, check out the `init_spec` option.
 
 > [runtime](https://github.com/NVIDIA/ais-etl/tree/master/runtime) contains a predefined work environment in which the provided code/script will be run. A full list of supported runtimes can be found [here](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#runtimes).
 
@@ -142,7 +141,7 @@ AIS supports both inline (applied when getting objects) and offline (bucket to b
 
 ## Transforming a single object inline
 
-With the ETL defined, we can use it when accessing our data. 
+With the ETL defined, we can use it when accessing our data.
 
 ```python
 def get_with_etl():
