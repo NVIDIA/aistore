@@ -55,7 +55,8 @@ const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 type (
 	regstate struct {
 		sync.Mutex
-		disabled atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
+		disabled  atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
+		restarted atomic.Bool // target restarted (the state resulting from, e.g., powercycle)
 	}
 	backends map[string]cluster.BackendProvider
 	// main
@@ -72,9 +73,17 @@ type (
 )
 
 // interface guard
-var _ cos.Runner = (*target)(nil)
+var (
+	_ cos.Runner = (*target)(nil)
+	_ htext      = (*target)(nil)
+)
 
 func (*target) Name() string { return apc.Target } // as cos.Runner
+
+func (t *target) interrupted() (bool, bool) { // as htext
+	rebMarked := xreg.GetRebMarked()
+	return rebMarked.Interrupted, t.regstate.restarted.Load()
+}
 
 //
 // target
@@ -316,12 +325,9 @@ func (t *target) Run() error {
 		tstats.Standby(true)
 		t.regstate.disabled.Store(true)
 		glog.Warningf("%s not joining - standing by...", t.si)
-		go func() {
-			for !t.ClusterStarted() {
-				time.Sleep(2 * config.Periodic.StatsTime.D())
-				glog.Flush()
-			}
-		}()
+
+		go t.gostandby(2 * config.Periodic.StatsTime.D())
+
 		// see endStartupStandby()
 	} else {
 		// discover primary and join cluster (compare with manual `apc.AdminJoin`)
@@ -331,26 +337,7 @@ func (t *target) Run() error {
 			return err
 		}
 		t.markNodeStarted()
-		go func() {
-			smap := t.owner.smap.get()
-			cii := t.pollClusterStarted(config, smap.Primary)
-			if daemon.stopping.Load() {
-				return
-			}
-			if cii != nil {
-				if status, err := t.joinCluster(apc.ActSelfJoinTarget,
-					cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-					glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
-					return
-				}
-			}
-			t.markClusterStarted()
-
-			if t.fsprg.newVol && !config.TestingEnv() {
-				config := cmn.GCO.BeginUpdate()
-				fspathsSave(config)
-			}
-		}()
+		go t.gojoin(config)
 	}
 
 	t.initBackends()
@@ -360,7 +347,6 @@ func (t *target) Run() error {
 		glog.Errorf("Failed to initialize DB: %v", err)
 		return err
 	}
-	defer cos.Close(db)
 
 	dload.SetDB(db)
 
@@ -380,26 +366,56 @@ func (t *target) Run() error {
 
 	marked := xreg.GetResilverMarked()
 	if marked.Interrupted || daemon.resilver.required {
-		go func() {
-			if marked.Interrupted {
-				glog.Info("Resuming resilver...")
-			} else if daemon.resilver.required {
-				glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
-			}
-			t.runResilver(res.Args{}, nil /*wg*/)
-		}()
+		go t.goreslver(marked.Interrupted)
 	}
 
 	dsort.InitManagers(db)
 	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t, t.statsT)
 
-	defer etl.StopAll(t) // Always try to stop running ETLs.
-
 	err = t.htrun.run()
 
-	// do it after the `run()` to retain `restarted` marker on panic
-	fs.RemoveMarker(fname.NodeRestartedMarker)
+	etl.StopAll(t)                             // stop all running ETLs if any
+	cos.Close(db)                              // close kv db
+	fs.RemoveMarker(fname.NodeRestartedMarker) // exit gracefully
 	return err
+}
+
+func (t *target) gostandby(sleep time.Duration) {
+	sleep = cos.MaxDuration(sleep, 10*time.Second)
+	for !t.ClusterStarted() {
+		time.Sleep(sleep)
+		glog.Flush()
+	}
+}
+
+func (t *target) gojoin(config *cmn.Config) {
+	smap := t.owner.smap.get()
+	cii := t.pollClusterStarted(config, smap.Primary)
+	if daemon.stopping.Load() {
+		return
+	}
+	if cii != nil {
+		if status, err := t.joinCluster(apc.ActSelfJoinTarget,
+			cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
+			glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
+			return
+		}
+	}
+	t.markClusterStarted()
+
+	if t.fsprg.newVol && !config.TestingEnv() {
+		config := cmn.GCO.BeginUpdate()
+		fspathsSave(config)
+	}
+}
+
+func (t *target) goreslver(interrupted bool) {
+	if interrupted {
+		glog.Info("Resuming resilver...")
+	} else if daemon.resilver.required {
+		glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
+	}
+	t.runResilver(res.Args{}, nil /*wg*/)
 }
 
 func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
@@ -481,7 +497,8 @@ func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		t.statsT.Inc(stats.RestartCount)
 
-		// TODO -- FIXME quick and dirty to trigger rebalance
+		// TODO -- FIXME: t.regstate.restarted instead or in addition
+
 		fs.PersistMarker(fname.RebalanceMarker)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)

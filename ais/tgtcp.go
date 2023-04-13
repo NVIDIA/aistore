@@ -43,7 +43,7 @@ const (
 )
 
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
-	res := t.join(nil, primaryURLs...)
+	res := t.join(nil, t, primaryURLs...)
 	defer freeCR(res)
 	if res.err != nil {
 		status, err = res.status, res.err
@@ -253,7 +253,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	switch getWhat {
 	case apc.WhatConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
 		apc.WhatSnode, apc.WhatLog, apc.WhatNodeStats, apc.WhatMetricNames:
-		t.htrun.httpdaeget(w, r, query)
+		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	case apc.WhatSysInfo:
 		tsysinfo := apc.TSysInfo{MemCPUInfo: apc.GetMemCPU(), CapacityInfo: fs.CapStatusGetWhat()}
 		t.writeJSON(w, r, tsysinfo, httpdaeWhat)
@@ -310,7 +310,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		t.writeJSON(w, r, aisBackend.GetInfo(aisConf), httpdaeWhat)
 	default:
-		t.htrun.httpdaeget(w, r, query)
+		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	}
 }
 

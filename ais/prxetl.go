@@ -24,7 +24,7 @@ import (
 
 // [METHOD] /v1/etl
 func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStartedWithRetry() {
+	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

@@ -244,7 +244,7 @@ func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, e
 	if cmn.GCO.Get().Proxy.NonElectable {
 		query = url.Values{apc.QparamNonElectable: []string{"true"}}
 	}
-	res := p.join(query, primaryURLs...)
+	res := p.join(query, nil /*htext*/, primaryURLs...)
 	defer freeCR(res)
 	if res.err != nil {
 		status, err = res.status, res.err
@@ -369,7 +369,7 @@ func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bc
 
 // verb /v1/buckets/
 func (p *proxy) bucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStartedWithRetry() {
+	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -2438,7 +2438,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		fallthrough // fallthrough
 	case apc.WhatConfig, apc.WhatSmapVote, apc.WhatSnode, apc.WhatLog,
 		apc.WhatNodeStats, apc.WhatMetricNames:
-		p.htrun.httpdaeget(w, r, query)
+		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
 	case apc.WhatSmap:
@@ -2484,7 +2484,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		p.writeJSON(w, r, msg, what)
 	default:
-		p.htrun.httpdaeget(w, r, query)
+		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	}
 }
 
@@ -2707,7 +2707,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 
 	p.metasyncer.becomeNonPrimary() // metasync to stop syncing and cancel all pending requests
 	p.owner.smap.put(newSmap)
-	res := p.registerToURL(primary.ControlNet.URL, primary, apc.DefaultTimeout, nil, false)
+	res := p.regTo(primary.ControlNet.URL, primary, apc.DefaultTimeout, nil, nil, false /*keepalive*/)
 	if res.err != nil {
 		p.writeErr(w, r, res.toErr())
 	}
@@ -2857,7 +2857,7 @@ func (p *proxy) _primaryURLPre(_ *configModifier, clone *globalConfig) (updated 
 
 // [METHOD] /v1/sort
 func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
-	if !p.ClusterStartedWithRetry() {
+	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -2891,7 +2891,7 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 	const fs3 = "/" + apc.S3
-	if !p.ClusterStartedWithRetry() {
+	if !p.cluStartedWithRetry() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}

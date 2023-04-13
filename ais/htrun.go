@@ -41,6 +41,11 @@ import (
 
 const ciePrefix = "cluster integrity error cie#"
 
+// extra or extended state - currently, target only
+type htext interface {
+	interrupted() (bool, bool)
+}
+
 type htrun struct {
 	si        *cluster.Snode
 	keepalive keepaliver
@@ -72,6 +77,9 @@ type htrun struct {
 ///////////
 // htrun //
 ///////////
+
+// interface guard
+var _ cluster.Node = (*htrun)(nil)
 
 func (h *htrun) DataClient() *http.Client { return h.client.data }
 
@@ -130,14 +138,14 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.EtlMD = h.owner.etl.get()
 	}
 	if h.si.IsTarget() && opts.fillRebMarker {
-		rebMarked := xreg.GetRebMarked()
-		cm.RebInterrupted = rebMarked.Interrupted
+		debug.Assert(opts.htext != nil)
+		cm.RebInterrupted, cm.Restarted = opts.htext.interrupted()
 	}
 	return cm, nil
 }
 
 // usage: [API call => handler => ClusterStartedWithRetry ]
-func (h *htrun) ClusterStartedWithRetry() bool {
+func (h *htrun) cluStartedWithRetry() bool {
 	if clutime := h.startup.cluster.Load(); clutime > 0 {
 		return true
 	}
@@ -990,7 +998,7 @@ func _checkAction(msg *apc.ActMsg, expectedActions ...string) (err error) {
 // htrun //
 ///////////
 
-func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values) {
+func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values, htext htext) {
 	var (
 		body any
 		what = query.Get(apc.QparamWhat)
@@ -1004,7 +1012,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		body = h.owner.bmd.get()
 	case apc.WhatSmapVote:
 		var err error
-		body, err = h.cluMeta(cmetaFillOpt{})
+		body, err = h.cluMeta(cmetaFillOpt{htext: htext})
 		if err != nil {
 			glog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
@@ -1557,7 +1565,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 //   - if these fails we try the candidates provided by the caller.
 //
 // ================================== Background =========================================
-func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) {
+func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res *callResult) {
 	var (
 		config                   = cmn.GCO.Get()
 		candidates               = make([]string, 0, 4+len(contactURLs))
@@ -1598,7 +1606,7 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 				freeCR(resPrev)
 				resPrev = nil //nolint:ineffassign // readability
 			}
-			res = h.registerToURL(candidateURL, nil, apc.DefaultTimeout, query, false)
+			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 			if res.err == nil {
 				glog.Infof("%s: joined cluster via %s", h.si, candidateURL)
 				return // ok
@@ -1627,18 +1635,19 @@ func (h *htrun) join(query url.Values, contactURLs ...string) (res *callResult) 
 	if resPrev != nil {
 		freeCR(resPrev)
 	}
-	res = h.registerToURL(primaryURL, nil, apc.DefaultTimeout, query, false)
+	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {
 		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
 	}
 	return
 }
 
-func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration, q url.Values, keepalive bool) *callResult {
+func (h *htrun) regTo(url string, psi *cluster.Snode, tout time.Duration, q url.Values, htext htext, keepalive bool) *callResult {
 	var (
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
 		opts          = cmetaFillOpt{
+			htext:         htext,
 			skipSmap:      skipPrxKalive,
 			skipBMD:       skipPrxKalive,
 			skipRMD:       keepalive,
@@ -1670,14 +1679,14 @@ func (h *htrun) registerToURL(url string, psi *cluster.Snode, tout time.Duration
 	return res
 }
 
-func (h *htrun) sendKalive(smap *smapX, timeout time.Duration) (pid string, status int, err error) {
+func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid string, status int, err error) {
 	if daemon.stopping.Load() {
 		err = fmt.Errorf("%s is stopping", h.si)
 		return
 	}
 	primaryURL, psi := h.getPrimaryURLAndSI(smap)
 	pid = psi.ID()
-	res := h.registerToURL(primaryURL, psi, timeout, nil, true)
+	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
 			cos.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)

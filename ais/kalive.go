@@ -131,7 +131,7 @@ func (*talive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 }
 
 func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration) (string, int, error) {
-	return tkr.t.sendKalive(smap, timeout)
+	return tkr.t.sendKalive(smap, tkr.t, timeout)
 }
 
 func (tkr *talive) do() (stopped bool) {
@@ -180,7 +180,7 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration) (pid string, s
 	if smap.isPrimary(pkr.p.si) && smap.version() > 0 {
 		return
 	}
-	return pkr.p.htrun.sendKalive(smap, timeout)
+	return pkr.p.htrun.sendKalive(smap, nil /*htext*/, timeout)
 }
 
 func (pkr *palive) do() (stopped bool) {

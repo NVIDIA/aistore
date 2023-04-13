@@ -1,6 +1,6 @@
 // Package xreg provides registry and (renew, find) functions for AIS eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package xreg
 
@@ -17,8 +17,9 @@ func GetRebMarked() (out xact.Marked) {
 	dreg.entries.mtx.RUnlock()
 	if entry != nil {
 		out.Xact = entry.Get()
+	} else {
+		out.Interrupted = fs.MarkerExists(fname.RebalanceMarker)
 	}
-	out.Interrupted = fs.MarkerExists(fname.RebalanceMarker) && entry == nil
 	return
 }
 
@@ -28,7 +29,8 @@ func GetResilverMarked() (out xact.Marked) {
 	dreg.entries.mtx.RUnlock()
 	if entry != nil {
 		out.Xact = entry.Get()
+	} else {
+		out.Interrupted = fs.MarkerExists(fname.ResilverMarker)
 	}
-	out.Interrupted = fs.MarkerExists(fname.ResilverMarker) && entry == nil
 	return
 }

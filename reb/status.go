@@ -65,9 +65,9 @@ func (reb *Reb) RebStatus(status *Status) {
 		glog.Warningf("%s: Smap version %d != %d", reb.t, status.SmapVersion, status.RebVersion)
 		return
 	}
-	reb.awaiting.mu.Lock()
+	reb.awaiting.mtx.Lock()
 	reb.wackStatus(status, rsmap)
-	reb.awaiting.mu.Unlock()
+	reb.awaiting.mtx.Unlock()
 }
 
 // extended info when stage is <wack>

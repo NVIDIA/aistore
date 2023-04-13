@@ -107,7 +107,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 		config := cmn.GCO.Get()
 		p.writeJSON(w, r, &config.ClusterConfig, what)
 	case apc.WhatBMD, apc.WhatSmapVote, apc.WhatSnode, apc.WhatSmap:
-		p.htrun.httpdaeget(w, r, query)
+		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	default:
 		p.writeErrf(w, r, fmtUnknownQue, what)
 	}

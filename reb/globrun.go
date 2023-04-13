@@ -67,27 +67,27 @@ const fmtpend = "%s: newer rebalance[g%d] pending - not running"
 
 type (
 	Reb struct {
-		mu        sync.RWMutex
 		t         cluster.Target
+		smap      atomic.Pointer // new smap which will be soon live
+		xreb      atomic.Pointer // unsafe(*xact.Rebalance)
 		dm        *bundle.DataMover
 		pushes    *bundle.Streams // broadcast notifications
 		filterGFN *prob.Filter
-		smap      atomic.Pointer // new smap which will be soon live
+		semaCh    *cos.Semaphore
+		ecClient  *http.Client
+		stages    *nodeStages
 		lomacks   [cos.MultiSyncMapCount]*lomAcks
 		awaiting  struct {
-			mu      sync.Mutex
 			targets cluster.Nodes // targets for which we are waiting for
 			ts      int64         // last time we have recomputed
+			mtx     sync.Mutex
 		}
-		semaCh   *cos.Semaphore
-		ecClient *http.Client
-		stages   *nodeStages
-		// atomic state
-		xreb    atomic.Pointer // unsafe(*xact.Rebalance)
+		// (smap, xreb) + atomic state
 		rebID   atomic.Int64
 		nxtID   atomic.Int64
 		inQueue atomic.Int64
 		onAir   atomic.Int64
+		mu      sync.RWMutex
 		laterx  atomic.Bool
 	}
 	lomAcks struct {
@@ -102,14 +102,14 @@ type (
 	rebJogger struct {
 		joggerBase
 		smap *cluster.Smap
-		ver  int64
 		opts fs.WalkOpts
+		ver  int64
 	}
 	rebArgs struct {
-		id     int64
 		smap   *cluster.Smap
 		config *cmn.Config
 		apaths fs.MPI
+		id     int64
 		ecUsed bool
 	}
 )

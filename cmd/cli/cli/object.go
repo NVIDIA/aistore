@@ -180,7 +180,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 	}
 
 	// 3. inline "list" w/ no flag: "FILE[,FILE...]" BUCKET/[OBJECT_NAME]
-	if _, err := os.Stat(fileName); err != nil {
+	if err := cos.Stat(fileName); err != nil {
 		fnames := splitCsv(fileName)
 		return putList(c, fnames, bck, objName /* subdir name */)
 	}

@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -15,18 +15,11 @@ import (
 // nodeStages //
 ////////////////
 
-type (
-	nodeStages struct {
-		// Info about remote targets. It needs mutex for it can be
-		// updated from different goroutines
-		mtx     sync.Mutex
-		targets map[string]uint32 // daemonID <-> stage
-		// Info about this target rebalance status. This info is used oftener
-		// than remote target ones, and updated more frequently locally.
-		// That is why it uses atomics instead of global mutex
-		stage atomic.Uint32 // rebStage* enum: this target current stage
-	}
-)
+type nodeStages struct {
+	targets map[string]uint32 // remote tid <-> stage
+	stage   atomic.Uint32     // rebStage* enum: my own current stage
+	mtx     sync.Mutex        // updated from different goroutines
+}
 
 func newNodeStages() *nodeStages {
 	return &nodeStages{targets: make(map[string]uint32)}

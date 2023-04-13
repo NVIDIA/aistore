@@ -586,10 +586,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	}
 	// slow path
 	bdir := lom.mi.MakePathBck(lom.Bucket())
-	// NOTE:
-	// - os.Stat instead of cos.Stat (`syscall.Stat`)
-	// - one virtualized environment produces rare sporadic fail when there's none
-	if _, err = os.Stat(bdir); err != nil {
+	if err = cos.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
 	}
 	fdir := filepath.Dir(fqn)

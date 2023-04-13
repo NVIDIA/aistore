@@ -26,20 +26,20 @@ const (
 
 type (
 	regularAck struct {
-		rebID    int64
 		daemonID string // sender's DaemonID
+		rebID    int64
 	}
 	ecAck struct {
-		rebID    int64
 		daemonID string // sender's DaemonID
+		rebID    int64
 		sliceID  uint16
 	}
 
 	// stage notification struct - a target sends it when it enters `stage`
 	stageNtfn struct {
 		md       *ec.Metadata
-		rebID    int64  // sender's rebalance ID
 		daemonID string // sender's ID
+		rebID    int64  // sender's rebalance ID
 		stage    uint32 // stage the sender has just reached
 		action   uint32 // see rebAct* constants
 	}

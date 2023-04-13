@@ -119,13 +119,16 @@ type (
 		EtlMD          *etlMD         `json:"etlMD"`
 		Config         *globalConfig  `json:"config"`
 		SI             *cluster.Snode `json:"si"`
-		RebInterrupted bool           `json:"reb_interrupted"`
 		VoteInProgress bool           `json:"voting"`
+		// target only
+		RebInterrupted bool `json:"reb_interrupted"`
+		Restarted      bool `json:"restarted"`
 	}
 	nodeRegPool []cluMeta
 
 	// what data to omit when sending request/response (join-cluster, kalive)
 	cmetaFillOpt struct {
+		htext         htext
 		skipSmap      bool
 		skipBMD       bool
 		skipRMD       bool
