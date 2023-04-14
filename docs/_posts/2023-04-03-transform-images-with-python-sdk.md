@@ -51,6 +51,8 @@ from aistore.sdk.multiobj import ObjectRange
 
 AISTORE_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://192.168.49.2:8080")
 client = Client(AISTORE_ENDPOINT)
+bucket_name = "images"
+
 
 def show_image(image_data):
     with Image.open(io.BytesIO(image_data)) as image:
@@ -58,9 +60,9 @@ def show_image(image_data):
 
 
 def load_data():
-    # First, let's create a bucket and put the data into ais
-    bucket = client.bucket("images").create()
-    bucket.put_files("images", pattern="*.jpg")
+    # First, let's create a bucket and put the data into AIS
+    bucket = client.bucket(bucket_name).create()
+    bucket.put_files("images/", pattern="*.jpg")
     # Show a random (non-transformed) image from the dataset
     image_data = bucket.object("Bengal_171.jpg").get().read_all()
     show_image(image_data)
@@ -116,23 +118,23 @@ We will use `python3` (`python:3.10`) *runtime* and install the `torchvision` pa
 
 ```python
 def create_etl():
-    client.etl().init_code(etl_name="transform-images",
+    client.etl("transform-images").init_code(
                            transform=etl,
                            dependencies=["torchvision"],
                            communication_type="io")
 
 
-create_etl()
+image_etl = create_etl()
 ```
 
 This initialization may take a few minutes to run, as it must download torchvision and all its dependencies.
 
 ```python
-def show_etl():
-    print(client.etl().list())
-    print(client.etl().view("transform-images"))
+def show_etl(etl):
+    print(client.cluster().list_running_etls())
+    print(etl.view())
 
-show_etl()
+show_etl(image_etl)
 ```
 
 ## Inline and Offline ETL
@@ -144,11 +146,11 @@ AIS supports both inline (applied when getting objects) and offline (bucket to b
 With the ETL defined, we can use it when accessing our data.
 
 ```python
-def get_with_etl():
-    transformed_data = client.bucket("images").object("Bengal_171.jpg").get(etl_name="transform-images").read_all()
+def get_with_etl(etl):
+    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get(etl_name=etl.name).read_all()
     show_image(transformed_data)
 
-get_with_etl()
+get_with_etl(image_etl)
 ```
 
 Post-transform image:
@@ -160,13 +162,13 @@ Post-transform image:
 Note that the job below may take a long time to run depending on your machine and the images you are transforming. You can view all jobs with `client.cluster().list_running_jobs()`. If you'd like to run a shorter example, you can limit which images are transformed with the `prefix_filter` option in the `bucket.transform` function:
 
 ```python
-def etl_bucket():
+def etl_bucket(etl):
     dest_bucket = client.bucket("transformed-images").create()
-    transform_job = client.bucket("images").transform(etl_name="transform-images", to_bck=dest_bucket)
+    transform_job = client.bucket(bucket_name).transform(etl_name=etl.name, to_bck=dest_bucket)
     client.job(transform_job).wait()
     print(entry.name for entry in dest_bucket.list_all_objects())
 
-etl_bucket()
+etl_bucket(image_etl)
 ```
 
 ## Transforming multiple objects offline
@@ -174,16 +176,16 @@ etl_bucket()
 We can also utilize the SDK's object group feature to transform a selection of several objects with the defined ETL.
 
 ```python
-def etl_group():
+def etl_group(etl):
     dest_bucket = client.bucket("transformed-selected-images").create()
     # Select a range of objects from the source bucket
     object_range = ObjectRange(min_index=0, max_index=100, prefix="Bengal_", suffix=".jpg")
-    object_group = client.bucket("images").objects(obj_range=object_range)
-    transform_job = object_group.transform(etl_name="transform-images", to_bck=dest_bucket)
+    object_group = client.bucket(bucket_name).objects(obj_range=object_range)
+    transform_job = object_group.transform(etl_name=etl.name, to_bck=dest_bucket)
     client.job(transform_job).wait_for_idle(timeout=300)
     print([entry.name for entry in dest_bucket.list_all_objects()])
 
-etl_group()
+etl_group(image_etl)
 ```
 
 ### AIS/PyTorch connector

@@ -73,13 +73,16 @@ class Client:
         """
         return Job(client=self._request_client, job_id=job_id, job_kind=job_kind)
 
-    def etl(self):
+    def etl(self, etl_name: str):
         """
         Factory constructor for ETL object.
         Contains APIs related to AIStore ETL operations.
         Does not make any HTTP request, only instantiates an ETL object.
 
+        Args:
+            etl_name (str): Name of the ETL
+
         Returns:
             The ETL object created.
         """
-        return Etl(client=self._request_client)
+        return Etl(client=self._request_client, name=etl_name)

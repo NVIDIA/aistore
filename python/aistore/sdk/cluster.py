@@ -19,9 +19,10 @@ from aistore.sdk.const import (
     URL_PATH_CLUSTER,
     WHAT_ALL_XACT_STATUS,
     WHAT_ALL_RUNNING_STATUS,
+    URL_PATH_ETL,
 )
 
-from aistore.sdk.types import BucketModel, JobStatus, JobQuery
+from aistore.sdk.types import BucketModel, JobStatus, JobQuery, ETLInfo
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import ActionMsg, Smap
 
@@ -128,6 +129,19 @@ class Cluster:
             res_model=List[str],
             json=JobQuery(kind=job_kind, target=target_id, active=True).as_dict(),
             params={QPARAM_WHAT: WHAT_ALL_RUNNING_STATUS},
+        )
+
+    def list_running_etls(self) -> List[ETLInfo]:
+        """
+        Lists all running ETLs.
+
+        Note: Does not list ETLs that have been stopped or deleted.
+
+        Returns:
+            List[ETLInfo]: A list of details on running ETLs
+        """
+        return self._client.request_deserialize(
+            HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]
         )
 
     def is_aistore_running(self) -> bool:

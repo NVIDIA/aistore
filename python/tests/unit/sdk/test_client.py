@@ -43,7 +43,7 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(job_kind, res.job_kind)
 
     def test_etl(self):
-        res = self.client.etl()
-        self.assertEqual(self.endpoint, res.client.endpoint)
-        self.assertIsInstance(res.client, RequestClient)
+        etl_name = "my-etl"
+        res = self.client.etl(etl_name)
         self.assertIsInstance(res, Etl)
+        self.assertEqual(etl_name, res.name)

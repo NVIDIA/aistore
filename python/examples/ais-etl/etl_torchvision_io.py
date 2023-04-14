@@ -31,15 +31,14 @@ def apply_image_transforms():
 deps = ["Pillow", "torchvision"]
 
 # initialize ETL
-client.etl().init_code(
+client.etl(etl_name="etl_torchvision_io").init_code(
     transform=apply_image_transforms,
-    etl_name="etl_torchvision_io",
     dependencies=deps,
     communication_type=ETL_COMM_IO,
 )
 
 # Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
-    etl_name="torchvision_io1", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
+    etl_name="etl_torchvision_io", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
 )
 client.job(job_id).wait()

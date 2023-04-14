@@ -44,7 +44,7 @@ class TestETLOps(unittest.TestCase):
             client=self.client, bck_name=self.bck_name, obj_name="obj2.jpg"
         )
 
-        self.current_etl_count = len(self.client.etl().list())
+        self.current_etl_count = len(self.client.cluster().list_running_etls())
 
     def tearDown(self) -> None:
         # Try to destroy all temporary buckets if there are left.
@@ -52,11 +52,11 @@ class TestETLOps(unittest.TestCase):
             self.client.bucket(bucket.name).delete(missing_ok=True)
 
         # delete all the etls
-        for etl in self.client.etl().list():
-            self.client.etl().stop(etl_name=etl.id)
-            self.client.etl().delete(etl_name=etl.id)
+        for etl in self.client.cluster().list_running_etls():
+            self.client.etl(etl.id).stop()
+            self.client.etl(etl.id).delete()
 
-    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-statements,too-many-locals
     @pytest.mark.etl
     def test_etl_apis(self):
         # code
@@ -65,11 +65,14 @@ class TestETLOps(unittest.TestCase):
             md5.update(input_bytes)
             return md5.hexdigest().encode()
 
-        self.client.etl().init_code(transform=transform, etl_name=ETL_NAME_CODE)
+        code_etl = self.client.etl(ETL_NAME_CODE)
+        code_etl.init_code(transform=transform)
 
-        obj = self.bucket.object(self.obj_name).get(etl_name=ETL_NAME_CODE).read_all()
+        obj = self.bucket.object(self.obj_name).get(etl_name=code_etl.name).read_all()
         self.assertEqual(obj, transform(bytes(self.content)))
-        self.assertEqual(self.current_etl_count + 1, len(self.client.etl().list()))
+        self.assertEqual(
+            self.current_etl_count + 1, len(self.client.cluster().list_running_etls())
+        )
 
         # code (io comm)
         def main():
@@ -78,35 +81,37 @@ class TestETLOps(unittest.TestCase):
             md5.update(chunk)
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
-        self.client.etl().init_code(
-            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type=ETL_COMM_IO
-        )
+        code_io_etl = self.client.etl(ETL_NAME_CODE_IO)
+        code_io_etl.init_code(transform=main, communication_type=ETL_COMM_IO)
 
         obj_io = (
-            self.bucket.object(self.obj_name).get(etl_name=ETL_NAME_CODE_IO).read_all()
+            self.bucket.object(self.obj_name).get(etl_name=code_io_etl.name).read_all()
         )
         self.assertEqual(obj_io, transform(bytes(self.content)))
 
-        self.client.etl().stop(etl_name=ETL_NAME_CODE_IO)
-        self.client.etl().delete(etl_name=ETL_NAME_CODE_IO)
+        code_io_etl.stop()
+        code_io_etl.delete()
 
         # spec
         template = MD5.format(communication_type=ETL_COMM_HPUSH)
-        self.client.etl().init_spec(template=template, etl_name=ETL_NAME_SPEC)
+        spec_etl = self.client.etl(ETL_NAME_SPEC)
+        spec_etl.init_spec(template=template)
 
-        obj = self.bucket.object(self.obj_name).get(etl_name=ETL_NAME_SPEC).read_all()
+        obj = self.bucket.object(self.obj_name).get(etl_name=spec_etl.name).read_all()
         self.assertEqual(obj, transform(bytes(self.content)))
 
-        self.assertEqual(self.current_etl_count + 2, len(self.client.etl().list()))
+        self.assertEqual(
+            self.current_etl_count + 2, len(self.client.cluster().list_running_etls())
+        )
 
-        self.assertIsNotNone(self.client.etl().view(etl_name=ETL_NAME_CODE))
-        self.assertIsNotNone(self.client.etl().view(etl_name=ETL_NAME_SPEC))
+        self.assertIsNotNone(code_etl.view())
+        self.assertIsNotNone(spec_etl.view())
 
         temp_bck1 = self.client.bucket(random_string()).create()
 
         # Transform Bucket with MD5 Template
         job_id = self.bucket.transform(
-            etl_name=ETL_NAME_SPEC, to_bck=temp_bck1, prefix_filter="temp-"
+            etl_name=spec_etl.name, to_bck=temp_bck1, prefix_filter="temp-"
         )
         self.client.job(job_id).wait()
 
@@ -122,13 +127,14 @@ class TestETLOps(unittest.TestCase):
 
         # Start ETL with ECHO template
         template = ECHO.format(communication_type=ETL_COMM_HPUSH)
-        self.client.etl().init_spec(template=template, etl_name=ETL_NAME_SPEC_COMP)
+        echo_spec_etl = self.client.etl(ETL_NAME_SPEC_COMP)
+        echo_spec_etl.init_spec(template=template)
 
         temp_bck2 = self.client.bucket(random_string()).create()
 
         # Transform bucket with ECHO template
         job_id = self.bucket.transform(
-            etl_name=ETL_NAME_SPEC_COMP,
+            etl_name=echo_spec_etl.name,
             to_bck=temp_bck2,
             ext={"jpg": "txt"},
         )
@@ -144,8 +150,8 @@ class TestETLOps(unittest.TestCase):
         # transformation)
         self.assertNotEqual(md5_obj, echo_obj)
 
-        self.client.etl().stop(etl_name=ETL_NAME_SPEC_COMP)
-        self.client.etl().delete(etl_name=ETL_NAME_SPEC_COMP)
+        echo_spec_etl.stop()
+        echo_spec_etl.delete()
 
         # Transform w/ non-existent ETL name raises exception
         with self.assertRaises(AISError):
@@ -154,26 +160,30 @@ class TestETLOps(unittest.TestCase):
             )
 
         # Stop ETLs
-        self.client.etl().stop(etl_name=ETL_NAME_CODE)
-        self.client.etl().stop(etl_name=ETL_NAME_SPEC)
-        self.assertEqual(len(self.client.etl().list()), self.current_etl_count)
+        code_etl.stop()
+        spec_etl.stop()
+        self.assertEqual(
+            len(self.client.cluster().list_running_etls()), self.current_etl_count
+        )
 
         # Start stopped ETLs
-        self.client.etl().start(etl_name=ETL_NAME_CODE)
-        self.client.etl().start(etl_name=ETL_NAME_SPEC)
-        self.assertEqual(len(self.client.etl().list()), self.current_etl_count + 2)
+        code_etl.start()
+        spec_etl.start()
+        self.assertEqual(
+            len(self.client.cluster().list_running_etls()), self.current_etl_count + 2
+        )
 
         # Delete stopped ETLs
-        self.client.etl().stop(etl_name=ETL_NAME_CODE)
-        self.client.etl().stop(etl_name=ETL_NAME_SPEC)
-        self.client.etl().delete(etl_name=ETL_NAME_CODE)
-        self.client.etl().delete(etl_name=ETL_NAME_SPEC)
+        code_etl.stop()
+        spec_etl.stop()
+        code_etl.delete()
+        spec_etl.delete()
 
         # Starting deleted ETLs raises error
         with self.assertRaises(AISError):
-            self.client.etl().start(etl_name=ETL_NAME_CODE)
+            code_etl.start()
         with self.assertRaises(AISError):
-            self.client.etl().start(etl_name=ETL_NAME_SPEC)
+            spec_etl.start()
 
     @pytest.mark.etl
     def test_etl_apis_stress(self):
@@ -191,7 +201,8 @@ class TestETLOps(unittest.TestCase):
             md5.update(input_bytes)
             return md5.hexdigest().encode()
 
-        self.client.etl().init_code(transform=transform, etl_name=ETL_NAME_CODE)
+        md5_hpush_etl = self.client.etl(ETL_NAME_CODE)
+        md5_hpush_etl.init_code(transform=transform)
 
         # code (io comm)
         def main():
@@ -200,30 +211,29 @@ class TestETLOps(unittest.TestCase):
             md5.update(chunk)
             sys.stdout.buffer.write(md5.hexdigest().encode())
 
-        self.client.etl().init_code(
-            transform=main, etl_name=ETL_NAME_CODE_IO, communication_type=ETL_COMM_IO
-        )
+        md5_io_etl = self.client.etl(ETL_NAME_CODE_IO)
+        md5_io_etl.init_code(transform=main, communication_type=ETL_COMM_IO)
 
         start_time = time.time()
         job_id = self.bucket.transform(
-            etl_name=ETL_NAME_CODE, to_bck=Bucket("transformed-etl-hpush")
+            etl_name=md5_hpush_etl.name, to_bck=Bucket("transformed-etl-hpush")
         )
         self.client.job(job_id).wait()
         print("Transform bucket using HPUSH took ", time.time() - start_time)
 
         start_time = time.time()
         job_id = self.bucket.transform(
-            etl_name=ETL_NAME_CODE_IO, to_bck=Bucket("transformed-etl-io")
+            etl_name=md5_io_etl.name, to_bck=Bucket("transformed-etl-io")
         )
         self.client.job(job_id).wait()
         print("Transform bucket using IO took ", time.time() - start_time)
 
         for key, value in content.items():
             transformed_obj_hpush = (
-                self.bucket.object(key).get(etl_name=ETL_NAME_CODE).read_all()
+                self.bucket.object(key).get(etl_name=md5_hpush_etl.name).read_all()
             )
             transformed_obj_io = (
-                self.bucket.object(key).get(etl_name=ETL_NAME_CODE_IO).read_all()
+                self.bucket.object(key).get(etl_name=md5_io_etl.name).read_all()
             )
 
             self.assertEqual(transform(bytes(value)), transformed_obj_hpush)
@@ -237,15 +247,12 @@ class TestETLOps(unittest.TestCase):
                 checksum.update(byte)
             writer.write(checksum.hexdigest().encode())
 
-        self.client.etl().init_code(
-            transform=transform,
-            etl_name=ETL_NAME_CODE_STREAM,
-            chunk_size=32768,
-        )
+        code_stream_etl = self.client.etl(ETL_NAME_CODE_STREAM)
+        code_stream_etl.init_code(transform=transform, chunk_size=32768)
 
         obj = (
             self.bucket.object(self.obj_name)
-            .get(etl_name=ETL_NAME_CODE_STREAM)
+            .get(etl_name=code_stream_etl.name)
             .read_all()
         )
         md5 = hashlib.md5()
@@ -263,11 +270,10 @@ class TestETLOps(unittest.TestCase):
                 checksum.update(out)
             writer.write(checksum.hexdigest().encode())
 
-        self.client.etl().init_code(
-            transform=transform, etl_name="etl-xor1", chunk_size=32
-        )
+        xor_etl = self.client.etl("etl-xor1")
+        xor_etl.init_code(transform=transform, chunk_size=32)
         transformed_obj = (
-            self.bucket.object(self.obj_name).get(etl_name="etl-xor1").read_all()
+            self.bucket.object(self.obj_name).get(etl_name=xor_etl.name).read_all()
         )
         data, checksum = transformed_obj[:-32], transformed_obj[-32:]
         computed_checksum = hashlib.md5(data).hexdigest().encode()

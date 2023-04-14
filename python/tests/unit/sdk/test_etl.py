@@ -1,6 +1,5 @@
 import base64
 import unittest
-from typing import List
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -23,17 +22,14 @@ from aistore.sdk.etl_const import (
 )
 
 from aistore.sdk.etl import Etl, _get_default_runtime
-from aistore.sdk.types import ETL, ETLDetails
+from aistore.sdk.types import ETLDetails
 
 
 class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.mock_client = Mock()
-        self.etl = Etl(self.mock_client)
         self.etl_name = "etl-name"
-
-    def test_properties(self):
-        self.assertEqual(self.mock_client, self.etl.client)
+        self.etl = Etl(self.mock_client, self.etl_name)
 
     def test_init_spec_default_params(self):
         expected_action = {
@@ -44,7 +40,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_init_spec_invalid_comm(self):
         with self.assertRaises(ValueError):
-            self.etl.init_spec("template", self.etl_name, communication_type="invalid")
+            self.etl.init_spec("template", communication_type="invalid")
 
     def test_init_spec(self):
         communication_type = ETL_COMM_HPUSH
@@ -68,7 +64,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
 
-        response = self.etl.init_spec(template, self.etl_name, **kwargs)
+        response = self.etl.init_spec(template, **kwargs)
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
@@ -106,7 +102,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
 
     def test_init_code_invalid_comm(self):
         with self.assertRaises(ValueError):
-            self.etl.init_code(Mock(), self.etl_name, communication_type="invalid")
+            self.etl.init_code(Mock(), communication_type="invalid")
 
     def test_init_code(self):
         runtime = "python-non-default"
@@ -162,47 +158,36 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         mock_response.text = expected_response_text
         self.mock_client.request.return_value = mock_response
 
-        response = self.etl.init_code(
-            transform=self.transform_fn, etl_name=self.etl_name, **kwargs
-        )
+        response = self.etl.init_code(transform=self.transform_fn, **kwargs)
 
         self.assertEqual(expected_response_text, response)
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_PUT, path=URL_PATH_ETL, json=expected_action
         )
 
-    def test_list(self):
-        mock_response = Mock()
-        self.mock_client.request_deserialize.return_value = mock_response
-        response = self.etl.list()
-        self.assertEqual(mock_response, response)
-        self.mock_client.request_deserialize.assert_called_with(
-            HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETL]
-        )
-
     def test_view(self):
         mock_response = Mock()
         self.mock_client.request_deserialize.return_value = mock_response
-        response = self.etl.view(self.etl_name)
+        response = self.etl.view()
         self.assertEqual(mock_response, response)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET, path=f"etl/{ self.etl_name }", res_model=ETLDetails
         )
 
     def test_start(self):
-        self.etl.start(self.etl_name)
+        self.etl.start()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/start"
         )
 
     def test_stop(self):
-        self.etl.stop(self.etl_name)
+        self.etl.stop()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_POST, path=f"etl/{ self.etl_name }/stop"
         )
 
     def test_delete(self):
-        self.etl.delete(self.etl_name)
+        self.etl.delete()
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_DELETE, path=f"etl/{ self.etl_name }"
         )

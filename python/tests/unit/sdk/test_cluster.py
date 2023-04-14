@@ -18,9 +18,10 @@ from aistore.sdk.const import (
     URL_PATH_CLUSTER,
     WHAT_ALL_XACT_STATUS,
     WHAT_ALL_RUNNING_STATUS,
+    URL_PATH_ETL,
 )
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.types import Smap, ActionMsg, BucketModel, JobStatus, JobQuery
+from aistore.sdk.types import Smap, ActionMsg, BucketModel, JobStatus, JobQuery, ETLInfo
 
 
 class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
@@ -144,4 +145,13 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             res_model=List[str],
             json=expected_request_val,
             params={QPARAM_WHAT: WHAT_ALL_RUNNING_STATUS},
+        )
+
+    def test_list_running_etls(self):
+        mock_response = Mock()
+        self.mock_client.request_deserialize.return_value = mock_response
+        response = self.cluster.list_running_etls()
+        self.assertEqual(mock_response, response)
+        self.mock_client.request_deserialize.assert_called_with(
+            HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]
         )

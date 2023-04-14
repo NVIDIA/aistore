@@ -17,7 +17,7 @@ def transform(input_bytes):
     return md5.hexdigest().encode()
 
 
-client.etl().init_code(transform=transform, etl_name="etl-md5")
+client.etl("etl-md5").init_code(transform=transform)
 
 job_id = client.bucket("from-bck").transform(
     etl_name="etl-md5", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}

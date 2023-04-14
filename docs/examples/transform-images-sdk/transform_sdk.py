@@ -11,6 +11,7 @@ from aistore.sdk.multiobj import ObjectRange
 
 AISTORE_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://192.168.49.2:8080")
 client = Client(AISTORE_ENDPOINT)
+bucket_name = "images"
 
 
 def etl():
@@ -40,44 +41,46 @@ def show_image(image_data):
 
 
 def load_data():
-    # First, let's create a bucket and put the data into ais
-    bucket = client.bucket("images").create()
-    bucket.put_files("images", pattern="*.jpg")
+    # First, let's create a bucket and put the data into AIS
+    bucket = client.bucket(bucket_name).create()
+    bucket.put_files("images/", pattern="*.jpg")
     # Show a random (non-transformed) image from the dataset
     image_data = bucket.object("Bengal_171.jpg").get().read_all()
     show_image(image_data)
 
 
-def create_etl():
-    client.etl().init_code(etl_name="transform-images",
+def create_etl(etl_name):
+    image_etl = client.etl(etl_name)
+    image_etl.init_code(
                            transform=etl,
                            dependencies=["torchvision"],
                            communication_type="io")
+    return image_etl
 
 
-def show_etl():
-    print(client.etl().list())
-    print(client.etl().view("transform-images"))
+def show_etl(etl):
+    print(client.cluster().list_running_etls())
+    print(etl.view())
 
 
-def get_with_etl():
-    transformed_data = client.bucket("images").object("Bengal_171.jpg").get(etl_name="transform-images").read_all()
+def get_with_etl(etl):
+    transformed_data = client.bucket(bucket_name).object("Bengal_171.jpg").get(etl_name=etl.name).read_all()
     show_image(transformed_data)
 
 
-def etl_bucket():
+def etl_bucket(etl):
     dest_bucket = client.bucket("transformed-images").create()
-    transform_job = client.bucket("images").transform(etl_name="transform-images", to_bck=dest_bucket)
+    transform_job = client.bucket(bucket_name).transform(etl_name=etl.name, to_bck=dest_bucket)
     client.job(transform_job).wait()
     print(entry.name for entry in dest_bucket.list_all_objects())
 
 
-def etl_group():
+def etl_group(etl):
     dest_bucket = client.bucket("transformed-selected-images").create()
     # Select a range of objects from the source bucket
     object_range = ObjectRange(min_index=0, max_index=100, prefix="Bengal_", suffix=".jpg")
-    object_group = client.bucket("images").objects(obj_range=object_range)
-    transform_job = object_group.transform(etl_name="transform-images", to_bck=dest_bucket)
+    object_group = client.bucket(bucket_name).objects(obj_range=object_range)
+    transform_job = object_group.transform(etl_name=etl.name, to_bck=dest_bucket)
     client.job(transform_job).wait_for_idle(timeout=300)
     print([entry.name for entry in dest_bucket.list_all_objects()])
 
@@ -91,9 +94,9 @@ def create_dataloader():
 
 if __name__ == "__main__":
     load_data()
-    create_etl()
-    show_etl()
-    get_with_etl()
-    etl_bucket()
-    etl_group()
+    image_etl = create_etl("transform-images")
+    show_etl(image_etl)
+    get_with_etl(image_etl)
+    etl_bucket(image_etl)
+    etl_group(image_etl)
     data_loader = create_dataloader()

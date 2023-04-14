@@ -21,9 +21,7 @@ def etl():
     sys.stdout.buffer.write(md5.hexdigest().encode())
 
 
-client.etl().init_code(
-    transform=etl, etl_name="etl-md5-io-code", communication_type=ETL_COMM_IO
-)
+client.etl("etl-md5-io-code").init_code(transform=etl, communication_type=ETL_COMM_IO)
 
 job_id = client.bucket("from-bck").transform(
     etl_name="etl-md5-io-code", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}

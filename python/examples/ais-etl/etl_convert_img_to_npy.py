@@ -22,9 +22,7 @@ def transform(input_bytes):
 deps = ["opencv-python-headless==4.5.3.56"]
 
 # initialize ETL
-client.etl().init_code(
-    transform=transform, etl_name="etl-img-to-npy", dependencies=deps
-)
+client.etl("etl-img-to-npy").init_code(transform=transform, dependencies=deps)
 
 to_bck = client.bucket("to-bck")
 

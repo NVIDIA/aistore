@@ -171,12 +171,13 @@ class JobStatus(BaseModel):
     aborted: bool = False
 
 
-class ETL(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
+class ETLInfo(BaseModel):  # pylint: disable=too-few-public-methods,unused-variable
     """
     Represents the API response when querying an ETL
     """
 
     id: str = ""
+    xaction_id: str = ""
     obj_count: int = 0
     in_bytes: int = 0
     out_bytes: int = 0

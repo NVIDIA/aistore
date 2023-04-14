@@ -119,7 +119,8 @@ class TestObjectGroupOps(RemoteEnabledTest):
             md5.update(input_bytes)
             return md5.hexdigest().encode()
 
-        self.client.etl().init_code(transform=transform, etl_name=etl_name)
+        md5_etl = self.client.etl(etl_name)
+        md5_etl.init_code(transform=transform)
 
         to_bck_name = "destination-bucket"
         to_bck = self._create_bucket(to_bck_name)
@@ -128,7 +129,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
 
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
-            to_bck, etl_name=etl_name, prepend=new_prefix
+            to_bck, etl_name=md5_etl.name, prepend=new_prefix
         )
         self.client.job(job_id=transform_job).wait_for_idle(timeout=TEST_TIMEOUT)
 

@@ -18,14 +18,13 @@ def transform(reader, writer):
     writer.write(checksum.hexdigest().encode())
 
 
-client.etl().init_code(
+client.etl("etl-stream").init_code(
     transform=transform,
-    etl_name="etl-stream3",
     chunk_size=32768,
 )
 
 
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-stream3", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}
+    etl_name="etl-stream", to_bck=Bucket("to-bck"), ext={"jpg": "txt"}
 )
 client.job(job_id).wait()

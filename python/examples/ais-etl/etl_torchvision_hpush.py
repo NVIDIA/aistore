@@ -32,16 +32,15 @@ def apply_image_transforms(reader, writer):
 
 
 # initialize ETL
-client.etl().init_code(
+client.etl("etl-torchvision").init_code(
     transform=apply_image_transforms,
-    etl_name="etl-torchvision",
     dependencies=["Pillow", "torchvision"],
     timeout="10m",
 )
 
 # Transform bucket with given ETL name
 job_id = client.bucket("from-bck").transform(
-    etl_name="etl-img-to-npy", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
+    etl_name="etl-torchvision", to_bck=Bucket("to-bck"), ext={"jpg": "npy"}
 )
 client.job(job_id).wait()
 
