@@ -26,6 +26,7 @@ and [so on](/docs/cli.md).
   - [Multiple Disk Setup](#multiple-disk-setup)
   - [Backend Provider Setup](#backend-provider-setup)
   - [Cloud Deployment](#cloud-deployment)
+- [How to Rebuild](#how-to-rebuild)
 
 ## Prerequisites
 
@@ -233,3 +234,58 @@ AIS_ENDPOINT="http://<ec2-host-name>:51080" ais show cluster
 **EC2 Minimal Deployment Benchmarks**
 
 For more information on deployment performance, please refer [here](./ec2-standalone-benchmark.md).
+
+## How to Rebuild
+
+The provided [Makefile](Makefile) and [Dockerfile](Dockerfile) are the bare minimum "stripped-down" versions that you may find insufficient one way or another.
+
+One common reason for this could be: credentials to facilitate access to a given remote backend - say, Amazon S3.
+
+Here's an example:
+
+```diff
+diff --git a/deploy/prod/docker/single/Dockerfile b/deploy/prod/docker/single/Dockerfile
+index 9f7d048cf..d775fc69d 100644
+--- a/deploy/prod/docker/single/Dockerfile
++++ b/deploy/prod/docker/single/Dockerfile
+@@ -42,6 +42,9 @@ COPY aisnode_config.sh ./
+ COPY limits.conf /etc/security/limits.conf
+ COPY --from=builder /go/bin/aisnode bin/
+
++RUN mkdir -p /root/.aws
++COPY credentials /root/.aws/.
++
+ EXPOSE 51080/tcp
+
+ ENTRYPOINT ["sh", "-c", "entrypoint/entrypoint.sh \"$@\"", "--"]
+--- a/deploy/prod/docker/single/Makefile
++++ b/deploy/prod/docker/single/Makefile
+@@ -14,10 +14,11 @@ all: build push
+ build:
+        cp ${AISTORE_PATH}/deploy/dev/local/aisnode_config.sh .
+        cp ${AISTORE_PATH}/deploy/conf/limits.conf .
++       cp ~/.aws/credentials .
+
+-       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f aisnode_config.sh limits.conf
++       docker build -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) -f Dockerfile . || rm -f aisnode_config.sh limits.conf credentials
+
+-       rm -f aisnode_config.sh limits.conf
++       rm -f aisnode_config.sh limits.conf credentials
+
+ push:
+        docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
+```
+
+This, essentially, single-line change followed by `make -e build` will have the result of injecting your own AWS S3 credentials into the new `cluster-minimal` image. Once done and [deployed](#how-to-deploy), use CLI to list your S3 buckets:
+
+```console
+$ AIS_ENDPOINT="http://localhost:51080" ais ls s3
+```
+
+and, generally, start using `cluster-minimal` to transparently work with those (buckets).
+
+**IMPORTANT:**
+
+> For obvious reasons, makes sense to carefully consider implications before sharing (pushing, uploading) the image that contains any sort of secrets.
+
+> In the `make -e` command, optionally specify `IMAGE_TAG` to differentiate your custom-built image from the default.
