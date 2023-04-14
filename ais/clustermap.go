@@ -29,6 +29,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const clusterMap = "Smap"
+
 // NOTE: to access Snode, Smap and related structures, external
 //       packages and HTTP clients must import aistore/cluster (and not ais)
 
@@ -74,8 +76,8 @@ type (
 		post  func(ctx *smapModifier, clone *smapX)
 		final func(ctx *smapModifier, clone *smapX)
 
-		smap *smapX // smap before pre-modifcation
-		rmd  *rebMD // latest rebMD post modification
+		smap   *smapX       // pre-modification smap that the modifier clones (and modifies)
+		rmdCtx *rmdModifier // in particular, rmd prev and cur (below)
 
 		msg         *apc.ActMsg    // action modifying smap (apc.Act*)
 		nsi         *cluster.Snode // new node to be added
@@ -86,21 +88,20 @@ type (
 		exists      bool           // node (nsi) that's being added already exists in Smap
 		interrupted bool           // target reports interrupted rebalance or cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
-		_mustReb    bool           // must run rebalance (modifier's internal)
 	}
 
 	rmdModifier struct {
 		pre   func(ctx *rmdModifier, clone *rebMD)
 		final func(ctx *rmdModifier, clone *rebMD)
 
-		smap  *smapX
+		prev *rebMD // pre-modification rmd
+		cur  *rebMD // the cloned and modified `prev`
+
 		msg   *apc.ActMsg
 		rebCB func(nl nl.Listener)
 		wait  bool
 	}
 )
-
-const clusterMap = "Smap"
 
 // interface guard
 var (

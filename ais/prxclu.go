@@ -622,9 +622,9 @@ func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
 
 func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, rebInterrupted bool) (xid string, err error) {
 	ctx := &smapModifier{
-		pre:         p._updPre,
-		post:        p._updPost,
-		final:       p._updFinal,
+		pre:         p._joinedPre,
+		post:        p._joinedPost,
+		final:       p._joinedFinal,
 		nsi:         nsi,
 		msg:         msg,
 		flags:       flags,
@@ -632,16 +632,16 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 	}
 	err = p.owner.smap.modify(ctx)
 	if err != nil {
-		glog.Errorf("FATAL: %v", err)
+		debug.AssertNoErr(err)
 		return
 	}
-	if ctx.rmd != nil {
-		xid = xact.RebID2S(ctx.rmd.Version)
+	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() {
+		xid = xact.RebID2S(ctx.rmdCtx.cur.version())
 	}
 	return
 }
 
-func (p *proxy) _updPre(ctx *smapModifier, clone *smapX) error {
+func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
@@ -656,37 +656,33 @@ func (p *proxy) _updPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) _updPost(ctx *smapModifier, clone *smapX) {
-	if !ctx.nsi.IsTarget() {
-		// RMD is sent upon proxy joining to provide for its (RMD's) replication -
-		// done under Smap lock to serialize with respect to new joins.
-		ctx.rmd = p.owner.rmd.get()
+// RMD is always transmitted to provide for its (RMD's) replication -
+// done under Smap lock to serialize with respect to new joins.
+func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
+	if ctx.nsi.IsProxy() {
 		return
 	}
-	if err := p.canRunRebalance(); err != nil {
+	if err := p.canRebalance(); err != nil {
 		return
 	}
-	// `ctx.exists` - make a note of the fact that target with the same ID already exists
-	// `ctx.interrupted` - trigger global rebalance when target reports interrupted rebalance or power-cycle
-	// (see mustRunRebalance() for all other conditions)
-	if mustRunRebalance(ctx, clone) {
-		rmdCtx := &rmdModifier{
-			pre: func(_ *rmdModifier, clone *rebMD) {
-				clone.TargetIDs = []string{ctx.nsi.ID()}
-				clone.inc()
-			},
-		}
-		rmdClone, err := p.owner.rmd.modify(rmdCtx)
-		if err != nil {
-			glog.Error(err)
-			debug.AssertNoErr(err)
-		} else {
-			ctx.rmd = rmdClone
-		}
+	if !mustRebalance(ctx, clone) {
+		return
 	}
+	// new RMD
+	rmdCtx := &rmdModifier{
+		pre: func(_ *rmdModifier, clone *rebMD) {
+			clone.TargetIDs = []string{ctx.nsi.ID()}
+			clone.inc()
+		},
+	}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	ctx.rmdCtx = rmdCtx // smap modifier to reference the rmd one directly
 }
 
-func (p *proxy) _updFinal(ctx *smapModifier, clone *smapX) {
+func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	var (
 		tokens = p.authn.revokedTokenList()
 		bmd    = p.owner.bmd.get()
@@ -703,19 +699,24 @@ func (p *proxy) _updFinal(ctx *smapModifier, clone *smapX) {
 	if etlMD != nil && etlMD.version() > 0 {
 		pairs = append(pairs, revsPair{etlMD, aisMsg})
 	}
-	if ctx.rmd != nil && ctx.nsi.IsTarget() && mustRunRebalance(ctx, clone) {
-		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
-		nl := xact.NewXactNL(xact.RebID2S(ctx.rmd.version()), apc.ActRebalance, &clone.Smap, nil)
+
+	rebalance := ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version()
+	if !rebalance {
+		// replicate RMD across (existing nodes will drop it upon version comparison)
+		rmd := p.owner.rmd.get()
+		pairs = append(pairs, revsPair{rmd, aisMsg})
+	} else {
+		// new target triggers rebalance
+		debug.Assert(ctx.nsi.IsTarget())
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
+		nl := xact.NewXactNL(xact.RebID2S(ctx.rmdCtx.cur.version()), apc.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
-		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+		// NOTE: metasync must register rebalance/resilver `nl` on all IC members -
+		// see `p.receiveRMD`
 		err := p.notifs.add(nl)
 		debug.AssertNoErr(err)
-	} else if ctx.nsi.IsProxy() {
-		// Send RMD to proxies to make sure that they have
-		// the latest one - newly joined can become primary in a second.
-		cos.Assert(ctx.rmd != nil)
-		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
 	}
+
 	if tokens != nil {
 		pairs = append(pairs, revsPair{tokens, aisMsg})
 	}
@@ -723,40 +724,40 @@ func (p *proxy) _updFinal(ctx *smapModifier, clone *smapX) {
 	p.syncNewICOwners(ctx.smap, clone)
 }
 
-func (p *proxy) _newRebRMD(ctx *smapModifier, clone *smapX) {
+func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
+	// e.g., taking node out of maintenance w/ no rebalance
 	if ctx.skipReb {
 		return
 	}
-	if mustRunRebalance(ctx, clone) {
+	if mustRebalance(ctx, clone) {
 		rmdCtx := &rmdModifier{pre: func(_ *rmdModifier, clone *rebMD) { clone.inc() }}
-		rmdClone, err := p.owner.rmd.modify(rmdCtx)
-		if err != nil {
-			glog.Error(err)
+		if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 			debug.AssertNoErr(err)
-		} else {
-			ctx.rmd = rmdClone
+			return
 		}
+		ctx.rmdCtx = rmdCtx
 	}
 }
 
 // NOTE: when the change involves target node always wait for metasync to distribute updated Smap
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		aisMsg = p.newAmsg(ctx.msg, nil)
-		pairs  = make([]revsPair, 0, 2)
+		aisMsg    = p.newAmsg(ctx.msg, nil)
+		pairs     = make([]revsPair, 0, 2)
+		rebalance = ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version()
 	)
 	pairs = append(pairs, revsPair{clone, aisMsg})
-	if ctx.rmd != nil {
-		nl := xact.NewXactNL(xact.RebID2S(ctx.rmd.version()), apc.ActRebalance, &clone.Smap, nil)
+	if rebalance {
+		nl := xact.NewXactNL(xact.RebID2S(ctx.rmdCtx.cur.version()), apc.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
-		// Rely on metasync to register rebalanace/resilver `nl` on all IC members.  See `p.receiveRMD`.
+		// metasync must register rebalance/resilver `nl` on all IC members
 		err := p.notifs.add(nl)
 		debug.Assertf(err == nil || daemon.stopping.Load(), "%v", err)
-		pairs = append(pairs, revsPair{ctx.rmd, aisMsg})
+		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
 	}
 	debug.Assert(clone._sgl != nil)
 	wg := p.metasyncer.sync(pairs...)
-	if ctx._mustReb {
+	if rebalance {
 		wg.Wait()
 	}
 }
@@ -992,7 +993,7 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 
 func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	// note operational priority over config-disabled `errRebalanceDisabled`
-	if err := p.canRunRebalance(); err != nil && err != errRebalanceDisabled {
+	if err := p.canRebalance(); err != nil && err != errRebalanceDisabled {
 		p.writeErr(w, r, err)
 		return
 	}
@@ -1005,7 +1006,6 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
 		final: p.metasyncRMD,
 		msg:   &apc.ActMsg{Action: apc.ActRebalance},
-		smap:  p.owner.smap.get(),
 	}
 	rmdClone, err := p.owner.rmd.modify(rmdCtx)
 	if err != nil {
@@ -1376,7 +1376,6 @@ func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID st
 			clone.inc()
 		},
 		final: p.metasyncRMD,
-		smap:  p.owner.smap.get(),
 		msg:   msg,
 		rebCB: cb,
 		wait:  true,
@@ -1395,7 +1394,7 @@ func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID st
 func (p *proxy) cancelMaintenance(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
 		pre:     p._cancelMaintPre,
-		post:    p._newRebRMD,
+		post:    p._newRMD,
 		final:   p._syncFinal,
 		sid:     opts.DaemonID,
 		skipReb: opts.SkipRebalance,
@@ -1403,8 +1402,9 @@ func (p *proxy) cancelMaintenance(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebI
 		flags:   cluster.NodeFlagsMaintDecomm,
 	}
 	err = p.owner.smap.modify(ctx)
-	if ctx.rmd != nil {
-		rebID = xact.RebID2S(ctx.rmd.Version)
+	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
+		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version())
+		rebID = xact.RebID2S(ctx.rmdCtx.cur.version())
 	}
 	return
 }
@@ -1420,8 +1420,10 @@ func (p *proxy) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 }
 
 func (p *proxy) metasyncRMD(ctx *rmdModifier, clone *rebMD) {
+	debug.Assert(clone.version() == ctx.cur.version() && clone.version() > ctx.prev.version())
+	smap := p.owner.smap.get()
 	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil)})
-	nl := xact.NewXactNL(xact.RebID2S(clone.Version), apc.ActRebalance, &ctx.smap.Smap, nil)
+	nl := xact.NewXactNL(xact.RebID2S(clone.Version), apc.ActRebalance, &smap.Smap, nil)
 	nl.SetOwner(equalIC)
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
@@ -1632,7 +1634,7 @@ func (p *proxy) callRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (er
 func (p *proxy) unregNode(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
-		post:    p._newRebRMD,
+		post:    p._newRMD,
 		final:   p._syncFinal,
 		msg:     msg,
 		sid:     si.ID(),
@@ -1673,9 +1675,11 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-// rebalance's `can` and `must`
-
-func (p *proxy) canRunRebalance() (err error) {
+// rebalance's `can`: factors not including cluster map
+func (p *proxy) canRebalance() (err error) {
+	if daemon.stopping.Load() {
+		return fmt.Errorf("%s is stopping", p)
+	}
 	smap := p.owner.smap.get()
 	if err = smap.validate(); err != nil {
 		return
@@ -1697,39 +1701,40 @@ func (p *proxy) canRunRebalance() (err error) {
 	return
 }
 
-func mustRunRebalance(ctx *smapModifier, cur *smapX) bool {
-	prev := ctx.smap
-	if ctx._mustReb {
-		return true
-	}
+// rebalance's `must`: compares previous and current (cloned, updated) Smap
+// TODO: bmd.num-buckets == 0 would be an easy one to check
+func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		return false
 	}
-	if ctx.interrupted {
-		ctx._mustReb = true
-		goto ret
+	if daemon.stopping.Load() {
+		return false
 	}
+	prev := ctx.smap
+	if prev.CountActiveTs() == 0 {
+		return false
+	}
+	if cur.CountActiveTs() <= 1 {
+		return false
+	}
+	if ctx.interrupted {
+		return true
+	}
+	//
+	// compare Smaps
+	//
+	debug.Assert(prev.version() < cur.version())
 	for _, si := range cur.Tmap {
-		if si.IsProxy() || si.InMaintOrDecomm() {
-			continue
-		}
-		if prev.GetActiveNode(si.ID()) == nil { // added or activated
-			ctx._mustReb = true
-			goto ret
+		// added an active one or activated previously inactive
+		if !si.InMaintOrDecomm() && prev.GetActiveNode(si.ID()) == nil {
+			return true
 		}
 	}
 	for _, si := range prev.Tmap {
-		if si.IsProxy() || si.InMaintOrDecomm() {
-			continue
-		}
-		if cur.GetActiveNode(si.ID()) == nil { // deleted or deactivated
-			ctx._mustReb = true
-			goto ret
+		// removed an active one or deactivated previously active
+		if !si.InMaintOrDecomm() && cur.GetActiveNode(si.ID()) == nil {
+			return true
 		}
 	}
-ret:
-	if ctx._mustReb {
-		ctx._mustReb = prev.CountActiveTs() > 0 && cur.CountActiveTs() > 1
-	}
-	return ctx._mustReb
+	return false
 }

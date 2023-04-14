@@ -433,7 +433,7 @@ func (p *proxy) bmodSetProps(ctx *bmdModifier, clone *bucketMD) (err error) {
 
 // rename-bucket: { confirm existence -- begin -- RebID -- metasync -- commit -- wait for rebalance and unlock }
 func (p *proxy) renameBucket(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg) (xid string, err error) {
-	if err = p.canRunRebalance(); err != nil {
+	if err = p.canRebalance(); err != nil {
 		err = cmn.NewErrFailedTo(p, "rename", bckFrom, err)
 		return
 	}
@@ -833,7 +833,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
 	)
 	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
-		if err = p.canRunRebalance(); err != nil {
+		if err = p.canRebalance(); err != nil {
 			return
 		}
 	}
