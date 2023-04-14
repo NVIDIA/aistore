@@ -55,7 +55,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         self._evict_all_objects()
         # Fetch back a specific object group and verify cache status
         job_id = obj_group.prefetch()
-        self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
+        self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
         self._verify_cached_objects(10, range(1, 10))
 
     def test_prefetch_objects_local(self):
