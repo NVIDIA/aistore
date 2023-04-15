@@ -20,7 +20,7 @@ variables:
     value: "us-east-2"
     description: "Region of AWS bucket."
   CLOUD_BCKS:
-    value: "aws://ais-blossom gs://ais-ci-kube"
+    value: "aws://ais-blossom gs://ais-ci-kube" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."
   S3_COMPAT_RUN_ALL:
     value: "False"
@@ -140,7 +140,7 @@ test:short:
 test:short:python:
   <<: *test_short_def
   variables:
-    BUCKET: "aws://ais-cicd"
+    BUCKET: "aws://ais-ci-python"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
