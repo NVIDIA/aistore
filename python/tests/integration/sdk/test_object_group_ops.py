@@ -10,7 +10,7 @@ import pytest
 
 from aistore.sdk.const import PROVIDER_AIS
 from aistore.sdk.errors import InvalidBckProvider
-from tests.integration import REMOTE_SET, TEST_TIMEOUT
+from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.utils import random_string
 
@@ -19,7 +19,7 @@ from tests.utils import random_string
 class TestObjectGroupOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
-        self.obj_names = self._create_objects(10, suffix="-suffix")
+        self.obj_names = self._create_objects(suffix="-suffix")
 
     def test_delete(self):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
@@ -39,7 +39,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
         job_id = object_group.evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._verify_cached_objects(10, [0])
+        self._verify_cached_objects(OBJECT_COUNT, [0])
 
     def test_evict_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
@@ -56,7 +56,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         # Fetch back a specific object group and verify cache status
         job_id = obj_group.prefetch()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT * 2)
-        self._verify_cached_objects(10, range(1, 10))
+        self._verify_cached_objects(OBJECT_COUNT, range(1, OBJECT_COUNT))
 
     def test_prefetch_objects_local(self):
         local_bucket = self.client.bucket(random_string(), provider=PROVIDER_AIS)
@@ -67,7 +67,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
         to_bck_name = "destination-bucket"
         to_bck = self._create_bucket(to_bck_name)
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
-        self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
+        self.assertEqual(
+            OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
+        )
 
         new_prefix = "prefix-"
         copy_job = self.bucket.objects(obj_names=self.obj_names[1:5]).copy(
@@ -80,14 +82,18 @@ class TestObjectGroupOps(RemoteEnabledTest):
         )
 
     def test_archive_objects_without_copy(self):
-        self._archive_exec_assert(self.bucket, self.bucket)
+        arch_name = self.obj_prefix + "-archive-without-copy.tar"
+        self._archive_exec_assert(arch_name, self.bucket, self.bucket)
 
     def test_archive_objects_with_copy(self):
+        arch_name = self.obj_prefix + "-archive-with-copy.tar"
         dest_bck = self._create_bucket(random_string())
-        self._archive_exec_assert(self.bucket, dest_bck, to_bck=dest_bck)
+        self._archive_exec_assert(arch_name, self.bucket, dest_bck, to_bck=dest_bck)
 
-    def _archive_exec_assert(self, src_bck, res_bck, **kwargs):
-        arch_name = "my_arch.tar"
+    def _archive_exec_assert(self, arch_name, src_bck, res_bck, **kwargs):
+        # Add to object list to clean up on test finish
+        if res_bck.provider != PROVIDER_AIS:
+            self.cloud_objects.append(arch_name)
         archived_names = self.obj_names[1:5]
         expected_contents = {}
         for name in archived_names:
@@ -126,7 +132,9 @@ class TestObjectGroupOps(RemoteEnabledTest):
         to_bck = self._create_bucket(to_bck_name)
         new_prefix = "prefix-"
         self.assertEqual(0, len(to_bck.list_all_objects(prefix=self.obj_prefix)))
-        self.assertEqual(10, len(self.bucket.list_all_objects(prefix=self.obj_prefix)))
+        self.assertEqual(
+            OBJECT_COUNT, len(self.bucket.list_all_objects(prefix=self.obj_prefix))
+        )
 
         transform_job = self.bucket.objects(obj_names=self.obj_names).transform(
             to_bck, etl_name=md5_etl.name, prepend=new_prefix
@@ -146,7 +154,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
     def _evict_all_objects(self):
         job_id = self.bucket.objects(obj_names=self.obj_names).evict()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(10, expected_cached=False)
+        self._check_all_objects_cached(OBJECT_COUNT, expected_cached=False)
 
     def _verify_cached_objects(self, expected_object_count, cached_range):
         """

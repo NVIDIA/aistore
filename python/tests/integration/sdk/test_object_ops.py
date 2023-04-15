@@ -19,7 +19,6 @@ from tests.integration import CLUSTER_ENDPOINT
 OBJ_READ_TYPE_ALL = "read_all"
 OBJ_READ_TYPE_CHUNK = "chunk"
 OBJ_NAME = "test-object"
-LOCAL_TEST_FILES = Path().absolute().joinpath("object-ops-test")
 
 
 # pylint: disable=unused-variable
@@ -30,12 +29,15 @@ class TestObjectOps(unittest.TestCase):
         self.client = Client(CLUSTER_ENDPOINT)
         self.bucket = self.client.bucket(self.bck_name)
         self.bucket.create()
+        self.local_test_files = (
+            Path().absolute().joinpath("object-ops-test-" + random_string(8))
+        )
 
     def tearDown(self) -> None:
         # Try to destroy bucket if there is one left.
         destroy_bucket(self.client, self.bck_name)
         # Cleanup local files at end
-        cleanup_local(LOCAL_TEST_FILES)
+        cleanup_local(str(self.local_test_files))
 
     def _test_get_obj(self, read_type, obj_name, exp_content):
         chunk_size = random.randrange(1, len(exp_content) + 10)
@@ -73,9 +75,9 @@ class TestObjectOps(unittest.TestCase):
         self.assertEqual(content, res.read_all())
 
     def test_put_file(self):
-        LOCAL_TEST_FILES.mkdir()
+        self.local_test_files.mkdir()
         content = b"content for the object"
-        filename = LOCAL_TEST_FILES.joinpath("test_file")
+        filename = self.local_test_files.joinpath("test_file")
         with open(filename, "wb") as writer:
             writer.write(content)
         obj = self.bucket.object(OBJ_NAME)
@@ -86,8 +88,8 @@ class TestObjectOps(unittest.TestCase):
     def test_put_file_invalid(self):
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_file("non-existent-file")
-        LOCAL_TEST_FILES.mkdir()
-        inner_dir = LOCAL_TEST_FILES.joinpath("inner_dir_not_file")
+        self.local_test_files.mkdir()
+        inner_dir = self.local_test_files.joinpath("inner_dir_not_file")
         inner_dir.mkdir()
         with self.assertRaises(ValueError):
             self.bucket.object("any").put_file(inner_dir)
@@ -102,8 +104,8 @@ class TestObjectOps(unittest.TestCase):
                 self._test_get_obj(option, obj_name, content)
 
     def test_get_with_writer(self):
-        LOCAL_TEST_FILES.mkdir()
-        filename = LOCAL_TEST_FILES.joinpath("test_get_with_writer.txt")
+        self.local_test_files.mkdir()
+        filename = self.local_test_files.joinpath("test_get_with_writer.txt")
         objects = self._put_objects(10)
         all_content = b""
         for obj_name, content in objects.items():
@@ -123,8 +125,8 @@ class TestObjectOps(unittest.TestCase):
     )
     # pylint: disable=too-many-locals
     def test_promote(self):
-        LOCAL_TEST_FILES.mkdir()
-        top_folder = LOCAL_TEST_FILES.joinpath("promote_folder")
+        self.local_test_files.mkdir()
+        top_folder = self.local_test_files.joinpath("promote_folder")
         top_item = "test_file_top"
         top_item_contents = "contents in the test file"
         inner_folder = "inner_folder"

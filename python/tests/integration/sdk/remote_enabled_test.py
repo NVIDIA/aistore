@@ -3,10 +3,14 @@ import unittest
 from aistore.sdk.const import PROVIDER_AIS
 
 from aistore import Client
-from tests.integration import REMOTE_SET, REMOTE_BUCKET, CLUSTER_ENDPOINT
+from tests.integration import (
+    REMOTE_SET,
+    REMOTE_BUCKET,
+    CLUSTER_ENDPOINT,
+    OBJECT_COUNT,
+    TEST_TIMEOUT_LONG,
+)
 from tests.utils import random_string, destroy_bucket, create_and_put_objects
-
-CLEANUP_TIMEOUT = 30
 
 
 class RemoteEnabledTest(unittest.TestCase):
@@ -45,7 +49,7 @@ class RemoteEnabledTest(unittest.TestCase):
             obj_names.extend(self.cloud_objects)
             if len(obj_names) > 0:
                 job_id = self.bucket.objects(obj_names=obj_names).delete()
-                self.client.job(job_id).wait(timeout=CLEANUP_TIMEOUT)
+                self.client.job(job_id).wait(timeout=TEST_TIMEOUT_LONG)
         for bck in self.buckets:
             destroy_bucket(self.client, bck)
 
@@ -61,7 +65,7 @@ class RemoteEnabledTest(unittest.TestCase):
         bck.create()
         return bck
 
-    def _create_objects(self, num_obj, suffix=""):
+    def _create_objects(self, num_obj=OBJECT_COUNT, suffix=""):
         """
         Create a list of objects using a unique test prefix and track them for later cleanup
         Args:

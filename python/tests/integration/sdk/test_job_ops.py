@@ -1,11 +1,10 @@
 #
 # Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
 #
-import random
 import unittest
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
-from tests.integration import REMOTE_SET, TEST_TIMEOUT
+from tests.integration import REMOTE_SET, TEST_TIMEOUT, OBJECT_COUNT
 
 
 class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
@@ -15,12 +14,11 @@ class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
         self.assertNotEqual(0, self.client.job(job_id=job_id).status().end_time)
 
     def test_job_wait_for_idle(self):
-        # Put random number of objects to bucket, assert success
-        obj_names = self._create_objects(random.randint(2, 10))
-        existing_names = [
+        obj_names = self._create_objects()
+        existing_names = {
             obj.name for obj in self.bucket.list_objects(prefix=self.obj_prefix).entries
-        ]
-        self.assertEqual(obj_names, existing_names)
+        }
+        self.assertEqual(set(obj_names), existing_names)
 
         # Start a deletion job that will reach an idle state when it finishes
         job_id = self.bucket.objects(obj_names=obj_names).delete()
@@ -35,25 +33,24 @@ class TestJobOps(RemoteEnabledTest):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_async_job_wait_for_idle(self):
-        num_obj = random.randint(5, 20)
-        obj_names = self._create_objects(num_obj)
+        obj_names = self._create_objects()
         obj_group = self.bucket.objects(obj_names=obj_names)
         job_id = obj_group.evict()
         self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(num_obj, False)
+        self._check_all_objects_cached(OBJECT_COUNT, False)
         job_id = obj_group.prefetch()
         self.client.job(job_id).wait_for_idle(timeout=TEST_TIMEOUT)
-        self._check_all_objects_cached(num_obj, True)
+        self._check_all_objects_cached(OBJECT_COUNT, True)
 
     def test_job_wait(self):
-        new_bck_name = "renamed-bucket"
-        first_bck = self._create_bucket("first_bck")
-        # Add here so we clean up after renaming
-        self.buckets.append(new_bck_name)
-        job_id = first_bck.rename(new_bck_name)
-        self.client.job(job_id=job_id).wait()
-        # Will raise exception if the renamed bucket has not been created (job did not finish)
-        self.client.bucket(new_bck_name).list_objects()
+        object_names = self._create_objects()
+        # Delete does not idle when finished
+        job_id = self.bucket.objects(obj_names=object_names).delete()
+        self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT)
+        # Check that objects do not exist
+        existing_obj = [entry.name for entry in self.bucket.list_all_objects()]
+        for name in object_names:
+            self.assertNotIn(name, existing_obj)
 
 
 if __name__ == "__main__":
