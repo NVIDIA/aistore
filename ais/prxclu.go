@@ -578,7 +578,7 @@ func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp strin
 	// no further checks join when cluster's starting up
 	if !p.ClusterStarted() {
 		clone := smap.clone()
-		clone.putNode(nsi, flags)
+		clone.putNode(nsi, flags, false /*silent*/)
 		p.owner.smap.put(clone)
 		return
 	}
@@ -620,7 +620,7 @@ func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
 	return true
 }
 
-func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, rebInterrupted bool) (xid string, err error) {
+func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, interrupted bool) (xid string, err error) {
 	ctx := &smapModifier{
 		pre:         p._joinedPre,
 		post:        p._joinedPost,
@@ -628,15 +628,15 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		nsi:         nsi,
 		msg:         msg,
 		flags:       flags,
-		interrupted: rebInterrupted,
+		interrupted: interrupted,
 	}
-	err = p.owner.smap.modify(ctx)
-	if err != nil {
+	if err = p.owner.smap.modify(ctx); err != nil {
 		debug.AssertNoErr(err)
 		return
 	}
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() {
-		xid = xact.RebID2S(ctx.rmdCtx.cur.version())
+		xid = ctx.rmdCtx.rebID
+		debug.Assert(xid != "")
 	}
 	return
 }
@@ -645,7 +645,7 @@ func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
-	ctx.exists = clone.putNode(ctx.nsi, ctx.flags)
+	clone.putNode(ctx.nsi, ctx.flags, true /*silent*/)
 	if ctx.nsi.IsTarget() {
 		// Notify targets to set up GFN
 		aisMsg := p.newAmsgActVal(apc.ActStartGFN, nil)
@@ -708,11 +708,12 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	} else {
 		// new target triggers rebalance
 		debug.Assert(ctx.nsi.IsTarget())
+		debug.Assert(ctx.rmdCtx.rebID != "")
+		aisMsg.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
-		nl := xact.NewXactNL(xact.RebID2S(ctx.rmdCtx.cur.version()), apc.ActRebalance, &clone.Smap, nil)
+		nl := xact.NewXactNL(ctx.rmdCtx.rebID, apc.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
-		// NOTE: metasync must register rebalance/resilver `nl` on all IC members -
-		// see `p.receiveRMD`
+		// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
 		err := p.notifs.add(nl)
 		debug.AssertNoErr(err)
 	}
@@ -748,11 +749,13 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	)
 	pairs = append(pairs, revsPair{clone, aisMsg})
 	if rebalance {
-		nl := xact.NewXactNL(xact.RebID2S(ctx.rmdCtx.cur.version()), apc.ActRebalance, &clone.Smap, nil)
+		debug.Assert(ctx.rmdCtx.rebID != "")
+		nl := xact.NewXactNL(ctx.rmdCtx.rebID, apc.ActRebalance, &clone.Smap, nil)
 		nl.SetOwner(equalIC)
-		// metasync must register rebalance/resilver `nl` on all IC members
+		// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
 		err := p.notifs.add(nl)
 		debug.Assertf(err == nil || daemon.stopping.Load(), "%v", err)
+		aisMsg.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
 	}
 	debug.Assert(clone._sgl != nil)
@@ -1004,15 +1007,16 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 	}
 	rmdCtx := &rmdModifier{
 		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
-		final: p.metasyncRMD,
+		final: p._syncRMD,
 		msg:   &apc.ActMsg{Action: apc.ActRebalance},
 	}
-	rmdClone, err := p.owner.rmd.modify(rmdCtx)
+	_, err := p.owner.rmd.modify(rmdCtx)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
-	w.Write([]byte(xact.RebID2S(rmdClone.version())))
+	debug.Assert(rmdCtx.rebID != "")
+	w.Write([]byte(rmdCtx.rebID))
 }
 
 func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs xact.ArgsMsg) {
@@ -1372,21 +1376,17 @@ func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID st
 		cb = func(nl nl.Listener) { p.removeAfterRebalance(nl, msg, si) }
 	}
 	rmdCtx := &rmdModifier{
-		pre: func(_ *rmdModifier, clone *rebMD) {
-			clone.inc()
-		},
-		final: p.metasyncRMD,
+		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
+		final: p._syncRMD,
 		msg:   msg,
 		rebCB: cb,
 		wait:  true,
 	}
-	rmdClone, err := p.owner.rmd.modify(rmdCtx)
-	if err != nil {
-		glog.Error(err)
+	if _, err = p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
-	} else {
-		rebID = xact.RebID2S(rmdClone.version())
+		return
 	}
+	rebID = rmdCtx.rebID
 	return
 }
 
@@ -1403,8 +1403,8 @@ func (p *proxy) cancelMaintenance(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebI
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
-		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version())
-		rebID = xact.RebID2S(ctx.rmdCtx.cur.version())
+		debug.Assert(ctx.rmdCtx.cur.version() > ctx.rmdCtx.prev.version() && ctx.rmdCtx.rebID != "")
+		rebID = ctx.rmdCtx.rebID
 	}
 	return
 }
@@ -1419,16 +1419,18 @@ func (p *proxy) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) metasyncRMD(ctx *rmdModifier, clone *rebMD) {
+func (p *proxy) _syncRMD(ctx *rmdModifier, clone *rebMD) {
 	debug.Assert(clone.version() == ctx.cur.version() && clone.version() > ctx.prev.version())
-	smap := p.owner.smap.get()
-	wg := p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil)})
-	nl := xact.NewXactNL(xact.RebID2S(clone.Version), apc.ActRebalance, &smap.Smap, nil)
+	var (
+		smap = p.owner.smap.get()
+		wg   = p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil, ctx.rebID)})
+		nl   = xact.NewXactNL(ctx.rebID, apc.ActRebalance, &smap.Smap, nil)
+	)
 	nl.SetOwner(equalIC)
 	if ctx.rebCB != nil {
 		nl.F = ctx.rebCB
 	}
-	// Rely on metasync to register rebalance/resilver `nl` on all IC members. See `p.receiveRMD`.
+	// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
 	err := p.notifs.add(nl)
 	debug.AssertNoErr(err)
 	if ctx.wait {

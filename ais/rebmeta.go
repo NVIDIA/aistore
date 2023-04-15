@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // Rebalance metadata is distributed to start rebalance. We must do it:
@@ -117,6 +118,7 @@ func (r *rmdOwner) _runPre(ctx *rmdModifier) (clone *rebMD, err error) {
 		r.put(clone)
 	}
 	ctx.cur = clone
+	ctx.rebID = xact.RebID2S(clone.Version)
 	r.Unlock()
 	return
 }

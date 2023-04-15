@@ -85,7 +85,6 @@ type (
 		sid         string         // DaemonID of node to modify
 		flags       cos.BitFlags   // enum cmn.Snode* to set or clear
 		status      int            // http.Status* of operation
-		exists      bool           // node (nsi) that's being added already exists in Smap
 		interrupted bool           // target reports interrupted rebalance or cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
 	}
@@ -94,8 +93,9 @@ type (
 		pre   func(ctx *rmdModifier, clone *rebMD)
 		final func(ctx *rmdModifier, clone *rebMD)
 
-		prev *rebMD // pre-modification rmd
-		cur  *rebMD // the cloned and modified `prev`
+		prev  *rebMD // pre-modification rmd
+		cur   *rebMD // the cloned and modified `prev`
+		rebID string // cluster-wide UUID
 
 		msg   *apc.ActMsg
 		rebCB func(nl nl.Listener)
@@ -286,28 +286,32 @@ func (m *smapX) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags) (exists bool) {
-	id := nsi.ID()
+func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags, silent bool) {
+	var (
+		id  = nsi.ID()
+		old *cluster.Snode
+	)
 	nsi.Flags = flags
 	if nsi.IsProxy() {
-		if m.GetProxy(id) != nil {
+		if old = m.GetProxy(id); old != nil {
 			m.delProxy(id)
-			exists = true
 		}
 		m.addProxy(nsi)
 		if flags.IsSet(cluster.SnodeNonElectable) {
 			glog.Warningf("%s won't be electable", nsi)
 		}
 	} else {
-		cos.Assert(nsi.IsTarget())
-		if m.GetTarget(id) != nil { // ditto
+		debug.Assert(nsi.IsTarget())
+		if old = m.GetTarget(id); old != nil { // ditto
 			m.delTarget(id)
-			exists = true
 		}
 		m.addTarget(nsi)
 	}
-	glog.Infof("joined %s (p %d, t %d)", nsi, m.CountProxies(), m.CountTargets())
-	return
+	if old != nil {
+		glog.Errorf("Warning: same ID %s vs (joining) %s, %s", old.StringEx(), nsi.StringEx(), m.StringEx())
+	} else if !silent {
+		glog.Infof("joined %s, %s", nsi, m.StringEx())
+	}
 }
 
 func (m *smapX) clone() *smapX {
@@ -538,9 +542,8 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 	return jsp.SaveMeta(r.fpath, newSmap, wto)
 }
 
+// executes under lock
 func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	ctx.smap = r.get()
 	clone = ctx.smap.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
@@ -563,7 +566,9 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 }
 
 func (r *smapOwner) modify(ctx *smapModifier) error {
+	r.mu.Lock()
 	clone, err := r._runPre(ctx)
+	r.mu.Unlock()
 	if err != nil {
 		return err
 	}

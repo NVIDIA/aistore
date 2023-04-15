@@ -693,14 +693,9 @@ func (t *target) _postBMD(tag string, rmbcks []*cluster.Bck) {
 	}
 }
 
-func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
+// NOTE: is called under lock
+func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	rmd := t.owner.rmd.get()
-	glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
-
-	t.owner.rmd.Lock()
-	defer t.owner.rmd.Unlock()
-
-	rmd = t.owner.rmd.get()
 	if newRMD.Version <= rmd.Version {
 		if newRMD.Version < rmd.Version {
 			err = newErrDowngrade(t.si, rmd.String(), newRMD.String())
@@ -881,7 +876,12 @@ func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, caller, false /*silent*/)
 	}
 	if errRMD == nil && newRMD != nil {
-		errRMD = t.receiveRMD(newRMD, msgRMD, caller)
+		rmd := t.owner.rmd.get()
+		glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msgRMD, caller))
+
+		t.owner.rmd.Lock()
+		errRMD = t.receiveRMD(newRMD, msgRMD)
+		t.owner.rmd.Unlock()
 	}
 	if errEtlMD == nil && newEtlMD != nil {
 		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, t._etlMDChange)
