@@ -53,6 +53,19 @@ func ActivateTimedGFN() {
 	}
 }
 
+func DeactivateTimedGFN() {
+	if gfn.gon.Load() {
+		return
+	}
+	gfn.mtx.Lock()
+	trc := gfn.trc.Dec()
+	if trc == 0 {
+		gfn.exp.Store(0)
+	}
+	gfn.mtx.Unlock()
+	glog.Infoln(gfnT, trc)
+}
+
 func hkTimed() time.Duration {
 	gfn.mtx.Lock()
 	now := mono.NanoTime()

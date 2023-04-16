@@ -860,7 +860,7 @@ func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	var (
 		caller                       = r.Header.Get(apc.HdrCallerName)
 		newConf, msgConf, errConf    = t.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap    = t.extractSmap(payload, caller)
+		newSmap, msgSmap, errSmap    = t.extractSmap(payload, caller, false /*skip validation*/)
 		newBMD, msgBMD, errBMD       = t.extractBMD(payload, caller)
 		newRMD, msgRMD, errRMD       = t.extractRMD(payload, caller)
 		newEtlMD, msgEtlMD, errEtlMD = t.extractEtlMD(payload, caller)
@@ -954,14 +954,24 @@ func (t *target) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caller := r.Header.Get(apc.HdrCallerName)
-	newSmap, msg, err := t.extractSmap(payload, caller)
+	newSmap, msg, err := t.extractSmap(payload, caller, true /*skip validation*/)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
-
-	if newSmap != nil && msg.Action == apc.ActStartGFN {
+	ntid := msg.UUID
+	info := fmt.Sprintf("%s %q: %s, join t[%s]", t, msg.Action, newSmap, ntid) // "start-gfn" | "stop-gfn"
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infoln(info)
+	}
+	switch msg.Action {
+	case apc.ActStartGFN:
 		reb.ActivateTimedGFN()
+	case apc.ActStopGFN:
+		reb.DeactivateTimedGFN()
+	default:
+		debug.Assert(false, info)
+		t.writeErrAct(w, r, msg.Action)
 	}
 }
 

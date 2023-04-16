@@ -87,6 +87,7 @@ type (
 		status      int            // http.Status* of operation
 		interrupted bool           // target reports interrupted rebalance or cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
+		gfn         bool           // sent start-gfn notification
 	}
 
 	rmdModifier struct {
@@ -543,7 +544,7 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 }
 
 // executes under lock
-func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
+func (r *smapOwner) prepost(ctx *smapModifier) (clone *smapX, err error) {
 	ctx.smap = r.get()
 	clone = ctx.smap.clone()
 	if err = ctx.pre(ctx, clone); err != nil {
@@ -567,7 +568,7 @@ func (r *smapOwner) _runPre(ctx *smapModifier) (clone *smapX, err error) {
 
 func (r *smapOwner) modify(ctx *smapModifier) error {
 	r.mu.Lock()
-	clone, err := r._runPre(ctx)
+	clone, err := r.prepost(ctx)
 	r.mu.Unlock()
 	if err != nil {
 		return err

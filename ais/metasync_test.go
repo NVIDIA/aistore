@@ -835,7 +835,7 @@ func TestMetasyncReceive(t *testing.T) {
 		proxy1 := newSecondary("p1")
 
 		// empty payload
-		newSMap, msg, err := proxy1.extractSmap(make(msPayload), "")
+		newSMap, msg, err := proxy1.extractSmap(make(msPayload), "", false /*skip validation*/)
 		if newSMap != nil || msg != nil || err != nil {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
@@ -844,14 +844,14 @@ func TestMetasyncReceive(t *testing.T) {
 		wg1.Wait()
 		payload := <-chProxy
 
-		newSMap, msg, err = proxy1.extractSmap(payload, "")
+		newSMap, msg, err = proxy1.extractSmap(payload, "", false /*skip validation*/)
 		tassert.CheckFatal(t, err)
 		emptyAisMsg(msg)
 		matchSMap(primary.owner.smap.get(), newSMap)
 		proxy1.owner.smap.put(newSMap)
 
 		// same version of smap received
-		newSMap, msg, err = proxy1.extractSmap(payload, "")
+		newSMap, msg, err = proxy1.extractSmap(payload, "", false /*skip validation*/)
 		tassert.CheckFatal(t, err)
 		emptyAisMsg(msg)
 		nilSMap(newSMap)

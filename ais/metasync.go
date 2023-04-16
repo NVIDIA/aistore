@@ -296,21 +296,24 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			msg, tag = pair.msg, pair.revs.tag()
 			revs     = y.useJIT(pair)
 		)
-		// NOTE: in extremely rare cases the revs here may still be carrying sgl that has been freed
-		//       via becomeNonPrimary => y.free(); checking sgl.IsNil() looks like the most lightweight
-		//       vs possible (tracking) alternatives
-		if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
-			// fast path
-			revsBody = sgl.Bytes()
-			y.addnew(revs)
-		} else {
-			// slow path
+		if revsReqType == revsReqNotify {
 			revsBody = revs.marshal()
-			if sgl := revs.sgl(); sgl != nil {
+		} else {
+			// in an unlikely event, the revs may still carry sgl that has been freed
+			// via becomeNonPrimary => y.free() sequence; checking sgl.IsNil() is a compromise
+			if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
+				// fast path
+				revsBody = sgl.Bytes()
 				y.addnew(revs)
+			} else {
+				// slow path
+				revsBody = revs.marshal()
+				if sgl := revs.sgl(); sgl != nil {
+					y.addnew(revs)
+				}
 			}
+			y.lastSynced[tag] = revs
 		}
-		y.lastSynced[tag] = revs
 		if tag == revsRMDTag {
 			md := revs.(*rebMD)
 			newTargetIDs = md.TargetIDs

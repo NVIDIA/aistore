@@ -872,7 +872,7 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		caller                       = r.Header.Get(apc.HdrCallerName)
 		newConf, msgConf, errConf    = p.extractConfig(payload, caller)
-		newSmap, msgSmap, errSmap    = p.extractSmap(payload, caller)
+		newSmap, msgSmap, errSmap    = p.extractSmap(payload, caller, false /*skip validation*/)
 		newBMD, msgBMD, errBMD       = p.extractBMD(payload, caller)
 		newRMD, msgRMD, errRMD       = p.extractRMD(payload, caller)
 		newEtlMD, msgEtlMD, errEtlMD = p.extractEtlMD(payload, caller)

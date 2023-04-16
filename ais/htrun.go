@@ -1321,7 +1321,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	return
 }
 
-func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, msg *aisMsg, err error) {
+func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation bool) (newSmap *smapX, msg *aisMsg, err error) {
 	if _, ok := payload[revsSmapTag]; !ok {
 		return
 	}
@@ -1338,6 +1338,10 @@ func (h *htrun) extractSmap(payload msPayload, caller string) (newSmap *smapX, m
 			return
 		}
 	}
+	if skipValidation {
+		return
+	}
+
 	var (
 		smap        = h.owner.smap.get()
 		curVer      = smap.version()

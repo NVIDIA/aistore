@@ -462,7 +462,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.owner.smap.mu.Lock()
-	upd, err := p.handleJoinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
+	upd, err := p._joinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -541,9 +541,8 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 	return status, err
 }
 
-// NOTE: executes under Smap lock
-// TODO: extract Infof and Warningf
-func (p *proxy) handleJoinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags) (upd bool, err error) {
+// executes under lock
+func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -630,15 +629,53 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		flags:       flags,
 		interrupted: interrupted,
 	}
+	if err = p._earlyGFN(ctx); err != nil {
+		debug.AssertNoErr(err) // TODO: remove
+		return
+	}
 	if err = p.owner.smap.modify(ctx); err != nil {
 		debug.AssertNoErr(err)
 		return
 	}
-	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() {
+	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
+		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
+		debug.Assert(ctx.rmdCtx.rebID != "")
 		xid = ctx.rmdCtx.rebID
-		debug.Assert(xid != "")
+	} else if ctx.gfn {
+		// early-GFN appears to be premature, so term it
+		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
+		aisMsg.UUID = ctx.nsi.ID()
+		notifyPairs := revsPair{&smapX{}, aisMsg}
+		_ = p.metasyncer.notify(false /*wait*/, notifyPairs) // async, failed-cnt always zero
 	}
 	return
+}
+
+func (p *proxy) _earlyGFN(ctx *smapModifier) error {
+	smap := p.owner.smap.get()
+	if !smap.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot add %s", ctx.nsi))
+	}
+	if ctx.nsi.IsProxy() {
+		return nil
+	}
+	if err := p.canRebalance(); err != nil {
+		if err == errRebalanceDisabled {
+			err = nil
+		}
+		return err
+	}
+
+	// early-GFN notification with an empty (version-only and not yet inc-ed) Smap and message
+	// carrying the new target's ID
+	aisMsg := p.newAmsgActVal(apc.ActStartGFN, nil)
+	aisMsg.UUID = ctx.nsi.ID()
+	notifyPairs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, aisMsg}
+	if fcnt := p.metasyncer.notify(true /*wait*/, notifyPairs); fcnt > 0 {
+		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
+	}
+	ctx.gfn = true // mark in the context
+	return nil
 }
 
 func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
@@ -646,13 +683,9 @@ func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
 	clone.putNode(ctx.nsi, ctx.flags, true /*silent*/)
-	if ctx.nsi.IsTarget() {
-		// Notify targets to set up GFN
-		aisMsg := p.newAmsgActVal(apc.ActStartGFN, nil)
-		notifyPairs := revsPair{clone, aisMsg}
-		_ = p.metasyncer.notify(true, notifyPairs)
+	if ctx.nsi.IsProxy() {
+		clone.staffIC()
 	}
-	clone.staffIC()
 	return nil
 }
 

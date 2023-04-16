@@ -47,8 +47,11 @@ const (
 	ActSetBprops      = "set-bprops"
 	ActSetConfig      = "set-config"
 	ActShutdown       = "shutdown"
-	ActStartGFN       = "start-gfn"
 	ActStoreCleanup   = "cleanup-store"
+
+	// internal
+	ActStartGFN = "start-gfn"
+	ActStopGFN  = "stop-gfn"
 
 	// multi-object (via `ListRange`)
 	ActCopyObjects     = "copy-listrange"
