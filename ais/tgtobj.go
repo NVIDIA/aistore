@@ -700,11 +700,11 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 		// when resilvering:
 		// (whether or not resilvering is active depends on the context: mountpath events vs GET)
 		var (
-			marked               = xreg.GetResilverMarked()
-			interrupted, running = marked.Interrupted, marked.Xact != nil
-			gfnActive            = goi.t.res.IsActive(3 /*interval-of-inactivity multiplier*/)
+			resMarked = xreg.GetResilverMarked()
+			running   = resMarked.Xact != nil
+			gfnActive = goi.t.res.IsActive(3 /*interval-of-inactivity multiplier*/)
 		)
-		if interrupted || running || gfnActive {
+		if resMarked.Interrupted || running || gfnActive {
 			if goi.lom.RestoreToLocation() { // from copies
 				if glog.FastV(4, glog.SmoduleAIS) {
 					glog.Infof("%s restored", goi.lom)
@@ -717,13 +717,13 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 
 	// when rebalancing: cluster-wide lookup (aka "get from neighbor" or GFN)
 	var (
-		gfnNode              *cluster.Snode
-		marked               = xreg.GetRebMarked()
-		interrupted, running = marked.Interrupted, marked.Xact != nil
-		gfnActive            = reb.IsActiveGFN() // GFN(global rebalance)
-		ecEnabled            = goi.lom.Bprops().EC.Enabled
-		// TODO: if there're not enough EC targets to restore a sliced object,
-		//       we might still be able to restore it from its full replica
+		gfnNode   *cluster.Snode
+		marked    = xreg.GetRebMarked()
+		running   = marked.Xact != nil
+		gfnActive = reb.IsActiveGFN() // GFN(global rebalance)
+		ecEnabled = goi.lom.Bprops().EC.Enabled
+		// TODO: when not enough EC targets to restore a sliced object,
+		// we might still be able to restore from the object's full replica
 		enoughECRestoreTargets = goi.lom.Bprops().EC.RequiredRestoreTargets() <= smap.CountActiveTs()
 	)
 	if running {
@@ -735,7 +735,8 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 			goto gfn
 		}
 	}
-	if running || !enoughECRestoreTargets || ((interrupted || gfnActive) && !ecEnabled) {
+	if running || !enoughECRestoreTargets ||
+		((marked.Interrupted || marked.Restarted || gfnActive) && !ecEnabled) {
 		gfnNode = goi.t.headObjBcast(goi.lom, smap)
 	}
 gfn:

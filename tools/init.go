@@ -107,7 +107,7 @@ func init() {
 func InitLocalCluster() {
 	var (
 		// Gets the fields from the .env file from which the docker was deployed
-		envVars = cos.ParseEnvVariables(dockerEnvFile)
+		envVars = parseEnvVariables(dockerEnvFile)
 		// Host IP and port of primary cluster
 		primaryHostIP, port = envVars["PRIMARY_HOST_IP"], envVars["PORT"]
 
@@ -243,4 +243,30 @@ func initNodeCmd() {
 		}
 		restoreNodes[node.ID()] = GetRestoreCmd(node)
 	}
+}
+
+// reads .env file and parses its contents
+func parseEnvVariables(fpath string, delimiter ...string) map[string]string {
+	m := map[string]string{}
+	dlim := "="
+	data, err := os.ReadFile(fpath)
+	if err != nil {
+		return nil
+	}
+
+	if len(delimiter) > 0 {
+		dlim = delimiter[0]
+	}
+
+	paramList := strings.Split(string(data), "\n")
+	for _, dat := range paramList {
+		datum := strings.Split(dat, dlim)
+		// key=val
+		if len(datum) == 2 {
+			key := strings.TrimSpace(datum[0])
+			value := strings.TrimSpace(datum[1])
+			m[key] = value
+		}
+	}
+	return m
 }

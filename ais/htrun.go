@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -43,7 +44,7 @@ const ciePrefix = "cluster integrity error cie#"
 
 // extra or extended state - currently, target only
 type htext interface {
-	interrupted() (bool, bool)
+	rebMarked() xact.Marked
 }
 
 type htrun struct {
@@ -138,8 +139,8 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.EtlMD = h.owner.etl.get()
 	}
 	if h.si.IsTarget() && opts.fillRebMarker {
-		debug.Assert(opts.htext != nil)
-		cm.RebInterrupted, cm.Restarted = opts.htext.interrupted()
+		rebMarked := opts.htext.rebMarked()
+		cm.RebInterrupted, cm.Restarted = rebMarked.Interrupted, rebMarked.Restarted
 	}
 	return cm, nil
 }

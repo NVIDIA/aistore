@@ -19,6 +19,7 @@ func GetRebMarked() (out xact.Marked) {
 		out.Xact = entry.Get()
 	} else {
 		out.Interrupted = fs.MarkerExists(fname.RebalanceMarker)
+		out.Restarted = fs.MarkerExists(fname.NodeRestartedPrev)
 	}
 	return
 }

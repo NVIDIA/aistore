@@ -46,4 +46,5 @@ const (
 	ResilverMarker      = "resilver"
 	RebalanceMarker     = "rebalance"
 	NodeRestartedMarker = "node_restarted"
+	NodeRestartedPrev   = "node_restarted.prev"
 )

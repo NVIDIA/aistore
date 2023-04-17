@@ -81,32 +81,6 @@ func MustMorphMarshal(data, v any) {
 	AssertNoErr(err)
 }
 
-// ParseEnvVariables takes in a .env file and parses its contents
-func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
-	m := map[string]string{}
-	dlim := "="
-	data, err := os.ReadFile(fpath)
-	if err != nil {
-		return nil
-	}
-
-	if len(delimiter) > 0 {
-		dlim = delimiter[0]
-	}
-
-	paramList := strings.Split(string(data), "\n")
-	for _, dat := range paramList {
-		datum := strings.Split(dat, dlim)
-		// key=val
-		if len(datum) == 2 {
-			key := strings.TrimSpace(datum[0])
-			value := strings.TrimSpace(datum[1])
-			m[key] = value
-		}
-	}
-	return m
-}
-
 ////////////
 // StrKVs //
 ////////////

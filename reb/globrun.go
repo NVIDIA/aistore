@@ -193,16 +193,19 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 		reb.semaCh.Release()
 		return
 	}
-	if !haveStreams { // nothing to do
+	if !haveStreams {
+		// cleanup and leave
+		glog.Infoln(logHdr + " - no targets, nothing to do")
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
 		reb.semaCh.Release()
 		fs.RemoveMarker(fname.RebalanceMarker)
+		fs.RemoveMarker(fname.NodeRestartedPrev)
 		reb.xctn().Finish(nil)
 		return
 	}
 
-	// At this point only one rebalance is running
+	// At this point, only one rebalance is running
 
 	activateGFN()
 
@@ -666,6 +669,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
 			glog.Infof("%s: %s removed marker ok", reb.t, reb.xctn())
 		}
+		_ = fs.RemoveMarker(fname.NodeRestartedPrev)
 	}
 	reb.endStreams(err)
 	reb.filterGFN.Reset()

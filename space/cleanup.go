@@ -182,22 +182,47 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	return parent.cs.c
 }
 
-func (p *clnP) rmMisplaced() (yes bool) {
-	g, l := xreg.GetRebMarked(), xreg.GetResilverMarked()
-	if g.Xact != nil || l.Xact != nil {
-		return
+func (p *clnP) rmMisplaced() bool {
+	var (
+		g = xreg.GetRebMarked()
+		l = xreg.GetResilverMarked()
+	)
+	if g.Xact == nil && l.Xact == nil && !g.Interrupted && !g.Restarted && !l.Interrupted {
+		return true
 	}
-	yes = !g.Interrupted && !l.Interrupted
-	if yes && p.cs.a.Err != nil {
-		glog.Errorf("%s: %s but not removing misplaced/obsolete copies in presence of interrupted rebalance",
-			p.ini.Xaction, p.cs.a.String())
+
+	// log
+	var warn, info string
+	if p.cs.a.Err != nil {
+		warn = fmt.Sprintf("%s: %s but not removing misplaced/obsolete copies: ", p.ini.Xaction, p.cs.a.String())
+	} else {
+		warn = fmt.Sprintf("%s: not removing misplaced/obsolete copies: ", p.ini.Xaction)
 	}
-	return
+	switch {
+	case g.Xact != nil:
+		info = g.Xact.String() + " is running"
+	case g.Interrupted:
+		info = "rebalance interrupted"
+	case g.Restarted:
+		info = "node restarted"
+	case l.Xact != nil:
+		info = l.Xact.String() + " is running"
+	case l.Interrupted:
+		info = "resilver interrupted"
+	}
+	if p.cs.a.Err != nil {
+		glog.Errorln(warn + info)
+	} else {
+		glog.Warningln(warn + info)
+	}
+	return false
 }
 
-//////////////////////
-// mountpath jogger //
-//////////////////////
+//////////
+// clnJ //
+//////////
+
+// mountpath cleanup j
 
 func (j *clnJ) String() string {
 	return fmt.Sprintf("%s: jog-%s", j.ini.Xaction, j.mi)
@@ -510,7 +535,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 	j.oldWork = j.oldWork[:0]
 
 	// 2. rm misplaced
-	if j.p.rmMisplaced() {
+	if len(j.misplaced.loms) > 0 && j.p.rmMisplaced() {
 		for _, mlom := range j.misplaced.loms {
 			var (
 				fqn     = mlom.FQN

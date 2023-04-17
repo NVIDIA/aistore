@@ -49,7 +49,8 @@ type (
 	}
 	Marked struct {
 		Xact        cluster.Xact
-		Interrupted bool
+		Interrupted bool // (rebalance | resilver) interrupted
+		Restarted   bool // node restarted
 	}
 )
 

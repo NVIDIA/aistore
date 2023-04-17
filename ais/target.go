@@ -45,6 +45,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -55,8 +56,7 @@ const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 type (
 	regstate struct {
 		sync.Mutex
-		disabled  atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
-		restarted atomic.Bool // target restarted (the state resulting from, e.g., powercycle)
+		disabled atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
 	backends map[string]cluster.BackendProvider
 	// main
@@ -78,12 +78,8 @@ var (
 	_ htext      = (*target)(nil)
 )
 
-func (*target) Name() string { return apc.Target } // as cos.Runner
-
-func (t *target) interrupted() (bool, bool) { // as htext
-	rebMarked := xreg.GetRebMarked()
-	return rebMarked.Interrupted, t.regstate.restarted.Load()
-}
+func (*target) Name() string           { return apc.Target }          // as cos.Runner
+func (*target) rebMarked() xact.Marked { return xreg.GetRebMarked() } // as htext
 
 //
 // target
@@ -496,10 +492,7 @@ func (t *target) Stop(err error) {
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		t.statsT.Inc(stats.RestartCount)
-
-		// TODO -- FIXME: t.regstate.restarted instead or in addition
-
-		fs.PersistMarker(fname.RebalanceMarker)
+		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
 	return

@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
@@ -256,7 +255,8 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	debug.Assert(resp.Lst.UUID == msg.UUID)
 
 	// TODO: `Flags` have limited usability, consider to remove
-	if fs.MarkerExists(fname.RebalanceMarker) || reb.IsActiveGFN() {
+	marked := xreg.GetRebMarked()
+	if marked.Xact != nil || marked.Interrupted || reb.IsActiveGFN() {
 		resp.Lst.Flags = 1
 	}
 
