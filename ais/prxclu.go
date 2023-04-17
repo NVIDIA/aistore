@@ -389,9 +389,11 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 		nsi = regReq.SI
 	default:
+		debug.Assert(false, apiOp) // must be one of the (3) above
 		p.writeErrURL(w, r)
 		return
 	}
+
 	if err := nsi.Validate(); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -414,7 +416,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		action = apc.ActKeepaliveUpdate // (must be an extremely rare case)
 	}
 
-	// more validation
+	// more validation && non-electability
 	if p.NodeStarted() {
 		bmd := p.owner.bmd.get()
 		if err := bmd.validateUUID(regReq.BMD, p.si, nsi, ""); err != nil {
@@ -422,7 +424,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	nonElectable := false
+	var (
+		nonElectable bool
+	)
 	if nsi.IsProxy() {
 		s := r.URL.Query().Get(apc.QparamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
@@ -433,7 +437,8 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeErrf(w, r, "%s: failed to %s %s - (err: %v)", p.si, apiOp, nsi.StringEx(), err)
 		return
 	}
-	// set node flags
+
+	// node flags
 	smap := p.owner.smap.get()
 	if osi := smap.GetNode(nsi.ID()); osi != nil {
 		nsi.Flags = osi.Flags
@@ -441,8 +446,10 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nonElectable {
 		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
 	}
+
+	// handshake | check dup
 	if apiOp == apc.AdminJoin {
-		// handshake: call the node with cluster-metadata included
+		// call the node with cluster-metadata included
 		if errCode, err := p.adminJoinHandshake(nsi, apiOp); err != nil {
 			p.writeErr(w, r, err, errCode)
 			return
@@ -450,10 +457,12 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	} else if apiOp == apc.SelfJoin {
 		// check for dup node ID
 		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
-			if duplicate, err := p.detectDaemonDuplicate(osi, nsi); err != nil {
+			duplicate, err := p.detectDuplicate(osi, nsi)
+			if err != nil {
 				p.writeErrf(w, r, "failed to obtain node info: %v", err)
 				return
-			} else if duplicate {
+			}
+			if duplicate {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
@@ -461,8 +470,21 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if !cmn.GCO.Get().Rebalance.Enabled {
+		regReq.RebInterrupted, regReq.Restarted = false, false
+	}
+	if nsi.IsTarget() && regReq.RebInterrupted {
+		// handle via rmd.starting + resumeReb
+		p.owner.rmd.interrupted.CAS(false, true)
+		glog.Errorf("%s: %s reports interrupted rebalance", p, nsi.StringEx())
+	}
+	// when keepalive becomes a new join
+	if regReq.Restarted && apiOp == apc.Keepalive {
+		apiOp = apc.SelfJoin
+	}
+
 	p.owner.smap.mu.Lock()
-	upd, err := p._joinKalive(nsi, regReq.Smap, apiOp, nsi.Flags)
+	upd, err := p._joinKalive(nsi, regReq.Smap, apiOp, nsi.Flags, &regReq)
 	p.owner.smap.mu.Unlock()
 	if err != nil {
 		p.writeErr(w, r, err)
@@ -476,19 +498,11 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rebInterrupted bool
-	if !nsi.IsProxy() && p.NodeStarted() {
-		if p.owner.rmd.rebalance.CAS(false, regReq.RebInterrupted) && regReq.RebInterrupted {
-			rebInterrupted = true
-			glog.Errorf("%s: %s reports interrupted rebalance", p, nsi.StringEx())
-		}
-	}
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
 	glog.Infof("%s: %s(%q) %s (%s)...", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
-		// return both node ID and rebalance ID
-		rebID, err := p.mcastJoined(nsi, msg, nsi.Flags, rebInterrupted)
+		rebID, err := p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -507,7 +521,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, meta, path.Join(msg.Action, nsi.ID()))
 	}
 
-	go p.mcastJoined(nsi, msg, nsi.Flags, rebInterrupted)
+	go p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
 }
 
 // when joining manually: update the node with cluster meta that does not include Smap
@@ -542,7 +556,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 }
 
 // executes under lock
-func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags) (upd bool, err error) {
+func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -563,6 +577,8 @@ func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, fl
 		}
 		if keepalive {
 			upd = p.kalive(nsi, osi)
+		} else if regReq.Restarted {
+			upd = true
 		} else {
 			upd = p.rereg(nsi, osi)
 		}
@@ -574,23 +590,27 @@ func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, fl
 	if err = smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
 		return
 	}
-	// no further checks join when cluster's starting up
-	if !p.ClusterStarted() {
-		clone := smap.clone()
-		clone.putNode(nsi, flags, false /*silent*/)
-		p.owner.smap.put(clone)
-		return
-	}
+	// check dup IP
 	if _, err = smap.IsDuplicate(nsi); err != nil {
 		err = errors.New(p.si.String() + ": " + err.Error())
 	}
+
+	// when cluster's starting up
+	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
+		clone := smap.clone()
+		clone.putNode(nsi, flags, false /*silent*/)
+		p.owner.smap.put(clone)
+		upd = false
+		return
+	}
+
 	upd = err == nil
 	return
 }
 
 func (p *proxy) kalive(nsi, osi *cluster.Snode) bool {
 	if !osi.Equals(nsi) {
-		duplicate, err := p.detectDaemonDuplicate(osi, nsi)
+		duplicate, err := p.detectDuplicate(osi, nsi)
 		if err != nil {
 			glog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
 			return false
@@ -619,7 +639,7 @@ func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
 	return true
 }
 
-func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, interrupted bool) (xid string, err error) {
+func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, regReq *cluMeta) (xid string, err error) {
 	ctx := &smapModifier{
 		pre:         p._joinedPre,
 		post:        p._joinedPost,
@@ -627,7 +647,8 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		nsi:         nsi,
 		msg:         msg,
 		flags:       flags,
-		interrupted: interrupted,
+		interrupted: regReq.RebInterrupted,
+		restarted:   regReq.Restarted,
 	}
 	if err = p._earlyGFN(ctx); err != nil {
 		debug.AssertNoErr(err) // TODO: remove
@@ -1502,11 +1523,11 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if smap.InMaintOrDecomm(psi) {
-		err := fmt.Errorf("%s: cannot set new primary - under maintenance", psi)
+		err := fmt.Errorf("%s: cannot set new primary when under maintenance", psi)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
-	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 		err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
@@ -1699,7 +1720,7 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 		glog.Infof("%s %s (num proxies %d)", verb, node, clone.CountProxies())
 	} else {
 		// see NOTE below
-		if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 		}
 		clone.delTarget(sid)
@@ -1727,7 +1748,7 @@ func (p *proxy) canRebalance() (err error) {
 	// NOTE: Since cluster startup handles rebalance elsewhere (see p.resumeReb),
 	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
 	// are not permitted and will fail.
-	if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
@@ -1752,7 +1773,7 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	if cur.CountActiveTs() <= 1 {
 		return false
 	}
-	if ctx.interrupted {
+	if ctx.interrupted || ctx.restarted {
 		return true
 	}
 	//

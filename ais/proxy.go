@@ -955,7 +955,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// primary
 	if smap.isPrimary(p.si) {
 		if prr {
-			if a, b := p.ClusterStarted(), p.owner.rmd.startup.Load(); !a || b {
+			if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
 				if glog.FastV(4, glog.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
@@ -3104,9 +3104,7 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 	return
 }
 
-// detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
-// and is equal to nsi
-func (p *proxy) detectDaemonDuplicate(osi, nsi *cluster.Snode) (bool, error) {
+func (p *proxy) detectDuplicate(osi, nsi *cluster.Snode) (bool, error) {
 	si, err := p.getDaemonInfo(osi)
 	if err != nil {
 		return false, err

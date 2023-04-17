@@ -44,9 +44,10 @@ type (
 	// it keeps the Version of the latest rebalance.
 	rmdOwner struct {
 		sync.Mutex
-		rmd       atomic.Pointer
-		rebalance atomic.Bool // whether to resume interrupted rebalance
-		startup   atomic.Bool // true when starting up
+		rmd atomic.Pointer
+		// global local atomic state
+		interrupted atomic.Bool // when joining target reports interrupted rebalance
+		starting    atomic.Bool // when starting up
 	}
 )
 

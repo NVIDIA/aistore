@@ -85,7 +85,8 @@ type (
 		sid         string         // DaemonID of node to modify
 		flags       cos.BitFlags   // enum cmn.Snode* to set or clear
 		status      int            // http.Status* of operation
-		interrupted bool           // target reports interrupted rebalance or cold restart (powercycle)
+		interrupted bool           // target reports interrupted rebalance
+		restarted   bool           // target reports cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
 		gfn         bool           // sent start-gfn notification
 	}
@@ -363,8 +364,8 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 	return
 }
 
-// detect duplicate URLs and/or IPs; if del == true we delete an old one
-// so that the caller can add an updated Snode info instead
+// detect duplicate URL and/or IP
+// if `del` is true delete the old one so that the caller can update Snode
 func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
 	var osi *cluster.Snode
 	if osi, err = m.IsDuplicate(nsi); err == nil {

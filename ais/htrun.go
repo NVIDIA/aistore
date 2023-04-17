@@ -61,7 +61,7 @@ type htrun struct {
 	}
 	owner struct {
 		smap   *smapOwner
-		bmd    bmdOwner // interface with proxy and target impl-s
+		bmd    bmdOwner // an interface with proxy and target impl-s
 		rmd    *rmdOwner
 		config *configOwner
 		etl    etlOwner // ditto

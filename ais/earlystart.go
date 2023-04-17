@@ -334,7 +334,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 7. mark RMD as starting up to prevent joining targets from triggering rebalance
-	ok := p.owner.rmd.startup.CAS(false, true)
+	ok := p.owner.rmd.starting.CAS(false, true)
 	debug.Assert(ok)
 
 	// 8. initialize etl
@@ -352,6 +352,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	}
 
 	// 10. metasync (smap, config, etl & bmd) and startup as primary
+	smap = p.owner.smap.get()
 	var (
 		aisMsg = p.newAmsgStr(metaction2, bmd)
 		pairs  = []revsPair{{smap, aisMsg}, {bmd, aisMsg}, {cluConfig, aisMsg}}
@@ -375,7 +376,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	if config.Rebalance.Enabled {
 		p.resumeReb(smap, config)
 	}
-	p.owner.rmd.startup.Store(false)
+	p.owner.rmd.starting.Store(false)
 }
 
 func (p *proxy) _cluConfig(uuid string) (config *globalConfig, err error) {
@@ -424,7 +425,7 @@ until:
 	// NOTE: under Smap lock to serialize the following vs node joins (see `httpclupost`)
 	//
 	p.owner.smap.mu.Lock()
-	if !p.owner.rmd.rebalance.CAS(true, false) {
+	if !p.owner.rmd.interrupted.CAS(true, false) {
 		p.owner.smap.mu.Unlock() // nothing to do
 		return
 	}
@@ -449,7 +450,7 @@ until:
 		cos.ExitLogf("%v", err)
 	}
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
-	p.owner.rmd.startup.Store(false)
+	p.owner.rmd.starting.Store(false)
 	p.owner.smap.mu.Unlock()
 
 	wg.Wait()
