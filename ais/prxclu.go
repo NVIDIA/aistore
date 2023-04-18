@@ -784,14 +784,15 @@ func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
 	if ctx.skipReb {
 		return
 	}
-	if mustRebalance(ctx, clone) {
-		rmdCtx := &rmdModifier{pre: func(_ *rmdModifier, clone *rebMD) { clone.inc() }}
-		if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
-			debug.AssertNoErr(err)
-			return
-		}
-		ctx.rmdCtx = rmdCtx
+	if !mustRebalance(ctx, clone) {
+		return
 	}
+	rmdCtx := &rmdModifier{pre: func(_ *rmdModifier, clone *rebMD) { clone.inc() }}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	ctx.rmdCtx = rmdCtx
 }
 
 // NOTE: when the change involves target node always wait for metasync to distribute updated Smap
@@ -836,6 +837,14 @@ func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
+	if daemon.stopping.Load() {
+		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
+		return
+	}
+	if !p.NodeStarted() {
+		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is not ready yet (starting up)", p)
+		return
+	}
 	if len(apiItems) == 0 {
 		p.cluputJSON(w, r)
 	} else {
@@ -849,11 +858,15 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Action != apc.ActSendOwnershipTbl {
+		// must be primary
 		if p.forwardCP(w, r, msg, "") {
 			return
 		}
+		if err := p.pready(nil); err != nil {
+			p.writeErr(w, r, err, http.StatusServiceUnavailable)
+			return
+		}
 	}
-	// handle the action
 	switch msg.Action {
 	case apc.ActSetConfig:
 		toUpdate := &cmn.ConfigToUpdate{}
@@ -1169,13 +1182,14 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 	if smap.InMaintOrDecomm(si) {
-		p.writeErrf(w, r, "node %q is already in maintenance", opts.DaemonID)
+		p.writeErrf(w, r, "%s is already in maintenance", si.StringEx())
 		return
 	}
-	if p.si.Equals(si) {
-		p.writeErrf(w, r, "node %q is primary, cannot perform %q", opts.DaemonID, msg.Action)
+	if p.si.ID() == opts.DaemonID {
+		p.writeErrf(w, r, "%s is the current primary, cannot perform action %q on itself", p, msg.Action)
 		return
 	}
+
 	// proxy
 	if si.IsProxy() {
 		if err := p.markMaintenance(msg, si); err != nil {
@@ -1190,6 +1204,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 		return
 	}
+
 	// target
 	rebID, err := p.startMaintenance(si, msg, &opts)
 	if err != nil {
@@ -1242,7 +1257,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		}
 	}
 
-	rebID, err := p.cancelMaintenance(msg, &opts)
+	rebID, err := p.mcastStopMaint(msg, &opts)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1255,6 +1270,12 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action string) {
 	if p.forwardCP(w, r, &apc.ActMsg{Action: action}, "") {
 		return
+	}
+	if action != apc.ActAttachRemAis && action != apc.ActDetachRemAis {
+		if err := p.pready(nil); err != nil {
+			p.writeErr(w, r, err, http.StatusServiceUnavailable)
+			return
+		}
 	}
 	switch action {
 	case apc.Proxy:
@@ -1445,9 +1466,9 @@ func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID st
 }
 
 // Stop rebalance, cleanup, and get the node back to the cluster.
-func (p *proxy) cancelMaintenance(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
+func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
-		pre:     p._cancelMaintPre,
+		pre:     p._stopMaintPre,
 		post:    p._newRMD,
 		final:   p._syncFinal,
 		sid:     opts.DaemonID,
@@ -1463,13 +1484,20 @@ func (p *proxy) cancelMaintenance(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebI
 	return
 }
 
-func (p *proxy) _cancelMaintPre(ctx *smapModifier, clone *smapX) error {
+func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
+	const efmt = "cannot take %s out of maintenance"
 	if !clone.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, clone,
-			fmt.Sprintf("cannot cancel maintenance for %s", ctx.sid))
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf(efmt, ctx.sid))
+	}
+	node := clone.GetNode(ctx.sid)
+	if node == nil {
+		ctx.status = http.StatusNotFound
+		return &errNodeNotFound{fmt.Sprintf(efmt, ctx.sid), ctx.sid, p.si, clone}
 	}
 	clone.clearNodeFlags(ctx.sid, ctx.flags)
-	clone.staffIC()
+	if node.IsProxy() {
+		clone.staffIC()
+	}
 	return nil
 }
 
@@ -1506,35 +1534,30 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	proxyid := apiItems[0]
-	s := "designate new primary proxy '" + proxyid + "'"
-	if p.forwardCP(w, r, nil, s) {
+	npid := apiItems[0]
+	if p.forwardCP(w, r, nil, "designate new primary proxy '"+npid+"'") {
 		return
 	}
 	smap := p.owner.smap.get()
-	psi := smap.GetProxy(proxyid)
+	psi := smap.GetProxy(npid)
 	if psi == nil {
-		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", proxyid, smap.StringEx())
+		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", npid, smap.StringEx())
 		return
 	}
-	if proxyid == p.si.ID() {
+	if npid == p.si.ID() {
 		debug.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
-		glog.Warningf("Request to set primary to %s(self) - nothing to do", proxyid)
+		glog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
 		return
 	}
 	if smap.InMaintOrDecomm(psi) {
-		err := fmt.Errorf("%s: cannot set new primary when under maintenance", psi)
-		p.writeErr(w, r, err, http.StatusServiceUnavailable)
-		return
-	}
-	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
-		err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
+		err := fmt.Errorf("FATAL: %s: cannot set new primary when under maintenance", psi)
+		debug.AssertNoErr(err)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
 	// (I.1) Prepare phase - inform other nodes.
-	urlPath := apc.URLPathDaeProxy.Join(proxyid)
+	urlPath := apc.URLPathDaeProxy.Join(npid)
 	q := url.Values{}
 	q.Set(apc.QparamPrepare, "true")
 	args := allocBcArgs()
@@ -1554,7 +1577,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, proxyid)
+		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, npid)
 		p.writeErr(w, r, err)
 		freeBcastRes(results)
 		return
@@ -1583,11 +1606,11 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		if res.si.ID() == proxyid {
-			cos.ExitLogf("Commit phase failure: new primary %q returned err: %v", proxyid, res.err)
+		if res.si.ID() == npid {
+			cos.ExitLogf("Commit phase failure: new primary %q returned err: %v", npid, res.err)
 		} else {
 			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
-				res.si.ID(), res.err, proxyid)
+				res.si.ID(), res.err, npid)
 		}
 	}
 	freeBcastRes(results)
@@ -1619,13 +1642,25 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, nil, sid) {
 		return
 	}
+	if daemon.stopping.Load() {
+		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
+		return
+	}
+	if !p.NodeStarted() {
+		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is not ready yet (starting up)", p)
+		return
+	}
+	if err := p.pready(smap); err != nil {
+		p.writeErr(w, r, err, http.StatusServiceUnavailable)
+		return
+	}
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
 	var errCode int
 	if p.isIntraCall(r.Header, false /*from primary*/) == nil {
 		if cid := r.Header.Get(apc.HdrCallerID); cid == sid {
-			errCode, err = p.unregNode(&apc.ActMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
+			errCode, err = p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
 		} else {
 			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
 		}
@@ -1682,12 +1717,12 @@ func (p *proxy) callRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (er
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
 	}
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActCallbackRmFromSmap {
-		errCode, err = p.unregNode(msg, si, skipReb) // NOTE: proceeding anyway even if all retries fail
+		errCode, err = p.mcastUnreg(msg, si, skipReb) // NOTE: proceeding anyway even if all retries fail
 	}
 	return
 }
 
-func (p *proxy) unregNode(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		post:    p._newRMD,
@@ -1703,30 +1738,22 @@ func (p *proxy) unregNode(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (err
 func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	const verb = "remove"
 	sid := ctx.sid
-	node := clone.GetNode(sid)
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot cancel %s %s", verb, sid))
 	}
+	node := clone.GetNode(sid)
 	if node == nil {
 		ctx.status = http.StatusNotFound
 		return &errNodeNotFound{"failed to " + verb, sid, p.si, clone}
 	}
-	if !p.NodeStarted() {
-		ctx.status = http.StatusServiceUnavailable
-		return nil
-	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
 		glog.Infof("%s %s (num proxies %d)", verb, node, clone.CountProxies())
+		clone.staffIC()
 	} else {
-		// see NOTE below
-		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
-			return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
-		}
 		clone.delTarget(sid)
 		glog.Infof("%s %s (num targets %d)", verb, node, clone.CountTargets())
 	}
-	clone.staffIC()
 	p.rproxy.nodes.Delete(ctx.sid)
 	return nil
 }
@@ -1745,11 +1772,11 @@ func (p *proxy) canRebalance() (err error) {
 		debug.AssertNoErr(err)
 		return
 	}
-	// NOTE: Since cluster startup handles rebalance elsewhere (see p.resumeReb),
+	// NOTE: cluster startup handles rebalance elsewhere (see p.resumeReb), and so
 	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
-	// are not permitted and will fail.
-	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
-		return fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
+	// are not permitted and will fail during startup.
+	if err = p.pready(smap); err != nil {
+		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		err = errRebalanceDisabled
@@ -1770,25 +1797,24 @@ func mustRebalance(ctx *smapModifier, cur *smapX) bool {
 	if prev.CountActiveTs() == 0 {
 		return false
 	}
-	if cur.CountActiveTs() <= 1 {
+	if cur.CountActiveTs() < 2 {
 		return false
 	}
 	if ctx.interrupted || ctx.restarted {
 		return true
 	}
-	//
-	// compare Smaps
-	//
+
+	// active <=> inactive transition
 	debug.Assert(prev.version() < cur.version())
-	for _, si := range cur.Tmap {
+	for _, tsi := range cur.Tmap {
 		// added an active one or activated previously inactive
-		if !si.InMaintOrDecomm() && prev.GetActiveNode(si.ID()) == nil {
+		if !tsi.InMaintOrDecomm() && prev.GetActiveNode(tsi.ID()) == nil {
 			return true
 		}
 	}
-	for _, si := range prev.Tmap {
+	for _, tsi := range prev.Tmap {
 		// removed an active one or deactivated previously active
-		if !si.InMaintOrDecomm() && cur.GetActiveNode(si.ID()) == nil {
+		if !tsi.InMaintOrDecomm() && cur.GetActiveNode(tsi.ID()) == nil {
 			return true
 		}
 	}

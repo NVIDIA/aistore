@@ -469,7 +469,7 @@ func (t *target) initRecvHandlers() {
 		{r: "/" + apc.S3, h: t.s3Handler, net: accessNetPublicData},
 		{r: "/", h: t.errURL, net: accessNetAll},
 	}
-	t.registerNetworkHandlers(networkHandlers)
+	t.regNetHandlers(networkHandlers)
 }
 
 // stop gracefully

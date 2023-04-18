@@ -162,6 +162,18 @@ func readProxyID(config *cmn.Config) (id string) {
 	return
 }
 
+func (p *proxy) pready(smap *smapX) error {
+	const msg = "%s primary: not ready yet "
+	debug.Assert(smap == nil || smap.IsPrimary(p.si))
+	if !p.ClusterStarted() {
+		return fmt.Errorf(msg+"(cluster is starting up)", p)
+	}
+	if p.owner.rmd.starting.Load() {
+		return fmt.Errorf(msg+"(finalizing global rebalancing state)", p)
+	}
+	return nil
+}
+
 // start proxy runner
 func (p *proxy) Run() error {
 	config := cmn.GCO.Get()
@@ -222,7 +234,7 @@ func (p *proxy) Run() error {
 		// ht:// _or_ S3 compatibility, depending on feature flag
 		{r: "/", h: p.rootHandler, net: accessNetPublic},
 	}
-	p.registerNetworkHandlers(networkHandlers)
+	p.regNetHandlers(networkHandlers)
 
 	glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PubNet.URL)
 	if p.si.PubNet.URL != p.si.ControlNet.URL {
@@ -955,8 +967,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// primary
 	if smap.isPrimary(p.si) {
 		if prr {
-			if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
-				err := fmt.Errorf(fmtErrPrimaryNotReadyYet, p, a, b)
+			if err := p.pready(smap); err != nil {
 				if glog.FastV(4, glog.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
