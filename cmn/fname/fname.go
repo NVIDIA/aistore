@@ -47,4 +47,7 @@ const (
 	RebalanceMarker     = "rebalance"
 	NodeRestartedMarker = "node_restarted"
 	NodeRestartedPrev   = "node_restarted.prev"
+
+	// cleanup
+	RemoveRestartedMark = "remove_restarted_mark"
 )

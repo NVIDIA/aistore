@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -407,9 +408,9 @@ func (t *target) unreg(action string, opts *apc.ActValRmNode) {
 	}
 
 	// NOTE: vs metasync
-	t.regstate.Lock()
+	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
-	t.regstate.Unlock()
+	t.regstate.mu.Unlock()
 
 	if action == apc.ActShutdown {
 		debug.Assert(!opts.NoShutdown)
@@ -811,38 +812,43 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	if r != nil {
 		caller = r.Header.Get(apc.HdrCallerName)
 	}
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
+	t.regstate.mu.Lock()
 	if daemon.stopping.Load() {
+		t.regstate.mu.Unlock()
 		return
 	}
-	if err := t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/); err != nil && !isErrDowngrade(err) {
+	err = t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/)
+	t.regstate.mu.Unlock()
+	if err != nil && !isErrDowngrade(err) {
 		glog.Error(err)
 	}
 }
 
 // [METHOD] /v1/metasync
 func (t *target) metasyncHandler(w http.ResponseWriter, r *http.Request) {
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
 	if daemon.stopping.Load() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	switch r.Method {
 	case http.MethodPut:
-		t.metasyncHandlerPut(w, r)
+		t.regstate.mu.Lock()
+		if daemon.stopping.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			t.metasyncPut(w, r)
+		}
+		t.regstate.mu.Unlock()
 	case http.MethodPost:
-		t.metasyncHandlerPost(w, r)
+		t.metasyncPost(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodPost, http.MethodPut)
 	}
 }
 
 // PUT /v1/metasync
-// (compare w/ p.metasyncHandler - minor differences around receiving Smap
-// and RMD - code reduction must be doable)
-func (t *target) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
+// compare w/ p.metasyncHandler (NOTE: executes under regstate lock)
+func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	var (
 		err = &errMsync{}
 		cii = &err.Cii
@@ -947,7 +953,7 @@ func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *aisMsg) (err e
 }
 
 // POST /v1/metasync
-func (t *target) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
+func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	payload := make(msPayload)
 	if err := payload.unmarshal(r.Body, "metasync post"); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -960,17 +966,20 @@ func (t *target) metasyncHandlerPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ntid := msg.UUID
-	info := fmt.Sprintf("%s %q: %s, join t[%s]", t, msg.Action, newSmap, ntid) // "start-gfn" | "stop-gfn"
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infoln(info)
+		glog.Infof("%s %s: %s, join t[%s]", t, msg.String(), newSmap, ntid) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
 		reb.ActivateTimedGFN()
 	case apc.ActStopGFN:
 		reb.DeactivateTimedGFN()
+		if msg.Name == fname.RemoveRestartedMark {
+			fs.RemoveMarker(fname.NodeRestartedPrev)
+			glog.Infoln(t.String() + ": removed restarted-mark")
+		}
 	default:
-		debug.Assert(false, info)
+		debug.Assert(false, msg.String())
 		t.writeErrAct(w, r, msg.Action)
 	}
 }
@@ -1044,34 +1053,38 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // unregisters the target and marks it as disabled by an internal event
 func (t *target) disable(msg string) {
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
+	t.regstate.mu.Lock()
 
 	if t.regstate.disabled.Load() {
+		t.regstate.mu.Unlock()
 		return // nothing to do
 	}
 	if err := t.unregisterSelf(false); err != nil {
+		t.regstate.mu.Unlock()
 		glog.Errorf("%s but failed to remove self from Smap: %v", msg, err)
 		return
 	}
 	t.regstate.disabled.Store(true)
+	t.regstate.mu.Unlock()
 	glog.Errorf("Warning: %s => disabled and removed self from Smap", msg)
 }
 
 // registers the target again if it was disabled by and internal event
 func (t *target) enable() error {
-	t.regstate.Lock()
-	defer t.regstate.Unlock()
+	t.regstate.mu.Lock()
 
 	if !t.regstate.disabled.Load() {
+		t.regstate.mu.Unlock()
 		return nil
 	}
-	glog.Infof("Enabling %s", t.si)
 	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
+		t.regstate.mu.Unlock()
+		glog.Infof("%s failed to re-join: %v", t.si, err)
 		return err
 	}
 	t.regstate.disabled.Store(false)
-	glog.Infof("%s has been enabled", t.si)
+	t.regstate.mu.Unlock()
+	glog.Infof("%s is now active", t.si)
 	return nil
 }
 

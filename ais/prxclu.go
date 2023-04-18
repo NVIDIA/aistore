@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -72,11 +73,11 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatAllRunningXacts:
 		p.xgetRunning(w, r, what, query)
 	case apc.WhatNodeStats:
-		p.queryClusterStats(w, r, what, query)
+		p.qcluStats(w, r, what, query)
 	case apc.WhatSysInfo:
-		p.queryClusterSysinfo(w, r, what, query)
+		p.qcluSysinfo(w, r, what, query)
 	case apc.WhatMountpaths:
-		p.queryClusterMountpaths(w, r, what, query)
+		p.qcluMountpaths(w, r, what, query)
 	case apc.WhatRemoteAIS:
 		all, err := p.getRemAises(true /*refresh*/)
 		if err != nil {
@@ -137,7 +138,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
-	targetResults, erred := p._queryResults(w, r, results)
+	targetResults, erred := p._tresRaw(w, r, results)
 	if erred {
 		return
 	}
@@ -191,12 +192,12 @@ func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string,
 	p.writeJSON(w, r, uniqueKindIDs.ToSlice(), what)
 }
 
-func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
 	var (
 		config  = cmn.GCO.Get()
 		timeout = config.Client.Timeout.D()
 	)
-	proxyResults, err := p.cluSysinfo(r, timeout, cluster.Proxies, query)
+	proxyResults, err := p._sysinfo(r, timeout, cluster.Proxies, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -204,7 +205,7 @@ func (p *proxy) queryClusterSysinfo(w http.ResponseWriter, r *http.Request, what
 	out := &apc.ClusterSysInfoRaw{}
 	out.Proxy = proxyResults
 
-	targetResults, err := p.cluSysinfo(r, timeout, cluster.Targets, query)
+	targetResults, err := p._sysinfo(r, timeout, cluster.Targets, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -247,7 +248,7 @@ func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 	return v, err
 }
 
-func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int, query url.Values) (cos.JSONRawMsgs, error) {
+func (p *proxy) _sysinfo(r *http.Request, timeout time.Duration, to int, query url.Values) (cos.JSONRawMsgs, error) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query}
 	args.timeout = timeout
@@ -267,8 +268,8 @@ func (p *proxy) cluSysinfo(r *http.Request, timeout time.Duration, to int, query
 	return sysInfoMap, nil
 }
 
-func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	targetStats, erred := p._queryTargets(w, r, query)
+func (p *proxy) qcluStats(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetStats, erred := p._queryTs(w, r, query)
 	if targetStats == nil || erred {
 		return
 	}
@@ -279,8 +280,8 @@ func (p *proxy) queryClusterStats(w http.ResponseWriter, r *http.Request, what s
 	_ = p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
-	targetMountpaths, erred := p._queryTargets(w, r, query)
+func (p *proxy) qcluMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
+	targetMountpaths, erred := p._queryTs(w, r, query)
 	if targetMountpaths == nil || erred {
 		return
 	}
@@ -291,7 +292,7 @@ func (p *proxy) queryClusterMountpaths(w http.ResponseWriter, r *http.Request, w
 
 // helper methods for querying targets
 
-func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request, query url.Values) (cos.JSONRawMsgs, bool) {
+func (p *proxy) _queryTs(w http.ResponseWriter, r *http.Request, query url.Values) (cos.JSONRawMsgs, bool) {
 	var (
 		err  error
 		body []byte
@@ -308,10 +309,10 @@ func (p *proxy) _queryTargets(w http.ResponseWriter, r *http.Request, query url.
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
-	return p._queryResults(w, r, results)
+	return p._tresRaw(w, r, results)
 }
 
-func (p *proxy) _queryResults(w http.ResponseWriter, r *http.Request, results sliceResults) (tres cos.JSONRawMsgs, erred bool) {
+func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceResults) (tres cos.JSONRawMsgs, erred bool) {
 	tres = make(cos.JSONRawMsgs, len(results))
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
@@ -651,7 +652,6 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		restarted:   regReq.Restarted,
 	}
 	if err = p._earlyGFN(ctx); err != nil {
-		debug.AssertNoErr(err) // TODO: remove
 		return
 	}
 	if err = p.owner.smap.modify(ctx); err != nil {
@@ -663,11 +663,14 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		debug.Assert(ctx.rmdCtx.rebID != "")
 		xid = ctx.rmdCtx.rebID
 	} else if ctx.gfn {
-		// early-GFN appears to be premature, so term it
+		// cleanup: bcast stop gfn (started above) and, possibly, "node-restarted" marker
 		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
 		aisMsg.UUID = ctx.nsi.ID()
-		notifyPairs := revsPair{&smapX{}, aisMsg}
-		_ = p.metasyncer.notify(false /*wait*/, notifyPairs) // async, failed-cnt always zero
+		if ctx.restarted {
+			aisMsg.Name = fname.RemoveRestartedMark
+		}
+		revs := revsPair{&smapX{}, aisMsg}
+		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return
 }
@@ -691,8 +694,8 @@ func (p *proxy) _earlyGFN(ctx *smapModifier) error {
 	// carrying the new target's ID
 	aisMsg := p.newAmsgActVal(apc.ActStartGFN, nil)
 	aisMsg.UUID = ctx.nsi.ID()
-	notifyPairs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, aisMsg}
-	if fcnt := p.metasyncer.notify(true /*wait*/, notifyPairs); fcnt > 0 {
+	revs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, aisMsg}
+	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
 	ctx.gfn = true // mark in the context

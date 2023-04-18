@@ -55,8 +55,8 @@ const clusterClockDrift = 5 * time.Millisecond // is expected to be bounded by
 
 type (
 	regstate struct {
-		sync.Mutex
-		disabled atomic.Bool // target was unregistered by internal event (e.g, all mountpaths are down)
+		mu       sync.Mutex  // serialize metasync Rx, stopping, and transitioning to standby
+		disabled atomic.Bool // true: standing by
 	}
 	backends map[string]cluster.BackendProvider
 	// main
@@ -68,7 +68,7 @@ type (
 		reb          *reb.Reb
 		res          *res.Res
 		transactions transactions
-		regstate     regstate // the state of being registered with the primary, can be (en/dis)abled via API
+		regstate     regstate
 	}
 )
 
@@ -476,9 +476,9 @@ func (t *target) initRecvHandlers() {
 // TODO: write shutdown-marker
 func (t *target) Stop(err error) {
 	// NOTE: vs metasync
-	t.regstate.Lock()
+	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
-	t.regstate.Unlock()
+	t.regstate.mu.Unlock()
 
 	f := glog.Infof
 	if err != nil {
