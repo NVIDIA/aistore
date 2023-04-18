@@ -1,11 +1,11 @@
 ## AIS Python Components
 
-This directory includes the AIStore Python package containing the SDK, PyTorch integration, and Botocore patch. 
-See the README files in each directory in `aistore` for usage details.
+This package contains the AIStore Python SDK, PyTorch integration, and Botocore patch. 
+See the README files in each module for usage details:
 
-- [SDK](aistore/sdk/README.md)
-- [PyTorch](aistore/pytorch/README.md)
-- [Botocore](aistore/botocore_patch/README.md)
+- [SDK](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md)
+- [PyTorch](https://github.com/NVIDIA/aistore/blob/master/python/aistore/pytorch/README.md)
+- [Botocore](https://github.com/NVIDIA/aistore/blob/master/python/aistore/botocore_patch/README.md)
 
 ## References
 
