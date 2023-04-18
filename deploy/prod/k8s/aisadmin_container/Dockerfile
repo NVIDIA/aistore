@@ -14,7 +14,9 @@ RUN git clone https://github.com/NVIDIA/aistore.git && cd aistore && \
 FROM ubuntu:22.04
 
 RUN apt-get update -yq
-RUN apt-get install -y wget sysstat curl git iputils-ping netcat make coreutils net-tools iproute2 tcptrack vim
+RUN apt-get install -y wget sysstat curl git iputils-ping netcat make coreutils net-tools iproute2 tcptrack vim \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /usr/local/bin
 ENV PATH="/usr/local/bin:${PATH}"
