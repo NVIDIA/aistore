@@ -591,6 +591,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 	t.owner.bmd.Unlock()
 
 	if err == nil && oldVer < newBMD.Version {
+		t.regstate.prevbmd.Store(false)
 		t._postBMD(tag, rmbcks)
 	}
 	return oldVer, err
@@ -615,7 +616,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		}
 		return
 	}
-	nilbmd := bmd.version() == 0 // initial
+	nilbmd := bmd.version() == 0 || t.regstate.prevbmd.Load()
 
 	// 1. create
 	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {

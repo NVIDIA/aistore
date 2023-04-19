@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -222,18 +223,15 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 	return
 }
 
-func (mi *Mountpath) ClearMDs() {
+func (mi *Mountpath) ClearMDs() (rerr error) {
 	for _, mdPath := range mdFilesDirs {
-		mi.Remove(mdPath)
+		fpath := filepath.Join(mi.Path, mdPath)
+		if err := os.RemoveAll(fpath); err != nil && !os.IsNotExist(err) {
+			glog.Error(err)
+			rerr = err
+		}
 	}
-}
-
-func (mi *Mountpath) Remove(path string) error {
-	fpath := filepath.Join(mi.Path, path)
-	if err := os.RemoveAll(fpath); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	return
 }
 
 func (mi *Mountpath) SetDaemonIDXattr(tid string) error {
@@ -368,9 +366,11 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 		dir := mi.MakePathCT(bck, contentType)
 		if err := cos.Stat(dir); err == nil {
 			if nilbmd {
-				// NOTE: e.g., has been decommissioned without proper cleanup, and rejoined
-				glog.Errorf("bucket %s: directory %s already exists but local BMD is nil - skipping...",
-					bck, dir)
+				// a) loaded previous BMD version or b) failed to load any
+				// in both cases, BMD cannot be fully trusted, and so we ignore that fact
+				// that the directory exists
+				// (scenario: decommission without proper cleanup, followed by rejoin)
+				glog.Errorf("Warning: %s bdir %s exists but local BMD is not the latest", bck, dir)
 				num++
 				continue
 			}
@@ -551,27 +551,65 @@ func TestNew(iostater ios.IOS) {
 	PutMPI(make(MPI, num), make(MPI, num))
 }
 
+const desleep = 256 * time.Millisecond
+
 func Decommission(mdOnly bool) {
-	available, disabled := Get()
-	allmpi := []MPI{available, disabled}
-	for idx, mpi := range allmpi {
-		if mdOnly { // NOTE: removing daemon ID below as well
-			for _, mi := range mpi {
-				mi.ClearMDs()
+	var (
+		avail, disabled = Get()
+		allmpi          = []MPI{avail, disabled}
+	)
+	for i := 0; i < 3; i++ { // retry
+		if mdOnly {
+			if err := _deMD(allmpi); err == nil {
+				return
 			}
 		} else {
-			// NOTE: the entire content including user data, MDs, and daemon ID
-			for _, mi := range mpi {
-				if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) && idx == 0 {
-					// available is [0]
-					glog.Errorf("failed to cleanup available %s: %v", mi, err)
+			if err := _deWorld(allmpi); err == nil {
+				return
+			}
+		}
+		if i < 2 {
+			glog.Errorln("decommission: retrying cleanup...")
+			time.Sleep(desleep)
+		}
+	}
+}
+
+func _deMD(allmpi []MPI) (rerr error) {
+	for _, mpi := range allmpi {
+		for _, mi := range mpi {
+			// BMD et al.
+			if err := mi.ClearMDs(); err != nil {
+				rerr = err
+			}
+			// node ID (SID)
+			if err := removeXattr(mi.Path, nodeXattrID); err != nil {
+				debug.AssertNoErr(err)
+				rerr = err
+			}
+		}
+	}
+	return
+}
+
+// the entire content including user data, MDs, and daemon ID
+func _deWorld(allmpi []MPI) (rerr error) {
+	for _, mpi := range allmpi {
+		for _, mi := range mpi {
+			if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) {
+				// "directory not empty" race vs. PUT - retry in place
+				if errors.Is(err, syscall.ENOTEMPTY) {
+					time.Sleep(desleep)
+					err = os.RemoveAll(mi.Path)
+				}
+				if err != nil {
+					glog.Error(err)
+					rerr = err
 				}
 			}
 		}
 	}
-	if mdOnly {
-		RemoveDaemonIDs()
-	}
+	return
 }
 
 // `ios` delegations

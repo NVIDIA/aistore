@@ -57,6 +57,7 @@ type (
 	regstate struct {
 		mu       sync.Mutex  // serialize metasync Rx, stopping, and transitioning to standby
 		disabled atomic.Bool // true: standing by
+		prevbmd  atomic.Bool // special
 	}
 	backends map[string]cluster.BackendProvider
 	// main
@@ -306,7 +307,9 @@ func (t *target) Run() error {
 	}
 
 	// Init meta-owners and load local instances
-	t.owner.bmd.init()
+	if prev := t.owner.bmd.init(); prev {
+		t.regstate.prevbmd.Store(true)
+	}
 	t.owner.etl.init()
 
 	smap, reliable := t.tryLoadSmap()
@@ -484,7 +487,7 @@ func (t *target) Stop(err error) {
 	if err != nil {
 		f = glog.Warningf
 	}
-	f("Stopping %s, err: %v", t.si, err)
+	f("Stopping %s: %v", t, err)
 	xreg.AbortAll(err)
 	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }

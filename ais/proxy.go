@@ -1907,11 +1907,13 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
-	pname := smap.Primary.StringEx()
-	if msg != nil {
-		glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
-	} else {
-		glog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
+	if glog.FastV(4, glog.SmoduleAIS) {
+		pname := smap.Primary.StringEx()
+		if msg != nil {
+			glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
+		} else {
+			glog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
+		}
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true

@@ -58,7 +58,7 @@ type (
 		sync.Locker
 		Get() *cluster.BMD
 
-		init()
+		init() bool // true when loaded previous version
 		get() (bmd *bucketMD)
 		putPersist(bmd *bucketMD, payload msPayload) error
 		persist(clone *bucketMD, payload msPayload) error
@@ -288,7 +288,7 @@ func newBMDOwnerPrx(config *cmn.Config) *bmdOwnerPrx {
 	return &bmdOwnerPrx{fpath: filepath.Join(config.ConfigDir, fname.Bmd)}
 }
 
-func (bo *bmdOwnerPrx) init() {
+func (bo *bmdOwnerPrx) init() (prev bool) {
 	bmd, err := _loadBMD(bo.fpath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -298,6 +298,7 @@ func (bo *bmdOwnerPrx) init() {
 		}
 	}
 	bo.put(bmd)
+	return
 }
 
 func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) {
@@ -354,7 +355,7 @@ func newBMDOwnerTgt() *bmdOwnerTgt {
 	return &bmdOwnerTgt{}
 }
 
-func (bo *bmdOwnerTgt) init() {
+func (bo *bmdOwnerTgt) init() (prev bool) {
 	var (
 		bmd       *bucketMD
 		available = fs.GetAvail()
@@ -365,6 +366,7 @@ func (bo *bmdOwnerTgt) init() {
 	}
 	if bmd = loadBMD(available, fname.BmdPrevious); bmd != nil {
 		glog.Errorf("loaded previous version of the %s (%q)", bmd, fname.BmdPrevious)
+		prev = true
 		goto finalize
 	}
 	bmd = newBucketMD()
@@ -372,6 +374,7 @@ func (bo *bmdOwnerTgt) init() {
 
 finalize:
 	bo.put(bmd)
+	return
 }
 
 func (bo *bmdOwnerTgt) putPersist(bmd *bucketMD, payload msPayload) (err error) {
