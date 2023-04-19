@@ -31,11 +31,11 @@ type gfnCtx struct {
 
 var gfn = &gfnCtx{}
 
-func IsActiveGFN() bool {
+func IsGFN() bool {
 	return gfn.gon.Load() || (gfn.exp.Load() != 0 && gfn.trc.Load() > 0)
 }
 
-func ActivateTimedGFN() {
+func OnTimedGFN() {
 	if gfn.gon.Load() {
 		return
 	}
@@ -53,7 +53,7 @@ func ActivateTimedGFN() {
 	}
 }
 
-func DeactivateTimedGFN() {
+func OffTimedGFN(detail string) {
 	if gfn.gon.Load() {
 		return
 	}
@@ -63,7 +63,7 @@ func DeactivateTimedGFN() {
 		gfn.exp.Store(0)
 	}
 	gfn.mtx.Unlock()
-	glog.Infoln(gfnT, trc)
+	glog.Infoln(gfnT, trc, detail)
 }
 
 func hkTimed() time.Duration {
@@ -83,15 +83,15 @@ func hkTimed() time.Duration {
 	return time.Duration(exp - now + 100)
 }
 
-func activateGFN() (prev bool) {
+func onGFN() (prev bool) {
 	if prev = gfn.gon.Swap(true); !prev {
-		gfn.trc.Store(0) // see IsActiveGFN
+		gfn.trc.Store(0) // see IsGFN
 		glog.Infoln(gfnG, "on")
 	}
 	return
 }
 
-func deactivateGFN() {
+func offGFN() {
 	gfn.gon.Store(false)
 	glog.Infoln(gfnG, "off")
 }

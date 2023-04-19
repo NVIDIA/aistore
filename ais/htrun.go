@@ -634,9 +634,8 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 			client = h.client.control
 		}
 	}
-
 	if res.err != nil {
-		res.details = fmt.Sprintf("unexpected failure to create HTTP request %s %s, err: %v",
+		res.details = fmt.Sprintf("FATAL: failed to create HTTP request %s %s: %v",
 			args.req.Method, args.req.URL(), res.err)
 		return
 	}

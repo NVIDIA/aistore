@@ -720,7 +720,7 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 		gfnNode   *cluster.Snode
 		marked    = xreg.GetRebMarked()
 		running   = marked.Xact != nil
-		gfnActive = reb.IsActiveGFN() // GFN(global rebalance)
+		gfnActive = reb.IsGFN() // GFN(global rebalance)
 		ecEnabled = goi.lom.Bprops().EC.Enabled
 		// TODO: when not enough EC targets to restore a sliced object,
 		// we might still be able to restore from the object's full replica

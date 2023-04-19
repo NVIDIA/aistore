@@ -49,10 +49,6 @@ const (
 	ActShutdown       = "shutdown"
 	ActStoreCleanup   = "cleanup-store"
 
-	// internal
-	ActStartGFN = "start-gfn"
-	ActStopGFN  = "stop-gfn"
-
 	// multi-object (via `ListRange`)
 	ActCopyObjects     = "copy-listrange"
 	ActDeleteObjects   = "delete-listrange"
@@ -86,9 +82,14 @@ const (
 	ActRegGlobalXaction  = "reg-global-xaction"
 )
 
-// internal - add (usually, on the fly) existing remote bucket to AIS BMD
+// internal use
 const (
-	ActAddRemoteBck = "add-remote-bck"
+	ActAddRemoteBck = "add-remote-bck" // add to BMD (usually, on the fly) existing remote bucket
+
+	ActStartGFN = "start-gfn"
+	ActStopGFN  = "stop-gfn"
+
+	ActCleanupMarkers = "cleanup-markers"
 )
 
 const (

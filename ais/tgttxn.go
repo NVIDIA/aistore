@@ -441,7 +441,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		}
 		c.addNotif(xctn) // notify upon completion
 
-		reb.ActivateTimedGFN()
+		reb.OnTimedGFN()
 		xact.GoRunW(xctn) // run and wait until it starts running
 
 		return xctn.ID(), nil
@@ -842,7 +842,7 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 		if err := xreg.LimitedCoexistence(t.si, nil, c.msg.Action); err != nil {
 			return err
 		}
-		reb.ActivateTimedGFN()
+		reb.OnTimedGFN()
 	case apc.ActAbort:
 		// letting gfn-timed to self-expire in a serialized way
 		glog.Warningf("%s: aborting %q", t, c.msg.Action)

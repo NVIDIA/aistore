@@ -86,7 +86,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	// The latter is driven by regMetasync (see regMetasync.go) distributing updated cluster map.
 	// To handle incoming GETs within this window (which would typically take a few seconds or less)
 	// we need to have the current cluster-wide regMetadata and the temporary gfn state:
-	reb.ActivateTimedGFN()
+	reb.OnTimedGFN()
 
 	// BMD
 	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
@@ -176,6 +176,16 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.unreg(msg.Action, &opts)
+	case apc.ActCleanupMarkers:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		var ctx cleanmark
+		if err := cos.MorphMarshal(msg.Value, &ctx); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		t.cleanupMark(&ctx)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -429,6 +439,29 @@ func (t *target) unreg(action string, opts *apc.ActValRmNode) {
 	}
 	if !opts.NoShutdown {
 		t.Stop(&errNoUnregister{action})
+	}
+}
+
+// called by p.cleanupMark
+func (t *target) cleanupMark(ctx *cleanmark) {
+	smap := t.owner.smap.get()
+	if smap.version() > ctx.NewVer {
+		glog.Warningf("%s: %s is newer - ignoring (and dropping) %v", t, smap, ctx)
+		return
+	}
+	if ctx.Interrupted {
+		if err := fs.RemoveMarker(fname.RebalanceMarker); err == nil {
+			glog.Infof("%s: cleanmark 'rebalance', %s", t, smap)
+		} else {
+			glog.Errorf("%s: failed to cleanmark 'rebalance': %v, %s", t, err, smap)
+		}
+	}
+	if ctx.Restarted {
+		if err := fs.RemoveMarker(fname.NodeRestartedPrev); err == nil {
+			glog.Infof("%s: cleanmark 'restarted', %s", t, smap)
+		} else {
+			glog.Errorf("%s: failed to cleanmark 'restarted': %v, %s", t, err, smap)
+		}
 	}
 }
 
@@ -968,17 +1001,14 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	}
 	ntid := msg.UUID
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s: %s, join t[%s]", t, msg.String(), newSmap, ntid) // "start-gfn" | "stop-gfn"
+		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, cluster.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
-		reb.ActivateTimedGFN()
+		reb.OnTimedGFN()
 	case apc.ActStopGFN:
-		reb.DeactivateTimedGFN()
-		if msg.Name == fname.RemoveRestartedMark {
-			fs.RemoveMarker(fname.NodeRestartedPrev)
-			glog.Infoln(t.String() + ": removed restarted-mark")
-		}
+		detail := cluster.Tname(ntid) + " " + newSmap.String()
+		reb.OffTimedGFN(detail)
 	default:
 		debug.Assert(false, msg.String())
 		t.writeErrAct(w, r, msg.Action)

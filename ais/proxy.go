@@ -1921,11 +1921,19 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
 func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) {
-	msg := fmt.Sprintf("%s: rproxy err %v, req: %s %s", p, err, r.Method, r.URL.Path)
-	if caller := r.Header.Get(apc.HdrCallerName); caller != "" {
-		msg += " (from " + caller + ")"
+	var (
+		smap = p.owner.smap.get()
+		si   = smap.PubNet2Node(r.URL.Host) // assuming pub
+		dst  = r.URL.Host
+	)
+	if si != nil {
+		dst = "node " + si.StringEx()
 	}
-	glog.Errorln(msg)
+	if cos.IsErrConnectionRefused(err) {
+		glog.Errorf("%s: %s is unreachable (%s %s)", p, dst, r.Method, r.URL.Path)
+	} else {
+		glog.Errorf("%s rproxy to %s (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
+	}
 	w.WriteHeader(http.StatusBadGateway)
 }
 

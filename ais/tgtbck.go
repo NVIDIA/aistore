@@ -256,7 +256,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 
 	// TODO: `Flags` have limited usability, consider to remove
 	marked := xreg.GetRebMarked()
-	if marked.Xact != nil || marked.Interrupted || reb.IsActiveGFN() {
+	if marked.Xact != nil || marked.Interrupted || reb.IsGFN() {
 		resp.Lst.Flags = 1
 	}
 

@@ -81,10 +81,11 @@ type (
 
 		msg         *apc.ActMsg    // action modifying smap (apc.Act*)
 		nsi         *cluster.Snode // new node to be added
-		nid         string         // DaemonID of candidate primary to vote
-		sid         string         // DaemonID of node to modify
+		nid         string         // node ID of the candidate primary
+		sid         string         // ID of the node to modify
 		flags       cos.BitFlags   // enum cmn.Snode* to set or clear
-		status      int            // http.Status* of operation
+		nver        int64          // new Smap version (cloned and modified `smap` - see above)
+		status      int            // resulting http.Status*
 		interrupted bool           // target reports interrupted rebalance
 		restarted   bool           // target reports cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
@@ -557,6 +558,7 @@ func (r *smapOwner) prepost(ctx *smapModifier) (clone *smapX, err error) {
 		clone._free()
 		return nil, cmn.NewErrFailedTo(nil, "persist", clone, err)
 	}
+	ctx.nver = clone.version()
 	if ctx.final == nil {
 		clone._free()
 	}

@@ -34,18 +34,19 @@ const (
 	Roles     = "roles"    // AuthN
 	IC        = "ic"       // information center
 
-	// l3
-	SyncSmap = "syncsmap" // legacy
+	// l3 ---
 
-	Voteres    = "result"
-	VoteInit   = "init"
-	Mountpaths = "mountpaths"
+	Voteres  = "result"
+	VoteInit = "init"
 
 	// (see the corresponding action messages above)
 	Keepalive      = "keepalive"
 	AdminJoin      = "join-by-admin"   // when node is joined by admin ("manual join")
 	SelfJoin       = "autoreg"         // auto-join cluster at startup
 	CallbackRmSelf = "cb-rm-from-smap" // set by primary to request that node calls back to request removal (internal use only!)
+
+	// target
+	Mountpaths = "mountpaths"
 
 	// common
 	Init     = "init"
@@ -78,6 +79,11 @@ const (
 	ETLStart   = Start
 	ETLHealth  = "health"
 	ETLMetrics = "metrics"
+)
+
+// RESTful l3, internal use
+const (
+	SyncSmap = "syncsmap"
 )
 
 type URLPath struct {

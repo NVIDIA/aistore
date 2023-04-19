@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -658,18 +657,20 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		debug.AssertNoErr(err)
 		return
 	}
+	// with rebalance
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
-		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
 		debug.Assert(ctx.rmdCtx.rebID != "")
 		xid = ctx.rmdCtx.rebID
-	} else if ctx.gfn {
-		// cleanup: bcast stop gfn (started above) and, possibly, "node-restarted" marker
-		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
+		return
+	}
+	// cleanup target state
+	if ctx.restarted || ctx.interrupted {
+		go p.cleanupMark(ctx)
+	}
+	if ctx.gfn {
+		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
 		aisMsg.UUID = ctx.nsi.ID()
-		if ctx.restarted {
-			aisMsg.Name = fname.RemoveRestartedMark
-		}
-		revs := revsPair{&smapX{}, aisMsg}
+		revs := revsPair{&smapX{Smap: cluster.Smap{Version: ctx.nver}}, aisMsg}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return
@@ -690,16 +691,51 @@ func (p *proxy) _earlyGFN(ctx *smapModifier) error {
 		return err
 	}
 
-	// early-GFN notification with an empty (version-only and not yet inc-ed) Smap and message
-	// carrying the new target's ID
-	aisMsg := p.newAmsgActVal(apc.ActStartGFN, nil)
-	aisMsg.UUID = ctx.nsi.ID()
-	revs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, aisMsg}
+	// early-GFN notification with an empty (version-only and not yet updated) Smap and
+	// message(new target's ID)
+	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
+	msg.UUID = ctx.nsi.ID()
+	revs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, msg}
 	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
-	ctx.gfn = true // mark in the context
+	ctx.gfn = true // to undo if need be
 	return nil
+}
+
+// calls t.cleanupMark
+func (p *proxy) cleanupMark(ctx *smapModifier) {
+	var (
+		val = cleanmark{OldVer: ctx.smap.version(), NewVer: ctx.nver,
+			Interrupted: ctx.interrupted, Restarted: ctx.restarted,
+		}
+		msg     = apc.ActMsg{Action: apc.ActCleanupMarkers, Value: &val}
+		cargs   = allocCargs()
+		timeout = cmn.Timeout.CplaneOperation()
+		sleep   = timeout >> 1
+	)
+	{
+		cargs.si = ctx.nsi
+		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
+		cargs.timeout = timeout
+	}
+	time.Sleep(sleep)
+	for i := 0; i < 4; i++ { // retry
+		res := p.call(cargs)
+		err := res.err
+		freeCR(res)
+		if err == nil {
+			break
+		}
+		if cos.IsRetriableConnErr(err) {
+			time.Sleep(sleep)
+			glog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
+			continue
+		}
+		glog.Error(err)
+		break
+	}
+	freeCargs(cargs)
 }
 
 func (p *proxy) _joinedPre(ctx *smapModifier, clone *smapX) error {

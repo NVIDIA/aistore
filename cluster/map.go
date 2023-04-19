@@ -522,6 +522,23 @@ func (m *Smap) ICCount() int {
 
 func (*Smap) DefaultICSize() int { return icGroupSize }
 
+// checking pub net only
+func (m *Smap) PubNet2Node(hostport string) *Snode {
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return nil
+	}
+	all := []NodeMap{m.Tmap, m.Pmap}
+	for _, mm := range all {
+		for _, si := range mm {
+			if si.PubNet.Hostname == host && si.PubNet.Port == port {
+				return si
+			}
+		}
+	}
+	return nil
+}
+
 /////////////
 // NodeMap //
 /////////////

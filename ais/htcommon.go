@@ -45,6 +45,70 @@ const (
 	fmtUnknownQue       = "unexpected query [what=%s]"
 )
 
+// intra-cluster JSON control
+type (
+	// cluster-wide control information - replicated, versioned, and synchronized
+	// usages: primary election, join-cluster
+	cluMeta struct {
+		Smap           *smapX         `json:"smap"`
+		BMD            *bucketMD      `json:"bmd"`
+		RMD            *rebMD         `json:"rmd"`
+		EtlMD          *etlMD         `json:"etlMD"`
+		Config         *globalConfig  `json:"config"`
+		SI             *cluster.Snode `json:"si"`
+		VoteInProgress bool           `json:"voting"`
+		// target only
+		RebInterrupted bool `json:"reb_interrupted"`
+		Restarted      bool `json:"restarted"`
+	}
+
+	// node <=> node cluster-info exchange
+	clusterInfo struct {
+		Smap struct {
+			Primary struct {
+				PubURL  string `json:"pub_url"`
+				CtrlURL string `json:"control_url"`
+				ID      string `json:"id"`
+			}
+			Version int64  `json:"version,string"`
+			UUID    string `json:"uuid"`
+		} `json:"smap"`
+		BMD struct {
+			UUID    string `json:"uuid"`
+			Version int64  `json:"version,string"`
+		} `json:"bmd"`
+		RMD struct {
+			Version int64 `json:"version,string"`
+		} `json:"rmd"`
+		Config struct {
+			Version int64 `json:"version,string"`
+		} `json:"config"`
+		EtlMD struct {
+			Version int64 `json:"version,string"`
+		} `json:"etlmd"`
+		Flags struct {
+			VoteInProgress bool `json:"vote_in_progress"`
+			ClusterStarted bool `json:"cluster_started"`
+			NodeStarted    bool `json:"node_started"`
+		} `json:"flags"`
+	}
+
+	// extend control msg: ActionMsg with an extra information for node <=> node control plane communications
+	aisMsg struct {
+		apc.ActMsg
+		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
+		BMDVersion int64  `json:"bmdversion,string"`
+		RMDVersion int64  `json:"rmdversion,string"`
+	}
+
+	cleanmark struct {
+		OldVer      int64 `json:"oldver,string"`
+		NewVer      int64 `json:"newver,string"`
+		Interrupted bool  `json:"interrupted"`
+		Restarted   bool  `json:"restarted"`
+	}
+)
+
 type (
 	byteRanges struct {
 		Range string // cos.HdrRange, see https://www.rfc-editor.org/rfc/rfc7233#section-2.1
@@ -109,20 +173,6 @@ type (
 		net netAccess        // handler network access
 	}
 
-	// cluster-wide control information - replicated, versioned, and synchronized
-	// usages: primary election, join-cluster
-	cluMeta struct {
-		Smap           *smapX         `json:"smap"`
-		BMD            *bucketMD      `json:"bmd"`
-		RMD            *rebMD         `json:"rmd"`
-		EtlMD          *etlMD         `json:"etlMD"`
-		Config         *globalConfig  `json:"config"`
-		SI             *cluster.Snode `json:"si"`
-		VoteInProgress bool           `json:"voting"`
-		// target only
-		RebInterrupted bool `json:"reb_interrupted"`
-		Restarted      bool `json:"restarted"`
-	}
 	nodeRegPool []cluMeta
 
 	// what data to omit when sending request/response (join-cluster, kalive)
@@ -136,36 +186,6 @@ type (
 		fillRebMarker bool
 	}
 
-	// node <=> node cluster-info exchange
-	clusterInfo struct {
-		Smap struct {
-			Primary struct {
-				PubURL  string `json:"pub_url"`
-				CtrlURL string `json:"control_url"`
-				ID      string `json:"id"`
-			}
-			Version int64  `json:"version,string"`
-			UUID    string `json:"uuid"`
-		} `json:"smap"`
-		BMD struct {
-			UUID    string `json:"uuid"`
-			Version int64  `json:"version,string"`
-		} `json:"bmd"`
-		RMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"rmd"`
-		Config struct {
-			Version int64 `json:"version,string"`
-		} `json:"config"`
-		EtlMD struct {
-			Version int64 `json:"version,string"`
-		} `json:"etlmd"`
-		Flags struct {
-			VoteInProgress bool `json:"vote_in_progress"`
-			ClusterStarted bool `json:"cluster_started"`
-			NodeStarted    bool `json:"node_started"`
-		} `json:"flags"`
-	}
 	getMaxCii struct {
 		h          *htrun
 		maxCii     *clusterInfo
@@ -175,14 +195,6 @@ type (
 		mu         sync.Mutex
 		cnt        int
 		checkAll   bool
-	}
-
-	// aisMsg is an extended ActionMsg with extra information for node <=> node control plane communications
-	aisMsg struct {
-		apc.ActMsg
-		UUID       string `json:"uuid"` // cluster-wide ID of this action (operation, transaction)
-		BMDVersion int64  `json:"bmdversion,string"`
-		RMDVersion int64  `json:"rmdversion,string"`
 	}
 
 	httpMuxers map[string]*mux.ServeMux // by http.Method

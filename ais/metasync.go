@@ -654,8 +654,7 @@ func (y *metasyncer) addnew(revs revs) {
 		if sgl == revs.sgl() {
 			return
 		}
-		// free duplicate (created previously via "slow path")
-		debug.Assert(sgl.Len() == revs.sgl().Len(), revs.String())
+		// free the duplicate (created previously via "slow path")
 		sgl.Free()
 	}
 	vgl[revs.version()] = revs.sgl()

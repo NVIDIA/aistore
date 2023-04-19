@@ -207,7 +207,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 
 	// At this point, only one rebalance is running
 
-	activateGFN()
+	onGFN()
 
 	errCnt := 0
 	err := reb.run(rargs)
@@ -227,7 +227,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 
 	reb.fini(rargs, logHdr, err)
 
-	deactivateGFN()
+	offGFN()
 }
 
 // To optimize goroutine creation:
