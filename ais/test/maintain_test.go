@@ -464,10 +464,21 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	// 1. Shutdown a random node.
-	pid, cmd, err := tools.ShutdownNode(t, baseParams, node)
+	pid, cmd, rebID, err := tools.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
-	if nodeType == apc.Target {
-		tools.WaitForRebalAndResil(t, baseParams)
+	if nodeType == apc.Target && origTargetCount > 1 {
+		time.Sleep(time.Second)
+		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+		for i := 0; i < 3; i++ {
+			status, err := api.WaitForXactionIC(baseParams, xargs)
+			if err == nil {
+				tlog.Logf("%v\n", status)
+				break
+			}
+			herr := cmn.Err2HTTPErr(err)
+			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
+			time.Sleep(time.Second)
+		}
 	}
 
 	// 2. Make sure the node has been shut down.
@@ -536,25 +547,24 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// 2. Shut down a random target.
 	tsi, _ := m.smap.GetRandTarget()
-	pid, cmd, err := tools.ShutdownNode(t, baseParams, tsi)
+	pid, cmd, rebID, err := tools.ShutdownNode(t, baseParams, tsi)
 	tassert.CheckFatal(t, err)
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
 		err = tools.RestoreNode(cmd, false, apc.Target)
 		tassert.CheckError(t, err)
-		_, err = tools.WaitForClusterState(proxyURL, "target is back",
-			m.smap.Version, 0, origTargetCount-1)
 
-		if err != nil {
-			tlog.Logf("%v\n", err)
-		}
+		// first, activate target, second, wait-for-cluster-state
+		time.Sleep(time.Second)
 
-		// Remove the node from maintenance.
 		_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+		if err != nil {
+			time.Sleep(3 * time.Second)
+			_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: tsi.ID()})
+		}
 		tassert.CheckError(t, err)
-		_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance",
-			m.smap.Version, 0, origTargetCount)
+		_, err = tools.WaitForClusterState(proxyURL, "remove node from maintenance", m.smap.Version, 0, origTargetCount)
 		tassert.CheckError(t, err)
 
 		tools.WaitForRebalAndResil(t, baseParams)
@@ -562,14 +572,14 @@ func TestShutdownListObjects(t *testing.T) {
 
 	if origTargetCount > 1 {
 		time.Sleep(time.Second)
-		for i := 0; i < 10; i++ {
-			status, err := api.WaitForXactionIC(baseParams, xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout})
+		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+		for i := 0; i < 3; i++ {
+			status, err := api.WaitForXactionIC(baseParams, xargs)
 			if err == nil {
 				tlog.Logf("%v\n", status)
 				break
 			}
 			herr := cmn.Err2HTTPErr(err)
-			tassert.Fatalf(t, herr != nil, "herr is nil")
 			tassert.Errorf(t, herr.Status == http.StatusNotFound, "expecting not found, got %+v", herr)
 			time.Sleep(time.Second)
 		}

@@ -157,7 +157,8 @@ func demd(allmpi []MPI) (rerr error) {
 func deworld(allmpi []MPI) (rerr error) {
 	for _, mpi := range allmpi {
 		for _, mi := range mpi {
-			if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) {
+			if err := os.RemoveAll(mi.Path); err != nil {
+				debug.Assert(!os.IsNotExist(err))
 				// retry ENOTEMPTY in place
 				if errors.Is(err, syscall.ENOTEMPTY) {
 					time.Sleep(desleep)
@@ -177,12 +178,10 @@ func deworld(allmpi []MPI) (rerr error) {
 func RemoveAll(dir string) (err error) {
 	for i := 0; i < deretries; i++ {
 		err = os.RemoveAll(dir)
-		if os.IsNotExist(err) {
-			err = nil
-		}
 		if err == nil {
 			break
 		}
+		debug.Assert(!os.IsNotExist(err), err)
 		glog.ErrorDepth(1, err)
 		if !errors.Is(err, syscall.ENOTEMPTY) {
 			break

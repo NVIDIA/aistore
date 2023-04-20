@@ -358,7 +358,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	return
 }
 
-func ShutdownNode(_ *testing.T, bp api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, err error) {
+func ShutdownNode(_ *testing.T, bp api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -381,7 +381,7 @@ func ShutdownNode(_ *testing.T, bp api.BaseParams, node *cluster.Snode) (pid int
 	}
 
 	actValue := &apc.ActValRmNode{DaemonID: daemonID}
-	_, err = api.ShutdownNode(bp, actValue)
+	rebID, err = api.ShutdownNode(bp, actValue)
 	return
 }
 
