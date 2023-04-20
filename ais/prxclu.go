@@ -650,7 +650,7 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 		interrupted: regReq.RebInterrupted,
 		restarted:   regReq.Restarted,
 	}
-	if err = p._earlyGFN(ctx); err != nil {
+	if err = p._earlyGFN(ctx, ctx.nsi); err != nil {
 		return
 	}
 	if err = p.owner.smap.modify(ctx); err != nil {
@@ -676,12 +676,12 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 	return
 }
 
-func (p *proxy) _earlyGFN(ctx *smapModifier) error {
+func (p *proxy) _earlyGFN(ctx *smapModifier, si *cluster.Snode /*being added or removed*/) error {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot add %s", ctx.nsi))
+		return newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot add %s", si))
 	}
-	if ctx.nsi.IsProxy() {
+	if si.IsProxy() {
 		return nil
 	}
 	if err := p.canRebalance(); err != nil {
@@ -694,7 +694,7 @@ func (p *proxy) _earlyGFN(ctx *smapModifier) error {
 	// early-GFN notification with an empty (version-only and not yet updated) Smap and
 	// message(new target's ID)
 	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
-	msg.UUID = ctx.nsi.ID()
+	msg.UUID = si.ID()
 	revs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, msg}
 	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
@@ -1231,7 +1231,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	// proxy
 	if si.IsProxy() {
-		if err := p.markMaintenance(msg, si); err != nil {
+		_, gfn, err := p.mcastMaintenance(msg, si)
+		debug.Assert(!gfn)
+		if err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
@@ -1451,7 +1453,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	return true, nil
 }
 
-// Callback: remove the node from the cluster if rebalance finished successfully
+// Callback: remove the node from the cluster if rebalance finishes successfully
 func (p *proxy) removeAfterRebalance(nl nl.Listener, msg *apc.ActMsg, si *cluster.Snode) {
 	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
 		var s string
@@ -1469,14 +1471,13 @@ func (p *proxy) removeAfterRebalance(nl nl.Listener, msg *apc.ActMsg, si *cluste
 	}
 }
 
-// Run rebalance if needed; remove self from the cluster when rebalance finishes
-// the method handles msg.Action == apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
-func (p *proxy) rebalanceAndRmSelf(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
+// handles all three: apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
+func (p *proxy) rebalanceRm(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
 	var (
 		cb   nl.Callback
 		smap = p.owner.smap.get()
 	)
-	if cnt := smap.CountActiveTs(); cnt < 2 {
+	if cnt := smap.CountTargets(); cnt < 2 {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
 		}

@@ -825,14 +825,17 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 	return strings.Join(all, xact.UUIDSepa), nil
 }
 
-// maintenance: { begin -- enable GFN -- commit -- start rebalance }
+// put target in maintenance mode
 func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	var (
+		nver       int64
+		earlyGFN   bool
 		waitmsync  = false
 		c          = p.prepTxnClient(msg, nil, waitmsync)
 		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
 	)
-	if si.IsTarget() && !opts.SkipRebalance && rebEnabled {
+	debug.Assert(si.IsTarget(), si.StringEx())
+	if !opts.SkipRebalance && rebEnabled {
 		if err = p.canRebalance(); err != nil {
 			return
 		}
@@ -842,14 +845,14 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		return
 	}
 
-	// 2. Put node under maintenance
-	if err = p.markMaintenance(msg, si); err != nil {
+	// 2. metasync with the target flagged for maint
+	nver, earlyGFN, err = p.mcastMaintenance(msg, si)
+	if err != nil {
 		c.bcastAbort(si, err)
 		return
 	}
 
-	// 3. Commit
-	// NOTE: Call only the target that's being decommissioned (commit is a no-op for the rest)
+	// 3. Commit (NOTE: calling only the target that's being decommissioned or shut down)
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
 		c.req.Path = cos.JoinWords(c.path, apc.ActCommit)
 		cargs := allocCargs()
@@ -864,21 +867,30 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		freeCR(res)
 		if err != nil {
 			glog.Error(err)
+			// TODO -- FIXME: rollback - undo mcastMaintenance
 			return
 		}
 	}
 
 	// 4. Start rebalance
 	if !opts.SkipRebalance && rebEnabled {
-		return p.rebalanceAndRmSelf(msg, si)
+		rebID, err = p.rebalanceRm(msg, si)
 	} else if msg.Action == apc.ActDecommissionNode {
 		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
+	}
+
+	// 5. w/ no rebalance "stop-gfn" timed
+	if rebID == "" && earlyGFN {
+		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
+		aisMsg.UUID = si.ID()
+		revs := revsPair{&smapX{Smap: cluster.Smap{Version: nver}}, aisMsg}
+		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return
 }
 
-// Put node under maintenance
-func (p *proxy) markMaintenance(msg *apc.ActMsg, si *cluster.Snode) error {
+// NOTE: with no RMD (- done separately)
+func (p *proxy) mcastMaintenance(msg *apc.ActMsg, si *cluster.Snode) (nver int64, earlyGFN bool, err error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
@@ -886,10 +898,9 @@ func (p *proxy) markMaintenance(msg *apc.ActMsg, si *cluster.Snode) error {
 	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		flags = cluster.NodeFlagMaint
 	default:
-		err := fmt.Errorf(fmtErrInvaldAction, msg.Action,
+		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
-		debug.AssertNoErr(err)
-		return err
+		return
 	}
 	ctx := &smapModifier{
 		pre:   p._markMaint,
@@ -898,7 +909,15 @@ func (p *proxy) markMaintenance(msg *apc.ActMsg, si *cluster.Snode) error {
 		flags: flags,
 		msg:   msg,
 	}
-	return p.owner.smap.modify(ctx)
+	if err = p._earlyGFN(ctx, si); err != nil {
+		return
+	}
+	if err = p.owner.smap.modify(ctx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	nver, earlyGFN = ctx.nver, ctx.gfn
+	return
 }
 
 func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {

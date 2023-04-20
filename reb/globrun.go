@@ -187,7 +187,8 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 		return
 	}
 	reb.regRecv()
-	haveStreams := smap.CountActiveTs() > 1
+	// TODO -- FIXME: must be (active + rebalancing-out)
+	haveStreams := smap.CountTargets() > 1
 	if !reb.initRenew(rargs, notif, logHdr, haveStreams) {
 		reb.unregRecv()
 		reb.semaCh.Release()
