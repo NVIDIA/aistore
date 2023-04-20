@@ -231,7 +231,7 @@ func RemoveMpaths(t *testing.T, mpaths fs.MPI) {
 		removedMP, err := fs.Remove(mpath.Path)
 		tassert.CheckError(t, err)
 		tassert.Errorf(t, removedMP != nil, "expected remove to be successful")
-		tassert.CheckError(t, os.RemoveAll(mpath.Path))
+		tassert.CheckError(t, fs.RemoveAll(mpath.Path))
 	}
 }
 
@@ -239,7 +239,7 @@ func AddMpath(t *testing.T, path string) {
 	err := cos.CreateDir(path) // Create directory if not exists
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() {
-		os.RemoveAll(path)
+		fs.RemoveAll(path)
 	})
 	_, err = fs.Add(path, "daeID")
 	tassert.Errorf(t, err == nil, "Failed adding mountpath %q, err: %v", path, err)

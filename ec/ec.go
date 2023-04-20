@@ -222,8 +222,9 @@ func (s *slice) free() {
 		}
 	}
 	if s.workFQN != "" {
-		errRm := os.RemoveAll(s.workFQN)
-		debug.AssertNoErr(errRm)
+		if err := os.Remove(s.workFQN); err != nil && !os.IsNotExist(err) {
+			glog.Error(err)
+		}
 	}
 }
 

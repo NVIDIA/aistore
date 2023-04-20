@@ -5,7 +5,6 @@
 package fs
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -226,7 +225,7 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 func (mi *Mountpath) ClearMDs() (rerr error) {
 	for _, mdPath := range mdFilesDirs {
 		fpath := filepath.Join(mi.Path, mdPath)
-		if err := os.RemoveAll(fpath); err != nil && !os.IsNotExist(err) {
+		if err := RemoveAll(fpath); err != nil {
 			glog.Error(err)
 			rerr = err
 		}
@@ -549,67 +548,6 @@ func TestNew(iostater ios.IOS) {
 		mfs.ios = iostater
 	}
 	PutMPI(make(MPI, num), make(MPI, num))
-}
-
-const desleep = 256 * time.Millisecond
-
-func Decommission(mdOnly bool) {
-	var (
-		avail, disabled = Get()
-		allmpi          = []MPI{avail, disabled}
-	)
-	for i := 0; i < 3; i++ { // retry
-		if mdOnly {
-			if err := _deMD(allmpi); err == nil {
-				return
-			}
-		} else {
-			if err := _deWorld(allmpi); err == nil {
-				return
-			}
-		}
-		if i < 2 {
-			glog.Errorln("decommission: retrying cleanup...")
-			time.Sleep(desleep)
-		}
-	}
-}
-
-func _deMD(allmpi []MPI) (rerr error) {
-	for _, mpi := range allmpi {
-		for _, mi := range mpi {
-			// BMD et al.
-			if err := mi.ClearMDs(); err != nil {
-				rerr = err
-			}
-			// node ID (SID)
-			if err := removeXattr(mi.Path, nodeXattrID); err != nil {
-				debug.AssertNoErr(err)
-				rerr = err
-			}
-		}
-	}
-	return
-}
-
-// the entire content including user data, MDs, and daemon ID
-func _deWorld(allmpi []MPI) (rerr error) {
-	for _, mpi := range allmpi {
-		for _, mi := range mpi {
-			if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) {
-				// "directory not empty" race vs. PUT - retry in place
-				if errors.Is(err, syscall.ENOTEMPTY) {
-					time.Sleep(desleep)
-					err = os.RemoveAll(mi.Path)
-				}
-				if err != nil {
-					glog.Error(err)
-					rerr = err
-				}
-			}
-		}
-	}
-	return
 }
 
 // `ios` delegations
@@ -1019,10 +957,12 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
 	for _, mi := range availablePaths {
 		fromPath := mi.makeDelPathBck(bckFrom, bidFrom)
 		toPath := mi.MakePathBck(bckTo)
-		// os.Rename fails when renaming to a directory which already exists.
-		// We should remove destination bucket directory before rename. It's reasonable to do so
-		// as all targets agreed to rename and rename was committed in BMD.
-		os.RemoveAll(toPath)
+
+		// remove destination bucket directory before renaming
+		// (the operation will fail otherwise)
+		errRm := RemoveAll(toPath)
+		debug.AssertNoErr(errRm)
+
 		if err = os.Rename(fromPath, toPath); err != nil {
 			break
 		}
@@ -1049,7 +989,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 	)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			glog.Errorf("Failed to read markers directory %q: %v", fromPath, err)
+			glog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
 		}
 		return
 	}

@@ -1,14 +1,17 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -18,7 +21,11 @@ import (
 
 // TODO: undelete (feature)
 
-const deletedRoot = ".$deleted"
+const (
+	deletedRoot = ".$deleted"
+	desleep     = 256 * time.Millisecond
+	deretries   = 3
+)
 
 func (mi *Mountpath) DeletedRoot() string {
 	return filepath.Join(mi.Path, deletedRoot)
@@ -93,12 +100,96 @@ func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 	}
 rm:
 	// not placing in 'deleted' - removing right away
-	errRm := os.RemoveAll(dir)
-	if errRm != nil && !os.IsNotExist(errRm) && err == nil {
+	errRm := RemoveAll(dir)
+	if err == nil {
 		err = errRm
 	}
 	if cs.OOS {
 		glog.Errorf("%s %s: OOS (%v)", mi, cs.String(), err)
 	}
 	return err
+}
+
+//
+// decommission
+//
+
+func Decommission(mdOnly bool) {
+	var (
+		avail, disabled = Get()
+		allmpi          = []MPI{avail, disabled}
+	)
+	for i := 0; i < deretries; i++ { // retry
+		if mdOnly {
+			if err := demd(allmpi); err == nil {
+				return
+			}
+		} else {
+			if err := deworld(allmpi); err == nil {
+				return
+			}
+		}
+		if i < deretries-1 {
+			glog.Errorln("decommission: retrying cleanup...")
+			time.Sleep(desleep)
+		}
+	}
+}
+
+func demd(allmpi []MPI) (rerr error) {
+	for _, mpi := range allmpi {
+		for _, mi := range mpi {
+			// BMD et al.
+			if err := mi.ClearMDs(); err != nil {
+				rerr = err
+			}
+			// node ID (SID)
+			if err := removeXattr(mi.Path, nodeXattrID); err != nil {
+				debug.AssertNoErr(err)
+				rerr = err
+			}
+		}
+	}
+	return
+}
+
+// the entire content including user data, MDs, and daemon ID
+func deworld(allmpi []MPI) (rerr error) {
+	for _, mpi := range allmpi {
+		for _, mi := range mpi {
+			if err := os.RemoveAll(mi.Path); err != nil && !os.IsNotExist(err) {
+				// retry ENOTEMPTY in place
+				if errors.Is(err, syscall.ENOTEMPTY) {
+					time.Sleep(desleep)
+					err = os.RemoveAll(mi.Path)
+				}
+				if err != nil {
+					glog.Error(err)
+					rerr = err
+				}
+			}
+		}
+	}
+	return
+}
+
+// retrying ENOTEMPTY - "directory not empty" race vs. new writes
+func RemoveAll(dir string) (err error) {
+	for i := 0; i < deretries; i++ {
+		err = os.RemoveAll(dir)
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		if err == nil {
+			break
+		}
+		glog.ErrorDepth(1, err)
+		if !errors.Is(err, syscall.ENOTEMPTY) {
+			break
+		}
+		if i < deretries-1 {
+			time.Sleep(desleep)
+		}
+	}
+	return
 }

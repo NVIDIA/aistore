@@ -130,7 +130,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.RemoveAll(fqnMeta); err != nil {
+		if err := os.RemoveAll(fqnMeta); err != nil { // TODO: use os.Rename() and check IsNotExist
 			return fmt.Errorf("error removing %s %q: %w", tp, fqnMeta, err)
 		}
 	}

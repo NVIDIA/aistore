@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/filetype"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
 )
@@ -363,7 +364,7 @@ func (rm *RecordManager) ExtractionPaths() *sync.Map {
 func (rm *RecordManager) Cleanup() {
 	rm.Records.Drain()
 	rm.extractionPaths.Range(func(k, v any) bool {
-		if err := os.RemoveAll(k.(string)); err != nil {
+		if err := fs.RemoveAll(k.(string)); err != nil {
 			glog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
 		}
 		rm.extractionPaths.Delete(k)
