@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	notif "github.com/NVIDIA/aistore/nl"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -589,14 +589,8 @@ func (p *proxy) tcb(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg, dryRun bool) (
 	nl.SetOwner(equalIC)
 	// cleanup upon failure via notification listener callback
 	// (note synchronous cleanup below)
-	nl.F = func(nl notif.Listener) {
-		if errNl := nl.Err(); errNl != nil {
-			if !existsTo { // undo metasync above
-				glog.Error(errNl)
-				_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
-			}
-		}
-	}
+	r := &_rmbck{p, bckTo, existsTo}
+	nl.F = r.cb
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
 	// 5. commit
@@ -829,10 +823,9 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	var (
 		nver       int64
-		earlyGFN   bool
-		waitmsync  = false
-		c          = p.prepTxnClient(msg, nil, waitmsync)
 		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
+		earlyGFN   bool
+		waitmsync  bool // not waiting
 	)
 	debug.Assert(si.IsTarget(), si.StringEx())
 	if !opts.SkipRebalance && rebEnabled {
@@ -841,6 +834,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		}
 	}
 	// 1. begin
+	c := p.prepTxnClient(msg, nil, waitmsync)
 	if err = c.begin(si); err != nil {
 		return
 	}
@@ -852,7 +846,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		return
 	}
 
-	// 3. Commit (NOTE: calling only the target that's being decommissioned or shut down)
+	// 3. commit (NOTE: calling only the target that's being decommissioned or shut down)
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
 		c.req.Path = cos.JoinWords(c.path, apc.ActCommit)
 		cargs := allocCargs()
@@ -872,20 +866,53 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		}
 	}
 
-	// 4. Start rebalance
+	// 4. rebalance
 	if !opts.SkipRebalance && rebEnabled {
-		rebID, err = p.rebalanceRm(msg, si)
+		rebID, err = p._startRebRm(msg, si)
 	} else if msg.Action == apc.ActDecommissionNode {
 		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
 	}
 
-	// 5. w/ no rebalance "stop-gfn" timed
+	// 5. w/ no rebalance: "stop-gfn" timed
 	if rebID == "" && earlyGFN {
 		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
 		aisMsg.UUID = si.ID()
 		revs := revsPair{&smapX{Smap: cluster.Smap{Version: nver}}, aisMsg}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
+	return
+}
+
+// handles all three: apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
+func (p *proxy) _startRebRm(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
+	smap := p.owner.smap.get()
+	if cnt := smap.CountTargets(); cnt < 2 {
+		if glog.FastV(4, glog.SmoduleAIS) {
+			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
+		}
+		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%q %s and start rebalance", msg.Action, si)
+	}
+	rmdCtx := &rmdModifier{
+		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
+		final: p._syncRMD,
+		msg:   msg,
+		rebCB: nil,
+		wait:  true,
+	}
+	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
+		r := &_rmpostreb{p, msg, si}
+		rmdCtx.rebCB = r.cb
+	}
+
+	if _, err = p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	rebID = rmdCtx.rebID
 	return
 }
 
@@ -1215,4 +1242,55 @@ func (p *proxy) initBackendProp(nprops *cmn.BucketProps) (err error) {
 	// NOTE: backend versioning override
 	nprops.Versioning.Enabled = backend.Props.Versioning.Enabled
 	return
+}
+
+////////////
+// _rmbck //
+////////////
+
+type _rmbck struct {
+	p       *proxy
+	bck     *cluster.Bck
+	existed bool
+}
+
+// TODO: revisit other cleanup
+func (r *_rmbck) cb(nl nl.Listener) {
+	err := nl.Err()
+	if err == nil {
+		return
+	}
+	glog.Error(err)
+	if r.existed {
+		return
+	}
+	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
+}
+
+////////////////
+// _rmpostreb //
+////////////////
+
+type _rmpostreb struct {
+	p   *proxy
+	msg *apc.ActMsg
+	si  *cluster.Snode
+}
+
+// callback: remove the node from the cluster if/when rebalance finishes successfully
+func (r *_rmpostreb) cb(nl nl.Listener) {
+	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
+		var s string
+		if abrt {
+			s = " aborted,"
+		}
+		glog.Errorf("x-rebalance[%s]%s err: %v", nl.UUID(), s, err)
+		return
+	}
+	if glog.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), r.si)
+	}
+	if _, err := r.p.callRmSelf(r.msg, r.si, true /*skipReb*/); err != nil {
+		glog.Errorf("Failed to remove node (%s) after rebalance: %v", r.si, err)
+	}
 }

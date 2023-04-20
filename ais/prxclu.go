@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -1451,58 +1450,6 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	config.Backend.Set(apc.AIS, aisConf)
 
 	return true, nil
-}
-
-// Callback: remove the node from the cluster if rebalance finishes successfully
-func (p *proxy) removeAfterRebalance(nl nl.Listener, msg *apc.ActMsg, si *cluster.Snode) {
-	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
-		var s string
-		if abrt {
-			s = " aborted,"
-		}
-		glog.Errorf("x-rebalance[%s]%s err: %v", nl.UUID(), s, err)
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), si)
-	}
-	if _, err := p.callRmSelf(msg, si, true /*skipReb*/); err != nil {
-		glog.Errorf("Failed to remove node (%s) after rebalance, err: %v", si, err)
-	}
-}
-
-// handles all three: apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
-func (p *proxy) rebalanceRm(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
-	var (
-		cb   nl.Callback
-		smap = p.owner.smap.get()
-	)
-	if cnt := smap.CountTargets(); cnt < 2 {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
-		}
-		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%q %s and start rebalance", msg.Action, si)
-	}
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-		cb = func(nl nl.Listener) { p.removeAfterRebalance(nl, msg, si) }
-	}
-	rmdCtx := &rmdModifier{
-		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
-		final: p._syncRMD,
-		msg:   msg,
-		rebCB: cb,
-		wait:  true,
-	}
-	if _, err = p.owner.rmd.modify(rmdCtx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	rebID = rmdCtx.rebID
-	return
 }
 
 // Stop rebalance, cleanup, and get the node back to the cluster.
