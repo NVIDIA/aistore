@@ -827,15 +827,13 @@ func (e *ErrHTTP) _string() (s string) {
 	return s + " (" + string(e.trace) + ")"
 }
 
-func (e *ErrHTTP) _jsonError() []byte {
-	// Stop from escaping `<`, `>` and `&`.
-	buf := new(bytes.Buffer)
+func (e *ErrHTTP) _jsonError(buf *bytes.Buffer) {
 	enc := jsoniter.NewEncoder(buf)
-	enc.SetEscapeHTML(false)
+	enc.SetEscapeHTML(false) // stop from escaping `<`, `>` and `&`.
 	if err := enc.Encode(e); err != nil {
-		return []byte(err.Error())
+		buf.Reset()
+		buf.WriteString(err.Error())
 	}
-	return buf.Bytes()
 }
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
@@ -856,13 +854,17 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	hdr := w.Header()
 	hdr.Set(cos.HdrContentType, cos.ContentJSON)
 	hdr.Set(cos.HdrContentTypeOptions, "nosniff")
+
+	berr := NewBuffer()
+	e._jsonError(berr)
 	if r.Method == http.MethodHead {
-		hdr.Set(apc.HdrError, string(e._jsonError()))
+		hdr.Set(apc.HdrError, berr.String())
 		w.WriteHeader(e.Status)
 	} else {
 		w.WriteHeader(e.Status)
-		w.Write(e._jsonError()) // no newline
+		w.Write(berr.Bytes()) // no newline
 	}
+	FreeBuffer(berr)
 }
 
 func (e *ErrHTTP) _trace() {
@@ -1017,13 +1019,18 @@ func WriteErr405(w http.ResponseWriter, r *http.Request, methods ...string) {
 	}
 }
 
-/////////////
-// errPool //
-/////////////
+//
+// 1) ErrHTTP struct pool
+// 2) bytes.Buffer pool
+//
+
+const maxBuffer = 4 * cos.KiB
 
 var (
 	errPool sync.Pool
-	err0    ErrHTTP
+	bufPool sync.Pool
+
+	err0 ErrHTTP
 )
 
 func allocHterr() (a *ErrHTTP) {
@@ -1041,4 +1048,21 @@ func FreeHterr(a *ErrHTTP) {
 		a.trace = trace[:0]
 	}
 	errPool.Put(a)
+}
+
+func NewBuffer() (buf *bytes.Buffer) {
+	if v := bufPool.Get(); v != nil {
+		buf = v.(*bytes.Buffer)
+	} else {
+		buf = bytes.NewBuffer(nil)
+	}
+	return
+}
+
+func FreeBuffer(buf *bytes.Buffer) {
+	if buf.Cap() > maxBuffer {
+		return
+	}
+	buf.Reset()
+	bufPool.Put(buf)
 }

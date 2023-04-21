@@ -662,9 +662,10 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 			msg := resp.Header.Get(apc.HdrError)
 			res.err = cmn.S2HTTPErr(req, msg, res.status)
 		} else {
-			var b bytes.Buffer
+			b := cmn.NewBuffer()
 			b.ReadFrom(resp.Body)
 			res.err = cmn.S2HTTPErr(req, b.String(), res.status)
+			cmn.FreeBuffer(b)
 		}
 		res.details = res.err.Error()
 		return
