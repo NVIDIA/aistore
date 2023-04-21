@@ -772,6 +772,9 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 		return
 	}
 	ctx.rmdCtx = rmdCtx // smap modifier to reference the rmd one directly
+
+	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
+	debug.AssertNoErr(err)
 }
 
 func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
@@ -825,12 +828,15 @@ func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
 	if !mustRebalance(ctx, clone) {
 		return
 	}
-	rmdCtx := &rmdModifier{pre: func(_ *rmdModifier, clone *rebMD) { clone.inc() }}
+	rmdCtx := &rmdModifier{pre: rmdInc}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
 		return
 	}
 	ctx.rmdCtx = rmdCtx
+
+	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
+	debug.AssertNoErr(err)
 }
 
 // NOTE: when the change involves target node always wait for metasync to distribute updated Smap
@@ -1111,7 +1117,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rmdCtx := &rmdModifier{
-		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
+		pre:   rmdInc,
 		final: p._syncRMD,
 		msg:   &apc.ActMsg{Action: apc.ActRebalance},
 	}
@@ -1489,18 +1495,11 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 }
 
 func (p *proxy) _syncRMD(ctx *rmdModifier, clone *rebMD) {
-	debug.Assert(clone.version() == ctx.cur.version() && clone.version() > ctx.prev.version())
 	var (
 		smap = p.owner.smap.get()
 		wg   = p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil, ctx.rebID)})
-		nl   = xact.NewXactNL(ctx.rebID, apc.ActRebalance, &smap.Smap, nil)
 	)
-	nl.SetOwner(equalIC)
-	if ctx.rebCB != nil {
-		nl.F = ctx.rebCB
-	}
-	// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
-	err := p.notifs.add(nl)
+	err := p.notifs.add(ctx.newNL(smap /*notifiers*/))
 	debug.AssertNoErr(err)
 	if ctx.wait {
 		wg.Wait()

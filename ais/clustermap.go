@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/nl"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -90,19 +89,6 @@ type (
 		restarted   bool           // target reports cold restart (powercycle)
 		skipReb     bool           // skip rebalance when target added/removed
 		gfn         bool           // sent start-gfn notification
-	}
-
-	rmdModifier struct {
-		pre   func(ctx *rmdModifier, clone *rebMD)
-		final func(ctx *rmdModifier, clone *rebMD)
-
-		prev  *rebMD // pre-modification rmd
-		cur   *rebMD // the cloned and modified `prev`
-		rebID string // cluster-wide UUID
-
-		msg   *apc.ActMsg
-		rebCB func(nl nl.Listener)
-		wait  bool
 	}
 )
 

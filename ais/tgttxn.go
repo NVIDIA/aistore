@@ -159,9 +159,9 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//////////////////
-// createBucket //
-//////////////////
+//
+// createBucket
+//
 
 func (t *target) createBucket(c *txnServerCtx) error {
 	switch c.phase {
@@ -202,9 +202,9 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 	return
 }
 
-/////////////////
-// makeNCopies //
-/////////////////
+//
+// makeNCopies
+//
 
 func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -283,9 +283,9 @@ func (t *target) validateMakeNCopies(bck *cluster.Bck, msg *aisMsg) (curCopies, 
 	return
 }
 
-////////////////////
-// setBucketProps //
-////////////////////
+//
+// setBucketProps
+//
 
 func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -387,9 +387,9 @@ func (t *target) validateNprops(bck *cluster.Bck, msg *aisMsg) (nprops *cmn.Buck
 	return
 }
 
-//////////////////
-// renameBucket //
-//////////////////
+//
+// renameBucket
+//
 
 func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -690,9 +690,9 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 	return xid, nil
 }
 
-//////////////
-// ecEncode //
-//////////////
+//
+// ecEncode
+//
 
 func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -748,9 +748,9 @@ func (t *target) validateECEncode(bck *cluster.Bck, msg *aisMsg) error {
 	return xreg.LimitedCoexistence(t.si, bck, msg.Action)
 }
 
-////////////////////////
-// createArchMultiObj //
-////////////////////////
+//
+// createArchMultiObj
+//
 
 func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xid string
@@ -828,45 +828,24 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 	return xid, nil
 }
 
-//////////////////////
-// startMaintenance //
-//////////////////////
+//
+// startMaintenance
+//
 
 func (t *target) startMaintenance(c *txnServerCtx) error {
-	switch c.phase {
-	case apc.ActBegin:
-		var opts apc.ActValRmNode
-		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
-		}
-		if err := xreg.LimitedCoexistence(t.si, nil, c.msg.Action); err != nil {
-			return err
-		}
-		reb.OnTimedGFN()
-	case apc.ActAbort:
-		// letting gfn-timed to self-expire in a serialized way
-		glog.Warningf("%s: aborting %q", t, c.msg.Action)
-	case apc.ActCommit:
-		var opts apc.ActValRmNode
-		if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
-			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
-		}
-		if c.msg.Action == apc.ActDecommissionNode {
-			if opts.DaemonID != t.SID() {
-				err := fmt.Errorf("%s: invalid target ID %q", t, opts.DaemonID)
-				debug.AssertNoErr(err)
-				return err
-			}
-		}
-	default:
-		debug.Assert(false)
+	var opts apc.ActValRmNode
+	if c.phase != apc.ActBegin {
+		return fmt.Errorf("%s: expecting begin phase, got %q", t, c.phase)
 	}
-	return nil
+	if err := cos.MorphMarshal(c.msg.Value, &opts); err != nil {
+		return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
+	}
+	return xreg.LimitedCoexistence(t.si, nil, c.msg.Action)
 }
 
-//////////////////////////////////////////////
-// destroy local bucket / evict cloud buket //
-//////////////////////////////////////////////
+//
+// destroy local bucket / evict cloud buket
+//
 
 func (t *target) destroyBucket(c *txnServerCtx) error {
 	switch c.phase {
@@ -1049,9 +1028,9 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 	return nil
 }
 
-//////////
-// misc //
-//////////
+//
+// misc
+//
 
 func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase string) (*txnServerCtx, error) {
 	var (

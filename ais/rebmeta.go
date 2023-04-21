@@ -12,13 +12,16 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -48,6 +51,19 @@ type (
 		// global local atomic state
 		interrupted atomic.Bool // when joining target reports interrupted rebalance
 		starting    atomic.Bool // when starting up
+	}
+
+	rmdModifier struct {
+		pre   func(ctx *rmdModifier, clone *rebMD)
+		final func(ctx *rmdModifier, clone *rebMD)
+
+		prev  *rebMD // pre-modification rmd
+		cur   *rebMD // the cloned and modified `prev`
+		rebID string // cluster-wide UUID
+
+		msg   *apc.ActMsg
+		rebCB func(nl nl.Listener)
+		wait  bool
 	}
 )
 
@@ -130,4 +146,37 @@ func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 		ctx.final(ctx, clone)
 	}
 	return
+}
+
+/////////////////
+// rmdModifier //
+/////////////////
+
+func rmdInc(_ *rmdModifier, clone *rebMD) { clone.inc() }
+
+func (m *rmdModifier) newNL(smap *smapX) nl.Listener {
+	nl := xact.NewXactNL(m.rebID, apc.ActRebalance, &smap.Smap, nil)
+	nl.SetOwner(equalIC)
+	nl.F = m.rebCB
+	if nl.F == nil {
+		nl.F = m.log
+	}
+	return nl
+}
+
+// default
+func (m *rmdModifier) log(nl nl.Listener) {
+	debug.Assertf(nl.UUID() == m.rebID, "%s vs %s", nl.UUID(), m.rebID)
+	var (
+		s         string
+		err, abrt = nl.Err(), nl.Aborted()
+	)
+	if err == nil && !abrt {
+		glog.Infof("x-rebalance[%s] done", nl.UUID())
+		return
+	}
+	if abrt {
+		s = " aborted"
+	}
+	glog.Errorf("x-rebalance[%s]%s: %v", nl.UUID(), s, err)
 }

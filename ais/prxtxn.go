@@ -846,25 +846,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.A
 		return
 	}
 
-	// 3. commit (NOTE: calling only the target that's being decommissioned or shut down)
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-		c.req.Path = cos.JoinWords(c.path, apc.ActCommit)
-		cargs := allocCargs()
-		{
-			cargs.si = si
-			cargs.req = c.req
-			cargs.timeout = c.cmtTout(waitmsync)
-		}
-		res := p.call(cargs)
-		err = res.toErr()
-		freeCargs(cargs)
-		freeCR(res)
-		if err != nil {
-			glog.Error(err)
-			// TODO -- FIXME: rollback - undo mcastMaintenance
-			return
-		}
-	}
+	// TODO -- FIXME: =================
 
 	// 4. rebalance
 	if !opts.SkipRebalance && rebEnabled {
@@ -897,17 +879,16 @@ func (p *proxy) _startRebRm(msg *apc.ActMsg, si *cluster.Snode) (rebID string, e
 		glog.Infof("%q %s and start rebalance", msg.Action, si)
 	}
 	rmdCtx := &rmdModifier{
-		pre:   func(_ *rmdModifier, clone *rebMD) { clone.inc() },
+		pre:   rmdInc,
 		final: p._syncRMD,
 		msg:   msg,
-		rebCB: nil,
+		rebCB: nil, // TODO -- FIXME: ActStartMaintenance special teatment
 		wait:  true,
 	}
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
 		r := &_rmpostreb{p, msg, si}
 		rmdCtx.rebCB = r.cb
 	}
-
 	if _, err = p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
 		return
@@ -1284,13 +1265,11 @@ func (r *_rmpostreb) cb(nl nl.Listener) {
 		if abrt {
 			s = " aborted,"
 		}
-		glog.Errorf("x-rebalance[%s]%s err: %v", nl.UUID(), s, err)
+		glog.Errorf("x-rebalance[%s]%s: %v", nl.UUID(), s, err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Rebalance(%s) finished. Removing node %s", nl.UUID(), r.si)
-	}
+	glog.Infof("x-rebalance[%s] done (%s)", nl.UUID(), r.msg)
 	if _, err := r.p.callRmSelf(r.msg, r.si, true /*skipReb*/); err != nil {
-		glog.Errorf("Failed to remove node (%s) after rebalance: %v", r.si, err)
+		glog.Errorf("Failed to remove %s after rebalance: %v", r.si.StringEx(), err)
 	}
 }
