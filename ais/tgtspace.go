@@ -62,7 +62,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	xlru := rns.Entry.Get()
 	if regToIC && xlru.ID() == id {
 		// pre-existing UUID: notify IC members
-		regMsg := xactRegMsg{UUID: id, Kind: apc.ActLRU, Srcs: []string{t.si.ID()}}
+		regMsg := xactRegMsg{UUID: id, Kind: apc.ActLRU, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}
@@ -99,7 +99,7 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 	xcln := rns.Entry.Get()
 	if regToIC && xcln.ID() == id {
 		// pre-existing UUID: notify IC members
-		regMsg := xactRegMsg{UUID: id, Kind: apc.ActStoreCleanup, Srcs: []string{t.si.ID()}}
+		regMsg := xactRegMsg{UUID: id, Kind: apc.ActStoreCleanup, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}

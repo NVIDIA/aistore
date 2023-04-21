@@ -110,7 +110,7 @@ outer:
 		return
 	case equalIC:
 		if selfIC {
-			owner = ic.p.si.ID()
+			owner = ic.p.SID()
 		} else {
 			for pid, si := range smap.Pmap {
 				if !smap.IsIC(psi) {
@@ -132,7 +132,7 @@ outer:
 		}
 		debug.Assertf(smap.IsIC(psi), "%s, %s", psi, smap.StrIC(ic.p.si))
 	}
-	if owner == ic.p.si.ID() {
+	if owner == ic.p.SID() {
 		return
 	}
 	// otherwise, hand it over

@@ -591,7 +591,7 @@ func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, fl
 	}
 	// check dup IP
 	if _, err = smap.IsDuplicate(nsi); err != nil {
-		err = errors.New(p.si.String() + ": " + err.Error())
+		err = errors.New(p.String() + ": " + err.Error())
 	}
 
 	// when cluster's starting up
@@ -1223,7 +1223,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErrf(w, r, "%s is already in maintenance", si.StringEx())
 		return
 	}
-	if p.si.ID() == opts.DaemonID {
+	if p.SID() == opts.DaemonID {
 		p.writeErrf(w, r, "%s is the current primary, cannot perform action %q on itself", p, msg.Action)
 		return
 	}
@@ -1531,8 +1531,8 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", npid, smap.StringEx())
 		return
 	}
-	if npid == p.si.ID() {
-		debug.Assert(p.si.ID() == smap.Primary.ID()) // must be forwardCP-ed
+	if npid == p.SID() {
+		debug.Assert(p.SID() == smap.Primary.ID()) // must be forwardCP-ed
 		glog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
 		return
 	}

@@ -93,8 +93,7 @@ type (
 // interface guard
 var _ cos.Runner = (*proxy)(nil)
 
-func (*proxy) Name() string     { return apc.Proxy } // as cos.Runner
-func (p *proxy) String() string { return p.si.String() }
+func (*proxy) Name() string { return apc.Proxy } // as cos.Runner
 
 func (p *proxy) initClusterCIDR() {
 	if nodeCIDR := os.Getenv("AIS_CLUSTER_CIDR"); nodeCIDR != "" {
@@ -109,7 +108,7 @@ func (p *proxy) init(config *cmn.Config) {
 	p.initNetworks()
 	p.si.Init(initPID(config), apc.Proxy)
 
-	memsys.Init(p.si.ID(), p.si.ID(), config)
+	memsys.Init(p.SID(), p.SID(), config)
 
 	cos.InitShortID(p.si.Digest())
 
@@ -924,7 +923,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 	}
 
 	for _, psi := range newSmap.Pmap {
-		if p.si.ID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
+		if p.SID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *cluster.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi); err != nil {
 					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
@@ -1468,7 +1467,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	}
 
 	if p.ic.reverseToOwner(w, r, lsmsg.UUID, amsg) {
-		debug.Assert(p.si.ID() != smap.Primary.ID())
+		debug.Assert(p.SID() != smap.Primary.ID())
 		if newls {
 			// cleanup right away
 			p.notifs.del(nl, false)
@@ -2096,7 +2095,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Set(apc.QparamProxyID, p.si.ID())
+	query.Set(apc.QparamProxyID, p.SID())
 	query.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
 	redirect += query.Encode()
 	return
@@ -2349,7 +2348,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// otherwise, warn and go ahead
 		// (e.g. scenario: shutdown when transitioning through states)
-		glog.Warningf("%s: %s status is: %s", p.si, si.StringEx(), daeStatus)
+		glog.Warningf("%s: %s status is: %s", p, si.StringEx(), daeStatus)
 	}
 
 	// access control
@@ -2646,7 +2645,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !p.keepalive.paused() {
-		glog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p.si)
+		glog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p)
 	}
 	p.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
@@ -2696,8 +2695,8 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 	newPrimaryURL := r.URL.Query().Get(apc.QparamPrimaryCandidate)
 	glog.Infof("%s: force new primary %s (URL: %s)", p, proxyID, newPrimaryURL)
 
-	if p.si.ID() == proxyID {
-		glog.Warningf("%s is already the primary", p.si)
+	if p.SID() == proxyID {
+		glog.Warningf("%s is already primary", p)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -2772,7 +2771,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// self
-	if p.si.ID() == proxyID {
+	if p.SID() == proxyID {
 		smap := p.owner.smap.get()
 		if smap.GetActiveNode(proxyID) == nil {
 			p.writeErrf(w, r, "%s: in maintenance or decommissioned", p)
@@ -2826,7 +2825,7 @@ func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
 		p.rproxy.nodes.Delete(ctx.sid)
 	}
 
-	clone.Primary = clone.GetProxy(p.si.ID())
+	clone.Primary = clone.GetProxy(p.SID())
 	clone.Version += 100
 	clone.staffIC()
 	return nil

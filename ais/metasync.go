@@ -265,7 +265,7 @@ drain:
 		}
 	}
 	y.workCh <- revsReq{}
-	glog.Infof("%s: becoming non-primary", y.p.si)
+	glog.Infof("%s: becoming non-primary", y.p)
 }
 
 // main method; see top of the file; returns number of "sync" failures
@@ -351,7 +351,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			continue
 		}
 		// failing to sync
-		glog.Warningf("%s: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 		// in addition to "retriables" always retry newTargetID - the joining one
 		if cos.IsRetriableConnErr(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
@@ -368,7 +368,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
 			if lr > 0 {
-				glog.Infof("%s: %d node%s sync-ed", y.p.si, lr, cos.Plural(lr))
+				glog.Infof("%s: %d node%s sync-ed", y.p, lr, cos.Plural(lr))
 			}
 			break
 		}
@@ -418,9 +418,9 @@ func (y *metasyncer) useJIT(pair revsPair) revs {
 		}
 	}
 	if skipping {
-		glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p.si, tag, jitRevs.version(), s, revs)
+		glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p, tag, jitRevs.version(), s, revs)
 	} else {
-		glog.Infof("%s: sync %s v%d%s", y.p.si, tag, revs.version(), s)
+		glog.Infof("%s: sync %s v%d%s", y.p, tag, revs.version(), s)
 	}
 	return revs
 }
@@ -474,7 +474,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 				continue
 			}
 		}
-		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 	}
 	freeBcastRes(results)
 	return true
@@ -490,7 +490,7 @@ func (y *metasyncer) _pending() (pending cluster.NodeMap, smap *smapX) {
 	}
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, si := range serverMap {
-			if si.ID() == y.p.si.ID() {
+			if si.ID() == y.p.SID() {
 				continue
 			}
 			ndr, ok := y.nodesRevs[si.ID()]
@@ -582,7 +582,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 				continue
 			}
 		}
-		glog.Warningf("%s [hp]: %s %s, err: %v(%d)", y.p.si, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s [hp]: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 	}
 	freeBcastRes(results)
 	return
@@ -598,11 +598,11 @@ func (y *metasyncer) remainPrimary(e *errMsync, from *cluster.Snode, smap *smapX
 		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %v from %s", ciError(90), y.p.si, smap.StringEx(),
 			e.Cii, from)
 	}
-	if e.Cii.Smap.Primary.ID == "" || e.Cii.Smap.Primary.ID == y.p.si.ID() {
+	if e.Cii.Smap.Primary.ID == "" || e.Cii.Smap.Primary.ID == y.p.SID() {
 		return true
 	}
 	if e.Cii.Smap.Version > smap.Version {
-		glog.Warningf("%s: detected primary change: %s vs %s [%v] from %s", y.p.si, smap.StringEx(),
+		glog.Warningf("%s: detected primary change: %s vs %s [%v] from %s", y.p, smap.StringEx(),
 			e.Message, e.Cii, from)
 		y.becomeNonPrimary()
 		return false
@@ -610,7 +610,7 @@ func (y *metasyncer) remainPrimary(e *errMsync, from *cluster.Snode, smap *smapX
 	if e.Cii.Smap.Version < smap.Version {
 		return true
 	}
-	glog.Errorf("%s: [%s %s] vs %v from %s", ciError(90), y.p.si, smap.StringEx(), e.Cii, from)
+	glog.Errorf("%s: [%s %s] vs %v from %s", ciError(90), y.p, smap.StringEx(), e.Cii, from)
 	return true // TODO: iffy; may need to do more
 }
 

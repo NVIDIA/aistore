@@ -307,7 +307,7 @@ func (n *notifs) done(nl nl.Listener) {
 		// TODO: confirm & load-balance
 		doSend := true
 		if smap.Primary != nil { // nil in unit tests
-			debug.Assert(n.p.si.ID() != smap.Primary.ID() || smap.IsPrimary(n.p.si))
+			debug.Assert(n.p.SID() != smap.Primary.ID() || smap.IsPrimary(n.p.si))
 			doSend = smap.IsPrimary(n.p.si) ||
 				!smap.IsIC(smap.Primary) // never happens but ok
 		}
@@ -410,7 +410,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)
 			if err != nil {
-				glog.Errorf("%s: failed to parse stats from %s, err: %v", n.p.si, res.si.StringEx(), err)
+				glog.Errorf("%s: failed to parse stats from %s: %v", n.p, res.si.StringEx(), err)
 				continue
 			}
 			nl.Lock()
@@ -429,7 +429,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Errorf("%s: %s, node %s, err: %v", n.p.si, nl, res.si.StringEx(), res.err)
+			glog.Errorf("%s: %s, node %s, err: %v", n.p, nl, res.si.StringEx(), res.err)
 		}
 	}
 	freeBcastRes(results)

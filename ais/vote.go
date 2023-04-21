@@ -143,11 +143,11 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// proceed with election iff:
-	if psi.ID() != p.si.ID() {
+	if psi.ID() != p.SID() {
 		glog.Warningf("%s: not next in line %s", p, psi)
 		return
 	} else if !p.ClusterStarted() {
-		glog.Warningf("%s: not ready yet to be elected - starting up", p.si)
+		glog.Warningf("%s: not ready yet to be elected - starting up", p)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -156,7 +156,7 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 		Candidate: msg.Request.Candidate,
 		Primary:   msg.Request.Primary,
 		StartTime: time.Now(),
-		Initiator: p.si.ID(),
+		Initiator: p.SID(),
 	}
 	// include resulting Smap in the response
 	vr.Smap = p.owner.smap.get()
@@ -169,7 +169,7 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxy) startElection(vr *VoteRecord) {
 	if p.owner.smap.get().isPrimary(p.si) {
-		glog.Infof("%s: already in primary state", p.si)
+		glog.Infof("%s: already in primary state", p)
 		return
 	}
 	rns := xreg.RenewElection()
@@ -241,7 +241,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	}
 
 	// 4. become!
-	glog.Infof("%s: moving (self) to primary state", p.si)
+	glog.Infof("%s: moving (self) to primary state", p)
 	p.becomeNewPrimary(vr.Primary /*proxyIDToRemove*/)
 }
 
@@ -281,7 +281,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 		msg = VoteMessage{Record: *vr}
 		q   = url.Values{}
 	)
-	q.Set(apc.QparamPrimaryCandidate, p.si.ID())
+	q.Set(apc.QparamPrimaryCandidate, p.SID())
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
@@ -322,7 +322,7 @@ func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
 				Primary:   vr.Primary,
 				Smap:      vr.Smap,
 				StartTime: time.Now(),
-				Initiator: p.si.ID(),
+				Initiator: p.SID(),
 			},
 		}
 	)

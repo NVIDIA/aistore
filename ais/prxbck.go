@@ -243,7 +243,7 @@ func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
 		if cmn.IsErrBucketAlreadyExists(err) {
-			glog.Errorf("%s: %v - race, proceeding anyway...", args.p.si, err)
+			glog.Errorf("%s: %v - race, proceeding anyway...", args.p, err)
 			err = nil
 		} else {
 			args.p.writeErr(args.w, args.r, err, errCode)

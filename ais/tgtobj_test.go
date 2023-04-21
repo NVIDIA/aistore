@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 	tid, _ := initTID(config)
 	t.si.Init(tid, apc.Target)
 
-	fs.Add(testMountpath, t.si.ID())
+	fs.Add(testMountpath, t.SID())
 
 	t.htrun.init(config)
 

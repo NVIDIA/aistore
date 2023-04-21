@@ -690,7 +690,7 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 	var (
 		tsi   *cluster.Snode
 		smap  = goi.t.owner.smap.get()
-		tname = goi.t.si.String()
+		tname = goi.t.String()
 	)
 	tsi, err = cluster.HrwTargetAll(goi.lom.Uname(), &smap.Smap) // including targets in maintenance
 	if err != nil {
@@ -729,7 +729,7 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 	if running {
 		doubleCheck = true
 	}
-	if running && tsi.ID() != goi.t.si.ID() {
+	if running && tsi.ID() != goi.t.SID() {
 		if goi.t.HeadObjT2T(goi.lom, tsi) {
 			gfnNode = tsi
 			goto gfn
@@ -1065,7 +1065,7 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			return
 		}
 
-		newHandle = combineAppendHandle(aoi.t.si.ID(), filePath, aoi.hi.partialCksum)
+		newHandle = combineAppendHandle(aoi.t.SID(), filePath, aoi.hi.partialCksum)
 	case apc.FlushOp:
 		if filePath == "" {
 			err = fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", aoi.hi)
@@ -1162,7 +1162,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 	if err != nil {
 		return 0, err
 	}
-	if tsi.ID() != coi.t.si.ID() {
+	if tsi.ID() != coi.t.SID() {
 		// dst location is tsi
 		return coi.sendRemote(lom, objNameTo, tsi)
 	}
@@ -1244,7 +1244,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
-	if tsi.ID() != coi.t.si.ID() {
+	if tsi.ID() != coi.t.SID() {
 		// remote dst
 		return coi.sendRemote(lom, objNameTo, tsi)
 	}
@@ -1423,7 +1423,7 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 		query = sargs.bckTo.AddToQuery(nil)
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
-	hdr.Set(apc.HdrT2TPutterID, coi.t.si.ID())
+	hdr.Set(apc.HdrT2TPutterID, coi.t.SID())
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
 	if coi.Xact != nil {
 		query.Set(apc.QparamUUID, coi.Xact.ID())

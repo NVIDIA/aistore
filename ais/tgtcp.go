@@ -350,12 +350,12 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		if t.keepalive.paused() {
 			t.keepalive.ctrl(kaResumeMsg)
 		} else {
-			glog.Warningf("%s already joined (\"enabled\")- nothing to do", t.si)
+			glog.Warningf("%s already joined (\"enabled\")- nothing to do", t)
 		}
 		return
 	}
 	if daemon.cli.target.standby {
-		glog.Infof("%s: transitioning standby => join", t.si)
+		glog.Infof("%s: transitioning standby => join", t)
 	}
 	t.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
@@ -741,7 +741,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	if err = smap.validate(); err != nil {
 		return
 	}
-	if smap.GetNode(t.si.ID()) == nil {
+	if smap.GetNode(t.SID()) == nil {
 		err = fmt.Errorf("%s (self) not present in %s", t, smap.StringEx())
 		return
 	}
@@ -756,19 +756,19 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
 		}
 		if msg.Action == apc.ActRebalance {
-			glog.Infof("%s: starting user-requested rebalance", t.si)
+			glog.Infof("%s: starting user-requested rebalance", t)
 			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 			return
 		}
-		glog.Infof("%s: starting auto-rebalance", t.si)
+		glog.Infof("%s: starting rebalance", t)
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 		if newRMD.Resilver != "" {
-			glog.Infof("%s: ... and resilver", t.si)
+			glog.Infof("%s: ... and resilver", t)
 			go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
 		}
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
-	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.si.ID() {
+	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
 		glog.Warningf("%s: standby => join %s", t, msg)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
@@ -1018,7 +1018,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 // GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
-		glog.Warningf("[health] %s: standing by...", t.si)
+		glog.Warningf("[health] %s: standing by...", t)
 	} else if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -1110,12 +1110,12 @@ func (t *target) enable() error {
 	}
 	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
 		t.regstate.mu.Unlock()
-		glog.Infof("%s failed to re-join: %v", t.si, err)
+		glog.Infof("%s failed to re-join: %v", t, err)
 		return err
 	}
 	t.regstate.disabled.Store(false)
 	t.regstate.mu.Unlock()
-	glog.Infof("%s is now active", t.si)
+	glog.Infof("%s is now active", t)
 	return nil
 }
 

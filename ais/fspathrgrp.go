@@ -39,7 +39,7 @@ func (g *fsprungroup) init(t *target, newVol bool) {
 // enableMpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err error) {
-	enabledMi, err = fs.EnableMpath(mpath, g.t.si.ID(), g.redistributeMD)
+	enabledMi, err = fs.EnableMpath(mpath, g.t.SID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
 		return
 	}
@@ -50,7 +50,7 @@ func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err er
 // attachMpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpath, err error) {
-	addedMi, err = fs.AddMpath(mpath, g.t.si.ID(), g.redistributeMD, force)
+	addedMi, err = fs.AddMpath(mpath, g.t.SID(), g.redistributeMD, force)
 	if err != nil || addedMi == nil {
 		return
 	}
@@ -256,7 +256,7 @@ func (g *fsprungroup) redistributeMD() {
 		}
 	}
 
-	if _, err := volume.NewFromMPI(g.t.si.ID()); err != nil {
+	if _, err := volume.NewFromMPI(g.t.SID()); err != nil {
 		debug.AssertNoErr(err)
 		cos.ExitLogf("%v", err)
 	}

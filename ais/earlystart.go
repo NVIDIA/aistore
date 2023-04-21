@@ -58,12 +58,12 @@ func (p *proxy) bootstrap() {
 	// 3. primary?
 	if primary {
 		if pid != "" { // takes precedence over everything else
-			cos.Assert(pid == p.si.ID())
+			cos.Assert(pid == p.SID())
 		} else if reliable {
 			var cnt int // confirmation count
 			// double-check
 			if cii, cnt = p.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {
-				if cii.Smap.Primary.ID != p.si.ID() || cnt < maxVerConfirmations {
+				if cii.Smap.Primary.ID != p.SID() || cnt < maxVerConfirmations {
 					glog.Warningf("%s: cannot assume the primary role: local %s < v%d(%s, cnt=%d)",
 						p.si, smap, cii.Smap.Version, cii.Smap.Primary.ID, cnt)
 					primary = false
@@ -107,7 +107,7 @@ func (p *proxy) bootstrap() {
 func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	tag := "no Smap, "
 	if loadedSmap != nil {
-		loadedSmap.Pmap[p.si.ID()] = p.si
+		loadedSmap.Pmap[p.SID()] = p.si
 		tag = loadedSmap.StringEx() + ", "
 	}
 	// parse env
@@ -119,7 +119,7 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 		primary: cos.IsParseBool(os.Getenv(env.AIS.IsPrimary)),
 	}
 
-	if envP.pid != "" && envP.primary && p.si.ID() != envP.pid {
+	if envP.pid != "" && envP.primary && p.SID() != envP.pid {
 		cos.ExitLogf(
 			"FATAL: %s: invalid combination of %s=true & %s=%s",
 			p.si, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid,
@@ -144,7 +144,7 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 		}
 	}
 	if envP.pid != "" {
-		primary = envP.pid == p.si.ID()
+		primary = envP.pid == p.SID()
 		pid = envP.pid
 	} else if loadedSmap != nil {
 		primary = loadedSmap.isPrimary(p.si)
@@ -159,7 +159,7 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
-	} else if smap.Primary.ID() == p.si.ID() {
+	} else if smap.Primary.ID() == p.SID() {
 		glog.Infof("%s: zeroing-out primary=self in %s", p.si.StringEx(), smap)
 		smap.Primary = nil
 	}
@@ -219,7 +219,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			if _, err := maxVerSmap.IsDuplicate(p.si); err != nil {
 				cos.ExitLogf("FATAL: %v", err)
 			}
-			maxVerSmap.Pmap[p.si.ID()] = p.si
+			maxVerSmap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
 				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetIntraControl))
@@ -566,7 +566,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 	if eq && sameVersion {
 		return
 	}
-	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.si.ID() {
+	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.SID() {
 		if svm.Smap.version() > smap.version() {
 			if dupNode, err := svm.Smap.IsDuplicate(p.si); err != nil {
 				if !svm.Smap.IsPrimary(dupNode) {
@@ -577,11 +577,11 @@ func (p *proxy) discoverMeta(smap *smapX) {
 				// TODO: Add validation to ensure `dupNode` and `p.si` only differ in `DaemonID`.
 				svm.Smap.Primary = p.si
 				svm.Smap.delProxy(dupNode.ID())
-				svm.Smap.Pmap[p.si.ID()] = p.si
+				svm.Smap.Pmap[p.SID()] = p.si
 				goto merge
 			}
 			glog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
-			svm.Smap.Pmap[p.si.ID()] = p.si
+			svm.Smap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(svm.Smap)
 			return
 		}
@@ -761,7 +761,7 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	svm, _, slowp := p.bcastMaxVer(smap, nil, nil)
 	if svm.Smap != nil && !slowp {
 		if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
-			if svm.Smap.Primary.ID() != p.si.ID() {
+			if svm.Smap.Primary.ID() != p.SID() {
 				glog.Warningf("%s: primary change whereby local %s is older than max-ver %s",
 					p.si, smap.StringEx(), svm.Smap.StringEx())
 				return svm.Smap
@@ -866,7 +866,7 @@ ret:
 		before.Smap.StringEx(), after.Smap.StringEx())
 	clone := after.Smap.clone()
 	clone.Primary = p.si
-	clone.Pmap[p.si.ID()] = p.si
+	clone.Pmap[p.SID()] = p.si
 	clone.Version += 100
 	after.Config, err = p.owner.config.modify(&configModifier{
 		pre: func(ctx *configModifier, clone *globalConfig) (updated bool, err error) {

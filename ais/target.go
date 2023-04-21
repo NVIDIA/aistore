@@ -173,7 +173,7 @@ func (t *target) init(config *cmn.Config) {
 
 	cos.InitShortID(t.si.Digest())
 
-	memsys.Init(t.si.ID(), t.si.ID(), config)
+	memsys.Init(t.SID(), t.SID(), config)
 
 	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks,
 		daemon.cli.target.useLoopbackDevs, daemon.cli.target.startWithLostMountpath)
@@ -317,13 +317,13 @@ func (t *target) Run() error {
 		smap = newSmap()
 	}
 	// Add self to the cluster map
-	smap.Tmap[t.si.ID()] = t.si
+	smap.Tmap[t.SID()] = t.si
 	t.owner.smap.put(smap)
 
 	if daemon.cli.target.standby {
 		tstats.Standby(true)
 		t.regstate.disabled.Store(true)
-		glog.Warningf("%s not joining - standing by...", t.si)
+		glog.Warningf("%s not joining - standing by...", t)
 
 		go t.gostandby(2 * config.Periodic.StatsTime.D())
 
@@ -332,7 +332,7 @@ func (t *target) Run() error {
 		// discover primary and join cluster (compare with manual `apc.AdminJoin`)
 		if status, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
 			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
-			glog.Errorf("%s is terminating", t.si)
+			glog.Errorf("%s is terminating", t)
 			return err
 		}
 		t.markNodeStarted()
@@ -421,7 +421,7 @@ func (t *target) runResilver(args res.Args, wg *sync.WaitGroup) {
 	// with no cluster-wide UUID it's a local run
 	if args.UUID == "" {
 		args.UUID = cos.GenUUID()
-		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.si.ID()}}
+		regMsg := xactRegMsg{UUID: args.UUID, Kind: apc.ActResilver, Srcs: []string{t.SID()}}
 		msg := t.newAmsgActVal(apc.ActRegGlobalXaction, regMsg)
 		t.bcastAsyncIC(msg)
 	}

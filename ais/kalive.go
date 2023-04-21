@@ -204,7 +204,7 @@ func (pkr *palive) do() (stopped bool) {
 // the resulting map is then metasync-ed.
 func (pkr *palive) updateSmap() (stopped bool) {
 	if !pkr.inProgress.CAS(0, 1) {
-		glog.Infof("%s: primary keepalive is in progress...", pkr.p.si)
+		glog.Infof("%s: primary keepalive is in progress...", pkr.p)
 		return
 	}
 	defer pkr.inProgress.CAS(1, 0)
@@ -218,7 +218,7 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), daemonCnt)
 	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
-			if sid == p.si.ID() {
+			if sid == p.SID() {
 				continue
 			}
 			// skipping

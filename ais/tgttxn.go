@@ -852,7 +852,7 @@ func (t *target) startMaintenance(c *txnServerCtx) error {
 			return fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
 		if c.msg.Action == apc.ActDecommissionNode {
-			if opts.DaemonID != t.si.ID() {
+			if opts.DaemonID != t.SID() {
 				err := fmt.Errorf("%s: invalid target ID %q", t, opts.DaemonID)
 				debug.AssertNoErr(err)
 				return err
@@ -1029,7 +1029,7 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 			if err != nil {
 				return err
 			}
-			if si.ID() != t.si.ID() {
+			if si.ID() != t.SID() {
 				continue
 			}
 		}
