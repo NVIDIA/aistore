@@ -567,11 +567,20 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 /////////////////
 
 // serialize itself (slightly more efficiently than JSON)
-func (ctracker copyTracker) write(sgl *memsys.SGL) {
-	var next bool
+func (ctracker copyTracker) write(sgl *memsys.SGL, target bool) {
+	var (
+		next  bool
+		disks bool // whether to write target disk metrics
+	)
 	sgl.WriteByte('{')
 	for n, v := range ctracker {
-		if v.Value == 0 {
+		if v.Value == 0 || n == Uptime { // always skip zeros and uptime
+			continue
+		}
+		if isDiskMetric(n) {
+			if isDiskUtilMetric(n) && v.Value > minLogDiskUtil {
+				disks = true // not idle - all all
+			}
 			continue
 		}
 		if next {
@@ -579,8 +588,20 @@ func (ctracker copyTracker) write(sgl *memsys.SGL) {
 		}
 		sgl.Write(cos.UnsafeB(n))
 		sgl.WriteByte(':')
-		sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10)))
+		sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // raw value
 		next = true
+	}
+	if disks {
+		debug.Assert(target)
+		for n, v := range ctracker {
+			if v.Value == 0 || !isDiskMetric(n) {
+				continue
+			}
+			sgl.WriteByte(',')
+			sgl.Write(cos.UnsafeB(n))
+			sgl.WriteByte(':')
+			sgl.Write(cos.UnsafeB(strconv.FormatInt(v.Value, 10))) // ditto
+		}
 	}
 	sgl.WriteByte('}')
 }

@@ -98,7 +98,7 @@ type (
 )
 
 const (
-	minLogDiskUtil = 10 // skip logDiskStats if below
+	minLogDiskUtil = 10 // skip logging idle disks
 )
 
 /////////////
@@ -162,8 +162,11 @@ func nameWavg(disk string) string { return "disk." + disk + ".avg.wsize" }
 func nameUtil(disk string) string { return "disk." + disk + ".util" }
 
 // log vs idle logic
+func isDiskMetric(name string) bool {
+	return strings.HasPrefix(name, "disk.")
+}
 func isDiskUtilMetric(name string) bool {
-	return strings.HasPrefix(name, "disk.") && strings.HasSuffix(name, ".util")
+	return isDiskMetric(name) && strings.HasSuffix(name, ".util")
 }
 
 func (r *Trunner) RegDiskMetrics(disk string) {
@@ -267,10 +270,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	if now >= r.nextLogTime && !idle {
 		s.sgl.Reset() // NOTE: sharing the same sgl w/ CoreStats.copyT
-		r.ctracker.write(s.sgl)
-		bytes := s.sgl.Bytes()
-		r.lines = append(r.lines, string(bytes))
-
+		r.ctracker.write(s.sgl, true /*target*/)
+		if s.sgl.Len() > 3 { // skip '{}'
+			bytes := s.sgl.Bytes()
+			r.lines = append(r.lines, string(bytes))
+		}
 		i := int64(config.Log.StatsTime)
 		if i == 0 {
 			i = dfltStatsLogInterval

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -189,16 +190,19 @@ func (d *Snode) Equals(o *Snode) (eq bool) {
 		if !eq {
 			return
 		}
-		// if eq then must be equal
 		name := d.StringEx()
 		debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
-		debug.Assertf(d.PubNet.Port == o.PubNet.Port, "%s: pub port %s vs %s", name, d.PubNet.Port, o.PubNet.Port)
-		debug.Assertf(d.PubNet.Hostname == o.PubNet.Hostname, "%s: pub host %s vs %s",
-			name, d.PubNet.Hostname, o.PubNet.Hostname)
-		debug.Assertf(d.ControlNet.Port == o.ControlNet.Port, "%s: ctrl port %s vs %s",
-			name, d.ControlNet.Port, o.ControlNet.Port)
-		debug.Assertf(d.ControlNet.Hostname == o.ControlNet.Hostname, "%s: ctrl host %s vs %s",
-			name, d.ControlNet.Hostname, o.ControlNet.Hostname)
+		// generally, expecting network equality with local reconfig (and re-join) considered
+		// legit
+		if !d.PubNet.eq(&o.PubNet) {
+			glog.Errorf("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
+		}
+		if !d.ControlNet.eq(&o.ControlNet) {
+			glog.Errorf("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
+		}
+		if !d.DataNet.eq(&o.DataNet) {
+			glog.Errorf("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
+		}
 	})
 	return
 }
@@ -280,6 +284,10 @@ func (ni *NetInfo) TCPEndpoint() string {
 
 func (ni *NetInfo) String() string {
 	return ni.TCPEndpoint()
+}
+
+func (ni *NetInfo) eq(o *NetInfo) bool {
+	return ni.Port == o.Port && ni.Hostname == o.Hostname
 }
 
 //===============================================================

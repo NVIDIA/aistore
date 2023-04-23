@@ -65,10 +65,11 @@ func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	s.promUnlock()
 	if now >= r.nextLogTime && !idle {
 		s.sgl.Reset() // NOTE: sharing the same sgl w/ CoreStats.copyT
-		r.ctracker.write(s.sgl)
-		bytes := s.sgl.Bytes()
-		glog.Infoln(string(bytes))
-
+		r.ctracker.write(s.sgl, false /*target*/)
+		if s.sgl.Len() > 3 { // skip '{}'
+			bytes := s.sgl.Bytes()
+			glog.Infoln(string(bytes))
+		}
 		i := int64(config.Log.StatsTime)
 		if i == 0 {
 			i = dfltStatsLogInterval

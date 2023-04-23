@@ -185,7 +185,7 @@ killRestore:
 	cmd, err := tools.KillNode(node)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(proxyURL, "kill primary", smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
+	smap, err = tools.WaitForClusterState(proxyURL, "cluster to stabilize", smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
 	tassert.CheckFatal(t, err)
 
 	// Update local config ports.
