@@ -819,122 +819,10 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 	return strings.Join(all, xact.UUIDSepa), nil
 }
 
-// put target in maintenance mode
-func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
-	var (
-		nver       int64
-		rebEnabled = cmn.GCO.Get().Rebalance.Enabled
-		earlyGFN   bool
-		waitmsync  bool // not waiting
-	)
+func (p *proxy) beginMaintenance(si *cluster.Snode, msg *apc.ActMsg) error {
 	debug.Assert(si.IsTarget(), si.StringEx())
-	if !opts.SkipRebalance && rebEnabled {
-		if err = p.canRebalance(); err != nil {
-			return
-		}
-	}
-	// 1. begin
-	c := p.prepTxnClient(msg, nil, waitmsync)
-	if err = c.begin(si); err != nil {
-		return
-	}
-
-	// 2. metasync with the target flagged for maint
-	nver, earlyGFN, err = p.mcastMaintenance(msg, si)
-	if err != nil {
-		c.bcastAbort(si, err)
-		return
-	}
-
-	// TODO -- FIXME: =================
-
-	// 4. rebalance
-	if !opts.SkipRebalance && rebEnabled {
-		rebID, err = p._startRebRm(msg, si)
-	} else if msg.Action == apc.ActDecommissionNode {
-		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
-	}
-
-	// 5. w/ no rebalance: "stop-gfn" timed
-	if rebID == "" && earlyGFN {
-		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
-		aisMsg.UUID = si.ID()
-		revs := revsPair{&smapX{Smap: cluster.Smap{Version: nver}}, aisMsg}
-		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
-	}
-	return
-}
-
-// handles all three: apc.ActStartMaintenance | apc.ActDecommission | apc.ActShutdownNode
-func (p *proxy) _startRebRm(msg *apc.ActMsg, si *cluster.Snode) (rebID string, err error) {
-	smap := p.owner.smap.get()
-	if cnt := smap.CountTargets(); cnt < 2 {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%q: removing the last target %s - no rebalance", msg.Action, si)
-		}
-		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
-		return
-	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%q %s and start rebalance", msg.Action, si)
-	}
-	rmdCtx := &rmdModifier{
-		pre:   rmdInc,
-		final: p._syncRMD,
-		msg:   msg,
-		rebCB: nil, // TODO -- FIXME: ActStartMaintenance special teatment
-		wait:  true,
-	}
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-		r := &_rmpostreb{p, msg, si}
-		rmdCtx.rebCB = r.cb
-	}
-	if _, err = p.owner.rmd.modify(rmdCtx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	rebID = rmdCtx.rebID
-	return
-}
-
-// NOTE: with no RMD (- done separately)
-func (p *proxy) mcastMaintenance(msg *apc.ActMsg, si *cluster.Snode) (nver int64, earlyGFN bool, err error) {
-	var flags cos.BitFlags
-	switch msg.Action {
-	case apc.ActDecommissionNode:
-		flags = cluster.NodeFlagDecomm
-	case apc.ActStartMaintenance, apc.ActShutdownNode:
-		flags = cluster.NodeFlagMaint
-	default:
-		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
-			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
-		return
-	}
-	ctx := &smapModifier{
-		pre:   p._markMaint,
-		final: p._syncFinal,
-		sid:   si.ID(),
-		flags: flags,
-		msg:   msg,
-	}
-	if err = p._earlyGFN(ctx, si); err != nil {
-		return
-	}
-	if err = p.owner.smap.modify(ctx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	nver, earlyGFN = ctx.nver, ctx.gfn
-	return
-}
-
-func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
-	if !clone.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot put %s in maintenance", ctx.sid))
-	}
-	clone.setNodeFlags(ctx.sid, ctx.flags)
-	clone.staffIC()
-	return nil
+	c := p.prepTxnClient(msg, nil, false /*waitmsync*/)
+	return c.begin(si)
 }
 
 // destroy bucket: { begin -- commit }
@@ -1246,30 +1134,4 @@ func (r *_rmbck) cb(nl nl.Listener) {
 		return
 	}
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
-}
-
-////////////////
-// _rmpostreb //
-////////////////
-
-type _rmpostreb struct {
-	p   *proxy
-	msg *apc.ActMsg
-	si  *cluster.Snode
-}
-
-// callback: remove the node from the cluster if/when rebalance finishes successfully
-func (r *_rmpostreb) cb(nl nl.Listener) {
-	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
-		var s string
-		if abrt {
-			s = " aborted,"
-		}
-		glog.Errorf("x-rebalance[%s]%s: %v", nl.UUID(), s, err)
-		return
-	}
-	glog.Infof("x-rebalance[%s] done (%s)", nl.UUID(), r.msg)
-	if _, err := r.p.callRmSelf(r.msg, r.si, true /*skipReb*/); err != nil {
-		glog.Errorf("Failed to remove %s after rebalance: %v", r.si.StringEx(), err)
-	}
 }

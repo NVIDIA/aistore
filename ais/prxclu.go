@@ -766,6 +766,7 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 			clone.TargetIDs = []string{ctx.nsi.ID()}
 			clone.inc()
 		},
+		wait: true,
 	}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
@@ -795,22 +796,15 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		pairs = append(pairs, revsPair{etlMD, aisMsg})
 	}
 
-	rebalance := ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version()
-	if !rebalance {
+	reb := ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
+	if !reb {
 		// replicate RMD across (existing nodes will drop it upon version comparison)
 		rmd := p.owner.rmd.get()
 		pairs = append(pairs, revsPair{rmd, aisMsg})
 	} else {
-		// new target triggers rebalance
-		debug.Assert(ctx.nsi.IsTarget())
-		debug.Assert(ctx.rmdCtx.rebID != "")
+		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
 		aisMsg.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
-		nl := xact.NewXactNL(ctx.rmdCtx.rebID, apc.ActRebalance, &clone.Smap, nil)
-		nl.SetOwner(equalIC)
-		// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
-		err := p.notifs.add(nl)
-		debug.AssertNoErr(err)
 	}
 
 	if tokens != nil {
@@ -828,7 +822,7 @@ func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
 	if !mustRebalance(ctx, clone) {
 		return
 	}
-	rmdCtx := &rmdModifier{pre: rmdInc}
+	rmdCtx := &rmdModifier{pre: rmdInc, wait: true}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
 		return
@@ -839,27 +833,21 @@ func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
 	debug.AssertNoErr(err)
 }
 
-// NOTE: when the change involves target node always wait for metasync to distribute updated Smap
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 	var (
-		aisMsg    = p.newAmsg(ctx.msg, nil)
-		pairs     = make([]revsPair, 0, 2)
-		rebalance = ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil && ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version()
+		aisMsg = p.newAmsg(ctx.msg, nil)
+		pairs  = make([]revsPair, 0, 2)
+		reb    = ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
 	)
 	pairs = append(pairs, revsPair{clone, aisMsg})
-	if rebalance {
-		debug.Assert(ctx.rmdCtx.rebID != "")
-		nl := xact.NewXactNL(ctx.rmdCtx.rebID, apc.ActRebalance, &clone.Smap, nil)
-		nl.SetOwner(equalIC)
-		// metasync registers rebalance/resilver `nl` on all IC members (see `p.receiveRMD`)
-		err := p.notifs.add(nl)
-		debug.Assertf(err == nil || daemon.stopping.Load(), "%v", err)
+	if reb {
+		debug.Assert(ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version())
 		aisMsg.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, aisMsg})
 	}
 	debug.Assert(clone._sgl != nil)
 	wg := p.metasyncer.sync(pairs...)
-	if rebalance {
+	if ctx.rmdCtx != nil && ctx.rmdCtx.wait {
 		wg.Wait()
 	}
 }
@@ -1236,9 +1224,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	// proxy
 	if si.IsProxy() {
-		_, gfn, err := p.mcastMaintenance(msg, si)
-		debug.Assert(!gfn)
-		if err != nil {
+		if _, err := p.mcastMaintenance(msg, si, false /*reb*/); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
@@ -1252,7 +1238,18 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 
 	// target
-	rebID, err := p.startMaintenance(si, msg, &opts)
+	reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled
+	if reb {
+		if err := p.canRebalance(); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		if err := p.beginMaintenance(si, msg); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+	}
+	rebID, err := p.startMaintenance(si, msg, reb)
 	if err != nil {
 		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 		return
@@ -1260,6 +1257,93 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	if rebID != "" {
 		w.Write(cos.UnsafeB(rebID))
 	}
+}
+
+func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
+	var ctx *smapModifier
+	if ctx, err = p.mcastMaintenance(msg, si, reb); err != nil {
+		return
+	}
+	if !reb && msg.Action == apc.ActDecommissionNode {
+		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
+	} else if ctx.rmdCtx != nil {
+		rebID = ctx.rmdCtx.rebID
+		if rebID == "" && ctx.gfn { // stop early gfn
+			aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
+			aisMsg.UUID = si.ID()
+			revs := revsPair{&smapX{Smap: cluster.Smap{Version: ctx.nver}}, aisMsg}
+			_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
+		}
+	}
+	return
+}
+
+func (p *proxy) mcastMaintenance(msg *apc.ActMsg, si *cluster.Snode, reb bool) (ctx *smapModifier, err error) {
+	var flags cos.BitFlags
+	switch msg.Action {
+	case apc.ActDecommissionNode:
+		flags = cluster.NodeFlagDecomm
+	case apc.ActStartMaintenance, apc.ActShutdownNode:
+		flags = cluster.NodeFlagMaint
+	default:
+		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
+			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
+		return
+	}
+	ctx = &smapModifier{
+		pre:     p._markMaint,
+		post:    p._rebPostRm, // (rmdCtx.rmnode => p.callRmSelf rebalance-done callback***)
+		final:   p._syncFinal,
+		sid:     si.ID(),
+		flags:   flags,
+		msg:     msg,
+		skipReb: !reb,
+	}
+	if err = p._earlyGFN(ctx, si); err != nil {
+		return
+	}
+	if err = p.owner.smap.modify(ctx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	return
+}
+
+func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
+	if !clone.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot put %s in maintenance", ctx.sid))
+	}
+	clone.setNodeFlags(ctx.sid, ctx.flags)
+	clone.staffIC()
+	return nil
+}
+
+// TODO -- FIXME: compare with _newRMD; revisit
+func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
+	if ctx.skipReb {
+		return
+	}
+	if !mustRebalance(ctx, clone) {
+		return
+	}
+	rmdCtx := &rmdModifier{
+		pre:     rmdInc,
+		p:       p,
+		smapCtx: ctx,
+		rebCB:   nil,
+		wait:    true,
+	}
+	if ctx.msg.Action == apc.ActDecommissionNode || ctx.msg.Action == apc.ActShutdownNode {
+		rmdCtx.rebCB = rmdCtx.rmnode
+	}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	ctx.rmdCtx = rmdCtx
+
+	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
+	debug.AssertNoErr(err)
 }
 
 func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
@@ -1626,10 +1710,6 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.forwardCP(w, r, nil, sid) {
-		return
-	}
-	if daemon.stopping.Load() {
-		p.writeErr(w, r, fmt.Errorf("%s is stopping", p), http.StatusServiceUnavailable)
 		return
 	}
 	if !p.NodeStarted() {

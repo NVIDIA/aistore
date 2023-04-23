@@ -61,6 +61,9 @@ type (
 		cur   *rebMD // the cloned and modified `prev`
 		rebID string // cluster-wide UUID
 
+		p       *proxy
+		smapCtx *smapModifier
+
 		msg   *apc.ActMsg
 		rebCB func(nl nl.Listener)
 		wait  bool
@@ -166,17 +169,30 @@ func (m *rmdModifier) newNL(smap *smapX) nl.Listener {
 
 // default
 func (m *rmdModifier) log(nl nl.Listener) {
-	debug.Assertf(nl.UUID() == m.rebID, "%s vs %s", nl.UUID(), m.rebID)
+	debug.Assert(nl.UUID() == m.rebID)
 	var (
-		s         string
-		err, abrt = nl.Err(), nl.Aborted()
+		err  = nl.Err()
+		abrt = nl.Aborted()
+		name = "x-rebalance[" + nl.UUID() + "] "
 	)
-	if err == nil && !abrt {
-		glog.Infof("x-rebalance[%s] done", nl.UUID())
+	switch {
+	case err == nil && !abrt:
+		glog.Infoln(name + "done")
+	case abrt:
+		glog.Warningln(name + "aborted")
+	default:
+		glog.Errorf("%s failed: %v", name, err)
+	}
+}
+
+// remove node from the cluster
+func (m *rmdModifier) rmnode(nl nl.Listener) {
+	m.log(nl)
+	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
 		return
 	}
-	if abrt {
-		s = " aborted"
+	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
+	if _, err := m.p.callRmSelf(m.smapCtx.msg, si, true /*skipReb*/); err != nil {
+		glog.Error(err)
 	}
-	glog.Errorf("x-rebalance[%s]%s: %v", nl.UUID(), s, err)
 }
