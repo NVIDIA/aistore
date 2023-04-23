@@ -1740,10 +1740,20 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxC
 			return
 		}
 		if _, _, err := h.Health(smap.Primary, healthTimeout, query /*ask primary*/); err == nil {
-			rmd := h.owner.rmd.get()
-			glog.Infof("%s via primary health: cluster startup ok, %s, %s", h.si, smap.StringEx(), rmd)
+			// log
+			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
+			if self := smap.GetNode(h.si.ID()); self == nil {
+				glog.Warningln(s + "; NOTE: not present in the cluster map")
+			} else if self.Flags.IsSet(cluster.NodeFlagMaint) {
+				glog.Warningln(s + "; NOTE: starting in maintenance mode")
+			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
+				glog.Infoln(s + ", " + rmd.String())
+			} else {
+				glog.Infoln(s)
+			}
 			return
 		}
+
 		if rediscover >= config.Timeout.Startup.D()/2 {
 			rediscover = 0
 			if cii, cnt := h.bcastHealth(smap, true /*checkAll*/); cii != nil && cii.Smap.Version > smap.version() {

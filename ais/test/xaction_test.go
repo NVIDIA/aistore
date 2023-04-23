@@ -68,8 +68,8 @@ func TestXactionAllStatus(t *testing.T) {
 					aborted = append(aborted, ns)
 				} else {
 					// doesn't appear to be aborted and is, therefore, expected to be running
-					tassert.Errorf(t, ns.FinTime == 0, "%q: non-sero fin time=%v",
-						ns.String(), time.Unix(0, ns.FinTime))
+					tassert.Errorf(t, ns.EndTimeX == 0, "%q: non-sero fin time=%v",
+						ns.String(), time.Unix(0, ns.EndTimeX))
 				}
 			}
 			if len(aborted) == 0 {
@@ -87,7 +87,7 @@ func TestXactionAllStatus(t *testing.T) {
 				for _, ns := range vec {
 					if a.UUID == ns.UUID {
 						found = true
-						tassert.Errorf(t, ns.FinTime != 0, "%q: was aborted, is expected to be finished",
+						tassert.Errorf(t, ns.EndTimeX != 0, "%q: was aborted, is expected to be finished",
 							ns.String())
 						break
 					}

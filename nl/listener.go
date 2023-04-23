@@ -83,7 +83,7 @@ type (
 		addedTime   atomic.Int64     // Time when `nl` is added
 
 		// runtime
-		FinTime  atomic.Int64 // timestamp when finished
+		EndTimeX atomic.Int64 // timestamp when finished
 		AbortedX atomic.Bool  // sets if the xaction is Aborted
 		ErrValue cos.ErrValue // reported error and count
 	}
@@ -92,7 +92,7 @@ type (
 		Kind     string `json:"kind"`     // xaction kind
 		UUID     string `json:"uuid"`     // xaction UUID
 		ErrMsg   string `json:"err"`      // error
-		FinTime  int64  `json:"end_time"` // time xaction ended
+		EndTimeX int64  `json:"end_time"` // time xaction ended
 		AbortedX bool   `json:"aborted"`  // true if aborted
 	}
 	StatusVec []Status
@@ -126,7 +126,7 @@ func (nlb *ListenerBase) Notifiers() cluster.NodeMap      { return nlb.Srcs }
 func (nlb *ListenerBase) UUID() string                    { return nlb.Common.UUID }
 func (nlb *ListenerBase) Aborted() bool                   { return nlb.AbortedX.Load() }
 func (nlb *ListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
-func (nlb *ListenerBase) EndTime() int64                  { return nlb.FinTime.Load() }
+func (nlb *ListenerBase) EndTime() int64                  { return nlb.EndTimeX.Load() }
 func (nlb *ListenerBase) Finished() bool                  { return nlb.EndTime() > 0 }
 func (nlb *ListenerBase) ProgressInterval() time.Duration { return nlb.progress }
 func (nlb *ListenerBase) NodeStats() *NodeStats           { return nlb.Stats }
@@ -151,8 +151,8 @@ func (nlb *ListenerBase) HasFinished(node *cluster.Snode) bool {
 
 // is called after all Notifiers will have notified OR on failure (err != nil)
 func (nlb *ListenerBase) Callback(nl Listener, ts int64) {
-	if nlb.FinTime.CAS(0, 1) {
-		nlb.FinTime.Store(ts)
+	if nlb.EndTimeX.CAS(0, 1) {
+		nlb.EndTimeX.Store(ts)
 		if nlb.F != nil {
 			nlb.F(nl)
 		}
@@ -201,7 +201,7 @@ func (nlb *ListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes clus
 }
 
 func (nlb *ListenerBase) Status() *Status {
-	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), FinTime: nlb.FinTime.Load(), AbortedX: nlb.Aborted()}
+	return &Status{Kind: nlb.Kind(), UUID: nlb.UUID(), EndTimeX: nlb.EndTimeX.Load(), AbortedX: nlb.Aborted()}
 }
 
 func (nlb *ListenerBase) String() string {
@@ -217,7 +217,7 @@ func (nlb *ListenerBase) String() string {
 			hdr += "-" + bcks[0].String() + "-" + bcks[1].String()
 		}
 	}
-	if tfin := nlb.FinTime.Load(); tfin > 0 {
+	if tfin := nlb.EndTimeX.Load(); tfin > 0 {
 		if err := nlb.ErrValue.Err(); err != nil {
 			res = "-" + err.Error()
 		} else {
@@ -236,7 +236,7 @@ func (nlb *ListenerBase) String() string {
 // Status //
 ////////////
 
-func (ns *Status) Finished() bool { return ns.FinTime > 0 }
+func (ns *Status) Finished() bool { return ns.EndTimeX > 0 }
 func (ns *Status) Aborted() bool  { return ns.AbortedX }
 
 func (ns *Status) String() (s string) {

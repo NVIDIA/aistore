@@ -315,9 +315,8 @@ func (t *target) Run() error {
 	smap, reliable := t.tryLoadSmap()
 	if !reliable {
 		smap = newSmap()
+		smap.Tmap[t.SID()] = t.si // add self to initial temp smap
 	}
-	// Add self to the cluster map
-	smap.Tmap[t.SID()] = t.si
 	t.owner.smap.put(smap)
 
 	if daemon.cli.target.standby {
