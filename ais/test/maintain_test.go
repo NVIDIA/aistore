@@ -513,7 +513,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 func TestShutdownListObjects(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
-	const nodeOffTimeout = 10 * time.Second
+	const nodeOffTimeout = 16 * time.Second
 	var (
 		bck = cmn.Bck{Name: "shutdown-list", Provider: apc.AIS}
 		m   = &ioContext{

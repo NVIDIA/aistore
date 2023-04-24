@@ -620,19 +620,24 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 	_, psi := t.getPrimaryURLAndSI(nil)
 
 	t.owner.bmd.Lock()
-	rmbcks, oldVer, err := t._syncBMD(newBMD, msg, payload, psi)
+	rmbcks, oldVer, emsg, err := t._syncBMD(newBMD, msg, payload, psi)
 	t.owner.bmd.Unlock()
 
-	if err == nil && oldVer < newBMD.Version {
+	if err != nil {
+		glog.Error(err)
+	} else if oldVer < newBMD.Version {
 		t.regstate.prevbmd.Store(false)
 		t._postBMD(tag, rmbcks)
+	}
+	if emsg != "" {
+		glog.Errorln(emsg)
 	}
 	return oldVer, err
 }
 
 // executes under lock
 func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *cluster.Snode) (rmbcks []*cluster.Bck,
-	oldVer int64, err error) {
+	oldVer int64, emsg string, err error) {
 	var (
 		createErrs  []error
 		destroyErrs []error
@@ -663,7 +668,8 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		return false
 	})
 	if len(createErrs) > 0 {
-		err = fmt.Errorf("%s: failed to receive %s: %v", t, newBMD, createErrs)
+		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v",
+			t, newBMD, bmd, nilbmd, createErrs)
 		return
 	}
 
@@ -701,7 +707,8 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		return false
 	})
 	if len(destroyErrs) > 0 {
-		glog.Errorf("%s: failed to cleanup destroyed buckets: %v", t, destroyErrs)
+		emsg = fmt.Sprintf("%s: failed to cleanup destroyed buckets: %s, old/cur %s(%t): %v",
+			t, newBMD, bmd, nilbmd, destroyErrs)
 	}
 	return
 }
