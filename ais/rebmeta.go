@@ -63,10 +63,7 @@ type (
 
 		p       *proxy
 		smapCtx *smapModifier
-
-		msg   *apc.ActMsg
-		rebCB func(nl nl.Listener)
-		wait  bool
+		wait    bool
 	}
 )
 
@@ -127,27 +124,28 @@ func (r *rmdOwner) load() {
 func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(unsafe.Pointer(rmd)) }
 func (r *rmdOwner) get() *rebMD    { return (*rebMD)(r.rmd.Load()) }
 
-func (r *rmdOwner) _runPre(ctx *rmdModifier) (clone *rebMD, err error) {
+func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()
+	clone, err = r.do(ctx)
+	r.Unlock()
+	if err == nil && ctx.final != nil {
+		ctx.final(ctx, clone)
+	}
+	return
+}
+
+func (r *rmdOwner) do(ctx *rmdModifier) (clone *rebMD, err error) {
 	ctx.prev = r.get()
 	clone = ctx.prev.clone()
 	clone.TargetIDs = nil
 	clone.Resilver = ""
-	ctx.pre(ctx, clone)
+	ctx.pre(ctx, clone) // `pre` callback
+
 	if err = r.persist(clone); err == nil {
 		r.put(clone)
 	}
 	ctx.cur = clone
-	ctx.rebID = xact.RebID2S(clone.Version)
-	r.Unlock()
-	return
-}
-
-func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
-	clone, err = r._runPre(ctx)
-	if err == nil && ctx.final != nil {
-		ctx.final(ctx, clone)
-	}
+	ctx.rebID = xact.RebID2S(clone.Version) // new rebID
 	return
 }
 
@@ -157,14 +155,28 @@ func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 
 func rmdInc(_ *rmdModifier, clone *rebMD) { clone.inc() }
 
-func (m *rmdModifier) newNL(smap *smapX) nl.Listener {
-	nl := xact.NewXactNL(m.rebID, apc.ActRebalance, &smap.Smap, nil)
-	nl.SetOwner(equalIC)
-	nl.F = m.rebCB
-	if nl.F == nil {
-		nl.F = m.log
+// via `rmdModifier.final`
+func rmdSync(m *rmdModifier, clone *rebMD) {
+	debug.Assert(m.cur == clone)
+	m.listen(nil)
+	msg := &aisMsg{ActMsg: apc.ActMsg{Action: apc.ActRebalance}, UUID: m.rebID} // user-requested rebalance
+	wg := m.p.metasyncer.sync(revsPair{m.cur, msg})
+	if m.wait {
+		wg.Wait()
 	}
-	return nl
+}
+
+// see `receiveRMD` (upon termination, notify IC)
+func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
+	nl := xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, nil)
+	nl.SetOwner(equalIC)
+
+	nl.F = m.log
+	if cb != nil {
+		nl.F = cb
+	}
+	err := m.p.notifs.add(nl)
+	debug.AssertNoErr(err)
 }
 
 // default
@@ -173,7 +185,7 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	var (
 		err  = nl.Err()
 		abrt = nl.Aborted()
-		name = "x-rebalance[" + nl.UUID() + "] "
+		name = "rebalance[" + nl.UUID() + "] "
 	)
 	switch {
 	case err == nil && !abrt:
@@ -186,13 +198,14 @@ func (m *rmdModifier) log(nl nl.Listener) {
 }
 
 // remove node from the cluster
-func (m *rmdModifier) rmnode(nl nl.Listener) {
+func (m *rmdModifier) rmNode(nl nl.Listener) {
 	m.log(nl)
 	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
 		return
 	}
 	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
-	if _, err := m.p.callRmSelf(m.smapCtx.msg, si, true /*skipReb*/); err != nil {
+	debug.Assert(si.IsTarget())
+	if _, err := m.p.askRmSelf(m.smapCtx.msg, si, true /*skipReb (already done)*/); err != nil {
 		glog.Error(err)
 	}
 }

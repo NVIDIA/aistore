@@ -498,7 +498,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
-	glog.Infof("%s: %s(%q) %s (%s)...", p, apiOp, action, nsi.StringEx(), regReq.Smap)
+	glog.Infof("%s: %s(%q) %s (%s)", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
 		rebID, err := p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
@@ -766,16 +766,16 @@ func (p *proxy) _joinedPost(ctx *smapModifier, clone *smapX) {
 			clone.TargetIDs = []string{ctx.nsi.ID()}
 			clone.inc()
 		},
-		wait: true,
+		smapCtx: ctx,
+		p:       p,
+		wait:    true,
 	}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
 		return
 	}
+	rmdCtx.listen(nil)
 	ctx.rmdCtx = rmdCtx // smap modifier to reference the rmd one directly
-
-	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
-	debug.AssertNoErr(err)
 }
 
 func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
@@ -812,25 +812,6 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	}
 	_ = p.metasyncer.sync(pairs...)
 	p.syncNewICOwners(ctx.smap, clone)
-}
-
-func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
-	// e.g., taking node out of maintenance w/ no rebalance
-	if ctx.skipReb {
-		return
-	}
-	if !mustRebalance(ctx, clone) {
-		return
-	}
-	rmdCtx := &rmdModifier{pre: rmdInc, wait: true}
-	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	ctx.rmdCtx = rmdCtx
-
-	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
-	debug.AssertNoErr(err)
 }
 
 func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
@@ -1099,15 +1080,19 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if smap := p.owner.smap.get(); smap.CountActiveTs() < 2 {
-		err := &errNotEnoughTargets{p.si, smap, 2}
-		glog.Warningf("%s: %v - nothing to do", p, err)
+	smap := p.owner.smap.get()
+	if smap.CountTargets() < 2 {
+		p.writeErr(w, r, &errNotEnoughTargets{p.si, smap, 2})
 		return
 	}
+	if na := smap.CountActiveTs(); na < 2 {
+		glog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance anyway", p, na)
+	}
 	rmdCtx := &rmdModifier{
-		pre:   rmdInc,
-		final: p._syncRMD,
-		msg:   &apc.ActMsg{Action: apc.ActRebalance},
+		pre:     rmdInc,
+		final:   rmdSync, // metasync new rmd instance
+		p:       p,
+		smapCtx: &smapModifier{smap: smap},
 	}
 	_, err := p.owner.rmd.modify(rmdCtx)
 	if err != nil {
@@ -1206,7 +1191,6 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
-	glog.Warningf("%s: %s %+v", p, msg.Action, opts)
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
 		err := cmn.NewErrNotFound("%s: node %q", p.si, opts.DaemonID)
@@ -1222,6 +1206,8 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
+	glog.Warningf("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
+
 	// proxy
 	if si.IsProxy() {
 		if _, err := p.mcastMaintenance(msg, si, false /*reb*/); err != nil {
@@ -1229,7 +1215,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 		if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-			errCode, err := p.callRmSelf(msg, si, true /*skipReb*/)
+			errCode, err := p.askRmSelf(msg, si, true /*skipReb*/)
 			if err != nil {
 				p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 			}
@@ -1265,7 +1251,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, reb bool) (
 		return
 	}
 	if !reb && msg.Action == apc.ActDecommissionNode {
-		_, err = p.callRmSelf(msg, si, true /*skipReb*/)
+		_, err = p.askRmSelf(msg, si, true /*skipReb*/)
 	} else if ctx.rmdCtx != nil {
 		rebID = ctx.rmdCtx.rebID
 		if rebID == "" && ctx.gfn { // stop early gfn
@@ -1292,7 +1278,7 @@ func (p *proxy) mcastMaintenance(msg *apc.ActMsg, si *cluster.Snode, reb bool) (
 	}
 	ctx = &smapModifier{
 		pre:     p._markMaint,
-		post:    p._rebPostRm, // (rmdCtx.rmnode => p.callRmSelf rebalance-done callback***)
+		post:    p._rebPostRm, // (rmdCtx.rmNode => p.askRmSelf when all done)
 		final:   p._syncFinal,
 		sid:     si.ID(),
 		flags:   flags,
@@ -1318,7 +1304,6 @@ func (p *proxy) _markMaint(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-// TODO -- FIXME: compare with _newRMD; revisit
 func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 	if ctx.skipReb {
 		return
@@ -1330,20 +1315,18 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 		pre:     rmdInc,
 		p:       p,
 		smapCtx: ctx,
-		rebCB:   nil,
 		wait:    true,
-	}
-	if ctx.msg.Action == apc.ActDecommissionNode || ctx.msg.Action == apc.ActShutdownNode {
-		rmdCtx.rebCB = rmdCtx.rmnode
 	}
 	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
 		debug.AssertNoErr(err)
 		return
 	}
+	if ctx.msg.Action == apc.ActDecommissionNode || ctx.msg.Action == apc.ActShutdownNode {
+		rmdCtx.listen(rmdCtx.rmNode)
+	} else {
+		rmdCtx.listen(nil)
+	}
 	ctx.rmdCtx = rmdCtx
-
-	err := p.notifs.add(rmdCtx.newNL(ctx.smap /*notifiers*/))
-	debug.AssertNoErr(err)
 }
 
 func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
@@ -1578,16 +1561,26 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) _syncRMD(ctx *rmdModifier, clone *rebMD) {
-	var (
-		smap = p.owner.smap.get()
-		wg   = p.metasyncer.sync(revsPair{clone, p.newAmsg(ctx.msg, nil, ctx.rebID)})
-	)
-	err := p.notifs.add(ctx.newNL(smap /*notifiers*/))
-	debug.AssertNoErr(err)
-	if ctx.wait {
-		wg.Wait()
+func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
+	// e.g., taking node out of maintenance w/ no rebalance
+	if ctx.skipReb {
+		return
 	}
+	if !mustRebalance(ctx, clone) {
+		return
+	}
+	rmdCtx := &rmdModifier{
+		pre:     rmdInc,
+		smapCtx: ctx,
+		p:       p,
+		wait:    true,
+	}
+	if _, err := p.owner.rmd.modify(rmdCtx); err != nil {
+		debug.AssertNoErr(err)
+		return
+	}
+	rmdCtx.listen(nil)
+	ctx.rmdCtx = rmdCtx
 }
 
 func (p *proxy) bmodSync(ctx *bmdModifier, clone *bucketMD) {
@@ -1732,16 +1725,16 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Immediately removes a node from Smap (advanced usage - potential data loss)
-		errCode, err = p.callRmSelf(&apc.ActMsg{Action: apc.ActCallbackRmFromSmap}, node, false /*skipReb*/)
+		errCode, err = p.askRmSelf(&apc.ActMsg{Action: apc.ActCallbackRmFromSmap}, node, false /*skipReb*/)
 	}
 	if err != nil {
 		p.writeErr(w, r, err, errCode)
 	}
 }
 
-// Ask the node (`si`) to permanently or temporarily remove itself from the cluster, in
-// accordance with the specific `msg.Action` (that we also enumerate and assert below).
-func (p *proxy) callRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+// as per the specific `msg.Action`, ask the node (`si`) to permanently or temporarily remove itself
+// from the cluster
+func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())

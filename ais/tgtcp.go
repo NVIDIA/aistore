@@ -752,16 +752,21 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		}
 	}
 	if !t.regstate.disabled.Load() {
+		//
+		// run rebalance
+		//
 		notif := &xact.NotifXact{
-			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		}
 		if msg.Action == apc.ActRebalance {
-			glog.Infof("%s: starting user-requested rebalance", t)
+			glog.Infof("%s: starting user-requested rebalance[%s]", t, msg.UUID)
 			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 			return
 		}
-		glog.Infof("%s: starting rebalance", t)
+
+		glog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
+
 		if newRMD.Resilver != "" {
 			glog.Infof("%s: ... and resilver", t)
 			go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)

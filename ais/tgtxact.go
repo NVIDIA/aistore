@@ -185,7 +185,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) e
 			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
+				F:    t.notifyTerm,
 			},
 		}
 		wg := &sync.WaitGroup{}
@@ -208,7 +208,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) e
 			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
+				F:    t.notifyTerm,
 			},
 			Xact: xctn,
 		})

@@ -696,15 +696,10 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *htrun) callerNotifyFin(n cluster.Notif, err error) {
-	h.callerNotify(n, err, apc.Finished)
-}
+func (h *htrun) notifyTerm(n cluster.Notif, err error) { h._nfy(n, err, apc.Finished) }
+func (h *htrun) notifyProgress(n cluster.Notif)        { h._nfy(n, nil, apc.Progress) }
 
-func (h *htrun) callerNotifyProgress(n cluster.Notif) {
-	h.callerNotify(n, nil, apc.Progress)
-}
-
-func (h *htrun) callerNotify(n cluster.Notif, err error, upon string) {
+func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	var (
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()

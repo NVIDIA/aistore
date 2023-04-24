@@ -91,8 +91,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 				When:     cluster.UponProgress,
 				Interval: progressInterval,
 				Dsts:     []string{equalIC},
-				F:        t.callerNotifyFin,
-				P:        t.callerNotifyProgress,
+				F:        t.notifyTerm,
+				P:        t.notifyProgress,
 			},
 		}, dljob)
 		response, statusCode, respErr = xdl.Download(dljob)

@@ -380,7 +380,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			Base: nl.Base{
 				When: cluster.UponTerm,
 				Dsts: []string{equalIC},
-				F:    t.callerNotifyFin,
+				F:    t.notifyTerm,
 			},
 			Xact: xctn,
 		})

@@ -77,7 +77,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 		Force:               force,
 	}
 	xlru.AddNotif(&xact.NotifXact{
-		Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		Xact: xlru,
 	})
 	space.RunLRU(&ini)
@@ -111,7 +111,7 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 		WG:      wg,
 	}
 	xcln.AddNotif(&xact.NotifXact{
-		Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.callerNotifyFin},
+		Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		Xact: xcln,
 	})
 	return space.RunCleanup(&ini)
