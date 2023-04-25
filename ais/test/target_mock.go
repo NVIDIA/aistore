@@ -59,7 +59,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	err = tools.RemoveNodeFromSmap(proxyURL, tools.MockDaemonID)
+	err = tools.RemoveNodeUnsafe(proxyURL, tools.MockDaemonID)
 	tassert.CheckFatal(t, err)
 	s.Shutdown(context.Background())
 }

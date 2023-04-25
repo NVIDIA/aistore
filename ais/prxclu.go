@@ -902,7 +902,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
 		p.unreg(w, r, msg)
-	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
+	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActRmNodeUnsafe:
 		p.rmNode(w, r, msg)
 	case apc.ActStopMaintenance:
 		p.stopMaintenance(w, r, msg)
@@ -1205,10 +1205,10 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
-	glog.Warningf("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
+	glog.Infof("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
 
-	// proxy
-	if si.IsProxy() {
+	switch {
+	case si.IsProxy():
 		if _, err := p.mcastMaintDec(msg, si, false /*reb*/); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
@@ -1219,28 +1219,37 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 				p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 			}
 		}
-		return
-	}
-
-	// target
-	reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled
-	if reb {
-		if err := p.canRebalance(); err != nil {
+	case msg.Action == apc.ActRmNodeUnsafe: // target unsafe
+		if !opts.SkipRebalance {
+			err := errors.New("unsafe must be unsafe")
+			debug.AssertNoErr(err)
 			p.writeErr(w, r, err)
 			return
 		}
-		if err := p.beginRmTarget(si, msg); err != nil {
-			p.writeErr(w, r, err)
+		errCode, err := p.rmNodeFinal(msg, si)
+		if err != nil {
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
+		}
+	default: // target
+		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled
+		if reb {
+			if err := p.canRebalance(); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+			if err := p.beginRmTarget(si, msg); err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+		}
+		rebID, err := p.rmTarget(si, msg, reb)
+		if err != nil {
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
-	}
-	rebID, err := p.rmTarget(si, msg, reb)
-	if err != nil {
-		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
-		return
-	}
-	if rebID != "" {
-		w.Write(cos.UnsafeB(rebID))
+		if rebID != "" {
+			w.Write(cos.UnsafeB(rebID))
+		}
 	}
 }
 
@@ -1715,20 +1724,18 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-
-	var errCode int
-	if p.isIntraCall(r.Header, false /*from primary*/) == nil {
-		if cid := r.Header.Get(apc.HdrCallerID); cid == sid {
-			errCode, err = p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node)
-		} else {
-			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
-		}
-	} else {
-		// immediately remove node from Smap - no rebalance
-		errCode, err = p.rmNodeFinal(&apc.ActMsg{Action: apc.ActRmSelf}, node)
+	if err := p.isIntraCall(r.Header, false /*from primary*/); err != nil {
+		err = fmt.Errorf("expecting intra-cluster call for self-initiated removal, got %w", err)
+		p.writeErr(w, r, err)
+		return
 	}
-
-	if err != nil {
+	cid := r.Header.Get(apc.HdrCallerID)
+	if cid != sid {
+		err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
+		p.writeErr(w, r, err)
+		return
+	}
+	if errCode, err := p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node); err != nil {
 		p.writeErr(w, r, err, errCode)
 	}
 }
@@ -1752,13 +1759,13 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, er
 	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
-	case apc.ActShutdownNode, apc.ActRmSelf: // PUT(shutdown | rm-self)
+	case apc.ActShutdownNode, apc.ActRmNodeUnsafe: // PUT(shutdown | rm-unsafe)
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
 	case apc.ActStartMaintenance, apc.ActDecommissionNode: // DELETE(maint | dec)
 		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathDaeRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
-			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmSelf})
+			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
 		debug.AssertNoErr(err)
 		return
 	}
@@ -1772,7 +1779,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, er
 	if er != nil {
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
 	}
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActRmSelf {
+	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActRmNodeUnsafe {
 		errCode, err = p.mcastUnreg(msg, si) // NOTE: proceeding anyway even if all retries fail
 	}
 	return

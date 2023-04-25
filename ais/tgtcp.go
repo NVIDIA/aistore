@@ -167,7 +167,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 		t.termKaliveX(msg.Action)
 		t.shutdown(msg.Action)
-	case apc.ActRmSelf:
+	case apc.ActRmNodeUnsafe:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}

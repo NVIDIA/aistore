@@ -451,14 +451,22 @@ func ShutdownNode(bp BaseParams, actValue *apc.ActValRmNode) (id string, err err
 	return id, err
 }
 
-// Remove a node from Smap immediately.
-// Immediately removes a node from Smap (advanced usage - potential data loss)
-func RemoveNodeFromSmap(bp BaseParams, sid string) error {
-	bp.Method = http.MethodDelete
+// Remove node node from the cluster immediately.
+// - NOTE: potential data loss, advanced usage only!
+// - NOTE: the node remains running (compare w/ shutdown) and can be re-joined at a later time
+// (see api.JoinCluster).
+func RemoveNodeUnsafe(bp BaseParams, sid string) error {
+	msg := apc.ActMsg{
+		Action: apc.ActRmNodeUnsafe,
+		Value:  &apc.ActValRmNode{DaemonID: sid, SkipRebalance: true},
+	}
+	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathCluDaemon.Join(sid)
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Body = cos.MustMarshal(msg)
+		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)

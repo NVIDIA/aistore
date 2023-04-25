@@ -266,7 +266,7 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cl
 
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies.
 // Use `JoinCluster` to attach node back.
-func RemoveNodeFromSmap(proxyURL, sid string) error {
+func RemoveNodeUnsafe(proxyURL, sid string) error {
 	return _removeNodeFromSmap(gctx, proxyURL, sid, time.Minute)
 }
 

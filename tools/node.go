@@ -56,7 +56,7 @@ func (n nodesCnt) satisfied(actual int) bool {
 }
 
 // Add an alive node that is not in SMap to the cluster.
-// Use to add a new node to the cluster or get back a node removed by `RemoveNodeFromSmap`
+// Use to add a new node to the cluster or get back a node removed by `RemoveNodeUnsafe`
 func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
 	return _joinCluster(gctx, proxyURL, node, registerTimeout)
 }
@@ -821,7 +821,7 @@ func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) 
 	}
 	tlog.Logf("Remove %s from %s\n", node.StringEx(), smap)
 
-	err = api.RemoveNodeFromSmap(bp, sid)
+	err = api.RemoveNodeUnsafe(bp, sid)
 	if err != nil {
 		return err
 	}

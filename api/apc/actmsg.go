@@ -61,7 +61,7 @@ const (
 	ActAttachRemAis = "attach"
 	ActDetachRemAis = "detach"
 
-	// Node maintenance & cluster membership (see also ActRmSelf below)
+	// Node maintenance & cluster membership (see also ActRmNodeUnsafe below)
 	ActStartMaintenance = "start-maintenance" // put into maintenance state
 	ActStopMaintenance  = "stop-maintenance"  // cancel maintenance state
 	ActShutdownNode     = "shutdown-node"     // shutdown node
@@ -86,7 +86,7 @@ const (
 const (
 	ActAddRemoteBck = "add-remote-bck" // add to BMD (usually, on the fly) existing remote bucket
 
-	ActRmSelf = "rm-self" // primary => node that must (see also: CallbackRmSelf)
+	ActRmNodeUnsafe = "rm-unsafe" // primary => node that must (see also: CallbackRmSelf)
 
 	ActStartGFN = "start-gfn"
 	ActStopGFN  = "stop-gfn"

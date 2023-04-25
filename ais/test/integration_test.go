@@ -457,7 +457,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Unregister target 1 in parallel
 	go func() {
 		defer wg.Done()
-		err = tools.RemoveNodeFromSmap(m.proxyURL, target1.ID())
+		err = tools.RemoveNodeUnsafe(m.proxyURL, target1.ID())
 		tassert.CheckFatal(t, err)
 	}()
 
