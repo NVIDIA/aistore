@@ -895,17 +895,20 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case apc.ActResetConfig:
 		p.resetCluCfgPersistent(w, r, msg)
-	case apc.ActShutdown, apc.ActDecommission:
+	case apc.ActShutdownCluster, apc.ActDecommissionCluster:
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
 		p.unreg(w, r, msg)
+	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
+		p.rmNode(w, r, msg)
+	case apc.ActStopMaintenance:
+		p.stopMaintenance(w, r, msg)
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)
-
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
 		p.bcastReqGroup(w, r, args, cluster.AllNodes)
@@ -916,10 +919,6 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		p.xstop(w, r, msg)
 	case apc.ActSendOwnershipTbl:
 		p.sendOwnTbl(w, r, msg)
-	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
-		p.rmNode(w, r, msg)
-	case apc.ActStopMaintenance:
-		p.stopMaintenance(w, r, msg)
 	default:
 		p.writeErrAct(w, r, msg.Action)
 	}
@@ -1215,7 +1214,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 		if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-			errCode, err := p.askRmSelf(msg, si, true /*skipReb*/)
+			errCode, err := p.rmNodeFinal(msg, si)
 			if err != nil {
 				p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 			}
@@ -1251,7 +1250,7 @@ func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID st
 		return
 	}
 	if !reb {
-		_, err = p.askRmSelf(msg, si, true /*skipReb*/)
+		_, err = p.rmNodeFinal(msg, si)
 	} else if ctx.rmdCtx != nil {
 		rebID = ctx.rmdCtx.rebID
 		if rebID == "" && ctx.gfn { // stop early gfn
@@ -1278,7 +1277,7 @@ func (p *proxy) mcastMaintDec(msg *apc.ActMsg, si *cluster.Snode, reb bool) (ctx
 	}
 	ctx = &smapModifier{
 		pre:     p._markMaint,
-		post:    p._rebPostRm, // (rmdCtx.rmNode => p.askRmSelf when all done)
+		post:    p._rebPostRm, // (rmdCtx.rmNode => p.rmNodeFinal when all done)
 		final:   p._syncFinal,
 		sid:     si.ID(),
 		flags:   flags,
@@ -1716,46 +1715,46 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
+
 	var errCode int
 	if p.isIntraCall(r.Header, false /*from primary*/) == nil {
 		if cid := r.Header.Get(apc.HdrCallerID); cid == sid {
-			errCode, err = p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node, false /*skipReb*/)
+			errCode, err = p.mcastUnreg(&apc.ActMsg{Action: "self-initiated-removal"}, node)
 		} else {
 			err = fmt.Errorf("expecting self-initiated removal (%s != %s)", cid, sid)
 		}
 	} else {
-		// Immediately removes a node from Smap (advanced usage - potential data loss)
-		errCode, err = p.askRmSelf(&apc.ActMsg{Action: apc.ActRmSelf}, node, false /*skipReb*/)
+		// immediately remove node from Smap - no rebalance
+		errCode, err = p.rmNodeFinal(&apc.ActMsg{Action: apc.ActRmSelf}, node)
 	}
+
 	if err != nil {
 		p.writeErr(w, r, err, errCode)
 	}
 }
 
-// as per the specific `msg.Action`, ask the node (`si`) to permanently or temporarily remove itself
-// from the cluster
-func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+// post-rebalance or post no-rebalance - last step removing a node (with semantics defined
+// by the msg.Action)
+func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
 		timeout = cmn.Timeout.CplaneOperation()
 	)
 	if node == nil {
-		txt := fmt.Sprintf("cannot %q", msg.Action)
+		txt := "cannot \"" + msg.Action + "\""
 		err = &errNodeNotFound{txt, si.ID(), p.si, smap}
 		return http.StatusNotFound, err
 	}
-
-	cargs := allocCargs()
+	var (
+		cargs = allocCargs()
+		body  = cos.MustMarshal(msg)
+	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
-	case apc.ActShutdownNode:
-		// put(act-shutdown)
-		body := cos.MustMarshal(apc.ActMsg{Action: apc.ActShutdown})
+	case apc.ActShutdownNode, apc.ActRmSelf: // PUT(shutdown | rm-self)
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmSelf:
-		// vs delete/rm-self(act-maint/etc.)
-		body := cos.MustMarshal(msg)
+	case apc.ActStartMaintenance, apc.ActDecommissionNode: // DELETE(maint | dec)
 		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathDaeRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
@@ -1764,7 +1763,7 @@ func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (err
 		return
 	}
 
-	glog.Infof("%s: removing node %s via %q (skip-reb=%t)", p, node, msg.Action, skipReb)
+	glog.Infof("%s: removing node %s via %q", p, node.StringEx(), msg.Action)
 	res := p.call(cargs)
 	er, d := res.err, res.details
 	freeCargs(cargs)
@@ -1774,19 +1773,18 @@ func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (err
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
 	}
 	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActRmSelf {
-		errCode, err = p.mcastUnreg(msg, si, skipReb) // NOTE: proceeding anyway even if all retries fail
+		errCode, err = p.mcastUnreg(msg, si) // NOTE: proceeding anyway even if all retries fail
 	}
 	return
 }
 
-func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (errCode int, err error) {
+func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
-		post:    p._newRMD,
 		final:   p._syncFinal,
 		msg:     msg,
 		sid:     si.ID(),
-		skipReb: skipReb,
+		skipReb: true,
 	}
 	err = p.owner.smap.modify(ctx)
 	return ctx.status, err

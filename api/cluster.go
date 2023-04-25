@@ -396,7 +396,7 @@ func StopMaintenance(bp BaseParams, actValue *apc.ActValRmNode) (xid string, err
 
 // ShutdownCluster shuts down the whole cluster
 func ShutdownCluster(bp BaseParams) error {
-	msg := apc.ActMsg{Action: apc.ActShutdown}
+	msg := apc.ActMsg{Action: apc.ActShutdownCluster}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -412,7 +412,7 @@ func ShutdownCluster(bp BaseParams) error {
 
 // DecommissionCluster permanently decommissions entire cluster
 func DecommissionCluster(bp BaseParams, rmUserData bool) error {
-	msg := apc.ActMsg{Action: apc.ActDecommission}
+	msg := apc.ActMsg{Action: apc.ActDecommissionCluster}
 	if rmUserData {
 		msg.Value = &apc.ActValRmNode{RmUserData: true}
 	}

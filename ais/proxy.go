@@ -2538,12 +2538,12 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)
-	case apc.ActDecommission:
+	case apc.ActDecommissionCluster:
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
 		p.unreg(w, r, msg)
-	case apc.ActShutdown:
+	case apc.ActShutdownCluster:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
 		if !isPrimary {
@@ -2614,7 +2614,7 @@ func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	if msg.Action == apc.ActStartMaintenance {
 		return
 	}
-	if msg.Action == apc.ActDecommission || msg.Action == apc.ActDecommissionNode {
+	if msg.Action == apc.ActDecommissionCluster || msg.Action == apc.ActDecommissionNode {
 		var (
 			opts              apc.ActValRmNode
 			keepInitialConfig bool

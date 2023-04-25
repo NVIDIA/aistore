@@ -46,8 +46,9 @@ const (
 	ActResyncBprops   = "resync-bprops"
 	ActSetBprops      = "set-bprops"
 	ActSetConfig      = "set-config"
-	ActShutdown       = "shutdown"
 	ActStoreCleanup   = "cleanup-store"
+
+	ActShutdownCluster = "shutdown" // see also: ActShutdownNode
 
 	// multi-object (via `ListRange`)
 	ActCopyObjects     = "copy-listrange"
@@ -66,7 +67,7 @@ const (
 	ActShutdownNode     = "shutdown-node"     // shutdown node
 	ActDecommissionNode = "decommission-node" // start rebalance and, when done, remove node from Smap
 
-	ActDecommission = "decommission" // decommission all nodes in the cluster (cleanup system data)
+	ActDecommissionCluster = "decommission" // decommission all nodes in the cluster (cleanup system data)
 
 	ActAdminJoinTarget = "admin-join-target"
 	ActSelfJoinTarget  = "self-join-target"

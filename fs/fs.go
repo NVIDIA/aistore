@@ -222,17 +222,6 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 	return
 }
 
-func (mi *Mountpath) ClearMDs() (rerr error) {
-	for _, mdPath := range mdFilesDirs {
-		fpath := filepath.Join(mi.Path, mdPath)
-		if err := RemoveAll(fpath); err != nil {
-			glog.Error(err)
-			rerr = err
-		}
-	}
-	return
-}
-
 func (mi *Mountpath) SetDaemonIDXattr(tid string) error {
 	cos.Assert(tid != "")
 	// Validate if mountpath already has daemon ID set.
@@ -1018,7 +1007,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 			break
 		}
 	}
-	from.ClearMDs()
+	from.ClearMDs(true /*inclBMD*/)
 }
 
 // load node ID

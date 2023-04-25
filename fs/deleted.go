@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
@@ -110,6 +111,20 @@ rm:
 	return err
 }
 
+func (mi *Mountpath) ClearMDs(inclBMD bool) (rerr error) {
+	for _, mdfd := range mdFilesDirs {
+		if !inclBMD && mdfd == fname.Bmd {
+			continue
+		}
+		fpath := filepath.Join(mi.Path, mdfd)
+		if err := RemoveAll(fpath); err != nil {
+			glog.Error(err)
+			rerr = err
+		}
+	}
+	return
+}
+
 //
 // decommission
 //
@@ -139,8 +154,8 @@ func Decommission(mdOnly bool) {
 func demd(allmpi []MPI) (rerr error) {
 	for _, mpi := range allmpi {
 		for _, mi := range mpi {
-			// BMD et al.
-			if err := mi.ClearMDs(); err != nil {
+			// NOTE: BMD goes with data (ie., no data - no BMD)
+			if err := mi.ClearMDs(false /*include BMD*/); err != nil {
 				rerr = err
 			}
 			// node ID (SID)

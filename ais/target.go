@@ -475,13 +475,13 @@ func (t *target) initRecvHandlers() {
 }
 
 // stop gracefully
-// TODO: write shutdown-marker
 func (t *target) Stop(err error) {
-	// NOTE: vs metasync
-	t.regstate.mu.Lock()
-	daemon.stopping.Store(true)
-	t.regstate.mu.Unlock()
-
+	if !daemon.stopping.Load() {
+		// vs metasync
+		t.regstate.mu.Lock()
+		daemon.stopping.Store(true)
+		t.regstate.mu.Unlock()
+	}
 	f := glog.Infof
 	if err != nil {
 		f = glog.Warningf

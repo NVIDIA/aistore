@@ -161,12 +161,18 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
-	case apc.ActShutdown:
+	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.unreg(msg.Action, &apc.ActValRmNode{RmUserData: false, NoShutdown: false})
-	case apc.ActDecommission:
+		t.termKaliveX(msg.Action)
+		t.shutdown(msg.Action)
+	case apc.ActRmSelf:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		t.termKaliveX(msg.Action)
+	case apc.ActDecommissionCluster:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
@@ -175,7 +181,8 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.unreg(msg.Action, &opts)
+		t.termKaliveX(msg.Action)
+		t.decommission(msg.Action, &opts)
 	case apc.ActCleanupMarkers:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -384,7 +391,10 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	switch apiItems[0] {
 	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
-	case apc.CallbackRmSelf:
+	case apc.CallbackRmSelf: // via p.askRmSelf
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
 		var (
 			msg  apc.ActMsg
 			opts apc.ActValRmNode
@@ -396,46 +406,15 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.unreg(msg.Action, &opts)
+
+		debug.Assert(msg.Action == apc.ActStartMaintenance || msg.Action == apc.ActDecommissionNode, msg.Action) // TODO -- FIXME
+
+		t.termKaliveX(msg.Action)
+		if msg.Action == apc.ActDecommissionNode {
+			t.decommission(msg.Action, &opts)
+		}
 	default:
 		t.writeErrURL(w, r)
-	}
-}
-
-func (t *target) unreg(action string, opts *apc.ActValRmNode) {
-	// Stop keepalive-ing
-	t.keepalive.ctrl(kaSuspendMsg)
-
-	errCause := errors.New("target is being removed from the cluster via '" + action + "'")
-	dsort.Managers.AbortAll(errCause) // all dSort jobs
-	xreg.AbortAll(errCause)           // all xactions
-
-	if action == apc.ActStartMaintenance || action == apc.ActRmSelf {
-		return // return without terminating http
-	}
-
-	// NOTE: vs metasync
-	t.regstate.mu.Lock()
-	daemon.stopping.Store(true)
-	t.regstate.mu.Unlock()
-
-	if action == apc.ActShutdown {
-		debug.Assert(!opts.NoShutdown)
-		t.Stop(&errNoUnregister{action})
-		return
-	}
-
-	glog.Infof("%s: decommissioning %+v", t, opts)
-	fs.Decommission(!opts.RmUserData /*ais metadata only*/)
-	cleanupConfigDir(t.Name(), opts.KeepInitialConfig)
-
-	// Delete DB file.
-	err := cos.RemoveFile(filepath.Join(cmn.GCO.Get().ConfigDir, dbName))
-	if err != nil {
-		glog.Errorf("failed to delete database, err: %v", err)
-	}
-	if !opts.NoShutdown {
-		t.Stop(&errNoUnregister{action})
 	}
 }
 
@@ -577,8 +556,6 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 		if newBMD.Version > oldVer {
 			if err == nil {
 				glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(oldVer, msg, caller))
-			} else {
-				glog.Errorf("%s: error %v receiving %s%s", t, err, newBMD.StringEx(), _msdetail(oldVer, msg, caller))
 			}
 		}
 		return
@@ -665,8 +642,8 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		return false
 	})
 	if len(createErrs) > 0 {
-		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v",
-			t, newBMD, bmd, nilbmd, createErrs)
+		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v (total errors: %d)",
+			t, newBMD, bmd, nilbmd, createErrs[0], len(createErrs))
 		return
 	}
 
@@ -1190,4 +1167,41 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 	}
 	freeBcastRes(results)
 	return nil
+}
+
+//
+// termination(s)
+//
+
+func (t *target) termKaliveX(action string) {
+	t.keepalive.ctrl(kaSuspendMsg)
+	errCause := errors.New("target is being removed from the cluster via '" + action + "'")
+	dsort.Managers.AbortAll(errCause) // all dSort jobs
+	xreg.AbortAll(errCause)           // all xactions
+}
+
+func (t *target) shutdown(action string) {
+	t.regstate.mu.Lock()
+	daemon.stopping.Store(true)
+	t.regstate.mu.Unlock()
+
+	t.Stop(&errNoUnregister{action})
+}
+
+func (t *target) decommission(action string, opts *apc.ActValRmNode) {
+	t.regstate.mu.Lock()
+	daemon.stopping.Store(true)
+	t.regstate.mu.Unlock()
+
+	glog.Infof("%s: %s %v", t, action, opts)
+	fs.Decommission(!opts.RmUserData /*ais metadata only*/)
+	cleanupConfigDir(t.Name(), opts.KeepInitialConfig)
+
+	fpath := filepath.Join(cmn.GCO.Get().ConfigDir, dbName)
+	if err := cos.RemoveFile(fpath); err != nil { // delete kvdb
+		glog.Errorf("failed to delete kvdb: %v", err)
+	}
+	if !opts.NoShutdown {
+		t.Stop(&errNoUnregister{action})
+	}
 }

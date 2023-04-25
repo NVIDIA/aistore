@@ -205,7 +205,7 @@ func (m *rmdModifier) rmNode(nl nl.Listener) {
 	}
 	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
 	debug.Assert(si.IsTarget())
-	if _, err := m.p.askRmSelf(m.smapCtx.msg, si, true /*skipReb (already done)*/); err != nil {
+	if _, err := m.p.rmNodeFinal(m.smapCtx.msg, si); err != nil {
 		glog.Error(err)
 	}
 }
