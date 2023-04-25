@@ -1210,7 +1210,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	// proxy
 	if si.IsProxy() {
-		if _, err := p.mcastMaintenance(msg, si, false /*reb*/); err != nil {
+		if _, err := p.mcastMaintDec(msg, si, false /*reb*/); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
@@ -1230,12 +1230,12 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, err)
 			return
 		}
-		if err := p.beginMaintenance(si, msg); err != nil {
+		if err := p.beginRmTarget(si, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 	}
-	rebID, err := p.startMaintenance(si, msg, reb)
+	rebID, err := p.rmTarget(si, msg, reb)
 	if err != nil {
 		p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 		return
@@ -1245,12 +1245,12 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 }
 
-func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
+func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
-	if ctx, err = p.mcastMaintenance(msg, si, reb); err != nil {
+	if ctx, err = p.mcastMaintDec(msg, si, reb); err != nil {
 		return
 	}
-	if !reb && msg.Action == apc.ActDecommissionNode {
+	if !reb {
 		_, err = p.askRmSelf(msg, si, true /*skipReb*/)
 	} else if ctx.rmdCtx != nil {
 		rebID = ctx.rmdCtx.rebID
@@ -1264,7 +1264,7 @@ func (p *proxy) startMaintenance(si *cluster.Snode, msg *apc.ActMsg, reb bool) (
 	return
 }
 
-func (p *proxy) mcastMaintenance(msg *apc.ActMsg, si *cluster.Snode, reb bool) (ctx *smapModifier, err error) {
+func (p *proxy) mcastMaintDec(msg *apc.ActMsg, si *cluster.Snode, reb bool) (ctx *smapModifier, err error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
@@ -1725,7 +1725,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// Immediately removes a node from Smap (advanced usage - potential data loss)
-		errCode, err = p.askRmSelf(&apc.ActMsg{Action: apc.ActCallbackRmFromSmap}, node, false /*skipReb*/)
+		errCode, err = p.askRmSelf(&apc.ActMsg{Action: apc.ActRmSelf}, node, false /*skipReb*/)
 	}
 	if err != nil {
 		p.writeErr(w, r, err, errCode)
@@ -1750,18 +1750,16 @@ func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (err
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
 	case apc.ActShutdownNode:
+		// put(act-shutdown)
 		body := cos.MustMarshal(apc.ActMsg{Action: apc.ActShutdown})
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActCallbackRmFromSmap:
-		act := &apc.ActMsg{Action: msg.Action}
-		if msg.Action == apc.ActDecommissionNode {
-			act.Value = msg.Value
-		}
-		body := cos.MustMarshal(act)
+	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmSelf:
+		// vs delete/rm-self(act-maint/etc.)
+		body := cos.MustMarshal(msg)
 		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathDaeRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
-			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActCallbackRmFromSmap})
+			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmSelf})
 		debug.AssertNoErr(err)
 		return
 	}
@@ -1775,7 +1773,7 @@ func (p *proxy) askRmSelf(msg *apc.ActMsg, si *cluster.Snode, skipReb bool) (err
 	if er != nil {
 		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
 	}
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActCallbackRmFromSmap {
+	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActRmSelf {
 		errCode, err = p.mcastUnreg(msg, si, skipReb) // NOTE: proceeding anyway even if all retries fail
 	}
 	return

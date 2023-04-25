@@ -60,12 +60,11 @@ const (
 	ActAttachRemAis = "attach"
 	ActDetachRemAis = "detach"
 
-	// Node maintenance & cluster membership (see the corresponding URL path words below)
-	ActStartMaintenance   = "start-maintenance"     // put into maintenance state
-	ActStopMaintenance    = "stop-maintenance"      // cancel maintenance state
-	ActShutdownNode       = "shutdown-node"         // shutdown node
-	ActCallbackRmFromSmap = "callback-rm-from-smap" // set by primary when requested (internal use only)
-	ActDecommissionNode   = "decommission-node"     // start rebalance and, when done, remove node from Smap
+	// Node maintenance & cluster membership (see also ActRmSelf below)
+	ActStartMaintenance = "start-maintenance" // put into maintenance state
+	ActStopMaintenance  = "stop-maintenance"  // cancel maintenance state
+	ActShutdownNode     = "shutdown-node"     // shutdown node
+	ActDecommissionNode = "decommission-node" // start rebalance and, when done, remove node from Smap
 
 	ActDecommission = "decommission" // decommission all nodes in the cluster (cleanup system data)
 
@@ -85,6 +84,8 @@ const (
 // internal use
 const (
 	ActAddRemoteBck = "add-remote-bck" // add to BMD (usually, on the fly) existing remote bucket
+
+	ActRmSelf = "rm-self" // primary => node that must (see also: CallbackRmSelf)
 
 	ActStartGFN = "start-gfn"
 	ActStopGFN  = "stop-gfn"

@@ -819,7 +819,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *cluster.Bck, msg *apc.ActMsg)
 	return strings.Join(all, xact.UUIDSepa), nil
 }
 
-func (p *proxy) beginMaintenance(si *cluster.Snode, msg *apc.ActMsg) error {
+func (p *proxy) beginRmTarget(si *cluster.Snode, msg *apc.ActMsg) error {
 	debug.Assert(si.IsTarget(), si.StringEx())
 	c := p.prepTxnClient(msg, nil, false /*waitmsync*/)
 	return c.begin(si)

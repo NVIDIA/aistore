@@ -17,8 +17,8 @@ import (
 const timedDuration = time.Minute + time.Minute/2
 
 const (
-	gfnT = "gfn-timed"
-	gfnG = "gfn-global"
+	gfnT = "timed"
+	gfnG = "global"
 )
 
 // get-from-neighbors (GFN) state

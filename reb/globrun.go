@@ -448,7 +448,7 @@ func (reb *Reb) beginStreams(config *cmn.Config) {
 		Multiplier: config.Rebalance.SbundleMult,
 		Extra:      &transport.Extra{SenderID: xreb.ID()},
 	}
-	reb.pushes = bundle.NewStreams(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
+	reb.pushes = bundle.New(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 
 	reb.laterx.Store(false)
 	reb.inQueue.Store(0)

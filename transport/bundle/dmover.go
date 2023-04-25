@@ -140,7 +140,7 @@ func (dm *DataMover) Open() {
 	if dm.xctn != nil {
 		dataArgs.Extra.SenderID = dm.xctn.ID()
 	}
-	dm.data.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
+	dm.data.streams = New(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
 	if dm.useACKs() {
 		ackArgs := Args{
 			Net:          dm.ack.net,
@@ -152,7 +152,7 @@ func (dm *DataMover) Open() {
 		if dm.xctn != nil {
 			ackArgs.Extra.SenderID = dm.xctn.ID()
 		}
-		dm.ack.streams = NewStreams(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
+		dm.ack.streams = New(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
 	}
 	dm.stage.opened.Store(true)
 }

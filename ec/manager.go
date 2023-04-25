@@ -111,8 +111,8 @@ func (mgr *Manager) initECBundles() error {
 	}
 
 	sowner := mgr.t.Sowner()
-	mgr.reqBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, reqSbArgs)))
-	mgr.respBundle.Store(unsafe.Pointer(bundle.NewStreams(sowner, mgr.t.Snode(), client, respSbArgs)))
+	mgr.reqBundle.Store(unsafe.Pointer(bundle.New(sowner, mgr.t.Snode(), client, reqSbArgs)))
+	mgr.respBundle.Store(unsafe.Pointer(bundle.New(sowner, mgr.t.Snode(), client, respSbArgs)))
 
 	mgr.smap = sowner.Get()
 	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTs()))

@@ -392,10 +392,7 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		if err := readJSON(w, r, &msg); err != nil {
 			return
 		}
-		if msg.Value == nil {
-			glog.Warningf("%s: remove from Smap via (%q, action=%s)", t, apiItems[0], msg.Action)
-			opts.NoShutdown = true
-		} else if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -413,7 +410,7 @@ func (t *target) unreg(action string, opts *apc.ActValRmNode) {
 	dsort.Managers.AbortAll(errCause) // all dSort jobs
 	xreg.AbortAll(errCause)           // all xactions
 
-	if action == apc.ActStartMaintenance || action == apc.ActCallbackRmFromSmap {
+	if action == apc.ActStartMaintenance || action == apc.ActRmSelf {
 		return // return without terminating http
 	}
 

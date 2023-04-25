@@ -274,7 +274,7 @@ func (m *Manager) initStreams() error {
 		return errors.WithStack(err)
 	}
 	client := transport.NewIntraDataClient()
-	m.streams.shards = bundle.NewStreams(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
+	m.streams.shards = bundle.New(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
 	return nil
 }
 

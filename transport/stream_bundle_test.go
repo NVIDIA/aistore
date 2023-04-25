@@ -163,7 +163,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		extra.SizePDU = memsys.DefaultBufSize
 	}
 	_, _ = random.Read(wbuf)
-	sb := bundle.NewStreams(sowner, &lsnode, httpclient,
+	sb := bundle.New(sowner, &lsnode, httpclient,
 		bundle.Args{Net: network, Trname: trname, Multiplier: multiplier, Extra: extra})
 	var numGs int64 = 6
 	if testing.Short() {

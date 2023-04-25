@@ -136,7 +136,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActArchive:
 		xid, err = t.createArchMultiObj(c)
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode:
-		err = t.startMaintenance(c)
+		err = t.beginRm(c)
 	case apc.ActDestroyBck, apc.ActEvictRemoteBck:
 		err = t.destroyBucket(c)
 	case apc.ActPromote:
@@ -829,10 +829,10 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 }
 
 //
-// startMaintenance
+// begin (maintenance -- decommission -- shutdown) via p.beginRmTarget
 //
 
-func (t *target) startMaintenance(c *txnServerCtx) error {
+func (t *target) beginRm(c *txnServerCtx) error {
 	var opts apc.ActValRmNode
 	if c.phase != apc.ActBegin {
 		return fmt.Errorf("%s: expecting begin phase, got %q", t, c.phase)

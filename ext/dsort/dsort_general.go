@@ -165,8 +165,8 @@ func (ds *dsorterGeneral) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.request = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.response = bundle.NewStreams(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.request = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
+	ds.streams.response = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
 
 	// start watching memory
 	return ds.mw.watch()

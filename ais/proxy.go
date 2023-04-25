@@ -2591,8 +2591,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 }
 
 func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	// the path includes cmn.CallbackRmSelf (compare with t.httpdaedelete)
-	_, err := p.apiItems(w, r, 0, false, apc.URLPathDaeRmSelf.L)
+	_, err := p.apiItems(w, r, 0, false, apc.URLPathDaeRmSelf.L) // apc.CallbackRmSelf
 	if err != nil {
 		return
 	}
