@@ -17,8 +17,9 @@ import (
 const timedDuration = time.Minute + time.Minute/2
 
 const (
-	gfnT = "timed"
-	gfnG = "global"
+	gfnT   = "timed"
+	hkgfnT = "gfn-timed"
+	gfnG   = "global"
 )
 
 // get-from-neighbors (GFN) state
@@ -43,7 +44,7 @@ func OnTimedGFN() {
 	now := mono.NanoTime()
 	if gfn.exp.Swap(now+timedDuration.Nanoseconds()) == 0 {
 		gfn.trc.Store(1)
-		hk.Reg(gfnT+hk.NameSuffix, hkTimed, 0 /*time.Duration*/)
+		hk.Reg(hkgfnT+hk.NameSuffix, hkTimed, 0 /*time.Duration*/)
 		gfn.mtx.Unlock()
 		glog.Infoln(gfnT, 1)
 	} else {

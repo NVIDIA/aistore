@@ -149,13 +149,17 @@ func (hk *housekeeper) Run() (err error) {
 		syscall.SIGQUIT, // kill -SIGQUIT XXXX
 	)
 	hk.timer = time.NewTimer(time.Hour)
-	defer hk.terminate()
-
 	hk.running.Store(true)
+	err = hk._run()
+	hk.terminate()
+	return
+}
+
+func (hk *housekeeper) _run() error {
 	for {
 		select {
 		case <-hk.stopCh.Listen():
-			return
+			return nil
 		case <-hk.timer.C:
 			if hk.actions.Len() == 0 {
 				break
@@ -172,10 +176,13 @@ func (hk *housekeeper) Run() (err error) {
 			hk.updateTimer()
 		case req := <-hk.workCh:
 			if req.registering {
-				debug.Assert(req.f != nil, req.name)
-				debug.Assert(req.initialInterval != UnregInterval, req.name) // cannot reg w/unreg
-				debug.Assert(hk.byName(req.name) == -1, req.name)            // duplicate name
-
+				// duplicate name
+				if hk.byName(req.name) != -1 {
+					glog.Errorln(req.name + " is (still) registered - rescheduling...")
+					time.Sleep(time.Second)
+					hk.workCh <- req
+					break
+				}
 				initialInterval := req.initialInterval
 				if req.initialInterval == 0 {
 					initialInterval = req.f()

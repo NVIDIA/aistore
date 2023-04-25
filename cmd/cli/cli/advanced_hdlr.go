@@ -227,7 +227,7 @@ func removeNodeFromSmap(c *cli.Context) error {
 	if smap.IsPrimary(node) {
 		return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
 	}
-	return api.RemoveNodeFromSmap(apiBP, sid)
+	return api.RemoveNodeUnsafe(apiBP, sid)
 }
 
 func randNode(c *cli.Context) error {
