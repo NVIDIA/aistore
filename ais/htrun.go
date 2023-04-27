@@ -92,6 +92,13 @@ func (h *htrun) String() string        { return h.si.String() }
 func (h *htrun) Bowner() cluster.Bowner { return h.owner.bmd }
 func (h *htrun) Sowner() cluster.Sowner { return h.owner.smap }
 
+// NOTE: currently, only 'resume' (see also: kaSuspendMsg)
+func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
+	if ofl.IsAnySet(cluster.NodeFlagsMaintDecomm) && !nfl.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+		h.keepalive.ctrl(kaResumeMsg)
+	}
+}
+
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
 	apireq.items, err = h.apiItems(w, r, apireq.after, false, apireq.prefix)
@@ -1437,26 +1444,16 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	return
 }
 
-func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload,
-	caller string, cb func(newSmap *smapX, oldSmap *smapX)) (err error) {
+func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, caller string, cb smapUpdatedCB) error {
 	if newSmap == nil {
-		return
+		return nil
 	}
 	smap := h.owner.smap.get()
 	glog.Infof("receive %s%s", newSmap.StringEx(), _msdetail(smap.Version, msg, caller))
 	if !newSmap.isPresent(h.si) {
-		err = fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap.StringEx())
-		glog.Warningf("Error: %s\n%s", err, newSmap.pp())
-		return
+		return fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap)
 	}
-	err = h.owner.smap.synchronize(h.si, newSmap, payload)
-	if err != nil {
-		return
-	}
-	if cb != nil {
-		cb(newSmap, smap)
-	}
-	return
+	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
 
 func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,

@@ -98,7 +98,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
 	}
 	// Smap
-	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, nil); err != nil {
+	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, t.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
 			glog.Error(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
@@ -215,7 +215,7 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 		if cmn.ReadJSON(w, r, newsmap) != nil {
 			return
 		}
-		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/); err != nil {
+		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/, t.htrun.smapUpdatedCB); err != nil {
 			t.writeErr(w, r, cmn.NewErrFailedTo(t, "synchronize", newsmap, err))
 		}
 		glog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
@@ -881,7 +881,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		errConf = t.receiveConfig(newConf, msgConf, payload, caller)
 	}
 	if errSmap == nil && newSmap != nil {
-		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, nil)
+		errSmap = t.receiveSmap(newSmap, msgSmap, payload, caller, t.htrun.smapUpdatedCB)
 	}
 	if errBMD == nil && newBMD != nil {
 		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, caller, false /*silent*/)
@@ -1159,7 +1159,6 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 //
 
 func (t *target) termKaliveX(action string) {
-	glog.Errorln(t.String(), "termKaliveX", action) // DEBUG
 	t.keepalive.ctrl(kaSuspendMsg)
 
 	err := fmt.Errorf("%s: term-kalive by %q", t, action)
@@ -1168,7 +1167,6 @@ func (t *target) termKaliveX(action string) {
 }
 
 func (t *target) shutdown(action string) {
-	glog.Errorln(t.String(), "shutdown", action) // DEBUG
 	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
 	t.regstate.mu.Unlock()
@@ -1177,7 +1175,6 @@ func (t *target) shutdown(action string) {
 }
 
 func (t *target) decommission(action string, opts *apc.ActValRmNode) {
-	glog.Errorln(t.String(), "decommission", action, opts) // DEBUG
 	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
 	t.regstate.mu.Unlock()

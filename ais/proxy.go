@@ -2574,7 +2574,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 			p.writeErrf(w, r, "%s: invalid %s: %v", p.si, newsmap, err)
 			return
 		}
-		if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/); err != nil {
+		if err := p.owner.smap.synchronize(p.si, newsmap, nil /*ms payload*/, p.htrun.smapUpdatedCB); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, "synchronize", newsmap, err))
 			return
 		}
@@ -3045,7 +3045,7 @@ func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error
 	return
 }
 
-func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX) {
+func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags) {
 	// When some node was removed from the cluster we need to clean up the
 	// reverse proxy structure.
 	p.rproxy.nodes.Range(func(key, _ any) bool {
@@ -3056,6 +3056,8 @@ func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX) {
 		return true
 	})
 	p.syncNewICOwners(oldSmap, newSmap)
+
+	p.htrun.smapUpdatedCB(newSmap, oldSmap, nfl, ofl)
 }
 
 func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, caller string) (err error) {
@@ -3245,7 +3247,6 @@ func ciError(num int) string {
 //
 
 func (p *proxy) termKalive(action string) {
-	glog.Errorln(p.String(), "termKalive", action) // DEBUG
 	p.keepalive.ctrl(kaSuspendMsg)
 
 	err := fmt.Errorf("%s: term-kalive by %q", p, action)
@@ -3253,12 +3254,10 @@ func (p *proxy) termKalive(action string) {
 }
 
 func (p *proxy) shutdown(action string) {
-	glog.Errorln(p.String(), "shutdown", action) // DEBUG
 	p.Stop(&errNoUnregister{action})
 }
 
 func (p *proxy) decommission(action string, opts *apc.ActValRmNode) {
-	glog.Errorln(p.String(), "decommission", action, opts) // DEBUG
 	cleanupConfigDir(p.Name(), opts.KeepInitialConfig)
 	if !opts.NoShutdown {
 		p.Stop(&errNoUnregister{action})

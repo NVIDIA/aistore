@@ -438,7 +438,7 @@ func (ic *ic) syncICBundle() error {
 	bundle := res.v.(*icBundle)
 	debug.Assertf(smap.UUID == bundle.Smap.UUID, "%s vs %s", smap.StringEx(), bundle.Smap.StringEx())
 
-	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/); err != nil {
+	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/, ic.p.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
 			glog.Error(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
 		}

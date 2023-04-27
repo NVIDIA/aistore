@@ -90,6 +90,8 @@ type (
 		skipReb     bool           // skip rebalance when target added/removed
 		gfn         bool           // sent start-gfn notification
 	}
+
+	smapUpdatedCB func(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags)
 )
 
 // interface guard
@@ -467,15 +469,17 @@ func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPayload) (err error) {
+func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
 	if err = newSmap.validate(); err != nil {
 		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
 		return
 	}
+
+	var ofl, nfl cos.BitFlags
 	r.mu.Lock()
-	smap := r.Get()
+	smap := r.get()
 	if nsi := newSmap.GetNode(si.ID()); nsi != nil && si.Flags != nsi.Flags {
-		glog.Warningf("%s changing flags from %#b to %#b", si, si.Flags, nsi.Flags)
+		ofl, nfl = si.Flags, nsi.Flags
 		si.Flags = nsi.Flags
 	}
 	if smap != nil {
@@ -496,6 +500,13 @@ func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPay
 		r.put(newSmap)
 	}
 	r.mu.Unlock()
+
+	if err == nil {
+		if ofl != nfl {
+			glog.Infof("%s flags: from %#b to %#b", si, ofl, nfl)
+		}
+		cb(newSmap, smap, nfl, ofl)
+	}
 	return
 }
 

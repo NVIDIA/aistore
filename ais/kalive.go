@@ -447,11 +447,13 @@ func (k *keepalive) Run() error {
 		case sig := <-k.controlCh:
 			switch sig.msg {
 			case kaResumeMsg:
-				ticker.Reset(k.interval)
-				k.tickerPaused.Store(false)
+				if k.tickerPaused.CAS(true, false) {
+					ticker.Reset(k.interval)
+				}
 			case kaSuspendMsg:
-				ticker.Stop()
-				k.tickerPaused.Store(true)
+				if k.tickerPaused.CAS(false, true) {
+					ticker.Stop()
+				}
 			case kaStopMsg:
 				ticker.Stop()
 				return nil
