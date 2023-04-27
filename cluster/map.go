@@ -258,6 +258,7 @@ func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
 func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(NodeFlagsMaintDecomm) }
+func (d *Snode) InMaint() bool         { return d.Flags.IsSet(NodeFlagMaint) }
 func (d *Snode) nonElectable() bool    { return d.Flags.IsSet(SnodeNonElectable) }
 func (d *Snode) isIC() bool            { return d.Flags.IsSet(SnodeIC) }
 
@@ -493,7 +494,12 @@ func (m *Smap) NonElectable(psi *Snode) (ok bool) {
 
 // given Snode, check (usually, the current) Smap that it is present _and_ InMaintOrDecomm
 // (see also GetActiveNode)
-func (m *Smap) InMaintOrDecomm(si *Snode) (ok bool) {
+func (m *Smap) InMaintOrDecomm(si *Snode) bool {
+	node := m.GetNode(si.ID())
+	return node != nil && node.InMaintOrDecomm()
+}
+
+func (m *Smap) InMaint(si *Snode) bool {
 	node := m.GetNode(si.ID())
 	return node != nil && node.InMaintOrDecomm()
 }

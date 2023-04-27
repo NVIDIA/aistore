@@ -180,7 +180,7 @@ func showRebalanceHandler(c *cli.Context) error {
 
 	if !printed && !flagIsSet(c, allJobsFlag) {
 		n, h := qflprn(allJobsFlag), qflprn(cli.HelpFlag)
-		fmt.Fprintf(c.App.Writer, "Global rebalance is not running. Use %s to show the history, %s for details.\n", n, h)
+		fmt.Fprintf(c.App.Writer, "Global rebalance is not running. Use %s to show history, %s for details.\n", n, h)
 	}
 
 	return nil

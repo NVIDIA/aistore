@@ -1215,13 +1215,35 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cmn.NewErrNotFound("%s: node %q", p.si, opts.DaemonID)
+		err := cmn.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
+	var inMaint bool
 	if smap.InMaintOrDecomm(si) {
-		p.writeErrf(w, r, "%s is already in maintenance", si.StringEx())
-		return
+		// only (maintenance => decommission|shutdown) permitted
+		sname := si.StringEx()
+		switch msg.Action {
+		case apc.ActDecommissionNode, apc.ActDecommissionCluster, apc.ActShutdownNode, apc.ActShutdownCluster:
+			onl := true
+			flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
+			if nl := p.notifs.find(flt); nl != nil {
+				p.writeErrf(w, r, "rebalance[%s] is currently running, please try again later", nl.UUID())
+				return
+			}
+			if !smap.InMaint(si) {
+				glog.Errorln("Warning: " + sname + " is currently being decommissioned")
+			}
+			inMaint = true
+			// proceeding anyway
+		default:
+			if smap.InMaint(si) {
+				p.writeErrMsg(w, r, sname+" is already in maintenance mode")
+			} else {
+				p.writeErrMsg(w, r, sname+" is currently being decommissioned")
+			}
+			return
+		}
 	}
 	if p.SID() == opts.DaemonID {
 		p.writeErrf(w, r, "%s is the current primary, cannot perform action %q on itself", p, msg.Action)
@@ -1252,7 +1274,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 		}
 	default: // target
-		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled
+		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && !inMaint
 		if reb {
 			if err := p.canRebalance(); err != nil {
 				p.writeErr(w, r, err)
@@ -1365,12 +1387,12 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cmn.NewErrNotFound("%s: node %q", p.si, opts.DaemonID)
+		err := cmn.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
-	if !smap.InMaintOrDecomm(si) {
-		p.writeErrf(w, r, "node %q is not under maintenance", si.StringEx())
+	if !smap.InMaint(si) {
+		p.writeErrf(w, r, "node %s is not in maintenance mode - nothing to do", si.StringEx())
 		return
 	}
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation.D()
@@ -1638,7 +1660,12 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if smap.InMaintOrDecomm(psi) {
-		err := fmt.Errorf("FATAL: %s: cannot set new primary when under maintenance", psi)
+		var err error
+		if smap.InMaint(psi) {
+			err = fmt.Errorf("%s cannot become the new primary as it's currently under maintenance", psi)
+		} else {
+			err = fmt.Errorf("%s cannot become the new primary as it's currently being decommissioned", psi)
+		}
 		debug.AssertNoErr(err)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
