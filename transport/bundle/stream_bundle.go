@@ -80,15 +80,11 @@ func (sb *Streams) Trname() string { return sb.trname }
 func New(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
 	if sbArgs.Net == "" {
 		sbArgs.Net = cmn.NetIntraData
-	} else {
-		debug.Assertf(cmn.NetworkIsKnown(sbArgs.Net), "Unknown network %s, expecting one of: %v",
-			sbArgs.Net, cmn.KnownNetworks)
 	}
-	debug.Assert(sbArgs.Ntype == cluster.Targets || sbArgs.Ntype == cluster.Proxies || sbArgs.Ntype == cluster.AllNodes)
 	listeners := sowner.Listeners()
 	sb = &Streams{
 		sowner:       sowner,
-		smap:         &cluster.Smap{},
+		smap:         &cluster.Smap{}, // empty on purpose (see Resync)
 		smaplock:     &sync.Mutex{},
 		lsnode:       lsnode,
 		client:       cl,
@@ -323,21 +319,33 @@ func (sb *Streams) Resync() {
 		return
 	}
 
-	var oldNodeMap, newNodeMap []cluster.NodeMap
+	var (
+		oldm []cluster.NodeMap
+		newm []cluster.NodeMap
+		node = smap.GetNode(sb.lsnode.ID()) // upd flags
+	)
 	switch sb.rxNodeType {
 	case cluster.Targets:
-		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap}
-		newNodeMap = []cluster.NodeMap{smap.Tmap}
+		oldm = []cluster.NodeMap{sb.smap.Tmap}
+		newm = []cluster.NodeMap{smap.Tmap}
 	case cluster.Proxies:
-		oldNodeMap = []cluster.NodeMap{sb.smap.Pmap}
-		newNodeMap = []cluster.NodeMap{smap.Pmap}
+		oldm = []cluster.NodeMap{sb.smap.Pmap}
+		newm = []cluster.NodeMap{smap.Pmap}
 	case cluster.AllNodes:
-		oldNodeMap = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
-		newNodeMap = []cluster.NodeMap{smap.Tmap, smap.Pmap}
+		oldm = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
+		newm = []cluster.NodeMap{smap.Tmap, smap.Pmap}
 	default:
 		debug.Assert(false)
 	}
-	added, removed := cluster.NodeMapDelta(oldNodeMap, newNodeMap)
+	if node == nil {
+		// extremely unlikely
+		debug.Assert(false, sb.lsnode.ID())
+		newm = []cluster.NodeMap{make(cluster.NodeMap)}
+	} else {
+		sb.lsnode.Flags = node.Flags
+	}
+
+	added, removed := cluster.NodeMapDelta(oldm, newm)
 
 	obundle := sb.get()
 	l := len(added) - len(removed)
@@ -352,6 +360,12 @@ func (sb *Streams) Resync() {
 		if id == sb.lsnode.ID() {
 			continue
 		}
+		// shall never establish streaming connection to its peer when:
+		if !sb.lsnode.InMaintOrDecomm() && si.InMaintOrDecomm() {
+			// TODO -- FIXME: acks
+			glog.Infof("%s => %s[-/%#b]", sb, si.StringEx(), si.Flags)
+		}
+
 		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {

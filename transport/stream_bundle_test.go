@@ -106,8 +106,10 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		network      = cmn.NetIntraData
 		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)
+		lsnode       = cluster.Snode{DaeID: "local"}
 	)
 	smap.Tmap = make(cluster.NodeMap, 100)
+	smap.Tmap[lsnode.ID()] = &lsnode
 	for i := 0; i < 10; i++ {
 		ts := httptest.NewServer(objmux)
 		tss = append(tss, ts)
@@ -140,7 +142,6 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	var (
 		httpclient     = transport.NewIntraDataClient()
 		sowner         = &sowner{}
-		lsnode         = cluster.Snode{DaeID: "local"}
 		random         = newRand(mono.NanoTime())
 		wbuf, slab     = mmsa.Alloc()
 		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: mmsa}

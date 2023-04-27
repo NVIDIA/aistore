@@ -1224,11 +1224,13 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		// only (maintenance => decommission|shutdown) permitted
 		sname := si.StringEx()
 		switch msg.Action {
-		case apc.ActDecommissionNode, apc.ActDecommissionCluster, apc.ActShutdownNode, apc.ActShutdownCluster:
+		case apc.ActDecommissionNode, apc.ActDecommissionCluster,
+			apc.ActShutdownNode, apc.ActShutdownCluster, apc.ActRmNodeUnsafe:
 			onl := true
 			flt := nlFilter{Kind: apc.ActRebalance, OnlyRunning: &onl}
 			if nl := p.notifs.find(flt); nl != nil {
-				p.writeErrf(w, r, "rebalance[%s] is currently running, please try again later", nl.UUID())
+				p.writeErrf(w, r, "rebalance[%s] is currently running, please try (%s %s) later",
+					nl.UUID(), msg.Action, si.StringEx())
 				return
 			}
 			if !smap.InMaint(si) {
