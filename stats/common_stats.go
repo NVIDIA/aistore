@@ -382,7 +382,6 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			v.mu.Lock()
 			if v.numSamples > 0 {
 				lat = v.Value / v.numSamples
-				out[name] = copyValue{lat}
 				if !ignore(name) {
 					idle = false
 				}
@@ -390,6 +389,8 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			v.Value = 0
 			v.numSamples = 0
 			v.mu.Unlock()
+
+			out[name] = copyValue{lat}
 			// NOTE: ns => ms, and not reporting zeros
 			millis := cos.DivRound(lat, int64(time.Millisecond))
 			if !s.isPrometheus() && millis > 0 {
@@ -400,7 +401,6 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			v.mu.Lock()
 			if v.Value > 0 {
 				throughput = v.Value / cos.MaxI64(int64(s.statsTime.Seconds()), 1)
-				out[name] = copyValue{throughput}
 				if !ignore(name) {
 					idle = false
 				}
@@ -408,6 +408,8 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 				v.Value = 0
 			}
 			v.mu.Unlock()
+
+			out[name] = copyValue{throughput}
 			if !s.isPrometheus() && throughput > 0 {
 				fv := roundMBs(throughput)
 				s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)

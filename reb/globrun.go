@@ -181,14 +181,19 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 	reb.mu.Unlock()
 
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
-	glog.Infof("%s: initializing...", logHdr)
-	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: reb.t.Bowner().Get().IsECUsed()}
+	glog.Infof("%s: initializing", logHdr)
+	bmd := reb.t.Bowner().Get()
+	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed()}
 	if !reb.serialize(rargs, logHdr) {
 		return
 	}
+
 	reb.regRecv()
-	// TODO -- FIXME: must be (active + rebalancing-out)
+	// TODO -- FIXME: minimally, must be num(active) + num(maintenance-mode-rebalancing-out)
 	haveStreams := smap.CountTargets() > 1
+	if bmd.IsEmpty() {
+		haveStreams = false
+	}
 	if !reb.initRenew(rargs, notif, logHdr, haveStreams) {
 		reb.unregRecv()
 		reb.semaCh.Release()
@@ -196,7 +201,7 @@ func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact
 	}
 	if !haveStreams {
 		// cleanup and leave
-		glog.Infoln(logHdr + " - no targets, nothing to do")
+		glog.Infof("%s: nothing to do: %s, %s", logHdr, smap.StringEx(), bmd.StringEx())
 		reb.stages.stage.Store(rebStageDone)
 		reb.unregRecv()
 		reb.semaCh.Release()

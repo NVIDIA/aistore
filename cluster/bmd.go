@@ -47,32 +47,12 @@ func (m *BMD) String() string {
 	return "BMD v" + strconv.FormatInt(m.Version, 10)
 }
 
-func (m *BMD) numBuckets() (na, nar, nc, no int) {
-	for provider, namespaces := range m.Providers {
-		for nsUname, buckets := range namespaces {
-			ns := cmn.ParseNsUname(nsUname)
-			if provider == apc.AIS {
-				if ns.IsRemote() {
-					nar += len(buckets)
-				} else {
-					na += len(buckets)
-				}
-			} else if apc.IsCloudProvider(provider) {
-				nc += len(buckets)
-			} else {
-				no += len(buckets)
-			}
-		}
-	}
-	return
-}
-
 func (m *BMD) StringEx() string {
 	if m == nil {
 		return "BMD <nil>"
 	}
-	na, nar, nc, no := m.numBuckets()
-	if na == 0 && nc == 0 && nar == 0 && no == 0 {
+	na, nar, nc, no := m.numBuckets(false /*check empty*/)
+	if na+nar+nc+no == 0 {
 		return fmt.Sprintf("BMD v%d[%s (no buckets)]", m.Version, m.UUID)
 	}
 	if nar == 0 && no == 0 {
@@ -88,21 +68,6 @@ func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
 		p, present = buckets[bck.Name]
 	}
 	return
-}
-
-func (m *BMD) eqBID(bck *Bck, bckID uint64) error {
-	debug.Assert(bckID != 0)
-	bprops, present := m.Get(bck)
-	if !present {
-		if bck.IsRemote() {
-			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
-		}
-		return cmn.NewErrBckNotFound(bck.Bucket())
-	}
-	if bckID == bprops.BID {
-		return nil // ok
-	}
-	return errBucketIDMismatch
 }
 
 func (m *BMD) Del(bck *Bck) (deleted bool) {
@@ -151,6 +116,11 @@ func (m *BMD) Add(bck *Bck) {
 		namespaces[nsUname] = buckets
 	}
 	buckets[bck.Name] = bck.Props
+}
+
+func (m *BMD) IsEmpty() bool {
+	na, nar, nc, no := m.numBuckets(true)
+	return na+nar+nc+no == 0
 }
 
 func (m *BMD) IsECUsed() (yes bool) {
@@ -210,9 +180,47 @@ func (m *BMD) Select(qbck *cmn.QueryBcks) cmn.Bcks {
 // private methods
 //
 
+func (m *BMD) eqBID(bck *Bck, bckID uint64) error {
+	debug.Assert(bckID != 0)
+	bprops, present := m.Get(bck)
+	if !present {
+		if bck.IsRemote() {
+			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
+		}
+		return cmn.NewErrBckNotFound(bck.Bucket())
+	}
+	if bckID == bprops.BID {
+		return nil // ok
+	}
+	return errBucketIDMismatch
+}
+
 func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	if namespaces, ok := m.Providers[bck.Provider]; ok {
 		buckets = namespaces[bck.Ns.Uname()]
+	}
+	return
+}
+
+func (m *BMD) numBuckets(checkEmpty bool) (na, nar, nc, no int) {
+	for provider, namespaces := range m.Providers {
+		for nsUname, buckets := range namespaces {
+			ns := cmn.ParseNsUname(nsUname)
+			if provider == apc.AIS {
+				if ns.IsRemote() {
+					nar += len(buckets)
+				} else {
+					na += len(buckets)
+				}
+			} else if apc.IsCloudProvider(provider) {
+				nc += len(buckets)
+			} else {
+				no += len(buckets)
+			}
+			if checkEmpty && (na+nar+nc+no > 0) {
+				return
+			}
+		}
 	}
 	return
 }

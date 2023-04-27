@@ -474,23 +474,6 @@ func (t *target) initRecvHandlers() {
 	t.regNetHandlers(networkHandlers)
 }
 
-// stop gracefully
-func (t *target) Stop(err error) {
-	if !daemon.stopping.Load() {
-		// vs metasync
-		t.regstate.mu.Lock()
-		daemon.stopping.Store(true)
-		t.regstate.mu.Unlock()
-	}
-	f := glog.Infof
-	if err != nil {
-		f = glog.Warningf
-	}
-	f("Stopping %s: %v", t, err)
-	xreg.AbortAll(err)
-	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
-}
-
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		t.statsT.Inc(stats.RestartCount)

@@ -40,10 +40,9 @@ const (
 	VoteInit = "init"
 
 	// (see the corresponding action messages above)
-	Keepalive      = "keepalive"
-	AdminJoin      = "join-by-admin"   // when node is joined by admin ("manual join")
-	SelfJoin       = "autoreg"         // auto-join cluster at startup
-	CallbackRmSelf = "cb-rm-from-smap" // primary => node to call back to request removal (internal use only!)
+	Keepalive = "keepalive"
+	AdminJoin = "join-by-admin" // when node is joined by admin ("manual join")
+	SelfJoin  = "autoreg"       // auto-join cluster at startup
 
 	// target
 	Mountpaths = "mountpaths"
@@ -123,7 +122,6 @@ var (
 	URLPathDaeProxy     = urlpath(Version, Daemon, Proxy)
 	URLPathDaeSetConf   = urlpath(Version, Daemon, ActSetConfig)
 	URLPathDaeAdminJoin = urlpath(Version, Daemon, AdminJoin)
-	URLPathDaeRmSelf    = urlpath(Version, Daemon, CallbackRmSelf)
 
 	URLPathReverse    = urlpath(Version, Reverse)
 	URLPathReverseDae = urlpath(Version, Reverse, Daemon)

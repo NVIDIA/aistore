@@ -472,10 +472,13 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if !cmn.GCO.Get().Rebalance.Enabled {
 		regReq.RebInterrupted, regReq.Restarted = false, false
 	}
-	if nsi.IsTarget() && regReq.RebInterrupted {
-		// handle via rmd.starting + resumeReb
-		p.owner.rmd.interrupted.CAS(false, true)
-		glog.Errorf("%s: %s reports interrupted rebalance", p, nsi.StringEx())
+	if nsi.IsTarget() && (regReq.RebInterrupted || regReq.Restarted) {
+		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
+			// handle via rmd.starting + resumeReb
+			if p.owner.rmd.interrupted.CAS(false, true) {
+				glog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(), regReq.RebInterrupted, regReq.Restarted)
+			}
+		}
 	}
 	// when keepalive becomes a new join
 	if regReq.Restarted && apiOp == apc.Keepalive {
@@ -895,17 +898,37 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case apc.ActResetConfig:
 		p.resetCluCfgPersistent(w, r, msg)
-	case apc.ActShutdownCluster, apc.ActDecommissionCluster:
+
+	case apc.ActShutdownCluster:
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
 		args.to = cluster.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
-		p.unreg(w, r, msg)
+		// self
+		p.termKalive(msg.Action)
+		p.shutdown(msg.Action)
+	case apc.ActDecommissionCluster:
+		var (
+			opts apc.ActValRmNode
+			args = allocBcArgs()
+		)
+		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
+		args.to = cluster.AllNodes
+		_ = p.bcastGroup(args)
+		freeBcArgs(args)
+		// self
+		p.termKalive(msg.Action)
+		p.decommission(msg.Action, &opts)
 	case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActRmNodeUnsafe:
 		p.rmNode(w, r, msg)
 	case apc.ActStopMaintenance:
 		p.stopMaintenance(w, r, msg)
+
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)
@@ -1213,11 +1236,9 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
-		if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActShutdownNode {
-			errCode, err := p.rmNodeFinal(msg, si)
-			if err != nil {
-				p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
-			}
+		errCode, err := p.rmNodeFinal(msg, si)
+		if err != nil {
+			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 		}
 	case msg.Action == apc.ActRmNodeUnsafe: // target unsafe
 		if !opts.SkipRebalance {
@@ -1329,11 +1350,7 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 		debug.AssertNoErr(err)
 		return
 	}
-	if ctx.msg.Action == apc.ActDecommissionNode || ctx.msg.Action == apc.ActShutdownNode {
-		rmdCtx.listen(rmdCtx.rmNode)
-	} else {
-		rmdCtx.listen(nil)
-	}
+	rmdCtx.listen(rmdCtx.rmNode)
 	ctx.rmdCtx = rmdCtx
 }
 
@@ -1740,8 +1757,8 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// post-rebalance or post no-rebalance - last step removing a node (with semantics defined
-// by the msg.Action)
+// post-rebalance or post no-rebalance - last step removing a node
+// (with msg.Action defining semantics)
 func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {
 	var (
 		smap    = p.owner.smap.get()
@@ -1759,10 +1776,8 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, er
 	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
-	case apc.ActShutdownNode, apc.ActRmNodeUnsafe: // PUT(shutdown | rm-unsafe)
+	case apc.ActShutdownNode, apc.ActRmNodeUnsafe, apc.ActStartMaintenance, apc.ActDecommissionNode:
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	case apc.ActStartMaintenance, apc.ActDecommissionNode: // DELETE(maint | dec)
-		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathDaeRmSelf.S, Body: body}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})

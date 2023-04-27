@@ -84,13 +84,10 @@ const (
 
 // internal use
 const (
-	ActAddRemoteBck = "add-remote-bck" // add to BMD (usually, on the fly) existing remote bucket
-
-	ActRmNodeUnsafe = "rm-unsafe" // primary => node that must (see also: CallbackRmSelf)
-
-	ActStartGFN = "start-gfn"
-	ActStopGFN  = "stop-gfn"
-
+	ActAddRemoteBck   = "add-remote-bck" // add to BMD existing remote bucket, usually on the fly
+	ActRmNodeUnsafe   = "rm-unsafe"      // primary => the node to be removed
+	ActStartGFN       = "start-gfn"      // get-from-neighbor
+	ActStopGFN        = "stop-gfn"       // off
 	ActCleanupMarkers = "cleanup-markers"
 )
 

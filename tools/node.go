@@ -532,32 +532,33 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 }
 
 func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
-	var (
-		ctx           = context.Background()
-		retryInterval = time.Second
-		deadline      = time.Minute
-	)
+	const retryInterval = time.Second
 
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return nil // already (TODO: confirm)
+	}
+
+	var (
+		cancel context.CancelFunc
+		ctx    = context.Background()
+		done   = make(chan error)
+	)
+	tlog.Logf("Waiting for PID=%d to terminate\n", pid)
+
+	deadline := time.Minute / 2
 	if len(timeout) > 0 {
 		deadline = timeout[0]
 	}
-
-	tlog.Logf("Waiting for process PID=%d to terminate\n", pid)
-	var cancel context.CancelFunc
 	ctx, cancel = context.WithTimeout(ctx, deadline)
 	defer cancel()
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return nil
-	}
 
-	done := make(chan error)
 	go func() {
-		_, err := process.Wait()
-		done <- err
+		_, erw := process.Wait() // NOTE: w/ no timeout
+		done <- erw
 	}()
+	time.Sleep(10 * time.Millisecond)
 	for {
-		time.Sleep(retryInterval)
 		select {
 		case <-done:
 			return nil
@@ -566,6 +567,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 		default:
 			break
 		}
+		time.Sleep(retryInterval)
 	}
 }
 

@@ -341,26 +341,6 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	}
 }
 
-// stop proxy runner and return => rungroup.run
-// TODO: write shutdown-marker
-func (p *proxy) Stop(err error) {
-	var (
-		s         string
-		smap      = p.owner.smap.get()
-		isPrimary = smap.isPrimary(p.si)
-		f         = glog.Infof
-	)
-	if isPrimary {
-		s = " (primary)"
-	}
-	if err != nil {
-		f = glog.Warningf
-	}
-	f("Stopping %s%s, err: %v", p.si, s, err)
-	xreg.AbortAll(errors.New("p-stop"))
-	p.htrun.stop(!isPrimary && smap.isValid() && !isErrNoUnregister(err) /* rm from Smap*/)
-}
-
 // parse request + init/lookup bucket (combo)
 func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck,
 	objName string, err error) {
@@ -2403,8 +2383,6 @@ func (p *proxy) daemonHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpdaeget(w, r)
 	case http.MethodPut:
 		p.httpdaeput(w, r)
-	case http.MethodDelete:
-		p.httpdaedelete(w, r)
 	case http.MethodPost:
 		p.httpdaepost(w, r)
 	default:
@@ -2538,11 +2516,29 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)
-	case apc.ActDecommissionCluster:
+
+	case apc.ActStartMaintenance:
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		p.unreg(w, r, msg)
+		p.termKalive(msg.Action) // TODO -- FIXME: ???
+	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
+		if !p.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		var opts apc.ActValRmNode
+		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		p.termKalive(msg.Action)
+		p.decommission(msg.Action, &opts)
+	case apc.ActShutdownNode:
+		if !p.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		p.termKalive(msg.Action)
+		p.shutdown(msg.Action)
 	case apc.ActShutdownCluster:
 		smap := p.owner.smap.get()
 		isPrimary := smap.isPrimary(p.si)
@@ -2588,47 +2584,6 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 	default:
 		p.writeErrAct(w, r, action)
 	}
-}
-
-func (p *proxy) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	_, err := p.apiItems(w, r, 0, false, apc.URLPathDaeRmSelf.L) // apc.CallbackRmSelf
-	if err != nil {
-		return
-	}
-	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
-		return
-	}
-	var msg apc.ActMsg
-	if err := readJSON(w, r, &msg); err != nil {
-		return
-	}
-	p.unreg(w, r, &msg)
-}
-
-func (p *proxy) unreg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
-	// Stop keepaliving
-	p.keepalive.ctrl(kaSuspendMsg)
-
-	// In case of maintenance, we only stop the keepalive daemon,
-	// the HTTPServer is still active and accepts requests.
-	if msg.Action == apc.ActStartMaintenance {
-		return
-	}
-	if msg.Action == apc.ActDecommissionCluster || msg.Action == apc.ActDecommissionNode {
-		var (
-			opts              apc.ActValRmNode
-			keepInitialConfig bool
-		)
-		if msg.Value != nil {
-			if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-				p.writeErr(w, r, err)
-				return
-			}
-			keepInitialConfig = opts.KeepInitialConfig
-		}
-		cleanupConfigDir(p.Name(), keepInitialConfig)
-	}
-	p.Stop(&errNoUnregister{msg.Action})
 }
 
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
@@ -3283,4 +3238,50 @@ func resolveUUIDBMD(bmds bmds) (*bucketMD, error) {
 
 func ciError(num int) string {
 	return fmt.Sprintf(cmn.FmtErrIntegrity, ciePrefix, num, cmn.GitHubHome)
+}
+
+//
+// termination(s)
+//
+
+func (p *proxy) termKalive(action string) {
+	glog.Errorln(p.String(), "termKalive", action) // DEBUG
+	p.keepalive.ctrl(kaSuspendMsg)
+
+	err := fmt.Errorf("%s: term-kalive by %q", p, action)
+	xreg.AbortAll(err)
+}
+
+func (p *proxy) shutdown(action string) {
+	glog.Errorln(p.String(), "shutdown", action) // DEBUG
+	p.Stop(&errNoUnregister{action})
+}
+
+func (p *proxy) decommission(action string, opts *apc.ActValRmNode) {
+	glog.Errorln(p.String(), "decommission", action, opts) // DEBUG
+	cleanupConfigDir(p.Name(), opts.KeepInitialConfig)
+	if !opts.NoShutdown {
+		p.Stop(&errNoUnregister{action})
+	}
+}
+
+// and return from rungroup.run
+func (p *proxy) Stop(err error) {
+	var (
+		s         = "Stopping " + p.String()
+		smap      = p.owner.smap.get()
+		isPrimary = smap.isPrimary(p.si)
+	)
+	if isPrimary {
+		s += "(primary)"
+	}
+	if err == nil {
+		glog.Infoln(s)
+	} else {
+		glog.Warningf("%s: %v", s, err)
+	}
+	xreg.AbortAll(errors.New("p-stop"))
+
+	rmFromSmap := !isPrimary && smap.isValid() && !isErrNoUnregister(err)
+	p.htrun.stop(rmFromSmap)
 }

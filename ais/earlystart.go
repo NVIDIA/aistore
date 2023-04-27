@@ -396,14 +396,17 @@ func (p *proxy) _cluConfig(uuid string) (config *globalConfig, err error) {
 	return
 }
 
-// resume rebalance if needed
+// [cluster startup]: resume rebalance if `interrupted`
 func (p *proxy) resumeReb(smap *smapX, config *cmn.Config) {
-	var (
-		ver     = smap.version()
-		nojoins = config.Timeout.MaxHostBusy.D() // initial quiet time with no new joins
-		sleep   = cos.ProbingFrequency(nojoins)
-	)
 	debug.AssertNoErr(smap.validate())
+	ver := smap.version()
+
+	// initial quiet time
+	nojoins := config.Timeout.MaxKeepalive.D()
+	if p.owner.rmd.interrupted.Load() {
+		nojoins = config.Timeout.MaxHostBusy.D()
+	}
+	sleep := cos.ProbingFrequency(nojoins)
 until:
 	// until (last-Smap-update + nojoins)
 	for elapsed := time.Duration(0); elapsed < nojoins; {
@@ -416,14 +419,17 @@ until:
 		}
 		if smap.version() != ver {
 			debug.Assert(smap.version() > ver)
-			elapsed, nojoins = 0, cos.MinDuration(nojoins+sleep, config.Timeout.Startup.D())
+			elapsed = 0
+			nojoins = cos.MinDuration(nojoins+sleep, config.Timeout.Startup.D())
+			if p.owner.rmd.interrupted.Load() {
+				nojoins = cos.MaxDuration(nojoins+sleep, config.Timeout.MaxHostBusy.D())
+			}
 			ver = smap.version()
 		}
 	}
-	debug.AssertNoErr(smap.validate())
-	//
-	// NOTE: under Smap lock to serialize the following vs node joins (see `httpclupost`)
-	//
+
+	// NOTE: the remaining section under lock to serialize node joins (`httpclupost`)
+
 	p.owner.smap.mu.Lock()
 	if !p.owner.rmd.interrupted.CAS(true, false) {
 		p.owner.smap.mu.Unlock() // nothing to do
@@ -432,12 +438,10 @@ until:
 	smap = p.owner.smap.get()
 	if smap.version() != ver {
 		p.owner.smap.mu.Unlock()
-		goto until
+		goto until // repeat
 	}
-	if smap.CountActiveTs() < 2 {
-		err := &errNotEnoughTargets{p.si, smap, 2}
-		cos.ExitLogf("%s: cannot resume global rebalance - %v", p.si, err)
-	}
+
+	// do
 	var (
 		msg    = &apc.ActMsg{Action: apc.ActRebalance, Value: metaction3}
 		aisMsg = p.newAmsg(msg, nil)
@@ -449,12 +453,15 @@ until:
 	if err != nil {
 		cos.ExitLogf("%v", err)
 	}
+	// NOTE: cannot rmdModifier.listen - p.notifs may not be initialized yet
+
 	wg := p.metasyncer.sync(revsPair{rmd, aisMsg})
-	p.owner.rmd.starting.Store(false)
+
+	p.owner.rmd.starting.Store(false) // done
 	p.owner.smap.mu.Unlock()
 
 	wg.Wait()
-	glog.Errorf("%s: resuming global rebalance (%s, %s)", p.si.StringEx(), smap.StringEx(), rmd.String())
+	glog.Errorf("Warning: resumed global rebalance[%s] (%s, %s)", ctx.rebID, smap.StringEx(), rmd.String())
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on

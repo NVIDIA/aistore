@@ -161,6 +161,13 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		t.statsT.ResetStats(errorsOnly)
+
+	case apc.ActStartMaintenance:
+		if !t.ensureIntraControl(w, r, true /* from primary */) {
+			return
+		}
+		t.termKaliveX(msg.Action) // TODO -- FIXME: ????
+
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -172,7 +179,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.termKaliveX(msg.Action)
-	case apc.ActDecommissionCluster:
+	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
@@ -391,28 +398,6 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	switch apiItems[0] {
 	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
-	case apc.CallbackRmSelf: // via p.askRmSelf
-		if !t.ensureIntraControl(w, r, true /* from primary */) {
-			return
-		}
-		var (
-			msg  apc.ActMsg
-			opts apc.ActValRmNode
-		)
-		if err := readJSON(w, r, &msg); err != nil {
-			return
-		}
-		if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
-
-		debug.Assert(msg.Action == apc.ActStartMaintenance || msg.Action == apc.ActDecommissionNode, msg.Action) // TODO -- FIXME
-
-		t.termKaliveX(msg.Action)
-		if msg.Action == apc.ActDecommissionNode {
-			t.decommission(msg.Action, &opts)
-		}
 	default:
 		t.writeErrURL(w, r)
 	}
@@ -1174,13 +1159,16 @@ func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
 //
 
 func (t *target) termKaliveX(action string) {
+	glog.Errorln(t.String(), "termKaliveX", action) // DEBUG
 	t.keepalive.ctrl(kaSuspendMsg)
-	errCause := errors.New("target is being removed from the cluster via '" + action + "'")
-	dsort.Managers.AbortAll(errCause) // all dSort jobs
-	xreg.AbortAll(errCause)           // all xactions
+
+	err := fmt.Errorf("%s: term-kalive by %q", t, action)
+	dsort.Managers.AbortAll(err) // all dsort jobs
+	xreg.AbortAll(err)           // all xactions
 }
 
 func (t *target) shutdown(action string) {
+	glog.Errorln(t.String(), "shutdown", action) // DEBUG
 	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
 	t.regstate.mu.Unlock()
@@ -1189,6 +1177,7 @@ func (t *target) shutdown(action string) {
 }
 
 func (t *target) decommission(action string, opts *apc.ActValRmNode) {
+	glog.Errorln(t.String(), "decommission", action, opts) // DEBUG
 	t.regstate.mu.Lock()
 	daemon.stopping.Store(true)
 	t.regstate.mu.Unlock()
@@ -1204,4 +1193,21 @@ func (t *target) decommission(action string, opts *apc.ActValRmNode) {
 	if !opts.NoShutdown {
 		t.Stop(&errNoUnregister{action})
 	}
+}
+
+// stop gracefully, return from rungroup.run
+func (t *target) Stop(err error) {
+	if !daemon.stopping.Load() {
+		// vs metasync
+		t.regstate.mu.Lock()
+		daemon.stopping.Store(true)
+		t.regstate.mu.Unlock()
+	}
+	if err == nil {
+		glog.Infoln("Stopping " + t.String())
+	} else {
+		glog.Warningf("Stopping %s: %v", t, err)
+	}
+	xreg.AbortAll(err)
+	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }

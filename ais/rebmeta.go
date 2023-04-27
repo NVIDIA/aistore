@@ -197,7 +197,7 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	}
 }
 
-// remove node from the cluster
+// deactivate or remove node from the cluster (as per msg.Action)
 func (m *rmdModifier) rmNode(nl nl.Listener) {
 	m.log(nl)
 	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
