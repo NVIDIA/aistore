@@ -154,7 +154,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 		table.addRow(row)
 	}
 
-	if c.Totals == nil || numTs <= 1 {
+	if !c.Idle && (c.Totals == nil || numTs <= 1) { // but always show 'idle'
 		return table, numNZ, nil
 	}
 
@@ -169,16 +169,16 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 			row = append(row, "")
 			continue
 		}
-		val, ok := c.Totals[h.name]
 		if c.Idle || numNZ == 0 {
 			if !added {
-				row = append(row, "idle")
+				row = append(row, fgreen("idle"))
 				added = true
 			} else {
 				row = append(row, "")
 			}
 			continue
 		}
+		val, ok := c.Totals[h.name]
 		if ok {
 			kind, ok := c.Metrics[h.name]
 			debug.Assert(ok, h.name)
