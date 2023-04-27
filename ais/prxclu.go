@@ -593,7 +593,7 @@ func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, fl
 		return
 	}
 	// check dup IP
-	if _, err = smap.IsDuplicate(nsi); err != nil {
+	if _, err = smap.IsDupNet(nsi); err != nil {
 		err = errors.New(p.String() + ": " + err.Error())
 	}
 
@@ -1695,7 +1695,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if res.si.ID() == npid {
-			cos.ExitLogf("Commit phase failure: new primary %q returned err: %v", npid, res.err)
+			cos.ExitLogf("commit phase failure: new primary %q returned %v", npid, res.err)
 		} else {
 			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
 				res.si.ID(), res.err, npid)

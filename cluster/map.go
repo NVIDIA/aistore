@@ -226,7 +226,7 @@ func (d *Snode) Clone() *Snode {
 	return &dst
 }
 
-func (d *Snode) isDuplicate(n *Snode) error {
+func (d *Snode) isDupNet(n *Snode, smap *Smap) error {
 	var (
 		du = []string{d.PubNet.URL, d.ControlNet.URL, d.DataNet.URL}
 		nu = []string{n.PubNet.URL, n.ControlNet.URL, n.DataNet.URL}
@@ -234,19 +234,19 @@ func (d *Snode) isDuplicate(n *Snode) error {
 	for _, ni := range nu {
 		np, err := url.Parse(ni)
 		if err != nil {
-			return fmt.Errorf("FATAL: failed to parse %s URL %q: %v", n.StringEx(), ni, err)
+			return fmt.Errorf("%s %s: failed to parse %s URL %q: %v", cmn.BadSmapPrefix, smap, n.StringEx(), ni, err)
 		}
 		for _, di := range du {
 			dp, err := url.Parse(di)
 			if err != nil {
-				return fmt.Errorf("FATAL: failed to parse %s URL %q: %v", d.StringEx(), di, err)
+				return fmt.Errorf("%s %s: failed to parse %s URL %q: %v", cmn.BadSmapPrefix, smap, d.StringEx(), di, err)
 			}
 			if np.Host == dp.Host {
-				return fmt.Errorf("duplicate IPs: %s and %s share the same %q (hint: node ID changed or lost/renewed?)",
-					d.StringEx(), n.StringEx(), np.Host)
+				return fmt.Errorf("duplicate IPs: %s and %s share the same %q, %s",
+					d.StringEx(), n.StringEx(), np.Host, smap.StringEx())
 			}
 			if ni == di {
-				return fmt.Errorf("duplicate URLs: %s and %s share the same %q", d.StringEx(), n.StringEx(), ni)
+				return fmt.Errorf("duplicate URLs: %s and %s share the same %q, %s", d.StringEx(), n.StringEx(), ni, smap.StringEx())
 			}
 		}
 	}
@@ -440,12 +440,12 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 		len(m.Pmap), cnt, excludePrimary)
 }
 
-func (m *Smap) IsDuplicate(nsi *Snode) (osi *Snode, err error) {
+func (m *Smap) IsDupNet(nsi *Snode) (osi *Snode, err error) {
 	for _, tsi := range m.Tmap {
 		if tsi.ID() == nsi.ID() {
 			continue
 		}
-		if err = tsi.isDuplicate(nsi); err != nil {
+		if err = tsi.isDupNet(nsi, m); err != nil {
 			osi = tsi
 			return
 		}
@@ -454,7 +454,7 @@ func (m *Smap) IsDuplicate(nsi *Snode) (osi *Snode, err error) {
 		if psi.ID() == nsi.ID() {
 			continue
 		}
-		if err = psi.isDuplicate(nsi); err != nil {
+		if err = psi.isDupNet(nsi, m); err != nil {
 			osi = psi
 			return
 		}

@@ -103,7 +103,7 @@ func (t *target) initBackends() {
 	}
 
 	if err := t._initBuiltin(); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 }
 
@@ -200,7 +200,7 @@ func (t *target) init(config *cmn.Config) {
 	t.fshc = fshc
 
 	if err := ts.InitCDF(); err != nil { // goes after fs.New
-		cos.ExitLogf("%s", err)
+		cos.ExitLog(err)
 	}
 
 	s3.Init() // s3 multipart
@@ -246,7 +246,7 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 
 	var err error
 	if tid, err = fs.LoadNodeID(config.FSP.Paths); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	if tid != "" {
 		return
@@ -270,7 +270,7 @@ func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {
 
 func (t *target) Run() error {
 	if err := t.si.Validate(); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	config := cmn.GCO.Get()
 	t.htrun.init(config)
@@ -282,7 +282,7 @@ func (t *target) Run() error {
 	tstats := t.statsT.(*stats.Trunner)
 	availablePaths, disabledPaths := fs.Get()
 	if len(availablePaths) == 0 {
-		cos.ExitLogf("%v", cmn.ErrNoMountpaths)
+		cos.ExitLog(cmn.ErrNoMountpaths)
 	}
 	regDiskMetrics(tstats, availablePaths)
 	regDiskMetrics(tstats, disabledPaths)
@@ -290,7 +290,7 @@ func (t *target) Run() error {
 
 	fatalErr, writeErr := t.checkRestarted()
 	if fatalErr != nil {
-		cos.ExitLogf("%v", fatalErr)
+		cos.ExitLog(fatalErr)
 	}
 	if writeErr != nil {
 		glog.Errorln("")
@@ -300,10 +300,10 @@ func (t *target) Run() error {
 
 	// register object type and workfile type
 	if err := fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	if err := fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 
 	// Init meta-owners and load local instances
@@ -312,10 +312,12 @@ func (t *target) Run() error {
 	}
 	t.owner.etl.init()
 
-	smap, reliable := t.tryLoadSmap()
+	smap, reliable := t.loadSmap()
 	if !reliable {
 		smap = newSmap()
 		smap.Tmap[t.SID()] = t.si // add self to initial temp smap
+	} else {
+		glog.Infof("%s: loaded %s", t.si.StringEx(), smap.StringEx())
 	}
 	t.owner.smap.put(smap)
 

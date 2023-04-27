@@ -118,18 +118,29 @@ func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d
 // Abnormal Termination
 //
 
-// Exitf writes formatted message to STDERR and exits with non-zero status code.
+const fatalPrefix = "FATAL ERROR: "
+
 func Exitf(f string, a ...any) {
-	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
-	fmt.Fprint(os.Stderr, msg)
-	os.Exit(1)
+	msg := fmt.Sprintf(fatalPrefix+f+"\n", a...)
+	_exit(msg)
 }
 
-// ExitLogf is glog + Exitf.
+// +glog
 func ExitLogf(f string, a ...any) {
-	msg := fmt.Sprintf("FATAL ERROR: "+f+"\n", a...)
+	msg := fmt.Sprintf(fatalPrefix+f+"\n", a...)
 	glog.ErrorDepth(1, msg)
 	glog.Flush()
+	_exit(msg)
+}
+
+func ExitLog(a ...any) {
+	msg := fatalPrefix + fmt.Sprint(a...) + "\n"
+	glog.ErrorDepth(1, msg)
+	glog.Flush()
+	_exit(msg)
+}
+
+func _exit(msg string) {
 	fmt.Fprint(os.Stderr, msg)
 	os.Exit(1)
 }

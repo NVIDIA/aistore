@@ -243,22 +243,19 @@ func (g *fsprungroup) redistributeMD() {
 	if !hasEnoughBMDCopies() {
 		bo := g.t.owner.bmd
 		if err := bo.persist(bo.get(), nil); err != nil {
-			debug.AssertNoErr(err)
-			cos.ExitLogf("%v", err)
+			cos.ExitLog(err)
 		}
 	}
 
 	if !hasEnoughEtlMDCopies() {
 		eo := g.t.owner.etl
 		if err := eo.persist(eo.get(), nil); err != nil {
-			debug.AssertNoErr(err)
-			cos.ExitLogf("%v", err)
+			cos.ExitLog(err)
 		}
 	}
 
 	if _, err := volume.NewFromMPI(g.t.SID()); err != nil {
-		debug.AssertNoErr(err)
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 }
 

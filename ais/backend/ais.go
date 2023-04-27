@@ -105,7 +105,7 @@ func extractErrCode(e error, uuid string) (int, error) {
 func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) error {
 	conf := cmn.BackendConfAIS{}
 	if err := cos.MorphMarshal(v, &conf); err != nil {
-		return fmt.Errorf("invalid ais backend config (%+v, %T), err: %v", v, v, err)
+		return fmt.Errorf("invalid ais backend config (%+v, %T): %v", v, v, err)
 	}
 	m.mu.Lock()
 	err := m._apply(cfg, conf, action)
@@ -255,7 +255,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 			client = httpsClient
 		}
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua}); err != nil {
-			glog.Warningf("remote cluster failing to reach %q via %s, err: %v", alias, u, err)
+			glog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)
 			continue
 		}
 		if remSmap == nil {

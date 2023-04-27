@@ -324,7 +324,7 @@ func (h *htrun) initNetworks() {
 		pubAddr, intraControlAddr, intraDataAddr cluster.NetInfo
 	)
 	if err != nil {
-		cos.ExitLogf("Failed to get local IP addr list, err: %v", err)
+		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
 	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
 	if k8sDetected && config.HostNet.Hostname != "" {
@@ -334,7 +334,7 @@ func (h *htrun) initNetworks() {
 		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
 	}
 	if err != nil {
-		cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
+		cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
 	}
 	if config.HostNet.Hostname != "" {
 		s = " (config: " + config.HostNet.Hostname + ")"
@@ -346,7 +346,7 @@ func (h *htrun) initNetworks() {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
 		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
-			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
+			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraControl != "" {
@@ -359,7 +359,7 @@ func (h *htrun) initNetworks() {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
 		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
-			cos.ExitLogf("Failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
+			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
 		}
 		s = ""
 		if config.HostNet.HostnameIntraData != "" {
@@ -407,37 +407,38 @@ func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, 
 	}
 }
 
-// detectNodeChanges is called at startup. Given loaded Smap, it checks whether
-// this node ID is present.
-// NOTE: we are _not_ enforcing node's (`h.si`) immutability - in particular,
-// the node's IPs that, in fact, may change upon restart in certain environments.
-func (h *htrun) detectNodeChanges(smap *smapX) (err error) {
-	if smap.GetNode(h.si.ID()) == nil {
-		err = fmt.Errorf("%s: not present in the loaded %s", h.si, smap)
-	}
-	return
-}
+// at startup, check this Snode vs locally stored Smap replica (NOTE: some errors are FATAL)
+func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
+	smap = newSmap()
+	loaded, err := h.owner.smap.load(smap)
 
-func (h *htrun) tryLoadSmap() (_ *smapX, reliable bool) {
-	var (
-		smap        = newSmap()
-		loaded, err = h.owner.smap.load(smap)
-	)
 	if err != nil {
-		glog.Errorf("Failed to load Smap (err: %v)", err)
-		smap = newSmap() // Reinitialize smap as it might have been corrupted during loading.
-	} else if loaded {
-		reliable = true
-		if err := h.detectNodeChanges(smap); err != nil {
-			glog.Error(err)
-			reliable = false
-		}
-		if _, err := smap.IsDuplicate(h.si); err != nil {
-			glog.Error(err)
-			reliable = false
-		}
+		glog.Errorf("Failed to load cluster map (\"Smap\"): %v - reinitializing", err)
+		return
 	}
-	return smap, reliable
+	if !loaded {
+		return // no local replica - joining from scratch
+	}
+
+	node := smap.GetNode(h.SID())
+	if node == nil {
+		cos.ExitLogf("%s: %s is not present in the loaded %s", cmn.BadSmapPrefix, h.si, smap.StringEx())
+		return
+	}
+	if node.Type() != h.si.Type() {
+		cos.ExitLogf("%s: %s is %q while the node in the loaded %s is %q", cmn.BadSmapPrefix,
+			h.si, h.si.Type(), smap.StringEx(), node.Type())
+		return
+	}
+
+	// NOTE: not enforcing Snode's immutability - in particular, IPs that may change upon restart
+	// in certain environments
+	if _, err := smap.IsDupNet(h.si); err != nil {
+		glog.Error(err)
+		return
+	}
+	reliable = true
+	return
 }
 
 func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, query url.Values) {
@@ -1686,7 +1687,7 @@ func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid
 	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
-			cos.ExitLogf("%v", res.err) // FATAL: cluster integrity error (cie)
+			cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
 		}
 		status, err = res.status, res.err
 		freeCR(res)

@@ -47,6 +47,8 @@ const (
 	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
 
 	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
+
+	BadSmapPrefix = "[bad cluster map]"
 )
 
 type (

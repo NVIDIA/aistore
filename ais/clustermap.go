@@ -357,7 +357,7 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 // if `del` is true delete the old one so that the caller can update Snode
 func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
 	var osi *cluster.Snode
-	if osi, err = m.IsDuplicate(nsi); err == nil {
+	if osi, err = m.IsDupNet(nsi); err == nil {
 		return
 	}
 	glog.Error(err)

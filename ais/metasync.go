@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -207,7 +207,7 @@ func (y *metasyncer) Run() error {
 }
 
 func (y *metasyncer) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", y.Name(), err)
+	glog.Infof("Stopping %s: %v", y.Name(), err)
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)
@@ -351,7 +351,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			continue
 		}
 		// failing to sync
-		glog.Warningf("%s: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 		// in addition to "retriables" always retry newTargetID - the joining one
 		if cos.IsRetriableConnErr(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
 			if refused == nil {
@@ -464,7 +464,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
-				msg := fmt.Sprintf("%s [hr]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				msg := fmt.Sprintf("%s [hr]: %s %s: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
 					glog.Errorln(msg + " - aborting")
 					freeBcastRes(results)
@@ -474,7 +474,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 				continue
 			}
 		}
-		glog.Warningf("%s [hr]: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s [hr]: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 	}
 	freeBcastRes(results)
 	return true
@@ -571,7 +571,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
-				msg := fmt.Sprintf("%s [hp]: %s %s, err: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				msg := fmt.Sprintf("%s [hp]: %s %s: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
 					// return zero so that the caller stops retrying (y.retryTimer)
 					glog.Errorln(msg + " - aborting")
@@ -582,7 +582,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 				continue
 			}
 		}
-		glog.Warningf("%s [hp]: %s %s, err: %v(%d)", y.p, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s [hp]: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 	}
 	freeBcastRes(results)
 	return

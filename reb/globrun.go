@@ -133,7 +133,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 	}
 	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrate, dmExtra)
 	if err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	reb.dm = dm
 
@@ -144,10 +144,10 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 
 func (reb *Reb) regRecv() {
 	if err := reb.dm.RegRecv(); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	if err := transport.HandleObjStream(trnamePsh, reb.recvStageNtfn /*RecvObj*/); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 }
 
@@ -328,7 +328,7 @@ func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning
 		err := reb._preempt(rargs, logHdr, total, maxTotal, errcnt)
 		if err != nil {
 			if total > maxwt {
-				cos.ExitLogf("%v", err)
+				cos.ExitLog(err)
 			}
 			errcnt++
 		}

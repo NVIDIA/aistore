@@ -603,7 +603,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		bmd         = t.owner.bmd.get()
 	)
 	if err = bmd.validateUUID(newBMD, t.si, psi, ""); err != nil {
-		cos.ExitLogf("%v", err) // FATAL: cluster integrity error (cie)
+		cos.ExitLog(err) // FATAL: cluster integrity error (cie)
 		return
 	}
 	// check downgrade
@@ -634,7 +634,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 
 	// 2. persist
 	if err = t.owner.bmd.putPersist(newBMD, payload); err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 		return
 	}
 

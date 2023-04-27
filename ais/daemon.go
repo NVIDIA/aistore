@@ -123,7 +123,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		os.Exit(0)
 	}
 	if daemon.cli.role != apc.Proxy && daemon.cli.role != apc.Target {
-		cos.ExitLogf("Invalid daemon's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)
+		cos.ExitLogf("invalid node's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)
 	}
 	if daemon.cli.globalConfigPath == "" {
 		cos.ExitLogf(erfm, "config")
@@ -137,7 +137,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	config = &cmn.Config{}
 	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	cmn.GCO.Put(config)
 
@@ -156,16 +156,16 @@ func initDaemon(version, buildTime string) cos.Runner {
 			kvs      = strings.Split(daemon.cli.confCustom, ",")
 		)
 		if err := toUpdate.FillFromKVS(kvs); err != nil {
-			cos.ExitLogf(err.Error())
+			cos.ExitLog(err)
 		}
 		if err := setConfigInMem(toUpdate, config, apc.Daemon); err != nil {
-			cos.ExitLogf("Failed to update config in memory: %v", err)
+			cos.ExitLogf("failed to update config in memory: %v", err)
 		}
 
 		overrideConfig := cmn.GCO.MergeOverrideConfig(toUpdate)
 		if !daemon.cli.transient {
 			if err = cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
-				cos.ExitLogf("Failed to save override config: %v", err)
+				cos.ExitLogf("failed to save 'override' config: %v", err)
 			}
 		}
 	}

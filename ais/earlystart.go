@@ -45,7 +45,7 @@ func (p *proxy) bootstrap() {
 	)
 
 	// 1: load a local copy and try to utilize it for discovery
-	smap, reliable := p.tryLoadSmap()
+	smap, reliable := p.loadSmap()
 	if !reliable {
 		smap = nil
 	} else {
@@ -96,7 +96,7 @@ func (p *proxy) bootstrap() {
 		}
 	}
 	if err != nil {
-		cos.ExitLogf("FATAL: %s (non-primary) failed to join cluster, err: %v", p.si, err)
+		cos.ExitLogf("%s (non-primary) failed to join: %v", p.si, err)
 	}
 }
 
@@ -120,10 +120,7 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	}
 
 	if envP.pid != "" && envP.primary && p.SID() != envP.pid {
-		cos.ExitLogf(
-			"FATAL: %s: invalid combination of %s=true & %s=%s",
-			p.si, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid,
-		)
+		cos.ExitLogf("%s: invalid combination of %s=true & %s=%s", p, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid)
 	}
 	glog.Infof("%s: %sprimary-env=%+v", p.si.StringEx(), tag, envP)
 
@@ -216,15 +213,15 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	if !daemon.cli.primary.skipStartup {
 		maxVerSmap := p.acceptRegistrations(smap, loadedSmap, config, ntargets)
 		if maxVerSmap != nil {
-			if _, err := maxVerSmap.IsDuplicate(p.si); err != nil {
-				cos.ExitLogf("FATAL: %v", err)
+			if _, err := maxVerSmap.IsDupNet(p.si); err != nil {
+				cos.ExitLogf("%s: %v", cmn.BadSmapPrefix, err)
 			}
 			maxVerSmap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(maxVerSmap)
 			glog.Infof("%s: change-of-mind #1: registering with %s(%s)",
 				p.si, maxVerSmap.Primary.ID(), maxVerSmap.Primary.URL(cmn.NetIntraControl))
 			if err := p.secondaryStartup(maxVerSmap); err != nil {
-				cos.ExitLogf("FATAL: %v", err)
+				cos.ExitLogf("%s: %v", cmn.BadSmapPrefix, err)
 			}
 			return
 		}
@@ -288,7 +285,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		p.owner.smap.mu.Unlock()
 		glog.Infof("%s: registering with primary %s", p.si.StringEx(), smap.Primary.StringEx())
 		if err := p.secondaryStartup(smap); err != nil {
-			cos.ExitLogf("FATAL: %v", err)
+			cos.ExitLog(err)
 		}
 		return
 	}
@@ -296,7 +293,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	// 5:  persist and finalize w/ sync + BMD
 	if smap.UUID == "" {
 		if !daemon.cli.primary.skipStartup && smap.CountTargets() == 0 {
-			cos.ExitLogf("FATAL: %s cannot create a new cluster with no targets, %s", p.si, smap)
+			cos.ExitLogf("%s: cannot create cluster with no targets, %s", p, smap.StringEx())
 		}
 		clone := smap.clone()
 		if uuid == "" {
@@ -319,7 +316,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
-		cos.ExitLogf("%s (primary), err: %v", p.si, err)
+		cos.ExitLogf("%s (primary): %v", p.si, err)
 	}
 	p.owner.smap.mu.Unlock()
 
@@ -329,7 +326,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		bmd.Version = 1 // init BMD
 		bmd.UUID = smap.UUID
 		if err := p.owner.bmd.putPersist(bmd, nil); err != nil {
-			cos.ExitLogf("%v", err)
+			cos.ExitLog(err)
 		}
 	}
 
@@ -348,7 +345,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	// 9. cluster config: load existing _or_ initialize brand new v1
 	cluConfig, err := p._cluConfig(smap.UUID)
 	if err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 
 	// 10. metasync (smap, config, etl & bmd) and startup as primary
@@ -451,7 +448,7 @@ until:
 	)
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
-		cos.ExitLogf("%v", err)
+		cos.ExitLog(err)
 	}
 	// NOTE: cannot rmdModifier.listen - p.notifs may not be initialized yet
 
@@ -526,7 +523,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 		if bmd == nil || bmd.version() < svm.BMD.version() {
 			glog.Infof("%s: override local %s with %s", p.si.StringEx(), bmd, svm.BMD)
 			if err := p.owner.bmd.putPersist(svm.BMD, nil); err != nil {
-				cos.ExitLogf("%v", err)
+				cos.ExitLog(err)
 			}
 		}
 		p.owner.bmd.Unlock()
@@ -575,9 +572,9 @@ func (p *proxy) discoverMeta(smap *smapX) {
 	}
 	if svm.Smap.Primary != nil && svm.Smap.Primary.ID() != p.SID() {
 		if svm.Smap.version() > smap.version() {
-			if dupNode, err := svm.Smap.IsDuplicate(p.si); err != nil {
+			if dupNode, err := svm.Smap.IsDupNet(p.si); err != nil {
 				if !svm.Smap.IsPrimary(dupNode) {
-					cos.ExitLogf("%v", err)
+					cos.ExitLog(err)
 				}
 				// If the primary in max-ver Smap version and current node only differ by `DaemonID`,
 				// overwrite the proxy entry with current `Snode` and proceed to merging Smap.
@@ -828,7 +825,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	}
 	if after.BMD != before.BMD {
 		if err := p.owner.bmd.putPersist(after.BMD, nil); err != nil {
-			cos.ExitLogf("FATAL: %v", err)
+			cos.ExitLog(err)
 		}
 	}
 	if after.RMD != before.RMD {
@@ -844,7 +841,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 			},
 		})
 		if err != nil {
-			cos.ExitLogf("FATAL: %v", err)
+			cos.ExitLog(err)
 		}
 	}
 
@@ -884,7 +881,7 @@ ret:
 		},
 	})
 	if err != nil {
-		cos.ExitLogf("FATAL: %v", err)
+		cos.ExitLog(err)
 	}
 	return clone
 }
