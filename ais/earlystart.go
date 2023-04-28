@@ -357,7 +357,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	p.markClusterStarted()
-	glog.Infof("%s: primary & cluster startup complete (%s, %s)", p.si.StringEx(), smap.StringEx(), bmd.StringEx())
+	glog.Infof("%s primary: cluster started up (%s, %s)", p.si.StringEx(), smap.StringEx(), bmd.StringEx())
 
 	if etlMD.Version > 0 {
 		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})

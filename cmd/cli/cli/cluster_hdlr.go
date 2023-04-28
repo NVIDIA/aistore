@@ -43,6 +43,10 @@ var (
 			noRebalanceFlag,
 			yesFlag,
 		},
+		cmdStopMaint: {
+			noRebalanceFlag,
+			yesFlag,
+		},
 		cmdShutdown + ".node": {
 			noRebalanceFlag,
 			rmUserDataFlag,
@@ -162,6 +166,7 @@ var (
 						Name:         cmdStopMaint,
 						Usage:        "activate node by taking it back from \"maintenance\"",
 						ArgsUsage:    nodeIDArgument,
+						Flags:        clusterCmdsFlags[cmdStopMaint],
 						Action:       nodeMaintShutDecommHandler,
 						BashComplete: suggestAllNodes,
 					},
@@ -338,7 +343,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
@@ -377,17 +382,23 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	switch action {
 	case cmdStartMaint:
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to put node %s in maintenance mode", sname)
+			warn := fmt.Sprintf("about to put %s in maintenance mode", sname)
 			if ok := confirm(c, "Proceed?", warn); !ok {
 				return nil
 			}
 		}
 		xid, err = api.StartMaintenance(apiBP, actValue)
 	case cmdStopMaint:
+		if !flagIsSet(c, yesFlag) {
+			prompt := fmt.Sprintf("Take %s out of maintenance mode", sname)
+			if ok := confirm(c, prompt); !ok {
+				return nil
+			}
+		}
 		xid, err = api.StopMaintenance(apiBP, actValue)
 	case cmdNodeDecommission:
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to permanently decommission node %s. The operation cannot be undone!", sname)
+			warn := fmt.Sprintf("about to permanently decommission %s. The operation cannot be undone!", sname)
 			if ok := confirm(c, "Proceed?", warn); !ok {
 				return nil
 			}
@@ -395,8 +406,8 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		xid, err = api.DecommissionNode(apiBP, actValue)
 	case cmdShutdown:
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("about to shut down node %s", sname)
-			if ok := confirm(c, "Proceed?", warn); !ok {
+			prompt := fmt.Sprintf("Shut down %s", sname)
+			if ok := confirm(c, prompt); !ok {
 				return nil
 			}
 		}

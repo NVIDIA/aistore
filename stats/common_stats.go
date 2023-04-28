@@ -34,10 +34,11 @@ import (
 )
 
 const (
-	dfltPeriodicFlushTime = 40 * time.Second       // when `config.Log.FlushTime` == time.Duration(0)
-	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
-	dfltStatsLogInterval  = int64(time.Minute)     // when `config.Log.StatsTime` == time.Duration(0)
-	maxStatsLogInterval   = int64(2 * time.Minute) // when the resulting `statsTime` is greater than
+	dfltPeriodicFlushTime = 40 * time.Second // when `config.Log.FlushTime` == time.Duration(0)
+	dfltPeriodicTimeStamp = time.Hour        // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
+
+	// when idle or configured `statsTime` greater than
+	maxStatsLogInterval = int64(2*time.Minute) - int64(10*time.Millisecond)
 )
 
 // more periodic
@@ -131,15 +132,15 @@ type (
 
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		daemon      runnerHost
-		stopCh      chan struct{}
-		workCh      chan cos.NamedVal64
-		ticker      *time.Ticker
-		core        *coreStats
-		ctracker    copyTracker // to avoid making it at runtime
-		name        string      // this stats-runner's name
-		nextLogTime int64       // mono.NanoTime()
-		startedUp   atomic.Bool
+		daemon    runnerHost
+		stopCh    chan struct{}
+		workCh    chan cos.NamedVal64
+		ticker    *time.Ticker
+		core      *coreStats
+		ctracker  copyTracker // to avoid making it at runtime
+		name      string      // this stats-runner's name
+		next      int64       // mono.NanoTime()
+		startedUp atomic.Bool
 	}
 
 	//
@@ -417,9 +418,6 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 		case KindComputedThroughput:
 			if throughput := ratomic.SwapInt64(&v.Value, 0); throughput > 0 {
 				out[name] = copyValue{throughput}
-				if !ignore(name) {
-					idle = false
-				}
 				if !s.isPrometheus() {
 					fv := roundMBs(throughput)
 					s.statsdC.AppMetric(metric{Type: statsd.Gauge, Name: v.label.stsd, Value: fv}, s.sgl)
@@ -432,12 +430,12 @@ func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 			)
 			if prev, ok := out[name]; !ok || prev.Value != val {
 				changed = true
-				if !ignore(name) {
-					idle = false
-				}
 			}
 			if val > 0 {
 				out[name] = copyValue{val}
+				if changed && !ignore(name) {
+					idle = false
+				}
 			}
 			// StatsD iff changed
 			if !s.isPrometheus() && changed {
@@ -848,7 +846,7 @@ waitStartup:
 	r.startedUp.Store(true)
 	var (
 		checkNumGorHigh   int64
-		startTime         = mono.NanoTime()
+		startTime         = mono.NanoTime() // uptime henceforth
 		lastGlogFlushTime = startTime
 		lastDateTimestamp = startTime
 	)

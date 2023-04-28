@@ -57,24 +57,22 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 // statsLogger interface impl
 //
 
-func (r *Prunner) log(now int64, uptime time.Duration, config *cmn.Config) {
+func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	s := r.core
 	s.updateUptime(uptime)
 	s.promLock()
 	idle := s.copyT(r.ctracker)
 	s.promUnlock()
-	if now >= r.nextLogTime && !idle {
-		s.sgl.Reset() // NOTE: sharing the same sgl w/ CoreStats.copyT
+	if now >= r.next || !idle {
+		s.sgl.Reset() // sharing w/ CoreStats.copyT
 		r.ctracker.write(s.sgl, false /*target*/)
 		if s.sgl.Len() > 3 { // skip '{}'
 			bytes := s.sgl.Bytes()
 			glog.Infoln(string(bytes))
 		}
-		i := int64(config.Log.StatsTime)
-		if i == 0 {
-			i = dfltStatsLogInterval
+		if idle {
+			r.next = now + maxStatsLogInterval
 		}
-		r.nextLogTime = now + cos.MinI64(i, maxStatsLogInterval)
 	}
 }
 

@@ -402,7 +402,7 @@ func (y *metasyncer) useJIT(pair revsPair) revs {
 		skipping       bool
 	)
 	if msg.Action != "" {
-		s = ", action " + msg.Action
+		s = ", " + msg.Action
 	}
 	if jitRevs != nil && jitRevs.version() > revs.version() {
 		// making exception for BMD (and associated bucket-level transactions) unless:
@@ -418,9 +418,9 @@ func (y *metasyncer) useJIT(pair revsPair) revs {
 		}
 	}
 	if skipping {
-		glog.Infof("%s: sync newer %s v%d%s (skipping %s)", y.p, tag, jitRevs.version(), s, revs)
+		glog.Infof("%s: newer %s v%d%s (skipping %s)", y.p, tag, jitRevs.version(), s, revs)
 	} else {
-		glog.Infof("%s: sync %s v%d%s", y.p, tag, revs.version(), s)
+		glog.Infof("%s: %s v%d%s", y.p, tag, revs.version(), s)
 	}
 	return revs
 }

@@ -163,7 +163,7 @@ func (h *htrun) cluStartedWithRetry() bool {
 	time.Sleep(time.Second)
 	clutime := h.startup.cluster.Load()
 	if clutime == 0 {
-		glog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up (?)", h.si))
+		glog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up", h.si))
 	}
 	return clutime > 0
 }

@@ -1814,7 +1814,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, er
 		return
 	}
 
-	glog.Infof("%s: removing node %s via %q", p, node.StringEx(), msg.Action)
+	glog.Infof("%s: %s %s", p, msg.Action, node.StringEx())
 	res := p.call(cargs)
 	er, d := res.err, res.details
 	freeCargs(cargs)
