@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -183,17 +182,19 @@ type (
 // ActMsg //
 ////////////
 
-func (msg *ActMsg) String() string {
+func (msg *ActMsg) String() string   { return msg._string(false) }
+func (msg *ActMsg) StringEx() string { return msg._string(true) }
+
+func (msg *ActMsg) _string(inclVal bool) string {
 	s := "amsg[" + msg.Action
 	if msg.Name != "" {
 		s += ", name=" + msg.Name
 	}
-	if msg.Value == nil {
+	if !inclVal || msg.Value == nil {
 		return s + "]"
 	}
 	vs, err := jsoniter.Marshal(msg.Value)
 	if err != nil {
-		debug.AssertNoErr(err)
 		s += "-<json err: " + err.Error() + ">"
 		return s + "]"
 	}

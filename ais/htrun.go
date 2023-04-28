@@ -1252,16 +1252,18 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 // metasync Rx
 //
 
-func _msdetail(ver int64, msg *aisMsg, caller string) (d string) {
-	if caller != "" {
-		d = " from " + caller
-	}
-	if msg.Action != "" || msg.UUID != "" {
-		d += fmt.Sprintf(" (up from v%d, action %q, uuid %q)", ver, msg.Action, msg.UUID)
+func logmsync(ver int64, revs revs, msg *aisMsg, opts ...string) {
+	var (
+		what   string
+		caller = opts[0]
+	)
+	if len(opts) == 1 {
+		what = revs.String()
 	} else {
-		d += fmt.Sprintf(" (up from v%d)", ver)
+		what = opts[1]
 	}
-	return
+	s := fmt.Sprintf("msync Rx: %s (up from v%d), %s <-- %s", what, ver, msg, caller)
+	glog.InfoDepth(1, s)
 }
 
 func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
@@ -1283,7 +1285,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	}
 	config := cmn.GCO.Get()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("extract %s%s", newConfig, _msdetail(config.Version, msg, caller))
+		logmsync(config.Version, newConfig, msg, caller)
 	}
 	if newConfig.version() <= config.Version {
 		if newConfig.version() < config.Version {
@@ -1313,8 +1315,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	}
 	etlMD := h.owner.etl.get()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("extract %s%s", newMD, _msdetail(etlMD.Version, msg, caller))
-		glog.Errorf("extract %s%s", newMD, _msdetail(etlMD.Version, msg, caller))
+		logmsync(etlMD.Version, newMD, msg, caller)
 	}
 	if newMD.version() <= etlMD.version() {
 		if newMD.version() < etlMD.version() {
@@ -1367,7 +1368,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		return // FATAL: cluster integrity error
 	}
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("extract %s%s", newSmap, _msdetail(smap.Version, msg, caller))
+		logmsync(smap.Version, newSmap, msg, caller)
 	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
 	debug.Assert(sameOrigin)
@@ -1400,7 +1401,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	}
 	rmd := h.owner.rmd.get()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("extract %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
+		logmsync(rmd.Version, newRMD, msg, caller)
 	}
 	if newRMD.version() <= rmd.version() {
 		if newRMD.version() < rmd.version() {
@@ -1430,7 +1431,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	}
 	bmd := h.owner.bmd.get()
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("extract %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
+		logmsync(bmd.Version, newBMD, msg, caller)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
 	if h.si.IsTarget() && msg.UUID != "" {
@@ -1450,7 +1451,8 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 		return nil
 	}
 	smap := h.owner.smap.get()
-	glog.Infof("receive %s%s", newSmap.StringEx(), _msdetail(smap.Version, msg, caller))
+	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx())
+
 	if !newSmap.isPresent(h.si) {
 		return fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap)
 	}
@@ -1463,7 +1465,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 		return
 	}
 	etlMD := h.owner.etl.get()
-	glog.Infof("receive %s%s", newEtlMD, _msdetail(etlMD.Version, msg, caller))
+	logmsync(etlMD.Version, newEtlMD, msg, caller)
 
 	h.owner.etl.Lock()
 	etlMD = h.owner.etl.get()
@@ -1486,7 +1488,7 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 
 func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	config := cmn.GCO.Get()
-	glog.Infof("receive %s%s", newConfig, _msdetail(config.Version, msg, caller))
+	logmsync(config.Version, newConfig, msg, caller)
 
 	h.owner.config.Lock()
 	defer h.owner.config.Unlock()
@@ -1924,7 +1926,7 @@ func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg,
 	msg = &aisMsg{}
 	err = cmn.ReadJSON(w, r, msg)
 	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
-		glog.InfoDepth(1, h.si.String()+": "+msg.String())
+		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
 	}
 	return
 }
@@ -1963,7 +1965,7 @@ func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.
 	msg = &apc.ActMsg{}
 	err = cmn.ReadJSON(w, r, msg)
 	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
-		glog.InfoDepth(1, h.si.String()+": "+msg.String())
+		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
 	}
 	return
 }

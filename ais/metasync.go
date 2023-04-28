@@ -29,8 +29,7 @@ import (
 //
 // All other methods and the metasync's own state are private and internal.
 //
-// Method called doSync does most of the work and is commented in its step-wise
-// execution.
+// Method `do()` does most of the work (comments inline).
 //
 // REVS (see interface below) stands for REplicated, Versioned and Shared/Synchronized.
 //
@@ -39,10 +38,10 @@ import (
 // "metasyncer" provides a generic transport to send an arbitrary payload that
 // combines any number of data units having the following layout:
 //
-//         (shared-replicated-object, associated action-message)
+//         (shared-replicated-object, associated action-message),
 //
-// Action message (above, see aisMsg) provides receivers with a context as
-// to what exactly to do with the newly received versioned replica.
+// where `associated action-message` (aisMsg) provides receivers with the operation
+// ("action") and other relevant context.
 //
 // Further, the metasyncer:
 //
@@ -87,8 +86,8 @@ const (
 )
 
 const (
-	revsReqSync = iota
-	revsReqNotify
+	reqSync = iota
+	reqNotify
 )
 
 const faisync = "failing to sync"
@@ -110,7 +109,7 @@ type (
 		wg        *sync.WaitGroup
 		failedCnt *atomic.Int32
 		pairs     []revsPair
-		reqType   int // enum: revsReqSync, etc.
+		reqType   int // enum: reqSync, etc.
 	}
 	msPayload map[string][]byte     // tag => revs' body
 	ndRevs    map[string]int64      // tag => version (see nodesRevs)
@@ -143,6 +142,8 @@ func (req revsReq) isNil() bool { return len(req.pairs) == 0 }
 // metasyncer //
 ////////////////
 
+func (*metasyncer) Name() string { return "metasyncer" }
+
 func newMetasyncer(p *proxy) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.nodesRevs = make(map[string]ndRevs, 8)
@@ -157,8 +158,6 @@ func newMetasyncer(p *proxy) (y *metasyncer) {
 	y.timerStopped = true
 	return
 }
-
-func (*metasyncer) Name() string { return "metasyncer" }
 
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Name())
@@ -177,7 +176,7 @@ func (y *metasyncer) Run() error {
 				y.timerStopped = true
 				break
 			}
-			failedCnt := y.doSync(revsReq.pairs, revsReq.reqType)
+			failedCnt := y.do(revsReq.pairs, revsReq.reqType)
 			if revsReq.wg != nil {
 				if revsReq.failedCnt != nil {
 					revsReq.failedCnt.Store(int32(failedCnt))
@@ -226,7 +225,7 @@ func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
 		req.wg = &sync.WaitGroup{}
 		req.wg.Add(1)
 		req.failedCnt = failedCntAtomic
-		req.reqType = revsReqNotify
+		req.reqType = reqNotify
 	}
 	y.workCh <- req
 
@@ -246,7 +245,7 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 		return req.wg
 	}
 	req.wg.Add(1)
-	req.reqType = revsReqSync
+	req.reqType = reqSync
 	y.workCh <- req
 	return req.wg
 }
@@ -269,36 +268,33 @@ drain:
 }
 
 // main method; see top of the file; returns number of "sync" failures
-func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
+func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	var (
-		refused      cluster.NodeMap
-		method       string
-		newTargetIDs []string
-		smap         = y.p.owner.smap.get()
+		refused cluster.NodeMap
+		newTIDs []string
+		smap    = y.p.owner.smap.get()
+		method  = http.MethodPut
 	)
+	if reqT == reqNotify {
+		method = http.MethodPost
+	}
 	if daemon.stopping.Load() {
 		return
 	}
 
-	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
-	if revsReqType == revsReqNotify {
-		method = http.MethodPost
-	} else {
-		debug.Assert(revsReqType == revsReqSync)
-		method = http.MethodPut
-	}
-
-	// step 2: build payload and update last sync-ed
+	// step: build payload and update last sync-ed
 	payload := make(msPayload, 2*len(pairs))
 	for _, pair := range pairs {
 		var (
 			revsBody []byte
 			msg, tag = pair.msg, pair.revs.tag()
-			revs     = y.useJIT(pair)
+			revs     = pair.revs
 		)
-		if revsReqType == revsReqNotify {
+		if reqT == reqNotify {
 			revsBody = revs.marshal()
 		} else {
+			revs = y.jit(pair)
+
 			// in an unlikely event, the revs may still carry sgl that has been freed
 			// via becomeNonPrimary => y.free() sequence; checking sgl.IsNil() is a compromise
 			if sgl := revs.sgl(); sgl != nil && !sgl.IsNil() {
@@ -316,13 +312,13 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		}
 		if tag == revsRMDTag {
 			md := revs.(*rebMD)
-			newTargetIDs = md.TargetIDs
+			newTIDs = md.TargetIDs
 		}
 		payload[tag] = revsBody                           // payload
 		payload[tag+revsActionTag] = cos.MustMarshal(msg) // action message always on the wire even when empty
 	}
 
-	// step 3: b-cast
+	// step: bcast
 	var (
 		urlPath = apc.URLPathMetasync.S
 		body    = payload.marshal(y.p.gmm)
@@ -330,7 +326,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	)
 	defer body.Free()
 
-	if revsReqType == revsReqNotify {
+	if reqT == reqNotify {
 		to = cluster.Targets
 	}
 	args := allocBcArgs()
@@ -342,10 +338,10 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	results := y.p.bcastGroup(args)
 	freeBcArgs(args)
 
-	// step 4: count failures and fill-in refused
+	// step: count failures and fill-in refused
 	for _, res := range results {
 		if res.err == nil {
-			if revsReqType == revsReqSync {
+			if reqT == reqSync {
 				y.syncDone(res.si, pairs)
 			}
 			continue
@@ -353,7 +349,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		// failing to sync
 		glog.Warningf("%s: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
 		// in addition to "retriables" always retry newTargetID - the joining one
-		if cos.IsRetriableConnErr(res.err) || cos.StringInSlice(res.si.ID(), newTargetIDs) {
+		if cos.IsRetriableConnErr(res.err) || cos.StringInSlice(res.si.ID(), newTIDs) {
 			if refused == nil {
 				refused = make(cluster.NodeMap, 2)
 			}
@@ -363,7 +359,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 		}
 	}
 	freeBcastRes(results)
-	// step 5: handle connection-refused right away
+	// step: handle connection-refused right away
 	lr := len(refused)
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
@@ -382,7 +378,7 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 			break
 		}
 	}
-	// step 6: housekeep and return new pending
+	// step: housekeep and return new pending
 	smap = y.p.owner.smap.get()
 	for sid := range y.nodesRevs {
 		si := smap.GetActiveNode(sid)
@@ -394,16 +390,12 @@ func (y *metasyncer) doSync(pairs []revsPair, revsReqType int) (failedCnt int) {
 	return
 }
 
-func (y *metasyncer) useJIT(pair revsPair) revs {
+func (y *metasyncer) jit(pair revsPair) revs {
 	var (
-		s              string
 		revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
 		jitRevs        = revs.jit(y.p)
 		skipping       bool
 	)
-	if msg.Action != "" {
-		s = ", " + msg.Action
-	}
 	if jitRevs != nil && jitRevs.version() > revs.version() {
 		// making exception for BMD (and associated bucket-level transactions) unless:
 		if tag == revsBMDTag {
@@ -418,9 +410,9 @@ func (y *metasyncer) useJIT(pair revsPair) revs {
 		}
 	}
 	if skipping {
-		glog.Infof("%s: newer %s v%d%s (skipping %s)", y.p, tag, jitRevs.version(), s, revs)
+		glog.Infof("%s: newer %s v%d, %s - skipping %s", y.p, tag, jitRevs.version(), msg, revs)
 	} else {
-		glog.Infof("%s: %s v%d%s", y.p, tag, revs.version(), s)
+		glog.Infof("%s: %s v%d, %s", y.p, tag, revs.version(), msg)
 	}
 	return revs
 }
@@ -522,7 +514,7 @@ func (y *metasyncer) _pending() (pending cluster.NodeMap, smap *smapX) {
 }
 
 // gets invoked when retryTimer fires; returns updated number of still pending
-// using MethodPut since revsReqType here is always revsReqSync
+// using MethodPut since reqT here is always reqSync
 func (y *metasyncer) handlePending() (failedCnt int) {
 	pending, smap := y._pending()
 	if len(pending) == 0 {

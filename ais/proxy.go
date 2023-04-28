@@ -3014,7 +3014,8 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
 	rmd := p.owner.rmd.get()
-	glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msg, caller))
+	logmsync(rmd.Version, newRMD, msg, caller)
+
 	p.owner.rmd.Lock()
 	rmd = p.owner.rmd.get()
 	if newRMD.version() <= rmd.version() {
@@ -3062,7 +3063,7 @@ func (p *proxy) smapOnUpdate(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags) {
 
 func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, caller string) (err error) {
 	bmd := p.owner.bmd.get()
-	glog.Infof("receive %s%s", newBMD, _msdetail(bmd.Version, msg, caller))
+	logmsync(bmd.Version, newBMD, msg, caller)
 
 	p.owner.bmd.Lock()
 	bmd = p.owner.bmd.get()

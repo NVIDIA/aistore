@@ -540,7 +540,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 		oldVer, err = t.applyBMD(newBMD, msg, payload, tag)
 		if newBMD.Version > oldVer {
 			if err == nil {
-				glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(oldVer, msg, caller))
+				logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
 			}
 		}
 		return
@@ -560,7 +560,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	case err != nil:
 		glog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), caller, msg.Action, msg.UUID)
 	case newBMD.Version > oldVer:
-		glog.Infof("receive %s%s", newBMD.StringEx(), _msdetail(oldVer, msg, caller))
+		logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
 	case newBMD.Version == oldVer:
 		glog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
 			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
@@ -888,7 +888,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if errRMD == nil && newRMD != nil {
 		rmd := t.owner.rmd.get()
-		glog.Infof("receive %s%s", newRMD, _msdetail(rmd.Version, msgRMD, caller))
+		logmsync(rmd.Version, newRMD, msgRMD, caller)
 
 		t.owner.rmd.Lock()
 		errRMD = t.receiveRMD(newRMD, msgRMD)

@@ -1854,11 +1854,11 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
-		glog.Infof("%s %s (num proxies %d)", verb, node, clone.CountProxies())
+		glog.Infof("%s %s (num proxies %d)", verb, node.StringEx(), clone.CountProxies())
 		clone.staffIC()
 	} else {
 		clone.delTarget(sid)
-		glog.Infof("%s %s (num targets %d)", verb, node, clone.CountTargets())
+		glog.Infof("%s %s (num targets %d)", verb, node.StringEx(), clone.CountTargets())
 	}
 	p.rproxy.nodes.Delete(ctx.sid)
 	return nil
