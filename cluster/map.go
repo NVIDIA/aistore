@@ -27,18 +27,19 @@ const (
 	AllNodes
 )
 
-// number of broadcasting goroutines <= cmn.NumCPU() * MaxBcastMultiplier
-const MaxBcastMultiplier = 2
+// number of broadcasting goroutines <= cmn.NumCPU() * maxBcastMultiplier
+const maxBcastMultiplier = 2
 
 // enum Snode.Flags
 const (
 	SnodeNonElectable cos.BitFlags = 1 << iota
 	SnodeIC
-	NodeFlagMaint
-	NodeFlagDecomm
+	SnodeMaint
+	SnodeDecomm
+	SnodeMaintPostReb
 )
 
-const NodeFlagsMaintDecomm = NodeFlagMaint | NodeFlagDecomm
+const SnodeMaintDecomm = SnodeMaint | SnodeDecomm
 
 const icGroupSize = 3 // desirable gateway count in the Information Center
 
@@ -94,7 +95,7 @@ type (
 	}
 )
 
-func MaxBcastParallel() int { return sys.NumCPU() * MaxBcastMultiplier }
+func MaxBcastParallel() int { return sys.NumCPU() * maxBcastMultiplier }
 
 ///////////
 // Snode //
@@ -257,10 +258,12 @@ func (d *Snode) IsProxy() bool  { return d.DaeType == apc.Proxy }
 func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
-func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(NodeFlagsMaintDecomm) }
-func (d *Snode) InMaint() bool         { return d.Flags.IsSet(NodeFlagMaint) }
-func (d *Snode) nonElectable() bool    { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) isIC() bool            { return d.Flags.IsSet(SnodeIC) }
+func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(SnodeMaintDecomm) }
+func (d *Snode) InMaintPostReb() bool {
+	return d.Flags.IsSet(SnodeMaint) && d.Flags.IsSet(SnodeMaintPostReb)
+}
+func (d *Snode) nonElectable() bool { return d.Flags.IsSet(SnodeNonElectable) }
+func (d *Snode) isIC() bool         { return d.Flags.IsSet(SnodeIC) }
 
 /////////////
 // NetInfo //
@@ -598,26 +601,4 @@ func mapsEq(a, b NodeMap) bool {
 		}
 	}
 	return true
-}
-
-// helper to find out NodeMap "delta" or "diff"
-func NodeMapDelta(oldNodeMap, newNodeMap []NodeMap) (added, removed NodeMap) {
-	added, removed = make(NodeMap), make(NodeMap)
-	for i, mold := range oldNodeMap {
-		mnew := newNodeMap[i]
-		for id, si := range mnew {
-			if _, ok := mold[id]; !ok {
-				added[id] = si
-			}
-		}
-	}
-	for i, mold := range oldNodeMap {
-		mnew := newNodeMap[i]
-		for id, si := range mold {
-			if _, ok := mnew[id]; !ok {
-				removed[id] = si
-			}
-		}
-	}
-	return
 }

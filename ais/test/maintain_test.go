@@ -498,7 +498,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s", node.ID(), smap)
-	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.NodeFlagMaint),
+	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.SnodeMaint),
 		"node should be in maintenance after starting")
 
 	// 4. Remove the node from maintenance.

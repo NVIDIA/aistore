@@ -2309,9 +2309,9 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	if si != nil && si.InMaintOrDecomm() {
 		daeStatus := "inactive"
 		switch {
-		case si.Flags.IsSet(cluster.NodeFlagMaint):
+		case si.Flags.IsSet(cluster.SnodeMaint):
 			daeStatus = apc.NodeMaintenance
-		case si.Flags.IsSet(cluster.NodeFlagDecomm):
+		case si.Flags.IsSet(cluster.SnodeDecomm):
 			daeStatus = apc.NodeDecommission
 		}
 		if r.Method == http.MethodGet {
@@ -2521,7 +2521,7 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		p.termKalive(msg.Action) // TODO -- FIXME: ???
+		p.termKalive(msg.Action)
 	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
 		if !p.ensureIntraControl(w, r, true /* from primary */) {
 			return

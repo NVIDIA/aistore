@@ -414,7 +414,7 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cos.BitFlags) {
 func (m *smapX) setNodeFlags(sid string, flags cos.BitFlags) {
 	si := m.GetNode(sid)
 	newFlags := si.Flags.Set(flags)
-	if flags.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+	if flags.IsAnySet(cluster.SnodeMaintDecomm) {
 		newFlags = newFlags.Clear(cluster.SnodeIC)
 	}
 	m._applyFlags(si, newFlags)

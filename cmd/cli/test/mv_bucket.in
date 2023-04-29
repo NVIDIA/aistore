@@ -1,3 +1,4 @@
+ais wait rebalance // IGNORE
 ais advanced gen-shards "ais://$BUCKET_1/tmp/shard-{0..9}.tar" --fcount 1 --fsize 1KB --conc 1 --cleanup // IGNORE
 ais bucket mv ais://$BUCKET_1/ ais://$BUCKET_2/ --wait
 ais bucket mv ais://$BUCKET_2/ ais://$BUCKET_1/

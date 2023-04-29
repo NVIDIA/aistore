@@ -166,8 +166,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.termKaliveX(msg.Action) // TODO -- FIXME: ????
-
+		t.termKaliveX(msg.Action)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return

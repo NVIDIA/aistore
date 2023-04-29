@@ -1256,11 +1256,11 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	switch {
 	case si.IsProxy():
-		if _, err := p.mcastMaintDec(msg, si, false /*reb*/); err != nil {
+		if _, err := p.mcastMaintDec(msg, si, false /*reb*/, false /*maintPostReb*/); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
-		errCode, err := p.rmNodeFinal(msg, si)
+		errCode, err := p.rmNodeFinal(msg, si, nil)
 		if err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 		}
@@ -1271,7 +1271,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			p.writeErr(w, r, err)
 			return
 		}
-		errCode, err := p.rmNodeFinal(msg, si)
+		errCode, err := p.rmNodeFinal(msg, si, nil)
 		if err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err), errCode)
 		}
@@ -1300,11 +1300,11 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
-	if ctx, err = p.mcastMaintDec(msg, si, reb); err != nil {
+	if ctx, err = p.mcastMaintDec(msg, si, reb, false /*maintPostReb*/); err != nil {
 		return
 	}
 	if !reb {
-		_, err = p.rmNodeFinal(msg, si)
+		_, err = p.rmNodeFinal(msg, si, ctx)
 	} else if ctx.rmdCtx != nil {
 		rebID = ctx.rmdCtx.rebID
 		if rebID == "" && ctx.gfn { // stop early gfn
@@ -1317,13 +1317,19 @@ func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID st
 	return
 }
 
-func (p *proxy) mcastMaintDec(msg *apc.ActMsg, si *cluster.Snode, reb bool) (ctx *smapModifier, err error) {
+func (p *proxy) mcastMaintDec(msg *apc.ActMsg, si *cluster.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
-		flags = cluster.NodeFlagDecomm
-	case apc.ActStartMaintenance, apc.ActShutdownNode:
-		flags = cluster.NodeFlagMaint
+		flags = cluster.SnodeDecomm
+	case apc.ActShutdownNode:
+		flags = cluster.SnodeMaint
+	case apc.ActStartMaintenance:
+		flags = cluster.SnodeMaint
+		if maintPostReb {
+			debug.Assert(si.IsTarget())
+			flags |= cluster.SnodeMaintPostReb
+		}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
@@ -1574,7 +1580,6 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 	return true, nil
 }
 
-// Stop rebalance, cleanup, and get the node back to the cluster.
 func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
 	ctx := &smapModifier{
 		pre:     p._stopMaintPre,
@@ -1583,7 +1588,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID s
 		sid:     opts.DaemonID,
 		skipReb: opts.SkipRebalance,
 		msg:     msg,
-		flags:   cluster.NodeFlagsMaintDecomm,
+		flags:   cluster.SnodeMaint | cluster.SnodeMaintPostReb, // to clear node flags
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
@@ -1788,7 +1793,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // post-rebalance or post no-rebalance - last step removing a node
 // (with msg.Action defining semantics)
-func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {
+func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifier) (int, error) {
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
@@ -1796,37 +1801,57 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode) (errCode int, er
 	)
 	if node == nil {
 		txt := "cannot \"" + msg.Action + "\""
-		err = &errNodeNotFound{txt, si.ID(), p.si, smap}
-		return http.StatusNotFound, err
+		return http.StatusNotFound, &errNodeNotFound{txt, si.ID(), p.si, smap}
 	}
+
 	var (
-		cargs = allocCargs()
-		body  = cos.MustMarshal(msg)
+		err     error
+		errCode int
+		cargs   = allocCargs()
+		body    = cos.MustMarshal(msg)
 	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
 	case apc.ActShutdownNode, apc.ActRmNodeUnsafe, apc.ActStartMaintenance, apc.ActDecommissionNode:
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
 	default:
-		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
+		return 0, fmt.Errorf(fmtErrInvaldAction, msg.Action,
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
-		debug.AssertNoErr(err)
-		return
 	}
 
 	glog.Infof("%s: %s %s", p, msg.Action, node.StringEx())
 	res := p.call(cargs)
-	er, d := res.err, res.details
+	err = res.toErr()
 	freeCargs(cargs)
 	freeCR(res)
 
-	if er != nil {
-		glog.Warningf("%s: %s that is being removed via %q fails to respond: %v[%s]", p, node, msg.Action, er, d)
+	if err != nil {
+		emsg := fmt.Sprintf("%s: (%s %s) final stage: the node fails to respond: %v", p, msg, node, err)
+		switch msg.Action {
+		case apc.ActShutdownNode, apc.ActDecommissionNode: // expecting EOF
+			if !cos.IsEOF(err) {
+				glog.Error(emsg)
+			}
+		default:
+			glog.Error(emsg)
+		}
+		err = nil // NOTE: proceeding anyway
 	}
-	if msg.Action == apc.ActDecommissionNode || msg.Action == apc.ActRmNodeUnsafe {
-		errCode, err = p.mcastUnreg(msg, si) // NOTE: proceeding anyway even if all retries fail
+
+	switch msg.Action {
+	case apc.ActDecommissionNode, apc.ActRmNodeUnsafe:
+		errCode, err = p.mcastUnreg(msg, si)
+	case apc.ActStartMaintenance:
+		// specifically, to update si.Flags |= cluster.SnodeMaintPostReb
+		if ctx != nil && ctx.rmdCtx != nil && ctx.rmdCtx.rebID != "" {
+			_, err = p.mcastMaintDec(msg, si, false /*reb*/, true /*maintPostReb*/)
+		}
 	}
-	return
+	if err != nil {
+		glog.Errorf("%s: (%s %s) final stage: failed to update %s: %v",
+			p, msg, node, p.owner.smap.get(), err)
+	}
+	return errCode, err
 }
 
 func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {

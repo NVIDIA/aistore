@@ -94,7 +94,7 @@ func (h *htrun) Sowner() cluster.Sowner { return h.owner.smap }
 
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
-	if ofl.IsAnySet(cluster.NodeFlagsMaintDecomm) && !nfl.IsAnySet(cluster.NodeFlagsMaintDecomm) {
+	if ofl.IsAnySet(cluster.SnodeMaintDecomm) && !nfl.IsAnySet(cluster.SnodeMaintDecomm) {
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }
@@ -1739,7 +1739,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxC
 			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
 				glog.Warningln(s + "; NOTE: not present in the cluster map")
-			} else if self.Flags.IsSet(cluster.NodeFlagMaint) {
+			} else if self.Flags.IsSet(cluster.SnodeMaint) {
 				glog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
 				glog.Infoln(s + ", " + rmd.String())
@@ -1855,7 +1855,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
 			if h.ClusterStarted() {
-				glog.Errorf("%s: %s < %s-Smap(v%s) - proceeding anyway...", h.si, smap, callerName, callerSver)
+				glog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h.si, smap, callerSver, callerName)
 			}
 			runtime.Gosched()
 			return
@@ -1984,9 +1984,9 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 func (h *htrun) _status(smap *smapX) (daeStatus string) {
 	self := smap.GetNode(h.si.ID()) // updated flags
 	switch {
-	case self.Flags.IsSet(cluster.NodeFlagMaint):
+	case self.Flags.IsSet(cluster.SnodeMaint):
 		daeStatus = apc.NodeMaintenance
-	case self.Flags.IsSet(cluster.NodeFlagDecomm):
+	case self.Flags.IsSet(cluster.SnodeDecomm):
 		daeStatus = apc.NodeDecommission
 	}
 	return

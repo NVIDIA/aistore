@@ -345,7 +345,7 @@ func (sb *Streams) Resync() {
 		sb.lsnode.Flags = node.Flags
 	}
 
-	added, removed := cluster.NodeMapDelta(oldm, newm)
+	added, removed := mdiff(oldm, newm)
 
 	obundle := sb.get()
 	l := len(added) - len(removed)
@@ -360,10 +360,10 @@ func (sb *Streams) Resync() {
 		if id == sb.lsnode.ID() {
 			continue
 		}
-		// shall never establish streaming connection to its peer when:
-		if !sb.lsnode.InMaintOrDecomm() && si.InMaintOrDecomm() {
-			// TODO -- FIXME: acks
-			glog.Infof("%s => %s[-/%#b]", sb, si.StringEx(), si.Flags)
+		// not connecting to the peer that's in maintenance and already rebalanced-out
+		if si.InMaintPostReb() {
+			glog.Infof("%s => %s[-/%#b] - skipping", sb, si.StringEx(), si.Flags)
+			continue
 		}
 
 		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
@@ -401,4 +401,31 @@ func (sb *Streams) Resync() {
 	}
 	sb.streams.Store(unsafe.Pointer(&nbundle))
 	sb.smap = smap
+}
+
+// helper to find out NodeMap "delta" or "diff"
+func mdiff(oldMaps, newMaps []cluster.NodeMap) (added, removed cluster.NodeMap) {
+	for i, mold := range oldMaps {
+		mnew := newMaps[i]
+		for id, si := range mnew {
+			if _, ok := mold[id]; !ok {
+				if added == nil {
+					added = make(cluster.NodeMap, cos.Max(len(mnew)-len(mold), 1))
+				}
+				added[id] = si
+			}
+		}
+	}
+	for i, mold := range oldMaps {
+		mnew := newMaps[i]
+		for id, si := range mold {
+			if _, ok := mnew[id]; !ok {
+				if removed == nil {
+					removed = make(cluster.NodeMap, 1)
+				}
+				removed[id] = si
+			}
+		}
+	}
+	return
 }
