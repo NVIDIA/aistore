@@ -49,7 +49,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 		}
 		if ds.Tracker == nil { // (unlikely)
 			debug.Assert(false, tid)
-			err := fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, c.Smap))
+			err := fmt.Errorf("missing stats from %s, please try again later", fmtDaemonID(tid, c.Smap, ""))
 			return nil, 0, err
 		}
 

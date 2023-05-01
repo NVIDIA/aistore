@@ -26,12 +26,12 @@ const (
 	UnknownStatusVal = "n/a"
 )
 
-const rebalanceExpirationTime = 5 * time.Minute
+const rebalanceForgetTime = 5 * time.Minute
 
 const (
 	primarySuffix       = "[P]"
 	nonElectableSuffix  = "[n/e]"
-	specialStatusSuffix = "[x]" // (daeStatus, via apc.WhatNodeStatsAndStatus)
+	offlineStatusSuffix = "[x]" // (daeStatus, via apc.WhatNodeStatsAndStatus)
 
 	NodeOnline = "online"
 )

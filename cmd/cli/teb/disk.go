@@ -41,7 +41,7 @@ func NewDiskTab(dsh []DiskStatsHelper, smap *cluster.Smap, regex *regexp.Regexp,
 		if ds.TargetID == totalsHdr {
 			row = append(row, totalsHdr)
 		} else {
-			row = append(row, fmtDaemonID(ds.TargetID, smap))
+			row = append(row, fmtDaemonID(ds.TargetID, smap, ""))
 		}
 		row = append(row, ds.DiskName)
 

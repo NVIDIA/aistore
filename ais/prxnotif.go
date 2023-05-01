@@ -429,7 +429,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Errorf("%s: %s, node %s, err: %v", n.p, nl, res.si.StringEx(), res.err)
+			glog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
 		}
 	}
 	freeBcastRes(results)

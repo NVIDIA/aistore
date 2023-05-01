@@ -463,9 +463,9 @@ func setPrimaryHandler(c *cli.Context) error {
 	}
 
 	switch {
-	case node.Flags.IsSet(cluster.NodeFlagMaint):
+	case node.Flags.IsSet(cluster.SnodeMaint):
 		return fmt.Errorf("%s is currently in maintenance", sname)
-	case node.Flags.IsSet(cluster.NodeFlagDecomm):
+	case node.Flags.IsSet(cluster.SnodeDecomm):
 		return fmt.Errorf("%s is currently being decommissioned", sname)
 	case node.Flags.IsSet(cluster.SnodeNonElectable):
 		return fmt.Errorf("%s is non-electable", sname)

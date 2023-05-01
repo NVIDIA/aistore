@@ -77,29 +77,40 @@ func cluDaeStatus(c *cli.Context, smap *cluster.Smap, tstatusMap, pstatusMap teb
 			Tmap: tstatusMap,
 		},
 	}
-	if res, proxyOK := pstatusMap[sid]; proxyOK {
+	if res, ok := pstatusMap[sid]; ok {
 		table := teb.NewDaeStatus(res, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
-	} else if res, targetOK := tstatusMap[sid]; targetOK {
+	}
+	if res, ok := tstatusMap[sid]; ok {
 		table := teb.NewDaeStatus(res, smap, apc.Target, units)
 		out := table.Template(hideHeader)
 		return teb.Print(res, out, teb.Jopts(usejs))
-	} else if sid == apc.Proxy {
+	}
+	if sid == apc.Proxy {
 		table := teb.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
-	} else if sid == apc.Target {
+	}
+	if sid == apc.Target {
 		table := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 		out := table.Template(hideHeader)
 		return teb.Print(body, out, teb.Jopts(usejs))
-	} else if sid == "" {
+	}
+	// `ais show cluster`
+	if sid == "" {
 		tableP := teb.NewDaeMapStatus(&body.Status, smap, apc.Proxy, units)
 		tableT := teb.NewDaeMapStatus(&body.Status, smap, apc.Target, units)
 
 		out := tableP.Template(false) + "\n"
 		out += tableT.Template(false) + "\n"
-		out += fgreen("Summary:") + "\n" + teb.ClusterSummary
+
+		// summary
+		title := fgreen("Summary:")
+		if isRebalancing(body.Status.Tmap) {
+			title = fcyan("Summary:")
+		}
+		out += title + "\n" + teb.ClusterSummary
 		return teb.Print(body, out, teb.Jopts(usejs))
 	}
 

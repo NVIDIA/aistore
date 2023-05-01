@@ -80,14 +80,15 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 		ds := ps[sid]
 
 		if ds.Status != NodeOnline {
+			nid, nstatus := fmtStatusSID(ds.Snode.ID(), smap, ds.Status)
 			row := []string{
-				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
+				nid,
 				unknownVal,
 				unknownVal,
 				unknownVal,
 				unknownVal,
 				ds.K8sPodName,
-				fcyan(ds.Status),
+				nstatus,
 				ds.Version,
 				ds.BuildTime,
 			}
@@ -152,8 +153,9 @@ func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
 		ds := ts[sid]
 
 		if ds.Status != NodeOnline {
+			nid, nstatus := fmtStatusSID(ds.Snode.ID(), smap, ds.Status)
 			row := []string{
-				fmtDaemonID(ds.Snode.ID(), smap, ds.Status),
+				nid,
 				unknownVal,
 				unknownVal,
 				unknownVal,
@@ -162,7 +164,7 @@ func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
 				unknownVal,
 				unknownVal,
 				ds.K8sPodName,
-				fcyan(ds.Status),
+				nstatus,
 				ds.Version,
 				ds.BuildTime,
 			}

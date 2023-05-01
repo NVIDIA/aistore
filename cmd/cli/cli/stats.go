@@ -83,6 +83,17 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tsta
 	return
 }
 
+func isRebalancing(tstatusMap teb.StstMap) bool {
+	for _, ds := range tstatusMap {
+		if ds.RebSnap != nil {
+			if !ds.RebSnap.IsAborted() && ds.RebSnap.EndTime.IsZero() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstMap) bool {
 	expected := mmc[0] + versionSepa + mmc[1]
 	for _, ds := range stmap {
@@ -152,13 +163,7 @@ func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StstMap) {
 			daeStatus.Status = "[" + err.Error() + "]"
 		}
 	} else if daeStatus.Status == "" {
-		daeStatus.Status = teb.NodeOnline
-		switch {
-		case node.Flags.IsSet(cluster.NodeFlagMaint):
-			daeStatus.Status = apc.NodeMaintenance
-		case node.Flags.IsSet(cluster.NodeFlagDecomm):
-			daeStatus.Status = apc.NodeDecommission
-		}
+		daeStatus.Status = teb.FmtNodeStatus(node)
 	}
 
 	mu.Lock()

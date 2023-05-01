@@ -225,6 +225,9 @@ func (pkr *palive) updateSmap() (stopped bool) {
 			if !pkr.isTimeToPing(sid) {
 				continue
 			}
+			// NOTE in re maintenance-mode nodes:
+			// for future activation, passively (ie, no keepalives) keeping them in the cluster map -
+			// use apc.ActRmNodeUnsafe to remove, if need be
 			if si.InMaintOrDecomm() {
 				continue
 			}

@@ -1996,7 +1996,16 @@ func (h *htrun) _status(smap *smapX) (daeStatus string) {
 // callResult //
 ////////////////
 
-// error helper for intra-cluster calls
+// error helpers for intra-cluster calls
+
+func (res *callResult) unwrap() (err error) {
+	err = errors.Unwrap(res.err)
+	if err == nil {
+		err = res.err
+	}
+	return
+}
+
 func (res *callResult) toErr() error {
 	if res.err == nil {
 		return nil

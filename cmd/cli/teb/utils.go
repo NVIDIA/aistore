@@ -79,15 +79,20 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) (snamePlus string) {
-	si := smap.GetNode(id)
-	snamePlus = si.StringEx()
+func fmtDaemonID(id string, smap *cluster.Smap, daeStatus string) (snamePlus string) {
+	snamePlus, _ = fmtStatusSID(id, smap, daeStatus)
+	return
+}
 
-	if len(daeStatus) > 0 {
-		if daeStatus[0] != NodeOnline {
-			snamePlus += specialStatusSuffix
-			return
-		}
+func fmtStatusSID(id string, smap *cluster.Smap, daeStatus string) (snamePlus, status string) {
+	si := smap.GetNode(id)
+	snamePlus, status = si.StringEx(), daeStatus
+
+	if status == "" {
+		status = FmtNodeStatus(si)
+	}
+	if status != NodeOnline {
+		goto offline
 	}
 	if id == smap.Primary.ID() {
 		snamePlus += primarySuffix
@@ -98,8 +103,25 @@ func fmtDaemonID(id string, smap *cluster.Smap, daeStatus ...string) (snamePlus 
 		snamePlus += nonElectableSuffix
 		return
 	}
+offline:
 	if si.InMaintOrDecomm() {
-		snamePlus += specialStatusSuffix
+		snamePlus += offlineStatusSuffix
+		if si.IsProxy() || (si.IsTarget() && si.InMaintPostReb()) {
+			status = fcyan(status)
+		} else {
+			status = fred(status) // (please do not disconnect!)
+		}
+	}
+	return
+}
+
+func FmtNodeStatus(node *cluster.Snode) (status string) {
+	status = NodeOnline
+	switch {
+	case node.Flags.IsSet(cluster.SnodeMaint):
+		status = apc.NodeMaintenance
+	case node.Flags.IsSet(cluster.SnodeDecomm):
+		status = apc.NodeDecommission
 	}
 	return
 }
@@ -189,7 +211,7 @@ func fmtRebStatus(rebSnap *cluster.Snap) string {
 	if rebSnap.EndTime.IsZero() {
 		return fmt.Sprintf("running(%s)", rebSnap.ID)
 	}
-	if time.Since(rebSnap.EndTime) < rebalanceExpirationTime {
+	if time.Since(rebSnap.EndTime) < rebalanceForgetTime {
 		return fmt.Sprintf("finished(%s)", rebSnap.ID)
 	}
 	return unknownVal

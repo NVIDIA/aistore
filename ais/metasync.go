@@ -272,7 +272,6 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	var (
 		refused cluster.NodeMap
 		newTIDs []string
-		smap    = y.p.owner.smap.get()
 		method  = http.MethodPut
 	)
 	if reqT == reqNotify {
@@ -323,6 +322,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 		urlPath = apc.URLPathMetasync.S
 		body    = payload.marshal(y.p.gmm)
 		to      = cluster.AllNodes
+		smap    = y.p.owner.smap.get()
 	)
 	defer body.Free()
 
@@ -346,15 +346,21 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			}
 			continue
 		}
-		// failing to sync
-		glog.Warningf("%s: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
-		// in addition to "retriables" always retry newTargetID - the joining one
-		if cos.IsRetriableConnErr(res.err) || cos.StringInSlice(res.si.ID(), newTIDs) {
+		sname := res.si.StringEx()
+		err := res.unwrap()
+		// failing to sync - not retrying, ignoring
+		if res.si.InMaintOrDecomm() {
+			glog.Infof("%s: %s %s (maintenance %#b): %v(%d)", y.p, faisync, sname, res.si.Flags, err, res.status)
+			continue
+		}
+		// - retrying, counting
+		if cos.IsRetriableConnErr(err) || cos.StringInSlice(res.si.ID(), newTIDs) { // always retry newTIDs (joining)
 			if refused == nil {
 				refused = make(cluster.NodeMap, 2)
 			}
 			refused.Add(res.si)
 		} else {
+			glog.Warningf("%s: %s %s: %v(%d)", y.p, faisync, sname, err, res.status)
 			failedCnt++
 		}
 	}
@@ -466,7 +472,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 				continue
 			}
 		}
-		glog.Warningf("%s [hr]: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
+		glog.Warningf("%s [hr]: %s %s: %v(%d)", y.p, faisync, res.si, res.unwrap(), res.status)
 	}
 	freeBcastRes(results)
 	return true

@@ -1809,6 +1809,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifie
 		errCode int
 		cargs   = allocCargs()
 		body    = cos.MustMarshal(msg)
+		sname   = node.StringEx()
 	)
 	cargs.si, cargs.timeout = node, timeout
 	switch msg.Action {
@@ -1819,17 +1820,21 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifie
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
 	}
 
-	glog.Infof("%s: %s %s", p, msg.Action, node.StringEx())
+	glog.Infof("%s: %s %s", p, msg.Action, sname)
 	res := p.call(cargs)
-	err = res.toErr()
+	err = res.unwrap()
 	freeCargs(cargs)
 	freeCR(res)
 
 	if err != nil {
-		emsg := fmt.Sprintf("%s: (%s %s) final stage: the node fails to respond: %v", p, msg, node, err)
+		emsg := fmt.Sprintf("%s: (%s %s) final: %v - proceeding anyway...", p, msg, sname, err)
 		switch msg.Action {
 		case apc.ActShutdownNode, apc.ActDecommissionNode: // expecting EOF
 			if !cos.IsEOF(err) {
+				glog.Error(emsg)
+			}
+		case apc.ActRmNodeUnsafe:
+			if glog.FastV(4, glog.SmoduleAIS) {
 				glog.Error(emsg)
 			}
 		default:
@@ -1840,16 +1845,15 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifie
 
 	switch msg.Action {
 	case apc.ActDecommissionNode, apc.ActRmNodeUnsafe:
-		errCode, err = p.mcastUnreg(msg, si)
+		errCode, err = p.mcastUnreg(msg, node)
 	case apc.ActStartMaintenance:
-		// specifically, to update si.Flags |= cluster.SnodeMaintPostReb
 		if ctx != nil && ctx.rmdCtx != nil && ctx.rmdCtx.rebID != "" {
-			_, err = p.mcastMaintDec(msg, si, false /*reb*/, true /*maintPostReb*/)
+			// set si.Flags |= cluster.SnodeMaintPostReb
+			_, err = p.mcastMaintDec(msg, node, false /*reb*/, true /*maintPostReb*/)
 		}
 	}
 	if err != nil {
-		glog.Errorf("%s: (%s %s) final stage: failed to update %s: %v",
-			p, msg, node, p.owner.smap.get(), err)
+		glog.Errorf("%s: (%s %s) FATAL: failed to update %s: %v", p, msg, sname, p.owner.smap.get(), err)
 	}
 	return errCode, err
 }
