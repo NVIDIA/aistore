@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -29,6 +30,16 @@ type (
 		waiting   int32      // waiting room count
 		exclusive bool       // write-lock
 		upgraded  bool       // indication for the waiters that upgrade's done
+	}
+)
+
+type (
+	noCopy struct{}
+	nlp    struct {
+		_         noCopy
+		nlc       *nlc
+		uname     string
+		exclusive bool
 	}
 )
 
@@ -208,3 +219,55 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	li.notifyWaiters()
 	nlc.mu.Unlock()
 }
+
+/////////
+// nlp //
+/////////
+
+// interface guard
+var _ cmn.NLP = (*nlp)(nil)
+
+func (nlp *nlp) Lock() {
+	nlp.nlc.Lock(nlp.uname, true)
+	nlp.exclusive = true
+}
+
+func (nlp *nlp) TryLock(timeout time.Duration) (ok bool) {
+	if timeout == 0 {
+		timeout = nlpTryDefault
+	}
+	ok = nlp.withRetry(timeout, true)
+	nlp.exclusive = ok
+	return
+}
+
+// NOTE: ensure single-time usage (no ref counting!)
+func (nlp *nlp) TryRLock(timeout time.Duration) (ok bool) {
+	if timeout == 0 {
+		timeout = nlpTryDefault
+	}
+	ok = nlp.withRetry(timeout, false)
+	debug.Assert(!nlp.exclusive)
+	return
+}
+
+func (nlp *nlp) Unlock() {
+	nlp.nlc.Unlock(nlp.uname, nlp.exclusive)
+}
+
+func (nlp *nlp) withRetry(d time.Duration, exclusive bool) bool {
+	if nlp.nlc.TryLock(nlp.uname, exclusive) {
+		return true
+	}
+	i := d / 10
+	for j := i; j < d; j += i {
+		time.Sleep(i)
+		if nlp.nlc.TryLock(nlp.uname, exclusive) {
+			return true
+		}
+	}
+	return false
+}
+
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}

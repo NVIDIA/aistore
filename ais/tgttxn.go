@@ -573,7 +573,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom *cluster.NameLockPair, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom cmn.NLP, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {

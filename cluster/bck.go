@@ -1,6 +1,6 @@
 // Package cluster provides common interfaces and local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -25,18 +25,7 @@ const (
 
 type (
 	Bck cmn.Bck
-
-	noCopy       struct{}
-	NameLockPair struct {
-		_         noCopy
-		nlc       *nlc
-		uname     string
-		exclusive bool
-	}
 )
-
-// interface guard
-var _ cmn.NLP = (*NameLockPair)(nil)
 
 var bckLocker nameLocker
 
@@ -269,55 +258,12 @@ func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 // lock/unlock
 //
 
-func (b *Bck) GetNameLockPair() (nlp *NameLockPair) {
-	nlp = &NameLockPair{uname: b.MakeUname("")}
-	hash := xxhash.ChecksumString64S(nlp.uname, cos.MLCG32)
-	idx := int(hash & (cos.MultiSyncMapCount - 1))
+func (b *Bck) GetNameLockPair() cmn.NLP {
+	var (
+		nlp  = &nlp{uname: b.MakeUname("")}
+		hash = xxhash.ChecksumString64S(nlp.uname, cos.MLCG32)
+		idx  = int(hash & (cos.MultiSyncMapCount - 1))
+	)
 	nlp.nlc = &bckLocker[idx]
-	return
+	return nlp
 }
-
-func (nlp *NameLockPair) Lock() {
-	nlp.nlc.Lock(nlp.uname, true)
-	nlp.exclusive = true
-}
-
-func (nlp *NameLockPair) TryLock(timeout time.Duration) (ok bool) {
-	if timeout == 0 {
-		timeout = nlpTryDefault
-	}
-	ok = nlp.withRetry(timeout, true)
-	nlp.exclusive = ok
-	return
-}
-
-// TODO: ensure single-time usage (no ref counting!)
-func (nlp *NameLockPair) TryRLock(timeout time.Duration) (ok bool) {
-	if timeout == 0 {
-		timeout = nlpTryDefault
-	}
-	ok = nlp.withRetry(timeout, false)
-	debug.Assert(!nlp.exclusive)
-	return
-}
-
-func (nlp *NameLockPair) Unlock() {
-	nlp.nlc.Unlock(nlp.uname, nlp.exclusive)
-}
-
-func (nlp *NameLockPair) withRetry(d time.Duration, exclusive bool) bool {
-	if nlp.nlc.TryLock(nlp.uname, exclusive) {
-		return true
-	}
-	i := d / 10
-	for j := i; j < d; j += i {
-		time.Sleep(i)
-		if nlp.nlc.TryLock(nlp.uname, exclusive) {
-			return true
-		}
-	}
-	return false
-}
-
-func (*noCopy) Lock()   {}
-func (*noCopy) Unlock() {}
