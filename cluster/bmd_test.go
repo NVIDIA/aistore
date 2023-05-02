@@ -1,8 +1,8 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package cluster_test: unit tests for the package
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package cluster_test
 
 import (
 	"github.com/NVIDIA/aistore/cmn"
