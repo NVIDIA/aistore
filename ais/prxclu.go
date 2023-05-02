@@ -1256,7 +1256,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	switch {
 	case si.IsProxy():
-		if _, err := p.mcastMaintDec(msg, si, false /*reb*/, false /*maintPostReb*/); err != nil {
+		if _, err := p.mcastMaint(msg, si, false /*reb*/, false /*maintPostReb*/); err != nil {
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, msg.Action, si, err))
 			return
 		}
@@ -1300,7 +1300,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
-	if ctx, err = p.mcastMaintDec(msg, si, reb, false /*maintPostReb*/); err != nil {
+	if ctx, err = p.mcastMaint(msg, si, reb, false /*maintPostReb*/); err != nil {
 		return
 	}
 	if !reb {
@@ -1317,14 +1317,12 @@ func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID st
 	return
 }
 
-func (p *proxy) mcastMaintDec(msg *apc.ActMsg, si *cluster.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
+func (p *proxy) mcastMaint(msg *apc.ActMsg, si *cluster.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
 		flags = cluster.SnodeDecomm
-	case apc.ActShutdownNode:
-		flags = cluster.SnodeMaint
-	case apc.ActStartMaintenance:
+	case apc.ActShutdownNode, apc.ActStartMaintenance:
 		flags = cluster.SnodeMaint
 		if maintPostReb {
 			debug.Assert(si.IsTarget())
@@ -1846,10 +1844,12 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifie
 	switch msg.Action {
 	case apc.ActDecommissionNode, apc.ActRmNodeUnsafe:
 		errCode, err = p.mcastUnreg(msg, node)
-	case apc.ActStartMaintenance:
+	case apc.ActStartMaintenance, apc.ActShutdownNode:
 		if ctx != nil && ctx.rmdCtx != nil && ctx.rmdCtx.rebID != "" {
-			// set si.Flags |= cluster.SnodeMaintPostReb
-			_, err = p.mcastMaintDec(msg, node, false /*reb*/, true /*maintPostReb*/)
+			// final step executing shutdown and start-maintenance transaction:
+			// setting si.Flags |= cluster.SnodeMaintPostReb
+			// (compare w/ rmTarget --> p.mcastMaint above)
+			_, err = p.mcastMaint(msg, node, false /*reb*/, true /*maintPostReb*/)
 		}
 	}
 	if err != nil {

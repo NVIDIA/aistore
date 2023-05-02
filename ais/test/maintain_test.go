@@ -459,6 +459,9 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 			t.Skipf("%s requires at least %d target%s (have %d)",
 				t.Name(), minNumNodes, cos.Plural(minNumNodes), origTargetCount)
 		}
+		bck := cmn.Bck{Name: "shutdown-node" + cos.GenTie(), Provider: apc.AIS}
+		tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+
 		node, err = smap.GetRandTarget()
 		tdc = 1
 	}
@@ -487,19 +490,21 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	if err != nil {
 		tlog.Logf("Warning: WaitForNodeToTerminate returned: %v\n", err)
 	}
-	_, err = tools.WaitForClusterState(proxyURL, "shutdown node",
+	smap, err = tools.WaitForClusterState(proxyURL, "shutdown node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.ID())
 	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s after shutdown", node.ID(), smap)
+	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.SnodeMaint),
+		"node should be in maintenance mode after shutdown")
 
 	// 3. Start node again.
 	err = tools.RestoreNode(cmd, false, nodeType)
 	tassert.CheckError(t, err)
-	smap, err = tools.WaitForClusterState(proxyURL, "restart node",
-		smap.Version, origProxyCnt-pdc, origTargetCount-tdc)
-	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s", node.ID(), smap)
+	time.Sleep(5 * time.Second) // FIXME: wait-for(node started)
+	smap = tools.GetClusterMap(t, proxyURL)
+	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s after restart", node.ID(), smap)
 	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.SnodeMaint),
-		"node should be in maintenance after starting")
+		"node should be in maintenance mode after restart")
 
 	// 4. Remove the node from maintenance.
 	_, err = api.StopMaintenance(baseParams, &apc.ActValRmNode{DaemonID: node.ID()})
