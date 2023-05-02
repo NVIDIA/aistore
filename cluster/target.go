@@ -1,6 +1,6 @@
 // Package cluster provides local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 
@@ -11,11 +11,18 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
+)
+
+const (
+	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
+	Proxies
+	AllNodes
 )
 
 //
@@ -26,10 +33,10 @@ type (
 	Node interface {
 		SID() string
 		String() string
-		Snode() *Snode
+		Snode() *meta.Snode
 
-		Bowner() Bowner
-		Sowner() Sowner
+		Bowner() meta.Bowner
+		Sowner() meta.Sowner
 
 		ClusterStarted() bool
 		NodeStarted() bool
@@ -62,11 +69,11 @@ type (
 		TargetPut
 
 		// backend
-		Backend(*Bck) BackendProvider
+		Backend(*meta.Bck) BackendProvider
 
 		// FS health and Health
 		FSHC(err error, path string)
-		Health(si *Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
+		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, errCode int, err error)
 	}
 
 	// all of the above; for implementations, see `ais/tgtimpl.go` and `ais/htrun.go`
@@ -85,7 +92,7 @@ type (
 		CopyObject(lom *LOM, params *CopyObjectParams, dryRun bool) (int64, error)
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 		Promote(params PromoteParams) (errCode int, err error)
-		HeadObjT2T(lom *LOM, si *Snode) bool
+		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 	}
 
 	TargetExt interface {
@@ -106,8 +113,8 @@ type (
 		Open()
 		Close(err error)
 		UnregRecv()
-		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *Snode) error
-		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *Snode) error
+		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error
+		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error
 		OWT() cmn.OWT
 	}
 	PutObjectParams struct {
@@ -123,7 +130,7 @@ type (
 		DM        DataMover
 		DP        DP // Data Provider (optional; see Transform/Copy Bucket (TCB))
 		Xact      Xact
-		BckTo     *Bck
+		BckTo     *meta.Bck
 		ObjNameTo string
 		Buf       []byte
 	}
@@ -142,7 +149,7 @@ type (
 		SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 	}
 	PromoteParams struct {
-		Bck         *Bck       // destination bucket
+		Bck         *meta.Bck  // destination bucket
 		Cksum       *cos.Cksum // checksum to validate
 		Xact        Xact       // responsible xaction
 		PromoteArgs            // all of the above

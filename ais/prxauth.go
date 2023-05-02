@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -229,7 +229,7 @@ func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
 //	Exceptions:
 //	- read-only access to a bucket is always granted
 //	- PATCH cannot be forbidden
-func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, ace apc.AccessAttrs) (err error) {
+func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	if err = p.access(r.Header, bck, ace); err != nil {
 		p.writeErr(w, r, err, aceErrToCode(err))
 	}
@@ -247,7 +247,7 @@ func aceErrToCode(err error) (status int) {
 	return
 }
 
-func (p *proxy) access(hdr http.Header, bck *cluster.Bck, ace apc.AccessAttrs) error {
+func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) error {
 	var (
 		tk     *tok.Token
 		bucket *cmn.Bck

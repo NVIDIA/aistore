@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -48,7 +49,7 @@ type htext interface {
 }
 
 type htrun struct {
-	si        *cluster.Snode
+	si        *meta.Snode
 	keepalive keepaliver
 	statsT    stats.Tracker
 	netServ   struct {
@@ -84,17 +85,17 @@ var _ cluster.Node = (*htrun)(nil)
 
 func (h *htrun) DataClient() *http.Client { return h.client.data }
 
-func (h *htrun) Snode() *cluster.Snode { return h.si }
-func (h *htrun) callerName() string    { return h.si.String() }
-func (h *htrun) SID() string           { return h.si.ID() }
-func (h *htrun) String() string        { return h.si.String() }
+func (h *htrun) Snode() *meta.Snode { return h.si }
+func (h *htrun) callerName() string { return h.si.String() }
+func (h *htrun) SID() string        { return h.si.ID() }
+func (h *htrun) String() string     { return h.si.String() }
 
-func (h *htrun) Bowner() cluster.Bowner { return h.owner.bmd }
-func (h *htrun) Sowner() cluster.Sowner { return h.owner.smap }
+func (h *htrun) Bowner() meta.Bowner { return h.owner.bmd }
+func (h *htrun) Sowner() meta.Sowner { return h.owner.smap }
 
 // NOTE: currently, only 'resume' (see also: kaSuspendMsg)
 func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
-	if ofl.IsAnySet(cluster.SnodeMaintDecomm) && !nfl.IsAnySet(cluster.SnodeMaintDecomm) {
+	if ofl.IsAnySet(meta.SnodeMaintDecomm) && !nfl.IsAnySet(meta.SnodeMaintDecomm) {
 		h.keepalive.ctrl(kaResumeMsg)
 	}
 }
@@ -315,21 +316,24 @@ func (h *htrun) init(config *cmn.Config) {
 
 func (h *htrun) initNetworks() {
 	var (
-		s                                        string
-		config                                   = cmn.GCO.Get()
-		port                                     = strconv.Itoa(config.HostNet.Port)
-		proto                                    = config.Net.HTTP.Proto
-		addrList, err                            = getLocalIPv4List()
-		k8sDetected                              = k8s.Detect() == nil
-		pubAddr, intraControlAddr, intraDataAddr cluster.NetInfo
+		s                string
+		pubAddr          meta.NetInfo
+		intraControlAddr meta.NetInfo
+		intraDataAddr    meta.NetInfo
+		config           = cmn.GCO.Get()
+		port             = strconv.Itoa(config.HostNet.Port)
+		proto            = config.Net.HTTP.Proto
+		addrList, err    = getLocalIPv4List()
 	)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
-	// NOTE: In K8S deployment, public hostname could be LoadBalancer external IP, or a service DNS.
+	// NOTE in re K8S deployment:
+	// public hostname could be LoadBalancer external IP or a service DNS
+	k8sDetected := k8s.Detect() == nil
 	if k8sDetected && config.HostNet.Hostname != "" {
 		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
-		pubAddr = *cluster.NewNetInfo(proto, config.HostNet.Hostname, port)
+		pubAddr = *meta.NewNetInfo(proto, config.HostNet.Hostname, port)
 	} else {
 		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
 	}
@@ -391,14 +395,14 @@ func (h *htrun) initNetworks() {
 		config.HostNet.UseIntraControl,
 		"ctl/data",
 	)
-	h.si = &cluster.Snode{
+	h.si = &meta.Snode{
 		PubNet:     pubAddr,
 		ControlNet: intraControlAddr,
 		DataNet:    intraDataAddr,
 	}
 }
 
-func mustDiffer(ip1 cluster.NetInfo, port1 int, use1 bool, ip2 cluster.NetInfo, port2 int, use2 bool, tag string) {
+func mustDiffer(ip1 meta.NetInfo, port1 int, use1 bool, ip2 meta.NetInfo, port2 int, use2 bool, tag string) {
 	if !use1 || !use2 {
 		return
 	}
@@ -563,7 +567,7 @@ func (h *htrun) stop(rmFromSmap bool) {
 // call another target or a proxy; optionally, include a json-encoded body
 //
 
-func (h *htrun) _call(si *cluster.Snode, bargs *bcastArgs, results *bcastResults) {
+func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	cargs := allocCargs()
 	{
 		cargs.si = si
@@ -772,19 +776,19 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 
 	switch args.to {
 	case cluster.Targets:
-		args.nodes = []cluster.NodeMap{args.smap.Tmap}
+		args.nodes = []meta.NodeMap{args.smap.Tmap}
 		args.nodeCount = len(args.smap.Tmap)
 		if present && h.si.IsTarget() {
 			args.nodeCount--
 		}
 	case cluster.Proxies:
-		args.nodes = []cluster.NodeMap{args.smap.Pmap}
+		args.nodes = []meta.NodeMap{args.smap.Pmap}
 		args.nodeCount = len(args.smap.Pmap)
 		if present && h.si.IsProxy() {
 			args.nodeCount--
 		}
 	case cluster.AllNodes:
-		args.nodes = []cluster.NodeMap{args.smap.Pmap, args.smap.Tmap}
+		args.nodes = []meta.NodeMap{args.smap.Pmap, args.smap.Tmap}
 		args.nodeCount = len(args.smap.Pmap) + len(args.smap.Tmap)
 		if present {
 			args.nodeCount--
@@ -800,8 +804,8 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
-		f       = func(si *cluster.Snode) { h._call(si, bargs, &results); wg.Done() }
+		wg      = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), bargs.nodeCount)
+		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) == 0)
 	if !bargs.async {
@@ -826,8 +830,8 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), bargs.nodeCount)
-		f       = func(si *cluster.Snode) { h._call(si, bargs, &results); wg.Done() }
+		wg      = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), bargs.nodeCount)
+		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) > 0)
 	if !bargs.async {
@@ -856,7 +860,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 			continue
 		}
 		wg.Add(1)
-		go func(si *cluster.Snode) {
+		go func(si *meta.Snode) {
 			cargs := allocCargs()
 			{
 				cargs.si = si
@@ -1171,7 +1175,7 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 // health client
 //
 
-func (h *htrun) Health(si *cluster.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
+func (h *htrun) Health(si *meta.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
 	var (
 		path  = apc.URLPathHealth.S
 		url   = si.URL(cmn.NetIntraControl)
@@ -1224,9 +1228,9 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 		nodemap = smap.Tmap
 	}
 	if c.checkAll {
-		wg = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(nodemap))
+		wg = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(nodemap))
 	} else {
-		count = cos.Min(cluster.MaxBcastParallel(), maxVerConfirmations<<1)
+		count = cos.Min(meta.MaxBcastParallel(), maxVerConfirmations<<1)
 		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
 	}
 	for sid, si := range nodemap {
@@ -1642,7 +1646,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	return
 }
 
-func (h *htrun) regTo(url string, psi *cluster.Snode, tout time.Duration, q url.Values, htext htext, keepalive bool) *callResult {
+func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Values, htext htext, keepalive bool) *callResult {
 	var (
 		path          string
 		skipPrxKalive = h.si.IsProxy() || keepalive
@@ -1700,7 +1704,7 @@ func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid
 	return
 }
 
-func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *cluster.Snode) {
+func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *meta.Snode) {
 	if smap == nil {
 		smap = h.owner.smap.get()
 	}
@@ -1712,7 +1716,7 @@ func (h *htrun) getPrimaryURLAndSI(smap *smapX) (url string, psi *cluster.Snode)
 	return
 }
 
-func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxCii *clusterInfo) {
+func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii *clusterInfo) {
 	var (
 		sleep, total, rediscover time.Duration
 		healthTimeout            = config.Timeout.CplaneOperation.D()
@@ -1739,7 +1743,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *cluster.Snode) (maxC
 			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
 				glog.Warningln(s + "; NOTE: not present in the cluster map")
-			} else if self.Flags.IsSet(cluster.SnodeMaint) {
+			} else if self.Flags.IsSet(meta.SnodeMaint) {
 				glog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
 				glog.Infoln(s + ", " + rmd.String())
@@ -1984,9 +1988,9 @@ func readJSON(w http.ResponseWriter, r *http.Request, out any) (err error) {
 func (h *htrun) _status(smap *smapX) (daeStatus string) {
 	self := smap.GetNode(h.si.ID()) // updated flags
 	switch {
-	case self.Flags.IsSet(cluster.SnodeMaint):
+	case self.Flags.IsSet(meta.SnodeMaint):
 		daeStatus = apc.NodeMaintenance
-	case self.Flags.IsSet(cluster.SnodeDecomm):
+	case self.Flags.IsSet(meta.SnodeDecomm):
 		daeStatus = apc.NodeDecommission
 	}
 	return

@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -222,7 +222,7 @@ func TestDownloadSingle(t *testing.T) {
 		linkSmall = "storage.googleapis.com/minikube/iso/minikube-v0.23.0.iso.sha256"
 	)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		m := ioContext{
 			t:   t,
 			bck: bck.Clone(),
@@ -292,7 +292,7 @@ func TestDownloadRange(t *testing.T) {
 		}
 	)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		m := ioContext{
 			t:   t,
 			bck: bck.Clone(),
@@ -327,7 +327,7 @@ func TestDownloadMultiRange(t *testing.T) {
 		}
 	)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		m := ioContext{
 			t:   t,
 			bck: bck.Clone(),
@@ -356,7 +356,7 @@ func TestDownloadMultiMap(t *testing.T) {
 		expectedObjects = []string{"ais", "k8s"}
 	)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		m := ioContext{
 			t:   t,
 			bck: bck.Clone(),
@@ -387,7 +387,7 @@ func TestDownloadMultiList(t *testing.T) {
 		baseParams   = tools.BaseAPIParams(proxyURL)
 	)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		m := ioContext{
 			t:   t,
 			bck: bck.Clone(),

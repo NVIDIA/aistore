@@ -1,26 +1,17 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package meta: cluster-level metadata
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package meta
 
 import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/OneOfOne/xxhash"
-)
-
-const (
-	aisBIDmask = uint64(1 << 63)
-
-	nlpTryDefault = time.Second // nlp.TryLock default duration
 )
 
 type Bck cmn.Bck
@@ -37,7 +28,7 @@ func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck
 	return bck
 }
 
-// clone (*cluster.Bck | *cmn.Bck) <=> (cmn.Bck | cluster.Bck) respectively
+// clone (*meta.Bck | *cmn.Bck) <=> (cmn.Bck | meta.Bck) respectively
 func (b *Bck) Clone() cmn.Bck { return cmn.Bck(*b) }
 
 func CloneBck(bck *cmn.Bck) *Bck {
@@ -48,7 +39,7 @@ func CloneBck(bck *cmn.Bck) *Bck {
 	return (*Bck)(&b)
 }
 
-// cast *cluster.Bck => *cmn.Bck
+// cast *meta.Bck => *cmn.Bck
 func (b *Bck) Bucket() *cmn.Bck { return (*cmn.Bck)(b) }
 
 //
@@ -76,6 +67,8 @@ func (b *Bck) AddUnameToQuery(q url.Values, uparam string) url.Values {
 	bck := (*cmn.Bck)(b)
 	return bck.AddUnameToQuery(q, uparam)
 }
+
+const aisBIDmask = uint64(1 << 63)
 
 func (b *Bck) MaskBID(i int64) uint64 {
 	bck := (*cmn.Bck)(b)
@@ -160,7 +153,7 @@ func (b *Bck) Init(bowner Bowner) (err error) {
 }
 
 // part of lom.init (compare with the above)
-func (b *Bck) initFast(bowner Bowner) (err error) {
+func (b *Bck) InitFast(bowner Bowner) (err error) {
 	bmd := bowner.Get()
 	if err = b.init(bmd); err != nil {
 		return
@@ -243,18 +236,4 @@ func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 	op := apc.AccessOp(bit)
 	err = cmn.NewBucketAccessDenied(b.String(), op, b.Props.Access)
 	return
-}
-
-//
-// lock/unlock
-//
-
-func (b *Bck) GetNameLockPair() NLP {
-	var (
-		nlp  = &nlp{uname: b.MakeUname("")}
-		hash = xxhash.ChecksumString64S(nlp.uname, cos.MLCG32)
-		idx  = int(hash & (cos.MultiSyncMapCount - 1))
-	)
-	nlp.nlc = &bckLocker[idx]
-	return nlp
 }

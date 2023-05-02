@@ -5,7 +5,7 @@
 package mock
 
 import (
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -27,7 +27,7 @@ func (*StatsTracker) IncErr(string)              {}
 func (*StatsTracker) Inc(string)                 {}
 func (*StatsTracker) Add(string, int64)          {}
 func (*StatsTracker) AddMany(...cos.NamedVal64)  {}
-func (*StatsTracker) RegMetrics(*cluster.Snode)  {}
+func (*StatsTracker) RegMetrics(*meta.Snode)     {}
 func (*StatsTracker) GetMetricNames() cos.StrKVs { return nil }
 func (*StatsTracker) GetStats() *stats.Node      { return nil }
 func (*StatsTracker) ResetStats(bool)            {}

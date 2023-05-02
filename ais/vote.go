@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -387,7 +388,7 @@ func (h *htrun) onPrimaryFail(self *proxy) {
 			}
 			return
 		}
-		glog.Infof("%s: trying %s as the new primary candidate", h.si, cluster.Pname(nextPrimaryProxy.ID()))
+		glog.Infof("%s: trying %s as the new primary candidate", h.si, meta.Pname(nextPrimaryProxy.ID()))
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
@@ -544,7 +545,7 @@ func (h *htrun) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) (err error) {
+func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.Snode) (err error) {
 	var (
 		msg   = VoteInitiationMessage{Request: *vr}
 		body  = cos.MustMarshal(&msg)

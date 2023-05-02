@@ -1,12 +1,12 @@
-// Package cluster_test: unit tests for the package
+// Package meta_test: unit tests for the package
 /*
  * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster_test
+package meta_test
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -17,7 +17,7 @@ var _ = Describe("Bck", func() {
 	Describe("Uname", func() {
 		DescribeTable("should convert bucket and object name to uname and back",
 			func(bckName, bckProvider string, bckNs cmn.Ns, objName string) {
-				bck := cluster.NewBck(bckName, bckProvider, bckNs)
+				bck := meta.NewBck(bckName, bckProvider, bckNs)
 				uname := bck.MakeUname(objName)
 
 				gotBck, gotObjName := cmn.ParseUname(uname)
@@ -59,61 +59,61 @@ var _ = Describe("Bck", func() {
 
 	Describe("Equal", func() {
 		DescribeTable("should not be equal",
-			func(a, b *cluster.Bck) {
+			func(a, b *meta.Bck) {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/, true /* same backend*/)).To(BeFalse())
 			},
 			Entry(
 				"not matching names",
-				cluster.NewBck("a", apc.AIS, cmn.NsGlobal),
-				cluster.NewBck("b", apc.AIS, cmn.NsGlobal),
+				meta.NewBck("a", apc.AIS, cmn.NsGlobal),
+				meta.NewBck("b", apc.AIS, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching namespace #1",
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns1"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns2"}),
 			),
 			Entry(
 				"not matching namespace #2",
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid1", Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid2", Name: "ns"}),
 			),
 			Entry(
 				"not matching providers #2",
-				cluster.NewBck("a", apc.AIS, cmn.NsGlobal),
-				cluster.NewBck("a", apc.AWS, cmn.NsGlobal),
+				meta.NewBck("a", apc.AIS, cmn.NsGlobal),
+				meta.NewBck("a", apc.AWS, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #4",
-				cluster.NewBck("a", apc.AWS, cmn.NsGlobal),
-				cluster.NewBck("a", apc.GCP, cmn.NsGlobal),
+				meta.NewBck("a", apc.AWS, cmn.NsGlobal),
+				meta.NewBck("a", apc.GCP, cmn.NsGlobal),
 			),
 			Entry(
 				"not matching Backend providers #5",
-				cluster.NewBck("a", apc.GCP, cmn.NsGlobal),
-				cluster.NewBck("a", apc.AWS, cmn.NsGlobal),
+				meta.NewBck("a", apc.GCP, cmn.NsGlobal),
+				meta.NewBck("a", apc.AWS, cmn.NsGlobal),
 			),
 		)
 
 		DescribeTable("should be equal",
-			func(a, b *cluster.Bck) {
+			func(a, b *meta.Bck) {
 				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
 				Expect(a.Equal(b, true /*same BID*/, true /* same backend */)).To(BeTrue())
 			},
 			Entry(
 				"matching AIS providers",
-				cluster.NewBck("a", apc.AIS, cmn.NsGlobal),
-				cluster.NewBck("a", apc.AIS, cmn.NsGlobal),
+				meta.NewBck("a", apc.AIS, cmn.NsGlobal),
+				meta.NewBck("a", apc.AIS, cmn.NsGlobal),
 			),
 			Entry(
 				"matching local namespaces",
-				cluster.NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
-				cluster.NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{Name: "ns"}),
 			),
 			Entry(
 				"matching cloud namespaces",
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
-				cluster.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
+				meta.NewBck("a", apc.AIS, cmn.Ns{UUID: "uuid", Name: "ns"}),
 			),
 		)
 	})

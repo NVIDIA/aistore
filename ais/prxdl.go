@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -276,7 +276,7 @@ func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, bo
 		p.writeErr(w, r, err)
 		return
 	}
-	bck := cluster.CloneBck(&dlBase.Bck)
+	bck := meta.CloneBck(&dlBase.Bck)
 	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
 	args.createAIS = true
 	if _, err := args.initAndTry(); err == nil {

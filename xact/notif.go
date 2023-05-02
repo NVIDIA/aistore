@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
@@ -33,7 +34,7 @@ var (
 	_ nl.Listener   = (*NotifXactListener)(nil)
 )
 
-func NewXactNL(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
+func NewXactNL(uuid, action string, smap *meta.Smap, srcs meta.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
 	if srcs == nil {
 		srcs = smap.Tmap.ActiveMap()
 	}

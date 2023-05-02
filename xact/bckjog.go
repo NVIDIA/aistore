@@ -6,6 +6,7 @@ package xact
 
 import (
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs/mpather"
 )
@@ -16,7 +17,7 @@ type BckJog struct {
 	Base
 }
 
-func (r *BckJog) Init(id, kind string, bck *cluster.Bck, opts *mpather.JgroupOpts) {
+func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts) {
 	r.t = opts.T
 	r.InitBase(id, kind, bck)
 	r.joggers = mpather.NewJoggerGroup(opts)

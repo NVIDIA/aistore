@@ -22,7 +22,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -809,7 +809,7 @@ func TestETLHealth(t *testing.T) {
 
 	for _, msg := range healths {
 		tassert.Errorf(t, msg.Status == etl.HealthStatusRunning, "Expected pod at %s to be %q, got %q",
-			cluster.Tname(msg.TargetID), etl.HealthStatusRunning, msg.Status)
+			meta.Tname(msg.TargetID), etl.HealthStatusRunning, msg.Status)
 	}
 }
 

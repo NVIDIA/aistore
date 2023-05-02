@@ -7,6 +7,7 @@ package cluster
 import (
 	"fmt"
 
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -43,7 +44,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 	lom.mi = parsedFQN.Mountpath
 	lom.mpathDigest = parsedFQN.Digest
 	lom.ObjName = parsedFQN.ObjName
-	lom.bck = *(*Bck)(&parsedFQN.Bck)
+	lom.bck = *(*meta.Bck)(&parsedFQN.Bck)
 
 	if expbck != nil {
 		if expbck.Name != parsedFQN.Bck.Name {
@@ -56,7 +57,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsedFQN.Bck.Ns)
 		}
 	}
-	if err = lom.bck.initFast(T.Bowner()); err != nil {
+	if err = lom.bck.InitFast(T.Bowner()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
@@ -76,8 +77,8 @@ func (lom *LOM) InitCT(ct *CT) {
 }
 
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
-	lom.bck = *(*Bck)(bck)
-	if err = lom.bck.initFast(T.Bowner()); err != nil {
+	lom.bck = *(*meta.Bck)(bck)
+	if err = lom.bck.InitFast(T.Bowner()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)

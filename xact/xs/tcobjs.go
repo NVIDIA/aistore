@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -58,7 +59,7 @@ var (
 // tcoFactory //
 ////////////////
 
-func (p *tcoFactory) New(args xreg.Args, bckFrom *cluster.Bck) xreg.Renewable {
+func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 	np := &tcoFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bckFrom}, kind: p.kind}}
 	np.args = args.Custom.(*xreg.TCObjsArgs)
 	return np
@@ -229,7 +230,7 @@ func (r *XactTCObjs) String() string {
 	return r.streamingX.String() + " => " + r.args.BckTo.String()
 }
 
-func (r *XactTCObjs) FromTo() (*cluster.Bck, *cluster.Bck) { return r.args.BckFrom, r.args.BckTo }
+func (r *XactTCObjs) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
 
 func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}

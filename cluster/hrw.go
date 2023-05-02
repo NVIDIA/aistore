@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/xoshiro256"
@@ -21,21 +22,21 @@ import (
 // Utility struct to generate a list of the first `n` nodes sorted by their weights
 type hrwList struct {
 	hs  []uint64
-	sis Nodes
+	sis meta.Nodes
 	n   int
 }
 
-func HrwTarget(uname string, smap *Smap) (si *Snode, err error) {
+func HrwTarget(uname string, smap *meta.Smap) (si *meta.Snode, err error) {
 	return _hrwTarget(uname, smap, true)
 }
 
 // Include targets in maintenance
-func HrwTargetAll(uname string, smap *Smap) (si *Snode, err error) {
+func HrwTargetAll(uname string, smap *meta.Smap) (si *meta.Snode, err error) {
 	return _hrwTarget(uname, smap, false)
 }
 
 // Returns a target with the highest HRW score
-func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error) {
+func _hrwTarget(uname string, smap *meta.Smap, skipMaint bool) (si *meta.Snode, err error) {
 	var (
 		max    uint64
 		digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
@@ -44,7 +45,7 @@ func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error)
 		if skipMaint && tsi.InMaintOrDecomm() {
 			continue
 		}
-		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
 		if cs >= max {
 			max = cs
 			si = tsi
@@ -60,7 +61,7 @@ func _hrwTarget(uname string, smap *Smap, skipMaint bool) (si *Snode, err error)
 // returns resulting subset (aka slice) that has the requested length = count.
 // Returns error if the cluster does not have enough targets.
 // If count == length of Smap.Tmap, the function returns as many targets as possible.
-func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
+func HrwTargetList(uname string, smap *meta.Smap, count int) (sis meta.Nodes, err error) {
 	const fmterr = "%v: required %d, available %d, %s"
 	cnt := smap.CountTargets()
 	if cnt < count {
@@ -71,7 +72,7 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 	hlist := newHrwList(count)
 
 	for _, tsi := range smap.Tmap {
-		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
 		if tsi.InMaintOrDecomm() {
 			continue
 		}
@@ -85,20 +86,20 @@ func HrwTargetList(uname string, smap *Smap, count int) (sis Nodes, err error) {
 	return sis, nil
 }
 
-func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
+func HrwProxy(smap *meta.Smap, idToSkip string) (pi *meta.Snode, err error) {
 	var max uint64
 	for pid, psi := range smap.Pmap {
 		if pid == idToSkip {
 			continue
 		}
-		if psi.Flags.IsSet(SnodeNonElectable) {
+		if psi.Flags.IsSet(meta.SnodeNonElectable) {
 			continue
 		}
 		if psi.InMaintOrDecomm() {
 			continue
 		}
-		if psi.idDigest >= max {
-			max = psi.idDigest
+		if d := psi.Digest(); d >= max {
+			max = d
 			pi = psi
 		}
 	}
@@ -108,16 +109,16 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, err error) {
 	return
 }
 
-func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
+func HrwIC(smap *meta.Smap, uuid string) (pi *meta.Snode, err error) {
 	var (
 		max    uint64
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
-		if psi.InMaintOrDecomm() || !psi.isIC() {
+		if psi.InMaintOrDecomm() || !psi.IsIC() {
 			continue
 		}
-		cs := xoshiro256.Hash(psi.idDigest ^ digest)
+		cs := xoshiro256.Hash(psi.Digest() ^ digest)
 		if cs >= max {
 			max = cs
 			pi = psi
@@ -131,7 +132,7 @@ func HrwIC(smap *Smap, uuid string) (pi *Snode, err error) {
 
 // Returns a target for a given task. E.g. usage: list objects in a cloud bucket
 // (we want only one target to do it).
-func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
+func HrwTargetTask(uuid string, smap *meta.Smap) (si *meta.Snode, err error) {
 	var (
 		max    uint64
 		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
@@ -141,7 +142,7 @@ func HrwTargetTask(uuid string, smap *Smap) (si *Snode, err error) {
 			continue
 		}
 		// Assumes that sinfo.idDigest is initialized
-		cs := xoshiro256.Hash(tsi.idDigest ^ digest)
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
 		if cs >= max {
 			max = cs
 			si = tsi
@@ -180,14 +181,14 @@ func HrwMpath(uname string) (mi *fs.Mountpath, digest uint64, err error) {
 /////////////
 
 func newHrwList(count int) *hrwList {
-	return &hrwList{hs: make([]uint64, 0, count), sis: make(Nodes, 0, count), n: count}
+	return &hrwList{hs: make([]uint64, 0, count), sis: make(meta.Nodes, 0, count), n: count}
 }
 
-func (hl *hrwList) get() Nodes { return hl.sis }
+func (hl *hrwList) get() meta.Nodes { return hl.sis }
 
 // Adds Snode with `weight`. The result is sorted on the fly with insertion sort
 // and it makes sure that the length of resulting list never exceeds `count`
-func (hl *hrwList) add(weight uint64, sinfo *Snode) {
+func (hl *hrwList) add(weight uint64, sinfo *meta.Snode) {
 	l := len(hl.sis)
 	if l == hl.n && weight <= hl.hs[l-1] {
 		return

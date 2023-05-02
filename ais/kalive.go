@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -215,8 +215,8 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	)
 	pkr.openCh(daemonCnt)
 	// limit parallelism, here and elsewhere
-	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), daemonCnt)
-	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), daemonCnt)
+	for _, daemons := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
 			if sid == p.SID() {
 				continue
@@ -256,7 +256,7 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	return
 }
 
-func (pkr *palive) ping(si *cluster.Snode, wg cos.WG) {
+func (pkr *palive) ping(si *meta.Snode, wg cos.WG) {
 	defer wg.Done()
 	if len(pkr.stoppedCh) > 0 {
 		return
@@ -270,7 +270,7 @@ func (pkr *palive) ping(si *cluster.Snode, wg cos.WG) {
 	}
 }
 
-func (pkr *palive) _pingRetry(to *cluster.Snode) (ok, stopped bool) {
+func (pkr *palive) _pingRetry(to *meta.Snode) (ok, stopped bool) {
 	var (
 		timeout        = time.Duration(pkr.timeoutStats(to.ID()).timeout)
 		t              = mono.NanoTime()
@@ -350,7 +350,7 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 }
 
-func (pkr *palive) retry(si *cluster.Snode) (ok, stopped bool) {
+func (pkr *palive) retry(si *meta.Snode) (ok, stopped bool) {
 	var (
 		timeout = time.Duration(pkr.timeoutStats(si.ID()).timeout)
 		ticker  = time.NewTicker(cmn.KeepaliveRetryDuration())
@@ -484,7 +484,7 @@ func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveT
 }
 
 // is called by non-primary proxies and (all) targets to send keepalive req. to the primary
-func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
+func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 	var (
 		pid     = smap.Primary.ID()
 		timeout = time.Duration(k.timeoutStats(pid).timeout)
@@ -499,7 +499,7 @@ func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
 		return
 	}
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
-	glog.Warningf("%s => %s keepalive failed: %v(%d)", si, cluster.Pname(pid), err, status)
+	glog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
 
 	var (
 		ticker = time.NewTicker(cmn.KeepaliveRetryDuration())
@@ -529,7 +529,7 @@ func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
 				return
 			}
 			if i == kaNumRetries {
-				glog.Warningf("%s: failed to keepalive with %s after %d attempts", si, cluster.Pname(pid), i)
+				glog.Warningf("%s: failed to keepalive with %s after %d attempts", si, meta.Pname(pid), i)
 				return true
 			}
 			if cos.IsUnreachable(err, status) {
@@ -538,7 +538,7 @@ func (k *keepalive) do(smap *smapX, si *cluster.Snode) (stopped bool) {
 			if daemon.stopping.Load() {
 				return true
 			}
-			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", si, cluster.Pname(pid), err, status)
+			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", si, meta.Pname(pid), err, status)
 			debug.AssertNoErr(err)
 			glog.Warning(err)
 		case sig := <-k.controlCh:

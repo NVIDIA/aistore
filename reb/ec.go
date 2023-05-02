@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -94,7 +95,7 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *cluster.Snode, workFQN ...string) (err error) {
+func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) (err error) {
 	var (
 		lom    *cluster.LOM
 		roc    cos.ReadOpenCloser
@@ -169,7 +170,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 	cos.Assert(ntfn.md != nil)
 	var (
 		err error
-		bck = cluster.CloneBck(&hdr.Bck)
+		bck = meta.CloneBck(&hdr.Bck)
 	)
 	if err := bck.Init(reb.t.Bowner()); err != nil {
 		return err
@@ -205,7 +206,7 @@ func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
 // Used to resolve the conflict: this target is the "main" one (has a full
 // replica) but it also stores a slice of the object. So, the existing slice
 // goes to any other _free_ target.
-func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*cluster.Snode, error) {
+func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*meta.Snode, error) {
 	sliceCnt := md.Data + md.Parity + 2
 	hrwList, err := cluster.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get(), sliceCnt)
 	if err != nil {
@@ -264,7 +265,7 @@ func (reb *Reb) detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, err
 // - return Snode that must receive the local slice, and workfile path
 // - the caller saves received CT to local drives, and then sends workfile
 func (reb *Reb) renameLocalCT(req *stageNtfn, ct *cluster.CT, md *ec.Metadata) (
-	workFQN string, moveTo *cluster.Snode, err error) {
+	workFQN string, moveTo *meta.Snode, err error) {
 	if md == nil || req.action == rebActMoveCT {
 		return
 	}

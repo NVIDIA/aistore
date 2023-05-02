@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -29,9 +30,9 @@ type (
 	XactBckEncode struct {
 		xact.Base
 		t    cluster.Target
-		bck  *cluster.Bck
+		bck  *meta.Bck
 		wg   *sync.WaitGroup // to wait for EC finishes all objects
-		smap *cluster.Smap
+		smap *meta.Smap
 	}
 )
 
@@ -45,7 +46,7 @@ var (
 // encFactory //
 ////////////////
 
-func (*encFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*encFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.ECEncodeArgs)
 	p := &encFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, phase: custom.Phase}
 	return p
@@ -74,7 +75,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *cluster.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
+func newXactBckEncode(bck *meta.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
 	r = &XactBckEncode{t: t, bck: bck, wg: &sync.WaitGroup{}, smap: t.Sowner().Get()}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return

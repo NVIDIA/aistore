@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -136,7 +136,7 @@ func TestConfigSetGlobal(t *testing.T) {
 		ecCondition bool
 		smap        = tools.GetClusterMap(t, tools.GetPrimaryURL())
 		config      = tools.GetClusterConfig(t)
-		check       = func(snode *cluster.Snode, c *cmn.Config) {
+		check       = func(snode *meta.Snode, c *cmn.Config) {
 			tassert.Errorf(t, c.EC.Enabled == ecCondition,
 				"%s expected 'ec.enabled' to be %v, got %v", snode, ecCondition, c.EC.Enabled)
 		}
@@ -282,7 +282,7 @@ func TestConfigSyncToNewNode(t *testing.T) {
 	_, _ = api.WaitForXactionIC(baseParams, flt)
 }
 
-func checkConfig(t *testing.T, smap *cluster.Smap, check func(*cluster.Snode, *cmn.Config)) {
+func checkConfig(t *testing.T, smap *meta.Smap, check func(*meta.Snode, *cmn.Config)) {
 	for _, node := range smap.Pmap {
 		config := tools.GetDaemonConfig(t, node)
 		check(node, config)
@@ -337,7 +337,7 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	// Override a cluster config on daemon and primary
 	primary, err := tools.GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
-	for _, node := range []*cluster.Snode{primary, proxy} {
+	for _, node := range []*meta.Snode{primary, proxy} {
 		err = api.SetDaemonConfig(baseParams, node.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
 		tassert.CheckFatal(t, err)
 
@@ -349,7 +349,7 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	// Reset all daemons and check if the override is gone.
 	err = api.ResetClusterConfig(baseParams)
 	tassert.CheckFatal(t, err)
-	for _, node := range []*cluster.Snode{primary, proxy} {
+	for _, node := range []*meta.Snode{primary, proxy} {
 		daemonConfig = tools.GetDaemonConfig(t, node)
 		tassert.Fatalf(t, daemonConfig.Disk.DiskUtilLowWM == config.Disk.DiskUtilLowWM,
 			errWMConfigNotExpected, config.Disk.DiskUtilLowWM, daemonConfig.Disk.DiskUtilLowWM)

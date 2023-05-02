@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -33,7 +34,7 @@ type (
 	// Communicator is responsible for managing communications with local ETL container.
 	// It listens to cluster membership changes and terminates ETL container, if need be.
 	Communicator interface {
-		cluster.Slistener
+		meta.Slistener
 
 		Name() string
 		Xact() cluster.Xact
@@ -47,25 +48,25 @@ type (
 		// OnlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error
+		OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error
 
 		// OfflineTransform interface implementations realize offline ETL.
 		// OfflineTransform is driven by `OfflineDP` - not to confuse
 		// with GET requests from users (such as training models and apps)
 		// to perform on-the-fly transformation.
-		OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
+		OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error)
 		Stop()
 
 		CommStats
 	}
 
 	commArgs struct {
-		listener     cluster.Slistener
+		listener     meta.Slistener
 		bootstrapper *etlBootstrapper
 	}
 
 	baseComm struct {
-		cluster.Slistener
+		meta.Slistener
 		t        cluster.Target
 		xctn     cluster.Xact
 		name     string
@@ -223,7 +224,7 @@ finish:
 // pushComm //
 //////////////
 
-func (pc *pushComm) doRequest(bck *cluster.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(bck *meta.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 
@@ -308,7 +309,7 @@ finish:
 	}), nil
 }
 
-func (pc *pushComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *cluster.Bck, objName string) error {
+func (pc *pushComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *meta.Bck, objName string) error {
 	var (
 		size   int64
 		r, err = pc.doRequest(bck, objName, 0 /*timeout*/)
@@ -326,7 +327,7 @@ func (pc *pushComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 	return err
 }
 
-func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	return pc.doRequest(bck, objName, timeout)
 }
 
@@ -334,7 +335,7 @@ func (pc *pushComm) OfflineTransform(bck *cluster.Bck, objName string, timeout t
 // redirectComm //
 //////////////////
 
-func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
 	if err := rc.xctn.AbortErr(); err != nil {
 		return cmn.NewErrAborted(rc.String(), "online", err)
 	}
@@ -351,7 +352,7 @@ func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 	return nil
 }
 
-func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return nil, err
@@ -365,7 +366,7 @@ func (rc *redirectComm) OfflineTransform(bck *cluster.Bck, objName string, timeo
 // revProxyComm //
 //////////////////
 
-func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) error {
+func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
 	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return err
@@ -380,7 +381,7 @@ func (pc *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, 
 	return nil
 }
 
-func (pc *revProxyComm) OfflineTransform(bck *cluster.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return nil, err
@@ -419,11 +420,11 @@ func pruneQuery(rawQuery string) string {
 }
 
 // TODO: Consider encoding bucket and object name without the necessity to escape.
-func transformerPath(bck *cluster.Bck, objName string) string {
+func transformerPath(bck *meta.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func lomLoad(bck *cluster.Bck, objName string) (int64, error) {
+func lomLoad(bck *meta.Bck, objName string) (int64, error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {

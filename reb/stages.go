@@ -7,7 +7,7 @@ package reb
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 )
 
@@ -46,7 +46,7 @@ func (ns *nodeStages) setStage(daemonID string, stage uint32) {
 }
 
 // Returns true if the target is in `newStage` or in any next stage.
-func (ns *nodeStages) isInStage(si *cluster.Snode, stage uint32) bool {
+func (ns *nodeStages) isInStage(si *meta.Snode, stage uint32) bool {
 	ns.mtx.Lock()
 	inStage := ns.isInStageUnlocked(si, stage)
 	ns.mtx.Unlock()
@@ -54,7 +54,7 @@ func (ns *nodeStages) isInStage(si *cluster.Snode, stage uint32) bool {
 }
 
 // Returns true if the target is in `newStage` or in any next stage
-func (ns *nodeStages) isInStageUnlocked(si *cluster.Snode, stage uint32) bool {
+func (ns *nodeStages) isInStageUnlocked(si *meta.Snode, stage uint32) bool {
 	status, ok := ns.targets[si.ID()]
 	if !ok {
 		return false

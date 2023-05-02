@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -62,11 +63,11 @@ func (*httpProvider) Provider() string  { return apc.HTTP }
 func (*httpProvider) MaxPageSize() uint { return 10000 }
 
 // TODO: can be done
-func (hp *httpProvider) CreateBucket(*cluster.Bck) (int, error) {
+func (hp *httpProvider) CreateBucket(*meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", hp.Provider()+" bucket")
 }
 
-func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	// TODO: we should use `bck.RemoteBck()`.
 
 	origURL, err := getOriginalURL(ctx, bck, "")
@@ -100,7 +101,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckPr
 	return
 }
 
-func (*httpProvider) ListObjects(*cluster.Bck, *apc.LsoMsg, *cmn.LsoResult) (errCode int, err error) {
+func (*httpProvider) ListObjects(*meta.Bck, *apc.LsoMsg, *cmn.LsoResult) (errCode int, err error) {
 	debug.Assert(false)
 	return
 }
@@ -110,7 +111,7 @@ func (*httpProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err
 	return
 }
 
-func getOriginalURL(ctx context.Context, bck *cluster.Bck, objName string) (string, error) {
+func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string, error) {
 	origURL, ok := ctx.Value(cos.CtxOriginalURL).(string)
 	if !ok || origURL == "" {
 		if bck.Props == nil {

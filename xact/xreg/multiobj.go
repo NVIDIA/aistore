@@ -7,10 +7,11 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
-func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck) RenewRes {
+func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *meta.Bck) RenewRes {
 	return RenewBucketXact(
 		apc.ActArchive,
 		bckFrom,
@@ -19,10 +20,10 @@ func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *cluster.Bck)
 	)
 }
 
-func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *cluster.Bck, msg *cmn.ListRange) RenewRes {
+func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *meta.Bck, msg *cmn.ListRange) RenewRes {
 	return RenewBucketXact(kind, bck, Args{T: t, UUID: uuid, Custom: msg})
 }
 
-func RenewPrefetch(uuid string, t cluster.Target, bck *cluster.Bck, msg *cmn.ListRange) RenewRes {
+func RenewPrefetch(uuid string, t cluster.Target, bck *meta.Bck, msg *cmn.ListRange) RenewRes {
 	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{T: t, UUID: uuid, Custom: msg})
 }

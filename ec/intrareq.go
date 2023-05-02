@@ -5,7 +5,7 @@
 package ec
 
 import (
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -56,7 +56,7 @@ var (
 // daemon ID, and sets `Exists:true` that means "local object exists".
 // Later `Exists` can be changed to `false` if local file is unreadable or does
 // not exist
-func newIntraReq(act intraReqType, meta *Metadata, bck *cluster.Bck) *intraReq {
+func newIntraReq(act intraReqType, meta *Metadata, bck *meta.Bck) *intraReq {
 	req := &intraReq{
 		meta:   meta,
 		exists: true,

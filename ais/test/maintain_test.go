@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -236,7 +236,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// If any node is in maintenance cancel the state
-	var dcm *cluster.Snode
+	var dcm *meta.Snode
 	for _, node := range smap.Tmap {
 		if smap.InMaintOrDecomm(node) {
 			dcm = node
@@ -265,7 +265,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	}
 }
 
-func countVMDTargets(tsMpaths map[*cluster.Snode][]string) (total int) {
+func countVMDTargets(tsMpaths map[*meta.Snode][]string) (total int) {
 	for _, mpaths := range tsMpaths {
 		for _, mpath := range mpaths {
 			if err := cos.Stat(filepath.Join(mpath, fname.Vmd)); err == nil {
@@ -440,7 +440,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		smap     = tools.GetClusterMap(t, proxyURL)
-		node     *cluster.Snode
+		node     *meta.Snode
 		err      error
 		pdc, tdc int
 
@@ -494,7 +494,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.ID())
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s after shutdown", node.ID(), smap)
-	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.SnodeMaint),
+	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(meta.SnodeMaint),
 		"node should be in maintenance mode after shutdown")
 
 	// 3. Start node again.
@@ -503,7 +503,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	time.Sleep(5 * time.Second) // FIXME: wait-for(node started)
 	smap = tools.GetClusterMap(t, proxyURL)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s after restart", node.ID(), smap)
-	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(cluster.SnodeMaint),
+	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(meta.SnodeMaint),
 		"node should be in maintenance mode after restart")
 
 	// 4. Remove the node from maintenance.

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -27,7 +28,7 @@ const abortErrWait = time.Second
 type (
 	Base struct {
 		notif  *NotifXact
-		bck    cluster.Bck
+		bck    meta.Bck
 		id     string
 		kind   string
 		sutime atomic.Int64
@@ -68,7 +69,7 @@ func GoRunW(xctn cluster.Xact) {
 // Base - partially implements `cluster.Xact` interface
 //////////////
 
-func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
+func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
 	debug.Assert(kind == apc.ActETLInline || cos.IsValidUUID(id) || IsValidRebID(id), id)
 	debug.Assert(IsValidKind(kind), kind)
 	xctn.id, xctn.kind = id, kind
@@ -82,7 +83,7 @@ func (xctn *Base) InitBase(id, kind string, bck *cluster.Bck) {
 func (xctn *Base) ID() string   { return xctn.id }
 func (xctn *Base) Kind() string { return xctn.kind }
 
-func (xctn *Base) Bck() *cluster.Bck { return &xctn.bck }
+func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 
 func (xctn *Base) Finished() bool { return xctn.eutime.Load() != 0 }
 
@@ -94,7 +95,7 @@ func (xctn *Base) Running() (yes bool) {
 
 func (xctn *Base) IsIdle() bool { return !xctn.Running() }
 
-func (*Base) FromTo() (*cluster.Bck, *cluster.Bck) { return nil, nil }
+func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
 
 //
 // aborting

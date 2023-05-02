@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -32,7 +33,7 @@ var (
 	_ xreg.Renewable = (*eleFactory)(nil)
 )
 
-func (*eleFactory) New(xreg.Args, *cluster.Bck) xreg.Renewable { return &eleFactory{} }
+func (*eleFactory) New(xreg.Args, *meta.Bck) xreg.Renewable { return &eleFactory{} }
 
 func (p *eleFactory) Start() error {
 	p.xctn = &Election{}

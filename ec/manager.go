@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -28,9 +29,9 @@ type Manager struct {
 	mu sync.RWMutex
 
 	t         cluster.Target
-	smap      *cluster.Smap
+	smap      *meta.Smap
 	targetCnt atomic.Int32 // atomic, to avoid races between read/write on smap
-	bmd       *cluster.BMD // bmd owner
+	bmd       *meta.BMD    // bmd owner
 
 	xacts map[string]*BckXacts // bckName -> xctn map, only ais buckets allowed, no naming collisions
 
@@ -143,7 +144,7 @@ func (mgr *Manager) NewRespondXact(bck *cmn.Bck) *XactRespond {
 	return NewRespondXact(mgr.t, bck, mgr)
 }
 
-func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
+func (mgr *Manager) RestoreBckGetXact(bck *meta.Bck) (xget *XactGet) {
 	xctn, err := _renewXact(bck, apc.ActECGet)
 	debug.AssertNoErr(err) // TODO: handle, here and elsewhere
 	xget = xctn.(*XactGet)
@@ -151,7 +152,7 @@ func (mgr *Manager) RestoreBckGetXact(bck *cluster.Bck) (xget *XactGet) {
 	return
 }
 
-func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
+func (mgr *Manager) RestoreBckPutXact(bck *meta.Bck) (xput *XactPut) {
 	xctn, err := _renewXact(bck, apc.ActECPut)
 	debug.AssertNoErr(err)
 	xput = xctn.(*XactPut)
@@ -159,7 +160,7 @@ func (mgr *Manager) RestoreBckPutXact(bck *cluster.Bck) (xput *XactPut) {
 	return
 }
 
-func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) (xrsp *XactRespond) {
+func (mgr *Manager) RestoreBckRespXact(bck *meta.Bck) (xrsp *XactRespond) {
 	xctn, err := _renewXact(bck, apc.ActECRespond)
 	debug.AssertNoErr(err)
 	xrsp = xctn.(*XactRespond)
@@ -167,7 +168,7 @@ func (mgr *Manager) RestoreBckRespXact(bck *cluster.Bck) (xrsp *XactRespond) {
 	return
 }
 
-func _renewXact(bck *cluster.Bck, kind string) (cluster.Xact, error) {
+func _renewXact(bck *meta.Bck, kind string) (cluster.Xact, error) {
 	rns := xreg.RenewBucketXact(kind, bck, xreg.Args{})
 	if rns.Err != nil {
 		return nil, rns.Err
@@ -219,7 +220,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 			return err
 		}
 	}
-	bck := cluster.CloneBck(&hdr.Bck)
+	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Errorf("failed to init bucket %s: %v", bck, err)
@@ -250,7 +251,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 		glog.Errorf("Failed to unmarshal request: %v", err)
 		return err
 	}
-	bck := cluster.CloneBck(&hdr.Bck)
+	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			glog.Error(err)
@@ -341,7 +342,7 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 }
 
 // disableBck starts to reject new EC requests, rejects pending ones
-func (mgr *Manager) disableBck(bck *cluster.Bck) {
+func (mgr *Manager) disableBck(bck *meta.Bck) {
 	mgr.RestoreBckGetXact(bck).ClearRequests()
 	mgr.RestoreBckPutXact(bck).ClearRequests()
 }
@@ -349,7 +350,7 @@ func (mgr *Manager) disableBck(bck *cluster.Bck) {
 // enableBck aborts xctn disable and starts to accept new EC requests
 // enableBck uses the same channel as disableBck, so order of executing them is the same as
 // order which they arrived to a target in
-func (mgr *Manager) enableBck(bck *cluster.Bck) {
+func (mgr *Manager) enableBck(bck *meta.Bck) {
 	mgr.RestoreBckGetXact(bck).EnableRequests()
 	mgr.RestoreBckPutXact(bck).EnableRequests()
 }
@@ -373,7 +374,7 @@ func (mgr *Manager) BucketsMDChanged() error {
 		mgr.closeECBundles()
 	}
 	provider := apc.AIS
-	newBckMD.Range(&provider, nil, func(nbck *cluster.Bck) bool {
+	newBckMD.Range(&provider, nil, func(nbck *meta.Bck) bool {
 		oprops, ok := oldBckMD.Get(nbck)
 		if !ok {
 			if nbck.Props.EC.Enabled {
@@ -409,7 +410,7 @@ func (mgr *Manager) ListenSmapChanged() {
 	// stopping relevant EC xactions which can't be satisfied with current number of targets
 	// respond xaction is never stopped as it should respond regardless of the other targets
 	provider := apc.AIS
-	mgr.bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+	mgr.bmd.Range(&provider, nil, func(bck *meta.Bck) bool {
 		bckName, bckProps := bck.Name, bck.Props
 		bckXacts := mgr.getBckXactsUnlocked(bckName)
 		if !bckProps.EC.Enabled {

@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -1344,7 +1344,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 					tarballCnt:       1000,
 					fileInTarballCnt: 500,
 				}
-				target *cluster.Snode
+				target *meta.Snode
 			)
 
 			m.initWithCleanupAndSaveState()
@@ -1411,7 +1411,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 							fileInTarballCnt: 200,
 						}
 
-						mountpaths = make(map[*cluster.Snode]string)
+						mountpaths = make(map[*meta.Snode]string)
 					)
 
 					m.initWithCleanupAndSaveState()

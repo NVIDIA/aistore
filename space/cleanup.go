@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -101,7 +102,7 @@ func (r *XactCln) Snap() (snap *cluster.Snap) {
 // clnFactory //
 ////////////////
 
-func (*clnFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*clnFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &clnFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
@@ -292,7 +293,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 		var (
 			sz  int64
 			err error
-			b   = cluster.CloneBck(&bck)
+			b   = meta.CloneBck(&bck)
 		)
 		j.bck = bck
 		err = b.Init(bowner)

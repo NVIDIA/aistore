@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,7 +33,7 @@ import (
 // NOTE: to access bucket metadata and related structures, external
 //       packages and HTTP clients must import aistore/cluster (and not ais)
 
-// - bucketMD is a server-side extension of the cluster.BMD
+// - bucketMD is a server-side extension of the meta.BMD
 // - bucketMD represents buckets (that store objects) and associated metadata
 // - bucketMD (instance) can be obtained via bmdOwner.get()
 // - bucketMD is immutable and versioned
@@ -52,11 +53,11 @@ type (
 		cksum *cos.Cksum  // BMD checksum
 		_sgl  *memsys.SGL // jsp-formatted
 		vstr  string      // itoa(Version), to have it handy for http redirects
-		cluster.BMD
+		meta.BMD
 	}
 	bmdOwner interface {
 		sync.Locker
-		Get() *cluster.BMD
+		Get() *meta.BMD
 
 		init() bool // true when loaded previous version
 		get() (bmd *bucketMD)
@@ -80,7 +81,7 @@ type (
 
 		msg   *apc.ActMsg
 		txnID string // transaction UUID
-		bcks  []*cluster.Bck
+		bcks  []*meta.Bck
 
 		propsToUpdate *cmn.BucketPropsToUpdate // update existing props
 		revertProps   *cmn.BucketPropsToUpdate // props to revert
@@ -96,24 +97,24 @@ type (
 
 // interface guard
 var (
-	_ revs           = (*bucketMD)(nil)
-	_ cluster.Bowner = (*bmdOwnerBase)(nil)
-	_ bmdOwner       = (*bmdOwnerPrx)(nil)
-	_ bmdOwner       = (*bmdOwnerTgt)(nil)
+	_ revs        = (*bucketMD)(nil)
+	_ meta.Bowner = (*bmdOwnerBase)(nil)
+	_ bmdOwner    = (*bmdOwnerPrx)(nil)
+	_ bmdOwner    = (*bmdOwnerTgt)(nil)
 )
 
 var bmdImmSize int64
 
 // c-tor
 func newBucketMD() *bucketMD {
-	providers := make(cluster.Providers, 2)
-	namespaces := make(cluster.Namespaces, 1)
+	providers := make(meta.Providers, 2)
+	namespaces := make(meta.Namespaces, 1)
 	providers[apc.AIS] = namespaces
-	buckets := make(cluster.Buckets, 16)
+	buckets := make(meta.Buckets, 16)
 	debug.Assert(cmn.NsGlobalUname == cmn.NsGlobal.Uname())
 	namespaces[cmn.NsGlobalUname] = buckets
 
-	return &bucketMD{BMD: cluster.BMD{Providers: providers, UUID: ""}}
+	return &bucketMD{BMD: meta.BMD{Providers: providers, UUID: ""}}
 }
 
 func newClusterUUID() (uuid, created string) {
@@ -124,7 +125,7 @@ func newClusterUUID() (uuid, created string) {
 // bucketMD //
 //////////////
 
-func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
+func (m *bucketMD) add(bck *meta.Bck, p *cmn.BucketProps) bool {
 	debug.Assert(apc.IsProvider(bck.Provider))
 	if _, present := m.Get(bck); present {
 		return false
@@ -144,7 +145,7 @@ func (m *bucketMD) add(bck *cluster.Bck, p *cmn.BucketProps) bool {
 	return true
 }
 
-func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
+func (m *bucketMD) del(bck *meta.Bck) (deleted bool) {
 	if !m.Del(bck) {
 		return
 	}
@@ -152,7 +153,7 @@ func (m *bucketMD) del(bck *cluster.Bck) (deleted bool) {
 	return true
 }
 
-func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
+func (m *bucketMD) set(bck *meta.Bck, p *cmn.BucketProps) {
 	debug.Assert(apc.IsProvider(bck.Provider))
 	prevProps, present := m.Get(bck)
 	if !present {
@@ -167,7 +168,7 @@ func (m *bucketMD) set(bck *cluster.Bck, p *cmn.BucketProps) {
 	if p.BackendBck.Name != "" && p.BackendBck.Props == nil {
 		if provider, err := cmn.NormalizeProvider(p.BackendBck.Provider); err == nil {
 			p.BackendBck.Provider = provider
-			p.BackendBck.Props, _ = m.Get((*cluster.Bck)(&p.BackendBck))
+			p.BackendBck.Props, _ = m.Get((*meta.Bck)(&p.BackendBck))
 		}
 	}
 
@@ -181,11 +182,11 @@ func (m *bucketMD) clone() *bucketMD {
 
 	// deep copy
 	*dst = *m
-	dst.Providers = make(cluster.Providers, len(m.Providers))
+	dst.Providers = make(meta.Providers, len(m.Providers))
 	for provider, namespaces := range m.Providers {
-		dstNamespaces := make(cluster.Namespaces, len(namespaces))
+		dstNamespaces := make(meta.Namespaces, len(namespaces))
 		for ns, buckets := range namespaces {
-			dstBuckets := make(cluster.Buckets, len(buckets))
+			dstBuckets := make(meta.Buckets, len(buckets))
 			for name, p := range buckets {
 				dstProps := &cmn.BucketProps{}
 				*dstProps = *p
@@ -201,7 +202,7 @@ func (m *bucketMD) clone() *bucketMD {
 	return dst
 }
 
-func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *cluster.Snode, caller string) (err error) {
+func (m *bucketMD) validateUUID(nbmd *bucketMD, si, nsi *meta.Snode, caller string) (err error) {
 	if nbmd == nil || nbmd.Version == 0 || m.Version == 0 {
 		return
 	}
@@ -254,7 +255,7 @@ func (m *bucketMD) _encode() (sgl *memsys.SGL) {
 // bmdOwnerBase //
 //////////////////
 
-func (bo *bmdOwnerBase) Get() *cluster.BMD    { return &bo.get().BMD }
+func (bo *bmdOwnerBase) Get() *meta.BMD       { return &bo.get().BMD }
 func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return (*bucketMD)(bo.bmd.Load()) }
 
 func (bo *bmdOwnerBase) put(bmd *bucketMD) {
@@ -272,7 +273,7 @@ func (*bmdOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
 		return
 	}
 	var (
-		bmd *cluster.BMD
+		bmd *meta.BMD
 		wto = bytes.NewBuffer(bmdValue)
 		err = jsp.SaveMeta(fpath, bmd, wto)
 	)
@@ -472,8 +473,8 @@ func hasEnoughBMDCopies() bool { return fs.CountPersisted(fname.Bmd) >= bmdCopie
 //////////////////////////
 
 type bckPropsArgs struct {
-	bck *cluster.Bck // Base bucket for determining default bucket props.
-	hdr http.Header  // Header with remote bucket properties.
+	bck *meta.Bck   // Base bucket for determining default bucket props.
+	hdr http.Header // Header with remote bucket properties.
 }
 
 // Convert HEAD(bucket) response to cmn.BucketProps (compare with `defaultBckProps`)
@@ -548,3 +549,9 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 	}
 	return props
 }
+
+//
+// lock/unlock
+//
+
+func getBckNLP(b *meta.Bck) cluster.NLP { return cluster.NewNLP(b.MakeUname("")) }

@@ -18,7 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -98,7 +98,7 @@ func primaryCrashElectRestart(t *testing.T) {
 }
 
 func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
-	postKill func(smap *cluster.Smap, newPrimary, oldPrimary *cluster.Snode)) *cluster.Smap {
+	postKill func(smap *meta.Smap, newPrimary, oldPrimary *meta.Snode)) *meta.Smap {
 	var (
 		smap          = tools.GetClusterMap(t, proxyURL)
 		proxyCount    = smap.CountActivePs()
@@ -164,7 +164,7 @@ func killRestoreDiffIP(t *testing.T, nodeType string) {
 		smap                          = tools.GetClusterMap(t, proxyURL)
 		origProxyCnt, origTargetCount = smap.CountActivePs(), smap.CountActiveTs()
 		portInc                       = 100
-		node                          *cluster.Snode
+		node                          *meta.Snode
 		err                           error
 		pdc, tdc                      int
 		restore                       bool
@@ -248,7 +248,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	var (
 		targetURL       string
 		targetID        string
-		targetNode      *cluster.Snode
+		targetNode      *meta.Snode
 		origTargetCount = smap.CountActiveTs()
 		origProxyCount  = smap.CountActivePs()
 	)
@@ -333,7 +333,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		smap     = tools.GetClusterMap(t, proxyURL)
-		node     *cluster.Snode
+		node     *meta.Snode
 		err      error
 
 		// node configs
@@ -384,7 +384,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	var (
 		proxyURL = tools.GetPrimaryURL()
 		smap     = tools.GetClusterMap(t, proxyURL)
-		node     *cluster.Snode
+		node     *meta.Snode
 		err      error
 	)
 
@@ -416,7 +416,7 @@ func primaryAndProxyCrash(t *testing.T) {
 		smap                        = tools.GetClusterMap(t, proxyURL)
 		origProxyCount              = smap.CountActivePs()
 		oldPrimaryURL, oldPrimaryID = smap.Primary.URL(cmn.NetPublic), smap.Primary.ID()
-		secondNode                  *cluster.Snode
+		secondNode                  *meta.Snode
 		secondID                    string
 	)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
@@ -481,7 +481,7 @@ func primaryAndProxyCrash(t *testing.T) {
 func targetRejoin(t *testing.T) {
 	var (
 		id       string
-		node     *cluster.Snode
+		node     *meta.Snode
 		proxyURL = tools.RandomProxyURL(t)
 	)
 
@@ -652,7 +652,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
 	_ = tools.RandomProxyURL(t)
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		proxyURL := tools.RandomProxyURL(t)
 		smap := tools.GetClusterMap(t, proxyURL)
 		tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
@@ -813,7 +813,7 @@ loop:
 		default:
 		}
 
-		postKill := func(smap *cluster.Smap, newPrimary, _ *cluster.Snode) {
+		postKill := func(smap *meta.Smap, newPrimary, _ *meta.Snode) {
 			// let the workers go to the dying primary for a little while longer to generate errored requests
 			time.Sleep(time.Second)
 			for _, ch := range proxyurlchs {
@@ -967,7 +967,7 @@ loop:
 // smap 	- current Smap
 // directURL	- URL of the proxy that we send the request to (not necessarily the current primary)
 // toID, toURL 	- DaemonID and URL of the proxy that must become the new primary
-func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, toID string) (newSmap *cluster.Smap) {
+func setPrimaryTo(t *testing.T, proxyURL string, smap *meta.Smap, directURL, toID string) (newSmap *meta.Smap) {
 	if directURL == "" {
 		directURL = smap.Primary.URL(cmn.NetPublic)
 	}
@@ -986,7 +986,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap *cluster.Smap, directURL, 
 	return
 }
 
-func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
+func chooseNextProxy(smap *meta.Smap) (proxyid, proxyURL string, err error) {
 	pid, err := hrwProxyTest(smap, smap.Primary.ID())
 	pi := smap.Pmap[pid]
 	if err != nil {
@@ -1019,7 +1019,7 @@ func checkSmaps(t *testing.T, proxyURL string) {
 // NOTE: This test cannot be run as separate test. It requires that original
 // primary proxy was down and retuned back. So, the test should be executed
 // after primaryCrashElectRestart test
-func primarySetToOriginal(t *testing.T) *cluster.Smap {
+func primarySetToOriginal(t *testing.T) *meta.Smap {
 	var (
 		proxyURL              = tools.GetPrimaryURL()
 		smap                  = tools.GetClusterMap(t, proxyURL)
@@ -1074,7 +1074,7 @@ func primarySetToOriginal(t *testing.T) *cluster.Smap {
 // exported. As a result of this, ais.HrwProxy will not return the correct
 // proxy since the `idDigest` will be initialized to 0. To avoid this, we
 // compute the checksum directly in this method.
-func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, err error) {
+func hrwProxyTest(smap *meta.Smap, idToSkip string) (pi string, err error) {
 	if smap.CountActivePs() == 0 {
 		err = errors.New("AIStore cluster map is empty: no proxies")
 		return
@@ -1361,10 +1361,10 @@ func TestIC(t *testing.T) {
 	time.Sleep(time.Second)
 }
 
-func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tools.RestoreCmd, *cluster.Smap) {
+func killRandNonPrimaryIC(t testing.TB, smap *meta.Smap) (tools.RestoreCmd, *meta.Smap) {
 	origProxyCount := smap.CountActivePs()
 	primary := smap.Primary
-	var killNode *cluster.Snode
+	var killNode *meta.Snode
 	for _, psi := range smap.Pmap {
 		if smap.IsIC(psi) && !psi.Equals(primary) {
 			killNode = psi
@@ -1380,8 +1380,8 @@ func killRandNonPrimaryIC(t testing.TB, smap *cluster.Smap) (tools.RestoreCmd, *
 	return cmd, smap
 }
 
-func icFromSmap(smap *cluster.Smap) cos.StrSet {
-	lst := make(cos.StrSet, smap.DefaultICSize())
+func icFromSmap(smap *meta.Smap) cos.StrSet {
+	lst := make(cos.StrSet, meta.DfltCountIC)
 	for pid, psi := range smap.Pmap {
 		if smap.IsIC(psi) {
 			lst.Add(pid)
@@ -1393,8 +1393,8 @@ func icFromSmap(smap *cluster.Smap) cos.StrSet {
 func icMemberLeaveAndRejoin(t *testing.T) {
 	smap := tools.GetClusterMap(t, proxyURL)
 	primary := smap.Primary
-	tassert.Fatalf(t, smap.ICCount() == smap.DefaultICSize(),
-		"should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
+	tassert.Fatalf(t, smap.ICCount() == meta.DfltCountIC,
+		"should have %d members in IC, has %d", meta.DfltCountIC, smap.ICCount())
 
 	// Primary must be an IC member
 	tassert.Fatalf(t, smap.IsIC(primary), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
@@ -1411,8 +1411,8 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 	for sid := range origIC {
 		tassert.Errorf(t, smap.IsIC(smap.GetProxy(sid)), "Should not remove existing IC members (%s)", sid)
 	}
-	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(), "should have %d members in IC, has %d",
-		smap.DefaultICSize(), smap.ICCount())
+	tassert.Errorf(t, smap.ICCount() == meta.DfltCountIC, "should have %d members in IC, has %d",
+		meta.DfltCountIC, smap.ICCount())
 
 	err := tools.RestoreNode(cmd, false, "proxy")
 	tassert.CheckFatal(t, err)
@@ -1435,7 +1435,7 @@ func icKillAndRestorePrimary(t *testing.T) {
 		oldPrimary = smap.Primary
 	)
 
-	icCheck := func(smap *cluster.Smap, newPrimary, oldPrimary *cluster.Snode) {
+	icCheck := func(smap *meta.Smap, newPrimary, oldPrimary *meta.Snode) {
 		// Old primary shouldn't be in IC.
 		tassert.Errorf(t, !smap.IsIC(oldPrimary), "killed primary (%s) must be removed from IC", oldPrimary)
 
@@ -1455,8 +1455,8 @@ func icKillAndRestorePrimary(t *testing.T) {
 	// When a node added as primary, it should add itself to IC.
 	tassert.Fatalf(t, smap.IsIC(oldPrimary),
 		"primary (%s) should be a IC member, (were: %s)", oldPrimary, smap.StrIC(oldPrimary))
-	tassert.Errorf(t, smap.ICCount() == smap.DefaultICSize(),
-		"should have %d members in IC, has %d", smap.DefaultICSize(), smap.ICCount())
+	tassert.Errorf(t, smap.ICCount() == meta.DfltCountIC,
+		"should have %d members in IC, has %d", meta.DfltCountIC, smap.ICCount())
 }
 
 func icSyncOwnershipTable(t *testing.T) {
@@ -1638,7 +1638,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 }
 
 // Continuously kill and restore IC nodes
-func killRestoreIC(t *testing.T, smap *cluster.Smap, stopCh *cos.StopCh, wg *sync.WaitGroup) {
+func killRestoreIC(t *testing.T, smap *meta.Smap, stopCh *cos.StopCh, wg *sync.WaitGroup) {
 	var (
 		cmd      tools.RestoreCmd
 		proxyURL = smap.Primary.URL(cmn.NetPublic)

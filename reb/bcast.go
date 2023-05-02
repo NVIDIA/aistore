@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,10 +21,10 @@ import (
 )
 
 type (
-	syncCallback func(tsi *cluster.Snode, rargs *rebArgs) (ok bool)
+	syncCallback func(tsi *meta.Snode, rargs *rebArgs) (ok bool)
 
 	Status struct {
-		Targets     cluster.Nodes `json:"targets"`             // targets I'm waiting for ACKs from
+		Targets     meta.Nodes    `json:"targets"`             // targets I'm waiting for ACKs from
 		SmapVersion int64         `json:"smap_version,string"` // current Smap version (via smapOwner)
 		RebVersion  int64         `json:"reb_version,string"`  // Smap version of *this* rebalancing op
 		RebID       int64         `json:"reb_id,string"`       // rebalance ID
@@ -42,13 +43,13 @@ type (
 // main method
 func (reb *Reb) bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 	var cnt atomic.Int32
-	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(rargs.smap.Tmap))
+	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(rargs.smap.Tmap))
 	for _, tsi := range rargs.smap.Tmap {
 		if tsi.ID() == reb.t.SID() {
 			continue
 		}
 		wg.Add(1)
-		go func(tsi *cluster.Snode) {
+		go func(tsi *meta.Snode) {
 			if !cb(tsi, rargs) {
 				cnt.Inc()
 			}
@@ -62,7 +63,7 @@ func (reb *Reb) bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 
 // pingTarget checks if target is running (type syncCallback)
 // TODO: reuse keepalive
-func (reb *Reb) pingTarget(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		ver    = rargs.smap.Version
 		sleep  = cmn.Timeout.CplaneOperation()
@@ -92,7 +93,7 @@ func (reb *Reb) pingTarget(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
 }
 
 // wait for target to get ready to receive objects (type syncCallback)
-func (reb *Reb) rxReady(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		sleep  = cmn.Timeout.CplaneOperation() * 2
 		maxwt  = rargs.config.Rebalance.DestRetryTime.D() + rargs.config.Rebalance.DestRetryTime.D()/2
@@ -122,7 +123,7 @@ func (reb *Reb) rxReady(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
 // wait for the target to reach strage = rebStageFin (i.e., finish traversing and sending)
 // if the target that has reached rebStageWaitAck but not yet in the rebStageFin stage,
 // separately check whether it is waiting for my ACKs
-func (reb *Reb) waitFinExtended(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
+func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		curwt      time.Duration
 		status     *Status
@@ -177,7 +178,7 @@ func (reb *Reb) waitFinExtended(tsi *cluster.Snode, rargs *rebArgs) (ok bool) {
 // returns:
 // - `Status` or nil
 // - OK iff the desiredStage has been reached
-func (reb *Reb) checkStage(tsi *cluster.Snode, rargs *rebArgs, desiredStage uint32) (status *Status, ok bool) {
+func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32) (status *Status, ok bool) {
 	var (
 		sleepRetry = cmn.KeepaliveRetryDuration(rargs.config)
 		logHdr     = reb.logHdr(rargs.id, rargs.smap)

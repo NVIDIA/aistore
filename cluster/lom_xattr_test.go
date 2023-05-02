@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -37,11 +38,11 @@ var _ = Describe("LOM Xattributes", func() {
 		copyMpathInfo *fs.Mountpath
 		mix           = fs.Mountpath{Path: xattrMpath}
 		bmdMock       = mock.NewBaseBownerMock(
-			cluster.NewBck(
+			meta.NewBck(
 				bucketLocal, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},
 			),
-			cluster.NewBck(
+			meta.NewBck(
 				bucketCached, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:       cmn.CksumConf{Type: cos.ChecksumXXHash},

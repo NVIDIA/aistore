@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -821,12 +822,12 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
 		tmap     = c.parent.smap.Get().Tmap
-		wg       = cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), 8)
+		wg       = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), 8)
 		mtx      = &sync.Mutex{}
 		gen      int64
 		mdExists bool
 	)
-	requestMeta := func(si *cluster.Snode) {
+	requestMeta := func(si *meta.Snode) {
 		defer wg.Done()
 		md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
 		if err != nil {

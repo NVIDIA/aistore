@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -90,7 +91,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
 		tname, _ := cluster.ParseObjLoc(e.Location)
-		tid := cluster.N2ID(tname)
+		tid := meta.N2ID(tname)
 		targets[tid] = struct{}{}
 		tsi := smap.GetTarget(tid)
 		url := tsi.URL(cmn.NetPublic)
@@ -180,7 +181,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
 		tmp := strings.Split(e.Location, apc.LocationPropSepa)
-		tid := cluster.N2ID(tmp[0])
+		tid := meta.N2ID(tmp[0])
 		targets[tid] = struct{}{}
 		tsi := smap.GetTarget(tid)
 		url := tsi.URL(cmn.NetPublic)
@@ -450,7 +451,7 @@ func TestRenameObjects(t *testing.T) {
 }
 
 func TestObjectPrefix(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			proxyURL  = tools.RandomProxyURL(t)
 			b         = bck.Clone()
@@ -494,7 +495,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	}
 
 	// Step 1: Unregister multiple targets
-	removed := make(map[string]*cluster.Snode, m.smap.CountActiveTs()-1)
+	removed := make(map[string]*meta.Snode, m.smap.CountActiveTs()-1)
 	defer func() {
 		var rebID string
 		for _, tgt := range removed {
@@ -767,7 +768,7 @@ func TestPrefetchList(t *testing.T) {
 }
 
 func TestDeleteList(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			err        error
 			prefix     = "__listrange/tstf-"
@@ -879,7 +880,7 @@ func TestPrefetchRange(t *testing.T) {
 }
 
 func TestDeleteRange(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			err            error
 			objCnt         = 100

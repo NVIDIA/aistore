@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -34,7 +34,7 @@ import (
 
 func TestGetFromArchive(t *testing.T) {
 	const tmpDir = "/tmp"
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			m = ioContext{
 				t:   t,
@@ -149,13 +149,13 @@ func TestGetFromArchive(t *testing.T) {
 // PUT/create
 func TestCreateMultiObjArch(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		testMobjArch(t, bck)
 	})
 }
 
 // TODO: review aborting (test.abrt) timing logic
-func testMobjArch(t *testing.T, bck *cluster.Bck) {
+func testMobjArch(t *testing.T, bck *meta.Bck) {
 	var (
 		numPuts = 100
 		m       = ioContext{

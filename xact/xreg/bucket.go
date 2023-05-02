@@ -7,6 +7,7 @@ package xreg
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -15,15 +16,15 @@ import (
 type (
 	TCBArgs struct {
 		DP      cluster.DP
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
+		BckFrom *meta.Bck
+		BckTo   *meta.Bck
 		Msg     *apc.TCBMsg
 		Phase   string
 	}
 
 	TCObjsArgs struct {
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
+		BckFrom *meta.Bck
+		BckTo   *meta.Bck
 		DP      cluster.DP
 	}
 
@@ -33,8 +34,8 @@ type (
 
 	BckRenameArgs struct {
 		T       cluster.TargetExt
-		BckFrom *cluster.Bck
-		BckTo   *cluster.Bck
+		BckFrom *meta.Bck
+		BckTo   *meta.Bck
 		RebID   string
 		Phase   string
 	}
@@ -58,12 +59,12 @@ func (r *registry) regBckXact(entry Renewable) {
 
 // RenewBucketXact is general function to renew bucket xaction without any
 // additional or specific parameters.
-func RenewBucketXact(kind string, bck *cluster.Bck, args Args, buckets ...*cluster.Bck) (res RenewRes) {
+func RenewBucketXact(kind string, bck *meta.Bck, args Args, buckets ...*meta.Bck) (res RenewRes) {
 	e := dreg.bckXacts[kind].New(args, bck)
 	return dreg.renew(e, bck, buckets...)
 }
 
-func RenewECEncode(t cluster.Target, bck *cluster.Bck, uuid, phase string) RenewRes {
+func RenewECEncode(t cluster.Target, bck *meta.Bck, uuid, phase string) RenewRes {
 	return RenewBucketXact(apc.ActECEncode, bck, Args{T: t, Custom: &ECEncodeArgs{Phase: phase}, UUID: uuid})
 }
 
@@ -73,7 +74,7 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 		bmd      = t.Bowner().Get()
 		provider = apc.AIS
 	)
-	bmd.Range(&provider, nil, func(bck *cluster.Bck) bool {
+	bmd.Range(&provider, nil, func(bck *meta.Bck) bool {
 		if bck.Props.Mirror.Enabled {
 			rns := RenewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 			if rns.Err == nil && !rns.IsRunning() {
@@ -84,7 +85,7 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 	})
 	// TODO: remote ais
 	for name, ns := range cfg.Backend.Providers {
-		bmd.Range(&name, &ns, func(bck *cluster.Bck) bool {
+		bmd.Range(&name, &ns, func(bck *meta.Bck) bool {
 			if bck.Props.Mirror.Enabled {
 				rns := RenewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))
 				if rns.Err == nil && !rns.IsRunning() {
@@ -96,16 +97,16 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 	}
 }
 
-func RenewBckMakeNCopies(t cluster.Target, bck *cluster.Bck, uuid, tag string, copies int) (res RenewRes) {
+func RenewBckMakeNCopies(t cluster.Target, bck *meta.Bck, uuid, tag string, copies int) (res RenewRes) {
 	e := dreg.bckXacts[apc.ActMakeNCopies].New(Args{T: t, Custom: &MNCArgs{tag, copies}, UUID: uuid}, bck)
 	return dreg.renew(e, bck)
 }
 
-func RenewPromote(t cluster.Target, uuid string, bck *cluster.Bck, args *cluster.PromoteArgs) RenewRes {
+func RenewPromote(t cluster.Target, uuid string, bck *meta.Bck, args *cluster.PromoteArgs) RenewRes {
 	return RenewBucketXact(apc.ActPromote, bck, Args{T: t, Custom: args, UUID: uuid})
 }
 
-func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *cluster.Bck) RenewRes {
+func RenewBckLoadLomCache(t cluster.Target, uuid string, bck *meta.Bck) RenewRes {
 	return RenewBucketXact(apc.ActLoadLomCache, bck, Args{T: t, UUID: uuid})
 }
 
@@ -131,7 +132,7 @@ func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewR
 	)
 }
 
-func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *cluster.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
+func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *meta.Bck, uuid string, rmdVersion int64, phase string) RenewRes {
 	custom := &BckRenameArgs{
 		T:       t,
 		Phase:   phase,
@@ -142,7 +143,7 @@ func RenewBckRename(t cluster.TargetExt, bckFrom, bckTo *cluster.Bck, uuid strin
 	return RenewBucketXact(apc.ActMoveBck, bckTo, Args{T: t, Custom: custom, UUID: uuid})
 }
 
-func RenewLso(t cluster.Target, bck *cluster.Bck, uuid string, msg *apc.LsoMsg) RenewRes {
+func RenewLso(t cluster.Target, bck *meta.Bck, uuid string, msg *apc.LsoMsg) RenewRes {
 	e := dreg.bckXacts[apc.ActList].New(Args{T: t, UUID: uuid, Custom: msg}, bck)
 	return dreg.renewByID(e, bck)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -72,7 +73,7 @@ type (
 	}
 
 	baseDlJob struct {
-		bck         *cluster.Bck
+		bck         *meta.Bck
 		notif       *NotifDownload
 		xdl         *Xact
 		id          string
@@ -134,7 +135,7 @@ type (
 // baseDlJob //
 ///////////////
 
-func (j *baseDlJob) init(t cluster.Target, id string, bck *cluster.Bck, timeout, desc string, limits Limits, xdl *Xact) {
+func (j *baseDlJob) init(t cluster.Target, id string, bck *meta.Bck, timeout, desc string, limits Limits, xdl *Xact) {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
@@ -205,7 +206,7 @@ func (j *baseDlJob) cleanup() {
 // sliceDlJob -- multiDlJob -- singleDlJob
 //
 
-func (j *sliceDlJob) init(t cluster.Target, bck *cluster.Bck, objects cos.StrKVs) error {
+func (j *sliceDlJob) init(t cluster.Target, bck *meta.Bck, objects cos.StrKVs) error {
 	objs, err := buildDlObjs(t, bck, objects)
 	if err != nil {
 		return err
@@ -231,7 +232,7 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
+func newMultiDlJob(t cluster.Target, id string, bck *meta.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
 	var objs cos.StrKVs
 
 	mj = &multiDlJob{}
@@ -246,7 +247,7 @@ func newMultiDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *Multi
 
 func (j *multiDlJob) String() (s string) { return "multi-" + j.baseDlJob.String() }
 
-func newSingleDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
+func newSingleDlJob(t cluster.Target, id string, bck *meta.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
 	var objs cos.StrKVs
 
 	sj = &singleDlJob{}
@@ -268,7 +269,7 @@ func (j *singleDlJob) String() (s string) {
 ////////////////
 
 // NOTE: the sizes of objects to be downloaded will be unknown.
-func newRangeDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *RangeBody, xdl *Xact) (rj *rangeDlJob, err error) {
+func newRangeDlJob(t cluster.Target, id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj *rangeDlJob, err error) {
 	rj = &rangeDlJob{}
 	if rj.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return nil, err
@@ -330,7 +331,7 @@ func (j *rangeDlJob) getNextObjs() error {
 // backendDlJob //
 //////////////////
 
-func newBackendDlJob(t cluster.Target, id string, bck *cluster.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
+func newBackendDlJob(t cluster.Target, id string, bck *meta.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {

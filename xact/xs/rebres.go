@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -49,7 +50,7 @@ var (
 // Rebalance //
 ///////////////
 
-func (*rebFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*rebFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &rebFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
@@ -108,7 +109,7 @@ func (xreb *Rebalance) Snap() (snap *cluster.Snap) {
 // Resilver //
 //////////////
 
-func (*resFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*resFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &resFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 

@@ -14,8 +14,6 @@ var (
 	lomPool sync.Pool
 	lom0    LOM
 
-	nodesPool sync.Pool
-
 	cpObjPool sync.Pool
 	cpObj0    CopyObjectParams
 
@@ -41,27 +39,6 @@ func FreeLOM(lom *LOM) {
 	debug.Assertf(lom.ObjName != "" || lom.FQN != "", "%q, %q", lom.ObjName, lom.FQN)
 	*lom = lom0
 	lomPool.Put(lom)
-}
-
-///////////////
-// nodesPool //
-///////////////
-
-func AllocNodes(capacity int) (nodes Nodes) {
-	if v := nodesPool.Get(); v != nil {
-		pnodes := v.(*Nodes)
-		nodes = *pnodes
-		debug.Assert(nodes != nil && len(nodes) == 0)
-	} else {
-		debug.Assert(capacity > 0)
-		nodes = make(Nodes, 0, capacity)
-	}
-	return
-}
-
-func FreeNodes(nodes Nodes) {
-	nodes = nodes[:0]
-	nodesPool.Put(&nodes)
 }
 
 //////////////////////

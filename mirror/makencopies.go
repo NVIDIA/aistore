@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -48,7 +49,7 @@ var (
 // mncFactory //
 ////////////////
 
-func (*mncFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &mncFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: *args.Custom.(*xreg.MNCArgs)}
 	return p
 }
@@ -73,7 +74,7 @@ func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // xactMNC //
 /////////////
 
-func newXactMNC(bck *cluster.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
+func newXactMNC(bck *meta.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
 	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
 	debug.Assert(r.tag != "" && r.copies > 0)
 	mpopts := &mpather.JgroupOpts{

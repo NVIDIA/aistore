@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -213,7 +214,7 @@ func (j *jogger) run() error {
 	// walk all buckets, one at a time
 	if j.opts.Bck.IsEmpty() {
 		bmd := j.opts.T.Bowner().Get()
-		bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
+		bmd.Range(nil, nil, func(bck *meta.Bck) bool {
 			aborted, err = j.runBck(bck.Bucket())
 			return err != nil || aborted
 		})

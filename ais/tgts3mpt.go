@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -47,7 +48,7 @@ func (*target) putMptCopy(w http.ResponseWriter, r *http.Request, items []string
 // either not present (s3cmd) or cannot be trusted (aws s3api).
 //
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html
-func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
+func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
 	if len(items) < 2 {
 		err := fmt.Errorf(fmtErrBO, items)
 		s3.WriteErr(w, r, err, 0)
@@ -147,7 +148,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 // - Generate UUID for the upload
 // - Return the UUID to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
-func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
+func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
 	objName := s3.ObjName(items)
 	lom := cluster.LOM{ObjName: objName}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
@@ -172,7 +173,7 @@ func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string
 // 2. Merge all parts into a single file and calculate its ETag
 // 3. Return ETag to a caller
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
-func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *cluster.Bck) {
+func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []string, q url.Values, bck *meta.Bck) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID == "" {
 		s3.WriteErr(w, r, errors.New("empty uploadId"), 0)
@@ -285,7 +286,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 // s3cmd is OK to receive an empty body in response with status=200. In this
 // case s3cmd sends all parts.
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListParts.html
-func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, q url.Values) {
+func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 
 	lom := &cluster.LOM{ObjName: objName}
@@ -311,7 +312,7 @@ func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *clust
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListMultipartUploads.html
 // GET /?uploads&delimiter=Delimiter&encoding-type=EncodingType&key-marker=KeyMarker&
 // max-uploads=MaxUploads&prefix=Prefix&upload-id-marker=UploadIdMarker
-func (t *target) listMptUploads(w http.ResponseWriter, bck *cluster.Bck, q url.Values) {
+func (t *target) listMptUploads(w http.ResponseWriter, bck *meta.Bck, q url.Values) {
 	var (
 		maxUploads int
 		idMarker   string
@@ -359,7 +360,7 @@ func (*target) abortMptUpload(w http.ResponseWriter, r *http.Request, items []st
 // The object must have been multipart-uploaded beforehand.
 // See:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
-func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, q url.Values) {
+func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {

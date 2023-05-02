@@ -4,12 +4,14 @@
  */
 package cluster
 
+import "github.com/NVIDIA/aistore/cluster/meta"
+
 type (
 	RemAis struct {
-		URL   string `json:"url"`
-		Alias string `json:"alias"`
-		UUID  string `json:"uuid"` // Smap.UUID
-		Smap  *Smap  `json:"smap"`
+		URL   string     `json:"url"`
+		Alias string     `json:"alias"`
+		UUID  string     `json:"uuid"` // Smap.UUID
+		Smap  *meta.Smap `json:"smap"`
 	}
 	Remotes struct {
 		A   []*RemAis `json:"a"`

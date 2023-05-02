@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -25,7 +25,7 @@ type Listener interface {
 	Unlock()
 	RLock()
 	RUnlock()
-	Notifiers() cluster.NodeMap
+	Notifiers() meta.NodeMap
 	Kind() string
 	Bcks() []*cmn.Bck
 	SetErr(error)
@@ -44,16 +44,16 @@ type Listener interface {
 	String() string
 	GetOwner() string
 	SetOwner(string)
-	LastUpdated(si *cluster.Snode) int64
+	LastUpdated(si *meta.Snode) int64
 	ProgressInterval() time.Duration
 
 	// detailed ref-counting
-	ActiveNotifiers() cluster.NodeMap
+	ActiveNotifiers() meta.NodeMap
 	FinCount() int
 	ActiveCount() int
-	HasFinished(node *cluster.Snode) bool
-	MarkFinished(node *cluster.Snode)
-	NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool)
+	HasFinished(node *meta.Snode) bool
+	MarkFinished(node *meta.Snode)
+	NodesTardy(periodicNotifTime time.Duration) (nodes meta.NodeMap, tardy bool)
 }
 
 type (
@@ -74,8 +74,8 @@ type (
 			Bck         []*cmn.Bck
 		}
 		// construction
-		Srcs        cluster.NodeMap  // all notifiers
-		ActiveSrcs  cluster.NodeMap  // running notifiers
+		Srcs        meta.NodeMap     // all notifiers
+		ActiveSrcs  meta.NodeMap     // running notifiers
 		F           Callback         `json:"-"` // optional listening-side callback
 		Stats       *NodeStats       // [daeID => Stats (e.g. cmn.SnapExt)]
 		lastUpdated map[string]int64 // [daeID => last update time(nanoseconds)]
@@ -102,7 +102,7 @@ type (
 // ListenerBase //
 //////////////////
 
-func NewNLB(uuid, action string, smap *cluster.Smap, srcs cluster.NodeMap, progress time.Duration, bck ...*cmn.Bck) *ListenerBase {
+func NewNLB(uuid, action string, smap *meta.Smap, srcs meta.NodeMap, progress time.Duration, bck ...*cmn.Bck) *ListenerBase {
 	nlb := &ListenerBase{
 		Srcs:        srcs,
 		Stats:       NewNodeStats(len(srcs)),
@@ -122,7 +122,7 @@ func (nlb *ListenerBase) Unlock()  { nlb.mu.Unlock() }
 func (nlb *ListenerBase) RLock()   { nlb.mu.RLock() }
 func (nlb *ListenerBase) RUnlock() { nlb.mu.RUnlock() }
 
-func (nlb *ListenerBase) Notifiers() cluster.NodeMap      { return nlb.Srcs }
+func (nlb *ListenerBase) Notifiers() meta.NodeMap         { return nlb.Srcs }
 func (nlb *ListenerBase) UUID() string                    { return nlb.Common.UUID }
 func (nlb *ListenerBase) Aborted() bool                   { return nlb.AbortedX.Load() }
 func (nlb *ListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
@@ -137,15 +137,15 @@ func (nlb *ListenerBase) Bcks() []*cmn.Bck                { return nlb.Common.Bc
 func (nlb *ListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 func (nlb *ListenerBase) SetAddedTime()                   { nlb.addedTime.Store(mono.NanoTime()) }
 
-func (nlb *ListenerBase) ActiveNotifiers() cluster.NodeMap { return nlb.ActiveSrcs }
-func (nlb *ListenerBase) ActiveCount() int                 { return len(nlb.ActiveSrcs) }
-func (nlb *ListenerBase) FinCount() int                    { return len(nlb.Srcs) - nlb.ActiveCount() }
+func (nlb *ListenerBase) ActiveNotifiers() meta.NodeMap { return nlb.ActiveSrcs }
+func (nlb *ListenerBase) ActiveCount() int              { return len(nlb.ActiveSrcs) }
+func (nlb *ListenerBase) FinCount() int                 { return len(nlb.Srcs) - nlb.ActiveCount() }
 
-func (nlb *ListenerBase) MarkFinished(node *cluster.Snode) {
+func (nlb *ListenerBase) MarkFinished(node *meta.Snode) {
 	delete(nlb.ActiveSrcs, node.ID())
 }
 
-func (nlb *ListenerBase) HasFinished(node *cluster.Snode) bool {
+func (nlb *ListenerBase) HasFinished(node *meta.Snode) bool {
 	return !nlb.ActiveSrcs.Contains(node.ID())
 }
 
@@ -174,7 +174,7 @@ func (nlb *ListenerBase) SetStats(daeID string, stats any) {
 	nlb.lastUpdated[daeID] = mono.NanoTime()
 }
 
-func (nlb *ListenerBase) LastUpdated(si *cluster.Snode) int64 {
+func (nlb *ListenerBase) LastUpdated(si *meta.Snode) int64 {
 	if nlb.lastUpdated == nil {
 		return 0
 	}
@@ -182,11 +182,11 @@ func (nlb *ListenerBase) LastUpdated(si *cluster.Snode) int64 {
 }
 
 // under rlock
-func (nlb *ListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes cluster.NodeMap, tardy bool) {
+func (nlb *ListenerBase) NodesTardy(periodicNotifTime time.Duration) (nodes meta.NodeMap, tardy bool) {
 	if nlb.ProgressInterval() != 0 {
 		periodicNotifTime = nlb.ProgressInterval()
 	}
-	nodes = make(cluster.NodeMap, nlb.ActiveCount())
+	nodes = make(meta.NodeMap, nlb.ActiveCount())
 	now := mono.NanoTime()
 	for _, si := range nlb.ActiveSrcs {
 		ts := nlb.LastUpdated(si)

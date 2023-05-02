@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -56,7 +57,7 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, items []stri
 		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
 		return
 	}
-	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -91,7 +92,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	// src
-	bckSrc, err, errCode := cluster.InitByNameOnly(parts[0], t.owner.bmd)
+	bckSrc, err, errCode := meta.InitByNameOnly(parts[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -118,7 +119,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	// dst
-	bckDst, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bckDst, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -152,7 +153,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	sgl.Free()
 }
 
-func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *cluster.Bck) {
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
@@ -202,7 +203,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 // GET s3/<bucket-name[/<object-name>]
 func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
-	bck, err, errCode := cluster.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -248,7 +249,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		return
 	}
 	bucket, objName := items[0], s3.ObjName(items)
-	bck, err, errCode := cluster.InitByNameOnly(bucket, t.owner.bmd)
+	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -310,7 +311,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 
 // DELETE /s3/<bucket-name>/<object-name>
 func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -342,7 +343,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 // POST /s3/<bucket-name>/<object-name>
 func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []string) {
-	bck, err, errCode := cluster.InitByNameOnly(items[0], t.owner.bmd)
+	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return

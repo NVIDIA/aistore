@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -87,7 +88,7 @@ var (
 	_ xreg.Renewable = (*lsoFactory)(nil)
 )
 
-func (*lsoFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &lsoFactory{
 		streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActList},
 		msg:        args.Custom.(*apc.LsoMsg),
@@ -310,7 +311,7 @@ func (r *LsoXact) nextPageR() error {
 		wantOnlyRemote := r.msg.WantOnlyRemoteProps()
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
-		if !wantOnlyRemote && smap.HasActiveTargetPeers() {
+		if !wantOnlyRemote && smap.HasActiveTs(r.streamingX.p.Args.T.SID()) {
 			if err == nil {
 				err = r.bcast(page)
 			} else {

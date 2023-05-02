@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -225,7 +226,7 @@ func (dm *DataMover) UnregRecv() {
 	dm.stage.regred.Store(false)
 }
 
-func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *cluster.Snode) (err error) {
+func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {
 	err = dm.data.streams.Send(obj, roc, tsi)
 	if err == nil && !transport.ReservedOpcode(obj.Hdr.Opcode) {
 		dm.xctn.OutObjsAdd(1, obj.Size())
@@ -233,7 +234,7 @@ func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *clust
 	return
 }
 
-func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *cluster.Snode) error {
+func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
 	return dm.ack.streams.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
 }
 

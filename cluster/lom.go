@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -45,7 +46,7 @@ type (
 		bckID   uint64
 	}
 	LOM struct {
-		bck         Bck
+		bck         meta.Bck
 		ObjName     string
 		mi          *fs.Mountpath
 		FQN         string
@@ -152,7 +153,7 @@ func (lom *LOM) VersionConf() cmn.VersionConf { return lom.bck.VersionConf() }
 
 // as fs.PartsFQN
 func (lom *LOM) ObjectName() string       { return lom.ObjName }
-func (lom *LOM) Bck() *Bck                { return &lom.bck }
+func (lom *LOM) Bck() *meta.Bck           { return &lom.bck }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
 func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
@@ -177,7 +178,7 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
-func (lom *LOM) HrwTarget(smap *Smap) (tsi *Snode, local bool, err error) {
+func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
 	tsi, err = HrwTarget(lom.Uname(), smap)
 	if err != nil {
 		return
@@ -383,11 +384,20 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	return
 }
 
-func (lom *LOM) _checkBucket(bmd *BMD) (err error) {
-	err = bmd.eqBID(&lom.bck, lom.md.bckID)
-	if err == errBucketIDMismatch {
-		err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
+func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
+	bck, bckID := &lom.bck, lom.md.bckID
+	debug.Assert(bckID != 0)
+	bprops, present := bmd.Get(bck)
+	if !present {
+		if bck.IsRemote() {
+			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
+		}
+		return cmn.NewErrBckNotFound(bck.Bucket())
 	}
+	if bckID == bprops.BID {
+		return nil // ok
+	}
+	err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	return
 }
 
@@ -500,7 +510,7 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 // evict lom cache
 //
 
-func EvictLomCache(b *Bck) {
+func EvictLomCache(b *meta.Bck) {
 	var (
 		caches = lomCaches()
 		wg     = &sync.WaitGroup{}

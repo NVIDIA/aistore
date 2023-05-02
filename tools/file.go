@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -140,7 +141,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				BID:   0xa5b6e7d8,
 			},
 		}
-		bmd   = mock.NewBaseBownerMock((*cluster.Bck)(&bck))
+		bmd   = mock.NewBaseBownerMock((*meta.Bck)(&bck))
 		tMock cluster.Target
 	)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -39,7 +40,7 @@ type (
 	}
 	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
 	lrxact interface {
-		Bck() *cluster.Bck
+		Bck() *meta.Bck
 		IsAborted() bool
 		Finished() bool
 	}
@@ -103,7 +104,7 @@ func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *cmn.ListRange, fre
 	r.freeLOM = freeLOM
 }
 
-func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
+func (r *lriterator) iterateRange(wi lrwi, smap *meta.Smap) error {
 	pt, err := cos.NewParsedTemplate(r.msg.Template)
 	if err != nil {
 		return err
@@ -114,7 +115,7 @@ func (r *lriterator) iterateRange(wi lrwi, smap *cluster.Smap) error {
 	return r.iteratePrefix(smap, pt.Prefix, wi)
 }
 
-func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
+func (r *lriterator) iterateTemplate(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	pt.InitIter()
 	for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
@@ -133,7 +134,7 @@ func (r *lriterator) iterateTemplate(smap *cluster.Smap, pt *cos.ParsedTemplate,
 	return nil
 }
 
-func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) error {
+func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) error {
 	var (
 		err     error
 		lst     *cmn.LsoResult
@@ -196,7 +197,7 @@ func (r *lriterator) iteratePrefix(smap *cluster.Smap, prefix string, wi lrwi) e
 	return nil
 }
 
-func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
+func (r *lriterator) iterateList(wi lrwi, smap *meta.Smap) error {
 	for _, objName := range r.msg.ObjNames {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
@@ -214,7 +215,7 @@ func (r *lriterator) iterateList(wi lrwi, smap *cluster.Smap) error {
 	return nil
 }
 
-func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
+func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *meta.Smap) error {
 	if err := lom.InitBck(r.xctn.Bck().Bucket()); err != nil {
 		return err
 	}
@@ -235,7 +236,7 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *cluster.Smap) error {
 // evict/delete //
 //////////////////
 
-func (p *evdFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRange)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	np := &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
@@ -254,7 +255,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newEvictDelete(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRange) (ed *evictDelete) {
+func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *cmn.ListRange) (ed *evictDelete) {
 	ed = &evictDelete{}
 	ed.lriterator.init(ed, xargs.T, msg, true /*freeLOM*/)
 	ed.InitBase(xargs.UUID, kind, bck)
@@ -300,7 +301,7 @@ func (r *evictDelete) Snap() (snap *cluster.Snap) {
 // prefetch //
 //////////////
 
-func (*prfFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.ListRange)
 	debug.Assert(!msg.IsList() || !msg.HasTemplate())
 	np := &prfFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
@@ -329,7 +330,7 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newPrefetch(xargs *xreg.Args, kind string, bck *cluster.Bck, msg *cmn.ListRange) (prf *prefetch) {
+func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *cmn.ListRange) (prf *prefetch) {
 	prf = &prefetch{}
 	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
 	prf.InitBase(xargs.UUID, kind, bck)

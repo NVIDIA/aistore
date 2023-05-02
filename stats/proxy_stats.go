@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -31,7 +32,7 @@ var _ cos.Runner = (*Prunner)(nil)
 func (r *Prunner) Run() error { return r.runcommon(r) }
 
 // NOTE: have only common metrics (see regCommon()) - init only the Prometheus part if used
-func (r *Prunner) RegMetrics(node *cluster.Snode) {
+func (r *Prunner) RegMetrics(node *meta.Snode) {
 	r.core.initProm(node)
 }
 

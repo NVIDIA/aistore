@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -34,7 +35,7 @@ const ua = "aisnode/backend"
 
 type (
 	remAis struct {
-		smap *cluster.Smap
+		smap *meta.Smap
 		m    *AISBackendProvider
 		url  string
 		uuid string
@@ -57,9 +58,9 @@ var (
 )
 
 func NewAIS(t cluster.TargetPut) *AISBackendProvider {
-	suff := regexp.QuoteMeta(cluster.SnameSuffix)
-	preg = regexp.MustCompile(regexp.QuoteMeta(cluster.PnamePrefix) + `\S*` + suff + ": ")
-	treg = regexp.MustCompile(regexp.QuoteMeta(cluster.TnamePrefix) + `\S*` + suff + ": ")
+	suff := regexp.QuoteMeta(meta.SnameSuffix)
+	preg = regexp.MustCompile(regexp.QuoteMeta(meta.PnamePrefix) + `\S*` + suff + ": ")
+	treg = regexp.MustCompile(regexp.QuoteMeta(meta.TnamePrefix) + `\S*` + suff + ": ")
 	return &AISBackendProvider{
 		t:      t,
 		remote: make(map[string]*remAis),
@@ -241,7 +242,7 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (offline bool, err error) {
 	var (
 		url           string
-		remSmap, smap *cluster.Smap
+		remSmap, smap *meta.Smap
 		httpClient    = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
 		httpsClient   = cmn.NewClient(cmn.TransportArgs{
 			Timeout:    cfg.Client.Timeout.D(),
@@ -386,7 +387,7 @@ func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
 func (*AISBackendProvider) Provider() string  { return apc.AIS }
 func (*AISBackendProvider) MaxPageSize() uint { return apc.DefaultPageSizeAIS }
 
-func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error) {
+func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (errCode int, err error) {
 	debug.Assert(false) // Bucket creation happens only with reverse proxy to AIS cluster.
 	return 0, nil
 }
@@ -395,7 +396,7 @@ func (*AISBackendProvider) CreateBucket(_ *cluster.Bck) (errCode int, err error)
 // that, in particular, include `dontAddRemote` = (true | false).
 // Here we have to hardcode the value to keep HeadBucket() consistent across all backends.
 // For similar limitations, see also ListBuckets() below.
-func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		remAis      *remAis
 		p           *cmn.BucketProps
@@ -426,7 +427,7 @@ func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *cluster.Bck) (bckProps
 	return
 }
 
-func (m *AISBackendProvider) ListObjects(remoteBck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (m *AISBackendProvider) ListObjects(remoteBck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var remAis *remAis
 	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
 		return

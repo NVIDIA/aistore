@@ -1,8 +1,8 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package meta: cluster-level metadata
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package meta
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -20,15 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/OneOfOne/xxhash"
 )
-
-const (
-	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
-	Proxies
-	AllNodes
-)
-
-// number of broadcasting goroutines <= cmn.NumCPU() * maxBcastMultiplier
-const maxBcastMultiplier = 2
 
 // enum Snode.Flags
 const (
@@ -41,7 +33,8 @@ const (
 
 const SnodeMaintDecomm = SnodeMaint | SnodeDecomm
 
-const icGroupSize = 3 // desirable gateway count in the Information Center
+// desirable gateway count in the Information Center (IC)
+const DfltCountIC = 3
 
 type (
 	// interface to Get current cluster-map instance
@@ -95,6 +88,9 @@ type (
 	}
 )
 
+// number of broadcasting goroutines <= cmn.NumCPU() * maxBcastMultiplier
+const maxBcastMultiplier = 2
+
 func MaxBcastParallel() int { return sys.NumCPU() * maxBcastMultiplier }
 
 ///////////
@@ -112,14 +108,15 @@ func (d *Snode) Init(id, daeType string) {
 	debug.Assert(id != "" && daeType != "")
 	d.DaeID, d.DaeType = id, daeType
 	d.SetName()
-	d.Digest()
+	d.setDigest()
 }
 
-func (d *Snode) Digest() uint64 {
+func (d *Snode) Digest() uint64 { return d.idDigest }
+
+func (d *Snode) setDigest() {
 	if d.idDigest == 0 {
 		d.idDigest = xxhash.ChecksumString64S(d.ID(), cos.MLCG32)
 	}
-	return d.idDigest
 }
 
 func (d *Snode) ID() string   { return d.DaeID }
@@ -240,14 +237,16 @@ func (d *Snode) isDupNet(n *Snode, smap *Smap) error {
 		for _, di := range du {
 			dp, err := url.Parse(di)
 			if err != nil {
-				return fmt.Errorf("%s %s: failed to parse %s URL %q: %v", cmn.BadSmapPrefix, smap, d.StringEx(), di, err)
+				return fmt.Errorf("%s %s: failed to parse %s URL %q: %v",
+					cmn.BadSmapPrefix, smap, d.StringEx(), di, err)
 			}
 			if np.Host == dp.Host {
 				return fmt.Errorf("duplicate IPs: %s and %s share the same %q, %s",
 					d.StringEx(), n.StringEx(), np.Host, smap.StringEx())
 			}
 			if ni == di {
-				return fmt.Errorf("duplicate URLs: %s and %s share the same %q, %s", d.StringEx(), n.StringEx(), ni, smap.StringEx())
+				return fmt.Errorf("duplicate URLs: %s and %s share the same %q, %s",
+					d.StringEx(), n.StringEx(), ni, smap.StringEx())
 			}
 		}
 	}
@@ -263,7 +262,7 @@ func (d *Snode) InMaintPostReb() bool {
 	return d.Flags.IsSet(SnodeMaint) && d.Flags.IsSet(SnodeMaintPostReb)
 }
 func (d *Snode) nonElectable() bool { return d.Flags.IsSet(SnodeNonElectable) }
-func (d *Snode) isIC() bool         { return d.Flags.IsSet(SnodeIC) }
+func (d *Snode) IsIC() bool         { return d.Flags.IsSet(SnodeIC) }
 
 /////////////
 // NetInfo //
@@ -294,21 +293,17 @@ func (ni *NetInfo) eq(o *NetInfo) bool {
 	return ni.Port == o.Port && ni.Hostname == o.Hostname
 }
 
-//===============================================================
-//
-// Smap: cluster map is a versioned object
+// Cluster map (aks Smap) is a versioned object
 // Executing Sowner.Get() gives an immutable version that won't change
 // Smap versioning is monotonic and incremental
 // Smap uniquely and solely defines the primary proxy
-//
-//===============================================================
 
 func (m *Smap) InitDigests() {
 	for _, node := range m.Tmap {
-		node.Digest()
+		node.setDigest()
 	}
 	for _, node := range m.Pmap {
-		node.Digest()
+		node.setDigest()
 	}
 }
 
@@ -343,9 +338,10 @@ func (m *Smap) CountActiveTs() (count int) {
 	return
 }
 
-func (m *Smap) HasActiveTargetPeers() bool {
+// whether this target has active peers
+func (m *Smap) HasActiveTs(except string) bool {
 	for tid, t := range m.Tmap {
-		if tid == T.SID() || t.InMaintOrDecomm() {
+		if tid == except || t.InMaintOrDecomm() {
 			continue
 		}
 		return true
@@ -509,13 +505,13 @@ func (m *Smap) InMaint(si *Snode) bool {
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {
 	node := m.GetProxy(psi.ID())
-	return node != nil && node.isIC()
+	return node != nil && node.IsIC()
 }
 
 func (m *Smap) StrIC(node *Snode) string {
-	all := make([]string, 0, m.DefaultICSize())
+	all := make([]string, 0, DfltCountIC)
 	for pid, psi := range m.Pmap {
-		if !psi.isIC() {
+		if !psi.IsIC() {
 			continue
 		}
 		if node != nil && pid == node.ID() {
@@ -530,14 +526,12 @@ func (m *Smap) StrIC(node *Snode) string {
 func (m *Smap) ICCount() int {
 	count := 0
 	for _, psi := range m.Pmap {
-		if psi.isIC() {
+		if psi.IsIC() {
 			count++
 		}
 	}
 	return count
 }
-
-func (*Smap) DefaultICSize() int { return icGroupSize }
 
 // checking pub net only
 func (m *Smap) PubNet2Node(hostport string) *Snode {
@@ -601,4 +595,27 @@ func mapsEq(a, b NodeMap) bool {
 		}
 	}
 	return true
+}
+
+///////////////
+// nodesPool //
+///////////////
+
+var nodesPool sync.Pool
+
+func AllocNodes(capacity int) (nodes Nodes) {
+	if v := nodesPool.Get(); v != nil {
+		pnodes := v.(*Nodes)
+		nodes = *pnodes
+		debug.Assert(nodes != nil && len(nodes) == 0)
+	} else {
+		debug.Assert(capacity > 0)
+		nodes = make(Nodes, 0, capacity)
+	}
+	return
+}
+
+func FreeNodes(nodes Nodes) {
+	nodes = nodes[:0]
+	nodesPool.Put(&nodes)
 }

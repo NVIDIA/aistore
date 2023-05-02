@@ -18,7 +18,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -642,7 +642,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 // Minimalistic list objects test to check that everything works correctly.
 func TestListObjectsSmoke(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
@@ -675,7 +675,7 @@ func TestListObjectsSmoke(t *testing.T) {
 }
 
 func TestListObjectsGoBack(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
@@ -745,7 +745,7 @@ func TestListObjectsGoBack(t *testing.T) {
 }
 
 func TestListObjectsRerequestPage(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
@@ -795,7 +795,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 }
 
 func TestListObjectsStartAfter(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
@@ -840,7 +840,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 }
 
 func TestListObjectsProps(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			baseParams = tools.BaseAPIParams()
 			m          = ioContext{
@@ -1021,7 +1021,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 
 // Runs standard list objects but selects new random proxy every page.
 func TestListObjectsRandProxy(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			m = ioContext{
 				t:                   t,
@@ -1062,7 +1062,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 
 // Runs standard list objects but changes the page size every request.
 func TestListObjectsRandPageSize(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			totalCnt   int
 			baseParams = tools.BaseAPIParams()

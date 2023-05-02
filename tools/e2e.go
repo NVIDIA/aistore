@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -54,7 +54,7 @@ func destroyMatchingBuckets(subName string) (err error) {
 	return err
 }
 
-func randomTarget() *cluster.Snode {
+func randomTarget() *meta.Snode {
 	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	si, err := smap.GetRandTarget()
@@ -62,7 +62,7 @@ func randomTarget() *cluster.Snode {
 	return si
 }
 
-func randomMountpath(target *cluster.Snode) string {
+func randomMountpath(target *meta.Snode) string {
 	mpaths, err := api.GetMountpaths(BaseAPIParams(proxyURLReadOnly), target)
 	gomega.Expect(err).NotTo(gomega.HaveOccurred())
 	gomega.Expect(len(mpaths.Available)).NotTo(gomega.Equal(0))

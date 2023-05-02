@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -35,7 +36,7 @@ func (*target) GetAllRunning(xactKind string, separateIdle bool) (running, idle 
 	return xreg.GetAllRunning(xactKind, separateIdle)
 }
 
-func (t *target) Backend(bck *cluster.Bck) cluster.BackendProvider {
+func (t *target) Backend(bck *meta.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {
 		return t.backend[apc.AIS]
 	}
@@ -316,7 +317,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 
 // TODO: use DM streams
 // TODO: Xact.InObjsAdd on the receive side
-func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *cluster.Snode) (int64, error) {
+func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *meta.Snode) (int64, error) {
 	lom.FQN = params.SrcFQN
 
 	// when not overwriting check w/ remote target first (and separately)
@@ -346,7 +347,7 @@ func (t *target) DisableMpath(mpath, reason string) (err error) {
 	return
 }
 
-func (t *target) RebalanceNamespace(si *cluster.Snode) (b []byte, status int, err error) {
+func (t *target) RebalanceNamespace(si *meta.Snode) (b []byte, status int, err error) {
 	// pull the data
 	query := url.Values{}
 	query.Set(apc.QparamRebData, "true")

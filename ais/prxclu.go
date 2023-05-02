@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -332,7 +333,7 @@ func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceRe
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		regReq cluMeta
-		nsi    *cluster.Snode
+		nsi    *meta.Snode
 		apiOp  string // one of: admin-join, self-join, keepalive
 		action string // msg.Action, one: apc.ActSelfJoinProxy, ...
 	)
@@ -443,7 +444,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		nsi.Flags = osi.Flags
 	}
 	if nonElectable {
-		nsi.Flags = nsi.Flags.Set(cluster.SnodeNonElectable)
+		nsi.Flags = nsi.Flags.Set(meta.SnodeNonElectable)
 	}
 
 	// handshake | check dup
@@ -528,7 +529,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 // when joining manually: update the node with cluster meta that does not include Smap
 // (the later gets finalized and metasync-ed upon success)
-func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error) {
+func (p *proxy) adminJoinHandshake(nsi *meta.Snode, apiOp string) (int, error) {
 	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -558,7 +559,7 @@ func (p *proxy) adminJoinHandshake(nsi *cluster.Snode, apiOp string) (int, error
 }
 
 // executes under lock
-func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta) (upd bool, err error) {
+func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -610,7 +611,7 @@ func (p *proxy) _joinKalive(nsi *cluster.Snode, regSmap *smapX, apiOp string, fl
 	return
 }
 
-func (p *proxy) kalive(nsi, osi *cluster.Snode) bool {
+func (p *proxy) kalive(nsi, osi *meta.Snode) bool {
 	if !osi.Equals(nsi) {
 		duplicate, err := p.detectDuplicate(osi, nsi)
 		if err != nil {
@@ -629,7 +630,7 @@ func (p *proxy) kalive(nsi, osi *cluster.Snode) bool {
 	return false
 }
 
-func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
+func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 	if !p.NodeStarted() {
 		return true
 	}
@@ -641,7 +642,7 @@ func (p *proxy) rereg(nsi, osi *cluster.Snode) bool {
 	return true
 }
 
-func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFlags, regReq *cluMeta) (xid string, err error) {
+func (p *proxy) mcastJoined(nsi *meta.Snode, msg *apc.ActMsg, flags cos.BitFlags, regReq *cluMeta) (xid string, err error) {
 	ctx := &smapModifier{
 		pre:         p._joinedPre,
 		post:        p._joinedPost,
@@ -672,13 +673,13 @@ func (p *proxy) mcastJoined(nsi *cluster.Snode, msg *apc.ActMsg, flags cos.BitFl
 	if ctx.gfn {
 		aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil) // "stop-gfn" timed
 		aisMsg.UUID = ctx.nsi.ID()
-		revs := revsPair{&smapX{Smap: cluster.Smap{Version: ctx.nver}}, aisMsg}
+		revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, aisMsg}
 		_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 	}
 	return
 }
 
-func (p *proxy) _earlyGFN(ctx *smapModifier, si *cluster.Snode /*being added or removed*/) error {
+func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode /*being added or removed*/) error {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, smap, fmt.Sprintf("cannot add %s", si))
@@ -697,7 +698,7 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *cluster.Snode /*being added or 
 	// message(new target's ID)
 	msg := p.newAmsgActVal(apc.ActStartGFN, nil)
 	msg.UUID = si.ID()
-	revs := revsPair{&smapX{Smap: cluster.Smap{Version: smap.Version}}, msg}
+	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, msg}
 	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
@@ -1298,7 +1299,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 }
 
-func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
+func (p *proxy) rmTarget(si *meta.Snode, msg *apc.ActMsg, reb bool) (rebID string, err error) {
 	var ctx *smapModifier
 	if ctx, err = p.mcastMaint(msg, si, reb, false /*maintPostReb*/); err != nil {
 		return
@@ -1310,23 +1311,23 @@ func (p *proxy) rmTarget(si *cluster.Snode, msg *apc.ActMsg, reb bool) (rebID st
 		if rebID == "" && ctx.gfn { // stop early gfn
 			aisMsg := p.newAmsgActVal(apc.ActStopGFN, nil)
 			aisMsg.UUID = si.ID()
-			revs := revsPair{&smapX{Smap: cluster.Smap{Version: ctx.nver}}, aisMsg}
+			revs := revsPair{&smapX{Smap: meta.Smap{Version: ctx.nver}}, aisMsg}
 			_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
 		}
 	}
 	return
 }
 
-func (p *proxy) mcastMaint(msg *apc.ActMsg, si *cluster.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
+func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bool) (ctx *smapModifier, err error) {
 	var flags cos.BitFlags
 	switch msg.Action {
 	case apc.ActDecommissionNode:
-		flags = cluster.SnodeDecomm
+		flags = meta.SnodeDecomm
 	case apc.ActShutdownNode, apc.ActStartMaintenance:
-		flags = cluster.SnodeMaint
+		flags = meta.SnodeMaint
 		if maintPostReb {
 			debug.Assert(si.IsTarget())
-			flags |= cluster.SnodeMaintPostReb
+			flags |= meta.SnodeMaintPostReb
 		}
 	default:
 		err = fmt.Errorf(fmtErrInvaldAction, msg.Action,
@@ -1586,7 +1587,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID s
 		sid:     opts.DaemonID,
 		skipReb: opts.SkipRebalance,
 		msg:     msg,
-		flags:   cluster.SnodeMaint | cluster.SnodeMaintPostReb, // to clear node flags
+		flags:   meta.SnodeMaint | meta.SnodeMaintPostReb, // to clear node flags
 	}
 	err = p.owner.smap.modify(ctx)
 	if ctx.rmdCtx != nil && ctx.rmdCtx.cur != nil {
@@ -1791,7 +1792,7 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 
 // post-rebalance or post no-rebalance - last step removing a node
 // (with msg.Action defining semantics)
-func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifier) (int, error) {
+func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) (int, error) {
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
@@ -1858,7 +1859,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *cluster.Snode, ctx *smapModifie
 	return errCode, err
 }
 
-func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *cluster.Snode) (errCode int, err error) {
+func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *meta.Snode) (errCode int, err error) {
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		final:   p._syncFinal,

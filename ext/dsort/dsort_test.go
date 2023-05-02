@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -38,8 +39,8 @@ const (
 
 // interface guard
 var (
-	_ extract.Creator       = (*extractCreatorMock)(nil)
-	_ cluster.SmapListeners = (*testSmapListeners)(nil)
+	_ extract.Creator    = (*extractCreatorMock)(nil)
+	_ meta.SmapListeners = (*testSmapListeners)(nil)
 )
 
 //
@@ -72,35 +73,35 @@ type testSmapListeners struct {
 	sync.RWMutex
 }
 
-func (*testSmapListeners) Reg(cluster.Slistener)   {}
-func (*testSmapListeners) Unreg(cluster.Slistener) {}
+func (*testSmapListeners) Reg(meta.Slistener)   {}
+func (*testSmapListeners) Unreg(meta.Slistener) {}
 
 type testSmap struct {
-	*cluster.Smap
+	*meta.Smap
 	a *testSmapListeners
 }
 
 func newTestSmap(targets ...string) *testSmap {
 	smap := &testSmap{
-		&cluster.Smap{},
+		&meta.Smap{},
 		&testSmapListeners{},
 	}
-	smap.Tmap = make(cluster.NodeMap)
+	smap.Tmap = make(meta.NodeMap)
 	for _, target := range targets {
-		smap.Tmap[target] = &cluster.Snode{}
+		smap.Tmap[target] = &meta.Snode{}
 	}
 	return smap
 }
 
-func (tm *testSmap) addTarget(si *cluster.Snode) {
+func (tm *testSmap) addTarget(si *meta.Snode) {
 	tm.Tmap[si.ID()] = si
 }
 
-func (tm *testSmap) Get() *cluster.Smap {
+func (tm *testSmap) Get() *meta.Smap {
 	return tm.Smap
 }
 
-func (tm *testSmap) Listeners() cluster.SmapListeners {
+func (tm *testSmap) Listeners() meta.SmapListeners {
 	return tm.a
 }
 
@@ -240,12 +241,12 @@ func (tctx *testContext) setup() {
 	Expect(err).ShouldNot(HaveOccurred())
 	for i := 0; i < tctx.targetCnt; i++ {
 		targetPort := ports[i]
-		ni := cluster.NetInfo{
+		ni := meta.NetInfo{
 			Hostname: testIP,
 			Port:     fmt.Sprintf("%d", targetPort),
 			URL:      fmt.Sprintf("http://%s:%d", testIP, targetPort),
 		}
-		di := &cluster.Snode{
+		di := &meta.Snode{
 			DaeID:      genNodeID(i),
 			PubNet:     ni,
 			ControlNet: ni,
@@ -271,7 +272,7 @@ func (tctx *testContext) setup() {
 
 	// Initialize BMD owner.
 	bmdMock := mock.NewBaseBownerMock(
-		cluster.NewBck(
+		meta.NewBck(
 			testBucket, apc.AIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		),

@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -56,16 +57,16 @@ var (
 
 // interface guard
 var (
-	_ cluster.Slistener = (*Manager)(nil)
-	_ cos.Packer        = (*buildingShardInfo)(nil)
-	_ cos.Unpacker      = (*buildingShardInfo)(nil)
+	_ meta.Slistener = (*Manager)(nil)
+	_ cos.Packer     = (*buildingShardInfo)(nil)
+	_ cos.Unpacker   = (*buildingShardInfo)(nil)
 )
 
 type (
 	dsortContext struct {
-		smapOwner cluster.Sowner
-		bmdOwner  cluster.Bowner
-		node      *cluster.Snode
+		smapOwner meta.Sowner
+		bmdOwner  meta.Bowner
+		node      *meta.Snode
 		t         cluster.Target // Set only on target.
 		stats     stats.Tracker
 		client    *http.Client // Client for broadcast.
@@ -99,7 +100,7 @@ type (
 
 		mu   sync.Mutex
 		ctx  dsortContext
-		smap *cluster.Smap
+		smap *meta.Smap
 
 		recManager     *extract.RecordManager
 		extractCreator extract.Creator
@@ -141,7 +142,7 @@ type (
 	}
 )
 
-func RegisterNode(smapOwner cluster.Sowner, bmdOwner cluster.Bowner, snode *cluster.Snode, t cluster.Target,
+func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode, t cluster.Target,
 	stats stats.Tracker) {
 	ctx.smapOwner = smapOwner
 	ctx.bmdOwner = bmdOwner

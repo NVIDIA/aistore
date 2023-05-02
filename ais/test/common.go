@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,7 +56,7 @@ var (
 
 type ioContext struct {
 	t                   *testing.T
-	smap                *cluster.Smap
+	smap                *meta.Smap
 	controlCh           chan struct{}
 	stopCh              chan struct{}
 	objNames            []string
@@ -102,7 +103,7 @@ func (m *ioContext) waitAndCheckCluState() {
 	m.checkCluState(smap)
 }
 
-func (m *ioContext) checkCluState(smap *cluster.Smap) {
+func (m *ioContext) checkCluState(smap *meta.Smap) {
 	proxyCount := smap.CountActivePs()
 	targetCount := smap.CountActiveTs()
 	if targetCount != m.originalTargetCount ||
@@ -184,7 +185,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
 		tname, _ := cluster.ParseObjLoc(obj.Location)
-		tid := cluster.N2ID(tname)
+		tid := meta.N2ID(tname)
 		targetObjectCount[tid]++
 	}
 	if len(targetObjectCount) != m.originalTargetCount {
@@ -599,11 +600,11 @@ func (m *ioContext) ensureNoGetErrors() {
 	}
 }
 
-func (m *ioContext) ensureNumMountpaths(target *cluster.Snode, mpList *apc.MountpathList) {
+func (m *ioContext) ensureNumMountpaths(target *meta.Snode, mpList *apc.MountpathList) {
 	ensureNumMountpaths(m.t, target, mpList)
 }
 
-func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.MountpathList) {
+func ensureNumMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	tname := target.StringEx()
 	baseParams := tools.BaseAPIParams()
@@ -626,7 +627,7 @@ func ensureNumMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.Mountp
 	}
 }
 
-func ensureNoDisabledMountpaths(t *testing.T, target *cluster.Snode, mpList *apc.MountpathList) {
+func ensureNoDisabledMountpaths(t *testing.T, target *meta.Snode, mpList *apc.MountpathList) {
 	t.Helper()
 	for i := 0; i < 6; i++ {
 		if len(mpList.WaitingDD) == 0 && len(mpList.Disabled) == 0 {
@@ -659,7 +660,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	return true
 }
 
-func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
+func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
 	target, _ := m.smap.GetRandTarget()
 	tlog.Logf("Put %s in maintenance\n", target.StringEx())
 	args := &apc.ActValRmNode{DaemonID: target.ID(), SkipRebalance: true}
@@ -676,7 +677,7 @@ func (m *ioContext) startMaintenanceNoRebalance() *cluster.Snode {
 	return target
 }
 
-func (m *ioContext) stopMaintenance(target *cluster.Snode) (rebID string) {
+func (m *ioContext) stopMaintenance(target *meta.Snode) (rebID string) {
 	const (
 		timeout    = time.Second * 10
 		interval   = time.Millisecond * 10
@@ -735,7 +736,7 @@ func (m *ioContext) setNonDefaultBucketProps() {
 	tassert.CheckFatal(m.t, err)
 }
 
-func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
+func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	tests := []struct {
 		name       string
 		bck        cmn.Bck
@@ -841,7 +842,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *cluster.Bck)) {
 			p, err := api.HeadBucket(baseParams, test.bck, false /* don't add */)
 			tassert.CheckFatal(t, err)
 
-			bck := cluster.CloneBck(&test.bck)
+			bck := meta.CloneBck(&test.bck)
 			bck.Props = p
 
 			f(t, bck)

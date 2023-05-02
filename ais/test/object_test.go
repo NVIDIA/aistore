@@ -21,7 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -773,7 +773,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	_ = mock.NewTarget(mock.NewBaseBownerMock(
-		cluster.NewBck(
+		meta.NewBck(
 			m.bck.Name, m.bck.Provider, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, Extra: p.Extra, BID: 0xa73b9f11},
 		),
@@ -968,11 +968,11 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		_          = mock.NewTarget(mock.NewBaseBownerMock(
-			cluster.NewBck(
+			meta.NewBck(
 				m.bck.Name, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 1},
 			),
-			cluster.CloneBck(&m.bck),
+			meta.CloneBck(&m.bck),
 		))
 		cksumConf = m.bck.DefaultProps(initialClusterConfig).Cksum
 	)
@@ -1057,7 +1057,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 func TestRangeRead(t *testing.T) {
 	initMountpaths(t, tools.RandomProxyURL(t)) // to run findObjOnDisk() and validate range
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
 			m = ioContext{
 				t:         t,
@@ -1422,7 +1422,7 @@ func TestOperationsWithRanges(t *testing.T) {
 	)
 	proxyURL := tools.RandomProxyURL(t)
 
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		for _, evict := range []bool{false, true} {
 			t.Run(fmt.Sprintf("evict=%t", evict), func(t *testing.T) {
 				if evict && bck.IsAIS() {

@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -40,12 +41,12 @@ const (
 
 type (
 	Renewable interface {
-		New(args Args, bck *cluster.Bck) Renewable // new xaction stub that can be `Start`-ed.
-		Start() error                              // starts an xaction, will be called when entry is stored into registry
+		New(args Args, bck *meta.Bck) Renewable // new xaction stub that can be `Start`-ed.
+		Start() error                           // starts an xaction, will be called when entry is stored into registry
 		Kind() string
 		Get() cluster.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
-		Bucket() *cluster.Bck
+		Bucket() *meta.Bck
 		UUID() string
 	}
 	// used in constructions
@@ -56,15 +57,15 @@ type (
 	}
 	RenewBase struct {
 		Args
-		Bck *cluster.Bck
+		Bck *meta.Bck
 	}
 	// simplified non-JSON QueryMsg (internal AIS use)
 	Flt struct {
-		Bck         *cluster.Bck
+		Bck         *meta.Bck
 		OnlyRunning *bool
 		ID          string
 		Kind        string
-		Buckets     []*cluster.Bck
+		Buckets     []*meta.Bck
 	}
 )
 
@@ -78,11 +79,11 @@ type (
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
-		bcks       []*cluster.Bck // run on a slice of buckets
-		scope      []int          // one of { ScopeG, ScopeB, ... } enum
-		kind       string         // all of a kind
-		err        error          // original cause (or reason), e.g. cmn.ErrUserAbort
-		mountpaths bool           // mountpath xactions - see xact.Table
+		bcks       []*meta.Bck // run on a slice of buckets
+		scope      []int       // one of { ScopeG, ScopeB, ... } enum
+		kind       string      // all of a kind
+		err        error       // original cause (or reason), e.g. cmn.ErrUserAbort
+		mountpaths bool        // mountpath xactions - see xact.Table
 	}
 
 	entries struct {
@@ -212,7 +213,7 @@ func GetLatest(flt Flt) Renewable {
 // It not only stops the "bucket xactions" but possibly "task xactions" which
 // are running on given bucket.
 
-func AbortAllBuckets(err error, bcks ...*cluster.Bck) {
+func AbortAllBuckets(err error, bcks ...*meta.Bck) {
 	dreg.abort(abortArgs{bcks: bcks, err: err})
 }
 
@@ -451,14 +452,14 @@ func (r *registry) hkDelOld() time.Duration {
 	return hk.DelOldIval
 }
 
-func (r *registry) renewByID(entry Renewable, bck *cluster.Bck) (rns RenewRes) {
+func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {
 	flt := Flt{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
 	rns = r._renewFlt(entry, flt)
 	rns.beingRenewed()
 	return
 }
 
-func (r *registry) renew(entry Renewable, bck *cluster.Bck, buckets ...*cluster.Bck) (rns RenewRes) {
+func (r *registry) renew(entry Renewable, bck *meta.Bck, buckets ...*meta.Bck) (rns RenewRes) {
 	flt := Flt{Kind: entry.Kind(), Bck: bck, Buckets: buckets}
 	rns = r._renewFlt(entry, flt)
 	rns.beingRenewed()
@@ -497,7 +498,7 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 }
 
 // reusing current (aka "previous") xaction: default policies
-func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) {
+func usePrev(xprev cluster.Xact, nentry Renewable, bck *meta.Bck) (use bool) {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
 	pdtor, ndtor := xact.Table[pkind], xact.Table[nkind]
@@ -521,7 +522,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, bck *cluster.Bck) (use bool) 
 	return
 }
 
-func (r *registry) renewLocked(entry Renewable, flt Flt, bck *cluster.Bck) (rns RenewRes) {
+func (r *registry) renewLocked(entry Renewable, flt Flt, bck *meta.Bck) (rns RenewRes) {
 	var (
 		xprev cluster.Xact
 		wpr   WPR
@@ -645,7 +646,7 @@ func (e *entries) add(entry Renewable) {
 // of that sort. Further comments below.
 //
 
-func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) (err error) {
+func LimitedCoexistence(tsi *meta.Snode, bck *meta.Bck, action string, otherBck ...*meta.Bck) (err error) {
 	const sleep = time.Second
 	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
 		if err = dreg.limco(tsi, bck, action, otherBck...); err == nil {
@@ -664,7 +665,7 @@ func LimitedCoexistence(tsi *cluster.Snode, bck *cluster.Bck, action string, oth
 //     transitioning storage targets to maintenance
 //   - all supported xactions define "limited coexistence" via their respecive
 //     descriptors in xact.Table
-func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, otherBck ...*cluster.Bck) error {
+func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck ...*meta.Bck) error {
 	var (
 		nd    *xact.Descriptor // the one that wants to run
 		admin bool             // admin-requested action that'd generate protential conflict
@@ -733,7 +734,7 @@ func (r *registry) limco(tsi *cluster.Snode, bck *cluster.Bck, action string, ot
 	return nil
 }
 
-func _eqAny(bck1, bck2, from, to *cluster.Bck) (eq bool) {
+func _eqAny(bck1, bck2, from, to *meta.Bck) (eq bool) {
 	if from != nil {
 		if bck1.Equal(from, false, true) || bck2.Equal(from, false, true) {
 			return true
@@ -749,8 +750,8 @@ func _eqAny(bck1, bck2, from, to *cluster.Bck) (eq bool) {
 // RenewBase //
 ///////////////
 
-func (r *RenewBase) Bucket() *cluster.Bck { return r.Bck }
-func (r *RenewBase) UUID() string         { return r.Args.UUID }
+func (r *RenewBase) Bucket() *meta.Bck { return r.Bck }
+func (r *RenewBase) UUID() string      { return r.Args.UUID }
 
 func (r *RenewBase) Str(kind string) string {
 	prefix := kind

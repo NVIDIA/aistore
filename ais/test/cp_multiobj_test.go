@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -100,12 +100,12 @@ func TestCopyMultiObjSimple(t *testing.T) {
 }
 
 func TestCopyMultiObj(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		testCopyMobj(t, bck)
 	})
 }
 
-func testCopyMobj(t *testing.T, bck *cluster.Bck) {
+func testCopyMobj(t *testing.T, bck *meta.Bck) {
 	const objCnt = 200
 	var (
 		proxyURL   = tools.RandomProxyURL(t)

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -295,7 +296,7 @@ func SliceSize(fileSize int64, slices int) int64 {
 // a unique ID for each of them. Because of all replicas/slices of an object have
 // the same names, cluster.Uname is not enough to generate unique ID. Adding an
 // extra prefix - an identifier of the destination - solves the issue
-func unique(prefix string, bck *cluster.Bck, objName string) string {
+func unique(prefix string, bck *meta.Bck, objName string) string {
 	return prefix + string(filepath.Separator) + bck.MakeUname(objName)
 }
 
@@ -354,7 +355,7 @@ func freeSlices(slices []*slice) {
 }
 
 // RequestECMeta returns an EC metadata found on a remote target.
-func RequestECMeta(bck *cmn.Bck, objName string, si *cluster.Snode, client *http.Client) (md *Metadata, err error) {
+func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Client) (md *Metadata, err error) {
 	path := apc.URLPathEC.Join(URLMeta, bck.Name, objName)
 	query := url.Values{}
 	query = bck.AddToQuery(query)
@@ -402,7 +403,7 @@ func validateBckBID(t cluster.Target, bck *cmn.Bck, bid uint64) error {
 	if bid == 0 {
 		return nil
 	}
-	newBck := cluster.CloneBck(bck)
+	newBck := meta.CloneBck(bck)
 	err := newBck.Init(t.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)

@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -40,7 +40,7 @@ type (
 	// rebMD is revs (see metasync) which is distributed by primary proxy to
 	// the targets. It is distributed when some kind of rebalance is required.
 	rebMD struct {
-		cluster.RMD
+		meta.RMD
 	}
 
 	// rmdOwner is used to keep the information about the rebalances. Currently

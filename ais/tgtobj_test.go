@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -76,7 +77,7 @@ func TestMain(m *testing.M) {
 	t.statsT = mock.NewStatsTracker()
 	cluster.Init(t)
 
-	bck := cluster.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
+	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
 	bmd := newBucketMD()
 	bmd.add(bck, &cmn.BucketProps{
 		Cksum: cmn.CksumConf{

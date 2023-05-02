@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -48,7 +48,7 @@ func genObjURL(isSecure, isXML bool) (s string) {
 }
 
 // build command line for CURL
-func genCURLCmdLine(t *testing.T, resURL, proxyURL string, targets cluster.NodeMap) []string {
+func genCURLCmdLine(t *testing.T, resURL, proxyURL string, targets meta.NodeMap) []string {
 	var noProxy []string
 	for _, t := range targets {
 		if !cos.StringInSlice(t.PubNet.Hostname, noProxy) {

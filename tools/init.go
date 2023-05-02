@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/docker"
@@ -37,7 +37,7 @@ const (
 type (
 	// command used to restore a node
 	RestoreCmd struct {
-		Node *cluster.Snode
+		Node *meta.Snode
 		Cmd  string
 		Args []string
 		PID  int
@@ -53,11 +53,11 @@ const (
 )
 
 var (
-	proxyURLReadOnly string          // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
-	pmapReadOnly     cluster.NodeMap // initial proxy map - it is read-only variable
-	testClusterType  ClusterType     // AIS cluster type - it is read-only variable
+	proxyURLReadOnly string       // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	pmapReadOnly     meta.NodeMap // initial proxy map - it is read-only variable
+	testClusterType  ClusterType  // AIS cluster type - it is read-only variable
 
-	currSmap *cluster.Smap
+	currSmap *meta.Smap
 
 	restoreNodesOnce sync.Once             // Ensures that the initialization happens only once.
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them

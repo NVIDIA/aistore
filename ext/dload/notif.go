@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/nl"
@@ -33,7 +34,7 @@ var (
 	_ cluster.Notif = (*NotifDownload)(nil)
 )
 
-func NewDownloadNL(jobID, action string, smap *cluster.Smap, progressInterval time.Duration) *NotifDownloadListerner {
+func NewDownloadNL(jobID, action string, smap *meta.Smap, progressInterval time.Duration) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
 		ListenerBase: *nl.NewNLB(jobID, action, smap, smap.Tmap.ActiveMap(), progressInterval),
 	}

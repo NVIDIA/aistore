@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -70,7 +71,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			t.listBuckets(w, r, qbck)
 			return
 		}
-		bck := cluster.CloneBck((*cmn.Bck)(qbck))
+		bck := meta.CloneBck((*cmn.Bck)(qbck))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				t.BMDVersionFixup(r)
@@ -107,7 +108,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// if in fact it is a specific named bucket
-		bck := (*cluster.Bck)(qbck)
+		bck := (*meta.Bck)(qbck)
 		if qbck.IsBucket() {
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
@@ -191,7 +192,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		bcks = bmd.Select(qbck)
 		return
 	}
-	backend := t.Backend((*cluster.Bck)(qbck))
+	backend := t.Backend((*meta.Bck)(qbck))
 	bcks, errCode, err = backend.ListBuckets(*qbck)
 	if err == nil && len(bcks) > 1 {
 		sort.Sort(bcks)
@@ -200,7 +201,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 }
 
 // listObjects returns a list of objects in a bucket (with optional prefix).
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, actMsg *aisMsg) (ok bool) {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, actMsg *aisMsg) (ok bool) {
 	var msg *apc.LsoMsg
 	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
@@ -263,7 +264,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *cluste
 	return t.writeMsgPack(w, resp.Lst, "list_objects")
 }
 
-func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *cluster.Bck, msg *cmn.BsummCtrlMsg) {
+func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *meta.Bck, msg *cmn.BsummCtrlMsg) {
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
 		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
@@ -348,7 +349,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if apireq.bck.IsHDFS() || keepMD {
-			nlp := apireq.bck.GetNameLockPair()
+			nlp := getBckNLP(apireq.bck)
 			nlp.Lock()
 			defer nlp.Unlock()
 

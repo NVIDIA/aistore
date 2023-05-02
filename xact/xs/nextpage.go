@@ -10,19 +10,20 @@ package xs
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 type npgCtx struct {
-	bck  *cluster.Bck
+	bck  *meta.Bck
 	wi   walkInfo
 	page cmn.LsoResult
 	idx  int
 }
 
-func newNpgCtx(t cluster.Target, bck *cluster.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
+func newNpgCtx(t cluster.Target, bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{

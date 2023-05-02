@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
@@ -30,8 +31,8 @@ type (
 		Run(*sync.WaitGroup)
 		ID() string
 		Kind() string
-		Bck() *Bck
-		FromTo() (*Bck, *Bck)
+		Bck() *meta.Bck
+		FromTo() (*meta.Bck, *meta.Bck)
 		StartTime() time.Time
 		EndTime() time.Time
 		Finished() bool

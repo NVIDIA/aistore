@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -373,7 +374,7 @@ func (ds *dsorterMem) createShardsLocally() error {
 					return func() error {
 						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
-						bck := cluster.NewBck(ds.m.rs.OutputBck.Name, ds.m.rs.OutputBck.Provider, cmn.NsGlobal)
+						bck := meta.NewBck(ds.m.rs.OutputBck.Name, ds.m.rs.OutputBck.Provider, cmn.NsGlobal)
 						if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
 							return err
 						}
@@ -458,7 +459,7 @@ func (ds *dsorterMem) createShardsLocally() error {
 	return nil
 }
 
-func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *cluster.Snode) (err error) {
+func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *meta.Snode) (err error) {
 	var (
 		local = toNode.ID() == ds.m.ctx.node.ID()
 		req   = RemoteResponse{

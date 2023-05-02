@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -58,7 +58,7 @@ func NewListBucketResult() (r *ListBucketResult) {
 	return
 }
 
-func (r *ListBucketResult) Add(bck *cluster.Bck) {
+func (r *ListBucketResult) Add(bck *meta.Bck) {
 	var warn string
 	for _, b := range r.Buckets {
 		if b.Name == bck.Name {

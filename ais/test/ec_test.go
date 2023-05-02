@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -62,7 +63,7 @@ type ecOptions struct {
 	sema        *cos.DynSemaphore
 	silent      bool
 	rnd         *rand.Rand
-	smap        *cluster.Smap
+	smap        *meta.Smap
 }
 
 // Initializes the EC options, validates the number of targets.
@@ -1830,11 +1831,11 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 	// kill #dataslices of targets, normal EC restore won't be possible
 	// 2. Kill a random target
-	removedTargets := make(cluster.Nodes, 0, o.dataCnt)
+	removedTargets := make(meta.Nodes, 0, o.dataCnt)
 	smap := tools.GetClusterMap(t, proxyURL)
 
 	for i := o.dataCnt - 1; i >= 0; i-- {
-		var removedTarget *cluster.Snode
+		var removedTarget *meta.Snode
 		smap, removedTarget = tools.RmTargetSkipRebWait(t, proxyURL, smap)
 		removedTargets = append(removedTargets, removedTarget)
 	}
@@ -1850,7 +1851,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 	}()
 
-	hasTarget := func(targets cluster.Nodes, target *cluster.Snode) bool {
+	hasTarget := func(targets meta.Nodes, target *meta.Snode) bool {
 		for _, tr := range targets {
 			if tr.ID() == target.ID() {
 				return true
@@ -1864,7 +1865,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 
 		objName := fmt.Sprintf(o.pattern, i)
 		// 1) hack: calculate which targets stored a replica
-		cbck := cluster.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
+		cbck := meta.NewBck(bck.Name, bck.Provider, cmn.NsGlobal)
 		targets, err := cluster.HrwTargetList(cbck.MakeUname(ecTestDir+objName), o.smap, o.parityCnt+1)
 		tassert.CheckFatal(t, err)
 
@@ -2631,7 +2632,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 // the number of objects before it
 func ecMountpaths(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	type removedMpath struct {
-		si    *cluster.Snode
+		si    *meta.Snode
 		mpath string
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)

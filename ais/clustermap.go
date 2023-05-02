@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -35,7 +35,7 @@ const clusterMap = "Smap"
 
 //=====================================================================
 //
-// - smapX is a server-side extension of the cluster.Smap
+// - smapX is a server-side extension of the meta.Smap
 // - smapX represents AIStore cluster in terms of its member nodes and their properties
 // - smapX (instance) can be obtained via smapOwner.get()
 // - smapX is immutable and versioned
@@ -54,7 +54,7 @@ type (
 	smapX struct {
 		_sgl *memsys.SGL // jsp-formatted
 		vstr string      // itoa(Version)
-		cluster.Smap
+		meta.Smap
 	}
 	smapOwner struct {
 		smap    atomic.Pointer
@@ -64,7 +64,7 @@ type (
 		mu      sync.Mutex
 	}
 	sls struct {
-		listeners map[string]cluster.Slistener
+		listeners map[string]meta.Slistener
 		postCh    chan int64
 		wg        sync.WaitGroup
 		mu        sync.RWMutex
@@ -78,17 +78,17 @@ type (
 		smap   *smapX       // pre-modification smap that the modifier clones (and modifies)
 		rmdCtx *rmdModifier // in particular, rmd prev and cur (below)
 
-		msg         *apc.ActMsg    // action modifying smap (apc.Act*)
-		nsi         *cluster.Snode // new node to be added
-		nid         string         // node ID of the candidate primary
-		sid         string         // ID of the node to modify
-		flags       cos.BitFlags   // enum cmn.Snode* to set or clear
-		nver        int64          // new Smap version (cloned and modified `smap` - see above)
-		status      int            // resulting http.Status*
-		interrupted bool           // target reports interrupted rebalance
-		restarted   bool           // target reports cold restart (powercycle)
-		skipReb     bool           // skip rebalance when target added/removed
-		gfn         bool           // sent start-gfn notification
+		msg         *apc.ActMsg  // action modifying smap (apc.Act*)
+		nsi         *meta.Snode  // new node to be added
+		nid         string       // node ID of the candidate primary
+		sid         string       // ID of the node to modify
+		flags       cos.BitFlags // enum cmn.Snode* to set or clear
+		nver        int64        // new Smap version (cloned and modified `smap` - see above)
+		status      int          // resulting http.Status*
+		interrupted bool         // target reports interrupted rebalance
+		restarted   bool         // target reports cold restart (powercycle)
+		skipReb     bool         // skip rebalance when target added/removed
+		gfn         bool         // sent start-gfn notification
 	}
 
 	smapUpdatedCB func(newSmap, oldSmap *smapX, nfl, ofl cos.BitFlags)
@@ -96,9 +96,9 @@ type (
 
 // interface guard
 var (
-	_ revs                  = (*smapX)(nil)
-	_ cluster.Sowner        = (*smapOwner)(nil)
-	_ cluster.SmapListeners = (*sls)(nil)
+	_ revs               = (*smapX)(nil)
+	_ meta.Sowner        = (*smapOwner)(nil)
+	_ meta.SmapListeners = (*sls)(nil)
 )
 
 // as revs
@@ -141,22 +141,22 @@ func newSmap() (smap *smapX) {
 }
 
 func (m *smapX) init(tsize, psize int) {
-	m.Tmap = make(cluster.NodeMap, tsize)
-	m.Pmap = make(cluster.NodeMap, psize)
+	m.Tmap = make(meta.NodeMap, tsize)
+	m.Pmap = make(meta.NodeMap, psize)
 }
 
 func (m *smapX) _fillIC() {
-	if m.ICCount() >= m.DefaultICSize() {
+	if m.ICCount() >= meta.DfltCountIC {
 		return
 	}
 
 	// try to select the missing members - upto DefaultICSize - if available
 	for _, si := range m.Pmap {
-		if si.Flags.IsSet(cluster.SnodeNonElectable) {
+		if si.Flags.IsSet(meta.SnodeNonElectable) {
 			continue
 		}
 		m.addIC(si)
-		if m.ICCount() >= m.DefaultICSize() {
+		if m.ICCount() >= meta.DfltCountIC {
 			return
 		}
 	}
@@ -173,21 +173,21 @@ func (m *smapX) staffIC() {
 // ensure num IC members doesn't exceed max value
 // Evict the most recently added IC member
 func (m *smapX) evictIC() {
-	if m.ICCount() <= m.DefaultICSize() {
+	if m.ICCount() <= meta.DfltCountIC {
 		return
 	}
 	for sid, si := range m.Pmap {
 		if sid == m.Primary.ID() || !m.IsIC(si) {
 			continue
 		}
-		m.clearNodeFlags(sid, cluster.SnodeIC)
+		m.clearNodeFlags(sid, meta.SnodeIC)
 		break
 	}
 }
 
-func (m *smapX) addIC(psi *cluster.Snode) {
+func (m *smapX) addIC(psi *meta.Snode) {
 	if !m.IsIC(psi) {
-		m.setNodeFlags(psi.ID(), cluster.SnodeIC)
+		m.setNodeFlags(psi.ID(), meta.SnodeIC)
 	}
 }
 
@@ -227,14 +227,14 @@ func (m *smapX) validate() error {
 	return nil
 }
 
-func (m *smapX) isPrimary(self *cluster.Snode) bool {
+func (m *smapX) isPrimary(self *meta.Snode) bool {
 	if !m.isValid() {
 		return false
 	}
 	return m.Primary.ID() == self.ID()
 }
 
-func (m *smapX) isPresent(si *cluster.Snode) bool {
+func (m *smapX) isPresent(si *meta.Snode) bool {
 	if si.IsProxy() {
 		psi := m.GetProxy(si.ID())
 		return psi != nil
@@ -243,7 +243,7 @@ func (m *smapX) isPresent(si *cluster.Snode) bool {
 	return tsi != nil
 }
 
-func (m *smapX) addTarget(tsi *cluster.Snode) {
+func (m *smapX) addTarget(tsi *meta.Snode) {
 	if si := m.GetNode(tsi.ID()); si != nil {
 		cos.Assertf(false, "FATAL: duplicate SID: new %s vs %s", tsi.StringEx(), si.StringEx())
 	}
@@ -252,7 +252,7 @@ func (m *smapX) addTarget(tsi *cluster.Snode) {
 	m.Version++
 }
 
-func (m *smapX) addProxy(psi *cluster.Snode) {
+func (m *smapX) addProxy(psi *meta.Snode) {
 	if si := m.GetNode(psi.ID()); si != nil {
 		cos.Assertf(false, "FATAL: duplicate SID: new %s vs %s", psi.StringEx(), si.StringEx())
 	}
@@ -277,10 +277,10 @@ func (m *smapX) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags, silent bool) {
+func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 	var (
 		id  = nsi.ID()
-		old *cluster.Snode
+		old *meta.Snode
 	)
 	nsi.Flags = flags
 	if nsi.IsProxy() {
@@ -288,7 +288,7 @@ func (m *smapX) putNode(nsi *cluster.Snode, flags cos.BitFlags, silent bool) {
 			m.delProxy(id)
 		}
 		m.addProxy(nsi)
-		if flags.IsSet(cluster.SnodeNonElectable) {
+		if flags.IsSet(meta.SnodeNonElectable) {
 			glog.Warningf("%s won't be electable", nsi)
 		}
 	} else {
@@ -355,8 +355,8 @@ func (m *smapX) merge(dst *smapX, override bool) (added int, err error) {
 
 // detect duplicate URL and/or IP
 // if `del` is true delete the old one so that the caller can update Snode
-func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
-	var osi *cluster.Snode
+func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
+	var osi *meta.Snode
 	if osi, err = m.IsDupNet(nsi); err == nil {
 		return
 	}
@@ -375,7 +375,7 @@ func (m *smapX) handleDuplicateNode(nsi *cluster.Snode, del bool) (err error) {
 	return
 }
 
-func (m *smapX) validateUUID(si *cluster.Snode, newSmap *smapX, caller string, cieNum int) (err error) {
+func (m *smapX) validateUUID(si *meta.Snode, newSmap *smapX, caller string, cieNum int) (err error) {
 	if m == nil || newSmap == nil || newSmap.Version == 0 {
 		return
 	}
@@ -400,7 +400,7 @@ func (m *smapX) pp() string {
 	return string(s)
 }
 
-func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cos.BitFlags) {
+func (m *smapX) _applyFlags(si *meta.Snode, newFlags cos.BitFlags) {
 	si.Flags = newFlags
 	if si.IsTarget() {
 		m.Tmap[si.ID()] = si
@@ -414,8 +414,8 @@ func (m *smapX) _applyFlags(si *cluster.Snode, newFlags cos.BitFlags) {
 func (m *smapX) setNodeFlags(sid string, flags cos.BitFlags) {
 	si := m.GetNode(sid)
 	newFlags := si.Flags.Set(flags)
-	if flags.IsAnySet(cluster.SnodeMaintDecomm) {
-		newFlags = newFlags.Clear(cluster.SnodeIC)
+	if flags.IsAnySet(meta.SnodeMaintDecomm) {
+		newFlags = newFlags.Clear(meta.SnodeIC)
 	}
 	m._applyFlags(si, newFlags)
 }
@@ -451,8 +451,8 @@ func (r *smapOwner) load(smap *smapX) (loaded bool, err error) {
 	return true, nil
 }
 
-func (r *smapOwner) Get() *cluster.Smap               { return &r.get().Smap }
-func (r *smapOwner) Listeners() cluster.SmapListeners { return r.sls }
+func (r *smapOwner) Get() *meta.Smap               { return &r.get().Smap }
+func (r *smapOwner) Listeners() meta.SmapListeners { return r.sls }
 
 //
 // private
@@ -469,7 +469,7 @@ func (r *smapOwner) get() (smap *smapX) {
 	return (*smapX)(r.smap.Load())
 }
 
-func (r *smapOwner) synchronize(si *cluster.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
+func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
 	if err = newSmap.validate(); err != nil {
 		debug.Assertf(false, "%s: %s is invalid: %v", si, newSmap, err)
 		return
@@ -520,7 +520,7 @@ func (r *smapOwner) persistBytes(payload msPayload) (done bool) {
 		return
 	}
 	var (
-		smap *cluster.Smap
+		smap *meta.Smap
 		wto  = bytes.NewBuffer(smapValue)
 		err  = jsp.SaveMeta(r.fpath, smap, wto)
 	)
@@ -585,7 +585,7 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 
 func newSmapListeners() *sls {
 	sls := &sls{
-		listeners: make(map[string]cluster.Slistener, 8),
+		listeners: make(map[string]meta.Slistener, 8),
 		postCh:    make(chan int64, 8),
 	}
 	return sls
@@ -616,7 +616,7 @@ func (sls *sls) run() {
 	}
 }
 
-func (sls *sls) Reg(sl cluster.Slistener) {
+func (sls *sls) Reg(sl meta.Slistener) {
 	cos.Assert(sl.String() != "")
 	sls.mu.Lock()
 	_, ok := sls.listeners[sl.String()]
@@ -630,7 +630,7 @@ func (sls *sls) Reg(sl cluster.Slistener) {
 	sls.mu.Unlock()
 }
 
-func (sls *sls) Unreg(sl cluster.Slistener) {
+func (sls *sls) Unreg(sl meta.Slistener) {
 	sls.mu.Lock()
 	_, ok := sls.listeners[sl.String()]
 	cos.Assert(ok)

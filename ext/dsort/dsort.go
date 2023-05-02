@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -492,11 +493,11 @@ exit:
 // repeats until len(targetOrder) == 1, in which case the single target in the
 // slice is the final target with the final, complete, sorted slice of Record
 // structs.
-func (m *Manager) participateInRecordDistribution(targetOrder cluster.Nodes) (currentTargetIsFinal bool, err error) {
+func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (currentTargetIsFinal bool, err error) {
 	var (
 		i           int
-		d           *cluster.Snode
-		dummyTarget *cluster.Snode // dummy target is represented as nil value
+		d           *meta.Snode
+		dummyTarget *meta.Snode // dummy target is represented as nil value
 	)
 
 	// Metrics
@@ -807,7 +808,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		shards []*extract.Shard
 		err    error
 
-		shardsToTarget = make(map[*cluster.Snode][]*extract.Shard, m.smap.CountActiveTs())
+		shardsToTarget = make(map[*meta.Snode][]*extract.Shard, m.smap.CountActiveTs())
 		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTs())
 		errCh          = make(chan error, m.smap.CountActiveTs())
 	)
@@ -849,7 +850,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
-	bck := cluster.CloneBck(&m.rs.OutputBck)
+	bck := meta.CloneBck(&m.rs.OutputBck)
 	if err := bck.Init(m.ctx.bmdOwner); err != nil {
 		return err
 	}
@@ -883,10 +884,10 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	m.recManager.Records.Drain()
 
-	wg := cos.NewLimitedWaitGroup(cluster.MaxBcastParallel(), len(shardsToTarget))
+	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
 		wg.Add(1)
-		go func(si *cluster.Snode, s []*extract.Shard, order map[string]*extract.Shard) {
+		go func(si *meta.Snode, s []*extract.Shard, order map[string]*extract.Shard) {
 			defer wg.Done()
 
 			var (
@@ -971,9 +972,9 @@ func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRec
 	return id
 }
 
-// randomTargetOrder returns a cluster.Snode slice for targets in a pseudorandom order.
-func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
-	targets := make(map[uint64]*cluster.Snode, len(tmap))
+// randomTargetOrder returns a meta.Snode slice for targets in a pseudorandom order.
+func randomTargetOrder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
+	targets := make(map[uint64]*meta.Snode, len(tmap))
 	keys := make([]uint64, 0, len(tmap))
 	for i, d := range tmap {
 		if d.InMaintOrDecomm() {
@@ -985,7 +986,7 @@ func randomTargetOrder(salt uint64, tmap cluster.NodeMap) []*cluster.Snode {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
-	t := make(cluster.Nodes, len(keys))
+	t := make(meta.Nodes, len(keys))
 	for i, k := range keys {
 		t[i] = targets[k]
 	}

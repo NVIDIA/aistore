@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -55,7 +55,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 				}
 
 				var (
-					bck   = cluster.NewBck(fmt.Sprintf("bucket_%d", i), provider, cmn.NsGlobal)
+					bck   = meta.NewBck(fmt.Sprintf("bucket_%d", i), provider, cmn.NsGlobal)
 					props = defaultBckProps(bckPropsArgs{bck: bck, hdr: hdr})
 				)
 				bmd.add(bck, props)
@@ -100,7 +100,7 @@ var _ = Describe("BMD marshal and unmarshal", func() {
 								Signature: signature,
 							}
 							clone := bmd.clone()
-							bck := cluster.NewBck("abc"+cos.GenTie(), apc.AIS, cmn.NsGlobal)
+							bck := meta.NewBck("abc"+cos.GenTie(), apc.AIS, cmn.NsGlobal)
 
 							// Add bucket and save.
 							clone.add(bck, defaultBckProps(bckPropsArgs{bck: bck}))

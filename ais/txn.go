@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -73,7 +74,7 @@ type (
 		sync.RWMutex
 	}
 	txnBckBase struct {
-		bck  cluster.Bck
+		bck  meta.Bck
 		nlps []cluster.NLP
 		txnBase
 	}
@@ -97,8 +98,8 @@ type (
 		txnBckBase
 	}
 	txnRenameBucket struct {
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
+		bckFrom *meta.Bck
+		bckTo   *meta.Bck
 		txnBckBase
 	}
 	txnTCB struct {
@@ -405,13 +406,13 @@ func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 // txnBckBase //
 ////////////////
 
-func newTxnBckBase(bck *cluster.Bck) (txn *txnBckBase) {
+func newTxnBckBase(bck *meta.Bck) (txn *txnBckBase) {
 	txn = &txnBckBase{}
 	txn.init(bck)
 	return
 }
 
-func (txn *txnBckBase) init(bck *cluster.Bck) { txn.bck = *bck }
+func (txn *txnBckBase) init(bck *meta.Bck) { txn.bck = *bck }
 
 func (txn *txnBckBase) cleanup() {
 	for _, p := range txn.nlps {
@@ -508,7 +509,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSet
 // txnRenameBucket //
 /////////////////////
 
-func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *cluster.Bck) (txn *txnRenameBucket) {
+func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *meta.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{bckFrom: bckFrom, bckTo: bckTo}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)
@@ -540,7 +541,7 @@ func (txn *txnTCB) String() string {
 // txnTCObjs //
 ///////////////
 
-func newTxnTCObjs(c *txnServerCtx, bckFrom *cluster.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
+func newTxnTCObjs(c *txnServerCtx, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
 	txn = &txnTCObjs{xtco: xtco, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)
@@ -561,7 +562,7 @@ func (txn *txnTCObjs) String() string {
 // txnECEncode //
 /////////////////
 
-func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
+func newTxnECEncode(c *txnServerCtx, bck *meta.Bck) (txn *txnECEncode) {
 	txn = &txnECEncode{}
 	txn.init(bck)
 	txn.fillFromCtx(c)
@@ -572,7 +573,7 @@ func newTxnECEncode(c *txnServerCtx, bck *cluster.Bck) (txn *txnECEncode) {
 // txnCreateArchMultiObj //
 ///////////////////////////
 
-func newTxnArchMultiObj(c *txnServerCtx, bckFrom *cluster.Bck, xarch *xs.XactArch, msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
+func newTxnArchMultiObj(c *txnServerCtx, bckFrom *meta.Bck, xarch *xs.XactArch, msg *cmn.ArchiveMsg) (txn *txnArchMultiObj) {
 	txn = &txnArchMultiObj{xarch: xarch, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)

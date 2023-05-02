@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -147,7 +147,7 @@ func cleanRWStress(bck cmn.Bck, cksumType string) {
 }
 
 func parallelPutGetStress(t *testing.T) {
-	runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		if bck.IsCloud() {
 			t.Skipf("skipping %s for Cloud bucket %s", t.Name(), bck.Bucket())
 		}
@@ -169,7 +169,7 @@ func parallelPutGetStress(t *testing.T) {
 
 func multiOpStress(opNames ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		runProviderTests(t, func(t *testing.T, bck *cluster.Bck) {
+		runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 			if bck.IsCloud() {
 				t.Skipf("skipping %s for Cloud bucket %s", t.Name(), bck.Bucket())
 			}

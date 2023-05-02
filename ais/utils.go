@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -169,14 +169,14 @@ func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
 // getNetInfo returns an Hostname for proxy/target to listen on it.
 // 1. If there is an Hostname in config - it tries to use it
 // 2. If config does not contain Hostname - it chooses one of local IPv4s
-func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo cluster.NetInfo, err error) {
+func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo meta.NetInfo, err error) {
 	var ip net.IP
 	if configuredIPv4s == "" {
 		ip, err = detectLocalIPv4(addrList)
 		if err != nil {
 			return netInfo, err
 		}
-		netInfo = *cluster.NewNetInfo(proto, ip.String(), port)
+		netInfo = *meta.NewNetInfo(proto, ip.String(), port)
 		return
 	}
 
@@ -186,7 +186,7 @@ func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) 
 		return netInfo, err
 	}
 
-	netInfo = *cluster.NewNetInfo(proto, selHostname, port)
+	netInfo = *meta.NewNetInfo(proto, selHostname, port)
 	return
 }
 

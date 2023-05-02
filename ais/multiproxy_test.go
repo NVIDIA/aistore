@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -40,7 +40,7 @@ func newDiscoverServerPrimary() *proxy {
 		p       = &proxy{}
 		tracker = mock.NewStatsTracker()
 	)
-	p.si = cluster.NewSnode("primary", apc.Proxy, cluster.NetInfo{}, cluster.NetInfo{}, cluster.NetInfo{})
+	p.si = meta.NewSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
 
@@ -71,8 +71,8 @@ func discoverServerDefaultHandler(sv, lv int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: false,
-				Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
-				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+				Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
+				BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -90,8 +90,8 @@ func discoverServerVoteOnceHandler(sv, lv int64) *httptest.Server {
 		cnt++
 		msg := cluMeta{
 			VoteInProgress: cnt == 1,
-			Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
-			BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+			Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
+			BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 		}
 		b, _ := jsoniter.Marshal(msg)
 		w.Write(b)
@@ -111,8 +111,8 @@ func discoverServerFailTwiceHandler(sv, lv int64) *httptest.Server {
 		if cnt > 2 {
 			msg := cluMeta{
 				VoteInProgress: false,
-				Smap:           &smapX{Smap: cluster.Smap{Version: smapVersion}},
-				BMD:            &bucketMD{BMD: cluster.BMD{Version: bmdVersion}},
+				Smap:           &smapX{Smap: meta.Smap{Version: smapVersion}},
+				BMD:            &bucketMD{BMD: meta.BMD{Version: bmdVersion}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -139,8 +139,8 @@ func discoverServerVoteInProgressHandler(_, _ int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := cluMeta{
 				VoteInProgress: true,
-				Smap:           &smapX{Smap: cluster.Smap{Version: 12345}},
-				BMD:            &bucketMD{BMD: cluster.BMD{Version: 67890}},
+				Smap:           &smapX{Smap: meta.Smap{Version: 12345}},
+				BMD:            &bucketMD{BMD: meta.BMD{Version: 67890}},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -290,9 +290,9 @@ func TestDiscoverServers(t *testing.T) {
 				ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 				addrInfo := serverTCPAddr(ts.URL)
 				if s.isProxy {
-					discoverSmap.addProxy(cluster.NewSnode(s.id, apc.Proxy, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addProxy(meta.NewSnode(s.id, apc.Proxy, addrInfo, addrInfo, addrInfo))
 				} else {
-					discoverSmap.addTarget(cluster.NewSnode(s.id, apc.Target, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addTarget(meta.NewSnode(s.id, apc.Target, addrInfo, addrInfo, addrInfo))
 				}
 			}
 			svm := primary.uncoverMeta(discoverSmap)

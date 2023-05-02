@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
@@ -25,13 +25,13 @@ func (p *proxy) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bck := cluster.CloneBck(&parsedRS.Bck)
+	bck := meta.CloneBck(&parsedRS.Bck)
 	args := bckInitArgs{p: p, w: w, r: r, bck: bck, perms: apc.AceObjLIST | apc.AceGET}
 	if _, err = args.initAndTry(); err != nil {
 		return
 	}
 
-	bck = cluster.CloneBck(&parsedRS.OutputBck)
+	bck = meta.CloneBck(&parsedRS.OutputBck)
 	args = bckInitArgs{p: p, w: w, r: r, bck: bck, perms: apc.AcePUT}
 	if _, err = args.initAndTry(); err != nil {
 		return

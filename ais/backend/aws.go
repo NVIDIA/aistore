@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -74,7 +75,7 @@ func (*awsProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
 // CREATE BUCKET //
 ///////////////////
 
-func (*awsProvider) CreateBucket(_ *cluster.Bck) (int, error) {
+func (*awsProvider) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "s3:// bucket")
 }
 
@@ -82,7 +83,7 @@ func (*awsProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		svc      *s3.S3
 		region   string
@@ -132,7 +133,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs, er
 
 // NOTE: asking for the remote s3 version might be extremely taxing, performance wise!!!
 
-func (awsp *awsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		h        = cmn.BackendHelpers.Amazon

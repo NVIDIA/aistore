@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -31,7 +32,7 @@ func (reb *Reb) RebStatus(status *Status) {
 	status.RebID = reb.rebID.Load()
 	status.Quiescent = reb.isQuiescent()
 	status.SmapVersion = tsmap.Version
-	rsmap := (*cluster.Smap)(reb.smap.Load())
+	rsmap := (*meta.Smap)(reb.smap.Load())
 	if rsmap != nil {
 		status.RebVersion = rsmap.Version
 	}
@@ -71,7 +72,7 @@ func (reb *Reb) RebStatus(status *Status) {
 }
 
 // extended info when stage is <wack>
-func (reb *Reb) wackStatus(status *Status, rsmap *cluster.Smap) {
+func (reb *Reb) wackStatus(status *Status, rsmap *meta.Smap) {
 	var (
 		config     = cmn.GCO.Get()
 		sleepRetry = cmn.KeepaliveRetryDuration(config)
@@ -91,7 +92,7 @@ func (reb *Reb) wackStatus(status *Status, rsmap *cluster.Smap) {
 	status.Targets = reb.awaiting.targets
 }
 
-func _wackStatusLom(lomAcks *lomAcks, targets cluster.Nodes, rsmap *cluster.Smap) cluster.Nodes {
+func _wackStatusLom(lomAcks *lomAcks, targets meta.Nodes, rsmap *meta.Smap) meta.Nodes {
 outer:
 	for _, lom := range lomAcks.q {
 		tsi, err := cluster.HrwTarget(lom.Uname(), rsmap)

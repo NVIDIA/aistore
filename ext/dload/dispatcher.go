@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -345,7 +346,7 @@ func (d *dispatcher) checkAborted() bool {
 
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
-	bck := cluster.CloneBck(task.job.Bck())
+	bck := meta.CloneBck(task.job.Bck())
 	if err := bck.Init(d.xdl.t.Bowner()); err != nil {
 		return true, err
 	}

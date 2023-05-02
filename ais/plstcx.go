@@ -8,6 +8,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -16,12 +17,12 @@ import (
 type lstcx struct {
 	p *proxy
 	// arg
-	bckFrom *cluster.Bck
-	bckTo   *cluster.Bck
+	bckFrom *meta.Bck
+	bckTo   *meta.Bck
 	amsg    *apc.ActMsg // orig
 	tcbmsg  *apc.TCBMsg
 	// work
-	tsi    *cluster.Snode
+	tsi    *meta.Snode
 	lsmsg  apc.LsoMsg
 	altmsg apc.ActMsg
 	tcomsg cmn.TCObjsMsg

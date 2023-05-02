@@ -1,8 +1,8 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package meta: cluster-level metadata
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package meta
 
 import (
 	"github.com/NVIDIA/aistore/cmn"

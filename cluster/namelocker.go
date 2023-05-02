@@ -10,7 +10,10 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/OneOfOne/xxhash"
 )
+
+const nlpTryDefault = time.Second // nlp.TryLock default duration
 
 // nameLocker is a 2-level structure utilized to lock objects of *any* kind
 // as long as object has a (string) name and an (int) digest.
@@ -68,7 +71,11 @@ func newNameLocker() (nl nameLocker) {
 	return
 }
 
-func (li *lockInfo) notifyWaiters() {
+//////////////
+// lockInfo //
+//////////////
+
+func (li *lockInfo) notify() {
 	if li.wcond == nil || li.waiting == 0 {
 		return
 	}
@@ -142,7 +149,6 @@ func (nlc *nlc) try(uname string, exclusive bool) bool {
 }
 
 // NOTE: Lock() stays in the loop for as long as needed to acquire the lock.
-//
 // The implementation is intentionally simple as we currently don't need
 // cancellation (e.g., via context.Context), timeout, etc. semantics
 func (nlc *nlc) Lock(uname string, exclusive bool) {
@@ -160,8 +166,7 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 }
 
 // NOTE: `UpgradeLock` correctly synchronizes threads waiting for **the same** operation
-//
-//	(e.g., get object from a remote backend)
+// (e.g., get object from a remote backend)
 func (nlc *nlc) UpgradeLock(uname string) (upgraded bool) {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
@@ -202,7 +207,7 @@ func (nlc *nlc) DowngradeLock(uname string) {
 	debug.Assert(found && li.exclusive)
 	li.rc++
 	li.exclusive = false
-	li.notifyWaiters()
+	li.notify()
 	nlc.mu.Unlock()
 }
 
@@ -214,7 +219,7 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 		debug.Assert(li.exclusive)
 		if li.waiting > 0 {
 			li.exclusive = false
-			li.notifyWaiters()
+			li.notify()
 		} else {
 			delete(nlc.m, uname)
 		}
@@ -225,7 +230,7 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 	if li.rc == 0 {
 		delete(nlc.m, uname)
 	}
-	li.notifyWaiters()
+	li.notify()
 	nlc.mu.Unlock()
 }
 
@@ -235,6 +240,17 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 
 // interface guard
 var _ NLP = (*nlp)(nil)
+
+// NOTE: limited use: buckets only (see `bckLocker` below)
+func NewNLP(name string) NLP {
+	var (
+		nlp  = &nlp{uname: name}
+		hash = xxhash.ChecksumString64S(name, cos.MLCG32)
+		idx  = int(hash & (cos.MultiSyncMapCount - 1))
+	)
+	nlp.nlc = &bckLocker[idx]
+	return nlp
+}
 
 func (nlp *nlp) Lock() {
 	nlp.nlc.Lock(nlp.uname, true)

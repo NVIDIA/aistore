@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -76,11 +77,11 @@ func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (hp *hdfsProvider) CreateBucket(bck *cluster.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) CreateBucket(bck *meta.Bck) (errCode int, err error) {
 	return hp.checkDirectoryExists(bck)
 }
 
-func (hp *hdfsProvider) checkDirectoryExists(bck *cluster.Bck) (errCode int, err error) {
+func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (errCode int, err error) {
 	debug.Assert(bck.Props != nil)
 	refDirectory := bck.Props.Extra.HDFS.RefDirectory
 	debug.Assert(refDirectory != "")
@@ -99,7 +100,7 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *cluster.Bck) (errCode int, err
 // HEAD BUCKET //
 /////////////////
 
-func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs,
+func (hp *hdfsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
 	if errCode, err = hp.checkDirectoryExists(bck); err != nil {
 		return
@@ -115,7 +116,7 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *cluster.Bck) (bckProps cos.StrKVs
 // LIST OBJECTS //
 //////////////////
 
-func (hp *hdfsProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
+func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
 	var (
 		h   = cmn.BackendHelpers.HDFS
 		idx int

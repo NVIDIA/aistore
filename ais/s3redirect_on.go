@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -21,7 +21,7 @@ import (
 // * docs/s3compat.md
 // * Makefile (and look for `s3rproxy` build tag)
 // * ais/s3redirect_on.go
-func (*proxy) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *cluster.Snode, redirectURL, bucket string) {
+func (*proxy) s3Redirect(w http.ResponseWriter, _ *http.Request, _ *meta.Snode, redirectURL, bucket string) {
 	h := w.Header()
 	h.Set(cos.HdrLocation, redirectURL)
 	h.Set(cos.HdrContentType, "text/xml; charset=utf-8")

@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -27,13 +28,13 @@ import (
 )
 
 // Generates an object name that hashes to a different target than `baseName`.
-func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *cluster.Smap) string {
+func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap) string {
 	// Init digests - HrwTarget() requires it
 	smap.InitDigests()
 
 	newName := newNamePrefix
 
-	cbck := cluster.CloneBck(&bck)
+	cbck := meta.CloneBck(&bck)
 	baseNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(baseName), smap)
 	newNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(newName), smap)
 
@@ -183,7 +184,7 @@ func isClusterK8s() (isK8s bool, err error) {
 func isClusterLocal() (isLocal bool, err error) {
 	var (
 		primaryURL = GetPrimaryURL()
-		smap       *cluster.Smap
+		smap       *meta.Smap
 		bp         = BaseAPIParams(primaryURL)
 		config     *cmn.Config
 		fileData   []byte

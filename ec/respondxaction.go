@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -45,7 +46,7 @@ var (
 // rspFactory //
 ////////////////
 
-func (*rspFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*rspFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &rspFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }
@@ -107,7 +108,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
-func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
+func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 	if glog.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Delete request for %s", bck.Cname(objName))
 	}
@@ -138,7 +139,7 @@ func (r *XactRespond) removeObjAndMeta(bck *cluster.Bck, objName string) error {
 	return nil
 }
 
-func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck) error {
+func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck) error {
 	var (
 		fqn, metaFQN string
 		md           *Metadata
@@ -165,7 +166,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *clust
 }
 
 // DispatchReq is responsible for handling request from other targets
-func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck) {
+func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck) {
 	switch hdr.Opcode {
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles

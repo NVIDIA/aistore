@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -32,7 +33,7 @@ var (
 	_ xreg.Renewable = (*etlFactory)(nil)
 )
 
-func (*etlFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*etlFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &etlFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 

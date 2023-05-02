@@ -9,13 +9,13 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 // health should respond with 200 even is node is unregistered
-func unregisteredNodeHealth(t *testing.T, proxyURL string, si *cluster.Snode) {
+func unregisteredNodeHealth(t *testing.T, proxyURL string, si *meta.Snode) {
 	err := api.Health(tools.BaseAPIParams(si.PubNet.URL))
 	tassert.CheckError(t, err)
 

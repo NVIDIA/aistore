@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -26,11 +27,11 @@ const (
 
 type (
 	Streams struct {
-		sowner       cluster.Sowner
+		sowner       meta.Sowner
 		client       transport.Client
-		smap         *cluster.Smap // current Smap
+		smap         *meta.Smap // current Smap
 		smaplock     *sync.Mutex
-		lsnode       *cluster.Snode // this node
+		lsnode       *meta.Snode    // this node
 		streams      atomic.Pointer // points to the bundle (map below)
 		trname       string
 		network      string
@@ -62,7 +63,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Slistener = (*Streams)(nil)
+var _ meta.Slistener = (*Streams)(nil)
 
 var verbose bool
 
@@ -77,14 +78,14 @@ func init() {
 func (sb *Streams) UsePDU() bool   { return sb.extra.UsePDU() }
 func (sb *Streams) Trname() string { return sb.trname }
 
-func New(sowner cluster.Sowner, lsnode *cluster.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
+func New(sowner meta.Sowner, lsnode *meta.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
 	if sbArgs.Net == "" {
 		sbArgs.Net = cmn.NetIntraData
 	}
 	listeners := sowner.Listeners()
 	sb = &Streams{
 		sowner:       sowner,
-		smap:         &cluster.Smap{}, // empty on purpose (see Resync)
+		smap:         &meta.Smap{}, // empty on purpose (see Resync)
 		smaplock:     &sync.Mutex{},
 		lsnode:       lsnode,
 		client:       cl,
@@ -138,7 +139,7 @@ func (sb *Streams) Close(gracefully bool) {
 
 // when (nodes == nil) transmit via all established streams in a bundle
 // otherwise, restrict to the specified subset (nodes)
-func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*cluster.Snode) (err error) {
+func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*meta.Snode) (err error) {
 	debug.Assert(!transport.ReservedOpcode(obj.Hdr.Opcode))
 	streams := sb.get()
 	if len(streams) == 0 {
@@ -211,8 +212,8 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	}
 }
 
-func (sb *Streams) String() string      { return sb.lid }
-func (sb *Streams) Smap() *cluster.Smap { return sb.smap }
+func (sb *Streams) String() string   { return sb.lid }
+func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
 func (sb *Streams) ListenSmapChanged() {
@@ -320,27 +321,27 @@ func (sb *Streams) Resync() {
 	}
 
 	var (
-		oldm []cluster.NodeMap
-		newm []cluster.NodeMap
+		oldm []meta.NodeMap
+		newm []meta.NodeMap
 		node = smap.GetNode(sb.lsnode.ID()) // upd flags
 	)
 	switch sb.rxNodeType {
 	case cluster.Targets:
-		oldm = []cluster.NodeMap{sb.smap.Tmap}
-		newm = []cluster.NodeMap{smap.Tmap}
+		oldm = []meta.NodeMap{sb.smap.Tmap}
+		newm = []meta.NodeMap{smap.Tmap}
 	case cluster.Proxies:
-		oldm = []cluster.NodeMap{sb.smap.Pmap}
-		newm = []cluster.NodeMap{smap.Pmap}
+		oldm = []meta.NodeMap{sb.smap.Pmap}
+		newm = []meta.NodeMap{smap.Pmap}
 	case cluster.AllNodes:
-		oldm = []cluster.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
-		newm = []cluster.NodeMap{smap.Tmap, smap.Pmap}
+		oldm = []meta.NodeMap{sb.smap.Tmap, sb.smap.Pmap}
+		newm = []meta.NodeMap{smap.Tmap, smap.Pmap}
 	default:
 		debug.Assert(false)
 	}
 	if node == nil {
 		// extremely unlikely
 		debug.Assert(false, sb.lsnode.ID())
-		newm = []cluster.NodeMap{make(cluster.NodeMap)}
+		newm = []meta.NodeMap{make(meta.NodeMap)}
 	} else {
 		sb.lsnode.Flags = node.Flags
 	}
@@ -404,13 +405,13 @@ func (sb *Streams) Resync() {
 }
 
 // helper to find out NodeMap "delta" or "diff"
-func mdiff(oldMaps, newMaps []cluster.NodeMap) (added, removed cluster.NodeMap) {
+func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
 	for i, mold := range oldMaps {
 		mnew := newMaps[i]
 		for id, si := range mnew {
 			if _, ok := mold[id]; !ok {
 				if added == nil {
-					added = make(cluster.NodeMap, cos.Max(len(mnew)-len(mold), 1))
+					added = make(meta.NodeMap, cos.Max(len(mnew)-len(mold), 1))
 				}
 				added[id] = si
 			}
@@ -421,7 +422,7 @@ func mdiff(oldMaps, newMaps []cluster.NodeMap) (added, removed cluster.NodeMap) 
 		for id, si := range mold {
 			if _, ok := mnew[id]; !ok {
 				if removed == nil {
-					removed = make(cluster.NodeMap, 1)
+					removed = make(meta.NodeMap, 1)
 				}
 				removed[id] = si
 			}

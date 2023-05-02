@@ -1,11 +1,10 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package meta
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -37,8 +36,6 @@ type (
 		Version   int64     `json:"version,string"` // gets incremented on every update
 	}
 )
-
-var errBucketIDMismatch = errors.New("bucket ID mismatch")
 
 func (m *BMD) String() string {
 	if m == nil {
@@ -179,21 +176,6 @@ func (m *BMD) Select(qbck *cmn.QueryBcks) cmn.Bcks {
 //
 // private methods
 //
-
-func (m *BMD) eqBID(bck *Bck, bckID uint64) error {
-	debug.Assert(bckID != 0)
-	bprops, present := m.Get(bck)
-	if !present {
-		if bck.IsRemote() {
-			return cmn.NewErrRemoteBckNotFound(bck.Bucket())
-		}
-		return cmn.NewErrBckNotFound(bck.Bucket())
-	}
-	if bckID == bprops.BID {
-		return nil // ok
-	}
-	return errBucketIDMismatch
-}
 
 func (m *BMD) getBuckets(bck *Bck) (buckets Buckets) {
 	if namespaces, ok := m.Providers[bck.Provider]; ok {

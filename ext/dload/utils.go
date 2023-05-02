@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -33,11 +34,11 @@ func clientForURL(u string) *http.Client {
 	return httpClient
 }
 
-func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *cluster.Bck) (cnt int, err error) {
+func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
-		si   *cluster.Snode
+		si   *meta.Snode
 	)
 	pt.InitIter()
 	for link, ok := pt.Next(); ok; link, ok = pt.Next() {
@@ -58,7 +59,7 @@ func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *clus
 }
 
 // buildDlObjs returns list of objects that must be downloaded by target.
-func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.StrKVs) ([]dlObj, error) {
+func buildDlObjs(t cluster.Target, bck *meta.Bck, objects cos.StrKVs) ([]dlObj, error) {
 	var (
 		smap = t.Sowner().Get()
 		sid  = t.SID()
@@ -78,7 +79,7 @@ func buildDlObjs(t cluster.Target, bck *cluster.Bck, objects cos.StrKVs) ([]dlOb
 	return objs, nil
 }
 
-func makeDlObj(smap *cluster.Smap, sid string, bck *cluster.Bck, objName, link string) (dlObj, error) {
+func makeDlObj(smap *meta.Smap, sid string, bck *meta.Bck, objName, link string) (dlObj, error) {
 	objName, err := NormalizeObjName(objName)
 	if err != nil {
 		return dlObj{}, err
@@ -115,7 +116,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartRequest(t cluster.Target, bck *cluster.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
+func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
 	switch dlb.Type {
 	case TypeBackend:
 		dp := &BackendBody{}

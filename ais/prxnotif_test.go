@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -45,14 +46,14 @@ var _ = Describe("Notifications xaction test", func() {
 
 	// helper functions
 	var (
-		mockNode = func(id, daeType string) *cluster.Snode {
+		mockNode = func(id, daeType string) *meta.Snode {
 			server := discoverServerDefaultHandler(1, 1)
 			info := serverTCPAddr(server.URL)
-			return cluster.NewSnode(id, daeType, info, info, info)
+			return meta.NewSnode(id, daeType, info, info, info)
 		}
 
-		getNodeMap = func(ids ...string) (snodes cluster.NodeMap) {
-			snodes = make(cluster.NodeMap, len(ids))
+		getNodeMap = func(ids ...string) (snodes meta.NodeMap) {
+			snodes = make(meta.NodeMap, len(ids))
 			for _, id := range ids {
 				snodes[id] = mockNode(id, apc.Target)
 			}
@@ -81,7 +82,7 @@ var _ = Describe("Notifications xaction test", func() {
 				nls: newListeners(),
 				fin: newListeners(),
 			}
-			smap := &smapX{Smap: cluster.Smap{Version: 1}}
+			smap := &smapX{Smap: meta.Smap{Version: 1}}
 			n.p.htrun.owner.smap = newSmapOwner(cmn.GCO.Get())
 			n.p.htrun.owner.smap.put(smap)
 			n.p.htrun.startup.cluster = *atomic.NewInt64(1)

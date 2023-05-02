@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -50,13 +51,13 @@ type (
 	// cluster-wide control information - replicated, versioned, and synchronized
 	// usages: primary election, join-cluster
 	cluMeta struct {
-		Smap           *smapX         `json:"smap"`
-		BMD            *bucketMD      `json:"bmd"`
-		RMD            *rebMD         `json:"rmd"`
-		EtlMD          *etlMD         `json:"etlMD"`
-		Config         *globalConfig  `json:"config"`
-		SI             *cluster.Snode `json:"si"`
-		VoteInProgress bool           `json:"voting"`
+		Smap           *smapX        `json:"smap"`
+		BMD            *bucketMD     `json:"bmd"`
+		RMD            *rebMD        `json:"rmd"`
+		EtlMD          *etlMD        `json:"etlMD"`
+		Config         *globalConfig `json:"config"`
+		SI             *meta.Snode   `json:"si"`
+		VoteInProgress bool          `json:"voting"`
 		// target only
 		RebInterrupted bool `json:"reb_interrupted"`
 		Restarted      bool `json:"restarted"`
@@ -124,7 +125,7 @@ type (
 	callResult struct {
 		v       any // unmarshalled value (only when requested via `callArgs.v`)
 		err     error
-		si      *cluster.Snode
+		si      *meta.Snode
 		header  http.Header
 		details string
 		bytes   []byte // response bytes (raw)
@@ -147,24 +148,24 @@ type (
 	// callArgs: unicast control-plane call arguments
 	callArgs struct {
 		cresv   cresv
-		si      *cluster.Snode
+		si      *meta.Snode
 		req     cmn.HreqArgs
 		timeout time.Duration
 	}
 
 	// bcastArgs: intra-cluster broadcast call args
 	bcastArgs struct {
-		cresv             cresv             // call result value (comment above)
-		smap              *smapX            // Smap to use
-		network           string            // one of the cmn.KnownNetworks
-		req               cmn.HreqArgs      // h.call args
-		nodes             []cluster.NodeMap // broadcast destinations - map(s)
-		selected          cluster.Nodes     // broadcast destinations - slice of selected few
-		timeout           time.Duration     // call timeout
-		to                int               // (all targets, all proxies, all nodes) enum
-		nodeCount         int               // m.b. greater or equal destination count
-		ignoreMaintenance bool              // do not skip nodes under maintenance
-		async             bool              // ignore results
+		cresv             cresv          // call result value (comment above)
+		smap              *smapX         // Smap to use
+		network           string         // one of the cmn.KnownNetworks
+		req               cmn.HreqArgs   // h.call args
+		nodes             []meta.NodeMap // broadcast destinations - map(s)
+		selected          meta.Nodes     // broadcast destinations - slice of selected few
+		timeout           time.Duration  // call timeout
+		to                int            // (all targets, all proxies, all nodes) enum
+		nodeCount         int            // m.b. greater or equal destination count
+		ignoreMaintenance bool           // do not skip nodes under maintenance
+		async             bool           // ignore results
 	}
 
 	networkHandler struct {
@@ -217,20 +218,20 @@ type (
 	errNodeNotFound     struct {
 		msg  string
 		id   string
-		si   *cluster.Snode
+		si   *meta.Snode
 		smap *smapX
 	}
 	errNotEnoughTargets struct {
-		si       *cluster.Snode
+		si       *meta.Snode
 		smap     *smapX
 		required int // should at least contain
 	}
 	errDowngrade struct {
-		si       *cluster.Snode
+		si       *meta.Snode
 		from, to string
 	}
 	errNotPrimary struct {
-		si     *cluster.Snode
+		si     *meta.Snode
 		smap   *smapX
 		detail string
 	}
@@ -238,7 +239,7 @@ type (
 		detail string
 	}
 	apiRequest struct {
-		bck *cluster.Bck // out: initialized bucket
+		bck *meta.Bck // out: initialized bucket
 
 		// URL query: the conventional/slow and
 		// the fast alternative tailored exclusively for the datapath (either/or)
@@ -293,7 +294,7 @@ func isErrNoUnregister(err error) bool {
 // errDowngrade //
 //////////////////
 
-func newErrDowngrade(si *cluster.Snode, from, to string) *errDowngrade {
+func newErrDowngrade(si *meta.Snode, from, to string) *errDowngrade {
 	return &errDowngrade{si, from, to}
 }
 
@@ -322,7 +323,7 @@ func (e *errNotEnoughTargets) Error() string {
 // errNotPrimary //
 ///////////////////
 
-func newErrNotPrimary(si *cluster.Snode, smap *smapX, detail ...string) *errNotPrimary {
+func newErrNotPrimary(si *meta.Snode, smap *smapX, detail ...string) *errNotPrimary {
 	if len(detail) == 0 {
 		return &errNotPrimary{si, smap, ""}
 	}
@@ -428,7 +429,7 @@ func freeBcastRes(results sliceResults) {
 type (
 	cresCM struct{} // -> cluMeta
 	cresSM struct{} // -> smapX
-	cresND struct{} // -> cluster.Snode
+	cresND struct{} // -> meta.Snode
 	cresBA struct{} // -> cmn.BackendInfoAIS
 	cresEI struct{} // -> etl.InfoList
 	cresEL struct{} // -> etl.Logs
@@ -474,7 +475,7 @@ func (c cresLso) read(res *callResult, body io.Reader) { res.v = c.newV(); res.m
 func (cresSM) newV() any                              { return &smapX{} }
 func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresND) newV() any                              { return &cluster.Snode{} }
+func (cresND) newV() any                              { return &meta.Snode{} }
 func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresBA) newV() any                              { return &cluster.Remotes{} }
@@ -697,7 +698,7 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 // getMaxCii //
 ///////////////
 
-func (c *getMaxCii) do(si *cluster.Snode, wg cos.WG, smap *smapX) {
+func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
 	var cii *clusterInfo
 	body, _, err := c.h.Health(si, c.timeout, c.query)
 	if err != nil {
@@ -734,7 +735,7 @@ func (c *getMaxCii) haveEnough() (yes bool) {
 	return
 }
 
-func extractCii(body []byte, smap *smapX, self, si *cluster.Snode) *clusterInfo {
+func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *clusterInfo {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
 		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
@@ -780,7 +781,7 @@ func apiReqFree(a *apiRequest) {
 // misc helpers
 //
 
-func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*cluster.Bck, error) {
+func newBckFromQ(bckName string, query url.Values, dpq *dpq) (*meta.Bck, error) {
 	bck := _bckFromQ(bckName, query, dpq)
 	normp, err := cmn.NormalizeProvider(bck.Provider)
 	if err == nil {
@@ -795,7 +796,7 @@ func newQbckFromQ(bckName string, query url.Values, dpq *dpq) (*cmn.QueryBcks, e
 	return qbck, qbck.Validate()
 }
 
-func _bckFromQ(bckName string, query url.Values, dpq *dpq) *cluster.Bck {
+func _bckFromQ(bckName string, query url.Values, dpq *dpq) *meta.Bck {
 	var (
 		provider  string
 		namespace cmn.Ns
@@ -808,10 +809,10 @@ func _bckFromQ(bckName string, query url.Values, dpq *dpq) *cluster.Bck {
 		provider = dpq.provider
 		namespace = cmn.ParseNsUname(dpq.namespace)
 	}
-	return &cluster.Bck{Name: bckName, Provider: provider, Ns: namespace}
+	return &meta.Bck{Name: bckName, Provider: provider, Ns: namespace}
 }
 
-func newBckFromQuname(query url.Values, required bool) (*cluster.Bck, error) {
+func newBckFromQuname(query url.Values, required bool) (*meta.Bck, error) {
 	uname := query.Get(apc.QparamBckTo)
 	if uname == "" {
 		if required {
@@ -826,7 +827,7 @@ func newBckFromQuname(query url.Values, required bool) (*cluster.Bck, error) {
 	if err := bck.Validate(); err != nil {
 		return nil, err
 	}
-	return cluster.CloneBck(&bck), nil
+	return meta.CloneBck(&bck), nil
 }
 
 func _reMirror(bprops, nprops *cmn.BucketProps) bool {
@@ -839,7 +840,7 @@ func _reMirror(bprops, nprops *cmn.BucketProps) bool {
 	return false
 }
 
-func _reEC(bprops, nprops *cmn.BucketProps, bck *cluster.Bck, smap *smapX) (targetCnt int, yes bool) {
+func _reEC(bprops, nprops *cmn.BucketProps, bck *meta.Bck, smap *smapX) (targetCnt int, yes bool) {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
 			// abort running ec-encode xaction, if exists

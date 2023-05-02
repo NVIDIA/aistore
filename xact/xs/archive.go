@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -68,7 +69,7 @@ type (
 		err       error
 		r         *XactArch
 		msg       *cmn.ArchiveMsg
-		tsi       *cluster.Snode
+		tsi       *meta.Snode
 		lom       *cluster.LOM // of the archive
 		fqn       string       // workFQN --/--
 		fh        *os.File     // --/--
@@ -84,7 +85,7 @@ type (
 		streamingX
 		workCh  chan *cmn.ArchiveMsg
 		config  *cmn.Config
-		bckTo   *cluster.Bck
+		bckTo   *meta.Bck
 		pending struct {
 			m map[string]*archwi
 			sync.RWMutex
@@ -108,7 +109,7 @@ var (
 // archFactory //
 /////////////////
 
-func (*archFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &archFactory{streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActArchive}}
 	return p
 }
@@ -197,7 +198,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	// TODO: extend `cluster.Xact` for one-source-to-many-destination buckets
 	if r.bckTo == nil {
 		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
-			r.bckTo = cluster.CloneBck(&wi.msg.ToBck)
+			r.bckTo = meta.CloneBck(&wi.msg.ToBck)
 		}
 	}
 
@@ -392,7 +393,7 @@ func (r *XactArch) String() (s string) {
 	return
 }
 
-func (r *XactArch) FromTo() (src, dst *cluster.Bck) {
+func (r *XactArch) FromTo() (src, dst *meta.Bck) {
 	if r.bckTo != nil {
 		src, dst = r.Bck(), r.bckTo
 	}

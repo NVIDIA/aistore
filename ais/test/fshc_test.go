@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -38,8 +38,8 @@ type checkerMD struct {
 	numObjs    int
 	proxyURL   string
 	bck        cmn.Bck
-	smap       *cluster.Smap
-	mpList     cluster.NodeMap
+	smap       *meta.Smap
+	mpList     meta.NodeMap
 	allMps     map[string]*apc.MountpathList
 	origAvail  int
 	fileSize   int64
@@ -59,7 +59,7 @@ func newCheckerMD(t *testing.T) *checkerMD {
 			Provider: apc.AIS,
 		},
 		fileSize: 64 * cos.KiB,
-		mpList:   make(cluster.NodeMap, 10),
+		mpList:   make(meta.NodeMap, 10),
 		allMps:   make(map[string]*apc.MountpathList, 10),
 		chstop:   make(chan struct{}),
 		chfail:   make(chan struct{}),
@@ -94,11 +94,11 @@ func (md *checkerMD) init() {
 	}
 }
 
-func (md *checkerMD) ensureNumMountpaths(target *cluster.Snode, mpList *apc.MountpathList) {
+func (md *checkerMD) ensureNumMountpaths(target *meta.Snode, mpList *apc.MountpathList) {
 	ensureNumMountpaths(md.t, target, mpList)
 }
 
-func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, mpathMap *apc.MountpathList) {
+func (md *checkerMD) randomTargetMpath() (target *meta.Snode, mpath string, mpathMap *apc.MountpathList) {
 	// select random target and mountpath
 	for m, t := range md.mpList {
 		target, mpath = t, m
@@ -108,7 +108,7 @@ func (md *checkerMD) randomTargetMpath() (target *cluster.Snode, mpath string, m
 	return
 }
 
-func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath string, mpathList *apc.MountpathList, suffix string) {
+func (md *checkerMD) runTestAsync(method string, target *meta.Snode, mpath string, mpathList *apc.MountpathList, suffix string) {
 	md.wg.Add(1)
 	go runAsyncJob(md.t, md.bck, md.wg, method, mpath, fileNames, md.chfail, md.chstop, suffix)
 	// let the job run for a while and then make a mountpath broken
@@ -124,7 +124,7 @@ func (md *checkerMD) runTestAsync(method string, target *cluster.Snode, mpath st
 	repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
 }
 
-func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath string, mpathList *apc.MountpathList,
+func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string, mpathList *apc.MountpathList,
 	objList []string, suffix string) {
 	breakMountpath(md.t, mpath, suffix)
 	defer repairMountpath(md.t, target, mpath, len(mpathList.Available), len(mpathList.Disabled), suffix)
@@ -161,7 +161,7 @@ func (md *checkerMD) runTestSync(method string, target *cluster.Snode, mpath str
 	}
 }
 
-func waitForMountpathChanges(t *testing.T, target *cluster.Snode, availLen, disabledLen int, failIfDiffer bool) bool {
+func waitForMountpathChanges(t *testing.T, target *meta.Snode, availLen, disabledLen int, failIfDiffer bool) bool {
 	var (
 		err        error
 		newMpaths  *apc.MountpathList
@@ -218,7 +218,7 @@ func breakMountpath(t *testing.T, mpath, suffix string) {
 	f.Close()
 }
 
-func repairMountpath(t *testing.T, target *cluster.Snode, mpath string, availLen, disabledLen int, suffix string) {
+func repairMountpath(t *testing.T, target *meta.Snode, mpath string, availLen, disabledLen int, suffix string) {
 	var (
 		err        error
 		baseParams = tools.BaseAPIParams()
@@ -431,7 +431,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams(proxyURL)
 		smap       = tools.GetClusterMap(t, proxyURL)
-		mpList     = make(cluster.NodeMap, 10)
+		mpList     = make(meta.NodeMap, 10)
 		origAvail  = 0
 	)
 
@@ -454,7 +454,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 
 	// select random target and mountpath
 	var (
-		selectedTarget *cluster.Snode
+		selectedTarget *meta.Snode
 		selectedMpath  string
 	)
 	for m, t := range mpList {
@@ -490,7 +490,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	}
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
-		target *cluster.Snode
+		target *meta.Snode
 
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams()
@@ -546,7 +546,7 @@ func TestFSAddMountpathRestartNode(t *testing.T) {
 		t.Skipf("skipping %s", t.Name())
 	}
 	var (
-		target *cluster.Snode
+		target *meta.Snode
 
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams()
@@ -621,7 +621,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 		RequiredDeployment: tools.ClusterTypeLocal,
 	})
 	var (
-		target *cluster.Snode
+		target *meta.Snode
 
 		smap       = tools.GetClusterMap(t, tools.RandomProxyURL())
 		baseParams = tools.BaseAPIParams()

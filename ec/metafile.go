@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/OneOfOne/xxhash"
@@ -73,11 +74,11 @@ func MetaFromReader(reader io.Reader) (*Metadata, error) {
 
 // RemoteTargets returns list of Snodes that contain a slice or replica.
 // This target(`t`) is removed from the list.
-func (md *Metadata) RemoteTargets(t cluster.Target) []*cluster.Snode {
+func (md *Metadata) RemoteTargets(t cluster.Target) []*meta.Snode {
 	if len(md.Daemons) == 0 {
 		return nil
 	}
-	nodes := make([]*cluster.Snode, 0, len(md.Daemons))
+	nodes := make([]*meta.Snode, 0, len(md.Daemons))
 	smap := t.Sowner().Get()
 	for tid := range md.Daemons {
 		if tid == t.SID() {
@@ -111,7 +112,7 @@ func (md *Metadata) Clone() *Metadata {
 }
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
-func ObjectMetadata(bck *cluster.Bck, objName string) (*Metadata, error) {
+func ObjectMetadata(bck *meta.Bck, objName string) (*Metadata, error) {
 	fqn, _, err := cluster.HrwFQN(bck.Bucket(), fs.ECMetaType, objName)
 	if err != nil {
 		return nil, err

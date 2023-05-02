@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
@@ -161,7 +161,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 			numGetsEachFile: 5,
 			fileSize:        cos.KiB * 2,
 		}
-		targetNode *cluster.Snode
+		targetNode *meta.Snode
 	)
 
 	m.initWithCleanupAndSaveState()
@@ -539,8 +539,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 			numGetsEachFile: 3,
 		}
 		baseParams     = tools.BaseAPIParams()
-		selectedTarget *cluster.Snode
-		killTarget     *cluster.Snode
+		selectedTarget *meta.Snode
+		killTarget     *meta.Snode
 	)
 
 	m.initWithCleanupAndSaveState()

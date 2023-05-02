@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -30,7 +31,7 @@ type (
 	}
 	XactDirPromote struct {
 		args *cluster.PromoteArgs
-		smap *cluster.Smap
+		smap *meta.Smap
 		dir  string
 		xact.BckJog
 		confirmedFshare bool // set separately in the commit phase prior to Run
@@ -47,7 +48,7 @@ var (
 // proFactory //
 ////////////////
 
-func (*proFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	c := args.Custom.(*cluster.PromoteArgs)
 	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: c}
 	return p

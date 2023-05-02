@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -471,7 +472,7 @@ func (t *target) enableMpath(w http.ResponseWriter, r *http.Request, mpath strin
 
 	// create missing buckets dirs
 	bmd := t.owner.bmd.get()
-	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
+	bmd.Range(nil, nil, func(bck *meta.Bck) bool {
 		err = enabledMi.CreateMissingBckDirs(bck.Bucket())
 		return err != nil // break on error
 	})
@@ -493,7 +494,7 @@ func (t *target) attachMpath(w http.ResponseWriter, r *http.Request, mpath strin
 	}
 	// create missing buckets dirs, if any
 	bmd := t.owner.bmd.get()
-	bmd.Range(nil, nil, func(bck *cluster.Bck) bool {
+	bmd.Range(nil, nil, func(bck *meta.Bck) bool {
 		err = addedMi.CreateMissingBckDirs(bck.Bucket())
 		return err != nil // break on error
 	})
@@ -594,7 +595,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 }
 
 // executes under lock
-func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *cluster.Snode) (rmbcks []*cluster.Bck,
+func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi *meta.Snode) (rmbcks []*meta.Bck,
 	oldVer int64, emsg string, err error) {
 	var (
 		createErrs  []error
@@ -615,7 +616,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	nilbmd := bmd.version() == 0 || t.regstate.prevbmd.Load()
 
 	// 1. create
-	newBMD.Range(nil, nil, func(bck *cluster.Bck) bool {
+	newBMD.Range(nil, nil, func(bck *meta.Bck) bool {
 		if _, present := bmd.Get(bck); present {
 			return false
 		}
@@ -638,9 +639,9 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	}
 
 	// 3. delete, ignore errors
-	bmd.Range(nil, nil, func(obck *cluster.Bck) bool {
+	bmd.Range(nil, nil, func(obck *meta.Bck) bool {
 		var present bool
-		newBMD.Range(nil, nil, func(nbck *cluster.Bck) bool {
+		newBMD.Range(nil, nil, func(nbck *meta.Bck) bool {
 			if !obck.Equal(nbck, false /*ignore BID*/, false /* ignore backend */) {
 				return false
 			}
@@ -671,11 +672,11 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	return
 }
 
-func (t *target) _postBMD(tag string, rmbcks []*cluster.Bck) {
+func (t *target) _postBMD(tag string, rmbcks []*meta.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
 		xreg.AbortAllBuckets(errors.New("post-bmd"), rmbcks...)
-		go func(bcks ...*cluster.Bck) {
+		go func(bcks ...*meta.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
 			}
@@ -971,13 +972,13 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	}
 	ntid := msg.UUID
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, cluster.Tname(ntid)) // "start-gfn" | "stop-gfn"
+		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
 		reb.OnTimedGFN()
 	case apc.ActStopGFN:
-		detail := cluster.Tname(ntid) + " " + newSmap.String()
+		detail := meta.Tname(ntid) + " " + newSmap.String()
 		reb.OffTimedGFN(detail)
 	default:
 		debug.Assert(false, msg.String())
@@ -1095,7 +1096,7 @@ func (t *target) enable() error {
 
 // HeadObjT2T checks with a given target to see if it has the object.
 // (compare with api.HeadObject)
-func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
+func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *meta.Snode) (ok bool) {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
@@ -1123,7 +1124,7 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *cluster.Snode) (ok bool) {
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
 // NOTE: 1) apc.QparamCheckExistsAny to make an extra effort, 2) `ignoreMaintenance`
-func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *cluster.Snode {
+func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *meta.Snode {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced

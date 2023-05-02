@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -342,7 +343,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 }
 
 // parse request + init/lookup bucket (combo)
-func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *cluster.Bck,
+func (p *proxy) _parseReqTry(w http.ResponseWriter, r *http.Request, bckArgs *bckInitArgs) (bck *meta.Bck,
 	objName string, err error) {
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*dpq*/)
 	if err = p.parseReq(w, r, apireq); err != nil {
@@ -550,7 +551,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 		var (
 			err   error
 			lsmsg apc.LsoMsg
-			bck   = cluster.CloneBck((*cmn.Bck)(qbck))
+			bck   = meta.CloneBck((*cmn.Bck)(qbck))
 		)
 		if err = cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
@@ -676,7 +677,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	// 3. redirect
 	var (
-		si      *cluster.Snode
+		si      *meta.Snode
 		smap    = p.owner.smap.get()
 		started = time.Now()
 	)
@@ -904,7 +905,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 
 	for _, psi := range newSmap.Pmap {
 		if p.SID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
-			go func(psi *cluster.Snode) {
+			go func(psi *meta.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi); err != nil {
 					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
 				}
@@ -1007,7 +1008,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo := cluster.CloneBck(&archMsg.ToBck)
+		bckTo := meta.CloneBck(&archMsg.ToBck)
 		if bckTo.IsEmpty() {
 			bckTo = bckFrom
 		} else {
@@ -1127,7 +1128,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		w.Write([]byte(xid))
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			bckTo       *cluster.Bck
+			bckTo       *meta.Bck
 			tcbmsg      = &apc.TCBMsg{}
 			xid         string
 			errCode     int
@@ -1202,7 +1203,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		var (
 			xid     string
 			tcomsg  = &cmn.TCObjsMsg{}
-			bckTo   *cluster.Bck
+			bckTo   *meta.Bck
 			errCode int
 			eq      bool
 		)
@@ -1210,7 +1211,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		bckTo = cluster.CloneBck(&tcomsg.ToBck)
+		bckTo = meta.CloneBck(&tcomsg.ToBck)
 
 		if bck.Equal(bckTo, true, true) {
 			eq = true
@@ -1283,7 +1284,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 // init existing or create remote
 // not calling `initAndTry` - delegating ais:from// props cloning to the separate method
 func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Values,
-	bckTo *cluster.Bck) (*cluster.Bck, int, error) {
+	bckTo *meta.Bck) (*meta.Bck, int, error) {
 	bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
 	bckToArgs.createAIS = true
 	errCode, err := bckToArgs.init()
@@ -1302,7 +1303,7 @@ func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Valu
 }
 
 // POST { apc.ActCreateBck } /v1/buckets/bucket-name
-func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *cluster.Bck) {
+func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, msg *apc.ActMsg, bck *meta.Bck) {
 	var (
 		remoteHdr http.Header
 		bucket    = bck.Name
@@ -1394,7 +1395,7 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, amsg *apc.ActMsg,
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg,
 	lsmsg *apc.LsoMsg, beg int64) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() < 1 {
@@ -1419,7 +1420,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 
 	var (
 		err                        error
-		tsi                        *cluster.Snode
+		tsi                        *meta.Snode
 		lst                        *cmn.LsoResult
 		newls                      bool
 		listRemote, wantOnlyRemote bool
@@ -1436,7 +1437,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 	var nl nl.Listener
 	if newls {
 		if wantOnlyRemote {
-			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, cluster.NodeMap{tsi.ID(): tsi}, bck.Bucket())
+			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, meta.NodeMap{tsi.ID(): tsi}, bck.Bucket())
 		} else {
 			// bcast
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, nil, bck.Bucket())
@@ -1497,7 +1498,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *cluster
 }
 
 // list-objects flow control helper
-func (p *proxy) _lsofc(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *cluster.Snode, listRemote, wantOnlyRemote bool,
+func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta.Snode, listRemote, wantOnlyRemote bool,
 	err error) {
 	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	if !listRemote {
@@ -1583,7 +1584,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
 		}
-		var tsi *cluster.Snode
+		var tsi *meta.Snode
 		if args.DaemonID != "" {
 			smap := p.owner.smap.get()
 			if tsi = smap.GetTarget(args.DaemonID); tsi == nil {
@@ -1690,7 +1691,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	toHdr(bck, hdr, info)
 }
 
-func toHdr(bck *cluster.Bck, hdr http.Header, info *cmn.BsummResult) {
+func toHdr(bck *meta.Bck, hdr http.Header, info *cmn.BsummResult) {
 	if bck.Props == nil {
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
 	} else {
@@ -1747,7 +1748,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if !nprops.BackendBck.IsEmpty() {
 		// backend must exist
-		backendBck := cluster.CloneBck(&nprops.BackendBck)
+		backendBck := meta.CloneBck(&nprops.BackendBck)
 		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg, dpq: apireq.dpq, query: apireq.query}
 		args.createAIS = false
 		if _, err = args.initAndTry(); err != nil {
@@ -1917,7 +1918,7 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 }
 
 // reverse-proxy request
-func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *cluster.Snode) {
+func (p *proxy) reverseNodeRequest(w http.ResponseWriter, r *http.Request, si *meta.Snode) {
 	parsedURL, err := url.Parse(si.URL(cmn.NetPublic))
 	debug.AssertNoErr(err)
 	p.reverseRequest(w, r, si.ID(), parsedURL)
@@ -2048,7 +2049,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	debug.AssertNoErr(err)
 }
 
-func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, netName string) (redirect string) {
+func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netName string) (redirect string) {
 	var (
 		nodeURL string
 		query   = url.Values{}
@@ -2084,7 +2085,7 @@ func (p *proxy) redirectURL(r *http.Request, si *cluster.Snode, ts time.Time, ne
 // lsObjsA reads object list from all targets, combines, sorts and returns
 // the final list. Excess of object entries from each target is remembered in the
 // buffer (see: `queryBuffers`) so we won't request the same objects again.
-func (p *proxy) lsObjsA(bck *cluster.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoResult, err error) {
+func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoResult, err error) {
 	var (
 		aisMsg    *aisMsg
 		args      *bcastArgs
@@ -2185,7 +2186,7 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *cluster.Snode, wantOnlyRemote bool) (*cmn.LsoResult, error) {
+func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, wantOnlyRemote bool) (*cmn.LsoResult, error) {
 	var (
 		config     = cmn.GCO.Get()
 		reqTimeout = config.Client.ListObjTimeout.D()
@@ -2239,7 +2240,7 @@ func (p *proxy) lsObjsR(bck *cluster.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *c
 	return cmn.MergeLso(resLists, 0), nil
 }
 
-func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string, msg *apc.ActMsg) {
+func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, msg *apc.ActMsg) {
 	started := time.Now()
 	if objName == msg.Name {
 		p.writeErrMsg(w, r, "the new and the current name are the same")
@@ -2309,9 +2310,9 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	if si != nil && si.InMaintOrDecomm() {
 		daeStatus := "inactive"
 		switch {
-		case si.Flags.IsSet(cluster.SnodeMaint):
+		case si.Flags.IsSet(meta.SnodeMaint):
 			daeStatus = apc.NodeMaintenance
-		case si.Flags.IsSet(cluster.SnodeDecomm):
+		case si.Flags.IsSet(meta.SnodeDecomm):
 			daeStatus = apc.NodeDecommission
 		}
 		if r.Method == http.MethodGet {
@@ -2395,7 +2396,7 @@ func (p *proxy) handlePendingRenamedLB(renamedBucket string) {
 		pre:   p.bmodPostMv,
 		final: p.bmodSync,
 		msg:   &apc.ActMsg{Value: apc.ActMoveBck},
-		bcks:  []*cluster.Bck{cluster.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
+		bcks:  []*meta.Bck{meta.NewBck(renamedBucket, apc.AIS, cmn.NsGlobal)},
 	}
 	_, err := p.owner.bmd.modify(ctx)
 	debug.AssertNoErr(err)
@@ -3081,7 +3082,7 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 	return
 }
 
-func (p *proxy) detectDuplicate(osi, nsi *cluster.Snode) (bool, error) {
+func (p *proxy) detectDuplicate(osi, nsi *meta.Snode) (bool, error) {
 	si, err := p.getDaemonInfo(osi)
 	if err != nil {
 		return false, err
@@ -3090,7 +3091,7 @@ func (p *proxy) detectDuplicate(osi, nsi *cluster.Snode) (bool, error) {
 }
 
 // getDaemonInfo queries osi for its daemon info and returns it.
-func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error) {
+func (p *proxy) getDaemonInfo(osi *meta.Snode) (si *meta.Snode, err error) {
 	cargs := allocCargs()
 	{
 		cargs.si = osi
@@ -3100,13 +3101,13 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSnode}},
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
-		cargs.cresv = cresND{} // -> cluster.Snode
+		cargs.cresv = cresND{} // -> meta.Snode
 	}
 	res := p.call(cargs)
 	if res.err != nil {
 		err = res.err
 	} else {
-		si = res.v.(*cluster.Snode)
+		si = res.v.(*meta.Snode)
 	}
 	freeCargs(cargs)
 	freeCR(res)
@@ -3115,7 +3116,7 @@ func (p *proxy) getDaemonInfo(osi *cluster.Snode) (si *cluster.Snode, err error)
 
 func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, statusCode int, err error) {
 	var (
-		tsi  *cluster.Snode
+		tsi  *meta.Snode
 		path = apc.URLPathBuckets.Join(bck.Name)
 	)
 	if tsi, err = p.owner.smap.get().GetRandTarget(); err != nil {

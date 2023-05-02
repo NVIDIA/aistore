@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -37,7 +38,7 @@ var (
 // llcFactory //
 ////////////////
 
-func (*llcFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*llcFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &llcFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}}
 	p.Bck = bck
 	return p
@@ -59,7 +60,7 @@ func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return 
 // xactLLC //
 /////////////
 
-func newXactLLC(t cluster.Target, uuid string, bck *cluster.Bck) (r *xactLLC) {
+func newXactLLC(t cluster.Target, uuid string, bck *meta.Bck) (r *xactLLC) {
 	r = &xactLLC{}
 	mpopts := &mpather.JgroupOpts{
 		T:        t,

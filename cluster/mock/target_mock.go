@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -18,28 +19,28 @@ import (
 
 // TargetMock provides cluster.Target interface with mocked return values.
 type TargetMock struct {
-	BO cluster.Bowner
+	BO meta.Bowner
 }
 
 // interface guard
 var _ cluster.Target = (*TargetMock)(nil)
 
-func NewTarget(bo cluster.Bowner) *TargetMock {
+func NewTarget(bo meta.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}
 	cluster.Init(t)
 	return t
 }
 
-func (t *TargetMock) Bowner() cluster.Bowner { return t.BO }
+func (t *TargetMock) Bowner() meta.Bowner { return t.BO }
 
 func (*TargetMock) Sname() string            { return "tmock" }
 func (*TargetMock) SID() string              { return "mock-id" }
 func (*TargetMock) String() string           { return "tmock" }
-func (*TargetMock) Snode() *cluster.Snode    { return nil }
+func (*TargetMock) Snode() *meta.Snode       { return nil }
 func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
 func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
-func (*TargetMock) Sowner() cluster.Sowner   { return nil }
+func (*TargetMock) Sowner() meta.Sowner      { return nil }
 func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
@@ -49,9 +50,9 @@ func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error) 
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                       { return 0, nil }
 func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                { return 0, nil }
 func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                  { return 0, nil }
-func (*TargetMock) Backend(*cluster.Bck) cluster.BackendProvider                { return nil }
-func (*TargetMock) HeadObjT2T(*cluster.LOM, *cluster.Snode) bool                { return false }
-func (*TargetMock) RebalanceNamespace(*cluster.Snode) ([]byte, int, error)      { return nil, 0, nil }
+func (*TargetMock) Backend(*meta.Bck) cluster.BackendProvider                   { return nil }
+func (*TargetMock) HeadObjT2T(*cluster.LOM, *meta.Snode) bool                   { return false }
+func (*TargetMock) RebalanceNamespace(*meta.Snode) ([]byte, int, error)         { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   {}
 func (*TargetMock) FSHC(error, string)                                          {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                              { return fs.CapStatus{} }
@@ -68,6 +69,6 @@ func (*TargetMock) GetCold(context.Context, *cluster.LOM, cmn.OWT) (int, error) 
 	return http.StatusOK, nil
 }
 
-func (*TargetMock) Health(*cluster.Snode, time.Duration, url.Values) ([]byte, int, error) {
+func (*TargetMock) Health(*meta.Snode, time.Duration, url.Values) ([]byte, int, error) {
 	return nil, 0, nil
 }

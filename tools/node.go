@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -57,13 +57,13 @@ func (n nodesCnt) satisfied(actual int) bool {
 
 // Add an alive node that is not in SMap to the cluster.
 // Use to add a new node to the cluster or get back a node removed by `RemoveNodeUnsafe`
-func JoinCluster(proxyURL string, node *cluster.Snode) (string, error) {
+func JoinCluster(proxyURL string, node *meta.Snode) (string, error) {
 	return _joinCluster(gctx, proxyURL, node, registerTimeout)
 }
 
 // Restore a node put into maintenance: in this case the node is in
 // Smap and canceling maintenance gets the node back.
-func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID string, newSmap *cluster.Smap) {
+func RestoreTarget(t *testing.T, proxyURL string, target *meta.Snode) (rebID string, newSmap *meta.Smap) {
 	smap := GetClusterMap(t, proxyURL)
 	tlog.Logf("Joining target %s (current %s)\n", target.StringEx(), smap.StringEx())
 	val := &apc.ActValRmNode{DaemonID: target.ID()}
@@ -80,7 +80,7 @@ func RestoreTarget(t *testing.T, proxyURL string, target *cluster.Snode) (rebID 
 	return rebID, newSmap
 }
 
-func ClearMaintenance(bp api.BaseParams, tsi *cluster.Snode) {
+func ClearMaintenance(bp api.BaseParams, tsi *meta.Snode) {
 	val := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: true}
 	// it can fail if the node is not under maintenance but it is OK
 	_, _ = api.StopMaintenance(bp, val)
@@ -116,14 +116,14 @@ func RandomProxyURL(ts ...*testing.T) (url string) {
 	return ""
 }
 
-func getRandomProxyURL(smap *cluster.Smap) string {
+func getRandomProxyURL(smap *meta.Smap) string {
 	proxies := smap.Pmap.ActiveNodes()
 	return proxies[rand.Intn(len(proxies))].URL(cmn.NetPublic)
 }
 
 // Return the first proxy from smap that is IC member. The primary
 // proxy has higher priority.
-func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snode {
+func GetICProxy(t testing.TB, smap *meta.Smap, ignoreID string) *meta.Snode {
 	if smap.IsIC(smap.Primary) {
 		return smap.Primary
 	}
@@ -147,7 +147,7 @@ func GetICProxy(t testing.TB, smap *cluster.Smap, ignoreID string) *cluster.Snod
 //
 // It returns the smap which satisfies those requirements.
 func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxyCnt, targetCnt int,
-	syncIgnoreIDs ...string) (*cluster.Smap, error) {
+	syncIgnoreIDs ...string) (*meta.Smap, error) {
 	for {
 		smap, err := WaitForClusterState(proxyURL, reason, origVersion, proxyCnt, targetCnt, syncIgnoreIDs...)
 		if err != nil {
@@ -169,7 +169,7 @@ func WaitForClusterStateActual(proxyURL, reason string, origVersion int64, proxy
 //
 // It returns the smap which satisfies those requirements.
 // NOTE: Upon successful return from this function cluster state might have already changed.
-func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int, ignoreIDs ...string) (*cluster.Smap, error) {
+func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int, ignoreIDs ...string) (*meta.Smap, error) {
 	const (
 		maxSleep = 7 * time.Second
 		maxWait  = 2 * time.Minute
@@ -220,10 +220,10 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 			if time.Since(started) > maxSleep {
 				pid := pidFromURL(smap, proxyURL)
 				if expPrx == 0 && expTgt == 0 {
-					tlog.Logf("Polling %s(%s) for (Smap > v%d)\n", cluster.Pname(pid), smap.StringEx(), origVer)
+					tlog.Logf("Polling %s(%s) for (Smap > v%d)\n", meta.Pname(pid), smap.StringEx(), origVer)
 				} else {
 					tlog.Logf("Polling %s(%s) for (t=%d, p=%d, Smap > v%d)\n",
-						cluster.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
+						meta.Pname(pid), smap.StringEx(), expTgt, expPrx, origVer)
 				}
 			}
 		}
@@ -232,7 +232,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		}
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if ok {
-			syncedSmap := &cluster.Smap{}
+			syncedSmap := &meta.Smap{}
 			cos.CopyStruct(syncedSmap, smap)
 
 			// skip primary proxy and mock targets
@@ -262,7 +262,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 	return nil, errors.New("timed out waiting for the cluster to stabilize")
 }
 
-func pidFromURL(smap *cluster.Smap, proxyURL string) string {
+func pidFromURL(smap *meta.Smap, proxyURL string) string {
 	for _, p := range smap.Pmap {
 		if p.PubNet.URL == proxyURL {
 			return p.ID()
@@ -271,11 +271,11 @@ func pidFromURL(smap *cluster.Smap, proxyURL string) string {
 	return ""
 }
 
-func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *cluster.Smap, err error) {
+func WaitForNewSmap(proxyURL string, prevVersion int64) (newSmap *meta.Smap, err error) {
 	return WaitForClusterState(proxyURL, "new smap version", prevVersion, 0, 0)
 }
 
-func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) {
+func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {
 	args := xact.ArgsMsg{Kind: apc.ActResilver, Timeout: resilverTimeout}
 	if target != nil {
 		args.DaemonID = target.ID()
@@ -296,8 +296,8 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *cluster.Snode) 
 	tassert.CheckFatal(t, err)
 }
 
-func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParams) map[*cluster.Snode][]string {
-	mpathsByTarget := make(map[*cluster.Snode][]string, smap.CountTargets())
+func GetTargetsMountpaths(t *testing.T, smap *meta.Smap, params api.BaseParams) map[*meta.Snode][]string {
+	mpathsByTarget := make(map[*meta.Snode][]string, smap.CountTargets())
 	for _, target := range smap.Tmap {
 		mpl, err := api.GetMountpaths(params, target)
 		tassert.CheckFatal(t, err)
@@ -307,7 +307,7 @@ func GetTargetsMountpaths(t *testing.T, smap *cluster.Smap, params api.BaseParam
 	return mpathsByTarget
 }
 
-func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
+func KillNode(node *meta.Snode) (cmd RestoreCmd, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -358,7 +358,7 @@ func KillNode(node *cluster.Snode) (cmd RestoreCmd, err error) {
 	return
 }
 
-func ShutdownNode(_ *testing.T, bp api.BaseParams, node *cluster.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
+func ShutdownNode(_ *testing.T, bp api.BaseParams, node *meta.Snode) (pid int, cmd RestoreCmd, rebID string, err error) {
 	restoreNodesOnce.Do(func() {
 		initNodeCmd()
 	})
@@ -425,7 +425,7 @@ func startNode(cmd string, args []string, asPrimary bool) (int, error) {
 	return pid, err
 }
 
-func DeployNode(t *testing.T, node *cluster.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
+func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
 	conf.ConfigDir = t.TempDir()
 	conf.LogDir = t.TempDir()
 	conf.TestFSP.Root = t.TempDir()
@@ -571,7 +571,7 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 	}
 }
 
-func GetRestoreCmd(si *cluster.Snode) RestoreCmd {
+func GetRestoreCmd(si *meta.Snode) RestoreCmd {
 	var (
 		err error
 		cmd = RestoreCmd{Node: si}
@@ -663,7 +663,7 @@ retry:
 	}
 }
 
-func WaitNodeAdded(bp api.BaseParams, nodeID string) (*cluster.Smap, error) {
+func WaitNodeAdded(bp api.BaseParams, nodeID string) (*meta.Smap, error) {
 	var i int
 retry:
 	smap, err := api.GetClusterMap(bp)
@@ -710,7 +710,7 @@ while503:
 	goto while503
 }
 
-func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.Duration) (rebID string, err error) {
+func _joinCluster(ctx *Ctx, proxyURL string, node *meta.Snode, timeout time.Duration) (rebID string, err error) {
 	bp := api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}
 	smap, err := api.GetClusterMap(bp)
 	if err != nil {
@@ -729,7 +729,7 @@ func _joinCluster(ctx *Ctx, proxyURL string, node *cluster.Snode, timeout time.D
 	return
 }
 
-func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (sid string, isproxy, exists bool) {
+func _nextNode(smap *meta.Smap, idsToIgnore cos.StrSet) (sid string, isproxy, exists bool) {
 	for _, d := range smap.Pmap {
 		if !idsToIgnore.Contains(d.ID()) {
 			sid = d.ID()
@@ -747,7 +747,7 @@ func _nextNode(smap *cluster.Smap, idsToIgnore cos.StrSet) (sid string, isproxy,
 	return
 }
 
-func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.Smap, ver int64, ignore cos.StrSet) error {
+func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *meta.Smap, ver int64, ignore cos.StrSet) error {
 	var (
 		prevSid string
 		orig    = ignore.Clone()
@@ -760,9 +760,9 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *cluster.
 		if sid == prevSid {
 			time.Sleep(time.Second)
 		}
-		sname := cluster.Tname(sid)
+		sname := meta.Tname(sid)
 		if isproxy {
-			sname = cluster.Pname(sid)
+			sname = meta.Pname(sid)
 		}
 		newSmap, err := api.GetNodeClusterMap(bp, sid)
 		if err != nil && !cos.IsRetriableConnErr(err) &&

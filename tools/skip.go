@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -42,7 +42,7 @@ func ShortSkipf(tb testing.TB, a ...any) {
 }
 
 func CheckSkip(tb testing.TB, args SkipTestArgs) {
-	var smap *cluster.Smap
+	var smap *meta.Smap
 	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())
 	}

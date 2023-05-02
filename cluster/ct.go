@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -22,7 +23,7 @@ type CT struct {
 	objName     string
 	contentType string
 	hrwFQN      string
-	bck         *Bck
+	bck         *meta.Bck
 	mi          *fs.Mountpath
 	uname       string
 	digest      uint64
@@ -36,7 +37,7 @@ var _ fs.PartsFQN = (*CT)(nil)
 func (ct *CT) FQN() string              { return ct.fqn }
 func (ct *CT) ObjectName() string       { return ct.objName }
 func (ct *CT) ContentType() string      { return ct.contentType }
-func (ct *CT) Bck() *Bck                { return ct.bck }
+func (ct *CT) Bck() *meta.Bck           { return ct.bck }
 func (ct *CT) Bucket() *cmn.Bck         { return (*cmn.Bck)(ct.bck) }
 func (ct *CT) Mountpath() *fs.Mountpath { return ct.mi }
 func (ct *CT) SizeBytes() int64         { return ct.size }
@@ -82,7 +83,7 @@ func (ct *CT) Unlock(exclusive bool) {
 //  if err != nil { ... }
 //  fqn := ct.Make(fs.ECMetaType)
 
-func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
+func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	parsedFQN, hrwFQN, errP := ResolveFQN(fqn)
 	if errP != nil {
 		return nil, errP
@@ -92,18 +93,18 @@ func NewCTFromFQN(fqn string, b Bowner) (ct *CT, err error) {
 		objName:     parsedFQN.ObjName,
 		contentType: parsedFQN.ContentType,
 		hrwFQN:      hrwFQN,
-		bck:         CloneBck(&parsedFQN.Bck),
+		bck:         meta.CloneBck(&parsedFQN.Bck),
 		mi:          parsedFQN.Mountpath,
 		digest:      parsedFQN.Digest,
 	}
 	if b != nil {
-		err = ct.bck.initFast(b)
+		err = ct.bck.InitFast(b)
 	}
 	return
 }
 
-func NewCTFromBO(bck *cmn.Bck, objName string, b Bowner, ctType ...string) (ct *CT, err error) {
-	ct = &CT{objName: objName, bck: CloneBck(bck)}
+func NewCTFromBO(bck *cmn.Bck, objName string, b meta.Bowner, ctType ...string) (ct *CT, err error) {
+	ct = &CT{objName: objName, bck: meta.CloneBck(bck)}
 	if b != nil {
 		if err = ct.bck.Init(b); err != nil {
 			return

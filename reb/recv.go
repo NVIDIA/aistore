@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -98,7 +99,7 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 	)
 	if xreb == nil {
 		if reb.stages.stage.Load() != rebStageInactive {
-			glog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*cluster.Smap)(rsmap)))
+			glog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*meta.Smap)(rsmap)))
 		}
 		return nil
 	}
@@ -112,20 +113,20 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 	if rebID == ntfn.rebID {
 		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
 		if ntfn.stage == rebStageAbort {
-			err := fmt.Errorf("abort stage notification from %s(%s)", cluster.Tname(ntfn.daemonID), otherStage)
+			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
 			glog.Error(err)
-			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
+			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*meta.Smap)(rsmap)), err))
 		}
 		return nil
 	}
 	// other's old
 	if rebID > ntfn.rebID {
-		glog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*cluster.Smap)(rsmap)),
-			cluster.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
+		glog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*meta.Smap)(rsmap)),
+			meta.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
 		return nil
 	}
 
-	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*cluster.Smap)(rsmap)), err))
+	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*meta.Smap)(rsmap)), err))
 	return nil
 }
 
@@ -133,7 +134,7 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 // regular (non-EC) receive
 //
 
-func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
+func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		glog.Errorf("Failed to parse ACK: %v", err)
@@ -155,10 +156,10 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 		reb.laterx.Store(true)
 		if stage > rebStageFin && glog.FastV(4, glog.SmoduleReb) {
 			glog.Errorf("%s: post stage-fin receive from %s %s (stage %s)",
-				reb.t.Snode(), cluster.Tname(tsid), lom, stages[stage])
+				reb.t.Snode(), meta.Tname(tsid), lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t, cluster.Tname(tsid), lom, stages[stage])
+		glog.Errorf("%s: early receive from %s %s (stage %s)", reb.t, meta.Tname(tsid), lom, stages[stage])
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
@@ -186,7 +187,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *cluster.Smap, unpacke
 	// ACK
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
-		err := fmt.Errorf("%s is not in the %s", cluster.Tname(tsid), smap)
+		err := fmt.Errorf("%s is not in the %s", meta.Tname(tsid), smap)
 		glog.Error(err)
 		return err
 	}

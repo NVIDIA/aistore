@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -137,7 +138,7 @@ func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string)
 	}
 }
 
-func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, bck *cluster.Bck, objName string) {
+func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, bck *meta.Bck, objName string) {
 	var (
 		comm etl.Communicator
 		err  error
@@ -199,7 +200,7 @@ func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName stri
 	t.writeJSON(w, r, metricMsg, "metrics-etl")
 }
 
-func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *cluster.Bck, objName string, err error) {
+func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *meta.Bck, objName string, err error) {
 	var items []string
 	items, err = cmn.MatchItems(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
 	if err != nil {
@@ -221,7 +222,7 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 		err = fmt.Errorf("etl-parse-req: object name is missing (bucket %s)", b)
 		return
 	}
-	bck = cluster.CloneBck(&b)
+	bck = meta.CloneBck(&b)
 	return
 }
 

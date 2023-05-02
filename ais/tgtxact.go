@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -41,7 +42,7 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	var (
 		xactMsg xact.QueryMsg
-		bck     *cluster.Bck
+		bck     *meta.Bck
 		query   = r.URL.Query()
 		what    = query.Get(apc.QparamWhat)
 	)
@@ -66,7 +67,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if xactMsg.Bck.Name != "" {
-		bck = cluster.CloneBck(&xactMsg.Bck)
+		bck = meta.CloneBck(&xactMsg.Bck)
 		if err := bck.Init(t.owner.bmd); err != nil {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
@@ -81,7 +82,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 	var (
 		xargs xact.ArgsMsg
-		bck   *cluster.Bck
+		bck   *meta.Bck
 	)
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
@@ -92,7 +93,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !xargs.Bck.IsEmpty() {
-		bck = cluster.CloneBck(&xargs.Bck)
+		bck = meta.CloneBck(&xargs.Bck)
 		if err := bck.Init(t.owner.bmd); err != nil && msg.Action != apc.ActXactStop {
 			// proceed anyway to stop
 			t.writeErr(w, r, err)
@@ -150,7 +151,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 	}
 }
 
-func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *cluster.Bck) error {
+func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 

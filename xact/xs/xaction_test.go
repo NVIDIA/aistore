@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -70,7 +71,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	var (
 		evArgs = &cmn.ListRange{}
 		bmd    = mock.NewBaseBownerMock()
-		bck    = cluster.NewBck(
+		bck    = meta.NewBck(
 			"test", apc.GCP, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
@@ -109,8 +110,8 @@ func TestXactionRenewPrefetch(t *testing.T) {
 func TestXactionAbortAll(t *testing.T) {
 	var (
 		bmd     = mock.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckFrom = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -136,8 +137,8 @@ func TestXactionAbortAll(t *testing.T) {
 func TestXactionAbortAllGlobal(t *testing.T) {
 	var (
 		bmd     = mock.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckFrom = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -166,8 +167,8 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 func TestXactionAbortBuckets(t *testing.T) {
 	var (
 		bmd     = mock.NewBaseBownerMock()
-		bckFrom = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
-		bckTo   = cluster.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckFrom = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
+		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()
@@ -203,9 +204,9 @@ func TestXactionQueryFinished(t *testing.T) {
 	}
 	var (
 		bmd   = mock.NewBaseBownerMock()
-		bck1  = cluster.NewBck("test1", apc.AIS, cmn.NsGlobal)
-		bck2  = cluster.NewBck("test2", apc.AIS, cmn.NsGlobal)
-		bck3  = cluster.NewBck("test3", apc.GCP, cmn.NsGlobal)
+		bck1  = meta.NewBck("test1", apc.AIS, cmn.NsGlobal)
+		bck2  = meta.NewBck("test2", apc.AIS, cmn.NsGlobal)
+		bck3  = meta.NewBck("test3", apc.GCP, cmn.NsGlobal)
 		tMock = mock.NewTarget(bmd)
 	)
 	xreg.TestReset()

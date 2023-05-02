@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -31,10 +32,10 @@ type (
 		xact.DemandBase
 		t cluster.Target
 
-		smap  cluster.Sowner // cluster map
-		si    *cluster.Snode // target daemonInfo
-		stats stats          // EC statistics
-		bck   cmn.Bck        // which bucket xctn belongs to
+		smap  meta.Sowner // to get current cluster map
+		si    *meta.Snode // target daemonInfo
+		stats stats       // EC statistics
+		bck   cmn.Bck     // which bucket xctn belongs to
 
 		dOwner *dataOwner // data slice manager
 		mgr    *Manager   // EC manager
@@ -76,8 +77,8 @@ func newXactReqECBase() xactReqBase {
 	}
 }
 
-func newXactECBase(t cluster.Target, smap cluster.Sowner,
-	si *cluster.Snode, bck *cmn.Bck, mgr *Manager) xactECBase {
+func newXactECBase(t cluster.Target, smap meta.Sowner,
+	si *meta.Snode, bck *cmn.Bck, mgr *Manager) xactECBase {
 	return xactECBase{
 		t:     t,
 		smap:  smap,
@@ -147,7 +148,7 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 }
 
 // replica/full object request
-func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck, objName string) (reader cos.ReadOpenCloser, err error) {
+func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (reader cos.ReadOpenCloser, err error) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err = lom.InitBck(bck.Bucket()); err != nil {
@@ -175,7 +176,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *cluster.Bck, objName string) (
 // encoding or to send requested "object" to a client. In the latter case
 // if the local object does not exist, it sends an empty body and sets
 // exists=false in response header
-func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn string, bck *cluster.Bck, objName string,
+func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn string, bck *meta.Bck, objName string,
 	md *Metadata) (err error) {
 	var (
 		reader   cos.ReadOpenCloser
@@ -211,7 +212,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 
 // Send a data or request to one or few targets by their DaemonIDs. Most of the time
 // only DaemonID is known - that is why the function gets DaemonID and internally
-// transforms it into cluster.Snode.
+// transforms it into meta.Snode.
 // * daemonIDs - a list of targets
 // * hdr - transport header
 // * reader - a data to send
@@ -222,7 +223,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 //   - false - send a slice/replica/metadata to targets
 func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cos.ReadOpenCloser,
 	cb transport.ObjSentCB, isRequest bool) error {
-	nodes := cluster.AllocNodes(len(daemonIDs))
+	nodes := meta.AllocNodes(len(daemonIDs))
 	smap := r.smap.Get()
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
@@ -242,7 +243,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 	} else {
 		err = r.mgr.resp().Send(o, reader, nodes...)
 	}
-	cluster.FreeNodes(nodes)
+	meta.FreeNodes(nodes)
 	return err
 }
 

@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -594,7 +595,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 // getObject is main function to get the object. It doesn't check request origin,
 // so it must be done by the caller (if necessary).
-func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *cluster.Bck, lom *cluster.LOM) *cluster.LOM {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *cluster.LOM) *cluster.LOM {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -854,7 +855,7 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) objhead(hdr http.Header, query url.Values, bck *cluster.Bck, lom *cluster.LOM) (errCode int, err error) {
+func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *cluster.LOM) (errCode int, err error) {
 	var (
 		fltPresence int
 		exists      = true
@@ -1050,7 +1051,7 @@ func (t *target) httpecget(w http.ResponseWriter, r *http.Request) {
 }
 
 // Returns a CT's metadata.
-func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
+func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
 	if err := bck.Init(t.owner.bmd); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) { // is ais
 			t.writeErr(w, r, err, Silent)
@@ -1069,7 +1070,7 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *clu
 	w.Write(md.NewPack())
 }
 
-func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *cluster.Bck, objName string) {
+func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
 	lom := cluster.AllocLOM(objName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {

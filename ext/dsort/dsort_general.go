@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -468,7 +469,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 }
 
 func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
-	errHandler := func(err error, node *cluster.Snode, o *transport.Obj) {
+	errHandler := func(err error, node *meta.Snode, o *transport.Obj) {
 		*o = transport.Obj{Hdr: o.Hdr}
 		o.Hdr.Opaque = []byte(err.Error())
 		o.Hdr.ObjAttrs.Size = 0

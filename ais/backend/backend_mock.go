@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -30,15 +31,15 @@ func NewDummyBackend(t cluster.TargetPut) (cluster.BackendProvider, error) { ret
 func (*mockBP) Provider() string  { return mock }
 func (*mockBP) MaxPageSize() uint { return math.MaxUint32 }
 
-func (*mockBP) CreateBucket(*cluster.Bck) (int, error) {
+func (*mockBP) CreateBucket(*meta.Bck) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("create", mock+" bucket")
 }
 
-func (*mockBP) HeadBucket(_ ctx, bck *cluster.Bck) (cos.StrKVs, int, error) {
+func (*mockBP) HeadBucket(_ ctx, bck *meta.Bck) (cos.StrKVs, int, error) {
 	return cos.StrKVs{}, http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 
-func (*mockBP) ListObjects(bck *cluster.Bck, _ *apc.LsoMsg, _ *cmn.LsoResult) (int, error) {
+func (*mockBP) ListObjects(bck *meta.Bck, _ *apc.LsoMsg, _ *cmn.LsoResult) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckOffline(bck.Bucket())
 }
 

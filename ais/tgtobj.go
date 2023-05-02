@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -112,8 +113,8 @@ type (
 		reader    cos.ReadOpenCloser
 		dm        cluster.DataMover
 		objAttrs  cmn.ObjAttrsHolder
-		tsi       *cluster.Snode
-		bckTo     *cluster.Bck
+		tsi       *meta.Snode
+		bckTo     *meta.Bck
 		objNameTo string
 		owt       cmn.OWT
 	}
@@ -688,7 +689,7 @@ validate:
 // 4) Cloud
 func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
 	var (
-		tsi   *cluster.Snode
+		tsi   *meta.Snode
 		smap  = goi.t.owner.smap.get()
 		tname = goi.t.String()
 	)
@@ -717,7 +718,7 @@ func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, er
 
 	// when rebalancing: cluster-wide lookup (aka "get from neighbor" or GFN)
 	var (
-		gfnNode   *cluster.Snode
+		gfnNode   *meta.Snode
 		marked    = xreg.GetRebMarked()
 		running   = marked.Xact != nil
 		gfnActive = reb.IsGFN() // GFN(global rebalance)
@@ -778,7 +779,7 @@ gfn:
 	return
 }
 
-func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *cluster.Snode) bool {
+func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	query := lom.Bck().AddToQuery(nil)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
@@ -1240,7 +1241,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
-	var tsi *cluster.Snode
+	var tsi *meta.Snode
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
 	}
@@ -1307,7 +1308,7 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	return io.Copy(io.Discard, reader)
 }
 
-func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *cluster.Snode) (size int64, err error) {
+func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
 	debug.Assert(coi.owt > 0)
 	sargs := allocSnda()
 	{

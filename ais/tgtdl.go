@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -66,7 +67,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			progressInterval = dur
 		}
 
-		bck := cluster.CloneBck(&dlBodyBase.Bck)
+		bck := meta.CloneBck(&dlBodyBase.Bck)
 		if err := bck.Init(t.Bowner()); err != nil {
 			t.writeErr(w, r, err)
 			return

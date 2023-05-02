@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -61,7 +62,7 @@ var (
 // tcbFactory //
 ////////////////
 
-func (e *tcbFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (e *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.TCBArgs)
 	p := &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: e.kind, phase: custom.Phase, args: custom}
 	return p
@@ -280,7 +281,7 @@ func (r *XactTCB) Name() string {
 	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
 }
 
-func (r *XactTCB) FromTo() (*cluster.Bck, *cluster.Bck) {
+func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.args.BckFrom, r.args.BckTo
 }
 

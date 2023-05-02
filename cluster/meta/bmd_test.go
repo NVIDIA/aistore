@@ -1,8 +1,8 @@
-// Package cluster_test: unit tests for the package
+// Package meta_test: unit tests for the package
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster_test
+package meta_test
 
 import (
 	"github.com/NVIDIA/aistore/cmn"

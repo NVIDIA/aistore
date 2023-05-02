@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -104,7 +105,7 @@ func (test *prmTests) generate(t *testing.T, from, to int, tempdir, subdir strin
 	tassert.CheckFatal(t, err)
 }
 
-func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
+func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	if bck.IsCloud() {
 		// NOTE: filtering out some test permutations to save time
 		if testing.Short() {
@@ -158,7 +159,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 			SrcIsNotFshare: test.notFshare,
 		},
 	}
-	var target *cluster.Snode
+	var target *meta.Snode
 	if test.singleTarget {
 		target, _ = m.smap.GetRandTarget()
 		tlog.Logf("Promoting via %s\n", target.StringEx())
@@ -273,7 +274,7 @@ func (test *prmTests) do(t *testing.T, bck *cluster.Bck) {
 }
 
 // wait for an xaction (if there's one) and then query all targets for stats
-func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *cluster.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
+func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
 	time.Sleep(4 * time.Second)
 	xargs := xact.ArgsMsg{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
 	xname := fmt.Sprintf("%q", apc.ActPromote)

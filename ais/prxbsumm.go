@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -27,7 +27,7 @@ func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.
 	}
 	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID), msg.UUID)
 	if qbck.IsBucket() {
-		bck := (*cluster.Bck)(qbck)
+		bck := (*meta.Bck)(qbck)
 		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: amsg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
 		bckArgs.createAIS = false
 		bckArgs.dontHeadRemote = msg.BckPresent
@@ -72,7 +72,7 @@ retry:
 }
 
 // steps
-func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, *cluster.Snode, int, error) {
+func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, *meta.Snode, int, error) {
 	var (
 		q      = make(url.Values, 4)
 		config = cmn.GCO.Get()
@@ -147,7 +147,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsum
 	return summaries, nil, 0, nil
 }
 
-func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *cluster.Snode, numDone, numAck int, err error) {
+func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *meta.Snode, numDone, numAck int, err error) {
 	defer freeBcastRes(results)
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
@@ -175,7 +175,7 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *cluster.S
 }
 
 // NOTE: always executes the (cached-only, fast) version of the bucket summary
-func (p *proxy) bsummDoWait(bck *cluster.Bck, out *cmn.BsummResult, fltPresence int) error {
+func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int) error {
 	var (
 		max   = cmn.Timeout.MaxKeepalive()
 		sleep = cos.ProbingFrequency(max)

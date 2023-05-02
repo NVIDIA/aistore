@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -148,7 +148,7 @@ func GetPrimaryURL() string {
 	} else if proxyURL := currSmap.Primary.URL(cmn.NetPublic); proxyURL != proxyURLReadOnly {
 		primary, err = GetPrimaryProxy(proxyURL)
 	} else {
-		var psi *cluster.Snode
+		var psi *meta.Snode
 		if psi, err = currSmap.GetRandProxy(true /*exclude primary*/); err == nil {
 			primary, err = GetPrimaryProxy(psi.URL(cmn.NetPublic))
 		}
@@ -161,7 +161,7 @@ func GetPrimaryURL() string {
 }
 
 // GetPrimaryProxy returns the primary proxy
-func GetPrimaryProxy(proxyURL string) (*cluster.Snode, error) {
+func GetPrimaryProxy(proxyURL string) (*meta.Snode, error) {
 	bp := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(bp)
 	if err != nil {
@@ -241,7 +241,7 @@ func SetBackendBck(t *testing.T, bp api.BaseParams, srcBck, dstBck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 }
 
-func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *cluster.Smap) (*cluster.Smap, *cluster.Snode) {
+func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *meta.Smap) (*meta.Smap, *meta.Snode) {
 	var (
 		removeTarget, _ = smap.GetRandTarget()
 		origTgtCnt      = smap.CountActiveTs()
@@ -621,14 +621,14 @@ func GetNamedStatsVal(ds *stats.Node, name string) int64 {
 	return v.Value
 }
 
-func GetDaemonConfig(t *testing.T, node *cluster.Snode) *cmn.Config {
+func GetDaemonConfig(t *testing.T, node *meta.Snode) *cmn.Config {
 	bp := BaseAPIParams()
 	config, err := api.GetDaemonConfig(bp, node)
 	tassert.CheckFatal(t, err)
 	return config
 }
 
-func GetClusterMap(tb testing.TB, url string) *cluster.Smap {
+func GetClusterMap(tb testing.TB, url string) *meta.Smap {
 	smap, err := waitForStartup(BaseAPIParams(url), tb)
 	if err == nil && (currSmap == nil || currSmap.Version < smap.Version) {
 		currSmap = smap
@@ -678,7 +678,7 @@ func CheckErrIsNotFound(t *testing.T, err error) {
 	)
 }
 
-func waitForStartup(bp api.BaseParams, ts ...testing.TB) (*cluster.Smap, error) {
+func waitForStartup(bp api.BaseParams, ts ...testing.TB) (*meta.Smap, error) {
 	for {
 		smap, err := api.GetClusterMap(bp)
 		if err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -74,7 +75,7 @@ begin:
 		smap          = ic.p.owner.smap.get()
 		selfIC        = smap.IsIC(ic.p.si)
 		owner, exists = ic.p.notifs.getOwner(uuid)
-		psi           *cluster.Snode
+		psi           *meta.Snode
 	)
 	if exists {
 		goto outer
@@ -151,7 +152,7 @@ func (ic *ic) redirectToIC(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 
-	var node *cluster.Snode
+	var node *meta.Snode
 	for _, psi := range smap.Pmap {
 		if smap.IsIC(psi) {
 			node = psi
@@ -168,9 +169,9 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
 		return
 	}
-	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: (*cluster.Bck)(&msg.Bck), OnlyRunning: msg.OnlyRunning}
+	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: (*meta.Bck)(&msg.Bck), OnlyRunning: msg.OnlyRunning}
 	if !msg.Bck.IsEmpty() {
-		flt.Bck = (*cluster.Bck)(&msg.Bck)
+		flt.Bck = (*meta.Bck)(&msg.Bck)
 	}
 	nls := ic.p.notifs.findAll(flt)
 
@@ -204,7 +205,7 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	var (
 		nl  nl.Listener
-		bck *cluster.Bck
+		bck *meta.Bck
 		msg = &xact.QueryMsg{}
 	)
 	if err := cmn.ReadJSON(w, r, msg); err != nil {
@@ -225,7 +226,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg.Bck.Name != "" {
-		bck = cluster.CloneBck(&msg.Bck)
+		bck = meta.CloneBck(&msg.Bck)
 		if err := bck.Init(ic.p.owner.bmd); err != nil {
 			ic.p.writeErr(w, r, err, http.StatusNotFound, Silent)
 			return
@@ -336,7 +337,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 	case apc.ActRegGlobalXaction:
 		var (
 			regMsg     = &xactRegMsg{}
-			tmap       cluster.NodeMap
+			tmap       meta.NodeMap
 			callerSver = r.Header.Get(apc.HdrCallerSmapVersion)
 			err        error
 		)
@@ -385,7 +386,7 @@ func (ic *ic) bcastListenIC(nl nl.Listener) {
 	ic.p.bcastAsyncIC(msg)
 }
 
-func (ic *ic) sendOwnershipTbl(si *cluster.Snode) error {
+func (ic *ic) sendOwnershipTbl(si *meta.Snode) error {
 	if ic.p.notifs.size() == 0 {
 		if glog.FastV(4, glog.SmoduleAIS) {
 			glog.Infof("%s: ownership table empty, skipping sending to %s", ic.p, si)

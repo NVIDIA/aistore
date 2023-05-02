@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -68,7 +69,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Slistener = (*notifs)(nil)
+	_ meta.Slistener = (*notifs)(nil)
 
 	_ json.Marshaler   = (*notifs)(nil)
 	_ json.Unmarshaler = (*notifs)(nil)
@@ -169,7 +170,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (*notifs) handleProgress(nl nl.Listener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+func (*notifs) handleProgress(nl nl.Listener, tsi *meta.Snode, data []byte, srcErr error) (err error) {
 	nl.Lock()
 	defer nl.Unlock()
 
@@ -184,7 +185,7 @@ func (*notifs) handleProgress(nl nl.Listener, tsi *cluster.Snode, data []byte, s
 	return
 }
 
-func (n *notifs) handleFinished(nl nl.Listener, tsi *cluster.Snode, data []byte, srcErr error) (err error) {
+func (n *notifs) handleFinished(nl nl.Listener, tsi *meta.Snode, data []byte, srcErr error) (err error) {
 	var (
 		stats   any
 		aborted bool
@@ -279,7 +280,7 @@ func (n *notifs) size() (size int) {
 }
 
 // PRECONDITION: `nl` should be under lock.
-func (*notifs) markFinished(nl nl.Listener, tsi *cluster.Snode, srcErr error, aborted bool) (done bool) {
+func (*notifs) markFinished(nl nl.Listener, tsi *meta.Snode, srcErr error, aborted bool) (done bool) {
 	nl.MarkFinished(tsi)
 	if aborted {
 		nl.SetAborted()
@@ -318,7 +319,7 @@ func (n *notifs) done(nl nl.Listener) {
 			args.req = abortReq(nl)
 			args.network = cmn.NetIntraControl
 			args.timeout = cmn.Timeout.MaxKeepalive()
-			args.nodes = []cluster.NodeMap{nl.Notifiers()}
+			args.nodes = []meta.NodeMap{nl.Notifiers()}
 			args.nodeCount = len(args.nodes[0])
 			args.async = true
 			_ = n.p.bcastNodes(args) // args.async: result is already discarded/freed
@@ -400,7 +401,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 	args.network = cmn.NetIntraControl
 	args.timeout = config.Timeout.MaxHostBusy.D()
 	args.req = nl.QueryArgs() // nodes to fetch stats from
-	args.nodes = []cluster.NodeMap{nodesTardy}
+	args.nodes = []meta.NodeMap{nodesTardy}
 	args.nodeCount = len(args.nodes[0])
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 

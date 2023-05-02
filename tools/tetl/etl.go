@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
@@ -151,7 +151,7 @@ func headETLLogs(etlLogs etl.Logs, maxLen int) string {
 	if maxLen < l {
 		logs = logs[:maxLen]
 	}
-	str := fmt.Sprintf("%s logs:\n%s", cluster.Tname(etlLogs.TargetID), string(logs))
+	str := fmt.Sprintf("%s logs:\n%s", meta.Tname(etlLogs.TargetID), string(logs))
 	if maxLen < l {
 		str += fmt.Sprintf("\nand %d bytes more...", l-maxLen)
 	}

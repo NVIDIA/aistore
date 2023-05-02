@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -121,7 +122,7 @@ func (*gcpProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
 // CREATE BUCKET //
 ///////////////////
 
-func (*gcpProvider) CreateBucket(_ *cluster.Bck) (int, error) {
+func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "gs:// bucket")
 }
 
@@ -129,7 +130,7 @@ func (*gcpProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs, errCode int, err error) {
+func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	if verbose {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
@@ -154,7 +155,7 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps 
 // LIST OBJECTS //
 //////////////////
 
-func (gcpp *gcpProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
 		query    *storage.Query
 		h        = cmn.BackendHelpers.Google

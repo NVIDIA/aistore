@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -42,14 +43,14 @@ type (
 		ResetStats(errorsOnly bool)
 		GetMetricNames() cos.StrKVs // (name, kind) pairs
 
-		RegMetrics(node *cluster.Snode) // + init Prometheus, if configured
+		RegMetrics(node *meta.Snode) // + init Prometheus, if configured
 	}
 
 	// REST API
 	Node struct {
-		Snode     *cluster.Snode `json:"snode"`
-		Tracker   copyTracker    `json:"tracker"`
-		TargetCDF fs.TargetCDF   `json:"capacity"`
+		Snode     *meta.Snode  `json:"snode"`
+		Tracker   copyTracker  `json:"tracker"`
+		TargetCDF fs.TargetCDF `json:"capacity"`
 	}
 	Cluster struct {
 		Proxy  *Node            `json:"proxy"`

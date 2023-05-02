@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -92,17 +93,17 @@ var m = map[string]struct {
 
 // "extract*" routines expect AIS-formatted (smap, bmd, rmd, etc.)
 
-func extractSmap() error   { return extractMeta(&cluster.Smap{}) }
-func extractBMD() error    { return extractMeta(&cluster.BMD{}) }
-func extractRMD() error    { return extractMeta(&cluster.RMD{}) }
+func extractSmap() error   { return extractMeta(&meta.Smap{}) }
+func extractBMD() error    { return extractMeta(&meta.BMD{}) }
+func extractRMD() error    { return extractMeta(&meta.RMD{}) }
 func extractConfig() error { return extractMeta(&cmn.ClusterConfig{}) }
 func extractVMD() error    { return extractMeta(&volume.VMD{}) }
 
 // "format*" routines require output filename
 
-func formatSmap() error   { return formatMeta(&cluster.Smap{}) }
-func formatBMD() error    { return formatMeta(&cluster.BMD{}) }
-func formatRMD() error    { return formatMeta(&cluster.RMD{}) }
+func formatSmap() error   { return formatMeta(&meta.Smap{}) }
+func formatBMD() error    { return formatMeta(&meta.BMD{}) }
+func formatRMD() error    { return formatMeta(&meta.RMD{}) }
 func formatConfig() error { return formatMeta(&cmn.ClusterConfig{}) }
 func formatVMD() error    { return formatMeta(&volume.VMD{}) }
 func formatLOM() error    { return errors.New("saving LOM is unsupported") }

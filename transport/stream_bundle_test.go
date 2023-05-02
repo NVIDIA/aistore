@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -32,15 +32,15 @@ type (
 )
 
 var (
-	smap      cluster.Smap
+	smap      meta.Smap
 	listeners slisteners
 )
 
-func (*sowner) Get() *cluster.Smap               { return &smap }
-func (*sowner) Listeners() cluster.SmapListeners { return &listeners }
+func (*sowner) Get() *meta.Smap               { return &smap }
+func (*sowner) Listeners() meta.SmapListeners { return &listeners }
 
-func (*slisteners) Reg(cluster.Slistener)   {}
-func (*slisteners) Unreg(cluster.Slistener) {}
+func (*slisteners) Reg(meta.Slistener)   {}
+func (*slisteners) Unreg(meta.Slistener) {}
 
 func Test_Bundle(t *testing.T) {
 	tests := []struct {
@@ -106,9 +106,9 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		network      = cmn.NetIntraData
 		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)
-		lsnode       = cluster.Snode{DaeID: "local"}
+		lsnode       = meta.Snode{DaeID: "local"}
 	)
-	smap.Tmap = make(cluster.NodeMap, 100)
+	smap.Tmap = make(meta.NodeMap, 100)
 	smap.Tmap[lsnode.ID()] = &lsnode
 	for i := 0; i < 10; i++ {
 		ts := httptest.NewServer(objmux)
@@ -214,8 +214,8 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	fmt.Printf("send$: num-sent=%d, num-completed=%d\n", num, numCompleted.Load())
 }
 
-func addTarget(smap *cluster.Smap, ts *httptest.Server, i int) {
-	netinfo := cluster.NetInfo{URL: ts.URL}
+func addTarget(smap *meta.Smap, ts *httptest.Server, i int) {
+	netinfo := meta.NetInfo{URL: ts.URL}
 	tid := "t_" + strconv.FormatInt(int64(i), 10)
-	smap.Tmap[tid] = &cluster.Snode{PubNet: netinfo, ControlNet: netinfo, DataNet: netinfo}
+	smap.Tmap[tid] = &meta.Snode{PubNet: netinfo, ControlNet: netinfo, DataNet: netinfo}
 }

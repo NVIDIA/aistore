@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -27,8 +28,8 @@ const (
 )
 
 type (
-	bmds  map[*cluster.Snode]*bucketMD
-	smaps map[*cluster.Snode]*smapX
+	bmds  map[*meta.Snode]*bucketMD
+	smaps map[*meta.Snode]*smapX
 )
 
 // Background:
@@ -306,7 +307,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		smap = clone
 	}
 	// try to start with a fully staffed IC
-	if l := smap.ICCount(); l < smap.DefaultICSize() {
+	if l := smap.ICCount(); l < meta.DfltCountIC {
 		clone := smap.clone()
 		clone.staffIC()
 		if l != clone.ICCount() {

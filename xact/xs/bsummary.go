@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -55,7 +56,7 @@ var (
 // bsummFactory //
 //////////////////
 
-func (*bsummFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*bsummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	msg := args.Custom.(*cmn.BsummCtrlMsg)
 	p := &bsummFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return p
@@ -83,7 +84,7 @@ func (*bsummFactory) WhenPrevIsRunning(xreg.Renewable) (w xreg.WPR, e error) {
 func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	var (
 		err error
-		si  *cluster.Snode
+		si  *meta.Snode
 	)
 	rwg.Done()
 	if r.Bck() == nil || r.Bck().IsEmpty() {
@@ -119,7 +120,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		// TODO: currently, summarizing only the _present_ buckets
 		// (see apc.QparamFltPresence and commentary)
 
-		bmd.Range(pq, nil, func(bck *cluster.Bck) bool {
+		bmd.Range(pq, nil, func(bck *meta.Bck) bool {
 			if err := r.runBck(bck, listRemote); err != nil {
 				glog.Error(err)
 			}
@@ -129,7 +130,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	r.updRes(err)
 }
 
-func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
+func (r *bsummXact) runBck(bck *meta.Bck, listRemote bool) (err error) {
 	var (
 		msg  cmn.BsummCtrlMsg
 		summ = cmn.NewBsummResult(bck.Bucket(), r.totalDisksSize)
@@ -151,7 +152,7 @@ func (r *bsummXact) runBck(bck *cluster.Bck, listRemote bool) (err error) {
 }
 
 // TODO: `msg.Fast` might be a bit crude, usability-wise - consider adding (best effort) max-time limitation
-func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.BsummCtrlMsg) (err error) {
+func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *cmn.BsummCtrlMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
 	// 1. always estimate on-disk size (is fast)
@@ -212,7 +213,7 @@ func (r *bsummXact) _run(bck *cluster.Bck, summ *cmn.BsummResult, msg *cmn.Bsumm
 	return nil
 }
 
-func (*bsummXact) sizeOnDisk(bck *cluster.Bck, prefix string) (size, ecnt uint64) {
+func (*bsummXact) sizeOnDisk(bck *meta.Bck, prefix string) (size, ecnt uint64) {
 	var (
 		avail = fs.GetAvail()
 		wg    = cos.NewLimitedWaitGroup(4, len(avail))

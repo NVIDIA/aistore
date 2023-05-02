@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/transport"
@@ -25,7 +26,7 @@ func (reb *Reb) FilterAdd(uname []byte) { reb.filterGFN.Insert(uname) }
 func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 	if xreb := reb.xctn(); xreb != nil {
 		// double-check
-		smap := (*cluster.Smap)(reb.smap.Load())
+		smap := (*meta.Smap)(reb.smap.Load())
 		if smap.Version == olderSmapV {
 			if xreb.Abort(err) {
 				glog.Warningf("%v - aborted", err)
@@ -37,7 +38,7 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 func (reb *Reb) xctn() *xs.Rebalance        { return (*xs.Rebalance)(reb.xreb.Load()) }
 func (reb *Reb) setXact(xctn *xs.Rebalance) { reb.xreb.Store(unsafe.Pointer(xctn)) }
 
-func (reb *Reb) logHdr(rebID int64, smap *cluster.Smap, initializing ...bool) string {
+func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) string {
 	smapv := "v<???>"
 	if smap != nil {
 		smapv = "v" + strconv.FormatInt(smap.Version, 10)
@@ -60,8 +61,8 @@ func (reb *Reb) warnID(remoteID int64, tid string) (s string) {
 	return
 }
 
-func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
-	smap = (*cluster.Smap)(reb.smap.Load())
+func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
+	smap = (*meta.Smap)(reb.smap.Load())
 	if smap != nil {
 		return
 	}
@@ -75,7 +76,7 @@ func (reb *Reb) _waitForSmap() (smap *cluster.Smap, err error) {
 	glog.Warningf("%s: waiting to start...", reb.t)
 	time.Sleep(sleep)
 	for curwt < maxwt {
-		smap = (*cluster.Smap)(reb.smap.Load())
+		smap = (*meta.Smap)(reb.smap.Load())
 		if smap != nil {
 			return
 		}

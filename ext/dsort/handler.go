@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -27,7 +27,7 @@ import (
 )
 
 type response struct {
-	si         *cluster.Snode
+	si         *meta.Snode
 	res        []byte
 	err        error
 	statusCode int
@@ -703,13 +703,13 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.updateFinishedAck(daemonID)
 }
 
-func broadcastTargets(method, path string, urlParams url.Values, body []byte, smap *cluster.Smap, ignore ...*cluster.Snode) []response {
+func broadcastTargets(method, path string, urlParams url.Values, body []byte, smap *meta.Smap, ignore ...*meta.Snode) []response {
 	var (
 		responses = make([]response, smap.CountActiveTs())
 		wg        = &sync.WaitGroup{}
 	)
 
-	call := func(idx int, node *cluster.Snode) {
+	call := func(idx int, node *meta.Snode) {
 		defer wg.Done()
 
 		reqArgs := cmn.HreqArgs{

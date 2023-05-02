@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -317,7 +318,7 @@ func newTargetLRUMock() *mock.TargetMock {
 	// Bucket owner mock, required for LOM
 	var (
 		bmdMock = mock.NewBaseBownerMock(
-			cluster.NewBck(
+			meta.NewBck(
 				bucketName, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
@@ -326,7 +327,7 @@ func newTargetLRUMock() *mock.TargetMock {
 					BID:    0xa7b8c1d2,
 				},
 			),
-			cluster.NewBck(
+			meta.NewBck(
 				bucketNameAnother, apc.AIS, cmn.NsGlobal,
 				&cmn.BucketProps{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},

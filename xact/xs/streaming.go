@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -129,7 +130,7 @@ func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
 	r.err.Store(err)
 }
 
-func (r *streamingX) sendTerm(uuid string, tsi *cluster.Snode, err error) {
+func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	o := transport.AllocSend()
 	o.Hdr.SID = r.p.T.SID()
 	o.Hdr.Opaque = []byte(uuid)

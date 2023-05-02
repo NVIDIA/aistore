@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -193,7 +193,7 @@ func roundMBs(val int64) (mbs float64) {
 	return
 }
 
-func (s *coreStats) init(node *cluster.Snode, size int) {
+func (s *coreStats) init(node *meta.Snode, size int) {
 	s.Tracker = make(statsTracker, size)
 	s.promDesc = make(promDesc, size)
 
@@ -240,7 +240,7 @@ func (s *coreStats) promUnlock() {
 }
 
 // init MetricClient client: StatsD (default) or Prometheus
-func (s *coreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
+func (s *coreStats) initMetricClient(node *meta.Snode, parent *statsRunner) {
 	// Either Prometheus
 	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" {
 		glog.Infoln("Using Prometheus")
@@ -280,7 +280,7 @@ func (s *coreStats) initMetricClient(node *cluster.Snode, parent *statsRunner) {
 
 // populate *prometheus.Desc and statsValue.label.prom
 // NOTE: naming; compare with statsTracker.register()
-func (s *coreStats) initProm(node *cluster.Snode) {
+func (s *coreStats) initProm(node *meta.Snode) {
 	if !s.isPrometheus() {
 		return
 	}
@@ -611,7 +611,7 @@ func (ctracker copyTracker) write(sgl *memsys.SGL, target bool) {
 //////////////////
 
 // NOTE: naming; compare with coreStats.initProm()
-func (tracker statsTracker) reg(node *cluster.Snode, name, kind string) {
+func (tracker statsTracker) reg(node *meta.Snode, name, kind string) {
 	debug.Assert(kind == KindCounter || kind == KindSize || kind == KindGauge || kind == KindLatency ||
 		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial)
 
@@ -653,7 +653,7 @@ func (tracker statsTracker) reg(node *cluster.Snode, name, kind string) {
 }
 
 // register common metrics; see RegMetrics() in target_stats.go
-func (tracker statsTracker) regCommon(node *cluster.Snode) {
+func (tracker statsTracker) regCommon(node *meta.Snode) {
 	// basic counters
 	tracker.reg(node, GetCount, KindCounter)
 	tracker.reg(node, PutCount, KindCounter)

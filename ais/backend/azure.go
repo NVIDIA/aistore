@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -191,7 +192,7 @@ func (*azureProvider) MaxPageSize() uint { return 5000 }
 // CREATE BUCKET //
 ///////////////////
 
-func (*azureProvider) CreateBucket(_ *cluster.Bck) (int, error) {
+func (*azureProvider) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "azure:// bucket")
 }
 
@@ -199,7 +200,7 @@ func (*azureProvider) CreateBucket(_ *cluster.Bck) (int, error) {
 // HEAD BUCKET //
 /////////////////
 
-func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckProps cos.StrKVs,
+func (ap *azureProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
 	var (
 		cloudBck = bck.RemoteBck()
@@ -224,7 +225,7 @@ func (ap *azureProvider) HeadBucket(ctx context.Context, bck *cluster.Bck) (bckP
 // LIST OBJECTS //
 //////////////////
 
-func (ap *azureProvider) ListObjects(bck *cluster.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
+func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	msg.PageSize = calcPageSize(msg.PageSize, ap.MaxPageSize())
 	var (
 		h        = cmn.BackendHelpers.Azure

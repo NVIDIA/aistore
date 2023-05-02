@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -58,7 +59,7 @@ var (
 // putFactory //
 ////////////////
 
-func (*putFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*putFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &putFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }

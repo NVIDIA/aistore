@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -56,7 +57,7 @@ type (
 // NOTE: override `Base.IsIdle`
 func (r *DemandBase) IsIdle() bool { return r.likelyIdle() }
 
-func (r *DemandBase) Init(uuid, kind string, bck *cluster.Bck, idle time.Duration) (xdb *DemandBase) {
+func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idle time.Duration) (xdb *DemandBase) {
 	r.hkName = kind + "/" + uuid
 	r.idle.d = idleDefault
 	if idle > 0 {

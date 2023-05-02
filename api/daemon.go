@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ios"
@@ -25,7 +25,7 @@ type GetLogInput struct {
 }
 
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
-func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, err error) {
+func GetMountpaths(bp BaseParams, node *meta.Snode) (mpl *apc.MountpathList, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -43,7 +43,7 @@ func GetMountpaths(bp BaseParams, node *cluster.Snode) (mpl *apc.MountpathList, 
 }
 
 // TODO: rewrite tests that come here with `force`
-func AttachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, force bool) error {
+func AttachMountpath(bp BaseParams, node *meta.Snode, mountpath string, force bool) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -62,7 +62,7 @@ func AttachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, force
 	return err
 }
 
-func EnableMountpath(bp BaseParams, node *cluster.Snode, mountpath string) error {
+func EnableMountpath(bp BaseParams, node *meta.Snode, mountpath string) error {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -80,7 +80,7 @@ func EnableMountpath(bp BaseParams, node *cluster.Snode, mountpath string) error
 	return err
 }
 
-func DetachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+func DetachMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
@@ -102,7 +102,7 @@ func DetachMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontR
 	return err
 }
 
-func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dontResilver bool) error {
+func DisableMountpath(bp BaseParams, node *meta.Snode, mountpath string, dontResilver bool) error {
 	var q url.Values
 	if dontResilver {
 		q = url.Values{apc.QparamDontResilver: []string{"true"}}
@@ -126,7 +126,7 @@ func DisableMountpath(bp BaseParams, node *cluster.Snode, mountpath string, dont
 
 // GetDaemonConfig returns the configuration of a specific daemon in a cluster.
 // (compare with `api.GetClusterConfig`)
-func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, err error) {
+func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -149,7 +149,7 @@ func GetDaemonConfig(bp BaseParams, node *cluster.Snode) (config *cmn.Config, er
 }
 
 // names _and_ kinds, i.e. (name, kind) pairs
-func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err error) {
+func GetMetricNames(bp BaseParams, node *meta.Snode) (kvs cos.StrKVs, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -178,7 +178,7 @@ func GetMetricNames(bp BaseParams, node *cluster.Snode) (kvs cos.StrKVs, err err
 // - api.GetClusterStats
 // - api.GetStatsAndStatus (below)
 // - stats/api.go
-func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err error) {
+func GetDaemonStats(bp BaseParams, node *meta.Snode) (ds *stats.Node, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -193,7 +193,7 @@ func GetDaemonStats(bp BaseParams, node *cluster.Snode) (ds *stats.Node, err err
 }
 
 // see also: ResetClusterStats
-func ResetDaemonStats(bp BaseParams, node *cluster.Snode, errorsOnly bool) (err error) {
+func ResetDaemonStats(bp BaseParams, node *meta.Snode, errorsOnly bool) (err error) {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
@@ -222,7 +222,7 @@ func GetDiskStats(bp BaseParams, tid string) (res ios.AllDiskStats, err error) {
 }
 
 // Returns both node's stats and extended status
-func GetStatsAndStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.NodeStatus, err error) {
+func GetStatsAndStatus(bp BaseParams, node *meta.Snode) (daeStatus *stats.NodeStatus, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -237,7 +237,7 @@ func GetStatsAndStatus(bp BaseParams, node *cluster.Snode) (daeStatus *stats.Nod
 }
 
 // Returns log of a specific node in a cluster.
-func GetDaemonLog(bp BaseParams, node *cluster.Snode, args GetLogInput) (int64, error) {
+func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, error) {
 	w := args.Writer
 	q := make(url.Values, 3)
 	q.Set(apc.QparamWhat, apc.WhatLog)

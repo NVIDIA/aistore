@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/tools"
@@ -34,10 +34,10 @@ type targetMocker interface {
 }
 
 type MockRegRequest struct {
-	SI *cluster.Snode `json:"si"`
+	SI *meta.Snode `json:"si"`
 }
 
-func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
+func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *meta.Smap) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(apc.URLPathBuckets.S, mocktgt.filehdlr)
@@ -64,7 +64,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	s.Shutdown(context.Background())
 }
 
-func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
+func registerMockTarget(proxyURL string, smap *meta.Smap) error {
 	var (
 		jsonDaemonInfo []byte
 		err            error
@@ -73,7 +73,7 @@ func registerMockTarget(proxyURL string, smap *cluster.Smap) error {
 	// borrow a random target's ip but using a different port to register the mock target
 	for _, v := range smap.Tmap {
 		v.DaeID = tools.MockDaemonID
-		v.PubNet = cluster.NetInfo{
+		v.PubNet = meta.NetInfo{
 			Hostname: v.PubNet.Hostname,
 			Port:     mockTargetPort,
 			URL:      "http://" + v.PubNet.Hostname + ":" + mockTargetPort,
@@ -104,12 +104,12 @@ type voteRetryMockTarget struct {
 }
 
 type cluMetaRedux struct {
-	Smap           *cluster.Smap
+	Smap           *meta.Smap
 	VoteInProgress bool `json:"voting"`
 }
 
 func newVoteMsg(inp bool) cluMetaRedux {
-	return cluMetaRedux{VoteInProgress: inp, Smap: &cluster.Smap{Version: 1}}
+	return cluMetaRedux{VoteInProgress: inp, Smap: &meta.Smap{Version: 1}}
 }
 
 func (*voteRetryMockTarget) filehdlr(http.ResponseWriter, *http.Request) {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats"
@@ -66,7 +67,7 @@ func mkhealth(bp BaseParams, readyToRebalance ...bool) (reqParams *ReqParams) {
 }
 
 // GetClusterMap retrieves AIStore cluster map.
-func GetClusterMap(bp BaseParams) (smap *cluster.Smap, err error) {
+func GetClusterMap(bp BaseParams) (smap *meta.Smap, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -80,7 +81,7 @@ func GetClusterMap(bp BaseParams) (smap *cluster.Smap, err error) {
 }
 
 // GetNodeClusterMap retrieves AIStore cluster map from a specific node.
-func GetNodeClusterMap(bp BaseParams, sid string) (smap *cluster.Smap, err error) {
+func GetNodeClusterMap(bp BaseParams, sid string) (smap *meta.Smap, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -175,7 +176,7 @@ func GetRemoteAIS(bp BaseParams) (remais cluster.Remotes, err error) {
 }
 
 // JoinCluster add a node to a cluster.
-func JoinCluster(bp BaseParams, nodeInfo *cluster.Snode) (rebID, sid string, err error) {
+func JoinCluster(bp BaseParams, nodeInfo *meta.Snode) (rebID, sid string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -289,7 +290,7 @@ func GetClusterConfig(bp BaseParams) (*cmn.ClusterConfig, error) {
 }
 
 // GetBMD returns bucket metadata
-func GetBMD(bp BaseParams) (*cluster.BMD, error) {
+func GetBMD(bp BaseParams) (*meta.BMD, error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
@@ -298,7 +299,7 @@ func GetBMD(bp BaseParams) (*cluster.BMD, error) {
 		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatBMD}}
 	}
 
-	bmd := &cluster.BMD{}
+	bmd := &meta.BMD{}
 	_, err := reqParams.DoReqAny(bmd)
 	FreeRp(reqParams)
 	if err != nil {

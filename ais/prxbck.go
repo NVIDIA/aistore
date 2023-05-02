@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -26,7 +26,7 @@ type bckInitArgs struct {
 
 	p *proxy
 
-	bck *cluster.Bck
+	bck *meta.Bck
 	msg *apc.ActMsg
 
 	// URL query: the conventional/slow and
@@ -181,7 +181,7 @@ func (args *bckInitArgs) _requiresPermission(perm apc.AccessAttrs) bool {
 	return (args.perms & perm) == perm
 }
 
-func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
+func (args *bckInitArgs) access(bck *meta.Bck) (errCode int, err error) {
 	err = args.p.access(args.r.Header, bck, args.perms)
 	errCode = aceErrToCode(err)
 	return
@@ -192,7 +192,7 @@ func (args *bckInitArgs) access(bck *cluster.Bck) (errCode int, err error) {
 // NOTE:
 // - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
 // - for remais buckets: user-provided alias(***)
-func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
+func (args *bckInitArgs) initAndTry() (bck *meta.Bck, err error) {
 	var errCode int
 
 	// 1. init bucket
@@ -239,7 +239,7 @@ func (args *bckInitArgs) initAndTry() (bck *cluster.Bck, err error) {
 	return
 }
 
-func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
+func (args *bckInitArgs) try() (bck *meta.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
 		if cmn.IsErrBucketAlreadyExists(err) {
@@ -256,7 +256,7 @@ func (args *bckInitArgs) try() (bck *cluster.Bck, err error) {
 // methods that are internal to this source
 //
 
-func (args *bckInitArgs) _try() (bck *cluster.Bck, errCode int, err error) {
+func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 	if err = args.bck.Validate(); err != nil {
 		errCode = http.StatusBadRequest
 		return
@@ -358,7 +358,7 @@ func (args *bckInitArgs) getOrigURL() (ourl string) {
 	return
 }
 
-func (args *bckInitArgs) lookup(bck *cluster.Bck) (hdr http.Header, code int, err error) {
+func (args *bckInitArgs) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
 	var (
 		q       = url.Values{}
 		retried bool

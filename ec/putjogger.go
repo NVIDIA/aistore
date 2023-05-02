@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -37,7 +38,7 @@ type (
 		paritySlices int              // the number of parity slices
 		cksums       []*cos.CksumHash // checksums of parity slices (filled by reed-solomon)
 		slices       []*slice         // all EC slices (in the order of slice IDs)
-		targets      []*cluster.Snode // target list (in the order of slice IDs: targets[i] receives slices[i])
+		targets      []*meta.Snode    // target list (in the order of slice IDs: targets[i] receives slices[i])
 	}
 
 	// a mountpath putJogger: processes PUT/DEL requests to one mountpath
@@ -468,7 +469,7 @@ func generateSlicesToDisk(ctx *encodeCtx) error {
 	return finalizeSlices(ctx, sliceWriters)
 }
 
-func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *cluster.Snode, idx int) error {
+func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *meta.Snode, idx int) error {
 	// Reopen the slice's reader, because it was read to the end by erasure
 	// encoding while calculating parity slices.
 	reader, err := ctx.slices[idx].reopenReader()

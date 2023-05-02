@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -39,7 +40,7 @@ var _ = Describe("CommunicatorTest", func() {
 
 		bck        = cmn.Bck{Name: "commBck", Provider: apc.AIS, Ns: cmn.NsGlobal}
 		objName    = "commObj"
-		clusterBck = cluster.NewBck(
+		clusterBck = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)

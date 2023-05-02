@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -182,7 +183,7 @@ func (r *Trunner) RegDiskMetrics(disk string) {
 	r.reg(nameUtil(disk), KindGauge)
 }
 
-func (r *Trunner) RegMetrics(node *cluster.Snode) {
+func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(GetColdCount, KindCounter)
 	r.reg(GetColdSize, KindSize)
 

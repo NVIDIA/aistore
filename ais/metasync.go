@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -270,7 +271,7 @@ drain:
 // main method; see top of the file; returns number of "sync" failures
 func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	var (
-		refused cluster.NodeMap
+		refused meta.NodeMap
 		newTIDs []string
 		method  = http.MethodPut
 	)
@@ -356,7 +357,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 		// - retrying, counting
 		if cos.IsRetriableConnErr(err) || cos.StringInSlice(res.si.ID(), newTIDs) { // always retry newTIDs (joining)
 			if refused == nil {
-				refused = make(cluster.NodeMap, 2)
+				refused = make(meta.NodeMap, 2)
 			}
 			refused.Add(res.si)
 		} else {
@@ -424,7 +425,7 @@ func (y *metasyncer) jit(pair revsPair) revs {
 }
 
 // keeping track of per-daemon versioning - TODO: extend to take care of aisMsg where pairs may be empty
-func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
+func (y *metasyncer) syncDone(si *meta.Snode, pairs []revsPair) {
 	ndr, ok := y.nodesRevs[si.ID()]
 	smap := y.p.owner.smap.get()
 	if smap.GetActiveNode(si.ID()) == nil {
@@ -443,13 +444,13 @@ func (y *metasyncer) syncDone(si *cluster.Snode, pairs []revsPair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused cluster.NodeMap, pairs []revsPair,
+func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused meta.NodeMap, pairs []revsPair,
 	smap *smapX) (ok bool) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
-	args.nodes = []cluster.NodeMap{refused}
+	args.nodes = []meta.NodeMap{refused}
 	args.nodeCount = len(refused)
 	results := y.p.bcastNodes(args)
 	freeBcArgs(args)
@@ -480,13 +481,13 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) _pending() (pending cluster.NodeMap, smap *smapX) {
+func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 	smap = y.p.owner.smap.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
 	}
-	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+	for _, serverMap := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, si := range serverMap {
 			if si.ID() == y.p.SID() {
 				continue
@@ -511,7 +512,7 @@ func (y *metasyncer) _pending() (pending cluster.NodeMap, smap *smapX) {
 				}
 			}
 			if pending == nil {
-				pending = make(cluster.NodeMap, 2)
+				pending = make(meta.NodeMap, 2)
 			}
 			pending.Add(si)
 		}
@@ -555,7 +556,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
 	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
-	args.nodes = []cluster.NodeMap{pending}
+	args.nodes = []meta.NodeMap{pending}
 	args.nodeCount = len(pending)
 	defer body.Free()
 	results := y.p.bcastNodes(args)
@@ -587,7 +588,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 }
 
 // cie and isPrimary checks versus remote clusterInfo
-func (y *metasyncer) remainPrimary(e *errMsync, from *cluster.Snode, smap *smapX) bool /*yes*/ {
+func (y *metasyncer) remainPrimary(e *errMsync, from *meta.Snode, smap *smapX) bool /*yes*/ {
 	if !cos.IsValidUUID(e.Cii.Smap.UUID) || e.Cii.Smap.Version == 0 {
 		return true
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
@@ -178,7 +179,7 @@ func Xreg() {
 // factory //
 /////////////
 
-func (*factory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*factory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &factory{RenewBase: xreg.RenewBase{Args: args}, statsT: args.Custom.(stats.Tracker)}
 }
 

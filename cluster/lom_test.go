@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -73,15 +74,15 @@ var _ = Describe("LOM", func() {
 	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	bmd := mock.NewBaseBownerMock(
-		cluster.NewBck(
+		meta.NewBck(
 			bucketLocalA, apc.AIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
 		),
-		cluster.NewBck(
+		meta.NewBck(
 			bucketLocalB, apc.AIS, cmn.NsGlobal,
 			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
 		),
-		cluster.NewBck(
+		meta.NewBck(
 			bucketLocalC, apc.AIS, cmn.NsGlobal,
 			&cmn.BucketProps{
 				Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
@@ -90,10 +91,10 @@ var _ = Describe("LOM", func() {
 				BID:    3,
 			},
 		),
-		cluster.NewBck(sameBucketName, apc.AIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
-		cluster.NewBck(bucketCloudA, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
-		cluster.NewBck(bucketCloudB, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
-		cluster.NewBck(sameBucketName, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
+		meta.NewBck(sameBucketName, apc.AIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
+		meta.NewBck(bucketCloudA, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
+		meta.NewBck(bucketCloudB, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
+		meta.NewBck(sameBucketName, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
 	)
 
 	BeforeEach(func() {

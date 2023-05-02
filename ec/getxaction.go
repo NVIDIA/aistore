@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -56,7 +57,7 @@ var (
 // getFactory //
 ////////////////
 
-func (*getFactory) New(_ xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*getFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &getFactory{RenewBase: xreg.RenewBase{Bck: bck}}
 	return p
 }
@@ -104,7 +105,7 @@ func NewGetXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactGet {
 	return runner
 }
 
-func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *cluster.Bck, reader io.Reader) {
+func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck, reader io.Reader) {
 	objName, objAttrs := hdr.ObjName, hdr.ObjAttrs
 	uname := unique(hdr.SID, bck, objName)
 	switch hdr.Opcode {

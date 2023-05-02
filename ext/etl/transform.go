@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -92,7 +93,7 @@ type (
 	// will be stopped.
 	Aborter struct {
 		t           cluster.Target
-		currentSmap *cluster.Smap
+		currentSmap *meta.Smap
 		name        string
 		mtx         sync.Mutex
 	}
@@ -103,7 +104,7 @@ type (
 )
 
 // interface guard
-var _ cluster.Slistener = (*Aborter)(nil)
+var _ meta.Slistener = (*Aborter)(nil)
 
 func newAborter(t cluster.Target, name string) *Aborter {
 	return &Aborter{
@@ -337,7 +338,7 @@ func StopAll(t cluster.Target) {
 	}
 }
 
-func GetCommunicator(etlName string, lsnode *cluster.Snode) (Communicator, error) {
+func GetCommunicator(etlName string, lsnode *meta.Snode) (Communicator, error) {
 	c, exists := reg.get(etlName)
 	if !exists {
 		return nil, cmn.NewErrNotFound("%s: etl[%s]", lsnode, etlName)

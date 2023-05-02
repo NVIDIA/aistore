@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -78,8 +79,8 @@ type (
 		stages    *nodeStages
 		lomacks   [cos.MultiSyncMapCount]*lomAcks
 		awaiting  struct {
-			targets cluster.Nodes // targets for which we are waiting for
-			ts      int64         // last time we have recomputed
+			targets meta.Nodes // targets for which we are waiting for
+			ts      int64      // last time we have recomputed
 			mtx     sync.Mutex
 		}
 		// (smap, xreb) + atomic state
@@ -101,12 +102,12 @@ type (
 	}
 	rebJogger struct {
 		joggerBase
-		smap *cluster.Smap
+		smap *meta.Smap
 		opts fs.WalkOpts
 		ver  int64
 	}
 	rebArgs struct {
-		smap   *cluster.Smap
+		smap   *meta.Smap
 		config *cmn.Config
 		apaths fs.MPI
 		id     int64
@@ -167,7 +168,7 @@ func (reb *Reb) unregRecv() {
 //  4. Global rebalance performs checks such as `stage > rebStageTraverse` or
 //     `stage < rebStageWaitAck`. Since all EC stages are between
 //     `Traverse` and `WaitAck` non-EC rebalance does not "notice" stage changes.
-func (reb *Reb) RunRebalance(smap *cluster.Smap, id int64, notif *xact.NotifXact) {
+func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	if reb.nxtID.Load() >= id {
 		return
 	}
@@ -343,7 +344,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 		var (
 			rebID   = reb.RebID()
 			rsmap   = reb.smap.Load()
-			rlogHdr = reb.logHdr(rebID, (*cluster.Smap)(rsmap), true)
+			rlogHdr = reb.logHdr(rebID, (*meta.Smap)(rsmap), true)
 			xreb    = reb.xctn()
 			s       string
 		)
@@ -410,7 +411,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	}
 
 	if reb.awaiting.targets == nil {
-		reb.awaiting.targets = make(cluster.Nodes, 0, maxWackTargets)
+		reb.awaiting.targets = make(meta.Nodes, 0, maxWackTargets)
 	} else {
 		reb.awaiting.targets = reb.awaiting.targets[:0]
 	}
@@ -715,7 +716,7 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 	bmd.Range(nil, nil, rj.walkBck)
 }
 
-func (rj *rebJogger) walkBck(bck *cluster.Bck) bool {
+func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 	rj.opts.Bck.Copy(bck.Bucket())
 	err := fs.Walk(&rj.opts)
 	if err == nil {
@@ -823,7 +824,7 @@ func _getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 	return lom.NewDeferROC()
 }
 
-func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *cluster.Snode, roc cos.ReadOpenCloser) error {
+func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
 	var (
 		ack    = regularAck{rebID: rj.m.RebID(), daemonID: rj.m.t.SID()}
 		o      = transport.AllocSend()

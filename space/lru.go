@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -114,7 +115,7 @@ var (
 // lruFactory //
 ////////////////
 
-func (*lruFactory) New(args xreg.Args, _ *cluster.Bck) xreg.Renewable {
+func (*lruFactory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
 	return &lruFactory{RenewBase: xreg.RenewBase{Args: args}}
 }
 
@@ -497,7 +498,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 func (j *lruJ) allow() (ok bool, err error) {
 	var (
 		bowner = j.ini.T.Bowner()
-		b      = cluster.CloneBck(&j.bck)
+		b      = meta.CloneBck(&j.bck)
 	)
 	if err = b.Init(bowner); err != nil {
 		return

@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
@@ -29,8 +30,8 @@ const (
 type (
 	bckRename struct {
 		t       cluster.TargetExt
-		bckFrom *cluster.Bck
-		bckTo   *cluster.Bck
+		bckFrom *meta.Bck
+		bckTo   *meta.Bck
 		rebID   string
 		xact.Base
 	}
@@ -53,7 +54,7 @@ var (
 // bmvFactory //
 ////////////////
 
-func (*bmvFactory) New(args xreg.Args, bck *cluster.Bck) xreg.Renewable {
+func (*bmvFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	p := &bmvFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, cargs: args.Custom.(*xreg.BckRenameArgs)}
 	return p
 }
@@ -92,7 +93,7 @@ func (p *bmvFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // bckRename //
 ///////////////
 
-func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *cluster.Bck) (x *bckRename) {
+func newBckRename(uuid, kind, rebID string, bck, bckFrom, bckTo *meta.Bck) (x *bckRename) {
 	// NOTE: `bck` = `bckTo` = (the new name) while `bckFrom` is the existing bucket to be renamed
 	debug.Assert(bck.Equal(bckTo, false, true), bck.String()+" vs "+bckTo.String())
 
@@ -143,7 +144,7 @@ func (r *bckRename) Name() string {
 	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.bckFrom)
 }
 
-func (r *bckRename) FromTo() (*cluster.Bck, *cluster.Bck) { return r.bckFrom, r.bckTo }
+func (r *bckRename) FromTo() (*meta.Bck, *meta.Bck) { return r.bckFrom, r.bckTo }
 
 func (r *bckRename) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}
