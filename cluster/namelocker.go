@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
@@ -33,7 +32,15 @@ type (
 	}
 )
 
+// pair
 type (
+	NLP interface {
+		Lock()
+		TryLock(timeout time.Duration) bool
+		TryRLock(timeout time.Duration) bool
+		Unlock()
+	}
+
 	noCopy struct{}
 	nlp    struct {
 		_         noCopy
@@ -53,10 +60,12 @@ const (
 // namelocker //
 ////////////////
 
-func (nl nameLocker) init() {
+func newNameLocker() (nl nameLocker) {
+	nl = make(nameLocker, cos.MultiSyncMapCount)
 	for idx := 0; idx < len(nl); idx++ {
 		nl[idx].init()
 	}
+	return
 }
 
 func (li *lockInfo) notifyWaiters() {
@@ -225,7 +234,7 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 /////////
 
 // interface guard
-var _ cmn.NLP = (*nlp)(nil)
+var _ NLP = (*nlp)(nil)
 
 func (nlp *nlp) Lock() {
 	nlp.nlc.Lock(nlp.uname, true)

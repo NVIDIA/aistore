@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -50,14 +49,6 @@ type (
 	QueryBcks Bck
 
 	Bcks []Bck
-
-	// implemented by cluster.Bck
-	NLP interface {
-		Lock()
-		TryLock(timeout time.Duration) bool
-		TryRLock(timeout time.Duration) bool
-		Unlock()
-	}
 
 	ParseURIOpts struct {
 		DefaultProvider string // If set the provider will be used as provider.

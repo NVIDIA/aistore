@@ -23,16 +23,7 @@ const (
 	nlpTryDefault = time.Second // nlp.TryLock default duration
 )
 
-type (
-	Bck cmn.Bck
-)
-
-var bckLocker nameLocker
-
-func initBckLocker() {
-	bckLocker = make(nameLocker, cos.MultiSyncMapCount)
-	bckLocker.init()
-}
+type Bck cmn.Bck
 
 func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
 	var err error
@@ -258,7 +249,7 @@ func (b *Bck) checkAccess(bit apc.AccessAttrs) (err error) {
 // lock/unlock
 //
 
-func (b *Bck) GetNameLockPair() cmn.NLP {
+func (b *Bck) GetNameLockPair() NLP {
 	var (
 		nlp  = &nlp{uname: b.MakeUname("")}
 		hash = xxhash.ChecksumString64S(nlp.uname, cos.MLCG32)

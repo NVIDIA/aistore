@@ -225,7 +225,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 			nlp.Unlock()
 			return "", err
 		}
-		txn.nlps = []cmn.NLP{nlp}
+		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
@@ -309,7 +309,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 			nlp.Unlock()
 			return "", err
 		}
-		txn.nlps = []cmn.NLP{nlp}
+		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
@@ -416,7 +416,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 			nlpFrom.Unlock()
 			return "", err
 		}
-		txn.nlps = []cmn.NLP{nlpFrom, nlpTo}
+		txn.nlps = []cluster.NLP{nlpFrom, nlpTo}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
@@ -573,7 +573,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom cmn.NLP, err error) {
+func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom cluster.NLP, err error) {
 	bckTo, bckFrom := c.bckTo, c.bck
 	nlpFrom = bckFrom.GetNameLockPair()
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
@@ -601,7 +601,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 	if err = t.transactions.begin(txn); err != nil {
 		return
 	}
-	txn.nlps = []cmn.NLP{nlpFrom}
+	txn.nlps = []cluster.NLP{nlpFrom}
 	if nlpTo != nil {
 		txn.nlps = append(txn.nlps, nlpTo)
 	}
@@ -713,7 +713,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 			nlp.Unlock()
 			return "", err
 		}
-		txn.nlps = []cmn.NLP{nlp}
+		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
@@ -860,7 +860,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 			nlp.Unlock()
 			return err
 		}
-		txn.nlps = []cmn.NLP{nlp}
+		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:

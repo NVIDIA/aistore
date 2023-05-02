@@ -58,6 +58,7 @@ type (
 
 var (
 	lomLocker nameLocker
+	bckLocker nameLocker
 	maxLmeta  atomic.Int64
 	T         TargetLoc
 )
@@ -70,18 +71,13 @@ var (
 )
 
 func Init(t TargetLoc) {
-	initBckLocker()
+	bckLocker = newNameLocker()
 	if t == nil { // am proxy
 		return
 	}
-	initLomLocker()
-	T = t
-}
-
-func initLomLocker() {
-	lomLocker = make(nameLocker, cos.MultiSyncMapCount)
-	lomLocker.init()
+	lomLocker = newNameLocker()
 	maxLmeta.Store(xattrMaxSize)
+	T = t
 }
 
 /////////

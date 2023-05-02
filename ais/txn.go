@@ -74,7 +74,7 @@ type (
 	}
 	txnBckBase struct {
 		bck  cluster.Bck
-		nlps []cmn.NLP
+		nlps []cluster.NLP
 		txnBase
 	}
 	txnError struct {
