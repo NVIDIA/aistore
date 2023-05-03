@@ -10,7 +10,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -359,7 +359,7 @@ type (
 		Stat     ios.DiskStats
 	}
 	SmapHelper struct {
-		Smap         *cluster.Smap
+		Smap         *meta.Smap
 		ExtendedURLs bool
 	}
 	StatsAndStatusHelper struct {
@@ -367,7 +367,7 @@ type (
 		Tmap StstMap `json:"tmap"`
 	}
 	StatusHelper struct {
-		Smap      *cluster.Smap        `json:"smap"`
+		Smap      *meta.Smap           `json:"smap"`
 		CluConfig *cmn.ClusterConfig   `json:"config"`
 		Status    StatsAndStatusHelper `json:"status"`
 	}

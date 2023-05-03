@@ -11,7 +11,7 @@ import (
 	"sort"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -39,7 +39,7 @@ func (ctx *dstatsCtx) get() error {
 	return nil
 }
 
-func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error) {
+func getDiskStats(smap *meta.Smap, tid string) ([]teb.DiskStatsHelper, error) {
 	var (
 		targets = smap.Tmap
 		l       = smap.CountActiveTs()
@@ -49,7 +49,7 @@ func getDiskStats(smap *cluster.Smap, tid string) ([]teb.DiskStatsHelper, error)
 		if tsi.InMaintOrDecomm() {
 			return nil, fmt.Errorf("target %s is unaivailable at this point", tsi.StringEx())
 		}
-		targets = cluster.NodeMap{tid: tsi}
+		targets = meta.NodeMap{tid: tsi}
 		l = 1
 	}
 	dsh := make([]teb.DiskStatsHelper, 0, l)

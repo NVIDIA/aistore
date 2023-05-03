@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -79,12 +80,12 @@ func FmtEC(gen int64, data, parity int, isCopy bool) string {
 	return info
 }
 
-func fmtDaemonID(id string, smap *cluster.Smap, daeStatus string) (snamePlus string) {
+func fmtDaemonID(id string, smap *meta.Smap, daeStatus string) (snamePlus string) {
 	snamePlus, _ = fmtStatusSID(id, smap, daeStatus)
 	return
 }
 
-func fmtStatusSID(id string, smap *cluster.Smap, daeStatus string) (snamePlus, status string) {
+func fmtStatusSID(id string, smap *meta.Smap, daeStatus string) (snamePlus, status string) {
 	si := smap.GetNode(id)
 	snamePlus, status = si.StringEx(), daeStatus
 
@@ -115,18 +116,18 @@ offline:
 	return
 }
 
-func FmtNodeStatus(node *cluster.Snode) (status string) {
+func FmtNodeStatus(node *meta.Snode) (status string) {
 	status = NodeOnline
 	switch {
-	case node.Flags.IsSet(cluster.SnodeMaint):
+	case node.Flags.IsSet(meta.SnodeMaint):
 		status = apc.NodeMaintenance
-	case node.Flags.IsSet(cluster.SnodeDecomm):
+	case node.Flags.IsSet(meta.SnodeDecomm):
 		status = apc.NodeDecommission
 	}
 	return
 }
 
-func fmtProxiesSumm(smap *cluster.Smap) string {
+func fmtProxiesSumm(smap *meta.Smap) string {
 	cnt, act := len(smap.Pmap), smap.CountActivePs()
 	if cnt != act {
 		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
@@ -141,7 +142,7 @@ func fmtProxiesSumm(smap *cluster.Smap) string {
 	return fmt.Sprintf("%d (%d unelectable)", cnt, smap.CountNonElectable())
 }
 
-func fmtTargetsSumm(smap *cluster.Smap) string {
+func fmtTargetsSumm(smap *meta.Smap) string {
 	cnt, act := len(smap.Tmap), smap.CountActiveTs()
 	if cnt != act {
 		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
@@ -149,7 +150,7 @@ func fmtTargetsSumm(smap *cluster.Smap) string {
 	return fmt.Sprintf("%d", cnt)
 }
 
-func fmtSmap(smap *cluster.Smap) string {
+func fmtSmap(smap *meta.Smap) string {
 	return fmt.Sprintf("version %d, UUID %s, primary %s", smap.Version, smap.UUID, smap.Primary.StringEx())
 }
 

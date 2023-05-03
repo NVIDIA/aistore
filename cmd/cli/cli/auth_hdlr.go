@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
@@ -405,7 +405,7 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return
 	}
-	var smap *cluster.Smap
+	var smap *meta.Smap
 	if len(cluSpec.URLs) == 0 {
 		smap, err = getClusterMap(c)
 		cluSpec.URLs = append(cluSpec.URLs, clusterURL)

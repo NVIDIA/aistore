@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -194,7 +194,7 @@ func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMa
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
-			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", cluster.Tname(tid))
+			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", meta.Tname(tid))
 			actionWarn(c, warn)
 			continue
 		}
@@ -243,7 +243,7 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 	for tid, begin := range mapBegin {
 		end := mapEnd[tid]
 		if end == nil {
-			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", cluster.Tname(tid))
+			warn := fmt.Sprintf("missing %s in the get-stats-and-status results\n", meta.Tname(tid))
 			actionWarn(c, warn)
 			continue
 		}

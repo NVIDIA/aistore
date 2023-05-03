@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -29,7 +29,7 @@ const (
 	colPodName   = "K8s POD"
 )
 
-func NewDaeStatus(st *stats.NodeStatus, smap *cluster.Smap, daeType, units string) *Table {
+func NewDaeStatus(st *stats.NodeStatus, smap *meta.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
 		return newTableProxies(StstMap{st.Snode.ID(): st}, smap, units)
@@ -41,7 +41,7 @@ func NewDaeStatus(st *stats.NodeStatus, smap *cluster.Smap, daeType, units strin
 	}
 }
 
-func NewDaeMapStatus(ds *StatsAndStatusHelper, smap *cluster.Smap, daeType, units string) *Table {
+func NewDaeMapStatus(ds *StatsAndStatusHelper, smap *meta.Smap, daeType, units string) *Table {
 	switch daeType {
 	case apc.Proxy:
 		return newTableProxies(ds.Pmap, smap, units)
@@ -54,7 +54,7 @@ func NewDaeMapStatus(ds *StatsAndStatusHelper, smap *cluster.Smap, daeType, unit
 }
 
 // proxy(ies)
-func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
+func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 	var (
 		h        = StatsAndStatusHelper{Pmap: ps}
 		pods     = h.pods()
@@ -125,7 +125,7 @@ func newTableProxies(ps StstMap, smap *cluster.Smap, units string) *Table {
 }
 
 // target(s)
-func newTableTargets(ts StstMap, smap *cluster.Smap, units string) *Table {
+func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 	var (
 		h        = StatsAndStatusHelper{Tmap: ts}
 		pods     = h.pods()

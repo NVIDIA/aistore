@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -532,7 +533,7 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs xact.Mul
 		props := flattenXactStats(di.XactSnaps[0], units)
 		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
-		actionCptn(c, cluster.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
+		actionCptn(c, meta.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
 		if err := teb.Print(props, teb.PropsSimpleTmpl, teb.Jopts(usejs)); err != nil {
 			return l, err
 		}
@@ -561,7 +562,7 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 
 func showSmapHandler(c *cli.Context) error {
 	var (
-		smap            *cluster.Smap
+		smap            *meta.Smap
 		sid, sname, err = argNode(c)
 	)
 	if err != nil {
@@ -632,8 +633,8 @@ func showClusterConfig(c *cli.Context, section string) error {
 
 func showNodeConfig(c *cli.Context) error {
 	var (
-		smap           *cluster.Smap
-		node           *cluster.Snode
+		smap           *meta.Smap
+		node           *meta.Snode
 		section, scope string
 		usejs          = flagIsSet(c, jsonFlag)
 	)

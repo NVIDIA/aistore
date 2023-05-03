@@ -349,7 +349,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		keepMD := cos.IsParseBool(apireq.query.Get(apc.QparamKeepRemote))
 		// HDFS buckets will always keep metadata so they can re-register later
 		if apireq.bck.IsHDFS() || keepMD {
-			nlp := getBckNLP(apireq.bck)
+			nlp := newBckNLP(apireq.bck)
 			nlp.Lock()
 			defer nlp.Unlock()
 

@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -373,8 +373,8 @@ func (ctx *bsummCtx) get() (err error) {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
-		smap            *cluster.Smap
-		nodes           []*cluster.Snode
+		smap            *meta.Smap
+		nodes           []*meta.Snode
 		sid, sname, err = argNode(c)
 	)
 	if err != nil {
@@ -392,9 +392,9 @@ func showMpathHandler(c *cli.Context) error {
 		if node.IsProxy() {
 			return fmt.Errorf("node %s is a proxy (expecting target)", sname)
 		}
-		nodes = []*cluster.Snode{node}
+		nodes = []*meta.Snode{node}
 	} else {
-		nodes = make(cluster.Nodes, 0, len(smap.Tmap))
+		nodes = make(meta.Nodes, 0, len(smap.Tmap))
 		for _, tgt := range smap.Tmap {
 			nodes = append(nodes, tgt)
 		}
@@ -408,7 +408,7 @@ func showMpathHandler(c *cli.Context) error {
 	)
 	for _, node := range nodes {
 		wg.Add(1)
-		go func(node *cluster.Snode) {
+		go func(node *meta.Snode) {
 			mpl, err := api.GetMountpaths(apiBP, node)
 			if err != nil {
 				erCh <- err
@@ -462,7 +462,7 @@ func mpathAction(c *cli.Context, action string) error {
 		} else {
 			nodeID = tail[len(tail)-1]
 		}
-		nodeID = cluster.N2ID(nodeID)
+		nodeID = meta.N2ID(nodeID)
 		if nodeID != "" && smap.GetTarget(nodeID) != nil {
 			return fmt.Errorf("target %s: missing mountpath to %s", first, action)
 		}
@@ -473,7 +473,7 @@ func mpathAction(c *cli.Context, action string) error {
 			err   error
 			acted string
 		)
-		nodeID = cluster.N2ID(nodeID)
+		nodeID = meta.N2ID(nodeID)
 		si := smap.GetTarget(nodeID)
 		if si == nil {
 			si = smap.GetProxy(nodeID)

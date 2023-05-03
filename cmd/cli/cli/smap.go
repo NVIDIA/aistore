@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
@@ -21,12 +21,12 @@ import (
 // In this file:
 // utility functions, wrappers, and helpers to work with cluster map (Smap) and clustered nodes.
 
-var curSmap *cluster.Smap
+var curSmap *meta.Smap
 
 // the implementation may look simplified, even naive, but in fact
 // within-a-single-command lifecycle and singlethreaded-ness eliminate
 // all scenarios that'd be otherwise commonly expected
-func getClusterMap(c *cli.Context) (*cluster.Smap, error) {
+func getClusterMap(c *cli.Context) (*meta.Smap, error) {
 	// when "long-running" refresh Smap as well
 	// (see setLongRunParams)
 	if curSmap != nil && !flagIsSet(c, refreshFlag) {
@@ -77,9 +77,9 @@ func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
 		err = errV
 		return
 	}
-	if strings.HasPrefix(arg, cluster.TnamePrefix) || strings.HasPrefix(arg, cluster.PnamePrefix) {
+	if strings.HasPrefix(arg, meta.TnamePrefix) || strings.HasPrefix(arg, meta.PnamePrefix) {
 		sname = arg
-		sid = cluster.N2ID(arg)
+		sid = meta.N2ID(arg)
 	} else {
 		sid = arg
 	}
@@ -93,7 +93,7 @@ func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
 }
 
 // Gets Smap from a given node (`daemonID`) and displays it
-func smapFromNode(primarySmap *cluster.Smap, sid string, usejs bool) error {
+func smapFromNode(primarySmap *meta.Smap, sid string, usejs bool) error {
 	var (
 		smap         = primarySmap
 		err          error
@@ -105,7 +105,7 @@ func smapFromNode(primarySmap *cluster.Smap, sid string, usejs bool) error {
 			return err
 		}
 	}
-	for _, m := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
+	for _, m := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
 		for _, v := range m {
 			if v.PubNet != v.ControlNet || v.PubNet != v.DataNet {
 				extendedURLs = true

@@ -550,8 +550,5 @@ func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.Bucket
 	return props
 }
 
-//
-// lock/unlock
-//
-
-func getBckNLP(b *meta.Bck) cluster.NLP { return cluster.NewNLP(b.MakeUname("")) }
+// returns (uname, nlc) pair to lock/unlock buckets
+func newBckNLP(b *meta.Bck) cluster.NLP { return cluster.NewNLP(b.MakeUname("")) }

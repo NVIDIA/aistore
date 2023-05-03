@@ -64,6 +64,7 @@ type (
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
 		idDigest   uint64
 	}
+
 	Nodes   []*Snode          // slice of Snodes
 	NodeMap map[string]*Snode // map of Snodes: DaeID => Snodes
 

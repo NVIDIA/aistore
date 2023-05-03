@@ -14,7 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -232,7 +232,7 @@ func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches fun
 
 func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
 	var (
-		bmd        *cluster.BMD
+		bmd        *meta.BMD
 		err        error
 		footer     lsbFooter
 		hideHeader = flagIsSet(c, noHeaderFlag)
@@ -254,7 +254,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 		if apc.IsFltPresent(fltPresence) {
 			info.IsBckPresent = true
 		} else {
-			props, info.IsBckPresent = bmd.Get(cluster.CloneBck(&bck))
+			props, info.IsBckPresent = bmd.Get(meta.CloneBck(&bck))
 		}
 		footer.nb++
 		if info.IsBckPresent {
@@ -268,7 +268,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 					return
 				}
 			}
-			props, _ = bmd.Get(cluster.CloneBck(&bck))
+			props, _ = bmd.Get(meta.CloneBck(&bck))
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: &info})

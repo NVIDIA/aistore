@@ -14,7 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -46,7 +46,7 @@ func getMetricNames(c *cli.Context) (cos.StrKVs, error) {
 
 const versionSepa = "."
 
-func fillNodeStatusMap(c *cli.Context, daeType string) (smap *cluster.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
+func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap, err error) {
 	if smap, err = getClusterMap(c); err != nil {
 		return
 	}
@@ -121,14 +121,14 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 	return true
 }
 
-func verWarn(c *cli.Context, snode *cluster.Snode, role, version, expected string, incompat bool) {
+func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, incompat bool) {
 	var (
 		sname, warn string
 	)
 	if role == apc.Proxy {
-		sname = cluster.Pname(snode.ID())
+		sname = meta.Pname(snode.ID())
 	} else {
-		sname = cluster.Tname(snode.ID())
+		sname = meta.Tname(snode.ID())
 	}
 	if incompat {
 		warn = fmt.Sprintf("node %s runs software version %s which is not compatible with the CLI (expecting v%s)",
@@ -140,17 +140,17 @@ func verWarn(c *cli.Context, snode *cluster.Snode, role, version, expected strin
 	actionWarn(c, warn+"\n")
 }
 
-func daeStatus(nodeMap cluster.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex) {
+func daeStatus(nodeMap meta.NodeMap, out teb.StstMap, wg cos.WG, mu *sync.Mutex) {
 	for _, si := range nodeMap {
 		wg.Add(1)
-		go func(si *cluster.Snode) {
+		go func(si *meta.Snode) {
 			_status(si, mu, out)
 			wg.Done()
 		}(si)
 	}
 }
 
-func _status(node *cluster.Snode, mu *sync.Mutex, out teb.StstMap) {
+func _status(node *meta.Snode, mu *sync.Mutex, out teb.StstMap) {
 	daeStatus, err := api.GetStatsAndStatus(apiBP, node)
 	if err != nil {
 		daeStatus = &stats.NodeStatus{}

@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -21,7 +21,7 @@ const (
 	colUtil     = "UTIL(%)"
 )
 
-func NewDiskTab(dsh []DiskStatsHelper, smap *cluster.Smap, regex *regexp.Regexp, units, totalsHdr string) *Table {
+func NewDiskTab(dsh []DiskStatsHelper, smap *meta.Smap, regex *regexp.Regexp, units, totalsHdr string) *Table {
 	// 1. columns
 	cols := []*header{
 		{name: colTarget},

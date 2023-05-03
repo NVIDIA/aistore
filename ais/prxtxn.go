@@ -154,7 +154,7 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Header) error {
 	var (
 		bprops  *cmn.BucketProps
-		nlp     = getBckNLP(bck)
+		nlp     = newBckNLP(bck)
 		bmd     = p.owner.bmd.get()
 		backend = bck.Backend()
 	)
@@ -705,7 +705,7 @@ func parseECConf(value any) (*cmn.ECConfToUpdate, error) {
 
 // ec-encode: { confirm existence -- begin -- update locally -- metasync -- commit }
 func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
-	nlp := getBckNLP(bck)
+	nlp := newBckNLP(bck)
 	ecConf, err := parseECConf(msg.Value)
 	if err != nil {
 		return
@@ -828,7 +828,7 @@ func (p *proxy) beginRmTarget(si *meta.Snode, msg *apc.ActMsg) error {
 
 // destroy bucket: { begin -- commit }
 func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
-	nlp := getBckNLP(bck)
+	nlp := newBckNLP(bck)
 	nlp.Lock()
 	defer nlp.Unlock()
 

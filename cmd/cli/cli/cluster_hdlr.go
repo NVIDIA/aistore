@@ -12,7 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -303,12 +303,12 @@ func joinNodeHandler(c *cli.Context) (err error) {
 	}
 
 	prefix = getPrefixFromPrimary()
-	netInfo := cluster.NetInfo{
+	netInfo := meta.NetInfo{
 		Hostname: addrParts[0],
 		Port:     addrParts[1],
 		URL:      prefix + addr,
 	}
-	nodeInfo := &cluster.Snode{
+	nodeInfo := &meta.Snode{
 		// once contacted, aisnode reports its ID (see also: `envDaemonID` and `genDaemonID`)
 		DaeID: "",
 		// (important to have it right)
@@ -463,11 +463,11 @@ func setPrimaryHandler(c *cli.Context) error {
 	}
 
 	switch {
-	case node.Flags.IsSet(cluster.SnodeMaint):
+	case node.Flags.IsSet(meta.SnodeMaint):
 		return fmt.Errorf("%s is currently in maintenance", sname)
-	case node.Flags.IsSet(cluster.SnodeDecomm):
+	case node.Flags.IsSet(meta.SnodeDecomm):
 		return fmt.Errorf("%s is currently being decommissioned", sname)
-	case node.Flags.IsSet(cluster.SnodeNonElectable):
+	case node.Flags.IsSet(meta.SnodeNonElectable):
 		return fmt.Errorf("%s is non-electable", sname)
 	}
 
@@ -507,7 +507,7 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 	)
 	if daemonID == "" && xid != "" {
 		// either/or
-		if strings.HasPrefix(xid, cluster.TnamePrefix) {
+		if strings.HasPrefix(xid, meta.TnamePrefix) {
 			sid, _, err := getNodeIDName(c, xid)
 			if err != nil {
 				return err

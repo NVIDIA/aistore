@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -237,12 +237,12 @@ func suggestNode(c *cli.Context, ty int) {
 	}
 	if ty != allTargets {
 		for sid := range smap.Pmap {
-			fmt.Println(cluster.Pname(sid))
+			fmt.Println(meta.Pname(sid))
 		}
 	}
 	if ty != allProxies {
 		for sid := range smap.Tmap {
-			fmt.Println(cluster.Tname(sid))
+			fmt.Println(meta.Tname(sid))
 		}
 	}
 }

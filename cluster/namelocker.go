@@ -241,14 +241,14 @@ func (nlc *nlc) Unlock(uname string, exclusive bool) {
 // interface guard
 var _ NLP = (*nlp)(nil)
 
-// NOTE: limited use: buckets only (see `bckLocker` below)
+// NOTE: currently, is only used to lock buckets
 func NewNLP(name string) NLP {
 	var (
 		nlp  = &nlp{uname: name}
 		hash = xxhash.ChecksumString64S(name, cos.MLCG32)
 		idx  = int(hash & (cos.MultiSyncMapCount - 1))
 	)
-	nlp.nlc = &bckLocker[idx]
+	nlp.nlc = &bckLocker[idx] // NOTE: bckLocker
 	return nlp
 }
 

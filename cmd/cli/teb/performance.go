@@ -10,14 +10,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 )
 
 type PerfTabCtx struct {
-	Smap      *cluster.Smap
+	Smap      *meta.Smap
 	Sid       string           // single target, unless ""
 	Metrics   cos.StrKVs       // metric (aka stats) names and kinds
 	Regex     *regexp.Regexp   // filter column names (case-insensitive)

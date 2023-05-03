@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
@@ -232,7 +232,7 @@ func removeNodeFromSmap(c *cli.Context) error {
 
 func randNode(c *cli.Context) error {
 	var (
-		si        *cluster.Snode
+		si        *meta.Snode
 		smap, err = getClusterMap(c)
 	)
 	if err != nil {
