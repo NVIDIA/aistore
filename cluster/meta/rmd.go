@@ -5,8 +5,7 @@
 package meta
 
 type (
-	// RMD aka "rebalance metadata" is used to distribute information
-	// for the next rebalance.
+	// RMD (Rebalance MetaData)
 	RMD struct {
 		Ext       any      `json:"ext,omitempty"` // within meta-version extensions
 		Resilver  string   `json:"resilver,omitempty"`

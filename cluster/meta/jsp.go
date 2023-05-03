@@ -17,9 +17,9 @@ var (
 )
 
 var (
-	smapJspOpts = jsp.CCSign(cmn.MetaverSmap)
-	bmdJspOpts  = jsp.CCSign(cmn.MetaverBMD)
-	rmdJspOpts  = jsp.CCSign(cmn.MetaverRMD)
+	smapJspOpts = jsp.CCSign(cmn.MetaverSmap) // Compress, Checksum, Signature (CCS)
+	bmdJspOpts  = jsp.CCSign(cmn.MetaverBMD)  // ditto
+	rmdJspOpts  = jsp.CCSign(cmn.MetaverRMD)  // ditto
 )
 
 func (*Smap) JspOpts() jsp.Options { return smapJspOpts }

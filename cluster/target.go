@@ -19,29 +19,11 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 )
 
-const (
-	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
-	Proxies
-	AllNodes
-)
-
 //
 // ais target: types and interfaces
 //
 
 type (
-	Node interface {
-		SID() string
-		String() string
-		Snode() *meta.Snode
-
-		Bowner() meta.Bowner
-		Sowner() meta.Sowner
-
-		ClusterStarted() bool
-		NodeStarted() bool
-	}
-
 	NodeMemCap interface {
 		Node
 

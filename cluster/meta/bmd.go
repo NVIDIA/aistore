@@ -14,9 +14,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// interface to Get current BMD instance
-// (for implementation, see ais/bucketmeta.go)
 type (
+	// interface to Get current (versioned, immutable) BMD instance
+	// (for implementation, see ais/bucketmeta.go)
 	Bowner interface {
 		Get() (bmd *BMD)
 	}

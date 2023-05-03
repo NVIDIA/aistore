@@ -37,12 +37,23 @@ const SnodeMaintDecomm = SnodeMaint | SnodeDecomm
 const DfltCountIC = 3
 
 type (
-	// interface to Get current cluster-map instance
+	// interface to Get current (immutable, versioned) cluster map (Smap) instance
 	Sowner interface {
 		Get() (smap *Smap)
 		Listeners() SmapListeners
 	}
+	// Smap On-change listeners (see ais/clustermap.go for impl-s)
+	Slistener interface {
+		String() string
+		ListenSmapChanged()
+	}
+	SmapListeners interface {
+		Reg(sl Slistener)
+		Unreg(sl Slistener)
+	}
+)
 
+type (
 	// Snode's networking info
 	NetInfo struct {
 		Hostname    string `json:"node_ip_addr"`
@@ -66,8 +77,9 @@ type (
 	}
 
 	Nodes   []*Snode          // slice of Snodes
-	NodeMap map[string]*Snode // map of Snodes: DaeID => Snodes
+	NodeMap map[string]*Snode // map of Snodes indexed by node ID (Pmap & Tmap below)
 
+	// cluster map
 	Smap struct {
 		Ext          any     `json:"ext,omitempty"`
 		Pmap         NodeMap `json:"pmap"` // [pid => Snode]
@@ -76,16 +88,6 @@ type (
 		UUID         string  `json:"uuid"`          // assigned once at creation time and never change
 		CreationTime string  `json:"creation_time"` // creation timestamp
 		Version      int64   `json:"version,string"`
-	}
-
-	// Smap on-change listeners
-	Slistener interface {
-		String() string
-		ListenSmapChanged()
-	}
-	SmapListeners interface {
-		Reg(sl Slistener)
-		Unreg(sl Slistener)
 	}
 )
 
@@ -233,7 +235,8 @@ func (d *Snode) isDupNet(n *Snode, smap *Smap) error {
 	for _, ni := range nu {
 		np, err := url.Parse(ni)
 		if err != nil {
-			return fmt.Errorf("%s %s: failed to parse %s URL %q: %v", cmn.BadSmapPrefix, smap, n.StringEx(), ni, err)
+			return fmt.Errorf("%s %s: failed to parse %s URL %q: %v",
+				cmn.BadSmapPrefix, smap, n.StringEx(), ni, err)
 		}
 		for _, di := range du {
 			dp, err := url.Parse(di)
@@ -269,19 +272,21 @@ func (d *Snode) IsIC() bool         { return d.Flags.IsSet(SnodeIC) }
 // NetInfo //
 /////////////
 
+func _ep(hostname, port string) string { return hostname + ":" + port }
+
 func NewNetInfo(proto, hostname, port string) *NetInfo {
-	tcpEndpoint := fmt.Sprintf("%s:%s", hostname, port)
+	ep := _ep(hostname, port)
 	return &NetInfo{
 		Hostname:    hostname,
 		Port:        port,
-		URL:         fmt.Sprintf("%s://%s", proto, tcpEndpoint),
-		tcpEndpoint: tcpEndpoint,
+		URL:         fmt.Sprintf("%s://%s", proto, ep),
+		tcpEndpoint: ep,
 	}
 }
 
 func (ni *NetInfo) TCPEndpoint() string {
 	if ni.tcpEndpoint == "" {
-		ni.tcpEndpoint = fmt.Sprintf("%s:%s", ni.Hostname, ni.Port)
+		ni.tcpEndpoint = _ep(ni.Hostname, ni.Port)
 	}
 	return ni.tcpEndpoint
 }
@@ -294,10 +299,12 @@ func (ni *NetInfo) eq(o *NetInfo) bool {
 	return ni.Port == o.Port && ni.Hostname == o.Hostname
 }
 
-// Cluster map (aks Smap) is a versioned object
-// Executing Sowner.Get() gives an immutable version that won't change
+//////////
+// Smap //
+//////////
+
+// Cluster map (aks Smap) is a versioned, protected and replicated object
 // Smap versioning is monotonic and incremental
-// Smap uniquely and solely defines the primary proxy
 
 func (m *Smap) InitDigests() {
 	for _, node := range m.Tmap {
@@ -598,9 +605,9 @@ func mapsEq(a, b NodeMap) bool {
 	return true
 }
 
-///////////////
-// nodesPool //
-///////////////
+//
+// mem-pool of Nodes (slices)
+//
 
 var nodesPool sync.Pool
 
