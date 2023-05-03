@@ -49,9 +49,10 @@ type (
 
 	InitCodeMsg struct {
 		InitMsgBase
-		Code    []byte `json:"code"` // NOTE: eq. `Code`
-		Deps    []byte `json:"dependencies"`
-		Runtime string `json:"runtime"`
+		Code         []byte `json:"code"` // NOTE: eq. `Code`
+		Deps         []byte `json:"dependencies"`
+		Runtime      string `json:"runtime"`
+		TransformURL bool   `json:"transform_url"`
 		// ========================================================================================
 		// `InitCodeMsg` carries the name of the transforming function;
 		// the `Transform` function is mandatory and cannot be "" (empty) - it _will_ be called

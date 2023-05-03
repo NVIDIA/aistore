@@ -203,6 +203,10 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	}
 	ftp = append(ftp, "<CHUNK_SIZE>", chunk)
 
+	if msg.CommTypeX == Hpull && msg.TransformURL {
+		ftp = append(ftp, "<ARG_TYPE>", "url")
+	}
+
 	if msg.Flags > 0 {
 		flags = "\"" + strconv.FormatInt(msg.Flags, 10) + "\""
 	}

@@ -6,7 +6,7 @@ spec:
   containers:
     - name: server
       image: aistorage/runtime_python:<TAG>
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       ports:
         - name: default
           containerPort: 80
@@ -20,6 +20,8 @@ spec:
           value: <COMM_TYPE>
         - name: CHUNK_SIZE
           value: <CHUNK_SIZE>
+        - name: ARG_TYPE
+          value: <ARG_TYPE>
         - name: FLAGS
           value: <FLAGS>
         - name: PYTHONPATH

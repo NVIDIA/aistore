@@ -279,6 +279,21 @@ class TestETLOps(unittest.TestCase):
         computed_checksum = hashlib.md5(data).hexdigest().encode()
         self.assertEqual(checksum, computed_checksum)
 
+    @pytest.mark.etl
+    def test_etl_transform_url(self):
+        def url_transform(url):
+            return url.encode("utf-8")
+
+        url_etl = self.client.etl("etl-hpull-url")
+        url_etl.init_code(
+            transform=url_transform, transform_url=True, communication_type="hpull"
+        )
+        res = self.bucket.object(self.obj_name).get(etl_name=url_etl.name).read_all()
+        result_url = res.decode("utf-8")
+
+        self.assertTrue(self.bucket.name in result_url)
+        self.assertTrue(self.obj_name in result_url)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -97,6 +97,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "dependencies": base64.b64encode(b"cloudpickle==2.2.0").decode(
                 UTF_ENCODING
             ),
+            "transform_url": False,
         }
         self.init_code_exec_assert(expected_action)
 
@@ -111,6 +112,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
         preimported = ["pytorch"]
         user_dependencies = ["pytorch"]
         chunk_size = 123
+        transform_url = True
 
         expected_dependencies = user_dependencies.copy()
         expected_dependencies.append("cloudpickle==2.2.0")
@@ -126,6 +128,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             "code": self.encode_fn(preimported, self.transform_fn, communication_type),
             "dependencies": expected_dep_str,
             "chunk_size": chunk_size,
+            "transform_url": transform_url,
         }
         self.init_code_exec_assert(
             expected_action,
@@ -135,6 +138,7 @@ class TestEtl(unittest.TestCase):  # pylint: disable=unused-variable
             communication_type=communication_type,
             timeout=timeout,
             chunk_size=chunk_size,
+            transform_url=transform_url,
         )
 
     @staticmethod
