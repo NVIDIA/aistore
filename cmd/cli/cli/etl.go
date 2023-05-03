@@ -31,6 +31,7 @@ var (
 			depsFileFlag,
 			runtimeFlag,
 			commTypeFlag,
+			transformURLFlag,
 			funcTransformFlag,
 			chunkSizeFlag,
 			unitsFlag,
@@ -254,6 +255,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+	msg.TransformURL = flagIsSet(c, transformURLFlag)
 
 	if flagIsSet(c, chunkSizeFlag) {
 		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)

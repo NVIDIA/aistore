@@ -773,12 +773,17 @@ var (
 		Usage: "absolute path to the file with dependencies that must be installed before running the code",
 	}
 	runtimeFlag = cli.StringFlag{
-		Name:  "runtime",
-		Usage: "runtime which should be used when running the provided code", Required: true,
+		Name:     "runtime",
+		Usage:    "environment used to run the provided code (currently supported: python3.8v2, python3.10v2, python3.11v2)",
+		Required: true,
 	}
 	commTypeFlag = cli.StringFlag{
 		Name:  "comm-type",
-		Usage: "communication type which should be used when running the provided code",
+		Usage: "communication type which should be used when running the provided code (defaults to hpush)",
+	}
+	transformURLFlag = cli.BoolFlag{
+		Name:  "transform-url",
+		Usage: "rather than contents (bytes), pass the URL of the objects to be transformed to the user-defined transform function (note: usage is limited to '--comm-type=hpull' only)",
 	}
 	funcTransformFlag = cli.StringFlag{
 		Name:  "transform",
