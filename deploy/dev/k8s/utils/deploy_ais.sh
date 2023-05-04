@@ -2,8 +2,6 @@
 
 set -e
 
-export MODE="debug"
-
 source ../utils.sh
 
 echo "Enter number of storage targets:"
@@ -21,14 +19,15 @@ source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
 export DOCKER_IMAGE="aistorage/aisnode-minikube:latest"
+
 echo "Build and push to local registry: (y/n) ?"
 read -r build
 if [[ "$build" == "y" ]]; then
-  echo "Building image with mode=${MODE}..."
-  export DOCKER_IMAGE="localhost:5000/aisnode-minikube:latest"
-  docker build ./../../../ --force-rm -t ${DOCKER_IMAGE} --build-arg MODE="${MODE}" -f Dockerfile
-  docker push ${DOCKER_IMAGE}
+  export REGISTRY_URL="localhost:5000" && \
+  ./utils/build_aisnode.sh
+  export DOCKER_IMAGE="${REGISTRY_URL}/${DOCKER_IMAGE}"
 fi
+
 
 PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
@@ -80,5 +79,9 @@ kubectl get pods -o wide
 
 echo "Done."
 echo ""
+(cd ../../../  && make cli)
+echo ""
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
 echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""
+
+export AIS_ENDPOINT="http://$(minikube ip):8080"

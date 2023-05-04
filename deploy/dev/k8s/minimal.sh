@@ -3,7 +3,10 @@
 source utils/ais_minikube_setup.sh
 export AIS_FS_PATHS=""
 export TEST_FSPATH_COUNT=1
-export DOCKER_IMAGE="aistorage/aisnode-minikube:latest"
+REGISTRY_URL="${REGISTRY_URL:-docker.io}"
+IMAGE_TAG="latest"
+export DOCKER_IMAGE="${REGISTRY_URL}/aistorage/aisnode-minikube:${IMAGE_TAG}"
+
 
 PRIMARY_PORT=8080
 HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
@@ -43,6 +46,8 @@ echo "List of running pods"
 kubectl get pods -o wide
 
 echo "Done."
+echo ""
+(cd ../../../  && make cli)
 echo ""
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
 echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""

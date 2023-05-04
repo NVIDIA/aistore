@@ -25,20 +25,6 @@ if ! command -v kubectl &> /dev/null; then
   sudo mv /tmp/kubectl /usr/local/bin/kubectl
 fi
 
-# Remove docker installed from snap
-if command -v snap &> /dev/null; then
-  sudo snap remove docker
-fi
-
-# Install docker from apt-get
-if command -v apt-get &> /dev/null; then
-  if ! command -v docker &> /dev/null;then
-    sudo apt-get -y install docker.io
-  fi
-fi
-sudo service docker start
-sudo usermod -aG docker $USER
-
 # The invoker of the parent script must not be root as `minikube`
 # should not be run as root
 if [[ $EUID -eq 0 ]]; then

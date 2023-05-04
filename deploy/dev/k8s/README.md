@@ -10,6 +10,7 @@
   - [Stopping and cleanup](#stopping-and-cleanup)
 - [Developing AIStore on minikube](#developing-aistore-on-minikube)
   - [Deploy](#deploy-1)
+  - [Local](#local)
   - [Stopping and cleanup](#stopping-and-cleanup-1)
 - [Troubleshooting minikube](#troubleshooting-minikube)
 - [Demo](#demo)
@@ -49,8 +50,10 @@ All commands below are running from the same directory i.e `${AISTORE_ROOT}/depl
 | --- | --- |
 | `make try` | start minikube and run a basic version of AIStore inside it ([ref](#trying-aistore-on-minikube)) |
 | `make dev` | deploy multi-proxy/target AIStore with other utilities ([ref](#developing-aistore-on-minikube)) |
-| `make minimal` | start a minimal AIStore deployment on an already running minikube|
-| `redeploy-ais` | skips the minikube and Docker registry deployment in `make dev` |
+| `make minimal` | start a minimal AIStore deployment (1 proxy and 1 target) on an already running minikube |
+| `make redeploy-ais` | skips the minikube and Docker registry deployment in `make dev` |
+| `make minimal-local` | start minikube, rebuild the `aisnode` container with local changes and start a minimal deployment |
+| `make redeploy-local` | rebuild the `aisnode` container with local changes on an already running minikube |
 | `make stop-ais` | stop running AIStore pods  |
 | `make stop`| stop and deletes AIStore pods, minikube cluster |
 
@@ -95,6 +98,10 @@ $ make redeploy-ais
 ```
 
 To update the aisnode images, or to redeploy AIStore, execute the `make ais-redeploy` argument, as shown below. This will skip the minikube and Docker registry deployment.
+
+### Local
+
+By default, the make targets will pull the `aisnode-minikube` image from [dockerhub](https://hub.docker.com/u/aistorage/). The `minimal-local` and `redeploy-local` options provide an easy way to test changes on a minimal cluster with a rebuilt local image by pushing the image to the local minikube registry. `make dev` also includes a prompt to rebuild the local image for more complex deployments.  
 
 ### Stopping and cleanup
 

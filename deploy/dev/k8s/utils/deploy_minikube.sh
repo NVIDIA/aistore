@@ -15,14 +15,29 @@ minikube_memory=${MINIKUBE_MEMORY:-9000}
 
 source utils/ais_minikube_setup.sh
 
-echo "Start local registry: (y/n) ?"
-read -r local_registry
-if [[ "$local_registry" == "y" ]]; then
+# Check if we should set up a local registry
+if [ -z "${USE_LOCAL_REGISTRY}" ]; then
+  echo "Start local registry: (y/n) ?"
+  read -r local_registry
+  if [[ "$local_registry" == "y" ]]; then
+    export USE_LOCAL_REGISTRY=true
+  fi
+fi
+
+if [ "$USE_LOCAL_REGISTRY" = true ]; then
   source utils/minikube_registry.sh
 fi
 
-echo "Deploy metrics collection (Prometheus operator): (y/n) ?"
-read -r metrics
-if [[ "$metrics" == "y" ]]; then
-  source utils/deploy_metrics.sh
+
+# Check if we should deploy prometheus metrics
+if [ -z "${DEPLOY_METRICS}" ]; then
+  echo "Deploy metrics collection (Prometheus operator): (y/n) ?"
+  read -r metrics
+  if [[ "$metrics" == "y" ]]; then
+    export DEPLOY_METRICS=true
+  fi
+fi
+
+if [ "$DEPLOY_METRICS" = true ]; then
+  source utils/enable_metrics.sh
 fi

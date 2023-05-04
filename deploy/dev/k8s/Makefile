@@ -7,7 +7,8 @@ CPU=4
 MEMORY=7000
 MODE="debug"
 REGISTRY_URL ?= docker.io
-IMAGE_REPO=aistorage/aisnode-minikube
+LOCAL_REGISTRY_URL ?= localhost:5000
+DOCKER_IMAGE=aistorage/aisnode-minikube
 IMAGE_TAG=latest
 
 # Run AIStore cluster consisting of 1 proxy/gateway and 1 target
@@ -22,18 +23,30 @@ try: stop
 	@ minikube start --driver=docker
 	@ ./minimal.sh
 
-#  Gives you the ability to configure everything
+# Gives you the ability to configure everything
 dev:
 	@ set -e
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_minikube.sh && \
-	  ./utils/minikube_registry.sh && \
 	  ./utils/deploy_ais.sh
 
 # This will skip the minikube and Docker registry deployment
 redeploy-ais:
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_ais.sh
+
+# Set up minikube and deploy a minimal cluster with the new aisnode container including local changes
+minimal-local: 
+	export USE_LOCAL_REGISTRY=true && \
+	  export DEPLOY_METRICS=false && \
+	  ./utils/deploy_minikube.sh
+	make redeploy-local
+
+# Rebuild the local container and restart the minimal cluster without restarting minikube
+redeploy-local:
+	export REGISTRY_URL=${LOCAL_REGISTRY_URL} && \
+	./utils/build_aisnode.sh && \
+	./minimal.sh
 
 # Stops AIS running on minikube
 stop-ais:
@@ -45,9 +58,9 @@ stop:
 	@ minikube delete
 
 docker-build:
-	@ docker build ./../../../ --force-rm -t $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG) --build-arg MODE="$(MODE)" -f Dockerfile
+	@ docker build ./../../../ --force-rm -t $(REGISTRY_URL)/$(DOCKER_IMAGE):$(IMAGE_TAG) --build-arg MODE="$(MODE)" -f Dockerfile
 
 docker-push:
-	@ docker push $(REGISTRY_URL)/$(IMAGE_REPO):$(IMAGE_TAG)
+	@ docker push $(REGISTRY_URL)/$(DOCKER_IMAGE):$(IMAGE_TAG)
 
 docker-all: docker-build docker-push
