@@ -145,6 +145,7 @@ With a little effort, they all could be extracted and used outside.
   - [Checksumming: brief theory of operations](/docs/checksum.md)
   - [S3 compatibility](/docs/s3compat.md)
 - Cluster Management
+  - [Lifecycle management: maintenance mode, rebalance/rebuild, and more](/docs/lifecycle_node.md)
   - [CLI: `ais cluster` and subcommands](/docs/cli/show.md)
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)

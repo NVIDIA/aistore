@@ -118,3 +118,7 @@ Parallelism and autonomy always go hand in hand. In aistore, _location_ rules ar
 And so, even though it ultimately boils down to iteratively calling read and write primitives, the core process appears to be infinitely flexible in its applications.
 
 And that's the upshot.
+
+## References
+
+* [Lifecycle management: maintenance mode, rebalance/rebuild, and more](/docs/lifecycle_node.md)
