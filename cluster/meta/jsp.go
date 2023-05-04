@@ -17,7 +17,7 @@ var (
 )
 
 var (
-	smapJspOpts = jsp.CCSign(cmn.MetaverSmap) // Compress, Checksum, Signature (CCS)
+	smapJspOpts = jsp.CCSign(cmn.MetaverSmap) // Compress, Checksum, Sign (CCS)
 	bmdJspOpts  = jsp.CCSign(cmn.MetaverBMD)  // ditto
 	rmdJspOpts  = jsp.CCSign(cmn.MetaverRMD)  // ditto
 )
