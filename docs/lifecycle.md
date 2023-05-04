@@ -14,7 +14,7 @@ Any discussion along those lines typically involves state transitions, so let's 
 
 ![Node lifecycle: states and transitions](images/lifecycle-graceful-term.png)
 
-To put things in perspective, this picture is about a node (not shown) in an aistore cluster (not shown). Tracking it from the top downwards, first notice a state called "maintenance mode". Maintenance node constitutes maybe the most gentle, if you will, way of removing a node from the operating cluster.
+To put things in perspective, this picture is about a node (not shown) in an aistore cluster (not shown). Tracking it from the top downwards, first notice a state called "maintenance mode". "Maintenance mode" constitutes maybe the most gentle, if you will, way of removing a node from the operating cluster.
 
 When in maintenance, the node stops keep-alive heartbeats but remains in the cluster map and remains connected. That is, unless you disconnect or shut it down manually (which would be perfectly fine and expected).
 
@@ -75,7 +75,7 @@ In aistore, all the migration (aka "rebalancing") that's taking in place is the 
 
 ### Proper location
 
-For any object in a cluster, its _proper_ location is defined by the current cluster map and locally - on each target node - by the (locally) configured target's mountpaths (disks).
+For any object in a cluster, its _proper_ location is defined by the current cluster map and locally - on each target node - by the locally configured target's [mountpaths](overview.md#terminology).
 
 In that sense, the "maintenance" state, for instance, has its _beginning_ - when the cluster starts rebalancing, and the post-rebalancing _end_, whereby the corresponding sub-state get recorded in a new version of the cluster map, which then gets safely distributed across all nodes, etc., etc.
 

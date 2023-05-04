@@ -5,7 +5,7 @@ Any discussion along those lines typically involves state transitions, so let's 
 
 ![Node lifecycle: states and transitions](images/lifecycle-graceful-term.png)
 
-To put things in perspective, this picture is about a node (not shown) in an aistore cluster (not shown). Tracking it from the top downwards, first notice a state called "maintenance mode". Maintenance node constitutes maybe the most gentle, if you will, way of removing a node from the operating cluster.
+To put things in perspective, this picture is about a node (not shown) in an aistore cluster (not shown). Tracking it from the top downwards, first notice a state called "maintenance mode". "Maintenance mode" constitutes maybe the most gentle, if you will, way of removing a node from the operating cluster.
 
 When in maintenance, the node stops keep-alive heartbeats but remains in the cluster map and remains connected. That is, unless you disconnect or shut it down manually (which would be perfectly fine and expected).
 
