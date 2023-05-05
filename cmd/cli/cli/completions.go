@@ -257,12 +257,12 @@ func suggestNodesInMaint(c *cli.Context) {
 		return // node already selected
 	}
 	for _, psi := range smap.Pmap {
-		if psi.InMaintOrDecomm() { // TODO -- FIXME: m.b. InMaint
+		if psi.InMaint() {
 			fmt.Println(meta.Pname(psi.ID()))
 		}
 	}
 	for _, tsi := range smap.Tmap {
-		if tsi.InMaintOrDecomm() { // ditto
+		if tsi.InMaint() {
 			fmt.Println(meta.Tname(tsi.ID()))
 		}
 	}
