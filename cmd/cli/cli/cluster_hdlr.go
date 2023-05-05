@@ -165,7 +165,7 @@ var (
 					},
 					{
 						Name:         cmdStopMaint,
-						Usage:        "activate node by taking it back from \"maintenance\"",
+						Usage:        "take node out of maintenance mode - activate",
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdStopMaint],
 						Action:       nodeMaintShutDecommHandler,
