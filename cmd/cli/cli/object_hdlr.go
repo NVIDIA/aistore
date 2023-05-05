@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -105,7 +106,8 @@ var (
 	objectCmdPut = cli.Command{
 		Name: commandPut,
 		Usage: "PUT or APPEND one file or one directory, or multiple files and/or directories.\n" +
-			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select sources;\n" +
+			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select multiple sources, for example:\n" +
+			indent4 + "\t\t- ais put 'docs/*.md' ais://abc/markdown/  # note single quotes\n" +
 			indent4 + "\t- request '--compute-checksum' to facilitate end-to-end protection;\n" +
 			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
 			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
@@ -374,8 +376,15 @@ func put(c *cli.Context) error {
 		fileName = c.Args().Get(0)
 		uri      = c.Args().Get(1)
 	)
-	if c.NArg() > 2 {
-		return incorrectUsageMsg(c, "too many arguments _or_ unrecognized option '%+v'", c.Args()[2:])
+	if l := c.NArg(); l > 2 {
+		const (
+			efmt = "too many arguments: '%s'"
+			hint = "(hint: wildcards must be in single or double quotes, see `--help` for details)"
+		)
+		if l > 4 {
+			return fmt.Errorf(efmt+" ...\n%s\n", strings.Join(c.Args()[2:4], " "), hint)
+		}
+		return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
 	}
 
 	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
