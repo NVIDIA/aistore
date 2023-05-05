@@ -262,6 +262,7 @@ func (d *Snode) IsTarget() bool { return d.DaeType == apc.Target }
 
 // node flags
 func (d *Snode) InMaintOrDecomm() bool { return d.Flags.IsAnySet(SnodeMaintDecomm) }
+func (d *Snode) InMaint() bool         { return d.Flags.IsAnySet(SnodeMaint) }
 func (d *Snode) InMaintPostReb() bool {
 	return d.Flags.IsSet(SnodeMaint) && d.Flags.IsSet(SnodeMaintPostReb)
 }
@@ -424,6 +425,7 @@ func (m *Smap) GetActiveNode(sid string) (si *Snode) {
 	return
 }
 
+// (random active)
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
 	for _, tsi = range m.Tmap {
 		if !tsi.InMaintOrDecomm() {
@@ -508,7 +510,7 @@ func (m *Smap) InMaintOrDecomm(si *Snode) bool {
 
 func (m *Smap) InMaint(si *Snode) bool {
 	node := m.GetNode(si.ID())
-	return node != nil && node.InMaintOrDecomm()
+	return node != nil && node.InMaint()
 }
 
 func (m *Smap) IsIC(psi *Snode) (ok bool) {

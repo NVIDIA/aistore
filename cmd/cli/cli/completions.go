@@ -247,6 +247,27 @@ func suggestNode(c *cli.Context, ty int) {
 	}
 }
 
+func suggestNodesInMaint(c *cli.Context) {
+	smap, err := getClusterMap(c)
+	if err != nil {
+		completionErr(c, err)
+		return
+	}
+	if _, _, err = getNodeIDName(c, argLast(c)); err == nil {
+		return // node already selected
+	}
+	for _, psi := range smap.Pmap {
+		if psi.InMaintOrDecomm() { // TODO -- FIXME: m.b. InMaint
+			fmt.Println(meta.Pname(psi.ID()))
+		}
+	}
+	for _, tsi := range smap.Tmap {
+		if tsi.InMaintOrDecomm() { // ditto
+			fmt.Println(meta.Tname(tsi.ID()))
+		}
+	}
+}
+
 func showClusterCompletions(c *cli.Context) {
 	switch c.NArg() {
 	case 0:

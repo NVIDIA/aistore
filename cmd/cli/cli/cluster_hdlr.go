@@ -169,7 +169,7 @@ var (
 						ArgsUsage:    nodeIDArgument,
 						Flags:        clusterCmdsFlags[cmdStopMaint],
 						Action:       nodeMaintShutDecommHandler,
-						BashComplete: suggestAllNodes,
+						BashComplete: suggestNodesInMaint,
 					},
 					{
 						Name:         cmdNodeDecommission,
