@@ -56,6 +56,7 @@ var (
 			noRebalanceFlag,
 			noShutdownFlag,
 			rmUserDataFlag,
+			keepInitialConfigFlag,
 			yesFlag,
 		},
 		cmdClusterDecommission: {
@@ -355,11 +356,12 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
 	}
 	var (
-		xid           string
-		skipRebalance = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
-		noShutdown    = flagIsSet(c, noShutdownFlag)
-		rmUserData    = flagIsSet(c, rmUserDataFlag)
-		actValue      = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		xid               string
+		skipRebalance     = flagIsSet(c, noRebalanceFlag) || node.IsProxy()
+		noShutdown        = flagIsSet(c, noShutdownFlag)
+		rmUserData        = flagIsSet(c, rmUserDataFlag)
+		keepInitialConfig = flagIsSet(c, keepInitialConfigFlag)
+		actValue          = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
 	)
 	if skipRebalance && node.IsTarget() {
 		warn := fmt.Sprintf("executing %q _and_ not running global rebalance may lead to a loss of data!", action)
@@ -370,6 +372,7 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if action == cmdNodeDecommission {
 		actValue.NoShutdown = noShutdown
 		actValue.RmUserData = rmUserData
+		actValue.KeepInitialConfig = keepInitialConfig
 	} else {
 		const fmterr = "option %s is valid only for decommissioning\n"
 		if noShutdown {

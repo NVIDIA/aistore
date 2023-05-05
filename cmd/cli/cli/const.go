@@ -807,6 +807,11 @@ var (
 		Name:  "rm-user-data",
 		Usage: "remove all user data when decommissioning node from the cluster",
 	}
+	keepInitialConfigFlag = cli.BoolFlag{
+		Name: "keep-initial-config",
+		Usage: "keep the original plain-text configuration the node was deployed with\n" +
+			indent4 + "\t(the option can be used to restart aisnode from scratch)",
+	}
 
 	transientFlag = cli.BoolFlag{
 		Name:  "transient",
