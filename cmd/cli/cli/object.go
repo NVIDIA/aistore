@@ -137,7 +137,7 @@ func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 }
 
 func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
-	// 1. STDIN
+	// 1. PUT from STDIN
 	if fileName == "-" {
 		if objName == "" {
 			return fmt.Errorf("when writing directly from standard input destination object name (in %s) is required",
@@ -185,22 +185,12 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return putList(c, fnames, bck, objName /* subdir name */)
 	}
 
-	// 4. put single file _or_ append to arch
+	// 4. PUT file
 	if finfo, err := os.Stat(path); err == nil && !finfo.IsDir() {
 		if objName == "" {
 			// [CONVENTION]: if objName is not provided
 			// we use the filename as the destination object name
 			objName = filepath.Base(path)
-		}
-
-		archPath := parseStrFlag(c, archpathOptionalFlag)
-		// APPEND to an existing archive
-		if archPath != "" {
-			if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
-				return err
-			}
-			actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
-			return nil
 		}
 
 		// single-file PUT
@@ -211,7 +201,7 @@ func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		return nil
 	}
 
-	// 5. directory
+	// 5. PUT dir
 	recurs := flagIsSet(c, recursFlag)
 	files, err := lsFobj(c, path, "", objName, recurs)
 	if err != nil {

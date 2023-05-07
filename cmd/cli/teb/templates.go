@@ -270,6 +270,10 @@ const (
 		"--{{FlagName $flag }}" +
 		"{{end}}{{end}}\n"
 
+	UsageOnlyTmpl = `{{.HelpName}} - {{.Usage}}
+   {{.UsageText}}
+See '--help' and docs/cli for details.`
+
 	AuthNClusterTmpl = "CLUSTER ID\tALIAS\tURLs\n" +
 		"{{ range $clu := . }}" +
 		"{{ $clu.ID }}\t{{ $clu.Alias }}\t{{ JoinList $clu.URLs }}\n" +

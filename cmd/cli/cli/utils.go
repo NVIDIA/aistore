@@ -159,15 +159,28 @@ func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err 
 	return
 }
 
-//nolint:unparam // !requireProviderInURI (with default ais://) is a currently never used (feature)
-func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck, error) {
+// NOTE: consider adding cli config.default-backend-provider - nolint for now
+
+//nolint:unparam // !requireProviderInURI is currently never used
+func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool, errorOnly ...bool) (cmn.Bck, error) {
+	const validNames = ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp"
 	if isWebURL(uri) {
 		bck := parseURLtoBck(uri)
 		return bck, nil
 	}
 
 	opts := cmn.ParseURIOpts{}
-	if cfg != nil && !requireProviderInURI {
+	if requireProviderInURI {
+		parts := strings.Split(uri, apc.BckProviderSeparator)
+		if len(parts) < 2 {
+			err := fmt.Errorf("invalid %q: backend provider cannot be empty\n(e.g. valid names%s)", uri, validNames)
+			return cmn.Bck{}, err
+		}
+		if len(parts) > 2 {
+			err := fmt.Errorf("invalid bucket arg: too many parts %v\n(e.g. valid names%s)", parts, validNames)
+			return cmn.Bck{}, err
+		}
+	} else {
 		opts.DefaultProvider = cfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
@@ -175,12 +188,21 @@ func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool) (cmn.Bck
 	case err != nil:
 		return cmn.Bck{}, err
 	case objName != "":
+		if len(errorOnly) > 0 && errorOnly[0] {
+			return cmn.Bck{}, fmt.Errorf("unexpected object name argument %q", objName)
+		}
 		return cmn.Bck{}, objectNameArgNotExpected(c, objName)
 	case bck.Name == "":
-		return cmn.Bck{}, incorrectUsageMsg(c, "%q: missing bucket name", uri)
+		if len(errorOnly) > 0 && errorOnly[0] {
+			return cmn.Bck{}, fmt.Errorf("missing bucket name: %q", uri)
+		}
+		return cmn.Bck{}, incorrectUsageMsg(c, "missing bucket name in %q", uri)
 	default:
 		if err = bck.Validate(); err != nil {
-			msg := "E.g. " + bucketArgument + ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp, etc."
+			if len(errorOnly) > 0 && errorOnly[0] {
+				return cmn.Bck{}, err
+			}
+			msg := "E.g. " + bucketArgument + validNames
 			return cmn.Bck{}, cannotExecuteError(c, err, msg)
 		}
 	}

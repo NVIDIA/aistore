@@ -8,7 +8,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -49,8 +48,8 @@ var (
 			},
 			{
 				Name: cmdAppend,
-				Usage: "append file to an existing .tar archive, e.g.: " +
-					"'append src-filename bucket/shard.tar --archpath dst-name'",
+				Usage: "append file to an existing tar-formatted object (aka \"shard\"), e.g.:\n" +
+					indent4 + "'append src-filename bucket/shard-00123.tar --archpath dst-name-in-archive'",
 				ArgsUsage:    appendToArchArgument,
 				Flags:        archCmdsFlags[cmdAppend],
 				Action:       appendArchHandler,
@@ -88,19 +87,13 @@ func appendArchHandler(c *cli.Context) error {
 
 	// dst
 	if c.NArg() < 2 {
-		return missingArgSimple("destination archive name in the form " + optionalObjectsArgument)
+		return missingArgSimple("destination archive name in the form " + objectArgument)
 	}
 	uri := c.Args().Get(1)
-	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+	bck, objName, err := parseBckObjectURI(c, uri, false /*optional objName*/)
 	if err != nil {
 		return err
 	}
-	if objName == "" {
-		// [CONVENTION]: if objName is not provided
-		// we use the filename as the destination object name
-		objName = filepath.Base(path)
-	}
-
 	if flagIsSet(c, dryRunFlag) {
 		return putDryRun(c, bck, objName, fileName)
 	}

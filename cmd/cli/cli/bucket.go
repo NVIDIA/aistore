@@ -536,8 +536,9 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 	}
 
 	if v != NilValue {
-		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/); err != nil {
-			return fmt.Errorf("invalid %q: %v", apc.PropBackendBck, err)
+		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/, true /*error only*/); err != nil {
+			return fmt.Errorf("invalid '%s=%s': expecting %q to be a valid bucket name",
+				apc.PropBackendBck, v, v)
 		}
 	}
 
@@ -693,14 +694,14 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom,
 		return
 	}
 
-	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*require provider*/)
+	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*require provider*/, true /*error only*/)
 	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%s': %v", bckFromArg, c.Args().Get(shift), err)
+		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
 		return
 	}
-	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
+	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true, true /*error only*/)
 	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%q': %v", bckToArg, c.Args().Get(shift+1), err)
+		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
 	}
 	return
 }

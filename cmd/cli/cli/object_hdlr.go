@@ -105,13 +105,13 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name: commandPut,
-		Usage: "PUT or APPEND one file or one directory, or multiple files and/or directories.\n" +
+		Usage: "PUT or APPEND one file, one directory, or multiple files and/or directories.\n" +
 			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select multiple sources, for example:\n" +
-			indent4 + "\t\t- ais put 'docs/*.md' ais://abc/markdown/  # note single quotes\n" +
-			indent4 + "\t- request '--compute-checksum' to facilitate end-to-end protection;\n" +
+			indent4 + "\t\t$ ais put 'docs/*.md' ais://abc/markdown/  # notice single quotes\n" +
+			indent4 + "\t- '--compute-checksum' to facilitate end-to-end protection;\n" +
 			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
 			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent4 + "\t- use '--archpath' to APPEND to an existing tar-formatted object.",
+			indent4 + "\t- '--archpath' to APPEND to an existing tar-formatted object (\"shard\").",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
@@ -385,6 +385,12 @@ func put(c *cli.Context) error {
 			return fmt.Errorf(efmt+" ...\n%s\n", strings.Join(c.Args()[2:4], " "), hint)
 		}
 		return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
+	}
+
+	archPath := parseStrFlag(c, archpathOptionalFlag)
+	// APPEND to an existing archive
+	if archPath != "" {
+		return appendArchHandler(c)
 	}
 
 	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)

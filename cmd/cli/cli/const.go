@@ -256,7 +256,7 @@ const (
 	objectArgument          = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument = "BUCKET[/OBJECT_NAME]..."
 	renameObjectArgument    = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
-	appendToArchArgument    = "FILE BUCKET[/OBJECT_NAME]"
+	appendToArchArgument    = "FILE BUCKET/SHARD_NAME"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 		indent1 +

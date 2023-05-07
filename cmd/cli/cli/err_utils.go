@@ -218,11 +218,17 @@ func objectNameArgNotExpected(c *cli.Context, objectName string) *errUsage {
 	return _errUsage(c, msg)
 }
 
-func _errUsage(c *cli.Context, msg string) *errUsage {
-	return &errUsage{
+func _errUsage(c *cli.Context, msg string) (err *errUsage) {
+	err = &errUsage{
 		context:      c,
 		message:      msg,
 		helpData:     c.Command,
 		helpTemplate: cli.CommandHelpTemplate,
 	}
+	switch c.Command.Name {
+	// long list of options makes it difficult to see the actual error
+	case commandList, commandPut, commandCopy:
+		err.helpTemplate = teb.UsageOnlyTmpl
+	}
+	return
 }
