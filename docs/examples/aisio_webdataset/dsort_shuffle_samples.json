@@ -1,0 +1,11 @@
+{
+    "extension": ".tar",
+    "bck": {"name": "images"},
+    "input_format": "samples-{00..18}",
+    "output_format": "shuffled-shard-%d",
+    "output_shard_size": "100MB",
+    "description": "Create new shuffled shards",
+    "algorithm": {
+        "kind": "shuffle"
+    }
+}
