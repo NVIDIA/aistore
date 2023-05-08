@@ -45,9 +45,8 @@ const fmtNested = "%s: nested (%v): failed to %s %q: %v"
 
 type (
 	putObjInfo struct {
-		atime time.Time
-		r     io.ReadCloser // reader that has the content
-		xctn  cluster.Xact  // xaction that puts
+		r    io.ReadCloser // reader that has the content
+		xctn cluster.Xact  // xaction that puts
 
 		t          *target
 		lom        *cluster.LOM
@@ -56,6 +55,7 @@ type (
 
 		workFQN string // temp fqn to be renamed
 
+		atime   int64
 		size    int64   // Content-Length
 		owt     cmn.OWT // object write transaction enum { OwtPut, ..., OwtGet* }
 		restful bool    // being invoked via RESTful API
@@ -187,7 +187,8 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
-			delta := time.Since(poi.atime)
+			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
+			delta := time.Since(time.Unix(0, poi.atime))
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
 				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
@@ -294,11 +295,10 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		defer lom.Unlock(true)
 	default:
 		// expecting valid atime passed with `poi`
-		atime := poi.atime.UnixNano()
-		debug.Assert(!poi.atime.IsZero() && atime > 946771140000000000 /*year 2000*/, poi.atime.String())
+		debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
 		lom.Lock(true)
 		defer lom.Unlock(true)
-		lom.SetAtimeUnix(atime)
+		lom.SetAtimeUnix(poi.atime)
 	}
 
 	// ais versioning
@@ -325,7 +325,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		}
 	}
 	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
-		lom.SetAtimeUnix(poi.atime.UnixNano())
+		lom.SetAtimeUnix(poi.atime)
 	}
 	err = lom.PersistMain()
 	return
@@ -820,6 +820,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 		poi.r = resp.Body
 		poi.owt = cmn.OwtMigrate
 		poi.workFQN = workFQN
+		poi.atime = lom.ObjAttrs().Atime
 		poi.cksumToUse = cksumToUse
 	}
 	errCode, erp := poi.putObject()

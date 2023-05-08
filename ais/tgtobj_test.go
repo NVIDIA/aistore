@@ -116,7 +116,7 @@ func BenchmarkObjPut(b *testing.B) {
 				b.StopTimer()
 				r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
 				poi := &putObjInfo{
-					atime:   time.Now(),
+					atime:   time.Now().UnixNano(),
 					t:       t,
 					lom:     lom,
 					r:       r,
@@ -225,7 +225,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 
 			r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
 			poi := &putObjInfo{
-				atime:   time.Now(),
+				atime:   time.Now().UnixNano(),
 				t:       t,
 				lom:     lom,
 				r:       r,

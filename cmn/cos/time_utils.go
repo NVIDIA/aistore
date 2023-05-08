@@ -78,3 +78,10 @@ func FormatMilli(tm time.Duration) string {
 	}
 	return fmt.Sprintf("%.2fms", float64(micro)/1000.0)
 }
+
+// access time validity; prefetch special (negative) case - sets atime=-now
+// 946771140000000000 = time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z").UnixNano()
+func IsValidAtime(atime int64) bool {
+	return atime > 946771140000000000 ||
+		(atime < -946771140000000000 && atime != -6795364578871345152) // time.IsZero()
+}

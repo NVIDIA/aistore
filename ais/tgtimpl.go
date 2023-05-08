@@ -69,7 +69,7 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 		poi.lom = lom
 		poi.r = params.Reader
 		poi.workFQN = workFQN
-		poi.atime = params.Atime
+		poi.atime = params.Atime.UnixNano()
 		poi.xctn = params.Xact
 		poi.owt = params.OWT
 		poi.skipEC = params.SkipEncode
@@ -86,7 +86,7 @@ func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
-		poi.atime = time.Now()
+		poi.atime = time.Now().UnixNano()
 		poi.lom = lom
 		poi.workFQN = workFQN
 		poi.owt = cmn.OwtFinalize
@@ -303,7 +303,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 	}
 	poi := allocPutObjInfo()
 	{
-		poi.atime = time.Now()
+		poi.atime = time.Now().UnixNano()
 		poi.t = t
 		poi.lom = lom
 		poi.workFQN = workFQN

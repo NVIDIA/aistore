@@ -184,7 +184,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 	}
 	poi := allocPutObjInfo()
 	{
-		poi.atime = started
+		poi.atime = started.UnixNano()
 		poi.t = t
 		poi.lom = lom
 		poi.skipVC = cmn.Features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC

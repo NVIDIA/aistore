@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
@@ -91,7 +92,7 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 			}
 			atimefs := md.atimefs & ^lomDirtyMask
 			if md.Atime > 0 && atimefs != uint64(md.Atime) {
-				debug.Assert(isValidAtime(md.Atime))
+				debug.Assert(cos.IsValidAtime(md.Atime), md.Atime)
 				lif := LIF{Uname: md.uname, BID: md.bckID}
 				lom, err := lif.LOM()
 				if err == nil {

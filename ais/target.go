@@ -738,7 +738,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	default:
 		poi := allocPutObjInfo()
 		{
-			poi.atime = started
+			poi.atime = started.UnixNano()
 			poi.t = t
 			poi.lom = lom
 			poi.skipVC = skipVC

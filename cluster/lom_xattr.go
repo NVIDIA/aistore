@@ -159,7 +159,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 
 func (lom *LOM) PersistMain() (err error) {
 	atime := lom.AtimeUnix()
-	debug.Assert(isValidAtime(atime))
+	debug.Assert(cos.IsValidAtime(atime))
 	if atime < 0 /*prefetch*/ || !lom.WritePolicy().IsImmediate() /*write-never, write-delayed*/ {
 		lom.md.makeDirty()
 		lom.Recache()
@@ -181,7 +181,7 @@ func (lom *LOM) PersistMain() (err error) {
 // (caller must set atime; compare with the above)
 func (lom *LOM) Persist() (err error) {
 	atime := lom.AtimeUnix()
-	debug.Assert(isValidAtime(atime))
+	debug.Assert(cos.IsValidAtime(atime), atime)
 
 	if atime < 0 || !lom.WritePolicy().IsImmediate() {
 		lom.md.makeDirty()
@@ -485,10 +485,10 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.StrKVs) []byte {
 }
 
 func (md *lmeta) cpAtime(from *lmeta) {
-	if !isValidAtime(from.Atime) {
+	if !cos.IsValidAtime(from.Atime) {
 		return
 	}
-	if !isValidAtime(md.Atime) || (md.Atime > 0 && md.Atime < from.Atime) {
+	if !cos.IsValidAtime(md.Atime) || (md.Atime > 0 && md.Atime < from.Atime) {
 		md.Atime = from.Atime
 	}
 }

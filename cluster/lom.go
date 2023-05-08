@@ -118,12 +118,6 @@ func (lom *LOM) Atime() time.Time      { return time.Unix(0, lom.md.Atime) }
 func (lom *LOM) AtimeUnix() int64      { return lom.md.Atime }
 func (lom *LOM) SetAtimeUnix(tu int64) { lom.md.Atime = tu }
 
-// 946771140000000000 = time.Parse(time.RFC3339Nano, "2000-01-01T23:59:00Z").UnixNano()
-// and note that prefetch sets atime=-now
-func isValidAtime(atime int64) bool {
-	return atime < -946771140000000000 || atime > 946771140000000000
-}
-
 // custom metadata
 func (lom *LOM) GetCustomMD() cos.StrKVs   { return lom.md.GetCustomMD() }
 func (lom *LOM) SetCustomMD(md cos.StrKVs) { lom.md.SetCustomMD(md) }
