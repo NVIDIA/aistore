@@ -188,11 +188,11 @@ func (poi *putObjInfo) putObject() (errCode int, err error) {
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
-			delta := time.Since(time.Unix(0, poi.atime))
+			now := time.Now().UnixNano()
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
 				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
-				cos.NamedVal64{Name: stats.PutLatency, Value: int64(delta)},
+				cos.NamedVal64{Name: stats.PutLatency, Value: now - poi.atime},
 			)
 			// via /s3 (TODO: revisit)
 			if poi.resphdr != nil {
