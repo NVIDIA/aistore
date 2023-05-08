@@ -238,6 +238,10 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				err = lrit.iterateList(wi, smap)
 			} else {
 				err = lrit.iterateRange(wi, smap)
+				if err == cos.ErrEmptyTemplate {
+					// motivation: archive the entire bucket
+					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
+				}
 			}
 			if wi.errCnt.Load() > 0 {
 				wi.wmu.Lock()
@@ -367,10 +371,9 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	}
 
 	wi.lom.SetSize(size)
-	wi.lom.SetAtimeUnix(time.Now().UnixNano())
 	cos.Close(wi.fh)
 
-	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn, r)
+	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn, r) // cmn.OwtFinalize
 	cluster.FreeLOM(wi.lom)
 
 	r.ObjsAdd(1, size-wi.appendPos)
@@ -492,6 +495,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 
 func (wi *archwi) abortAppend(err error) {
 	if wi.appendPos == 0 || wi.fh == nil {
+		glog.Error(err)
 		return
 	}
 	cos.Close(wi.fh)

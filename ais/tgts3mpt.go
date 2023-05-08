@@ -14,7 +14,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
@@ -262,7 +261,6 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 	lom.SetSize(size)
-	lom.SetAtimeUnix(time.Now().UnixNano())
 	lom.SetCustomKey(cmn.ETag, objETag)
 	lom.SetCksum(actualMD5.Cksum.Clone())
 	t.FinalizeObj(lom, objWorkfile, nil) // locks inside

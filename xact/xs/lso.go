@@ -140,9 +140,12 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 			debug.Assert(r.msg.UUID == msg.UUID && r.msg.Prefix == msg.Prefix && r.msg.Flags == msg.Flags)
 			r.msg.ContinuationToken = msg.ContinuationToken
 			r.msg.PageSize = msg.PageSize
+
+			r.IncPending()
 			resp := r.doPage()
+			r.DecPending()
 			if resp.Err == nil {
-				// NOTE: x-list reports heterogeneous stats (and is an exception)
+				// report heterogeneous stats (x-list is an exception)
 				r.ObjsAdd(len(resp.Lst.Entries), 0)
 			}
 			r.respCh <- resp
@@ -237,9 +240,6 @@ func (r *LsoXact) Do(msg *apc.LsoMsg) *LsoRsp {
 }
 
 func (r *LsoXact) doPage() *LsoRsp {
-	r.IncPending()
-	defer r.DecPending()
-
 	if r.listRemote() {
 		if r.msg.ContinuationToken == "" || r.msg.ContinuationToken != r.token {
 			// can't extract the next-to-list object name from the remotely generated

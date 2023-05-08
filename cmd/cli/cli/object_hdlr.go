@@ -274,18 +274,17 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	var (
 		bckTo, bckFrom cmn.Bck
 		objName        string
-		template       = parseStrFlag(c, templateFlag)
-		list           = parseStrFlag(c, listFlag)
 	)
+	// validate
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
 	}
-	if template == "" && list == "" {
+	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
 		return missingArgumentsError(c,
 			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
 				flprn(listFlag), flprn(templateFlag)))
 	}
-	if template != "" && list != "" {
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
 			flprn(listFlag), flprn(templateFlag)))
 	}
@@ -299,11 +298,16 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 	} else {
 		bckFrom = bckTo
 	}
-	msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
+
+	// api
+	var (
+		template = parseStrFlag(c, templateFlag)
+		list     = parseStrFlag(c, listFlag)
+		msg      = cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
+	)
 	msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
 	msg.AllowAppendToExisting = flagIsSet(c, allowAppendToExistingFlag)
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-
 	if list != "" {
 		msg.ListRange.ObjNames = splitCsv(list)
 		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)

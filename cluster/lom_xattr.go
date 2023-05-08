@@ -157,7 +157,6 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	return
 }
 
-// (copy/paste tradeoff on purpose)
 func (lom *LOM) PersistMain() (err error) {
 	atime := lom.AtimeUnix()
 	debug.Assert(isValidAtime(atime))

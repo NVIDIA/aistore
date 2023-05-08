@@ -293,9 +293,12 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 		}
 		defer lom.Unlock(true)
 	default:
+		// expecting valid atime passed with `poi`
+		atime := poi.atime.UnixNano()
+		debug.Assert(!poi.atime.IsZero() && atime > 946771140000000000 /*year 2000*/, poi.atime.String())
 		lom.Lock(true)
 		defer lom.Unlock(true)
-		lom.SetAtimeUnix(poi.atime.UnixNano())
+		lom.SetAtimeUnix(atime)
 	}
 
 	// ais versioning

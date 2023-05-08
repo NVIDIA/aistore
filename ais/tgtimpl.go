@@ -86,6 +86,7 @@ func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact
 	poi := allocPutObjInfo()
 	{
 		poi.t = t
+		poi.atime = time.Now()
 		poi.lom = lom
 		poi.workFQN = workFQN
 		poi.owt = cmn.OwtFinalize
