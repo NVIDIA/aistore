@@ -24,7 +24,7 @@ import (
 // x-TCO: multi-object transform or copy
 func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	var (
-		lrMsg   cmn.ListRange
+		lrMsg   apc.ListRange
 		numObjs int64
 	)
 	// 1. list or template
@@ -44,13 +44,15 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 	}
 
 	// 2. TCO message
-	var msg = cmn.TCObjsMsg{ListRange: lrMsg, ToBck: bckTo}
-	msg.DryRun = flagIsSet(c, copyDryRunFlag)
-	if flagIsSet(c, etlBucketRequestTimeout) {
-		msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
+	msg := cmn.TCObjsMsg{ToBck: bckTo}
+	{
+		msg.ListRange = lrMsg
+		msg.DryRun = flagIsSet(c, copyDryRunFlag)
+		if flagIsSet(c, etlBucketRequestTimeout) {
+			msg.Timeout = cos.Duration(etlBucketRequestTimeout.Value)
+		}
+		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 	}
-	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-
 	// 3. start copying/transforming
 	var (
 		xid   string

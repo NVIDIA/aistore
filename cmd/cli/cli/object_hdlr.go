@@ -306,18 +306,20 @@ func archMultiObj(c *cli.Context, doAppend bool) (err error) {
 	var (
 		template = parseStrFlag(c, templateFlag)
 		list     = parseStrFlag(c, listFlag)
-		msg      = cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
+		msg      = cmn.ArchiveMsg{ToBck: bckTo}
 	)
-	msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
-	msg.AllowAppendToExisting = doAppend
-	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-	if list != "" {
-		msg.ListRange.ObjNames = splitCsv(list)
-		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
-	} else {
-		msg.ListRange.Template = template
-		_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
+	{
+		msg.ArchName = objName
+		msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
+		msg.AppendToExisting = doAppend
+		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
+		if list != "" {
+			msg.ListRange.ObjNames = splitCsv(list)
+		} else {
+			msg.ListRange.Template = template
+		}
 	}
+	_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
 	if err != nil {
 		return err
 	}
