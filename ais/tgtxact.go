@@ -196,7 +196,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 	// 2. with bucket
 	case apc.ActPrefetchObjects:
 		var (
-			smsg = &cmn.ListRange{}
+			smsg = &apc.ListRange{}
 		)
 		rns := xreg.RenewPrefetch(args.ID, t, bck, smsg)
 		if rns.Err != nil {

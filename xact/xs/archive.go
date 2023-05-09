@@ -161,7 +161,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	if r.p.T.SID() == wi.tsi.ID() {
 		if errExists := cos.Stat(wi.lom.FQN); errExists != nil {
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
-		} else if wi.msg.AllowAppendToExisting {
+		} else if wi.msg.AppendToExisting {
 			switch msg.Mime {
 			case cos.ExtTar:
 				err = wi.openTarForAppend()

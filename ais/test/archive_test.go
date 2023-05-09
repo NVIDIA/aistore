@@ -265,7 +265,10 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 						}
 					}
 					go func(archName string, list []string, i int) {
-						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
+						msg := cmn.ArchiveMsg{
+							ToBck:      bckTo,
+							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
+						}
 						msg.ListRange.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
@@ -279,13 +282,17 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start, i int) {
-						msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
+						msg := cmn.ArchiveMsg{
+							ToBck:      bckTo,
+							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
+						}
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
 						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
-						tlog.Logf("[%s] %2d: arch range %s %s => %s\n", xids, i, msg.ListRange.Template, m.bck, bckTo)
+						tlog.Logf("[%s] %2d: arch range %s %s => %s\n",
+							xids, i, msg.ListRange.Template, m.bck, bckTo)
 					}(archName, start, i)
 				}
 			}
@@ -412,7 +419,10 @@ func TestAppendToArch(t *testing.T) {
 					list = append(list, m.objNames[rand.Intn(m.num)])
 				}
 				go func(archName string, list []string) {
-					msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName}
+					msg := cmn.ArchiveMsg{
+						ToBck:      bckTo,
+						ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
+					}
 					msg.ListRange.ObjNames = list
 
 					_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
@@ -437,7 +447,11 @@ func TestAppendToArch(t *testing.T) {
 					for j := 0; j < numAdd; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
-					msg := cmn.ArchiveMsg{ToBck: bckTo, ArchName: archName, AllowAppendToExisting: true}
+					msg := cmn.ArchiveMsg{
+						ToBck:      bckTo,
+						ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
+					}
+					msg.AppendToExisting = true
 					msg.ListRange.ObjNames = list
 					go func() {
 						_, err = api.CreateArchMultiObj(baseParams, bckFrom, msg)

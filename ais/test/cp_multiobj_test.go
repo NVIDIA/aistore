@@ -26,7 +26,7 @@ import (
 )
 
 // TODO -- FIXME: randomize range, check prefix for `xs.iteratePrefix`
-// NOTE:          from is a cloud bucket, if exists
+// NOTE:          `from` is a cloud bucket, if exists
 func TestCopyMultiObjSimple(t *testing.T) {
 	const (
 		copyCnt   = 20
@@ -77,7 +77,9 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
 		template := "test/a-" + fmt.Sprintf("{%04d..%04d}", rangeStart, rangeStart+copyCnt-1)
 		tlog.Logf("[%s] %s => %s\n", template, bckFrom.Cname(""), bckTo.Cname(""))
-		msg := cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
+
+		msg := cmn.TCObjsMsg{ToBck: bckTo}
+		msg.Template = template
 		xid, err = api.CopyMultiObj(baseParams, bckFrom, msg)
 		tassert.CheckFatal(t, err)
 	}
@@ -188,8 +190,9 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						var (
 							err error
 							xid string
-							msg = cmn.TCObjsMsg{ListRange: cmn.ListRange{ObjNames: list}, ToBck: bckTo}
+							msg = cmn.TCObjsMsg{ToBck: bckTo}
 						)
+						msg.ObjNames = list
 						if m.bck.IsRemote() && test.evictRemoteSrc {
 							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
 						} else {
@@ -221,8 +224,9 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 							err      error
 							xid      string
 							template = fmt.Sprintf(fmtRange, m.prefix, start, start+numToCopy-1)
-							msg      = cmn.TCObjsMsg{ListRange: cmn.ListRange{Template: template}, ToBck: bckTo}
+							msg      = cmn.TCObjsMsg{ToBck: bckTo}
 						)
+						msg.Template = template
 						if m.bck.IsRemote() && test.evictRemoteSrc {
 							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
 						} else {

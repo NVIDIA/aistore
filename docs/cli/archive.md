@@ -50,9 +50,9 @@ For the most recently updated list of supported archival formats, please see:
 | `--list` | `string` | Comma separated list of objects for adding to archive | `""` |
 | `--cleanup` | `bool` | delete or evict the source objects upon successful archiving | `false` |
 | `--skip-misplaced` | `bool` | skip misplaced objects | `false` |
-| `--include-bck` | `bool` | true - archive directory structure starts with bucket name, false - objects are put to the archive root | `false` |
+| `--include-bck` | `bool` | archive directory structure starts with bucket name, false - objects are put to the archive root | `false` |
 | `--ignore-error` | `bool` | ignore error on soft failures like bucket already exists, bucket does not exist etc | `false` |
-| `--append-to-arch` | `bool` | true - append to an archive if already exists, false - create a new archive | `false` |
+| `--append` | `bool` | add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard") | `false` |
 
 The command must include either `--list` or `--template` option. Options `--list` and `--template` are mutually exclusive.
 
@@ -86,7 +86,7 @@ arch1.tar                31.00KiB
     arch1.tar/obj1       9.26KiB
     arch1.tar/obj2       9.26KiB
     arch1.tar/obj3       9.26KiB
-$ ais archive create ais://bck/arch1.tar --template "obj{4..5}" --append-to-arch
+$ ais archive create ais://bck/arch1.tar --template "obj{4..5}" --append
 Created archive "ais://bck/arch1.tar"
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE

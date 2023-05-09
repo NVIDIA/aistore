@@ -366,7 +366,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case apc.ActDeleteObjects, apc.ActEvictObjects:
-		lrMsg := &cmn.ListRange{}
+		lrMsg := &apc.ListRange{}
 		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
@@ -420,7 +420,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case apc.ActPrefetchObjects:
 		var (
 			err   error
-			lrMsg = &cmn.ListRange{}
+			lrMsg = &apc.ListRange{}
 		)
 		if !apireq.bck.IsRemote() {
 			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s",

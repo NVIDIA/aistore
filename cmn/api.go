@@ -144,34 +144,20 @@ type (
 
 // Multi-object (list|range) operations
 type (
-	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
-	ListRange struct {
-		Template string   `json:"template"`
-		ObjNames []string `json:"objnames"`
-	}
-
-	// ArchiveMsg is used in CreateArchMultiObj operations; the message contains parameters
+	// ArchiveMsg is used in api.CreateArchMultiObj operations; the message contains parameters
 	// for archiving mutiple (source) objects as one of the supported cos.ArchExtensions types
-	// at the specified (bucket) destination
+	// at the specified (bucket) destination.
+	// --------------------  a NOTE on terminology:   ---------------------
+	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
 	ArchiveMsg struct {
-		ToBck       Bck    `json:"tobck"`
-		TxnUUID     string `json:"-"`
-		FromBckName string `json:"-"`
-		ArchName    string `json:"archname"` // must have one of the cos.ArchExtensions
-		Mime        string `json:"mime"`     // user-specified mime type takes precedence if defined
-		ListRange
-		InclSrcBname          bool `json:"isbn"` // include source bucket name into the names of archived objects
-		AllowAppendToExisting bool `json:"aate"` // allow adding a list or a range of objects to an existing archive
-		ContinueOnError       bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
+		ToBck Bck `json:"tobck"`
+		apc.ArchiveMsg
 	}
 
 	//  Multi-object copy & transform (see also: TCBMsg)
 	TCObjsMsg struct {
 		ToBck Bck `json:"tobck"`
-		ListRange
-		TxnUUID string `json:"-"`
-		apc.TCBMsg
-		ContinueOnError bool `json:"coer"` // ditto
+		apc.TCObjsMsg
 	}
 )
 
@@ -382,15 +368,6 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 		summ.UsedPct = cos.DivRoundU64(summ.TotalSize.OnDisk*100, totalDisksSize)
 	}
 }
-
-///////////////////
-// ListRange //
-///////////////////
-
-// NOTE: to operate on an entire bucket use empty `ListRange{}`
-
-func (lrm *ListRange) IsList() bool      { return len(lrm.ObjNames) > 0 }
-func (lrm *ListRange) HasTemplate() bool { return lrm.Template != "" }
 
 ////////////////
 // ArchiveMsg //

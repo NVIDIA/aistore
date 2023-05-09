@@ -330,6 +330,8 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
+	archExts = "(" + strings.Join(cos.ArchExtensions, ", ") + ")"
+
 	//
 	// scope 'all'
 	//
@@ -719,10 +721,15 @@ var (
 
 	sourceBckFlag = cli.StringFlag{Name: "source-bck", Usage: "source bucket (to archive multiple objects from)"}
 
-	allowAppendToExistingFlag = cli.BoolFlag{
-		Name:  "append-to-arch",
-		Usage: "allow adding a list or a range of objects to an existing archive",
+	appendArch1Flag = cli.BoolFlag{ // from `ais archive`
+		Name:  "append",
+		Usage: "add object(s) to an existing " + archExts + "-formatted object (\"archive\", \"shard\")",
 	}
+	appendArch2Flag = cli.BoolFlag{ // from `ais put`
+		Name:  "append-to-arch",
+		Usage: appendArch1Flag.Usage,
+	}
+
 	continueOnErrorFlag = cli.BoolFlag{
 		Name:  "cont-on-err",
 		Usage: "keep running archiving xaction in presence of errors in a any given multi-object transaction",

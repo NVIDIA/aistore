@@ -69,7 +69,7 @@ func TestXactionRenewLRU(t *testing.T) {
 
 func TestXactionRenewPrefetch(t *testing.T) {
 	var (
-		evArgs = &cmn.ListRange{}
+		evArgs = &apc.ListRange{}
 		bmd    = mock.NewBaseBownerMock()
 		bck    = meta.NewBck(
 			"test", apc.GCP, cmn.NsGlobal,
@@ -229,7 +229,7 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
-	rns3 := xreg.RenewPrefetch(cos.GenUUID(), tMock, bck3, &cmn.ListRange{})
+	rns3 := xreg.RenewPrefetch(cos.GenUUID(), tMock, bck3, &apc.ListRange{})
 	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)
 
 	xactBck1 := rns1.Entry.Get()

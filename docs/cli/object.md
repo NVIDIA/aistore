@@ -335,7 +335,7 @@ OPTIONS:
    --source-bck value  source bucket (to archive multiple objects from)
    --archpath value    filename in archive
    --archive           archive a given list ('--list') or range ('--template') of objects
-   --append-to-arch    allow adding a list or a range of objects to an existing archive
+   --append-to-arch    add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard")
    --skip-vc           skip loading object metadata (and the associated checksum & version related processing)
    --compute-checksum  [end-to-end protection] compute client-side checksum configured for the destination bucket
    --crc32c value      compute client-side crc32c checksum

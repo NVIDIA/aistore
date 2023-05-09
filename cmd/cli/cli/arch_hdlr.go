@@ -22,7 +22,7 @@ var (
 			templateFlag,
 			listFlag,
 			includeSrcBucketNameFlag,
-			allowAppendToExistingFlag,
+			appendArch1Flag,
 			continueOnErrorFlag,
 		},
 		cmdAppend: {
@@ -43,7 +43,7 @@ var (
 				Usage:        "create multi-object (" + strings.Join(cos.ArchExtensions, ", ") + ") archive",
 				ArgsUsage:    objectArgument,
 				Flags:        archCmdsFlags[commandCreate],
-				Action:       createArchMultiObjHandler,
+				Action:       archMultiObjHandler,
 				BashComplete: putPromoteObjectCompletions,
 			},
 			{

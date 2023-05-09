@@ -61,7 +61,7 @@ var (
 			sourceBckFlag,
 			archpathOptionalFlag,
 			createArchFlag,
-			allowAppendToExistingFlag,
+			appendArch2Flag,
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
@@ -270,15 +270,18 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	return multiobjArg(c, commandRemove)
 }
 
-func createArchMultiObjHandler(c *cli.Context) (err error) {
-	var (
-		bckTo, bckFrom cmn.Bck
-		objName        string
-	)
+func archMultiObjHandler(c *cli.Context) (err error) {
 	// validate
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
 	}
+	return archMultiObj(c, flagIsSet(c, appendArch1Flag))
+}
+func archMultiObj(c *cli.Context, doAppend bool) (err error) {
+	var (
+		bckTo, bckFrom cmn.Bck
+		objName        string
+	)
 	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
 		return missingArgumentsError(c,
 			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
@@ -306,7 +309,7 @@ func createArchMultiObjHandler(c *cli.Context) (err error) {
 		msg      = cmn.ArchiveMsg{ToBck: bckTo, ArchName: objName}
 	)
 	msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
-	msg.AllowAppendToExisting = flagIsSet(c, allowAppendToExistingFlag)
+	msg.AllowAppendToExisting = doAppend
 	msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 	if list != "" {
 		msg.ListRange.ObjNames = splitCsv(list)
@@ -335,14 +338,15 @@ func putHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
-		// --progress steals STDOUT while multi-object produces scary looking errors w/ no cluster
+		// '--progress' steals STDOUT with multi-object producing scary looking
+		// errors when there's no cluster
 		if _, err = api.GetClusterMap(apiBP); err != nil {
 			return
 		}
 	}
 	switch {
 	case flagIsSet(c, createArchFlag): // 1. archive
-		return createArchMultiObjHandler(c)
+		return archMultiObj(c, flagIsSet(c, appendArch2Flag))
 	case c.NArg() == 1: // 2. BUCKET/[OBJECT_NAME] --list|--template
 		if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
 			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))

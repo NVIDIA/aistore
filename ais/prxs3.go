@@ -242,7 +242,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 
 	var (
 		msg   = apc.ActMsg{Action: apc.ActDeleteObjects}
-		lrMsg = &cmn.ListRange{ObjNames: make([]string, 0, len(objList.Object))}
+		lrMsg = &apc.ListRange{ObjNames: make([]string, 0, len(objList.Object))}
 	)
 	for _, obj := range objList.Object {
 		lrMsg.ObjNames = append(lrMsg.ObjNames, obj.Key)

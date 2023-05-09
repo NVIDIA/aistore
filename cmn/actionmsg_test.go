@@ -33,7 +33,7 @@ func testRawUnmarshal(t *testing.T, tc actmsgTestConf) {
 
 			// parse the template
 			if tc.isSelectObjs {
-				lrMsg := &ListRange{}
+				lrMsg := &apc.ListRange{}
 				err = cos.MorphMarshal(msg.Value, lrMsg)
 				tassert.CheckError(t, err)
 			}

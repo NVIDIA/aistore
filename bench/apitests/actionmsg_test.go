@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -18,7 +17,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		msg := apc.ActMsg{
 			Name:   "test-name",
 			Action: apc.ActDeleteObjects,
-			Value:  &cmn.ListRange{Template: "thisisatemplate"},
+			Value:  &apc.ListRange{Template: "thisisatemplate"},
 		}
 		data, err := jsoniter.Marshal(&msg)
 		if err != nil {
@@ -29,7 +28,7 @@ func BenchmarkActionMsgMarshal(b *testing.B) {
 		if err != nil {
 			b.Errorf("unmarshaling errored: %v", err)
 		}
-		err = cos.MorphMarshal(msg2.Value, &cmn.ListRange{})
+		err = cos.MorphMarshal(msg2.Value, &apc.ListRange{})
 		if err != nil {
 			b.Errorf("morph unmarshal errored: %v", err)
 		}
