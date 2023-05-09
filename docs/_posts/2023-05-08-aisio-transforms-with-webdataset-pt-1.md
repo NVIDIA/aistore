@@ -38,7 +38,7 @@ For this example we will be using:
 --- 
 ## The Dataset
 
-As in the [previous ETL example](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk), we will use the `Oxford-IIIT Pet Dataset`: https://www.robots.ox.ac.uk/~vgg/data/pets/. 
+As in the [previous ETL example](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk), we will use the `Oxford-IIIT Pet Dataset`: [https://www.robots.ox.ac.uk/~vgg/data/pets/](https://www.robots.ox.ac.uk/~vgg/data/pets/). 
 
 This dataset is notably NOT in WebDataset format -- the class info, metadata, and images are all separated.
 
