@@ -451,7 +451,7 @@ func setPrimaryHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}

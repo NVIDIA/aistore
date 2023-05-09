@@ -536,7 +536,7 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 	}
 
 	if v != NilValue {
-		if originBck, err = parseBckURI(c, v, true /*requireProviderInURI*/, true /*error only*/); err != nil {
+		if originBck, err = parseBckURI(c, v, true /*error only*/); err != nil {
 			return fmt.Errorf("invalid '%s=%s': expecting %q to be a valid bucket name",
 				apc.PropBackendBck, v, v)
 		}
@@ -570,7 +570,7 @@ func showBucketProps(c *cli.Context) (err error) {
 
 	section := c.Args().Get(1)
 
-	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
+	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
@@ -680,29 +680,6 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	}
 	msg := fmt.Sprintf("Erasure-coding bucket %s. ", bck.Cname(""))
 	actionDone(c, msg+toMonitorMsg(c, xid, ""))
-	return
-}
-
-// Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
-func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom, bckTo cmn.Bck, err error) {
-	if c.NArg() == shift {
-		err = missingArgumentsError(c, bckFromArg, bckToArg)
-		return
-	}
-	if c.NArg() == shift+1 {
-		err = missingArgumentsError(c, bckToArg)
-		return
-	}
-
-	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*require provider*/, true /*error only*/)
-	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
-		return
-	}
-	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true, true /*error only*/)
-	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
-	}
 	return
 }
 

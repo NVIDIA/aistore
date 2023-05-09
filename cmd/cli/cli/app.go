@@ -33,12 +33,18 @@ const (
    To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
 )
 
-// TODO: simplify
 const (
 	warnRemAisOffline = `remote ais cluster %s is crrrently unreachable.
 Run 'ais config cluster backend.conf --json' - to show the respective configuration;
     'ais config cluster backend.conf <new JSON formatted value>' - to reconfigure or remove.
 For details and usage examples, see: docs/cli/config.md`
+)
+
+const (
+	// currently _required_ - e.g., `ais://mmm` cannot be reduced to `mmm`
+	// in the future, we may fully support cfg.DefaultProvider but not yet
+	// * see also: cmd/cli/config/config.go
+	providerRequired = true
 )
 
 type (

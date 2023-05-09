@@ -332,7 +332,6 @@ OPTIONS:
                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
                        si  - SI (metric) format, e.g.: KB, MB, GB
                        raw - do not convert to (or from) human-readable format
-   --source-bck value  source bucket (to archive multiple objects from)
    --archpath value    filename in archive
    --archive           archive a given list ('--list') or range ('--template') of objects
    --append-to-arch    add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard")
@@ -1093,11 +1092,11 @@ Note that (alternatively) multi-object archives can be created using `ais create
 # TAR objects `obj1`, `obj2` , `obj3` in a given (destination) bucket called `destbck`.
 # NOTE: when specifying `--list` or `--template`, make sure to use double or single quotation marks.
 
-$ ais put ais://destbck/myarch.tar --source-bck=ais://abc --list="obj1,  obj2,obj3" --archive
+$ ais put ais://abc ais://destbck/myarch.tar --list="obj1,  obj2,obj3" --archive
 ```
 
 ```console
 # ZIP objects `obj1`, `obj2` , `obj3`. Note that in this example source and destination are identical.
 
-$ ais put ais://mybck/myarch.zip --source-bck=ais://mybck --list="obj1,obj2, obj3" --archive
+$ ais put ais://mybck ais://mybck/myarch.zip --list="obj1,obj2, obj3" --archive
 ```

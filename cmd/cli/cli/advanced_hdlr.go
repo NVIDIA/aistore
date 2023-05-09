@@ -97,7 +97,7 @@ func genShardsHandler(c *cli.Context) error {
 	}
 
 	// Expecting: "ais://bucket/shard-{00..99}.tar"
-	bck, object, err := parseBckObjectURI(c, c.Args()[0])
+	bck, object, err := parseBckObjURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func loadLomCacheHandler(c *cli.Context) error {
 	} else if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func removeNodeFromSmap(c *cli.Context) error {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
 
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}

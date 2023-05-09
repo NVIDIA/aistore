@@ -275,7 +275,7 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 func multiobjArg(c *cli.Context, command string) error {
 	// stops iterating if encounters error
 	for _, uri := range c.Args() {
-		bck, objName, err := parseBckObjectURI(c, uri)
+		bck, objName, err := parseBckObjURI(c, uri, false)
 		if err != nil {
 			return err
 		}

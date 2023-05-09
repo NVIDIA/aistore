@@ -165,7 +165,7 @@ func getxst(out any, q url.Values, bp BaseParams, args xact.ArgsMsg) (err error)
 //  3. Breaks loop on error
 //  4. If the destination returns status code StatusOK, it means the response
 //     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitBsumm(msg *cmn.BsummCtrlMsg, bsumm *cmn.AllBsummResults) error {
+func (reqParams *ReqParams) waitBsumm(msg *apc.BsummCtrlMsg, bsumm *cmn.AllBsummResults) error {
 	var (
 		uuid   string
 		sleep  = xact.MinPollTime

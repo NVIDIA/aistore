@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -58,7 +56,6 @@ var (
 			continueOnErrorFlag,
 			unitsFlag,
 			// arch
-			sourceBckFlag,
 			archpathOptionalFlag,
 			createArchFlag,
 			appendArch2Flag,
@@ -191,7 +188,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		bck    cmn.Bck
 	)
 
-	if bck, oldObj, err = parseBckObjectURI(c, oldObjFull); err != nil {
+	if bck, oldObj, err = parseBckObjURI(c, oldObjFull, false); err != nil {
 		return
 	}
 	if oldObj == "" {
@@ -204,7 +201,7 @@ func mvObjectHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "provider %q not supported", bck.Provider)
 	}
 
-	if bckDst, objDst, err := parseBckObjectURI(c, newObj); err == nil && bckDst.Name != "" {
+	if bckDst, objDst, err := parseBckObjURI(c, newObj, false); err == nil && bckDst.Name != "" {
 		if !bckDst.Equal(&bck) {
 			return incorrectUsageMsg(c, "moving an object to another bucket(%s) is not supported", bckDst)
 		}
@@ -232,12 +229,11 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	}
 
 	if c.NArg() == 1 {
-		uri := c.Args().First()
-		bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)
+		uri := c.Args().Get(0)
+		bck, objName, err := parseBckObjURI(c, uri, true /*is optional*/)
 		if err != nil {
 			return err
 		}
-
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 			// List or range operation on a given bucket.
 			return listrange(c, bck)
@@ -270,71 +266,6 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	return multiobjArg(c, commandRemove)
 }
 
-func archMultiObjHandler(c *cli.Context) (err error) {
-	// validate
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
-	}
-	return archMultiObj(c, flagIsSet(c, appendArch1Flag))
-}
-func archMultiObj(c *cli.Context, doAppend bool) (err error) {
-	var (
-		bckTo, bckFrom cmn.Bck
-		objName        string
-	)
-	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		return missingArgumentsError(c,
-			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
-				flprn(listFlag), flprn(templateFlag)))
-	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(listFlag), flprn(templateFlag)))
-	}
-	if bckTo, objName, err = parseBckObjectURI(c, c.Args().Get(0), true /*optional objName*/); err != nil {
-		return
-	}
-	if srcURI := parseStrFlag(c, sourceBckFlag); srcURI != "" {
-		if bckFrom, _, err = parseBckObjectURI(c, srcURI, true /*optional objName*/); err != nil {
-			return
-		}
-	} else {
-		bckFrom = bckTo
-	}
-
-	// api
-	var (
-		template = parseStrFlag(c, templateFlag)
-		list     = parseStrFlag(c, listFlag)
-		msg      = cmn.ArchiveMsg{ToBck: bckTo}
-	)
-	{
-		msg.ArchName = objName
-		msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
-		msg.AppendToExisting = doAppend
-		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-		if list != "" {
-			msg.ListRange.ObjNames = splitCsv(list)
-		} else {
-			msg.ListRange.Template = template
-		}
-	}
-	_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
-	if err != nil {
-		return err
-	}
-	for i := 0; i < 3; i++ {
-		time.Sleep(time.Second)
-		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentNoProps)
-		if err == nil {
-			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.Cname(objName))
-			return nil
-		}
-	}
-	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.Cname(objName))
-	return nil
-}
-
 func putHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -358,7 +289,7 @@ func putHandler(c *cli.Context) (err error) {
 		}
 		// destination
 		uri := c.Args().Get(0)
-		bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+		bck, objName, err := parseBckObjURI(c, uri, true /*optional objName*/)
 		if err != nil {
 			return err
 		}
@@ -403,7 +334,7 @@ func put(c *cli.Context) error {
 		return appendArchHandler(c)
 	}
 
-	bck, objName, err := parseBckObjectURI(c, uri, true /*optional objName*/)
+	bck, objName, err := parseBckObjURI(c, uri, true /*optional objName*/)
 	if err != nil {
 		return err
 	}
@@ -431,7 +362,7 @@ func concatHandler(c *cli.Context) (err error) {
 		fileNames[i] = c.Args().Get(i)
 	}
 
-	if bck, objName, err = parseBckObjectURI(c, fullObjName); err != nil {
+	if bck, objName, err = parseBckObjURI(c, fullObjName, false); err != nil {
 		return
 	}
 	if _, err = headBucket(bck, false /* don't add */); err != nil {
@@ -458,7 +389,7 @@ func promoteHandler(c *cli.Context) (err error) {
 		objName     string
 		fullObjName = c.Args().Get(1)
 	)
-	if bck, objName, err = parseBckObjectURI(c, fullObjName, true /*optObjName*/); err != nil {
+	if bck, objName, err = parseBckObjURI(c, fullObjName, true /*optObjName*/); err != nil {
 		return
 	}
 	if _, err = headBucket(bck, false /* don't add */); err != nil {
@@ -472,7 +403,7 @@ func setCustomPropsHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjectURI(c, uri, true /* optional objName */)
+	bck, objName, err := parseBckObjURI(c, uri, true /* optional objName */)
 	if err != nil {
 		return err
 	}

@@ -26,7 +26,7 @@ func catHandler(c *cli.Context) error {
 	}
 	// source
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjectURI(c, uri)
+	bck, objName, err := parseBckObjURI(c, uri, false)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func getHandler(c *cli.Context) error {
 	}
 	// source
 	uri := c.Args().Get(0)
-	bck, objName, err := parseBckObjectURI(c, uri, flagIsSet(c, getObjPrefixFlag) /*optObjName*/)
+	bck, objName, err := parseBckObjURI(c, uri, flagIsSet(c, getObjPrefixFlag))
 	if err != nil {
 		return err
 	}

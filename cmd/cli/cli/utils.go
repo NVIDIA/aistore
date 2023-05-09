@@ -147,116 +147,6 @@ func isConfigProp(s string) bool {
 	return cos.StringInSlice(s, props)
 }
 
-func parseDest(c *cli.Context, uri string) (bck cmn.Bck, pathSuffix string, err error) {
-	bck, pathSuffix, err = parseBckObjectURI(c, uri, true /*optional objName*/)
-	if err != nil {
-		return
-	} else if bck.IsHTTP() {
-		err = fmt.Errorf("http bucket is not supported as destination")
-		return
-	}
-	pathSuffix = strings.Trim(pathSuffix, "/")
-	return
-}
-
-// NOTE: consider adding cli config.default-backend-provider - nolint for now
-
-//nolint:unparam // !requireProviderInURI is currently never used
-func parseBckURI(c *cli.Context, uri string, requireProviderInURI bool, errorOnly ...bool) (cmn.Bck, error) {
-	const validNames = ": ais://mmm, s3://nnn or aws://nnn, gs://ppp or gcp://ppp"
-	if isWebURL(uri) {
-		bck := parseURLtoBck(uri)
-		return bck, nil
-	}
-
-	opts := cmn.ParseURIOpts{}
-	if requireProviderInURI {
-		parts := strings.Split(uri, apc.BckProviderSeparator)
-		if len(parts) < 2 {
-			err := fmt.Errorf("invalid %q: backend provider cannot be empty\n(e.g. valid names%s)", uri, validNames)
-			return cmn.Bck{}, err
-		}
-		if len(parts) > 2 {
-			err := fmt.Errorf("invalid bucket arg: too many parts %v\n(e.g. valid names%s)", parts, validNames)
-			return cmn.Bck{}, err
-		}
-	} else {
-		opts.DefaultProvider = cfg.DefaultProvider
-	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
-	switch {
-	case err != nil:
-		return cmn.Bck{}, err
-	case objName != "":
-		if len(errorOnly) > 0 && errorOnly[0] {
-			return cmn.Bck{}, fmt.Errorf("unexpected object name argument %q", objName)
-		}
-		return cmn.Bck{}, objectNameArgNotExpected(c, objName)
-	case bck.Name == "":
-		if len(errorOnly) > 0 && errorOnly[0] {
-			return cmn.Bck{}, fmt.Errorf("missing bucket name: %q", uri)
-		}
-		return cmn.Bck{}, incorrectUsageMsg(c, "missing bucket name in %q", uri)
-	default:
-		if err = bck.Validate(); err != nil {
-			if len(errorOnly) > 0 && errorOnly[0] {
-				return cmn.Bck{}, err
-			}
-			msg := "E.g. " + bucketArgument + validNames
-			return cmn.Bck{}, cannotExecuteError(c, err, msg)
-		}
-	}
-	return bck, nil
-}
-
-func parseQueryBckURI(c *cli.Context, uri string) (cmn.QueryBcks, error) {
-	uri = preparseBckObjURI(uri)
-	if isWebURL(uri) {
-		bck := parseURLtoBck(uri)
-		return cmn.QueryBcks(bck), nil
-	}
-	bck, objName, err := cmn.ParseBckObjectURI(uri, cmn.ParseURIOpts{IsQuery: true})
-	if err != nil {
-		return cmn.QueryBcks(bck), err
-	} else if objName != "" {
-		return cmn.QueryBcks(bck), objectNameArgNotExpected(c, objName)
-	}
-	return cmn.QueryBcks(bck), nil
-}
-
-func parseBckObjectURI(c *cli.Context, uri string, optObjName ...bool) (bck cmn.Bck, objName string, err error) {
-	opts := cmn.ParseURIOpts{}
-	if isWebURL(uri) {
-		hbo, err := cmn.NewHTTPObjPath(uri)
-		if err != nil {
-			return bck, objName, err
-		}
-		bck, objName = hbo.Bck, hbo.ObjName
-		goto validate
-	}
-	if cfg != nil {
-		opts.DefaultProvider = cfg.DefaultProvider
-	}
-	bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
-	if err != nil {
-		if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
-			return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
-		}
-		msg := "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
-		return bck, objName, cannotExecuteError(c, err, msg)
-	}
-
-validate:
-	if bck.Name == "" {
-		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
-	} else if err := bck.Validate(); err != nil {
-		return bck, objName, cannotExecuteError(c, err, "")
-	} else if objName == "" && (len(optObjName) == 0 || !optObjName[0]) {
-		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
-	}
-	return
-}
-
 func getPrefixFromPrimary() string {
 	scheme, _ := cmn.ParseURLScheme(clusterURL)
 	if scheme == "" {
@@ -323,7 +213,7 @@ func parseRemAliasURL(c *cli.Context) (alias, remAisURL string, err error) {
 		alias, remAisURL = c.Args().Get(0), c.Args().Get(1)
 		goto ret
 	}
-	parts = strings.SplitN(c.Args().First(), keyAndValueSeparator, 2)
+	parts = strings.SplitN(c.Args().Get(0), keyAndValueSeparator, 2)
 	if len(parts) < 2 {
 		err = missingArgumentsError(c, aliasURLPairArgument)
 		return
@@ -472,7 +362,7 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	return
 }
 
-func parseBckPropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err error) {
+func parseBpropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err error) {
 	propArgs := c.Args().Tail()
 
 	if c.Command.Name == commandCreate {
@@ -514,7 +404,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 	bcks := make([]cmn.Bck, 0, len(uris))
 
 	for _, bckURI := range uris {
-		bck, err := parseBckURI(c, bckURI, true /*require provider*/)
+		bck, err := parseBckURI(c, bckURI, false)
 		if err != nil {
 			return nil, err
 		}
@@ -919,18 +809,6 @@ func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
 	}
 	sort.Strings(sorted)
 	return
-}
-
-// `ais ls` and friends: allow for `provider:` shortcut
-func preparseBckObjURI(uri string) string {
-	if uri == "" {
-		return uri
-	}
-	p := strings.TrimSuffix(uri, ":")
-	if _, err := cmn.NormalizeProvider(p); err == nil {
-		return p + apc.BckProviderSeparator
-	}
-	return uri // unchanged
 }
 
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }

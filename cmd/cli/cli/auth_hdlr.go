@@ -298,7 +298,7 @@ func filterRolesByCluster(roles []*authn.Role, clusters []string) ([]*authn.Role
 }
 
 func cliAuthnUserName(c *cli.Context) string {
-	name := c.Args().First()
+	name := c.Args().Get(0)
 	if name == "" {
 		name = readValue(c, "User login")
 	}
@@ -334,7 +334,7 @@ func addAuthUserHandler(c *cli.Context) (err error) {
 }
 
 func deleteUserHandler(c *cli.Context) (err error) {
-	userName := c.Args().First()
+	userName := c.Args().Get(0)
 	if userName == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
@@ -523,7 +523,7 @@ func showAuthAllRoles(c *cli.Context) error {
 }
 
 func showAuthRoleHandler(c *cli.Context) (err error) {
-	roleID := c.Args().First()
+	roleID := c.Args().Get(0)
 	if roleID != "" {
 		return showAuthSingleRole(c, roleID)
 	}
@@ -531,7 +531,7 @@ func showAuthRoleHandler(c *cli.Context) (err error) {
 }
 
 func showAuthUserHandler(c *cli.Context) (err error) {
-	userID := c.Args().First()
+	userID := c.Args().Get(0)
 	if userID == "" {
 		list, err := authn.GetAllUsers(authParams)
 		if err != nil {
@@ -629,7 +629,7 @@ func addOrUpdateRole(c *cli.Context) (*authn.Role, error) {
 		Desc: parseStrFlag(c, descRoleFlag),
 	}
 	if bucket != "" {
-		bck, err := parseBckURI(c, bucket, true /*require provider*/)
+		bck, err := parseBckURI(c, bucket, false)
 		if err != nil {
 			return nil, err
 		}

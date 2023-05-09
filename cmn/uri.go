@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -15,6 +15,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/OneOfOne/xxhash"
 )
+
+type ParseURIOpts struct {
+	DefaultProvider string // If set the provider will be used as provider.
+	IsQuery         bool   // Determines if the URI should be parsed as query.
+}
 
 //
 // Parse URI = [provider://][@uuid#namespace][/][bucketName[/objectName]]

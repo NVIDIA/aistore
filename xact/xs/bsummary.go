@@ -34,11 +34,11 @@ type (
 	bsummFactory struct {
 		xreg.RenewBase
 		xctn *bsummXact
-		msg  *cmn.BsummCtrlMsg
+		msg  *apc.BsummCtrlMsg
 	}
 	bsummXact struct {
 		t         cluster.Target
-		msg       *cmn.BsummCtrlMsg
+		msg       *apc.BsummCtrlMsg
 		res       atomic.Pointer
 		summaries cmn.AllBsummResults
 		xact.Base
@@ -57,7 +57,7 @@ var (
 //////////////////
 
 func (*bsummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	msg := args.Custom.(*cmn.BsummCtrlMsg)
+	msg := args.Custom.(*apc.BsummCtrlMsg)
 	p := &bsummFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
 	return p
 }
@@ -132,7 +132,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 
 func (r *bsummXact) runBck(bck *meta.Bck, listRemote bool) (err error) {
 	var (
-		msg  cmn.BsummCtrlMsg
+		msg  apc.BsummCtrlMsg
 		summ = cmn.NewBsummResult(bck.Bucket(), r.totalDisksSize)
 	)
 	cos.CopyStruct(&msg, r.msg) // each bucket to have it's own copy of the msg (we may update it)
@@ -152,7 +152,7 @@ func (r *bsummXact) runBck(bck *meta.Bck, listRemote bool) (err error) {
 }
 
 // TODO: `msg.Fast` might be a bit crude, usability-wise - consider adding (best effort) max-time limitation
-func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *cmn.BsummCtrlMsg) (err error) {
+func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtrlMsg) (err error) {
 	summ.Bck.Copy(bck.Bucket())
 
 	// 1. always estimate on-disk size (is fast)

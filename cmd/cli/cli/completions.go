@@ -142,10 +142,10 @@ func showConfigCompletions(c *cli.Context) {
 		suggestAllNodes(c)
 		return
 	}
-	if c.Args().First() == cmdCLI {
+	if c.Args().Get(0) == cmdCLI {
 		return
 	}
-	if c.Args().First() == cmdCluster {
+	if c.Args().Get(0) == cmdCluster {
 		if c.NArg() == 1 {
 			configSectionCompletions(c, cmdCluster)
 		}
@@ -310,7 +310,7 @@ func suggestUpdatableConfig(c *cli.Context) {
 		return
 	}
 	scope := apc.Cluster
-	if c.NArg() > 0 && !isConfigProp(c.Args().First()) {
+	if c.NArg() > 0 && !isConfigProp(c.Args().Get(0)) {
 		scope = apc.Daemon
 	}
 
@@ -394,7 +394,7 @@ mloop:
 	for _, b := range buckets {
 		if multiple {
 			for _, argBck := range c.Args() {
-				parsedArgBck, err := parseBckURI(c, argBck, true /*require provider*/)
+				parsedArgBck, err := parseBckURI(c, argBck, false)
 				if err != nil {
 					return
 				}
@@ -438,7 +438,7 @@ func bpropsFilterExtra(c *cli.Context, tag string) bool {
 	if !strings.HasPrefix(tag, "extra.") {
 		return true
 	}
-	switch c.Args().First() {
+	switch c.Args().Get(0) {
 	case apc.S3Scheme, apc.AWS:
 		return strings.HasPrefix(tag, "extra.aws")
 	case apc.HTTP:
@@ -649,7 +649,7 @@ func oneRoleCompletions(c *cli.Context) {
 		return
 	}
 	for _, role := range roleList {
-		if role.ID == c.Args().First() {
+		if role.ID == c.Args().Get(0) {
 			return
 		}
 	}
@@ -696,7 +696,7 @@ func oneUserCompletionsWithRoles(c *cli.Context) {
 	}
 
 	for _, user := range userList {
-		if user.ID == c.Args().First() {
+		if user.ID == c.Args().Get(0) {
 			multiRoleCompletions(c)
 			return
 		}

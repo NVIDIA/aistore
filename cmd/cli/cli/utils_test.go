@@ -428,7 +428,7 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 	}
 	for _, test := range positiveTests {
-		bck, objName, err := parseBckObjectURI(&cli.Context{}, test.uri, test.optObjName)
+		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)
 		tassert.Errorf(t, err == nil, "failed on %s with err: %v", test.uri, err)
 		tassert.Errorf(t, test.bck.Equal(&bck), "failed on %s buckets are not equal (expected: %q, got: %q)", test.uri, test.bck, bck)
 		tassert.Errorf(t, test.objName == objName, "failed on %s object names are not equal (expected: %q, got: %q)", test.uri, test.objName, objName)
@@ -461,7 +461,7 @@ func TestParseBckObjectURI(t *testing.T) {
 		{uri: "hdfs://bucket"},
 	}
 	for _, test := range negativeTests {
-		bck, objName, err := parseBckObjectURI(&cli.Context{}, test.uri, test.optObjName)
+		bck, objName, err := parseBckObjURI(&cli.Context{}, test.uri, test.optObjName)
 		tassert.Errorf(t, err != nil, "expected error on %s (bck: %q, obj_name: %q)", test.uri, bck, objName)
 	}
 }

@@ -17,19 +17,18 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// Bucket properties - manageable, user-configurable, and inheritable (from cluster config)
+// BucketProps - manageable, user-configurable, and inheritable (from cluster config).
+// Includes per-bucket user-configurable checksum, version, LRU, erasure-coding, and more.
+//
+// At creation time, unless specified via api.CreateBucket, new bucket by default
+// inherits its properties from the global configuration.
+// * see api.CreateBucket for details
+// * for all inheritable props, see DefaultProps below
+//
+// Naming convention for setting/getting the particular props is defined as
+// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
+// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 type (
-	// BucketProps includes per-bucket user-configurable checksum, version, LRU, erasure-coding,
-	// and more.
-	//
-	// At creation time, unless specified via api.CreateBucket, new bucket by default
-	// inherits its properties from the global configuration.
-	// * see api.CreateBucket for details
-	// * for all inheritable props, see DefaultProps below
-	//
-	// Naming convention for setting/getting the particular props is defined as
-	// joining the json tags with dot. Eg. when referring to `EC.Enabled` field
-	// one would need to write `ec.enabled`. For more info refer to `IterFields`.
 	BucketProps struct {
 		BackendBck  Bck             `json:"backend_bck,omitempty"` // makes remote bucket out of a given ais bucket
 		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"`
@@ -105,59 +104,6 @@ type (
 	BackendBckToUpdate struct {
 		Name     *string `json:"name"`
 		Provider *string `json:"provider"`
-	}
-)
-
-// Bucket Summary
-type (
-	// control message to generate bucket summary or summaries (above)
-	BsummCtrlMsg struct {
-		UUID       string `json:"uuid"`
-		Prefix     string `json:"prefix"`
-		Fast       bool   `json:"fast"`
-		ObjCached  bool   `json:"cached"`
-		BckPresent bool   `json:"present"`
-	}
-	// "summarized" result for a given bucket
-	BsummResult struct {
-		Bck
-		ObjCount struct {
-			Present uint64 `json:"obj_count_present,string"`
-			Remote  uint64 `json:"obj_count_remote,string"`
-		}
-		ObjSize struct {
-			Min int64 `json:"obj_min_size"`
-			Avg int64 `json:"obj_avg_size"`
-			Max int64 `json:"obj_max_size"`
-		}
-		TotalSize struct {
-			OnDisk      uint64 `json:"size_on_disk,string"`          // sum(dir sizes) aka "apparent size"
-			PresentObjs uint64 `json:"size_all_present_objs,string"` // sum(cached object sizes)
-			RemoteObjs  uint64 `json:"size_all_remote_objs,string"`  // sum(all object sizes in a remote bucket)
-			Disks       uint64 `json:"total_disks_size,string"`
-		}
-		UsedPct      uint64 `json:"used_pct"`
-		IsBckPresent bool   `json:"is_present"` // in BMD
-	}
-	AllBsummResults []*BsummResult
-)
-
-// Multi-object (list|range) operations
-type (
-	// ArchiveMsg is used in api.CreateArchMultiObj operations; the message contains parameters
-	// for archiving mutiple (source) objects as one of the supported cos.ArchExtensions types
-	// at the specified (bucket) destination.
-	// --------------------  a NOTE on terminology:   ---------------------
-	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
-	ArchiveMsg struct {
-		ToBck Bck `json:"tobck"`
-		apc.ArchiveMsg
-	}
-
-	//  Multi-object copy & transform (see also: TCBMsg)
-	TCObjsMsg struct {
-		ToBck Bck `json:"tobck"`
-		apc.TCObjsMsg
 	}
 )
 
@@ -308,8 +254,16 @@ func (c *ExtraProps) ValidateAsProps(arg ...any) error {
 }
 
 //
-// bucket summary
+// Bucket Summary - result for a given bucket, and all results -------------------------------------------------
 //
+
+type (
+	BsummResult struct {
+		Bck
+		apc.BsummResult
+	}
+	AllBsummResults []*BsummResult
+)
 
 // interface guard
 var _ sort.Interface = (*AllBsummResults)(nil)
@@ -369,8 +323,26 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 	}
 }
 
-////////////////
-// ArchiveMsg //
-////////////////
+//
+// Multi-object (list|range) operations ----------------------------------------------------------
+//
+
+type (
+	// ArchiveMsg is used in api.CreateArchMultiObj operations; the message contains parameters
+	// for archiving mutiple (source) objects as one of the supported cos.ArchExtensions types
+	// at the specified (bucket) destination.
+	// --------------------  a NOTE on terminology:   ---------------------
+	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
+	ArchiveMsg struct {
+		ToBck Bck `json:"tobck"`
+		apc.ArchiveMsg
+	}
+
+	//  Multi-object copy & transform (see also: TCBMsg)
+	TCObjsMsg struct {
+		ToBck Bck `json:"tobck"`
+		apc.TCObjsMsg
+	}
+)
 
 func (msg *ArchiveMsg) Cname() string { return msg.ToBck.Cname(msg.ArchName) }

@@ -49,11 +49,6 @@ type (
 	QueryBcks Bck
 
 	Bcks []Bck
-
-	ParseURIOpts struct {
-		DefaultProvider string // If set the provider will be used as provider.
-		IsQuery         bool   // Determines if the URI should be parsed as query.
-	}
 )
 
 const (

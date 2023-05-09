@@ -276,7 +276,7 @@ func startXactionKind(c *cli.Context, xname string) (err error) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if c.NArg() > 0 && xact.IsSameScope(xname, xact.ScopeB, xact.ScopeGB) {
-		bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/)
+		bck, err = parseBckURI(c, c.Args().Get(0), false)
 		if err != nil {
 			return err
 		}
@@ -287,7 +287,7 @@ func startXactionKind(c *cli.Context, xname string) (err error) {
 func startResilverHandler(c *cli.Context) (err error) {
 	var sid string
 	if c.NArg() > 0 {
-		sid, _, err = getNodeIDName(c, c.Args().First())
+		sid, _, err = getNodeIDName(c, c.Args().Get(0))
 		if err != nil {
 			return
 		}
@@ -622,7 +622,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 	var specBytes []byte
 	if specPath == "" {
 		// Specification provided as an argument.
-		specBytes = []byte(c.Args().First())
+		specBytes = []byte(c.Args().Get(0))
 	} else {
 		// Specification provided as path to the file (flag).
 		var r io.Reader
@@ -682,7 +682,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 	bckArgs := splitCsv(s)
 	buckets := make([]cmn.Bck, len(bckArgs))
 	for idx, bckArg := range bckArgs {
-		bck, err := parseBckURI(c, bckArg, true /*require provider*/)
+		bck, err := parseBckURI(c, bckArg, false)
 		if err != nil {
 			return err
 		}
@@ -710,7 +710,7 @@ func startPrefetchHandler(c *cli.Context) (err error) {
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return
 	}
@@ -1162,7 +1162,7 @@ func removeDownloadHandler(c *cli.Context) error {
 			jobIDArgument, qflprn(allFinishedJobsFlag))
 		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
-	id := c.Args().First()
+	id := c.Args().Get(0)
 	if err := api.RemoveDownload(apiBP, id); err != nil {
 		return err
 	}
@@ -1210,7 +1210,7 @@ func removeDsortHandler(c *cli.Context) error {
 			jobIDArgument, qflprn(allFinishedJobsFlag))
 		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
-	id := c.Args().First()
+	id := c.Args().Get(0)
 	if err := api.RemoveDSort(apiBP, id); err != nil {
 		return err
 	}
@@ -1268,13 +1268,13 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	}
 	if xid != "" {
 		var errV error
-		if bck, errV = parseBckURI(c, xid, true /*require provider*/); errV == nil {
+		if bck, errV = parseBckURI(c, xid, false); errV == nil {
 			xid = "" // arg #1 is a bucket
 		}
 	}
 	if daemonID != "" && bck.IsEmpty() {
 		var errV error
-		if bck, errV = parseBckURI(c, daemonID, true); errV == nil {
+		if bck, errV = parseBckURI(c, daemonID, false); errV == nil {
 			daemonID = "" // ditto arg #2
 		}
 	}

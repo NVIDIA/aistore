@@ -8,7 +8,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -56,7 +55,7 @@ func RenewETL(t cluster.Target, msg any, xid string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewBckSummary(t cluster.Target, bck *meta.Bck, msg *cmn.BsummCtrlMsg) RenewRes {
+func RenewBckSummary(t cluster.Target, bck *meta.Bck, msg *apc.BsummCtrlMsg) RenewRes {
 	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: msg}, bck)
 	return dreg.renew(e, bck)
 }

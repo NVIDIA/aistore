@@ -25,9 +25,31 @@ See also:
 
 ## Archive multiple objects
 
-`ais archive create BUCKET/OBJECT [command options]`
-
 Archive a list or range of existing objects. Name the resulting (`.tar`, `.tar.gz`, `.zip`, `.msgpack`) archive `BUCKET/OBJECT`.
+
+```console
+$ ais archive create --help
+NAME:
+   ais archive create - create multi-object (.tar, .tgz, .tar.gz, .zip, .msgpack) archive
+
+USAGE:
+   ais archive create [command options] SRC_BUCKET DST_BUCKET/OBJECT_NAME
+
+OPTIONS:
+   --dry-run          preview the results without really running the action
+   --template value   template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
+                      --template 'dir/subdir/'
+                      --template 'shard-{1000..9999}.tar'
+                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                      --template "prefix-{0010..9999..2}-suffix"
+   --list value       comma-separated list of object names, e.g.:
+                      --list 'o1,o2,o3'
+                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+   --include-src-bck  prefix names of archived objects with the source bucket name
+   --append           add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard")
+   --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
+   --help, -h         show help
+```
 
 The operation accepts either an explicitly defined *list* or template-defined *range* of object names (to archive).
 
@@ -41,41 +63,27 @@ For the most recently updated list of supported archival formats, please see:
 
 * [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
 
-### Options
-
-| Name | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--source-bck` | `string` | Bucket that contains the source objects. If not set, source and destination buckets are the same | `""` |
-| `--template` | `string` | The object name template with optional range parts, e.g.: 'shard-{900..999}.tar' | `""` |
-| `--list` | `string` | Comma separated list of objects for adding to archive | `""` |
-| `--cleanup` | `bool` | delete or evict the source objects upon successful archiving | `false` |
-| `--skip-misplaced` | `bool` | skip misplaced objects | `false` |
-| `--include-bck` | `bool` | archive directory structure starts with bucket name, false - objects are put to the archive root | `false` |
-| `--ignore-error` | `bool` | ignore error on soft failures like bucket already exists, bucket does not exist etc | `false` |
-| `--append` | `bool` | add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard") | `false` |
-
-The command must include either `--list` or `--template` option. Options `--list` and `--template` are mutually exclusive.
-
 ### Examples
 
-Create an archive from a list of files of the same bucket:
+1. Create an archive from a list of files of the same bucket:
 
 ```console
 $ ais archive create ais://bck/arch.tar --list obj1,obj2
 Creating archive "ais://bck/arch.tar"
 ```
 
-The archive `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
+Resulting archive `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
 
-Create an archive using template:
+2. Create an archive with objects from a different bucket, use template (range):
 
 ```console
-$ ais archive create ais://bck/arch.tar --source-bck ais://bck2 --template "obj-{0..9}"
-Creating archive "ais://arch.tar"
-```
-The archive `ais://bck/arch.tar` contains 10 objects from bucket `ais://bck2`: `ais://bck2/obj-0`, `ais://bck2/obj-1` ... `ais://bck2/obj-9`.
+$ ais archive create ais://src ais://dst/arch.tar --template "obj-{0..9}"
 
-Create an archive consisting of 3 objects and then append 2 more:
+Creating archive "ais://dst/arch.tar" ...
+```
+The archive `ais://dst/arch.tar` contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
+
+3. Create an archive consisting of 3 objects and then append 2 more:
 
 ```console
 $ ais archive create ais://bck/arch1.tar --template "obj{1..3}"
@@ -86,8 +94,10 @@ arch1.tar                31.00KiB
     arch1.tar/obj1       9.26KiB
     arch1.tar/obj2       9.26KiB
     arch1.tar/obj3       9.26KiB
+
 $ ais archive create ais://bck/arch1.tar --template "obj{4..5}" --append
 Created archive "ais://bck/arch1.tar"
+
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE
 arch1.tar                51.00KiB

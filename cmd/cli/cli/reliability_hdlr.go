@@ -49,7 +49,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 		bck cmn.Bck
 		p   *cmn.BucketProps
 	)
-	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
+	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, false /* don't add */); err != nil {
@@ -74,7 +74,7 @@ func ecEncodeHandler(c *cli.Context) (err error) {
 		bck cmn.Bck
 		p   *cmn.BucketProps
 	)
-	if bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/); err != nil {
+	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return
 	}
 	if p, err = headBucket(bck, false /* don't add */); err != nil {

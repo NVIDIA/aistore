@@ -546,7 +546,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "object name in the form "+objectArgument)
 	}
 	fullObjName := c.Args().Get(0)
-	bck, object, err := parseBckObjectURI(c, fullObjName)
+	bck, object, err := parseBckObjURI(c, fullObjName, false)
 	if err != nil {
 		return err
 	}
@@ -586,17 +586,17 @@ func showBMDHandler(c *cli.Context) (err error) {
 }
 
 func showClusterConfigHandler(c *cli.Context) (err error) {
-	return showClusterConfig(c, c.Args().First())
+	return showClusterConfig(c, c.Args().Get(0))
 }
 
 func showConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, "missing arguments (hint: "+tabtab+")")
 	}
-	if c.Args().First() == cmdCLI {
+	if c.Args().Get(0) == cmdCLI {
 		return showCLIConfigHandler(c)
 	}
-	if c.Args().First() == cmdCluster {
+	if c.Args().Get(0) == cmdCluster {
 		return showClusterConfig(c, c.Args().Get(1))
 	}
 	return showNodeConfig(c)

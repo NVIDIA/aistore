@@ -95,7 +95,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		)
 	case apc.ActSummaryBck:
 		var (
-			bsumMsg cmn.BsummCtrlMsg
+			bsumMsg apc.BsummCtrlMsg
 			query   = r.URL.Query()
 		)
 		qbck, err := newQbckFromQ(bckName, query, nil)
@@ -264,7 +264,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	return t.writeMsgPack(w, resp.Lst, "list_objects")
 }
 
-func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *meta.Bck, msg *cmn.BsummCtrlMsg) {
+func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *meta.Bck, msg *apc.BsummCtrlMsg) {
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
 		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))

@@ -20,7 +20,7 @@ import (
 )
 
 func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActMsg, dpq *dpq) {
-	var msg cmn.BsummCtrlMsg
+	var msg apc.BsummCtrlMsg
 	if err := cos.MorphMarshal(amsg.Value, &msg); err != nil {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, amsg.Action, amsg.Value, err)
 		return
@@ -72,7 +72,7 @@ retry:
 }
 
 // steps
-func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, *meta.Snode, int, error) {
+func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsummResults, *meta.Snode, int, error) {
 	var (
 		q      = make(url.Values, 4)
 		config = cmn.GCO.Get()
@@ -180,7 +180,7 @@ func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int
 		max   = cmn.Timeout.MaxKeepalive()
 		sleep = cos.ProbingFrequency(max)
 		qbck  = (*cmn.QueryBcks)(bck)
-		msg   = &cmn.BsummCtrlMsg{ObjCached: true, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
+		msg   = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
 	)
 	if _, _, _, err := p.bsummDo(qbck, msg); err != nil {
 		return err

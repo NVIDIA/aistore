@@ -719,8 +719,6 @@ var (
 		Usage: "prefix names of archived objects with the source bucket name",
 	}
 
-	sourceBckFlag = cli.StringFlag{Name: "source-bck", Usage: "source bucket (to archive multiple objects from)"}
-
 	appendArch1Flag = cli.BoolFlag{ // from `ais archive`
 		Name:  "append",
 		Usage: "add object(s) to an existing " + archExts + "-formatted object (\"archive\", \"shard\")",

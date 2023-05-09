@@ -52,7 +52,7 @@ type (
 		Timeout         TimeoutConfig `json:"timeout"`
 		Auth            AuthConfig    `json:"auth"`
 		Aliases         AliasConfig   `json:"aliases"`
-		DefaultProvider string        `json:"default_provider,omitempty"`
+		DefaultProvider string        `json:"default_provider,omitempty"` // NOTE: not supported yet (see app.go)
 		NoColor         bool          `json:"no_color"`
 	}
 )

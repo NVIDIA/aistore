@@ -218,7 +218,7 @@ var (
 func createBucketHandler(c *cli.Context) (err error) {
 	var props *cmn.BucketPropsToUpdate
 	if flagIsSet(c, bucketPropsFlag) {
-		propSingleBck, err := parseBckPropsFromContext(c)
+		propSingleBck, err := parseBpropsFromContext(c)
 		if err != nil {
 			return err
 		}
@@ -313,7 +313,7 @@ func summaryBucketHandler(c *cli.Context) (err error) {
 }
 
 func showMisplacedAndMore(c *cli.Context) (err error) {
-	queryBcks, err := parseQueryBckURI(c, c.Args().First())
+	queryBcks, err := parseQueryBckURI(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func evictHandler(c *cli.Context) (err error) {
 	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
 		uri := c.Args().Get(0)
-		bck, objName, err := parseBckObjectURI(c, uri, true)
+		bck, objName, err := parseBckObjURI(c, uri, true)
 		if err != nil {
 			return err
 		}
@@ -385,7 +385,7 @@ func evictHandler(c *cli.Context) (err error) {
 }
 
 func resetPropsHandler(c *cli.Context) error {
-	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
@@ -397,7 +397,7 @@ func resetPropsHandler(c *cli.Context) error {
 }
 
 func lruBucketHandler(c *cli.Context) error {
-	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
@@ -437,14 +437,14 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 
 func setPropsHandler(c *cli.Context) (err error) {
 	var currProps *cmn.BucketProps
-	bck, err := parseBckURI(c, c.Args().First(), true /*require provider*/)
+	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
 	}
 	if currProps, err = headBucket(bck, false /* don't add */); err != nil {
 		return err
 	}
-	newProps, err := parseBckPropsFromContext(c)
+	newProps, err := parseBpropsFromContext(c)
 	if err != nil {
 		if strings.Contains(err.Error(), "missing property") {
 			if errV := showBucketProps(c); errV == nil {
@@ -506,7 +506,7 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 func listAnyHandler(c *cli.Context) error {
 	var (
 		opts = cmn.ParseURIOpts{IsQuery: true}
-		uri  = c.Args().First()
+		uri  = c.Args().Get(0)
 	)
 	uri = preparseBckObjURI(uri)
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)

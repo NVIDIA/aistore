@@ -1642,7 +1642,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wantBckSummary {
-		info = &cmn.BsummResult{IsBckPresent: false}
+		info = &cmn.BsummResult{} // IsBckPresent false (see below)
 	}
 	if bckArgs.isPresent {
 		if wantBckSummary {

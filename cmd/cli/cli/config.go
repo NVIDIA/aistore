@@ -345,7 +345,7 @@ func resetConfigHandler(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return cli.ShowCommandHelp(c, cmdReset)
 	}
-	switch c.Args().First() {
+	switch c.Args().Get(0) {
 	case cmdCLI:
 		err = resetCLIConfigHandler(c)
 		return
@@ -364,7 +364,7 @@ func resetNodeConfigHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().First())
+	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}

@@ -79,7 +79,7 @@ func k8sShowSingleDaemon(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, _, err := getNodeIDName(c, c.Args().First())
+	sid, _, err := getNodeIDName(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}

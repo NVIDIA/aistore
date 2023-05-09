@@ -155,7 +155,7 @@ func showAliasHandler(*cli.Context) (err error) {
 }
 
 func rmAliasHandler(c *cli.Context) (err error) {
-	alias := c.Args().First()
+	alias := c.Args().Get(0)
 	if alias == "" {
 		return missingArgumentsError(c, "alias")
 	}
@@ -167,7 +167,7 @@ func rmAliasHandler(c *cli.Context) (err error) {
 }
 
 func (a *acli) setAliasHandler(c *cli.Context) (err error) {
-	alias := c.Args().First()
+	alias := c.Args().Get(0)
 	if alias == "" {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}

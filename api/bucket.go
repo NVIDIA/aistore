@@ -189,9 +189,9 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // GetBucketSummary returns bucket summaries (capacity ulitization percentages, sizes, and
 // numbers of objects) for the specified bucket or buckets, as per `cmn.QueryBcks` query.
 // E.g., an empty bucket query corresponds to all buckets present in the cluster's metadata.
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *cmn.BsummCtrlMsg) (cmn.AllBsummResults, error) {
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsummResults, error) {
 	if msg == nil {
-		msg = &cmn.BsummCtrlMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
+		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
 	}
 	bp.Method = http.MethodGet
 

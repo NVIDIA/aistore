@@ -197,7 +197,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		id  string
 	)
 	if c.NArg() != 0 {
-		bck, err = parseBckURI(c, c.Args().First(), true /*require provider*/)
+		bck, err = parseBckURI(c, c.Args().Get(0), false)
 		if err != nil {
 			return
 		}
@@ -456,7 +456,7 @@ func mpathAction(c *cli.Context, action string) error {
 	kvs, err := makePairs(c.Args())
 	if err != nil {
 		// check whether user typed target ID with no mountpath
-		first, tail, nodeID := c.Args().First(), c.Args().Tail(), ""
+		first, tail, nodeID := c.Args().Get(0), c.Args().Tail(), ""
 		if len(tail) == 0 {
 			nodeID = first
 		} else {
