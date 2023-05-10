@@ -120,13 +120,13 @@ type (
 	}
 
 	appendArchObjInfo struct {
-		started  time.Time     // started time of receiving - used to calculate the recv duration
 		r        io.ReadCloser // reader with the content of the object
-		t        *target
-		lom      *cluster.LOM
-		filename string // path inside an archive
-		mime     string // archive type
-		size     int64  // Content-Length
+		t        *target       // this
+		lom      *cluster.LOM  // resulting shard
+		filename string        // fqn inside
+		mime     string        // format
+		started  time.Time     // time of receiving
+		size     int64         // aka Content-Length
 	}
 )
 
@@ -1458,13 +1458,30 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND (to archive)
+// APPEND to archive -- TODO -- FIXME: support non-tar formats
 //
 
 func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
-	fh, err := cos.OpenTarForAppend(aaoi.lom.String(), fqn)
+	fh, err := cos.OpenTarForAppend(aaoi.lom.Cname(), fqn)
 	if err != nil {
-		return err
+		if err == cos.ErrTarIsEmpty {
+			// double-check the format
+			fh, err = os.OpenFile(fqn, os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				debug.AssertNoErr(err) // unlikely
+				return err
+			}
+			ok := mimeByMagic(fh, aaoi.t.smm, magicTar, true /* 512 bytes of zeros is also fine */)
+			cos.Close(fh)
+			if !ok {
+				return fmt.Errorf("%s is not a TAR", aaoi.lom.Cname())
+			}
+			// NOTE: recreate and proceed to append from scratch
+			fh, err = aaoi.lom.CreateFile(fqn)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	buf, slab := aaoi.t.gmm.AllocSize(aaoi.size)
 	tw := tar.NewWriter(fh)
@@ -1473,8 +1490,8 @@ func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
 		Name:     aaoi.filename,
 		Size:     aaoi.size,
 		ModTime:  aaoi.started,
-		Mode:     int64(cos.PermRWR), // default value '0' - no access at all
 	}
+	cos.SetAuxTarHeader(&hdr)
 	tw.WriteHeader(&hdr)
 	_, err = io.CopyBuffer(tw, aaoi.r, buf)
 	tw.Close()
@@ -1521,7 +1538,7 @@ func (aaoi *appendArchObjInfo) begin() (string, error) {
 
 func (aaoi *appendArchObjInfo) abort(fqn string) {
 	aaoi.lom.Uncache(true)
-	if err := os.Rename(aaoi.lom.FQN, fqn); err != nil {
+	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
 		glog.Errorf("nested error while rolling back %s: %v", aaoi.lom.ObjName, err)
 	}
 }

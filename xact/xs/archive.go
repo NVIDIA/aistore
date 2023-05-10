@@ -539,16 +539,16 @@ func (tw *tarWriter) fini() {
 }
 
 func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
-	tarhdr := new(tar.Header)
-	tarhdr.Typeflag = tar.TypeReg
-
-	tarhdr.Size = oah.SizeBytes()
-	tarhdr.ModTime = time.Unix(0, oah.AtimeUnix())
-	tarhdr.Name = fullname
-
+	hdr := tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     fullname,
+		Size:     oah.SizeBytes(),
+		ModTime:  time.Unix(0, oah.AtimeUnix()),
+	}
+	cos.SetAuxTarHeader(&hdr)
 	// one at a time
 	tw.archwi.wmu.Lock()
-	if err = tw.tw.WriteHeader(tarhdr); err == nil {
+	if err = tw.tw.WriteHeader(&hdr); err == nil {
 		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
 	}
 	if err != nil {

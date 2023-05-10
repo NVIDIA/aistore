@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/vmihailenco/msgpack"
 )
 
@@ -92,6 +93,32 @@ func (goi *getObjInfo) freadArch(file *os.File, mime string) (cos.ReadCloseSizer
 		debug.Assert(false)
 		return nil, cos.NewUnknownMimeError(mime)
 	}
+}
+
+func mimeByMagic(file *os.File, smm *memsys.MMSA, magic detect, zerosOk bool) (ok bool) {
+	var (
+		buf, slab = smm.AllocSize(sizeDetectMime)
+		n, err    = file.Read(buf)
+	)
+	switch {
+	case err != nil || n < sizeDetectMime:
+	default:
+		if zerosOk {
+			ok = true
+			for i := 0; i < sizeDetectMime; i++ {
+				if buf[i] != 0 {
+					ok = false
+					break
+				}
+			}
+		}
+		if !ok {
+			// finally, compare signature
+			ok = n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig)
+		}
+	}
+	slab.Free(buf)
+	return
 }
 
 func (goi *getObjInfo) mime(file *os.File) (m string, err error) {

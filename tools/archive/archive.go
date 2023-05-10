@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -93,13 +94,17 @@ func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
 	return
 }
 
+func isGzipped(filename string) bool {
+	return strings.HasSuffix(filename, cos.ExtTgz) || strings.HasSuffix(filename, cos.ExtTarTgz)
+}
+
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.
 func CreateTarWithRandomFiles(tarName string, fileCnt, fileSize int, duplication bool,
 	recordExts []string, randomNames []string) error {
 	var (
 		gzw     *gzip.Writer
 		tw      *tar.Writer
-		gzipped = cos.IsGzipped(tarName)
+		gzipped = isGzipped(tarName)
 	)
 
 	// set up the output file
