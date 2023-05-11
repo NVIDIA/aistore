@@ -727,18 +727,11 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	)
 	switch {
 	case apireq.dpq.archpath != "": // apc.QparamArchpath
-		mime := apireq.dpq.archmime
-		if mime != "" {
-			// user-defined mime (apc.QparamArchmime)
-			mime, err = cos.ByMime(mime)
-		} else {
-			mime, err = cos.MimeByExt(lom.ObjName)
-			// TODO -- FIXME: on err detect by magic
-		}
+		apireq.dpq.archmime, err = mimeFQN(t.smm, apireq.dpq.archmime, lom.FQN)
 		if err != nil {
 			break
 		}
-		apireq.dpq.archmime = mime
+		// do
 		lom.Lock(true)
 		errCode, err = t.appendArch(r, lom, started, apireq.dpq)
 		lom.Unlock(true)
@@ -1175,6 +1168,7 @@ func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time,
 	return aoi.appendObject()
 }
 
+// prior to append-to-arch
 // is called under lock
 func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (int, error) {
 	var (

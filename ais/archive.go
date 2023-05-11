@@ -95,71 +95,6 @@ func (goi *getObjInfo) freadArch(file *os.File, mime string) (cos.ReadCloseSizer
 	}
 }
 
-func mimeByMagic(file *os.File, smm *memsys.MMSA, magic detect, zerosOk bool) (ok bool) {
-	var (
-		buf, slab = smm.AllocSize(sizeDetectMime)
-		n, err    = file.Read(buf)
-	)
-	switch {
-	case err != nil || n < sizeDetectMime:
-	default:
-		if zerosOk {
-			ok = true
-			for i := 0; i < sizeDetectMime; i++ {
-				if buf[i] != 0 {
-					ok = false
-					break
-				}
-			}
-		}
-		if !ok {
-			// finally, compare signature
-			ok = n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig)
-		}
-	}
-	slab.Free(buf)
-	return
-}
-
-func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
-	// simple first
-	if goi.archive.mime != "" {
-		// user-defined goi.archive.mime (apc.QparamArchmime)
-		// means there will be no attempting to detect signature
-		return cos.ByMime(goi.archive.mime)
-	}
-	if m, err = cos.MimeByExt(goi.lom.ObjName); err == nil {
-		return
-	}
-
-	// otherwise, by magic(*****)
-	var (
-		buf, slab = goi.t.smm.AllocSize(sizeDetectMime)
-		n         int
-	)
-	n, err = file.Read(buf)
-	for _, magic := range allMagics {
-		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
-			m = magic.mime
-			break
-		}
-	}
-	if m == "" {
-		if err == nil {
-			err = cos.NewUnknownMimeError(goi.lom.ObjName)
-		} else {
-			err = cos.NewUnknownMimeError(err.Error())
-		}
-	} else {
-		err = nil
-	}
-	if n > 0 {
-		file.Seek(0, io.SeekStart)
-	}
-	slab.Free(buf)
-	return
-}
-
 func freadTar(reader io.Reader, filename, archname string) (*cslLimited, error) {
 	tr := tar.NewReader(reader)
 	for {
@@ -250,6 +185,85 @@ func archNamesEq(n1, n2 string) bool {
 		n2 = n2[1:]
 	}
 	return n1 == n2
+}
+
+//
+// target Mime utils (see also: cmn/cos/archive.go)
+//
+
+func mimeByMagic(buf []byte, n int, magic detect, zerosOk bool) (ok bool) {
+	if n < sizeDetectMime {
+		return
+	}
+	if zerosOk {
+		ok = true
+		for i := 0; i < sizeDetectMime; i++ {
+			if buf[i] != 0 {
+				ok = false
+				break
+			}
+		}
+	}
+	if !ok {
+		// finally, compare signature
+		ok = n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig)
+	}
+	return
+}
+
+// a superset of cos.Mime (adds magic)
+func mimeFile(file *os.File, smm *memsys.MMSA, mime, filename string) (m string, err error) {
+	// simple first
+	if mime != "" {
+		// user-defined goi.archive.mime (apc.QparamArchmime)
+		// means there will be no attempting to detect signature
+		return cos.ByMime(mime)
+	}
+	if m, err = cos.MimeByExt(filename); err == nil {
+		return
+	}
+	// otherwise, by magic
+	var (
+		buf, slab = smm.AllocSize(sizeDetectMime)
+		n         int
+	)
+	n, err = file.Read(buf)
+	if err != nil {
+		return
+	}
+	if n < sizeDetectMime {
+		file.Seek(0, io.SeekStart)
+		return "", cos.NewUnknownMimeError(filename + " is too short")
+	}
+	for _, magic := range allMagics {
+		if mimeByMagic(buf, n, magic, false) {
+			m = magic.mime
+			break
+		}
+	}
+	_, err = file.Seek(0, io.SeekStart)
+	debug.AssertNoErr(err)
+	slab.Free(buf)
+	return
+}
+
+// may open file and call the above
+func mimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
+	if mime != "" {
+		// user-defined mime (apc.QparamArchmime)
+		return cos.ByMime(mime)
+	}
+	mime, err = cos.MimeByExt(fqn)
+	if err == nil {
+		return mime, nil
+	}
+	fh, err := os.Open(fqn)
+	if err != nil {
+		return "", err
+	}
+	mime, err = mimeFile(fh, smm, mime, fqn)
+	cos.Close(fh)
+	return mime, err
 }
 
 //

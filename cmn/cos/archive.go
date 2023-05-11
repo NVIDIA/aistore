@@ -43,6 +43,7 @@ var (
 	ErrTarIsEmpty = errors.New("tar is empty")
 )
 
+// compare w/ ais/archive.go `mimeAll()`
 func Mime(mime, filename string) (string, error) {
 	if mime != "" {
 		return ByMime(mime)
@@ -51,7 +52,7 @@ func Mime(mime, filename string) (string, error) {
 }
 
 // user-specified (intended) format always takes precedence
-// see also: `ais.mimeByMagic` (that reads the first 512 bytes and compares)
+// compare w/ ais/archive.go `mimeAll()` and `mimeByMagic()`
 func ByMime(mime string) (ext string, err error) {
 	debug.Assert(mime != "", mime)
 	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar

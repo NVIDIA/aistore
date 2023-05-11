@@ -892,7 +892,7 @@ func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *ht
 	switch {
 	case goi.archive.filename != "": // archive
 		var mime string
-		mime, err = goi.mime(lmfh)
+		mime, err = mimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
 		if err != nil {
 			return
 		}
@@ -1493,18 +1493,28 @@ func (aaoi *appendArchInfo) commit(fqn string) error {
 	fh, err := cos.OpenTarForAppend(aaoi.lom.Cname(), fqn)
 	if err != nil {
 		if err == cos.ErrTarIsEmpty {
-			// double-check the format
-			fh, err = os.OpenFile(fqn, os.O_RDONLY, os.ModePerm)
+			// special case -- only TAR -- double-check the format
+			fh, err = os.Open(fqn)
 			if err != nil {
 				debug.AssertNoErr(err) // unlikely
 				return err
 			}
-			ok := mimeByMagic(fh, aaoi.t.smm, magicTar, true /* 512 bytes of zeros is also fine */)
+			var (
+				buf, slab = aaoi.t.smm.AllocSize(sizeDetectMime)
+				n         int
+				ok        bool
+			)
+			n, err = fh.Read(buf)
+			debug.AssertNoErr(err) // unlikely
+			if err == nil {
+				ok = mimeByMagic(buf, n, magicTar, true /*512 zeros ok*/)
+			}
+			slab.Free(buf)
 			cos.Close(fh)
 			if !ok {
 				return fmt.Errorf("%s is not a TAR", aaoi.lom.Cname())
 			}
-			// NOTE: recreate and proceed to append from scratch
+			// NOTE: go ahead and recreate (to append the very first one)
 			fh, err = aaoi.lom.CreateFile(fqn)
 		}
 		if err != nil {
