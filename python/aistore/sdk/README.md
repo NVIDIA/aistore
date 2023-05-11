@@ -101,6 +101,7 @@ Check out the [provided examples](https://github.com/NVIDIA/aistore/blob/master/
 |[object.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
 |[object_group.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object_group.py)|Contains class `ObjectGroup`, representing a collection of objects belonging to a bucket in an AIS cluster. Includes all multi-object operations such as deleting, evicting, prefetching, copying, and transforming objects.|
 |[job.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/job.py)|Contains class `Job` and all job-related operations.|
+|[dsort.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/dsort.py)|Contains class `Dsort` and all dsort-related operations.|
 |[etl.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
 For more information on SDK usage, refer to the [SDK reference documentation](https://aiatscale.org/docs/python_sdk.md) or see the examples [here](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/).

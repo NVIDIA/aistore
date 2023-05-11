@@ -9,6 +9,7 @@ from aistore.sdk.const import (
     PROVIDER_AIS,
 )
 from aistore.sdk.cluster import Cluster
+from aistore.sdk.dsort import Dsort
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
@@ -86,3 +87,17 @@ class Client:
             The ETL object created.
         """
         return Etl(client=self._request_client, name=etl_name)
+
+    def dsort(self, dsort_id: str = ""):
+        """
+        Factory constructor for dSort object.
+        Contains APIs related to AIStore dSort operations.
+        Does not make any HTTP request, only instantiates a dSort object.
+
+        Args:
+            dsort_id: ID of the dSort job
+
+        Returns:
+            dSort object created
+        """
+        return Dsort(client=self._request_client, dsort_id=dsort_id)

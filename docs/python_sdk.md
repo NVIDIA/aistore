@@ -17,6 +17,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [cluster](#client.Client.cluster)
     * [job](#client.Client.job)
     * [etl](#client.Client.etl)
+    * [dsort](#client.Client.dsort)
 * [cluster](#cluster)
   * [Cluster](#cluster.Cluster)
     * [client](#cluster.Cluster.client)
@@ -24,6 +25,7 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
     * [list\_buckets](#cluster.Cluster.list_buckets)
     * [list\_jobs\_status](#cluster.Cluster.list_jobs_status)
     * [list\_running\_jobs](#cluster.Cluster.list_running_jobs)
+    * [list\_running\_etls](#cluster.Cluster.list_running_etls)
     * [is\_aistore\_running](#cluster.Cluster.is_aistore_running)
 * [bucket](#bucket)
   * [Bucket](#bucket.Bucket)
@@ -92,10 +94,9 @@ AIStore Python SDK is a growing set of client-side objects and methods to access
   * [ObjectIterator](#object_iterator.ObjectIterator)
 * [etl](#etl)
   * [Etl](#etl.Etl)
-    * [client](#etl.Etl.client)
+    * [name](#etl.Etl.name)
     * [init\_spec](#etl.Etl.init_spec)
     * [init\_code](#etl.Etl.init_code)
-    * [list](#etl.Etl.list)
     * [view](#etl.Etl.view)
     * [start](#etl.Etl.start)
     * [stop](#etl.Etl.stop)
@@ -180,16 +181,42 @@ Does not make any HTTP request, only instantiates a job object.
 ### etl
 
 ```python
-def etl()
+def etl(etl_name: str)
 ```
 
 Factory constructor for ETL object.
 Contains APIs related to AIStore ETL operations.
 Does not make any HTTP request, only instantiates an ETL object.
 
+**Arguments**:
+
+- `etl_name` _str_ - Name of the ETL
+  
+
 **Returns**:
 
   The ETL object created.
+
+<a id="client.Client.dsort"></a>
+
+### dsort
+
+```python
+def dsort(dsort_id: str = "")
+```
+
+Factory constructor for dSort object.
+Contains APIs related to AIStore dSort operations.
+Does not make any HTTP request, only instantiates a dSort object.
+
+**Arguments**:
+
+- `dsort_id` - ID of the dSort job
+  
+
+**Returns**:
+
+  dSort object created
 
 <a id="cluster.Cluster"></a>
 
@@ -301,6 +328,22 @@ List the currently running jobs on the cluster
 **Returns**:
 
   List of jobs in the format job_kind[job_id]
+
+<a id="cluster.Cluster.list_running_etls"></a>
+
+### list\_running\_etls
+
+```python
+def list_running_etls() -> List[ETLInfo]
+```
+
+Lists all running ETLs.
+
+Note: Does not list ETLs that have been stopped or deleted.
+
+**Returns**:
+
+- `List[ETLInfo]` - A list of details on running ETLs
 
 <a id="cluster.Cluster.is_aistore_running"></a>
 
@@ -1589,16 +1632,16 @@ class Etl()
 
 A class containing ETL-related functions.
 
-<a id="etl.Etl.client"></a>
+<a id="etl.Etl.name"></a>
 
-### client
+### name
 
 ```python
 @property
-def client()
+def name() -> str
 ```
 
-The client bound to this ETL object.
+Name of the ETL
 
 <a id="etl.Etl.init_spec"></a>
 
@@ -1606,9 +1649,8 @@ The client bound to this ETL object.
 
 ```python
 def init_spec(template: str,
-              etl_name: str,
               communication_type: str = DEFAULT_ETL_COMM,
-              timeout: str = DEFAULT_ETL_TIMEOUT)
+              timeout: str = DEFAULT_ETL_TIMEOUT) -> str
 ```
 
 Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
@@ -1618,13 +1660,12 @@ Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
 - `template` _str_ - Kubernetes pod spec template
   Existing templates can be found at `sdk.etl_templates`
   For more information visit: https://github.com/NVIDIA/ais-etl/tree/master/transformers
-- `etl_name` _str_ - Name of new ETL
 - `communication_type` _str_ - Communication type of the ETL (options: hpull, hrev, hpush)
 - `timeout` _str_ - Timeout of the ETL job (e.g. 5m for 5 minutes)
 
 **Returns**:
 
-- `etl_name` _str_ - ETL name
+  Job ID string associated with this ETL
 
 <a id="etl.Etl.init_code"></a>
 
@@ -1632,12 +1673,13 @@ Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
 
 ```python
 def init_code(transform: Callable,
-              etl_name: str,
               dependencies: List[str] = None,
+              preimported_modules: List[str] = None,
               runtime: str = _get_default_runtime(),
               communication_type: str = DEFAULT_ETL_COMM,
               timeout: str = DEFAULT_ETL_TIMEOUT,
-              chunk_size: int = None)
+              chunk_size: int = None,
+              transform_url: bool = False) -> str
 ```
 
 Initializes ETL based on the provided source code. Returns etl_name.
@@ -1645,8 +1687,9 @@ Initializes ETL based on the provided source code. Returns etl_name.
 **Arguments**:
 
 - `transform` _Callable_ - Transform function of the ETL
-- `etl_name` _str_ - Name of new ETL
 - `dependencies` _list[str]_ - Python dependencies to install
+- `preimported_modules` _list[str]_ - Modules to import before running the transform function. This can
+  be necessary in cases where the modules used both attempt to import each other circularly
 - `runtime` _str_ - [optional, default= V2 implementation of the current python version if supported, else
   python3.8v2] Runtime environment of the ETL [choose from: python3.8v2, python3.10v2, python3.11v2]
   (see ext/etl/runtime/all.go)
@@ -1655,40 +1698,22 @@ Initializes ETL based on the provided source code. Returns etl_name.
 - `timeout` _str_ - [optional, default="5m"] Timeout of the ETL job (e.g. 5m for 5 minutes)
 - `chunk_size` _int_ - Chunk size in bytes if transform function in streaming data.
   (whole object is read by default)
+- `transform_url` _optional, bool_ - If True, the runtime will provide the transform function with the URL to the
+  object on the target rather than the raw bytes read from the object
 
 **Returns**:
 
-- `etl_name` _str_ - ETL name
-
-<a id="etl.Etl.list"></a>
-
-### list
-
-```python
-def list() -> List[ETLDetails]
-```
-
-Lists all running ETLs.
-
-Note: Does not list ETLs that have been stopped or deleted.
-
-**Returns**:
-
-- `List[ETL]` - A list of running ETLs
+  Job ID string associated with this ETL
 
 <a id="etl.Etl.view"></a>
 
 ### view
 
 ```python
-def view(etl_name: str) -> ETLDetails
+def view() -> ETLDetails
 ```
 
-View ETLs Init spec/code
-
-**Arguments**:
-
-- `etl_name` _str_ - name of ETL
+View ETL details
 
 **Returns**:
 
@@ -1699,46 +1724,34 @@ View ETLs Init spec/code
 ### start
 
 ```python
-def start(etl_name: str)
+def start()
 ```
 
 Resumes a stopped ETL with given ETL name.
 
 Note: Deleted ETLs cannot be started.
 
-**Arguments**:
-
-- `etl_name` _str_ - name of ETL
-
 <a id="etl.Etl.stop"></a>
 
 ### stop
 
 ```python
-def stop(etl_name: str)
+def stop()
 ```
 
-Stops ETL with given ETL name. Stops (but does not delete) all the pods created by Kubernetes for this ETL and
+Stops ETL. Stops (but does not delete) all the pods created by Kubernetes for this ETL and
 terminates any transforms.
-
-**Arguments**:
-
-- `etl_name` _str_ - name of ETL
 
 <a id="etl.Etl.delete"></a>
 
 ### delete
 
 ```python
-def delete(etl_name: str)
+def delete()
 ```
 
-Delete ETL with given ETL name. Deletes pods created by Kubernetes for this ETL and specifications for this ETL
+Delete ETL. Deletes pods created by Kubernetes for this ETL and specifications for this ETL
 in Kubernetes.
 
 Note: Running ETLs cannot be deleted.
-
-**Arguments**:
-
-- `etl_name` _str_ - name of ETL
 

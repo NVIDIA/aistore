@@ -13,6 +13,7 @@ QPARAM_ARCHPATH = "archpath"
 QPARAM_FORCE = "frc"
 QPARAM_PRIMARY_READY_REB = "prr"
 QPARAM_NAMESPACE = "namespace"
+DSORT_UUID = "uuid"
 
 # URL Param values
 # See api/apc/query.go
@@ -29,6 +30,8 @@ URL_PATH_OBJECTS = "objects"
 URL_PATH_HEALTH = "health"
 URL_PATH_DAEMON = "daemon"
 URL_PATH_ETL = "etl"
+URL_PATH_DSORT = "sort"
+DSORT_ABORT = "abort"
 
 # Bucket providers
 # See api/apc/provider.go
@@ -77,6 +80,7 @@ AIS_CUSTOM_MD = "ais-custom-md"
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768
 DEFAULT_JOB_WAIT_TIMEOUT = 300
+DEFAULT_DSORT_WAIT_TIMEOUT = 300
 
 # ENCODING
 UTF_ENCODING = "utf-8"
