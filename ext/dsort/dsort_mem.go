@@ -293,8 +293,10 @@ func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error
 	}
 	o := transport.AllocSend()
 	o.Hdr.Opaque = bsi.NewPack(ds.m.ctx.t.ByteMM())
-	if err := ds.streams.builder.Send(o, nil); err != nil {
-		return err
+	if ds.m.smap.HasActiveTs(ds.m.ctx.t.SID() /*except*/) {
+		if err := ds.streams.builder.Send(o, nil); err != nil {
+			return err
+		}
 	}
 	ds.creationPhase.requestedShards <- shardName // we also need to inform ourselves
 	ds.creationPhase.adjuster.write.acquireSema(mi)

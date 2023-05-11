@@ -627,7 +627,7 @@ func TestDistributedSort(t *testing.T) {
 
 			// Initialize ioContext
 			m.initWithCleanupAndSaveState()
-			m.expectTargets(3)
+			m.expectTargets(1)
 
 			// Create ais bucket
 			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
