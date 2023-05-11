@@ -43,24 +43,17 @@ var (
 	ErrTarIsEmpty = errors.New("tar is empty")
 )
 
-// Map user-specified mime type OR the filename's extension to one of the supported ArchExtensions
-// NOTE see also: `ais.mimeByMagic` (that reads the first 512 bytes and compares)
-func Mime(mime, filename string) (ext string, err error) {
-	// user-specified (intended) format takes precedence
+func Mime(mime, filename string) (string, error) {
 	if mime != "" {
-		return byMime(mime)
+		return ByMime(mime)
 	}
-	// otherwise, by filename extension
-	for _, ext := range ArchExtensions {
-		if strings.HasSuffix(filename, ext) {
-			return ext, nil
-		}
-	}
-	err = NewUnknownMimeError(filename)
-	return
+	return MimeByExt(filename)
 }
 
-func byMime(mime string) (string, error) {
+// user-specified (intended) format always takes precedence
+// see also: `ais.mimeByMagic` (that reads the first 512 bytes and compares)
+func ByMime(mime string) (ext string, err error) {
+	debug.Assert(mime != "", mime)
 	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
 		return ExtTarTgz, nil
 	}
@@ -72,13 +65,24 @@ func byMime(mime string) (string, error) {
 	return "", NewUnknownMimeError(mime)
 }
 
+// by filename extension
+func MimeByExt(filename string) (ext string, err error) {
+	for _, ext := range ArchExtensions {
+		if strings.HasSuffix(filename, ext) {
+			return ext, nil
+		}
+	}
+	err = NewUnknownMimeError(filename)
+	return
+}
+
 // Exists for all ais-created/appended TARs - common code to set auxiliary bits in a header
 // NOTE:
 // - currently, not using os.Getuid/gid (or user.Current) to set Uid/Gid, and
 // - not calling standard tar.FileInfoHeader(finfo-of-the-file-to-archive) as well
 // - see also: /usr/local/go/src/archive/tar/common.go
 func SetAuxTarHeader(hdr *tar.Header) {
-	hdr.Mode = int64(PermRWR)
+	hdr.Mode = int64(PermRWRR)
 }
 
 // OpenTarForAppend opens a TAR and uses tar's reader Next() to skip

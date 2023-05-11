@@ -119,7 +119,7 @@ type (
 		owt       cmn.OWT
 	}
 
-	appendArchObjInfo struct {
+	appendArchInfo struct {
 		r        io.ReadCloser // reader with the content of the object
 		t        *target       // this
 		lom      *cluster.LOM  // resulting shard
@@ -488,6 +488,7 @@ func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
 
 //
 // GET(object)
+// see also: archive.go
 //
 
 func (goi *getObjInfo) getObject() (errCode int, err error) {
@@ -1458,10 +1459,37 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND to archive -- TODO -- FIXME: support non-tar formats
+// APPEND to archive
+// see also: archive.go
 //
 
-func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
+func (aaoi *appendArchInfo) do() (errCode int, err error) {
+	if aaoi.filename == "" {
+		return http.StatusBadRequest, errors.New("archive path is not defined")
+	}
+	// Standard library does not support appending to archive of any type.
+	// For TAR there is a working workaround - see below
+	if aaoi.mime != cos.ExtTar {
+		return http.StatusBadRequest, fmt.Errorf("append is supported only for %s archives", cos.ExtTar)
+	}
+	workFQN, err := aaoi.begin()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if err = aaoi.commit(workFQN); err == nil {
+		if err = aaoi.finalize(workFQN); err == nil {
+			return 0, nil
+		}
+	}
+	aaoi.abort(workFQN)
+	errCode = http.StatusInternalServerError
+	if cmn.IsErrCapacityExceeded(err) {
+		errCode = http.StatusInsufficientStorage
+	}
+	return
+}
+
+func (aaoi *appendArchInfo) commit(fqn string) error {
 	fh, err := cos.OpenTarForAppend(aaoi.lom.Cname(), fqn)
 	if err != nil {
 		if err == cos.ErrTarIsEmpty {
@@ -1511,7 +1539,7 @@ func (aaoi *appendArchObjInfo) appendToArch(fqn string) error {
 	return nil
 }
 
-func (aaoi *appendArchObjInfo) finalize(fqn string) error {
+func (aaoi *appendArchInfo) finalize(fqn string) error {
 	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
 		return err
 	}
@@ -1528,7 +1556,7 @@ func (aaoi *appendArchObjInfo) finalize(fqn string) error {
 	return nil
 }
 
-func (aaoi *appendArchObjInfo) begin() (string, error) {
+func (aaoi *appendArchInfo) begin() (string, error) {
 	workFQN := fs.CSM.Gen(aaoi.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	if err := os.Rename(aaoi.lom.FQN, workFQN); err != nil {
 		return "", err
@@ -1536,37 +1564,11 @@ func (aaoi *appendArchObjInfo) begin() (string, error) {
 	return workFQN, nil
 }
 
-func (aaoi *appendArchObjInfo) abort(fqn string) {
+func (aaoi *appendArchInfo) abort(fqn string) {
 	aaoi.lom.Uncache(true)
 	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
 		glog.Errorf("nested error while rolling back %s: %v", aaoi.lom.ObjName, err)
 	}
-}
-
-func (aaoi *appendArchObjInfo) appendObject() (errCode int, err error) {
-	if aaoi.filename == "" {
-		return http.StatusBadRequest, errors.New("archive path is not defined")
-	}
-	// Standard library does not support appending to archive of any type.
-	// For TAR there is a working workaround, so allow appending to TAR only.
-	if aaoi.mime != cos.ExtTar {
-		return http.StatusBadRequest, fmt.Errorf("append is supported only for %s archives", cos.ExtTar)
-	}
-	workFQN, err := aaoi.begin()
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	if err = aaoi.appendToArch(workFQN); err == nil {
-		if err = aaoi.finalize(workFQN); err == nil {
-			return 0, nil
-		}
-	}
-	aaoi.abort(workFQN)
-	errCode = http.StatusInternalServerError
-	if cmn.IsErrCapacityExceeded(err) {
-		errCode = http.StatusInsufficientStorage
-	}
-	return
 }
 
 //

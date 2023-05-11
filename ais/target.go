@@ -727,9 +727,23 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	)
 	switch {
 	case apireq.dpq.archpath != "": // apc.QparamArchpath
-		errCode, err = t.doAppendArch(r, lom, started, apireq.dpq)
+		mime := apireq.dpq.archmime
+		if mime != "" {
+			// user-defined mime (apc.QparamArchmime)
+			mime, err = cos.ByMime(mime)
+		} else {
+			mime, err = cos.MimeByExt(lom.ObjName)
+			// TODO -- FIXME: on err detect by magic
+		}
+		if err != nil {
+			break
+		}
+		apireq.dpq.archmime = mime
+		lom.Lock(true)
+		errCode, err = t.appendArch(r, lom, started, apireq.dpq)
+		lom.Unlock(true)
 	case apireq.dpq.appendTy != "": // apc.QparamAppendType
-		handle, errCode, err = t.doAppend(r, lom, started, apireq.dpq)
+		handle, errCode, err = t.appendObj(r, lom, started, apireq.dpq)
 		if err == nil {
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
@@ -1126,20 +1140,17 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	return
 }
 
-func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (newHandle string,
-	errCode int, err error) {
+func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (string, int, error) {
 	var (
 		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
 		cksumType     = r.Header.Get(apc.HdrObjCksumType)
 		contentLength = r.Header.Get(cos.HdrContentLength)
 		handle        = dpq.appendHdl // apc.QparamAppendHandle
 	)
-
 	hi, err := parseAppendHandle(handle)
 	if err != nil {
 		return "", http.StatusBadRequest, err
 	}
-
 	aoi := &appendObjInfo{
 		started: started,
 		t:       t,
@@ -1147,6 +1158,11 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 		r:       r.Body,
 		op:      dpq.appendTy, // apc.QparamAppendType
 		hi:      hi,
+	}
+	if aoi.op != apc.AppendOp && aoi.op != apc.FlushOp {
+		err = fmt.Errorf("invalid operation %q (expecting either %q or %q) - check %q query",
+			aoi.op, apc.AppendOp, apc.FlushOp, apc.QparamAppendType)
+		return "", http.StatusBadRequest, err
 	}
 	if contentLength != "" {
 		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
@@ -1159,7 +1175,8 @@ func (t *target) doAppend(r *http.Request, lom *cluster.LOM, started time.Time, 
 	return aoi.appendObject()
 }
 
-func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (errCode int, err error) {
+// is called under lock
+func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (int, error) {
 	var (
 		sizeStr  = r.Header.Get(cos.HdrContentLength)
 		mime     = dpq.archmime // apc.QparamArchmime
@@ -1170,15 +1187,13 @@ func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Ti
 			filename = rel
 		}
 	}
-	lom.Lock(true)
-	defer lom.Unlock(true)
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if os.IsNotExist(err) {
 			return http.StatusNotFound, err
 		}
 		return http.StatusInternalServerError, err
 	}
-	aaoi := &appendArchObjInfo{
+	aaoi := &appendArchInfo{
 		started:  started,
 		t:        t,
 		lom:      lom,
@@ -1194,7 +1209,7 @@ func (t *target) doAppendArch(r *http.Request, lom *cluster.LOM, started time.Ti
 	if aaoi.size == 0 {
 		return http.StatusBadRequest, errors.New("size is not defined")
 	}
-	return aaoi.appendObject()
+	return aaoi.do()
 }
 
 func (t *target) putMirror(lom *cluster.LOM) {

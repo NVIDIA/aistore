@@ -425,14 +425,14 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 //   - `api.CreateArchMultiObj`
 //   - `api.AppendObject`
 func AppendToArch(args AppendToArchArgs) (err error) {
-	m, err := cos.Mime("", args.ObjName)
+	mime, err := cos.MimeByExt(args.ObjName) // TODO -- FIXME: must be consistent with GET from-arch
 	if err != nil {
 		return err
 	}
 	q := make(url.Values, 4)
 	q = args.Bck.AddToQuery(q)
 	q.Set(apc.QparamArchpath, args.ArchPath)
-	q.Set(apc.QparamArchmime, m)
+	q.Set(apc.QparamArchmime, mime)
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut

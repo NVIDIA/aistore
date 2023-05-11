@@ -22,11 +22,13 @@ import (
 
 const MLCG32 = 1103515245 // xxhash seed
 
-// permissions
+// POSIX permissions
 const (
-	PermRWR       os.FileMode = 0o640 // POSIX perms
-	PermRWXRX     os.FileMode = 0o750
-	configDirMode             = PermRWXRX | os.ModeDir
+	PermRWR   os.FileMode = 0o640
+	PermRWRR  os.FileMode = 0o644
+	PermRWXRX os.FileMode = 0o750 // (archived files)
+
+	configDirMode = PermRWXRX | os.ModeDir
 )
 
 type (

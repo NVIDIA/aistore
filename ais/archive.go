@@ -73,9 +73,9 @@ func notFoundInArch(filename, archname string) error {
 	return cmn.NewErrNotFound("file %q in archive %q", filename, archname)
 }
 
-/////////////////////////
-// GET OBJECT: archive //
-/////////////////////////
+//
+// GET(object): read archive
+//
 
 func (goi *getObjInfo) freadArch(file *os.File, mime string) (cos.ReadCloseSizer, error) {
 	archname := filepath.Join(goi.lom.Bck().Name, goi.lom.ObjName)
@@ -122,11 +122,17 @@ func mimeByMagic(file *os.File, smm *memsys.MMSA, magic detect, zerosOk bool) (o
 }
 
 func (goi *getObjInfo) mime(file *os.File) (m string, err error) {
-	// either ok or non-empty user-defined mime type (that must work)
-	if m, err = cos.Mime(goi.archive.mime, goi.lom.ObjName); err == nil || goi.archive.mime != "" {
+	// simple first
+	if goi.archive.mime != "" {
+		// user-defined goi.archive.mime (apc.QparamArchmime)
+		// means there will be no attempting to detect signature
+		return cos.ByMime(goi.archive.mime)
+	}
+	if m, err = cos.MimeByExt(goi.lom.ObjName); err == nil {
 		return
 	}
-	// otherwise, by magic
+
+	// otherwise, by magic(*****)
 	var (
 		buf, slab = goi.t.smm.AllocSize(sizeDetectMime)
 		n         int
@@ -245,3 +251,7 @@ func archNamesEq(n1, n2 string) bool {
 	}
 	return n1 == n2
 }
+
+//
+// APPEND to archive -- TODO -- FIXME
+//
