@@ -39,11 +39,13 @@ const unknownDaemonID = "unknown"
 
 const whatRenamedLB = "renamedlb"
 
+// common error formats
 const (
 	fmtErrInsuffMpaths1 = "%s: not enough mountpaths (%d) to configure %s as %d-way mirror"
 	fmtErrInsuffMpaths2 = "%s: not enough mountpaths (%d) to replicate %s (configured) %d times"
 	fmtErrInvaldAction  = "invalid action %q (expected one of %v)"
 	fmtUnknownQue       = "unexpected query [what=%s]"
+	fmtNested           = "%s: nested (%v): failed to %s %q: %v"
 )
 
 // intra-cluster JSON control

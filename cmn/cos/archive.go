@@ -43,7 +43,7 @@ var (
 	ErrTarIsEmpty = errors.New("tar is empty")
 )
 
-// compare w/ ais/archive.go `mimeAll()`
+// compare w/ ais/archive.go `mimeFQN` and friends
 func Mime(mime, filename string) (string, error) {
 	if mime != "" {
 		return ByMime(mime)
@@ -52,7 +52,7 @@ func Mime(mime, filename string) (string, error) {
 }
 
 // user-specified (intended) format always takes precedence
-// compare w/ ais/archive.go `mimeAll()` and `mimeByMagic()`
+// compare w/ ais/archive.go `mimeFQN`
 func ByMime(mime string) (ext string, err error) {
 	debug.Assert(mime != "", mime)
 	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
@@ -97,7 +97,7 @@ func SetAuxTarHeader(hdr *tar.Header) {
 //	accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
 //	write different number of zero blocks.
 func OpenTarForAppend(cname, workFQN string) (*os.File, error) {
-	fh, err := os.OpenFile(workFQN, os.O_RDWR, os.ModePerm)
+	fh, err := os.OpenFile(workFQN, os.O_RDWR, PermRWR)
 	if err != nil {
 		return nil, err
 	}

@@ -21,10 +21,6 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
-// References:
-// * https://en.wikipedia.org/wiki/List_of_file_signatures
-// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-
 const (
 	sizeDetectMime = 512
 )
@@ -43,6 +39,9 @@ type (
 		size int64
 	}
 
+	// References:
+	// * https://en.wikipedia.org/wiki/List_of_file_signatures
+	// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
 	detect struct {
 		mime   string // '.' + IANA mime
 		sig    []byte
@@ -74,29 +73,12 @@ func notFoundInArch(filename, archname string) error {
 }
 
 //
-// GET(object): read archive
+// next() to `filename` and return a limited reader
+// to read the corresponding file from archive
 //
 
-func (goi *getObjInfo) freadArch(file *os.File, mime string) (cos.ReadCloseSizer, error) {
-	archname := filepath.Join(goi.lom.Bck().Name, goi.lom.ObjName)
-	filename := goi.archive.filename
-	switch mime {
-	case cos.ExtTar:
-		return freadTar(file, filename, archname)
-	case cos.ExtTarTgz, cos.ExtTgz:
-		return freadTgz(file, filename, archname)
-	case cos.ExtZip:
-		return freadZip(file, filename, archname, goi.lom.SizeBytes())
-	case cos.ExtMsgpack:
-		return freadMsgpack(file, filename, archname)
-	default:
-		debug.Assert(false)
-		return nil, cos.NewUnknownMimeError(mime)
-	}
-}
-
-func freadTar(reader io.Reader, filename, archname string) (*cslLimited, error) {
-	tr := tar.NewReader(reader)
+func freadTar(lreader io.Reader, filename, archname string) (*cslLimited, error) {
+	tr := tar.NewReader(lreader)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
@@ -106,17 +88,17 @@ func freadTar(reader io.Reader, filename, archname string) (*cslLimited, error) 
 			return nil, err
 		}
 		if hdr.Name == filename || archNamesEq(hdr.Name, filename) {
-			return &cslLimited{LimitedReader: io.LimitedReader{R: reader, N: hdr.Size}}, nil
+			return &cslLimited{LimitedReader: io.LimitedReader{R: lreader, N: hdr.Size}}, nil
 		}
 	}
 }
 
-func freadTgz(reader io.Reader, filename, archname string) (csc *cslClose, err error) {
+func freadTgz(lreader io.Reader, filename, archname string) (csc *cslClose, err error) {
 	var (
 		gzr *gzip.Reader
 		csl *cslLimited
 	)
-	if gzr, err = gzip.NewReader(reader); err != nil {
+	if gzr, err = gzip.NewReader(lreader); err != nil {
 		return
 	}
 	if csl, err = freadTar(gzr, filename, archname); err != nil {
@@ -126,9 +108,9 @@ func freadTgz(reader io.Reader, filename, archname string) (csc *cslClose, err e
 	return
 }
 
-func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
+func freadZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
 	var zr *zip.Reader
-	if zr, err = zip.NewReader(readerAt, size); err != nil {
+	if zr, err = zip.NewReader(lreaderAt, size); err != nil {
 		return
 	}
 	for _, f := range zr.File {
@@ -146,10 +128,10 @@ func freadZip(readerAt cos.ReadReaderAt, filename, archname string, size int64) 
 	return
 }
 
-func freadMsgpack(readerAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
+func freadMsgpack(lreaderAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
 	var (
 		dst any
-		dec = msgpack.NewDecoder(readerAt)
+		dec = msgpack.NewDecoder(lreaderAt)
 	)
 	if err = dec.Decode(&dst); err != nil {
 		return
@@ -188,7 +170,7 @@ func archNamesEq(n1, n2 string) bool {
 }
 
 //
-// target Mime utils (see also: cmn/cos/archive.go)
+// target Mime utils (see also cmn/cos/archive.go)
 //
 
 func mimeByMagic(buf []byte, n int, magic detect, zerosOk bool) (ok bool) {
@@ -247,7 +229,7 @@ func mimeFile(file *os.File, smm *memsys.MMSA, mime, filename string) (m string,
 	return
 }
 
-// may open file and call the above
+// _may_ open file and call the above
 func mimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
 	if mime != "" {
 		// user-defined mime (apc.QparamArchmime)
@@ -267,5 +249,36 @@ func mimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
 }
 
 //
-// APPEND to archive -- TODO -- FIXME
+// copy archive one file at a time, and APPEND new `reader` at the end
 //
+
+func apndTgz(lomr io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, nr io.Reader, buf []byte) (err error) {
+	var gzr *gzip.Reader
+	if gzr, err = gzip.NewReader(lomr); err != nil {
+		return
+	}
+	tr := tar.NewReader(gzr)
+	for {
+		var hdr *tar.Header
+		hdr, err = tr.Next()
+		if err != nil {
+			break
+		}
+		// copy one
+		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr, N: hdr.Size}}
+		if err = tw.WriteHeader(hdr); err == nil {
+			_, err = io.CopyBuffer(tw, csl, buf)
+		}
+		if err != nil {
+			break
+		}
+	}
+	if err == io.EOF {
+		err = tw.WriteHeader(nhdr)
+	}
+	if err == nil {
+		_, err = io.CopyBuffer(tw, nr, buf)
+	}
+	cos.Close(gzr)
+	return
+}

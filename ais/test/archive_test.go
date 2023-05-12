@@ -1,6 +1,6 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
@@ -242,6 +242,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 				m.num = numPuts >> 1
 			}
 			m.initWithCleanup()
+			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 			if m.bck.IsRemote() {
 				defer m.del(-1)
@@ -394,6 +395,9 @@ func TestAppendToArch(t *testing.T) {
 			{
 				ext: cos.ExtTar, multi: true,
 			},
+			{
+				ext: cos.ExtTgz, multi: false,
+			},
 		}
 	)
 	for _, test := range subtests {
@@ -402,6 +406,7 @@ func TestAppendToArch(t *testing.T) {
 			tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 			tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
 			m.initWithCleanup()
+			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 
 			if testing.Short() {

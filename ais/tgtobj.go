@@ -6,6 +6,7 @@ package ais
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding"
 	"encoding/base64"
@@ -41,68 +42,57 @@ import (
 // PUT, GET, APPEND (to file | to archive), and COPY object
 //
 
-const fmtNested = "%s: nested (%v): failed to %s %q: %v"
-
 type (
-	putObjInfo struct {
-		r    io.ReadCloser // reader that has the content
-		xctn cluster.Xact  // xaction that puts
-
-		t          *target
-		lom        *cluster.LOM
-		cksumToUse *cos.Cksum // if available (not `none`), can be validated and will be stored
-		resphdr    http.Header
-
-		workFQN string // temp fqn to be renamed
-
-		atime   int64
-		size    int64   // Content-Length
-		owt     cmn.OWT // object write transaction enum { OwtPut, ..., OwtGet* }
-		restful bool    // being invoked via RESTful API
-		t2t     bool    // by another target
-		skipEC  bool    // do not erasure-encode when finalizing
-		skipVC  bool    // skip loading existing Version and skip comparing Checksums (skip VC)
+	putOI struct {
+		r          io.ReadCloser // reader that has the content
+		xctn       cluster.Xact  // xaction that puts
+		t          *target       // this
+		lom        *cluster.LOM  // obj
+		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
+		resphdr    http.Header   // as implied
+		workFQN    string        // temp fqn to be renamed
+		atime      int64         // access time
+		size       int64         // aka Content-Length
+		owt        cmn.OWT       // object write transaction enum { OwtPut, ..., OwtGet* }
+		restful    bool          // being invoked via RESTful API
+		t2t        bool          // by another target
+		skipEC     bool          // do not erasure-encode when finalizing
+		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 	}
 
-	getObjInfo struct {
-		w   http.ResponseWriter
-		ctx context.Context // context used when getting object from remote backend (access creds)
-
-		t   *target
-		lom *cluster.LOM
-
-		archive archiveQuery // archive query
-		ranges  byteRanges   // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
-
-		atime      int64
-		latency    int64 // nanoseconds
-		isGFN      bool  // is GFN request
-		chunked    bool  // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
-		unlocked   bool
-		verchanged bool // version changed
+	getOI struct {
+		w          http.ResponseWriter
+		ctx        context.Context // context used when getting object from remote backend (access creds)
+		t          *target         // this
+		lom        *cluster.LOM    // obj
+		archive    archiveQuery    // archive query
+		ranges     byteRanges      // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
+		atime      int64           // access time
+		latency    int64           // get vnanoseconds
+		isGFN      bool            // is GFN
+		chunked    bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
+		unlocked   bool            // internal
+		verchanged bool            // version changed
 	}
 
-	// Contains information packed in append handle.
-	handleInfo struct {
+	// append handle (packed)
+	aoHdl struct {
 		partialCksum *cos.CksumHash
 		nodeID       string
 		filePath     string
 	}
-
-	appendObjInfo struct {
+	apndOI struct {
 		started time.Time     // started time of receiving - used to calculate the recv duration
 		r       io.ReadCloser // reader with the content of the object.
-
-		t   *target
-		lom *cluster.LOM
-
-		cksum *cos.Cksum // expected checksum of the final object.
-		hi    handleInfo // packed
-		op    string     // operation (Append | Flush)
-		size  int64      // Content-Length
+		t       *target       // this
+		lom     *cluster.LOM  // append to
+		cksum   *cos.Cksum    // expected checksum of the final object.
+		hdl     aoHdl         // packed
+		op      string        // operation (Append | Flush)
+		size    int64         // Content-Length
 	}
 
-	copyObjInfo struct {
+	copyOI struct {
 		t *target
 		cluster.CopyObjectParams
 		owt      cmn.OWT
@@ -119,8 +109,8 @@ type (
 		owt       cmn.OWT
 	}
 
-	appendArchInfo struct {
-		r        io.ReadCloser // reader with the content of the object
+	apndArchI struct {
+		r        io.ReadCloser // read bytes to append
 		t        *target       // this
 		lom      *cluster.LOM  // resulting shard
 		filename string        // fqn inside
@@ -134,7 +124,7 @@ type (
 // PUT(object)
 //
 
-func (poi *putObjInfo) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
+func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
 	{
 		poi.r = r.Body
 		poi.resphdr = resphdr
@@ -164,7 +154,7 @@ func (poi *putObjInfo) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, 
 	return poi.putObject()
 }
 
-func (poi *putObjInfo) putObject() (errCode int, err error) {
+func (poi *putOI) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
@@ -214,7 +204,7 @@ rerr:
 	return
 }
 
-func (poi *putObjInfo) loghdr() string {
+func (poi *putOI) loghdr() string {
 	s := poi.owt.String() + ", " + poi.lom.String()
 	if poi.xctn != nil { // may not be showing remote xaction (see doPut)
 		s += ", " + poi.xctn.String()
@@ -228,7 +218,7 @@ func (poi *putObjInfo) loghdr() string {
 	return s
 }
 
-func (poi *putObjInfo) finalize() (errCode int, err error) {
+func (poi *putOI) finalize() (errCode int, err error) {
 	if errCode, err = poi.fini(); err != nil {
 		if err1 := cos.Stat(poi.workFQN); err1 == nil || !os.IsNotExist(err1) {
 			if err1 == nil {
@@ -256,7 +246,7 @@ func (poi *putObjInfo) finalize() (errCode int, err error) {
 }
 
 // poi.workFQN => LOM
-func (poi *putObjInfo) fini() (errCode int, err error) {
+func (poi *putOI) fini() (errCode int, err error) {
 	var (
 		lom = poi.lom
 		bck = lom.Bck()
@@ -332,7 +322,7 @@ func (poi *putObjInfo) fini() (errCode int, err error) {
 }
 
 // via backend.PutObj()
-func (poi *putObjInfo) putRemote() (errCode int, err error) {
+func (poi *putOI) putRemote() (errCode int, err error) {
 	var (
 		lom     = poi.lom
 		backend = poi.t.Backend(lom.Bck())
@@ -355,7 +345,7 @@ func (poi *putObjInfo) putRemote() (errCode int, err error) {
 
 // LOM is updated at the end of this call with size and checksum.
 // `poi.r` (reader) is also closed upon exit.
-func (poi *putObjInfo) write() (err error) {
+func (poi *putOI) write() (err error) {
 	var (
 		written int64
 		buf     []byte
@@ -454,7 +444,7 @@ write:
 }
 
 // post-write close & cleanup
-func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
+func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
 	if buf != nil {
 		slab.Free(buf)
 	}
@@ -473,7 +463,7 @@ func (poi *putObjInfo) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, er
 	}
 }
 
-func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
+func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
 	case cmn.OwtMigrate, cmn.OwtPromote, cmn.OwtFinalize:
 		v = c.ValidateObjMove
@@ -491,7 +481,7 @@ func (poi *putObjInfo) validateCksum(c *cmn.CksumConf) (v bool) {
 // see also: archive.go
 //
 
-func (goi *getObjInfo) getObject() (errCode int, err error) {
+func (goi *getOI) getObject() (errCode int, err error) {
 	debug.Assert(!goi.unlocked)
 	goi.lom.Lock(false)
 	errCode, err = goi.get()
@@ -502,7 +492,7 @@ func (goi *getObjInfo) getObject() (errCode int, err error) {
 }
 
 // is under rlock
-func (goi *getObjInfo) get() (errCode int, err error) {
+func (goi *getOI) get() (errCode int, err error) {
 	var (
 		cs                          fs.CapStatus
 		doubleCheck, retry, retried bool
@@ -613,7 +603,7 @@ fin:
 // - validate checksums
 // - if corrupted and IsAIS, try to recover from redundant replicas or EC slices
 // - otherwise, rely on the remote backend for recovery (tradeoff; TODO: make it configurable)
-func (goi *getObjInfo) validateRecover() (coldGet bool, code int, err error) {
+func (goi *getOI) validateRecover() (coldGet bool, code int, err error) {
 	var (
 		lom     = goi.lom
 		retried bool
@@ -691,7 +681,7 @@ validate:
 // 2) other targets (when resilvering or rebalancing is running (aka GFN))
 // 3) other targets if the bucket erasure coded
 // 4) Cloud
-func (goi *getObjInfo) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
+func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode int, err error) {
 	var (
 		tsi   *meta.Snode
 		smap  = goi.t.owner.smap.get()
@@ -783,7 +773,7 @@ gfn:
 	return
 }
 
-func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
+func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	query := lom.Bck().AddToQuery(nil)
 	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
@@ -833,7 +823,7 @@ func (goi *getObjInfo) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	return false
 }
 
-func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err error) {
+func (goi *getOI) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	var (
 		lmfh *os.File
 		hrng *htrange
@@ -879,7 +869,7 @@ func (goi *getObjInfo) finalize(coldGet bool) (retry bool, errCode int, err erro
 }
 
 // in particular, setup reader and writer and set headers
-func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange, coldGet bool) (errCode int, err error) {
+func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange, coldGet bool) (errCode int, err error) {
 	var (
 		slab   *memsys.Slab
 		buf    []byte
@@ -948,7 +938,27 @@ func (goi *getObjInfo) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *ht
 	return
 }
 
-func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) error {
+func (goi *getOI) freadArch(file *os.File, mime string) (cos.ReadCloseSizer, error) {
+	var (
+		archname = goi.lom.Cname()
+		filename = goi.archive.filename
+	)
+	switch mime {
+	case cos.ExtTar:
+		return freadTar(file, filename, archname)
+	case cos.ExtTarTgz, cos.ExtTgz:
+		return freadTgz(file, filename, archname)
+	case cos.ExtZip:
+		return freadZip(file, filename, archname, goi.lom.SizeBytes())
+	case cos.ExtMsgpack:
+		return freadMsgpack(file, filename, archname)
+	default:
+		debug.Assert(false)
+		return nil, cos.NewUnknownMimeError(mime)
+	}
+}
+
+func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) error {
 	// NOTE: hide `ReadFrom` of the `http.ResponseWriter`
 	// (in re: sendfile; see also cos.WriterOnly comment)
 	w := cos.WriterOnly{Writer: io.Writer(goi.w)}
@@ -993,7 +1003,7 @@ func (goi *getObjInfo) transmit(r io.Reader, buf []byte, fqn string, coldGet boo
 }
 
 // parse & validate user-spec-ed goi.ranges, and set response header
-func (goi *getObjInfo) parseRange(resphdr http.Header, size int64) (hrng *htrange, errCode int, err error) {
+func (goi *getOI) parseRange(resphdr http.Header, size int64) (hrng *htrange, errCode int, err error) {
 	var ranges []htrange
 	ranges, err = parseMultiRange(goi.ranges.Range, size)
 	if err != nil {
@@ -1029,40 +1039,40 @@ func (goi *getObjInfo) parseRange(resphdr http.Header, size int64) (hrng *htrang
 // APPEND (to file)
 //
 
-func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err error) {
-	filePath := aoi.hi.filePath
-	switch aoi.op {
+func (a *apndOI) do() (newHandle string, errCode int, err error) {
+	filePath := a.hdl.filePath
+	switch a.op {
 	case apc.AppendOp:
 		var f *os.File
 		if filePath == "" {
-			filePath = fs.CSM.Gen(aoi.lom, fs.WorkfileType, fs.WorkfileAppend)
-			f, err = aoi.lom.CreateFile(filePath)
+			filePath = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppend)
+			f, err = a.lom.CreateFile(filePath)
 			if err != nil {
 				errCode = http.StatusInternalServerError
 				return
 			}
-			aoi.hi.partialCksum = cos.NewCksumHash(aoi.lom.CksumType())
+			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
 		} else {
 			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
 			if err != nil {
 				errCode = http.StatusInternalServerError
 				return
 			}
-			debug.Assert(aoi.hi.partialCksum != nil)
+			debug.Assert(a.hdl.partialCksum != nil)
 		}
 
 		var (
 			buf  []byte
 			slab *memsys.Slab
 		)
-		if aoi.size == 0 {
-			buf, slab = aoi.t.gmm.Alloc()
+		if a.size == 0 {
+			buf, slab = a.t.gmm.Alloc()
 		} else {
-			buf, slab = aoi.t.gmm.AllocSize(aoi.size)
+			buf, slab = a.t.gmm.AllocSize(a.size)
 		}
 
-		w := cos.NewWriterMulti(f, aoi.hi.partialCksum.H)
-		_, err = io.CopyBuffer(w, aoi.r, buf)
+		w := cos.NewWriterMulti(f, a.hdl.partialCksum.H)
+		_, err = io.CopyBuffer(w, a.r, buf)
 
 		slab.Free(buf)
 		cos.Close(f)
@@ -1071,68 +1081,68 @@ func (aoi *appendObjInfo) appendObject() (newHandle string, errCode int, err err
 			return
 		}
 
-		newHandle = combineAppendHandle(aoi.t.SID(), filePath, aoi.hi.partialCksum)
+		newHandle = combineAppendHandle(a.t.SID(), filePath, a.hdl.partialCksum)
 	case apc.FlushOp:
 		if filePath == "" {
-			err = fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", aoi.hi)
+			err = fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", a.hdl)
 			errCode = http.StatusBadRequest
 			return
 		}
-		debug.Assert(aoi.hi.partialCksum != nil)
-		aoi.hi.partialCksum.Finalize()
-		partialCksum := aoi.hi.partialCksum.Clone()
-		if !aoi.cksum.IsEmpty() && !partialCksum.Equal(aoi.cksum) {
-			err = cos.NewBadDataCksumError(partialCksum, aoi.cksum)
+		debug.Assert(a.hdl.partialCksum != nil)
+		a.hdl.partialCksum.Finalize()
+		partialCksum := a.hdl.partialCksum.Clone()
+		if !a.cksum.IsEmpty() && !partialCksum.Equal(a.cksum) {
+			err = cos.NewBadDataCksumError(partialCksum, a.cksum)
 			errCode = http.StatusInternalServerError
 			return
 		}
 		params := cluster.PromoteParams{
-			Bck:   aoi.lom.Bck(),
+			Bck:   a.lom.Bck(),
 			Cksum: partialCksum,
 			PromoteArgs: cluster.PromoteArgs{
 				SrcFQN:       filePath,
-				ObjName:      aoi.lom.ObjName,
+				ObjName:      a.lom.ObjName,
 				OverwriteDst: true,
 				DeleteSrc:    true, // NOTE: always overwrite and remove
 			},
 		}
-		if errCode, err = aoi.t.Promote(params); err != nil {
+		if errCode, err = a.t.Promote(params); err != nil {
 			return
 		}
 	default:
-		debug.Assert(false, aoi.op)
+		debug.Assert(false, a.op)
 	}
 
-	delta := time.Since(aoi.started)
-	aoi.t.statsT.AddMany(
+	delta := time.Since(a.started)
+	a.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
 		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
 	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s: %s", aoi.lom, delta)
+		glog.Infof("PUT %s: %s", a.lom, delta)
 	}
 	return
 }
 
-func parseAppendHandle(handle string) (hi handleInfo, err error) {
+func parseAppendHandle(handle string) (hdl aoHdl, err error) {
 	if handle == "" {
 		return
 	}
 	p := strings.SplitN(handle, "|", 4)
 	if len(p) != 4 {
-		return hi, fmt.Errorf("invalid APPEND handle: %q", handle)
+		return hdl, fmt.Errorf("invalid APPEND handle: %q", handle)
 	}
-	hi.partialCksum = cos.NewCksumHash(p[2])
+	hdl.partialCksum = cos.NewCksumHash(p[2])
 	buf, err := base64.StdEncoding.DecodeString(p[3])
 	if err != nil {
-		return hi, err
+		return hdl, err
 	}
-	err = hi.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf)
+	err = hdl.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf)
 	if err != nil {
-		return hi, err
+		return hdl, err
 	}
-	hi.nodeID = p[0]
-	hi.filePath = p[1]
+	hdl.nodeID = p[0]
+	hdl.filePath = p[1]
 	return
 }
 
@@ -1148,13 +1158,13 @@ func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) s
 // COPY(object)
 //
 
-func (coi *copyObjInfo) objsAdd(size int64, err error) {
+func (coi *copyOI) objsAdd(size int64, err error) {
 	if err == nil && coi.Xact != nil {
 		coi.Xact.ObjsAdd(1, size)
 	}
 }
 
-func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int64, err error) {
+func (coi *copyOI) copyObject(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	debug.Assert(coi.DP == nil)
 
 	if lom.Bck().IsRemote() || coi.BckTo.IsRemote() {
@@ -1245,7 +1255,7 @@ func (coi *copyObjInfo) copyObject(lom *cluster.LOM, objNameTo string) (size int
 // - PUT to the relevant backend
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
+func (coi *copyOI) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
 	var tsi *meta.Snode
 	if tsi, err = cluster.HrwTarget(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get()); err != nil {
 		return
@@ -1268,7 +1278,7 @@ func (coi *copyObjInfo) copyReader(lom *cluster.LOM, objNameTo string) (size int
 	return
 }
 
-func (coi *copyObjInfo) putReader(lom, dst *cluster.LOM) (size int64, err error) {
+func (coi *copyOI) putReader(lom, dst *cluster.LOM) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser
 		oah    cmn.ObjAttrsHolder
@@ -1304,7 +1314,7 @@ func (coi *copyObjInfo) putReader(lom, dst *cluster.LOM) (size int64, err error)
 	return
 }
 
-func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
+func (coi *copyOI) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
 	var reader io.ReadCloser
 	if reader, _, err = coi.DP.Reader(lom); err != nil {
 		return 0, err
@@ -1313,7 +1323,7 @@ func (coi *copyObjInfo) dryRunCopyReader(lom *cluster.LOM) (size int64, err erro
 	return io.Copy(io.Discard, reader)
 }
 
-func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+func (coi *copyOI) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
 	debug.Assert(coi.owt > 0)
 	sargs := allocSnda()
 	{
@@ -1334,7 +1344,7 @@ func (coi *copyObjInfo) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
+func (coi *copyOI) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
 	if coi.DM != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
@@ -1405,7 +1415,7 @@ func (coi *copyObjInfo) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, e
 
 // use data mover to transmit objects to other targets
 // (compare with coi.put())
-func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
+func (coi *copyOI) dm(lom *cluster.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
 	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())
 	o := transport.AllocSend()
@@ -1423,7 +1433,7 @@ func (coi *copyObjInfo) dm(lom *cluster.LOM, sargs *sendArgs) error {
 
 // PUT(lom) => destination target (compare with coi.dm())
 // always closes params.Reader, either explicitly or via Do()
-func (coi *copyObjInfo) put(sargs *sendArgs) error {
+func (coi *copyOI) put(sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.AddToQuery(nil)
@@ -1459,38 +1469,82 @@ func (coi *copyObjInfo) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND to archive
-// see also: archive.go
+// APPEND to archive (see also: archive.go)
 //
 
-func (aaoi *appendArchInfo) do() (errCode int, err error) {
-	if aaoi.filename == "" {
-		return http.StatusBadRequest, errors.New("archive path is not defined")
+func (a *apndArchI) do() (int, error) {
+	if a.filename == "" {
+		return 0, errors.New("archive path is not defined")
 	}
-	// Standard library does not support appending to archive of any type.
-	// For TAR there is a working workaround - see below
-	if aaoi.mime != cos.ExtTar {
-		return http.StatusBadRequest, fmt.Errorf("append is supported only for %s archives", cos.ExtTar)
+	// standard library does not support appending to tgz and zip;
+	// for TAR there is an optimal workaround (below) not requiring full reconstruction
+	if a.mime == cos.ExtTar {
+		workFQN, err := a.begin()
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		if err = a.commit(workFQN); err == nil {
+			if err = a.finalize(workFQN); err == nil {
+				return 0, nil
+			}
+		}
+		a.abort(workFQN)
+		return a.reterr(err)
 	}
-	workFQN, err := aaoi.begin()
+
+	// reconstruct and append
+	var (
+		err       error
+		lmfh, wfh *os.File
+		workFQN   string
+		buf       []byte
+		slab      *memsys.Slab
+	)
+	lmfh, err = os.Open(a.lom.FQN)
 	if err != nil {
+		return http.StatusNotFound, err
+	}
+	workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
+	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
+	if err != nil {
+		cos.Close(lmfh)
 		return http.StatusInternalServerError, err
 	}
-	if err = aaoi.commit(workFQN); err == nil {
-		if err = aaoi.finalize(workFQN); err == nil {
-			return 0, nil
-		}
+	buf, slab = a.t.gmm.Alloc()
+
+	// TODO -- FIXME: from here on tgz only --------
+
+	gzw := gzip.NewWriter(wfh)
+	tw := tar.NewWriter(gzw)
+	nhdr := tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     a.filename,
+		Size:     a.size,
+		ModTime:  a.started,
 	}
-	aaoi.abort(workFQN)
-	errCode = http.StatusInternalServerError
+	cos.SetAuxTarHeader(&nhdr)
+	// do
+	err = apndTgz(lmfh, tw, &nhdr, a.r, buf)
+	slab.Free(buf)
+	cos.Close(lmfh)
+	tw.Close()
+	gzw.Close()
+	if err == nil {
+		err = a.finalize(workFQN)
+	}
+	return a.reterr(err)
+}
+
+func (*apndArchI) reterr(err error) (int, error) {
+	errCode := http.StatusInternalServerError
 	if cmn.IsErrCapacityExceeded(err) {
 		errCode = http.StatusInsufficientStorage
 	}
-	return
+	return errCode, err
 }
 
-func (aaoi *appendArchInfo) commit(fqn string) error {
-	fh, err := cos.OpenTarForAppend(aaoi.lom.Cname(), fqn)
+func (a *apndArchI) commit(fqn string) error {
+	fh, err := cos.OpenTarForAppend(a.lom.Cname(), fqn)
 	if err != nil {
 		if err == cos.ErrTarIsEmpty {
 			// special case -- only TAR -- double-check the format
@@ -1500,7 +1554,7 @@ func (aaoi *appendArchInfo) commit(fqn string) error {
 				return err
 			}
 			var (
-				buf, slab = aaoi.t.smm.AllocSize(sizeDetectMime)
+				buf, slab = a.t.smm.AllocSize(sizeDetectMime)
 				n         int
 				ok        bool
 			)
@@ -1512,72 +1566,69 @@ func (aaoi *appendArchInfo) commit(fqn string) error {
 			slab.Free(buf)
 			cos.Close(fh)
 			if !ok {
-				return fmt.Errorf("%s is not a TAR", aaoi.lom.Cname())
+				return fmt.Errorf("%s is not a TAR", a.lom.Cname())
 			}
 			// NOTE: go ahead and recreate (to append the very first one)
-			fh, err = aaoi.lom.CreateFile(fqn)
+			fh, err = a.lom.CreateFile(fqn)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	buf, slab := aaoi.t.gmm.AllocSize(aaoi.size)
+	buf, slab := a.t.gmm.AllocSize(a.size)
 	tw := tar.NewWriter(fh)
 	hdr := tar.Header{
 		Typeflag: tar.TypeReg,
-		Name:     aaoi.filename,
-		Size:     aaoi.size,
-		ModTime:  aaoi.started,
+		Name:     a.filename,
+		Size:     a.size,
+		ModTime:  a.started,
 	}
 	cos.SetAuxTarHeader(&hdr)
 	tw.WriteHeader(&hdr)
-	_, err = io.CopyBuffer(tw, aaoi.r, buf)
+	_, err = io.CopyBuffer(tw, a.r, buf)
+
+	// cleanup and ret
 	tw.Close()
 	cos.Close(fh)
 	slab.Free(buf)
-	if err != nil {
-		return err
-	}
-
-	st, err := os.Stat(fqn)
-	if err != nil {
-		return err
-	}
-	aaoi.lom.SetSize(st.Size())
-	aaoi.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
-	aaoi.lom.SetAtimeUnix(aaoi.started.UnixNano())
-	return nil
+	return err
 }
 
-func (aaoi *appendArchInfo) finalize(fqn string) error {
-	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
+func (a *apndArchI) finalize(fqn string) error {
+	finfo, err := os.Stat(fqn)
+	if err != nil {
 		return err
 	}
-	aaoi.lom.SetAtimeUnix(aaoi.started.UnixNano())
-	if err := aaoi.lom.Persist(); err != nil {
+	if err := os.Rename(fqn, a.lom.FQN); err != nil {
 		return err
 	}
-	if aaoi.lom.Bprops().EC.Enabled {
-		if err := ec.ECM.EncodeObject(aaoi.lom); err != nil && err != ec.ErrorECDisabled {
+	a.lom.SetSize(finfo.Size())
+	a.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // TODO -- FIXME: checksum
+	a.lom.SetAtimeUnix(a.started.UnixNano())
+	if err := a.lom.Persist(); err != nil {
+		return err
+	}
+	if a.lom.Bprops().EC.Enabled {
+		if err := ec.ECM.EncodeObject(a.lom); err != nil && err != ec.ErrorECDisabled {
 			return err
 		}
 	}
-	aaoi.t.putMirror(aaoi.lom)
+	a.t.putMirror(a.lom)
 	return nil
 }
 
-func (aaoi *appendArchInfo) begin() (string, error) {
-	workFQN := fs.CSM.Gen(aaoi.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
-	if err := os.Rename(aaoi.lom.FQN, workFQN); err != nil {
+func (a *apndArchI) begin() (string, error) {
+	workFQN := fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
+	if err := os.Rename(a.lom.FQN, workFQN); err != nil {
 		return "", err
 	}
 	return workFQN, nil
 }
 
-func (aaoi *appendArchInfo) abort(fqn string) {
-	aaoi.lom.Uncache(true)
-	if err := os.Rename(fqn, aaoi.lom.FQN); err != nil {
-		glog.Errorf("nested error while rolling back %s: %v", aaoi.lom.ObjName, err)
+func (a *apndArchI) abort(fqn string) {
+	a.lom.Uncache(true)
+	if err := os.Rename(fqn, a.lom.FQN); err != nil {
+		glog.Errorf("nested error while rolling back %s: %v", a.lom.ObjName, err)
 	}
 }
 
@@ -1588,47 +1639,47 @@ func (aaoi *appendArchInfo) abort(fqn string) {
 var (
 	goiPool, poiPool, coiPool, sndPool sync.Pool
 
-	goi0 getObjInfo
-	poi0 putObjInfo
-	coi0 copyObjInfo
+	goi0 getOI
+	poi0 putOI
+	coi0 copyOI
 	snd0 sendArgs
 )
 
-func allocGetObjInfo() (a *getObjInfo) {
+func allocGetObjInfo() (a *getOI) {
 	if v := goiPool.Get(); v != nil {
-		a = v.(*getObjInfo)
+		a = v.(*getOI)
 		return
 	}
-	return &getObjInfo{}
+	return &getOI{}
 }
 
-func freeGetObjInfo(a *getObjInfo) {
+func freeGetObjInfo(a *getOI) {
 	*a = goi0
 	goiPool.Put(a)
 }
 
-func allocPutObjInfo() (a *putObjInfo) {
+func allocPutObjInfo() (a *putOI) {
 	if v := poiPool.Get(); v != nil {
-		a = v.(*putObjInfo)
+		a = v.(*putOI)
 		return
 	}
-	return &putObjInfo{}
+	return &putOI{}
 }
 
-func freePutObjInfo(a *putObjInfo) {
+func freePutObjInfo(a *putOI) {
 	*a = poi0
 	poiPool.Put(a)
 }
 
-func allocCopyObjInfo() (a *copyObjInfo) {
+func allocCopyObjInfo() (a *copyOI) {
 	if v := coiPool.Get(); v != nil {
-		a = v.(*copyObjInfo)
+		a = v.(*copyOI)
 		return
 	}
-	return &copyObjInfo{}
+	return &copyOI{}
 }
 
-func freeCopyObjInfo(a *copyObjInfo) {
+func freeCopyObjInfo(a *copyOI) {
 	*a = coi0
 	coiPool.Put(a)
 }

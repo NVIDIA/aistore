@@ -1138,34 +1138,33 @@ func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time,
 		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
 		cksumType     = r.Header.Get(apc.HdrObjCksumType)
 		contentLength = r.Header.Get(cos.HdrContentLength)
-		handle        = dpq.appendHdl // apc.QparamAppendHandle
 	)
-	hi, err := parseAppendHandle(handle)
+	hdl, err := parseAppendHandle(dpq.appendHdl) // apc.QparamAppendHandle
 	if err != nil {
 		return "", http.StatusBadRequest, err
 	}
-	aoi := &appendObjInfo{
+	a := &apndOI{
 		started: started,
 		t:       t,
 		lom:     lom,
 		r:       r.Body,
 		op:      dpq.appendTy, // apc.QparamAppendType
-		hi:      hi,
+		hdl:     hdl,
 	}
-	if aoi.op != apc.AppendOp && aoi.op != apc.FlushOp {
+	if a.op != apc.AppendOp && a.op != apc.FlushOp {
 		err = fmt.Errorf("invalid operation %q (expecting either %q or %q) - check %q query",
-			aoi.op, apc.AppendOp, apc.FlushOp, apc.QparamAppendType)
+			a.op, apc.AppendOp, apc.FlushOp, apc.QparamAppendType)
 		return "", http.StatusBadRequest, err
 	}
 	if contentLength != "" {
 		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
-			aoi.size = size
+			a.size = size
 		}
 	}
 	if cksumValue != "" {
-		aoi.cksum = cos.NewCksum(cksumType, cksumValue)
+		a.cksum = cos.NewCksum(cksumType, cksumValue)
 	}
-	return aoi.appendObject()
+	return a.do()
 }
 
 // prior to append-to-arch
@@ -1187,7 +1186,7 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 		}
 		return http.StatusInternalServerError, err
 	}
-	aaoi := &appendArchInfo{
+	a := &apndArchI{
 		started:  started,
 		t:        t,
 		lom:      lom,
@@ -1197,13 +1196,13 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 	}
 	if sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
-			aaoi.size = size
+			a.size = size
 		}
 	}
-	if aaoi.size == 0 {
+	if a.size == 0 {
 		return http.StatusBadRequest, errors.New("size is not defined")
 	}
-	return aaoi.do()
+	return a.do()
 }
 
 func (t *target) putMirror(lom *cluster.LOM) {

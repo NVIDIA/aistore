@@ -115,7 +115,7 @@ func BenchmarkObjPut(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 				r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
-				poi := &putObjInfo{
+				poi := &putOI{
 					atime:   time.Now().UnixNano(),
 					t:       t,
 					lom:     lom,
@@ -158,34 +158,34 @@ func BenchmarkObjAppend(b *testing.B) {
 				b.Fatal(err)
 			}
 
-			var hi handleInfo
+			var hdl aoHdl
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 				r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
-				aoi := &appendObjInfo{
+				aoi := &apndOI{
 					started: time.Now(),
 					t:       t,
 					lom:     lom,
 					r:       r,
 					op:      apc.AppendOp,
-					hi:      hi,
+					hdl:     hdl,
 				}
 				os.Remove(lom.FQN)
 				b.StartTimer()
 
-				newHandle, _, err := aoi.appendObject()
+				newHandle, _, err := aoi.do()
 				if err != nil {
 					b.Fatal(err)
 				}
-				hi, err = parseAppendHandle(newHandle)
+				hdl, err = parseAppendHandle(newHandle)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
 			b.StopTimer()
 			os.Remove(lom.FQN)
-			os.Remove(hi.filePath)
+			os.Remove(hdl.filePath)
 		})
 	}
 }
@@ -224,7 +224,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			r, _ := readers.NewRandReader(bench.fileSize, cos.ChecksumNone)
-			poi := &putObjInfo{
+			poi := &putOI{
 				atime:   time.Now().UnixNano(),
 				t:       t,
 				lom:     lom,
@@ -241,7 +241,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			}
 
 			w := newDiscardRW()
-			goi := &getObjInfo{
+			goi := &getOI{
 				atime:   time.Now().UnixNano(),
 				t:       t,
 				lom:     lom,
