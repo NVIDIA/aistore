@@ -124,7 +124,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	coi := allocCopyObjInfo()
+	coi := allocCOI()
 	{
 		coi.t = t
 		coi.BckTo = bckDst
@@ -132,7 +132,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	}
 	objName := s3.ObjName(items)
 	_, err = coi.copyObject(lom, objName)
-	freeCopyObjInfo(coi)
+	freeCOI(coi)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -182,7 +182,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	poi := allocPutObjInfo()
+	poi := allocPOI()
 	{
 		poi.atime = started.UnixNano()
 		poi.t = t
@@ -191,7 +191,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		poi.restful = true
 	}
 	errCode, err := poi.do(nil /*response hdr*/, r, dpq)
-	freePutObjInfo(poi)
+	freePOI(poi)
 	if err != nil {
 		t.fsErr(err, lom.FQN)
 		s3.WriteErr(w, r, err, errCode)

@@ -63,7 +63,7 @@ func (t *target) Backend(bck *meta.Bck) cluster.BackendProvider {
 func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
-	poi := allocPutObjInfo()
+	poi := allocPOI()
 	{
 		poi.t = t
 		poi.lom = lom
@@ -78,12 +78,12 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 		poi.cksumToUse = params.Cksum
 	}
 	_, err := poi.putObject()
-	freePutObjInfo(poi)
+	freePOI(poi)
 	return err
 }
 
 func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact) (errCode int, err error) {
-	poi := allocPutObjInfo()
+	poi := allocPOI()
 	{
 		poi.t = t
 		poi.atime = time.Now().UnixNano()
@@ -93,7 +93,7 @@ func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact
 		poi.xctn = xctn
 	}
 	errCode, err = poi.finalize()
-	freePutObjInfo(poi)
+	freePOI(poi)
 	return
 }
 
@@ -120,7 +120,7 @@ func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
 func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, dryRun bool) (size int64, err error) {
 	objNameTo := lom.ObjName
-	coi := allocCopyObjInfo()
+	coi := allocCOI()
 	{
 		coi.CopyObjectParams = *params
 		coi.t = t
@@ -137,7 +137,7 @@ func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, 
 		size, err = coi.copyObject(lom, objNameTo)
 	}
 	coi.objsAdd(size, err)
-	freeCopyObjInfo(coi)
+	freeCOI(coi)
 	return
 }
 
@@ -301,7 +301,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 			return
 		}
 	}
-	poi := allocPutObjInfo()
+	poi := allocPOI()
 	{
 		poi.atime = time.Now().UnixNano()
 		poi.t = t
@@ -312,7 +312,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 	}
 	lom.SetSize(fileSize)
 	errCode, err = poi.finalize()
-	freePutObjInfo(poi)
+	freePOI(poi)
 	return
 }
 
@@ -326,7 +326,7 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 		return -1, nil
 	}
 
-	coi := allocCopyObjInfo()
+	coi := allocCOI()
 	{
 		coi.t = t
 		coi.BckTo = lom.Bck()
@@ -334,7 +334,7 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 		coi.Xact = params.Xact
 	}
 	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
-	freeCopyObjInfo(coi)
+	freeCOI(coi)
 	return size, err
 }
 

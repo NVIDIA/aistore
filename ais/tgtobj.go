@@ -73,6 +73,7 @@ type (
 		chunked    bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked   bool            // internal
 		verchanged bool            // version changed
+		retry      bool            // once
 	}
 
 	// append handle (packed)
@@ -494,9 +495,10 @@ func (goi *getOI) getObject() (errCode int, err error) {
 // is under rlock
 func (goi *getOI) get() (errCode int, err error) {
 	var (
-		cs                          fs.CapStatus
-		doubleCheck, retry, retried bool
-		cold                        bool
+		cs          fs.CapStatus
+		doubleCheck bool
+		retried     bool
+		cold        bool
 	)
 do:
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
@@ -589,13 +591,19 @@ do:
 
 	// read locally and stream back
 fin:
-	retry, errCode, err = goi.finalize(cold)
-	if retry && !retried {
-		debug.Assert(err != errSendingResp)
-		glog.Warningf("GET %s: retrying...", goi.lom)
-		retried = true // only once
-		goi.lom.Uncache(true /*delDirty*/)
-		goto do
+	errCode, err = goi.finalize(cold)
+	if err == nil {
+		return
+	}
+	goi.lom.Uncache(true /*delDirty*/)
+	if goi.retry {
+		goi.retry = false
+		if !retried {
+			glog.Warningf("GET %s: retrying...", goi.lom)
+			retried = true // only once
+			goto do
+		}
+		glog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, errCode)
 	}
 	return
 }
@@ -804,7 +812,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 
 	cksumToUse := lom.ObjAttrs().FromHeader(resp.Header)
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileRemote)
-	poi := allocPutObjInfo()
+	poi := allocPOI()
 	{
 		poi.t = goi.t
 		poi.lom = lom
@@ -815,7 +823,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 		poi.cksumToUse = cksumToUse
 	}
 	errCode, erp := poi.putObject()
-	freePutObjInfo(poi)
+	freePOI(poi)
 	if erp == nil {
 		return true
 	}
@@ -823,7 +831,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	return false
 }
 
-func (goi *getOI) finalize(coldGet bool) (retry bool, errCode int, err error) {
+func (goi *getOI) finalize(coldGet bool) (errCode int, err error) {
 	var (
 		lmfh *os.File
 		hrng *htrange
@@ -836,7 +844,7 @@ func (goi *getOI) finalize(coldGet bool) (retry bool, errCode int, err error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			errCode = http.StatusNotFound
-			retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
+			goi.retry = true // (!lom.IsAIS() || lom.ECEnabled() || GFN...)
 		} else {
 			goi.t.fsErr(err, fqn)
 			errCode = http.StatusInternalServerError
@@ -845,10 +853,6 @@ func (goi *getOI) finalize(coldGet bool) (retry bool, errCode int, err error) {
 		return
 	}
 
-	defer func() {
-		cos.Close(lmfh)
-	}()
-
 	hdr := goi.w.Header()
 	if goi.ranges.Range != "" {
 		rsize := goi.lom.SizeBytes()
@@ -856,15 +860,17 @@ func (goi *getOI) finalize(coldGet bool) (retry bool, errCode int, err error) {
 			rsize = goi.ranges.Size
 		}
 		if hrng, errCode, err = goi.parseRange(hdr, rsize); err != nil {
-			return
+			goto ret
 		}
 		if goi.archive.filename != "" {
 			err = cmn.NewErrUnsupp("range-read archived file", goi.archive.filename)
 			errCode = http.StatusRequestedRangeNotSatisfiable
-			return
+			goto ret
 		}
 	}
 	errCode, err = goi.fini(fqn, lmfh, hdr, hrng, coldGet)
+ret:
+	cos.Close(lmfh)
 	return
 }
 
@@ -1599,7 +1605,8 @@ func (a *apndArchI) finalize(fqn string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Rename(fqn, a.lom.FQN); err != nil {
+	// done
+	if err := a.lom.RenameFile(fqn); err != nil {
 		return err
 	}
 	a.lom.SetSize(finfo.Size())
@@ -1645,7 +1652,7 @@ var (
 	snd0 sendArgs
 )
 
-func allocGetObjInfo() (a *getOI) {
+func allocGOI() (a *getOI) {
 	if v := goiPool.Get(); v != nil {
 		a = v.(*getOI)
 		return
@@ -1653,12 +1660,12 @@ func allocGetObjInfo() (a *getOI) {
 	return &getOI{}
 }
 
-func freeGetObjInfo(a *getOI) {
+func freeGOI(a *getOI) {
 	*a = goi0
 	goiPool.Put(a)
 }
 
-func allocPutObjInfo() (a *putOI) {
+func allocPOI() (a *putOI) {
 	if v := poiPool.Get(); v != nil {
 		a = v.(*putOI)
 		return
@@ -1666,12 +1673,12 @@ func allocPutObjInfo() (a *putOI) {
 	return &putOI{}
 }
 
-func freePutObjInfo(a *putOI) {
+func freePOI(a *putOI) {
 	*a = poi0
 	poiPool.Put(a)
 }
 
-func allocCopyObjInfo() (a *copyOI) {
+func allocCOI() (a *copyOI) {
 	if v := coiPool.Get(); v != nil {
 		a = v.(*copyOI)
 		return
@@ -1679,7 +1686,7 @@ func allocCopyObjInfo() (a *copyOI) {
 	return &copyOI{}
 }
 
-func freeCopyObjInfo(a *copyOI) {
+func freeCOI(a *copyOI) {
 	*a = coi0
 	coiPool.Put(a)
 }

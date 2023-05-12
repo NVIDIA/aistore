@@ -627,7 +627,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			t.statsT.Add(stats.GetRedirLatency, redelta)
 		}
 	}
-	goi := allocGetObjInfo()
+	goi := allocGOI()
 	{
 		goi.atime = atime
 		goi.latency = tm // assigned upon transmitting resp.
@@ -654,7 +654,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 	}
 	lom = goi.lom
-	freeGetObjInfo(goi)
+	freeGOI(goi)
 	return lom
 }
 
@@ -743,7 +743,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 		t.statsT.IncErr(stats.AppendCount)
 	default:
-		poi := allocPutObjInfo()
+		poi := allocPOI()
 		{
 			poi.atime = started.UnixNano()
 			poi.t = t
@@ -753,7 +753,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 			poi.t2t = t2tput
 		}
 		errCode, err = poi.do(w.Header(), r, apireq.dpq)
-		freePutObjInfo(poi)
+		freePOI(poi)
 	}
 	if err != nil {
 		t.fsErr(err, lom.FQN)
@@ -1317,7 +1317,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
 	}
 
 	buf, slab := t.gmm.Alloc()
-	coi := allocCopyObjInfo()
+	coi := allocCOI()
 	{
 		coi.CopyObjectParams = cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
 		coi.t = t
@@ -1326,7 +1326,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
 	}
 	_, err := coi.copyObject(lom, msg.Name /* new object name */)
 	slab.Free(buf)
-	freeCopyObjInfo(coi)
+	freeCOI(coi)
 	if err != nil {
 		return err
 	}
