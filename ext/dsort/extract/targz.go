@@ -9,7 +9,6 @@ import (
 	"compress/gzip"
 	"io"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -63,8 +62,7 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 			return extractedSize, extractedCount, err
 		}
 
-		metadata := newTarFileHeader(header)
-		bmeta := cos.MustMarshal(metadata)
+		bmeta := cos.MustMarshal(header)
 
 		if err := tw.WriteHeader(header); err != nil {
 			return extractedSize, extractedCount, err
@@ -76,10 +74,6 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 			// We can safely ignore this case because we do `MkdirAll` anyway
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
-			continue
-		}
-		if header.Typeflag != tar.TypeReg {
-			glog.Warningf("Unrecognized header typeflag in tar: %s", string(header.Typeflag))
 			continue
 		}
 

@@ -8,7 +8,6 @@ import (
 	"archive/tar"
 	"io"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -26,25 +25,6 @@ var (
 )
 
 type (
-	// tarFileHeader represents a single record's file metadata. The fields here
-	// are taken from `tar.Header`. It is very costly to marshal and unmarshal
-	// `time.Time` to and from JSON, so all `time.Time` fields are omitted.
-	// Furthermore, the `time.Time` fields are updated upon creating the new
-	// tarballs, so there is no need to maintain the original values.
-	tarFileHeader struct {
-		Typeflag byte `json:"typeflag"` // Type of header entry (should be TypeReg for most files)
-
-		Name     string `json:"name"`     // Name of file entry
-		Linkname string `json:"linkname"` // Target name of link (valid for TypeLink or TypeSymlink)
-
-		Size  int64  `json:"size"`  // Logical file size in bytes
-		Mode  int64  `json:"mode"`  // Permission and mode bits
-		UID   int    `json:"uid"`   // User ID of owner
-		GID   int    `json:"gid"`   // Group ID of owner
-		Uname string `json:"uname"` // User name of owner
-		Gname string `json:"gname"` // Group name of owner
-	}
-
 	tarExtractCreator struct {
 		t cluster.Target
 	}
@@ -60,33 +40,6 @@ type (
 		tarWriter    *tar.Writer
 	}
 )
-
-func newTarFileHeader(header *tar.Header) tarFileHeader {
-	return tarFileHeader{
-		Name:     header.Name,
-		Typeflag: header.Typeflag,
-		Linkname: header.Linkname,
-		Mode:     header.Mode,
-		UID:      header.Uid,
-		GID:      header.Gid,
-		Uname:    header.Uname,
-		Gname:    header.Gname,
-	}
-}
-
-func (h *tarFileHeader) toTarHeader(size int64) *tar.Header {
-	return &tar.Header{
-		Size:     size,
-		Name:     h.Name,
-		Typeflag: h.Typeflag,
-		Linkname: h.Linkname,
-		Mode:     h.Mode,
-		Uid:      h.UID,
-		Gid:      h.GID,
-		Uname:    h.Uname,
-		Gname:    h.Gname,
-	}
-}
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
@@ -121,13 +74,12 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 		copy(rd.metadataBuf[rd.written:], p[:remainingMetadataSize])
 		rd.written += remainingMetadataSize
 		p = p[remainingMetadataSize:]
-		var metadata tarFileHeader
-		if err := jsoniter.Unmarshal(rd.metadataBuf[:rd.metadataSize], &metadata); err != nil {
+		var header tar.Header
+		if err := jsoniter.Unmarshal(rd.metadataBuf[:rd.metadataSize], &header); err != nil {
 			return int(remainingMetadataSize), err
 		}
 
-		header := metadata.toTarHeader(rd.size)
-		if err := rd.tarWriter.WriteHeader(header); err != nil {
+		if err := rd.tarWriter.WriteHeader(&header); err != nil {
 			return int(remainingMetadataSize), err
 		}
 	} else {
@@ -160,19 +112,13 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 			return extractedSize, extractedCount, err
 		}
 
-		metadata := newTarFileHeader(header)
-		bmeta := cos.MustMarshal(metadata)
-
+		bmeta := cos.MustMarshal(header)
 		offset += t.MetadataSize()
 
 		if header.Typeflag == tar.TypeDir {
 			// We can safely ignore this case because we do `MkdirAll` anyway
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
-			continue
-		}
-		if header.Typeflag != tar.TypeReg {
-			glog.Warningf("Unrecognized header typeflag in tar: %s", string(header.Typeflag))
 			continue
 		}
 
