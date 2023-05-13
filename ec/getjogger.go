@@ -303,7 +303,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	if writer == nil {
 		return errors.New("failed to read a replica from any target")
 	}
-	if err := ctx.lom.RenameFile(tmpFQN); err != nil {
+	if err := ctx.lom.RenameFrom(tmpFQN); err != nil {
 		return err
 	}
 

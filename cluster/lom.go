@@ -598,7 +598,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 }
 
 // (compare with cos.Rename)
-func (lom *LOM) RenameFile(workfqn string) error {
+func (lom *LOM) RenameFrom(workfqn string) error {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err := cos.Stat(bdir); err != nil {
 		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)

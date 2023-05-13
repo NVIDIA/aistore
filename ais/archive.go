@@ -252,12 +252,19 @@ func mimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
 // copy archive one file at a time, and APPEND new `reader` at the end
 //
 
-func apndTgz(lomr io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, nr io.Reader, buf []byte) (err error) {
-	var gzr *gzip.Reader
-	if gzr, err = gzip.NewReader(lomr); err != nil {
-		return
+func cpapndT(lomr io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, nr io.Reader, buf []byte, tgz bool) (err error) {
+	var (
+		gzr *gzip.Reader
+		tr  *tar.Reader
+	)
+	if tgz {
+		if gzr, err = gzip.NewReader(lomr); err != nil {
+			return
+		}
+		tr = tar.NewReader(gzr)
+	} else {
+		tr = tar.NewReader(lomr)
 	}
-	tr := tar.NewReader(gzr)
 	for {
 		var hdr *tar.Header
 		hdr, err = tr.Next()
@@ -279,6 +286,8 @@ func apndTgz(lomr io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, nr i
 	if err == nil {
 		_, err = io.CopyBuffer(tw, nr, buf)
 	}
-	cos.Close(gzr)
+	if tgz {
+		cos.Close(gzr)
+	}
 	return
 }

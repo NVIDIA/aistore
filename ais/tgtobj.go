@@ -307,7 +307,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 	}
 
 	// done
-	if err = lom.RenameFile(poi.workFQN); err != nil {
+	if err = lom.RenameFrom(poi.workFQN); err != nil {
 		return
 	}
 	if lom.HasCopies() {
@@ -1485,20 +1485,38 @@ func (a *apndArchI) do() (int, error) {
 	// standard library does not support appending to tgz and zip;
 	// for TAR there is an optimal workaround (below) not requiring full reconstruction
 	if a.mime == cos.ExtTar {
-		workFQN, err := a.begin()
-		if err != nil {
+		var (
+			err     error
+			fh      *os.File
+			size    int64
+			workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
+		)
+		if err = os.Rename(a.lom.FQN, workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
-		if err = a.commit(workFQN); err == nil {
-			if err = a.finalize(workFQN); err == nil {
-				return 0, nil
+		fh, err = cos.OpenTarSeekEnd(a.lom.Cname(), workFQN)
+		if err != nil {
+			if errV := a.lom.RenameFrom(workFQN); errV != nil {
+				return http.StatusInternalServerError, errV
+			}
+			if err == cos.ErrTarIsEmpty {
+				goto cpapnd
+			}
+			return http.StatusInternalServerError, err
+		}
+		// do
+		if size, err = a.apndTar(fh); err == nil {
+			if err = a.finalize(size, workFQN); err == nil {
+				return http.StatusInternalServerError, nil // ok
 			}
 		}
-		a.abort(workFQN)
-		return a.reterr(err)
+		if errV := a.lom.RenameFrom(workFQN); errV != nil {
+			glog.Errorf(fmtNested, a.t, err, "append and rename back", workFQN, errV)
+		}
+		return http.StatusInternalServerError, err
 	}
 
-	// reconstruct and append
+cpapnd:
 	var (
 		err       error
 		lmfh, wfh *os.File
@@ -1518,10 +1536,7 @@ func (a *apndArchI) do() (int, error) {
 	}
 	buf, slab = a.t.gmm.Alloc()
 
-	// TODO -- FIXME: from here on tgz only --------
-
-	gzw := gzip.NewWriter(wfh)
-	tw := tar.NewWriter(gzw)
+	// TODO -- FIXME: from here on TAR or TGZ only --------
 	nhdr := tar.Header{
 		Typeflag: tar.TypeReg,
 		Name:     a.filename,
@@ -1530,13 +1545,32 @@ func (a *apndArchI) do() (int, error) {
 	}
 	cos.SetAuxTarHeader(&nhdr)
 	// do
-	err = apndTgz(lmfh, tw, &nhdr, a.r, buf)
+	if a.mime == cos.ExtTar {
+		tw := tar.NewWriter(wfh)
+		err = cpapndT(lmfh, tw, &nhdr, a.r, buf, false /*gzip*/)
+		cos.Close(tw)
+	} else {
+		debug.Assert(a.mime == cos.ExtTgz || a.mime == cos.ExtTarTgz, a.mime) // TODO -- FIXME: tbd -------
+		gzw := gzip.NewWriter(wfh)
+		tw := tar.NewWriter(gzw)
+		err = cpapndT(lmfh, tw, &nhdr, a.r, buf, true /*gzip*/)
+		cos.Close(tw)
+		cos.Close(gzw)
+	}
+
+	// close and finalize
 	slab.Free(buf)
 	cos.Close(lmfh)
-	tw.Close()
-	gzw.Close()
 	if err == nil {
-		err = a.finalize(workFQN)
+		var size int64
+		size, err = wfh.Seek(0, io.SeekCurrent)
+		cos.Close(wfh)
+		if err == nil {
+			err = a.finalize(size, workFQN)
+		}
+	} else {
+		cos.Close(wfh)
+		cos.RemoveFile(workFQN)
 	}
 	return a.reterr(err)
 }
@@ -1549,40 +1583,9 @@ func (*apndArchI) reterr(err error) (int, error) {
 	return errCode, err
 }
 
-func (a *apndArchI) commit(fqn string) error {
-	fh, err := cos.OpenTarForAppend(a.lom.Cname(), fqn)
-	if err != nil {
-		if err == cos.ErrTarIsEmpty {
-			// special case -- only TAR -- double-check the format
-			fh, err = os.Open(fqn)
-			if err != nil {
-				debug.AssertNoErr(err) // unlikely
-				return err
-			}
-			var (
-				buf, slab = a.t.smm.AllocSize(sizeDetectMime)
-				n         int
-				ok        bool
-			)
-			n, err = fh.Read(buf)
-			debug.AssertNoErr(err) // unlikely
-			if err == nil {
-				ok = mimeByMagic(buf, n, magicTar, true /*512 zeros ok*/)
-			}
-			slab.Free(buf)
-			cos.Close(fh)
-			if !ok {
-				return fmt.Errorf("%s is not a TAR", a.lom.Cname())
-			}
-			// NOTE: go ahead and recreate (to append the very first one)
-			fh, err = a.lom.CreateFile(fqn)
-		}
-		if err != nil {
-			return err
-		}
-	}
+func (a *apndArchI) apndTar(rwfh *os.File) (size int64, err error) {
 	buf, slab := a.t.gmm.AllocSize(a.size)
-	tw := tar.NewWriter(fh)
+	tw := tar.NewWriter(rwfh)
 	hdr := tar.Header{
 		Typeflag: tar.TypeReg,
 		Name:     a.filename,
@@ -1591,25 +1594,29 @@ func (a *apndArchI) commit(fqn string) error {
 	}
 	cos.SetAuxTarHeader(&hdr)
 	tw.WriteHeader(&hdr)
+	// append
 	_, err = io.CopyBuffer(tw, a.r, buf)
 
-	// cleanup and ret
-	tw.Close()
-	cos.Close(fh)
+	cos.Close(tw)
+	if err == nil {
+		size, err = rwfh.Seek(0, io.SeekCurrent)
+	}
+	cos.Close(rwfh)
 	slab.Free(buf)
-	return err
+	return
 }
 
-func (a *apndArchI) finalize(fqn string) error {
-	finfo, err := os.Stat(fqn)
-	if err != nil {
-		return err
-	}
+func (a *apndArchI) finalize(size int64, fqn string) error {
+	debug.Func(func() {
+		finfo, err := os.Stat(fqn)
+		debug.AssertNoErr(err)
+		debug.Assertf(finfo.Size() == size, "%d != %d", finfo.Size(), size)
+	})
 	// done
-	if err := a.lom.RenameFile(fqn); err != nil {
+	if err := a.lom.RenameFrom(fqn); err != nil {
 		return err
 	}
-	a.lom.SetSize(finfo.Size())
+	a.lom.SetSize(size)
 	a.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // TODO -- FIXME: checksum
 	a.lom.SetAtimeUnix(a.started.UnixNano())
 	if err := a.lom.Persist(); err != nil {
@@ -1622,21 +1629,6 @@ func (a *apndArchI) finalize(fqn string) error {
 	}
 	a.t.putMirror(a.lom)
 	return nil
-}
-
-func (a *apndArchI) begin() (string, error) {
-	workFQN := fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
-	if err := os.Rename(a.lom.FQN, workFQN); err != nil {
-		return "", err
-	}
-	return workFQN, nil
-}
-
-func (a *apndArchI) abort(fqn string) {
-	a.lom.Uncache(true)
-	if err := os.Rename(fqn, a.lom.FQN); err != nil {
-		glog.Errorf("nested error while rolling back %s: %v", a.lom.ObjName, err)
-	}
 }
 
 //

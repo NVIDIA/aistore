@@ -226,8 +226,9 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		t.Errorf("Wrong number of objects: have %d, expected %d", len(lst.Entries), objCount)
 	}
 
-	// FIXME: must use WaitForNodeToTerminate instead of sleep
-	time.Sleep(13 * time.Second)
+	// TODO -- FIXME: must use WaitForNodeToTerminateAndExit instead of sleep
+	// (restarting too early may result in: "bind: address already in use ")
+	time.Sleep(40 * time.Second)
 
 	smap = tools.GetClusterMap(t, proxyURL)
 	err = tools.RestoreNode(cmd, false, "target")

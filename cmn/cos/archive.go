@@ -96,16 +96,14 @@ func SetAuxTarHeader(hdr *tar.Header) {
 //	The blocks must be overwritten, otherwise newly added files won't be
 //	accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
 //	write different number of zero blocks.
-func OpenTarForAppend(cname, workFQN string) (*os.File, error) {
-	fh, err := os.OpenFile(workFQN, os.O_RDWR, PermRWR)
-	if err != nil {
-		return nil, err
+func OpenTarSeekEnd(cname, workFQN string) (rwfh *os.File, err error) {
+	if rwfh, err = os.OpenFile(workFQN, os.O_RDWR, PermRWR); err != nil {
+		return
 	}
-	err = _seekTarEnd(cname, fh)
-	if err != nil {
-		fh.Close()
+	if err = _seekTarEnd(cname, rwfh); err != nil {
+		rwfh.Close() // always close on err
 	}
-	return fh, err
+	return
 }
 
 func _seekTarEnd(cname string, fh *os.File) error {
@@ -118,7 +116,7 @@ func _seekTarEnd(cname string, fh *os.File) error {
 		hdr, err := twr.Next()
 		if err != nil {
 			if err != io.EOF {
-				return err
+				return err // invalid TAR format
 			}
 			// EOF
 			if pos < 0 {

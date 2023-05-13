@@ -252,7 +252,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				err = r.AbortErr()
 			}
 			if err != nil {
-				wi.abortAppend(err)
+				wi.abort()
 				goto fin
 			}
 			if r.p.T.SID() == wi.tsi.ID() {
@@ -286,10 +286,7 @@ fin:
 		if wi.finalizing.Load() {
 			continue
 		}
-		if wi.fh != nil && wi.appendPos == 0 {
-			cos.Close(wi.fh)
-			cos.RemoveFile(wi.fqn)
-		}
+		wi.abort()
 		delete(r.pending.m, uuid)
 	}
 	r.pending.Unlock()
@@ -358,7 +355,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	r.DecPending()
 
 	if err != nil {
-		wi.abortAppend(err)
+		wi.abort()
 		r.raiseErr(err, wi.msg.ContinueOnError, errCode)
 	}
 }
@@ -372,7 +369,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 
 	wi.lom.SetSize(size)
 	cos.Close(wi.fh)
-
+	wi.fh = nil
 	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn, r) // cmn.OwtFinalize
 	cluster.FreeLOM(wi.lom)
 
@@ -480,27 +477,37 @@ func (wi *archwi) nameInArch(objName string) string {
 }
 
 func (wi *archwi) openTarForAppend() (err error) {
-	if err := os.Rename(wi.lom.FQN, wi.fqn); err != nil {
-		return err
-	}
-	wi.fh, err = cos.OpenTarForAppend(wi.lom.ObjName, wi.fqn)
-	if err == nil {
-		wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
-		if err != nil {
-			wi.abortAppend(err)
-		}
-	}
-	return err
-}
-
-func (wi *archwi) abortAppend(err error) {
-	if wi.appendPos == 0 || wi.fh == nil {
-		glog.Error(err)
+	if err = os.Rename(wi.lom.FQN, wi.fqn); err != nil {
 		return
 	}
+	wi.fh, err = cos.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
+	if err != nil {
+		goto mvback
+	}
+	wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
+	if err == nil {
+		return // ok
+	}
 	cos.Close(wi.fh)
-	if errRm := os.Rename(wi.fqn, wi.lom.FQN); errRm != nil {
-		glog.Errorf("nested error: %v --> %v", err, errRm)
+	wi.fh = nil
+mvback:
+	if errV := wi.lom.RenameFrom(wi.fqn); errV != nil {
+		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
+			wi.tsi, wi.lom, err, wi.fqn, errV)
+	} else {
+		wi.fqn = ""
+	}
+	return
+}
+
+func (wi *archwi) abort() {
+	if wi.fh != nil {
+		cos.Close(wi.fh)
+		wi.fh = nil
+	}
+	if wi.fqn != "" {
+		cos.RemoveFile(wi.fqn)
+		wi.fqn = ""
 	}
 }
 

@@ -421,8 +421,8 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 // object formatted as one of the supported archives.
 // In other words, append to an existing archive.
 // For supported archival (mime) types, see cmn/cos/archive.go.
-// NOTE: compare with:
-//   - `api.CreateArchMultiObj`
+// NOTE see also:
+//   - `api.CreateArchMultiObj(msg.AppendToExisting = true)`
 //   - `api.AppendObject`
 func AppendToArch(args AppendToArchArgs) (err error) {
 	mime, err := cos.MimeByExt(args.ObjName) // TODO -- FIXME: must be consistent with GET from-arch
