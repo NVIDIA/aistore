@@ -108,7 +108,7 @@ func updateLogOptions() error {
 	if err := cos.CreateDir(Conf.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
 	}
-	glog.SetLogDir(Conf.Log.Dir)
+	glog.SetLogDirRole(Conf.Log.Dir, "auth")
 
 	if Conf.Log.Level != "" {
 		v := flag.Lookup("v").Value

@@ -173,18 +173,9 @@ func archNamesEq(n1, n2 string) bool {
 // target Mime utils (see also cmn/cos/archive.go)
 //
 
-func mimeByMagic(buf []byte, n int, magic detect, zerosOk bool) (ok bool) {
+func mimeByMagic(buf []byte, n int, magic detect) (ok bool) {
 	if n < sizeDetectMime {
 		return
-	}
-	if zerosOk {
-		ok = true
-		for i := 0; i < sizeDetectMime; i++ {
-			if buf[i] != 0 {
-				ok = false
-				break
-			}
-		}
 	}
 	if !ok {
 		// finally, compare signature
@@ -218,7 +209,7 @@ func mimeFile(file *os.File, smm *memsys.MMSA, mime, filename string) (m string,
 		return "", cos.NewUnknownMimeError(filename + " is too short")
 	}
 	for _, magic := range allMagics {
-		if mimeByMagic(buf, n, magic, false) {
+		if mimeByMagic(buf, n, magic) {
 			m = magic.mime
 			break
 		}

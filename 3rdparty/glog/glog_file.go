@@ -33,16 +33,18 @@ import (
 // MaxSize is the maximum size of a log file in bytes.
 var MaxSize uint64 = 1024 * 1024 * 1800
 
-// logDirs lists the candidate directories for new log files.
-var logDirs []string
-
-// If non-empty, overrides the choice of directory in which to write logs.
-// See createLogDirs for the full list of possible destinations.
-var logDir string
+var (
+	// logDirs lists the candidate directories for new log files.
+	logDirs []string
+	// If non-empty, overrides the choice of directory in which to write logs.
+	// See createLogDirs for the full list of possible destinations.
+	logDir string
+)
 
 var (
 	pid      int
 	program  string
+	aisrole  string
 	host     = "unknownhost"
 	userName = "unknownuser"
 )
@@ -80,13 +82,13 @@ func init() {
 	logging.setVState(0, nil, false)
 }
 
-func SetLogDir(dir string) { logDir = dir }
+func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }
 
 func InfoLogName() string { return program + ".INFO" }
 func WarnLogName() string { return program + ".WARNING" }
 func ErrLogName() string  { return program + ".ERROR" }
 
-func createLogDirs() {
+func appendLogDirs() {
 	if logDir != "" {
 		logDirs = append(logDirs, logDir)
 	}
@@ -99,25 +101,38 @@ func shortHostname(hostname string) string {
 	if i := strings.Index(hostname, "."); i >= 0 {
 		return hostname[:i]
 	}
-	return hostname
+	if len(hostname) < 16 || strings.IndexByte(hostname, '-') < 0 {
+		return hostname
+	}
+	// shorten even more (e.g. "runner-r9rhlq8--project-4149-concurrent-0")
+	parts := strings.Split(hostname, "-")
+	if len(parts) < 2 {
+		return hostname
+	}
+	if parts[1] != "" || len(parts) == 2 {
+		return parts[0] + "-" + parts[1]
+	}
+	return parts[0] + "-" + parts[2]
 }
 
 // logName returns a new log file name containing tag, with start time t, and
 // the name for the symlink for tag.
 func logName(tag string, t time.Time) (name, link string) {
-	name = fmt.Sprintf("%s.%s.%s.log.%s.%04d%02d%02d-%02d%02d%02d.%d",
-		program,
+	prog := program
+	if prog == "aisnode" && aisrole != "" {
+		prog = "ais" + aisrole
+	}
+	name = fmt.Sprintf("%s.%s.%s.%02d%02d-%02d%02d%02d.%d",
+		prog,
 		host,
-		userName,
 		tag,
-		t.Year(),
 		t.Month(),
 		t.Day(),
 		t.Hour(),
 		t.Minute(),
 		t.Second(),
 		pid)
-	return name, program + "." + tag
+	return name, prog + "." + tag
 }
 
 // create creates a new log file and returns the file and its filename, which
@@ -125,7 +140,7 @@ func logName(tag string, t time.Time) (name, link string) {
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
 func create(tag string, t time.Time) (f *os.File, filename string, err error) {
-	onceLogDirs.Do(createLogDirs)
+	onceLogDirs.Do(appendLogDirs)
 	if len(logDirs) == 0 {
 		return nil, "", errors.New("log: no log dirs")
 	}

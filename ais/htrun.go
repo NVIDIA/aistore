@@ -491,24 +491,24 @@ func (h *htrun) run() error {
 		if config.HostNet.UseIntraControl {
 			go func() {
 				addr := h.si.ControlNet.TCPEndpoint()
-				errCh <- h.netServ.control.listenAndServe(addr, logger)
+				errCh <- h.netServ.control.listen(addr, logger)
 			}()
 		}
 		if config.HostNet.UseIntraData {
 			go func() {
 				addr := h.si.DataNet.TCPEndpoint()
-				errCh <- h.netServ.data.listenAndServe(addr, logger)
+				errCh <- h.netServ.data.listen(addr, logger)
 			}()
 		}
 		go func() {
 			addr := h.pubListeningAddr(config)
-			errCh <- h.netServ.pub.listenAndServe(addr, logger)
+			errCh <- h.netServ.pub.listen(addr, logger)
 		}()
 		return <-errCh
 	}
 
 	addr := h.pubListeningAddr(config)
-	return h.netServ.pub.listenAndServe(addr, logger)
+	return h.netServ.pub.listen(addr, logger)
 }
 
 // testing environment excluding Kubernetes: listen on `host:port`
@@ -1612,7 +1612,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 			if res.err == nil {
-				glog.Infof("%s: joined cluster via %s", h.si, candidateURL)
+				glog.Infof("%s: primary responded Ok via %s", h.si, candidateURL)
 				return // ok
 			}
 			resPrev = res

@@ -450,6 +450,7 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 		len(m.Pmap), cnt, excludePrimary)
 }
 
+// whether IP is in use by a different node
 func (m *Smap) IsDupNet(nsi *Snode) (osi *Snode, err error) {
 	for _, tsi := range m.Tmap {
 		if tsi.ID() == nsi.ID() {

@@ -16,6 +16,7 @@ import (
 	rdebug "runtime/debug"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -574,10 +575,12 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go transfer(clientConn, destConn)
 }
 
-func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
+func (server *netServer) listen(addr string, logger *log.Logger) (err error) {
 	var (
-		httpHandler http.Handler = server.muxers
-		config                   = cmn.GCO.Get()
+		httpHandler = server.muxers
+		config      = cmn.GCO.Get()
+		tag         = "HTTP"
+		retried     bool
 	)
 	server.Lock()
 	server.s = &http.Server{
@@ -589,22 +592,24 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
 	}
 	server.Unlock()
+retry:
 	if config.Net.HTTP.UseHTTPS {
-		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("HTTPS terminated with error: %v", err)
-				return err
-			}
-		}
+		tag = "HTTPS"
+		err = server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key)
 	} else {
-		if err := server.s.ListenAndServe(); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("HTTP terminated with error: %v", err)
-				return err
-			}
-		}
+		err = server.s.ListenAndServe()
 	}
-	return nil
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	if errors.Is(err, syscall.EADDRINUSE) && !retried {
+		glog.Warningf("%q - shutting-down-and-restarting or else? will retry once...", err)
+		time.Sleep(cos.MaxDuration(5*time.Second, config.Timeout.MaxKeepalive.D()))
+		retried = true
+		goto retry
+	}
+	glog.Errorf("%s terminated with error: %v", tag, err)
+	return
 }
 
 func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {

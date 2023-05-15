@@ -593,7 +593,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	if err = smap.validateUUID(p.si, regSmap, nsi.StringEx(), 80 /* ciError */); err != nil {
 		return
 	}
-	// check dup IP
+	// whether IP is in use by a different node
 	if _, err = smap.IsDupNet(nsi); err != nil {
 		err = errors.New(p.String() + ": " + err.Error())
 	}

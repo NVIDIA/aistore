@@ -1714,7 +1714,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
 		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
 	}
-	glog.SetLogDir(config.LogDir)
+	glog.SetLogDirRole(config.LogDir, daeRole)
 
 	// Global (aka Cluster) config
 	// Normally, when the node is being deployed the very first time the last updated version

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -479,11 +480,28 @@ func (t *target) initRecvHandlers() {
 
 func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
+		// NOTE the risk: duplicate aisnode run - which'll fail shortly with "bind:
+		// address already in use" but not before triggering (`NodeRestartedPrev` => GFN)
+		// sequence and stealing glog symlinks - that's why we go extra length
+		if _lsof(t.si.PubNet.TCPEndpoint()) {
+			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)",
+				t, t.si.PubNet.TCPEndpoint())
+			return
+		}
+
 		t.statsT.Inc(stats.RestartCount)
 		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
 	fatalErr, writeErr = fs.PersistMarker(fname.NodeRestartedMarker)
 	return
+}
+
+// only when restarted marker exists
+func _lsof(addr string) bool {
+	arg := []string{"-sTCP:LISTEN", "-i", "tcp@" + addr}
+	cmd := exec.Command("lsof", arg...)
+	_, err := cmd.CombinedOutput()
+	return err == nil // detected dup
 }
 
 //
