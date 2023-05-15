@@ -26,6 +26,7 @@ RUN apt-get install -y --no-install-recommends \
 	git \
 	make \
 	coreutils \
+	lsof \
 	util-linux \
 	bash \
 	ca-certificates \

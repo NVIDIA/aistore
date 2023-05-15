@@ -1,6 +1,6 @@
 ---
 - name: Add test tools
-  hosts: all 
+  hosts: all
   become: true
   tasks:
     - name: install fio
@@ -26,6 +26,11 @@
     - name: install sysstat
       apt:
         name: sysstat
+        state: present
+        update_cache: yes
+    - name: install lsof
+      apt:
+        name: lsof
         state: present
         update_cache: yes
     - name: install nodejs

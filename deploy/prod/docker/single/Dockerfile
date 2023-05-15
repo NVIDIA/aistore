@@ -27,6 +27,7 @@ FROM alpine:latest
 #       where the initial plain-text config gets generated.
 ENV AIS_BACKEND_PROVIDERS=${providers:-"aws gcp"}
 
+# TODO: lsof (installed by default from busybox) doesn't handle `-sTCP:LISTEN` and `tcp@host:port`
 RUN apk upgrade --no-cache && \
   apk add --no-cache --virtual .build-deps \
     bash \

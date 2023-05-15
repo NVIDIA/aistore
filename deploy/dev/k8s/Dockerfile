@@ -22,6 +22,7 @@ RUN apt-get clean && apt-get update &&\
       git \
       sysstat \
       attr \
+      lsof \
       ca-certificates \
       util-linux \
       coreutils \
