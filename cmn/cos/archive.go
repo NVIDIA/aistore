@@ -6,6 +6,7 @@ package cos
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -174,6 +175,37 @@ func CopyT(src io.Reader, tw *tar.Writer /*over gzw*/, buf []byte, tgz bool) (er
 	}
 	if gzr != nil {
 		Close(gzr)
+	}
+	return
+}
+
+func CopyZ(src io.ReaderAt, size int64, zw *zip.Writer /*over gzw*/, buf []byte) (err error) {
+	var zr *zip.Reader
+	if zr, err = zip.NewReader(src, size); err != nil {
+		return
+	}
+	// TODO -- FIXME: losing full paths?
+	for _, f := range zr.File {
+		var (
+			zipr io.ReadCloser
+			zipw io.Writer
+		)
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		zipr, err = f.Open()
+		if err != nil {
+			break
+		}
+		hdr := f.FileHeader
+		zipw, err = zw.CreateHeader(&hdr)
+		if err == nil {
+			_, err = io.CopyBuffer(zipw, zipr, buf)
+		}
+		zipr.Close()
+		if err != nil {
+			break
+		}
 	}
 	return
 }

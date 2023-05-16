@@ -25,7 +25,7 @@ import (
 type bsummCtx struct {
 	qbck    cmn.QueryBcks
 	timeout time.Duration
-	msg     cmn.BsummCtrlMsg
+	msg     apc.BsummCtrlMsg
 	// results
 	res cmn.AllBsummResults
 }

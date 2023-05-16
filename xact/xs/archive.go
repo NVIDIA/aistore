@@ -163,8 +163,9 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	// NOTE: creating archive at BEGIN time (see cleanup)
 	if r.p.T.SID() == wi.tsi.ID() {
 		var (
-			lmfh   *os.File
-			exists = cos.Stat(wi.lom.FQN) == nil
+			lmfh        *os.File
+			finfo, errX = os.Stat(wi.lom.FQN)
+			exists      = errX == nil
 		)
 		if wi.msg.AppendToExisting {
 			if !exists {
@@ -188,7 +189,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 			tw := &tarWriter{}
 			tw.init(wi)
 			if lmfh != nil {
-				// for the subsequent APPEND
+				// (for subsequent multi-object APPEND)
 				err = cos.CopyT(lmfh, tw.tw, tw.buf, false)
 				cos.Close(lmfh)
 				if err != nil {
@@ -211,6 +212,15 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		case cos.ExtZip:
 			zw := &zipWriter{}
 			zw.init(wi)
+			if lmfh != nil {
+				// ditto
+				err = cos.CopyZ(lmfh, finfo.Size(), zw.zw, zw.buf)
+				cos.Close(lmfh)
+				if err != nil {
+					zw.fini()
+					return
+				}
+			}
 		case cos.ExtMsgpack:
 			mpw := &msgpackWriter{}
 			mpw.init(wi)
@@ -449,15 +459,17 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 		}
 	}
 	switch msg.Mime {
-	case cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz:
-		// to copy from `lmfh` --> `wi.fh` with subsequent APPENDing
+	case cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz, cos.ExtZip:
+		// to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
 		lmfh, err = os.Open(wi.lom.FQN)
-		if err == nil {
-			if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
-				cos.Close(lmfh)
-			}
+		if err != nil {
+			return
 		}
-	default: // TODO -- FIXME: currently, TAR and TGZ only
+		if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
+			cos.Close(lmfh)
+			lmfh = nil
+		}
+	default: // TODO -- FIXME: add .msgpack
 		err = fmt.Errorf("cannot APPEND to %s - %q not implemented yet", msg.Cname(), msg.Mime)
 	}
 	return
@@ -655,15 +667,14 @@ func (zw *zipWriter) fini() {
 }
 
 func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
-	ziphdr := new(zip.FileHeader)
-
-	ziphdr.Name = fullname
-	ziphdr.Comment = fullname
-	ziphdr.UncompressedSize64 = uint64(oah.SizeBytes())
-	ziphdr.Modified = time.Unix(0, oah.AtimeUnix())
-
+	ziphdr := zip.FileHeader{
+		Name:               fullname,
+		Comment:            fullname,
+		UncompressedSize64: uint64(oah.SizeBytes()),
+		Modified:           time.Unix(0, oah.AtimeUnix()),
+	}
 	zw.archwi.wmu.Lock()
-	zipw, err := zw.zw.CreateHeader(ziphdr)
+	zipw, err := zw.zw.CreateHeader(&ziphdr)
 	if err == nil {
 		_, err = io.CopyBuffer(zipw, reader, zw.buf)
 	}

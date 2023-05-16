@@ -25,7 +25,7 @@ var (
 			templateFlag,
 			listFlag,
 			includeSrcBucketNameFlag,
-			appendArch1Flag,
+			appendArch1Flag, // NOTE: multi-object bck=>bck APPEND - not to confuse with cmdAppend (files)
 			continueOnErrorFlag,
 		},
 		cmdAppend: {
