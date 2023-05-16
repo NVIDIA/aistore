@@ -1537,6 +1537,7 @@ cpapnd:
 	buf, slab = a.t.gmm.Alloc()
 
 	// TODO -- FIXME: from here on TAR or TGZ only --------
+
 	nhdr := tar.Header{
 		Typeflag: tar.TypeReg,
 		Name:     a.filename,
@@ -1547,13 +1548,13 @@ cpapnd:
 	// do
 	if a.mime == cos.ExtTar {
 		tw := tar.NewWriter(wfh)
-		err = cpapndT(lmfh, tw, &nhdr, a.r, buf, false /*gzip*/)
+		err = cos.CopyAppendT(lmfh, tw, &nhdr, a.r, buf, false /*gzip*/)
 		cos.Close(tw)
 	} else {
 		debug.Assert(a.mime == cos.ExtTgz || a.mime == cos.ExtTarTgz, a.mime) // TODO -- FIXME: tbd -------
 		gzw := gzip.NewWriter(wfh)
 		tw := tar.NewWriter(gzw)
-		err = cpapndT(lmfh, tw, &nhdr, a.r, buf, true /*gzip*/)
+		err = cos.CopyAppendT(lmfh, tw, &nhdr, a.r, buf, true /*gzip*/)
 		cos.Close(tw)
 		cos.Close(gzw)
 	}

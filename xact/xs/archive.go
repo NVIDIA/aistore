@@ -143,14 +143,17 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		r.raiseErr(err, msg.ContinueOnError)
 		return
 	}
-	debug.Assertf(lom.Cname() == msg.Cname(), "%s vs %s", lom.Cname(), msg.Cname()) // relying on it
+	debug.Assert(lom.Cname() == msg.Cname()) // relying on it
 
 	wi := &archwi{r: r, msg: msg, lom: lom}
 	wi.fqn = fs.CSM.Gen(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
 	wi.cksum.Init(lom.CksumType())
 
 	smap := r.p.T.Sowner().Get()
-	wi.refc.Store(int32(smap.CountTargets() - 1))
+
+	// TODO -- FIXME: assuming _this_ target is active; check TCO as well
+	wi.refc.Store(int32(smap.CountActiveTs() - 1))
+
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
 		r.raiseErr(err, msg.ContinueOnError)
@@ -159,29 +162,70 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	// NOTE: creating archive at BEGIN time (see cleanup)
 	if r.p.T.SID() == wi.tsi.ID() {
-		if errExists := cos.Stat(wi.lom.FQN); errExists != nil {
-			wi.fh, err = wi.lom.CreateFile(wi.fqn)
-		} else if wi.msg.AppendToExisting {
-			switch msg.Mime {
-			case cos.ExtTar:
+		var (
+			lmfh   *os.File
+			exists = cos.Stat(wi.lom.FQN) == nil
+		)
+		if wi.msg.AppendToExisting {
+			if !exists {
+				return fmt.Errorf("%s: %s doesn't exist, cannot APPEND", r.p.T, msg.Cname())
+			}
+			if msg.Mime == cos.ExtTar {
 				err = wi.openTarForAppend()
-			default:
-				err = fmt.Errorf("unsupported archive type %s, only %s is supported", msg.Mime, cos.ExtTar)
+				if err == nil {
+					goto cont
+				}
+			}
+			if err == cos.ErrTarIsEmpty || msg.Mime == cos.ExtTgz || msg.Mime == cos.ExtTarTgz {
+				lmfh, err = os.Open(wi.lom.FQN)
+				if err == nil {
+					wi.fh, err = os.OpenFile(wi.fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
+					if err != nil {
+						cos.Close(lmfh)
+					}
+				}
+			} else {
+				// TODO -- FIXME: TAR and TGZ only
+				err = fmt.Errorf("cannot APPEND to %s - %s not implemented yet (expecting one of: %s, %s, %s)",
+					msg.Cname(), msg.Mime, cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz)
 			}
 		} else {
-			err = fmt.Errorf("%s: not allowed to append to an existing %s", r.p.T, msg.Cname())
+			if exists {
+				// PUT (new multi-object-arch version) semantics
+				glog.Infof("%s: %s exists - overwriting w/ new version", r.p.T, msg.Cname())
+			}
+			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		}
 		if err != nil {
 			return
 		}
+	cont:
 		// construct format-specific writer
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
 			tw.init(wi)
+			if lmfh != nil {
+				// APPEND "from scratch"
+				err = cos.CopyAppendT(lmfh, tw.tw, nil, nil, tw.buf, false /*gzip*/)
+				cos.Close(lmfh)
+				if err != nil {
+					tw.fini()
+					return
+				}
+			}
 		case cos.ExtTgz, cos.ExtTarTgz:
 			tzw := &tgzWriter{}
 			tzw.init(wi)
+			if lmfh != nil {
+				// ditto
+				err = cos.CopyAppendT(lmfh, tzw.tw.tw, nil, nil, tzw.tw.buf, true /*gzip*/)
+				cos.Close(lmfh)
+				if err != nil {
+					tzw.fini()
+					return
+				}
+			}
 		case cos.ExtZip:
 			zw := &zipWriter{}
 			zw.init(wi)

@@ -398,6 +398,9 @@ func TestAppendToArch(t *testing.T) {
 			{
 				ext: cos.ExtTgz, multi: false,
 			},
+			{
+				ext: cos.ExtTgz, multi: true,
+			},
 		}
 	)
 	for _, test := range subtests {
