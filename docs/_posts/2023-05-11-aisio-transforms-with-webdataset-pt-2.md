@@ -6,7 +6,7 @@ author: Aaron Wilson
 categories: aistore etl pytorch python webdataset
 ---
 
-In the [previous post](https://aiatscale.org/blog/2023/05/08/aisio-transforms-with-webdataset-pt-1.md) we converted a dataset to the WebDataset format and stored it in a bucket in AIStore. 
+In the [previous post](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1) we converted a dataset to the WebDataset format and stored it in a bucket in AIStore. 
 
 This post will demonstrate AIStore's ability to efficiently apply custom transformations to the dataset on the storage cluster. We'll do this using [AIS ETL](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
 

@@ -1,19 +1,14 @@
-import os
 import io
-import tarfile
+import os
 
+import torchvision
+import webdataset as wds
+from PIL import Image
+from aistore.sdk import Client
 from torch.utils.data import IterableDataset
 from torch.utils.data.dataset import T_co
 
-from aistore.pytorch import AISDataset
-from torchdata.datapipes.iter import IterableWrapper, AISFileLister, AISFileLoader
-from aistore.sdk import Client
-
-import torchvision
-from PIL import Image
-import webdataset as wds
-
-AIS_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://192.168.49.2:8080")
+AIS_ENDPOINT = os.getenv("AIS_ENDPOINT")
 bucket_name = "images"
 etl_name = "wd-transform"
 
@@ -121,6 +116,6 @@ def transform_bucket_offline():
 if __name__ == "__main__":
     client = Client(AIS_ENDPOINT)
     image_bucket = client.bucket(bucket_name)
-    # create_wd_etl(client)
+    create_wd_etl(client)
     transform_object_inline()
-    # transform_bucket_offline()
+    transform_bucket_offline()

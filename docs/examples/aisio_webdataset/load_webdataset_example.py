@@ -5,7 +5,7 @@ from aistore.sdk import Client
 
 import webdataset as wds
 
-AIS_ENDPOINT = os.getenv("AIS_ENDPOINT", "http://192.168.49.2:8080")
+AIS_ENDPOINT = os.getenv("AIS_ENDPOINT")
 bucket_name = "images"
 
 
