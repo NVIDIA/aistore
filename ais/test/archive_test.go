@@ -154,7 +154,6 @@ func TestCreateMultiObjArch(t *testing.T) {
 	})
 }
 
-// TODO: review aborting (test.abrt) timing logic
 func testMobjArch(t *testing.T, bck *meta.Bck) {
 	var (
 		numPuts = 100
@@ -175,6 +174,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			list           bool
 			inclSrcBckName bool
 			abrt           bool
+			apnd           bool
 		}{
 			{
 				ext: cos.ExtTar, list: true,
@@ -186,6 +186,9 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 				ext: cos.ExtTar, list: false,
 			},
 			{
+				ext: cos.ExtTar, list: true, apnd: true,
+			},
+			{
 				ext: cos.ExtMsgpack, list: true,
 			},
 		}
@@ -194,12 +197,19 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			list           bool
 			inclSrcBckName bool
 			abrt           bool
+			apnd           bool
 		}{
 			{
 				ext: cos.ExtTgz, list: true,
 			},
 			{
 				ext: cos.ExtTgz, list: false, inclSrcBckName: true,
+			},
+			{
+				ext: cos.ExtTgz, list: true, inclSrcBckName: true, apnd: true,
+			},
+			{
+				ext: cos.ExtTgz, list: false, apnd: true,
 			},
 			{
 				ext: cos.ExtZip, list: true,
@@ -229,13 +239,16 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			listOrRange = "range"
 		}
 		tm := mono.NanoTime()
-		if tm&0x3 == 0 {
+		if tm&0x3 == 0 && !test.apnd {
 			test.abrt = true
 			abrt = "/abort"
 		}
 		tname := fmt.Sprintf("%s/%s%s", test.ext, listOrRange, abrt)
 		if test.inclSrcBckName {
 			tname += "/incl-src=" + m.bck.Name
+		}
+		if test.apnd {
+			tname += "/append"
 		}
 		t.Run(tname, func(t *testing.T) {
 			if m.bck.IsRemote() {
@@ -305,6 +318,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 				api.AbortXaction(baseParams, flt)
 			}
 
+			var lstToAppend *cmn.LsoResult
 			for ii := 0; ii < 2; ii++ {
 				// TODO: calibrate x-archive reporting 'idle'
 				// (too early in presence of multiple concurrent requests)
@@ -326,6 +340,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 					continue
 				}
 				tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+				lstToAppend = objList
 				break
 			}
 
@@ -338,6 +353,32 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			expectedNum := numArchs + numArchs*numInArch
 
 			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
+
+			// multi-object APPEND
+			if test.apnd {
+				for _, e := range lstToAppend.Entries {
+					start := rand.Intn(m.num - numInArch)
+					go func(archName string, start int) {
+						msg := cmn.ArchiveMsg{
+							ToBck:      bckTo,
+							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
+						}
+						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
+						msg.InclSrcBname = test.inclSrcBckName
+
+						msg.AppendToExisting = true // here
+
+						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						tassert.CheckFatal(t, err)
+						tlog.Logf("[%s] APPEND %s/%s => %s/%s\n",
+							xids, m.bck, msg.ListRange.Template, bckTo, archName)
+					}(e.Name, start)
+				}
+
+				time.Sleep(10 * time.Second)
+				flt := xact.ArgsMsg{Kind: apc.ActArchive, Bck: m.bck}
+				api.WaitForXactionIdle(baseParams, flt)
+			}
 
 			var (
 				objName string

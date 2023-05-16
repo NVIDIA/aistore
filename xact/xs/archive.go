@@ -168,46 +168,28 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		)
 		if wi.msg.AppendToExisting {
 			if !exists {
-				return fmt.Errorf("%s: %s doesn't exist, cannot APPEND", r.p.T, msg.Cname())
+				return fmt.Errorf("%s: %s doesn't exist - cannot APPEND", r.p.T, msg.Cname())
 			}
-			if msg.Mime == cos.ExtTar {
-				err = wi.openTarForAppend()
-				if err == nil {
-					goto cont
-				}
-			}
-			if err == cos.ErrTarIsEmpty || msg.Mime == cos.ExtTgz || msg.Mime == cos.ExtTarTgz {
-				lmfh, err = os.Open(wi.lom.FQN)
-				if err == nil {
-					wi.fh, err = os.OpenFile(wi.fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
-					if err != nil {
-						cos.Close(lmfh)
-					}
-				}
-			} else {
-				// TODO -- FIXME: TAR and TGZ only
-				err = fmt.Errorf("cannot APPEND to %s - %s not implemented yet (expecting one of: %s, %s, %s)",
-					msg.Cname(), msg.Mime, cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz)
-			}
+			lmfh, err = wi.beginAppend()
 		} else {
 			if exists {
 				// PUT (new multi-object-arch version) semantics
-				glog.Infof("%s: %s exists - overwriting w/ new version", r.p.T, msg.Cname())
+				glog.Infof("%s: %s exists - proceeding to overwrite w/ new version", r.p.T, msg.Cname())
 			}
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		}
 		if err != nil {
 			return
 		}
-	cont:
+
 		// construct format-specific writer
 		switch msg.Mime {
 		case cos.ExtTar:
 			tw := &tarWriter{}
 			tw.init(wi)
 			if lmfh != nil {
-				// APPEND "from scratch"
-				err = cos.CopyAppendT(lmfh, tw.tw, nil, nil, tw.buf, false /*gzip*/)
+				// for the subsequent APPEND
+				err = cos.CopyT(lmfh, tw.tw, tw.buf, false)
 				cos.Close(lmfh)
 				if err != nil {
 					tw.fini()
@@ -219,7 +201,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 			tzw.init(wi)
 			if lmfh != nil {
 				// ditto
-				err = cos.CopyAppendT(lmfh, tzw.tw.tw, nil, nil, tzw.tw.buf, true /*gzip*/)
+				err = cos.CopyT(lmfh, tzw.tw.tw, tzw.tw.buf, true /*gzip*/)
 				cos.Close(lmfh)
 				if err != nil {
 					tzw.fini()
@@ -459,6 +441,52 @@ func (r *XactArch) Snap() (snap *cluster.Snap) {
 // archwi //
 ////////////
 
+func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
+	msg := wi.msg
+	if msg.Mime == cos.ExtTar {
+		if err = wi.openTarForAppend(); err == nil || err != cos.ErrTarIsEmpty {
+			return
+		}
+	}
+	switch msg.Mime {
+	case cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz:
+		// to copy from `lmfh` --> `wi.fh` with subsequent APPENDing
+		lmfh, err = os.Open(wi.lom.FQN)
+		if err == nil {
+			if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
+				cos.Close(lmfh)
+			}
+		}
+	default: // TODO -- FIXME: currently, TAR and TGZ only
+		err = fmt.Errorf("cannot APPEND to %s - %q not implemented yet", msg.Cname(), msg.Mime)
+	}
+	return
+}
+
+func (wi *archwi) openTarForAppend() (err error) {
+	if err = os.Rename(wi.lom.FQN, wi.fqn); err != nil {
+		return
+	}
+	wi.fh, err = cos.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
+	if err != nil {
+		goto roll
+	}
+	wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
+	if err == nil {
+		return // ok
+	}
+	cos.Close(wi.fh)
+	wi.fh = nil
+roll:
+	if errV := wi.lom.RenameFrom(wi.fqn); errV != nil {
+		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
+			wi.tsi, wi.lom, err, wi.fqn, errV)
+	} else {
+		wi.fqn = ""
+	}
+	return
+}
+
 func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
@@ -518,30 +546,6 @@ func (wi *archwi) nameInArch(objName string) string {
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, objName...)
 	return cos.UnsafeS(buf)
-}
-
-func (wi *archwi) openTarForAppend() (err error) {
-	if err = os.Rename(wi.lom.FQN, wi.fqn); err != nil {
-		return
-	}
-	wi.fh, err = cos.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
-	if err != nil {
-		goto mvback
-	}
-	wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
-	if err == nil {
-		return // ok
-	}
-	cos.Close(wi.fh)
-	wi.fh = nil
-mvback:
-	if errV := wi.lom.RenameFrom(wi.fqn); errV != nil {
-		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
-			wi.tsi, wi.lom, err, wi.fqn, errV)
-	} else {
-		wi.fqn = ""
-	}
-	return
 }
 
 func (wi *archwi) abort() {

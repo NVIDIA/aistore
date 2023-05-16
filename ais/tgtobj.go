@@ -1537,30 +1537,35 @@ cpapnd:
 	buf, slab = a.t.gmm.Alloc()
 
 	// TODO -- FIXME: from here on TAR or TGZ only --------
-
-	nhdr := tar.Header{
-		Typeflag: tar.TypeReg,
-		Name:     a.filename,
-		Size:     a.size,
-		ModTime:  a.started,
-	}
+	var (
+		tw   *tar.Writer
+		gzw  *gzip.Writer
+		nhdr = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
+	)
 	cos.SetAuxTarHeader(&nhdr)
-	// do
+
+	// copy
 	if a.mime == cos.ExtTar {
-		tw := tar.NewWriter(wfh)
-		err = cos.CopyAppendT(lmfh, tw, &nhdr, a.r, buf, false /*gzip*/)
-		cos.Close(tw)
+		tw = tar.NewWriter(wfh)
+		err = cos.CopyT(lmfh, tw, buf, false)
 	} else {
-		debug.Assert(a.mime == cos.ExtTgz || a.mime == cos.ExtTarTgz, a.mime) // TODO -- FIXME: tbd -------
-		gzw := gzip.NewWriter(wfh)
-		tw := tar.NewWriter(gzw)
-		err = cos.CopyAppendT(lmfh, tw, &nhdr, a.r, buf, true /*gzip*/)
-		cos.Close(tw)
-		cos.Close(gzw)
+		gzw = gzip.NewWriter(wfh)
+		tw = tar.NewWriter(gzw)
+		err = cos.CopyT(lmfh, tw, buf, true /*gzip*/)
+	}
+	// append
+	if err == nil {
+		if err = tw.WriteHeader(&nhdr); err == nil {
+			_, err = io.CopyBuffer(tw, a.r, buf)
+		}
 	}
 
 	// close and finalize
 	slab.Free(buf)
+	cos.Close(tw)
+	if gzw != nil {
+		cos.Close(gzw)
+	}
 	cos.Close(lmfh)
 	if err == nil {
 		var size int64

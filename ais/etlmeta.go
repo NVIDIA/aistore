@@ -218,8 +218,7 @@ func (eo *etlMDOwnerTgt) init() {
 		goto finalize
 	}
 	etlMD = newEtlMD()
-	glog.Warningf("initializing new %s", etlMD)
-
+	glog.Infof("initializing new %s", etlMD)
 finalize:
 	eo.put(etlMD)
 }

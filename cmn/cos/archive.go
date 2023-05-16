@@ -140,10 +140,10 @@ func _seekTarEnd(cname string, fh *os.File) error {
 	return err
 }
 
-// copy TAR or TGZ (`src` => `tw`) one file at a time and, if requested,
-// APPEND new reader (`nr`) at the end
-func CopyAppendT(src io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, nr io.Reader, buf []byte,
-	tgz bool) (err error) {
+// copy TAR or TGZ (`src` => `tw`) one file at a time
+// opens specific arch reader and always closes it
+// the (`tw`) writer can further be used to write (append) more
+func CopyT(src io.Reader, tw *tar.Writer /*over gzw*/, buf []byte, tgz bool) (err error) {
 	var (
 		gzr *gzip.Reader
 		tr  *tar.Reader
@@ -156,9 +156,13 @@ func CopyAppendT(src io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, n
 	} else {
 		tr = tar.NewReader(src)
 	}
-	for {
+	for err == nil {
 		var hdr *tar.Header
 		hdr, err = tr.Next()
+		if err == io.EOF {
+			err = nil
+			break
+		}
 		if err != nil {
 			break
 		}
@@ -167,25 +171,8 @@ func CopyAppendT(src io.Reader, tw *tar.Writer /*over gzw*/, nhdr *tar.Header, n
 		if err = tw.WriteHeader(hdr); err == nil {
 			_, err = io.CopyBuffer(tw, csl, buf)
 		}
-		if err != nil {
-			break
-		}
 	}
-	// append new if requested
-	if nhdr == nil {
-		debug.Assert(nr == nil)
-		if err == io.EOF {
-			err = nil
-		}
-	} else {
-		if err == io.EOF {
-			err = tw.WriteHeader(nhdr)
-		}
-		if err == nil {
-			_, err = io.CopyBuffer(tw, nr, buf)
-		}
-	}
-	if tgz {
+	if gzr != nil {
 		Close(gzr)
 	}
 	return
