@@ -35,7 +35,7 @@ variables:
   after_script:
     - make kill # To make sure that nodes flushed the logs.
     - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
   artifacts:
     when: on_failure
     paths: [ logs/ ]
@@ -45,7 +45,7 @@ variables:
   after_script:
     - make kill
     - mkdir $CI_PROJECT_DIR/logs
-    - find /tmp/ais -type f -name "*log*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
+    - find /tmp/ais -type f -name "*\.INFO\.*" -exec cp {} $CI_PROJECT_DIR/logs/ \;
   artifacts:
     when: on_failure
     paths: [ logs/ ]
