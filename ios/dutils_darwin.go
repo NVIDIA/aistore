@@ -9,9 +9,11 @@ import (
 	"github.com/lufia/iostat"
 )
 
-// TODO: niy
+// TODO: NIY
 
-func lsblk(string, bool) *LsBlk {}
+type LsBlk struct{}
+
+func lsblk(string, bool) *LsBlk { return nil }
 
 func fs2disks(*LsBlk, string, bool) (disks FsDisks) {
 	driveStats, err := iostat.ReadDriveStats()
