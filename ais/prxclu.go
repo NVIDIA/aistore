@@ -105,7 +105,10 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 	case apc.WhatClusterConfig:
 		config := cmn.GCO.Get()
-		p.writeJSON(w, r, &config.ClusterConfig, what)
+		// hide secret
+		c := config.ClusterConfig
+		c.Auth.Secret = "**********"
+		p.writeJSON(w, r, &c, what)
 	case apc.WhatBMD, apc.WhatSmapVote, apc.WhatSnode, apc.WhatSmap:
 		p.htrun.httpdaeget(w, r, query, nil /*htext*/)
 	default:

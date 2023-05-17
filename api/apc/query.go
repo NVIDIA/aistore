@@ -159,7 +159,7 @@ const (
 	WhatSmap = "smap"
 	WhatBMD  = "bmd"
 	// config
-	WhatConfig        = "config"
+	WhatNodeConfig    = "config" // query specific node for (cluster config + overrides, local config)
 	WhatClusterConfig = "cluster_config"
 	// stats
 	WhatNodeStats          = "stats"

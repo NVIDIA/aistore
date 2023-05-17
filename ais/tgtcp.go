@@ -276,7 +276,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		httpdaeWhat = "httpdaeget-" + getWhat
 	)
 	switch getWhat {
-	case apc.WhatConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
+	case apc.WhatNodeConfig, apc.WhatSmap, apc.WhatBMD, apc.WhatSmapVote,
 		apc.WhatSnode, apc.WhatLog, apc.WhatNodeStats, apc.WhatMetricNames:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	case apc.WhatSysInfo:

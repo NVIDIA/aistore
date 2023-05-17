@@ -132,7 +132,7 @@ func GetDaemonConfig(bp BaseParams, node *meta.Snode) (config *cmn.Config, err e
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathReverseDae.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatConfig}}
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatNodeConfig}}
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{node.ID()}}
 	}
 	_, err = reqParams.DoReqAny(&config)

@@ -1012,8 +1012,15 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		what = query.Get(apc.QparamWhat)
 	)
 	switch what {
-	case apc.WhatConfig:
-		body = cmn.GCO.Get()
+	case apc.WhatNodeConfig:
+		var (
+			c      cmn.Config
+			config = cmn.GCO.Get()
+		)
+		// hide secret
+		c = *config
+		c.Auth.Secret = "**********"
+		body = &c
 	case apc.WhatSmap:
 		body = h.owner.smap.get()
 	case apc.WhatBMD:
