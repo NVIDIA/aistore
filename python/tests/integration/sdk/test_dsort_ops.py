@@ -128,6 +128,7 @@ class TestDsortOps(unittest.TestCase):
             input_bck_name="abort", out_bck_name="out", input_object_prefix="test"
         )
         dsort.abort()
+        dsort.wait(timeout=TEST_TIMEOUT)
         metrics = dsort.metrics()
         for metric in metrics.values():
             self.assertTrue(metric.aborted)
