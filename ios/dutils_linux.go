@@ -40,16 +40,12 @@ type (
 	}
 )
 
-// fs2disks is used when a mountpath is added to
-// retrieve the disk(s) associated with a filesystem.
-// This returns multiple disks only if the filesystem is RAID.
-func fs2disks(fs string, testingEnv bool) (disks FsDisks) {
+func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 	// skip docker union mounts
 	if fs == "overlay" {
 		return
 	}
 	var (
-		res      LsBlk
 		cmd      = exec.Command("lsblk", "-Jt") // JSON output format
 		out, err = cmd.CombinedOutput()
 	)
@@ -71,15 +67,24 @@ func fs2disks(fs string, testingEnv bool) (disks FsDisks) {
 		glog.Errorf("%s: no disks (empty lsblk output)", fs)
 		return
 	}
-	if err = jsoniter.Unmarshal(out, &res); err != nil {
+
+	// unmarshal
+	res = &LsBlk{}
+	if err = jsoniter.Unmarshal(out, res); err != nil {
 		err = fmt.Errorf("failed to unmarshal lsblk output: %v", err)
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
 		glog.Error(err)
-		return
+		res = nil
 	}
+	return
+}
 
+// given parsed lsblk and `fs` (filesystem) fs2disks retrieves the underlying
+// disk or disks; it may return multiple disks but only if the filesystem is
+// RAID; it is called upong adding/enabling mountpath
+func fs2disks(res *LsBlk, fs string, testingEnv bool) (disks FsDisks) {
 	// map trimmed(fs) <= disk(s)
 	var trimmedFS string
 	if strings.HasPrefix(fs, devPrefixLVM) {

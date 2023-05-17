@@ -58,6 +58,7 @@ type (
 		mpath2disks map[string]FsDisks
 		disk2mpath  cos.StrKVs
 		disk2sysfn  cos.StrKVs
+		lsblk       atomic.Pointer
 		cache       atomic.Pointer
 		cacheHst    [16]*cache
 		cacheIdx    int
@@ -101,7 +102,18 @@ func New(num int) IOS {
 	ios._put(ios.cacheHst[0])
 	ios.cacheIdx = 0
 	ios.busy.Store(false)
+
+	// best effort, startup, only once
+	if res := lsblk("new-ios", true); res != nil {
+		ios.lsblk.Store(unsafe.Pointer(res))
+		go ios.clblk()
+	}
 	return ios
+}
+
+func (ios *ios) clblk() {
+	time.Sleep(13 * time.Second)
+	ios.lsblk.Store(unsafe.Pointer(nil))
 }
 
 func newCache(num int) *cache {
@@ -130,7 +142,15 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(unsafe.Pointer(cache)) }
 //
 
 func (ios *ios) AddMpath(mpath, fs string, testingEnv bool) (fsdisks FsDisks, err error) {
-	fsdisks = fs2disks(fs, testingEnv)
+	if pres := (*LsBlk)(ios.lsblk.Load()); pres != nil {
+		res := *pres
+		fsdisks = fs2disks(&res, fs, testingEnv)
+	} else {
+		res := lsblk(fs, testingEnv)
+		if res != nil {
+			fsdisks = fs2disks(res, fs, testingEnv)
+		}
+	}
 	if len(fsdisks) == 0 {
 		return
 	}
