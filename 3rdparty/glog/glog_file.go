@@ -84,9 +84,17 @@ func init() {
 
 func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }
 
-func InfoLogName() string { return program + ".INFO" }
-func WarnLogName() string { return program + ".WARNING" }
-func ErrLogName() string  { return program + ".ERROR" }
+func shortProgram() (prog string) {
+	prog = program
+	if prog == "aisnode" && aisrole != "" {
+		prog = "ais" + aisrole
+	}
+	return
+}
+
+func InfoLogName() string { return shortProgram() + ".INFO" }
+func WarnLogName() string { return shortProgram() + ".WARNING" }
+func ErrLogName() string  { return shortProgram() + ".ERROR" }
 
 func appendLogDirs() {
 	if logDir != "" {
@@ -118,10 +126,7 @@ func shortHostname(hostname string) string {
 // logName returns a new log file name containing tag, with start time t, and
 // the name for the symlink for tag.
 func logName(tag string, t time.Time) (name, link string) {
-	prog := program
-	if prog == "aisnode" && aisrole != "" {
-		prog = "ais" + aisrole
-	}
+	prog := shortProgram()
 	name = fmt.Sprintf("%s.%s.%s.%02d%02d-%02d%02d%02d.%d",
 		prog,
 		host,
