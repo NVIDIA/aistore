@@ -1,16 +1,19 @@
 // Package ios is a collection of interfaces to the local storage subsystem;
 // the package includes OS-dependent implementations for those interfaces.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ios
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -26,14 +29,14 @@ const (
 
 type (
 	LsBlk struct {
-		BlockDevices []*BlockDevice `json:"blockdevices"`
+		BlockDevices []*blkdev `json:"blockdevices"`
 	}
 
 	// `lsblk -Jt` structure
-	BlockDevice struct {
+	blkdev struct {
 		Name         string          `json:"name"`
 		PhySec       jsoniter.Number `json:"phy-sec"`
-		BlockDevices []*BlockDevice  `json:"children"`
+		BlockDevices []*blkdev       `json:"children"`
 	}
 )
 
@@ -45,25 +48,39 @@ func fs2disks(fs string, testingEnv bool) (disks FsDisks) {
 	if fs == "overlay" {
 		return
 	}
-
-	// 1. lsblk
 	var (
-		getDiskCommand   = exec.Command("lsblk", "-Jt")
-		outputBytes, err = getDiskCommand.Output()
+		res      LsBlk
+		cmd      = exec.Command("lsblk", "-Jt") // JSON output format
+		out, err = cmd.CombinedOutput()
 	)
-	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("%s: no disks, err: %v", fs, err)
+	if err != nil {
+		switch {
+		case len(out) == 0:
+		case strings.Contains(err.Error(), "exit status"):
+			err = errors.New(string(out))
+		default:
+			err = fmt.Errorf("%s: %v", string(out), err)
+		}
+		if !testingEnv {
+			cos.ExitLog(err) // FATAL
+		}
+		glog.Error(err)
+		return
+	}
+	if len(out) == 0 {
+		glog.Errorf("%s: no disks (empty lsblk output)", fs)
+		return
+	}
+	if err = jsoniter.Unmarshal(out, &res); err != nil {
+		err = fmt.Errorf("failed to unmarshal lsblk output: %v", err)
+		if !testingEnv {
+			cos.ExitLog(err) // FATAL
+		}
+		glog.Error(err)
 		return
 	}
 
-	// 2. unmarshal
-	var lsBlkOutput LsBlk
-	if err := jsoniter.Unmarshal(outputBytes, &lsBlkOutput); err != nil {
-		glog.Errorf("Failed to unmarshal lsblk output [%s], err: %v", string(outputBytes), err)
-		return
-	}
-
-	// 3. map trimmed(fs) <= disk(s)
+	// map trimmed(fs) <= disk(s)
 	var trimmedFS string
 	if strings.HasPrefix(fs, devPrefixLVM) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixLVM)
@@ -71,58 +88,58 @@ func fs2disks(fs string, testingEnv bool) (disks FsDisks) {
 		trimmedFS = strings.TrimPrefix(fs, devPrefixReg)
 	}
 	disks = make(FsDisks, 4)
-	findDevDisks(lsBlkOutput.BlockDevices, trimmedFS, disks)
+	findDevs(res.BlockDevices, trimmedFS, disks)
 
 	// log
 	if flag.Parsed() {
 		if len(disks) == 0 {
 			// skip err logging block devices when running with `test_fspaths` (config.TestingEnv() == true)
 			// e.g.: testing with docker `/dev/root` mount with no disks
-			// see also: `allowSharedDisksAndNoDisks` (TODO unify via `allowSharedDisksAndNoDisks`)
+			// see also: `allowSharedDisksAndNoDisks`
 			if !testingEnv {
-				s, _ := jsoniter.MarshalIndent(lsBlkOutput.BlockDevices, "", " ")
+				s, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
 				glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
 			}
 		} else {
 			glog.Infof("%s: %v", fs, disks)
 		}
 	}
-
-	return disks
+	return
 }
 
 //
 // private
 //
 
-func childMatches(devList []*BlockDevice, device string) bool {
+func findDevs(devList []*blkdev, trimmedFS string, disks FsDisks) {
+	for _, bd := range devList {
+		if bd.Name == trimmedFS {
+			_add(bd, disks)
+			continue
+		}
+		if len(bd.BlockDevices) > 0 && _match(bd.BlockDevices, trimmedFS) {
+			_add(bd, disks)
+		}
+	}
+}
+
+func _add(bd *blkdev, disks FsDisks) {
+	var err error
+	if disks[bd.Name], err = bd.PhySec.Int64(); err != nil {
+		glog.Errorf("%s[%v]: failed to parse sector: %v", bd.Name, bd, err)
+		disks[bd.Name] = 512
+	}
+}
+
+func _match(devList []*blkdev, device string) bool {
 	for _, dev := range devList {
 		if dev.Name == device {
 			return true
 		}
-		if len(dev.BlockDevices) != 0 && childMatches(dev.BlockDevices, device) {
+		// recurs
+		if len(dev.BlockDevices) != 0 && _match(dev.BlockDevices, device) {
 			return true
 		}
 	}
 	return false
-}
-
-func findDevDisks(devList []*BlockDevice, trimmedFS string, disks FsDisks) {
-	addDisk := func(bd *BlockDevice) {
-		var err error
-		if disks[bd.Name], err = bd.PhySec.Int64(); err != nil {
-			glog.Errorf("%s[%v]: %v", bd.Name, bd, err)
-			disks[bd.Name] = 512
-		}
-	}
-
-	for _, bd := range devList {
-		if bd.Name == trimmedFS {
-			addDisk(bd)
-			continue
-		}
-		if len(bd.BlockDevices) > 0 && childMatches(bd.BlockDevices, trimmedFS) {
-			addDisk(bd)
-		}
-	}
 }

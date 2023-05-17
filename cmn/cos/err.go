@@ -7,6 +7,7 @@ package cos
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -121,27 +122,31 @@ func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d
 const fatalPrefix = "FATAL ERROR: "
 
 func Exitf(f string, a ...any) {
-	msg := fmt.Sprintf(fatalPrefix+f+"\n", a...)
+	msg := fmt.Sprintf(fatalPrefix+f, a...)
 	_exit(msg)
 }
 
 // +glog
 func ExitLogf(f string, a ...any) {
-	msg := fmt.Sprintf(fatalPrefix+f+"\n", a...)
-	glog.ErrorDepth(1, msg)
-	glog.Flush()
+	msg := fmt.Sprintf(fatalPrefix+f, a...)
+	if flag.Parsed() {
+		glog.ErrorDepth(1, msg+"\n")
+		glog.Flush()
+	}
 	_exit(msg)
 }
 
 func ExitLog(a ...any) {
-	msg := fatalPrefix + fmt.Sprint(a...) + "\n"
-	glog.ErrorDepth(1, msg)
-	glog.Flush()
+	msg := fatalPrefix + fmt.Sprint(a...)
+	if flag.Parsed() {
+		glog.ErrorDepth(1, msg+"\n")
+		glog.Flush()
+	}
 	_exit(msg)
 }
 
 func _exit(msg string) {
-	fmt.Fprint(os.Stderr, msg)
+	fmt.Fprintln(os.Stderr, msg)
 	os.Exit(1)
 }
 

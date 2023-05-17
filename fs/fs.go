@@ -521,7 +521,7 @@ func (mi *Mountpath) ClearDD() {
 // create a new singleton
 func New(num int, allowSharedDisksAndNoDisks bool) {
 	if allowSharedDisksAndNoDisks {
-		glog.Warningln("allowed disk sharing by multiple mountpaths and mountpaths with no disks")
+		glog.Warningln("allowed: (I) disk sharing by multiple mountpaths and (II) mountpaths with no disks")
 	}
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
 	mfs.ios = ios.New(num)

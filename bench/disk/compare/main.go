@@ -173,16 +173,16 @@ func lsblkOutput2disks(lsblkOutputBytes []byte) (disks cos.StrSet) {
 		return
 	}
 
-	findDevDisks(lsBlkOutput.BlockDevices, disks)
+	findDevs(lsBlkOutput.BlockDevices, disks)
 
 	return disks
 }
 
-func findDevDisks(devList []BlockDevice, disks cos.StrSet) {
+func findDevs(devList []BlockDevice, disks cos.StrSet) {
 	for _, bd := range devList {
 		if !strings.HasPrefix(bd.Name, "loop") {
 			disks[bd.Name] = struct{}{}
-			findDevDisks(bd.BlockDevices, disks)
+			findDevs(bd.BlockDevices, disks)
 		}
 	}
 }
