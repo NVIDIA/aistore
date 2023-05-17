@@ -120,12 +120,18 @@ class TestDsortOps(unittest.TestCase):
         self.assertEqual(expected_contents, result_contents)
 
     def test_abort(self):
-        self.client.bucket("abort").create(exist_ok=True)
-        self.buckets.append("abort")
-        self.client.bucket("out").create(exist_ok=True)
-        self.buckets.append("out")
+        input_bck_name = "abort"
+        out_bck_name = "out"
+        self.client.bucket(input_bck_name).create(exist_ok=True)
+        self.buckets.append(input_bck_name)
+        self.client.bucket(out_bck_name).create(exist_ok=True)
+        self.buckets.append(out_bck_name)
+        # Create enough files to make the dSort job slow enough to abort
+        self._generate_shards(input_bck_name, tarfile.GNU_FORMAT, 10, 1000)
         dsort = self._start_with_spec(
-            input_bck_name="abort", out_bck_name="out", input_object_prefix="test"
+            input_bck_name=input_bck_name,
+            out_bck_name=out_bck_name,
+            input_object_prefix=input_bck_name,
         )
         dsort.abort()
         dsort.wait(timeout=TEST_TIMEOUT)
