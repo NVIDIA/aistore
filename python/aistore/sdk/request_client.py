@@ -2,8 +2,8 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-from urllib.parse import urljoin
-from typing import TypeVar, Type
+from urllib.parse import urljoin, urlencode
+from typing import TypeVar, Type, Any, Dict
 
 from pydantic.tools import parse_raw_as
 import requests
@@ -83,3 +83,17 @@ class RequestClient:
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp)
         return resp
+
+    def get_full_url(self, path: str, params: Dict[str, Any]):
+        """
+        Get the full URL to the path on the cluster with the parameters given
+
+        Args:
+            path: Path on the cluster
+            params: Query parameters to include
+
+        Returns:
+            URL including cluster base url and parameters
+
+        """
+        return f"{self._base_url}/{path.lstrip('/')}?{urlencode(params)}"

@@ -6,7 +6,7 @@ from __future__ import annotations  # pylint: disable=unused-variable
 
 import logging
 from pathlib import Path
-from typing import Dict, List, NewType
+from typing import Dict, List, NewType, Iterable
 import requests
 
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
@@ -669,3 +669,20 @@ class Bucket:
         return BucketModel(
             name=self.name, namespace=self.namespace, provider=self.provider
         )
+
+    def get_object_urls(
+        self, prefix: str = "", archpath: str = "", etl_name: str = None
+    ) -> Iterable[str]:
+        """
+            Get an iterator of full URLs to every object in this bucket matching the prefix
+        Args:
+            prefix (str, optional): Limit objects selected by a given string prefix
+            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
+                from the archive
+            etl_name (str, optional): ETL to include in URLs
+
+        Returns:
+            Iterator of all object URLs matching the prefix
+        """
+        for entry in self.list_objects_iter(prefix=prefix, props="name"):
+            yield self.object(entry.name).get_url(archpath=archpath, etl_name=etl_name)

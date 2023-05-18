@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, call
 
 from aistore.sdk import Bucket
 from aistore.sdk.const import (
@@ -244,3 +244,16 @@ class TestObjectGroup(unittest.TestCase):
             allow_append=allow_append,
             continue_on_err=continue_on_err,
         )
+
+    def test_get_urls(self):
+        archpath = "myarch"
+        etl_name = "myetl"
+        expected_obj_calls = []
+        # Should create an object reference and get url for every object returned by listing
+        for name in self.obj_names:
+            expected_obj_calls.append(call(name))
+            expected_obj_calls.append(
+                call().get_url(archpath=archpath, etl_name=etl_name)
+            )
+        list(self.object_group.get_urls(archpath=archpath, etl_name=etl_name))
+        self.mock_bck.object.assert_has_calls(expected_obj_calls)

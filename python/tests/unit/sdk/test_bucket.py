@@ -519,6 +519,29 @@ class TestBucket(unittest.TestCase):
         self.assertEqual(expected_path, bucket.get_path())
         self.assertEqual(f"{PROVIDER_AIS}/@#/{bucket.name}/", self.ais_bck.get_path())
 
+    @patch("aistore.sdk.bucket.Bucket.object")
+    @patch("aistore.sdk.bucket.Bucket.list_objects_iter")
+    def test_get_object_urls(self, mock_list_obj, mock_object):
+        prefix = "my-prefix"
+        archpath = "arch"
+        etl_name = "my-etl"
+        object_names = ["obj_name", "obj_name2"]
+        expected_obj_calls = []
+        # Should create an object reference and get url for every object returned by listing
+        for name in object_names:
+            expected_obj_calls.append(call(name))
+            expected_obj_calls.append(
+                call().get_url(archpath=archpath, etl_name=etl_name)
+            )
+        mock_list_obj.return_value = [BucketEntry(name=name) for name in object_names]
+        list(
+            self.ais_bck.get_object_urls(
+                prefix=prefix, archpath=archpath, etl_name=etl_name
+            )
+        )
+        mock_list_obj.assert_called_with(prefix=prefix, props="name")
+        mock_object.assert_has_calls(expected_obj_calls)
+
     def test_make_request_no_client(self):
         bucket = Bucket(name="name")
         with self.assertRaises(ValueError):

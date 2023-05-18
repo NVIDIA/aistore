@@ -3,6 +3,7 @@
 #
 from io import BufferedWriter
 from typing import NewType
+
 import requests
 
 from aistore.sdk.const import (
@@ -42,6 +43,7 @@ class Object:
         self._bck_name = bucket.name
         self._qparams = bucket.qparam
         self._name = name
+        self._object_path = f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }"
 
     @property
     def bucket(self):
@@ -69,7 +71,7 @@ class Object:
         """
         return self._client.request(
             HTTP_METHOD_HEAD,
-            path=f"{URL_PATH_OBJECTS}/{ self._bck_name}/{ self.name }",
+            path=self._object_path,
             params=self._qparams,
         ).headers
 
@@ -106,7 +108,7 @@ class Object:
             params[QPARAM_ETL_NAME] = etl_name
         resp = self._client.request(
             HTTP_METHOD_GET,
-            path=f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }",
+            path=self._object_path,
             params=params,
             stream=True,
         )
@@ -118,6 +120,26 @@ class Object:
         if writer:
             writer.writelines(obj_reader)
         return obj_reader
+
+    def get_url(self, archpath: str = "", etl_name: str = None):
+        """
+        Get the full url to the object including base url and any query parameters
+
+        Args:
+            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
+                from the archive
+            etl_name (str, optional): Transforms an object based on ETL with etl_name
+
+        Returns:
+            Full URL to get object
+
+        """
+        params = self._qparams.copy()
+        if archpath:
+            params[QPARAM_ARCHPATH] = archpath
+        if etl_name:
+            params[QPARAM_ETL_NAME] = etl_name
+        return self._client.get_full_url(self._object_path, params)
 
     def put_content(self, content: bytes) -> Header:
         """
@@ -226,6 +248,6 @@ class Object:
         """
         self._client.request(
             HTTP_METHOD_DELETE,
-            path=f"{URL_PATH_OBJECTS}/{ self._bck_name }/{ self.name }",
+            path=self._object_path,
             params=self._qparams,
         )

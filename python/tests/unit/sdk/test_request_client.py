@@ -63,3 +63,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 )
                 self.assertEqual(mock_response, res)
                 mock_handle_err.assert_called_once()
+
+    def test_get_full_url(self):
+        path = "/testpath/to_obj"
+        params = {"p1key": "p1val", "p2key": "p2val"}
+        res = self.request_client.get_full_url(path, params)
+        self.assertEqual(
+            "https://aistore-endpoint/v1/testpath/to_obj?p1key=p1val&p2key=p2val", res
+        )

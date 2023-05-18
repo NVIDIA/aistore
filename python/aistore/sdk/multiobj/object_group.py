@@ -2,7 +2,7 @@
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
 import logging
-from typing import List
+from typing import List, Iterable
 
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
@@ -43,7 +43,7 @@ class ObjectGroup:
 
     def __init__(
         self,
-        bck,
+        bck: "Bucket",
         obj_names: list = None,
         obj_range: ObjectRange = None,
         obj_template: str = None,
@@ -291,3 +291,15 @@ class ObjectGroup:
 
         """
         return list(self._obj_collection)
+
+    def get_urls(self, archpath: str = "", etl_name: str = None) -> Iterable[str]:
+        """
+        Get an iterator of the full URL for every object in this group
+        Returns:
+            Iterable generator of object URLs
+
+        """
+        for obj_name in self._obj_collection:
+            yield self.bck.object(obj_name).get_url(
+                archpath=archpath, etl_name=etl_name
+            )

@@ -26,8 +26,8 @@ from aistore.sdk.object import Object
 from aistore.sdk.object_reader import ObjectReader
 from aistore.sdk.types import ActionMsg, PromoteAPIArgs
 
-BCK_NAME = "bucket name"
-OBJ_NAME = "object name"
+BCK_NAME = "bucket_name"
+OBJ_NAME = "object_name"
 REQUEST_PATH = f"{URL_PATH_OBJECTS}/{BCK_NAME}/{OBJ_NAME}"
 
 
@@ -128,6 +128,17 @@ class TestObject(unittest.TestCase):
 
         if "writer" in kwargs:
             self.mock_writer.writelines.assert_called_with(res)
+
+    def test_get_url(self):
+        expected_res = "full url"
+        archpath = "arch"
+        etl = "test-etl"
+        self.mock_client.get_full_url.return_value = expected_res
+        res = self.object.get_url(archpath=archpath, etl_name=etl)
+        self.assertEqual(expected_res, res)
+        self.mock_client.get_full_url.assert_called_with(
+            REQUEST_PATH, {QPARAM_ARCHPATH: archpath, QPARAM_ETL_NAME: etl}
+        )
 
     @patch("pathlib.Path.is_file")
     @patch("pathlib.Path.exists")
