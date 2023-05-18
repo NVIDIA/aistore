@@ -90,14 +90,12 @@ func SetAuxTarHeader(hdr *tar.Header) {
 
 // OpenTarForAppend opens a TAR and uses tar's reader Next() to skip
 // to the position right _after_ the last file in the TAR
-// (padding bytes including).
+// (padding bytes including). Background:
 //
-// Background:
-//
-//	TAR file is padded with one or more 512-byte blocks of zero bytes.
-//	The blocks must be overwritten, otherwise newly added files won't be
-//	accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
-//	write different number of zero blocks.
+// TAR file is padded with one or more 512-byte blocks of zero bytes.
+// The blocks must be overwritten, otherwise newly added files won't be
+// accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)
+// write different number of zero blocks.
 func OpenTarSeekEnd(cname, workFQN string) (rwfh *os.File, err error) {
 	if rwfh, err = os.OpenFile(workFQN, os.O_RDWR, PermRWR); err != nil {
 		return
@@ -141,10 +139,15 @@ func _seekTarEnd(cname string, fh *os.File) error {
 	return err
 }
 
-// copy TAR or TGZ (`src` => `tw`) one file at a time
-// opens specific arch reader and always closes it
-// the (`tw`) writer can further be used to write (append) more
-func CopyT(src io.Reader, tw *tar.Writer /*over gzw*/, buf []byte, tgz bool) (err error) {
+//
+// copying src-arch => dst-arch for subsequent APPEND
+// TODO -- FIXME: checksum
+//
+
+// copy TAR or TGZ (`src` => `tw`) one file at a time;
+// opens specific arch reader and always closes it;
+// `tw` is the writer that can be further used to write (ie., append)
+func CopyT(src io.Reader, tw *tar.Writer, buf []byte, tgz bool) (err error) {
 	var (
 		gzr *gzip.Reader
 		tr  *tar.Reader
@@ -179,12 +182,12 @@ func CopyT(src io.Reader, tw *tar.Writer /*over gzw*/, buf []byte, tgz bool) (er
 	return
 }
 
-func CopyZ(src io.ReaderAt, size int64, zw *zip.Writer /*over gzw*/, buf []byte) (err error) {
+// TODO: check subdirs
+func CopyZ(src io.ReaderAt, size int64, zw *zip.Writer, buf []byte) (err error) {
 	var zr *zip.Reader
 	if zr, err = zip.NewReader(src, size); err != nil {
 		return
 	}
-	// TODO -- FIXME: losing full paths?
 	for _, f := range zr.File {
 		var (
 			zipr io.ReadCloser
@@ -207,6 +210,11 @@ func CopyZ(src io.ReaderAt, size int64, zw *zip.Writer /*over gzw*/, buf []byte)
 			break
 		}
 	}
+	return
+}
+
+func CopyMsgpack(src io.Reader, dst io.Writer, buf []byte) (err error) {
+	_, err = io.CopyBuffer(dst, src, buf)
 	return
 }
 
