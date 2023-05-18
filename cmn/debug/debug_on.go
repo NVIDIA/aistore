@@ -166,7 +166,12 @@ func AssertNotPstr(a any) {
 }
 
 func FailTypeCast(a any) {
-	_panic(fmt.Errorf("unexpected type %v (%T)", a, a))
+	val := fmt.Sprint(a)
+	if len(val) < 32 {
+		_panic(fmt.Errorf("unexpected type %s: (%T)", val, a))
+	} else {
+		_panic(fmt.Errorf("unexpected type (%T)", a))
+	}
 }
 
 func Handlers() map[string]http.HandlerFunc {

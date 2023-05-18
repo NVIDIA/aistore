@@ -213,11 +213,6 @@ func CopyZ(src io.ReaderAt, size int64, zw *zip.Writer, buf []byte) (err error) 
 	return
 }
 
-func CopyMsgpack(src io.Reader, dst io.Writer, buf []byte) (err error) {
-	_, err = io.CopyBuffer(dst, src, buf)
-	return
-}
-
 ////////////////////
 // ErrUnknownMime //
 ////////////////////

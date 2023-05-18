@@ -37,6 +37,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/vmihailenco/msgpack"
 )
 
 //
@@ -1546,6 +1547,9 @@ cpap: // copy + append
 		err = a.tgz(lmfh, wfh, buf)
 	case cos.ExtZip:
 		err = a.zip(lmfh, a.lom.SizeBytes(), wfh, buf)
+	default:
+		debug.Assert(a.mime == cos.ExtMsgpack)
+		err = a.msgpack(lmfh, wfh)
 	}
 
 	// cleanup and finalize
@@ -1644,6 +1648,34 @@ func (a *apndArchI) zip(lmfh io.ReaderAt, size int64, wfh io.Writer, buf []byte)
 		}
 	}
 	cos.Close(zw)
+	return
+}
+
+func (a *apndArchI) msgpack(lmfh io.Reader, wfh io.Writer) (err error) {
+	var (
+		dst any
+		n   int64
+		sgl = a.t.gmm.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
+		dec = msgpack.NewDecoder(lmfh)
+	)
+	if err = dec.Decode(&dst); err != nil {
+		return
+	}
+	shard, ok := dst.(map[string]any)
+	if !ok {
+		debug.FailTypeCast(dst)
+		return fmt.Errorf("unexpected type (%T) - expecting decoded msgpack", dst)
+	}
+	n, err = io.Copy(sgl, a.r) // buffer's not needed since SGL is `io.ReaderFrom`
+	if err == nil {
+		debug.Assertf(n == a.size, "%d != %d", n, a.size)
+		shard[a.filename] = sgl.Bytes()
+
+		enc := msgpack.NewEncoder(wfh)
+		err := enc.Encode(shard)
+		debug.AssertNoErr(err)
+	}
+	sgl.Free()
 	return
 }
 

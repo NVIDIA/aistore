@@ -731,13 +731,15 @@ func (mpw *msgpackWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader 
 	sgl := memsys.PageMM().NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
 
 	mpw.archwi.wmu.Lock()
+
 	if _, ok := mpw.shard[fullname]; ok {
 		// warn and proceed
-		glog.Errorf("Warning: no duplicates in a msgpack-formatted shard (%s, %s, %s)",
-			mpw.archwi.r, mpw.archwi.lom, fullname)
+		glog.Errorf("arch %s: file %s already exists", mpw.archwi.lom, fullname)
 	}
+
 	mpw.shard[fullname] = sgl
-	size, err := io.Copy(sgl, reader)                   // buffer's not needed since SGL is `io.ReaderFrom`
+	size, err := io.Copy(sgl, reader) // buffer's not needed since SGL is `io.ReaderFrom`
+
 	debug.Assert(err == nil || size == oah.SizeBytes()) // other than this assert, `oah` is unused
 	if err != nil {
 		mpw.archwi.err = err
