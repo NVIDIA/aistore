@@ -164,7 +164,7 @@ func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl
 }
 
 // Given URL (link) and response header parse object attrs for GCP, S3 and Azure.
-func attrsFromLink(link string, resp *http.Response, oah cmn.ObjAttrsHolder) (size int64) {
+func attrsFromLink(link string, resp *http.Response, oah cos.OAH) (size int64) {
 	u, err := url.Parse(link)
 	debug.AssertNoErr(err)
 	switch {

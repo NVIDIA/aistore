@@ -66,9 +66,9 @@ var (
 
 // interface guard
 var (
-	_ cmn.ObjAttrsHolder = (*LOM)(nil)
-	_ fs.PartsFQN        = (*LOM)(nil)
-	_ lifUnlocker        = (*LOM)(nil)
+	_ cos.OAH     = (*LOM)(nil)
+	_ fs.PartsFQN = (*LOM)(nil)
+	_ lifUnlocker = (*LOM)(nil)
 )
 
 func Init(t TargetLoc) {
@@ -88,9 +88,9 @@ func Init(t TargetLoc) {
 func (lom *LOM) ObjAttrs() *cmn.ObjAttrs { return &lom.md.ObjAttrs }
 
 // LOM == remote-object equality check
-func (lom *LOM) Equal(rem cmn.ObjAttrsHolder) (equal bool) { return lom.ObjAttrs().Equal(rem) }
+func (lom *LOM) Equal(rem cos.OAH) (equal bool) { return lom.ObjAttrs().Equal(rem) }
 
-func (lom *LOM) CopyAttrs(oah cmn.ObjAttrsHolder, skipCksum bool) {
+func (lom *LOM) CopyAttrs(oah cos.OAH, skipCksum bool) {
 	lom.md.ObjAttrs.CopyFrom(oah, skipCksum)
 }
 

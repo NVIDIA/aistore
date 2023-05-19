@@ -19,7 +19,7 @@ const ldpact = ".LDP.Reader"
 type (
 	// data provider
 	DP interface {
-		Reader(lom *LOM) (reader cos.ReadOpenCloser, oah cmn.ObjAttrsHolder, err error)
+		Reader(lom *LOM) (reader cos.ReadOpenCloser, oah cos.OAH, err error)
 	}
 
 	LDP struct{}
@@ -51,7 +51,7 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 }
 
 // compare with etl/dp.go
-func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
+func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	lom.Lock(false)
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
 	if loadErr == nil {

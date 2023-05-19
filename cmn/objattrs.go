@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -61,29 +61,17 @@ type ObjectProps struct {
 	Present bool `json:"present"`
 }
 
-type (
-	ObjAttrsHolder interface {
-		SizeBytes(special ...bool) int64
-		Version(special ...bool) string
-		Checksum() *cos.Cksum
-		AtimeUnix() int64
-		GetCustomMD() cos.StrKVs
-		GetCustomKey(key string) (val string, exists bool)
-		SetCustomKey(k, v string)
-		String() string
-	}
-	// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
-	ObjAttrs struct {
-		Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
-		CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
-		Ver      string     `json:"version,omitempty"`   // object version
-		Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
-		Size     int64      `json:"size,omitempty"`      // object size (bytes)
-	}
-)
+// see also apc.HdrObjAtime et al. @ api/apc/const.go (and note that naming must be consistent)
+type ObjAttrs struct {
+	Cksum    *cos.Cksum `json:"checksum,omitempty"`  // object checksum (cloned)
+	CustomMD cos.StrKVs `json:"custom-md,omitempty"` // custom metadata: ETag, MD5, CRC, user-defined ...
+	Ver      string     `json:"version,omitempty"`   // object version
+	Atime    int64      `json:"atime,omitempty"`     // access time (nanoseconds since UNIX epoch)
+	Size     int64      `json:"size,omitempty"`      // object size (bytes)
+}
 
 // interface guard
-var _ ObjAttrsHolder = (*ObjAttrs)(nil)
+var _ cos.OAH = (*ObjAttrs)(nil)
 
 func (oa *ObjAttrs) String() string {
 	return fmt.Sprintf("%dB, v%q, %s, %+v", oa.Size, oa.Ver, oa.Cksum, oa.CustomMD)
@@ -128,8 +116,8 @@ func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
 	}
 }
 
-// clone ObjAttrsHolder => ObjAttrs (see also lom.CopyAttrs)
-func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
+// clone OAH => ObjAttrs (see also lom.CopyAttrs)
+func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum ...bool) {
 	oa.Atime = oah.AtimeUnix()
 	oa.Size = oah.SizeBytes()
 	oa.Ver = oah.Version()
@@ -146,7 +134,7 @@ func (oa *ObjAttrs) CopyFrom(oah ObjAttrsHolder, skipCksum ...bool) {
 // to and from HTTP header converters (as in: HEAD /object)
 //
 
-func ToHeader(oah ObjAttrsHolder, hdr http.Header) {
+func ToHeader(oah cos.OAH, hdr http.Header) {
 	if cksum := oah.Checksum(); !cksum.IsEmpty() {
 		hdr.Set(apc.HdrObjCksumType, cksum.Ty())
 		hdr.Set(apc.HdrObjCksumVal, cksum.Val())
@@ -206,7 +194,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 //
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
-func (oa *ObjAttrs) Equal(rem ObjAttrsHolder) (equal bool) {
+func (oa *ObjAttrs) Equal(rem cos.OAH) (equal bool) {
 	var (
 		count   int
 		sameVer bool

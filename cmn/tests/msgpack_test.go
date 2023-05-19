@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/vmihailenco/msgpack/v5"
@@ -26,6 +25,8 @@ const (
 	bone  = "\x01"
 	btwo  = "\xe3/\xbd"
 )
+
+type shard map[string][]byte
 
 func TestMsgpackGenericShardMarshal(t *testing.T) {
 	for i := 0; i < 3; i++ {
@@ -82,8 +83,8 @@ func TestMsgpackGenericShardEncode(t *testing.T) {
 	}
 }
 
-func makeShard(num int, nonASCIIKey bool) (s cmn.GenShard) {
-	s = make(cmn.GenShard, num)
+func makeShard(num int, nonASCIIKey bool) (s shard) {
+	s = make(shard, num)
 	now := mono.NanoTime()
 	for i := 1; i < num; i++ {
 		k := strconv.FormatUint(uint64(i)*uint64(now), 16)
@@ -105,7 +106,7 @@ func makeShard(num int, nonASCIIKey bool) (s cmn.GenShard) {
 	return
 }
 
-func cmpShard(t *testing.T, in cmn.GenShard, dst any) {
+func cmpShard(t *testing.T, in shard, dst any) {
 	out, ok := dst.(map[string]any)
 	if !ok {
 		t.Fatalf("not ok: %T", dst)

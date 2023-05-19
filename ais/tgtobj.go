@@ -106,7 +106,7 @@ type (
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
 		dm        cluster.DataMover
-		objAttrs  cmn.ObjAttrsHolder
+		objAttrs  cos.OAH
 		tsi       *meta.Snode
 		bckTo     *meta.Bck
 		objNameTo string
@@ -1270,7 +1270,7 @@ func (coi *copyOI) copyReader(lom *cluster.LOM, objNameTo string) (size int64, e
 func (coi *copyOI) putReader(lom, dst *cluster.LOM) (size int64, err error) {
 	var (
 		reader cos.ReadOpenCloser
-		oah    cmn.ObjAttrsHolder
+		oah    cos.OAH
 	)
 	if err = dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		return

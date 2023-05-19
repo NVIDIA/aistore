@@ -189,9 +189,6 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			{
 				ext: archive.ExtTar, list: true, apnd: true,
 			},
-			{
-				ext: archive.ExtMsgpack, list: true,
-			},
 		}
 		subtestsLong = []struct {
 			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
@@ -220,9 +217,6 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			},
 			{
 				ext: archive.ExtZip, list: true,
-			},
-			{
-				ext: archive.ExtMsgpack, list: false,
 			},
 		}
 	)
@@ -268,16 +262,8 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
-					if test.ext == archive.ExtMsgpack {
-						// m.b. unique for msgpack
-						start := rand.Intn(m.num - numInArch)
-						for j := start; j < start+numInArch; j++ {
-							list = append(list, m.objNames[j])
-						}
-					} else {
-						for j := 0; j < numInArch; j++ {
-							list = append(list, m.objNames[rand.Intn(m.num)])
-						}
+					for j := 0; j < numInArch; j++ {
+						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(archName string, list []string, i int) {
 						msg := cmn.ArchiveMsg{
@@ -455,10 +441,6 @@ func TestAppendToArch(t *testing.T) {
 			{
 				ext: archive.ExtZip, multi: true,
 			},
-			{
-				ext: archive.ExtMsgpack, multi: false,
-			},
-			// TODO -- FIXME: add multi-object msgpack
 		}
 	)
 	if !testing.Short() { // test-long, and see one other Skip below
@@ -558,14 +540,7 @@ func TestAppendToArch(t *testing.T) {
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)
 
-			if num != expectedNum {
-				if test.ext == archive.ExtMsgpack { // TODO -- FIXME: remove
-					tlog.Logf("Warning: expected %d, have %d (%d duplicates?)\n",
-						expectedNum, num, expectedNum-num)
-				} else {
-					t.Errorf("expected %d, have %d", expectedNum, num)
-				}
-			}
+			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
 		})
 	}
 }

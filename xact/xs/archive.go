@@ -6,9 +6,6 @@
 package xs
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,47 +24,17 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/vmihailenco/msgpack"
 )
 
 type (
 	archFactory struct {
 		streamingF
 	}
-	archWriter interface {
-		write(nameInArch string, oah cmn.ObjAttrsHolder, reader io.Reader) error
-		fini()
-	}
-	baseW struct {
-		wmul   *cos.WriterMulti
-		archwi *archwi
-		buf    []byte
-		slab   *memsys.Slab
-	}
-	tarWriter struct {
-		baseW
-		tw *tar.Writer
-	}
-	tgzWriter struct {
-		tw  tarWriter
-		gzw *gzip.Writer
-	}
-	zipWriter struct {
-		baseW
-		zw *zip.Writer
-	}
-	sglShard      map[string]*memsys.SGL
-	msgpackWriter struct {
-		baseW
-		shard sglShard
-	}
 	archwi struct { // archival work item; implements lrwi
-		writer    archWriter
-		err       error
+		writer    archive.Writer
 		r         *XactArch
 		msg       *cmn.ArchiveMsg
 		tsi       *meta.Snode
@@ -76,8 +43,6 @@ type (
 		fh        *os.File     // --/--
 		cksum     cos.CksumHashSize
 		appendPos int64 // append to existing archive
-		wmu       sync.Mutex
-		errCnt    atomic.Int32
 		// finishing
 		refc       atomic.Int32
 		finalizing atomic.Bool
@@ -99,11 +64,6 @@ var (
 	_ cluster.Xact   = (*XactArch)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
-
-	_ archWriter = (*tarWriter)(nil)
-	_ archWriter = (*tgzWriter)(nil)
-	_ archWriter = (*zipWriter)(nil)
-	_ archWriter = (*msgpackWriter)(nil)
 )
 
 /////////////////
@@ -185,49 +145,11 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		}
 
 		// construct format-specific writer
-		switch msg.Mime {
-		case archive.ExtTar:
-			tw := &tarWriter{}
-			tw.init(wi)
-			if lmfh != nil {
-				// (for subsequent multi-object APPEND)
-				err = archive.CopyT(lmfh, tw.tw, tw.buf, false)
-				cos.Close(lmfh)
-				if err != nil {
-					tw.fini()
-					return
-				}
-			}
-		case archive.ExtTgz, archive.ExtTarTgz:
-			tzw := &tgzWriter{}
-			tzw.init(wi)
-			if lmfh != nil {
-				// ditto
-				err = archive.CopyT(lmfh, tzw.tw.tw, tzw.tw.buf, true /*gzip*/)
-				cos.Close(lmfh)
-				if err != nil {
-					tzw.fini()
-					return
-				}
-			}
-		case archive.ExtZip:
-			zw := &zipWriter{}
-			zw.init(wi)
-			if lmfh != nil {
-				// ditto
-				err = archive.CopyZ(lmfh, finfo.Size(), zw.zw, zw.buf)
-				cos.Close(lmfh)
-				if err != nil {
-					zw.fini()
-					return
-				}
-			}
-		case archive.ExtMsgpack:
-			mpw := &msgpackWriter{}
-			mpw.init(wi)
-		default:
-			debug.Assert(false, msg.Mime)
-			return
+		wi.writer = archive.NewWriter(msg.Mime, wi.fh, &wi.cksum)
+
+		// append
+		if lmfh != nil {
+			err = wi.writer.Copy(lmfh, finfo.Size())
 		}
 	}
 
@@ -279,11 +201,6 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 					// motivation: archive the entire bucket
 					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
 				}
-			}
-			if wi.errCnt.Load() > 0 {
-				wi.wmu.Lock()
-				err = wi.err
-				wi.wmu.Unlock()
 			}
 			if err == nil {
 				err = r.AbortErr()
@@ -372,7 +289,10 @@ func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) er
 		return nil
 	}
 	debug.Assert(hdr.Opcode == 0)
-	wi.writer.write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
+	err = wi.writer.Write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
+	if err != nil {
+		r.raiseErr(err, wi.msg.ContinueOnError)
+	}
 	return nil
 }
 
@@ -399,7 +319,7 @@ func (r *XactArch) finalize(wi *archwi) {
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	var size int64
-	wi.writer.fini()
+	wi.writer.Fini()
 	if size, err = wi.finalize(); err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -536,7 +456,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		return
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	err = wi.writer.write(wi.nameInArch(lom.ObjName), lom, fh)
+	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh)
 	cluster.FreeLOM(lom)
 	cos.Close(fh)
 	if err != nil {
@@ -587,165 +507,4 @@ func (wi *archwi) finalize() (size int64, err error) {
 	}
 	wi.lom.SetCksum(cksum)
 	return size, err
-}
-
-///////////////
-// tarWriter //
-///////////////
-
-func (tw *tarWriter) init(wi *archwi) {
-	tw.archwi = wi
-	tw.buf, tw.slab = memsys.PageMM().Alloc()
-	tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
-	tw.tw = tar.NewWriter(tw.wmul)
-	wi.writer = tw
-}
-
-func (tw *tarWriter) fini() {
-	tw.slab.Free(tw.buf)
-	tw.tw.Close()
-}
-
-func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) (err error) {
-	hdr := tar.Header{
-		Typeflag: tar.TypeReg,
-		Name:     fullname,
-		Size:     oah.SizeBytes(),
-		ModTime:  time.Unix(0, oah.AtimeUnix()),
-	}
-	archive.SetAuxTarHeader(&hdr)
-	// one at a time
-	tw.archwi.wmu.Lock()
-	if err = tw.tw.WriteHeader(&hdr); err == nil {
-		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
-	}
-	if err != nil {
-		tw.archwi.err = err
-		tw.archwi.errCnt.Inc()
-	}
-	tw.archwi.wmu.Unlock()
-	return
-}
-
-///////////////
-// tgzWriter //
-///////////////
-
-func (tzw *tgzWriter) init(wi *archwi) {
-	tzw.tw.archwi = wi
-	tzw.tw.buf, tzw.tw.slab = memsys.PageMM().Alloc()
-	tzw.tw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
-	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
-	tzw.tw.tw = tar.NewWriter(tzw.gzw)
-	wi.writer = tzw
-}
-
-func (tzw *tgzWriter) fini() {
-	tzw.tw.fini()
-	tzw.gzw.Close()
-}
-
-func (tzw *tgzWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
-	return tzw.tw.write(fullname, oah, reader)
-}
-
-///////////////
-// zipWriter //
-///////////////
-
-// wi.writer = &zipWriter{archwi: wi, w: zip.NewWriter(wi.fh)}
-func (zw *zipWriter) init(wi *archwi) {
-	zw.archwi = wi
-	zw.buf, zw.slab = memsys.PageMM().Alloc()
-	zw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
-	zw.zw = zip.NewWriter(zw.wmul)
-	wi.writer = zw
-}
-
-func (zw *zipWriter) fini() {
-	zw.slab.Free(zw.buf)
-	zw.zw.Close()
-}
-
-func (zw *zipWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
-	ziphdr := zip.FileHeader{
-		Name:               fullname,
-		Comment:            fullname,
-		UncompressedSize64: uint64(oah.SizeBytes()),
-		Modified:           time.Unix(0, oah.AtimeUnix()),
-	}
-	zw.archwi.wmu.Lock()
-	zipw, err := zw.zw.CreateHeader(&ziphdr)
-	if err == nil {
-		_, err = io.CopyBuffer(zipw, reader, zw.buf)
-	}
-	if err != nil {
-		zw.archwi.err = err
-		zw.archwi.errCnt.Inc()
-	}
-	zw.archwi.wmu.Unlock()
-	return err
-}
-
-///////////////////
-// msgpackWriter //
-///////////////////
-
-const dfltNumPerShard = 32
-
-func (mpw *msgpackWriter) init(wi *archwi) {
-	mpw.archwi = wi
-	mpw.shard = make(sglShard, dfltNumPerShard)
-	mpw.wmul = cos.NewWriterMulti(wi.fh, &wi.cksum)
-	wi.writer = mpw
-}
-
-func (mpw *msgpackWriter) fini() {
-	genShard := make(cmn.GenShard, len(mpw.shard))
-	for fullname, sgl := range mpw.shard {
-		genShard[fullname] = sgl.Bytes() // NOTE potential heap alloc
-	}
-	enc := msgpack.NewEncoder(mpw.wmul)
-	err := enc.Encode(genShard)
-	debug.AssertNoErr(err)
-
-	// free
-	for fullname, sgl := range mpw.shard {
-		delete(mpw.shard, fullname)
-		delete(genShard, fullname)
-		sgl.Free()
-	}
-}
-
-// NOTE: ***************** msgpack formatting limitation *******************
-//
-// The format we are supporting for msgpack archiving is the most generic, simplified
-// to the point where there's no need for any schema-specific code on the client side.
-// Inter-operating with existing clients comes at a cost, though:
-//  1. `map[string][]byte` (aka `cmn.GenShard`) has no per-file headers where we could
-//     store the attributes of packed files.
-//  2. `map[string][]byte` certainly does not allow for same-name duplicates - in a given
-//     shard the names of packed files must be unique.
-func (mpw *msgpackWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Reader) error {
-	// allocate max-size slab buffer to increase the chances
-	// of _not_ allocating heap via `sgl.Bytes` (above)
-	sgl := memsys.PageMM().NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
-
-	mpw.archwi.wmu.Lock()
-
-	if _, ok := mpw.shard[fullname]; ok {
-		// warn and proceed
-		glog.Errorf("arch %s: file %s already exists", mpw.archwi.lom, fullname)
-	}
-
-	mpw.shard[fullname] = sgl
-	size, err := io.Copy(sgl, reader) // buffer's not needed since SGL is `io.ReaderFrom`
-
-	debug.Assert(err == nil || size == oah.SizeBytes()) // other than this assert, `oah` is unused
-	if err != nil {
-		mpw.archwi.err = err
-		mpw.archwi.errCnt.Inc()
-	}
-	mpw.archwi.wmu.Unlock()
-	return err
 }

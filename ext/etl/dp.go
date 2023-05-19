@@ -37,7 +37,7 @@ func NewOfflineDP(msg *apc.TCBMsg, lsnode *meta.Snode) (*OfflineDP, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cmn.ObjAttrsHolder, error) {
+func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	var (
 		r   cos.ReadCloseSizer // note: +sizer
 		err error
