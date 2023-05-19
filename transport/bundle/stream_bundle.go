@@ -186,7 +186,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 			if _, ok := streams[di.ID()]; ok {
 				continue
 			}
-			err = cmn.NewErrNotFound("destination mismatch: stream (%s) => %s", sb, di)
+			err = cos.NewErrNotFound("destination mismatch: stream (%s) => %s", sb, di)
 			_doCmpl(obj, roc, err) // ditto
 			return
 		}

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -425,7 +426,7 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 //   - `api.CreateArchMultiObj(msg.AppendToExisting = true)`
 //   - `api.AppendObject`
 func AppendToArch(args AppendToArchArgs) (err error) {
-	mime, err := cos.MimeByExt(args.ObjName) // TODO -- FIXME: must be consistent with GET from-arch
+	mime, err := archive.MimeByExt(args.ObjName) // TODO -- FIXME: must be consistent with GET from-arch
 	if err != nil {
 		return err
 	}

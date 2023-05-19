@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
@@ -47,7 +48,7 @@ var (
 )
 
 // supportedExtensions is a list of extensions (archives) supported by dSort
-var supportedExtensions = cos.ArchExtensions
+var supportedExtensions = archive.ArchExtensions
 
 // TODO: maybe this struct should be composed of `type` and `template` where
 // template is interface and each template has it's own struct. Then we could

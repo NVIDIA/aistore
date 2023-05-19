@@ -94,7 +94,7 @@ func (m *mgr) updateUser(userID string, updateReq *authn.User) error {
 	uInfo := &authn.User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		return cmn.NewErrNotFound("%s: user %q", svcName, userID)
+		return cos.NewErrNotFound("%s: user %q", svcName, userID)
 	}
 	if userID == adminUserID && len(updateReq.Roles) != 0 {
 		return errors.New("cannot change administrator's role")
@@ -184,7 +184,7 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) error {
 	rInfo := &authn.Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
-		return cmn.NewErrNotFound("%s: role %q", svcName, role)
+		return cos.NewErrNotFound("%s: role %q", svcName, role)
 	}
 
 	if updateReq.Desc != "" {
@@ -295,7 +295,7 @@ func (m *mgr) cluLookup(cluID, cluAlias string) string {
 func (m *mgr) getCluster(cluID string) (*authn.CluACL, error) {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return nil, cmn.NewErrNotFound("%s: cluster %q", svcName, cluID)
+		return nil, cos.NewErrNotFound("%s: cluster %q", svcName, cluID)
 	}
 	clu := &authn.CluACL{}
 	err := m.db.Get(clustersCollection, cid, clu)
@@ -358,7 +358,7 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) error {
 func (m *mgr) delCluster(cluID string) error {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return cmn.NewErrNotFound("%s: cluster %q", svcName, cluID)
+		return cos.NewErrNotFound("%s: cluster %q", svcName, cluID)
 	}
 	return m.db.Delete(clustersCollection, cid)
 }
@@ -394,7 +394,7 @@ func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error
 		}
 		cid = m.cluLookup(msg.ClusterID, msg.ClusterID)
 		if cid == "" {
-			return "", cmn.NewErrNotFound("%s: cluster %q", svcName, msg.ClusterID)
+			return "", cos.NewErrNotFound("%s: cluster %q", svcName, msg.ClusterID)
 		}
 		uInfo.ClusterACLs = mergeClusterACLs(make([]*authn.CluACL, 0, len(uInfo.ClusterACLs)), uInfo.ClusterACLs, cid)
 		uInfo.BucketACLs = mergeBckACLs(make([]*authn.BckACL, 0, len(uInfo.BucketACLs)), uInfo.BucketACLs, cid)

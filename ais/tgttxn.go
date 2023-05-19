@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -778,7 +779,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		if err := cos.MorphMarshal(c.msg.Value, archMsg); err != nil {
 			return xid, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}
-		mime, err := cos.Mime(archMsg.Mime, archMsg.ArchName)
+		mime, err := archive.Mime(archMsg.Mime, archMsg.ArchName)
 		if err != nil {
 			return xid, err
 		}

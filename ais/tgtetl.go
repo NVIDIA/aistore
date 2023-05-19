@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -130,7 +131,7 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	if err := etl.Stop(t, etlName, cmn.ErrXactUserAbort); err != nil {
 		statusCode := http.StatusBadRequest
-		if cmn.IsErrNotFound(err) {
+		if cos.IsErrNotFound(err) {
 			statusCode = http.StatusNotFound
 		}
 		t.writeErr(w, r, err, statusCode)
@@ -145,7 +146,7 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, b
 	)
 	comm, err = etl.GetCommunicator(etlName, t.si)
 	if err != nil {
-		if cmn.IsErrNotFound(err) {
+		if cos.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
 			t.writeErrStatusf(w, r,
 				http.StatusNotFound,
@@ -177,7 +178,7 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string)
 func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	health, err := etl.PodHealth(t, etlName)
 	if err != nil {
-		if cmn.IsErrNotFound(err) {
+		if cos.IsErrNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)
@@ -190,7 +191,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName string) {
 	metricMsg, err := etl.PodMetrics(t, etlName)
 	if err != nil {
-		if cmn.IsErrNotFound(err) {
+		if cos.IsErrNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {
 			t.writeErr(w, r, err)

@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -777,7 +778,7 @@ gfn:
 	if err != nil {
 		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom, err)
 	} else {
-		err = cmn.NewErrNotFound("%s: %s", goi.t.si, goi.lom.Cname())
+		err = cos.NewErrNotFound("%s: %s", goi.t.si, goi.lom.Cname())
 	}
 	errCode = http.StatusNotFound
 	return
@@ -890,14 +891,14 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 	switch {
 	case goi.archive.filename != "": // archive
 		var mime string
-		mime, err = mimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
+		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
 		if err != nil {
 			return
 		}
 		var csl cos.ReadCloseSizer
-		csl, err = goi.freadArch(lmfh, mime)
+		csl, err = archive.Read(lmfh, goi.lom.Cname(), goi.archive.filename, mime, goi.lom.SizeBytes())
 		if err != nil {
-			if cmn.IsErrNotFound(err) {
+			if cos.IsErrNotFound(err) {
 				errCode = http.StatusNotFound
 			} else {
 				err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
@@ -944,26 +945,6 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 	err = goi.transmit(reader, buf, fqn, coldGet)
 	slab.Free(buf)
 	return
-}
-
-func (goi *getOI) freadArch(file *os.File, mime string) (cos.ReadCloseSizer, error) {
-	var (
-		archname = goi.lom.Cname()
-		filename = goi.archive.filename
-	)
-	switch mime {
-	case cos.ExtTar:
-		return freadTar(file, filename, archname)
-	case cos.ExtTarTgz, cos.ExtTgz:
-		return freadTgz(file, filename, archname)
-	case cos.ExtZip:
-		return freadZip(file, filename, archname, goi.lom.SizeBytes())
-	case cos.ExtMsgpack:
-		return freadMsgpack(file, filename, archname)
-	default:
-		debug.Assert(false)
-		return nil, cos.NewUnknownMimeError(mime)
-	}
 }
 
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) error {
@@ -1486,7 +1467,7 @@ func (a *apndArchI) do() (int, error) {
 	}
 	// standard library does not support appending to tgz and zip;
 	// for TAR there is an optimal workaround (below) not requiring full reconstruction
-	if a.mime == cos.ExtTar {
+	if a.mime == archive.ExtTar {
 		var (
 			err     error
 			fh      *os.File
@@ -1496,12 +1477,12 @@ func (a *apndArchI) do() (int, error) {
 		if err = os.Rename(a.lom.FQN, workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
-		fh, err = cos.OpenTarSeekEnd(a.lom.Cname(), workFQN)
+		fh, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
 		if err != nil {
 			if errV := a.lom.RenameFrom(workFQN); errV != nil {
 				return http.StatusInternalServerError, errV
 			}
-			if err == cos.ErrTarIsEmpty {
+			if err == archive.ErrTarIsEmpty {
 				goto cpap
 			}
 			return http.StatusInternalServerError, err
@@ -1541,14 +1522,14 @@ cpap: // copy + append
 	// copy + append
 	buf, slab = a.t.gmm.Alloc()
 	switch a.mime {
-	case cos.ExtTar:
+	case archive.ExtTar:
 		err = a.tar(lmfh, wfh, buf)
-	case cos.ExtTgz, cos.ExtTarTgz:
+	case archive.ExtTgz, archive.ExtTarTgz:
 		err = a.tgz(lmfh, wfh, buf)
-	case cos.ExtZip:
+	case archive.ExtZip:
 		err = a.zip(lmfh, a.lom.SizeBytes(), wfh, buf)
 	default:
-		debug.Assert(a.mime == cos.ExtMsgpack)
+		debug.Assert(a.mime == archive.ExtMsgpack)
 		err = a.msgpack(lmfh, wfh)
 	}
 
@@ -1575,7 +1556,7 @@ func (a *apndArchI) fast(rwfh *os.File) (size int64, err error) {
 		tw        = tar.NewWriter(rwfh)
 		hdr       = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
 	)
-	cos.SetAuxTarHeader(&hdr)
+	archive.SetAuxTarHeader(&hdr)
 	tw.WriteHeader(&hdr)
 	_, err = io.CopyBuffer(tw, a.r, buf) // append
 	cos.Close(tw)
@@ -1600,8 +1581,8 @@ func (a *apndArchI) tar(lmfh io.Reader, wfh io.Writer, buf []byte) (err error) {
 		tw   = tar.NewWriter(wfh)
 		nhdr = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
 	)
-	cos.SetAuxTarHeader(&nhdr)
-	err = cos.CopyT(lmfh, tw, buf, false)
+	archive.SetAuxTarHeader(&nhdr)
+	err = archive.CopyT(lmfh, tw, buf, false)
 	if err == nil {
 		if err = tw.WriteHeader(&nhdr); err == nil {
 			_, err = io.CopyBuffer(tw, a.r, buf)
@@ -1617,8 +1598,8 @@ func (a *apndArchI) tgz(lmfh io.Reader, wfh io.Writer, buf []byte) (err error) {
 		tw   = tar.NewWriter(gzw)
 		nhdr = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
 	)
-	cos.SetAuxTarHeader(&nhdr)
-	err = cos.CopyT(lmfh, tw, buf, true /*gzip*/)
+	archive.SetAuxTarHeader(&nhdr)
+	err = archive.CopyT(lmfh, tw, buf, true /*gzip*/)
 	if err == nil {
 		if err = tw.WriteHeader(&nhdr); err == nil {
 			_, err = io.CopyBuffer(tw, a.r, buf)
@@ -1639,7 +1620,7 @@ func (a *apndArchI) zip(lmfh io.ReaderAt, size int64, wfh io.Writer, buf []byte)
 			Modified:           a.started,
 		}
 	)
-	err = cos.CopyZ(lmfh, size, zw, buf)
+	err = archive.CopyZ(lmfh, size, zw, buf)
 	if err == nil {
 		var zipw io.Writer
 		zipw, err = zw.CreateHeader(&hdr)

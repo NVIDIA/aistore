@@ -113,7 +113,7 @@ func NewMountpath(mpath string) (mi *Mountpath, err error) {
 		return
 	}
 	if err = cos.Stat(cleanMpath); err != nil {
-		return nil, cmn.NewErrNotFound("mountpath %q", mpath)
+		return nil, cos.NewErrNotFound("mountpath %q", mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
 		return

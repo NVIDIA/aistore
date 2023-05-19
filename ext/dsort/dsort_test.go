@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -145,7 +146,7 @@ type testContext struct {
 func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	// Initialize dSort manager
 	rs := &ParsedRequestSpec{
-		Extension: cos.ExtTar,
+		Extension: archive.ExtTar,
 		Algorithm: &SortAlgorithm{
 			FormatType: extract.FormatTypeString,
 		},
@@ -456,7 +457,7 @@ var _ = Describe("Distributed Sort", func() {
 								Decreasing: true,
 								FormatType: extract.FormatTypeString,
 							},
-							Extension:   cos.ExtTar,
+							Extension:   archive.ExtTar,
 							MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
 							DSorterType: DSorterGeneralType,
 						}

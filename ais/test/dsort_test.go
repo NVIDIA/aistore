@@ -19,14 +19,15 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
-	"github.com/NVIDIA/aistore/tools/archive"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tarch"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -180,7 +181,7 @@ func (df *dsortFramework) init() {
 		df.outputTempl = "output-{00000..10000}"
 	}
 	if df.extension == "" {
-		df.extension = cos.ExtTar
+		df.extension = archive.ExtTar
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -267,18 +268,18 @@ func (df *dsortFramework) createInputShards() {
 				tarName     string
 			)
 			if df.algorithm.Kind == dsort.SortKindContent {
-				tarName = path + cos.ExtTar
+				tarName = path + archive.ExtTar
 			} else {
 				tarName = path + df.extension
 			}
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = archive.CreateTarWithCustomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
-			} else if df.extension == cos.ExtTar {
-				err = archive.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
-			} else if df.extension == cos.ExtTarTgz {
-				err = archive.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
-			} else if df.extension == cos.ExtZip {
-				err = archive.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
+				err = tarch.CreateTarWithCustomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+			} else if df.extension == archive.ExtTar {
+				err = tarch.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+			} else if df.extension == archive.ExtTarTgz {
+				err = tarch.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+			} else if df.extension == archive.ExtZip {
+				err = tarch.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
 			} else {
 				df.m.t.Fail()
 			}
@@ -308,7 +309,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	var lastValue any
 
 	gzipped := false
-	if df.extension != cos.ExtTar {
+	if df.extension != archive.ExtTar {
 		gzipped = true
 	}
 
@@ -343,7 +344,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		tassert.CheckFatal(df.m.t, err)
 
 		if df.algorithm.Kind == dsort.SortKindContent {
-			files, err := archive.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
+			files, err := tarch.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
 			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
 				if file.Ext == df.algorithm.Extension {
@@ -383,10 +384,10 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		} else {
 			var files []os.FileInfo
 
-			if df.extension == cos.ExtTar || df.extension == cos.ExtTarTgz {
-				files, err = archive.GetFileInfosFromTarBuffer(buffer, gzipped)
-			} else if df.extension == cos.ExtZip {
-				files, err = archive.GetFileInfosFromZipBuffer(buffer)
+			if df.extension == archive.ExtTar || df.extension == archive.ExtTarTgz {
+				files, err = tarch.GetFileInfosFromTarBuffer(buffer, gzipped)
+			} else if df.extension == archive.ExtZip {
+				files, err = tarch.GetFileInfosFromZipBuffer(buffer)
 			}
 
 			tassert.CheckFatal(df.m.t, err)
@@ -510,7 +511,7 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 		_, err := api.GetObject(df.baseParams, bck, obj.Name, &getArgs)
 		tassert.CheckFatal(df.m.t, err)
 
-		files, err := archive.GetFileInfosFromTarBuffer(buffer, false)
+		files, err := tarch.GetFileInfosFromTarBuffer(buffer, false)
 		tassert.CheckFatal(df.m.t, err)
 
 		shard := shardRecords{
@@ -932,7 +933,7 @@ func TestDistributedSortWithCompressionAndDisk(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       200,
 					fileInTarballCnt: 50,
-					extension:        cos.ExtTarTgz,
+					extension:        archive.ExtTarTgz,
 					maxMemUsage:      "1KB",
 				}
 			)
@@ -1030,7 +1031,7 @@ func TestDistributedSortWithMemoryAndDiskAndCompression(t *testing.T) {
 			tarballCnt:        400,
 			fileInTarballSize: cos.MiB,
 			fileInTarballCnt:  5,
-			extension:         cos.ExtTarTgz,
+			extension:         archive.ExtTarTgz,
 		}
 		mem sys.MemStat
 	)
@@ -1135,7 +1136,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 					dsorterType:      dsorterType,
 					tarballCnt:       500,
 					fileInTarballCnt: 50,
-					extension:        cos.ExtTarTgz,
+					extension:        archive.ExtTarTgz,
 					maxMemUsage:      "99%",
 				}
 			)
@@ -1702,7 +1703,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					tarballCnt:       500,
 					tarballCntToSkip: 50,
 					fileInTarballCnt: 200,
-					extension:        cos.ExtTar,
+					extension:        archive.ExtTar,
 				}
 			)
 
@@ -1760,7 +1761,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					tarballCnt:            500,
 					fileInTarballCnt:      200,
 					recordDuplicationsCnt: 50,
-					extension:             cos.ExtTar,
+					extension:             archive.ExtTar,
 				}
 			)
 

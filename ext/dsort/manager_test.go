@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster/mock"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -33,7 +34,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cos.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: archive.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeFalse())
 	})
@@ -42,7 +43,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cos.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: archive.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -51,7 +52,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cos.ExtTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: archive.ExtTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -60,7 +61,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: cos.ExtZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: archive.ExtZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})
@@ -270,7 +271,7 @@ func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
 				ObjectFileType: "abc",
 				StoreType:      "ab",
 				Offset:         rand.Int63(),
-				MetadataSize:   cos.TarBlockSize,
+				MetadataSize:   archive.TarBlockSize,
 				Size:           rand.Int63(),
 				Extension:      "." + trand.String(4),
 			})

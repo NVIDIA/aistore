@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
-package archive
+package tarch
 
 import (
 	"archive/tar"
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
@@ -95,7 +96,7 @@ func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
 }
 
 func isGzipped(filename string) bool {
-	return strings.HasSuffix(filename, cos.ExtTgz) || strings.HasSuffix(filename, cos.ExtTarTgz)
+	return strings.HasSuffix(filename, archive.ExtTgz) || strings.HasSuffix(filename, archive.ExtTarTgz)
 }
 
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.

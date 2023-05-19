@@ -253,7 +253,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := cmn.NewErrNotFound("%s job %q", DSortName, managerUUID)
+		err := cos.NewErrNotFound("%s job %q", DSortName, managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}

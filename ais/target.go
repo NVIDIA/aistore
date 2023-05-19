@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -745,7 +746,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	)
 	switch {
 	case apireq.dpq.archpath != "": // apc.QparamArchpath
-		apireq.dpq.archmime, err = mimeFQN(t.smm, apireq.dpq.archmime, lom.FQN)
+		apireq.dpq.archmime, err = archive.MimeFQN(t.smm, apireq.dpq.archmime, lom.FQN)
 		if err != nil {
 			break
 		}
@@ -919,7 +920,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 
 	if !exists {
 		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			err = cmn.NewErrNotFound("%s: object %s", t, lom.Cname())
+			err = cos.NewErrNotFound("%s: object %s", t, lom.Cname())
 			return http.StatusNotFound, err
 		}
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -1019,7 +1020,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if _, err := cos.Mime(archMsg.Mime, archMsg.ArchName); err != nil {
+		if _, err := archive.Mime(archMsg.Mime, archMsg.ArchName); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1966,7 +1967,7 @@ func (p *proxy) reverseReqRemote(w http.ResponseWriter, r *http.Request, msg *ap
 		}
 	}
 	if !exists {
-		err = cmn.NewErrNotFound("%s: remote UUID/alias %q (%s)", p.si, aliasOrUUID, backend)
+		err = cos.NewErrNotFound("%s: remote UUID/alias %q (%s)", p.si, aliasOrUUID, backend)
 		p.writeErr(w, r, err)
 		return err
 	}

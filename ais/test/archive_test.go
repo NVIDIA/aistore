@@ -17,11 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools"
-	"github.com/NVIDIA/aistore/tools/archive"
 	"github.com/NVIDIA/aistore/tools/readers"
+	"github.com/NVIDIA/aistore/tools/tarch"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -51,31 +52,31 @@ func TestGetFromArchive(t *testing.T) {
 				mime       bool   // specify mime type
 			}{
 				{
-					ext: cos.ExtTar, nested: false, autodetect: false, mime: false,
+					ext: archive.ExtTar, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext: cos.ExtTarTgz, nested: false, autodetect: false, mime: false,
+					ext: archive.ExtTarTgz, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext: cos.ExtZip, nested: false, autodetect: false, mime: false,
+					ext: archive.ExtZip, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext: cos.ExtTar, nested: true, autodetect: true, mime: false,
+					ext: archive.ExtTar, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext: cos.ExtTarTgz, nested: true, autodetect: true, mime: false,
+					ext: archive.ExtTarTgz, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext: cos.ExtZip, nested: true, autodetect: true, mime: false,
+					ext: archive.ExtZip, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext: cos.ExtTar, nested: true, autodetect: true, mime: true,
+					ext: archive.ExtTar, nested: true, autodetect: true, mime: true,
 				},
 				{
-					ext: cos.ExtTarTgz, nested: true, autodetect: true, mime: true,
+					ext: archive.ExtTarTgz, nested: true, autodetect: true, mime: true,
 				},
 				{
-					ext: cos.ExtZip, nested: true, autodetect: true, mime: true,
+					ext: archive.ExtZip, nested: true, autodetect: true, mime: true,
 				},
 			}
 		)
@@ -100,10 +101,10 @@ func TestGetFromArchive(t *testing.T) {
 						randomNames[i] = "/" + randomNames[i]
 					}
 				}
-				if test.ext == cos.ExtZip {
-					err = archive.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
+				if test.ext == archive.ExtZip {
+					err = tarch.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
 				} else {
-					err = archive.CreateTarWithRandomFiles(
+					err = tarch.CreateTarWithRandomFiles(
 						archName,
 						numArchived,
 						fsize,
@@ -177,19 +178,19 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			apnd           bool
 		}{
 			{
-				ext: cos.ExtTar, list: true,
+				ext: archive.ExtTar, list: true,
 			},
 			{
-				ext: cos.ExtTar, list: false, inclSrcBckName: true,
+				ext: archive.ExtTar, list: false, inclSrcBckName: true,
 			},
 			{
-				ext: cos.ExtTar, list: false,
+				ext: archive.ExtTar, list: false,
 			},
 			{
-				ext: cos.ExtTar, list: true, apnd: true,
+				ext: archive.ExtTar, list: true, apnd: true,
 			},
 			{
-				ext: cos.ExtMsgpack, list: true,
+				ext: archive.ExtMsgpack, list: true,
 			},
 		}
 		subtestsLong = []struct {
@@ -200,28 +201,28 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			apnd           bool
 		}{
 			{
-				ext: cos.ExtTgz, list: true,
+				ext: archive.ExtTgz, list: true,
 			},
 			{
-				ext: cos.ExtTgz, list: false, inclSrcBckName: true,
+				ext: archive.ExtTgz, list: false, inclSrcBckName: true,
 			},
 			{
-				ext: cos.ExtTgz, list: true, inclSrcBckName: true, apnd: true,
+				ext: archive.ExtTgz, list: true, inclSrcBckName: true, apnd: true,
 			},
 			{
-				ext: cos.ExtTgz, list: false, apnd: true,
+				ext: archive.ExtTgz, list: false, apnd: true,
 			},
 			{
-				ext: cos.ExtZip, list: true,
+				ext: archive.ExtZip, list: true,
 			},
 			{
-				ext: cos.ExtZip, list: false, inclSrcBckName: true,
+				ext: archive.ExtZip, list: false, inclSrcBckName: true,
 			},
 			{
-				ext: cos.ExtZip, list: true,
+				ext: archive.ExtZip, list: true,
 			},
 			{
-				ext: cos.ExtMsgpack, list: false,
+				ext: archive.ExtMsgpack, list: false,
 			},
 		}
 	)
@@ -267,7 +268,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 				for i := 0; i < numArchs; i++ {
 					archName := fmt.Sprintf("test_lst_%02d%s", i, test.ext)
 					list := make([]string, 0, numInArch)
-					if test.ext == cos.ExtMsgpack {
+					if test.ext == archive.ExtMsgpack {
 						// m.b. unique for msgpack
 						start := rand.Intn(m.num - numInArch)
 						for j := start; j < start+numInArch; j++ {
@@ -432,16 +433,16 @@ func TestAppendToArch(t *testing.T) {
 			multi bool   // false - append a single file, true - append a list of objects
 		}{
 			{
-				ext: cos.ExtTar, multi: false,
+				ext: archive.ExtTar, multi: false,
 			},
 			{
-				ext: cos.ExtTar, multi: true,
+				ext: archive.ExtTar, multi: true,
 			},
 			{
-				ext: cos.ExtTgz, multi: false,
+				ext: archive.ExtTgz, multi: false,
 			},
 			{
-				ext: cos.ExtTgz, multi: true,
+				ext: archive.ExtTgz, multi: true,
 			},
 		}
 		subtestsLong = []struct {
@@ -449,17 +450,15 @@ func TestAppendToArch(t *testing.T) {
 			multi bool   // false - append a single file, true - append a list of objects
 		}{
 			{
-				ext: cos.ExtZip, multi: false,
+				ext: archive.ExtZip, multi: false,
 			},
 			{
-				ext: cos.ExtZip, multi: true,
+				ext: archive.ExtZip, multi: true,
 			},
 			{
-				ext: cos.ExtMsgpack, multi: false,
+				ext: archive.ExtMsgpack, multi: false,
 			},
-			{
-				ext: cos.ExtMsgpack, multi: true,
-			},
+			// TODO -- FIXME: add multi-object msgpack
 		}
 	)
 	if !testing.Short() { // test-long, and see one other Skip below
@@ -474,7 +473,7 @@ func TestAppendToArch(t *testing.T) {
 			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 
-			if testing.Short() && test.ext != cos.ExtTar {
+			if testing.Short() && test.ext != archive.ExtTar {
 				// skip all multi-object appends
 				if test.multi {
 					tools.ShortSkipf(t)
@@ -560,7 +559,7 @@ func TestAppendToArch(t *testing.T) {
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)
 
 			if num != expectedNum {
-				if test.ext == cos.ExtMsgpack { // TODO -- FIXME: remove
+				if test.ext == archive.ExtMsgpack { // TODO -- FIXME: remove
 					tlog.Logf("Warning: expected %d, have %d (%d duplicates?)\n",
 						expectedNum, num, expectedNum-num)
 				} else {

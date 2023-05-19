@@ -291,7 +291,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 
 	// never started
 	if xctn == nil {
-		err := cmn.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
+		err := cos.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
 		if silent {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
 		} else {

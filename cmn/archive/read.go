@@ -1,8 +1,8 @@
-// Package ais provides core functionality for the AIStore object storage.
+// Package archive
 /*
  * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package ais
+package archive
 
 import (
 	"archive/tar"
@@ -14,10 +14,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/vmihailenco/msgpack"
 )
 
@@ -50,9 +48,9 @@ type (
 )
 
 var (
-	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: cos.ExtTar}
-	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: cos.ExtTarTgz}
-	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: cos.ExtZip}
+	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}
+	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarTgz}
+	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: ExtZip}
 
 	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
 )
@@ -69,7 +67,7 @@ func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
 func notFoundInArch(filename, archname string) error {
-	return cmn.NewErrNotFound("file %q in archive %q", filename, archname)
+	return cos.NewErrNotFound("file %q in archive %q", filename, archname)
 }
 
 //
@@ -77,7 +75,23 @@ func notFoundInArch(filename, archname string) error {
 // to read the corresponding file from archive
 //
 
-func freadTar(lreader io.Reader, filename, archname string) (*cslLimited, error) {
+func Read(file *os.File, archname, filename, mime string, size int64) (cos.ReadCloseSizer, error) {
+	switch mime {
+	case ExtTar:
+		return readTar(file, filename, archname)
+	case ExtTarTgz, ExtTgz:
+		return readTgz(file, filename, archname)
+	case ExtZip:
+		return readZip(file, filename, archname, size)
+	case ExtMsgpack:
+		return readMsgpack(file, filename, archname)
+	default:
+		debug.Assert(false)
+		return nil, NewUnknownMimeError(mime)
+	}
+}
+
+func readTar(lreader io.Reader, filename, archname string) (*cslLimited, error) {
 	tr := tar.NewReader(lreader)
 	for {
 		hdr, err := tr.Next()
@@ -93,7 +107,7 @@ func freadTar(lreader io.Reader, filename, archname string) (*cslLimited, error)
 	}
 }
 
-func freadTgz(lreader io.Reader, filename, archname string) (csc *cslClose, err error) {
+func readTgz(lreader io.Reader, filename, archname string) (csc *cslClose, err error) {
 	var (
 		gzr *gzip.Reader
 		csl *cslLimited
@@ -101,14 +115,14 @@ func freadTgz(lreader io.Reader, filename, archname string) (csc *cslClose, err 
 	if gzr, err = gzip.NewReader(lreader); err != nil {
 		return
 	}
-	if csl, err = freadTar(gzr, filename, archname); err != nil {
+	if csl, err = readTar(gzr, filename, archname); err != nil {
 		return
 	}
 	csc = &cslClose{gzr: gzr /*to close*/, R: csl /*to read from*/, N: csl.N /*size*/}
 	return
 }
 
-func freadZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
+func readZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
 	var zr *zip.Reader
 	if zr, err = zip.NewReader(lreaderAt, size); err != nil {
 		return
@@ -128,7 +142,7 @@ func freadZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64)
 	return
 }
 
-func freadMsgpack(lreaderAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
+func readMsgpack(lreaderAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
 	var (
 		dst any
 		dec = msgpack.NewDecoder(lreaderAt)
@@ -167,74 +181,4 @@ func archNamesEq(n1, n2 string) bool {
 		n2 = n2[1:]
 	}
 	return n1 == n2
-}
-
-//
-// target Mime utils (see also cmn/cos/archive.go)
-//
-
-func mimeByMagic(buf []byte, n int, magic detect) (ok bool) {
-	if n < sizeDetectMime {
-		return
-	}
-	if !ok {
-		// finally, compare signature
-		ok = n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig)
-	}
-	return
-}
-
-// a superset of cos.Mime (adds magic)
-func mimeFile(file *os.File, smm *memsys.MMSA, mime, filename string) (m string, err error) {
-	// simple first
-	if mime != "" {
-		// user-defined goi.archive.mime (apc.QparamArchmime)
-		// means there will be no attempting to detect signature
-		return cos.ByMime(mime)
-	}
-	if m, err = cos.MimeByExt(filename); err == nil {
-		return
-	}
-	// otherwise, by magic
-	var (
-		buf, slab = smm.AllocSize(sizeDetectMime)
-		n         int
-	)
-	n, err = file.Read(buf)
-	if err != nil {
-		return
-	}
-	if n < sizeDetectMime {
-		file.Seek(0, io.SeekStart)
-		return "", cos.NewUnknownMimeError(filename + " is too short")
-	}
-	for _, magic := range allMagics {
-		if mimeByMagic(buf, n, magic) {
-			m = magic.mime
-			break
-		}
-	}
-	_, err = file.Seek(0, io.SeekStart)
-	debug.AssertNoErr(err)
-	slab.Free(buf)
-	return
-}
-
-// _may_ open file and call the above
-func mimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
-	if mime != "" {
-		// user-defined mime (apc.QparamArchmime)
-		return cos.ByMime(mime)
-	}
-	mime, err = cos.MimeByExt(fqn)
-	if err == nil {
-		return mime, nil
-	}
-	fh, err := os.Open(fqn)
-	if err != nil {
-		return "", err
-	}
-	mime, err = mimeFile(fh, smm, mime, fqn)
-	cos.Close(fh)
-	return mime, err
 }

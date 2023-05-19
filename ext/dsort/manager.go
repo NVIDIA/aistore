@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -470,11 +471,11 @@ func (m *Manager) setExtractCreator() (err error) {
 
 	var extractCreator extract.Creator
 	switch m.rs.Extension {
-	case cos.ExtTar:
+	case archive.ExtTar:
 		extractCreator = extract.NewTarExtractCreator(m.ctx.t)
-	case cos.ExtTarTgz, cos.ExtTgz:
+	case archive.ExtTarTgz, archive.ExtTgz:
 		extractCreator = extract.NewTargzExtractCreator(m.ctx.t)
-	case cos.ExtZip:
+	case archive.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
 		cos.Assertf(false, "unknown extension %s", m.rs.Extension)

@@ -345,7 +345,7 @@ func StopAll(t cluster.Target) {
 func GetCommunicator(etlName string, lsnode *meta.Snode) (Communicator, error) {
 	c, exists := reg.get(etlName)
 	if !exists {
-		return nil, cmn.NewErrNotFound("%s: etl[%s]", lsnode, etlName)
+		return nil, cos.NewErrNotFound("%s: etl[%s]", lsnode, etlName)
 	}
 	return c, nil
 }
@@ -396,7 +396,7 @@ func PodMetrics(t cluster.Target, etlName string) (*CPUMemUsed, error) {
 	if err == nil {
 		return &CPUMemUsed{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
-	if cmn.IsErrNotFound(err) {
+	if cos.IsErrNotFound(err) {
 		return nil, err
 	}
 	if metricsErr := client.CheckMetricsAvailability(); metricsErr != nil {

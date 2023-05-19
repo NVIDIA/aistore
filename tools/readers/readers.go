@@ -1,6 +1,6 @@
 // Package readers provides implementation for common reader types
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package readers
 
@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/tools/archive"
+	"github.com/NVIDIA/aistore/tools/tarch"
 )
 
 const (
@@ -330,7 +330,7 @@ func NewReader(p ParamReader, cksumType string) (Reader, error) {
 	case ReaderTypeFile:
 		return NewFileReader(p.Path, p.Name, p.Size, cksumType)
 	case ReaderTypeTar:
-		return NewTarReader(p.Size, cksumType)
+		return newTarReader(p.Size, cksumType)
 	default:
 		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
 	}
@@ -386,13 +386,14 @@ func (r *tarReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
-func NewTarReader(size int64, cksumType string) (r Reader, err error) {
+func newTarReader(size int64, cksumType string) (r Reader, err error) {
 	var (
 		singleFileSize = cos.MinI64(size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
 
-	err = archive.CreateTarWithCustomFilesToWriter(buff, cos.Max(int(size/singleFileSize), 1), int(singleFileSize), extract.FormatTypeInt, ".cls", true)
+	err = tarch.CreateTarWithCustomFilesToWriter(buff, cos.Max(int(size/singleFileSize), 1),
+		int(singleFileSize), extract.FormatTypeInt, ".cls", true)
 	if err != nil {
 		return nil, err
 	}

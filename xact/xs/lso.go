@@ -6,14 +6,10 @@
 package xs
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -27,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
@@ -35,7 +32,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/tinylib/msgp/msgp"
-	"github.com/vmihailenco/msgpack"
 )
 
 // `on-demand` per list-objects request
@@ -67,11 +63,6 @@ type (
 		Err    error
 		Lst    *cmn.LsoResult
 		Status int
-	}
-	// archived file
-	archEntry struct {
-		name string
-		size uint64 // uncompressed size
 	}
 )
 
@@ -534,15 +525,15 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	}
 
 	// arch
-	archList, err := listArchive(fqn)
+	archList, err := archive.List(fqn)
 	if archList == nil || err != nil {
 		return err
 	}
 	for _, archEntry := range archList {
 		e := &cmn.LsoEntry{
-			Name:  path.Join(entry.Name, archEntry.name),
+			Name:  path.Join(entry.Name, archEntry.Name),
 			Flags: entry.Flags | apc.EntryInArch,
-			Size:  int64(archEntry.size),
+			Size:  int64(archEntry.Size),
 		}
 		select {
 		case r.walk.pageCh <- e:
@@ -560,124 +551,6 @@ func (r *LsoXact) Snap() (snap *cluster.Snap) {
 
 	snap.IdleX = r.IsIdle()
 	return
-}
-
-//
-// listing archives
-//
-
-func listArchive(fqn string) ([]*archEntry, error) {
-	var arch string
-	for _, ext := range cos.ArchExtensions {
-		if strings.HasSuffix(fqn, ext) {
-			arch = ext
-			break
-		}
-	}
-	if arch == "" {
-		return nil, nil
-	}
-	// list the archive content
-	var (
-		archList []*archEntry
-		finfo    os.FileInfo
-	)
-	f, err := os.Open(fqn)
-	if err == nil {
-		switch arch {
-		case cos.ExtTar:
-			archList, err = listTar(f)
-		case cos.ExtTgz, cos.ExtTarTgz:
-			archList, err = listTgz(f)
-		case cos.ExtZip:
-			finfo, err = os.Stat(fqn)
-			if err == nil {
-				archList, err = listZip(f, finfo.Size())
-			}
-		case cos.ExtMsgpack:
-			archList, err = listMsgpack(f)
-		default:
-			debug.Assert(false, arch)
-		}
-	}
-	f.Close()
-	if err != nil {
-		return nil, err
-	}
-	// Files in archive can be in arbitrary order, but paging requires them sorted
-	sort.Slice(archList, func(i, j int) bool { return archList[i].name < archList[j].name })
-	return archList, nil
-}
-
-// list: tar, tgz, zip, msgpack
-func listTar(reader io.Reader) ([]*archEntry, error) {
-	fileList := make([]*archEntry, 0, 8)
-	tr := tar.NewReader(reader)
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err == io.EOF {
-				return fileList, nil
-			}
-			return nil, err
-		}
-		if hdr.FileInfo().IsDir() {
-			continue
-		}
-		e := &archEntry{name: hdr.Name, size: uint64(hdr.Size)}
-		fileList = append(fileList, e)
-	}
-}
-
-func listTgz(reader io.Reader) ([]*archEntry, error) {
-	gzr, err := gzip.NewReader(reader)
-	if err != nil {
-		return nil, err
-	}
-	return listTar(gzr)
-}
-
-func listZip(readerAt cos.ReadReaderAt, size int64) ([]*archEntry, error) {
-	zr, err := zip.NewReader(readerAt, size)
-	if err != nil {
-		return nil, err
-	}
-	fileList := make([]*archEntry, 0, 8)
-	for _, f := range zr.File {
-		finfo := f.FileInfo()
-		if finfo.IsDir() {
-			continue
-		}
-		e := &archEntry{
-			name: f.FileHeader.Name,
-			size: f.FileHeader.UncompressedSize64,
-		}
-		fileList = append(fileList, e)
-	}
-	return fileList, nil
-}
-
-func listMsgpack(readerAt cos.ReadReaderAt) ([]*archEntry, error) {
-	var (
-		dst any
-		dec = msgpack.NewDecoder(readerAt)
-	)
-	err := dec.Decode(&dst)
-	if err != nil {
-		return nil, err
-	}
-	out, ok := dst.(map[string]any)
-	if !ok {
-		debug.FailTypeCast(dst)
-		return nil, fmt.Errorf("unexpected type (%T)", dst)
-	}
-	fileList := make([]*archEntry, 0, len(out))
-	for fullname, v := range out {
-		vout := v.([]byte)
-		e := &archEntry{name: fullname, size: uint64(len(vout))}
-		fileList = append(fileList, e)
-	}
-	return fileList, nil
 }
 
 //

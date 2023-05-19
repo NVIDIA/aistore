@@ -126,9 +126,6 @@ type (
 		//
 		timestamp time.Time
 	}
-	ErrNotFound struct {
-		what string
-	}
 	ErrInitBackend struct {
 		Provider string
 	}
@@ -542,19 +539,6 @@ func AsErrAborted(err error) (errAborted *ErrAborted) {
 	return
 }
 
-// ErrNotFound
-
-func NewErrNotFound(format string, a ...any) *ErrNotFound {
-	return &ErrNotFound{fmt.Sprintf(format, a...)}
-}
-
-func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
-
-func IsErrNotFound(err error) bool {
-	_, ok := err.(*ErrNotFound)
-	return ok
-}
-
 // ErrInitBackend & ErrMissingBackend
 
 func (e *ErrInitBackend) Error() string {
@@ -722,7 +706,7 @@ func IsErrObjNought(err error) bool {
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
 func isErrNotFoundExtended(err error) bool {
-	return IsErrNotFound(err) ||
+	return cos.IsErrNotFound(err) ||
 		IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
 		IsObjNotExist(err) ||
 		IsErrMountpathNotFound(err) ||
@@ -746,7 +730,7 @@ func IsNotExist(err error) bool {
 	if errors.Is(err, iofs.ErrNotExist) {
 		return true
 	}
-	return IsErrNotFound(err)
+	return cos.IsErrNotFound(err)
 }
 
 func IsFileAlreadyClosed(err error) bool {
@@ -984,7 +968,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	)
 
 	// assign status (in order of priority)
-	if IsErrNotFound(err) {
+	if cos.IsErrNotFound(err) {
 		status = http.StatusNotFound
 	} else if l > 0 {
 		status = opts[0]

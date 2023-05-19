@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -185,43 +186,43 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 		// construct format-specific writer
 		switch msg.Mime {
-		case cos.ExtTar:
+		case archive.ExtTar:
 			tw := &tarWriter{}
 			tw.init(wi)
 			if lmfh != nil {
 				// (for subsequent multi-object APPEND)
-				err = cos.CopyT(lmfh, tw.tw, tw.buf, false)
+				err = archive.CopyT(lmfh, tw.tw, tw.buf, false)
 				cos.Close(lmfh)
 				if err != nil {
 					tw.fini()
 					return
 				}
 			}
-		case cos.ExtTgz, cos.ExtTarTgz:
+		case archive.ExtTgz, archive.ExtTarTgz:
 			tzw := &tgzWriter{}
 			tzw.init(wi)
 			if lmfh != nil {
 				// ditto
-				err = cos.CopyT(lmfh, tzw.tw.tw, tzw.tw.buf, true /*gzip*/)
+				err = archive.CopyT(lmfh, tzw.tw.tw, tzw.tw.buf, true /*gzip*/)
 				cos.Close(lmfh)
 				if err != nil {
 					tzw.fini()
 					return
 				}
 			}
-		case cos.ExtZip:
+		case archive.ExtZip:
 			zw := &zipWriter{}
 			zw.init(wi)
 			if lmfh != nil {
 				// ditto
-				err = cos.CopyZ(lmfh, finfo.Size(), zw.zw, zw.buf)
+				err = archive.CopyZ(lmfh, finfo.Size(), zw.zw, zw.buf)
 				cos.Close(lmfh)
 				if err != nil {
 					zw.fini()
 					return
 				}
 			}
-		case cos.ExtMsgpack:
+		case archive.ExtMsgpack:
 			mpw := &msgpackWriter{}
 			mpw.init(wi)
 		default:
@@ -453,13 +454,13 @@ func (r *XactArch) Snap() (snap *cluster.Snap) {
 
 func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 	msg := wi.msg
-	if msg.Mime == cos.ExtTar {
-		if err = wi.openTarForAppend(); err == nil || err != cos.ErrTarIsEmpty {
+	if msg.Mime == archive.ExtTar {
+		if err = wi.openTarForAppend(); err == nil || err != archive.ErrTarIsEmpty {
 			return
 		}
 	}
 	switch msg.Mime {
-	case cos.ExtTar, cos.ExtTgz, cos.ExtTarTgz, cos.ExtZip:
+	case archive.ExtTar, archive.ExtTgz, archive.ExtTarTgz, archive.ExtZip:
 		// to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
 		lmfh, err = os.Open(wi.lom.FQN)
 		if err != nil {
@@ -479,7 +480,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 	if err = os.Rename(wi.lom.FQN, wi.fqn); err != nil {
 		return
 	}
-	wi.fh, err = cos.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
+	wi.fh, err = archive.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
 	if err != nil {
 		goto roll
 	}
@@ -612,7 +613,7 @@ func (tw *tarWriter) write(fullname string, oah cmn.ObjAttrsHolder, reader io.Re
 		Size:     oah.SizeBytes(),
 		ModTime:  time.Unix(0, oah.AtimeUnix()),
 	}
-	cos.SetAuxTarHeader(&hdr)
+	archive.SetAuxTarHeader(&hdr)
 	// one at a time
 	tw.archwi.wmu.Lock()
 	if err = tw.tw.WriteHeader(&hdr); err == nil {

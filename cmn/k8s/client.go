@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
@@ -182,7 +181,7 @@ func (*defaultClient) Metrics(podName string) (cpuCores float64, freeMem int64, 
 	ms, err := msgetter.Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
-			err = cmn.NewErrNotFound("metrics for pod %q", podName)
+			err = cos.NewErrNotFound("metrics for pod %q", podName)
 		}
 		return 0, 0, err
 	}

@@ -20,6 +20,9 @@ import (
 )
 
 type (
+	ErrNotFound struct {
+		what string
+	}
 	ErrSignal struct {
 		signal syscall.Signal
 	}
@@ -29,9 +32,20 @@ type (
 	}
 )
 
-//////////////
-// ErrValue //
-//////////////
+// ErrNotFound
+
+func NewErrNotFound(format string, a ...any) *ErrNotFound {
+	return &ErrNotFound{fmt.Sprintf(format, a...)}
+}
+
+func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
+
+func IsErrNotFound(err error) bool {
+	_, ok := err.(*ErrNotFound)
+	return ok
+}
+
+// ErrValue
 
 func (ea *ErrValue) Store(err error) {
 	if ea.cnt.Add(1) == 1 {
@@ -106,9 +120,9 @@ func IsUnreachable(err error, status int) bool {
 		status == http.StatusBadGateway
 }
 
-///////////////
-// ErrSignal //
-///////////////
+//
+// ErrSignal
+//
 
 // https://tldp.org/LDP/abs/html/exitcodes.html
 func (e *ErrSignal) ExitCode() int               { return 128 + int(e.signal) }

@@ -1218,7 +1218,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cmn.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
+		err := cos.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -1396,7 +1396,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cmn.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
+		err := cos.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -267,7 +268,7 @@ func (xld *Xact) checkJob(req *request) (*dljob, error) {
 	dljob, err := dlStore.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
-		errV := cmn.NewErrNotFound("%s: download job %q", xld.t, req.id)
+		errV := cos.NewErrNotFound("%s: download job %q", xld.t, req.id)
 		req.errRsp(errV, http.StatusNotFound)
 		return nil, errV
 	}
