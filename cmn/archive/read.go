@@ -19,10 +19,6 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
-const (
-	sizeDetectMime = 512
-)
-
 type (
 	cslLimited struct {
 		io.LimitedReader
@@ -85,9 +81,10 @@ func Read(file *os.File, archname, filename, mime string, size int64) (cos.ReadC
 		return readZip(file, filename, archname, size)
 	case ExtMsgpack:
 		return readMsgpack(file, filename, archname)
-	default:
-		debug.Assert(false)
-		return nil, NewUnknownMimeError(mime)
+	default: // unlikely
+		err := NewErrUnknownMime(mime)
+		debug.AssertNoErr(err)
+		return nil, err
 	}
 }
 

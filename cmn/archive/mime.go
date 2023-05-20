@@ -5,8 +5,8 @@
 package archive
 
 import (
-	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -16,18 +16,33 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// compare w/ ais/archive.go `mimeFQN` and friends
-func Mime(mime, filename string) (string, error) {
+// motivation: prevent from creating archives with non-standard extensions
+func Strict(mime, filename string) (m string, err error) {
 	if mime != "" {
-		return ByMime(mime)
+		if m, err = normalize(mime); err != nil {
+			return
+		}
 	}
-	return MimeByExt(filename)
+	m, err = byExt(filename)
+	if err != nil || mime == "" {
+		return
+	}
+	if mime != m {
+		// user-defined (non-empty) MIME must correspond
+		err = fmt.Errorf("mime mismatch %q vs %q", mime, m)
+	}
+	return
 }
 
-// user-specified (intended) format always takes precedence
-// compare w/ ais/archive.go `mimeFQN`
-func ByMime(mime string) (ext string, err error) {
-	debug.Assert(mime != "", mime)
+func Mime(mime, filename string) (string, error) {
+	if mime != "" {
+		return normalize(mime)
+	}
+	return byExt(filename)
+}
+
+func normalize(mime string) (string, error) {
+	debug.Assert(mime != "", "mime empty")
 	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
 		return ExtTarTgz, nil
 	}
@@ -36,95 +51,82 @@ func ByMime(mime string) (ext string, err error) {
 			return ext, nil
 		}
 	}
-	return "", NewUnknownMimeError(mime)
+	return "", NewErrUnknownMime(mime)
 }
 
 // by filename extension
-func MimeByExt(filename string) (ext string, err error) {
+func byExt(filename string) (string, error) {
 	for _, ext := range ArchExtensions {
 		if strings.HasSuffix(filename, ext) {
 			return ext, nil
 		}
 	}
-	err = NewUnknownMimeError(filename)
+	return "", NewErrUnknownFileExt(filename)
+}
+
+const sizeDetectMime = 512
+
+// NOTE convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
+func MimeFile(file *os.File, smm *memsys.MMSA, mime, archname string) (m string, err error) {
+	m, err = Mime(mime, archname)
+	if err == nil || IsErrUnknownMime(err) {
+		return
+	}
+	if smm == nil {
+		err = NewErrUnknownFileExt(archname + " (not reading file magic)")
+		return
+	}
+	// by magic
+	var (
+		n         int
+		buf, slab = smm.AllocSize(sizeDetectMime)
+	)
+	m, n, err = _detect(file, archname, buf)
+	if n > 0 {
+		_, err = file.Seek(0, io.SeekStart)
+	}
+	slab.Free(buf)
 	return
 }
 
-// Exists for all ais-created/appended TARs - common code to set auxiliary bits in a header
 // NOTE:
-// - currently, not using os.Getuid/gid (or user.Current) to set Uid/Gid, and
-// - not calling standard tar.FileInfoHeader(finfo-of-the-file-to-archive) as well
-// - see also: /usr/local/go/src/archive/tar/common.go
-func SetAuxTarHeader(hdr *tar.Header) {
-	hdr.Mode = int64(cos.PermRWRR)
-}
-
-func mimeByMagic(buf []byte, n int, magic detect) (ok bool) {
-	if n < sizeDetectMime {
+// - on purpose redundant vs the above - not to open file if can be avoided
+// - convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
+func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
+	m, err = Mime(mime, archname)
+	if err == nil || IsErrUnknownMime(err) {
 		return
 	}
-	if !ok {
-		// finally, compare signature
-		ok = n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig)
-	}
-	return
-}
-
-// a superset of Mime above
-func MimeFile(file *os.File, smm *memsys.MMSA, mime, filename string) (m string, err error) {
-	// simple first
-	if mime != "" {
-		// user-defined goi.archive.mime (apc.QparamArchmime)
-		// means there will be no attempting to detect signature
-		return ByMime(mime)
-	}
-	if m, err = MimeByExt(filename); err == nil {
+	if smm == nil {
+		err = NewErrUnknownFileExt(archname + " (not reading file magic)")
 		return
 	}
-	// otherwise, by magic
-	return _detect(file, smm, filename)
-}
-
-// MAY open file and read the signature
-func MimeFQN(smm *memsys.MMSA, mime, fqn string) (_ string, err error) {
-	if mime != "" {
-		// user-defined mime (apc.QparamArchmime)
-		return ByMime(mime)
-	}
-	mime, err = MimeByExt(fqn)
-	if err == nil {
-		return mime, nil
-	}
-	fh, err := os.Open(fqn)
+	fh, err := os.Open(archname)
 	if err != nil {
 		return "", err
 	}
-	mime, err = _detect(fh, smm, fqn)
+	buf, slab := smm.AllocSize(sizeDetectMime)
+	m, _, err = _detect(fh, archname, buf)
+	slab.Free(buf)
 	cos.Close(fh)
-	return mime, err
+	return
 }
 
-func _detect(file *os.File, smm *memsys.MMSA, filename string) (m string, err error) {
-	var (
-		buf, slab = smm.AllocSize(sizeDetectMime)
-		n         int
-	)
+func _detect(file *os.File, archname string, buf []byte) (m string, n int, err error) {
 	n, err = file.Read(buf)
 	if err != nil {
 		return
 	}
 	if n < sizeDetectMime {
-		file.Seek(0, io.SeekStart)
-		return "", NewUnknownMimeError(filename + " is too short")
+		err = NewErrUnknownFileExt(archname + " (file too short)")
+		return
 	}
 	for _, magic := range allMagics {
-		if mimeByMagic(buf, n, magic) {
+		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
 			m = magic.mime
-			break
+			return // ok
 		}
 	}
-	_, err = file.Seek(0, io.SeekStart)
-	debug.AssertNoErr(err)
-	slab.Free(buf)
+	err = fmt.Errorf("failed to detect file signature in %q", archname)
 	return
 }

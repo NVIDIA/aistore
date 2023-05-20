@@ -1020,7 +1020,10 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if _, err := archive.Mime(archMsg.Mime, archMsg.ArchName); err != nil {
+		//
+		// NOTE: strict enforcement of the standard & supported file extensions
+		//
+		if _, err := archive.Strict(archMsg.Mime, archMsg.ArchName); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

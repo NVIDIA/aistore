@@ -19,8 +19,8 @@ type (
 	ArchiveMsg struct {
 		TxnUUID     string `json:"-"`        // internal use
 		FromBckName string `json:"-"`        // ditto
-		ArchName    string `json:"archname"` // must have one of the cos.ArchExtensions
-		Mime        string `json:"mime"`     // user-specified mime type takes precedence if defined
+		ArchName    string `json:"archname"` // one of the cos.ArchExtensions
+		Mime        string `json:"mime"`     // user-specified mime type (NOTE: takes precedence if defined)
 		ListRange
 		InclSrcBname     bool `json:"isbn"` // include source bucket name into the names of archived objects
 		AppendToExisting bool `json:"aate"` // adding a list or a range of objects to an existing archive

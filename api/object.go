@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -88,8 +87,10 @@ type (
 		// - we simply don't care.
 		SkipVC bool
 	}
+	// see related: `ArchiveMsg`
 	AppendToArchArgs struct {
-		ArchPath string
+		ArchPath string // filename _in_ archive
+		Mime     string // user-specified mime type (NOTE: takes precedence if defined)
 		PutArgs
 	}
 	PromoteArgs struct {
@@ -421,19 +422,18 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 // Append the content of a reader (`args.Reader` - e.g., an open file) to an existing
 // object formatted as one of the supported archives.
 // In other words, append to an existing archive.
-// For supported archival (mime) types, see cmn/cos/archive.go.
+// ---
+// For supported archival formats -- aka MIME types -- see cmn/cos/archive.go.
+// --
 // NOTE see also:
-//   - `api.CreateArchMultiObj(msg.AppendToExisting = true)`
-//   - `api.AppendObject`
+// - api.CreateArchMultiObj(msg.AppendToExisting = true)
+// - api.AppendObject
 func AppendToArch(args AppendToArchArgs) (err error) {
-	mime, err := archive.MimeByExt(args.ObjName) // TODO -- FIXME: must be consistent with GET from-arch
-	if err != nil {
-		return err
-	}
 	q := make(url.Values, 4)
 	q = args.Bck.AddToQuery(q)
 	q.Set(apc.QparamArchpath, args.ArchPath)
-	q.Set(apc.QparamArchmime, mime)
+	q.Set(apc.QparamArchmime, args.Mime)
+
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
