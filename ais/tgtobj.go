@@ -6,8 +6,6 @@ package ais
 
 import (
 	"archive/tar"
-	"archive/zip"
-	"compress/gzip"
 	"context"
 	"encoding"
 	"encoding/base64"
@@ -38,7 +36,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/vmihailenco/msgpack"
 )
 
 //
@@ -1489,7 +1486,8 @@ func (a *apndArchI) do() (int, error) {
 		}
 		// do - fast
 		if size, err = a.fast(fh); err == nil {
-			if err = a.finalize(size, workFQN); err == nil {
+			// NOTE: opt-out computing checksum
+			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
 			}
 		}
@@ -1504,9 +1502,8 @@ cpap: // copy + append
 		err       error
 		lmfh, wfh *os.File
 		workFQN   string
-		buf       []byte
-		slab      *memsys.Slab
-		size      int64
+		cksum     cos.CksumHashSize
+		writer    archive.Writer
 	)
 	lmfh, err = os.Open(a.lom.FQN)
 	if err != nil {
@@ -1520,30 +1517,21 @@ cpap: // copy + append
 	}
 
 	// copy + append
-	buf, slab = a.t.gmm.Alloc()
-	switch a.mime {
-	case archive.ExtTar:
-		err = a.tar(lmfh, wfh, buf)
-	case archive.ExtTgz, archive.ExtTarTgz:
-		err = a.tgz(lmfh, wfh, buf)
-	case archive.ExtZip:
-		err = a.zip(lmfh, a.lom.SizeBytes(), wfh, buf)
-	default:
-		debug.Assert(a.mime == archive.ExtMsgpack)
-		err = a.msgpack(lmfh, wfh)
+	cksum.Init(a.lom.CksumType())
+	writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
+	err = writer.Copy(lmfh, a.lom.SizeBytes())
+	if err == nil {
+		err = writer.Write(a.filename, a, a.r)
 	}
 
 	// cleanup and finalize
-	slab.Free(buf)
+	writer.Fini()
 	cos.Close(lmfh)
+	cos.Close(wfh)
 	if err == nil {
-		size, err = wfh.Seek(0, io.SeekCurrent)
-		cos.Close(wfh)
-		if err == nil {
-			err = a.finalize(size, workFQN)
-		}
+		cksum.Finalize()
+		err = a.finalize(cksum.Size, cksum.Clone(), workFQN)
 	} else {
-		cos.Close(wfh)
 		cos.RemoveFile(workFQN)
 	}
 	return a.reterr(err)
@@ -1576,91 +1564,7 @@ func (*apndArchI) reterr(err error) (int, error) {
 	return errCode, err
 }
 
-func (a *apndArchI) tar(lmfh io.Reader, wfh io.Writer, buf []byte) (err error) {
-	var (
-		tw   = tar.NewWriter(wfh)
-		nhdr = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
-	)
-	archive.SetAuxTarHeader(&nhdr)
-	err = archive.CopyT(lmfh, tw, buf, false)
-	if err == nil {
-		if err = tw.WriteHeader(&nhdr); err == nil {
-			_, err = io.CopyBuffer(tw, a.r, buf)
-		}
-	}
-	cos.Close(tw)
-	return
-}
-
-func (a *apndArchI) tgz(lmfh io.Reader, wfh io.Writer, buf []byte) (err error) {
-	var (
-		gzw  = gzip.NewWriter(wfh)
-		tw   = tar.NewWriter(gzw)
-		nhdr = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
-	)
-	archive.SetAuxTarHeader(&nhdr)
-	err = archive.CopyT(lmfh, tw, buf, true /*gzip*/)
-	if err == nil {
-		if err = tw.WriteHeader(&nhdr); err == nil {
-			_, err = io.CopyBuffer(tw, a.r, buf)
-		}
-	}
-	cos.Close(tw)
-	cos.Close(gzw)
-	return
-}
-
-func (a *apndArchI) zip(lmfh io.ReaderAt, size int64, wfh io.Writer, buf []byte) (err error) {
-	var (
-		zw  = zip.NewWriter(wfh)
-		hdr = zip.FileHeader{
-			Name:               a.filename,
-			Comment:            a.filename,
-			UncompressedSize64: uint64(a.size),
-			Modified:           a.started,
-		}
-	)
-	err = archive.CopyZ(lmfh, size, zw, buf)
-	if err == nil {
-		var zipw io.Writer
-		zipw, err = zw.CreateHeader(&hdr)
-		if err == nil {
-			_, err = io.CopyBuffer(zipw, a.r, buf)
-		}
-	}
-	cos.Close(zw)
-	return
-}
-
-func (a *apndArchI) msgpack(lmfh io.Reader, wfh io.Writer) (err error) {
-	var (
-		dst any
-		n   int64
-		sgl = a.t.gmm.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
-		dec = msgpack.NewDecoder(lmfh)
-	)
-	if err = dec.Decode(&dst); err != nil {
-		return
-	}
-	shard, ok := dst.(map[string]any)
-	if !ok {
-		debug.FailTypeCast(dst)
-		return fmt.Errorf("unexpected type (%T) - expecting decoded msgpack", dst)
-	}
-	n, err = io.Copy(sgl, a.r) // buffer's not needed since SGL is `io.ReaderFrom`
-	if err == nil {
-		debug.Assertf(n == a.size, "%d != %d", n, a.size)
-		shard[a.filename] = sgl.Bytes()
-
-		enc := msgpack.NewEncoder(wfh)
-		err := enc.Encode(shard)
-		debug.AssertNoErr(err)
-	}
-	sgl.Free()
-	return
-}
-
-func (a *apndArchI) finalize(size int64, fqn string) error {
+func (a *apndArchI) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 	debug.Func(func() {
 		finfo, err := os.Stat(fqn)
 		debug.AssertNoErr(err)
@@ -1671,7 +1575,7 @@ func (a *apndArchI) finalize(size int64, fqn string) error {
 		return err
 	}
 	a.lom.SetSize(size)
-	a.lom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // TODO -- FIXME: checksum
+	a.lom.SetCksum(cksum)
 	a.lom.SetAtimeUnix(a.started.UnixNano())
 	if err := a.lom.Persist(); err != nil {
 		return err
@@ -1684,6 +1588,18 @@ func (a *apndArchI) finalize(size int64, fqn string) error {
 	a.t.putMirror(a.lom)
 	return nil
 }
+
+// as cos.OAH
+
+func (a *apndArchI) SizeBytes(...bool) int64 { return a.size }
+func (a *apndArchI) AtimeUnix() int64        { return a.started.UnixNano() }
+
+func (*apndArchI) Version(...bool) string             { return "" }
+func (*apndArchI) Checksum() *cos.Cksum               { return nil }
+func (*apndArchI) GetCustomMD() cos.StrKVs            { return nil }
+func (*apndArchI) GetCustomKey(string) (string, bool) { return "", false }
+func (*apndArchI) SetCustomKey(_, _ string)           {}
+func (*apndArchI) String() string                     { return "" }
 
 //
 // mem pools

@@ -320,9 +320,8 @@ func (bo *bmdOwnerPrx) putPersist(bmd *bucketMD, payload msPayload) (err error) 
 
 func (*bmdOwnerPrx) persist(_ *bucketMD, _ msPayload) (err error) { debug.Assert(false); return }
 
+// under lock
 func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
-	bo.Lock()
-	defer bo.Unlock()
 	clone = bo.get().clone()
 	if err = ctx.pre(ctx, clone); err != nil || ctx.terminate {
 		return
@@ -332,7 +331,10 @@ func (bo *bmdOwnerPrx) _pre(ctx *bmdModifier) (clone *bucketMD, err error) {
 }
 
 func (bo *bmdOwnerPrx) modify(ctx *bmdModifier) (clone *bucketMD, err error) {
-	if clone, err = bo._pre(ctx); err != nil || ctx.terminate {
+	bo.Lock()
+	clone, err = bo._pre(ctx)
+	bo.Unlock()
+	if err != nil || ctx.terminate {
 		if clone._sgl != nil {
 			clone._sgl.Free()
 			clone._sgl = nil

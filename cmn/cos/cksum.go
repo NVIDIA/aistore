@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -201,9 +201,9 @@ func (ck *Cksum) String() string {
 	return ck.ty + "[" + SHead(ck.value) + "]"
 }
 
-/////////////
-// helpers //
-/////////////
+//
+// helpers
+//
 
 func NewCRC32C() hash.Hash {
 	return crc32.New(crc32.MakeTable(crc32.Castagnoli))
@@ -234,9 +234,9 @@ func ValidateCksumType(ty string, emptyOK ...bool) (err error) {
 	return
 }
 
-//////////////
-// noopHash //
-//////////////
+//
+// noopHash
+//
 
 func newNoopHash() hash.Hash                     { return &noopHash{} }
 func (*noopHash) Write(b []byte) (int, error)    { return len(b), nil }
@@ -247,9 +247,9 @@ func (*noopHash) BlockSize() int                 { return KiB }
 func (*noopHash) MarshalBinary() ([]byte, error) { return nil, nil }
 func (*noopHash) UnmarshalBinary([]byte) error   { return nil }
 
-////////////
-// errors //
-////////////
+//
+// errors
+//
 
 func NewBadDataCksumError(a, b *Cksum, context ...string) error {
 	ctx := ""

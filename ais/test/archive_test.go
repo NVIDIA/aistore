@@ -496,6 +496,7 @@ func TestAppendToArch(t *testing.T) {
 			for i := 0; i < numArchs; i++ {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				if test.multi {
+					tlog.Logf("APPEND multi-obj %s => %s/%s\n", bckFrom, bckTo, archName)
 					list := make([]string, 0, numAdd)
 					for j := 0; j < numAdd; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
@@ -520,10 +521,12 @@ func TestAppendToArch(t *testing.T) {
 							Reader:     reader,
 							Size:       fileSize,
 						}
+						archpath := fmt.Sprintf(archPath, j) + cos.GenTie()
 						appendArchArgs := api.AppendToArchArgs{
 							PutArgs:  putArgs,
-							ArchPath: fmt.Sprintf(archPath, j) + cos.GenTie(),
+							ArchPath: archpath,
 						}
+						tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo, archName, archpath)
 						err = api.AppendToArch(appendArchArgs)
 						tassert.CheckError(t, err)
 					}

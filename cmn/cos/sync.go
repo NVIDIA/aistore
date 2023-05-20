@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -72,6 +72,8 @@ type (
 	MultiSyncMap struct {
 		M [MultiSyncMapCount]sync.Map
 	}
+
+	NopLocker struct{}
 )
 
 // interface guard
@@ -79,6 +81,13 @@ var (
 	_ WG = (*LimitedWaitGroup)(nil)
 	_ WG = (*TimeoutGroup)(nil)
 )
+
+///////////////
+// NopLocker //
+///////////////
+
+func (NopLocker) Lock()   {}
+func (NopLocker) Unlock() {}
 
 //////////////////
 // TimeoutGroup //

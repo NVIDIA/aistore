@@ -145,7 +145,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		}
 
 		// construct format-specific writer
-		wi.writer = archive.NewWriter(msg.Mime, wi.fh, &wi.cksum)
+		wi.writer = archive.NewWriter(msg.Mime, wi.fh, &wi.cksum, true /*serialize*/)
 
 		// append
 		if lmfh != nil {

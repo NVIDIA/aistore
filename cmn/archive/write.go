@@ -24,11 +24,11 @@ type (
 		Copy(src io.Reader, size ...int64) error
 
 		// private
-		init(w io.Writer, cksum *cos.CksumHashSize)
+		init(w io.Writer, cksum *cos.CksumHashSize, serialize bool)
 	}
 	baseW struct {
 		wmul io.Writer
-		mu   sync.Mutex
+		lck  sync.Locker // serialize: (multi-object => single shard)
 		buf  []byte
 		slab *memsys.Slab
 	}
@@ -53,7 +53,7 @@ var (
 	_ Writer = (*zipWriter)(nil)
 )
 
-func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize) (aw Writer) {
+func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, serialize bool) (aw Writer) {
 	switch mime {
 	case ExtTar:
 		aw = &tarWriter{}
@@ -64,20 +64,29 @@ func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize) (aw Writer) {
 	default:
 		debug.Assert(false, mime)
 	}
-	aw.init(w, cksum)
+	aw.init(w, cksum, serialize)
 	return
 }
 
-///////////////
-// tarWriter //
-///////////////
+// baseW
 
-func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize) {
-	tw.buf, tw.slab = memsys.PageMM().Alloc()
-	tw.wmul = w
-	if cksum != nil {
-		tw.wmul = cos.NewWriterMulti(w, cksum)
+func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+	bw.buf, bw.slab = memsys.PageMM().Alloc()
+	if serialize {
+		bw.lck = &sync.Mutex{}
+	} else {
+		bw.lck = cos.NopLocker{}
 	}
+	bw.wmul = w
+	if cksum != nil {
+		bw.wmul = cos.NewWriterMulti(w, cksum)
+	}
+}
+
+// tarWriter
+
+func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+	tw.baseW.init(w, cksum, serialize)
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 
@@ -94,12 +103,11 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 		ModTime:  time.Unix(0, oah.AtimeUnix()),
 	}
 	SetAuxTarHeader(&hdr)
-	// one at a time
-	tw.mu.Lock()
+	tw.lck.Lock()
 	if err = tw.tw.WriteHeader(&hdr); err == nil {
 		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
 	}
-	tw.mu.Unlock()
+	tw.lck.Unlock()
 	return
 }
 
@@ -107,16 +115,10 @@ func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
 	return CopyT(src, tw.tw, tw.buf, false)
 }
 
-///////////////
-// tgzWriter //
-///////////////
+// tgzWriter
 
-func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize) {
-	tzw.tw.buf, tzw.tw.slab = memsys.PageMM().Alloc()
-	tzw.tw.wmul = w
-	if cksum != nil {
-		tzw.tw.wmul = cos.NewWriterMulti(w, cksum)
-	}
+func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+	tzw.tw.baseW.init(w, cksum, serialize)
 	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
 }
@@ -134,16 +136,10 @@ func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
 	return CopyT(src, tzw.tw.tw, tzw.tw.buf, true)
 }
 
-///////////////
-// zipWriter //
-///////////////
+// zipWriter
 
-func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize) {
-	zw.buf, zw.slab = memsys.PageMM().Alloc()
-	zw.wmul = w
-	if cksum != nil {
-		zw.wmul = cos.NewWriterMulti(w, cksum)
-	}
+func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+	zw.baseW.init(w, cksum, serialize)
 	zw.zw = zip.NewWriter(zw.wmul)
 }
 
@@ -159,12 +155,12 @@ func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error
 		UncompressedSize64: uint64(oah.SizeBytes()),
 		Modified:           time.Unix(0, oah.AtimeUnix()),
 	}
-	zw.mu.Lock()
+	zw.lck.Lock()
 	zipw, err := zw.zw.CreateHeader(&ziphdr)
 	if err == nil {
 		_, err = io.CopyBuffer(zipw, reader, zw.buf)
 	}
-	zw.mu.Unlock()
+	zw.lck.Unlock()
 	return err
 }
 
