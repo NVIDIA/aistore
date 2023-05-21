@@ -259,9 +259,6 @@ func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 }
 
 func setNodeConfigHandler(c *cli.Context) error {
-	if c.NArg() == 0 {
-		return missingKeyValueError(c)
-	}
 	var (
 		config   cmn.Config
 		nvs      cos.StrKVs
@@ -269,11 +266,13 @@ func setNodeConfigHandler(c *cli.Context) error {
 		v        any = &config.ClusterConfig
 		propList     = make([]string, 0, 48)
 	)
-	sid, sname, err := getNodeIDName(c, args.First())
+	if c.NArg() == 0 {
+		return missingKeyValueError(c)
+	}
+	node, sname, err := getNode(c, args.First())
 	if err != nil {
 		return err
 	}
-
 	if cos.StringInSlice(cfgScopeLocal, args) {
 		v = &config.LocalConfig
 	}
@@ -330,7 +329,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		// have api.SetClusterConfigUsingMsg but not "api.SetDaemonConfigUsingMsg"
 		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - not implemented yet", jsonval)
 	}
-	if err := api.SetDaemonConfig(apiBP, sid, nvs, flagIsSet(c, transientFlag)); err != nil {
+	if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, flagIsSet(c, transientFlag)); err != nil {
 		return err
 	}
 
@@ -364,11 +363,11 @@ func resetNodeConfigHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	if err := api.ResetDaemonConfig(apiBP, sid); err != nil {
+	if err := api.ResetDaemonConfig(apiBP, node.ID()); err != nil {
 		return err
 	}
 	actionDone(c, sname+": inherited config successfully reset to the current cluster-wide defaults")

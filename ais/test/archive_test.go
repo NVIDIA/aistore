@@ -46,7 +46,7 @@ func TestGetFromArchive(t *testing.T) {
 			numArchived = 10
 			randomNames = make([]string, numArchived)
 			subtests    = []struct {
-				ext        string // one of cos.ArchExtensions
+				ext        string // one of archive.FileExtensions
 				nested     bool   // subdirs
 				autodetect bool   // auto-detect by magic
 				mime       bool   // specify mime type
@@ -171,7 +171,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 		numInArch  = cos.Min(m.num/2, 7)
 		fmtRange   = "%s{%d..%d}"
 		subtests   = []struct {
-			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
+			ext            string // one of archive.FileExtensions (same as: supported arch formats)
 			list           bool
 			inclSrcBckName bool
 			abrt           bool
@@ -191,7 +191,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			},
 		}
 		subtestsLong = []struct {
-			ext            string // one of cos.ArchExtensions (same as: supported arch formats)
+			ext            string // one of archive.FileExtensions (same as: supported arch formats)
 			list           bool
 			inclSrcBckName bool
 			abrt           bool
@@ -415,7 +415,7 @@ func TestAppendToArch(t *testing.T) {
 		objPattern = "test_lst_%04d%s"
 		archPath   = "extra/newfile%04d"
 		subtests   = []struct {
-			ext   string // one of cos.ArchExtensions (same as: supported arch formats)
+			ext   string // one of archive.FileExtensions (same as: supported arch formats)
 			multi bool   // false - append a single file, true - append a list of objects
 		}{
 			{
@@ -432,7 +432,7 @@ func TestAppendToArch(t *testing.T) {
 			},
 		}
 		subtestsLong = []struct {
-			ext   string // one of cos.ArchExtensions (same as: supported arch formats)
+			ext   string // one of archive.FileExtensions (same as: supported arch formats)
 			multi bool   // false - append a single file, true - append a list of objects
 		}{
 			{

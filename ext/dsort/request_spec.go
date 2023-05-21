@@ -48,7 +48,7 @@ var (
 )
 
 // supportedExtensions is a list of extensions (archives) supported by dSort
-var supportedExtensions = archive.ArchExtensions
+var supportedExtensions = archive.FileExtensions
 
 // TODO: maybe this struct should be composed of `type` and `template` where
 // template is interface and each template has it's own struct. Then we could

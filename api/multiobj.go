@@ -18,7 +18,7 @@ import (
 // The option to append multiple objects to an existing archive is also supported.
 // The source and the destination buckets are defined as `bckFrom` and `bckTo`, respectively
 // (not necessarily distinct)
-// For supported archiving formats, see `cos.ArchExtensions`.
+// For supported archiving formats, see `archive.FileExtensions`.
 //
 // See also: api.AppendToArch
 func CreateArchMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveMsg) (string, error) {

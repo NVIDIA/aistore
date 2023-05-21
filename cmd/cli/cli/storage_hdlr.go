@@ -56,7 +56,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathAttach],
 				Action:       mpathAttachHandler,
-				BashComplete: suggestTargetNodes,
+				BashComplete: suggestTargets,
 			},
 			{
 				Name:         cmdMpathEnable,
@@ -64,7 +64,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathEnable],
 				Action:       mpathEnableHandler,
-				BashComplete: suggestTargetNodes,
+				BashComplete: suggestTargetMpath,
 			},
 			{
 				Name:         cmdMpathDetach,
@@ -72,7 +72,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathDetach],
 				Action:       mpathDetachHandler,
-				BashComplete: suggestTargetNodes,
+				BashComplete: suggestTargets,
 			},
 			{
 				Name:         cmdMpathDisable,
@@ -80,7 +80,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathDisable],
 				Action:       mpathDisableHandler,
-				BashComplete: suggestTargetNodes,
+				BashComplete: suggestTargets,
 			},
 		},
 	}
@@ -143,7 +143,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        storageFlags[cmdShowDisk],
 		Action:       showDisksHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 	showCmdStgSummary = cli.Command{
 		Name:         cmdSummary,
@@ -159,7 +159,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        storageFlags[cmdMountpath],
 		Action:       showMpathHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 
 	storageCmd = cli.Command{
@@ -235,14 +235,21 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 //
 
 func showDisksHandler(c *cli.Context) error {
-	sid, sname, err := argNode(c)
+	var (
+		tid             string
+		tsi, sname, err = arg0Node(c)
+	)
 	if err != nil {
 		return err
 	}
-	if getNodeType(c, sid) == apc.Proxy {
-		return fmt.Errorf("%s is a proxy (AIS gateways do not store user data and do not have any data drives)", sname)
+	if tsi != nil {
+		if tsi.IsProxy() {
+			const s = "(AIS gateways do not store user data and do not have any data drives)"
+			return fmt.Errorf("%s is a 'proxy' aka gateway %s", sname, s)
+		}
+		tid = tsi.ID()
 	}
-	return showDiskStats(c, sid)
+	return showDiskStats(c, tid)
 }
 
 func showDiskStats(c *cli.Context, tid string) error {
@@ -373,12 +380,16 @@ func (ctx *bsummCtx) get() (err error) {
 
 func showMpathHandler(c *cli.Context) error {
 	var (
-		smap            *meta.Smap
 		nodes           []*meta.Snode
-		sid, sname, err = argNode(c)
+		tsi, sname, err = arg0Node(c)
 	)
 	if err != nil {
 		return err
+	}
+	if tsi != nil {
+		if tsi.IsProxy() {
+			return fmt.Errorf("node %s is a proxy (expecting target)", sname)
+		}
 	}
 	setLongRunParams(c)
 
@@ -386,13 +397,8 @@ func showMpathHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
-	if sid != "" {
-		node := smap.GetNode(sid)
-		if node.IsProxy() {
-			return fmt.Errorf("node %s is a proxy (expecting target)", sname)
-		}
-		nodes = []*meta.Snode{node}
+	if tsi != nil {
+		nodes = []*meta.Snode{tsi}
 	} else {
 		nodes = make(meta.Nodes, 0, len(smap.Tmap))
 		for _, tgt := range smap.Tmap {

@@ -205,6 +205,7 @@ func (t *target) init(config *cmn.Config) {
 	if err := ts.InitCDF(); err != nil { // goes after fs.New
 		cos.ExitLog(err)
 	}
+	fs.Clblk()
 
 	s3.Init() // s3 multipart
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -76,7 +75,7 @@ var (
 				Name:         cmdRandMountpath,
 				Usage:        "print a random mountpath from a given target",
 				Action:       randMountpath,
-				BashComplete: suggestTargetNodes,
+				BashComplete: suggestTargets,
 			},
 		},
 	}
@@ -215,19 +214,20 @@ func removeNodeFromSmap(c *cli.Context) error {
 	if c.NArg() > 1 {
 		return incorrectUsageMsg(c, "", c.Args()[1:])
 	}
-
-	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	smap, err := getClusterMap(c)
-	debug.AssertNoErr(err)
-	node := smap.GetNode(sid)
-	debug.Assert(node != nil)
-	if smap.IsPrimary(node) {
-		return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
+	if node.IsProxy() {
+		smap, err := getClusterMap(c)
+		if err != nil {
+			return err // cannot happen
+		}
+		if smap.IsPrimary(node) {
+			return fmt.Errorf("%s is primary (cannot remove the primary node)", sname)
+		}
 	}
-	return api.RemoveNodeUnsafe(apiBP, sid)
+	return api.RemoveNodeUnsafe(apiBP, node.ID())
 }
 
 func randNode(c *cli.Context) error {
@@ -254,15 +254,12 @@ func randMountpath(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	tsi, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	smap, err := getClusterMap(c)
-	debug.AssertNoErr(err)
-	tsi := smap.GetTarget(sid)
-	if tsi == nil {
-		return fmt.Errorf("%s is not a target node (expecting target)", sname)
+	if tsi.IsProxy() {
+		return fmt.Errorf("%s is a 'proxy' (expecting 'target')", sname)
 	}
 	daeStatus, err := api.GetStatsAndStatus(apiBP, tsi)
 	if err != nil {

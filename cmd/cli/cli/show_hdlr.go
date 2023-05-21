@@ -357,28 +357,28 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 	return 1, dsortJobStatus(c, id)
 }
 
-func showClusterHandler(c *cli.Context) (err error) {
+func showClusterHandler(c *cli.Context) error {
 	var (
 		what, sid string
 		daeType   string
 	)
 	if c.NArg() > 0 {
 		what = c.Args().Get(0)
-		if id, _, errV := getNodeIDName(c, what); errV == nil {
-			sid, what = id, ""
+		if node, _, errV := getNode(c, what); errV == nil {
+			sid, what = node.ID(), ""
+			daeType = node.Type()
 		}
 	}
 	if c.NArg() > 1 {
 		arg := c.Args().Get(1)
-		if sid != "" {
+		if sid != "" { // not "what"
 			return incorrectUsageMsg(c, "", arg)
 		}
-		if sid, _, err = getNodeIDName(c, arg); err != nil {
+		node, _, err := getNode(c, arg)
+		if err != nil {
 			return err
 		}
-	}
-	if sid != "" {
-		daeType = getNodeType(c, sid)
+		sid, daeType = node.ID(), node.Type()
 	}
 
 	setLongRunParams(c)
@@ -562,8 +562,8 @@ func showBckPropsHandler(c *cli.Context) (err error) {
 
 func showSmapHandler(c *cli.Context) error {
 	var (
-		smap            *meta.Smap
-		sid, sname, err = argNode(c)
+		sid              string
+		node, sname, err = arg0Node(c)
 	)
 	if err != nil {
 		return err
@@ -571,12 +571,13 @@ func showSmapHandler(c *cli.Context) error {
 
 	setLongRunParams(c)
 
-	smap, err = getClusterMap(c)
-	if err != nil {
-		return err
-	}
-	if sid != "" {
+	if node != nil {
+		sid = node.ID()
 		actionCptn(c, "Cluster map from: ", sname)
+	}
+	smap, err := getClusterMap(c)
+	if err != nil {
+		return err // cannot happen
 	}
 	return smapFromNode(smap, sid, flagIsSet(c, jsonFlag))
 }
@@ -633,24 +634,17 @@ func showClusterConfig(c *cli.Context, section string) error {
 
 func showNodeConfig(c *cli.Context) error {
 	var (
-		smap           *meta.Smap
-		node           *meta.Snode
-		section, scope string
-		usejs          = flagIsSet(c, jsonFlag)
+		section string
+		scope   string
+		usejs   = flagIsSet(c, jsonFlag)
 	)
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-
-	sid, sname, err := argNode(c)
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	smap, err = getClusterMap(c)
-	debug.AssertNoErr(err)
-	node = smap.GetNode(sid)
-	debug.Assert(node != nil)
-
 	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
 		return err
@@ -754,14 +748,10 @@ func showNodeLogHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := argNode(c)
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	smap, err := getClusterMap(c)
-	debug.AssertNoErr(err)
-	node := smap.GetNode(sid)
-	debug.Assert(node != nil)
 
 	firstIteration := setLongRunParams(c, 0)
 
@@ -785,7 +775,7 @@ func showNodeLogHandler(c *cli.Context) error {
 		}
 		if config.Log.FlushTime.D() != flushRate {
 			nvs[nodeLogFlushName] = flushRate.String()
-			if err := api.SetDaemonConfig(apiBP, sid, nvs, true /*transient*/); err != nil {
+			if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, true /*transient*/); err != nil {
 				return err
 			}
 			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",

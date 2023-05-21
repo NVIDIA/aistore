@@ -12,14 +12,14 @@ type (
 	}
 
 	// ArchiveMsg contains the parameters (all except the destination bucket)
-	// for archiving mutiple objects as one of the supported cos.ArchExtensions types
+	// for archiving mutiple objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
 	// --------------------  a NOTE on terminology:   ---------------------
 	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
 	ArchiveMsg struct {
 		TxnUUID     string `json:"-"`        // internal use
 		FromBckName string `json:"-"`        // ditto
-		ArchName    string `json:"archname"` // one of the cos.ArchExtensions
+		ArchName    string `json:"archname"` // one of the archive.FileExtensions
 		Mime        string `json:"mime"`     // user-specified mime type (NOTE: takes precedence if defined)
 		ListRange
 		InclSrcBname     bool `json:"isbn"` // include source bucket name into the names of archived objects

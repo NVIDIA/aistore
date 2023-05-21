@@ -79,14 +79,14 @@ func k8sShowSingleDaemon(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, _, err := getNodeIDName(c, c.Args().Get(0))
+	node, _, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
 
 	cmdLine := make([]string, 0, len(cmdNodeInfo)+1)
 	cmdLine = append(cmdLine, cmdNodeInfo...)
-	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+sid)
+	cmdLine = append(cmdLine, "--selector=ais-daemon-id="+node.ID())
 	output, err := exec.Command(cmdK8s, cmdLine...).CombinedOutput()
 	if err != nil {
 		return err

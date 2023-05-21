@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/urfave/cli"
 )
 
@@ -43,7 +43,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         commandCreate,
-				Usage:        "create multi-object (" + strings.Join(cos.ArchExtensions, ", ") + ") archive",
+				Usage:        "create multi-object (" + strings.Join(archive.ArchExtensions, ", ") + ") archive",
 				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/OBJECT_NAME",
 				Flags:        archCmdsFlags[commandCreate],
 				Action:       archMultiObjHandler,

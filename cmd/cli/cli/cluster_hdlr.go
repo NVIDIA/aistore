@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -128,7 +127,7 @@ var (
 				ArgsUsage:    nodeIDArgument,
 				Flags:        clusterCmdsFlags[cmdPrimary],
 				Action:       setPrimaryHandler,
-				BashComplete: suggestProxyNodes,
+				BashComplete: suggestProxies,
 			},
 			// cluster level
 			{
@@ -323,11 +322,11 @@ func joinNodeHandler(c *cli.Context) (err error) {
 
 	// double check
 	var sname string
-	_, sname, err = getNodeIDName(c, nodeInfo.DaeID)
+	_, sname, err = getNode(c, nodeInfo.DaeID)
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "Node %s successfully joined the cluster\n", sname)
+	fmt.Fprintf(c.App.Writer, "%s successfully joined the cluster\n", sname)
 
 	if rebID != "" {
 		fmt.Fprintf(c.App.Writer, fmtRebalanceStarted, rebID)
@@ -344,13 +343,10 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	node := smap.GetNode(sid)
-	debug.Assert(node != nil)
-
 	action := c.Command.Name
 	if smap.IsPrimary(node) {
 		return fmt.Errorf("%s is primary (cannot %s the primary node)", sname, action)
@@ -361,7 +357,11 @@ func nodeMaintShutDecommHandler(c *cli.Context) error {
 		noShutdown        = flagIsSet(c, noShutdownFlag)
 		rmUserData        = flagIsSet(c, rmUserDataFlag)
 		keepInitialConfig = flagIsSet(c, keepInitialConfigFlag)
-		actValue          = &apc.ActValRmNode{DaemonID: sid, SkipRebalance: skipRebalance, NoShutdown: noShutdown}
+		actValue          = &apc.ActValRmNode{
+			DaemonID:      node.ID(),
+			SkipRebalance: skipRebalance,
+			NoShutdown:    noShutdown,
+		}
 	)
 	if skipRebalance && node.IsTarget() {
 		warn := fmt.Sprintf("executing %q _and_ not running global rebalance may lead to a loss of data!", action)
@@ -451,16 +451,10 @@ func setPrimaryHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	sid, sname, err := getNodeIDName(c, c.Args().Get(0))
+	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-	smap, err := getClusterMap(c)
-	if err != nil {
-		return err
-	}
-	node := smap.GetNode(sid)
-	debug.Assert(node != nil)
 	if !node.IsProxy() {
 		return incorrectUsageMsg(c, "%s is not a proxy", sname)
 	}
@@ -474,7 +468,7 @@ func setPrimaryHandler(c *cli.Context) error {
 		return fmt.Errorf("%s is non-electable", sname)
 	}
 
-	err = api.SetPrimaryProxy(apiBP, sid, false /*force*/)
+	err = api.SetPrimaryProxy(apiBP, node.ID(), false /*force*/)
 	if err == nil {
 		actionDone(c, sname+" is now a new primary")
 	}
@@ -503,19 +497,22 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 	return nil
 }
 
-func showClusterRebalanceHandler(c *cli.Context) (err error) {
+func showClusterRebalanceHandler(c *cli.Context) error {
 	var (
 		xid      = c.Args().Get(0)
 		daemonID = c.Args().Get(1)
 	)
 	if daemonID == "" && xid != "" {
 		// either/or
+		if strings.HasPrefix(xid, meta.PnamePrefix) {
+			return fmt.Errorf("%s appears to be a 'proxy' (expecting 'target' or empty)", xid)
+		}
 		if strings.HasPrefix(xid, meta.TnamePrefix) {
-			sid, _, err := getNodeIDName(c, xid)
+			node, _, err := getNode(c, xid)
 			if err != nil {
 				return err
 			}
-			daemonID, xid = sid, ""
+			daemonID, xid = node.ID(), ""
 		}
 	}
 	xargs := xact.ArgsMsg{
@@ -524,15 +521,15 @@ func showClusterRebalanceHandler(c *cli.Context) (err error) {
 		DaemonID:    daemonID,
 		OnlyRunning: !flagIsSet(c, allJobsFlag),
 	}
-	_, err = xactList(c, xargs, false)
-	return
+	_, err := xactList(c, xargs, false)
+	return err
 }
 
 func resetStatsHandler(c *cli.Context) error {
 	var (
-		errorsOnly      = flagIsSet(c, errorsOnlyFlag)
-		tag             = "stats"
-		sid, sname, err = argNode(c)
+		errorsOnly       = flagIsSet(c, errorsOnlyFlag)
+		tag              = "stats"
+		node, sname, err = arg0Node(c)
 	)
 	if err != nil {
 		return err
@@ -540,11 +537,8 @@ func resetStatsHandler(c *cli.Context) error {
 	if errorsOnly {
 		tag = "error metrics"
 	}
-	// node
-	if sid != "" {
-		smap, errV := getClusterMap(c)
-		debug.AssertNoErr(errV)
-		node := smap.GetNode(sid)
+	// 1. node
+	if node != nil {
 		if err := api.ResetDaemonStats(apiBP, node, errorsOnly); err != nil {
 			return err
 		}
@@ -552,7 +546,7 @@ func resetStatsHandler(c *cli.Context) error {
 		actionDone(c, msg)
 		return nil
 	}
-	// cluster
+	// 2. or cluster
 	if err := api.ResetClusterStats(apiBP, errorsOnly); err != nil {
 		return err
 	}

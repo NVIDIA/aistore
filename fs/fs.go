@@ -540,6 +540,7 @@ func TestNew(iostater ios.IOS) {
 }
 
 // `ios` delegations
+func Clblk()                                   { ios.Clblk(mfs.ios) }
 func GetAllMpathUtils() (utils *ios.MpathUtil) { return mfs.ios.GetAllMpathUtils() }
 func GetMpathUtil(mpath string) int64          { return mfs.ios.GetMpathUtil(mpath) }
 func FillDiskStats(m ios.AllDiskStats)         { mfs.ios.FillDiskStats(m) }

@@ -46,7 +46,7 @@ func normalize(mime string) (string, error) {
 	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
 		return ExtTarTgz, nil
 	}
-	for _, ext := range ArchExtensions {
+	for _, ext := range FileExtensions {
 		if strings.Contains(mime, ext[1:]) {
 			return ext, nil
 		}
@@ -56,7 +56,7 @@ func normalize(mime string) (string, error) {
 
 // by filename extension
 func byExt(filename string) (string, error) {
-	for _, ext := range ArchExtensions {
+	for _, ext := range FileExtensions {
 		if strings.HasSuffix(filename, ext) {
 			return ext, nil
 		}

@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -51,42 +50,26 @@ func getClusterMap(c *cli.Context) (*meta.Smap, error) {
 	return curSmap, nil
 }
 
-// returns apc.Target, apc.Proxy
-// returns "" on error of any kind
-func getNodeType(c *cli.Context, sid string) (daeType string) {
-	smap, err := getClusterMap(c)
-	if err != nil {
-		debug.AssertNoErr(err)
-		return
-	}
-	node := smap.GetNode(sid)
-	if node != nil {
-		daeType = node.Type()
-	}
-	return
-}
-
-// compare with `argNode()` that makes the arg optional
-func getNodeIDName(c *cli.Context, arg string) (sid, sname string, err error) {
+func getNode(c *cli.Context, arg string) (node *meta.Snode, sname string, err error) {
+	var (
+		sid  string
+		smap *meta.Smap
+	)
 	if arg == "" {
+		// NOTE: use arg0Node() when the node arg is optional
 		err = missingArgumentsError(c, c.Command.ArgsUsage)
 		return
 	}
-	smap, errV := getClusterMap(c)
-	if errV != nil {
-		err = errV
+	if smap, err = getClusterMap(c); err != nil {
 		return
 	}
 	if strings.HasPrefix(arg, meta.TnamePrefix) || strings.HasPrefix(arg, meta.PnamePrefix) {
-		sname = arg
 		sid = meta.N2ID(arg)
 	} else {
 		sid = arg
 	}
-	node := smap.GetNode(sid)
-	if node == nil {
-		err = fmt.Errorf("node %q does not exist ("+tabHelpOpt+", or see 'ais show cluster')", arg)
-		return
+	if node = smap.GetNode(sid); node == nil {
+		return nil, "", fmt.Errorf("node %q does not exist ("+tabHelpOpt+", or see 'ais show cluster')", arg)
 	}
 	sname = node.StringEx()
 	return

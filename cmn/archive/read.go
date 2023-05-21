@@ -62,7 +62,7 @@ func (csf *cslFile) Read(b []byte) (int, error) { return csf.file.Read(b) }
 func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
-func notFoundInArch(filename, archname string) error {
+func notFound(filename, archname string) error {
 	return cos.NewErrNotFound("file %q in archive %q", filename, archname)
 }
 
@@ -94,11 +94,11 @@ func readTar(lreader io.Reader, filename, archname string) (*cslLimited, error) 
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
-				err = notFoundInArch(filename, archname)
+				err = notFound(filename, archname)
 			}
 			return nil, err
 		}
-		if hdr.Name == filename || archNamesEq(hdr.Name, filename) {
+		if hdr.Name == filename || namesEq(hdr.Name, filename) {
 			return &cslLimited{LimitedReader: io.LimitedReader{R: lreader, N: hdr.Size}}, nil
 		}
 	}
@@ -129,13 +129,13 @@ func readZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) 
 		if finfo.IsDir() {
 			continue
 		}
-		if f.FileHeader.Name == filename || archNamesEq(f.FileHeader.Name, filename) {
+		if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
 			csf = &cslFile{size: finfo.Size()}
 			csf.file, err = f.Open()
 			return
 		}
 	}
-	err = notFoundInArch(filename, archname)
+	err = notFound(filename, archname)
 	return
 }
 
@@ -156,11 +156,11 @@ func readMsgpack(lreaderAt cos.ReadReaderAt, filename, archname string) (csf *cs
 	if !ok {
 		var name string
 		for name, v = range out {
-			if archNamesEq(name, filename) {
+			if namesEq(name, filename) {
 				goto found
 			}
 		}
-		return nil, notFoundInArch(filename, archname)
+		return nil, notFound(filename, archname)
 	}
 found:
 	vout := v.([]byte)
@@ -170,7 +170,7 @@ found:
 }
 
 // NOTE: in re `--absolute-names` (simplified)
-func archNamesEq(n1, n2 string) bool {
+func namesEq(n1, n2 string) bool {
 	if n1[0] == filepath.Separator {
 		n1 = n1[1:]
 	}

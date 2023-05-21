@@ -77,7 +77,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showCountersHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 	showThroughput = cli.Command{
 		Name:         cmdShowThroughput,
@@ -85,7 +85,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showThroughputHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 	showLatency = cli.Command{
 		Name:         cmdShowLatency,
@@ -93,7 +93,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        showPerfFlags,
 		Action:       showLatencyHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 	showCmdMpathCapacity = cli.Command{
 		Name:         cmdCapacity,
@@ -101,7 +101,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        append(showPerfFlags, mountpathFlag),
 		Action:       showMpathCapHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 )
 
@@ -294,11 +294,17 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 	if inclAvgSize {
 		avgSize = true // caller override
 	}
-	sid, _, err := argNode(c)
+	var (
+		tid          string
+		node, _, err = arg0Node(c)
+	)
 	if err != nil {
 		return err
 	}
-	debug.Assert(sid == "" || getNodeType(c, sid) == apc.Target)
+	if node != nil {
+		debug.Assert(node.IsTarget())
+		tid = node.ID()
+	}
 	if regexStr != "" {
 		regex, err = regexp.Compile(regexStr)
 		if err != nil {
@@ -320,7 +326,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 	}
 
-	if numTs := smap.CountActiveTs(); numTs == 1 || sid != "" {
+	if numTs := smap.CountActiveTs(); numTs == 1 || tid != "" {
 		totals = nil // sum implies multiple
 	} else if numTs == 0 {
 		return cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
@@ -334,7 +340,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 		setLongRunParams(c, lfooter)
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
 			AllCols: allCols, AvgSize: avgSize}
 		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
@@ -403,7 +409,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 			}
 		}
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: sid, Metrics: metrics, Regex: regex, Units: units,
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
 			Totals: totals, TotalsHdr: totalsHdr,
 			AllCols: allCols, AvgSize: avgSize, Idle: idle}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
@@ -423,6 +429,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 
 func showMpathCapHandler(c *cli.Context) error {
 	var (
+		tid         string
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
@@ -432,9 +439,12 @@ func showMpathCapHandler(c *cli.Context) error {
 	if errU != nil {
 		return errU
 	}
-	tid, _, err := argNode(c)
+	node, _, err := arg0Node(c)
 	if err != nil {
 		return err
+	}
+	if node != nil {
+		tid = node.ID()
 	}
 	if regexStr != "" {
 		regex, err = regexp.Compile(regexStr)

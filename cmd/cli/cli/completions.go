@@ -222,9 +222,9 @@ const (
 	allNodes
 )
 
-func suggestTargetNodes(c *cli.Context) { suggestNode(c, allTargets) }
-func suggestProxyNodes(c *cli.Context)  { suggestNode(c, allProxies) }
-func suggestAllNodes(c *cli.Context)    { suggestNode(c, allNodes) }
+func suggestTargets(c *cli.Context)  { suggestNode(c, allTargets) }
+func suggestProxies(c *cli.Context)  { suggestNode(c, allProxies) }
+func suggestAllNodes(c *cli.Context) { suggestNode(c, allNodes) }
 
 func suggestNode(c *cli.Context, ty int) {
 	smap, err := getClusterMap(c)
@@ -232,7 +232,7 @@ func suggestNode(c *cli.Context, ty int) {
 		completionErr(c, err)
 		return
 	}
-	if _, _, err = getNodeIDName(c, argLast(c)); err == nil {
+	if _, _, err = getNode(c, argLast(c)); err == nil {
 		return // node already selected
 	}
 	if ty != allTargets {
@@ -253,7 +253,7 @@ func suggestNodesInMaint(c *cli.Context) {
 		completionErr(c, err)
 		return
 	}
-	if _, _, err = getNodeIDName(c, argLast(c)); err == nil {
+	if _, _, err = getNode(c, argLast(c)); err == nil {
 		return // node already selected
 	}
 	for _, psi := range smap.Pmap {
@@ -275,9 +275,9 @@ func showClusterCompletions(c *cli.Context) {
 	case 1:
 		switch c.Args().Get(0) {
 		case apc.Proxy:
-			suggestProxyNodes(c)
+			suggestProxies(c)
 		case apc.Target:
-			suggestTargetNodes(c)
+			suggestTargets(c)
 		default:
 			suggestAllNodes(c)
 		}
@@ -553,7 +553,7 @@ func runningJobCompletions(c *cli.Context) {
 			return
 		}
 		if len(xactIDs) == 0 {
-			suggestTargetNodes(c)
+			suggestTargets(c)
 			return
 		}
 		for _, ki := range xactIDs {
@@ -562,7 +562,7 @@ func runningJobCompletions(c *cli.Context) {
 		}
 		return
 	case 2: // TARGET
-		suggestTargetNodes(c)
+		suggestTargets(c)
 	}
 }
 
@@ -577,7 +577,7 @@ func rebalanceCompletions(c *cli.Context) {
 			return
 		}
 		if len(xactIDs) == 0 {
-			suggestTargetNodes(c)
+			suggestTargets(c)
 			return
 		}
 		for _, ki := range xactIDs {
@@ -586,7 +586,7 @@ func rebalanceCompletions(c *cli.Context) {
 		}
 		return
 	case 1:
-		suggestTargetNodes(c)
+		suggestTargets(c)
 	}
 }
 
@@ -769,4 +769,13 @@ func cliPropCompletions(c *cli.Context) {
 		return nil, false
 	})
 	debug.AssertNoErr(err)
+}
+
+func suggestTargetMpath(c *cli.Context) {
+	switch c.NArg() {
+	case 0:
+		suggestTargets(c)
+	case 1:
+		// TODO -- FIXME: niy
+	}
 }

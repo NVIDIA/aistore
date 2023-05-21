@@ -27,7 +27,7 @@ type Entry struct {
 
 func List(fqn string) ([]*Entry, error) {
 	var arch string
-	for _, ext := range ArchExtensions {
+	for _, ext := range FileExtensions {
 		if strings.HasSuffix(fqn, ext) {
 			arch = ext
 			break

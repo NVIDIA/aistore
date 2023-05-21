@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -72,7 +73,7 @@ const (
 
 	cmdSmap   = apc.WhatSmap
 	cmdBMD    = apc.WhatBMD
-	cmdConfig = apc.WhatConfig
+	cmdConfig = "config"
 	cmdLog    = apc.WhatLog
 	cmdBucket = "bucket"
 	cmdObject = "object"
@@ -330,7 +331,7 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
-	archExts = "(" + strings.Join(cos.ArchExtensions, ", ") + ")"
+	archExts = "(" + strings.Join(archive.ArchExtensions, ", ") + ")"
 
 	//
 	// scope 'all'

@@ -30,7 +30,7 @@ type (
 )
 
 var (
-	ArchExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtMsgpack}
+	FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtMsgpack}
 	ErrTarIsEmpty  = errors.New("tar is empty")
 )
 

@@ -101,18 +101,17 @@ func New(num int) IOS {
 	}
 	ios._put(ios.cacheHst[0])
 	ios.cacheIdx = 0
-	ios.busy.Store(false)
+	ios.busy.Store(false) // redundant on purpose
 
-	// best effort, startup, only once
+	// once (cleared via Clblk)
 	if res := lsblk("new-ios", true); res != nil {
 		ios.lsblk.Store(unsafe.Pointer(res))
-		go ios.clblk()
 	}
 	return ios
 }
 
-func (ios *ios) clblk() {
-	time.Sleep(13 * time.Second)
+func Clblk(i IOS) {
+	ios := i.(*ios)
 	ios.lsblk.Store(unsafe.Pointer(nil))
 }
 

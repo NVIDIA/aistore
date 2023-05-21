@@ -65,15 +65,15 @@ func showRebalanceHandler(c *cli.Context) error {
 		arg := c.Args().Get(0)
 		if xact.IsValidRebID(arg) {
 			xargs.ID = arg
-		} else if sid, _, err := getNodeIDName(c, arg); err == nil {
-			xargs.DaemonID = sid
+		} else if node, _, err := getNode(c, arg); err == nil {
+			xargs.DaemonID = node.ID()
 		}
 		if c.NArg() > 1 {
 			arg = c.Args().Get(1)
 			if xact.IsValidRebID(arg) {
 				xargs.ID = arg
-			} else if sid, _, err := getNodeIDName(c, arg); err == nil {
-				xargs.DaemonID = sid
+			} else if node, _, err := getNode(c, arg); err == nil {
+				xargs.DaemonID = node.ID()
 			}
 		}
 	}

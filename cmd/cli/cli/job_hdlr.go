@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -85,7 +86,7 @@ var (
 		ArgsUsage:    optionalTargetIDArgument,
 		Flags:        startCommonFlags,
 		Action:       startResilverHandler,
-		BashComplete: suggestTargetNodes,
+		BashComplete: suggestTargets,
 	}
 	jobStartSub = cli.Command{
 		Name:  commandStart,
@@ -284,15 +285,16 @@ func startXactionKind(c *cli.Context, xname string) (err error) {
 	return startXaction(c, xname, bck, "" /*sid*/)
 }
 
-func startResilverHandler(c *cli.Context) (err error) {
-	var sid string
+func startResilverHandler(c *cli.Context) error {
+	var tid string
 	if c.NArg() > 0 {
-		sid, _, err = getNodeIDName(c, c.Args().Get(0))
+		tsi, _, err := getNode(c, c.Args().Get(0))
 		if err != nil {
-			return
+			return err
 		}
+		tid = tsi.ID()
 	}
-	return startXaction(c, apc.ActResilver, cmn.Bck{}, sid)
+	return startXaction(c, apc.ActResilver, cmn.Bck{}, tid)
 }
 
 func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
@@ -1279,8 +1281,8 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 		}
 	}
 	if xid != "" && daemonID == "" {
-		if sid, _, errV := getNodeIDName(c, xid); errV == nil {
-			daemonID, xid = sid, ""
+		if node, _, errV := getNode(c, xid); errV == nil {
+			daemonID, xid = node.ID(), ""
 			return
 		}
 	}
@@ -1289,7 +1291,11 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	}
 	// sname => sid
 	if daemonID != "" {
-		daemonID, _, err = getNodeIDName(c, daemonID)
+		var node *meta.Snode
+		node, _, err = getNode(c, daemonID)
+		if err == nil {
+			daemonID = node.ID()
+		}
 	}
 	return
 }

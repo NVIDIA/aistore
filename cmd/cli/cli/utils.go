@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -80,12 +81,10 @@ func argLast(c *cli.Context) (last string) {
 	return
 }
 
-// used together with `optionalTargetIDArgument` & `optionalNodeIDArgument`
-func argNode(c *cli.Context) (sid, sname string, err error) {
-	// only if the first and present
-	var idx int
-	if c.NArg() > idx {
-		sid, sname, err = getNodeIDName(c, c.Args().Get(idx))
+// arg[0] only; used together with `optionalTargetIDArgument` & `optionalNodeIDArgument`
+func arg0Node(c *cli.Context) (node *meta.Snode, sname string, err error) {
+	if c.NArg() > 0 {
+		node, sname, err = getNode(c, c.Args().Get(0))
 	}
 	return
 }
