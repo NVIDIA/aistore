@@ -2,10 +2,11 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from io import BufferedWriter
-from typing import NewType
+from typing import NewType, Iterable
 
 import requests
 
+from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
     DEFAULT_CHUNK_SIZE,
     HTTP_METHOD_DELETE,
@@ -27,7 +28,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=consider-using-with,unused-variable
-class Object:
+class Object(AISSource):
     """
     A class representing an object of a bucket bound to a client.
 
@@ -54,6 +55,9 @@ class Object:
     def name(self):
         """Name of this object"""
         return self._name
+
+    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
+        yield self.get_url(etl_name=etl_name)
 
     def head(self) -> Header:
         """

@@ -4,6 +4,7 @@
 import logging
 from typing import List, Iterable
 
+from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
     HTTP_METHOD_DELETE,
     HTTP_METHOD_POST,
@@ -29,7 +30,7 @@ from aistore.sdk.types import (
 
 
 # pylint: disable=unused-variable
-class ObjectGroup:
+class ObjectGroup(AISSource):
     """
     A class representing multiple objects within the same bucket. Only one of obj_names, obj_range, or obj_template
      should be provided.
@@ -65,6 +66,19 @@ class ObjectGroup:
             self._obj_collection = ObjectNames(obj_names)
         else:
             self._obj_collection = ObjectTemplate(obj_template)
+
+    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
+        """
+            Get an iterator of the full URL for every object in this group
+        Args:
+            prefix (str, optional): Limit objects selected by a given string prefix
+            etl_name (str, optional): ETL to include in URLs
+
+        Returns:
+            Iterator of all object URLs in the group
+        """
+        for obj_name in self._obj_collection:
+            yield self.bck.object(obj_name).get_url(etl_name=etl_name)
 
     def delete(self):
         """
@@ -291,15 +305,3 @@ class ObjectGroup:
 
         """
         return list(self._obj_collection)
-
-    def get_urls(self, archpath: str = "", etl_name: str = None) -> Iterable[str]:
-        """
-        Get an iterator of the full URL for every object in this group
-        Returns:
-            Iterable generator of object URLs
-
-        """
-        for obj_name in self._obj_collection:
-            yield self.bck.object(obj_name).get_url(
-                archpath=archpath, etl_name=etl_name
-            )

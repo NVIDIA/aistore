@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, NewType, Iterable
 import requests
 
+from aistore.sdk.ais_source import AISSource
 from aistore.sdk.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.object_iterator import ObjectIterator
 from aistore.sdk.const import (
@@ -57,7 +58,7 @@ Header = NewType("Header", requests.structures.CaseInsensitiveDict)
 
 
 # pylint: disable=unused-variable,too-many-public-methods
-class Bucket:
+class Bucket(AISSource):
     """
     A class representing a bucket that contains user data.
 
@@ -107,6 +108,19 @@ class Bucket:
     def namespace(self) -> Namespace:
         """The namespace for this bucket."""
         return self._namespace
+
+    def list_urls(self, prefix: str = "", etl_name: str = None) -> Iterable[str]:
+        """
+            Get an iterator of full URLs to every object in this bucket matching the prefix
+        Args:
+            prefix (str, optional): Limit objects selected by a given string prefix
+            etl_name (str, optional): ETL to include in URLs
+
+        Returns:
+            Iterator of all object URLs matching the prefix
+        """
+        for entry in self.list_objects_iter(prefix=prefix, props="name"):
+            yield self.object(entry.name).get_url(etl_name=etl_name)
 
     def create(self, exist_ok=False):
         """
@@ -669,20 +683,3 @@ class Bucket:
         return BucketModel(
             name=self.name, namespace=self.namespace, provider=self.provider
         )
-
-    def get_object_urls(
-        self, prefix: str = "", archpath: str = "", etl_name: str = None
-    ) -> Iterable[str]:
-        """
-            Get an iterator of full URLs to every object in this bucket matching the prefix
-        Args:
-            prefix (str, optional): Limit objects selected by a given string prefix
-            archpath (str, optional): If the object is an archive, use `archpath` to extract a single file
-                from the archive
-            etl_name (str, optional): ETL to include in URLs
-
-        Returns:
-            Iterator of all object URLs matching the prefix
-        """
-        for entry in self.list_objects_iter(prefix=prefix, props="name"):
-            yield self.object(entry.name).get_url(archpath=archpath, etl_name=etl_name)
