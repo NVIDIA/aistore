@@ -25,12 +25,12 @@ See also:
 
 ## Archive multiple objects
 
-Archive a list or range of existing objects. Name the resulting (`.tar`, `.tar.gz`, `.zip`, `.msgpack`) archive `BUCKET/OBJECT`.
+Archive multiple objects from the source bucket.
 
 ```console
 $ ais archive create --help
 NAME:
-   ais archive create - create multi-object (.tar, .tgz, .tar.gz, .zip, .msgpack) archive
+   ais archive create - create multi-object (.tar, .tgz, .tar.gz, .zip) archive
 
 USAGE:
    ais archive create [command options] SRC_BUCKET DST_BUCKET/OBJECT_NAME

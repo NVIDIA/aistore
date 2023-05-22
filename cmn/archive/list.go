@@ -8,100 +8,87 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"fmt"
 	"io"
 	"os"
 	"sort"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/vmihailenco/msgpack"
 )
 
-// archived file
+// archived file entry
 type Entry struct {
 	Name string
-	Size uint64 // uncompressed size
+	Size int64 // uncompressed size
 }
 
 func List(fqn string) ([]*Entry, error) {
-	var arch string
-	for _, ext := range FileExtensions {
-		if strings.HasSuffix(fqn, ext) {
-			arch = ext
-			break
-		}
-	}
-	if arch == "" {
-		return nil, nil
-	}
-	// list the archive content
 	var (
-		archList []*Entry
-		finfo    os.FileInfo
+		lst   []*Entry
+		finfo os.FileInfo
 	)
-	f, err := os.Open(fqn)
-	if err == nil {
-		switch arch {
-		case ExtTar:
-			archList, err = listTar(f)
-		case ExtTgz, ExtTarTgz:
-			archList, err = listTgz(f)
-		case ExtZip:
-			finfo, err = os.Stat(fqn)
-			if err == nil {
-				archList, err = listZip(f, finfo.Size())
-			}
-		case ExtMsgpack:
-			archList, err = listMsgpack(f)
-		default:
-			debug.Assert(false, arch)
-		}
-	}
-	f.Close()
+	fh, err := os.Open(fqn)
 	if err != nil {
 		return nil, err
 	}
-	// Files in archive can be in arbitrary order, but paging requires them sorted
-	sort.Slice(archList, func(i, j int) bool { return archList[i].Name < archList[j].Name })
-	return archList, nil
+	mime, err := MimeFile(fh, nil /*NOTE: not reading file magic*/, "", fqn)
+	if err != nil {
+		return nil, err
+	}
+	switch mime {
+	case ExtTar:
+		lst, err = lsTar(fh)
+	case ExtTgz, ExtTarTgz:
+		lst, err = lsTgz(fh)
+	case ExtZip:
+		finfo, err = os.Stat(fqn)
+		if err == nil {
+			lst, err = lsZip(fh, finfo.Size())
+		}
+	default:
+		debug.Assert(false, mime)
+	}
+	cos.Close(fh)
+	if err != nil {
+		return nil, err
+	}
+	// paging requires them sorted
+	sort.Slice(lst, func(i, j int) bool { return lst[i].Name < lst[j].Name })
+	return lst, nil
 }
 
 // list: tar, tgz, zip, msgpack
-func listTar(reader io.Reader) ([]*Entry, error) {
-	fileList := make([]*Entry, 0, 8)
+func lsTar(reader io.Reader) (lst []*Entry, _ error) {
 	tr := tar.NewReader(reader)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
 			if err == io.EOF {
-				return fileList, nil
+				return lst, nil // ok
 			}
 			return nil, err
 		}
 		if hdr.FileInfo().IsDir() {
 			continue
 		}
-		e := &Entry{Name: hdr.Name, Size: uint64(hdr.Size)}
-		fileList = append(fileList, e)
+		e := &Entry{Name: hdr.Name, Size: hdr.Size}
+		lst = append(lst, e)
 	}
 }
 
-func listTgz(reader io.Reader) ([]*Entry, error) {
+func lsTgz(reader io.Reader) ([]*Entry, error) {
 	gzr, err := gzip.NewReader(reader)
 	if err != nil {
 		return nil, err
 	}
-	return listTar(gzr)
+	return lsTar(gzr)
 }
 
-func listZip(readerAt cos.ReadReaderAt, size int64) ([]*Entry, error) {
-	zr, err := zip.NewReader(readerAt, size)
-	if err != nil {
-		return nil, err
+func lsZip(readerAt cos.ReadReaderAt, size int64) (lst []*Entry, err error) {
+	var zr *zip.Reader
+	if zr, err = zip.NewReader(readerAt, size); err != nil {
+		return
 	}
-	fileList := make([]*Entry, 0, 8)
 	for _, f := range zr.File {
 		finfo := f.FileInfo()
 		if finfo.IsDir() {
@@ -109,32 +96,9 @@ func listZip(readerAt cos.ReadReaderAt, size int64) ([]*Entry, error) {
 		}
 		e := &Entry{
 			Name: f.FileHeader.Name,
-			Size: f.FileHeader.UncompressedSize64,
+			Size: int64(f.FileHeader.UncompressedSize64),
 		}
-		fileList = append(fileList, e)
+		lst = append(lst, e)
 	}
-	return fileList, nil
-}
-
-func listMsgpack(readerAt cos.ReadReaderAt) ([]*Entry, error) {
-	var (
-		dst any
-		dec = msgpack.NewDecoder(readerAt)
-	)
-	err := dec.Decode(&dst)
-	if err != nil {
-		return nil, err
-	}
-	out, ok := dst.(map[string]any)
-	if !ok {
-		debug.FailTypeCast(dst)
-		return nil, fmt.Errorf("unexpected type (%T)", dst)
-	}
-	fileList := make([]*Entry, 0, len(out))
-	for fullname, v := range out {
-		vout := v.([]byte)
-		e := &Entry{Name: fullname, Size: uint64(len(vout))}
-		fileList = append(fileList, e)
-	}
-	return fileList, nil
+	return
 }

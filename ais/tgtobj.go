@@ -893,7 +893,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 			return
 		}
 		var csl cos.ReadCloseSizer
-		csl, err = archive.Read(lmfh, goi.lom.Cname(), goi.archive.filename, mime, goi.lom.SizeBytes())
+		csl, err = archive.GetReader(lmfh, goi.lom.Cname(), goi.archive.filename, mime, goi.lom.SizeBytes())
 		if err != nil {
 			if cos.IsErrNotFound(err) {
 				errCode = http.StatusNotFound

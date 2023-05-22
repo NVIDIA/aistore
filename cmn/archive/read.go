@@ -7,16 +7,13 @@ package archive
 import (
 	"archive/tar"
 	"archive/zip"
-	"bytes"
 	"compress/gzip"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/vmihailenco/msgpack"
 )
 
 type (
@@ -43,13 +40,9 @@ type (
 	}
 )
 
-var (
-	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}
-	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarTgz}
-	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: ExtZip}
-
-	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
-)
+//
+// assorted 'limited' readers
+//
 
 func (csl *cslLimited) Size() int64 { return csl.N }
 func (*cslLimited) Close() error    { return nil }
@@ -62,25 +55,18 @@ func (csf *cslFile) Read(b []byte) (int, error) { return csf.file.Read(b) }
 func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
-func notFound(filename, archname string) error {
-	return cos.NewErrNotFound("file %q in archive %q", filename, archname)
-}
-
 //
-// next() to `filename` and return a limited reader
-// to read the corresponding file from archive
+// next() to the spec-ed `filename` and return the corresponding limited reader (LR)
 //
 
-func Read(file *os.File, archname, filename, mime string, size int64) (cos.ReadCloseSizer, error) {
+func GetReader(fh *os.File, archname, filename, mime string, size int64) (cos.ReadCloseSizer, error) {
 	switch mime {
 	case ExtTar:
-		return readTar(file, filename, archname)
+		return tarLR(fh, filename, archname)
 	case ExtTarTgz, ExtTgz:
-		return readTgz(file, filename, archname)
+		return tgzLR(fh, filename, archname)
 	case ExtZip:
-		return readZip(file, filename, archname, size)
-	case ExtMsgpack:
-		return readMsgpack(file, filename, archname)
+		return zipLR(fh, filename, archname, size)
 	default: // unlikely
 		err := NewErrUnknownMime(mime)
 		debug.AssertNoErr(err)
@@ -88,8 +74,8 @@ func Read(file *os.File, archname, filename, mime string, size int64) (cos.ReadC
 	}
 }
 
-func readTar(lreader io.Reader, filename, archname string) (*cslLimited, error) {
-	tr := tar.NewReader(lreader)
+func tarLR(fh io.Reader, filename, archname string) (*cslLimited, error) {
+	tr := tar.NewReader(fh)
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
@@ -99,29 +85,29 @@ func readTar(lreader io.Reader, filename, archname string) (*cslLimited, error) 
 			return nil, err
 		}
 		if hdr.Name == filename || namesEq(hdr.Name, filename) {
-			return &cslLimited{LimitedReader: io.LimitedReader{R: lreader, N: hdr.Size}}, nil
+			return &cslLimited{LimitedReader: io.LimitedReader{R: fh, N: hdr.Size}}, nil // Ok
 		}
 	}
 }
 
-func readTgz(lreader io.Reader, filename, archname string) (csc *cslClose, err error) {
+func tgzLR(fh *os.File, filename, archname string) (csc *cslClose, err error) {
 	var (
 		gzr *gzip.Reader
 		csl *cslLimited
 	)
-	if gzr, err = gzip.NewReader(lreader); err != nil {
+	if gzr, err = gzip.NewReader(fh); err != nil {
 		return
 	}
-	if csl, err = readTar(gzr, filename, archname); err != nil {
+	if csl, err = tarLR(gzr, filename, archname); err != nil {
 		return
 	}
 	csc = &cslClose{gzr: gzr /*to close*/, R: csl /*to read from*/, N: csl.N /*size*/}
 	return
 }
 
-func readZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) (csf *cslFile, err error) {
+func zipLR(fh *os.File, filename, archname string, size int64) (csf *cslFile, err error) {
 	var zr *zip.Reader
-	if zr, err = zip.NewReader(lreaderAt, size); err != nil {
+	if zr, err = zip.NewReader(fh, size); err != nil {
 		return
 	}
 	for _, f := range zr.File {
@@ -139,37 +125,11 @@ func readZip(lreaderAt cos.ReadReaderAt, filename, archname string, size int64) 
 	return
 }
 
-func readMsgpack(lreaderAt cos.ReadReaderAt, filename, archname string) (csf *cslFile, err error) {
-	var (
-		dst any
-		dec = msgpack.NewDecoder(lreaderAt)
-	)
-	if err = dec.Decode(&dst); err != nil {
-		return
-	}
-	out, ok := dst.(map[string]any)
-	if !ok {
-		debug.FailTypeCast(dst)
-		return nil, fmt.Errorf("unexpected type (%T)", dst)
-	}
-	v, ok := out[filename]
-	if !ok {
-		var name string
-		for name, v = range out {
-			if namesEq(name, filename) {
-				goto found
-			}
-		}
-		return nil, notFound(filename, archname)
-	}
-found:
-	vout := v.([]byte)
-	csf = &cslFile{size: int64(len(vout))}
-	csf.file = io.NopCloser(bytes.NewReader(vout))
-	return
-}
+//
+// helpers
+//
 
-// NOTE: in re `--absolute-names` (simplified)
+// in re `--absolute-names` (simplified)
 func namesEq(n1, n2 string) bool {
 	if n1[0] == filepath.Separator {
 		n1 = n1[1:]
@@ -178,4 +138,8 @@ func namesEq(n1, n2 string) bool {
 		n2 = n2[1:]
 	}
 	return n1 == n2
+}
+
+func notFound(filename, archname string) error {
+	return cos.NewErrNotFound("%q in archive %q", filename, archname)
 }

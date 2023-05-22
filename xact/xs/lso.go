@@ -533,7 +533,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		e := &cmn.LsoEntry{
 			Name:  path.Join(entry.Name, archEntry.Name),
 			Flags: entry.Flags | apc.EntryInArch,
-			Size:  int64(archEntry.Size),
+			Size:  archEntry.Size,
 		}
 		select {
 		case r.walk.pageCh <- e:

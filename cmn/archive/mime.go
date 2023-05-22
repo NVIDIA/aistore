@@ -16,6 +16,15 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+// standard file signatures
+var (
+	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}
+	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarTgz}
+	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: ExtZip}
+
+	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
+)
+
 // motivation: prevent from creating archives with non-standard extensions
 func Strict(mime, filename string) (m string, err error) {
 	if mime != "" {

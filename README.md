@@ -17,7 +17,7 @@ AIS consistently shows balanced I/O distribution and **linear scalability** acro
 * **Turn-key cache**. Can be used as a standalone highly-available protected storage and/or LRU-based fast cache. Eviction watermarks, as well as numerous other management policies, are per-bucket configurable.
 * **ETL offload**. The capability to run I/O intensive custom data transformations *close to data* - offline (dataset to dataset) and inline (on-the-fly).
 * **File datasets**. AIS can be immediately populated from any file-based data source (local or remote, ad-hoc/on-demand or via asynchronus batch).
-* **Small files. Sharding.** To serialize small files, AIS supports TAR, TAR.GZ, ZIP, and [MessagePack](https://msgpack.org) formats, and provides the entire spectrum of operations to make the corresponding sharding transparent to the apps.
+* **Small files. Sharding.** To serialize small files, AIS supports TAR, TAR.GZ, and ZIP formats providing the entire spectrum of operations to make the corresponding sharding transparent and easy to use.
 * **Kubernetes**. Provides for easy Kubernetes deployment via a separate GitHub [repo](https://github.com/NVIDIA/ais-k8s) and [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/tree/master/operator).
 * **Command line management**. Integrated powerful [CLI](/docs/cli.md) for easy management and monitoring.
 * **Access control**. For security and fine-grained access control, AIS includes OAuth 2.0 compliant [Authentication Server (AuthN)](/docs/authn.md). A single AuthN instance executes CLI requests over HTTPS and can serve multiple clusters.

@@ -12,16 +12,6 @@ const (
 	ExtTgz    = ".tgz"
 	ExtTarTgz = ".tar.gz"
 	ExtZip    = ".zip"
-
-	// msgpack doesn't have a "common extension", see for instance:
-	// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-	// however, there seems to be a de-facto agreement wrt Content-Type
-	// * application/msgpack
-	// * application/x-msgpack (<<< recommended)
-	// * application/*+msgpack
-	// AIS uses the following single constant for both the default file extension
-	// and for the Content-Type (the latter with offset [1:])
-	ExtMsgpack = ".msgpack"
 )
 
 type (
@@ -30,7 +20,7 @@ type (
 )
 
 var (
-	FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtMsgpack}
+	FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip}
 	ErrTarIsEmpty  = errors.New("tar is empty")
 )
 
