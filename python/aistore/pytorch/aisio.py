@@ -3,12 +3,15 @@ AIS IO Datapipe
 Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 """
 
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, List
 
+from torch.utils.data.dataset import T_co
 from torchdata.datapipes import functional_datapipe
 
 from torchdata.datapipes.iter import IterDataPipe
 from torchdata.datapipes.utils import StreamWrapper
+
+from aistore.sdk.ais_source import AISSource
 
 try:
     from aistore.sdk import Client
@@ -148,3 +151,29 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
 
     def __len__(self) -> int:
         return len(self.source_datapipe)
+
+
+@functional_datapipe("ais_list_sources")
+class AISSourceLister(IterDataPipe[str]):
+    def __init__(self, ais_sources: List[AISSource], prefix="", etl_name=None):
+        """
+        Iterable DataPipe over the full URLs for each of the provided AIS source object types
+
+        Args:
+            ais_sources (List[AISSource]): List of types implementing the AISSource interface: Bucket, ObjectGroup,
+             Object, etc.
+            prefix (str, optional): Filter results to only include objects with names starting with this prefix
+            etl_name (str, optional): Pre-existing ETL on AIS to apply to all selected objects on the cluster side
+        """
+        _assert_aistore()
+        self.sources = ais_sources
+        self.prefix = prefix
+        self.etl_name = etl_name
+
+    def __getitem__(self, index) -> T_co:
+        raise NotImplementedError
+
+    def __iter__(self) -> Iterator[T_co]:
+        for source in self.sources:
+            for url in source.list_urls(prefix=self.prefix, etl_name=self.etl_name):
+                yield url

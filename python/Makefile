@@ -77,12 +77,17 @@ python_botocore_unit_tests: common_deps botocore_deps
 python_botocore_integration_tests: common_deps botocore_deps
 	pytest -v tests/integration/botocore_patch tests/integration/boto3
 
+# Tests for aistore.pytorch
+.PHONY: python_pytorch_unit_tests
+python_pytorch_unit_tests: common_deps dev_deps
+	pytest -v tests/unit/pytorch
+
 .PHONY: lint
 lint: common_deps
 	pylint --rcfile=.pylintrc --recursive=y aistore
 
 .PHONY: lint-tests
-lint-tests: common_deps botocore_deps
+lint-tests: common_deps botocore_deps dev_deps
 	pylint --rcfile=.pylintrc-tests --recursive=y tests
 
 .PHONY: generate-docs
