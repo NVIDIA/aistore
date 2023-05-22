@@ -5,7 +5,7 @@ set -e
 tmpdir="/tmp" 		# temp directory, e.g. $HOME/tmp
 dstdir="/usr/local/bin"	# installation destination
 completions="false"	# install and enable _only_ CLI autocompletions (ie., skip installing binaries)
-release="latest" 	# e.g., 3.10, 3.11, latest (default: latest)
+release="latest" 	# e.g.: v1.3.15, v1.3.16, latest (default: latest)
 
 script=$(basename $0)
 
