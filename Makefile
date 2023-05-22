@@ -149,7 +149,7 @@ endif
 ## Build 'aisfs' binary (experimental)
 aisfs:
 	@echo -n "Building aisfs..."
-	@cd $(BUILD_DIR)/aisfs && ./install.sh && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
+	@cd $(BUILD_DIR)/aisfs && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
 	@echo "   done."
 
 #
