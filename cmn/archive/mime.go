@@ -21,8 +21,9 @@ var (
 	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}
 	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarTgz}
 	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: ExtZip}
+	magicLz4  = detect{sig: []byte{0x04, 0x22, 0x4d, 0x18}, mime: ExtTarLz4}
 
-	allMagics = []detect{magicTar, magicGzip, magicZip} // NOTE: must contain all
+	allMagics = []detect{magicTar, magicGzip, magicZip, magicLz4} // NOTE: must contain all
 )
 
 // motivation: prevent from creating archives with non-standard extensions

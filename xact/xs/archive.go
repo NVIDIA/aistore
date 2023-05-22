@@ -379,19 +379,15 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 			return
 		}
 	}
-	switch msg.Mime {
-	case archive.ExtTar, archive.ExtTgz, archive.ExtTarTgz, archive.ExtZip:
-		// to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
-		lmfh, err = os.Open(wi.lom.FQN)
-		if err != nil {
-			return
-		}
-		if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
-			cos.Close(lmfh)
-			lmfh = nil
-		}
-	default: // TODO -- FIXME: add .msgpack
-		err = fmt.Errorf("cannot APPEND to %s - %q not implemented yet", msg.Cname(), msg.Mime)
+	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
+	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
+	lmfh, err = os.Open(wi.lom.FQN)
+	if err != nil {
+		return
+	}
+	if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
+		cos.Close(lmfh)
+		lmfh = nil
 	}
 	return
 }

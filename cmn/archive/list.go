@@ -14,7 +14,10 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/pierrec/lz4/v3"
 )
+
+// TODO (feature): support non-standard file extensions (see NOTE below)
 
 // archived file entry
 type Entry struct {
@@ -45,6 +48,8 @@ func List(fqn string) ([]*Entry, error) {
 		if err == nil {
 			lst, err = lsZip(fh, finfo.Size())
 		}
+	case ExtTarLz4:
+		lst, err = lsLz4(fh)
 	default:
 		debug.Assert(false, mime)
 	}
@@ -101,4 +106,9 @@ func lsZip(readerAt cos.ReadReaderAt, size int64) (lst []*Entry, err error) {
 		lst = append(lst, e)
 	}
 	return
+}
+
+func lsLz4(reader io.Reader) ([]*Entry, error) {
+	lzr := lz4.NewReader(reader)
+	return lsTar(lzr)
 }

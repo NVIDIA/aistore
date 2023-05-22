@@ -275,9 +275,9 @@ func (df *dsortFramework) createInputShards() {
 			if df.algorithm.Kind == dsort.SortKindContent {
 				err = tarch.CreateTarWithCustomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
-				err = tarch.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+				err = tarch.CreateTarWithRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
 			} else if df.extension == archive.ExtTarTgz {
-				err = tarch.CreateTarWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+				err = tarch.CreateTarWithRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else if df.extension == archive.ExtZip {
 				err = tarch.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
 			} else {

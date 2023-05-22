@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/pierrec/lz4/v3"
 )
 
 type (
@@ -67,6 +68,8 @@ func GetReader(fh *os.File, archname, filename, mime string, size int64) (cos.Re
 		return tgzLR(fh, filename, archname)
 	case ExtZip:
 		return zipLR(fh, filename, archname, size)
+	case ExtTarLz4:
+		return lz4LR(fh, filename, archname)
 	default: // unlikely
 		err := NewErrUnknownMime(mime)
 		debug.AssertNoErr(err)
@@ -74,6 +77,7 @@ func GetReader(fh *os.File, archname, filename, mime string, size int64) (cos.Re
 	}
 }
 
+// return tar limited reader
 func tarLR(fh io.Reader, filename, archname string) (*cslLimited, error) {
 	tr := tar.NewReader(fh)
 	for {
@@ -90,6 +94,7 @@ func tarLR(fh io.Reader, filename, archname string) (*cslLimited, error) {
 	}
 }
 
+// return tgz limited reader
 func tgzLR(fh *os.File, filename, archname string) (csc *cslClose, err error) {
 	var (
 		gzr *gzip.Reader
@@ -105,6 +110,7 @@ func tgzLR(fh *os.File, filename, archname string) (csc *cslClose, err error) {
 	return
 }
 
+// return zip limited reader
 func zipLR(fh *os.File, filename, archname string, size int64) (csf *cslFile, err error) {
 	var zr *zip.Reader
 	if zr, err = zip.NewReader(fh, size); err != nil {
@@ -123,6 +129,12 @@ func zipLR(fh *os.File, filename, archname string, size int64) (csf *cslFile, er
 	}
 	err = notFound(filename, archname)
 	return
+}
+
+// return lz4 limited reader
+func lz4LR(fh *os.File, filename, archname string) (*cslLimited, error) {
+	lzr := lz4.NewReader(fh)
+	return tarLR(lzr, filename, archname)
 }
 
 //

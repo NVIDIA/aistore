@@ -14,13 +14,13 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
+	"github.com/pierrec/lz4/v3"
 )
 
 type (
@@ -95,18 +95,10 @@ func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
 	return
 }
 
-func isGzipped(filename string) bool {
-	return strings.HasSuffix(filename, archive.ExtTgz) || strings.HasSuffix(filename, archive.ExtTarTgz)
-}
-
 // CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName string, fileCnt, fileSize int, duplication bool,
+func CreateTarWithRandomFiles(tarName, ext string, fileCnt, fileSize int, duplication bool,
 	recordExts []string, randomNames []string) error {
-	var (
-		gzw     *gzip.Writer
-		tw      *tar.Writer
-		gzipped = isGzipped(tarName)
-	)
+	var tw *tar.Writer
 
 	// set up the output file
 	tarball, err := cos.CreateFile(tarName)
@@ -115,23 +107,30 @@ func CreateTarWithRandomFiles(tarName string, fileCnt, fileSize int, duplication
 	}
 	defer tarball.Close()
 
-	if gzipped {
-		// set up the gzip writer
-		gzw = gzip.NewWriter(tarball)
+	switch ext {
+	case archive.ExtTgz, archive.ExtTarTgz:
+		gzw := gzip.NewWriter(tarball)
 		defer gzw.Close()
 		tw = tar.NewWriter(gzw)
-	} else {
+	case archive.ExtTarLz4:
+		lzw := lz4.NewWriter(tarball)
+		defer lzw.Close()
+		tw = tar.NewWriter(lzw)
+	default:
+		if ext != archive.ExtTar {
+			return fmt.Errorf("tools: unexpected file extension %q", ext)
+		}
 		tw = tar.NewWriter(tarball)
 	}
 	defer tw.Close()
 
-	prevFileName := ""
-	dupIndex := rand.Intn(fileCnt-1) + 1
-
+	var (
+		prevFileName string
+		dupIndex     = rand.Intn(fileCnt-1) + 1
+	)
 	if len(recordExts) == 0 {
 		recordExts = []string{".txt"}
 	}
-
 	for i := 0; i < fileCnt; i++ {
 		var randomName int
 		if randomNames == nil {

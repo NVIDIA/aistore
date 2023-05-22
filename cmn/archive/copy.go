@@ -7,31 +7,16 @@ package archive
 import (
 	"archive/tar"
 	"archive/zip"
-	"compress/gzip"
 	"io"
-
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// copying src-arch => dst-arch for subsequent APPEND
 // TODO -- FIXME: checksum
 
 // copy TAR or TGZ (`src` => `tw`) one file at a time;
 // opens specific arch reader and always closes it;
 // `tw` is the writer that can be further used to write (ie., append)
-func CopyT(src io.Reader, tw *tar.Writer, buf []byte, tgz bool) (err error) {
-	var (
-		gzr *gzip.Reader
-		tr  *tar.Reader
-	)
-	if tgz {
-		if gzr, err = gzip.NewReader(src); err != nil {
-			return
-		}
-		tr = tar.NewReader(gzr)
-	} else {
-		tr = tar.NewReader(src)
-	}
+func CopyT(src io.Reader, tw *tar.Writer, buf []byte) (err error) {
+	tr := tar.NewReader(src)
 	for err == nil {
 		var hdr *tar.Header
 		hdr, err = tr.Next()
@@ -47,9 +32,6 @@ func CopyT(src io.Reader, tw *tar.Writer, buf []byte, tgz bool) (err error) {
 		if err = tw.WriteHeader(hdr); err == nil {
 			_, err = io.CopyBuffer(tw, csl, buf)
 		}
-	}
-	if gzr != nil {
-		cos.Close(gzr)
 	}
 	return
 }

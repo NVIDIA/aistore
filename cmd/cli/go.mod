@@ -4,7 +4,7 @@ go 1.20
 
 // direct
 require (
-	github.com/NVIDIA/aistore v1.3.18-0.20230520151329-8a125d95c55e
+	github.com/NVIDIA/aistore v1.3.18-0.20230522185637-238c3a82bb70
 	github.com/fatih/color v1.14.1
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo v1.16.5
@@ -75,7 +75,6 @@ require (
 	github.com/tinylib/msgp v1.1.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.47.0 // indirect
-	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	golang.org/x/crypto v0.9.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect

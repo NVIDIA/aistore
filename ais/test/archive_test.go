@@ -43,7 +43,7 @@ func TestGetFromArchive(t *testing.T) {
 			}
 			baseParams  = tools.BaseAPIParams(m.proxyURL)
 			errCh       = make(chan error, m.num)
-			numArchived = 10
+			numArchived = 100
 			randomNames = make([]string, numArchived)
 			subtests    = []struct {
 				ext        string // one of archive.FileExtensions
@@ -59,6 +59,9 @@ func TestGetFromArchive(t *testing.T) {
 				},
 				{
 					ext: archive.ExtZip, nested: false, autodetect: false, mime: false,
+				},
+				{
+					ext: archive.ExtTarLz4, nested: false, autodetect: false, mime: false,
 				},
 				{
 					ext: archive.ExtTar, nested: true, autodetect: true, mime: false,
@@ -80,6 +83,9 @@ func TestGetFromArchive(t *testing.T) {
 				},
 			}
 		)
+		if testing.Short() {
+			numArchived = 10
+		}
 		for _, test := range subtests {
 			tname := fmt.Sprintf("%s/nested=%t/auto=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
 			t.Run(tname, func(t *testing.T) {
@@ -106,6 +112,7 @@ func TestGetFromArchive(t *testing.T) {
 				} else {
 					err = tarch.CreateTarWithRandomFiles(
 						archName,
+						test.ext,
 						numArchived,
 						fsize,
 						false,       // duplication
@@ -430,6 +437,9 @@ func TestAppendToArch(t *testing.T) {
 			{
 				ext: archive.ExtTgz, multi: true,
 			},
+			{
+				ext: archive.ExtTarLz4, multi: false,
+			},
 		}
 		subtestsLong = []struct {
 			ext   string // one of archive.FileExtensions (same as: supported arch formats)
@@ -440,6 +450,9 @@ func TestAppendToArch(t *testing.T) {
 			},
 			{
 				ext: archive.ExtZip, multi: true,
+			},
+			{
+				ext: archive.ExtTarLz4, multi: true,
 			},
 		}
 	)

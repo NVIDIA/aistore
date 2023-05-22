@@ -43,7 +43,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:         commandCreate,
-				Usage:        "create multi-object (" + strings.Join(archive.ArchExtensions, ", ") + ") archive",
+				Usage:        "create multi-object (" + strings.Join(archive.FileExtensions, ", ") + ") archive",
 				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/OBJECT_NAME",
 				Flags:        archCmdsFlags[commandCreate],
 				Action:       archMultiObjHandler,

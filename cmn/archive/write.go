@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/pierrec/lz4/v3"
 )
 
 type (
@@ -44,6 +45,10 @@ type (
 		baseW
 		zw *zip.Writer
 	}
+	lz4Writer struct {
+		tw  tarWriter
+		lzw *lz4.Writer
+	}
 )
 
 // interface guard
@@ -51,6 +56,7 @@ var (
 	_ Writer = (*tarWriter)(nil)
 	_ Writer = (*tgzWriter)(nil)
 	_ Writer = (*zipWriter)(nil)
+	_ Writer = (*lz4Writer)(nil)
 )
 
 func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, serialize bool) (aw Writer) {
@@ -61,6 +67,8 @@ func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, serialize boo
 		aw = &tgzWriter{}
 	case ExtZip:
 		aw = &zipWriter{}
+	case ExtTarLz4:
+		aw = &lz4Writer{}
 	default:
 		debug.Assert(false, mime)
 	}
@@ -112,7 +120,7 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 }
 
 func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
-	return CopyT(src, tw.tw, tw.buf, false)
+	return CopyT(src, tw.tw, tw.buf)
 }
 
 // tgzWriter
@@ -133,7 +141,13 @@ func (tzw *tgzWriter) Write(fullname string, oah cos.OAH, reader io.Reader) erro
 }
 
 func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
-	return CopyT(src, tzw.tw.tw, tzw.tw.buf, true)
+	gzr, err := gzip.NewReader(src)
+	if err != nil {
+		return err
+	}
+	err = CopyT(gzr, tzw.tw.tw, tzw.tw.buf)
+	cos.Close(gzr)
+	return err
 }
 
 // zipWriter
@@ -168,4 +182,26 @@ func (zw *zipWriter) Copy(src io.Reader, size ...int64) error {
 	r, ok := src.(io.ReaderAt)
 	debug.Assert(ok && len(size) == 1)
 	return CopyZ(r, size[0], zw.zw, zw.buf)
+}
+
+// lz4Writer
+
+func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+	lzw.tw.baseW.init(w, cksum, serialize)
+	lzw.lzw = lz4.NewWriter(lzw.tw.wmul)
+	lzw.tw.tw = tar.NewWriter(lzw.lzw)
+}
+
+func (lzw *lz4Writer) Fini() {
+	lzw.tw.Fini()
+	lzw.lzw.Close()
+}
+
+func (lzw *lz4Writer) Write(fullname string, oah cos.OAH, reader io.Reader) error {
+	return lzw.tw.Write(fullname, oah, reader)
+}
+
+func (lzw *lz4Writer) Copy(src io.Reader, _ ...int64) error {
+	lzr := lz4.NewReader(src)
+	return CopyT(lzr, lzw.tw.tw, lzw.tw.buf)
 }

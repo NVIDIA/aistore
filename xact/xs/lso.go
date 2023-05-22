@@ -526,7 +526,11 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 
 	// arch
 	archList, err := archive.List(fqn)
-	if archList == nil || err != nil {
+	if err != nil {
+		if archive.IsErrUnknownFileExt(err) {
+			// skip and keep going
+			err = nil
+		}
 		return err
 	}
 	for _, archEntry := range archList {

@@ -331,7 +331,7 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
-	archExts = "(" + strings.Join(archive.ArchExtensions, ", ") + ")"
+	archExts = "(" + strings.Join(archive.FileExtensions, ", ") + ")"
 
 	//
 	// scope 'all'
