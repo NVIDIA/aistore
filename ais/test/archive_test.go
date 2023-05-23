@@ -73,6 +73,9 @@ func TestGetFromArchive(t *testing.T) {
 					ext: archive.ExtZip, nested: true, autodetect: true, mime: false,
 				},
 				{
+					ext: archive.ExtTarLz4, nested: true, autodetect: true, mime: false,
+				},
+				{
 					ext: archive.ExtTar, nested: true, autodetect: true, mime: true,
 				},
 				{
@@ -80,6 +83,9 @@ func TestGetFromArchive(t *testing.T) {
 				},
 				{
 					ext: archive.ExtZip, nested: true, autodetect: true, mime: true,
+				},
+				{
+					ext: archive.ExtTarLz4, nested: true, autodetect: true, mime: true,
 				},
 			}
 		)
@@ -196,6 +202,9 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			{
 				ext: archive.ExtTar, list: true, apnd: true,
 			},
+			{
+				ext: archive.ExtTarLz4, list: true,
+			},
 		}
 		subtestsLong = []struct {
 			ext            string // one of archive.FileExtensions (same as: supported arch formats)
@@ -224,6 +233,9 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 			},
 			{
 				ext: archive.ExtZip, list: true,
+			},
+			{
+				ext: archive.ExtTarLz4, list: false,
 			},
 		}
 	)

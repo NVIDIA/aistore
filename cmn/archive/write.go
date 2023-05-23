@@ -189,6 +189,12 @@ func (zw *zipWriter) Copy(src io.Reader, size ...int64) error {
 func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
 	lzw.tw.baseW.init(w, cksum, serialize)
 	lzw.lzw = lz4.NewWriter(lzw.tw.wmul)
+
+	// TODO -- FIXME: config
+	lzw.lzw.Header.BlockChecksum = false
+	lzw.lzw.Header.NoChecksum = true
+	lzw.lzw.Header.BlockMaxSize = 256 * cos.KiB
+
 	lzw.tw.tw = tar.NewWriter(lzw.lzw)
 }
 

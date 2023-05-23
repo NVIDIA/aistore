@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -52,13 +51,16 @@ func Mime(mime, filename string) (string, error) {
 }
 
 func normalize(mime string) (string, error) {
-	debug.Assert(mime != "", "mime empty")
-	if strings.Contains(mime, ExtTarTgz[1:]) { // ExtTarTgz contains ExtTar
+	switch {
+	case strings.Contains(mime, ExtTarTgz[1:]): // ExtTarTgz contains ExtTar
 		return ExtTarTgz, nil
-	}
-	for _, ext := range FileExtensions {
-		if strings.Contains(mime, ext[1:]) {
-			return ext, nil
+	case strings.Contains(mime, ExtTarLz4[1:]): // ditto
+		return ExtTarLz4, nil
+	default:
+		for _, ext := range FileExtensions {
+			if strings.Contains(mime, ext[1:]) {
+				return ext, nil
+			}
 		}
 	}
 	return "", NewErrUnknownMime(mime)
