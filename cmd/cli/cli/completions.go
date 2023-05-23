@@ -771,11 +771,38 @@ func cliPropCompletions(c *cli.Context) {
 	debug.AssertNoErr(err)
 }
 
-func suggestTargetMpath(c *cli.Context) {
+func suggestTargetMpath(c *cli.Context, cmd string) {
 	switch c.NArg() {
 	case 0:
 		suggestTargets(c)
 	case 1:
-		// TODO -- FIXME: niy
+		node, _, err := arg0Node(c)
+		if node == nil || err != nil {
+			return
+		}
+		mpl, err := api.GetMountpaths(apiBP, node)
+		if err != nil {
+			return
+		}
+		switch cmd {
+		case cmdMpathEnable:
+			for _, mpath := range mpl.Disabled {
+				fmt.Println(mpath)
+			}
+			for _, mpath := range mpl.WaitingDD {
+				fmt.Println(mpath)
+			}
+		case cmdMpathDetach:
+			for _, mpath := range mpl.Available {
+				fmt.Println(mpath)
+			}
+			for _, mpath := range mpl.Disabled {
+				fmt.Println(mpath)
+			}
+		case cmdMpathDisable:
+			for _, mpath := range mpl.Available {
+				fmt.Println(mpath)
+			}
+		}
 	}
 }

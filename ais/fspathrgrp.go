@@ -96,13 +96,10 @@ func (g *fsprungroup) detachMpath(mpath string, dontResilver bool) (*fs.Mountpat
 	return g.doDD(apc.ActMountpathDetach, fs.FlagBeingDetached, mpath, dontResilver)
 }
 
-func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (rmi *fs.Mountpath, err error) {
-	var numAvail int
-	if rmi, numAvail, err = fs.BeginDD(action, flags, mpath); err != nil {
-		return
-	}
-	if rmi == nil {
-		return
+func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilver bool) (*fs.Mountpath, error) {
+	rmi, numAvail, noResil, err := fs.BeginDD(action, flags, mpath)
+	if err != nil || rmi == nil {
+		return nil, err
 	}
 
 	// TODO 1: Currently, dSort doesn't handle detaching/disabling mountpaths at runtime
@@ -113,16 +110,16 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		s := fmt.Sprintf("%s: lost (via %q) the last available mountpath %q", g.t.si, action, rmi)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // go ahead to disable/detach
 		g.t.disable(s)
-		return
+		return rmi, nil
 	}
 
 	rmi.EvictLomCache()
 
-	if dontResilver || !cmn.GCO.Get().Resilver.Enabled {
-		glog.Infof("%s: %q %s but resilvering=(%t, %t)", g.t, action, rmi,
-			!dontResilver, cmn.GCO.Get().Resilver.Enabled)
+	if noResil || dontResilver || !cmn.GCO.Get().Resilver.Enabled {
+		glog.Infof("%s: %q %s: no resilvering (%t, %t, %t)", g.t, action, rmi,
+			noResil, !dontResilver, cmn.GCO.Get().Resilver.Enabled)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
-		return
+		return rmi, nil
 	}
 
 	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
@@ -142,7 +139,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	go g.t.runResilver(args, wg)
 	wg.Wait()
 
-	return
+	return rmi, nil
 }
 
 func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver, err error) {

@@ -784,36 +784,45 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 }
 
 // begin (disable | detach) transaction: CoW-mark the corresponding mountpath
-func BeginDD(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, err error) {
-	var (
-		cleanMpath string
-		exists     bool
-	)
+func BeginDD(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, noResil bool, err error) {
+	var cleanMpath string
 	debug.Assert(cos.BitFlags(flags).IsAnySet(cos.BitFlags(FlagWaitingDD)))
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
 		return
 	}
 	mfs.mu.Lock()
-	defer mfs.mu.Unlock()
+	mi, numAvail, noResil, err = begdd(action, flags, cleanMpath)
+	mfs.mu.Unlock()
+	return
+}
 
-	availablePaths, disabledPaths := Get()
-	if mi, exists = availablePaths[cleanMpath]; !exists {
-		if mi, exists = disabledPaths[cleanMpath]; !exists {
+// under lock
+func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail int, noResil bool, err error) {
+	var (
+		avail, disabled = Get()
+		exists          bool
+	)
+	// dd inactive
+	if _, exists = avail[mpath]; !exists {
+		noResil = true
+		if mi, exists = disabled[mpath]; !exists {
 			err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 			return
 		}
-		glog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
-		mi = nil
-		numAvail = len(availablePaths)
+		if action == apc.ActMountpathDisable {
+			glog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
+			mi = nil
+		}
+		numAvail = len(avail)
 		return
 	}
-
-	availableCopy := _cloneOne(availablePaths)
-	mi = availableCopy[cleanMpath]
+	// dd active
+	clone := _cloneOne(avail)
+	mi = clone[mpath]
 	ok := mi.setFlags(flags)
-	debug.Assert(ok, mi.String()) // NOTE: under lock
-	putAvailMPI(availableCopy)
-	numAvail = len(availableCopy) - 1
+	debug.Assert(ok, mi.String()) // under lock
+	putAvailMPI(clone)
+	numAvail = len(clone) - 1
 	return
 }
 

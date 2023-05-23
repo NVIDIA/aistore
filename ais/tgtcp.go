@@ -518,19 +518,13 @@ func (t *target) disableMpath(w http.ResponseWriter, r *http.Request, mpath stri
 	}
 	if disabledMi == nil {
 		w.WriteHeader(http.StatusNoContent)
-		return
 	}
 }
 
 func (t *target) detachMpath(w http.ResponseWriter, r *http.Request, mpath string) {
 	dontResilver := cos.IsParseBool(r.URL.Query().Get(apc.QparamDontResilver))
-	removedMi, err := t.fsprg.detachMpath(mpath, dontResilver)
-	if err != nil {
-		t.writeErrf(w, r, err.Error())
-		return
-	}
-	if removedMi == nil {
-		return
+	if _, err := t.fsprg.detachMpath(mpath, dontResilver); err != nil {
+		t.writeErr(w, r, err)
 	}
 }
 

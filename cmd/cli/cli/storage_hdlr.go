@@ -64,7 +64,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathEnable],
 				Action:       mpathEnableHandler,
-				BashComplete: suggestTargetMpath,
+				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathEnable) },
 			},
 			{
 				Name:         cmdMpathDetach,
@@ -72,7 +72,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathDetach],
 				Action:       mpathDetachHandler,
-				BashComplete: suggestTargets,
+				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathDetach) },
 			},
 			{
 				Name:         cmdMpathDisable,
@@ -80,7 +80,7 @@ var (
 				ArgsUsage:    nodeMountpathPairArgument,
 				Flags:        mpathCmdsFlags[cmdMpathDisable],
 				Action:       mpathDisableHandler,
-				BashComplete: suggestTargets,
+				BashComplete: func(c *cli.Context) { suggestTargetMpath(c, cmdMpathDisable) },
 			},
 		},
 	}
