@@ -1,7 +1,7 @@
 dd if=/dev/zero of=/tmp/testfile bs=123K count=94 // IGNORE
 s3cmd --host=$HOST mb s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
 ais bucket props set ais://$BUCKET checksum.type=md5
-s3cmd --host=$HOST put /tmp/testfile s3://$BUCKET --multipart-chunk-size-mb=5 --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd --host=$HOST put /tmp/testfile s3://$BUCKET $PARAMS --multipart-chunk-size-mb=5 --host-bucket="$HOST/%(bucket)" // IGNORE
 ais ls ais://$BUCKET -H
 rm /tmp/testfile // IGNORE
 s3cmd --host=$HOST rb s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
