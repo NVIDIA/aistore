@@ -1,4 +1,5 @@
-// Package archive
+// Package archive: write, read, copy, append, list primitives
+// across all supported formats
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -14,14 +15,18 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pierrec/lz4/v3"
 )
 
 type (
 	Writer interface {
+		// Init specific writer
 		Write(nameInArch string, oah cos.OAH, reader io.Reader) error
+		// Close, cleanup
 		Fini()
+		// Copy arch, with potential subsequent APPEND
 		Copy(src io.Reader, size ...int64) error
 
 		// private
@@ -120,7 +125,7 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 }
 
 func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
-	return CopyT(src, tw.tw, tw.buf)
+	return cpTar(src, tw.tw, tw.buf)
 }
 
 // tgzWriter
@@ -145,7 +150,7 @@ func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
 	if err != nil {
 		return err
 	}
-	err = CopyT(gzr, tzw.tw.tw, tzw.tw.buf)
+	err = cpTar(gzr, tzw.tw.tw, tzw.tw.buf)
 	cos.Close(gzr)
 	return err
 }
@@ -181,7 +186,7 @@ func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error
 func (zw *zipWriter) Copy(src io.Reader, size ...int64) error {
 	r, ok := src.(io.ReaderAt)
 	debug.Assert(ok && len(size) == 1)
-	return CopyZ(r, size[0], zw.zw, zw.buf)
+	return cpZip(r, size[0], zw.zw, zw.buf)
 }
 
 // lz4Writer
@@ -190,10 +195,12 @@ func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool
 	lzw.tw.baseW.init(w, cksum, serialize)
 	lzw.lzw = lz4.NewWriter(lzw.tw.wmul)
 
-	// TODO -- FIXME: config
 	lzw.lzw.Header.BlockChecksum = false
-	lzw.lzw.Header.NoChecksum = true
+	lzw.lzw.Header.NoChecksum = !features.IsSet(feat.LZ4FrameChecksum)
 	lzw.lzw.Header.BlockMaxSize = 256 * cos.KiB
+	if features.IsSet(feat.LZ4Block1MB) {
+		lzw.lzw.Header.BlockMaxSize = cos.MiB
+	}
 
 	lzw.tw.tw = tar.NewWriter(lzw.lzw)
 }
@@ -209,5 +216,5 @@ func (lzw *lz4Writer) Write(fullname string, oah cos.OAH, reader io.Reader) erro
 
 func (lzw *lz4Writer) Copy(src io.Reader, _ ...int64) error {
 	lzr := lz4.NewReader(src)
-	return CopyT(lzr, lzw.tw.tw, lzw.tw.buf)
+	return cpTar(lzr, lzw.tw.tw, lzw.tw.buf)
 }

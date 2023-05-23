@@ -1,4 +1,5 @@
-// Package archive
+// Package archive: write, read, copy, append, list primitives
+// across all supported formats
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -14,10 +15,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// OpenTarForAppend opens a TAR and uses tar's reader Next() to skip
-// to the position right _after_ the last file in the TAR
-// (padding bytes including). Background:
+// fast.go provides "fast append"
+
+// Opens TAR and uses its reader's Next() to skip to the position
+// right _after_ the last file in the TAR (padding bytes including).
 //
+// Background:
 // TAR file is padded with one or more 512-byte blocks of zero bytes.
 // The blocks must be overwritten, otherwise newly added files won't be
 // accessible. Different TAR formats (such as `ustar`, `pax` and `GNU`)

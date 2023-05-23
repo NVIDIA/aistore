@@ -29,6 +29,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// TODO (feature): one source multiple destinations (buckets)
+
 type (
 	archFactory struct {
 		streamingF
@@ -154,7 +156,6 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	}
 
 	// most of the time there'll be a single dst bucket for the lifetime
-	// TODO: extend `cluster.Xact` for one-source-to-many-destination buckets
 	if r.bckTo == nil {
 		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
 			r.bckTo = meta.CloneBck(&wi.msg.ToBck)

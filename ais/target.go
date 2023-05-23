@@ -354,6 +354,8 @@ func (t *target) Run() error {
 
 	dload.SetDB(db)
 
+	archive.Init(config.Features)
+
 	// transactions
 	t.transactions.init(t)
 

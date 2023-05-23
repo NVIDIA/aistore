@@ -1,4 +1,5 @@
-// Package archive
+// Package archive: write, read, copy, append, list primitives
+// across all supported formats
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -9,9 +10,15 @@ import (
 	"archive/tar"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
 const TarBlockSize = 512 // Size of each block in a tar stream
+
+// package-local copy of config feature flags (a change requires restart)
+var features feat.Flags
+
+func Init(f feat.Flags) { features = f }
 
 // set auxiliary bits in TAR header
 // common for all ais-created/appended TARs

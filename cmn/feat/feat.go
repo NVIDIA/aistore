@@ -24,6 +24,8 @@ const (
 	DontAutoDetectFshare      // when promoting NFS shares to AIS
 	ProvideS3APIViaRoot       // handle s3 compat via `aistore-hostname/` (default: `aistore-hostname/s3`)
 	FsyncPUT                  // when finalizing PUT(obj) fflush prior to (close, rename) sequence
+	LZ4Block1MB               // .tar.lz4 format, lz4 compression: max uncompressed block size=1MB (default: 256K)
+	LZ4FrameChecksum          // checksum lz4 frames (default: don't)
 )
 
 var All = []string{
@@ -33,6 +35,8 @@ var All = []string{
 	"Do-not-Auto-Detect-FileShare",
 	"Provide-S3-API-via-Root",
 	"Fsync-PUT",
+	"LZ4-Block-1MB",
+	"LZ4-Frame-Checksum",
 }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }

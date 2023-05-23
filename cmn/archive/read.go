@@ -1,4 +1,5 @@
-// Package archive
+// Package archive: write, read, copy, append, list primitives
+// across all supported formats
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
