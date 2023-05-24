@@ -201,10 +201,9 @@ func ParseFmtTemplate(template string) (pt ParsedTemplate, err error) {
 	}, nil
 }
 
-// e.g. single-range template: "prefix{0001..0010}suffix"
-//
-//	multi-range:           "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
-//
+// examples
+// - single-range: "prefix{0001..0010}suffix"
+// - multi-range:  "prefix-{00001..00010..2}-gap-{001..100..2}-suffix"
 // (both prefix and suffix are optional, here and elsewhere)
 func ParseBashTemplate(template string) (pt ParsedTemplate, err error) {
 	left := strings.IndexByte(template, '{')

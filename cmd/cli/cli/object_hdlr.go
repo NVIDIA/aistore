@@ -7,10 +7,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -267,8 +268,18 @@ func removeObjectHandler(c *cli.Context) (err error) {
 }
 
 func putHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
+	// TODO -- FIXME: begin
+	if flagIsSet(c, createArchFlag) {
+		return archMultiObj(c, flagIsSet(c, appendArch2Flag))
+	}
+	if flagIsSet(c, archpathOptionalFlag) { // append to existing
+		return appendArchHandler(c)
+	}
+	// TODO -- FIXME: end
+
+	var a putargs
+	if err = a.parse(c); err != nil {
+		return
 	}
 	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
 		// '--progress' steals STDOUT with multi-object producing scary looking
@@ -278,70 +289,65 @@ func putHandler(c *cli.Context) (err error) {
 		}
 	}
 	switch {
-	case flagIsSet(c, createArchFlag): // 1. archive
-		return archMultiObj(c, flagIsSet(c, appendArch2Flag))
-	case c.NArg() == 1: // 2. BUCKET/[OBJECT_NAME] --list|--template
-		if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
-			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))
+	case a.src.arg == "":
+		// list/range via the corresponding flag
+		if len(a.src.lr.ObjNames) > 0 {
+			return putList(c, a.src.lr.ObjNames, a.dst.bck, a.dst.oname /* subdir name */)
 		}
-		if !flagIsSet(c, listFileFlag) && !flagIsSet(c, templateFileFlag) {
-			return missingArgSimple("FILE|DIRECTORY|DIRECTORY/PATTERN")
+		debug.Assert(a.pt != nil)
+		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
+	case a.pt != nil:
+		// alternatively, range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www
+		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
+	case len(a.src.lr.ObjNames) > 0:
+		// list from the first arg (and not the flag), e.g. "f1[,f2...]" dst-bucket[/prefix]
+		return putList(c, a.src.lr.ObjNames, a.dst.bck, a.dst.oname)
+	case a.src.stdin:
+		return putStdin(c, &a)
+	case !a.src.isdir:
+		// reg file
+		debug.Assert(a.src.finfo != nil)
+		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
+			return err
 		}
-		// destination
-		uri := c.Args().Get(0)
-		bck, objName, err := parseBckObjURI(c, uri, true /*optional objName*/)
+		actionDone(c, fmt.Sprintf("PUT %q => %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname)))
+		return nil
+	default:
+		// reg dir
+		debug.Assert(a.src.finfo != nil)
+		files, err := lsFobj(c, a.src.abspath, "", a.dst.oname, a.src.recurs)
 		if err != nil {
 			return err
 		}
-
-		// putList | putRange
-		if flagIsSet(c, listFileFlag) {
-			listObjs := parseStrFlag(c, listFileFlag)
-			fnames := splitCsv(listObjs)
-			return putList(c, fnames, bck, objName /* subdir name */)
-		}
-		tmplObjs := parseStrFlag(c, templateFileFlag)
-		pt, err := cos.NewParsedTemplate(tmplObjs)
-		if err != nil {
-			return err
-		}
-		return putRange(c, pt, bck, rangeTrimPrefix(pt), objName /* subdir name */)
-	default: // 3. FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]
-		return put(c)
+		tag := _putFrom(fmt.Sprintf(" from %q", a.src.arg), a.src.recurs)
+		return putFobjs(c, files, a.dst.bck, tag)
 	}
 }
 
-func put(c *cli.Context) error {
-	debug.Assert(c.NArg() >= 2) // NArg() < 2 above
-	var (
-		fileName = c.Args().Get(0)
-		uri      = c.Args().Get(1)
-	)
-	if l := c.NArg(); l > 2 {
-		const (
-			efmt = "too many arguments: '%s'"
-			hint = "(hint: wildcards must be in single or double quotes, see `--help` for details)"
-		)
-		if l > 4 {
-			return fmt.Errorf(efmt+" ...\n%s\n", strings.Join(c.Args()[2:4], " "), hint)
-		}
-		return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
-	}
-
-	archPath := parseStrFlag(c, archpathOptionalFlag)
-	// APPEND to an existing archive
-	if archPath != "" {
-		return appendArchHandler(c)
-	}
-
-	bck, objName, err := parseBckObjURI(c, uri, true /*optional objName*/)
+func putStdin(c *cli.Context, a *putargs) error {
+	chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, dryRunFlag) {
-		return putDryRun(c, bck, objName, fileName)
+	if flagIsSet(c, chunkSizeFlag) && chunkSize == 0 {
+		return fmt.Errorf("chunk size (in %s) cannot be zero (%s recommended)",
+			qflprn(chunkSizeFlag), teb.FmtSize(defaultChunkSize, cos.UnitsIEC, 0))
 	}
-	return putAny(c, bck, objName, fileName)
+	if chunkSize == 0 {
+		chunkSize = defaultChunkSize
+	}
+	if flagIsSet(c, verboseFlag) {
+		actionWarn(c, "To terminate input, press Ctrl-D two or more times")
+	}
+	cksum, err := cksumToCompute(c, a.dst.bck)
+	if err != nil {
+		return err
+	}
+	if err := putAppendChunks(c, a.dst.bck, a.dst.oname, os.Stdin, cksum.Type(), chunkSize); err != nil {
+		return err
+	}
+	actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", a.dst.bck.Cname(a.dst.oname)))
+	return nil
 }
 
 func concatHandler(c *cli.Context) (err error) {

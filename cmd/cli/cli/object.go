@@ -112,7 +112,7 @@ func absPath(fileName string) (path string, err error) {
 // Returns longest common prefix ending with '/' (exclusive) for objects in the template
 // /path/to/dir/test{0..10}/dir/another{0..10} => /path/to/dir
 // /path/to/prefix-@00001-gap-@100-suffix => /path/to
-func rangeTrimPrefix(pt cos.ParsedTemplate) string {
+func rangeTrimPrefix(pt *cos.ParsedTemplate) string {
 	sepaIndex := strings.LastIndex(pt.Prefix, string(os.PathSeparator))
 	debug.Assert(sepaIndex >= 0)
 	return pt.Prefix[:sepaIndex+1]
@@ -134,81 +134,6 @@ func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
 		actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
 	}
 	return nil
-}
-
-func putAny(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
-	// 1. PUT from STDIN
-	if fileName == "-" {
-		if objName == "" {
-			return fmt.Errorf("when writing directly from standard input destination object name (in %s) is required",
-				c.Command.ArgsUsage)
-		}
-		chunkSize, err := parseSizeFlag(c, chunkSizeFlag)
-		if err != nil {
-			return err
-		}
-		if flagIsSet(c, chunkSizeFlag) && chunkSize == 0 {
-			return fmt.Errorf("chunk size (in %s) cannot be zero (%s recommended)",
-				qflprn(chunkSizeFlag), teb.FmtSize(defaultChunkSize, cos.UnitsIEC, 0))
-		}
-		if chunkSize == 0 {
-			chunkSize = defaultChunkSize
-		}
-		if flagIsSet(c, verboseFlag) {
-			actionWarn(c, "To terminate input, press Ctrl-D two or more times")
-		}
-		cksum, err := cksumToCompute(c, bck)
-		if err != nil {
-			return err
-		}
-		cksumType := cksum.Type() // can be none
-		if err := putAppendChunks(c, bck, objName, os.Stdin, cksumType, chunkSize); err != nil {
-			return err
-		}
-		actionDone(c, fmt.Sprintf("PUT (standard input) => %s\n", bck.Cname(objName)))
-		return nil
-	}
-
-	path, err := absPath(fileName)
-	if err != nil {
-		return err
-	}
-
-	// 2. inline "range" w/ no flag, e.g.: "/tmp/www/test{0..2}{0..2}.txt" ais://nnn/www
-	if pt, err := cos.ParseBashTemplate(path); err == nil {
-		return putRange(c, pt, bck, rangeTrimPrefix(pt), objName /* subdir name */)
-	}
-
-	// 3. inline "list" w/ no flag: "FILE[,FILE...]" BUCKET/[OBJECT_NAME]
-	if err := cos.Stat(fileName); err != nil {
-		fnames := splitCsv(fileName)
-		return putList(c, fnames, bck, objName /* subdir name */)
-	}
-
-	// 4. PUT file
-	if finfo, err := os.Stat(path); err == nil && !finfo.IsDir() {
-		if objName == "" {
-			// [CONVENTION]: if objName is not provided
-			// we use the filename as the destination object name
-			objName = filepath.Base(path)
-		}
-
-		// single-file PUT
-		if err := putRegular(c, bck, objName, path, finfo); err != nil {
-			return err
-		}
-		actionDone(c, fmt.Sprintf("PUT %q => %s\n", fileName, bck.Cname(objName)))
-		return nil
-	}
-
-	// 5. PUT dir
-	recurs := flagIsSet(c, recursFlag)
-	files, err := lsFobj(c, path, "", objName, recurs)
-	if err != nil {
-		return err
-	}
-	tag := _putFrom(fmt.Sprintf(" from %q", fileName), recurs)
-	return putFobjs(c, files, bck, tag)
 }
 
 func _putFrom(s string, recurs bool) (tag string) {
@@ -236,7 +161,7 @@ func putList(c *cli.Context, fnames []string, bck cmn.Bck, appendPrefixSubdir st
 	return putFobjs(c, allFiles, bck, tag)
 }
 
-func putRange(c *cli.Context, pt cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
+func putRange(c *cli.Context, pt *cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
 	var (
 		allFiles = make([]fobj, 0, pt.Count())
 		recurs   = flagIsSet(c, recursFlag)
