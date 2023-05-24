@@ -87,7 +87,7 @@ lint: common_deps
 	pylint --rcfile=.pylintrc --recursive=y aistore
 
 .PHONY: lint-tests
-lint-tests: common_deps botocore_deps dev_deps
+lint-tests: common_deps botocore_deps
 	pylint --rcfile=.pylintrc-tests --recursive=y tests
 
 .PHONY: generate-docs
