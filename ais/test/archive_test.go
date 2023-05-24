@@ -292,7 +292,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 						msg.ListRange.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
-						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] %2d: arch list %d objects %s => %s\n", xids, i, len(list), m.bck, bckTo)
 					}(archName, list, i)
@@ -309,7 +309,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
-						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] %2d: arch range %s %s => %s\n",
 							xids, i, msg.ListRange.Template, m.bck, bckTo)
@@ -374,7 +374,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 
 						msg.AppendToExisting = true // here
 
-						xids, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] APPEND %s/%s => %s/%s\n",
 							xids, m.bck, msg.ListRange.Template, bckTo, archName)
@@ -414,7 +414,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 	}
 }
 
-// exercises `api.CreateArchMultiObj` followed by api.AppendToArch(local rand-reader)
+// exercises `api.ArchiveMultiObj` followed by api.AppendToArch(local rand-reader)
 func TestAppendToArch(t *testing.T) {
 	var (
 		bckFrom = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
@@ -503,7 +503,7 @@ func TestAppendToArch(t *testing.T) {
 					}
 					msg.ListRange.ObjNames = list
 
-					_, err := api.CreateArchMultiObj(baseParams, m.bck, msg)
+					_, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
 					tassert.CheckFatal(t, err)
 				}(archName, list)
 			}
@@ -533,7 +533,7 @@ func TestAppendToArch(t *testing.T) {
 					msg.AppendToExisting = true
 					msg.ListRange.ObjNames = list
 					go func() {
-						_, err = api.CreateArchMultiObj(baseParams, bckFrom, msg)
+						_, err = api.ArchiveMultiObj(baseParams, bckFrom, msg)
 						tassert.CheckError(t, err)
 					}()
 				} else {

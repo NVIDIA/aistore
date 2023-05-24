@@ -14,14 +14,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-// CreateArchMultiObj allows to archive multiple objects.
+// Archive multiple objects from the specified source bucket.
 // The option to append multiple objects to an existing archive is also supported.
 // The source and the destination buckets are defined as `bckFrom` and `bckTo`, respectively
 // (not necessarily distinct)
 // For supported archiving formats, see `archive.FileExtensions`.
-//
 // See also: api.AppendToArch
-func CreateArchMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
+func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
 	bp.Method = http.MethodPut
 	q := bckFrom.AddToQuery(nil)
 	return dolr(bp, bckFrom, apc.ActArchive, msg, q)

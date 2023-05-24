@@ -702,8 +702,8 @@ var (
 	}
 
 	// archive
-	listArchFlag   = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
-	createArchFlag = cli.BoolFlag{Name: "archive", Usage: "archive a given list ('--list') or range ('--template') of objects"}
+	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
+	putArchFlag  = cli.BoolFlag{Name: "archive", Usage: "archive a given list ('--list') or range ('--template') of objects"}
 
 	archpathOptionalFlag = cli.StringFlag{
 		Name:  "archpath",
@@ -720,13 +720,10 @@ var (
 		Usage: "prefix names of archived objects with the source bucket name",
 	}
 
-	appendArch1Flag = cli.BoolFlag{ // from `ais archive`
-		Name:  "append",
-		Usage: "add object(s) to an existing " + archExts + "-formatted object (\"archive\", \"shard\")",
-	}
-	appendArch2Flag = cli.BoolFlag{ // from `ais put`
-		Name:  "append-to-arch",
-		Usage: appendArch1Flag.Usage,
+	apndArchIfExistsFlag = cli.BoolFlag{ // usage: PUT archive with an option to append if already exists
+		Name: "append-if-exists",
+		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") exists append to it\n" +
+			indent4 + "\t(instead of creating a new one)",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{

@@ -328,7 +328,7 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 //
 
 type (
-	// ArchiveMsg is used in api.CreateArchMultiObj operations; the message contains parameters
+	// ArchiveMsg is used in api.ArchiveMultiObj operations; the message contains parameters
 	// for archiving mutiple (source) objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
 	// --------------------  a NOTE on terminology:   ---------------------

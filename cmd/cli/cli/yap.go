@@ -14,67 +14,76 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
 // generic types
 type (
-	there struct {
-		bck   cmn.Bck
-		oname string
-	}
 	here struct {
 		arg     string
 		abspath string
 		finfo   os.FileInfo
-		lr      apc.ListRange
+		fnames  []string
 		isdir   bool
 		recurs  bool
 		stdin   bool
+	}
+	there struct {
+		bck   cmn.Bck
+		oname string
+		lr    apc.ListRange
 	}
 )
 
 // assorted specific
 type (
+	// PUT object(s)
 	putargs struct {
 		src here
-		pt  *cos.ParsedTemplate
+		pt  *cos.ParsedTemplate // client-side, via --list|template or src/range
 		dst there
 	}
+	// PUT arch
+	archargs struct {
+		putargs
+		rsrc        there
+		apndIfExist bool
+	}
+	// APPEND to arch TODO -- FIXME
+	// aaargs struct {
+	// 	putargs
+	// 	putIfNotExist bool
+	// }
 )
 
 func (a *putargs) parse(c *cli.Context) (err error) {
-	debug.Assert(!flagIsSet(c, createArchFlag), "TODO: '--archive'")        // TODO -- FIXME
-	debug.Assert(!flagIsSet(c, archpathOptionalFlag), "TODO: '--archpath'") // TODO -- FIXME
-
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
+	if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))
+	}
 	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
-		// '--progress' steals STDOUT with multi-object producing scary looking
-		// errors when there's no cluster
+		// check connectivity (since '--progress' steals STDOUT with multi-object producing
+		// scary looking errors when there's no cluster)
 		if _, err = api.GetClusterMap(apiBP); err != nil {
 			return
 		}
 	}
 	switch {
-	case c.NArg() == 1: // 2. BUCKET/[OBJECT_NAME] --list|--template
+	case c.NArg() == 1: // BUCKET/[OBJECT_NAME] --list|--template
 		uri := c.Args().Get(0) // dst
 		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, true)
 		if err != nil {
 			return
 		}
-		// src via local lr
-		if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
-			return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))
-		}
+		// src via local filenames
 		if !flagIsSet(c, listFileFlag) && !flagIsSet(c, templateFileFlag) {
 			return missingArgSimple("FILE|DIRECTORY|DIRECTORY/PATTERN")
 		}
 		if flagIsSet(c, listFileFlag) {
 			csv := parseStrFlag(c, listFileFlag)
-			a.src.lr.ObjNames = splitCsv(csv)
+			a.src.fnames = splitCsv(csv)
 			return
 		}
 		// must template
@@ -88,7 +97,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		}
 		return
 
-	case c.NArg() == 2: // FILE|DIRECTORY|DIRECTORY/PATTERN BUCKET/[OBJECT_NAME]
+	case c.NArg() == 2: // FILE|DIRECTORY|DIRECTORY/PATTERN   BUCKET/[OBJECT_NAME]
 		a.src.arg = c.Args().Get(0) // src
 		uri := c.Args().Get(1)      // dst
 
@@ -96,6 +105,15 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		if err != nil {
 			return err
 		}
+
+		const efmt = "source (%q) and flag (%s) cannot are mutually exclusive"
+		if flagIsSet(c, listFileFlag) {
+			return fmt.Errorf(efmt, a.src.arg, qflprn(listFileFlag))
+		}
+		if flagIsSet(c, templateFileFlag) {
+			return fmt.Errorf(efmt, a.src.arg, qflprn(templateFileFlag))
+		}
+
 		// STDIN
 		if a.src.arg == "-" {
 			a.src.stdin = true
@@ -119,7 +137,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		finfo, errV := os.Stat(a.src.abspath)
 		if errV != nil {
 			// must be a list of files embedded into the first arg
-			a.src.lr.ObjNames = splitCsv(a.src.arg)
+			a.src.fnames = splitCsv(a.src.arg)
 			return
 		}
 
@@ -148,4 +166,34 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		return fmt.Errorf(efmt+" ...\n%s\n", strings.Join(c.Args()[2:4], " "), hint)
 	}
 	return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
+}
+
+func (a *archargs) parse(c *cli.Context) (err error) {
+	err = a.putargs.parse(c)
+	if a.dst.bck.IsEmpty() || err == nil /* TODO -- FIXME: archive local file(s) */ {
+		return
+	}
+	//
+	// parse a.rsrc (TODO -- FIXME: support archiving local a.src)
+	//
+	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+		return missingArgumentsError(c,
+			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
+				flprn(listFlag), flprn(templateFlag)))
+	}
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
+			flprn(listFlag), flprn(templateFlag)))
+	}
+	uri := c.Args().Get(0) // remote source
+	if a.rsrc.bck, err = parseBckURI(c, uri, false); err != nil {
+		return
+	}
+	if flagIsSet(c, listFlag) {
+		list := parseStrFlag(c, listFlag)
+		a.rsrc.lr.ObjNames = splitCsv(list)
+	} else {
+		a.rsrc.lr.Template = parseStrFlag(c, templateFlag)
+	}
+	return
 }

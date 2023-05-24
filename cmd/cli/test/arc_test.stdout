@@ -6,8 +6,8 @@
 
 ^PUT.*=> ais://$BUCKET_1/obj_3.txt$
 
-^Creat.*$
-^Creat.*$
+^Archiv.*$
+^Archiv.*$
 ^APPEND.*ais://$BUCKET_2/tmpl.tar as fourth.txt$
 
 5

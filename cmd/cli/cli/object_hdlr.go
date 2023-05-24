@@ -58,8 +58,8 @@ var (
 			unitsFlag,
 			// arch
 			archpathOptionalFlag,
-			createArchFlag,
-			appendArch2Flag,
+			putArchFlag,
+			apndArchIfExistsFlag,
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
@@ -268,52 +268,38 @@ func removeObjectHandler(c *cli.Context) (err error) {
 }
 
 func putHandler(c *cli.Context) (err error) {
-	// TODO -- FIXME: begin
-	if flagIsSet(c, createArchFlag) {
-		return archMultiObj(c, flagIsSet(c, appendArch2Flag))
-	}
-	if flagIsSet(c, archpathOptionalFlag) { // append to existing
+	// route to arch handler
+	switch {
+	case flagIsSet(c, putArchFlag):
+		return archMultiObjHandler(c)
+	case flagIsSet(c, archpathOptionalFlag):
 		return appendArchHandler(c)
 	}
-	// TODO -- FIXME: end
 
+	// main 'put' switch
 	var a putargs
 	if err = a.parse(c); err != nil {
 		return
 	}
-	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
-		// '--progress' steals STDOUT with multi-object producing scary looking
-		// errors when there's no cluster
-		if _, err = api.GetClusterMap(apiBP); err != nil {
-			return
-		}
-	}
 	switch {
-	case a.src.arg == "":
-		// list/range via the corresponding flag
-		if len(a.src.lr.ObjNames) > 0 {
-			return putList(c, a.src.lr.ObjNames, a.dst.bck, a.dst.oname /* subdir name */)
-		}
-		debug.Assert(a.pt != nil)
-		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
+	case len(a.src.fnames) > 0:
+		// - csv from the first arg (and not the flag), e.g. "f1[,f2...]" dst-bucket[/prefix], or
+		// - csv from the '--list'
+		return putList(c, a.src.fnames, a.dst.bck, a.dst.oname /*virt subdir*/)
 	case a.pt != nil:
-		// alternatively, range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www
+		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www, or
+		// - '--template'
 		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
-	case len(a.src.lr.ObjNames) > 0:
-		// list from the first arg (and not the flag), e.g. "f1[,f2...]" dst-bucket[/prefix]
-		return putList(c, a.src.lr.ObjNames, a.dst.bck, a.dst.oname)
 	case a.src.stdin:
 		return putStdin(c, &a)
-	case !a.src.isdir:
-		// reg file
+	case !a.src.isdir: // reg file
 		debug.Assert(a.src.finfo != nil)
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
 			return err
 		}
 		actionDone(c, fmt.Sprintf("PUT %q => %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
-	default:
-		// reg dir
+	default: // finally, local/nfs dir
 		debug.Assert(a.src.finfo != nil)
 		files, err := lsFobj(c, a.src.abspath, "", a.dst.oname, a.src.recurs)
 		if err != nil {

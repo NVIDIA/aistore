@@ -20,12 +20,12 @@ import (
 
 var (
 	archCmdsFlags = map[string][]cli.Flag{
-		commandCreate: {
+		commandCreate: { // TODO -- FIXME: remove 'create' verb
 			dryRunFlag,
 			templateFlag,
 			listFlag,
 			includeSrcBucketNameFlag,
-			appendArch1Flag, // NOTE: multi-object bck=>bck APPEND - not to confuse with cmdAppend (files)
+			apndArchIfExistsFlag,
 			continueOnErrorFlag,
 		},
 		cmdAppend: {
@@ -71,66 +71,32 @@ var (
 )
 
 func archMultiObjHandler(c *cli.Context) (err error) {
-	// validate
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, "destination object in the form "+optionalObjectsArgument)
-	}
-	return archMultiObj(c, flagIsSet(c, appendArch1Flag))
-}
-func archMultiObj(c *cli.Context, doAppend bool) (err error) {
-	var (
-		bckTo, bckFrom cmn.Bck
-		objName        string
-	)
-	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		return missingArgumentsError(c,
-			fmt.Sprintf("either a list of object names via %s or selection template (%s)",
-				flprn(listFlag), flprn(templateFlag)))
-	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
-			flprn(listFlag), flprn(templateFlag)))
-	}
-	if bckFrom, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
+	a := archargs{apndIfExist: flagIsSet(c, apndArchIfExistsFlag)}
+	if err = a.parse(c); err != nil {
 		return
 	}
-	if bckTo, objName, err = parseBckObjURI(c, c.Args().Get(1), false /*optional objName*/); err != nil {
-		if objName == "" {
-			return fmt.Errorf("destination object name (in %q) cannot be empty", c.Args().Get(1))
-		}
-		bckFrom = bckTo
-	}
-
-	// api
-	var (
-		template = parseStrFlag(c, templateFlag)
-		list     = parseStrFlag(c, listFlag)
-		msg      = cmn.ArchiveMsg{ToBck: bckTo}
-	)
+	msg := cmn.ArchiveMsg{ToBck: a.dst.bck}
 	{
-		msg.ArchName = objName
+		msg.ArchName = a.dst.oname
 		msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
-		msg.AppendToExisting = doAppend
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-		if list != "" {
-			msg.ListRange.ObjNames = splitCsv(list)
-		} else {
-			msg.ListRange.Template = template
-		}
+
+		msg.AppendToExisting = a.apndIfExist // TODO -- FIXME new semantics: (exists) ? append : PUT
+		msg.ListRange = a.rsrc.lr
 	}
-	_, err = api.CreateArchMultiObj(apiBP, bckFrom, msg)
+	_, err = api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
 	if err != nil {
 		return err
 	}
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Second)
-		_, err = api.HeadObject(apiBP, bckTo, objName, apc.FltPresentNoProps)
+		_, err = api.HeadObject(apiBP, a.dst.bck, a.dst.oname, apc.FltPresentNoProps)
 		if err == nil {
-			fmt.Fprintf(c.App.Writer, "Created archive %q\n", bckTo.Cname(objName))
+			fmt.Fprintf(c.App.Writer, "Archived %q\n", a.dst.bck.Cname(a.dst.oname))
 			return nil
 		}
 	}
-	fmt.Fprintf(c.App.Writer, "Creating archive %q ...\n", bckTo.Cname(objName))
+	fmt.Fprintf(c.App.Writer, "Archiving %q ...\n", a.dst.bck.Cname(a.dst.oname))
 	return nil
 }
 
