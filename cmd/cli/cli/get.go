@@ -208,11 +208,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	}
 
 	// where to
-	archPath := parseStrFlag(c, archpathOptionalFlag)
+	archpath := parseStrFlag(c, archpathOptionalFlag)
 	if outFile == "" {
 		// archive
-		if archPath != "" {
-			outFile = filepath.Base(archPath)
+		if archpath != "" {
+			outFile = filepath.Base(archpath)
 		} else {
 			outFile = filepath.Base(objName)
 		}
@@ -222,8 +222,8 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 			// destination is: directory | file (confirm overwrite)
 			if finfo.IsDir() {
 				// archive
-				if archPath != "" {
-					outFile = filepath.Join(outFile, filepath.Base(archPath))
+				if archpath != "" {
+					outFile = filepath.Join(outFile, filepath.Base(archpath))
 				} else {
 					outFile = filepath.Join(outFile, filepath.Base(objName))
 				}
@@ -260,11 +260,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 		getArgs.Query.Set(apc.QparamOrigURL, uri)
 	}
 	// TODO: validate
-	if archPath != "" {
+	if archpath != "" {
 		if getArgs.Query == nil {
 			getArgs.Query = make(url.Values, 1)
 		}
-		getArgs.Query.Set(apc.QparamArchpath, archPath)
+		getArgs.Query.Set(apc.QparamArchpath, archpath)
 	}
 
 	if flagIsSet(c, cksumFlag) {
@@ -273,7 +273,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 		oah, err = api.GetObject(apiBP, bck, objName, &getArgs)
 	}
 	if err != nil {
-		if cmn.IsStatusNotFound(err) && archPath == "" {
+		if cmn.IsStatusNotFound(err) && archpath == "" {
 			err = fmt.Errorf("%q does not exist", bck.Cname(objName))
 		}
 		return
@@ -291,17 +291,17 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	}
 	bn := bck.Cname("")
 	if outFile == discardIO {
-		if archPath != "" {
+		if archpath != "" {
 			fmt.Fprintf(c.App.Writer, "GET and discard: %q from archive %q (size %s)\n",
-				archPath, bck.Cname(objName), sz)
+				archpath, bck.Cname(objName), sz)
 		} else {
 			fmt.Fprintf(c.App.Writer, "GET and discard: %q from %s (size %s)\n", objName, bn, sz)
 		}
 		return
 	}
-	if archPath != "" {
+	if archpath != "" {
 		fmt.Fprintf(c.App.Writer, "GET %q from archive %q as %q (size %s)\n",
-			archPath, bck.Cname(objName), outFile, sz)
+			archpath, bck.Cname(objName), outFile, sz)
 	} else {
 		fmt.Fprintf(c.App.Writer, "GET %q from %s as %q (size %s)\n", objName, bn, outFile, sz)
 	}

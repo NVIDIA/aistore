@@ -6,8 +6,8 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -15,13 +15,15 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
+	"github.com/vbauerster/mpb/v4"
 )
 
 var (
 	archCmdsFlags = map[string][]cli.Flag{
 		commandCreate: { // TODO -- FIXME: remove 'create' verb
-			dryRunFlag,
+			dryRunFlag, // TODO -- FIXME: remove the flag or implement
 			templateFlag,
 			listFlag,
 			includeSrcBucketNameFlag,
@@ -99,42 +101,63 @@ func archMultiObjHandler(c *cli.Context) (err error) {
 	return nil
 }
 
-func appendArchHandler(c *cli.Context) error {
-	// src
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-	fileName := c.Args().Get(0)
-	path, err := absPath(fileName)
-	if err != nil {
-		return err
-	}
-	finfo, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	if finfo.IsDir() {
-		return fmt.Errorf("%q is a directory", fileName)
-	}
-
-	// dst
+func appendArchHandler(c *cli.Context) (err error) {
+	var a a2args
 	if c.NArg() < 2 {
-		return missingArgSimple("destination archive name in the form " + objectArgument)
+		// TODO -- FIXME
+		return errors.New("not implemented yet (currently, expecting local file and bucket/shard)")
 	}
-	uri := c.Args().Get(1)
-	bck, objName, err := parseBckObjURI(c, uri, false)
+	if err = a.parse(c); err != nil {
+		return
+	}
+	if err = a2a(c, &a); err == nil {
+		actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname), a.archpath))
+	}
+	return
+}
+
+func a2a(c *cli.Context, a *a2args) error {
+	var (
+		reader   cos.ReadOpenCloser
+		progress *mpb.Progress
+		bars     []*mpb.Bar
+		cksum    *cos.Cksum
+	)
+	fh, err := cos.NewFileHandle(a.src.abspath)
 	if err != nil {
 		return err
 	}
-	if flagIsSet(c, dryRunFlag) {
-		return putDryRun(c, bck, objName, fileName)
+	reader = fh
+	if flagIsSet(c, progressFlag) {
+		fi, err := fh.Stat()
+		if err != nil {
+			return err
+		}
+		// setup progress bar
+		args := barArgs{barType: sizeArg, barText: a.dst.oname, total: fi.Size()}
+		progress, bars = simpleBar(args)
+		cb := func(n int, _ error) { bars[0].IncrBy(n) }
+		reader = cos.NewCallbackReadOpenCloser(fh, cb)
 	}
-	archPath := parseStrFlag(c, archpathRequiredFlag)
-	if err := appendToArch(c, bck, objName, path, archPath, finfo); err != nil {
-		return err
+	putArgs := api.PutArgs{
+		BaseParams: apiBP,
+		Bck:        a.dst.bck,
+		ObjName:    a.dst.oname,
+		Reader:     reader,
+		Cksum:      cksum,
+		Size:       uint64(a.src.finfo.Size()),
+		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
-	actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
-	return nil
+	appendArchArgs := api.AppendToArchArgs{
+		PutArgs:       putArgs,
+		ArchPath:      a.archpath,
+		PutIfNotExist: a.putIfNotExist,
+	}
+	err = api.AppendToArch(appendArchArgs)
+	if progress != nil {
+		progress.Wait()
+	}
+	return err
 }
 
 func listArchHandler(c *cli.Context) error {

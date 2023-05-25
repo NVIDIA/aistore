@@ -292,49 +292,6 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 	return err
 }
 
-func appendToArch(c *cli.Context, bck cmn.Bck, objName, path, archPath string, finfo os.FileInfo) error {
-	var (
-		reader   cos.ReadOpenCloser
-		progress *mpb.Progress
-		bars     []*mpb.Bar
-		cksum    *cos.Cksum
-	)
-	fh, err := cos.NewFileHandle(path)
-	if err != nil {
-		return err
-	}
-	reader = fh
-	if flagIsSet(c, progressFlag) {
-		fi, err := fh.Stat()
-		if err != nil {
-			return err
-		}
-		// setup progress bar
-		args := barArgs{barType: sizeArg, barText: objName, total: fi.Size()}
-		progress, bars = simpleBar(args)
-		cb := func(n int, _ error) { bars[0].IncrBy(n) }
-		reader = cos.NewCallbackReadOpenCloser(fh, cb)
-	}
-	putArgs := api.PutArgs{
-		BaseParams: apiBP,
-		Bck:        bck,
-		ObjName:    objName,
-		Reader:     reader,
-		Cksum:      cksum,
-		Size:       uint64(finfo.Size()),
-		SkipVC:     flagIsSet(c, skipVerCksumFlag),
-	}
-	appendArchArgs := api.AppendToArchArgs{
-		PutArgs:  putArgs,
-		ArchPath: archPath,
-	}
-	err = api.AppendToArch(appendArchArgs)
-	if progress != nil {
-		progress.Wait()
-	}
-	return err
-}
-
 // PUT fixed-sized chunks using `api.AppendObject` and `api.FlushObject`
 func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string, chunkSize int64) error {
 	var (

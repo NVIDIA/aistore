@@ -46,7 +46,7 @@ OPTIONS:
                       --list 'o1,o2,o3'
                       --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
    --include-src-bck  prefix names of archived objects with the source bucket name
-   --append           add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard")
+   --append           add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted object ("archive", "shard")
    --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
    --help, -h         show help
 ```

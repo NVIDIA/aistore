@@ -87,17 +87,13 @@ type (
 		// - we simply don't care.
 		SkipVC bool
 	}
-	// see related: `ArchiveMsg`
-	AppendToArchArgs struct {
-		ArchPath string // filename _in_ archive
-		Mime     string // user-specified mime type (NOTE: takes precedence if defined)
-		PutArgs
-	}
 	PromoteArgs struct {
 		BaseParams BaseParams
 		Bck        cmn.Bck
 		cluster.PromoteArgs
 	}
+
+	// (see also: api.AppendToArchArgs)
 	AppendArgs struct {
 		Reader     cos.ReadOpenCloser
 		BaseParams BaseParams
@@ -112,6 +108,13 @@ type (
 		Bck        cmn.Bck
 		Object     string
 		Handle     string
+	}
+
+	AppendToArchArgs struct {
+		ArchPath      string // filename _in_ archive
+		Mime          string // user-specified mime type (NOTE: takes precedence if defined)
+		PutIfNotExist bool   // PUT (ie., create) if doesn't exist
+		PutArgs
 	}
 )
 

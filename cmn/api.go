@@ -332,7 +332,7 @@ type (
 	// for archiving mutiple (source) objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
 	// --------------------  a NOTE on terminology:   ---------------------
-	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
+	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
 	// see also: `AppendToArchArgs` message
 	ArchiveMsg struct {
 		ToBck Bck `json:"tobck"`

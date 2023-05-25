@@ -14,8 +14,9 @@ type (
 	// ArchiveMsg contains the parameters (all except the destination bucket)
 	// for archiving mutiple objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
-	// --------------------  a NOTE on terminology:   ---------------------
-	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .msgpack) formatted object.
+	// See also: api.AppendToArchArgs
+	// --------------------  terminology   ---------------------
+	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
 	ArchiveMsg struct {
 		TxnUUID     string `json:"-"`        // internal use
 		FromBckName string `json:"-"`        // ditto

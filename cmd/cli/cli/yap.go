@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -49,11 +50,12 @@ type (
 		rsrc        there
 		apndIfExist bool
 	}
-	// APPEND to arch TODO -- FIXME
-	// aaargs struct {
-	// 	putargs
-	// 	putIfNotExist bool
-	// }
+	// APPEND to arch
+	a2args struct {
+		putargs
+		archpath      string
+		putIfNotExist bool
+	}
 )
 
 func (a *putargs) parse(c *cli.Context) (err error) {
@@ -86,7 +88,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 			a.src.fnames = splitCsv(csv)
 			return
 		}
-		// must template
+		// optional template to select local source(s)
 		var (
 			pt   cos.ParsedTemplate
 			tmpl = parseStrFlag(c, templateFileFlag)
@@ -195,5 +197,16 @@ func (a *archargs) parse(c *cli.Context) (err error) {
 	} else {
 		a.rsrc.lr.Template = parseStrFlag(c, templateFlag)
 	}
+	return
+}
+
+func (a *a2args) parse(c *cli.Context) (err error) {
+	err = a.putargs.parse(c)
+	if a.dst.bck.IsEmpty() {
+		debug.Assert(err != nil)
+		return
+	}
+	a.archpath = parseStrFlag(c, archpathRequiredFlag)
+	a.putIfNotExist = flagIsSet(c, putArchIfNotExistFlag)
 	return
 }

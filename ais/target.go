@@ -681,6 +681,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 }
 
 // PUT /v1/objects/bucket-name/object-name
+// 1) append object 2) append to archive 3) PUT
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 	defer apiReqFree(apireq)
@@ -1204,6 +1205,7 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 	}
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if os.IsNotExist(err) {
+			// TODO -- FIXME: putIfNotExist
 			return http.StatusNotFound, err
 		}
 		return http.StatusInternalServerError, err

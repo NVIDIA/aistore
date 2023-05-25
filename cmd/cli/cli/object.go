@@ -118,24 +118,6 @@ func rangeTrimPrefix(pt *cos.ParsedTemplate) string {
 	return pt.Prefix[:sepaIndex+1]
 }
 
-func putDryRun(c *cli.Context, bck cmn.Bck, objName, fileName string) error {
-	actionCptn(c, dryRunHeader, " "+dryRunExplanation)
-	path, err := absPath(fileName)
-	if err != nil {
-		return err
-	}
-	if objName == "" {
-		objName = filepath.Base(path)
-	}
-	archPath := parseStrFlag(c, archpathOptionalFlag)
-	if archPath == "" {
-		actionDone(c, fmt.Sprintf("PUT %q => %s\n", fileName, bck.Cname(objName)))
-	} else {
-		actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", fileName, bck.Cname(objName), archPath))
-	}
-	return nil
-}
-
 func _putFrom(s string, recurs bool) (tag string) {
 	if recurs {
 		tag = s + "(recursive)"

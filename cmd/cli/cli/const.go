@@ -719,11 +719,16 @@ var (
 		Name:  "include-src-bck",
 		Usage: "prefix names of archived objects with the source bucket name",
 	}
-
-	apndArchIfExistsFlag = cli.BoolFlag{ // usage: PUT archive with an option to append if already exists
+	// PUT arch operation: option to APPEND if already exists (compare w/ next)
+	apndArchIfExistsFlag = cli.BoolFlag{
 		Name: "append-if-exists",
-		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") exists append to it\n" +
+		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") already exists append to it\n" +
 			indent4 + "\t(instead of creating a new one)",
+	}
+	// APPEND to arch operation: option to PUT (ie., create) if doesn't exist (compare with the above)
+	putArchIfNotExistFlag = cli.BoolFlag{
+		Name:  "put-if-not-exist",
+		Usage: "create archive if " + archExts + "-formatted destination (\"archive\", \"shard\") does not exist",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{

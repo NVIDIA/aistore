@@ -268,7 +268,7 @@ func removeObjectHandler(c *cli.Context) (err error) {
 }
 
 func putHandler(c *cli.Context) (err error) {
-	// route to arch handler
+	// destination: archive ? route to arch handler
 	switch {
 	case flagIsSet(c, putArchFlag):
 		return archMultiObjHandler(c)
@@ -276,19 +276,19 @@ func putHandler(c *cli.Context) (err error) {
 		return appendArchHandler(c)
 	}
 
-	// main 'put' switch
+	// main PUT switch
 	var a putargs
 	if err = a.parse(c); err != nil {
 		return
 	}
 	switch {
 	case len(a.src.fnames) > 0:
-		// - csv from the first arg (and not the flag), e.g. "f1[,f2...]" dst-bucket[/prefix], or
-		// - csv from the '--list'
+		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or
+		// - csv from '--list' flag
 		return putList(c, a.src.fnames, a.dst.bck, a.dst.oname /*virt subdir*/)
 	case a.pt != nil:
 		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www, or
-		// - '--template'
+		// - '--template' flag
 		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
 	case a.src.stdin:
 		return putStdin(c, &a)
@@ -299,7 +299,7 @@ func putHandler(c *cli.Context) (err error) {
 		}
 		actionDone(c, fmt.Sprintf("PUT %q => %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
-	default: // finally, local/nfs dir
+	default: // finally, a directory
 		debug.Assert(a.src.finfo != nil)
 		files, err := lsFobj(c, a.src.abspath, "", a.dst.oname, a.src.recurs)
 		if err != nil {

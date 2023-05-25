@@ -82,6 +82,7 @@ type (
 		nodeID       string
 		filePath     string
 	}
+	// (see also apndArchI)
 	apndOI struct {
 		started time.Time     // started time of receiving - used to calculate the recv duration
 		r       io.ReadCloser // reader with the content of the object.
@@ -1455,7 +1456,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND to (existing?) archive (see also: 'find . -name archive.go')
+// APPEND to archive aka shard (see also: /cmn/cos/archive.go)
 //
 
 func (a *apndArchI) do() (int, error) {
@@ -1486,7 +1487,7 @@ func (a *apndArchI) do() (int, error) {
 		}
 		// do - fast
 		if size, err = a.fast(fh); err == nil {
-			// NOTE: opt-out computing checksum
+			// NOTE: checksum traded off
 			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
 			}
