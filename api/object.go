@@ -426,7 +426,7 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 // For supported archival formats -- aka MIME types -- see cmn/cos/archive.go.
 // --
 // NOTE see also:
-// - api.ArchiveMultiObj(msg.AppendToExisting = true)
+// - api.ArchiveMultiObj(msg.AppendIfExists = true)
 // - api.AppendObject
 func AppendToArch(args AppendToArchArgs) (err error) {
 	q := make(url.Values, 4)

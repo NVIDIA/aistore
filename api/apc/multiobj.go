@@ -22,9 +22,9 @@ type (
 		ArchName    string `json:"archname"` // one of the archive.FileExtensions
 		Mime        string `json:"mime"`     // user-specified mime type (NOTE: takes precedence if defined)
 		ListRange
-		InclSrcBname     bool `json:"isbn"` // include source bucket name into the names of archived objects
-		AppendToExisting bool `json:"aate"` // adding a list or a range of objects to an existing archive
-		ContinueOnError  bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
+		InclSrcBname    bool `json:"isbn"` // include source bucket name into the names of archived objects
+		AppendIfExists  bool `json:"aate"` // adding a list or a range of objects to an existing archive
+		ContinueOnError bool `json:"coer"` // on err, keep running arc xaction in a any given multi-object transaction
 	}
 
 	//  Multi-object copy & transform (see also: TCBMsg)

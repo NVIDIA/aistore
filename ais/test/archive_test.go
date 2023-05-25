@@ -372,7 +372,7 @@ func testMobjArch(t *testing.T, bck *meta.Bck) {
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
-						msg.AppendToExisting = true // here
+						msg.AppendIfExists = true // here
 
 						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
 						tassert.CheckFatal(t, err)
@@ -530,7 +530,7 @@ func TestAppendToArch(t *testing.T) {
 						ToBck:      bckTo,
 						ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 					}
-					msg.AppendToExisting = true
+					msg.AppendIfExists = true
 					msg.ListRange.ObjNames = list
 					go func() {
 						_, err = api.ArchiveMultiObj(baseParams, bckFrom, msg)

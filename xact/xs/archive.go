@@ -130,16 +130,9 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 			finfo, errX = os.Stat(wi.lom.FQN)
 			exists      = errX == nil
 		)
-		if wi.msg.AppendToExisting {
-			if !exists {
-				return fmt.Errorf("%s: %s doesn't exist - cannot APPEND", r.p.T, msg.Cname())
-			}
+		if exists && wi.msg.AppendIfExists {
 			lmfh, err = wi.beginAppend()
 		} else {
-			if exists {
-				// PUT (new multi-object-arch version) semantics
-				glog.Infof("%s: %s exists - proceeding to overwrite w/ new version", r.p.T, msg.Cname())
-			}
 			wi.fh, err = wi.lom.CreateFile(wi.fqn)
 		}
 		if err != nil {

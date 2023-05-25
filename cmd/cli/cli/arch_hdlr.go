@@ -80,8 +80,7 @@ func archMultiObjHandler(c *cli.Context) (err error) {
 		msg.ArchName = a.dst.oname
 		msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
-
-		msg.AppendToExisting = a.apndIfExist // TODO -- FIXME new semantics: (exists) ? append : PUT
+		msg.AppendIfExists = a.apndIfExist
 		msg.ListRange = a.rsrc.lr
 	}
 	_, err = api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
