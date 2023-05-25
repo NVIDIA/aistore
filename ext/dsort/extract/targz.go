@@ -76,6 +76,22 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
+		} else if header.Format == tar.FormatPAX {
+			// When dealing with `tar.FormatPAX` we also need to take into
+			// consideration the `tar.TypeXHeader` that comes before the actual header.
+			// Together it looks like this: [x-header][pax-records][pax-header][pax-file].
+			// Since `tar.Reader` skips over this header and writes to `header.PAXRecords`
+			// we need to manually adjust the offset, otherwise when using the
+			// offset we will point to totally wrong location.
+
+			// Add offset for `tar.TypeXHeader`.
+			offset += t.MetadataSize()
+
+			// Add offset for size of PAX records - there is no way of knowing
+			// the size, so we must estimate it by ourselves...
+			size := estimateXHeaderSize(header.PAXRecords)
+			size = cos.CeilAlignInt64(size, archive.TarBlockSize)
+			offset += size
 		}
 
 		data := cos.NewSizedReader(tr, header.Size)
