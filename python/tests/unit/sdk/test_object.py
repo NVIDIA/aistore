@@ -13,7 +13,7 @@ from aistore.sdk.const import (
     QPARAM_ETL_NAME,
     HTTP_METHOD_PUT,
     HTTP_METHOD_DELETE,
-    CONTENT_LENGTH,
+    HEADER_CONTENT_LENGTH,
     AIS_CHECKSUM_VALUE,
     AIS_CHECKSUM_TYPE,
     AIS_ACCESS_TIME,
@@ -89,7 +89,7 @@ class TestObject(unittest.TestCase):
         )
         resp_headers = CaseInsensitiveDict(
             {
-                CONTENT_LENGTH: content_length,
+                HEADER_CONTENT_LENGTH: content_length,
                 AIS_CHECKSUM_VALUE: ais_check_val,
                 AIS_CHECKSUM_TYPE: ais_check_type,
                 AIS_ACCESS_TIME: ais_atime,

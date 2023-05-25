@@ -2,6 +2,23 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
+HEADERS_KW = "headers"
+# Standard Header Keys
+HEADER_ACCEPT = "Accept"
+HEADER_USER_AGENT = "User-Agent"
+HEADER_CONTENT_TYPE = "Content-Type"
+HEADER_CONTENT_LENGTH = "Content-Length"
+# Standard Header Values
+USER_AGENT_BASE = "ais/python"
+JSON_CONTENT_TYPE = "application/json"
+# AIS Headers
+AIS_CHECKSUM_TYPE = "ais-checksum-type"
+AIS_CHECKSUM_VALUE = "ais-checksum-value"
+AIS_ACCESS_TIME = "ais-atime"
+AIS_VERSION = "ais-version"
+AIS_CUSTOM_MD = "ais-custom-md"
+
+
 # URL Params
 # See api/apc/query.go
 QPARAM_WHAT = "what"
@@ -68,14 +85,6 @@ ACT_TRANSFORM_OBJECTS = "etl-listrange"
 ACT_ARCHIVE_OBJECTS = "archive"
 # Job actions
 ACT_START = "start"
-
-# Headers
-CONTENT_LENGTH = "content-length"
-AIS_CHECKSUM_TYPE = "ais-checksum-type"
-AIS_CHECKSUM_VALUE = "ais-checksum-value"
-AIS_ACCESS_TIME = "ais-atime"
-AIS_VERSION = "ais-version"
-AIS_CUSTOM_MD = "ais-custom-md"
 
 # Defaults
 DEFAULT_CHUNK_SIZE = 32768

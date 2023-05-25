@@ -28,6 +28,8 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     HTTP_METHOD_POST,
     URL_PATH_BUCKETS,
+    HEADER_ACCEPT,
+    JSON_CONTENT_TYPE,
 )
 from aistore.sdk.errors import InvalidBckProvider, ErrBckAlreadyExists, ErrBckNotFound
 from aistore.sdk.request_client import RequestClient
@@ -286,6 +288,7 @@ class TestBucket(unittest.TestCase):
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
             res_model=BucketList,
             json=action,
             params=self.ais_bck_params,
@@ -391,6 +394,7 @@ class TestBucket(unittest.TestCase):
         call_1 = mock.call(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
             res_model=BucketList,
             json=ActionMsg(action=ACT_LIST, value=expected_act_value_1).dict(),
             params=self.ais_bck_params,
@@ -399,6 +403,7 @@ class TestBucket(unittest.TestCase):
         call_2 = mock.call(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
             res_model=BucketList,
             json=ActionMsg(action=ACT_LIST, value=expected_act_value_2).dict(),
             params=self.ais_bck_params,

@@ -1,10 +1,5 @@
 import logging
-import importlib.metadata
 from aistore.sdk.client import Client
+from aistore.version import __version__
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-
-try:
-    __version__ = importlib.metadata.version("aistore")
-except ImportError:
-    pass

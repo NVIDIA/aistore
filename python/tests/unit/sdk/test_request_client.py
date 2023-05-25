@@ -1,7 +1,14 @@
 import unittest
 from unittest.mock import patch, Mock
 
+from aistore.sdk.const import (
+    JSON_CONTENT_TYPE,
+    HEADER_USER_AGENT,
+    USER_AGENT_BASE,
+    HEADER_CONTENT_TYPE,
+)
 from aistore.sdk.request_client import RequestClient
+from aistore.version import __version__ as sdk_version
 
 
 class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
@@ -11,6 +18,11 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         with patch("aistore.sdk.request_client.requests") as mock_requests_lib:
             mock_requests_lib.session.return_value = self.mock_session
             self.request_client = RequestClient(self.endpoint)
+
+        self.request_headers = {
+            HEADER_CONTENT_TYPE: JSON_CONTENT_TYPE,
+            HEADER_USER_AGENT: f"{USER_AGENT_BASE}/{sdk_version}",
+        }
 
     def test_properties(self):
         self.assertEqual(self.endpoint + "/v1", self.request_client.base_url)
@@ -22,7 +34,6 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         method = "method"
         path = "path"
         req_url = self.request_client.base_url + "/" + path
-        app_header = {"Accept": "application/json"}
 
         deserialized_response = Mock()
         mock_response = Mock()
@@ -34,22 +45,21 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             "method", "path", str, keyword="arg"
         )
         self.mock_session.request.assert_called_with(
-            method, req_url, headers=app_header, keyword="arg"
+            method, req_url, headers=self.request_headers, keyword="arg"
         )
         self.assertEqual(deserialized_response, res)
 
     def test_request(self):
         method = "method"
         path = "path"
-        req_url = self.request_client.base_url + "/" + path
-        app_header = {"Accept": "application/json"}
+        req_url = f"{self.request_client.base_url}/{path}"
 
         mock_response = Mock()
         mock_response.status_code = 200
         self.mock_session.request.return_value = mock_response
         res = self.request_client.request("method", "path", keyword="arg")
         self.mock_session.request.assert_called_with(
-            method, req_url, headers=app_header, keyword="arg"
+            method, req_url, headers=self.request_headers, keyword="arg"
         )
         self.assertEqual(mock_response, res)
 
@@ -59,7 +69,7 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
                 self.mock_session.request.return_value = mock_response
                 res = self.request_client.request("method", "path", keyword="arg")
                 self.mock_session.request.assert_called_with(
-                    method, req_url, headers=app_header, keyword="arg"
+                    method, req_url, headers=self.request_headers, keyword="arg"
                 )
                 self.assertEqual(mock_response, res)
                 mock_handle_err.assert_called_once()

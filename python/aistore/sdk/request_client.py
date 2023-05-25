@@ -1,14 +1,21 @@
 #
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
-
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict
 
 from pydantic.tools import parse_raw_as
 import requests
 
+from aistore.sdk.const import (
+    JSON_CONTENT_TYPE,
+    HEADER_USER_AGENT,
+    USER_AGENT_BASE,
+    HEADER_CONTENT_TYPE,
+    HEADERS_KW,
+)
 from aistore.sdk.utils import handle_errors
+from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
 
@@ -77,8 +84,15 @@ class RequestClient:
             Raw response from the API
         """
         url = f"{self._base_url}/{path.lstrip('/')}"
+        if HEADERS_KW not in kwargs:
+            kwargs[HEADERS_KW] = {}
+        headers = kwargs.get(HEADERS_KW, {})
+        headers[HEADER_CONTENT_TYPE] = JSON_CONTENT_TYPE
+        headers[HEADER_USER_AGENT] = f"{USER_AGENT_BASE}/{sdk_version}"
         resp = self._session.request(
-            method, url, headers={"Accept": "application/json"}, **kwargs
+            method,
+            url,
+            **kwargs,
         )
         if resp.status_code < 200 or resp.status_code >= 300:
             handle_errors(resp)

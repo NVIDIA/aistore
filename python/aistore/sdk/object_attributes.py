@@ -3,7 +3,7 @@ from typing import Dict
 from requests.structures import CaseInsensitiveDict
 
 from aistore.sdk.const import (
-    CONTENT_LENGTH,
+    HEADER_CONTENT_LENGTH,
     AIS_CHECKSUM_TYPE,
     AIS_CHECKSUM_VALUE,
     AIS_ACCESS_TIME,
@@ -29,7 +29,7 @@ class ObjectAttributes:
         """
         Size of object content
         """
-        return int(self.response_headers.get(CONTENT_LENGTH, 0))
+        return int(self.response_headers.get(HEADER_CONTENT_LENGTH, 0))
 
     @property
     def checksum_type(self) -> str:

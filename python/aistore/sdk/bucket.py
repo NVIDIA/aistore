@@ -30,6 +30,8 @@ from aistore.sdk.const import (
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     URL_PATH_BUCKETS,
+    HEADER_ACCEPT,
+    JSON_CONTENT_TYPE,
 )
 
 from aistore.sdk.errors import (
@@ -345,10 +347,12 @@ class Bucket(AISSource):
         bucket_list = self.client.request_deserialize(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{ self.name }",
+            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
             res_model=BucketList,
             json=action,
             params=self.qparam,
         )
+
         for entry in bucket_list.entries:
             entry.object = self.object(entry.name)
         return bucket_list

@@ -66,6 +66,7 @@ class Smap(BaseModel):
 class BucketEntry(BaseModel):
     """
     Represents a single entry in a bucket -- an object
+    See cmn/objlist.go/LsoEntry
     """
 
     name: str

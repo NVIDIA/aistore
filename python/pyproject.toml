@@ -13,9 +13,12 @@ markers = [
     "etl: marks tests as using etl and therefore requiring k8s cluster",
 ]
 
+[tool.hatch.version]
+path = "aistore/version.py"
+
 [project]
 name = "aistore"
-version = "1.2.2"
+dynamic = ["version"]
 authors = [
   { name="AIStore Team", email="ais@exchange.nvidia.com" },
 ]

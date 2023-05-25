@@ -5,7 +5,7 @@ import random
 import unittest
 from pathlib import Path
 
-from aistore.sdk.const import AIS_VERSION, CONTENT_LENGTH, UTF_ENCODING
+from aistore.sdk.const import AIS_VERSION, HEADER_CONTENT_LENGTH, UTF_ENCODING
 
 from aistore.sdk import Client
 from tests.utils import (
@@ -99,7 +99,7 @@ class TestObjectOps(unittest.TestCase):
         for obj_name, content in objects.items():
             properties = self.bucket.object(obj_name).head()
             self.assertEqual(properties[AIS_VERSION], "1")
-            self.assertEqual(properties[CONTENT_LENGTH], str(len(content)))
+            self.assertEqual(properties[HEADER_CONTENT_LENGTH], str(len(content)))
             for option in [OBJ_READ_TYPE_ALL, OBJ_READ_TYPE_CHUNK]:
                 self._test_get_obj(option, obj_name, content)
 
