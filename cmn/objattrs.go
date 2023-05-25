@@ -36,8 +36,7 @@ const (
 	OrigURLObjMD = "orig_url"
 
 	// additional backend
-	LastModified    = "LastModified"
-	ContentEncoding = "ContentEncoding"
+	LastModified = "LastModified"
 )
 
 // object properties

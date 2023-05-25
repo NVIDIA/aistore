@@ -537,11 +537,17 @@ func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		t.httpbckget(w, r)
 	case http.MethodDelete:
-		t.httpbckdelete(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		t.httpbckdelete(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPost:
-		t.httpbckpost(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		t.httpbckpost(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodHead:
-		t.httpbckhead(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
+		t.httpbckhead(w, r, apireq)
+		apiReqFree(apireq)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPost)
 	}
@@ -551,17 +557,33 @@ func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		t.httpobjget(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
+		t.httpobjget(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodHead:
-		t.httpobjhead(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		t.httpobjhead(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPut:
-		t.httpobjput(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
+		if err := t.parseReq(w, r, apireq); err == nil {
+			lom := cluster.AllocLOM(apireq.items[1])
+			t.httpobjput(w, r, apireq, lom)
+			cluster.FreeLOM(lom)
+		}
+		apiReqFree(apireq)
 	case http.MethodDelete:
-		t.httpobjdelete(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		t.httpobjdelete(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPost:
-		t.httpobjpost(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*useDpq*/)
+		t.httpobjpost(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPatch:
-		t.httpobjpatch(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
+		t.httpobjpatch(w, r, apireq)
+		apiReqFree(apireq)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
@@ -591,10 +613,8 @@ func (t *target) ecHandler(w http.ResponseWriter, r *http.Request) {
 // Checks if the object exists locally (if not, downloads it) and sends it back
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
-func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
+func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	if err := t.parseReq(w, r, apireq); err != nil {
-		apiReqFree(apireq)
 		return
 	}
 	if err := apireq.dpq.fromRawQ(r.URL.RawQuery); err != nil {
@@ -612,7 +632,6 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request) {
 	lom := cluster.AllocLOM(apireq.items[1])
 	lom = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
 	cluster.FreeLOM(lom)
-	apiReqFree(apireq)
 }
 
 // getObject is main function to get the object. It doesn't check request origin,
@@ -680,19 +699,11 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	return lom
 }
 
-// PUT /v1/objects/bucket-name/object-name
+// PUT /v1/objects/bucket-name/object-name; does:
 // 1) append object 2) append to archive 3) PUT
-func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
-	defer apiReqFree(apireq)
-	if err := t.parseReq(w, r, apireq); err != nil {
-		return
-	}
-
-	// prep and check
+func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *cluster.LOM) {
 	var (
 		config  = cmn.GCO.Get()
-		objName = apireq.items[1]
 		started = time.Now()
 		t2tput  = isT2TPut(r.Header)
 	)
@@ -714,8 +725,6 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// init
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -785,10 +794,8 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
-func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var msg aisMsg
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
-	defer apiReqFree(apireq)
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
@@ -802,27 +809,28 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 	evict := msg.Action == apc.ActEvictObjects
 	lom := cluster.AllocLOM(apireq.items[1])
-	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
+		cluster.FreeLOM(lom)
 		return
 	}
 
 	errCode, err := t.DeleteObject(lom, evict)
-	if err != nil {
+	if err == nil {
+		// EC cleanup if EC is enabled
+		ec.ECM.CleanupObject(lom)
+	} else {
 		if errCode == http.StatusNotFound {
 			t.writeErrSilentf(w, r, http.StatusNotFound, "%s doesn't exist", lom.Cname())
 		} else {
 			t.writeErr(w, r, err, errCode)
 		}
-		return
 	}
-	// EC cleanup if EC is enabled
-	ec.ECM.CleanupObject(lom)
+	cluster.FreeLOM(lom)
 }
 
 // POST /v1/objects/bucket-name/object-name
-func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := t.readActionMsg(w, r)
 	if err != nil {
 		return
@@ -831,8 +839,6 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		t.writeErrAct(w, r, msg.Action)
 		return
 	}
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false /*useDpq*/)
-	defer apiReqFree(apireq)
 	if t.parseReq(w, r, apireq) != nil {
 		return
 	}
@@ -856,14 +862,11 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
-func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
-	err := t.parseReq(w, r, apireq)
-	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
-	apiReqFree(apireq)
-	if err != nil {
+func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
+	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	query, bck, objName := apireq.query, apireq.bck, apireq.items[1]
 	if cmn.Features.IsSet(feat.EnforceIntraClusterAccess) {
 		// validates that the request is internal (by a node in the same cluster)
 		if isRedirect(query) == "" && t.isIntraCall(r.Header, false) != nil {
@@ -1010,9 +1013,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 // PATCH /v1/objects/<bucket-name>/<object-name>
 // By default, adds or updates existing custom keys. Will remove all existing keys and
 // replace them with the specified ones _iff_ `apc.QparamNewCustom` is set.
-func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request) {
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, false)
-	defer apiReqFree(apireq)
+func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}

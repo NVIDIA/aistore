@@ -6,7 +6,6 @@ package api
 
 import (
 	"encoding/hex"
-	"fmt"
 	"io"
 	"net/http"
 	"net/textproto"
@@ -474,7 +473,7 @@ func AppendObject(args AppendArgs) (string /*handle*/, error) {
 	wresp, err := DoWithRetry(args.BaseParams.Client, args._append, reqArgs) //nolint:bodyclose // it's closed inside
 	cmn.FreeHra(reqArgs)
 	if err != nil {
-		return "", fmt.Errorf("failed to %s, err: %v", http.MethodPut, err)
+		return "", err
 	}
 	return wresp.Header.Get(apc.HdrAppendHandle), err
 }
@@ -546,13 +545,10 @@ func Promote(args *PromoteArgs) (xid string, err error) {
 
 // DoWithRetry executes `http-client.Do` and retries *retriable connection errors*,
 // such as "broken pipe" and "connection refused".
-//
 // This function always closes the `reqArgs.BodR`, even in case of error.
-//
-// Should be used for PUT requests as it puts reader into a request.
-//
+// Usage: PUT and simlar requests that transfer payload from the user side.
 // NOTE: always closes request body reader (reqArgs.BodyR) - explicitly or via Do()
-// TODO: this code must be totally revised
+// TODO: refactor
 func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (resp *http.Response, err error) {
 	var (
 		req    *http.Request
@@ -560,11 +556,6 @@ func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (r
 		sleep  = httpRetrySleep
 		reader = reqArgs.BodyR.(cos.ReadOpenCloser)
 	)
-	cleanup := func() {
-		if resp != nil && doErr == nil {
-			resp.Body.Close() // NOTE: not returning err close
-		}
-	}
 	// first time
 	if req, err = cb(reqArgs); err != nil {
 		cos.Close(reader)
@@ -572,46 +563,54 @@ func DoWithRetry(client *http.Client, cb NewRequestCB, reqArgs *cmn.HreqArgs) (r
 	}
 	resp, doErr = client.Do(req)
 	err = doErr
-	defer cleanup()
-	if !shouldRetryHTTP(doErr, resp) {
+	if !_retry(doErr, resp) {
 		goto exit
 	}
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		sleep = httpRetryRateSleep
 	}
+
 	// retry
 	for i := 0; i < httpMaxRetries; i++ {
 		var r io.ReadCloser
 		time.Sleep(sleep)
 		sleep += sleep / 2
 		if r, err = reader.Open(); err != nil {
+			_close(resp, doErr)
 			return
 		}
 		reqArgs.BodyR = r
 
 		if req, err = cb(reqArgs); err != nil {
 			cos.Close(r)
+			_close(resp, doErr)
 			return
 		}
-		cleanup()
+		_close(resp, doErr)
 		resp, doErr = client.Do(req)
 		err = doErr
-		if !shouldRetryHTTP(doErr, resp) {
+		if !_retry(doErr, resp) {
 			goto exit
 		}
 	}
 exit:
-	if err != nil {
-		return nil, fmt.Errorf("failed to %s: %v", reqArgs.Method, err)
+	if err == nil {
+		reqParams := AllocRp()
+		err = reqParams.checkResp(resp)
+		cos.DrainReader(resp.Body)
+		FreeRp(reqParams)
 	}
-	reqParams := AllocRp()
-	err = reqParams.checkResp(resp)
-	cos.DrainReader(resp.Body)
-	FreeRp(reqParams)
+	_close(resp, doErr)
 	return
 }
 
-func shouldRetryHTTP(err error, resp *http.Response) bool {
+func _close(resp *http.Response, doErr error) {
+	if resp != nil && doErr == nil {
+		cos.Close(resp.Body)
+	}
+}
+
+func _retry(err error, resp *http.Response) bool {
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		return true
 	}

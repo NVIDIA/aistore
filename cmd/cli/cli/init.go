@@ -24,18 +24,17 @@ var loggedUserToken string
 func Init() (err error) {
 	cfg, err = config.Load()
 	if err != nil {
-		return err
+		return
 	}
+	// kubernetes
 	k8sDetected = detectK8s()
-	initClusterParams()
-	return nil
-}
 
-// private
-
-func initClusterParams() {
+	// auth
 	loggedUserToken = authn.LoadToken("")
 
+	//
+	// http transport and clients: the main one and auth, if enabled
+	//
 	clusterURL = _clusterURL(cfg)
 	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
@@ -51,7 +50,6 @@ func initClusterParams() {
 			UseHTTPS:    cos.IsHTTPS(authnURL),
 			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 		})
-
 		authParams = api.BaseParams{
 			Client: authnHTTPClient,
 			URL:    authnURL,
@@ -59,13 +57,13 @@ func initClusterParams() {
 			UA:     ua,
 		}
 	}
-
 	apiBP = api.BaseParams{
 		Client: defaultHTTPClient,
 		URL:    clusterURL,
 		Token:  loggedUserToken,
 		UA:     ua,
 	}
+	return
 }
 
 // resolving order:

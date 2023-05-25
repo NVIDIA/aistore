@@ -62,7 +62,7 @@ type (
 )
 
 func newErrCreateHTTPRequest(err error) error {
-	return fmt.Errorf("failed to create new HTTP request, err: %v", err)
+	return fmt.Errorf("failed to create HTTP request: %w", err)
 }
 
 // HTTPStatus returns HTTP status or (-1) for non-HTTP error.

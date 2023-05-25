@@ -63,7 +63,7 @@ func ETLGetInitMsg(params BaseParams, etlName string) (etl.InitMsg, error) {
 
 	b, err := io.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response, err: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 	return etl.UnmarshalInitMsg(b)
 }

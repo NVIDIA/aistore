@@ -88,6 +88,7 @@ func NewTransport(args TransportArgs) *http.Transport {
 		MaxIdleConns:          args.MaxIdleConns,
 		WriteBufferSize:       args.WriteBufferSize,
 		ReadBufferSize:        args.ReadBufferSize,
+		DisableCompression:    true, // NOTE: hardcoded - never used
 	}
 
 	// apply global defaults

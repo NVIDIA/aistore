@@ -323,13 +323,11 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 
 // DELETE { action } /v1/buckets/bucket-name
 // (evict | delete) (list | range)
-func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg := aisMsg{}
 	if err := readJSON(w, r, &msg); err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -392,13 +390,11 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/buckets/bucket-name
-func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := t.readAisMsg(w, r)
 	if err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -440,7 +436,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/buckets/bucket-name
-func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		bucketProps cos.StrKVs
 		err         error
@@ -448,8 +444,6 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		hdr         = w.Header()
 		code        int
 	)
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
-	defer apiReqFree(apireq)
 	if err = t.parseReq(w, r, apireq); err != nil {
 		return
 	}

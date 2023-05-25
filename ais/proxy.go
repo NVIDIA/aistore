@@ -368,17 +368,25 @@ func (p *proxy) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		p.httpbckget(w, r)
+		dpq := dpqAlloc()
+		p.httpbckget(w, r, dpq)
+		dpqFree(dpq)
 	case http.MethodDelete:
-		p.httpbckdelete(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
+		p.httpbckdelete(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPut:
 		p.httpbckput(w, r)
 	case http.MethodPost:
 		p.httpbckpost(w, r)
 	case http.MethodHead:
-		p.httpbckhead(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
+		p.httpbckhead(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodPatch:
-		p.httpbckpatch(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
+		p.httpbckpatch(w, r, apireq)
+		apiReqFree(apireq)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPatch, http.MethodPost)
@@ -391,11 +399,15 @@ func (p *proxy) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		p.httpobjget(w, r)
 	case http.MethodPut:
-		p.httpobjput(w, r)
+		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
+		p.httpobjput(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodDelete:
 		p.httpobjdelete(w, r)
 	case http.MethodPost:
-		p.httpobjpost(w, r)
+		apireq := apiReqAlloc(1, apc.URLPathObjects.L, false /*dpq*/)
+		p.httpobjpost(w, r, apireq)
+		apiReqFree(apireq)
 	case http.MethodHead:
 		p.httpobjhead(w, r)
 	case http.MethodPatch:
@@ -499,7 +511,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /v1/buckets[/bucket-name]
-func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	var (
 		msg     *apc.ActMsg
 		bckName string
@@ -519,8 +531,6 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request) {
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
-	dpq := dpqAlloc()
-	defer dpqFree(dpq)
 	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -632,15 +642,13 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 }
 
 // PUT /v1/objects/bucket-name/object-name
-func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		nodeID string
 		perms  apc.AccessAttrs
 	)
 	// 1. request
-	apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 	if err := p.parseReq(w, r, apireq); err != nil {
-		apiReqFree(apireq)
 		return
 	}
 	appendTyProvided := apireq.dpq.appendTy != "" // apc.QparamAppendType
@@ -649,7 +657,6 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // apc.QparamAppendHandle
 		if err != nil {
-			apiReqFree(apireq)
 			p.writeErr(w, r, err)
 			return
 		}
@@ -671,7 +678,6 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request) {
 	freeInitBckArgs(bckArgs)
 
 	objName := apireq.items[1]
-	apiReqFree(apireq)
 	if err != nil {
 		return
 	}
@@ -740,10 +746,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE { action } /v1/buckets
-func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	// 1. request
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
-	defer apiReqFree(apireq)
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1535,13 +1539,11 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 }
 
 // POST { action } /v1/objects/bucket-name[/object-name]
-func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	msg, err := p.readActionMsg(w, r)
 	if err != nil {
 		return
 	}
-	apireq := apiReqAlloc(1, apc.URLPathObjects.L, false /*dpq*/)
-	defer apiReqFree(apireq)
 	if msg.Action == apc.ActRenameObject {
 		apireq.after = 2
 	}
@@ -1609,16 +1611,13 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request) {
 }
 
 // HEAD /v1/buckets/bucket-name
-func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		info           *cmn.BsummResult
 		hdr            = w.Header()
-		apireq         = apiReqAlloc(1, apc.URLPathBuckets.L, true /*dpq*/)
 		fltPresence    int  // operate on present-only or otherwise (as per apc.Flt* enum)
 		wantBckSummary bool // whether to include bucket summary in the response
 	)
-	defer apiReqFree(apireq)
-
 	if err := p.parseReq(w, r, apireq); err != nil {
 		return
 	}
@@ -1707,7 +1706,7 @@ func toHdr(bck *meta.Bck, hdr http.Header, info *cmn.BsummResult) {
 }
 
 // PATCH /v1/buckets/bucket-name
-func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
 		err           error
 		msg           *apc.ActMsg
@@ -1715,8 +1714,6 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request) {
 		xid           string
 		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
 	)
-	apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false /*dpq*/)
-	defer apiReqFree(apireq)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		return
 	}
