@@ -42,9 +42,10 @@ type (
 		tsi       *meta.Snode
 		archlom   *cluster.LOM
 		fqn       string   // workFQN --/--
-		fh        *os.File // --/--
+		wfh       *os.File // --/--
 		cksum     cos.CksumHashSize
-		appendPos int64 // append to existing archive
+		appendPos int64        // append to existing archive
+		cnt       atomic.Int32 // num archived
 		// finishing
 		refc       atomic.Int32
 		finalizing atomic.Bool
@@ -135,7 +136,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		if exists && wi.msg.AppendIfExists {
 			lmfh, err = wi.beginAppend()
 		} else {
-			wi.fh, err = wi.archlom.CreateFile(wi.fqn)
+			wi.wfh, err = wi.archlom.CreateFile(wi.fqn)
 		}
 		if err != nil {
 			cluster.FreeLOM(archlom)
@@ -143,7 +144,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		}
 
 		// construct format-specific writer
-		wi.writer = archive.NewWriter(msg.Mime, wi.fh, &wi.cksum, true /*serialize*/)
+		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, true /*serialize*/)
 
 		// append
 		if lmfh != nil {
@@ -181,7 +182,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			if !ok {
-				debug.Assert(!r.err.IsNil()) // see cleanup
+				debug.Assert(r.err.Cnt() > 0) // see cleanup
 				goto fin
 			}
 			var (
@@ -202,7 +203,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				err = r.AbortErr()
 			}
 			if err != nil {
-				wi.abort()
+				wi.cleanup()
 				goto fin
 			}
 			if r.p.T.SID() == wi.tsi.ID() {
@@ -232,13 +233,13 @@ fin:
 		return
 	}
 
-	// [cleanup] close and rm unfinished archives (compare w/ `finalize`)
+	// [cleanup] close and rm unfinished archives (compare w/ finalize)
 	r.pending.Lock()
 	for uuid, wi := range r.pending.m {
 		if wi.finalizing.Load() {
 			continue
 		}
-		wi.abort()
+		wi.cleanup()
 		delete(r.pending.m, uuid)
 	}
 	r.pending.Unlock()
@@ -258,22 +259,28 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 }
 
 func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-	r.IncPending()
-	defer func() {
-		r.DecPending()
-		transport.DrainAndFreeReader(objReader)
-	}()
 	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
-		return err
+		goto ex
 	}
 
+	r.IncPending()
+	err = r._recv(&hdr, objReader)
+	r.DecPending()
+	transport.DrainAndFreeReader(objReader)
+ex:
+	if err != nil && verbose {
+		glog.Error(err)
+	}
+	return err
+}
+
+func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	txnUUID := string(hdr.Opaque)
 	r.pending.RLock()
 	wi, ok := r.pending.m[txnUUID]
 	r.pending.RUnlock()
 	if !ok {
-		debug.Assert(!r.err.IsNil()) // see cleanup
+		debug.Assert(r.err.Cnt() > 0) // see cleanup
 		return r.err.Err()
 	}
 	debug.Assert(wi.tsi.ID() == r.p.T.SID() && wi.msg.TxnUUID == txnUUID)
@@ -284,9 +291,12 @@ func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) er
 		debug.Assert(refc >= 0)
 		return nil
 	}
+
 	debug.Assert(hdr.Opcode == 0)
-	err = wi.writer.Write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
-	if err != nil {
+	err := wi.writer.Write(wi.nameInArch(hdr.ObjName), &hdr.ObjAttrs, objReader)
+	if err == nil {
+		wi.cnt.Inc()
+	} else {
 		r.raiseErr(err, wi.msg.ContinueOnError)
 	}
 	return nil
@@ -307,26 +317,49 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	errCode, err := r.fini(wi)
 	r.DecPending()
+	if err == nil {
+		return // ok
+	}
 
-	if err != nil {
-		wi.abort()
-		r.raiseErr(err, wi.msg.ContinueOnError, errCode)
+	wi.cleanup()
+	r.raiseErr(err, wi.msg.ContinueOnError, errCode)
+	if verbose {
+		return // logged elsewhere
+	}
+	const maxerrs = 11
+	if cnt := r.err.Cnt(); cnt <= maxerrs {
+		if cnt == maxerrs {
+			glog.Infof("Warning: %s logged max num errors (%d)", r, maxerrs-1)
+		} else {
+			glog.Error(err)
+		}
 	}
 }
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
-	var size int64
 	wi.writer.Fini()
-	if size, err = wi.finalize(); err != nil {
-		return http.StatusInternalServerError, err
+
+	var size int64
+	if wi.cnt.Load() == 0 {
+		s := "empty"
+		if wi.appendPos > 0 {
+			s = "no new appends to"
+		}
+		err = fmt.Errorf("%s: %s %s (%v)", r, s, wi.archlom, r.err.Err())
+	} else {
+		size, err = wi.finalize()
+	}
+	if err != nil {
+		cluster.FreeLOM(wi.archlom)
+		errCode = http.StatusInternalServerError
+		return
 	}
 
 	wi.archlom.SetSize(size)
-	cos.Close(wi.fh)
-	wi.fh = nil
+	cos.Close(wi.wfh)
+	wi.wfh = nil
 	errCode, err = r.p.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
 	cluster.FreeLOM(wi.archlom)
-
 	r.ObjsAdd(1, size-wi.appendPos)
 	return
 }
@@ -382,7 +415,7 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 	if err != nil {
 		return
 	}
-	if wi.fh, err = wi.archlom.CreateFile(wi.fqn); err != nil {
+	if wi.wfh, err = wi.archlom.CreateFile(wi.fqn); err != nil {
 		cos.Close(lmfh)
 		lmfh = nil
 	}
@@ -393,16 +426,18 @@ func (wi *archwi) openTarForAppend() (err error) {
 	if err = os.Rename(wi.archlom.FQN, wi.fqn); err != nil {
 		return
 	}
-	wi.fh, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
+	// open (rw) lom itself
+	wi.wfh, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
 	if err != nil {
 		goto roll
 	}
-	wi.appendPos, err = wi.fh.Seek(0, io.SeekCurrent)
+	wi.appendPos, err = wi.wfh.Seek(0, io.SeekCurrent)
 	if err == nil {
 		return // ok
 	}
-	cos.Close(wi.fh)
-	wi.fh = nil
+	wi.appendPos = 0
+	cos.Close(wi.wfh)
+	wi.wfh = nil
 roll:
 	if errV := wi.archlom.RenameFrom(wi.fqn); errV != nil {
 		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
@@ -449,10 +484,12 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		wi.r.doSend(lom, wi, fh)
 		return
 	}
-	debug.Assert(wi.fh != nil) // see Begin
+	debug.Assert(wi.wfh != nil) // see Begin
 	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh /*reader*/)
 	cos.Close(fh)
-	if err != nil {
+	if err == nil {
+		wi.cnt.Inc()
+	} else {
 		wi.r.raiseErr(err, wi.msg.ContinueOnError)
 	}
 }
@@ -474,30 +511,31 @@ func (wi *archwi) nameInArch(objName string) string {
 	return cos.UnsafeS(buf)
 }
 
-func (wi *archwi) abort() {
-	if wi.fh != nil {
-		cos.Close(wi.fh)
-		wi.fh = nil
+func (wi *archwi) cleanup() {
+	if wi.wfh != nil {
+		cos.Close(wi.wfh)
+		wi.wfh = nil
 	}
 	if wi.fqn != "" {
-		cos.RemoveFile(wi.fqn)
+		if wi.archlom == nil || wi.archlom.FQN != wi.fqn {
+			cos.RemoveFile(wi.fqn)
+		}
 		wi.fqn = ""
 	}
 }
 
-func (wi *archwi) finalize() (size int64, err error) {
-	var cksum *cos.Cksum
+func (wi *archwi) finalize() (int64, error) {
 	if wi.appendPos > 0 {
-		var st os.FileInfo
-		if st, err = os.Stat(wi.fqn); err == nil {
-			size = st.Size()
+		size, err := wi.wfh.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return 0, err
 		}
-		cksum = cos.NewCksum(cos.ChecksumNone, "")
-	} else {
-		wi.cksum.Finalize()
-		cksum = &wi.cksum.Cksum
-		size = wi.cksum.Size
+		debug.Assertf(size > wi.appendPos, "%d vs %d", size, wi.appendPos)
+		// checksum traded off
+		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, ""))
+		return size, nil
 	}
-	wi.archlom.SetCksum(cksum)
-	return size, err
+	wi.cksum.Finalize()
+	wi.archlom.SetCksum(&wi.cksum.Cksum)
+	return wi.cksum.Size, nil
 }

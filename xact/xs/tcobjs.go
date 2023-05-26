@@ -90,17 +90,32 @@ func (p *tcoFactory) Start() error {
 // XactTCObjs //
 ////////////////
 
+func (r *XactTCObjs) Name() string {
+	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
+}
+
+func (r *XactTCObjs) String() string {
+	return r.streamingX.String() + " => " + r.args.BckTo.String()
+}
+
+func (r *XactTCObjs) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
+
+func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
+	snap = &cluster.Snap{}
+	r.ToSnap(snap)
+
+	snap.IdleX = r.IsIdle()
+	f, t := r.FromTo()
+	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
+	return
+}
+
 func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
 	wi := &tcowi{r: r, msg: msg}
 	r.pending.Lock()
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
 	r.pending.Unlock()
-}
-
-func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
-	r.IncPending()
-	r.workCh <- msg
 }
 
 func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
@@ -118,7 +133,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			if !ok {
-				debug.Assert(!r.err.IsNil()) // see cleanup
+				debug.Assert(r.err.Cnt() > 0) // see cleanup
 				goto fin
 			}
 			wi.refc.Store(int32(smap.CountTargets() - 1))
@@ -158,17 +173,34 @@ fin:
 	}
 }
 
+// more work
+func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
+	r.IncPending()
+	r.workCh <- msg
+}
+
+//
+// Rx
+//
+
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-	r.IncPending()
-	defer func() {
-		r.DecPending()
-		transport.DrainAndFreeReader(objReader)
-	}()
 	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
-		return err
+		goto ex
 	}
+
+	r.IncPending()
+	err = r._recv(&hdr, objReader)
+	r.DecPending()
+	transport.DrainAndFreeReader(objReader)
+ex:
+	if err != nil && verbose {
+		glog.Error(err)
+	}
+	return err
+}
+
+func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode == opcodeDone {
 		txnUUID := string(hdr.Opaque)
 		r.pending.RLock()
@@ -186,13 +218,17 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 		}
 		return nil
 	}
-	debug.Assert(hdr.Opcode == 0)
 
+	debug.Assert(hdr.Opcode == 0)
 	lom := cluster.AllocLOM(hdr.ObjName)
-	defer cluster.FreeLOM(lom)
-	if err := lom.InitBck(&hdr.Bck); err != nil {
-		glog.Error(err)
-		return err
+	err := r._put(hdr, objReader, lom)
+	cluster.FreeLOM(lom)
+	return err
+}
+
+func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) (err error) {
+	if err = lom.InitBck(&hdr.Bck); err != nil {
+		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
 	params := cluster.AllocPutObjParams()
@@ -215,29 +251,6 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	params.Atime = lom.Atime()
 	err = r.p.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
-	if err != nil {
-		glog.Error(err)
-	}
-	return err
-}
-
-func (r *XactTCObjs) Name() string {
-	return fmt.Sprintf("%s => %s", r.streamingX.Name(), r.args.BckTo)
-}
-
-func (r *XactTCObjs) String() string {
-	return r.streamingX.String() + " => " + r.args.BckTo.String()
-}
-
-func (r *XactTCObjs) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
-
-func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
-	r.ToSnap(snap)
-
-	snap.IdleX = r.IsIdle()
-	f, t := r.FromTo()
-	snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
 	return
 }
 

@@ -64,7 +64,7 @@ func (ea *ErrValue) _load() (err error) {
 	return
 }
 
-func (ea *ErrValue) IsNil() bool { return ea.cnt.Load() == 0 }
+func (ea *ErrValue) Cnt() int { return int(ea.cnt.Load()) }
 
 func (ea *ErrValue) Err() (err error) {
 	err = ea._load()
