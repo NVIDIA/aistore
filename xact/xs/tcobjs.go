@@ -111,9 +111,8 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
-				smap    = r.p.T.Sowner().Get()
-				lrit    = &lriterator{}
-				freeLOM = false // not delegating
+				smap = r.p.T.Sowner().Get()
+				lrit = &lriterator{}
 			)
 			r.pending.RLock()
 			wi, ok := r.pending.m[msg.TxnUUID]
@@ -123,7 +122,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			wi.refc.Store(int32(smap.CountTargets() - 1))
-			lrit.init(r, r.p.T, &msg.ListRange, freeLOM)
+			lrit.init(r, r.p.T, &msg.ListRange)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {

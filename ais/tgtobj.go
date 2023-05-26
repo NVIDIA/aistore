@@ -1464,7 +1464,7 @@ func (a *apndArchI) do() (int, error) {
 		return 0, errors.New("archive path is not defined")
 	}
 	// standard library does not support appending to tgz and zip;
-	// for TAR there is an optimal workaround (below) not requiring full reconstruction
+	// for TAR there is an optimizing workaround not requiring full copy
 	if a.mime == archive.ExtTar && !a.put {
 		var (
 			err     error
@@ -1481,6 +1481,7 @@ func (a *apndArchI) do() (int, error) {
 				return http.StatusInternalServerError, errV
 			}
 			if err == archive.ErrTarIsEmpty {
+				a.put = true
 				goto cpap
 			}
 			return http.StatusInternalServerError, err

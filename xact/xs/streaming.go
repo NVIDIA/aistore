@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -111,22 +110,12 @@ func (r *streamingX) TxnAbort() {
 }
 
 func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
-	var s string
-	if cmn.IsErrAborted(err) {
-		if verbose {
-			glog.Warningf("%s[%s] aborted", r.p.T, r)
-		}
+	if verbose {
+		glog.WarningDepth(1, err, errCode)
+	}
+	if cmn.IsErrAborted(err) || contOnErr {
 		return
 	}
-	err = fmt.Errorf("%s[%s]: %w", r.p.T, r, err)
-	if len(errCode) > 0 {
-		s = fmt.Sprintf(" (%d)", errCode[0])
-	}
-	if contOnErr {
-		glog.WarningDepth(1, err.Error()+s+" - continuing...")
-		return
-	}
-	glog.ErrorDepth(1, err.Error()+s+" - storing...")
 	r.err.Store(err)
 }
 

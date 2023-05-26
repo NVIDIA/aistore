@@ -47,11 +47,10 @@ type (
 	// common mult-obj operation context
 	// common iterateList()/iterateRange() logic
 	lriterator struct {
-		xctn    lrxact
-		t       cluster.Target
-		ctx     context.Context
-		msg     *apc.ListRange
-		freeLOM bool // free LOM upon return from lriterator.do()
+		xctn lrxact
+		t    cluster.Target
+		ctx  context.Context
+		msg  *apc.ListRange
 	}
 )
 
@@ -96,12 +95,11 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *apc.ListRange, freeLOM bool) {
+func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *apc.ListRange) {
 	r.xctn = xctn
 	r.t = t
 	r.ctx = context.Background()
 	r.msg = msg
-	r.freeLOM = freeLOM
 }
 
 func (r *lriterator) iterateRange(wi lrwi, smap *meta.Smap) error {
@@ -123,12 +121,9 @@ func (r *lriterator) iterateTemplate(smap *meta.Smap, pt *cos.ParsedTemplate, wi
 		}
 		lom := cluster.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
+		cluster.FreeLOM(lom)
 		if err != nil {
-			cluster.FreeLOM(lom)
 			return err
-		}
-		if r.freeLOM {
-			cluster.FreeLOM(lom)
 		}
 	}
 	return nil
@@ -177,13 +172,10 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 			}
 			lom := cluster.AllocLOM(be.Name)
 			err := r.do(lom, wi, smap)
+			cluster.FreeLOM(lom)
 			if err != nil {
-				cluster.FreeLOM(lom)
 				freeLsoEntries(lst.Entries)
 				return err
-			}
-			if r.freeLOM {
-				cluster.FreeLOM(lom)
 			}
 		}
 		freeLsoEntries(lst.Entries)
@@ -204,12 +196,9 @@ func (r *lriterator) iterateList(wi lrwi, smap *meta.Smap) error {
 		}
 		lom := cluster.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
+		cluster.FreeLOM(lom)
 		if err != nil {
-			cluster.FreeLOM(lom)
 			return err
-		}
-		if r.freeLOM {
-			cluster.FreeLOM(lom)
 		}
 	}
 	return nil
@@ -228,6 +217,7 @@ func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *meta.Smap) error {
 			return nil
 		}
 	}
+	// NOTE: lom is alloc-ed prior to the call and freed upon return
 	wi.do(lom, r)
 	return nil
 }
@@ -257,7 +247,7 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete) {
 	ed = &evictDelete{}
-	ed.lriterator.init(ed, xargs.T, msg, true /*freeLOM*/)
+	ed.lriterator.init(ed, xargs.T, msg)
 	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
@@ -332,7 +322,7 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (prf *prefetch) {
 	prf = &prefetch{}
-	prf.lriterator.init(prf, xargs.T, msg, true /*freeLOM*/)
+	prf.lriterator.init(prf, xargs.T, msg)
 	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xctn = prf
 	return

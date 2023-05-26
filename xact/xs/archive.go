@@ -40,9 +40,9 @@ type (
 		r         *XactArch
 		msg       *cmn.ArchiveMsg
 		tsi       *meta.Snode
-		lom       *cluster.LOM // of the archive
-		fqn       string       // workFQN --/--
-		fh        *os.File     // --/--
+		archlom   *cluster.LOM
+		fqn       string   // workFQN --/--
+		fh        *os.File // --/--
 		cksum     cos.CksumHashSize
 		appendPos int64 // append to existing archive
 		// finishing
@@ -101,16 +101,17 @@ func (p *archFactory) Start() error {
 //////////////
 
 func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
-	lom := cluster.AllocLOM(msg.ArchName)
-	if err = lom.InitBck(&msg.ToBck); err != nil {
+	archlom := cluster.AllocLOM(msg.ArchName)
+	if err = archlom.InitBck(&msg.ToBck); err != nil {
 		r.raiseErr(err, msg.ContinueOnError)
+		cluster.FreeLOM(archlom)
 		return
 	}
-	debug.Assert(lom.Cname() == msg.Cname()) // relying on it
+	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
 
-	wi := &archwi{r: r, msg: msg, lom: lom}
-	wi.fqn = fs.CSM.Gen(wi.lom, fs.WorkfileType, fs.WorkfileCreateArch)
-	wi.cksum.Init(lom.CksumType())
+	wi := &archwi{r: r, msg: msg, archlom: archlom}
+	wi.fqn = fs.CSM.Gen(wi.archlom, fs.WorkfileType, fs.WorkfileCreateArch)
+	wi.cksum.Init(archlom.CksumType())
 
 	smap := r.p.T.Sowner().Get()
 
@@ -119,6 +120,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
+		cluster.FreeLOM(archlom)
 		r.raiseErr(err, msg.ContinueOnError)
 		return
 	}
@@ -127,15 +129,16 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	if r.p.T.SID() == wi.tsi.ID() {
 		var (
 			lmfh        *os.File
-			finfo, errX = os.Stat(wi.lom.FQN)
+			finfo, errX = os.Stat(wi.archlom.FQN)
 			exists      = errX == nil
 		)
 		if exists && wi.msg.AppendIfExists {
 			lmfh, err = wi.beginAppend()
 		} else {
-			wi.fh, err = wi.lom.CreateFile(wi.fqn)
+			wi.fh, err = wi.archlom.CreateFile(wi.fqn)
 		}
 		if err != nil {
+			cluster.FreeLOM(archlom)
 			return
 		}
 
@@ -182,11 +185,10 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			var (
-				smap    = r.p.T.Sowner().Get()
-				lrit    = &lriterator{}
-				freeLOM = false // not delegating to iterator
+				smap = r.p.T.Sowner().Get()
+				lrit = &lriterator{}
 			)
-			lrit.init(r, r.p.T, &msg.ListRange, freeLOM)
+			lrit.init(r, r.p.T, &msg.ListRange)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)
 			} else {
@@ -213,6 +215,8 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				r.wiCnt.Dec()
 				r.pending.Unlock()
 				r.DecPending()
+
+				cluster.FreeLOM(wi.archlom) // see Begin
 			}
 		case <-r.IdleTimer():
 			goto fin
@@ -249,9 +253,7 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
 		hdr.Opaque = []byte(wi.msg.TxnUUID)
 	}
-	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
-		cluster.FreeLOM(lom)
-	}
+	// o.Callback nil on purpose (lom is freed by the iterator)
 	r.p.dm.Send(o, fh, wi.tsi)
 }
 
@@ -290,6 +292,7 @@ func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) er
 	return nil
 }
 
+// NOTE: in goroutine
 func (r *XactArch) finalize(wi *archwi) {
 	if q := wi.quiesce(); q == cluster.QuiAborted {
 		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), wi.msg.ContinueOnError)
@@ -318,11 +321,11 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 		return http.StatusInternalServerError, err
 	}
 
-	wi.lom.SetSize(size)
+	wi.archlom.SetSize(size)
 	cos.Close(wi.fh)
 	wi.fh = nil
-	errCode, err = r.p.T.FinalizeObj(wi.lom, wi.fqn, r) // cmn.OwtFinalize
-	cluster.FreeLOM(wi.lom)
+	errCode, err = r.p.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
+	cluster.FreeLOM(wi.archlom)
 
 	r.ObjsAdd(1, size-wi.appendPos)
 	return
@@ -375,11 +378,11 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 	}
 	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
 	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
-	lmfh, err = os.Open(wi.lom.FQN)
+	lmfh, err = os.Open(wi.archlom.FQN)
 	if err != nil {
 		return
 	}
-	if wi.fh, err = wi.lom.CreateFile(wi.fqn); err != nil {
+	if wi.fh, err = wi.archlom.CreateFile(wi.fqn); err != nil {
 		cos.Close(lmfh)
 		lmfh = nil
 	}
@@ -387,10 +390,10 @@ func (wi *archwi) beginAppend() (lmfh *os.File, err error) {
 }
 
 func (wi *archwi) openTarForAppend() (err error) {
-	if err = os.Rename(wi.lom.FQN, wi.fqn); err != nil {
+	if err = os.Rename(wi.archlom.FQN, wi.fqn); err != nil {
 		return
 	}
-	wi.fh, err = archive.OpenTarSeekEnd(wi.lom.ObjName, wi.fqn)
+	wi.fh, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
 	if err != nil {
 		goto roll
 	}
@@ -401,15 +404,16 @@ func (wi *archwi) openTarForAppend() (err error) {
 	cos.Close(wi.fh)
 	wi.fh = nil
 roll:
-	if errV := wi.lom.RenameFrom(wi.fqn); errV != nil {
+	if errV := wi.archlom.RenameFrom(wi.fqn); errV != nil {
 		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
-			wi.tsi, wi.lom, err, wi.fqn, errV)
+			wi.tsi, wi.archlom, err, wi.fqn, errV)
 	} else {
 		wi.fqn = ""
 	}
 	return
 }
 
+// multi-object iterator i/f: "handle work item"
 func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
@@ -417,12 +421,12 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			wi.r.raiseErr(err, wi.msg.ContinueOnError)
 			return
 		}
-		coldGet = lom.Bck().IsRemote()
-		if !coldGet {
+		if coldGet = lom.Bck().IsRemote(); !coldGet {
 			wi.r.raiseErr(err, wi.msg.ContinueOnError)
 			return
 		}
 	}
+
 	t := lrit.t
 	if coldGet {
 		// cold
@@ -446,8 +450,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		return
 	}
 	debug.Assert(wi.fh != nil) // see Begin
-	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh)
-	cluster.FreeLOM(lom)
+	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, fh /*reader*/)
 	cos.Close(fh)
 	if err != nil {
 		wi.r.raiseErr(err, wi.msg.ContinueOnError)
@@ -495,6 +498,6 @@ func (wi *archwi) finalize() (size int64, err error) {
 		cksum = &wi.cksum.Cksum
 		size = wi.cksum.Size
 	}
-	wi.lom.SetCksum(cksum)
+	wi.archlom.SetCksum(cksum)
 	return size, err
 }
