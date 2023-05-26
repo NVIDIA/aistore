@@ -7,6 +7,7 @@ import base64
 
 from typing import Any, Mapping, List, Optional, Dict
 
+import msgspec
 from pydantic import BaseModel, validator
 
 from aistore.sdk.namespace import Namespace
@@ -63,21 +64,53 @@ class Smap(BaseModel):
     creation_time: str = ""
 
 
-class BucketEntry(BaseModel):
+class BucketEntry(msgspec.Struct):
     """
     Represents a single entry in a bucket -- an object
     See cmn/objlist.go/LsoEntry
     """
 
-    name: str
-    size: int = 0
-    checksum: str = ""
-    atime: str = ""
-    version: str = ""
-    target_url: str = ""
-    copies: int = 0
-    flags: int = 0
-    object: "Object" = None
+    n: str
+    cs: str = ""
+    a: str = ""
+    v: str = ""
+    t: str = ""
+    s: int = 0
+    c: int = 0
+    f: int = 0
+    object: Any = None
+
+    @property
+    def name(self):
+        return self.n
+
+    @property
+    def checksum(self):
+        return self.cs
+
+    @property
+    def atime(self):
+        return self.a
+
+    @property
+    def version(self):
+        return self.v
+
+    @property
+    def location(self):
+        return self.t
+
+    @property
+    def size(self):
+        return self.s
+
+    @property
+    def copies(self):
+        return self.c
+
+    @property
+    def flags(self):
+        return self.f
 
     def is_cached(self):
         return (self.flags & (1 << 6)) != 0
@@ -86,25 +119,37 @@ class BucketEntry(BaseModel):
         return (self.flags & ((1 << 5) - 1)) == 0
 
 
-class BucketList(BaseModel):
+class BucketList(msgspec.Struct):
     """
     Represents the response when getting a list of bucket items, containing a list of BucketEntry objects
     """
 
-    uuid: str
-    entries: Optional[List[BucketEntry]] = []
-    continuation_token: str
-    flags: int
+    UUID: str
+    ContinuationToken: str
+    Flags: int
+    Entries: List[BucketEntry] = None
+
+    @property
+    def uuid(self):
+        return self.UUID
+
+    @property
+    def continuation_token(self):
+        return self.ContinuationToken
+
+    @property
+    def flags(self):
+        return self.Flags
+
+    @property
+    def entries(self):
+        return [] if self.Entries is None else self.Entries
 
     def get_entries(self):
+        """
+        Deprecated -- use entries property
+        """
         return self.entries
-
-    # pylint: disable=no-self-argument
-    @validator("entries")
-    def set_entries(cls, entries):
-        if entries is None:
-            entries = []
-        return entries
 
 
 class BucketModel(BaseModel):

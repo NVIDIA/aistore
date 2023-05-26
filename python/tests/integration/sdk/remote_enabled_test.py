@@ -92,7 +92,7 @@ class RemoteEnabledTest(unittest.TestCase):
         """
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
-        ).get_entries()
+        ).entries
         self.assertEqual(num_obj, len(objects))
         self._validate_objects_cached(objects, expected_cached)
 

@@ -29,7 +29,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_BUCKETS,
     HEADER_ACCEPT,
-    JSON_CONTENT_TYPE,
+    MSGPACK_CONTENT_TYPE,
 )
 from aistore.sdk.errors import InvalidBckProvider, ErrBckAlreadyExists, ErrBckNotFound
 from aistore.sdk.request_client import RequestClient
@@ -281,14 +281,15 @@ class TestBucket(unittest.TestCase):
         action = ActionMsg(action=ACT_LIST, value=expected_act_value).dict()
 
         object_names = ["obj_name", "obj_name2"]
+        bucket_entries = [BucketEntry(n=name) for name in object_names]
         mock_list = Mock(BucketList)
-        mock_list.entries = [BucketEntry(name=name) for name in object_names]
+        mock_list.entries = bucket_entries
         self.mock_client.request_deserialize.return_value = mock_list
         result = self.ais_bck.list_objects(**kwargs)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
             path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
-            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
+            headers={HEADER_ACCEPT: MSGPACK_CONTENT_TYPE},
             res_model=BucketList,
             json=action,
             params=self.ais_bck_params,
@@ -373,43 +374,44 @@ class TestBucket(unittest.TestCase):
         expected_act_value_2,
         **kwargs,
     ):
-        entry_1 = BucketEntry(name="entry1")
-        entry_2 = BucketEntry(name="entry2")
-        entry_3 = BucketEntry(name="entry3")
-        list_1 = BucketList(uuid=list_1_id, continuation_token=list_1_cont, flags=0)
-        list_1.entries = [entry_1]
-        list_2 = BucketList(uuid="456", continuation_token="", flags=0)
-        list_2.entries = [entry_2, entry_3]
-
-        self.mock_client.request_deserialize.return_value = BucketList(
-            uuid="empty", continuation_token="", flags=0
+        entry_1 = BucketEntry(n="entry1")
+        entry_2 = BucketEntry(n="entry2")
+        entry_3 = BucketEntry(n="entry3")
+        list_1 = BucketList(
+            UUID=list_1_id, ContinuationToken=list_1_cont, Flags=0, Entries=[entry_1]
         )
+        list_2 = BucketList(
+            UUID="456", ContinuationToken="", Flags=0, Entries=[entry_2, entry_3]
+        )
+
+        # Test with empty list of entries
+        self.mock_client.request_deserialize.return_value = BucketList(
+            UUID="empty", ContinuationToken="", Flags=0
+        )
+
         self.assertEqual([], self.ais_bck.list_all_objects(**kwargs))
 
+        # Test with non-empty lists
         self.mock_client.request_deserialize.side_effect = [list_1, list_2]
         self.assertEqual(
             [entry_1, entry_2, entry_3], self.ais_bck.list_all_objects(**kwargs)
         )
 
-        call_1 = mock.call(
-            HTTP_METHOD_GET,
-            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
-            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
-            res_model=BucketList,
-            json=ActionMsg(action=ACT_LIST, value=expected_act_value_1).dict(),
-            params=self.ais_bck_params,
-        )
+        expected_calls = []
+        for expected_val in [expected_act_value_1, expected_act_value_2]:
+            expected_calls.append(
+                mock.call(
+                    HTTP_METHOD_GET,
+                    path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
+                    headers={HEADER_ACCEPT: MSGPACK_CONTENT_TYPE},
+                    res_model=BucketList,
+                    json=ActionMsg(action=ACT_LIST, value=expected_val).dict(),
+                    params=self.ais_bck_params,
+                )
+            )
 
-        call_2 = mock.call(
-            HTTP_METHOD_GET,
-            path=f"{URL_PATH_BUCKETS}/{BCK_NAME}",
-            headers={HEADER_ACCEPT: JSON_CONTENT_TYPE},
-            res_model=BucketList,
-            json=ActionMsg(action=ACT_LIST, value=expected_act_value_2).dict(),
-            params=self.ais_bck_params,
-        )
-
-        self.mock_client.request_deserialize.assert_has_calls([call_1, call_2])
+        for expected in expected_calls:
+            self.assertIn(expected, self.mock_client.request_deserialize.call_args_list)
 
     def test_transform(self):
         etl_name = "etl-name"
@@ -539,7 +541,7 @@ class TestBucket(unittest.TestCase):
         for name in object_names:
             expected_obj_calls.append(call(name))
             expected_obj_calls.append(call().get_url(etl_name=etl_name))
-        mock_list_obj.return_value = [BucketEntry(name=name) for name in object_names]
+        mock_list_obj.return_value = [BucketEntry(n=name) for name in object_names]
         list(self.ais_bck.list_urls(prefix=prefix, etl_name=etl_name))
         mock_list_obj.assert_called_with(prefix=prefix, props="name")
         mock_object.assert_has_calls(expected_obj_calls)
@@ -563,7 +565,7 @@ class TestBucket(unittest.TestCase):
     def test_make_request(self):
         method = "method"
         action = "action"
-        value = "value"
+        value = {"request_key": "value"}
         params = {"qparamkey": "qparamval"}
         self.ais_bck.make_request(method, action, value, params)
         self.mock_client.request.assert_called_with(

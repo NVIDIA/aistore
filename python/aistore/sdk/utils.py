@@ -2,15 +2,18 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
 #
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Type, TypeVar
 
 import braceexpand
 import humanize
+
+from msgspec import msgpack
 import pydantic.tools
 import requests
-from pydantic import BaseModel
+from pydantic import BaseModel, parse_raw_as
+from requests import Response
 
-from aistore.sdk.const import UTF_ENCODING
+from aistore.sdk.const import UTF_ENCODING, HEADER_CONTENT_TYPE, MSGPACK_CONTENT_TYPE
 from aistore.sdk.errors import (
     AISError,
     ErrBckNotFound,
@@ -18,6 +21,8 @@ from aistore.sdk.errors import (
     ErrBckAlreadyExists,
     ErrETLAlreadyExists,
 )
+
+T = TypeVar("T")
 
 
 class HttpError(BaseModel):
@@ -156,3 +161,21 @@ def expand_braces(template: str) -> Iterator[str]:
     # pylint: disable = fixme
     # TODO Build custom expansion to validate consistent with cmn/cos/template.go TemplateRange
     return braceexpand.braceexpand(template)
+
+
+def decode_response(
+    res_model: Type[T],
+    resp: Response,
+) -> T:
+    """
+    Parse response content from the cluster into a Python class,
+     decoding with msgpack depending on content type in header
+
+    Args:
+        res_model (Type[T]): Resulting type to which the response should be deserialized
+        resp (Response): Response from the AIS cluster
+
+    """
+    if resp.headers.get(HEADER_CONTENT_TYPE) == MSGPACK_CONTENT_TYPE:
+        return msgpack.decode(resp.content, type=res_model)
+    return parse_raw_as(res_model, resp.text)

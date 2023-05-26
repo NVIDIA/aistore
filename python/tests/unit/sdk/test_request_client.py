@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch, Mock
 
+from requests import Response
+
 from aistore.sdk.const import (
     JSON_CONTENT_TYPE,
     HEADER_USER_AGENT,
@@ -29,25 +31,24 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
         self.assertEqual(self.endpoint, self.request_client.endpoint)
         self.assertEqual(self.mock_session, self.request_client.session)
 
-    @patch("aistore.sdk.request_client.parse_raw_as")
-    def test_request_deserialize(self, mock_parse):
+    @patch("aistore.sdk.request_client.RequestClient.request")
+    @patch("aistore.sdk.request_client.decode_response")
+    def test_request_deserialize(self, mock_decode, mock_request):
         method = "method"
         path = "path"
-        req_url = self.request_client.base_url + "/" + path
+        decoded_value = "test value"
+        custom_kw = "arg"
+        mock_decode.return_value = decoded_value
+        mock_response = Mock(Response)
+        mock_request.return_value = mock_response
 
-        deserialized_response = Mock()
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = "response_text"
-        self.mock_session.request.return_value = mock_response
-        mock_parse.return_value = deserialized_response
         res = self.request_client.request_deserialize(
-            "method", "path", str, keyword="arg"
+            method, path, str, keyword=custom_kw
         )
-        self.mock_session.request.assert_called_with(
-            method, req_url, headers=self.request_headers, keyword="arg"
-        )
-        self.assertEqual(deserialized_response, res)
+
+        self.assertEqual(decoded_value, res)
+        mock_request.assert_called_with(method, path, keyword=custom_kw)
+        mock_decode.assert_called_with(str, mock_response)
 
     def test_request(self):
         method = "method"

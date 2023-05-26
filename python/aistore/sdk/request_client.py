@@ -4,7 +4,6 @@
 from urllib.parse import urljoin, urlencode
 from typing import TypeVar, Type, Any, Dict
 
-from pydantic.tools import parse_raw_as
 import requests
 
 from aistore.sdk.const import (
@@ -14,7 +13,7 @@ from aistore.sdk.const import (
     HEADER_CONTENT_TYPE,
     HEADERS_KW,
 )
-from aistore.sdk.utils import handle_errors
+from aistore.sdk.utils import handle_errors, decode_response
 from aistore.version import __version__ as sdk_version
 
 T = TypeVar("T")
@@ -63,14 +62,14 @@ class RequestClient:
         Args:
             method (str): HTTP method, e.g. POST, GET, PUT, DELETE
             path (str): URL path to call
-            res_model Type[T]: Resulting type to which the response should be deserialized
+            res_model (Type[T]): Resulting type to which the response should be deserialized
             **kwargs (optional): Optional keyword arguments to pass with the call to request
 
         Returns:
             Parsed result of the call to the API, as res_model
         """
         resp = self.request(method, path, **kwargs)
-        return parse_raw_as(res_model, resp.text)
+        return decode_response(res_model, resp)
 
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
         """

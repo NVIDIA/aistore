@@ -196,9 +196,9 @@ class TestObjectOps(unittest.TestCase):
             )
 
         objects = self.bucket.list_objects()
-        self.assertEqual(len(objects.get_entries()), bucket_size)
+        self.assertEqual(len(objects.entries), bucket_size)
 
         for obj_id in range(delete_cnt):
             self.bucket.object(f"obj-{ obj_id + 1 }").delete()
         objects = self.bucket.list_objects()
-        self.assertEqual(len(objects.get_entries()), bucket_size - delete_cnt)
+        self.assertEqual(len(objects.entries), bucket_size - delete_cnt)

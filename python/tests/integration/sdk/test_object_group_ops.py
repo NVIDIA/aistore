@@ -25,9 +25,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         object_group = self.bucket.objects(obj_names=self.obj_names[1:])
         job_id = object_group.delete()
         self.client.job(job_id).wait(timeout=TEST_TIMEOUT)
-        existing_objects = self.bucket.list_objects(
-            prefix=self.obj_prefix
-        ).get_entries()
+        existing_objects = self.bucket.list_objects(prefix=self.obj_prefix).entries
         self.assertEqual(1, len(existing_objects))
         self.assertEqual(self.obj_names[0], existing_objects[0].name)
 
@@ -167,7 +165,7 @@ class TestObjectGroupOps(RemoteEnabledTest):
         """
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
-        ).get_entries()
+        ).entries
         self.assertEqual(expected_object_count, len(objects))
         cached_names = {self.obj_prefix + str(x) + "-suffix" for x in cached_range}
         cached_objs = []

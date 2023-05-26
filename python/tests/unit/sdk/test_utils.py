@@ -2,7 +2,11 @@ import json
 import unittest
 from unittest.mock import Mock, patch, mock_open
 
+from msgspec import msgpack
+from requests import Response
+
 from aistore.sdk import utils
+from aistore.sdk.const import MSGPACK_CONTENT_TYPE, HEADER_CONTENT_TYPE
 from aistore.sdk.errors import (
     AISError,
     ErrRemoteBckNotFound,
@@ -142,3 +146,28 @@ class TestUtils(unittest.TestCase):
         else:
             with self.assertRaises(expected_error):
                 utils.expand_braces(input_str)
+
+    @patch("aistore.sdk.utils.parse_raw_as")
+    def test_decode_response_json(self, mock_parse):
+        response_content = "text content"
+        parsed_content = "parsed content"
+        mock_response = Mock(Response)
+        mock_response.headers = {}
+        mock_response.text = response_content
+        mock_parse.return_value = parsed_content
+
+        res = utils.decode_response(str, mock_response)
+
+        self.assertEqual(parsed_content, res)
+        mock_parse.assert_called_with(str, response_content)
+
+    def test_decode_response_msgpack(self):
+        unpacked_content = {"content key": "content value"}
+        packed_content = msgpack.encode(unpacked_content)
+        mock_response = Mock(Response)
+        mock_response.headers = {HEADER_CONTENT_TYPE: MSGPACK_CONTENT_TYPE}
+        mock_response.content = packed_content
+
+        res = utils.decode_response(dict, mock_response)
+
+        self.assertEqual(unpacked_content, res)

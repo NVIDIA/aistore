@@ -115,8 +115,8 @@ class TestETLOps(unittest.TestCase):
         )
         self.client.job(job_id).wait()
 
-        starting_obj = self.bucket.list_objects().get_entries()
-        transformed_obj = temp_bck1.list_objects().get_entries()
+        starting_obj = self.bucket.list_objects().entries
+        transformed_obj = temp_bck1.list_objects().entries
         # Should transform only the object defined by the prefix filter
         self.assertEqual(len(starting_obj) - 1, len(transformed_obj))
 
@@ -141,7 +141,7 @@ class TestETLOps(unittest.TestCase):
         self.client.job(job_id).wait()
 
         # Verify extension rename
-        for obj_iter in temp_bck2.list_objects().get_entries():
+        for obj_iter in temp_bck2.list_objects().entries:
             self.assertEqual(obj_iter.name.split(".")[1], "txt")
 
         echo_obj = temp_bck2.object("temp-obj1.txt").get().read_all()

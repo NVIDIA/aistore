@@ -33,7 +33,7 @@ class ObjectIterator:
         # Read the next page of objects.
         if len(self._fetched) == 0:
             resp = self._list_objects(uuid=self._uuid, token=self._token)
-            self._fetched = resp.get_entries()
+            self._fetched = resp.entries
             self._uuid = resp.uuid
             self._token = resp.continuation_token
             # Empty page and token mean no more objects left.

@@ -126,14 +126,14 @@ class TestBucketOps(RemoteEnabledTest):
         self._create_objects()
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
-        ).get_entries()
+        ).entries
         self._verify_objects_cache_status(objects, True)
 
         self.bucket.evict(keep_md=True)
 
         objects = self.bucket.list_objects(
             props="name,cached", prefix=self.obj_prefix
-        ).get_entries()
+        ).entries
         self.assertEqual(OBJECT_COUNT, len(objects))
         self._verify_objects_cache_status(objects, False)
 
@@ -248,7 +248,7 @@ class TestBucketOps(RemoteEnabledTest):
             resp = self.bucket.list_objects(page_size=page_size, prefix=self.obj_prefix)
         else:
             resp = self.bucket.list_objects(prefix=self.obj_prefix)
-        self.assertEqual(response_size, len(resp.get_entries()))
+        self.assertEqual(response_size, len(resp.entries))
 
     def test_list_all_objects(self):
         short_page_len = 17

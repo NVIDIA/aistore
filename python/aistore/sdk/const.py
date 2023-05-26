@@ -11,6 +11,7 @@ HEADER_CONTENT_LENGTH = "Content-Length"
 # Standard Header Values
 USER_AGENT_BASE = "ais/python"
 JSON_CONTENT_TYPE = "application/json"
+MSGPACK_CONTENT_TYPE = "application/msgpack"
 # AIS Headers
 AIS_CHECKSUM_TYPE = "ais-checksum-type"
 AIS_CHECKSUM_VALUE = "ais-checksum-value"
