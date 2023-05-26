@@ -8,7 +8,7 @@
 
 ^Archiv.*$
 ^Archiv.*$
-^APPEND.*ais://$BUCKET_2/tmpl.tar as fourth.txt$
+^APPEND.*ais://$BUCKET_2/tmpl.tar as "fourth.txt"$
 
 5
 6

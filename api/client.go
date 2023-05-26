@@ -30,8 +30,9 @@ type (
 		UA     string
 	}
 
-	// ReqParams is used in constructing client-side API requests to the AIStore.
+	// ReqParams is used in constructing client-side API requests to aistore.
 	// Stores Query and Headers for providing arguments that are not used commonly in API requests
+	//  See also: cmn.HreqArgs
 	ReqParams struct {
 		Query  url.Values
 		Header http.Header

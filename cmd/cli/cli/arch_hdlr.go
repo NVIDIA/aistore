@@ -32,6 +32,7 @@ var (
 		},
 		cmdAppend: {
 			archpathRequiredFlag,
+			putArchIfNotExistFlag,
 		},
 		cmdList: {
 			objPropsFlag,
@@ -102,16 +103,23 @@ func archMultiObjHandler(c *cli.Context) (err error) {
 }
 
 func appendArchHandler(c *cli.Context) (err error) {
-	var a a2args
 	if c.NArg() < 2 {
 		// TODO -- FIXME
 		return errors.New("not implemented yet (currently, expecting local file and bucket/shard)")
+	}
+	a := a2args{
+		archpath:      parseStrFlag(c, archpathRequiredFlag),
+		putIfNotExist: flagIsSet(c, putArchIfNotExistFlag),
 	}
 	if err = a.parse(c); err != nil {
 		return
 	}
 	if err = a2a(c, &a); err == nil {
-		actionDone(c, fmt.Sprintf("APPEND %q to %s as %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname), a.archpath))
+		msg := fmt.Sprintf("APPEND %s to %s", a.src.arg, a.dst.bck.Cname(a.dst.oname))
+		if a.archpath != "" && a.archpath != a.src.arg {
+			msg += " as \"" + a.archpath + "\""
+		}
+		actionDone(c, msg+"\n")
 	}
 	return
 }

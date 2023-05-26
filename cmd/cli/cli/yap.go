@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -202,11 +201,5 @@ func (a *archargs) parse(c *cli.Context) (err error) {
 
 func (a *a2args) parse(c *cli.Context) (err error) {
 	err = a.putargs.parse(c)
-	if a.dst.bck.IsEmpty() {
-		debug.Assert(err != nil)
-		return
-	}
-	a.archpath = parseStrFlag(c, archpathRequiredFlag)
-	a.putIfNotExist = flagIsSet(c, putArchIfNotExistFlag)
 	return
 }

@@ -31,7 +31,9 @@ const (
 )
 
 type (
-	// HreqArgs specifies HTTP request that we want to send.
+	// usage 1: initialize and fill out HTTP request.
+	// usage 2: intra-cluster control-plane (except streams)
+	// usage 3: PUT and APPEND API
 	// BodyR optimizes-out allocations - if non-nil and implements `io.Closer`, will always be closed by `client.Do`
 	HreqArgs struct {
 		BodyR    io.Reader

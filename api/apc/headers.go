@@ -49,6 +49,9 @@ const (
 	// Append object header.
 	HdrAppendHandle = HeaderPrefix + "append-handle"
 
+	// Append to archive
+	HdrPutIfNotExist = HeaderPrefix + "pine"
+
 	// Query objects handle header.
 	HdrHandle = HeaderPrefix + "query-handle"
 

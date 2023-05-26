@@ -119,6 +119,7 @@ type (
 		mime     string        // format
 		started  time.Time     // time of receiving
 		size     int64         // aka Content-Length
+		put      bool          // apc.HdrPutIfNotExist
 	}
 )
 
@@ -480,7 +481,6 @@ func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 
 //
 // GET(object)
-// see also: archive.go
 //
 
 func (goi *getOI) getObject() (errCode int, err error) {
@@ -1456,7 +1456,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND to archive aka shard (see also: /cmn/cos/archive.go)
+// APPEND to archive aka shard (read/write/list via cmn/archive pkg)
 //
 
 func (a *apndArchI) do() (int, error) {
@@ -1465,7 +1465,7 @@ func (a *apndArchI) do() (int, error) {
 	}
 	// standard library does not support appending to tgz and zip;
 	// for TAR there is an optimal workaround (below) not requiring full reconstruction
-	if a.mime == archive.ExtTar {
+	if a.mime == archive.ExtTar && !a.put {
 		var (
 			err     error
 			fh      *os.File
@@ -1506,28 +1506,36 @@ cpap: // copy + append
 		cksum     cos.CksumHashSize
 		writer    archive.Writer
 	)
-	lmfh, err = os.Open(a.lom.FQN)
-	if err != nil {
-		return http.StatusNotFound, err
-	}
 	workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
 	if err != nil {
-		cos.Close(lmfh)
 		return http.StatusInternalServerError, err
 	}
 
-	// copy + append
-	cksum.Init(a.lom.CksumType())
-	writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
-	err = writer.Copy(lmfh, a.lom.SizeBytes())
-	if err == nil {
-		err = writer.Write(a.filename, a, a.r)
+	if a.put {
+		// append to newly created (i.e., PUT); TODO: checksum type
+		cksum.Init(cos.ChecksumXXHash)
+		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
+		err = writer.Write(a.filename, a /* as cos.OAH */, a.r)
+		writer.Fini()
+	} else {
+		// copy + append
+		lmfh, err = os.Open(a.lom.FQN)
+		if err != nil {
+			cos.Close(wfh)
+			return http.StatusNotFound, err
+		}
+		cksum.Init(a.lom.CksumType())
+		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
+		err = writer.Copy(lmfh, a.lom.SizeBytes())
+		if err == nil {
+			err = writer.Write(a.filename, a /* as cos.OAH */, a.r)
+		}
+		writer.Fini()
+		cos.Close(lmfh)
 	}
 
-	// cleanup and finalize
-	writer.Fini()
-	cos.Close(lmfh)
+	// finalize
 	cos.Close(wfh)
 	if err == nil {
 		cksum.Finalize()

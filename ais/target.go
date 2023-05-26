@@ -1198,6 +1198,7 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 		sizeStr  = r.Header.Get(cos.HdrContentLength)
 		mime     = dpq.archmime // apc.QparamArchmime
 		filename = dpq.archpath // apc.QparamArchpath
+		put      bool           // apc.HdrPutIfNotExist
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
@@ -1205,11 +1206,13 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 		}
 	}
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if os.IsNotExist(err) {
-			// TODO -- FIXME: putIfNotExist
+		if !os.IsNotExist(err) {
+			return http.StatusInternalServerError, err
+		}
+		if pine := r.Header.Get(apc.HdrPutIfNotExist); !cos.IsParseBool(pine) {
 			return http.StatusNotFound, err
 		}
-		return http.StatusInternalServerError, err
+		put = true
 	}
 	a := &apndArchI{
 		started:  started,
@@ -1218,6 +1221,7 @@ func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time
 		r:        r.Body,
 		filename: filename,
 		mime:     mime,
+		put:      put,
 	}
 	if sizeStr != "" {
 		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {

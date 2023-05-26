@@ -444,6 +444,9 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
+	if args.PutIfNotExist {
+		reqArgs.Header = http.Header{apc.HdrPutIfNotExist: []string{"true"}}
+	}
 	putArgs := &args.PutArgs
 	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) //nolint:bodyclose // is closed inside
 	cmn.FreeHra(reqArgs)

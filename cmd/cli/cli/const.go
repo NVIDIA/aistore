@@ -727,8 +727,8 @@ var (
 	}
 	// APPEND to arch operation: option to PUT (ie., create) if doesn't exist (compare with the above)
 	putArchIfNotExistFlag = cli.BoolFlag{
-		Name:  "put-if-not-exist",
-		Usage: "create archive if " + archExts + "-formatted destination (\"archive\", \"shard\") does not exist",
+		Name:  "put",
+		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") does not exist, create a new one",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{
