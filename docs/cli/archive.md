@@ -28,15 +28,14 @@ See also:
 Archive multiple objects from the source bucket.
 
 ```console
-$ ais archive create --help
+$ ais archive put --help
 NAME:
-   ais archive create - create multi-object (.tar, .tgz, .tar.gz, .zip) archive
+   ais archive put - put multi-object (.tar, .tgz or .tar.gz, .zip, .tar.lz4) archive
 
 USAGE:
-   ais archive create [command options] SRC_BUCKET DST_BUCKET/OBJECT_NAME
+   ais archive put [command options] SRC_BUCKET DST_BUCKET/OBJECT_NAME
 
 OPTIONS:
-   --dry-run          preview the results without really running the action
    --template value   template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
                       --template 'dir/subdir/'
                       --template 'shard-{1000..9999}.tar'
@@ -46,14 +45,14 @@ OPTIONS:
                       --list 'o1,o2,o3'
                       --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
    --include-src-bck  prefix names of archived objects with the source bucket name
-   --append           add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .tar.lz4)-formatted object ("archive", "shard")
+   --append           if destination object ("archive", "shard") already exists, append to it
+                      (instead of creating a new one)
    --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
-   --help, -h         show help
 ```
 
 The operation accepts either an explicitly defined *list* or template-defined *range* of object names (to archive).
 
-As such, `archive create` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+As such, `archive put` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
 
 Also note that `ais put` command with its `--archive` option provides an alternative way to archive multiple objects:
 
@@ -65,29 +64,30 @@ For the most recently updated list of supported archival formats, please see:
 
 ### Examples
 
-1. Create an archive from a list of files of the same bucket:
+1. Archive list of objects from a given bucket:
 
 ```console
-$ ais archive create ais://bck/arch.tar --list obj1,obj2
-Creating archive "ais://bck/arch.tar"
+$ ais archive put ais://bck/arch.tar --list obj1,obj2
+Archiving "ais://bck/arch.tar" ...
 ```
 
-Resulting archive `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
+Resulting `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
 
-2. Create an archive with objects from a different bucket, use template (range):
+2. Archive objects from a different bucket, use template (range):
 
 ```console
-$ ais archive create ais://src ais://dst/arch.tar --template "obj-{0..9}"
+$ ais archive put ais://src ais://dst/arch.tar --template "obj-{0..9}"
 
-Creating archive "ais://dst/arch.tar" ...
+Archiving "ais://dst/arch.tar" ...
 ```
-The archive `ais://dst/arch.tar` contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
 
-3. Create an archive consisting of 3 objects and then append 2 more:
+`ais://dst/arch.tar` now contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
+
+3. Archive 3 objects and then append 2 more:
 
 ```console
-$ ais archive create ais://bck/arch1.tar --template "obj{1..3}"
-Creating archive "ais://bck/arch1.tar" ...
+$ ais archive put ais://bck/arch1.tar --template "obj{1..3}"
+Archived "ais://bck/arch1.tar" ...
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE
 arch1.tar                31.00KiB
@@ -95,8 +95,8 @@ arch1.tar                31.00KiB
     arch1.tar/obj2       9.26KiB
     arch1.tar/obj3       9.26KiB
 
-$ ais archive create ais://bck/arch1.tar --template "obj{4..5}" --append
-Created archive "ais://bck/arch1.tar"
+$ ais archive put ais://bck/arch1.tar --template "obj{4..5}" --append
+Archived "ais://bck/arch1.tar"
 
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE
@@ -113,7 +113,7 @@ arch1.tar                51.00KiB
 `ais archive ls BUCKET/OBJECT`
 
 Display an archive content as a tree, where the root is the archive name and leaves are files inside the archive.
-The files are always are sorted in alphabetical order.
+The filenames are always sorted alphabetically.
 
 ### Options
 

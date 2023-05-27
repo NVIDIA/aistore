@@ -33,7 +33,7 @@ import (
 // GET from
 //
 
-func TestGetFromArchive(t *testing.T) {
+func TestGetFromArch(t *testing.T) {
 	const tmpDir = "/tmp"
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		var (
@@ -160,15 +160,15 @@ func TestGetFromArchive(t *testing.T) {
 	})
 }
 
-// PUT/create
-func TestCreateMultiObjArch(t *testing.T) {
+// archive multple obj-s with an option to append if exists
+func TestArchMultiObj(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
-		testMobjArch(t, bck)
+		testArch(t, bck)
 	})
 }
 
-func testMobjArch(t *testing.T, bck *meta.Bck) {
+func testArch(t *testing.T, bck *meta.Bck) {
 	var (
 		numPuts = 100
 		m       = ioContext{

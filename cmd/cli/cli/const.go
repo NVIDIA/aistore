@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -331,7 +330,8 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
-	archExts = "(" + strings.Join(archive.FileExtensions, ", ") + ")"
+	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4"
+	archExts    = "(" + archFormats + ")"
 
 	//
 	// scope 'all'
@@ -719,16 +719,22 @@ var (
 		Name:  "include-src-bck",
 		Usage: "prefix names of archived objects with the source bucket name",
 	}
-	// PUT arch operation: option to APPEND if already exists (compare w/ next)
-	apndArchIfExistsFlag = cli.BoolFlag{
-		Name: "append-if-exists",
-		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") already exists append to it\n" +
+	// via 'ais archive': PUT arch operation with an option to APPEND if already exists
+	apndArchIf1Flag = cli.BoolFlag{
+		Name: "append",
+		Usage: "if destination object (\"archive\", \"shard\") already exists, append to it\n" +
+			indent4 + "\t(instead of creating a new one)",
+	}
+	// same as above via 'ais put'
+	apndArchIf2Flag = cli.BoolFlag{
+		Name: "arch-append-if-exists",
+		Usage: "if destination object (\"archive\", \"shard\") already exists, append to it\n" +
 			indent4 + "\t(instead of creating a new one)",
 	}
 	// APPEND to arch operation: option to PUT (ie., create) if doesn't exist (compare with the above)
 	putArchIfNotExistFlag = cli.BoolFlag{
 		Name:  "put",
-		Usage: "if " + archExts + "-formatted destination (\"archive\", \"shard\") does not exist, create a new one",
+		Usage: "if destination object (\"archive\", \"shard\") does not exist, create a new one",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{

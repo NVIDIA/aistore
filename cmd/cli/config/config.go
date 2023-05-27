@@ -62,14 +62,21 @@ var (
 	defaultConfig Config
 
 	DefaultAliasConfig = AliasConfig{
-		"get":    "object get",
-		"put":    "object put",
+		// object
+		"get": "object get",
+		"put": "object put",
+		// (.tar, .tgz or .tar.gz, .zip, .tar.lz4) object
+		"archput":  "archive put",
+		"archapnd": "archive append",
+		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",
 		"cp":     "bucket cp",
-		"start":  "job start",
-		"stop":   "job stop",
-		"wait":   "job wait",
+		"rmb":    "bucket rm",
+		// job
+		"start": "job start",
+		"stop":  "job stop",
+		"wait":  "job wait",
 	}
 )
 
@@ -107,21 +114,27 @@ func init() {
 // AliasConfig //
 /////////////////
 
+// compare w/ showAliasHandler(*cli.Context)
 func (a AliasConfig) String() (s string) {
 	b := cos.StrKVs(a)
 	keys := b.Keys()
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool { return b[keys[i]] < b[keys[j]] })
 
-	var next bool
-	s = "{"
+	var (
+		n    int
+		next bool
+	)
 	for _, k := range keys {
 		if next {
 			s += "; "
+			if len(s)-n > 60 {
+				s += "\n" + "\t "
+				n = len(s)
+			}
 		}
 		s += k + " => '" + a[k] + "'"
 		next = true
 	}
-	s += "}"
 	return
 }
 

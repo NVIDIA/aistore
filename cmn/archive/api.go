@@ -9,7 +9,7 @@ import (
 	"errors"
 )
 
-// supported archive types (file extensions)
+// supported archive types (file extensions); ref cmd/cli/cli/const.go archExts
 const (
 	ExtTar    = ".tar"
 	ExtTgz    = ".tgz"

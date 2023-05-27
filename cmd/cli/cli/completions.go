@@ -476,7 +476,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 // Object
 //
 
-func putPromoteObjectCompletions(c *cli.Context) {
+func putPromApndCompletions(c *cli.Context) {
 	if c.NArg() == 0 {
 		// Waiting for file|directory as first arg
 		return

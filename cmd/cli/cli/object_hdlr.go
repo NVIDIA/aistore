@@ -59,7 +59,7 @@ var (
 			// arch
 			archpathOptionalFlag,
 			putArchFlag,
-			apndArchIfExistsFlag,
+			apndArchIf2Flag,
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
@@ -109,11 +109,11 @@ var (
 			indent4 + "\t- '--compute-checksum' to facilitate end-to-end protection;\n" +
 			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
 			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent4 + "\t- '--archpath' to APPEND to an existing tar-formatted object (\"shard\").",
+			indent4 + "\t- '--archpath' to APPEND to an existing " + archExts + "-formatted object (\"shard\").",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
-		BashComplete: putPromoteObjectCompletions,
+		BashComplete: putPromApndCompletions,
 	}
 
 	objectCmdSetCustom = cli.Command{
@@ -156,7 +156,7 @@ var (
 				ArgsUsage:    promoteObjectArgument,
 				Flags:        objectCmdsFlags[commandPromote],
 				Action:       promoteHandler,
-				BashComplete: putPromoteObjectCompletions,
+				BashComplete: putPromApndCompletions,
 			},
 			{
 				Name:      commandConcat,

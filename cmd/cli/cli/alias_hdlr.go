@@ -141,11 +141,11 @@ func resetAliasHandler(c *cli.Context) (err error) {
 	return showAliasHandler(c)
 }
 
-// (compare w/ AliasConfig.String())
+// compare w/ AliasConfig.String()
 func showAliasHandler(*cli.Context) (err error) {
 	b := cos.StrKVs(cfg.Aliases)
 	keys := b.Keys()
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool { return b[keys[i]] < b[keys[j]] })
 
 	aliases := make(nvpairList, 0, len(cfg.Aliases))
 	for _, k := range keys {

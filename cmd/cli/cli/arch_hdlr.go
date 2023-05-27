@@ -8,13 +8,11 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -22,12 +20,11 @@ import (
 
 var (
 	archCmdsFlags = map[string][]cli.Flag{
-		commandCreate: { // TODO -- FIXME: remove 'create' verb
-			dryRunFlag, // TODO -- FIXME: remove the flag or implement
+		commandPut: {
 			templateFlag,
 			listFlag,
 			includeSrcBucketNameFlag,
-			apndArchIfExistsFlag,
+			apndArchIf1Flag,
 			continueOnErrorFlag,
 		},
 		cmdAppend: {
@@ -42,28 +39,31 @@ var (
 
 	archCmd = cli.Command{
 		Name:  commandArch,
-		Usage: "Create multi-object archive, append files to an existing archive",
+		Usage: "Put multi-object archive; append files and directories to an existing archive; list archived content",
 		Subcommands: []cli.Command{
 			{
-				Name:         commandCreate,
-				Usage:        "create multi-object (" + strings.Join(archive.FileExtensions, ", ") + ") archive",
+				Name:         commandPut,
+				Usage:        "put multi-object " + archExts + " archive",
 				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/OBJECT_NAME",
-				Flags:        archCmdsFlags[commandCreate],
+				Flags:        archCmdsFlags[commandPut],
 				Action:       archMultiObjHandler,
-				BashComplete: putPromoteObjectCompletions,
+				BashComplete: putPromApndCompletions,
 			},
 			{
 				Name: cmdAppend,
-				Usage: "append file to an existing tar-formatted object (aka \"shard\"), e.g.:\n" +
-					indent4 + "'append src-filename bucket/shard-00123.tar --archpath dst-name-in-archive'",
+				Usage: "append file, directory, or multiple files and/or directories to\n" +
+					indent4 + "\t" + archExts + "-formatted object (\"shard\")\n" +
+					indent4 + "\t" + "e.g.:\n" +
+					indent4 + "\t" + "- 'filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' # append a single file\n" +
+					indent4 + "\t" + "- 'src-dir bucket/shard-99999.zip -put'  # append a directory, put a new .zip iff doesn't exist",
 				ArgsUsage:    appendToArchArgument,
 				Flags:        archCmdsFlags[cmdAppend],
 				Action:       appendArchHandler,
-				BashComplete: putPromoteObjectCompletions,
+				BashComplete: putPromApndCompletions,
 			},
 			{
 				Name:         cmdList,
-				Usage:        "list archived content",
+				Usage:        "list archived content (supported formats: " + archFormats + ")",
 				ArgsUsage:    objectArgument,
 				Flags:        archCmdsFlags[cmdList],
 				Action:       listArchHandler,
@@ -74,7 +74,9 @@ var (
 )
 
 func archMultiObjHandler(c *cli.Context) (err error) {
-	a := archargs{apndIfExist: flagIsSet(c, apndArchIfExistsFlag)}
+	var a archargs
+
+	a.apndIfExist = flagIsSet(c, apndArchIf1Flag) || flagIsSet(c, apndArchIf2Flag)
 	if err = a.parse(c); err != nil {
 		return
 	}
