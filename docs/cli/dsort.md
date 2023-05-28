@@ -21,10 +21,10 @@ For background and in-depth presentation, please see this [document](/docs/dsort
 
 ## Generate Shards
 
-`ais advanced gen-shards "BUCKET/TEMPLATE.EXT"`
+`ais archive gen-shards "BUCKET/TEMPLATE.EXT"`
 
 Put randomly generated shards into a bucket. The main use case for this command is dSort testing.
-[Further reference for this command can be found here.](advanced.md#generate-shards)
+[Further reference for this command can be found here.](archive.md#generate-shards)
 
 ## Start dSort job
 

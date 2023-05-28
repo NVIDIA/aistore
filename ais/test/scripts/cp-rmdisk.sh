@@ -7,7 +7,7 @@ ais bucket rm ais://src-mirror ais://dst -y 2>/dev/null
 ais create ais://src-mirror --props="mirror.enabled=true mirror.copies=3" || \
 exit 1
 
-ais advanced gen-shards 'ais://src-mirror/shard-{001..999}.tgz'
+ais archive gen-shards 'ais://src-mirror/shard-{001..999}.tgz'
 
 ## list-objects to confirm
 num=$(ais ls ais://src-mirror --no-headers | wc -l)

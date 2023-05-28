@@ -330,7 +330,7 @@ var (
 	indent2 = strings.Repeat(indent1, 2)
 	indent4 = strings.Repeat(indent1, 4)
 
-	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4"
+	archFormats = ".tar, .tgz or .tar.gz, .zip, .tar.lz4" // namely, archive.FileExtensions
 	archExts    = "(" + archFormats + ")"
 
 	//
@@ -543,7 +543,7 @@ var (
 	// dSort
 	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
 	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
-	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files inside single shard"}
+	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
 	dsortSpecFlag   = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
 
 	cleanupFlag = cli.BoolFlag{
@@ -705,14 +705,9 @@ var (
 	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
 	putArchFlag  = cli.BoolFlag{Name: "archive", Usage: "archive a given list ('--list') or range ('--template') of objects"}
 
-	archpathOptionalFlag = cli.StringFlag{
+	archpathFlag = cli.StringFlag{
 		Name:  "archpath",
 		Usage: "filename in archive",
-	}
-	archpathRequiredFlag = cli.StringFlag{
-		Name:     archpathOptionalFlag.Name,
-		Usage:    archpathOptionalFlag.Usage,
-		Required: true,
 	}
 
 	includeSrcBucketNameFlag = cli.BoolFlag{

@@ -30,7 +30,7 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
-			archpathOptionalFlag,
+			archpathFlag,
 			cksumFlag,
 			yesFlag,
 			checkObjCachedFlag,
@@ -57,7 +57,7 @@ var (
 			continueOnErrorFlag,
 			unitsFlag,
 			// arch
-			archpathOptionalFlag,
+			archpathFlag,
 			putArchFlag,
 			apndArchIf2Flag,
 			// cksum
@@ -83,7 +83,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
-			archpathOptionalFlag,
+			archpathFlag,
 			cksumFlag,
 			forceFlag,
 		},
@@ -272,7 +272,7 @@ func putHandler(c *cli.Context) (err error) {
 	switch {
 	case flagIsSet(c, putArchFlag):
 		return archMultiObjHandler(c)
-	case flagIsSet(c, archpathOptionalFlag):
+	case flagIsSet(c, archpathFlag):
 		return appendArchHandler(c)
 	}
 

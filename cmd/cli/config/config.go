@@ -66,8 +66,8 @@ var (
 		"get": "object get",
 		"put": "object put",
 		// (.tar, .tgz or .tar.gz, .zip, .tar.lz4) object
-		"archput":  "archive put",
-		"archapnd": "archive append",
+		"zput":    "archive put",
+		"zappend": "archive append",
 		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",

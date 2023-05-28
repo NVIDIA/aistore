@@ -6,16 +6,11 @@
 package cli
 
 import (
-	"archive/tar"
-	"compress/gzip"
-	"encoding/hex"
 	jsonStd "encoding/json"
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,53 +29,6 @@ var phasesOrdered = []string{
 	dsort.ExtractionPhase,
 	dsort.SortingPhase,
 	dsort.CreationPhase,
-}
-
-func phaseToBarText(phase string) string {
-	return strings.ToUpper(phase[:1]) + phase[1:] + " phase: "
-}
-
-func createTar(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) error {
-	var (
-		gzw       *gzip.Writer
-		tw        *tar.Writer
-		random    = cos.NowRand()
-		buf       = make([]byte, fileSize)
-		randBytes = make([]byte, 10)
-	)
-
-	if ext == ".tgz" {
-		gzw = gzip.NewWriter(w)
-		tw = tar.NewWriter(gzw)
-		defer gzw.Close()
-	} else {
-		tw = tar.NewWriter(w)
-	}
-	defer tw.Close()
-
-	for fileNum := start; fileNum < end; fileNum++ {
-		// Generate random name
-		random.Read(randBytes)
-		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(randBytes), len(strconv.Itoa(fileCnt)), fileNum)
-
-		h := &tar.Header{
-			Typeflag: tar.TypeReg,
-			Size:     fileSize,
-			Name:     name,
-			Uid:      os.Getuid(),
-			Gid:      os.Getgid(),
-			Mode:     int64(cos.PermRWR),
-		}
-		if err := tw.WriteHeader(h); err != nil {
-			return err
-		}
-
-		if _, err := io.CopyBuffer(tw, io.LimitReader(random, fileSize), buf); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Creates bucket if not exists. If exists uses it or deletes and creates new
@@ -257,7 +205,7 @@ func (b *dsortPB) updateBars(metrics map[string]*dsort.Metrics) bool {
 		// If not finished also update the progress bars.
 		if !finished {
 			if phases[phaseName].progress > 0 && barPhase.bar == nil {
-				text := phaseToBarText(phaseName)
+				text := strings.ToUpper(phaseName[:1]) + phaseName[1:] + " phase: "
 				barPhase.bar = b.p.AddBar(
 					phase.total,
 					mpb.PrependDecorators(

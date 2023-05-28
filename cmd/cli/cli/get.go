@@ -208,7 +208,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	}
 
 	// where to
-	archpath := parseStrFlag(c, archpathOptionalFlag)
+	archpath := parseStrFlag(c, archpathFlag)
 	if outFile == "" {
 		// archive
 		if archpath != "" {

@@ -6,16 +6,27 @@
 package cli
 
 import (
+	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
+	"github.com/vbauerster/mpb/v4/decor"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -28,12 +39,18 @@ var (
 			continueOnErrorFlag,
 		},
 		cmdAppend: {
-			archpathRequiredFlag,
+			archpathFlag,
 			putArchIfNotExistFlag,
 		},
 		cmdList: {
 			objPropsFlag,
 			allPropsFlag,
+		},
+		cmdGenShards: {
+			cleanupFlag,
+			concurrencyFlag,
+			dsortFsizeFlag,
+			dsortFcountFlag,
 		},
 	}
 
@@ -54,8 +71,8 @@ var (
 				Usage: "append file, directory, or multiple files and/or directories to\n" +
 					indent4 + "\t" + archExts + "-formatted object (\"shard\")\n" +
 					indent4 + "\t" + "e.g.:\n" +
-					indent4 + "\t" + "- 'filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' # append a single file\n" +
-					indent4 + "\t" + "- 'src-dir bucket/shard-99999.zip -put'  # append a directory, put a new .zip iff doesn't exist",
+					indent4 + "\t" + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append one file\n" +
+					indent4 + "\t" + "- 'src-dir bucket/shard-99999.zip -put' - append a directory; iff the destination .zip doesn't exist create a new one",
 				ArgsUsage:    appendToArchArgument,
 				Flags:        archCmdsFlags[cmdAppend],
 				Action:       appendArchHandler,
@@ -68,6 +85,16 @@ var (
 				Flags:        archCmdsFlags[cmdList],
 				Action:       listArchHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
+			},
+			{
+				Name: cmdGenShards,
+				Usage: "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
+					indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
+					indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
+					indent4 + "\t(notice quotation marks in both cases)",
+				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
+				Flags:     archCmdsFlags[cmdGenShards],
+				Action:    genShardsHandler,
 			},
 		},
 	}
@@ -110,15 +137,19 @@ func appendArchHandler(c *cli.Context) (err error) {
 		return errors.New("not implemented yet (currently, expecting local file and bucket/shard)")
 	}
 	a := a2args{
-		archpath:      parseStrFlag(c, archpathRequiredFlag),
+		archpath:      parseStrFlag(c, archpathFlag),
 		putIfNotExist: flagIsSet(c, putArchIfNotExistFlag),
 	}
 	if err = a.parse(c); err != nil {
 		return
 	}
+	// NOTE [convention]: naming default when '--archpath' is omitted
+	if a.archpath == "" {
+		a.archpath = filepath.Base(a.src.abspath)
+	}
 	if err = a2a(c, &a); err == nil {
 		msg := fmt.Sprintf("APPEND %s to %s", a.src.arg, a.dst.bck.Cname(a.dst.oname))
-		if a.archpath != "" && a.archpath != a.src.arg {
+		if a.archpath != a.src.arg {
 			msg += " as \"" + a.archpath + "\""
 		}
 		actionDone(c, msg+"\n")
@@ -176,4 +207,132 @@ func listArchHandler(c *cli.Context) error {
 		return err
 	}
 	return listObjects(c, bck, objName, true /*list arch*/)
+}
+
+//
+// generate shards
+//
+
+func genShardsHandler(c *cli.Context) error {
+	var (
+		fileCnt   = parseIntFlag(c, dsortFcountFlag)
+		concLimit = parseIntFlag(c, concurrencyFlag)
+	)
+	if c.NArg() == 0 {
+		return incorrectUsageMsg(c, "missing destination bucket and BASH brace extension template")
+	}
+	if c.NArg() > 1 {
+		return incorrectUsageMsg(c, "too many arguments (make sure to use quotation marks to prevent BASH brace expansion)")
+	}
+
+	// Expecting: "ais://bucket/shard-{00..99}.tar"
+	bck, objname, err := parseBckObjURI(c, c.Args().Get(0), false)
+	if err != nil {
+		return err
+	}
+
+	mime, err := archive.Strict("", objname)
+	if err != nil {
+		return err
+	}
+	var (
+		ext      = mime
+		template = strings.TrimSuffix(objname, ext)
+	)
+
+	fileSize, err := parseSizeFlag(c, dsortFsizeFlag)
+	if err != nil {
+		return err
+	}
+
+	mm, err := memsys.NewMMSA("cli-gen-shards")
+	if err != nil {
+		debug.AssertNoErr(err) // unlikely
+		return err
+	}
+
+	pt, err := cos.ParseBashTemplate(template)
+	if err != nil {
+		return err
+	}
+
+	if err := setupBucket(c, bck); err != nil {
+		return err
+	}
+
+	var (
+		// Progress bar
+		text     = "Shards created: "
+		progress = mpb.New(mpb.WithWidth(barWidth))
+		bar      = progress.AddBar(
+			pt.Count(),
+			mpb.PrependDecorators(
+				decor.Name(text, decor.WC{W: len(text) + 2, C: decor.DSyncWidthR}),
+				decor.CountersNoUnit("%d/%d", decor.WCSyncWidth),
+			),
+			mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
+		)
+
+		concSemaphore = make(chan struct{}, concLimit)
+		group, ctx    = errgroup.WithContext(context.Background())
+		shardNum      = 0
+	)
+	pt.InitIter()
+
+loop:
+	for shardName, hasNext := pt.Next(); hasNext; shardName, hasNext = pt.Next() {
+		select {
+		case concSemaphore <- struct{}{}:
+		case <-ctx.Done():
+			break loop
+		}
+		group.Go(func(i int, name string) func() error {
+			return func() error {
+				defer func() {
+					bar.Increment()
+					<-concSemaphore
+				}()
+
+				name := fmt.Sprintf("%s%s", name, ext)
+				sgl := mm.NewSGL(fileSize * int64(fileCnt))
+				defer sgl.Free()
+
+				if err := genOne(sgl, ext, i*fileCnt, (i+1)*fileCnt, fileCnt, fileSize); err != nil {
+					return err
+				}
+				putArgs := api.PutArgs{
+					BaseParams: apiBP,
+					Bck:        bck,
+					ObjName:    name,
+					Reader:     sgl,
+					SkipVC:     true,
+				}
+				_, err := api.PutObject(putArgs)
+				return err
+			}
+		}(shardNum, shardName))
+		shardNum++
+	}
+	if err := group.Wait(); err != nil {
+		bar.Abort(true)
+		return err
+	}
+	progress.Wait()
+	return nil
+}
+
+func genOne(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) (err error) {
+	var (
+		random = cos.NowRand()
+		prefix = make([]byte, 10)
+		oah    = cos.SimpleOAH{Size: fileSize, Atime: time.Now().UnixNano()}
+		writer = archive.NewWriter(ext, w, nil /*cksum*/, false /*serialize*/)
+	)
+	for fileNum := start; fileNum < end && err == nil; fileNum++ {
+		random.Read(prefix)
+		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(prefix), len(strconv.Itoa(fileCnt)), fileNum)
+		err = writer.Write(name, oah, io.LimitReader(random, fileSize))
+	}
+	writer.Fini()
+	return
 }

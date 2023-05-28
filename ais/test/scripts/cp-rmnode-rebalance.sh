@@ -3,7 +3,7 @@
 ## start from scratch and generate 999 tgz shards
 ais bucket rm ais://src ais://dst -y 2>/dev/null
 ais create ais://src
-ais advanced gen-shards 'ais://src/shard-{001..999}.tgz'
+ais archive gen-shards 'ais://src/shard-{001..999}.tgz'
 
 ## list-objects to confirm
 num=$(ais ls ais://src --no-headers | wc -l)

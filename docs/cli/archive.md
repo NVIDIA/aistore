@@ -194,3 +194,66 @@ shard-2.tar                                      7.50KiB
     shard-2.tar/c7bcb7014568b5e7d13b-4.test      1.00KiB
     shard-2.tar/license.test                     1.05KiB
 ```
+
+## Generate shards
+
+`ais archive gen-shards "BUCKET/TEMPLATE.EXT"`
+
+Put randomly generated shards that can be used for dSort testing.
+The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must be one of: `.tar`, `.tar.gz`.
+
+**Warning**: Remember to always quote the argument (`"..."`) otherwise the brace expansion will happen in terminal.
+
+### Options
+
+| Flag | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--fsize` | `string` | Single file size inside the shard, can end with size suffix (k, MB, GiB, ...) | `1024`  (`1KB`)|
+| `--fcount` | `int` | Number of files inside single shard | `5` |
+| `--cleanup` | `bool` | When set, the old bucket will be deleted and created again | `false` |
+| `--conc` | `int` | Limits number of concurrent `PUT` requests and number of concurrent shards created | `10` |
+
+### Examples
+
+#### Generate shards with varying numbers of files and file sizes
+
+Generate 10 shards each containing 100 files of size 256KB and put them inside `ais://dsort-testing` bucket (creates it if it does not exist).
+Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
+
+```console
+$ ais archive gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
+Shards created: 10/10 [==============================================================] 100 %
+$ ais ls ais://dsort-testing
+NAME		SIZE		VERSION
+shard-0.tar	25.05MiB	1
+shard-1.tar	25.05MiB	1
+shard-2.tar	25.05MiB	1
+shard-3.tar	25.05MiB	1
+shard-4.tar	25.05MiB	1
+shard-5.tar	25.05MiB	1
+shard-6.tar	25.05MiB	1
+shard-7.tar	25.05MiB	1
+shard-8.tar	25.05MiB	1
+shard-9.tar	25.05MiB	1
+```
+
+#### Generate shards using custom naming template
+
+Generates 100 shards each containing 5 files of size 256KB and put them inside `dsort-testing` bucket.
+Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`
+
+```console
+$ ais archive gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
+Shards created: 100/100 [==============================================================] 100 %
+$ ais ls ais://dsort-testing
+NAME				SIZE	VERSION
+super_shard_000_last.tgz	1.25MiB	1
+super_shard_001_last.tgz	1.25MiB	1
+super_shard_002_last.tgz	1.25MiB	1
+super_shard_003_last.tgz	1.25MiB	1
+super_shard_004_last.tgz	1.25MiB	1
+super_shard_005_last.tgz	1.25MiB	1
+super_shard_006_last.tgz	1.25MiB	1
+super_shard_007_last.tgz	1.25MiB	1
+...
+```

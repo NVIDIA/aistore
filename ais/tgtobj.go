@@ -1512,12 +1512,13 @@ cpap: // copy + append
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-
+	// currently, arch writers only use size and time but it may change
+	oah := cos.SimpleOAH{Size: a.size, Atime: a.started.UnixNano()}
 	if a.put {
-		// append to newly created (i.e., PUT); TODO: checksum type
+		// when append becomes PUT (TODO: checksum type)
 		cksum.Init(cos.ChecksumXXHash)
 		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
-		err = writer.Write(a.filename, a /* as cos.OAH */, a.r)
+		err = writer.Write(a.filename, oah, a.r)
 		writer.Fini()
 	} else {
 		// copy + append
@@ -1530,7 +1531,7 @@ cpap: // copy + append
 		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
 		err = writer.Copy(lmfh, a.lom.SizeBytes())
 		if err == nil {
-			err = writer.Write(a.filename, a /* as cos.OAH */, a.r)
+			err = writer.Write(a.filename, oah, a.r)
 		}
 		writer.Fini()
 		cos.Close(lmfh)
@@ -1598,18 +1599,6 @@ func (a *apndArchI) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 	a.t.putMirror(a.lom)
 	return nil
 }
-
-// as cos.OAH
-
-func (a *apndArchI) SizeBytes(...bool) int64 { return a.size }
-func (a *apndArchI) AtimeUnix() int64        { return a.started.UnixNano() }
-
-func (*apndArchI) Version(...bool) string             { return "" }
-func (*apndArchI) Checksum() *cos.Cksum               { return nil }
-func (*apndArchI) GetCustomMD() cos.StrKVs            { return nil }
-func (*apndArchI) GetCustomKey(string) (string, bool) { return "", false }
-func (*apndArchI) SetCustomKey(_, _ string)           {}
-func (*apndArchI) String() string                     { return "" }
 
 //
 // mem pools

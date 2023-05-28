@@ -1045,7 +1045,7 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 And one other example (that also includes generating .tar shards):
 
 ```console
-$ ais advanced gen-shards "ais://dsort-testing/shard-{001..999}.tar" --fcount 256
+$ ais archive gen-shards "ais://dsort-testing/shard-{001..999}.tar" --fcount 256
 Shards created: 999/999 [==============================================================] 100 %
 
 # NOTE: make sure to use double or single quotations to specify the template (aka "range")

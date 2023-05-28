@@ -7,7 +7,7 @@ ais create ais://src-ec --props "ec.enabled=true ec.data_slices=3 ec.parity_slic
 exit 1
 
 ## generate a large number (say, 999) tar shards
-ais advanced gen-shards 'ais://src-ec/shard-{001..999}.tar'
+ais archive gen-shards 'ais://src-ec/shard-{001..999}.tar'
 
 ## list-objects to confirm
 num=$(ais ls ais://src-ec --no-headers | wc -l)
