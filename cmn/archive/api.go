@@ -7,7 +7,11 @@ package archive
 
 import (
 	"errors"
+
+	"github.com/NVIDIA/aistore/cmn/feat"
 )
+
+const TarBlockSize = 512 // Size of each block in a tar stream
 
 // supported archive types (file extensions); ref cmd/cli/cli/const.go archExts
 const (
@@ -20,6 +24,11 @@ const (
 
 // NOTE: when adding/removing check `allMagic` as well
 var FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtTarLz4}
+
+// package-local copy of config feature flags (a change requires restart)
+var features feat.Flags
+
+func Init(f feat.Flags) { features = f }
 
 // assorted errors
 type (

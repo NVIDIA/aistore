@@ -1517,7 +1517,7 @@ cpap: // copy + append
 	if a.put {
 		// when append becomes PUT (TODO: checksum type)
 		cksum.Init(cos.ChecksumXXHash)
-		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
+		writer = archive.NewWriter(a.mime, wfh, &cksum, nil /*opts*/)
 		err = writer.Write(a.filename, oah, a.r)
 		writer.Fini()
 	} else {
@@ -1528,7 +1528,7 @@ cpap: // copy + append
 			return http.StatusNotFound, err
 		}
 		cksum.Init(a.lom.CksumType())
-		writer = archive.NewWriter(a.mime, wfh, &cksum, false /*serialize*/)
+		writer = archive.NewWriter(a.mime, wfh, &cksum, nil)
 		err = writer.Copy(lmfh, a.lom.SizeBytes())
 		if err == nil {
 			err = writer.Write(a.filename, oah, a.r)
@@ -1548,14 +1548,19 @@ cpap: // copy + append
 	return a.reterr(err)
 }
 
-// TAR only - fast (compare w/ a.tar())
+// TAR only - fast & direct
 func (a *apndArchI) fast(rwfh *os.File) (size int64, err error) {
 	var (
 		buf, slab = a.t.gmm.AllocSize(a.size)
 		tw        = tar.NewWriter(rwfh)
-		hdr       = tar.Header{Typeflag: tar.TypeReg, Name: a.filename, Size: a.size, ModTime: a.started}
+		hdr       = tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     a.filename,
+			Size:     a.size,
+			ModTime:  a.started,
+			Mode:     int64(cos.PermRWRR),
+		}
 	)
-	archive.SetAuxTarHeader(&hdr)
 	tw.WriteHeader(&hdr)
 	_, err = io.CopyBuffer(tw, a.r, buf) // append
 	cos.Close(tw)

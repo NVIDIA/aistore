@@ -325,12 +325,14 @@ func genOne(w io.Writer, ext string, start, end, fileCnt int, fileSize int64) (e
 	var (
 		random = cos.NowRand()
 		prefix = make([]byte, 10)
+		width  = len(strconv.Itoa(fileCnt))
 		oah    = cos.SimpleOAH{Size: fileSize, Atime: time.Now().UnixNano()}
-		writer = archive.NewWriter(ext, w, nil /*cksum*/, false /*serialize*/)
+		opts   = archive.Opts{CB: archive.SetTarHeader, Serialize: false}
+		writer = archive.NewWriter(ext, w, nil /*cksum*/, &opts)
 	)
-	for fileNum := start; fileNum < end && err == nil; fileNum++ {
+	for idx := start; idx < end && err == nil; idx++ {
 		random.Read(prefix)
-		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(prefix), len(strconv.Itoa(fileCnt)), fileNum)
+		name := fmt.Sprintf("%s-%0*d.test", hex.EncodeToString(prefix), width, idx)
 		err = writer.Write(name, oah, io.LimitReader(random, fileSize))
 	}
 	writer.Fini()

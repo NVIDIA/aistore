@@ -144,7 +144,8 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 		}
 
 		// construct format-specific writer
-		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, true /*serialize*/)
+		opts := archive.Opts{Serialize: true}
+		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, &opts)
 
 		// append
 		if lmfh != nil {

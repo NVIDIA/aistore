@@ -10,6 +10,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -18,6 +19,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pierrec/lz4/v3"
+)
+
+type (
+	HeaderCallback func(any)
+	Opts           struct {
+		CB        HeaderCallback
+		Serialize bool
+	}
 )
 
 type (
@@ -30,12 +39,13 @@ type (
 		Copy(src io.Reader, size ...int64) error
 
 		// private
-		init(w io.Writer, cksum *cos.CksumHashSize, serialize bool)
+		init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts)
 	}
 	baseW struct {
 		wmul io.Writer
 		lck  sync.Locker // serialize: (multi-object => single shard)
 		buf  []byte
+		cb   HeaderCallback
 		slab *memsys.Slab
 	}
 	tarWriter struct {
@@ -64,7 +74,7 @@ var (
 	_ Writer = (*lz4Writer)(nil)
 )
 
-func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, serialize bool) (aw Writer) {
+func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, opts *Opts) (aw Writer) {
 	switch mime {
 	case ExtTar:
 		aw = &tarWriter{}
@@ -77,18 +87,24 @@ func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, serialize boo
 	default:
 		debug.Assert(false, mime)
 	}
-	aw.init(w, cksum, serialize)
+	aw.init(w, cksum, opts)
 	return
 }
 
 // baseW
 
-func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
+func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	bw.buf, bw.slab = memsys.PageMM().Alloc()
-	if serialize {
-		bw.lck = &sync.Mutex{}
-	} else {
-		bw.lck = cos.NopLocker{}
+
+	bw.lck = cos.NopLocker{}
+	bw.cb = nopTarHeader
+	if opts != nil {
+		if opts.CB != nil {
+			bw.cb = opts.CB
+		}
+		if opts.Serialize {
+			bw.lck = &sync.Mutex{}
+		}
 	}
 	bw.wmul = w
 	if cksum != nil {
@@ -98,8 +114,8 @@ func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
 
 // tarWriter
 
-func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
-	tw.baseW.init(w, cksum, serialize)
+func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
+	tw.baseW.init(w, cksum, opts)
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 
@@ -114,8 +130,9 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 		Name:     fullname,
 		Size:     oah.SizeBytes(),
 		ModTime:  time.Unix(0, oah.AtimeUnix()),
+		Mode:     int64(cos.PermRWRR),
 	}
-	SetAuxTarHeader(&hdr)
+	tw.cb(&hdr)
 	tw.lck.Lock()
 	if err = tw.tw.WriteHeader(&hdr); err == nil {
 		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
@@ -128,10 +145,24 @@ func (tw *tarWriter) Copy(src io.Reader, _ ...int64) error {
 	return cpTar(src, tw.tw, tw.buf)
 }
 
+// set Uid/Gid bits in TAR header
+// - note: cos.PermRWRR default
+// - not calling standard tar.FileInfoHeader
+
+func nopTarHeader(any) {}
+
+func SetTarHeader(hdr any) {
+	thdr := hdr.(*tar.Header)
+	{
+		thdr.Uid = os.Getuid()
+		thdr.Gid = os.Getgid()
+	}
+}
+
 // tgzWriter
 
-func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
-	tzw.tw.baseW.init(w, cksum, serialize)
+func (tzw *tgzWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
+	tzw.tw.baseW.init(w, cksum, opts)
 	tzw.gzw = gzip.NewWriter(tzw.tw.wmul)
 	tzw.tw.tw = tar.NewWriter(tzw.gzw)
 }
@@ -157,8 +188,8 @@ func (tzw *tgzWriter) Copy(src io.Reader, _ ...int64) error {
 
 // zipWriter
 
-func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
-	zw.baseW.init(w, cksum, serialize)
+func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
+	zw.baseW.init(w, cksum, opts)
 	zw.zw = zip.NewWriter(zw.wmul)
 }
 
@@ -174,6 +205,7 @@ func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error
 		UncompressedSize64: uint64(oah.SizeBytes()),
 		Modified:           time.Unix(0, oah.AtimeUnix()),
 	}
+	zw.cb(&ziphdr)
 	zw.lck.Lock()
 	zipw, err := zw.zw.CreateHeader(&ziphdr)
 	if err == nil {
@@ -191,8 +223,8 @@ func (zw *zipWriter) Copy(src io.Reader, size ...int64) error {
 
 // lz4Writer
 
-func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, serialize bool) {
-	lzw.tw.baseW.init(w, cksum, serialize)
+func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
+	lzw.tw.baseW.init(w, cksum, opts)
 	lzw.lzw = lz4.NewWriter(lzw.tw.wmul)
 
 	lzw.lzw.Header.BlockChecksum = false
