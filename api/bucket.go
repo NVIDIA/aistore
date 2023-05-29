@@ -85,7 +85,7 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 		err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketProps)), p)
 		return
 	}
-	err = headerr2msg(bck, err)
+	err = hdr2msg(bck, err)
 	return
 }
 
@@ -110,7 +110,6 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
-	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
@@ -122,14 +121,15 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 			info = &cmn.BsummResult{}
 			err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketSumm)), info)
 		}
-		return
+	} else {
+		err = hdr2msg(bck, err)
 	}
-	err = headerr2msg(bck, err)
+	FreeRp(reqParams)
 	return
 }
 
 // fill-in error message (HEAD response will never contain one)
-func headerr2msg(bck cmn.Bck, err error) error {
+func hdr2msg(bck cmn.Bck, err error) error {
 	herr := cmn.Err2HTTPErr(err)
 	if herr == nil {
 		debug.FailTypeCast(err)
@@ -370,8 +370,7 @@ func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint) (*c
 }
 
 // additional argument may include "progress-bar" context
-func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint,
-	progress *ProgressContext) (lst *cmn.LsoResult, err error) {
+func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint, progress *ProgressContext) (*cmn.LsoResult, error) {
 	var (
 		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -379,31 +378,37 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 			cos.HdrAccept:      []string{cos.ContentMsgPack},
 			cos.HdrContentType: []string{cos.ContentJSON},
 		}
-		nextPage = &cmn.LsoResult{}
-		toRead   = numObj
-		listAll  = numObj == 0
 	)
 	bp.Method = http.MethodGet
 	if lsmsg == nil {
 		lsmsg = &apc.LsoMsg{}
 	}
 	q = bck.AddToQuery(q)
-	lst = &cmn.LsoResult{}
 	lsmsg.UUID = ""
 	lsmsg.ContinuationToken = ""
-
-	// `rem` holds the remaining number of objects to list (that is, unless we are listing
-	// the entire bucket). Each iteration lists a page of objects and reduces the `rem`
-	// counter accordingly. When the latter gets below page size, we perform the final
-	// iteration for the reduced page.
 	reqParams := AllocRp()
-	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 		reqParams.Header = hdr
 		reqParams.Query = q
 	}
+	lst, err := lso(reqParams, lsmsg, numObj, progress)
+	FreeRp(reqParams)
+	return lst, err
+}
+
+// `toRead` holds the remaining number of objects to list (that is, unless we are listing
+// the entire bucket). Each iteration lists a page of objects and reduces `toRead`
+// accordingly. When the latter gets below page size, we perform the final
+// iteration for the reduced page.
+func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, numObj uint, progress *ProgressContext) (*cmn.LsoResult, error) {
+	var (
+		lst      = &cmn.LsoResult{}
+		nextPage = &cmn.LsoResult{}
+		toRead   = numObj
+		listAll  = numObj == 0
+	)
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
 			lsmsg.PageSize = toRead
@@ -411,39 +416,34 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 		actMsg := apc.ActMsg{Action: apc.ActList, Value: lsmsg}
 		reqParams.Body = cos.MustMarshal(actMsg)
 		page := nextPage
-
 		if pageNum == 1 {
 			page = lst
 		} else {
-			// Do not try to optimize by reusing allocated page as `Unmarshaler`/`Decoder`
-			// will reuse the entry pointers what will result in duplications.
 			page.Entries = nil
 		}
 
-		// Retry with increasing timeout.
-		for i := 0; i < 5; i++ {
-			if _, err = reqParams.DoReqAny(page); err != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
-					client := *reqParams.BaseParams.Client
-					client.Timeout = 2 * client.Timeout
-					reqParams.BaseParams.Client = &client
-					continue
-				}
-				return nil, err
+		// w/ limited retry and increasing timeout
+		const maxry = 5
+		for i := 0; i < maxry; i++ {
+			_, err := reqParams.DoReqAny(page)
+			if err == nil {
+				break
 			}
-			break
-		}
-		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && i < maxry-1 {
+				client := *reqParams.BaseParams.Client
+				client.Timeout = 2 * client.Timeout
+				reqParams.BaseParams.Client = &client
+				continue
+			}
 			return nil, err
 		}
 
 		lst.Flags |= page.Flags
-		// The first iteration uses the `lst` directly so there is no need to append.
+		// first page appends to an empty `lst`, otherwise:
 		if pageNum > 1 {
 			lst.Entries = append(lst.Entries, page.Entries...)
 			lst.ContinuationToken = page.ContinuationToken
 		}
-
 		if progress != nil && progress.mustFire() {
 			progress.info.Count = len(lst.Entries)
 			if page.ContinuationToken == "" {
@@ -451,19 +451,16 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 			}
 			progress.callback(progress)
 		}
-
 		if page.ContinuationToken == "" { // listed all pages
 			lsmsg.ContinuationToken = ""
 			break
 		}
-
 		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
 		debug.Assert(cos.IsValidUUID(page.UUID))
 		lsmsg.UUID = page.UUID
 		lsmsg.ContinuationToken = page.ContinuationToken
 	}
-
-	return lst, err
+	return lst, nil
 }
 
 // ListObjectsPage returns the first page of bucket objects.

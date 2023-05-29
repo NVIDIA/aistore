@@ -178,6 +178,7 @@ func (reqParams *ReqParams) doWriter(w io.Writer) (wresp *wrappedResp, err error
 		return
 	}
 	wresp, err = reqParams.rwResp(resp, w)
+	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	return
 }
@@ -288,13 +289,10 @@ func (reqParams *ReqParams) readStr(resp *http.Response, out *string) error {
 }
 
 func (reqParams *ReqParams) rwResp(resp *http.Response, w io.Writer) (*wrappedResp, error) {
-	defer cos.DrainReader(resp.Body)
-
 	if err := reqParams.checkResp(resp); err != nil {
 		return nil, err
 	}
 	wresp := &wrappedResp{Response: resp}
-	// TODO: pass a buffer or add an optional api.Init(MMSA) to allocate reusable one
 	n, err := io.Copy(w, resp.Body)
 	if err != nil {
 		return nil, err
@@ -308,16 +306,13 @@ func (reqParams *ReqParams) rwResp(resp *http.Response, w io.Writer) (*wrappedRe
 // affectively, end-to-end protection
 // (compare w/ readResp above)
 func (reqParams *ReqParams) readValidateCksum(resp *http.Response, w io.Writer) (*wrappedResp, error) {
-	if err := reqParams.checkResp(resp); err != nil {
-		cos.DrainReader(resp.Body)
-		return nil, err
-	}
 	var (
 		wresp     = &wrappedResp{Response: resp, n: resp.ContentLength}
 		cksumType = resp.Header.Get(apc.HdrObjCksumType)
 	)
-
-	// TODO: pass a buffer or add an optional api.Init(MMSA) to allocate reusable one
+	if err := reqParams.checkResp(resp); err != nil {
+		return nil, err
+	}
 	n, cksum, err := cos.CopyAndChecksum(w, resp.Body, nil, cksumType)
 	if err != nil {
 		return nil, err
@@ -329,7 +324,7 @@ func (reqParams *ReqParams) readValidateCksum(resp *http.Response, w io.Writer) 
 		return nil, fmt.Errorf("cannot validate nil checksum (type %q)", cksumType)
 	}
 
-	// and compare
+	// compare
 	wresp.cksumValue = cksum.Value()
 	hdrCksumValue := wresp.Header.Get(apc.HdrObjCksumVal)
 	if wresp.cksumValue != hdrCksumValue {
