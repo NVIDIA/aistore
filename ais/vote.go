@@ -478,7 +478,7 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 			glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newSmap, err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
 			_, err := w.Write([]byte(VoteNo))
-			cos.AssertNoErr(err)
+			debug.AssertNoErr(err)
 			return
 		}
 	}
@@ -495,12 +495,11 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	if vote {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteYes)))
 		_, err = w.Write([]byte(VoteYes))
-		cos.AssertNoErr(err)
 	} else {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
 		_, err = w.Write([]byte(VoteNo))
-		cos.AssertNoErr(err)
 	}
+	debug.AssertNoErr(err)
 }
 
 // PUT /v1/vote/result

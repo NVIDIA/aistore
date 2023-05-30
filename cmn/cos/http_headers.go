@@ -4,10 +4,22 @@
  */
 package cos
 
-// References:
-// - Standard HTTP headers: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
-// - AIS HTTP headers:      api package and api/apc/headers.go source
+// standard MIME types
+// - https://www.iana.org/assignments/media-types/media-types.xhtml
+// - https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+const (
+	ContentJSON           = "application/json"
+	ContentJSONCharsetUTF = "application/json; charset=utf-8"
+	ContentMsgPack        = "application/msgpack"
+	ContentXML            = "application/xml"
+	ContentBinary         = "application/octet-stream"
 
+	// not currently used:
+	ContentZip = "application/zip"
+	ContentTar = "application/x-tar" // not present in IANA reg, mozilla.org has it though
+)
+
+// Ref: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers
 const (
 	// range to read:
 	HdrRange          = "Range" // Ref: https://www.rfc-editor.org/rfc/rfc7233#section-2.1
@@ -61,11 +73,4 @@ const (
 	AzVersionHeader = "ETag"
 )
 
-// Ref: https://www.iana.org/assignments/media-types/media-types.xhtml
-const (
-	ContentJSON           = "application/json"
-	ContentJSONCharsetUTF = "application/json; charset=utf-8"
-	ContentMsgPack        = "application/msgpack"
-	ContentXML            = "application/xml"
-	ContentBinary         = "application/octet-stream"
-)
+// For AIS headers, see: api/apc/headers.go

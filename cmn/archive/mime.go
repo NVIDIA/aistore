@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+// for standard MIME types, see: cmn/cos/http_headers.go
+
 // standard file signatures
 var (
 	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}

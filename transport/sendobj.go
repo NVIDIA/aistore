@@ -305,6 +305,7 @@ func (s *Stream) sendPDU(b []byte) (n int) {
 // end-of-object:
 // - update stats, reset idle timeout, and post completion
 // - note that reader.Close() is done by `doCmpl`
+// TODO: ideally, there's a way to flush buffered data to the underlying connection :NOTE
 func (s *Stream) eoObj(err error) {
 	obj := &s.sendoff.obj
 	objSize := obj.Size()
