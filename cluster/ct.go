@@ -169,9 +169,9 @@ func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (
 	}
 	buf, slab := t.PageMM().Alloc()
 	if len(workFQN) == 0 {
-		_, err = cos.SaveReader(ct.fqn, reader, buf, cos.ChecksumNone, size, "")
+		_, err = cos.SaveReader(ct.fqn, reader, buf, cos.ChecksumNone, size)
 	} else {
-		_, err = cos.SaveReaderSafe(workFQN[0], ct.fqn, reader, buf, cos.ChecksumNone, size, "")
+		_, err = cos.SaveReaderSafe(workFQN[0], ct.fqn, reader, buf, cos.ChecksumNone, size)
 	}
 	slab.Free(buf)
 	return err

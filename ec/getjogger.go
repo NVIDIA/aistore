@@ -443,24 +443,19 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 	return nil
 }
 
-func checkSliceChecksum(reader io.Reader, recvCksm *cos.Cksum, sliceSize int64, objName string) error {
-	cksumType := recvCksm.Type()
+func cksumSlice(reader io.Reader, recvCksum *cos.Cksum, objName string) error {
+	cksumType := recvCksum.Type()
 	if cksumType == cos.ChecksumNone {
 		return nil
 	}
-
-	buf, slab := mm.AllocSize(sliceSize)
-	_, actualCksm, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
-	slab.Free(buf)
-
+	_, actualCksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cksumType)
 	if err != nil {
-		return fmt.Errorf("couldn't compute checksum of a slice: %v", err)
+		return fmt.Errorf("failed to checksum: %v", err)
 	}
-
-	if !actualCksm.Equal(recvCksm) {
-		return cos.NewBadDataCksumError(recvCksm, &actualCksm.Cksum, objName)
+	if !actualCksum.Equal(recvCksum) {
+		err = cos.NewBadDataCksumError(recvCksum, &actualCksum.Cksum, objName)
 	}
-	return nil
+	return err
 }
 
 // Reconstruct the main object from slices. Returns the list of reconstructed slices.
@@ -513,9 +508,9 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 			break
 		}
 
-		errCksum := checkSliceChecksum(cksmReader, sl.cksum, sliceSize, ctx.lom.ObjName)
+		errCksum := cksumSlice(cksmReader, sl.cksum, ctx.lom.ObjName)
 		if errCksum != nil {
-			glog.Errorf("Slice %d corrupted: %v", i, errCksum)
+			glog.Errorf("error slice %d: %v", i, errCksum)
 			err = newSliceWriter(ctx, writers, restored, cksums, cksumType, i, sliceSize)
 			if err != nil {
 				break

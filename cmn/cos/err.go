@@ -45,7 +45,7 @@ func IsErrNotFound(err error) bool {
 	return ok
 }
 
-// ErrValue
+// ErrValue (TODO: extend via errors.Join and Unwrap() []error Go 1.20)
 
 func (ea *ErrValue) Store(err error) {
 	if ea.cnt.Add(1) == 1 {

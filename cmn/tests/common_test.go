@@ -117,7 +117,7 @@ var _ = Describe("Common file", func() {
 			const bytesToRead = 1000
 			byteBuffer := make([]byte, bytesToRead)
 
-			_, err := cos.SaveReader(nonExistingFile, rand.Reader, byteBuffer, cos.ChecksumNone, bytesToRead, "")
+			_, err := cos.SaveReader(nonExistingFile, rand.Reader, byteBuffer, cos.ChecksumNone, bytesToRead)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer)
@@ -128,7 +128,7 @@ var _ = Describe("Common file", func() {
 			byteBuffer := make([]byte, bytesLimit*2)
 			reader := &io.LimitedReader{R: rand.Reader, N: bytesLimit}
 
-			_, err := cos.SaveReader(nonExistingFile, reader, byteBuffer, cos.ChecksumNone, -1, "")
+			_, err := cos.SaveReader(nonExistingFile, reader, byteBuffer, cos.ChecksumNone, -1)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateSaveReaderOutput(nonExistingFile, byteBuffer[:bytesLimit])
@@ -176,7 +176,7 @@ var _ = Describe("Common file", func() {
 		)
 
 		It("should copy file and preserve the content", func() {
-			_, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumNone, 1000, "")
+			_, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumNone, 1000)
 			Expect(err).NotTo(HaveOccurred())
 			_, _, err = cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumNone)
 			Expect(err).NotTo(HaveOccurred())
@@ -191,7 +191,7 @@ var _ = Describe("Common file", func() {
 		})
 
 		It("should copy a object and compute its checksum", func() {
-			expectedCksum, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumXXHash, 1000, "")
+			expectedCksum, err := cos.SaveReader(srcFilename, rand.Reader, make([]byte, 1000), cos.ChecksumXXHash, 1000)
 			Expect(err).NotTo(HaveOccurred())
 
 			_, cksum, err := cos.CopyFile(srcFilename, dstFilename, make([]byte, 1000), cos.ChecksumXXHash)

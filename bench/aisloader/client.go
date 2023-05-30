@@ -286,7 +286,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, io.Discard, src, hdrCksumType)
+	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 	if err != nil {
 		return 0, err
 	}
@@ -322,7 +322,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 	}
 
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
-	n, cksumValue, err := readResponse(resp, io.Discard, src, hdrCksumType)
+	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
 	if err != nil {
 		return 0, httpLatencies{}, err
 	}
@@ -362,7 +362,8 @@ func getConfig(server string) (httpLatencies, error) {
 	}
 	defer resp.Body.Close()
 
-	_, err = discardResponse(resp, "GetConfig")
+	_, _, err = readDiscard(resp, "GetConfig", "" /*cksum type*/)
+
 	l := httpLatencies{
 		ProxyConn: timeDelta(tctx.tr.tsProxyConn, tctx.tr.tsBegin),
 		Proxy:     time.Since(tctx.tr.tsProxyConn),
@@ -397,31 +398,21 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 	return objs, nil
 }
 
-func discardResponse(r *http.Response, src string) (int64, error) {
-	n, _, err := readResponse(r, io.Discard, src, "")
-	return n, err
-}
-
-func readResponse(r *http.Response, w io.Writer, src, cksumType string) (int64, string, error) {
+func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error) {
 	var (
 		n          int64
 		cksum      *cos.CksumHash
 		err        error
 		cksumValue string
 	)
-
 	if r.StatusCode >= http.StatusBadRequest {
 		bytes, err := io.ReadAll(r.Body)
 		if err == nil {
-			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
+			return 0, "", fmt.Errorf("bad status %d from %s, response: %s", r.StatusCode, tag, string(bytes))
 		}
-		return 0, "", fmt.Errorf("bad status %d from %s, err: %v", r.StatusCode, src, err)
+		return 0, "", fmt.Errorf("bad status %d from %s: %v", r.StatusCode, tag, err)
 	}
-
-	buf, slab := gmm.Alloc()
-	defer slab.Free(buf)
-
-	n, cksum, err = cos.CopyAndChecksum(w, r.Body, buf, cksumType)
+	n, cksum, err = cos.CopyAndChecksum(io.Discard, r.Body, nil, cksumType)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to read HTTP response, err: %v", err)
 	}

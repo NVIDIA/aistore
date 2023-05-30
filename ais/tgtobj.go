@@ -878,12 +878,9 @@ ret:
 // in particular, setup reader and writer and set headers
 func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange, coldGet bool) (errCode int, err error) {
 	var (
-		slab   *memsys.Slab
-		buf    []byte
 		size   int64
 		reader io.Reader = lmfh
 	)
-
 	cmn.ToHeader(goi.lom.ObjAttrs(), hdr) // (defaults)
 
 	switch {
@@ -912,34 +909,34 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		hdr.Set(apc.HdrArchmime, mime)
 		hdr.Set(apc.HdrArchpath, goi.archive.filename)
 		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
-
-		buf, slab = goi.t.gmm.AllocSize(size)
 	case hrng != nil: // range
 		cksumConf := goi.lom.CksumConf()
 		cksumRange := cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
 		size = hrng.Length
-		buf, slab = goi.t.gmm.AllocSize(hrng.Length)
 		reader = io.NewSectionReader(lmfh, hrng.Start, hrng.Length)
 		if cksumRange {
-			sgl := slab.MMSA().NewSGL(hrng.Length, slab.Size())
-			defer func() {
+			var (
+				cksum *cos.CksumHash
+				sgl   = goi.t.gmm.NewSGL(size)
+			)
+			_, cksum, err = cos.CopyAndChecksum(sgl /*as ReaderFrom*/, reader, nil, cksumConf.Type)
+			if err != nil {
 				sgl.Free()
-			}()
-			var cksum *cos.CksumHash
-			if _, cksum, err = cos.CopyAndChecksum(sgl, reader, buf, cksumConf.Type); err != nil {
-				slab.Free(buf)
 				return
 			}
 			hdr.Set(apc.HdrObjCksumVal, cksum.Value())
 			hdr.Set(apc.HdrObjCksumType, cksumConf.Type)
 			reader = sgl
+			defer func() {
+				sgl.Free()
+			}()
 		}
 		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	default:
 		size = goi.lom.SizeBytes()
-		buf, slab = goi.t.gmm.AllocSize(size)
 	}
 
+	buf, slab := goi.t.gmm.AllocSize(size)
 	err = goi.transmit(reader, buf, fqn, coldGet)
 	slab.Free(buf)
 	return

@@ -388,7 +388,7 @@ func getRandomFileName(fileCounter int) string {
 
 func saveRandomFile(filename string, size int64) {
 	buff := make([]byte, size)
-	_, err := cos.SaveReader(filename, rand.Reader, buff, cos.ChecksumNone, size, "")
+	_, err := cos.SaveReader(filename, rand.Reader, buff, cos.ChecksumNone, size)
 	Expect(err).NotTo(HaveOccurred())
 	lom := &cluster.LOM{}
 	err = lom.InitFQN(filename, nil)

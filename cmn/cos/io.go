@@ -491,15 +491,19 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 	return
 }
 
-// Saves the reader directly to a local file, xxhash-checksums if requested
-func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string,
-	size int64, dirMustExist string) (cksum *CksumHash, err error) {
-	Assert(fqn != "")
-	if dirMustExist != "" {
-		if err := Stat(dirMustExist); err != nil {
-			return nil, fmt.Errorf("failed to save-safe %s: directory %s %w", fqn, dirMustExist, err)
-		}
+func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, cksumType string, size int64) (cksum *CksumHash,
+	err error) {
+	if cksum, err = SaveReader(tmpfqn, reader, buf, cksumType, size); err != nil {
+		return
 	}
+	if err = Rename(tmpfqn, fqn); err != nil {
+		os.Remove(tmpfqn)
+	}
+	return
+}
+
+// Saves the reader directly to `fqn`, checksums if requested
+func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string, size int64) (cksum *CksumHash, err error) {
 	var (
 		written   int64
 		file, erc = CreateFile(fqn)
@@ -533,19 +537,6 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string,
 		return
 	}
 	return
-}
-
-// same as above, plus rename
-func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, cksumType string,
-	size int64, dirMustExist string) (cksum *CksumHash, err error) {
-	if cksum, err = SaveReader(tmpfqn, reader, buf, cksumType, size, dirMustExist); err != nil {
-		return nil, err
-	}
-	if err := Rename(tmpfqn, fqn); err != nil {
-		os.Remove(tmpfqn)
-		return nil, err
-	}
-	return cksum, nil
 }
 
 // Read only the first line of a file.
@@ -612,12 +603,15 @@ func ReadLines(filename string, cb func(string) error) error {
 	return nil
 }
 
-// CopyAndChecksum reads io.Reader and writes io.Writer; returns bytes written, checksum, and error
+// CopyAndChecksum reads from `r` and writes to `w`; returns num bytes copied and checksum, or error
 func CopyAndChecksum(w io.Writer, r io.Reader, buf []byte, cksumType string) (n int64, cksum *CksumHash, err error) {
+	debug.Assert(w != io.Discard || buf == nil) // io.Discard is io.ReaderFrom
+
 	if cksumType == ChecksumNone || cksumType == "" {
 		n, err = io.CopyBuffer(w, r, buf)
 		return
 	}
+
 	cksum = NewCksumHash(cksumType)
 	var mw io.Writer = cksum.H
 	if w != io.Discard {

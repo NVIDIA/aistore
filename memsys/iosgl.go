@@ -15,10 +15,11 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// interface guard (and a collection of provided io.* interfaces)
+// interface guard
 var (
-	_ cos.WriterAt   = (*SGL)(nil)
-	_ io.ReaderFrom  = (*SGL)(nil)
+	_ cos.WriterAt = (*SGL)(nil)
+
+	_ io.ReaderFrom  = (*SGL)(nil) // NOTE: important interfaces
 	_ io.WriterTo    = (*SGL)(nil)
 	_ io.ByteScanner = (*SGL)(nil)
 

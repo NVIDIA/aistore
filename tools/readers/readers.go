@@ -146,19 +146,12 @@ func (r *randReader) Cksum() *cos.Cksum {
 func NewRandReader(size int64, cksumType string) (Reader, error) {
 	var (
 		cksum *cos.Cksum
-		err   error
 		seed  = mono.NanoTime()
 	)
-	slab, err := memsys.PageMM().GetSlab(memsys.DefaultBufSize)
-	if err != nil {
-		return nil, err
-	}
-	buf := slab.Alloc()
-	defer slab.Free(buf)
 	rand1 := rand.New(rand.NewSource(seed))
-	rr := &rrLimited{rand1, size, 0}
 	if cksumType != cos.ChecksumNone {
-		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, buf, cksumType)
+		rr := &rrLimited{rand1, size, 0}
+		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, cksumType)
 		if err != nil {
 			return nil, err
 		}
@@ -228,9 +221,8 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 	if size == -1 {
 		// Assuming that the file already exists and contains data.
 		if cksumType != cos.ChecksumNone {
-			buf, slab := memsys.PageMM().Alloc()
-			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, buf, cksumType)
-			slab.Free(buf)
+			debug.Assert(cksumType != "")
+			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, cksumType)
 		}
 	} else {
 		// Populate the file with random data.

@@ -182,12 +182,12 @@ const (
 )
 
 //
-// misc constants
+// more constants
 //
 
 const (
-	fileStdIO = "-" // STDIN (for `ais put`), STDOUT (for `ais put`)
-	discardIO = "/dev/null"
+	fileStdIO = "-"         // STDIN (for `ais put`), STDOUT (for `ais put`)
+	discardIO = "/dev/null" // (io.Discard)
 )
 
 const (

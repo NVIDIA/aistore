@@ -303,9 +303,8 @@ func (reqParams *ReqParams) rwResp(resp *http.Response, w io.Writer) (*wrappedRe
 	return wresp, nil
 }
 
-// affectively, end-to-end protection
-// (compare w/ readResp above)
-func (reqParams *ReqParams) readValidateCksum(resp *http.Response, w io.Writer) (*wrappedResp, error) {
+// end-to-end protection (compare w/ rwResp above)
+func (reqParams *ReqParams) readValidate(resp *http.Response, w io.Writer) (*wrappedResp, error) {
 	var (
 		wresp     = &wrappedResp{Response: resp, n: resp.ContentLength}
 		cksumType = resp.Header.Get(apc.HdrObjCksumType)

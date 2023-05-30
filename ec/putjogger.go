@@ -342,12 +342,10 @@ func (c *putJogger) createCopies(ctx *encodeCtx) error {
 	return c.parent.writeRemote(nodes, ctx.lom, src, nil)
 }
 
-// Fills slices with calculated checksums, reports errors to error channel
 func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType string) error {
-	buf, slab := mm.AllocSize(ctx.sliceSize)
-	defer slab.Free(buf)
+	debug.Assert(cksumType != "") // caller checks for 'none'
 	for i, reader := range cksmReaders {
-		_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, buf, cksumType)
+		_, cksum, err := cos.CopyAndChecksum(io.Discard, reader, nil, cksumType)
 		if err != nil {
 			return err
 		}

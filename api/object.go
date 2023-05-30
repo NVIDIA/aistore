@@ -206,7 +206,7 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *Ge
 		return
 	}
 
-	wresp, err = reqParams.readValidateCksum(resp, w)
+	wresp, err = reqParams.readValidate(resp, w)
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	FreeRp(reqParams)
