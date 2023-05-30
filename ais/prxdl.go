@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -73,6 +74,7 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		p.writeErr(w, r, err, statusCode)
 	} else {
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(resp)))
 		w.Write(resp)
 	}
 }
@@ -115,8 +117,9 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 	nl.SetOwner(equalIC)
 	p.ic.registerEqual(regIC{nl: nl, smap: smap})
 
-	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
 	b := cos.MustMarshal(dload.DlPostResp{ID: jobID})
+	w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
 	w.Write(b)
 }
 

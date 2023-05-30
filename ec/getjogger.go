@@ -453,7 +453,7 @@ func cksumSlice(reader io.Reader, recvCksum *cos.Cksum, objName string) error {
 		return fmt.Errorf("failed to checksum: %v", err)
 	}
 	if !actualCksum.Equal(recvCksum) {
-		err = cos.NewBadDataCksumError(recvCksum, &actualCksum.Cksum, objName)
+		err = cos.NewErrDataCksum(recvCksum, &actualCksum.Cksum, objName)
 	}
 	return err
 }

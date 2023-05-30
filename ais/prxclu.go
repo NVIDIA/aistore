@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -101,6 +102,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 			buf.WriteByte(',')
 			buf.WriteString(si.DataNet.Hostname)
 		}
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(buf.Len()))
 		w.Write(buf.Bytes())
 
 	case apc.WhatClusterConfig:
@@ -213,7 +215,7 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 		return
 	}
 	out.Target = targetResults
-	_ = p.writeJSON(w, r, out, what)
+	p.writeJSON(w, r, out, what)
 }
 
 func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
@@ -279,7 +281,7 @@ func (p *proxy) qcluStats(w http.ResponseWriter, r *http.Request, what string, q
 	out.Target = targetStats
 	out.Proxy = p.statsT.GetStats()
 	out.Proxy.Snode = p.si
-	_ = p.writeJSON(w, r, out, what)
+	p.writeJSON(w, r, out, what)
 }
 
 func (p *proxy) qcluMountpaths(w http.ResponseWriter, r *http.Request, what string, query url.Values) {
@@ -289,7 +291,7 @@ func (p *proxy) qcluMountpaths(w http.ResponseWriter, r *http.Request, what stri
 	}
 	out := &ClusterMountpathsRaw{}
 	out.Targets = targetMountpaths
-	_ = p.writeJSON(w, r, out, what)
+	p.writeJSON(w, r, out, what)
 }
 
 // helper methods for querying targets
@@ -1071,6 +1073,8 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	smap := p.owner.smap.get()
 	nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
 	p.ic.registerEqual(regIC{smap: smap, nl: nl})
+
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
 	w.Write([]byte(xargs.ID))
 }
 
@@ -1126,6 +1130,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	debug.Assert(rmdCtx.rebID != "")
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rmdCtx.rebID)))
 	w.Write([]byte(rmdCtx.rebID))
 }
 
@@ -1150,6 +1155,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.Act
 	} else {
 		nl := xact.NewXactNL(xargs.ID, xargs.Kind, &smap.Smap, nil)
 		p.ic.registerEqual(regIC{smap: smap, nl: nl})
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xargs.ID)))
 		w.Write([]byte(xargs.ID))
 	}
 	freeCR(res)
@@ -1296,6 +1302,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 			return
 		}
 		if rebID != "" {
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rebID)))
 			w.Write(cos.UnsafeB(rebID))
 		}
 	}
@@ -1432,6 +1439,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		return
 	}
 	if rebID != "" {
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(rebID)))
 		w.Write(cos.UnsafeB(rebID))
 	}
 }

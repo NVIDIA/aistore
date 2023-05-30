@@ -294,7 +294,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 	}
 	if params.Cksum != nil && cksum != nil {
 		if !cksum.Equal(params.Cksum) {
-			err = cos.NewBadDataCksumError(
+			err = cos.NewErrDataCksum(
 				cksum.Clone(),
 				params.Cksum,
 				params.SrcFQN+" => "+lom.String() /*detail*/)

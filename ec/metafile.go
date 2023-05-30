@@ -142,7 +142,7 @@ func (md *Metadata) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	b := unpacker.Bytes()
 	calcCksum := xxhash.Checksum64S(b[:len(b)-cos.SizeofI64], cos.MLCG32)
 	if cksum != calcCksum {
-		err = cos.NewBadMetaCksumError(cksum, calcCksum, "EC metadata")
+		err = cos.NewErrMetaCksum(cksum, calcCksum, "EC metadata")
 	}
 	return err
 }

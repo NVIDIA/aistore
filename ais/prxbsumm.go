@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -50,6 +51,7 @@ retry:
 	// all accepted
 	if numNotFound == 0 {
 		w.WriteHeader(http.StatusAccepted)
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(msg.UUID)))
 		w.Write([]byte(msg.UUID))
 		return
 	}

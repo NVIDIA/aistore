@@ -918,28 +918,47 @@ func (h *htrun) writeMsgPack(w http.ResponseWriter, v msgp.Encodable, tag string
 	if err == nil {
 		return true
 	}
-	h.handleWerr(tag, v, err)
+	h.logerr(tag, v, err)
 	return false
 }
 
-func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag string) bool {
-	var err error
+func (h *htrun) writeJSON(w http.ResponseWriter, r *http.Request, v any, tag string) {
+	if err := _writejs(w, r, v); err != nil {
+		h.logerr(tag, v, err)
+	}
+}
+
+// same as above with boolean return to facilitate early termination
+func (h *htrun) writeJS(w http.ResponseWriter, r *http.Request, v any, tag string) bool {
+	if err := _writejs(w, r, v); err != nil {
+		h.logerr(tag, v, err)
+		return false
+	}
+	return true
+}
+
+func _writejs(w http.ResponseWriter, r *http.Request, v any) (err error) {
 	w.Header().Set(cos.HdrContentType, cos.ContentJSONCharsetUTF)
 	if isBrowser(r.Header.Get(cos.HdrUserAgent)) {
 		var out []byte
-		if out, err = jsoniter.MarshalIndent(v, "", "    "); err != nil {
-			goto rerr
+		if out, err = jsoniter.MarshalIndent(v, "", "    "); err == nil {
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(out)))
+			_, err = w.Write(out)
 		}
-		written, _ := w.Write(out)
-		return written == len(out)
+	} else { // previously: new-encoder(w).encode(v) (non-browser client)
+		j := cos.JSON.BorrowStream(nil)
+		j.WriteVal(v)
+		j.WriteRaw("\n")
+		if err = j.Error; err == nil {
+			b := j.Buffer()
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+			_, err = w.Write(b)
+
+			// NOTE: consider http.NewResponseController(w).Flush()
+		}
+		cos.JSON.ReturnStream(j)
 	}
-	// non-browser client
-	if err = jsoniter.NewEncoder(w).Encode(v); err == nil {
-		return true
-	}
-rerr:
-	h.handleWerr(tag, v, err)
-	return false
+	return
 }
 
 // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent
@@ -948,7 +967,7 @@ func isBrowser(userAgent string) bool {
 	return strings.HasPrefix(userAgent, "Mozilla/5.0")
 }
 
-func (h *htrun) handleWerr(tag string, v any, err error) {
+func (h *htrun) logerr(tag string, v any, err error) {
 	const maxl = 32
 	if daemon.stopping.Load() {
 		return

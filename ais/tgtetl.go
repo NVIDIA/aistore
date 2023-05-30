@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -185,6 +186,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 		}
 		return
 	}
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(health)))
 	w.Write([]byte(health))
 }
 

@@ -467,7 +467,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
 		if !lom.EqCksum(args.Cksum) {
-			err = cos.NewBadDataCksumError(args.Cksum, lom.Checksum(), lom.Cname())
+			err = cos.NewErrDataCksum(args.Cksum, lom.Checksum(), lom.Cname())
 			return
 		}
 	}

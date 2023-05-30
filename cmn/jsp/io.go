@@ -156,7 +156,7 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		actual := h.Sum(nil)
 		actualCksum := binary.BigEndian.Uint64(actual)
 		if expectedCksum != actualCksum {
-			err = cos.NewBadMetaCksumError(expectedCksum, actualCksum, tag)
+			err = cos.NewErrMetaCksum(expectedCksum, actualCksum, tag)
 			return
 		}
 		checksum = cos.NewCksum(cos.ChecksumXXHash, hex.EncodeToString(actual))

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -199,7 +200,9 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 			vec = append(vec, *nl.Status())
 		}
 	}
-	w.Write(cos.MustMarshal(vec))
+	b := cos.MustMarshal(vec)
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+	w.Write(b)
 }
 
 func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +267,9 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	w.Write(cos.MustMarshal(status)) // TODO: include stats, e.g., progress when ready
+	b := cos.MustMarshal(status) // TODO: include stats, e.g., progress when ready
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+	w.Write(b)
 }
 
 // verb /v1/ic

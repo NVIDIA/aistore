@@ -1098,7 +1098,9 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 		}
 		return
 	}
-	w.Write(md.NewPack())
+	b := md.NewPack()
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+	w.Write(b)
 }
 
 func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {

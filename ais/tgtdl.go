@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -177,7 +178,10 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if response != nil {
-		w.Write(cos.MustMarshal(response))
+		b := cos.MustMarshal(response)
+		w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))
+		w.Write(b)
 	}
 }
 

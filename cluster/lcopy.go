@@ -312,7 +312,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 
 	if cksumType != cos.ChecksumNone {
 		if !dstCksum.Equal(lom.Checksum()) {
-			return cos.NewBadDataCksumError(&dstCksum.Cksum, lom.Checksum())
+			return cos.NewErrDataCksum(&dstCksum.Cksum, lom.Checksum())
 		}
 		dst.SetCksum(dstCksum.Clone())
 	}

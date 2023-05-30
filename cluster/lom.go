@@ -244,7 +244,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	}
 	// different versions may have different checksums
 	if md.Ver == lom.md.Ver && !lom.EqCksum(md.Cksum) {
-		err = cos.NewBadDataCksumError(lom.md.Cksum, md.Cksum, lom.String())
+		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, lom.String())
 		lom.Uncache(true /*delDirty*/)
 	}
 	return err
@@ -303,7 +303,7 @@ recomp:
 		}
 	}
 ex:
-	err = cos.NewBadDataCksumError(&cksums.comp.Cksum, cksums.stor, lom.String())
+	err = cos.NewErrDataCksum(&cksums.comp.Cksum, cksums.stor, lom.String())
 	lom.Uncache(true /*delDirty*/)
 	return
 }

@@ -124,7 +124,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 		recvSHA := cos.NewCksum(cos.ChecksumSHA256, partSHA)
 		if !cksumSHA.Equal(recvSHA) {
 			detail := fmt.Sprintf("upload %q, %s, part %d", uploadID, lom, partNum)
-			err = cos.NewBadDataCksumError(&cksumSHA.Cksum, recvSHA, detail)
+			err = cos.NewErrDataCksum(&cksumSHA.Cksum, recvSHA, detail)
 			s3.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}

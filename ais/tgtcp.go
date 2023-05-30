@@ -1001,7 +1001,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(!query.Has(apc.QparamRebStatus))
 		cii := &clusterInfo{}
 		cii.fill(&t.htrun)
-		_ = t.writeJSON(w, r, cii, "cluster-info")
+		t.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
 	// valid?
@@ -1029,7 +1029,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if getRebStatus {
 		status := &reb.Status{}
 		t.reb.RebStatus(status)
-		if ok := t.writeJSON(w, r, status, "rebalance-status"); !ok {
+		if !t.writeJS(w, r, status, "rebalance-status") {
 			return
 		}
 		if smap.version() < callerSmapVer && status.Running {

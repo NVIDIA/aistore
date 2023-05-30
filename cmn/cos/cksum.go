@@ -251,7 +251,7 @@ func (*noopHash) UnmarshalBinary([]byte) error   { return nil }
 // errors
 //
 
-func NewBadDataCksumError(a, b *Cksum, context ...string) error {
+func NewErrDataCksum(a, b *Cksum, context ...string) error {
 	ctx := ""
 	if len(context) > 0 {
 		ctx = context[0]
@@ -259,7 +259,7 @@ func NewBadDataCksumError(a, b *Cksum, context ...string) error {
 	return &ErrBadCksum{prefix: badDataCksumPrefix, a: a, b: b, context: ctx}
 }
 
-func NewBadMetaCksumError(a, b uint64, context ...string) error {
+func NewErrMetaCksum(a, b uint64, context ...string) error {
 	ctx := ""
 	if len(context) > 0 {
 		ctx = context[0]

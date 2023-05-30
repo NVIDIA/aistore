@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
@@ -475,9 +476,9 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			glog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newSmap, err)
-			if _, err := w.Write([]byte(VoteNo)); err != nil {
-				glog.Errorf("%s: failed to write a No vote: %v", h.si, err)
-			}
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
+			_, err := w.Write([]byte(VoteNo))
+			cos.AssertNoErr(err)
 			return
 		}
 	}
@@ -492,15 +493,13 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if vote {
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteYes)))
 		_, err = w.Write([]byte(VoteYes))
-		if err != nil {
-			h.writeErrf(w, r, "%s: failed to write Yes vote: %v", h.si, err)
-		}
+		cos.AssertNoErr(err)
 	} else {
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
 		_, err = w.Write([]byte(VoteNo))
-		if err != nil {
-			h.writeErrf(w, r, "%s: failed to write No vote: %v", h.si, err)
-		}
+		cos.AssertNoErr(err)
 	}
 }
 

@@ -420,7 +420,7 @@ write:
 		cksums.finalized = cksums.compt == cksums.store
 		cksums.compt.Finalize()
 		if !cksums.compt.Equal(cksums.expct) {
-			err = cos.NewBadDataCksumError(cksums.expct, &cksums.compt.Cksum, poi.lom.String())
+			err = cos.NewErrDataCksum(cksums.expct, &cksums.compt.Cksum, poi.lom.String())
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.ErrCksumCount, Value: 1},
 				cos.NamedVal64{Name: stats.ErrCksumSize, Value: written},
@@ -908,7 +908,6 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		hdr.Del(apc.HdrObjCksumType)
 		hdr.Set(apc.HdrArchmime, mime)
 		hdr.Set(apc.HdrArchpath, goi.archive.filename)
-		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	case hrng != nil: // range
 		cksumConf := goi.lom.CksumConf()
 		cksumRange := cksumConf.Type != cos.ChecksumNone && cksumConf.EnableReadRange
@@ -931,11 +930,11 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 				sgl.Free()
 			}()
 		}
-		hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	default:
 		size = goi.lom.SizeBytes()
 	}
 
+	hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	buf, slab := goi.t.gmm.AllocSize(size)
 	err = goi.transmit(reader, buf, fqn, coldGet)
 	slab.Free(buf)
@@ -1076,7 +1075,7 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		a.hdl.partialCksum.Finalize()
 		partialCksum := a.hdl.partialCksum.Clone()
 		if !a.cksum.IsEmpty() && !partialCksum.Equal(a.cksum) {
-			err = cos.NewBadDataCksumError(partialCksum, a.cksum)
+			err = cos.NewErrDataCksum(partialCksum, a.cksum)
 			errCode = http.StatusInternalServerError
 			return
 		}

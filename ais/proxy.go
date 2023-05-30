@@ -831,6 +831,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 			p.writeErr(w, r, err)
 			return
 		}
+		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 		w.Write([]byte(xid))
 	default:
 		p.writeErrAct(w, r, msg.Action)
@@ -941,7 +942,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		debug.Assert(!prr)
 		cii := &clusterInfo{}
 		cii.fill(&p.htrun)
-		_ = p.writeJSON(w, r, cii, "cluster-info")
+		p.writeJSON(w, r, cii, "cluster-info")
 		return
 	}
 	smap := p.owner.smap.get()
@@ -1033,6 +1034,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		xid, err := p.createArchMultiObj(bckFrom, bckTo, msg)
 		if err == nil {
+			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
 			w.Write([]byte(xid))
 		} else {
 			p.writeErr(w, r, err)
@@ -1098,6 +1100,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 	//
 	// {action} on bucket
 	//
+	var xid string
 	switch msg.Action {
 	case apc.ActMoveBck:
 		bckFrom := bck
@@ -1118,27 +1121,21 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErrf(w, r, "cannot rename bucket %q to itself (%q)", bckFrom, bckTo)
 			return
 		}
-
-		bckFrom.Provider = apc.AIS
-		bckTo.Provider = apc.AIS
-
+		bckFrom.Provider, bckTo.Provider = apc.AIS, apc.AIS
 		if _, present := p.owner.bmd.get().Get(bckTo); present {
 			err := cmn.NewErrBckAlreadyExists(bckTo.Bucket())
 			p.writeErr(w, r, err)
 			return
 		}
 		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
-		var xid string
 		if xid, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
 			bckTo       *meta.Bck
 			tcbmsg      = &apc.TCBMsg{}
-			xid         string
 			errCode     int
 			fltPresence = apc.FltPresent
 		)
@@ -1206,10 +1203,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			xid     string
 			tcomsg  = &cmn.TCObjsMsg{}
 			bckTo   *meta.Bck
 			errCode int
@@ -1247,46 +1242,45 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	case apc.ActAddRemoteBck:
 		if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 			return
 		}
 		if err := p.createBucket(msg, bck, nil); err != nil {
 			p.writeErr(w, r, err, crerrStatus(err))
-			return
 		}
+		return
 	case apc.ActPrefetchObjects:
 		// TODO: GET vs SYNC?
 		if bck.IsAIS() {
 			p.writeErrf(w, r, fmtNotRemote, bucket)
 			return
 		}
-		var xid string
 		if xid, err = p.listrange(r.Method, bucket, msg, query); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	case apc.ActInvalListCache:
 		p.qm.c.invalidate(bck.Bucket())
+		return
 	case apc.ActMakeNCopies:
-		var xid string
 		if xid, err = p.makeNCopies(msg, bck); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	case apc.ActECEncode:
-		var xid string
 		if xid, err = p.ecEncode(bck, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		w.Write([]byte(xid))
 	default:
 		p.writeErrAct(w, r, msg.Action)
+		return
 	}
+
+	debug.Assertf(xact.IsValidUUID(xid) || strings.IndexByte(xid, ',') > 0, "%q: %q", msg.Action, xid)
+	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(xid)))
+	w.Write([]byte(xid))
 }
 
 // init existing or create remote
@@ -1490,7 +1484,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		if !p.writeMsgPack(w, lst, lsotag) {
 			return
 		}
-	} else if !p.writeJSON(w, r, lst, lsotag) {
+	} else if !p.writeJS(w, r, lst, lsotag) {
 		return
 	}
 
