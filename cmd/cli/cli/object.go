@@ -118,70 +118,64 @@ func rangeTrimPrefix(pt *cos.ParsedTemplate) string {
 	return pt.Prefix[:sepaIndex+1]
 }
 
-func _putFrom(s string, recurs bool) (tag string) {
-	if recurs {
-		tag = s + "(recursive)"
-	} else {
-		tag = s + "(non-recursive)"
-	}
-	return
-}
-
-func putList(c *cli.Context, fnames []string, bck cmn.Bck, appendPrefixSubdir string) error {
+func verbList(c *cli.Context, wop wop, fnames []string, bck cmn.Bck, appendPrefixSubdir string) error {
 	var (
-		allFiles = make([]fobj, 0, len(fnames))
+		ndir     int
+		allFobjs = make([]fobj, 0, len(fnames))
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	for _, n := range fnames {
-		files, err := lsFobj(c, n, "", appendPrefixSubdir, recurs)
+		fobjs, err := lsFobj(c, n, "", appendPrefixSubdir, &ndir, recurs)
 		if err != nil {
 			return err
 		}
-		allFiles = append(allFiles, files...)
+		allFobjs = append(allFobjs, fobjs...)
 	}
-	tag := _putFrom(" ", recurs)
-	return putFobjs(c, allFiles, bck, tag)
+	return verbFobjs(c, wop, allFobjs, bck, ndir, recurs)
 }
 
-func putRange(c *cli.Context, pt *cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
+func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
 	var (
-		allFiles = make([]fobj, 0, pt.Count())
+		ndir     int
+		allFobjs = make([]fobj, 0, pt.Count())
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	pt.InitIter()
 	for n, hasNext := pt.Next(); hasNext; n, hasNext = pt.Next() {
-		files, err := lsFobj(c, n, trimPrefix, appendPrefixSubdir, recurs)
+		fobjs, err := lsFobj(c, n, trimPrefix, appendPrefixSubdir, &ndir, recurs)
 		if err != nil {
 			return err
 		}
-		allFiles = append(allFiles, files...)
+		allFobjs = append(allFobjs, fobjs...)
 	}
-	tag := _putFrom(" ", recurs)
-	return putFobjs(c, allFiles, bck, tag)
+	return verbFobjs(c, wop, allFobjs, bck, ndir, recurs)
 }
 
 func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []string) error {
 	const verb = "Compose"
 	var (
-		totalSize  int64
-		bar        *mpb.Bar
-		progress   *mpb.Progress
+		totalSize int64
+		ndir      int
+		bar       *mpb.Bar
+		progress  *mpb.Progress
+
 		l          = len(fileNames)
-		fobjMatrix = make([]fobjSlice, l)
+		fobjMatrix = make([]fobjs, l)
 		sizes      = make(map[string]int64, l) // or greater
 		name       = bck.Cname(objName)
+		recurs     = flagIsSet(c, recursFlag)
 	)
 	for i, fileName := range fileNames {
-		fsl, err := lsFobj(c, fileName, "", "", flagIsSet(c, recursFlag))
+		fobjs, err := lsFobj(c, fileName, "", "", &ndir, recurs)
 		if err != nil {
 			return err
 		}
-		sort.Sort(fsl)
-		for _, f := range fsl {
+		sort.Sort(fobjs)
+		for _, f := range fobjs {
 			totalSize += f.size
 			sizes[f.path] = f.size
 		}
-		fobjMatrix[i] = fsl
+		fobjMatrix[i] = fobjs
 	}
 	// setup progress bar
 	if flagIsSet(c, progressFlag) {
@@ -191,7 +185,9 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		case 2, 3:
 			fmt.Fprintf(c.App.Writer, "%s %v as %s\n", verb, fileNames, name)
 		default:
-			fmt.Fprintf(c.App.Writer, "%s %d pathnames as %s\n", verb, l, name)
+			tag := fmt.Sprintf("%s %d pathnames", verb, l)
+			tag += ndir2tag(ndir, recurs)
+			fmt.Fprintf(c.App.Writer, "%s as %s\n", tag, name)
 		}
 		var (
 			bars []*mpb.Bar

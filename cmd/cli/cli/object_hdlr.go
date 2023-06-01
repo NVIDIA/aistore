@@ -278,18 +278,18 @@ func putHandler(c *cli.Context) (err error) {
 
 	// main PUT switch
 	var a putargs
-	if err = a.parse(c); err != nil {
+	if err = a.parse(c, true /*empty dst oname*/); err != nil {
 		return
 	}
 	switch {
 	case len(a.src.fnames) > 0:
 		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or
 		// - csv from '--list' flag
-		return putList(c, a.src.fnames, a.dst.bck, a.dst.oname /*virt subdir*/)
+		return verbList(c, &a, a.src.fnames, a.dst.bck, a.dst.oname /*virt subdir*/)
 	case a.pt != nil:
 		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www, or
 		// - '--template' flag
-		return putRange(c, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
+		return verbRange(c, &a, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
 	case a.src.stdin:
 		return putStdin(c, &a)
 	case !a.src.isdir: // reg file
@@ -297,16 +297,19 @@ func putHandler(c *cli.Context) (err error) {
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
 			return err
 		}
-		actionDone(c, fmt.Sprintf("PUT %q => %s\n", a.src.arg, a.dst.bck.Cname(a.dst.oname)))
+		actionDone(c, fmt.Sprintf("%s %q => %s\n", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
 	default: // finally, a directory
 		debug.Assert(a.src.finfo != nil)
-		files, err := lsFobj(c, a.src.abspath, "", a.dst.oname, a.src.recurs)
+		var (
+			ndir       int
+			fobjs, err = lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs)
+		)
 		if err != nil {
 			return err
 		}
-		tag := _putFrom(fmt.Sprintf(" from %q", a.src.arg), a.src.recurs)
-		return putFobjs(c, files, a.dst.bck, tag)
+		debug.Assert(ndir == 1)
+		return verbFobjs(c, &a, fobjs, a.dst.bck, ndir, a.src.recurs)
 	}
 }
 

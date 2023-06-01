@@ -19,26 +19,25 @@ import (
 // (no regex)
 
 type (
-	fobj struct {
-		path string
-		name string
-		size int64
-	}
 	// Struct to keep info groupped by file extension.
 	// Properties start with capital for reflexion (templates)
 	counter struct {
 		Cnt  int64
 		Size int64
 	}
+	fobj struct {
+		path string
+		name string
+		size int64
+	}
 	// recursive walk
 	walkCtx struct {
 		pattern      string
 		trimPrefix   string
 		appendPrefix string
-		files        []fobj
+		fobjs        fobjs
 	}
-
-	fobjSlice []fobj // sortable
+	fobjs []fobj // sortable
 )
 
 // removes base part from the path making object name from it.
@@ -49,12 +48,9 @@ func cutPrefixFromPath(path, base string) string {
 }
 
 // Returns files from the 'path' directory. No recursion.
-// If shell-filename matching pattern is used, includes only the matching files.
-func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) {
-	var (
-		files         []fobj
-		dentries, err = os.ReadDir(path)
-	)
+// If shell filename-matching pattern is present include only those that match.
+func listDir(path, trimPrefix, appendPrefix, pattern string) (fobjs fobjs, _ error) {
+	dentries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
@@ -73,15 +69,15 @@ func listDir(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) {
 				path: fullPath,
 				size: finfo.Size(),
 			}
-			files = append(files, fo)
+			fobjs = append(fobjs, fo)
 		}
 	}
-	return files, nil
+	return fobjs, nil
 }
 
-// Recursively traverses the 'path' dir.
-// If shell-filename matching pattern is used, includes only the matching files.
-func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) {
+// Traverse 'path' recursively
+// If shell filename-matching pattern is present include only those that match
+func listRecurs(path, trimPrefix, appendPrefix, pattern string) (fobjs, error) {
 	ctx := &walkCtx{
 		pattern:      pattern,
 		trimPrefix:   trimPrefix,
@@ -90,7 +86,7 @@ func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) 
 	if err := filepath.Walk(path, ctx.do); err != nil {
 		return nil, err
 	}
-	return ctx.files, nil
+	return ctx.fobjs, nil
 }
 
 // in:
@@ -98,15 +94,28 @@ func listRecurs(path, trimPrefix, appendPrefix, pattern string) ([]fobj, error) 
 // - base to generate object names
 // - recursive flag
 // returns:
-// - list of triplets (file or dir path, object name, size) that match
-func lsFobj(c *cli.Context, path, trimPrefix, appendPrefix string, recursive bool) (fobjSlice, error) {
-	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
+// - slice of matching {fname or dirname, destination object name, size} triplets
+// - true if source is a directory
+func lsFobj(c *cli.Context, path, trimPrefix, appendPrefix string, ndir *int, recurs bool) (fobjs, error) {
 	var (
-		pattern   string
-		info, err = os.Stat(path)
+		pattern    = "*" // default pattern: entire directory
+		finfo, err = os.Stat(path)
 	)
+	debug.Assert(trimPrefix == "" || strings.HasPrefix(path, trimPrefix))
+
+	// single file
+	if err == nil && !finfo.IsDir() {
+		if trimPrefix == "" {
+			// [convention] the default is to trim everything leaving only the base
+			trimPrefix = filepath.Dir(path)
+		}
+		objName := cutPrefixFromPath(path, trimPrefix)
+		fo := fobj{name: appendPrefix + objName, path: path, size: finfo.Size()}
+		return []fobj{fo}, nil
+	}
+
 	if err != nil {
-		// expecting filename-matching pattern base
+		// expecting the base to be a filename-matching pattern
 		pattern = filepath.Base(path)
 		isPattern := strings.Contains(pattern, "*") ||
 			strings.Contains(pattern, "?") ||
@@ -117,39 +126,25 @@ func lsFobj(c *cli.Context, path, trimPrefix, appendPrefix string, recursive boo
 			actionWarn(c, warn)
 		}
 		path = filepath.Dir(path)
-		info, err = os.Stat(path)
+		finfo, err = os.Stat(path)
 		if err != nil {
 			return nil, fmt.Errorf("%q does not exist", path)
 		}
-		if !info.IsDir() {
+		if !finfo.IsDir() {
 			return nil, fmt.Errorf("%q is not a directory", path)
 		}
-	} else {
-		if !info.IsDir() { // one file without custom name
-			if trimPrefix == "" {
-				// if trim prefix is not specified the default is to cut everything
-				// leaving only the base
-				trimPrefix = filepath.Dir(path)
-			}
-			objName := cutPrefixFromPath(path, trimPrefix)
-			fo := fobj{name: appendPrefix + objName, path: path, size: info.Size()}
-			files := []fobj{fo}
-			return files, nil
-		}
-
-		// otherwise, the entire directory (note that '*' is applied automatically)
-		pattern = "*"
 	}
 
-	// if trim prefix not specified by a called, cut the whole path from object name and use what's
-	// left in 'pattern' part of a filename
+	*ndir++
+	// [convention] ditto
 	if trimPrefix == "" {
 		trimPrefix = path
 	}
-	if !recursive {
-		return listDir(path, trimPrefix, appendPrefix, pattern)
+	f := listDir
+	if recurs {
+		f = listRecurs
 	}
-	return listRecurs(path, trimPrefix, appendPrefix, pattern)
+	return f(path, trimPrefix, appendPrefix, pattern)
 }
 
 func groupByExt(files []fobj) (int64, map[string]counter) {
@@ -191,14 +186,14 @@ func (w *walkCtx) do(fqn string, info os.FileInfo, err error) error {
 		path: fqn,
 		size: info.Size(),
 	}
-	w.files = append(w.files, fo)
+	w.fobjs = append(w.fobjs, fo)
 	return nil
 }
 
-///////////////
-// fobjSlice //
-///////////////
+///////////
+// fobjs //
+///////////
 
-func (a fobjSlice) Len() int           { return len(a) }
-func (a fobjSlice) Less(i, j int) bool { return a[i].path < a[j].path }
-func (a fobjSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a fobjs) Len() int           { return len(a) }
+func (a fobjs) Less(i, j int) bool { return a[i].path < a[j].path }
+func (a fobjs) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

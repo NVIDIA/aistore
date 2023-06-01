@@ -37,6 +37,9 @@ type (
 
 // assorted specific
 type (
+	wop interface {
+		verb() string
+	}
 	// PUT object(s)
 	putargs struct {
 		src here
@@ -57,7 +60,16 @@ type (
 	}
 )
 
-func (a *putargs) parse(c *cli.Context) (err error) {
+// interface guard
+var (
+	_ wop = (*putargs)(nil)
+	_ wop = (*archargs)(nil)
+	_ wop = (*a2args)(nil)
+)
+
+func (*putargs) verb() string { return "PUT" }
+
+func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
@@ -74,7 +86,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 	switch {
 	case c.NArg() == 1: // BUCKET/[OBJECT_NAME] --list|--template
 		uri := c.Args().Get(0) // dst
-		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, true)
+		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, emptyDstOnameOK)
 		if err != nil {
 			return
 		}
@@ -102,7 +114,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		a.src.arg = c.Args().Get(0) // src
 		uri := c.Args().Get(1)      // dst
 
-		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, true)
+		a.dst.bck, a.dst.oname, err = parseBckObjURI(c, uri, emptyDstOnameOK)
 		if err != nil {
 			return err
 		}
@@ -146,8 +158,7 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 		// reg file
 		if !finfo.IsDir() {
 			if a.dst.oname == "" {
-				// NOTE [convention]: if objName is not provided
-				// we use the filename as the destination object name
+				// PUT [convention]: use `basename` as the destination object name, unless specified
 				a.dst.oname = filepath.Base(a.src.abspath)
 			}
 			return
@@ -169,8 +180,10 @@ func (a *putargs) parse(c *cli.Context) (err error) {
 	return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
 }
 
+func (*archargs) verb() string { return "ARCHIVE" }
+
 func (a *archargs) parse(c *cli.Context) (err error) {
-	err = a.putargs.parse(c)
+	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	if a.dst.bck.IsEmpty() || err == nil /* TODO -- FIXME: archive local file(s) */ {
 		return
 	}
@@ -199,7 +212,9 @@ func (a *archargs) parse(c *cli.Context) (err error) {
 	return
 }
 
+func (*a2args) verb() string { return "APPEND" }
+
 func (a *a2args) parse(c *cli.Context) (err error) {
-	err = a.putargs.parse(c)
+	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	return
 }

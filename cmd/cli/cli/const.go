@@ -249,14 +249,16 @@ const (
 	bucketNewArgument      = "NEW_BUCKET"
 
 	// Objects
-	getObjectArgument       = "BUCKET[/OBJECT_NAME] [OUT_FILE|-]"
-	putObjectArgument       = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
-	promoteObjectArgument   = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
-	concatObjectArgument    = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"
+	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|-]"
+
+	putObjectArgument     = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
+	appendToArchArgument  = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME"
+	promoteObjectArgument = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
+	concatObjectArgument  = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"
+
 	objectArgument          = "BUCKET/OBJECT_NAME"
 	optionalObjectsArgument = "BUCKET[/OBJECT_NAME]..."
 	renameObjectArgument    = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
-	appendToArchArgument    = "FILE BUCKET/SHARD_NAME"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 		indent1 +
@@ -551,7 +553,8 @@ var (
 		Usage: "remove old bucket and create it again (warning: removes the entire content of the old bucket)",
 	}
 	concurrencyFlag = cli.IntFlag{
-		Name: "conc", Value: 10,
+		Name:  "conc",
+		Value: 10,
 		Usage: "limits number of concurrent put requests and number of concurrent shards created",
 	}
 

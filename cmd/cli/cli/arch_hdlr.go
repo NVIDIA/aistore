@@ -8,7 +8,6 @@ package cli
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -38,10 +37,19 @@ var (
 			apndArchIf1Flag,
 			continueOnErrorFlag,
 		},
-		cmdAppend: {
+		cmdAppend: append(
+			listrangeFileFlags,
 			archpathFlag,
 			putArchIfNotExistFlag,
-		},
+			concurrencyFlag,
+			dryRunFlag,
+			recursFlag,
+			verboseFlag,
+			yesFlag,
+			unitsFlag,
+			skipVerCksumFlag,
+			continueOnErrorFlag, // TODO -- FIXME
+		),
 		cmdList: {
 			objPropsFlag,
 			allPropsFlag,
@@ -61,14 +69,14 @@ var (
 			{
 				Name:         commandPut,
 				Usage:        "put multi-object " + archExts + " archive",
-				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/OBJECT_NAME",
+				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/SHARD_NAME",
 				Flags:        archCmdsFlags[commandPut],
 				Action:       archMultiObjHandler,
 				BashComplete: putPromApndCompletions,
 			},
 			{
 				Name: cmdAppend,
-				Usage: "append file, directory, or multiple files and/or directories to\n" +
+				Usage: "append file, directory, or multiple files and/or directories to a\n" +
 					indent4 + "\t" + archExts + "-formatted object (\"shard\")\n" +
 					indent4 + "\t" + "e.g.:\n" +
 					indent4 + "\t" + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append one file\n" +
@@ -132,10 +140,6 @@ func archMultiObjHandler(c *cli.Context) (err error) {
 }
 
 func appendArchHandler(c *cli.Context) (err error) {
-	if c.NArg() < 2 {
-		// TODO -- FIXME
-		return errors.New("not implemented yet (currently, expecting local file and bucket/shard)")
-	}
 	a := a2args{
 		archpath:      parseStrFlag(c, archpathFlag),
 		putIfNotExist: flagIsSet(c, putArchIfNotExistFlag),
@@ -143,26 +147,50 @@ func appendArchHandler(c *cli.Context) (err error) {
 	if err = a.parse(c); err != nil {
 		return
 	}
-	// NOTE [convention]: naming default when '--archpath' is omitted
-	if a.archpath == "" {
-		a.archpath = filepath.Base(a.src.abspath)
-	}
-	if err = a2a(c, &a); err == nil {
-		msg := fmt.Sprintf("APPEND %s to %s", a.src.arg, a.dst.bck.Cname(a.dst.oname))
+
+	// TODO -- FIXME: further unify vs putHandler; add STDIN; e2e tests
+	switch {
+	case len(a.src.fnames) > 0:
+		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or
+		// - csv from '--list' flag
+		return verbList(c, &a, a.src.fnames, a.dst.bck, a.dst.oname /*shard name*/)
+	case a.pt != nil:
+		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www.zip, or
+		// - '--template' flag
+		return verbRange(c, &a, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
+	case !a.src.isdir: // reg file
+		// [convention]: naming default when '--archpath' is omitted
+		if a.archpath == "" {
+			a.archpath = filepath.Base(a.src.abspath)
+		}
+		if err = a2aRegular(c, &a); err != nil {
+			return
+		}
+		msg := fmt.Sprintf("%s %s => %s", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname))
 		if a.archpath != a.src.arg {
 			msg += " as \"" + a.archpath + "\""
 		}
 		actionDone(c, msg+"\n")
+		return nil
+	default: // finally, directory
+		debug.Assert(a.src.finfo != nil)
+		var (
+			ndir       int
+			fobjs, err = lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs)
+		)
+		if err != nil {
+			return err
+		}
+		debug.Assert(ndir == 1)
+		return verbFobjs(c, &a, fobjs, a.dst.bck, ndir, a.src.recurs)
 	}
-	return
 }
 
-func a2a(c *cli.Context, a *a2args) error {
+func a2aRegular(c *cli.Context, a *a2args) error {
 	var (
 		reader   cos.ReadOpenCloser
 		progress *mpb.Progress
 		bars     []*mpb.Bar
-		cksum    *cos.Cksum
 	)
 	fh, err := cos.NewFileHandle(a.src.abspath)
 	if err != nil {
@@ -185,7 +213,7 @@ func a2a(c *cli.Context, a *a2args) error {
 		Bck:        a.dst.bck,
 		ObjName:    a.dst.oname,
 		Reader:     reader,
-		Cksum:      cksum,
+		Cksum:      nil,
 		Size:       uint64(a.src.finfo.Size()),
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
