@@ -28,12 +28,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO: destination naming: consider adding (explicit) '--trimprefix', here and elsewhere
+
 var (
 	archCmdsFlags = map[string][]cli.Flag{
 		commandPut: {
 			templateFlag,
 			listFlag,
-			includeSrcBucketNameFlag,
+			inclSrcBucketNameFlag,
 			apndArchIf1Flag,
 			continueOnErrorFlag,
 		},
@@ -47,6 +49,7 @@ var (
 			verboseFlag,
 			yesFlag,
 			unitsFlag,
+			inclSrcDirNameFlag,
 			skipVerCksumFlag,
 			continueOnErrorFlag, // TODO -- FIXME
 		),
@@ -76,11 +79,13 @@ var (
 			},
 			{
 				Name: cmdAppend,
-				Usage: "append file, directory, or multiple files and/or directories to a\n" +
-					indent4 + "\t" + archExts + "-formatted object (\"shard\")\n" +
-					indent4 + "\t" + "e.g.:\n" +
-					indent4 + "\t" + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append one file\n" +
-					indent4 + "\t" + "- 'src-dir bucket/shard-99999.zip -put' - append a directory; iff the destination .zip doesn't exist create a new one",
+				Usage: "append file, directory\n" +
+					indent4 + "or multiple files and/or directories to a " + archExts + "-formatted object (\"shard\")\n" +
+					indent4 + "e.g.:\n" +
+					indent4 + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append one file\n" +
+					indent4 + "- 'src-dir bucket/shard-99999.zip -put' - append one directory; iff the destination .zip doesn't exist create a new one\n" +
+					indent4 + "- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively append two directories (and check resulting names)\n" +
+					indent4 + "(tip: if in doubt add '--dry-run' option to command line)",
 				ArgsUsage:    appendToArchArgument,
 				Flags:        archCmdsFlags[cmdAppend],
 				Action:       appendArchHandler,
@@ -118,7 +123,7 @@ func archMultiObjHandler(c *cli.Context) (err error) {
 	msg := cmn.ArchiveMsg{ToBck: a.dst.bck}
 	{
 		msg.ArchName = a.dst.oname
-		msg.InclSrcBname = flagIsSet(c, includeSrcBucketNameFlag)
+		msg.InclSrcBname = flagIsSet(c, inclSrcBucketNameFlag)
 		msg.ContinueOnError = flagIsSet(c, continueOnErrorFlag)
 		msg.AppendIfExists = a.apndIfExist
 		msg.ListRange = a.rsrc.lr
@@ -150,18 +155,7 @@ func appendArchHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
-
-	// TODO -- FIXME: further unify vs putHandler; add STDIN; e2e tests
-	switch {
-	case len(a.src.fnames) > 0:
-		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or
-		// - csv from '--list' flag
-		return verbList(c, &a, a.src.fnames, a.dst.bck, a.dst.oname /*shard name*/)
-	case a.pt != nil:
-		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www.zip, or
-		// - '--template' flag
-		return verbRange(c, &a, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
-	case !a.src.isdir: // reg file
+	if a.srcIsRegular() {
 		// [convention]: naming default when '--archpath' is omitted
 		if a.archpath == "" {
 			a.archpath = filepath.Base(a.src.abspath)
@@ -174,13 +168,42 @@ func appendArchHandler(c *cli.Context) (err error) {
 			msg += " as \"" + a.archpath + "\""
 		}
 		actionDone(c, msg+"\n")
-		return nil
-	default: // finally, directory
-		debug.Assert(a.src.finfo != nil)
-		var (
-			ndir       int
-			fobjs, err = lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs)
-		)
+		return
+	}
+
+	//
+	// multi-file cases
+	//
+
+	// archpath
+	if a.archpath != "" && !strings.HasSuffix(a.archpath, "/") {
+		if !flagIsSet(c, yesFlag) {
+			warn := fmt.Sprintf("no traling filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
+			actionWarn(c, warn)
+			if ok := confirm(c, "Proceed anyway?"); !ok {
+				return
+			}
+		}
+	}
+
+	incl := flagIsSet(c, inclSrcDirNameFlag)
+	switch {
+	case len(a.src.fdnames) > 0:
+		// a) csv of files and/or directories (names) from the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
+		// b) csv from '--list' flag
+		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.archpath /*append pref*/, incl)
+	case a.pt != nil:
+		// a) range from the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www.zip
+		// b) from '--template'
+		var trimPrefix string
+		if !incl {
+			trimPrefix = rangeTrimPrefix(a.pt)
+		}
+		return verbRange(c, &a, a.pt, a.dst.bck, trimPrefix, a.archpath, incl)
+	default: // one directory
+		var ndir int
+
+		fobjs, err := lsFobj(c, a.src.arg, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl)
 		if err != nil {
 			return err
 		}

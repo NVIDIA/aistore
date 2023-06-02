@@ -7,7 +7,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -103,23 +102,14 @@ func absPath(fileName string) (path string, err error) {
 	return
 }
 
-// Returns longest common prefix ending with '/' (exclusive) for objects in the template
-// /path/to/dir/test{0..10}/dir/another{0..10} => /path/to/dir
-// /path/to/prefix-@00001-gap-@100-suffix => /path/to
-func rangeTrimPrefix(pt *cos.ParsedTemplate) string {
-	sepaIndex := strings.LastIndex(pt.Prefix, string(os.PathSeparator))
-	debug.Assert(sepaIndex >= 0)
-	return pt.Prefix[:sepaIndex+1]
-}
-
-func verbList(c *cli.Context, wop wop, fnames []string, bck cmn.Bck, appendPrefixSubdir string) error {
+func verbList(c *cli.Context, wop wop, fnames []string, bck cmn.Bck, appendPref string, incl bool) error {
 	var (
 		ndir     int
 		allFobjs = make([]fobj, 0, len(fnames))
 		recurs   = flagIsSet(c, recursFlag)
 	)
 	for _, n := range fnames {
-		fobjs, err := lsFobj(c, n, "", appendPrefixSubdir, &ndir, recurs)
+		fobjs, err := lsFobj(c, n, "", appendPref, &ndir, recurs, incl)
 		if err != nil {
 			return err
 		}
@@ -128,7 +118,7 @@ func verbList(c *cli.Context, wop wop, fnames []string, bck cmn.Bck, appendPrefi
 	return verbFobjs(c, wop, allFobjs, bck, ndir, recurs)
 }
 
-func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, trimPrefix, appendPrefixSubdir string) (err error) {
+func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, trimPref, appendPref string, incl bool) (err error) {
 	var (
 		ndir     int
 		allFobjs = make([]fobj, 0, pt.Count())
@@ -136,7 +126,7 @@ func verbRange(c *cli.Context, wop wop, pt *cos.ParsedTemplate, bck cmn.Bck, tri
 	)
 	pt.InitIter()
 	for n, hasNext := pt.Next(); hasNext; n, hasNext = pt.Next() {
-		fobjs, err := lsFobj(c, n, trimPrefix, appendPrefixSubdir, &ndir, recurs)
+		fobjs, err := lsFobj(c, n, trimPref, appendPref, &ndir, recurs, incl)
 		if err != nil {
 			return err
 		}
@@ -160,7 +150,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		recurs     = flagIsSet(c, recursFlag)
 	)
 	for i, fileName := range fileNames {
-		fobjs, err := lsFobj(c, fileName, "", "", &ndir, recurs)
+		fobjs, err := lsFobj(c, fileName, "", "", &ndir, recurs, false /*incl src dir*/)
 		if err != nil {
 			return err
 		}

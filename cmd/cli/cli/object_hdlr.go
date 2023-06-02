@@ -53,10 +53,11 @@ var (
 			recursFlag,
 			verboseFlag,
 			yesFlag,
-			includeSrcBucketNameFlag,
 			continueOnErrorFlag,
 			unitsFlag,
 			// arch
+			inclSrcBucketNameFlag,
+			inclSrcDirNameFlag,
 			archpathFlag,
 			putArchFlag,
 			apndArchIf2Flag,
@@ -109,7 +110,8 @@ var (
 			indent4 + "\t- '--compute-checksum' to facilitate end-to-end protection;\n" +
 			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
 			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent4 + "\t- '--archpath' to APPEND to an existing " + archExts + "-formatted object (\"shard\").",
+			indent4 + "\t- '--archpath' to APPEND to an existing " + archExts + "-formatted object (\"shard\");\n" +
+			indent4 + "\t(tip: use '--dry-run' to see the results without making any changes)",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
@@ -284,30 +286,35 @@ func putHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
-	switch {
-	case len(a.src.fnames) > 0:
-		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or
-		// - csv from '--list' flag
-		return verbList(c, &a, a.src.fnames, a.dst.bck, a.dst.oname /*virt subdir*/)
-	case a.pt != nil:
-		// - range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www, or
-		// - '--template' flag
-		return verbRange(c, &a, a.pt, a.dst.bck, rangeTrimPrefix(a.pt), a.dst.oname)
-	case a.src.stdin:
-		return putStdin(c, &a)
-	case !a.src.isdir: // reg file
-		debug.Assert(a.src.finfo != nil)
+	if a.srcIsRegular() {
+		debug.Assert(a.src.abspath != "")
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
 			return err
 		}
 		actionDone(c, fmt.Sprintf("%s %q => %s\n", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
-	default: // finally, a directory
-		debug.Assert(a.src.finfo != nil)
-		var (
-			ndir       int
-			fobjs, err = lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs)
-		)
+	}
+	// multi-file cases
+	incl := flagIsSet(c, inclSrcDirNameFlag)
+	switch {
+	case len(a.src.fdnames) > 0:
+		// a) csv of files and/or directories (names) embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
+		// b) csv from '--list' flag
+		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.dst.oname /*virt subdir*/, incl)
+	case a.pt != nil:
+		// a) range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www
+		// b) range and prefix from the parsed '--template'
+		var trimPrefix string
+		if !incl {
+			trimPrefix = rangeTrimPrefix(a.pt)
+		}
+		return verbRange(c, &a, a.pt, a.dst.bck, trimPrefix, a.dst.oname, incl)
+	case a.src.stdin:
+		return putStdin(c, &a)
+	default: // one directory
+		var ndir int
+
+		fobjs, err := lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs, incl)
 		if err != nil {
 			return err
 		}

@@ -824,7 +824,7 @@ func verboseWarnings() bool {
 func dryRunCptn(c *cli.Context) {
 	const (
 		dryRunHeader      = "[DRY RUN]"
-		dryRunExplanation = "No modifications to the cluster"
+		dryRunExplanation = "with no modifications to the cluster"
 	)
 	fmt.Fprintln(c.App.Writer, fcyan(dryRunHeader)+" "+dryRunExplanation)
 }

@@ -23,7 +23,7 @@ type (
 		arg     string
 		abspath string
 		finfo   os.FileInfo
-		fnames  []string
+		fdnames []string // files and directories (names)
 		isdir   bool
 		recurs  bool
 		stdin   bool
@@ -67,7 +67,8 @@ var (
 	_ wop = (*a2args)(nil)
 )
 
-func (*putargs) verb() string { return "PUT" }
+func (*putargs) verb() string         { return "PUT" }
+func (a *putargs) srcIsRegular() bool { return a.src.finfo != nil && !a.src.isdir }
 
 func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	if c.NArg() == 0 {
@@ -92,11 +93,11 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		}
 		// src via local filenames
 		if !flagIsSet(c, listFileFlag) && !flagIsSet(c, templateFileFlag) {
-			return missingArgSimple("FILE|DIRECTORY|DIRECTORY/PATTERN")
+			return fmt.Errorf("missing source arg in %q", c.Command.ArgsUsage)
 		}
 		if flagIsSet(c, listFileFlag) {
 			csv := parseStrFlag(c, listFileFlag)
-			a.src.fnames = splitCsv(csv)
+			a.src.fdnames = splitCsv(csv)
 			return
 		}
 		// optional template to select local source(s)
@@ -131,7 +132,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		if a.src.arg == "-" {
 			a.src.stdin = true
 			if a.dst.oname == "" {
-				err = fmt.Errorf("destination object name (in %s) is required when writing directly from standard input",
+				err = fmt.Errorf("missing destination object name (in %s) - required when writing directly from standard input",
 					c.Command.ArgsUsage)
 			}
 			return
@@ -149,8 +150,8 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		// local file or dir?
 		finfo, errV := os.Stat(a.src.abspath)
 		if errV != nil {
-			// must be a list of files embedded into the first arg
-			a.src.fnames = splitCsv(a.src.arg)
+			// must be a csv list of files embedded with the first arg
+			a.src.fdnames = splitCsv(a.src.arg)
 			return
 		}
 
@@ -163,7 +164,7 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 			}
 			return
 		}
-		// finally: a local (or client-accessible) directory
+		// finally: a local (or rather, client-accessible) directory
 		a.src.isdir = true
 		a.src.recurs = flagIsSet(c, recursFlag)
 		return

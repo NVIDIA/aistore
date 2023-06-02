@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,7 +58,7 @@ type (
 func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, recurs bool) error {
 	l := len(fobjs)
 	if l == 0 {
-		return fmt.Errorf("no files to %s (hint: check source name and formatting, see examples)", wop.verb())
+		return fmt.Errorf("no files to %s (check source name and formatting, see examples)", wop.verb())
 	}
 
 	cptn := fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
@@ -185,13 +184,13 @@ func (p *uparams) do(c *cli.Context) error {
 
 func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) (err error) {
 	if p.dryRun {
-		fmt.Fprintf(c.App.Writer, "%s %s -> %s\n", p.wop.verb(), fobj.path, p.bck.Cname(fobj.name))
+		fmt.Fprintf(c.App.Writer, "%s %s -> %s\n", p.wop.verb(), fobj.path, p.bck.Cname(fobj.dstName))
 		return
 	}
 	putArgs := api.PutArgs{
 		BaseParams: apiBP,
 		Bck:        p.bck,
-		ObjName:    fobj.name,
+		ObjName:    fobj.dstName,
 		Reader:     reader,
 		Cksum:      p.cksum,
 		Size:       uint64(fobj.size),
@@ -202,20 +201,10 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 }
 
 func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) error {
-	var (
-		archpath string
-		a, ok    = p.wop.(*a2args)
-	)
+	a, ok := p.wop.(*a2args)
 	debug.Assert(ok)
 
-	// [convention]
-	// - empty archpath: use `basename`
-	// - otherwise, prefix
-	if a.archpath == "" {
-		archpath = filepath.Base(fobj.path)
-	} else {
-		archpath = filepath.Join(a.archpath, filepath.Base(fobj.path))
-	}
+	archpath := fobj.dstName // an actual individual `archpath`
 	if p.dryRun {
 		if fobj.path == archpath {
 			fmt.Fprintf(c.App.Writer, "%s %s to %s\n", p.wop.verb(), fobj.path, a.dst.oname)
@@ -285,7 +274,7 @@ func (u *uctx) init(c *cli.Context, fobj fobj) (fh *cos.FileHandle, bar *mpb.Bar
 		fobj.size,
 		mpb.BarRemoveOnComplete(),
 		mpb.PrependDecorators(
-			decor.Name(fobj.name+" ", decor.WC{W: len(fobj.name) + 1, C: decor.DSyncWidthR}),
+			decor.Name(fobj.dstName+" ", decor.WC{W: len(fobj.dstName) + 1, C: decor.DSyncWidthR}),
 			decor.Counters(decor.UnitKiB, "%.1f/%.1f", decor.WCSyncWidth),
 		),
 		mpb.AppendDecorators(decor.Percentage(decor.WCSyncWidth)),
@@ -310,7 +299,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		return
 	}
 	if err != nil {
-		str := fmt.Sprintf("Failed to %s %s: %v\n", p.wop.verb(), p.bck.Cname(fobj.name), err)
+		str := fmt.Sprintf("Failed to %s %s: %v\n", p.wop.verb(), p.bck.Cname(fobj.dstName), err)
 		if u.showProgress {
 			u.errSb.WriteString(str)
 		} else {
@@ -318,7 +307,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 		}
 		u.errCount.Inc()
 	} else if u.verbose && !u.showProgress && !p.dryRun {
-		fmt.Fprintf(c.App.Writer, "%s -> %s\n", fobj.path, fobj.name) // needed?
+		fmt.Fprintf(c.App.Writer, "%s -> %s\n", fobj.path, fobj.dstName) // needed?
 	}
 }
 
