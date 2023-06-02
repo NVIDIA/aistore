@@ -448,12 +448,6 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) 
 	return
 }
 
-func printDryRunHeader(c *cli.Context) {
-	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-	}
-}
-
 // Prints multiple lines of fmtStr to writer w.
 // For line number i, fmtStr is formatted with values of args at index i
 // if maxLines >= 0 prints at most maxLines, otherwise prints everything until
@@ -825,6 +819,14 @@ func actionCptn(c *cli.Context, prefix, msg string) {
 // (more warning)
 func verboseWarnings() bool {
 	return os.Getenv(env.DEBUG) != "" // anything for now
+}
+
+func dryRunCptn(c *cli.Context) {
+	const (
+		dryRunHeader      = "[DRY RUN]"
+		dryRunExplanation = "No modifications to the cluster"
+	)
+	fmt.Fprintln(c.App.Writer, fcyan(dryRunHeader)+" "+dryRunExplanation)
 }
 
 //////////////

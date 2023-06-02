@@ -35,8 +35,9 @@ type (
 		workerCnt int
 		refresh   time.Duration
 		cksum     *cos.Cksum
-		tag       string
+		cptn      string
 		totalSize int64
+		dryRun    bool
 	}
 	uctx struct {
 		wg            cos.WG
@@ -61,13 +62,15 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		return fmt.Errorf("no files to %s (hint: check source name and formatting, see examples)", wop.verb())
 	}
 
-	tag := fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
-	tag += ndir2tag(ndir, recurs)
-	tag += fmt.Sprintf(" => %s", bck.Cname(""))
-
-	if flagIsSet(c, dryRunFlag) {
-		fmt.Fprintln(c.App.Writer, tag)
-		return nil
+	cptn := fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
+	cptn += ndir2tag(ndir, recurs)
+	switch wop.verb() {
+	case "PUT":
+		cptn += fmt.Sprintf(" => %s", bck.Cname(""))
+	case "APPEND":
+		a, ok := wop.(*a2args)
+		debug.Assert(ok)
+		cptn += fmt.Sprintf(" to %s", bck.Cname(a.dst.oname))
 	}
 
 	var (
@@ -90,13 +93,14 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 
 	// ask a user for confirmation
 	if !flagIsSet(c, yesFlag) {
-		if ok := confirm(c, tag+"?"); !ok {
+		if ok := confirm(c, cptn+"?"); !ok {
 			fmt.Fprintln(c.App.Writer, "Operation canceled")
 			return nil
 		}
 	}
 	refresh := calcPutRefresh(c)
 	numWorkers := parseIntFlag(c, concurrencyFlag)
+	debug.Assert(numWorkers > 0)
 	uparams := &uparams{
 		wop:       wop,
 		bck:       bck,
@@ -104,8 +108,9 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		workerCnt: numWorkers,
 		refresh:   refresh,
 		cksum:     cksum,
-		tag:       tag,
+		cptn:      cptn,
 		totalSize: totalSize,
+		dryRun:    flagIsSet(c, dryRunFlag),
 	}
 	return uparams.do(c)
 }
@@ -172,11 +177,17 @@ func (p *uparams) do(c *cli.Context) error {
 	if numFailed := u.errCount.Load(); numFailed > 0 {
 		return fmt.Errorf("failed to %s %d file%s", p.wop.verb(), numFailed, cos.Plural(int(numFailed)))
 	}
-	actionDone(c, p.tag)
+	if !flagIsSet(c, dryRunFlag) {
+		actionDone(c, p.cptn)
+	}
 	return nil
 }
 
-func (p *uparams) _putOne(fobj fobj, reader cos.ReadOpenCloser, skipVC bool) (err error) {
+func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) (err error) {
+	if p.dryRun {
+		fmt.Fprintf(c.App.Writer, "%s %s -> %s\n", p.wop.verb(), fobj.path, p.bck.Cname(fobj.name))
+		return
+	}
 	putArgs := api.PutArgs{
 		BaseParams: apiBP,
 		Bck:        p.bck,
@@ -190,9 +201,29 @@ func (p *uparams) _putOne(fobj fobj, reader cos.ReadOpenCloser, skipVC bool) (er
 	return
 }
 
-func (p *uparams) _a2aOne(fobj fobj, reader cos.ReadOpenCloser, skipVC bool) error {
-	a, ok := p.wop.(*a2args)
+func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) error {
+	var (
+		archpath string
+		a, ok    = p.wop.(*a2args)
+	)
 	debug.Assert(ok)
+
+	// [convention]
+	// - empty archpath: use `basename`
+	// - otherwise, prefix
+	if a.archpath == "" {
+		archpath = filepath.Base(fobj.path)
+	} else {
+		archpath = filepath.Join(a.archpath, filepath.Base(fobj.path))
+	}
+	if p.dryRun {
+		if fobj.path == archpath {
+			fmt.Fprintf(c.App.Writer, "%s %s to %s\n", p.wop.verb(), fobj.path, a.dst.oname)
+		} else {
+			fmt.Fprintf(c.App.Writer, "%s %s to %s as %s\n", p.wop.verb(), fobj.path, a.dst.oname, archpath)
+		}
+		return nil
+	}
 
 	putArgs := api.PutArgs{
 		BaseParams: apiBP,
@@ -204,9 +235,6 @@ func (p *uparams) _a2aOne(fobj fobj, reader cos.ReadOpenCloser, skipVC bool) err
 		SkipVC:     skipVC,
 	}
 
-	// [convention]: use `basename` (TODO -- FIXME: review; single entry in a list or range?
-	debug.Assert(a.archpath == "", a.archpath)
-	archpath := filepath.Base(fobj.path)
 	appendArchArgs := api.AppendToArchArgs{
 		PutArgs:       putArgs,
 		ArchPath:      archpath,
@@ -273,9 +301,9 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 	)
 	switch p.wop.verb() {
 	case "PUT":
-		err = p._putOne(fobj, countReader, skipVC)
+		err = p._putOne(c, fobj, countReader, skipVC)
 	case "APPEND":
-		err = p._a2aOne(fobj, countReader, skipVC)
+		err = p._a2aOne(c, fobj, countReader, skipVC)
 	default:
 		debug.Assert(false, p.wop.verb()) // "ARCHIVE"
 		actionWarn(c, fmt.Sprintf("%q not implemented yet", p.wop.verb()))
@@ -289,8 +317,8 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 			fmt.Fprint(c.App.Writer, str)
 		}
 		u.errCount.Inc()
-	} else if u.verbose && !u.showProgress {
-		fmt.Fprintf(c.App.Writer, "%s -> %s\n", fobj.path, fobj.name)
+	} else if u.verbose && !u.showProgress && !p.dryRun {
+		fmt.Fprintf(c.App.Writer, "%s -> %s\n", fobj.path, fobj.name) // needed?
 	}
 }
 
@@ -327,6 +355,10 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		bars     []*mpb.Bar
 		cksum    *cos.Cksum
 	)
+	if flagIsSet(c, dryRunFlag) {
+		// resulting message printed upon return
+		return nil
+	}
 	cksum, err := cksumToCompute(c, bck)
 	if err != nil {
 		return err

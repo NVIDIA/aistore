@@ -21,6 +21,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+const dryRunExamplesCnt = 10
+
 // x-TCO: multi-object transform or copy
 func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	var (

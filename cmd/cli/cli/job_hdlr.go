@@ -704,8 +704,9 @@ func startLRUHandler(c *cli.Context) (err error) {
 }
 
 func startPrefetchHandler(c *cli.Context) (err error) {
-	printDryRunHeader(c)
-
+	if flagIsSet(c, dryRunFlag) {
+		dryRunCptn(c)
+	}
 	if c.NArg() == 0 {
 		return incorrectUsageMsg(c, c.Command.ArgsUsage)
 	}

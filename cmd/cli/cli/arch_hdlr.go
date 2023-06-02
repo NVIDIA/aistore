@@ -147,6 +147,9 @@ func appendArchHandler(c *cli.Context) (err error) {
 	if err = a.parse(c); err != nil {
 		return
 	}
+	if flagIsSet(c, dryRunFlag) {
+		dryRunCptn(c)
+	}
 
 	// TODO -- FIXME: further unify vs putHandler; add STDIN; e2e tests
 	switch {
@@ -166,7 +169,7 @@ func appendArchHandler(c *cli.Context) (err error) {
 		if err = a2aRegular(c, &a); err != nil {
 			return
 		}
-		msg := fmt.Sprintf("%s %s => %s", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname))
+		msg := fmt.Sprintf("%s %s to %s", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname))
 		if a.archpath != a.src.arg {
 			msg += " as \"" + a.archpath + "\""
 		}
@@ -192,6 +195,10 @@ func a2aRegular(c *cli.Context, a *a2args) error {
 		progress *mpb.Progress
 		bars     []*mpb.Bar
 	)
+	if flagIsSet(c, dryRunFlag) {
+		// resulting message printed upon return
+		return nil
+	}
 	fh, err := cos.NewFileHandle(a.src.abspath)
 	if err != nil {
 		return err

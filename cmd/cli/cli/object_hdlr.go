@@ -281,6 +281,9 @@ func putHandler(c *cli.Context) (err error) {
 	if err = a.parse(c, true /*empty dst oname*/); err != nil {
 		return
 	}
+	if flagIsSet(c, dryRunFlag) {
+		dryRunCptn(c)
+	}
 	switch {
 	case len(a.src.fnames) > 0:
 		// - csv embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix], or

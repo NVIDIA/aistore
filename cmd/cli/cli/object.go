@@ -25,12 +25,6 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
-const (
-	dryRunExamplesCnt = 10
-	dryRunHeader      = "[DRY RUN]"
-	dryRunExplanation = "No modifications on the cluster"
-)
-
 // Promote AIS-colocated files and directories to objects.
 func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	var (

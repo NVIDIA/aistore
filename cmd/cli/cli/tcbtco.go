@@ -198,7 +198,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
+	dryRunCptn(c)
 	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
 	fmt.Fprintf(c.App.Writer, "ETL object counts:\t transformed=%d, sent=%d, received=%d", locObjs, outObjs, inObjs)
 	locBytes, outBytes, inBytes := snaps.ByteCounts(xid)
@@ -263,9 +263,9 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 		}
 		if dryRun {
-			// TODO: show object names with destinations, make the output consistent with etl dry-run
-			fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation)
-			actionDone(c, "[dry-run] Copying the entire bucket")
+			// TODO -- FIXME: show object names with destinations, make the output consistent with etl dry-run
+			dryRunCptn(c)
+			actionDone(c, "Copying the entire bucket")
 		}
 		if etlName != "" {
 			return etlBucket(c, etlName, bckFrom, bckTo)
@@ -280,11 +280,11 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 	if dryRun {
 		var msg string
 		if listObjs != "" {
-			msg = fmt.Sprintf("[dry-run] Copying %q ...\n", listObjs)
+			msg = fmt.Sprintf("Copying %q ...\n", listObjs)
 		} else {
-			msg = fmt.Sprintf("[dry-run] Copying objects that match the pattern %q ...\n", tmplObjs)
+			msg = fmt.Sprintf("Copying objects that match the pattern %q ...\n", tmplObjs)
 		}
-		fmt.Fprintln(c.App.Writer, dryRunHeader+" "+dryRunExplanation) // ditto
+		dryRunCptn(c) // TODO -- FIXME: ditto
 		actionDone(c, msg)
 	}
 	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)

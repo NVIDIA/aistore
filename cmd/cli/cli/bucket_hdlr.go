@@ -344,8 +344,9 @@ func removeBucketHandler(c *cli.Context) (err error) {
 }
 
 func evictHandler(c *cli.Context) (err error) {
-	printDryRunHeader(c)
-
+	if flagIsSet(c, dryRunFlag) {
+		dryRunCptn(c)
+	}
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
