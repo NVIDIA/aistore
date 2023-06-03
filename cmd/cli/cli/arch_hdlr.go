@@ -38,7 +38,7 @@ var (
 			listFlag,
 			dryRunFlag,
 			inclSrcBucketNameFlag,
-			apndArchIf1Flag,
+			archAppendIfExistFlag,
 			continueOnErrorFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
@@ -124,7 +124,7 @@ var (
 func archMultiObjHandler(c *cli.Context) error {
 	// parse
 	var a archbck
-	a.apndIfExist = flagIsSet(c, apndArchIf1Flag) || flagIsSet(c, apndArchIf2Flag)
+	a.apndIfExist = flagIsSet(c, archAppendIfExistFlag)
 	if err := a.parse(c); err != nil {
 		return err
 	}

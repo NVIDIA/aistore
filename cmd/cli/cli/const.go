@@ -703,7 +703,6 @@ var (
 
 	// archive
 	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "list archived content (see docs/archive.md for details)"}
-	putArchFlag  = cli.BoolFlag{Name: "archive", Usage: "archive a given list ('--list') or range ('--template') of objects"}
 
 	archpathFlag = cli.StringFlag{
 		Name:  "archpath",
@@ -717,18 +716,6 @@ var (
 	inclSrcDirNameFlag = cli.BoolFlag{
 		Name:  "include-src-dir",
 		Usage: "prefix the names of archived files with the (root) source directory (omitted by default)",
-	}
-	// via 'ais archive': PUT arch operation with an option to APPEND if already exists
-	apndArchIf1Flag = cli.BoolFlag{
-		Name: "append",
-		Usage: "if destination object (\"archive\", \"shard\") already exists, append to it\n" +
-			indent4 + "\t(instead of creating a new one)",
-	}
-	// same as above via 'ais put'
-	apndArchIf2Flag = cli.BoolFlag{
-		Name: "arch-append-if",
-		Usage: "if destination object (\"archive\", \"shard\") already exists, append to it\n" +
-			indent4 + "\t(instead of creating a new one)",
 	}
 	// 'ais archive put': conditional APPEND
 	archAppendIfExistFlag = cli.BoolFlag{

@@ -55,12 +55,6 @@ var (
 			yesFlag,
 			continueOnErrorFlag,
 			unitsFlag,
-			// arch
-			inclSrcBucketNameFlag,
-			inclSrcDirNameFlag,
-			archpathFlag,
-			putArchFlag,
-			apndArchIf2Flag,
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
@@ -270,14 +264,6 @@ func removeObjectHandler(c *cli.Context) (err error) {
 }
 
 func putHandler(c *cli.Context) (err error) {
-	// destination: archive ? route to arch handler
-	switch {
-	case flagIsSet(c, putArchFlag):
-		return archMultiObjHandler(c)
-	case flagIsSet(c, archpathFlag):
-		return putApndArchHandler(c)
-	}
-
 	// main PUT switch
 	var a putargs
 	if err = a.parse(c, true /*empty dst oname*/); err != nil {
