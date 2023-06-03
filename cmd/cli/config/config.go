@@ -63,16 +63,15 @@ var (
 
 	DefaultAliasConfig = AliasConfig{
 		// object
-		"get": "object get",
-		"put": "object put",
-		// (.tar, .tgz or .tar.gz, .zip, .tar.lz4) object
-		"zput":    "archive put",
-		"zappend": "archive append",
+		"get":     "object get",
+		"put":     "object put",
+		"archput": "archive put",
 		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",
 		"cp":     "bucket cp",
 		"rmb":    "bucket rm",
+		"archb":  "archive bucket",
 		// job
 		"start": "job start",
 		"stop":  "job stop",

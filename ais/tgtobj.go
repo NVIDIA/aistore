@@ -111,7 +111,7 @@ type (
 		owt       cmn.OWT
 	}
 
-	apndArchI struct {
+	putA2I struct {
 		r        io.ReadCloser // read bytes to append
 		t        *target       // this
 		lom      *cluster.LOM  // resulting shard
@@ -119,7 +119,7 @@ type (
 		mime     string        // format
 		started  time.Time     // time of receiving
 		size     int64         // aka Content-Length
-		put      bool          // apc.HdrPutIfNotExist
+		put      bool          // overwrite
 	}
 )
 
@@ -1453,15 +1453,15 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 }
 
 //
-// APPEND to archive aka shard (read/write/list via cmn/archive pkg)
+// PUT a new shard or APPEND to an existing one (w/ read/write/list via cmn/archive)
 //
 
-func (a *apndArchI) do() (int, error) {
+func (a *putA2I) do() (int, error) {
 	if a.filename == "" {
 		return 0, errors.New("archive path is not defined")
 	}
-	// standard library does not support appending to tgz and zip;
-	// for TAR there is an optimizing workaround not requiring full copy
+	// standard library does not support appending to tgz, zip, and such;
+	// for TAR there is an optimizing workaround not requiring a full copy
 	if a.mime == archive.ExtTar && !a.put {
 		var (
 			err     error
@@ -1546,7 +1546,7 @@ cpap: // copy + append
 }
 
 // TAR only - fast & direct
-func (a *apndArchI) fast(rwfh *os.File) (size int64, err error) {
+func (a *putA2I) fast(rwfh *os.File) (size int64, err error) {
 	var (
 		buf, slab = a.t.gmm.AllocSize(a.size)
 		tw        = tar.NewWriter(rwfh)
@@ -1569,7 +1569,7 @@ func (a *apndArchI) fast(rwfh *os.File) (size int64, err error) {
 	return
 }
 
-func (*apndArchI) reterr(err error) (int, error) {
+func (*putA2I) reterr(err error) (int, error) {
 	errCode := http.StatusInternalServerError
 	if cmn.IsErrCapacityExceeded(err) {
 		errCode = http.StatusInsufficientStorage
@@ -1577,7 +1577,7 @@ func (*apndArchI) reterr(err error) (int, error) {
 	return errCode, err
 }
 
-func (a *apndArchI) finalize(size int64, cksum *cos.Cksum, fqn string) error {
+func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 	debug.Func(func() {
 		finfo, err := os.Stat(fqn)
 		debug.AssertNoErr(err)

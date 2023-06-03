@@ -31,7 +31,7 @@ import (
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
-		apc.PropBucketAccessAttrs:             apc.SupportedPermissions(),
+		cmn.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
 		feat.FeaturesPropName:                 append(feat.All, NilValue),
 		"write_policy.data":                   apc.SupportedWritePolicy,
@@ -69,7 +69,7 @@ func completionErr(c *cli.Context, err error) {
 }
 
 func lastValueIsAccess(c *cli.Context) bool {
-	return lastValueIs(c, propCmpls[apc.PropBucketAccessAttrs])
+	return lastValueIs(c, propCmpls[cmn.PropBucketAccessAttrs])
 }
 
 func lastValueIsFeatures(c *cli.Context) bool {
@@ -92,7 +92,7 @@ func lastValueIs(c *cli.Context, values []string) bool {
 
 // Completes command line with not-yet-typed permission constant
 func accessCompletions(c *cli.Context) {
-	enumCompletions(c, propCmpls[apc.PropBucketAccessAttrs])
+	enumCompletions(c, propCmpls[cmn.PropBucketAccessAttrs])
 }
 
 // Completes command line with not-yet-typed feature constant

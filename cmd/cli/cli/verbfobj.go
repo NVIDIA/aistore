@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -63,14 +64,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 
 	cptn := fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
 	cptn += ndir2tag(ndir, recurs)
-	switch wop.verb() {
-	case "PUT":
-		cptn += fmt.Sprintf(" => %s", bck.Cname(""))
-	case "APPEND":
-		a, ok := wop.(*a2args)
-		debug.Assert(ok)
-		cptn += fmt.Sprintf(" to %s", bck.Cname(a.dst.oname))
-	}
+	cptn += fmt.Sprintf(" => %s", wop.dest())
 
 	var (
 		totalSize, extSizes = groupByExt(fobjs)
@@ -201,7 +195,7 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 }
 
 func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, skipVC bool) error {
-	a, ok := p.wop.(*a2args)
+	a, ok := p.wop.(*archput)
 	debug.Assert(ok)
 
 	archpath := fobj.dstName // an actual individual `archpath`
@@ -224,12 +218,18 @@ func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 		SkipVC:     skipVC,
 	}
 
-	appendArchArgs := api.AppendToArchArgs{
-		PutArgs:       putArgs,
-		ArchPath:      archpath,
-		PutIfNotExist: a.putIfNotExist,
+	putApndArchArgs := api.PutApndArchArgs{
+		PutArgs:  putArgs,
+		ArchPath: archpath,
 	}
-	return api.AppendToArch(appendArchArgs)
+	if a.appendOnly {
+		putApndArchArgs.Flags = apc.ArchAppend
+	}
+	if a.appendIf {
+		debug.Assert(!a.appendOnly)
+		putApndArchArgs.Flags = apc.ArchAppendIfExist
+	}
+	return api.PutApndArch(putApndArchArgs)
 }
 
 //////////

@@ -275,7 +275,7 @@ func putHandler(c *cli.Context) (err error) {
 	case flagIsSet(c, putArchFlag):
 		return archMultiObjHandler(c)
 	case flagIsSet(c, archpathFlag):
-		return appendArchHandler(c)
+		return putApndArchHandler(c)
 	}
 
 	// main PUT switch

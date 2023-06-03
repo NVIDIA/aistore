@@ -775,7 +775,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 				return xid, err
 			}
 		}
-		archMsg := &cmn.ArchiveMsg{}
+		archMsg := &cmn.ArchiveBckMsg{}
 		if err := cos.MorphMarshal(c.msg.Value, archMsg); err != nil {
 			return xid, fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 		}

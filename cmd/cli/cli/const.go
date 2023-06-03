@@ -143,9 +143,6 @@ const (
 	cmdSetBprops   = "set"
 	cmdResetBprops = cmdReset
 
-	// Archive subcommands
-	cmdAppend = "append"
-
 	// AuthN subcommands
 	cmdAuthAdd     = "add"
 	cmdAuthShow    = "show"
@@ -252,7 +249,7 @@ const (
 	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|-]"
 
 	putObjectArgument     = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
-	appendToArchArgument  = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME"
+	putApndArchArgument   = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME"
 	promoteObjectArgument = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
 	concatObjectArgument  = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"
 
@@ -729,14 +726,19 @@ var (
 	}
 	// same as above via 'ais put'
 	apndArchIf2Flag = cli.BoolFlag{
-		Name: "arch-append-if-exists",
+		Name: "arch-append-if",
 		Usage: "if destination object (\"archive\", \"shard\") already exists, append to it\n" +
 			indent4 + "\t(instead of creating a new one)",
 	}
-	// APPEND to arch operation: option to PUT (ie., create) if doesn't exist (compare with the above)
-	putArchIfNotExistFlag = cli.BoolFlag{
-		Name:  "put",
-		Usage: "if destination object (\"archive\", \"shard\") does not exist, create a new one",
+	// 'ais archive put': conditional APPEND
+	archAppendIfExistFlag = cli.BoolFlag{
+		Name:  "append-if",
+		Usage: "if destination object (\"archive\", \"shard\") exists append to it, otherwise archive a new one",
+	}
+	// 'ais archive put': unconditional APPEND
+	archAppendFlag = cli.BoolFlag{
+		Name:  "append",
+		Usage: "add newly archived content to the destination object (\"archive\", \"shard\") that must exist",
 	}
 
 	continueOnErrorFlag = cli.BoolFlag{

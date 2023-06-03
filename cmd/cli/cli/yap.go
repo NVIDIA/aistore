@@ -39,6 +39,7 @@ type (
 type (
 	wop interface {
 		verb() string
+		dest() string
 	}
 	// PUT object(s)
 	putargs struct {
@@ -46,28 +47,31 @@ type (
 		pt  *cos.ParsedTemplate // client-side, via --list|template or src/range
 		dst there
 	}
-	// PUT arch
-	archargs struct {
+	// 'ais archive bucket'
+	archbck struct {
 		putargs
 		rsrc        there
 		apndIfExist bool
 	}
-	// APPEND to arch
-	a2args struct {
+	// 'ais archive put' (with an option to append)
+	archput struct {
 		putargs
-		archpath      string
-		putIfNotExist bool
+		archpath   string
+		appendOnly bool
+		appendIf   bool
 	}
 )
 
 // interface guard
 var (
 	_ wop = (*putargs)(nil)
-	_ wop = (*archargs)(nil)
-	_ wop = (*a2args)(nil)
+	_ wop = (*archbck)(nil)
+	_ wop = (*archput)(nil)
 )
 
-func (*putargs) verb() string         { return "PUT" }
+func (*putargs) verb() string { return "PUT" }
+
+func (a *putargs) dest() string       { return a.dst.bck.Cname("") }
 func (a *putargs) srcIsRegular() bool { return a.src.finfo != nil && !a.src.isdir }
 
 func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
@@ -181,9 +185,11 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	return fmt.Errorf(efmt+"\n%s\n", strings.Join(c.Args()[2:], " "), hint)
 }
 
-func (*archargs) verb() string { return "ARCHIVE" }
+func (*archbck) verb() string { return "ARCHIVE" }
 
-func (a *archargs) parse(c *cli.Context) (err error) {
+func (a *archbck) dest() string { return a.dst.bck.Cname(a.dst.oname) }
+
+func (a *archbck) parse(c *cli.Context) (err error) {
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	if a.dst.bck.IsEmpty() || err == nil /* TODO -- FIXME: archive local file(s) */ {
 		return
@@ -213,9 +219,11 @@ func (a *archargs) parse(c *cli.Context) (err error) {
 	return
 }
 
-func (*a2args) verb() string { return "APPEND" }
+func (*archput) verb() string { return "APPEND" }
 
-func (a *a2args) parse(c *cli.Context) (err error) {
+func (a *archput) dest() string { return a.dst.bck.Cname(a.dst.oname) }
+
+func (a *archput) parse(c *cli.Context) (err error) {
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	return
 }

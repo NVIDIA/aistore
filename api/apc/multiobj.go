@@ -14,7 +14,7 @@ type (
 	// ArchiveMsg contains the parameters (all except the destination bucket)
 	// for archiving mutiple objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
-	// See also: api.AppendToArchArgs
+	// See also: api.PutApndArchArgs
 	// --------------------  terminology   ---------------------
 	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
 	ArchiveMsg struct {

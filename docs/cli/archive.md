@@ -182,7 +182,7 @@ shard-2.tar                                      5.50KiB
 # Do append
 # Note that --archpath can specify fully qualified name of the destination
 
-$ ais archive append LICENSE ais://nnn/shard-2.tar --archpath shard-2.tar/license.test
+$ ais archive put LICENSE ais://nnn/shard-2.tar --archpath shard-2.tar/license.test
 APPEND "/go/src/github.com/NVIDIA/aistore/LICENSE" to "ais://nnn/shard-2.tar[/shard-2.tar/license.test]"
 
 # contents _after_:

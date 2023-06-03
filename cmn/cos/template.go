@@ -70,7 +70,7 @@ func (e *ErrTemplate) Error() string { return e.msg }
 ////////////////////
 
 func NewParsedTemplate(template string) (ParsedTemplate, error) {
-	if template == "" {
+	if template == "" || template == "*" {
 		return ParsedTemplate{}, ErrEmptyTemplate
 	}
 	if parsed, err := ParseBashTemplate(template); err == nil {

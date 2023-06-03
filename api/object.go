@@ -92,7 +92,7 @@ type (
 		cluster.PromoteArgs
 	}
 
-	// (see also: api.AppendToArchArgs)
+	// (see also: api.PutApndArchArgs)
 	AppendArgs struct {
 		Reader     cos.ReadOpenCloser
 		BaseParams BaseParams
@@ -108,14 +108,15 @@ type (
 		Object     string
 		Handle     string
 	}
-
-	AppendToArchArgs struct {
-		ArchPath      string // filename _in_ archive
-		Mime          string // user-specified mime type (NOTE: takes precedence if defined)
-		PutIfNotExist bool   // PUT (ie., create) if doesn't exist
-		PutArgs
-	}
 )
+
+// Archive files and directories (see related: cmn.ArchiveBckMsg)
+type PutApndArchArgs struct {
+	ArchPath string // filename _in_ archive
+	Mime     string // user-specified mime type (NOTE: takes precedence if defined)
+	Flags    int64  // apc.ArchAppend and apc.ArchAppendIfExist (the former requires destination shard to exist)
+	PutArgs
+}
 
 /////////////
 // GetArgs //
@@ -422,16 +423,16 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 	return
 }
 
-// Append the content of a reader (`args.Reader` - e.g., an open file) to an existing
-// object formatted as one of the supported archives.
-// In other words, append to an existing archive.
+// Archive the content of a reader (`args.Reader` - e.g., an open file).
+// Destination, depending on the options, can be an existing (.tar, .tgz or .tar.gz, .zip, .tar.lz4)
+// formatted object (aka "shard") or a new one (or, a new version).
 // ---
-// For supported archival formats -- aka MIME types -- see cmn/cos/archive.go.
+// For the updated list of supported archival formats -- aka MIME types -- see cmn/cos/archive.go.
 // --
-// NOTE see also:
+// See also:
 // - api.ArchiveMultiObj(msg.AppendIfExists = true)
 // - api.AppendObject
-func AppendToArch(args AppendToArchArgs) (err error) {
+func PutApndArch(args PutApndArchArgs) (err error) {
 	q := make(url.Values, 4)
 	q = args.Bck.AddToQuery(q)
 	q.Set(apc.QparamArchpath, args.ArchPath)
@@ -445,8 +446,9 @@ func AppendToArch(args AppendToArchArgs) (err error) {
 		reqArgs.Query = q
 		reqArgs.BodyR = args.Reader
 	}
-	if args.PutIfNotExist {
-		reqArgs.Header = http.Header{apc.HdrPutIfNotExist: []string{"true"}}
+	if args.Flags != 0 {
+		flags := strconv.FormatInt(args.Flags, 10)
+		reqArgs.Header = http.Header{apc.HdrPutApndArchFlags: []string{flags}}
 	}
 	putArgs := &args.PutArgs
 	_, err = DoWithRetry(args.BaseParams.Client, putArgs.put, reqArgs) //nolint:bodyclose // is closed inside

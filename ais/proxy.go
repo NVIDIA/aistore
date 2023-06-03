@@ -1008,7 +1008,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	case apc.ActArchive:
 		var (
 			bckFrom = bck
-			archMsg = &cmn.ArchiveMsg{}
+			archMsg = &cmn.ArchiveBckMsg{}
 		)
 		if err := cos.MorphMarshal(msg.Value, archMsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)

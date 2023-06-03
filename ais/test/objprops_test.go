@@ -320,7 +320,7 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 
 		newConfig := make(cos.StrKVs)
 		if oldVersioning != versioning {
-			newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(versioning)
+			newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(versioning)
 		}
 		warmCheck := versioning
 		if oldChkVersion != warmCheck {
@@ -338,7 +338,7 @@ func propsVersionAllProviders(t *testing.T, versioning bool) {
 				newConfig["versioning.validate_warm_get"] = strconv.FormatBool(oldWarmCheck)
 			}
 			if oldVersioning != versioning {
-				newConfig[apc.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
+				newConfig[cmn.PropBucketVerEnabled] = strconv.FormatBool(oldVersioning)
 			}
 			if len(newConfig) != 0 {
 				tools.SetClusterConfig(t, newConfig)

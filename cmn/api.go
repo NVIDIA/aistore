@@ -28,6 +28,16 @@ import (
 // Naming convention for setting/getting the particular props is defined as
 // joining the json tags with dot. Eg. when referring to `EC.Enabled` field
 // one would need to write `ec.enabled`. For more info refer to `IterFields`.
+
+const (
+	PropBucketAccessAttrs  = "access"             // Bucket access attributes.
+	PropBucketVerEnabled   = "versioning.enabled" // Enable/disable object versioning in a bucket.
+	PropBucketCreated      = "created"            // Bucket creation time.
+	PropBackendBck         = "backend_bck"
+	PropBackendBckName     = PropBackendBck + ".name"
+	PropBackendBckProvider = PropBackendBck + ".provider"
+)
+
 type (
 	BucketProps struct {
 		BackendBck  Bck             `json:"backend_bck,omitempty"` // makes remote bucket out of a given ais bucket
@@ -324,17 +334,17 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 }
 
 //
-// Multi-object (list|range) operations ----------------------------------------------------------
+// Multi-object (list|range) operations source bucket => dest. bucket ---------------------------------------
 //
 
 type (
-	// ArchiveMsg is used in api.ArchiveMultiObj operations; the message contains parameters
-	// for archiving mutiple (source) objects as one of the supported archive.FileExtensions types
-	// at the specified (bucket) destination.
-	// --------------------  a NOTE on terminology:   ---------------------
-	// here and elsewhere "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object.
-	// see also: `AppendToArchArgs` message
-	ArchiveMsg struct {
+	// ArchiveBckMsg contains parameters to archive mutiple objects from the specified (source) bucket.
+	// Destination bucket may the same as the source or a different one.
+	// --------------------  NOTE on terminology:   ---------------------
+	// "archive" is any (.tar, .tgz/.tar.gz, .zip, .tar.lz4) formatted object often also called "shard"
+	//
+	// See also: apc.PutApndArchArgs
+	ArchiveBckMsg struct {
 		ToBck Bck `json:"tobck"`
 		apc.ArchiveMsg
 	}
@@ -346,4 +356,4 @@ type (
 	}
 )
 
-func (msg *ArchiveMsg) Cname() string { return msg.ToBck.Cname(msg.ArchName) }
+func (msg *ArchiveBckMsg) Cname() string { return msg.ToBck.Cname(msg.ArchName) }

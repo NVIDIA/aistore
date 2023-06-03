@@ -522,37 +522,37 @@ func reformatBackendProps(c *cli.Context, nvs cos.StrKVs) (err error) {
 		ok        bool
 	)
 
-	if v, ok = nvs[apc.PropBackendBckName]; ok && v != "" {
-		if v, ok = nvs[apc.PropBackendBckProvider]; ok && v != "" {
-			nvs[apc.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
+	if v, ok = nvs[cmn.PropBackendBckName]; ok && v != "" {
+		if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
+			nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
 			return
 		}
 	}
 
-	if v, ok = nvs[apc.PropBackendBck]; ok {
-		delete(nvs, apc.PropBackendBck)
-	} else if v, ok = nvs[apc.PropBackendBckName]; !ok {
+	if v, ok = nvs[cmn.PropBackendBck]; ok {
+		delete(nvs, cmn.PropBackendBck)
+	} else if v, ok = nvs[cmn.PropBackendBckName]; !ok {
 		goto validate
 	}
 
 	if v != NilValue {
 		if originBck, err = parseBckURI(c, v, true /*error only*/); err != nil {
 			return fmt.Errorf("invalid '%s=%s': expecting %q to be a valid bucket name",
-				apc.PropBackendBck, v, v)
+				cmn.PropBackendBck, v, v)
 		}
 	}
 
-	nvs[apc.PropBackendBckName] = originBck.Name
-	if v, ok = nvs[apc.PropBackendBckProvider]; ok && v != "" {
-		nvs[apc.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
+	nvs[cmn.PropBackendBckName] = originBck.Name
+	if v, ok = nvs[cmn.PropBackendBckProvider]; ok && v != "" {
+		nvs[cmn.PropBackendBckProvider], err = cmn.NormalizeProvider(v)
 	} else {
-		nvs[apc.PropBackendBckProvider] = originBck.Provider
+		nvs[cmn.PropBackendBckProvider] = originBck.Provider
 	}
 
 validate:
-	if nvs[apc.PropBackendBckProvider] != "" && nvs[apc.PropBackendBckName] == "" {
+	if nvs[cmn.PropBackendBckProvider] != "" && nvs[cmn.PropBackendBckName] == "" {
 		return fmt.Errorf("invalid %q: bucket name cannot be empty when bucket provider (%q) is set",
-			apc.PropBackendBckName, apc.PropBackendBckProvider)
+			cmn.PropBackendBckName, cmn.PropBackendBckProvider)
 	}
 	return err
 }
@@ -635,7 +635,7 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 				if def.Name != p.Name {
 					continue
 				}
-				if def.Name == apc.PropBucketCreated {
+				if def.Name == cmn.PropBucketCreated {
 					if p.Value != teb.NotSetVal {
 						created, err := cos.S2UnixNano(p.Value)
 						if err == nil {

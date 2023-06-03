@@ -285,7 +285,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
 					go func(archName string, list []string, i int) {
-						msg := cmn.ArchiveMsg{
+						msg := cmn.ArchiveBckMsg{
 							ToBck:      bckTo,
 							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 						}
@@ -302,7 +302,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 					archName := fmt.Sprintf("test_rng_%02d%s", i, test.ext)
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start, i int) {
-						msg := cmn.ArchiveMsg{
+						msg := cmn.ArchiveBckMsg{
 							ToBck:      bckTo,
 							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 						}
@@ -365,7 +365,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				for _, e := range lstToAppend.Entries {
 					start := rand.Intn(m.num - numInArch)
 					go func(archName string, start int) {
-						msg := cmn.ArchiveMsg{
+						msg := cmn.ArchiveBckMsg{
 							ToBck:      bckTo,
 							ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 						}
@@ -414,7 +414,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 	}
 }
 
-// exercises `api.ArchiveMultiObj` followed by api.AppendToArch(local rand-reader)
+// exercises `api.ArchiveMultiObj` followed by api.PutApndArch(local rand-reader)
 func TestAppendToArch(t *testing.T) {
 	var (
 		bckFrom = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
@@ -497,7 +497,7 @@ func TestAppendToArch(t *testing.T) {
 					list = append(list, m.objNames[rand.Intn(m.num)])
 				}
 				go func(archName string, list []string) {
-					msg := cmn.ArchiveMsg{
+					msg := cmn.ArchiveBckMsg{
 						ToBck:      bckTo,
 						ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 					}
@@ -526,7 +526,7 @@ func TestAppendToArch(t *testing.T) {
 					for j := 0; j < numAdd; j++ {
 						list = append(list, m.objNames[rand.Intn(m.num)])
 					}
-					msg := cmn.ArchiveMsg{
+					msg := cmn.ArchiveBckMsg{
 						ToBck:      bckTo,
 						ArchiveMsg: apc.ArchiveMsg{ArchName: archName},
 					}
@@ -547,12 +547,13 @@ func TestAppendToArch(t *testing.T) {
 							Size:       fileSize,
 						}
 						archpath := fmt.Sprintf(archPath, j) + cos.GenTie()
-						appendArchArgs := api.AppendToArchArgs{
+						appendArchArgs := api.PutApndArchArgs{
 							PutArgs:  putArgs,
 							ArchPath: archpath,
+							Flags:    apc.ArchAppend, // existence required
 						}
 						tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo, archName, archpath)
-						err = api.AppendToArch(appendArchArgs)
+						err = api.PutApndArch(appendArchArgs)
 						tassert.CheckError(t, err)
 					}
 				}

@@ -38,7 +38,7 @@ type (
 	archwi struct { // archival work item; implements lrwi
 		writer    archive.Writer
 		r         *XactArch
-		msg       *cmn.ArchiveMsg
+		msg       *cmn.ArchiveBckMsg
 		tsi       *meta.Snode
 		archlom   *cluster.LOM
 		fqn       string   // workFQN --/--
@@ -52,7 +52,7 @@ type (
 	}
 	XactArch struct {
 		streamingX
-		workCh  chan *cmn.ArchiveMsg
+		workCh  chan *cmn.ArchiveBckMsg
 		config  *cmn.Config
 		bckTo   *meta.Bck
 		pending struct {
@@ -79,7 +79,7 @@ func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *archFactory) Start() error {
-	workCh := make(chan *cmn.ArchiveMsg, maxNumInParallel)
+	workCh := make(chan *cmn.ArchiveBckMsg, maxNumInParallel)
 	r := &XactArch{streamingX: streamingX{p: &p.streamingF}, workCh: workCh, config: cmn.GCO.Get()}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
@@ -101,7 +101,7 @@ func (p *archFactory) Start() error {
 // XactArch //
 //////////////
 
-func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
+func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
 	archlom := cluster.AllocLOM(msg.ArchName)
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
 		r.raiseErr(err, msg.ContinueOnError)
@@ -167,7 +167,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveMsg) (err error) {
 	return
 }
 
-func (r *XactArch) Do(msg *cmn.ArchiveMsg) {
+func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 	r.IncPending()
 	r.workCh <- msg
 }

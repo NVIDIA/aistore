@@ -19,8 +19,8 @@ import (
 // The source and the destination buckets are defined as `bckFrom` and `bckTo`, respectively
 // (not necessarily distinct)
 // For supported archiving formats, see `archive.FileExtensions`.
-// See also: api.AppendToArch
-func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveMsg) (string, error) {
+// See also: api.PutApndArch
+func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveBckMsg) (string, error) {
 	bp.Method = http.MethodPut
 	q := bckFrom.AddToQuery(nil)
 	return dolr(bp, bckFrom, apc.ActArchive, msg, q)

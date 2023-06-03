@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -765,7 +764,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		}
 		// do
 		lom.Lock(true)
-		errCode, err = t.appendArch(r, lom, started, apireq.dpq)
+		errCode, err = t.putApndArch(r, lom, started, apireq.dpq)
 		lom.Unlock(true)
 	case apireq.dpq.appendTy != "": // apc.QparamAppendType
 		handle, errCode, err = t.appendObj(r, lom, started, apireq.dpq)
@@ -1193,45 +1192,53 @@ func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time,
 	return a.do()
 }
 
-// prior to append-to-arch
-// is called under lock
-func (t *target) appendArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (int, error) {
+// called under lock
+func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (int, error) {
 	var (
-		sizeStr  = r.Header.Get(cos.HdrContentLength)
 		mime     = dpq.archmime // apc.QparamArchmime
 		filename = dpq.archpath // apc.QparamArchpath
-		put      bool           // apc.HdrPutIfNotExist
+		flags    int64
 	)
 	if strings.HasPrefix(filename, lom.ObjName) {
 		if rel, err := filepath.Rel(lom.ObjName, filename); err == nil {
 			filename = rel
 		}
 	}
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !os.IsNotExist(err) {
-			return http.StatusInternalServerError, err
+	if s := r.Header.Get(apc.HdrPutApndArchFlags); s != "" {
+		var errV error
+		if flags, errV = strconv.ParseInt(s, 10, 64); errV != nil {
+			return http.StatusBadRequest,
+				fmt.Errorf("failed to archive %s: invalid flags %q in the request", lom.Cname(), s)
 		}
-		if pine := r.Header.Get(apc.HdrPutIfNotExist); !cos.IsParseBool(pine) {
-			return http.StatusNotFound, err
-		}
-		put = true
 	}
-	a := &apndArchI{
+	a := &putA2I{
 		started:  started,
 		t:        t,
 		lom:      lom,
 		r:        r.Body,
 		filename: filename,
 		mime:     mime,
-		put:      put,
+		put:      false, // below
 	}
-	if sizeStr != "" {
-		if size, ers := strconv.ParseInt(sizeStr, 10, 64); ers == nil {
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if !os.IsNotExist(err) {
+			return http.StatusInternalServerError, err
+		}
+		if flags == apc.ArchAppend {
+			return http.StatusNotFound, err
+		}
+		a.put = true
+	} else {
+		a.put = (flags == 0)
+	}
+	if s := r.Header.Get(cos.HdrContentLength); s != "" {
+		if size, err := strconv.ParseInt(s, 10, 64); err == nil {
 			a.size = size
 		}
 	}
 	if a.size == 0 {
-		return http.StatusBadRequest, errors.New("size is not defined")
+		return http.StatusBadRequest, fmt.Errorf("failed to archive %s: missing %q in the request",
+			lom.Cname(), cos.HdrContentLength)
 	}
 	return a.do()
 }

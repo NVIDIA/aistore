@@ -1,21 +1,11 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
 import (
 	"time"
-)
-
-// Configuration and bucket properties
-const (
-	PropBucketAccessAttrs  = "access"             // Bucket access attributes.
-	PropBucketVerEnabled   = "versioning.enabled" // Enable/disable object versioning in a bucket.
-	PropBucketCreated      = "created"            // Bucket creation time.
-	PropBackendBck         = "backend_bck"
-	PropBackendBckName     = PropBackendBck + ".name"
-	PropBackendBckProvider = PropBackendBck + ".provider"
 )
 
 const (
