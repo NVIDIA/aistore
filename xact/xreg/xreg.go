@@ -478,7 +478,7 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 		}
 		if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
 			r.renewMtx.RUnlock()
-			if cmn.IsErrUsePrevXaction(err) {
+			if cmn.IsErrXactUsePrev(err) {
 				if wpr != WprUse {
 					glog.Errorf("%v - not starting a new one of the same kind", err)
 				}
@@ -544,10 +544,10 @@ func (r *registry) renewLocked(entry Renewable, flt Flt, bck *meta.Bck) (rns Ren
 		}
 	}
 	if err = entry.Start(); err != nil {
-		return RenewRes{Entry: nil, Err: err, UUID: ""}
+		return RenewRes{Err: err}
 	}
 	r.entries.add(entry)
-	return RenewRes{Entry: entry, Err: nil, UUID: ""}
+	return RenewRes{Entry: entry}
 }
 
 //////////////////////

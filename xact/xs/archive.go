@@ -100,11 +100,9 @@ func (p *archFactory) Start() error {
 // XactArch //
 //////////////
 
-func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
-	archlom := cluster.AllocLOM(msg.ArchName)
+func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err error) {
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
 		r.raiseErr(err, false)
-		cluster.FreeLOM(archlom)
 		return
 	}
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
@@ -113,19 +111,21 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
 	wi.fqn = fs.CSM.Gen(wi.archlom, fs.WorkfileType, fs.WorkfileCreateArch)
 	wi.cksum.Init(archlom.CksumType())
 
+	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	smap := r.p.T.Sowner().Get()
-
-	// TODO -- FIXME: assuming _this_ target is active; check TCO as well
-	wi.refc.Store(int32(smap.CountActiveTs() - 1))
+	if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
+		return
+	}
+	nat := smap.CountActiveTs()
+	wi.refc.Store(int32(nat - 1))
 
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
-		cluster.FreeLOM(archlom)
 		r.raiseErr(err, false)
 		return
 	}
 
-	// NOTE: creating archive at BEGIN time (see cleanup)
+	// fcreate at BEGIN time
 	if r.p.T.SID() == wi.tsi.ID() {
 		var (
 			lmfh        *os.File
@@ -138,17 +138,21 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
 			wi.wfh, err = wi.archlom.CreateFile(wi.fqn)
 		}
 		if err != nil {
-			cluster.FreeLOM(archlom)
 			return
 		}
 
-		// construct format-specific writer
-		opts := archive.Opts{Serialize: true}
+		// construct format-specific writer; serialize for multi-target conc. writing
+		opts := archive.Opts{Serialize: nat > 1}
 		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, &opts)
 
-		// append
+		// append case (above)
 		if lmfh != nil {
 			err = wi.writer.Copy(lmfh, finfo.Size())
+			if err != nil {
+				wi.writer.Fini()
+				wi.cleanup()
+				return
+			}
 		}
 	}
 
@@ -216,7 +220,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				r.pending.Unlock()
 				r.DecPending()
 
-				cluster.FreeLOM(wi.archlom) // see Begin
+				cluster.FreeLOM(wi.archlom)
 			}
 		case <-r.IdleTimer():
 			goto fin

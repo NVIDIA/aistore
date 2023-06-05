@@ -74,6 +74,7 @@ var (
 	_ Writer = (*lz4Writer)(nil)
 )
 
+// calls init() -> open(),alloc()
 func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, opts *Opts) (aw Writer) {
 	switch mime {
 	case ExtTar:

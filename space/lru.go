@@ -129,7 +129,7 @@ func (*lruFactory) Kind() string        { return apc.ActLRU }
 func (p *lruFactory) Get() cluster.Xact { return p.xctn }
 
 func (*lruFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	return xreg.WprUse, cmn.NewErrUsePrevXaction(prevEntry.Get().String())
+	return xreg.WprUse, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 }
 
 func RunLRU(ini *IniLRU) {

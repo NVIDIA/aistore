@@ -136,7 +136,15 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				debug.Assert(r.err.Cnt() > 0) // see cleanup
 				goto fin
 			}
-			wi.refc.Store(int32(smap.CountTargets() - 1))
+
+			// this target must be active (ref: ignoreMaintenance)
+			if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
+				glog.Error(err)
+				goto fin
+			}
+			nat := smap.CountActiveTs()
+			wi.refc.Store(int32(nat - 1))
+
 			lrit.init(r, r.p.T, &msg.ListRange)
 			if msg.IsList() {
 				err = lrit.iterateList(wi, smap)

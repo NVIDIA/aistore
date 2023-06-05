@@ -147,13 +147,12 @@ func (r *streamingX) fin(err error, unreg bool) error {
 
 	r.DemandBase.Stop()
 	if err == nil {
-		err = r.err.Err()
-	}
-	if err == nil {
 		err = r.AbortErr()
 	}
-	if err != nil {
-		err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
+	if err == nil {
+		if err = r.err.Err(); err != nil {
+			err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
+		}
 	}
 	r.p.dm.Close(err)
 	r.Finish(err)

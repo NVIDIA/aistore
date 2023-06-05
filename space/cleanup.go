@@ -116,7 +116,7 @@ func (*clnFactory) Kind() string        { return apc.ActStoreCleanup }
 func (p *clnFactory) Get() cluster.Xact { return p.xctn }
 
 func (*clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	return xreg.WprUse, cmn.NewErrUsePrevXaction(prevEntry.Get().String())
+	return xreg.WprUse, cmn.NewErrXactUsePrev(prevEntry.Get().String())
 }
 
 func RunCleanup(ini *IniCln) fs.CapStatus {

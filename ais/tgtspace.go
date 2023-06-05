@@ -53,7 +53,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	}
 	rns := xreg.RenewLRU(id)
 	if rns.Err != nil || rns.IsRunning() {
-		debug.Assert(rns.Err == nil || cmn.IsErrUsePrevXaction(rns.Err))
+		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
 		if wg != nil {
 			wg.Done()
 		}
@@ -90,7 +90,7 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 	}
 	rns := xreg.RenewStoreCleanup(id)
 	if rns.Err != nil || rns.IsRunning() {
-		debug.Assert(rns.Err == nil || cmn.IsErrUsePrevXaction(rns.Err))
+		debug.Assert(rns.Err == nil || cmn.IsErrXactUsePrev(rns.Err))
 		if wg != nil {
 			wg.Done()
 		}

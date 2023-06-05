@@ -172,8 +172,12 @@ type (
 		action  string
 		detail  string
 	}
-	ErrUsePrevXaction struct { // equivalent to xreg.WprUse
+	ErrXactUsePrev struct { // equivalent to xreg.WprUse
 		xaction string
+	}
+	ErrXactTgtInMaint struct {
+		xaction string
+		tname   string
 	}
 
 	ErrStreamTerminated struct {
@@ -674,21 +678,34 @@ func (e *ErrLimitedCoexistence) Error() string {
 		e.node, e.xaction, e.action, e.detail)
 }
 
-///////////////////////
-// ErrUsePrevXaction //
-///////////////////////
+////////////////////
+// ErrXactUsePrev //
+////////////////////
 
-func NewErrUsePrevXaction(xaction string) *ErrUsePrevXaction {
-	return &ErrUsePrevXaction{xaction}
+func NewErrXactUsePrev(xaction string) *ErrXactUsePrev {
+	return &ErrXactUsePrev{xaction}
 }
 
-func (e *ErrUsePrevXaction) Error() string {
+func (e *ErrXactUsePrev) Error() string {
 	return fmt.Sprintf("%s is already running - not starting", e.xaction)
 }
 
-func IsErrUsePrevXaction(err error) bool {
-	_, ok := err.(*ErrUsePrevXaction)
+func IsErrXactUsePrev(err error) bool {
+	_, ok := err.(*ErrXactUsePrev)
 	return ok
+}
+
+///////////////////////
+// ErrXactTgtInMaint //
+///////////////////////
+
+func NewErrXactTgtInMaint(xaction, tname string) *ErrXactTgtInMaint {
+	return &ErrXactTgtInMaint{xaction, tname}
+}
+
+func (e *ErrXactTgtInMaint) Error() string {
+	return fmt.Sprintf("%s is in maintenance or being decommissioned - cannot run %s",
+		e.tname, e.xaction)
 }
 
 ////////////////////////////

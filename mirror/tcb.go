@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -43,8 +44,9 @@ type (
 		// starting up
 		wg sync.WaitGroup
 		// finishing
-		refc atomic.Int32
-		err  cos.ErrValue
+		rxlast atomic.Int64
+		refc   atomic.Int32
+		err    cos.ErrValue
 	}
 )
 
@@ -71,16 +73,21 @@ func (e *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (e *tcbFactory) Start() error {
 	var sizePDU int32
 	slab, err := e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 
 	e.xctn = newXactTCB(e, slab)
 	if e.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
 
-	// NOTE: to refcount OpcTxnDone
+	// refcount OpcTxnDone
+	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	smap := e.T.Sowner().Get()
-	e.xctn.refc.Store(int32(smap.CountTargets() - 1))
+	if err := e.xctn.InMaintOrDecomm(smap, e.T.Snode()); err != nil {
+		return err
+	}
+	nat := smap.CountActiveTs()
+	e.xctn.refc.Store(int32(nat - 1))
 	e.xctn.wg.Add(1)
 
 	config := cmn.GCO.Get()
@@ -89,14 +96,14 @@ func (e *tcbFactory) Start() error {
 }
 
 func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
-	const trname = "transcpy" // copy&transform transport endpoint prefix
+	const trname = "tcb"
 	dmExtra := bundle.Extra{
-		RecvAck:     nil, // NOTE: no ACKs
+		RecvAck:     nil, // no ACKs
 		Compression: config.TCB.Compression,
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(e.T, trname+"_"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)
+	dm, err := bundle.NewDataMover(e.T, trname+"-"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)
 	if err != nil {
 		return err
 	}
@@ -114,7 +121,7 @@ func (e *tcbFactory) Get() cluster.Xact { return e.xctn }
 func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
 	if e.UUID() != prev.UUID() {
-		err = cmn.NewErrUsePrevXaction(prevEntry.Get().String())
+		err = cmn.NewErrXactUsePrev(prevEntry.Get().String())
 		return
 	}
 	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
@@ -178,19 +185,17 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	o.Hdr.Opcode = OpcTxnDone
 	r.dm.Bcast(o, nil)
 
-	// NOTE: ref-counted quiescence, fairly short (optimal) waiting
-	config := cmn.GCO.Get()
-	optTime, maxTime := cmn.Timeout.MaxKeepalive(), config.Timeout.SendFile.D()/2
-	q := r.Quiesce(optTime, func(tot time.Duration) cluster.QuiRes { return xact.RefcntQuiCB(&r.refc, maxTime, tot) })
-	if err == nil {
-		err = r.err.Err()
+	q := r.Quiesce(cmn.Timeout.CplaneOperation(), r.qcb)
+	if err == nil && q == cluster.QuiAborted {
+		err = r.AbortErr()
+		debug.Assert(err != nil)
 	}
 	if err == nil {
-		if q == cluster.QuiAborted {
-			err = cmn.NewErrAborted(r.Name(), "", nil)
-		} else if q == cluster.QuiTimeout {
-			err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
-		}
+		debug.Assert(!r.IsAborted())
+		err = r.err.Err()
+	}
+	if err == nil && q == cluster.QuiTimeout {
+		err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
 	}
 
 	// close
@@ -198,6 +203,28 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.dm.UnregRecv()
 
 	r.Finish(err)
+}
+
+func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
+	if r.err.Err() != nil {
+		// to break quiescence - r.err.Err() will take precedence
+		return cluster.QuiTimeout
+	}
+	since := mono.Since(r.rxlast.Load())
+	if r.refc.Load() > 0 {
+		if since > cmn.Timeout.MaxKeepalive() {
+			// idle on the Rx side despite having some (refc > 0) senders
+			config := cmn.GCO.Get()
+			if tot > config.Timeout.SendFile.D() {
+				return cluster.QuiTimeout
+			}
+		}
+		return cluster.QuiActive
+	}
+	if since > cmn.Timeout.CplaneOperation() {
+		return cluster.QuiDone
+	}
+	return cluster.QuiInactiveCB
 }
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
@@ -221,27 +248,31 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-	defer transport.DrainAndFreeReader(objReader)
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
 		return err
 	}
-	// NOTE: best-effort via ref-counting
+	// ref-count done-senders
 	if hdr.Opcode == OpcTxnDone {
 		refc := r.refc.Dec()
 		debug.Assert(refc >= 0)
 		return nil
 	}
-	debug.Assert(hdr.Opcode == 0)
 
+	debug.Assert(hdr.Opcode == 0)
 	lom := cluster.AllocLOM(hdr.ObjName)
-	defer cluster.FreeLOM(lom)
+	err = r._recv(hdr, objReader, lom)
+	cluster.FreeLOM(lom)
+	transport.DrainAndFreeReader(objReader)
+	return err
+}
+
+func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		r.err.Store(err)
 		glog.Error(err)
 		return err
 	}
-
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
 	params := cluster.AllocPutObjParams()
 	{
@@ -267,8 +298,10 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	if erp != nil {
 		r.err.Store(erp)
 		glog.Error(erp)
+		return erp // NOTE: non-nil signals transport to terminate
 	}
-	return erp // NOTE: non-nil signals transport to terminate
+	r.rxlast.Store(mono.NanoTime())
+	return nil
 }
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }

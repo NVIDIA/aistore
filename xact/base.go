@@ -65,6 +65,8 @@ func GoRunW(xctn cluster.Xact) {
 	wg.Wait()
 }
 
+func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
+
 //////////////
 // Base - partially implements `cluster.Xact` interface
 //////////////
@@ -331,7 +333,12 @@ func (xctn *Base) ToStats(stats *cluster.Stats) {
 	stats.InBytes = xctn.InBytes()
 }
 
-func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
+func (xctn *Base) InMaintOrDecomm(smap *meta.Smap, tsi *meta.Snode) (err error) {
+	if smap.InMaintOrDecomm(tsi) {
+		err = cmn.NewErrXactTgtInMaint(xctn.String(), tsi.String())
+	}
+	return
+}
 
 // RebID helpers
 
