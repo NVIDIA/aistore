@@ -37,8 +37,8 @@ type (
 		hkName string
 		idle   struct {
 			ticks cos.StopCh
-			d     time.Duration
-			last  int64 // mono.NanoTime
+			d     time.Duration // hk idle
+			last  int64         // mono.NanoTime
 		}
 
 		Base

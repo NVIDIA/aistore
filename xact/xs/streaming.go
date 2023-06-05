@@ -113,10 +113,11 @@ func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
 	if verbose {
 		glog.WarningDepth(1, err, errCode)
 	}
-	if cmn.IsErrAborted(err) || contOnErr {
-		return
+	if contOnErr {
+		debug.Assert(!cmn.IsErrAborted(err))
+	} else {
+		r.err.Store(err)
 	}
-	r.err.Store(err)
 }
 
 func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {

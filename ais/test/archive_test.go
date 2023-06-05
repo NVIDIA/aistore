@@ -326,9 +326,6 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 			var lstToAppend *cmn.LsoResult
 			for ii := 0; ii < 2; ii++ {
-				// TODO: calibrate x-archive reporting 'idle'
-				// (too early in presence of multiple concurrent requests)
-				time.Sleep(3 * time.Second)
 				api.WaitForXactionIdle(baseParams, flt)
 
 				tlog.Logf("List %s\n", bckTo)
@@ -345,7 +342,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 					time.Sleep(7 * time.Second) // TODO: ditto
 					continue
 				}
-				tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
+				tassert.Errorf(t, num == numArchs || test.abrt, "expected %d, have %d", numArchs, num)
 				lstToAppend = objList
 				break
 			}
@@ -358,7 +355,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			num := len(objList.Entries)
 			expectedNum := numArchs + numArchs*numInArch
 
-			tassert.Errorf(t, num == expectedNum, "expected %d, have %d", expectedNum, num)
+			tassert.Errorf(t, num == expectedNum || test.abrt, "expected %d, have %d", expectedNum, num)
 
 			// multi-object APPEND
 			if test.apnd {

@@ -98,8 +98,7 @@ func (p *lsoFactory) Start() error {
 	}
 	r.lastPage = allocLsoEntries()
 	r.stopCh.Init()
-	totallyIdle := cmn.GCO.Get().Timeout.MaxHostBusy.D()
-	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, totallyIdle)
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, cmn.Timeout.MaxKeepalive() /*hk idle*/)
 
 	if r.listRemote() {
 		trname := "lso-" + p.UUID()

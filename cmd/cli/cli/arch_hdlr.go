@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -41,7 +40,6 @@ var (
 			archAppendIfExistFlag,
 			continueOnErrorFlag,
 			waitFlag,
-			waitJobXactFinishedFlag,
 		},
 		commandPut: append(
 			listrangeFileFlags,
@@ -78,7 +76,7 @@ var (
 				Name:         commandBucket,
 				Usage:        "archive multiple objects from " + bucketSrcArgument + " as " + archExts + "-formatted shard",
 				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/SHARD_NAME",
-				Flags:        archCmdsFlags[commandPut],
+				Flags:        archCmdsFlags[commandBucket],
 				Action:       archMultiObjHandler,
 				BashComplete: putPromApndCompletions,
 			},
@@ -148,33 +146,27 @@ func archMultiObjHandler(c *cli.Context) error {
 		return nil
 	}
 	// do
-	xids, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
+	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
 	if err != nil {
 		return err
 	}
-	// check
-	time.Sleep(time.Second >> 1)
-	for i := 0; i < 2; i++ {
+	// check (NOTE: not waiting through idle-ness, not looking at multiple returned xids)
+	var (
+		total time.Duration
+		sleep = time.Second / 2
+		maxw  = 2 * time.Second
+	)
+	if flagIsSet(c, waitFlag) {
+		maxw = 8 * time.Second
+	}
+	for total < maxw {
 		if _, errV := api.HeadObject(apiBP, a.dst.bck, a.dst.oname, apc.FltPresentNoProps); errV == nil {
-			actionDone(c, "Archived "+a.dest())
+			goto ex
 		}
-		time.Sleep(time.Second)
+		time.Sleep(sleep)
+		total += sleep
 	}
-	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		actionDone(c, "Archived "+a.dest()+" ...")
-		return nil
-	}
-
-	// wait
-	var timeout time.Duration
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	xid := strings.Split(xids, ",")[0]
-	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActArchive, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
-		return err
-	}
+ex:
 	actionDone(c, "Archived "+a.dest())
 	return nil
 }

@@ -47,8 +47,7 @@ type (
 		appendPos int64        // append to existing archive
 		cnt       atomic.Int32 // num archived
 		// finishing
-		refc       atomic.Int32
-		finalizing atomic.Bool
+		refc atomic.Int32
 	}
 	XactArch struct {
 		streamingX
@@ -104,7 +103,7 @@ func (p *archFactory) Start() error {
 func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
 	archlom := cluster.AllocLOM(msg.ArchName)
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
-		r.raiseErr(err, msg.ContinueOnError)
+		r.raiseErr(err, false)
 		cluster.FreeLOM(archlom)
 		return
 	}
@@ -122,7 +121,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg) (err error) {
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
 		cluster.FreeLOM(archlom)
-		r.raiseErr(err, msg.ContinueOnError)
+		r.raiseErr(err, false)
 		return
 	}
 
@@ -208,8 +207,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			if r.p.T.SID() == wi.tsi.ID() {
-				wi.finalizing.Store(true)
-				go r.finalize(wi) // NOTE async
+				go r.finalize(wi) // async finalize this shard
 			} else {
 				r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil)
 				r.pending.Lock()
@@ -237,9 +235,6 @@ fin:
 	// [cleanup] close and rm unfinished archives (compare w/ finalize)
 	r.pending.Lock()
 	for uuid, wi := range r.pending.m {
-		if wi.finalizing.Load() {
-			continue
-		}
 		wi.cleanup()
 		delete(r.pending.m, uuid)
 	}
@@ -305,9 +300,8 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 
 // NOTE: in goroutine
 func (r *XactArch) finalize(wi *archwi) {
-	if q := wi.quiesce(); q == cluster.QuiAborted {
-		r.raiseErr(cmn.NewErrAborted(r.Name(), "", nil), wi.msg.ContinueOnError)
-	} else if q == cluster.QuiTimeout {
+	q := wi.quiesce()
+	if q == cluster.QuiTimeout {
 		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), wi.msg.ContinueOnError)
 	}
 
@@ -318,27 +312,31 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	errCode, err := r.fini(wi)
 	r.DecPending()
-	if err == nil {
-		return // ok
+	if err == nil || r.IsAborted() { // done ok (unless aborted)
+		return
 	}
+	debug.Assert(q != cluster.QuiAborted)
 
 	wi.cleanup()
 	r.raiseErr(err, wi.msg.ContinueOnError, errCode)
 	if verbose {
 		return // logged elsewhere
 	}
-	const maxerrs = 11
-	if cnt := r.err.Cnt(); cnt <= maxerrs {
-		if cnt == maxerrs {
-			glog.Infof("Warning: %s logged max num errors (%d)", r, maxerrs-1)
-		} else {
-			glog.Error(err)
-		}
+
+	// log the 10th one for visibility
+	if r.err.Cnt() == 10 {
+		glog.Errorln("Warning: ", r.p.T.String(), " ", err)
 	}
 }
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	wi.writer.Fini()
+
+	if r.IsAborted() {
+		wi.cleanup()
+		cluster.FreeLOM(wi.archlom)
+		return
+	}
 
 	var size int64
 	if wi.cnt.Load() == 0 {
@@ -351,6 +349,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 		size, err = wi.finalize()
 	}
 	if err != nil {
+		wi.cleanup()
 		cluster.FreeLOM(wi.archlom)
 		errCode = http.StatusInternalServerError
 		return
@@ -359,6 +358,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	wi.archlom.SetSize(size)
 	cos.Close(wi.wfh)
 	wi.wfh = nil
+
 	errCode, err = r.p.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
 	cluster.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
@@ -496,7 +496,11 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
-	return wi.r.Quiesce(cmn.Timeout.MaxKeepalive(), func(total time.Duration) cluster.QuiRes {
+	timeout := cmn.Timeout.CplaneOperation()
+	return wi.r.Quiesce(timeout, func(total time.Duration) cluster.QuiRes {
+		if wi.refc.Load() == 0 && wi.r.wiCnt.Load() == 1 /*the last wi (so far) about to `fini`*/ {
+			return cluster.QuiDone
+		}
 		return xact.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
 	})
 }
