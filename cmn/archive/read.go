@@ -19,20 +19,19 @@ import (
 )
 
 type (
-	ReadCB func(reader io.ReadCloser) (bool, error)
+	ReadCB func(filename string, reader io.ReadCloser, hdr any) (bool, error)
 
 	Reader interface {
 		// non-empty filename to facilitate a simple-single selection
 		// (generalize as a multi-selection callback? no need yet...)
-		Range(filename string) (cos.ReadCloseSizer, error)
+		Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error)
 
 		// private
-		init(fh *os.File, readcb ReadCB) error
+		init(fh *os.File) error
 	}
 
 	baseR struct {
-		fh     io.Reader
-		readcb ReadCB
+		fh io.Reader
 	}
 	tarReader struct {
 		baseR
@@ -61,7 +60,7 @@ var (
 	_ Reader = (*lz4Reader)(nil)
 )
 
-func NewReader(mime string, fh *os.File, readcb ReadCB, size ...int64) (ar Reader, err error) {
+func NewReader(mime string, fh *os.File, size ...int64) (ar Reader, err error) {
 	switch mime {
 	case ExtTar:
 		ar = &tarReader{}
@@ -75,26 +74,24 @@ func NewReader(mime string, fh *os.File, readcb ReadCB, size ...int64) (ar Reade
 	default:
 		debug.Assert(false, mime)
 	}
-	err = ar.init(fh, readcb)
+	err = ar.init(fh)
 	return
 }
 
 // baseR
 
-func (br *baseR) init(fh io.Reader, readcb ReadCB) {
-	br.fh, br.readcb = fh, readcb
-}
+func (br *baseR) init(fh io.Reader) { br.fh = fh }
 
 // tarReader
 
-func (tr *tarReader) init(fh *os.File, readcb ReadCB) error {
-	tr.baseR.init(fh, readcb)
+func (tr *tarReader) init(fh *os.File) error {
+	tr.baseR.init(fh)
 	tr.tr = tar.NewReader(fh)
 	return nil
 }
 
-func (tr *tarReader) Range(filename string) (reader cos.ReadCloseSizer, _ error) {
-	debug.Assert(tr.readcb != nil || filename != "") // range read OR simple selection
+func (tr *tarReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, _ error) {
+	debug.Assert(rcb != nil || filename != "") // range read OR simple selection
 	for {
 		hdr, ern := tr.tr.Next()
 		if ern != nil {
@@ -112,7 +109,8 @@ func (tr *tarReader) Range(filename string) (reader cos.ReadCloseSizer, _ error)
 			continue
 		}
 		// range-read
-		stop, err := tr.readcb(&cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}})
+		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}}
+		stop, err := rcb(hdr.Name, csl, hdr)
 		if stop || err != nil {
 			return nil, err
 		}
@@ -121,12 +119,12 @@ func (tr *tarReader) Range(filename string) (reader cos.ReadCloseSizer, _ error)
 
 // tgzReader
 
-func (tgr *tgzReader) init(fh *os.File, readcb ReadCB) (err error) {
+func (tgr *tgzReader) init(fh *os.File) (err error) {
 	tgr.gzr, err = gzip.NewReader(fh)
 	if err != nil {
 		return
 	}
-	tgr.tr.baseR.init(tgr.gzr, readcb)
+	tgr.tr.baseR.init(tgr.gzr)
 	tgr.tr.tr = tar.NewReader(tgr.gzr)
 	return
 }
@@ -134,8 +132,8 @@ func (tgr *tgzReader) init(fh *os.File, readcb ReadCB) (err error) {
 // NOTE the convention:
 // - when the method returns non-nil reader the responsibility to close the latter goes to the caller (via reader.Close)
 // - otherwise, gzip.Reader is closed here upon return
-func (tgr *tgzReader) Range(filename string) (reader cos.ReadCloseSizer, err error) {
-	reader, err = tgr.tr.Range(filename)
+func (tgr *tgzReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, err error) {
+	reader, err = tgr.tr.Range(filename, rcb)
 	if err == nil && reader != nil {
 		csc := &cslClose{gzr: tgr.gzr /*to close*/, R: reader /*to read from*/, N: reader.Size()}
 		return csc, err
@@ -146,13 +144,13 @@ func (tgr *tgzReader) Range(filename string) (reader cos.ReadCloseSizer, err err
 
 // zipReader
 
-func (zr *zipReader) init(fh *os.File, readcb ReadCB) (err error) {
-	zr.baseR.init(fh, readcb)
+func (zr *zipReader) init(fh *os.File) (err error) {
+	zr.baseR.init(fh)
 	zr.zr, err = zip.NewReader(fh, zr.size)
 	return
 }
 
-func (zr *zipReader) Range(filename string) (reader cos.ReadCloseSizer, err error) {
+func (zr *zipReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, err error) {
 	for _, f := range zr.zr.File {
 		finfo := f.FileInfo()
 		if finfo.IsDir() {
@@ -172,7 +170,7 @@ func (zr *zipReader) Range(filename string) (reader cos.ReadCloseSizer, err erro
 		if csf.file, err = f.Open(); err != nil {
 			return
 		}
-		stop, err := zr.readcb(csf)
+		stop, err := rcb(f.FileHeader.Name, csf, &f.FileHeader)
 		if stop || err != nil {
 			return nil, err
 		}
@@ -182,15 +180,15 @@ func (zr *zipReader) Range(filename string) (reader cos.ReadCloseSizer, err erro
 
 // lz4Reader
 
-func (lzr *lz4Reader) init(fh *os.File, readcb ReadCB) error {
+func (lzr *lz4Reader) init(fh *os.File) error {
 	lzr.lzr = lz4.NewReader(fh)
-	lzr.tr.baseR.init(lzr.lzr, readcb)
+	lzr.tr.baseR.init(lzr.lzr)
 	lzr.tr.tr = tar.NewReader(lzr.lzr)
 	return nil
 }
 
-func (lzr *lz4Reader) Range(filename string) (cos.ReadCloseSizer, error) {
-	return lzr.tr.Range(filename)
+func (lzr *lz4Reader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
+	return lzr.tr.Range(filename, rcb)
 }
 
 //

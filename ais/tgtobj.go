@@ -894,11 +894,11 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 		if err != nil {
 			return
 		}
-		ar, err = archive.NewReader(mime, lmfh, nil /*read cb*/, goi.lom.SizeBytes())
+		ar, err = archive.NewReader(mime, lmfh, goi.lom.SizeBytes())
 		if err != nil {
 			return 0, fmt.Errorf("failed to open %s: %w", goi.lom.Cname(), err)
 		}
-		csl, err = ar.Range(goi.archive.filename)
+		csl, err = ar.Range(goi.archive.filename, nil)
 		if err != nil {
 			err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
 			return
