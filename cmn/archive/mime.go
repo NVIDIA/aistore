@@ -16,7 +16,29 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// for standard MIME types, see: cmn/cos/http_headers.go
+// supported archive types (file extensions); ref cmd/cli/cli/const.go archExts
+const (
+	ExtTar    = ".tar"
+	ExtTgz    = ".tgz"
+	ExtTarTgz = ".tar.gz"
+	ExtZip    = ".zip"
+	ExtTarLz4 = ".tar.lz4"
+)
+
+// - here and elsewhere, mime (string) is a "." + IANA mime
+// - for standard MIME types, see: cmn/cos/http_headers.go
+// - references:
+//   * https://en.wikipedia.org/wiki/List_of_file_signatures
+//   * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+
+type detect struct {
+	mime   string // '.' + IANA mime
+	sig    []byte
+	offset int
+}
+
+// when adding/removing update `allMagics` below
+var FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtTarLz4}
 
 // standard file signatures
 var (

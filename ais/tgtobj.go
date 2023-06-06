@@ -885,21 +885,28 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 
 	switch {
 	case goi.archive.filename != "": // archive
-		var mime string
+		var (
+			mime string
+			ar   archive.Reader
+			csl  cos.ReadCloseSizer
+		)
 		mime, err = archive.MimeFile(lmfh, goi.t.smm, goi.archive.mime, goi.lom.ObjName)
 		if err != nil {
 			return
 		}
-		var csl cos.ReadCloseSizer
-		csl, err = archive.GetReader(lmfh, goi.lom.Cname(), goi.archive.filename, mime, goi.lom.SizeBytes())
+		ar, err = archive.NewReader(mime, lmfh, nil /*read cb*/, goi.lom.SizeBytes())
 		if err != nil {
-			if cos.IsErrNotFound(err) {
-				errCode = http.StatusNotFound
-			} else {
-				err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
-			}
+			return 0, fmt.Errorf("failed to open %s: %w", goi.lom.Cname(), err)
+		}
+		csl, err = ar.Range(goi.archive.filename)
+		if err != nil {
+			err = cmn.NewErrFailedTo(goi.t, "extract "+goi.archive.filename+" from", goi.lom, err)
 			return
 		}
+		if csl == nil {
+			return http.StatusNotFound, cos.NewErrNotFound("%q in archive %q", goi.archive.filename, goi.lom.Cname())
+		}
+		// found
 		defer func() {
 			csl.Close()
 		}()

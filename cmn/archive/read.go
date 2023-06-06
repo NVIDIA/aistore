@@ -19,6 +19,185 @@ import (
 )
 
 type (
+	ReadCB func(reader io.ReadCloser) (bool, error)
+
+	Reader interface {
+		// non-empty filename to facilitate a simple-single selection
+		// (generalize as a multi-selection callback? no need yet...)
+		Range(filename string) (cos.ReadCloseSizer, error)
+
+		// private
+		init(fh *os.File, readcb ReadCB) error
+	}
+
+	baseR struct {
+		fh     io.Reader
+		readcb ReadCB
+	}
+	tarReader struct {
+		baseR
+		tr *tar.Reader
+	}
+	tgzReader struct {
+		tr  tarReader
+		gzr *gzip.Reader
+	}
+	zipReader struct {
+		baseR
+		size int64
+		zr   *zip.Reader
+	}
+	lz4Reader struct {
+		tr  tarReader
+		lzr *lz4.Reader
+	}
+)
+
+// interface guard
+var (
+	_ Reader = (*tarReader)(nil)
+	_ Reader = (*tgzReader)(nil)
+	_ Reader = (*zipReader)(nil)
+	_ Reader = (*lz4Reader)(nil)
+)
+
+func NewReader(mime string, fh *os.File, readcb ReadCB, size ...int64) (ar Reader, err error) {
+	switch mime {
+	case ExtTar:
+		ar = &tarReader{}
+	case ExtTgz, ExtTarTgz:
+		ar = &tgzReader{}
+	case ExtZip:
+		debug.Assert(len(size) > 0 && size[0] > 0, "size required")
+		ar = &zipReader{size: size[0]}
+	case ExtTarLz4:
+		ar = &lz4Reader{}
+	default:
+		debug.Assert(false, mime)
+	}
+	err = ar.init(fh, readcb)
+	return
+}
+
+// baseR
+
+func (br *baseR) init(fh io.Reader, readcb ReadCB) {
+	br.fh, br.readcb = fh, readcb
+}
+
+// tarReader
+
+func (tr *tarReader) init(fh *os.File, readcb ReadCB) error {
+	tr.baseR.init(fh, readcb)
+	tr.tr = tar.NewReader(fh)
+	return nil
+}
+
+func (tr *tarReader) Range(filename string) (reader cos.ReadCloseSizer, _ error) {
+	debug.Assert(tr.readcb != nil || filename != "") // range read OR simple selection
+	for {
+		hdr, ern := tr.tr.Next()
+		if ern != nil {
+			if ern == io.EOF {
+				return nil, nil
+			}
+			return nil, ern
+		}
+		// select one
+		if filename != "" {
+			if hdr.Name == filename || namesEq(hdr.Name, filename) {
+				reader = &cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}}
+				return
+			}
+			continue
+		}
+		// range-read
+		stop, err := tr.readcb(&cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}})
+		if stop || err != nil {
+			return nil, err
+		}
+	}
+}
+
+// tgzReader
+
+func (tgr *tgzReader) init(fh *os.File, readcb ReadCB) (err error) {
+	tgr.gzr, err = gzip.NewReader(fh)
+	if err != nil {
+		return
+	}
+	tgr.tr.baseR.init(tgr.gzr, readcb)
+	tgr.tr.tr = tar.NewReader(tgr.gzr)
+	return
+}
+
+// NOTE the convention:
+// - when the method returns non-nil reader the responsibility to close the latter goes to the caller (via reader.Close)
+// - otherwise, gzip.Reader is closed here upon return
+func (tgr *tgzReader) Range(filename string) (reader cos.ReadCloseSizer, err error) {
+	reader, err = tgr.tr.Range(filename)
+	if err == nil && reader != nil {
+		csc := &cslClose{gzr: tgr.gzr /*to close*/, R: reader /*to read from*/, N: reader.Size()}
+		return csc, err
+	}
+	err = tgr.gzr.Close()
+	return
+}
+
+// zipReader
+
+func (zr *zipReader) init(fh *os.File, readcb ReadCB) (err error) {
+	zr.baseR.init(fh, readcb)
+	zr.zr, err = zip.NewReader(fh, zr.size)
+	return
+}
+
+func (zr *zipReader) Range(filename string) (reader cos.ReadCloseSizer, err error) {
+	for _, f := range zr.zr.File {
+		finfo := f.FileInfo()
+		if finfo.IsDir() {
+			continue
+		}
+		// select one
+		if filename != "" {
+			if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
+				csf := &cslFile{size: finfo.Size()}
+				csf.file, err = f.Open()
+				reader = csf
+				return
+			}
+			continue
+		}
+		csf := &cslFile{size: finfo.Size()}
+		if csf.file, err = f.Open(); err != nil {
+			return
+		}
+		stop, err := zr.readcb(csf)
+		if stop || err != nil {
+			return nil, err
+		}
+	}
+	return
+}
+
+// lz4Reader
+
+func (lzr *lz4Reader) init(fh *os.File, readcb ReadCB) error {
+	lzr.lzr = lz4.NewReader(fh)
+	lzr.tr.baseR.init(lzr.lzr, readcb)
+	lzr.tr.tr = tar.NewReader(lzr.lzr)
+	return nil
+}
+
+func (lzr *lz4Reader) Range(filename string) (cos.ReadCloseSizer, error) {
+	return lzr.tr.Range(filename)
+}
+
+//
+// more limited readers
+//
+
+type (
 	cslLimited struct {
 		io.LimitedReader
 	}
@@ -30,15 +209,6 @@ type (
 	cslFile struct {
 		file io.ReadCloser
 		size int64
-	}
-
-	// References:
-	// * https://en.wikipedia.org/wiki/List_of_file_signatures
-	// * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-	detect struct {
-		mime   string // '.' + IANA mime
-		sig    []byte
-		offset int
 	}
 )
 
@@ -57,91 +227,6 @@ func (csf *cslFile) Read(b []byte) (int, error) { return csf.file.Read(b) }
 func (csf *cslFile) Size() int64                { return csf.size }
 func (csf *cslFile) Close() error               { return csf.file.Close() }
 
-//
-// next() to the spec-ed `filename` and return the corresponding limited reader (LR)
-//
-
-func GetReader(fh *os.File, archname, filename, mime string, size int64) (cos.ReadCloseSizer, error) {
-	switch mime {
-	case ExtTar:
-		return tarLR(fh, filename, archname)
-	case ExtTarTgz, ExtTgz:
-		return tgzLR(fh, filename, archname)
-	case ExtZip:
-		return zipLR(fh, filename, archname, size)
-	case ExtTarLz4:
-		return lz4LR(fh, filename, archname)
-	default: // unlikely
-		err := NewErrUnknownMime(mime)
-		debug.AssertNoErr(err)
-		return nil, err
-	}
-}
-
-// return tar limited reader
-func tarLR(fh io.Reader, filename, archname string) (*cslLimited, error) {
-	tr := tar.NewReader(fh)
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err == io.EOF {
-				err = notFound(filename, archname)
-			}
-			return nil, err
-		}
-		if hdr.Name == filename || namesEq(hdr.Name, filename) {
-			return &cslLimited{LimitedReader: io.LimitedReader{R: fh, N: hdr.Size}}, nil // Ok
-		}
-	}
-}
-
-// return tgz limited reader
-func tgzLR(fh *os.File, filename, archname string) (csc *cslClose, err error) {
-	var (
-		gzr *gzip.Reader
-		csl *cslLimited
-	)
-	if gzr, err = gzip.NewReader(fh); err != nil {
-		return
-	}
-	if csl, err = tarLR(gzr, filename, archname); err != nil {
-		return
-	}
-	csc = &cslClose{gzr: gzr /*to close*/, R: csl /*to read from*/, N: csl.N /*size*/}
-	return
-}
-
-// return zip limited reader
-func zipLR(fh *os.File, filename, archname string, size int64) (csf *cslFile, err error) {
-	var zr *zip.Reader
-	if zr, err = zip.NewReader(fh, size); err != nil {
-		return
-	}
-	for _, f := range zr.File {
-		finfo := f.FileInfo()
-		if finfo.IsDir() {
-			continue
-		}
-		if f.FileHeader.Name == filename || namesEq(f.FileHeader.Name, filename) {
-			csf = &cslFile{size: finfo.Size()}
-			csf.file, err = f.Open()
-			return
-		}
-	}
-	err = notFound(filename, archname)
-	return
-}
-
-// return lz4 limited reader
-func lz4LR(fh *os.File, filename, archname string) (*cslLimited, error) {
-	lzr := lz4.NewReader(fh)
-	return tarLR(lzr, filename, archname)
-}
-
-//
-// helpers
-//
-
 // in re `--absolute-names` (simplified)
 func namesEq(n1, n2 string) bool {
 	if n1[0] == filepath.Separator {
@@ -151,8 +236,4 @@ func namesEq(n1, n2 string) bool {
 		n2 = n2[1:]
 	}
 	return n1 == n2
-}
-
-func notFound(filename, archname string) error {
-	return cos.NewErrNotFound("%q in archive %q", filename, archname)
 }
