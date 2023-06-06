@@ -580,7 +580,7 @@ func (lom *LOM) Unlock(exclusive bool) {
 
 // (compare with cos.CreateFile)
 func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
 	if err == nil || !os.IsNotExist(err) {
 		return
 	}
@@ -593,7 +593,7 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	if err = cos.CreateDir(fdir); err != nil {
 		return
 	}
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
 	return
 }
 
