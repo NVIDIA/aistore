@@ -691,8 +691,8 @@ func (c *Config) TestingEnv() bool {
 }
 
 func (c *Config) FastV(verbosity int, pkg uint8) bool {
-	level := int(c.Log.Level[0] - '0') // see LogConf Validate
-	return level >= verbosity || bool(glog.FastV(glog.Level(verbosity), pkg))
+	level := int(c.Log.Level[0] - '0') // validated LogConf
+	return level >= verbosity || glog.FastV(verbosity, pkg)
 }
 
 ///////////////////

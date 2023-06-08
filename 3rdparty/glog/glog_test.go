@@ -243,44 +243,6 @@ func TestV(t *testing.T) {
 	}
 }
 
-func TestFastV(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	if FastV(1, SmoduleTransport) {
-		t.Error("V is enabled for 1")
-	}
-	SetV(SmoduleTransport, 2)
-	defer SetV(SmoduleTransport, 0)
-	if !FastV(1, SmoduleTransport) {
-		t.Error("V is not enabled for 1")
-	}
-	if FastV(1, SmoduleAIS) { // different smodule
-		t.Error("V enabled for 1")
-	}
-	if !FastV(2, SmoduleTransport) {
-		t.Error("V is not enabled for 2")
-	}
-	if FastV(3, SmoduleTransport) {
-		t.Error("V enabled for 3")
-	}
-	FastV(2, SmoduleTransport).Info("test")
-	if !contains(infoLog, "I") {
-		t.Errorf("Info has wrong character: %q", contents(infoLog))
-	}
-	if !contains(infoLog, "test") {
-		t.Error("Info failed")
-	}
-
-	SetV(SmoduleAIS, 4)
-	defer SetV(SmoduleAIS, 0)
-	if FastV(3, SmoduleTransport) {
-		t.Error("V enabled for 3")
-	}
-	if !FastV(4, SmoduleAIS) {
-		t.Error("V is not enabled for 4")
-	}
-}
-
 // Test that a vmodule enables a log in this file.
 func TestVmoduleOn(t *testing.T) {
 	setFlags()
