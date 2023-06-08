@@ -89,9 +89,9 @@ func (*target) rebMarked() xact.Marked { return xreg.GetRebMarked() } // as htex
 //
 
 func (t *target) initBackends() {
-	backend.Init()
-
 	config := cmn.GCO.Get()
+	backend.Init(config)
+
 	aisBackend := backend.NewAIS(t)
 	t.backend[apc.AIS] = aisBackend                  // always present
 	t.backend[apc.HTTP] = backend.NewHTTP(t, config) // ditto
@@ -779,6 +779,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			poi.atime = started.UnixNano()
 			poi.t = t
 			poi.lom = lom
+			poi.config = config
 			poi.skipVC = skipVC
 			poi.restful = true
 			poi.t2t = t2tput

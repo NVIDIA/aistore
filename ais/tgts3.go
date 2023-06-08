@@ -187,6 +187,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		poi.atime = started.UnixNano()
 		poi.t = t
 		poi.lom = lom
+		poi.config = cmn.GCO.Get()
 		poi.skipVC = cmn.Features.IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}

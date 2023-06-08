@@ -156,15 +156,17 @@ func (txns *transactions) init(t *target) {
 
 func (txns *transactions) begin(txn txn) (err error) {
 	txns.Lock()
-	defer txns.Unlock()
 	if x, ok := txns.m[txn.uuid()]; ok {
+		txns.Unlock()
 		err = fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
 		debug.AssertNoErr(err)
 		return
 	}
 	txn.started(apc.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
-	if glog.FastV(4, glog.SmoduleAIS) {
+	txns.Unlock()
+
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s begin: %s", txns.t, txn)
 	}
 	return
@@ -186,7 +188,8 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 		}
 	}
 	txns.Unlock()
-	if act != "" && glog.FastV(4, glog.SmoduleAIS) {
+
+	if act != "" && cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s: %s", txns.t, act, txn)
 	}
 	return
@@ -224,7 +227,7 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 			glog.Warningf("%s: commit with downgraded (current: %s)", txn, bmd)
 		}
 		if running, errDone = txn.commitAfter(caller, msg, err, args...); running {
-			glog.Infof("committed: %s", txn)
+			glog.Infoln(txn.String())
 		}
 	}
 	if !running {

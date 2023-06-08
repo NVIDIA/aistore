@@ -67,6 +67,7 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 	{
 		poi.t = t
 		poi.lom = lom
+		poi.config = cmn.GCO.Get()
 		poi.r = params.Reader
 		poi.workFQN = workFQN
 		poi.atime = params.Atime.UnixNano()
@@ -149,7 +150,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	case cmn.OwtGetTryLock, cmn.OwtGetLock:
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
-				if glog.FastV(4, glog.SmoduleAIS) {
+				if cmn.FastV(4, glog.SmoduleAIS) {
 					glog.Warningf("%s: %s(%s) is busy", t, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going

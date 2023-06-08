@@ -224,9 +224,6 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 		glog.Warning(err)
 	}
 	reb.changeStage(rebStageFin)
-	if glog.FastV(4, glog.SmoduleReb) {
-		glog.Infoln(logHdr)
-	}
 
 	for errCnt != 0 && !reb.xctn().IsAborted() {
 		errCnt = reb.bcast(rargs, reb.waitFinExtended)
@@ -513,7 +510,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	if err := xreb.AbortErr(); err != nil {
 		return cmn.NewErrAborted(xreb.Name(), "reb-run-joggers", err)
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
+	if rargs.config.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finished rebalance walk (g%d)", rargs.id)
 	}
 	return nil
@@ -627,7 +624,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 			}
 			tsi, _ := cluster.HrwTarget(lom.Uname(), rargs.smap)
 			if reb.t.HeadObjT2T(lom, tsi) {
-				if glog.FastV(4, glog.SmoduleReb) {
+				if rargs.config.FastV(4, glog.SmoduleReb) {
 					glog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
 				delete(lomAck.q, uname)
@@ -668,7 +665,7 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	var stats cluster.Stats
-	if glog.FastV(4, glog.SmoduleReb) {
+	if rargs.config.FastV(4, glog.SmoduleReb) {
 		glog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
 	// prior to closing the streams
@@ -734,7 +731,7 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	rj.m.inQueue.Dec()
 	if err != nil {
-		if bool(glog.FastV(4, glog.SmoduleReb)) || !cos.IsRetriableConnErr(err) {
+		if cmn.FastV(4, glog.SmoduleReb) || !cos.IsRetriableConnErr(err) {
 			lom, ok := arg.(*cluster.LOM)
 			debug.Assert(ok)
 			glog.Errorf("%s: failed to send %s: %v", rj.m.t.Snode(), lom, err)

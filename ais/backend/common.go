@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -18,8 +18,8 @@ type ctx = context.Context // used when omitted for shortness sake
 
 var verbose bool
 
-func Init() {
-	verbose = bool(glog.FastV(4, glog.SmoduleBackend))
+func Init(config *cmn.Config) {
+	verbose = config.FastV(4, glog.SmoduleBackend)
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {

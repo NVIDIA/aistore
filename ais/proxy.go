@@ -631,8 +631,8 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		p.writeErr(w, r, err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -702,8 +702,8 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 			return
 		}
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si, appendTyProvided)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -736,8 +736,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -954,7 +954,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if err := p.pready(smap); err != nil {
-				if glog.FastV(4, glog.SmoduleAIS) {
+				if cmn.FastV(4, glog.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
@@ -1196,7 +1196,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 			xid, err = lstcx.do()
 		} else {
-			glog.Infof("%s bucket %s => %s", msg.Action, bck, bckTo)
+			glog.Infof("%s: %s => %s", msg.Action, bck, bckTo)
 			xid, err = p.tcb(bck, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {
@@ -1785,8 +1785,8 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1813,8 +1813,8 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1882,7 +1882,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
 			glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
@@ -2247,8 +2247,8 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		p.writeErr(w, r, err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
@@ -2742,7 +2742,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if prepare {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
@@ -2894,7 +2894,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
@@ -2922,7 +2922,12 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 // compare w/ t.receiveConfig
 func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	if err = p._recvCfg(newConfig, msg, payload, caller); err != nil {
+	logmsync(oldConfig.Version, newConfig, msg, caller)
+
+	p.owner.config.Lock()
+	err = p._recvCfg(newConfig, payload)
+	p.owner.config.Unlock()
+	if err != nil {
 		return
 	}
 
@@ -2934,7 +2939,7 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 	}
 
 	if msg.Action != apc.ActAttachRemAis && msg.Action != apc.ActDetachRemAis &&
-		newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
+		newConfig.Backend.EqualRemAIS(&oldConfig.Backend, p.String()) {
 		return // nothing to do
 	}
 
@@ -2944,12 +2949,13 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 
 // refresh local p.remais cache via intra-cluster call to a random target
 func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
+	const maxretries = 5
 	if !p.remais.in.CAS(false, true) {
 		return
 	}
 	var (
 		sleep      = newConfig.Timeout.CplaneOperation.D()
-		retries    = 5
+		retries    = maxretries
 		over, nver int64
 	)
 	if blocking {
@@ -2967,7 +2973,9 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 		time.Sleep(sleep)
 		all, err := p.getRemAises(false /*refresh*/)
 		if err != nil {
-			glog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
+			if retries < maxretries {
+				glog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
+			}
 			continue
 		}
 		p.remais.mu.Lock()

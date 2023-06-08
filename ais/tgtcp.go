@@ -245,7 +245,7 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 	}
 
 	if prepare {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(4, glog.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
@@ -914,7 +914,12 @@ func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
 // compare w/ p.receiveConfig
 func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
 	oldConfig := cmn.GCO.Get()
-	if err = t._recvCfg(newConfig, msg, payload, caller); err != nil {
+	logmsync(oldConfig.Version, newConfig, msg, caller)
+
+	t.owner.config.Lock()
+	err = t._recvCfg(newConfig, payload)
+	t.owner.config.Unlock()
+	if err != nil {
 		return
 	}
 
@@ -930,7 +935,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 		return t.attachDetachRemAis(newConfig, msg)
 	}
 
-	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend) {
+	if !newConfig.Backend.EqualRemAIS(&oldConfig.Backend, t.String()) {
 		if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
 			err = t.attachDetachRemAis(newConfig, msg)
 		} else {
@@ -965,7 +970,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ntid := msg.UUID
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
@@ -1038,12 +1043,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if smap.GetProxy(callerID) != nil {
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("%s: health-ping from %s", t, caller)
-		}
 		t.keepalive.heardFrom(callerID, false)
-	} else if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: health-ping from %s", t, caller)
 	}
 }
 

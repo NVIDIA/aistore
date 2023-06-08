@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -298,6 +298,7 @@ func (tctx *testContext) teardown() {
 var _ = Describe("Distributed Sort", func() {
 	config := cmn.GCO.BeginUpdate()
 	config.Transport.MaxHeaderSize = memsys.PageSize
+	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
 	sc := transport.Init(&stats.Trunner{}, config)
 	go sc.Run()

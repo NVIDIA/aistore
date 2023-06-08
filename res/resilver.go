@@ -184,7 +184,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 	if srcMetaFQN == "" {
 		return
 	}
-	if glog.FastV(4, glog.SmoduleReb) {
+	if cmn.FastV(4, glog.SmoduleReb) {
 		glog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {

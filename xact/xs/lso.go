@@ -375,8 +375,8 @@ func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err err
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-	} else if bool(glog.FastV(4, glog.SmoduleXs)) || !cos.IsRetriableConnErr(err) {
-		glog.Errorf("%s: failed to send [%+v]: %v", r.p.T, hdr, err)
+	} else if verbose || !cos.IsRetriableConnErr(err) {
+		glog.Infof("Warning: %s: failed to send [%+v]: %v", r.p.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)
 	debug.Assertf(ok, "%T", arg)

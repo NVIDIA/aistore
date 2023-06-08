@@ -223,10 +223,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 		if remoteMD != nil && remoteMD.Generation == md.Generation {
 			_, ok := md.Daemons[tsi.ID()]
 			if !ok {
-				if glog.FastV(4, glog.SmoduleReb) {
-					glog.Infof("%s: %s[%d] not found - overwrite with new slice %d",
-						tsi.StringEx(), ct.ObjectName(), remoteMD.SliceID, md.SliceID)
-				}
+				// ct.ObjectName()[remoteMD.SliceID] not found (new slice md.SliceID)
 				return tsi, nil
 			}
 		}

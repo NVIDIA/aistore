@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 

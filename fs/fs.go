@@ -701,7 +701,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMpath = mi
 			putAvailMPI(availableCopy)
-		} else if glog.FastV(4, glog.SmoduleFS) {
+		} else if config.FastV(4, glog.SmoduleFS) {
 			glog.Infof("%s: %s is already available, nothing to do", tid, mi)
 		}
 		return

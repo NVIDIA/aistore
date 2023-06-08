@@ -690,6 +690,11 @@ func (c *Config) TestingEnv() bool {
 	return c.LocalConfig.TestingEnv()
 }
 
+func (c *Config) FastV(verbosity int, pkg uint8) bool {
+	level := int(c.Log.Level[0] - '0') // see LogConf Validate
+	return level >= verbosity || bool(glog.FastV(glog.Level(verbosity), pkg))
+}
+
 ///////////////////
 // ClusterConfig //
 ///////////////////
@@ -751,7 +756,7 @@ func (c *LogConf) Validate() error {
 	switch c.Level {
 	case "0", "1", "2", "3", "4", "5":
 	default:
-		return fmt.Errorf("invalid log.level=%q", c.Level)
+		return fmt.Errorf("invalid log.level=%q (expecting values 1 through 5(max))", c.Level)
 	}
 	if c.MaxSize < cos.KiB || c.MaxSize > cos.GiB {
 		return fmt.Errorf("invalid log.max_size=%s (expected range [1KB, 1GB])", c.MaxSize)
@@ -900,7 +905,7 @@ func (c *BackendConf) EqualClouds(o *BackendConf) bool {
 	return true
 }
 
-func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
+func (c *BackendConf) EqualRemAIS(o *BackendConf, sname string) bool {
 	var oldRemotes, newRemotes BackendConfAIS
 	oais, oko := o.Conf[apc.AIS]
 	nais, okn := c.Conf[apc.AIS]
@@ -913,8 +918,9 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf) bool {
 	erro := cos.MorphMarshal(oais, &oldRemotes)
 	errn := cos.MorphMarshal(nais, &newRemotes)
 	if erro != nil || errn != nil {
-		glog.Errorf("Failed to compare remote AIS backends: %v, %v", erro, errn)
-		return errn != nil // equal since cannot make use
+		glog.Errorf("%s: failed to unmarshal remote AIS backends: %v, %v", sname, erro, errn)
+		debug.AssertNoErr(errn)
+		return errn != nil // "equal" when cannot make use
 	}
 	if len(oldRemotes) != len(newRemotes) {
 		return false
@@ -1656,12 +1662,18 @@ func (ctu *ConfigToUpdate) FillFromKVS(kvs []string) (err error) {
 // misc config utils
 //
 
+// NOTE: convenience method, simple delegation
+func FastV(verbosity int, pkg uint8) bool {
+	return GCO.Get().FastV(verbosity, pkg)
+}
+
 func SetLogLevel(loglevel string) (err error) {
 	v := flag.Lookup("v").Value
 	if v == nil {
-		return fmt.Errorf("nil -v Value")
+		err = errors.New("log.level nil")
+	} else {
+		err = v.Set(loglevel)
 	}
-	err = v.Set(loglevel)
 	return
 }
 

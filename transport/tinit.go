@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -33,10 +33,10 @@ func init() {
 	nextSessionID.Store(100)
 	handlers = make(map[string]*handler, 32)
 	mu = &sync.RWMutex{}
-	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
 }
 
 func Init(st cos.StatsUpdater, config *cmn.Config) *StreamCollector {
+	verbose = config.FastV(4, glog.SmoduleTransport)
 	dfltMaxHdr = dfltSizeHeader
 	if config.Transport.MaxHeaderSize > 0 {
 		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)

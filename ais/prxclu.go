@@ -1843,7 +1843,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 				glog.Error(emsg)
 			}
 		case apc.ActRmNodeUnsafe:
-			if glog.FastV(4, glog.SmoduleAIS) {
+			if cmn.FastV(4, glog.SmoduleAIS) {
 				glog.Error(emsg)
 			}
 		default:

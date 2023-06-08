@@ -64,6 +64,7 @@ func TestMain(m *testing.M) {
 
 	// target
 	config := cmn.GCO.Get()
+	config.Log.Level = "3"
 	co := newConfigOwner(config)
 	t = newTarget(co)
 	t.initNetworks()

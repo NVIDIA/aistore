@@ -215,7 +215,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 		return
 	}
 	nl.SetAddedTime()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infoln("add " + nl.String())
 	}
 	return
@@ -223,7 +223,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
-	if ok && bool(glog.FastV(4, glog.SmoduleAIS)) {
+	if ok && cmn.FastV(4, glog.SmoduleAIS) {
 		glog.Infoln("del " + nl.String())
 	}
 	return
@@ -429,7 +429,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
-		} else if glog.FastV(4, glog.SmoduleAIS) {
+		} else if config.FastV(4, glog.SmoduleAIS) {
 			glog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
 		}
 	}
@@ -549,9 +549,14 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 		return
 	}
 	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.apply(&t)
+	n.mu.Unlock()
+	return
+}
 
-	// Identify the diff in ownership table and populate `added`, `removed` and `finished` slices
+// Identify the diff in ownership table and populate `added`, `removed` and `finished` slices
+// (under lock)
+func (n *notifs) apply(t *jsonNotifs) {
 	added, removed, finished := n.added[:0], n.removed[:0], n.finished[:0]
 	n.nls.RLock()
 	n.fin.RLock()
@@ -585,9 +590,6 @@ func (n *notifs) UnmarshalJSON(data []byte) (err error) {
 	}
 	for _, nl := range removed {
 		n.nls.del(nl, true /*locked*/)
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infoln("merge: del " + nl.String())
-		}
 	}
 	n.nls.Unlock()
 
@@ -608,7 +610,6 @@ fin:
 	for _, nl := range finished {
 		nl.Callback(nl, now)
 	}
-	return
 }
 
 func (n *notifs) String() string {

@@ -951,22 +951,25 @@ func removeLogs(config *cmn.Config) {
 			}
 		}
 		if tot > maxtotal {
-			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, finfos)
+			removeOlderLogs(config, tot, maxtotal, config.LogDir, logtype, finfos)
 		}
 	}
 }
 
-func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
+func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
+	const prefix = "GC logs"
 	l := len(filteredInfos)
 	if l <= 1 {
-		glog.Warningf("GC logs: cannot cleanup %s, dir %s, tot %d, max %d", logtype, logdir, tot, maxtotal)
+		glog.Warningf("%s: cannot cleanup %s, dir %s, tot %d, max %d", prefix, logtype, logdir, tot, maxtotal)
 		return
 	}
 	fiLess := func(i, j int) bool {
 		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
 	}
-	if glog.FastV(4, glog.SmoduleStats) {
-		glog.Infof("GC logs: started")
+
+	verbose := config.FastV(4, glog.SmoduleStats)
+	if verbose {
+		glog.Infoln(prefix + ": started")
 	}
 	sort.Slice(filteredInfos, fiLess)
 	filteredInfos = filteredInfos[:l-1] // except the last = current
@@ -974,18 +977,18 @@ func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos 
 		logfqn := filepath.Join(logdir, logfi.Name())
 		if err := cos.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
-			if glog.FastV(4, glog.SmoduleStats) {
-				glog.Infof("GC logs: removed %s", logfqn)
+			if verbose {
+				glog.Infof("%s: removed %s", prefix, logfqn)
 			}
 			if tot < maxtotal {
 				break
 			}
 		} else {
-			glog.Errorf("GC logs: failed to remove %s", logfqn)
+			glog.Errorf("%s: failed to remove %s", prefix, logfqn)
 		}
 	}
-	if glog.FastV(4, glog.SmoduleStats) {
-		glog.Infof("GC logs: done")
+	if verbose {
+		glog.Infoln(prefix + ": done")
 	}
 }
 

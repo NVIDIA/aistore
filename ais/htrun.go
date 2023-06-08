@@ -335,7 +335,7 @@ func (h *htrun) initNetworks() {
 		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
 		pubAddr = *meta.NewNetInfo(proto, config.HostNet.Hostname, port)
 	} else {
-		pubAddr, err = getNetInfo(addrList, proto, config.HostNet.Hostname, port)
+		pubAddr, err = getNetInfo(config, addrList, proto, config.HostNet.Hostname, port)
 	}
 	if err != nil {
 		cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
@@ -348,7 +348,7 @@ func (h *htrun) initNetworks() {
 	intraControlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		intraControlAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraControl, icport)
+		intraControlAddr, err = getNetInfo(config, addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
 		}
@@ -361,7 +361,7 @@ func (h *htrun) initNetworks() {
 	intraDataAddr = pubAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
-		intraDataAddr, err = getNetInfo(addrList, proto, config.HostNet.HostnameIntraData, idport)
+		intraDataAddr, err = getNetInfo(config, addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
 		}
@@ -1314,7 +1314,7 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 		}
 	}
 	config := cmn.GCO.Get()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if config.FastV(4, glog.SmoduleAIS) {
 		logmsync(config.Version, newConfig, msg, caller)
 	}
 	if newConfig.version() <= config.Version {
@@ -1344,7 +1344,7 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 		}
 	}
 	etlMD := h.owner.etl.get()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		logmsync(etlMD.Version, newMD, msg, caller)
 	}
 	if newMD.version() <= etlMD.version() {
@@ -1397,7 +1397,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
 		return // FATAL: cluster integrity error
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		logmsync(smap.Version, newSmap, msg, caller)
 	}
 	_, sameOrigin, _, eq := smap.Compare(&newSmap.Smap)
@@ -1430,7 +1430,7 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 		}
 	}
 	rmd := h.owner.rmd.get()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		logmsync(rmd.Version, newRMD, msg, caller)
 	}
 	if newRMD.version() <= rmd.version() {
@@ -1460,7 +1460,7 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 		}
 	}
 	bmd := h.owner.bmd.get()
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, glog.SmoduleAIS) {
 		logmsync(bmd.Version, newBMD, msg, caller)
 	}
 	// skip older iff not transactional - see t.receiveBMD()
@@ -1516,13 +1516,9 @@ func (h *htrun) receiveEtlMD(newEtlMD *etlMD, msg *aisMsg, payload msPayload,
 	return
 }
 
-func (h *htrun) _recvCfg(newConfig *globalConfig, msg *aisMsg, payload msPayload, caller string) (err error) {
+// under lock
+func (h *htrun) _recvCfg(newConfig *globalConfig, payload msPayload) (err error) {
 	config := cmn.GCO.Get()
-	logmsync(config.Version, newConfig, msg, caller)
-
-	h.owner.config.Lock()
-	defer h.owner.config.Unlock()
-	config = cmn.GCO.Get()
 	if newConfig.version() <= config.Version {
 		if newConfig.version() == config.Version {
 			return
@@ -1832,7 +1828,7 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 	// external call
 	if callerID == "" && caller == "" {
 		readiness := cos.IsParseBool(r.URL.Query().Get(apc.QparamHealthReadiness))
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(5, glog.SmoduleAIS) {
 			glog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
 		}
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
@@ -1955,7 +1951,7 @@ func ptLatency(tts int64, ptime string) (delta int64) {
 func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
 	msg = &aisMsg{}
 	err = cmn.ReadJSON(w, r, msg)
-	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
+	if err == nil && cmn.FastV(4, glog.SmoduleAIS) {
 		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
 	}
 	return
@@ -1994,7 +1990,7 @@ func (h *htrun) newAmsg(actionMsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *a
 func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActMsg, err error) {
 	msg = &apc.ActMsg{}
 	err = cmn.ReadJSON(w, r, msg)
-	if err == nil && glog.FastV(4, glog.SmoduleAIS) {
+	if err == nil && cmn.FastV(4, glog.SmoduleAIS) {
 		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
 	}
 	return

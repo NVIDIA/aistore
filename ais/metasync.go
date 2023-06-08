@@ -399,6 +399,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 
 func (y *metasyncer) jit(pair revsPair) revs {
 	var (
+		s              string
 		revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
 		jitRevs        = revs.jit(y.p)
 		skipping       bool
@@ -416,10 +417,13 @@ func (y *metasyncer) jit(pair revsPair) revs {
 			skipping = true
 		}
 	}
+	if msg.Action != "" {
+		s = ", " + msg.String()
+	}
 	if skipping {
-		glog.Infof("%s: newer %s v%d, %s - skipping %s", y.p, tag, jitRevs.version(), msg, revs)
+		glog.Infof("%s: newer %s v%d%s - skipping %s", y.p, tag, jitRevs.version(), s, revs)
 	} else {
-		glog.Infof("%s: %s v%d, %s", y.p, tag, revs.version(), msg)
+		glog.Infof("%s: %s v%d%s", y.p, tag, revs.version(), s)
 	}
 	return revs
 }

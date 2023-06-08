@@ -65,12 +65,6 @@ type (
 // interface guard
 var _ meta.Slistener = (*Streams)(nil)
 
-var verbose bool
-
-func init() {
-	verbose = bool(glog.FastV(4, glog.SmoduleTransport))
-}
-
 //
 // public
 //
@@ -370,16 +364,7 @@ func (sb *Streams) Resync() {
 		dstURL := si.URL(sb.network) + transport.ObjURLPath(sb.trname) // direct destination URL
 		nrobin := &robin{stsdest: make(stsdest, sb.multiplier)}
 		for k := 0; k < sb.multiplier; k++ {
-			var (
-				s  string
-				ns = transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
-			)
-			if sb.multiplier > 1 {
-				s = fmt.Sprintf("(#%d)", k+1)
-			}
-			if verbose {
-				glog.Infof("%s: %s%s via %s", sb, ns, s, dstURL)
-			}
+			ns := transport.NewObjStream(sb.client, dstURL, id /*dstID*/, &sb.extra)
 			nrobin.stsdest[k] = ns
 		}
 		nbundle[id] = nrobin
@@ -393,9 +378,6 @@ func (sb *Streams) Resync() {
 			os := orobin.stsdest[k]
 			if !os.IsTerminated() {
 				os.Stop() // the node is gone but the stream appears to be still active - stop it
-			}
-			if verbose {
-				glog.Infof("%s: [-] %s => %s via %s", sb, os, id, os.URL())
 			}
 		}
 		delete(nbundle, id)

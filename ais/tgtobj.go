@@ -49,6 +49,7 @@ type (
 		t          *target       // this
 		lom        *cluster.LOM  // obj
 		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
+		config     *cmn.Config   // (during this request)
 		resphdr    http.Header   // as implied
 		workFQN    string        // temp fqn to be renamed
 		atime      int64         // access time
@@ -161,7 +162,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
-			if glog.FastV(4, glog.SmoduleAIS) {
+			if poi.config.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
@@ -196,8 +197,8 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		// xaction in-objs counters, promote first
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof(poi.loghdr())
+	if poi.config.FastV(4, glog.SmoduleAIS) {
+		glog.Infoln(poi.loghdr())
 	}
 	return
 rerr:
@@ -280,7 +281,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
-			if glog.FastV(4, glog.SmoduleAIS) {
+			if poi.config.FastV(4, glog.SmoduleAIS) {
 				glog.Warningf("(%s) is busy", poi.loghdr())
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
@@ -710,9 +711,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 		)
 		if resMarked.Interrupted || running || gfnActive {
 			if goi.lom.RestoreToLocation() { // from copies
-				if glog.FastV(4, glog.SmoduleAIS) {
-					glog.Infof("%s restored", goi.lom)
-				}
+				glog.Infof("%s restored to location", goi.lom)
 				return
 			}
 			doubleCheck = running
@@ -746,9 +745,6 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 gfn:
 	if gfnNode != nil {
 		if goi.getFromNeighbor(goi.lom, gfnNode) {
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: gfn %s <= %s", tname, goi.lom, gfnNode)
-			}
 			return
 		}
 	}
@@ -759,9 +755,7 @@ gfn:
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
-			if glog.FastV(4, glog.SmoduleAIS) {
-				glog.Infof("%s: EC-recovered %s", tname, goi.lom)
-			}
+			glog.Infof("%s: EC-recovered %s", tname, goi.lom)
 			return
 		}
 		err = cmn.NewErrFailedTo(tname, "load EC-recovered", goi.lom, ecErr)
@@ -817,6 +811,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	{
 		poi.t = goi.t
 		poi.lom = lom
+		poi.config = config
 		poi.r = resp.Body
 		poi.owt = cmn.OwtMigrate
 		poi.workFQN = workFQN
@@ -826,6 +821,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	errCode, erp := poi.putObject()
 	freePOI(poi)
 	if erp == nil {
+		glog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
 		return true
 	}
 	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t, erp, errCode)
@@ -1101,7 +1097,9 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 			return
 		}
 	default:
-		debug.Assert(false, a.op)
+		err = fmt.Errorf("invalid append-file operation %q", a.op)
+		debug.AssertNoErr(err)
+		return
 	}
 
 	delta := time.Since(a.started)
@@ -1109,8 +1107,8 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
 		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("PUT %s: %s", a.lom, delta)
+	if cmn.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("APPEND %s: %s", a.lom, delta)
 	}
 	return
 }

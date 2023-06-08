@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load
@@ -775,7 +775,9 @@ func Start(version, buildtime string) (err error) {
 	go hk.DefaultHK.Run()
 	hk.WaitStarted()
 
-	memsys.Init(prefixC, prefixC, &cmn.Config{})
+	config := &cmn.Config{}
+	config.Log.Level = "3"
+	memsys.Init(prefixC, prefixC, config)
 	gmm = memsys.PageMM()
 	gmm.RegWithHK()
 

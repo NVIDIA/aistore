@@ -103,18 +103,21 @@ func extractErrCode(e error, uuid string) (int, error) {
 }
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
-func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) error {
+func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig) (err error) {
 	conf := cmn.BackendConfAIS{}
-	if err := cos.MorphMarshal(v, &conf); err != nil {
-		return fmt.Errorf("invalid ais backend config (%+v, %T): %v", v, v, err)
+	if err = cos.MorphMarshal(v, &conf); err != nil {
+		err = fmt.Errorf("%s: invalid ais backend config (%+v, %T): %v", m.t, v, v, err)
+		debug.AssertNoErr(err)
+		return
 	}
+	glog.Infof("%s: apply %q %+v Conf v%d", m.t, action, conf, cfg.Version)
 	m.mu.Lock()
-	err := m._apply(cfg, conf, action)
+	err = m._apply(cfg, conf, action)
 	if err == nil {
 		m.appliedCfgVer = cfg.Version
 	}
 	m.mu.Unlock()
-	return err
+	return
 }
 
 func (m *AISBackendProvider) _apply(cfg *cmn.ClusterConfig, clusterConf cmn.BackendConfAIS, action string) error {
@@ -331,13 +334,6 @@ ad:
 	m.remote[newAis.smap.UUID] = newAis
 	glog.Infof("%s %s", newAis, tag)
 	return
-}
-
-func (m *AISBackendProvider) A2U(aliasOrUUID string) string {
-	if remAis, err := m.getRemAis(aliasOrUUID); err == nil {
-		return remAis.uuid
-	}
-	return aliasOrUUID
 }
 
 func (m *AISBackendProvider) getRemAis(aliasOrUUID string) (remAis *remAis, err error) {

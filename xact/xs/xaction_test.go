@@ -24,15 +24,16 @@ import (
 )
 
 func init() {
-	xreg.Init()
-	xs.Xreg()
-
 	config := cmn.GCO.BeginUpdate()
+	config.Log.Level = "3"
 	config.ConfigDir = "/tmp/ais-tests"
 	config.Timeout.CplaneOperation = cos.Duration(2 * time.Second)
 	config.Timeout.MaxKeepalive = cos.Duration(4 * time.Second)
 	config.Timeout.MaxHostBusy = cos.Duration(20 * time.Second)
 	cmn.GCO.CommitUpdate(config)
+
+	xreg.Init()
+	xs.Xreg(config)
 }
 
 // Smoke tests for xactions

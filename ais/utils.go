@@ -141,10 +141,11 @@ func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string
 }
 
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a daemon to listen on it
-func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
+func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrList) == 0 {
 		return nil, fmt.Errorf("no addresses to choose from")
-	} else if len(addrList) == 1 {
+	}
+	if len(addrList) == 1 {
 		glog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
 		if addrList[0].mtu <= 1500 {
 			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrList[0].ipv4, addrList[0].mtu)
@@ -154,7 +155,7 @@ func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
 		}
 		return ip, nil
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
+	if config.FastV(4, glog.SmoduleAIS) {
 		glog.Infof("%d IPv4s:", len(addrList))
 		for _, addr := range addrList {
 			glog.Infof("    %#v\n", *addr)
@@ -169,10 +170,10 @@ func detectLocalIPv4(addrList []*localIPv4Info) (ip net.IP, err error) {
 // getNetInfo returns an Hostname for proxy/target to listen on it.
 // 1. If there is an Hostname in config - it tries to use it
 // 2. If config does not contain Hostname - it chooses one of local IPv4s
-func getNetInfo(addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo meta.NetInfo, err error) {
+func getNetInfo(config *cmn.Config, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo meta.NetInfo, err error) {
 	var ip net.IP
 	if configuredIPv4s == "" {
-		ip, err = detectLocalIPv4(addrList)
+		ip, err = detectLocalIPv4(config, addrList)
 		if err != nil {
 			return netInfo, err
 		}

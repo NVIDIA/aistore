@@ -84,8 +84,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		if glog.FastV(4, glog.SmoduleAIS) {
-			glog.Infof("Downloading: %s", dljob.ID())
+		if cmn.FastV(4, glog.SmoduleAIS) {
+			glog.Infoln("Downloading: " + dljob.ID())
 		}
 
 		dljob.AddNotif(&dload.NotifDownload{

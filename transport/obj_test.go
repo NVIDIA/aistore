@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport_test
 
@@ -89,6 +89,7 @@ func TestMain(t *testing.M) {
 	config.Transport.MaxHeaderSize = memsys.PageSize
 	config.Transport.IdleTeardown = cos.Duration(time.Second)
 	config.Transport.QuiesceTime = cos.Duration(10 * time.Second)
+	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
 	sc := transport.Init(&dummyStatsTracker{}, config)
 	go sc.Run()

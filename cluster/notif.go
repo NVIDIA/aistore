@@ -1,6 +1,6 @@
 // Package cluster provides local access to cluster-level metadata
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cluster
 

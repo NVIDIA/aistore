@@ -440,10 +440,6 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 	if expCopies <= gotCopies {
 		return
 	}
-	mi = lom.LeastUtilNoCopy()
-	if mi == nil && glog.FastV(4, glog.SmoduleCluster) {
-		glog.Warningf("%s: not enough mountpaths (%d) to place (%d/%d) copies",
-			lom, len(availablePaths), gotCopies, expCopies)
-	}
+	mi = lom.LeastUtilNoCopy() // NOTE: nil when not enough mountpaths
 	return
 }

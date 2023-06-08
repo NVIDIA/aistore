@@ -250,8 +250,9 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 // Simple majority voting.
 func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSet) {
 	var (
-		resCh = p.requestVotes(vr)
-		y, n  int
+		config = cmn.GCO.Get()
+		resCh  = p.requestVotes(vr)
+		y, n   int
 	)
 	for res := range resCh {
 		if res.err != nil {
@@ -262,7 +263,7 @@ func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSe
 			}
 			n++
 		} else {
-			if glog.FastV(4, glog.SmoduleAIS) {
+			if config.FastV(4, glog.SmoduleAIS) {
 				glog.Infof("Node %s responded with (winner: %t)", res.daemonID, res.yes)
 			}
 			if res.yes {
@@ -488,9 +489,6 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.writeErr(w, r, err)
 		return
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: voted '%v' for %s", h.si, vote, psi)
-	}
 
 	if vote {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteYes)))
@@ -535,11 +533,7 @@ func (h *htrun) _votedPrimary(ctx *smapModifier, clone *smapX) error {
 	if oldPrimary != "" && clone.GetProxy(oldPrimary) != nil {
 		clone.delProxy(oldPrimary)
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("%s: voted-primary result: %s", h.si, clone.pp())
-	} else {
-		glog.Infof("%s: voted-primary result: %s", h.si, clone)
-	}
+	glog.Infof("%s: voted-primary result: %s", h.si, clone)
 	return nil
 }
 
@@ -589,13 +583,13 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 }
 
 func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
+	config := cmn.GCO.Get()
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
 	if !h.keepalive.isTimeToPing(currPrimaryID) {
-		if glog.FastV(4, glog.SmoduleAIS) {
+		if config.FastV(4, glog.SmoduleAIS) {
 			glog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
-
 		return false, nil
 	}
 
@@ -606,9 +600,10 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error executing HRW: %v", err)
 	}
-	if glog.FastV(4, glog.SmoduleAIS) {
-		glog.Infof("Voting result for %s is %v. Expected primary: %s",
-			daemonID, nextPrimaryProxy.ID() == daemonID, daemonID)
+
+	vote := nextPrimaryProxy.ID() == daemonID
+	if config.FastV(4, glog.SmoduleAIS) {
+		glog.Infof("%s: voting '%t' for %s", h, vote, daemonID)
 	}
-	return nextPrimaryProxy.ID() == daemonID, nil
+	return vote, nil
 }
