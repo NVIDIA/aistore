@@ -33,6 +33,7 @@ type (
 	// Should not be stopped if number of known targets is small.
 	XactRespond struct {
 		xactECBase
+		config *cmn.Config
 	}
 )
 
@@ -72,21 +73,21 @@ func (p *rspFactory) Start() error {
 /////////////////
 
 func NewRespondXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactRespond {
-	smap, si := t.Sowner(), t.Snode()
+	var (
+		config   = cmn.GCO.Get()
+		smap, si = t.Sowner(), t.Snode()
+	)
 	runner := &XactRespond{
 		xactECBase: newXactECBase(t, smap, si, bck, mgr),
+		config:     config,
 	}
-
 	return runner
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
 	glog.Infoln(r.Name())
 
-	var (
-		cfg    = cmn.GCO.Get()
-		ticker = time.NewTicker(cfg.Periodic.StatsTime.D())
-	)
+	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
 
 	// as of now all requests are equal (TODO: throttle)
@@ -109,7 +110,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
 func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
-	if glog.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
@@ -145,7 +146,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		md           *Metadata
 		objName      = hdr.ObjName
 	)
-	if glog.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
@@ -203,7 +204,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			return
 		}
 
-		if glog.FastV(4, glog.SmoduleEC) {
+		if r.config.FastV(4, glog.SmoduleEC) {
 			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
 				iReq.meta.SliceID, hdr.Cname(), meta.ObjVersion, meta.CksumValue)
 		}

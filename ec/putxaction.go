@@ -33,6 +33,7 @@ type (
 		xactECBase
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
+		config     *cmn.Config
 	}
 	// extended x-ec-put statistics
 	ExtECPutStats struct {
@@ -85,13 +86,17 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 /////////////
 
 func NewPutXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactPut {
-	availablePaths, disabledPaths := fs.Get()
-	totalPaths := len(availablePaths) + len(disabledPaths)
-	smap, si := t.Sowner(), t.Snode()
+	var (
+		availablePaths, disabledPaths = fs.Get()
+		totalPaths                    = len(availablePaths) + len(disabledPaths)
+		smap, si                      = t.Sowner(), t.Snode()
+		config                        = cmn.GCO.Get()
+	)
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
 		xactECBase:  newXactECBase(t, smap, si, bck, mgr),
 		xactReqBase: newXactReqECBase(),
+		config:      config,
 	}
 
 	// create all runners but do not start them until Run is called
@@ -137,7 +142,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 	if !ok {
 		debug.Assert(false, "invalid "+lom.Mountpath().String())
 	}
-	if glog.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, glog.SmoduleEC) {
 		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
 	}
 	if req.rebuild {
@@ -165,17 +170,14 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 }
 
 func (r *XactPut) mainLoop() {
-	var (
-		cfg    = cmn.GCO.Get()
-		ticker = time.NewTicker(cfg.Periodic.StatsTime.D())
-	)
+	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
 		select {
 		case <-ticker.C:
-			if glog.FastV(4, glog.SmoduleEC) {
+			if r.config.FastV(4, glog.SmoduleEC) {
 				if s := fmt.Sprintf("%v", r.Snap()); s != "" {
 					glog.Info(s)
 				}

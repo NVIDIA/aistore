@@ -147,6 +147,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		parent: r,
 		mpath:  mpath,
 		client: client,
+		config: config,
 		workCh: make(chan *request, requestBufSizeFS),
 	}
 	j.stopCh.Init()
@@ -181,8 +182,8 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	}
 
 	var (
-		cfg    = cmn.GCO.Get()
-		ticker = time.NewTicker(cfg.Periodic.StatsTime.D())
+		config = cmn.GCO.Get()
+		ticker = time.NewTicker(config.Periodic.StatsTime.D())
 	)
 	defer ticker.Stop()
 
@@ -190,7 +191,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	for {
 		select {
 		case <-ticker.C:
-			if glog.FastV(4, glog.SmoduleEC) {
+			if config.FastV(4, glog.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
 					glog.Info(s)
 				}

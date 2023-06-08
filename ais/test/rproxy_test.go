@@ -206,8 +206,8 @@ func TestRProxyInvalidURL(t *testing.T) {
 		// case 1
 		{url: "http://storage.googleapis.com/kubernetes-release/release", statusCode: http.StatusNotFound, doAndCheck: true},
 		{url: "http://invalid.invaliddomain.com/test/webpage.txt", statusCode: http.StatusBadRequest, doAndCheck: true}, // Invalid domain
-		// case 2
-		{url: "http://archive.ics.uci.edu/ml/datasets/Abalone", doAndCheck: false},
+		// case 2 TODO -- FIXME: temporarily down with 502 (bad gateway)
+		// {url: "http://archive.ics.uci.edu/ml/datasets/Abalone", doAndCheck: false},
 	}
 	for _, test := range tests {
 		hbo, err := cmn.NewHTTPObjPath(test.url)
