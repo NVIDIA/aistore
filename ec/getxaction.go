@@ -85,10 +85,10 @@ func NewGetXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactGet {
 	availablePaths, disabledPaths := fs.Get()
 	totalPaths := len(availablePaths) + len(disabledPaths)
 	smap, si := t.Sowner(), t.Snode()
-
+	config := cmn.GCO.Get()
 	runner := &XactGet{
 		getJoggers:  make(map[string]*getJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, bck, mgr),
+		xactECBase:  newXactECBase(t, smap, si, config, bck, mgr),
 		xactReqBase: newXactReqECBase(),
 	}
 
@@ -137,17 +137,15 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 }
 
 func (r *XactGet) newGetJogger(mpath string) *getJogger {
-	config := cmn.GCO.Get()
 	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout.D(),
-		UseHTTPS:   config.Net.HTTP.UseHTTPS,
-		SkipVerify: config.Net.HTTP.SkipVerify,
+		Timeout:    r.config.Client.Timeout.D(),
+		UseHTTPS:   r.config.Net.HTTP.UseHTTPS,
+		SkipVerify: r.config.Net.HTTP.SkipVerify,
 	})
 	j := &getJogger{
 		parent: r,
 		mpath:  mpath,
 		client: client,
-		config: config,
 		workCh: make(chan *request, requestBufSizeFS),
 	}
 	j.stopCh.Init()

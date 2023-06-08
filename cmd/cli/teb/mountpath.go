@@ -180,7 +180,7 @@ func _capStatus(tcdf fs.TargetCDF) (s string) {
 			s = fcyan("good")
 		}
 	} else {
-		s = fred(tcdf.CsErr)
+		s = fred("Error: ") + tcdf.CsErr
 	}
 	return
 }

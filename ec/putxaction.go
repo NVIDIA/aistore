@@ -33,7 +33,6 @@ type (
 		xactECBase
 		xactReqBase
 		putJoggers map[string]*putJogger // mountpath joggers for PUT/DEL
-		config     *cmn.Config
 	}
 	// extended x-ec-put statistics
 	ExtECPutStats struct {
@@ -94,9 +93,8 @@ func NewPutXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactPut {
 	)
 	runner := &XactPut{
 		putJoggers:  make(map[string]*putJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, bck, mgr),
+		xactECBase:  newXactECBase(t, smap, si, config, bck, mgr),
 		xactReqBase: newXactReqECBase(),
-		config:      config,
 	}
 
 	// create all runners but do not start them until Run is called

@@ -32,10 +32,11 @@ type (
 		xact.DemandBase
 		t cluster.Target
 
-		smap  meta.Sowner // to get current cluster map
-		si    *meta.Snode // target daemonInfo
-		stats stats       // EC statistics
-		bck   cmn.Bck     // which bucket xctn belongs to
+		smap   meta.Sowner // to get current cluster map
+		si     *meta.Snode // target daemonInfo
+		config *cmn.Config // config
+		stats  stats       // EC statistics
+		bck    cmn.Bck     // which bucket xctn belongs to
 
 		dOwner *dataOwner // data slice manager
 		mgr    *Manager   // EC manager
@@ -77,20 +78,17 @@ func newXactReqECBase() xactReqBase {
 	}
 }
 
-func newXactECBase(t cluster.Target, smap meta.Sowner,
-	si *meta.Snode, bck *cmn.Bck, mgr *Manager) xactECBase {
+func newXactECBase(t cluster.Target, smap meta.Sowner, si *meta.Snode, config *cmn.Config, bck *cmn.Bck, mgr *Manager) xactECBase {
 	return xactECBase{
-		t:     t,
-		smap:  smap,
-		si:    si,
-		stats: stats{bck: *bck},
-		bck:   *bck,
-
+		t:      t,
+		smap:   smap,
+		si:     si,
+		stats:  stats{bck: *bck},
+		config: config,
+		bck:    *bck,
 		dOwner: &dataOwner{
-			mtx:    sync.Mutex{},
 			slices: make(map[string]*slice, 10),
 		},
-
 		mgr: mgr,
 	}
 }
@@ -256,8 +254,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 //     name, it puts the data to its writer and notifies when download is done
 //   - request - request to send
 //   - writer - an opened writer that will receive the replica/slice/meta
-func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer,
-	config *cmn.Config) (int64, error) {
+func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqGet}
 	hdr.Bck.Copy(lom.Bucket())
 	sw := &slice{
@@ -269,7 +266,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	sw.twg.Add(1)
 	r.regWriter(uname, sw)
 
-	if config.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
@@ -283,7 +280,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	}
 	r.unregWriter(uname)
 
-	if config.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, glog.SmoduleEC) {
 		glog.Infof("Received object %s from %s", lom, daemonID)
 	}
 	if sw.version != "" {

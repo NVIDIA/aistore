@@ -33,7 +33,6 @@ type (
 	// Should not be stopped if number of known targets is small.
 	XactRespond struct {
 		xactECBase
-		config *cmn.Config
 	}
 )
 
@@ -77,11 +76,7 @@ func NewRespondXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactRespond {
 		config   = cmn.GCO.Get()
 		smap, si = t.Sowner(), t.Snode()
 	)
-	runner := &XactRespond{
-		xactECBase: newXactECBase(t, smap, si, bck, mgr),
-		config:     config,
-	}
-	return runner
+	return &XactRespond{xactECBase: newXactECBase(t, smap, si, config, bck, mgr)}
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
