@@ -273,11 +273,11 @@ func (df *dsortFramework) createInputShards() {
 				tarName = path + df.extension
 			}
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = tarch.CreateTarWithCustomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+				err = tarch.CreateArchCustomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
-				err = tarch.CreateTarWithRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
 			} else if df.extension == archive.ExtTarTgz {
-				err = tarch.CreateTarWithRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else if df.extension == archive.ExtZip {
 				err = tarch.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
 			} else {
@@ -344,7 +344,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		tassert.CheckFatal(df.m.t, err)
 
 		if df.algorithm.Kind == dsort.SortKindContent {
-			files, err := tarch.GetFilesFromTarBuffer(buffer, df.algorithm.Extension)
+			files, err := tarch.GetFilesFromArchBuffer(cos.Ext(shardName), buffer, df.algorithm.Extension)
 			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
 				if file.Ext == df.algorithm.Extension {

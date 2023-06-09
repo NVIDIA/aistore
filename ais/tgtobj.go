@@ -1507,7 +1507,7 @@ cpap: // copy + append
 		lmfh, wfh *os.File
 		workFQN   string
 		cksum     cos.CksumHashSize
-		writer    archive.Writer
+		aw        archive.Writer
 	)
 	workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 	wfh, err = os.OpenFile(workFQN, os.O_CREATE|os.O_WRONLY, cos.PermRWR)
@@ -1519,9 +1519,9 @@ cpap: // copy + append
 	if a.put {
 		// when append becomes PUT (TODO: checksum type)
 		cksum.Init(cos.ChecksumXXHash)
-		writer = archive.NewWriter(a.mime, wfh, &cksum, nil /*opts*/)
-		err = writer.Write(a.filename, oah, a.r)
-		writer.Fini()
+		aw = archive.NewWriter(a.mime, wfh, &cksum, nil /*opts*/)
+		err = aw.Write(a.filename, oah, a.r)
+		aw.Fini()
 	} else {
 		// copy + append
 		lmfh, err = os.Open(a.lom.FQN)
@@ -1530,12 +1530,12 @@ cpap: // copy + append
 			return http.StatusNotFound, err
 		}
 		cksum.Init(a.lom.CksumType())
-		writer = archive.NewWriter(a.mime, wfh, &cksum, nil)
-		err = writer.Copy(lmfh, a.lom.SizeBytes())
+		aw = archive.NewWriter(a.mime, wfh, &cksum, nil)
+		err = aw.Copy(lmfh, a.lom.SizeBytes())
 		if err == nil {
-			err = writer.Write(a.filename, oah, a.r)
+			err = aw.Write(a.filename, oah, a.r)
 		}
-		writer.Fini()
+		aw.Fini() // in that order
 		cos.Close(lmfh)
 	}
 

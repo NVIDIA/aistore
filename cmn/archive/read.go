@@ -10,7 +10,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -27,7 +26,7 @@ type (
 		Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error)
 
 		// private
-		init(fh *os.File) error
+		init(fh io.Reader) error
 	}
 
 	baseR struct {
@@ -60,7 +59,7 @@ var (
 	_ Reader = (*lz4Reader)(nil)
 )
 
-func NewReader(mime string, fh *os.File, size ...int64) (ar Reader, err error) {
+func NewReader(mime string, fh io.Reader, size ...int64) (ar Reader, err error) {
 	switch mime {
 	case ExtTar:
 		ar = &tarReader{}
@@ -84,7 +83,7 @@ func (br *baseR) init(fh io.Reader) { br.fh = fh }
 
 // tarReader
 
-func (tr *tarReader) init(fh *os.File) error {
+func (tr *tarReader) init(fh io.Reader) error {
 	tr.baseR.init(fh)
 	tr.tr = tar.NewReader(fh)
 	return nil
@@ -117,7 +116,7 @@ func (tr *tarReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, err
 
 // tgzReader
 
-func (tgr *tgzReader) init(fh *os.File) (err error) {
+func (tgr *tgzReader) init(fh io.Reader) (err error) {
 	tgr.gzr, err = gzip.NewReader(fh)
 	if err != nil {
 		return
@@ -142,9 +141,11 @@ func (tgr *tgzReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSi
 
 // zipReader
 
-func (zr *zipReader) init(fh *os.File) (err error) {
+func (zr *zipReader) init(fh io.Reader) (err error) {
+	readerAt, ok := fh.(io.ReaderAt)
+	debug.Assert(ok, "expecting io.ReaderAt")
 	zr.baseR.init(fh)
-	zr.zr, err = zip.NewReader(fh, zr.size)
+	zr.zr, err = zip.NewReader(readerAt, zr.size)
 	return
 }
 
@@ -178,7 +179,7 @@ func (zr *zipReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSiz
 
 // lz4Reader
 
-func (lzr *lz4Reader) init(fh *os.File) error {
+func (lzr *lz4Reader) init(fh io.Reader) error {
 	lzr.lzr = lz4.NewReader(fh)
 	lzr.tr.baseR.init(lzr.lzr)
 	lzr.tr.tr = tar.NewReader(lzr.lzr)

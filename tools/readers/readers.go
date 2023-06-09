@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -383,18 +384,15 @@ func newTarReader(size int64, cksumType string) (r Reader, err error) {
 		singleFileSize = cos.MinI64(size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
-
-	err = tarch.CreateTarWithCustomFilesToWriter(buff, cos.Max(int(size/singleFileSize), 1),
+	err = tarch.CreateArchCustomFilesToW(buff, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
 		int(singleFileSize), extract.FormatTypeInt, ".cls", true)
 	if err != nil {
 		return nil, err
 	}
-
 	cksum, err := cos.ChecksumBytes(buff.Bytes(), cksumType)
 	if err != nil {
 		return nil, err
 	}
-
 	return &tarReader{
 		b:      buff.Bytes(),
 		Reader: *bytes.NewReader(buff.Bytes()),

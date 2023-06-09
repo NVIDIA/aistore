@@ -116,7 +116,7 @@ func TestGetFromArch(t *testing.T) {
 				if test.ext == archive.ExtZip {
 					err = tarch.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
 				} else {
-					err = tarch.CreateTarWithRandomFiles(
+					err = tarch.CreateArchRandomFiles(
 						archName,
 						test.ext,
 						numArchived,

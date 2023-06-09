@@ -1,6 +1,6 @@
 // Package archive provides common low-level utilities for testing archives
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tarch
 
@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
-	"github.com/pierrec/lz4/v3"
 )
 
 type (
@@ -49,8 +48,7 @@ func (*dummyFile) ModTime() time.Time { return time.Now() }
 func (*dummyFile) IsDir() bool        { return false }
 func (*dummyFile) Sys() any           { return nil }
 
-// adds a given buf to a tar or tar.gz or fills-out random fileSize bytes and adds anyway
-func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err error) {
+func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (err error) {
 	var b bytes.Buffer
 	if buf == nil {
 		buf = make([]byte, fileSize)
@@ -61,17 +59,8 @@ func addBufferToTar(tw *tar.Writer, path string, fileSize int, buf []byte) (err 
 	if _, err = b.Write(buf); err != nil {
 		return
 	}
-	header := new(tar.Header)
-	header.Name = path
-	header.Size = int64(fileSize)
-	header.Typeflag = tar.TypeReg
-	// write the header to the tarball archive
-	if err = tw.WriteHeader(header); err != nil {
-		return
-	}
-	// copy buffer to the tarball
-	_, err = io.CopyBuffer(tw, &b, buf)
-	return
+	oah := cos.SimpleOAH{Size: int64(fileSize)}
+	return aw.Write(path, oah, &b)
 }
 
 // adds random-filled fileSize to a zip
@@ -95,74 +84,55 @@ func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
 	return
 }
 
-// CreateTarWithRandomFiles creates tar with specified number of files. Tar is also gzipped if necessary.
-func CreateTarWithRandomFiles(tarName, ext string, fileCnt, fileSize int, duplication bool,
-	recordExts []string, randomNames []string) error {
-	var tw *tar.Writer
-
-	// set up the output file
-	tarball, err := cos.CreateFile(tarName)
+func CreateArchRandomFiles(shardName, ext string, fileCnt, fileSize int, dup bool, recExts, randNames []string) error {
+	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
 	}
-	defer tarball.Close()
 
-	switch ext {
-	case archive.ExtTgz, archive.ExtTarTgz:
-		gzw := gzip.NewWriter(tarball)
-		defer gzw.Close()
-		tw = tar.NewWriter(gzw)
-	case archive.ExtTarLz4:
-		lzw := lz4.NewWriter(tarball)
-		defer lzw.Close()
-		tw = tar.NewWriter(lzw)
-	default:
-		if ext != archive.ExtTar {
-			return fmt.Errorf("tools: unexpected file extension %q", ext)
-		}
-		tw = tar.NewWriter(tarball)
-	}
-	defer tw.Close()
+	aw := archive.NewWriter(ext, wfh, nil, nil /*opts*/)
+	defer func() {
+		aw.Fini()
+		wfh.Close()
+	}()
 
 	var (
 		prevFileName string
 		dupIndex     = rand.Intn(fileCnt-1) + 1
 	)
-	if len(recordExts) == 0 {
-		recordExts = []string{".txt"}
+	if len(recExts) == 0 {
+		recExts = []string{".txt"}
 	}
 	for i := 0; i < fileCnt; i++ {
 		var randomName int
-		if randomNames == nil {
+		if randNames == nil {
 			randomName = rand.Int()
 		}
-		for _, ext := range recordExts {
+		for _, ext := range recExts {
 			var fileName string
-			if randomNames == nil {
+			if randNames == nil {
 				fileName = fmt.Sprintf("%d%s", randomName, ext) // generate random names
-				if dupIndex == i && duplication {
+				if dupIndex == i && dup {
 					fileName = prevFileName
 				}
 			} else {
-				fileName = randomNames[i]
+				fileName = randNames[i]
 			}
-			if err := addBufferToTar(tw, fileName, fileSize, nil); err != nil {
+			if err := addBufferToArch(aw, fileName, fileSize, nil); err != nil {
 				return err
 			}
 			prevFileName = fileName
 		}
 	}
-
 	return nil
 }
 
-func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
-	tw := tar.NewWriter(w)
-	defer tw.Close()
-
+func CreateArchCustomFilesToW(w io.Writer, ext string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
+	aw := archive.NewWriter(ext, w, nil, nil /*opts*/)
+	defer aw.Fini()
 	for i := 0; i < fileCnt; i++ {
 		fileName := fmt.Sprintf("%d", rand.Int()) // generate random names
-		if err := addBufferToTar(tw, fileName+".txt", fileSize, nil); err != nil {
+		if err := addBufferToArch(aw, fileName+".txt", fileSize, nil); err != nil {
 			return err
 		}
 		// If missingKeys enabled we should only add keys randomly
@@ -179,7 +149,7 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 			default:
 				return fmt.Errorf("invalid custom file type: %q", customFileType)
 			}
-			if err := addBufferToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
+			if err := addBufferToArch(aw, fileName+customFileExt, len(buf), buf); err != nil {
 				return err
 			}
 		}
@@ -187,15 +157,14 @@ func CreateTarWithCustomFilesToWriter(w io.Writer, fileCnt, fileSize int, custom
 	return nil
 }
 
-func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
+func CreateArchCustomFiles(shardName, ext string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
 	// set up the output file
-	tarball, err := cos.CreateFile(tarName)
+	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
 	}
-	defer tarball.Close()
-
-	return CreateTarWithCustomFilesToWriter(tarball, fileCnt, fileSize, customFileType, customFileExt, missingKeys)
+	defer wfh.Close()
+	return CreateArchCustomFilesToW(wfh, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys)
 }
 
 func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int, randomNames []string) error {
@@ -255,34 +224,31 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 	return files, nil
 }
 
-// GetFilesFromTarBuffer returns all file infos contained in buffer which
-// presumably is tar or gzipped tar.
-func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
-	tr := tar.NewReader(&buffer)
-
-	var files []FileContent //nolint:prealloc // cannot determine the size
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break // End of archive
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		var buf bytes.Buffer
-		fExt := cos.Ext(hdr.Name)
-		if extension == fExt {
-			if _, err := io.CopyN(&buf, tr, hdr.Size); err != nil {
-				return nil, err
+func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) ([]FileContent, error) {
+	var (
+		files   = make([]FileContent, 0, 10)
+		ar, err = archive.NewReader(mime, &buffer, int64(buffer.Len()))
+	)
+	if err != nil {
+		return nil, err
+	}
+	f := func(filename string, size int64, reader io.ReadCloser, hdr any) (bool, error) {
+		var (
+			buf bytes.Buffer
+			ext = cos.Ext(filename)
+		)
+		defer reader.Close()
+		if extension == ext {
+			if _, err := io.Copy(&buf, reader); err != nil {
+				return true, err
 			}
 		}
-
-		files = append(files, FileContent{Name: hdr.Name, Ext: fExt, Content: buf.Bytes()})
+		files = append(files, FileContent{Name: filename, Ext: ext, Content: buf.Bytes()})
+		return false, nil
 	}
 
-	return files, nil
+	_, err = ar.Range("", f)
+	return files, err
 }
 
 // GetFileInfosFromZipBuffer returns all file infos contained in buffer which
