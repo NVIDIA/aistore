@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -345,7 +344,7 @@ extract:
 		ar   archive.Reader
 	)
 	if mime, err = archive.MimeFile(rfh, nil, "", objName); err != nil {
-		return nil // skip silently
+		return nil // skip silently: consider non-extractable and Ok
 	}
 	if rfh, err = os.Open(outFile); err != nil {
 		return
@@ -354,7 +353,8 @@ extract:
 		return
 	}
 	x := &extractor{outFile}
-	fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract to %s/\n", objName, bn, outFile, sz, x.basename())
+	fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract to %s/\n",
+		objName, bn, outFile, sz, cos.Basename(outFile))
 	_, err = ar.Range("", x.do)
 	rfh.Close()
 	return err
@@ -364,23 +364,30 @@ type extractor struct {
 	shardName string
 }
 
-func (x *extractor) basename() string {
-	ext := filepath.Ext(x.shardName)
-	return strings.TrimSuffix(x.shardName, ext)
-}
-
-func (x *extractor) do(filename string, reader io.ReadCloser, _ any) (bool /*stop*/, error) {
-	fqn := filepath.Join(x.basename(), filename)
+func (x *extractor) do(filename string, size int64, reader io.ReadCloser, _ any) (bool /*stop*/, error) {
+	fqn := filepath.Join(cos.Basename(x.shardName), filename)
 
 	wfh, err := cos.CreateFile(fqn)
 	if err != nil {
+		reader.Close()
 		return true, err
 	}
-	_, err = io.Copy(wfh, reader)
+	stop, err := x._write(filename, size, wfh, reader)
+	reader.Close()
+	wfh.Close()
+	if err != nil {
+		os.Remove(fqn)
+	}
+	return stop, err
+}
+
+func (x *extractor) _write(filename string, size int64, wfh *os.File, reader io.ReadCloser) (bool /*stop*/, error) {
+	n, err := io.Copy(wfh, reader)
 	if err != nil {
 		return true, err
 	}
-	reader.Close()
-	wfh.Close()
+	if n != size {
+		return true, fmt.Errorf("failed to extract %s from %s: wrong size (%d vs %d)", filename, x.shardName, n, size)
+	}
 	return false, nil
 }
