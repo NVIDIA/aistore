@@ -7,14 +7,17 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -186,8 +189,30 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 		oah     api.ObjAttrs
 		units   string
 	)
+	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
+	}
+	if flagIsSet(c, checkObjCachedFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, offsetFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(offsetFlag), qflprn(archpathGetFlag))
+	}
+	// TODO: easy
+	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, checkObjCachedFlag) {
+		return fmt.Errorf("checking presence (%s) of archived files (%s) not implemented yet",
+			qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+	}
+	if outFile == fileStdIO && flagIsSet(c, extractFlag) {
+		return fmt.Errorf("cannot extract archived files (%s) to standard output - not implemented yet",
+			qflprn(extractFlag))
+	}
+	if outFile == discardIO && flagIsSet(c, extractFlag) {
+		return fmt.Errorf("cannot extract (%s) and discard archived files - not implemented yet",
+			qflprn(extractFlag))
+	}
+
 	// just check if a remote object is present (do not GET)
-	// TODO: archived files
 	if flagIsSet(c, checkObjCachedFlag) {
 		return isObjPresent(c, bck, objName)
 	}
@@ -208,7 +233,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	}
 
 	// where to
-	archpath := parseStrFlag(c, archpathFlag)
+	archpath := parseStrFlag(c, archpathGetFlag)
 	if outFile == "" {
 		// archive
 		if archpath != "" {
@@ -219,6 +244,10 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	} else if outFile != fileStdIO && outFile != discardIO {
 		finfo, errEx := os.Stat(outFile)
 		if errEx == nil {
+			if !finfo.IsDir() && flagIsSet(c, extractFlag) {
+				return fmt.Errorf("cannot extract (%s) archived files - destination %q exists and is not a directory",
+					qflprn(extractFlag), outFile)
+			}
 			// destination is: directory | file (confirm overwrite)
 			if finfo.IsDir() {
 				// archive
@@ -292,18 +321,66 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	bn := bck.Cname("")
 	if outFile == discardIO {
 		if archpath != "" {
-			fmt.Fprintf(c.App.Writer, "GET and discard: %q from archive %q (size %s)\n",
+			fmt.Fprintf(c.App.Writer, "GET (and immediately discard) %s from %s (%s)\n",
 				archpath, bck.Cname(objName), sz)
 		} else {
-			fmt.Fprintf(c.App.Writer, "GET and discard: %q from %s (size %s)\n", objName, bn, sz)
+			fmt.Fprintf(c.App.Writer, "GET (and immediately discard) %s from %s (%s)\n", objName, bn, sz)
 		}
 		return
 	}
-	if archpath != "" {
-		fmt.Fprintf(c.App.Writer, "GET %q from archive %q as %q (size %s)\n",
-			archpath, bck.Cname(objName), outFile, sz)
-	} else {
-		fmt.Fprintf(c.App.Writer, "GET %q from %s as %q (size %s)\n", objName, bn, outFile, sz)
+
+	if flagIsSet(c, extractFlag) {
+		goto extract
 	}
-	return
+	if archpath != "" {
+		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s)\n", archpath, bck.Cname(objName), outFile, sz)
+	} else {
+		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s)\n", objName, bn, outFile, sz)
+	}
+
+extract:
+	var (
+		mime string
+		rfh  *os.File
+		ar   archive.Reader
+	)
+	if mime, err = archive.MimeFile(rfh, nil, "", objName); err != nil {
+		return nil // skip silently
+	}
+	if rfh, err = os.Open(outFile); err != nil {
+		return
+	}
+	if ar, err = archive.NewReader(mime, rfh, oah.Size()); err != nil {
+		return
+	}
+	x := &extractor{outFile}
+	fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract to %s/\n", objName, bn, outFile, sz, x.basename())
+	_, err = ar.Range("", x.do)
+	rfh.Close()
+	return err
+}
+
+type extractor struct {
+	shardName string
+}
+
+func (x *extractor) basename() string {
+	ext := filepath.Ext(x.shardName)
+	return strings.TrimSuffix(x.shardName, ext)
+}
+
+func (x *extractor) do(filename string, reader io.ReadCloser, _ any) (bool /*stop*/, error) {
+	fqn := filepath.Join(x.basename(), filename)
+
+	wfh, err := cos.CreateFile(fqn)
+	if err != nil {
+		return true, err
+	}
+	_, err = io.Copy(wfh, reader)
+	if err != nil {
+		return true, err
+	}
+	reader.Close()
+	wfh.Close()
+	return false, nil
 }

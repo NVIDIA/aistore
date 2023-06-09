@@ -56,10 +56,6 @@ var (
 			skipVerCksumFlag,
 			continueOnErrorFlag, // TODO -- FIXME
 		),
-		cmdList: {
-			objPropsFlag,
-			allPropsFlag,
-		},
 		cmdGenShards: {
 			cleanupFlag,
 			concurrencyFlag,
@@ -75,7 +71,7 @@ var (
 			{
 				Name:         commandBucket,
 				Usage:        "archive multiple objects from " + bucketSrcArgument + " as " + archExts + "-formatted shard",
-				ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument + "/SHARD_NAME",
+				ArgsUsage:    bucketSrcArgument + " " + dstShardArgument,
 				Flags:        archCmdsFlags[commandBucket],
 				Action:       archMultiObjHandler,
 				BashComplete: putPromApndCompletions,
@@ -98,10 +94,20 @@ var (
 				BashComplete: putPromApndCompletions,
 			},
 			{
+				Name: commandGet,
+				Usage: "get a shard, an archived file, or a range of bytes from the above;\n" +
+					indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
+					indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-')",
+				ArgsUsage:    getShardArgument,
+				Flags:        objectCmdsFlags[commandGet],
+				Action:       getHandler,
+				BashComplete: bucketCompletions(bcmplop{separator: true}),
+			},
+			{
 				Name:         cmdList,
 				Usage:        "list archived content (supported formats: " + archFormats + ")",
-				ArgsUsage:    objectArgument,
-				Flags:        archCmdsFlags[cmdList],
+				ArgsUsage:    optionalShardArgument,
+				Flags:        rmFlags(bucketCmdsFlags[commandList], listArchFlag),
 				Action:       listArchHandler,
 				BashComplete: bucketCompletions(bcmplop{}),
 			},
@@ -297,7 +303,10 @@ func a2aRegular(c *cli.Context, a *archput) error {
 }
 
 func listArchHandler(c *cli.Context) error {
-	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true)
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
+	bck, objName, err := parseBckObjURI(c, c.Args().Get(0), true /*empty ok*/)
 	if err != nil {
 		return err
 	}

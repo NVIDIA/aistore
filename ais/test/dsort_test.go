@@ -421,7 +421,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 
 				// Check if the record objects are in the correct order.
 				if len(df.recordExts) > 0 {
-					ext := extract.Ext(file.Name())
+					ext := cos.Ext(file.Name())
 					expectedExt := df.recordExts[idx%len(df.recordExts)]
 					if ext != expectedExt {
 						df.m.t.Errorf(
@@ -444,7 +444,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 }
 
 func canonicalName(recordName string) string {
-	return strings.TrimSuffix(recordName, extract.Ext(recordName))
+	return strings.TrimSuffix(recordName, cos.Ext(recordName))
 }
 
 func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsCnt int) {

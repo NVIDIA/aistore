@@ -63,15 +63,13 @@ var (
 
 	DefaultAliasConfig = AliasConfig{
 		// object
-		"get":     "object get",
-		"put":     "object put",
-		"archput": "archive put",
+		"get": "object get",
+		"put": "object put",
 		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",
 		"cp":     "bucket cp",
 		"rmb":    "bucket rm",
-		"archb":  "archive bucket",
 		// job
 		"start": "job start",
 		"stop":  "job stop",

@@ -6,7 +6,6 @@ package extract
 
 import (
 	"encoding/json"
-	"os"
 	"sync"
 	"unsafe"
 
@@ -283,21 +282,3 @@ func (r *Records) RecordMemorySize() (size uint64) {
 
 func (*Records) MarshalJSON() ([]byte, error) { panic("should not be used") }
 func (*Records) UnmarshalJSON([]byte) error   { panic("should not be used") }
-
-// Ext returns the file name extension used by path.
-// The extension is the suffix beginning at the FIRST (not final) dot
-// in the final element of path; it is empty if there is no dot.
-//
-// NOTE: This function one should be used instead of `filepath.Ext` in dSort.
-func Ext(path string) string {
-	dotIndex := -1
-	for i := len(path) - 1; i >= 0 && !os.IsPathSeparator(path[i]); i-- {
-		if path[i] == '.' {
-			dotIndex = i
-		}
-	}
-	if dotIndex == -1 {
-		return ""
-	}
-	return path[dotIndex:]
-}

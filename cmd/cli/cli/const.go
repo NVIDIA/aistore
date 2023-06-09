@@ -246,16 +246,22 @@ const (
 	bucketNewArgument      = "NEW_BUCKET"
 
 	// Objects
-	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|-]"
-
-	putObjectArgument     = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]"
-	putApndArchArgument   = "[-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME"
-	promoteObjectArgument = "FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME]"
-	concatObjectArgument  = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] BUCKET/OBJECT_NAME"
-
 	objectArgument          = "BUCKET/OBJECT_NAME"
-	optionalObjectsArgument = "BUCKET[/OBJECT_NAME]..."
-	renameObjectArgument    = "BUCKET/OBJECT_NAME NEW_OBJECT_NAME"
+	optionalObjArgument     = "BUCKET[/OBJECT_NAME]"
+	optionalObjectsArgument = "BUCKET[/OBJECT_NAME] ..."
+	shardArgument           = "BUCKET/SHARD_NAME"
+	optionalShardArgument   = "BUCKET[/SHARD_NAME]"
+	dstShardArgument        = bucketDstArgument + "/SHARD_NAME"
+
+	getObjectArgument   = optionalObjArgument + " [OUT_FILE|OUT_DIR|-]"
+	getShardArgument    = optionalShardArgument + " [OUT_FILE|OUT_DIR|-]"
+	putObjectArgument   = "[-|FILE|DIRECTORY[/PATTERN]] " + optionalObjArgument
+	putApndArchArgument = "[-|FILE|DIRECTORY[/PATTERN]] " + shardArgument
+
+	promoteObjectArgument = "FILE|DIRECTORY[/PATTERN] " + optionalObjArgument
+	concatObjectArgument  = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] " + objectArgument
+
+	renameObjectArgument = objectArgument + " NEW_OBJECT_NAME"
 
 	setCustomArgument = objectArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument + ", e.g.:\n" +
 		indent1 +
@@ -707,6 +713,14 @@ var (
 	archpathFlag = cli.StringFlag{
 		Name:  "archpath",
 		Usage: "filename in archive",
+	}
+	archpathGetFlag = cli.StringFlag{
+		Name:  archpathFlag.Name,
+		Usage: "extract the specified file from archive (shard)",
+	}
+	extractFlag = cli.BoolFlag{
+		Name:  "extract,x",
+		Usage: "extract all files from archive(s)",
 	}
 
 	inclSrcBucketNameFlag = cli.BoolFlag{

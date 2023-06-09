@@ -90,26 +90,24 @@ func (tr *tarReader) init(fh *os.File) error {
 	return nil
 }
 
-func (tr *tarReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, _ error) {
-	debug.Assert(rcb != nil || filename != "") // range read OR simple selection
+func (tr *tarReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
+	debug.Assert(rcb != nil || filename != "") // either/or
 	for {
 		hdr, ern := tr.tr.Next()
 		if ern != nil {
 			if ern == io.EOF {
-				return nil, nil
+				ern = nil
 			}
 			return nil, ern
 		}
-		// select one
 		if filename != "" {
 			if hdr.Name == filename || namesEq(hdr.Name, filename) {
-				reader = &cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}}
-				return
+				return &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}, nil
 			}
 			continue
 		}
-		// range-read
-		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.fh, N: hdr.Size}}
+		// otherwise, read them all until stopped
+		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}
 		stop, err := rcb(hdr.Name, csl, hdr)
 		if stop || err != nil {
 			return nil, err
@@ -215,7 +213,7 @@ type (
 //
 
 func (csl *cslLimited) Size() int64 { return csl.N }
-func (*cslLimited) Close() error    { return nil }
+func (*cslLimited) Close() error    { return nil } // NopCloser, unlike the other two (below)
 
 func (csc *cslClose) Read(b []byte) (int, error) { return csc.R.Read(b) }
 func (csc *cslClose) Size() int64                { return csc.N }

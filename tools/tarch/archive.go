@@ -272,7 +272,7 @@ func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent
 		}
 
 		var buf bytes.Buffer
-		fExt := extract.Ext(hdr.Name)
+		fExt := cos.Ext(hdr.Name)
 		if extension == fExt {
 			if _, err := io.CopyN(&buf, tr, hdr.Size); err != nil {
 				return nil, err

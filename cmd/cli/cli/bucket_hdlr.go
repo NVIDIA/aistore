@@ -19,11 +19,6 @@ import (
 	"github.com/urfave/cli"
 )
 
-const (
-	errFmtSameBucket = "cannot %s bucket %q onto itself"
-	errFmtExclusive  = "flags %s and %s are mutually exclusive"
-)
-
 var examplesBckSetProps = `
 Usage examples:
 - ais bucket props set [BUCKET] checksum.type=xxhash

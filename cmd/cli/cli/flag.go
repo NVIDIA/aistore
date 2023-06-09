@@ -161,3 +161,17 @@ func parseSizeFlag(c *cli.Context, flag cli.StringFlag, unitsParsed ...string) (
 	}
 	return cos.ParseSize(val, units)
 }
+
+func rmFlags(flags []cli.Flag, fs ...cli.Flag) (out []cli.Flag) {
+	out = make([]cli.Flag, 0, len(flags))
+loop:
+	for _, flag := range flags {
+		for _, f := range fs {
+			if flag.GetName() == f.GetName() {
+				continue loop
+			}
+		}
+		out = append(out, flag)
+	}
+	return
+}

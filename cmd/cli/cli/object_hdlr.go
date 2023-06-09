@@ -30,12 +30,14 @@ var (
 		commandGet: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
 			cksumFlag,
 			yesFlag,
 			checkObjCachedFlag,
 			refreshFlag,
 			progressFlag,
+			// archive
+			archpathGetFlag,
+			extractFlag,
 			// multi-object options (passed to list-objects)
 			getObjPrefixFlag,
 			getObjCachedFlag,
@@ -78,7 +80,7 @@ var (
 		commandCat: {
 			offsetFlag,
 			lengthFlag,
-			archpathFlag,
+			archpathGetFlag,
 			cksumFlag,
 			forceFlag,
 		},
@@ -87,9 +89,9 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name: commandGet,
-		Usage: "get an object, an archived file, or a range of bytes from the above, and in addition:\n" +
-			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-');\n" +
-			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).",
+		Usage: "get an object, an archived file, or a range of bytes from the above;\n" +
+			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
+			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-').",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,

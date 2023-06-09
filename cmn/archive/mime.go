@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-// supported archive types (file extensions); ref cmd/cli/cli/const.go archExts
+// supported archive types (file extensions); see also archExts in cmd/cli/cli/const.go
 const (
 	ExtTar    = ".tar"
 	ExtTgz    = ".tgz"
@@ -75,6 +75,7 @@ func Mime(mime, filename string) (string, error) {
 	return byExt(filename)
 }
 
+// e.g. MIME: "application/zip"
 func normalize(mime string) (string, error) {
 	switch {
 	case strings.Contains(mime, ExtTarTgz[1:]): // ExtTarTgz contains ExtTar
@@ -98,7 +99,7 @@ func byExt(filename string) (string, error) {
 			return ext, nil
 		}
 	}
-	return "", NewErrUnknownFileExt(filename)
+	return "", NewErrUnknownFileExt(filename, "")
 }
 
 const sizeDetectMime = 512
@@ -110,7 +111,7 @@ func MimeFile(file *os.File, smm *memsys.MMSA, mime, archname string) (m string,
 		return
 	}
 	if smm == nil {
-		err = NewErrUnknownFileExt(archname + " (not reading file magic)")
+		err = NewErrUnknownFileExt(archname, "not reading file magic")
 		return
 	}
 	// by magic
@@ -135,7 +136,7 @@ func MimeFQN(smm *memsys.MMSA, mime, archname string) (m string, err error) {
 		return
 	}
 	if smm == nil {
-		err = NewErrUnknownFileExt(archname + " (not reading file magic)")
+		err = NewErrUnknownFileExt(archname, "not reading file magic")
 		return
 	}
 	fh, err := os.Open(archname)
@@ -155,7 +156,7 @@ func _detect(file *os.File, archname string, buf []byte) (m string, n int, err e
 		return
 	}
 	if n < sizeDetectMime {
-		err = NewErrUnknownFileExt(archname + " (file too short)")
+		err = NewErrUnknownFileExt(archname, "file is too short")
 		return
 	}
 	for _, magic := range allMagics {

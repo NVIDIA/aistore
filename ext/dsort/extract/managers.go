@@ -107,7 +107,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		fullContentPath string
 		mdSize          int64
 
-		ext              = Ext(args.recordName)
+		ext              = cos.Ext(args.recordName)
 		recordUniqueName = rm.genRecordUniqueName(args.shardName, args.recordName)
 	)
 
@@ -236,7 +236,7 @@ func (rm *RecordManager) MergeEnqueuedRecords() {
 
 func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
 	shardWithoutExt := strings.TrimSuffix(shardName, rm.extension)
-	recordWithoutExt := strings.TrimSuffix(recordName, Ext(recordName))
+	recordWithoutExt := strings.TrimSuffix(recordName, cos.Ext(recordName))
 	return shardWithoutExt + "|" + recordWithoutExt
 }
 
@@ -256,14 +256,14 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		// For sgl:
 		//  * contentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
 		//  * fullContentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
-		recordExt := Ext(recordName)
+		recordExt := cos.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		return contentPath, contentPath // unique key for record
 	case DiskStoreType:
 		// For disk:
 		//  * contentPath = recordUniqueName with extension  (eg. shard_1-record_name.cls)
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
-		recordExt := Ext(recordName)
+		recordExt := cos.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		ct, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
 		cos.Assert(err == nil)
@@ -302,7 +302,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
 	sgl := value.(*memsys.SGL)
 
-	recordObjExt := Ext(fullContentPath)
+	recordObjExt := cos.Ext(fullContentPath)
 	contentPath := strings.TrimSuffix(fullContentPath, recordObjExt)
 
 	rm.Records.Lock()

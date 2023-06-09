@@ -15,6 +15,11 @@ import (
 	"github.com/urfave/cli"
 )
 
+const (
+	errFmtSameBucket = "cannot %s bucket %q onto itself"
+	errFmtExclusive  = "flags %s and %s are mutually exclusive"
+)
+
 type (
 	errUsage struct {
 		helpData      any

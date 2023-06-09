@@ -1,21 +1,21 @@
 "ais://$BUCKET_1" created
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
-GET "object_1.txt" from ais://$BUCKET_1 as "$OBJECT_1.txt" (size 11B)
+GET object_1.txt from ais://$BUCKET_1 as "$OBJECT_1.txt" (11B)
 11
-GET "object_1.txt" from ais://$BUCKET_1 as "$OBJECT_2.txt" (size 11B)
+GET object_1.txt from ais://$BUCKET_1 as "$OBJECT_2.txt" (11B)
 11
-GET "object_1.txt" from ais://$BUCKET_1 as "object_1.txt" (size 11B)
+GET object_1.txt from ais://$BUCKET_1 as "object_1.txt" (11B)
 11
-GET "test0/0/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test0/1/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test0/2/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test1/0/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test1/1/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test1/2/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test2/0/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test2/1/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
-GET "test2/2/test.txt" from ais://$BUCKET_1 as "test.txt" (size 3B)
+GET test0/0/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test0/1/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test0/2/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test1/0/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test1/1/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test1/2/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test2/0/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test2/1/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
+GET test2/2/test.txt from ais://$BUCKET_1 as "test.txt" (3B)
 9
 2 2
 2 2
