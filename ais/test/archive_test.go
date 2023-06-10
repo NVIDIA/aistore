@@ -113,19 +113,15 @@ func TestGetFromArch(t *testing.T) {
 						randomNames[i] = "/" + randomNames[i]
 					}
 				}
-				if test.ext == archive.ExtZip {
-					err = tarch.CreateZipWithRandomFiles(archName, numArchived, fsize, randomNames)
-				} else {
-					err = tarch.CreateArchRandomFiles(
-						archName,
-						test.ext,
-						numArchived,
-						fsize,
-						false,       // duplication
-						nil,         // record extensions
-						randomNames, // pregenerated filenames
-					)
-				}
+				err = tarch.CreateArchRandomFiles(
+					archName,
+					test.ext,
+					numArchived,
+					fsize,
+					false,       // duplication
+					nil,         // record extensions
+					randomNames, // pregenerated filenames
+				)
 				tassert.CheckFatal(t, err)
 				defer os.Remove(archName)
 

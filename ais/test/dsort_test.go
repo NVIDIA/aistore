@@ -276,10 +276,8 @@ func (df *dsortFramework) createInputShards() {
 				err = tarch.CreateArchCustomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
 				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
-			} else if df.extension == archive.ExtTarTgz {
+			} else if df.extension == archive.ExtTarTgz || df.extension == archive.ExtZip {
 				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
-			} else if df.extension == archive.ExtZip {
-				err = tarch.CreateZipWithRandomFiles(tarName, df.fileInTarballCnt, df.fileInTarballSize, nil)
 			} else {
 				df.m.t.Fail()
 			}
@@ -303,31 +301,22 @@ func (df *dsortFramework) createInputShards() {
 }
 
 func (df *dsortFramework) checkOutputShards(zeros int) {
-	tlog.Logln("checking if files are sorted...")
-
-	lastName := ""
-	var lastValue any
-
-	gzipped := false
-	if df.extension != archive.ExtTar {
-		gzipped = true
-	}
-
 	var (
-		inversions = 0
+		lastValue  any
+		lastName   string
+		inversions int
+		idx        int
 		baseParams = tools.BaseAPIParams(df.m.proxyURL)
-
-		idx     = 0
-		records = make(map[string]int, 100)
+		records    = make(map[string]int, 100)
 	)
+	tlog.Logln("checking if files are sorted...")
 	for i := 0; i < df.outputShardCnt; i++ {
-		shardName := fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
-		var buffer bytes.Buffer
-		getArgs := api.GetArgs{
-			Writer: &buffer,
-		}
-
-		bucket := df.m.bck
+		var (
+			buffer    bytes.Buffer
+			shardName = fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
+			getArgs   = api.GetArgs{Writer: &buffer}
+			bucket    = df.m.bck
+		)
 		if df.outputBck.Name != "" {
 			bucket = df.outputBck
 		}
@@ -382,14 +371,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				}
 			}
 		} else {
-			var files []os.FileInfo
-
-			if df.extension == archive.ExtTar || df.extension == archive.ExtTarTgz {
-				files, err = tarch.GetFileInfosFromTarBuffer(buffer, gzipped)
-			} else if df.extension == archive.ExtZip {
-				files, err = tarch.GetFileInfosFromZipBuffer(buffer)
-			}
-
+			files, err := tarch.GetFileInfosFromArchBuffer(buffer, df.extension)
 			tassert.CheckFatal(df.m.t, err)
 			if len(files) == 0 {
 				df.m.t.Fatal("number of files inside shard is 0")
@@ -502,16 +484,15 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 	if len(list.Entries) == 0 {
 		df.m.t.Errorf("number of objects in bucket %q is 0", bck)
 	}
-
 	for _, obj := range list.Entries {
-		var buffer bytes.Buffer
-		getArgs := api.GetArgs{
-			Writer: &buffer,
-		}
+		var (
+			buffer  bytes.Buffer
+			getArgs = api.GetArgs{Writer: &buffer}
+		)
 		_, err := api.GetObject(df.baseParams, bck, obj.Name, &getArgs)
 		tassert.CheckFatal(df.m.t, err)
 
-		files, err := tarch.GetFileInfosFromTarBuffer(buffer, false)
+		files, err := tarch.GetFileInfosFromArchBuffer(buffer, archive.ExtTar)
 		tassert.CheckFatal(df.m.t, err)
 
 		shard := shardRecords{

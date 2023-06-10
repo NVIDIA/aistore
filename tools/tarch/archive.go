@@ -5,10 +5,7 @@
 package tarch
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bytes"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"math/rand"
@@ -34,20 +31,6 @@ type (
 	}
 )
 
-func newDummyFile(name string, size int64) *dummyFile {
-	return &dummyFile{
-		name: name,
-		size: size,
-	}
-}
-
-func (f *dummyFile) Name() string     { return f.name }
-func (f *dummyFile) Size() int64      { return f.size }
-func (*dummyFile) Mode() os.FileMode  { return 0 }
-func (*dummyFile) ModTime() time.Time { return time.Now() }
-func (*dummyFile) IsDir() bool        { return false }
-func (*dummyFile) Sys() any           { return nil }
-
 func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (err error) {
 	var b bytes.Buffer
 	if buf == nil {
@@ -61,27 +44,6 @@ func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (
 	}
 	oah := cos.SimpleOAH{Size: int64(fileSize)}
 	return aw.Write(path, oah, &b)
-}
-
-// adds random-filled fileSize to a zip
-func addRndToZip(tw *zip.Writer, path string, fileSize int) (err error) {
-	var (
-		w io.Writer
-		b = make([]byte, fileSize)
-	)
-	if _, err = cryptorand.Read(b); err != nil {
-		return
-	}
-	header := new(zip.FileHeader)
-	header.Name = path
-	header.Comment = path
-	header.UncompressedSize64 = uint64(fileSize)
-	w, err = tw.CreateHeader(header)
-	if err != nil {
-		return
-	}
-	_, err = w.Write(b)
-	return
 }
 
 func CreateArchRandomFiles(shardName, ext string, fileCnt, fileSize int, dup bool, recExts, randNames []string) error {
@@ -158,7 +120,6 @@ func CreateArchCustomFilesToW(w io.Writer, ext string, fileCnt, fileSize int, cu
 }
 
 func CreateArchCustomFiles(shardName, ext string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
-	// set up the output file
 	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
@@ -167,67 +128,21 @@ func CreateArchCustomFiles(shardName, ext string, fileCnt, fileSize int, customF
 	return CreateArchCustomFilesToW(wfh, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys)
 }
 
-func CreateZipWithRandomFiles(zipName string, fileCnt, fileSize int, randomNames []string) error {
-	var zw *zip.Writer
-	z, err := cos.CreateFile(zipName)
-	if err != nil {
-		return err
-	}
-	defer z.Close()
-
-	zw = zip.NewWriter(z)
-	defer zw.Close()
-
-	for i := 0; i < fileCnt; i++ {
-		var fileName string
-		if randomNames == nil {
-			fileName = fmt.Sprintf("%d.txt", rand.Int()) // generate random names
-		} else {
-			fileName = randomNames[i]
-		}
-		if err := addRndToZip(zw, fileName, fileSize); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// GetFileInfosFromTarBuffer returns all file infos contained in buffer which
-// presumably is tar or gzipped tar.
-func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo, error) {
-	var tr *tar.Reader
-	if gzipped {
-		gzr, err := gzip.NewReader(&buffer)
-		if err != nil {
-			return nil, err
-		}
-		tr = tar.NewReader(gzr)
+func newArchReader(mime string, buffer *bytes.Buffer) (ar archive.Reader, err error) {
+	if mime == archive.ExtZip {
+		// zip is special
+		readerAt := bytes.NewReader(buffer.Bytes())
+		ar, err = archive.NewReader(mime, readerAt, int64(buffer.Len()))
 	} else {
-		tr = tar.NewReader(&buffer)
+		ar, err = archive.NewReader(mime, buffer)
 	}
-
-	var files []os.FileInfo //nolint:prealloc // cannot determine the size
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break // End of archive
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, newDummyFile(hdr.Name, hdr.Size))
-	}
-
-	return files, nil
+	return
 }
 
 func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) ([]FileContent, error) {
 	var (
 		files   = make([]FileContent, 0, 10)
-		ar, err = archive.NewReader(mime, &buffer, int64(buffer.Len()))
+		ar, err = newArchReader(mime, &buffer)
 	)
 	if err != nil {
 		return nil, err
@@ -251,19 +166,37 @@ func GetFilesFromArchBuffer(mime string, buffer bytes.Buffer, extension string) 
 	return files, err
 }
 
-// GetFileInfosFromZipBuffer returns all file infos contained in buffer which
-// presumably is zip.
-func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
-	reader := bytes.NewReader(buffer.Bytes())
-	zr, err := zip.NewReader(reader, int64(buffer.Len()))
+func GetFileInfosFromArchBuffer(buffer bytes.Buffer, mime string) ([]os.FileInfo, error) {
+	var (
+		files   = make([]os.FileInfo, 0, 10)
+		ar, err = newArchReader(mime, &buffer)
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	files := make([]os.FileInfo, len(zr.File))
-	for idx, file := range zr.File {
-		files[idx] = file.FileInfo()
+	f := func(filename string, size int64, reader io.ReadCloser, hdr any) (bool, error) {
+		files = append(files, newDummyFile(filename, size))
+		reader.Close()
+		return false, nil
 	}
-
-	return files, nil
+	_, err = ar.Range("", f)
+	return files, err
 }
+
+///////////////
+// dummyFile //
+///////////////
+
+func newDummyFile(name string, size int64) *dummyFile {
+	return &dummyFile{
+		name: name,
+		size: size,
+	}
+}
+
+func (f *dummyFile) Name() string     { return f.name }
+func (f *dummyFile) Size() int64      { return f.size }
+func (*dummyFile) Mode() os.FileMode  { return 0 }
+func (*dummyFile) ModTime() time.Time { return time.Now() }
+func (*dummyFile) IsDir() bool        { return false }
+func (*dummyFile) Sys() any           { return nil }
