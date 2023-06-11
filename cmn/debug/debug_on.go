@@ -46,6 +46,7 @@ var (
 		"xs":        glog.SmoduleXs,
 		"backend":   glog.SmoduleBackend,
 		"space":     glog.SmoduleSpace,
+		"mirror":    glog.SmoduleMirror,
 	}
 )
 

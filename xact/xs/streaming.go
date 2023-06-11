@@ -47,8 +47,9 @@ type (
 		kind string
 	}
 	streamingX struct {
-		p   *streamingF
-		err cos.ErrValue
+		p      *streamingF
+		config *cmn.Config
+		err    cos.ErrValue
 		xact.DemandBase
 		wiCnt atomic.Int32
 		maxWt time.Duration
@@ -69,9 +70,12 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 
 // NOTE:
 // - transport endpoint `trname` identifies the flow and must be identical across all participating targets
-// - stream-bundle multiplier always 1 (see also: `SbundleMult`)
+// TODO: transport (below, via bundle.Extra) can be extended with:
+// - Compression: config.X.Compression
+// - Multiplier:  config.X.SbundleMult (currently, always 1)
 func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32) (err error) {
 	dmxtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
+
 	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmxtra)
 	if err != nil {
 		return
@@ -110,8 +114,8 @@ func (r *streamingX) TxnAbort() {
 }
 
 func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
-	if verbose {
-		glog.WarningDepth(1, err, errCode)
+	if r.config.FastV(4, glog.SmoduleXs) {
+		glog.InfoDepth(1, "Error: ", err, errCode)
 	}
 	if contOnErr {
 		debug.Assert(!cmn.IsErrAborted(err))

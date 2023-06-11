@@ -68,7 +68,7 @@ func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 func (p *tcoFactory) Start() error {
 	var sizePDU int32
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
-	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF}, args: p.args, workCh: workCh}
+	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
@@ -202,7 +202,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 ex:
-	if err != nil && verbose {
+	if err != nil && r.config.FastV(4, glog.SmoduleXs) {
 		glog.Error(err)
 	}
 	return err
@@ -259,6 +259,10 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 	params.Atime = lom.Atime()
 	err = r.p.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
+
+	if r.config.FastV(5, glog.SmoduleXs) {
+		glog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
+	}
 	return
 }
 
@@ -287,5 +291,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	cluster.FreeCpObjParams(params)
 	if err != nil {
 		wi.r.raiseErr(err, wi.msg.ContinueOnError)
+	} else if wi.r.config.FastV(5, glog.SmoduleXs) {
+		glog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}
 }

@@ -189,7 +189,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// reg xaction factories
 	xreg.Init()
-	xs.Xreg(config)
+	xs.Xreg()
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)

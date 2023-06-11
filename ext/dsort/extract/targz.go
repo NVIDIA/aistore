@@ -180,7 +180,7 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 
 				needFlush = true
 			default:
-				cos.AssertMsg(false, obj.StoreType)
+				debug.Assert(false, obj.StoreType)
 			}
 
 			written += n

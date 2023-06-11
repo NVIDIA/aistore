@@ -366,9 +366,6 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 		}
 		return
 	}
-	if verbose {
-		glog.Infof("prefetch: %s", lom)
-	}
 	r.ObjsAdd(1, lom.SizeBytes())
 }
 

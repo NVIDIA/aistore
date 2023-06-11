@@ -156,7 +156,7 @@ func makeCommunicator(args commArgs) Communicator {
 			command:  args.bootstrapper.originalCommand,
 		}
 	default:
-		cos.AssertMsg(false, args.bootstrapper.msg.CommTypeX)
+		debug.Assert(false, args.bootstrapper.msg.CommTypeX)
 	}
 	return nil
 }

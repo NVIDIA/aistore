@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -25,8 +25,10 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// sparse logging
 const (
-	logNumProcessed = 256 // unit of house-keeping
+	logPending = 256
+	logError   = 32
 )
 
 type (
@@ -44,6 +46,7 @@ type (
 		// init
 		mirror cmn.MirrorConf
 		total  atomic.Int64
+		config *cmn.Config
 	}
 )
 
@@ -64,7 +67,7 @@ func (*putFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *putFactory) Start() error {
 	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	xctn, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {
 		glog.Error(err)
@@ -112,8 +115,13 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 // mpather/worker callback (one worker per mountpath)
 func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 	copies := int(lom.Bprops().Mirror.Copies)
-	if _, err := addCopies(lom, copies, buf); err != nil {
-		glog.Error(err)
+	size, err := addCopies(lom, copies, buf)
+	if (err != nil && (r.total.Load()%logError) == 0) || r.config.FastV(5, glog.SmoduleMirror) {
+		var s string
+		if err != nil {
+			s = "Error: " + err.Error() + ": "
+		}
+		glog.Infof("%s: %s%s, copies=%d, size=%d", r.Base.Name(), s, lom.Cname(), copies, size)
 	}
 	r.DecPending() // to support action renewal on-demand
 	cluster.FreeLOM(lom)
@@ -123,6 +131,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 // (LOMs get dispatched directly to workers)
 func (r *XactPut) Run(*sync.WaitGroup) {
 	glog.Infoln(r.Name())
+	r.config = cmn.GCO.Get()
 	r.workers.Run()
 	for {
 		select {
@@ -148,7 +157,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) {
 	total := r.total.Inc()
 
 	pending, max := int(r.Pending()), r.mirror.Burst
-	if pending > 1 && pending >= max && (total%logNumProcessed) == 0 {
+	if pending > 1 && pending >= max && (total%logPending) == 0 {
 		glog.Warningf("%s: pending=%d exceeded %d=burst (total=%d)", r, pending, max, total)
 	}
 	r.IncPending() // ref-count via base to support on-demand action

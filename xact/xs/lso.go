@@ -90,7 +90,7 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *lsoFactory) Start() error {
 	r := &LsoXact{
-		streamingX: streamingX{p: &p.streamingF},
+		streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()},
 		msg:        p.msg,
 		msgCh:      make(chan *apc.LsoMsg), // unbuffered
 		respCh:     make(chan *LsoRsp),     // ditto
@@ -117,7 +117,7 @@ func (p *lsoFactory) Start() error {
 /////////////
 
 func (r *LsoXact) Run(*sync.WaitGroup) {
-	if verbose {
+	if r.config.FastV(4, glog.SmoduleXs) {
 		glog.Infoln(r.String())
 	}
 	if !r.listRemote() {
@@ -375,7 +375,7 @@ func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err err
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-	} else if verbose || !cos.IsRetriableConnErr(err) {
+	} else if r.config.FastV(4, glog.SmoduleXs) || !cos.IsRetriableConnErr(err) {
 		glog.Infof("Warning: %s: failed to send [%+v]: %v", r.p.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)

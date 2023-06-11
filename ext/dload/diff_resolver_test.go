@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
@@ -185,7 +185,7 @@ func TestDiffResolver(t *testing.T) {
 					tassert.Errorf(t, result.Dst != nil, "destination has not been set for skip")
 				case dload.DiffResolverEOF:
 				default:
-					cos.Assertf(false, "invalid diff-resolver action %d", result.Action)
+					debug.Assertf(false, "invalid diff-resolver action %d", result.Action)
 				}
 			}
 

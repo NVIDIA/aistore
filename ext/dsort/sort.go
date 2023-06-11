@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
 
@@ -70,7 +70,7 @@ func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
 			seed, err = strconv.ParseInt(algo.Seed, 10, 64)
 			// We assert error since we know that the seed should be validated
 			// during request spec validation.
-			cos.AssertNoErr(err)
+			debug.AssertNoErr(err)
 		}
 
 		rnd = rand.New(rand.NewSource(seed))

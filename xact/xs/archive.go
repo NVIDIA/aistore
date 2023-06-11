@@ -52,7 +52,6 @@ type (
 	XactArch struct {
 		streamingX
 		workCh  chan *cmn.ArchiveBckMsg
-		config  *cmn.Config
 		bckTo   *meta.Bck
 		pending struct {
 			m map[string]*archwi
@@ -79,7 +78,7 @@ func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *archFactory) Start() error {
 	workCh := make(chan *cmn.ArchiveBckMsg, maxNumInParallel)
-	r := &XactArch{streamingX: streamingX{p: &p.streamingF}, workCh: workCh, config: cmn.GCO.Get()}
+	r := &XactArch{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, workCh: workCh}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
 	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck /*from*/, 0 /*use default*/)
@@ -128,17 +127,22 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	// fcreate at BEGIN time
 	if r.p.T.SID() == wi.tsi.ID() {
 		var (
+			s           string
 			lmfh        *os.File
 			finfo, errX = os.Stat(wi.archlom.FQN)
 			exists      = errX == nil
 		)
 		if exists && wi.msg.AppendIfExists {
+			s = " append"
 			lmfh, err = wi.beginAppend()
 		} else {
 			wi.wfh, err = wi.archlom.CreateFile(wi.fqn)
 		}
 		if err != nil {
 			return
+		}
+		if r.config.FastV(5, glog.SmoduleXs) {
+			glog.Infof("%s: begin%s %s", s, r.Base.Name(), msg.Cname())
 		}
 
 		// construct format-specific writer; serialize for multi-target conc. writing
@@ -260,17 +264,14 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 
 func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		goto ex
+		r.raiseErr(err, false /*contOnErr*/)
+		return err
 	}
 
 	r.IncPending()
 	err = r._recv(&hdr, objReader)
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
-ex:
-	if err != nil && verbose {
-		glog.Error(err)
-	}
 	return err
 }
 
@@ -306,7 +307,8 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 func (r *XactArch) finalize(wi *archwi) {
 	q := wi.quiesce()
 	if q == cluster.QuiTimeout {
-		r.raiseErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout), wi.msg.ContinueOnError)
+		err := fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
+		r.raiseErr(err, wi.msg.ContinueOnError)
 	}
 
 	r.pending.Lock()
@@ -316,6 +318,9 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	errCode, err := r.fini(wi)
 	r.DecPending()
+	if r.config.FastV(5, glog.SmoduleXs) {
+		glog.Infof("%s: finalize %s: %v(%d)", r.Base.Name(), wi.msg.Cname(), err, errCode)
+	}
 	if err == nil || r.IsAborted() { // done ok (unless aborted)
 		return
 	}
@@ -323,14 +328,6 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	wi.cleanup()
 	r.raiseErr(err, wi.msg.ContinueOnError, errCode)
-	if verbose {
-		return // logged elsewhere
-	}
-
-	// log the 10th one for visibility
-	if r.err.Cnt() == 10 {
-		glog.Errorln("Warning: ", r.p.T.String(), " ", err)
-	}
 }
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {

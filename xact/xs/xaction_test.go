@@ -33,7 +33,7 @@ func init() {
 	cmn.GCO.CommitUpdate(config)
 
 	xreg.Init()
-	xs.Xreg(config)
+	xs.Xreg()
 }
 
 // Smoke tests for xactions

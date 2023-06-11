@@ -71,17 +71,14 @@ func (e *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (e *tcbFactory) Start() error {
-	var sizePDU int32
-	slab, err := e.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+	var (
+		config    = cmn.GCO.Get()
+		slab, err = e.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	)
 	debug.AssertNoErr(err)
+	e.xctn = newXactTCB(e, slab, config)
 
-	e.xctn = newXactTCB(e, slab)
-	if e.kind == apc.ActETLBck {
-		sizePDU = memsys.DefaultBufSize
-	}
-
-	// refcount OpcTxnDone
-	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
+	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	smap := e.T.Sowner().Get()
 	if err := e.xctn.InMaintOrDecomm(smap, e.T.Snode()); err != nil {
 		return err
@@ -90,7 +87,10 @@ func (e *tcbFactory) Start() error {
 	e.xctn.refc.Store(int32(nat - 1))
 	e.xctn.wg.Add(1)
 
-	config := cmn.GCO.Get()
+	var sizePDU int32
+	if e.kind == apc.ActETLBck {
+		sizePDU = memsys.DefaultBufSize
+	}
 	err = e.newDM(config, e.UUID(), sizePDU)
 	return err
 }
@@ -138,7 +138,7 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort() {
-	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
+	err := cmn.NewErrAborted(r.Name(), "tcb: txn-abort", nil)
 	r.dm.CloseIf(err)
 	r.dm.UnregRecv()
 	r.Base.Finish(err)
@@ -146,7 +146,7 @@ func (r *XactTCB) TxnAbort() {
 
 // XactTCB copies one bucket _into_ another with or without transformation.
 // args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
-func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
+func newXactTCB(e *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 	var parallel int
 	r = &XactTCB{t: e.T, args: *e.args}
 	if e.kind == apc.ActETLBck {
@@ -160,10 +160,10 @@ func newXactTCB(e *tcbFactory, slab *memsys.Slab) (r *XactTCB) {
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,
-		Throttle: true,
+		Throttle: true, // NOTE: always trottling
 	}
 	mpopts.Bck.Copy(e.args.BckFrom.Bucket())
-	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts)
+	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts, config)
 	return
 }
 
@@ -214,8 +214,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 	if r.refc.Load() > 0 {
 		if since > cmn.Timeout.MaxKeepalive() {
 			// idle on the Rx side despite having some (refc > 0) senders
-			config := cmn.GCO.Get()
-			if tot > config.Timeout.SendFile.D() {
+			if tot > r.BckJog.Config.Timeout.SendFile.D() {
 				return cluster.QuiTimeout
 			}
 		}
@@ -229,6 +228,9 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
+	if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+		glog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), r.args.BckTo.Cname(objNameTo))
+	}
 	params := cluster.AllocCpObjParams()
 	{
 		params.BckTo = r.args.BckTo
@@ -238,9 +240,9 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		params.DP = r.args.DP
 		params.Xact = r
 	}
-	_, err = r.Target().CopyObject(lom, params, r.args.Msg.DryRun)
+	_, err = r.T.CopyObject(lom, params, r.args.Msg.DryRun)
 	if err != nil && cos.IsErrOOS(err) {
-		err = cmn.NewErrAborted(r.Name(), "copy-obj", err)
+		err = cmn.NewErrAborted(r.Name(), "tcb", err)
 	}
 	cluster.FreeCpObjParams(params)
 	return

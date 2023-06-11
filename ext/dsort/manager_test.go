@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -100,7 +101,7 @@ func BenchmarkRecordsMarshal(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				w := io.Discard
 				err := records.EncodeMsg(msgp.NewWriterBuf(w, buf))
-				cos.AssertNoErr(err)
+				debug.AssertNoErr(err)
 			}
 		})
 	}
@@ -140,8 +141,8 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 			)
 
 			err := records.EncodeMsg(w)
-			cos.AssertNoErr(err)
-			cos.AssertNoErr(w.Flush())
+			debug.AssertNoErr(err)
+			debug.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -153,7 +154,7 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 				b.StartTimer()
 
 				err := newRecords.DecodeMsg(msgp.NewReaderBuf(r, buf))
-				cos.AssertNoErr(err)
+				debug.AssertNoErr(err)
 			}
 		})
 	}
@@ -189,7 +190,7 @@ func BenchmarkCreationPhaseMetadataMarshal(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				w := io.Discard
 				err := md.EncodeMsg(msgp.NewWriterSize(w, serializationBufSize))
-				cos.AssertNoErr(err)
+				debug.AssertNoErr(err)
 			}
 		})
 	}
@@ -225,8 +226,8 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 				network = bytes.NewBuffer(nil)
 				w       = msgp.NewWriter(network)
 			)
-			cos.AssertNoErr(md.EncodeMsg(w))
-			cos.AssertNoErr(w.Flush())
+			debug.AssertNoErr(md.EncodeMsg(w))
+			debug.AssertNoErr(w.Flush())
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -238,7 +239,7 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 				b.StartTimer()
 
 				err := newMD.DecodeMsg(msgp.NewReaderBuf(r, buf))
-				cos.AssertNoErr(err)
+				debug.AssertNoErr(err)
 			}
 		})
 	}

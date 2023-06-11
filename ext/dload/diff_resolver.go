@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -104,7 +104,7 @@ func (dr *DiffResolver) Start() {
 					return
 				}
 				if remote {
-					cos.Assert(!dstOk || dst.Link == "") // destination must be remote as well
+					debug.Assert(!dstOk || dst.Link == "") // destination must be remote as well
 					dr.resultCh <- DiffResolverResult{
 						Action: DiffResolverDelete,
 						Src:    src,

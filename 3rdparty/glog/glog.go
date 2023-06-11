@@ -113,6 +113,7 @@ const (
 	SmoduleXs
 	SmoduleBackend
 	SmoduleSpace
+	SmoduleMirror
 	// NOTE: guard to define the size of 'smodules' array - make sure it is always the last.
 	_smoduleLast
 )

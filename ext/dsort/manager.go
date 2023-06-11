@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -143,14 +143,13 @@ type (
 	}
 )
 
-func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode, t cluster.Target,
-	stats stats.Tracker) {
+func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode, t cluster.Target, stats stats.Tracker) {
 	ctx.smapOwner = smapOwner
 	ctx.bmdOwner = bmdOwner
 	ctx.node = snode
 	ctx.t = t
 	ctx.stats = stats
-	cos.Assert(mm == nil)
+	debug.Assert(mm == nil)
 
 	config := cmn.GCO.Get()
 	ctx.client = cmn.NewClient(cmn.TransportArgs{
@@ -162,9 +161,9 @@ func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode
 	if ctx.node.IsTarget() {
 		mm = t.PageMM()
 		err := fs.CSM.Reg(filetype.DSortFileType, &filetype.DSortFile{})
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 		err = fs.CSM.Reg(filetype.DSortWorkfileType, &filetype.DSortFile{})
-		cos.AssertNoErr(err)
+		debug.AssertNoErr(err)
 	}
 }
 
@@ -439,7 +438,7 @@ func (m *Manager) setDSorter() (err error) {
 	case DSorterMemType:
 		m.dsorter = newDSorterMem(m)
 	default:
-		cos.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
+		debug.Assertf(false, "dsorter type is invalid: %q", m.rs.DSorterType)
 	}
 	m.dsorterStarted.Add(1)
 	return
@@ -478,7 +477,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	case archive.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	default:
-		cos.Assertf(false, "unknown extension %s", m.rs.Extension)
+		debug.Assertf(false, "unknown extension %s", m.rs.Extension)
 	}
 
 	if !m.rs.DryRun {
@@ -792,7 +791,7 @@ func (m *Manager) react(reaction, msg string) error {
 	case cmn.AbortReaction:
 		return fmt.Errorf("%s", msg) // error will be reported on abort
 	default:
-		cos.AssertMsg(false, reaction)
+		debug.Assert(false, reaction)
 		return nil
 	}
 }
@@ -821,7 +820,7 @@ func calcMaxMemoryUsage(maxUsage cos.ParsedQuantity, mem *sys.MemStat) uint64 {
 	case cos.QuantityBytes:
 		return cos.MinU64(maxUsage.Value, mem.Total)
 	default:
-		cos.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
+		debug.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
 		return 0
 	}
 }

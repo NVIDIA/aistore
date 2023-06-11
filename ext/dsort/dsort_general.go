@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -314,10 +314,9 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					return written, errors.WithMessage(err, "(offset) copy local content failed")
 				}
 			case extract.SGLStoreType:
-				cos.Assert(buf == nil)
-
+				debug.Assert(buf == nil)
 				v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-				cos.AssertMsg(ok, fullContentPath)
+				debug.Assert(ok, fullContentPath)
 				ds.m.recManager.RecordContents().Delete(fullContentPath)
 				sgl := v.(*memsys.SGL)
 				defer sgl.Free()
@@ -336,7 +335,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					return written, errors.WithMessage(err, "(disk) copy local content failed")
 				}
 			default:
-				cos.Assert(false)
+				debug.Assert(false, storeType)
 			}
 
 			debug.Assert(n > 0)
@@ -444,7 +443,7 @@ func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
 					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
 						ds.m.ctx.node.ID(), daemonID)
 				default:
-					cos.AssertMsg(false, "pulled but not stopped or timed?")
+					debug.Assert(false, "pulled but not stopped or timed?")
 				}
 				return 0, err
 			}
@@ -537,7 +536,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
 			ds.streams.response.Send(o, r, fromNode)
 		case extract.SGLStoreType:
 			v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-			cos.AssertMsg(ok, fullContentPath)
+			debug.Assert(ok, fullContentPath)
 			ds.m.recManager.RecordContents().Delete(fullContentPath)
 			sgl := v.(*memsys.SGL)
 			o.Hdr.ObjAttrs.Size = sgl.Size()

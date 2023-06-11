@@ -1,6 +1,6 @@
 // Package extract provides provides functions for working with compressed files
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/pkg/errors"
 )
 
@@ -84,7 +85,7 @@ type (
 // same Name. Since records should only differ on objects this is the thing that
 // is actually merged.
 func (r *Record) mergeObjects(other *Record) {
-	cos.Assert(r.Name == other.Name)
+	debug.Assert(r.Name == other.Name, r.Name+" vs "+other.Name)
 	if r.Key == nil && other.Key != nil {
 		r.Key = other.Key
 	}
@@ -163,7 +164,7 @@ func (r *Records) Insert(records ...*Record) {
 }
 
 func (r *Records) DeleteDup(name, ext string) {
-	cos.Assert(r.Exists(name, ext))
+	debug.Assert(r.Exists(name, ext), "record: "+name+", "+ext)
 	r.Lock()
 	if record, ok := r.m[name]; ok {
 		if record.delete(ext) {
@@ -244,7 +245,7 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 		return lhs.(string) < rhs.(string), nil
 	}
 
-	cos.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
+	debug.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])
 	return false, nil
 }
 

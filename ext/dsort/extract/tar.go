@@ -221,7 +221,7 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent
 
 				needFlush = true
 			default:
-				cos.AssertMsg(false, obj.StoreType)
+				debug.Assert(false, obj.StoreType)
 			}
 
 			written += n

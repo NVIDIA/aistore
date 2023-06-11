@@ -12,19 +12,20 @@ import (
 )
 
 type BckJog struct {
-	t       cluster.Target
+	T       cluster.Target
+	Config  *cmn.Config
 	joggers *mpather.Jgroup
 	Base
 }
 
-func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts) {
-	r.t = opts.T
+func (r *BckJog) Init(id, kind string, bck *meta.Bck, opts *mpather.JgroupOpts, config *cmn.Config) {
+	r.T = opts.T
 	r.InitBase(id, kind, bck)
 	r.joggers = mpather.NewJoggerGroup(opts)
+	r.Config = config
 }
 
-func (r *BckJog) Run()                   { r.joggers.Run() }
-func (r *BckJog) Target() cluster.Target { return r.t }
+func (r *BckJog) Run() { r.joggers.Run() }
 
 func (r *BckJog) Wait() error {
 	for {

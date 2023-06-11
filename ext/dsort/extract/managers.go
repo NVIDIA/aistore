@@ -1,6 +1,6 @@
 // Package extract provides provides functions for working with compressed files
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -124,9 +125,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		return 0, rm.onDuplicatedRecords(msg)
 	}
 
-	if args.extractMethod.Has(ExtractToWriter) {
-		cos.Assert(args.w != nil)
-	}
+	debug.Assert(!args.extractMethod.Has(ExtractToWriter) || args.w != nil)
 
 	r, ske, needRead := rm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
 	if args.extractMethod.Has(ExtractToMem) {
@@ -182,7 +181,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		cos.Close(f)
 		rm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
-		cos.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
+		debug.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
 	var key any
@@ -191,7 +190,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 	}
 
 	if contentPath == "" || storeType == "" {
-		cos.Assertf(false, "shardName: %q, recordName: %q, storeType: %q", args.shardName, args.recordName, storeType)
+		debug.Assertf(false, "shardName: %q, recordName: %q, storeType: %q", args.shardName, args.recordName, storeType)
 	}
 	rm.Records.Insert(&Record{
 		Key:      key,
@@ -266,10 +265,10 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		recordExt := cos.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
 		ct, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
-		cos.Assert(err == nil)
+		debug.AssertNoErr(err)
 		return contentPath, ct.Make(filetype.DSortFileType)
 	default:
-		cos.AssertMsg(false, storeType)
+		debug.Assert(false, storeType)
 		return "", ""
 	}
 }
@@ -280,7 +279,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
 		ct, err := cluster.NewCTFromBO(&rm.bck, obj.ContentPath, nil)
-		cos.Assert(err == nil)
+		debug.AssertNoErr(err)
 		return ct.Make(obj.ObjectFileType)
 	case SGLStoreType:
 		// To convert contentPath to fullContentPath we need to add record
@@ -291,10 +290,10 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// unique name full FQN.
 		contentPath := obj.ContentPath
 		ct, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
-		cos.Assert(err == nil)
+		debug.AssertNoErr(err)
 		return ct.Make(filetype.DSortFileType)
 	default:
-		cos.AssertMsg(false, obj.StoreType)
+		debug.Assert(false, obj.StoreType)
 		return ""
 	}
 }
@@ -323,7 +322,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 	}
 	obj := record.Objects[idx]
 
-	cos.Assert(obj.StoreType == SGLStoreType) // only SGLs are supported
+	debug.Assert(obj.StoreType == SGLStoreType, obj.StoreType+" vs "+SGLStoreType) // only SGLs are supported
 
 	switch newStoreType {
 	case OffsetStoreType:
@@ -343,7 +342,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 			return
 		}
 	default:
-		cos.AssertMsg(false, newStoreType)
+		debug.Assert(false, newStoreType)
 	}
 
 	obj.StoreType = newStoreType

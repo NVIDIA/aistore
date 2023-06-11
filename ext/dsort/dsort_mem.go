@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -85,7 +86,7 @@ type (
 var _ dsorter = (*dsorterMem)(nil)
 
 func newRWConnection(r io.Reader, w io.Writer) *rwConnection {
-	cos.Assert(r != nil || w != nil)
+	debug.Assert(r != nil || w != nil)
 	wgr := cos.NewTimeoutGroup()
 	wgr.Add(1)
 	wgw := &sync.WaitGroup{}
@@ -486,7 +487,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		beforeSend = mono.NanoTime()
 	}
 
-	cos.Assert(ds.m.ctx.node.ID() == rec.DaemonID)
+	debug.Assert(ds.m.ctx.node.ID() == rec.DaemonID, ds.m.ctx.node.ID()+" vs "+rec.DaemonID)
 
 	if local {
 		defer ds.m.decrementRef(1)
@@ -542,7 +543,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		hdr.ObjAttrs.Size = fi.Size()
 		return send(f)
 	default:
-		cos.Assert(false)
+		debug.Assert(false, obj.StoreType)
 		return nil
 	}
 }

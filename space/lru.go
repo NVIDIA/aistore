@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -53,6 +53,7 @@ type (
 	IniLRU struct {
 		T                   cluster.Target
 		Xaction             *XactLRU
+		Config              *cmn.Config
 		StatsT              stats.Tracker
 		Buckets             []cmn.Bck // list of buckets to run LRU
 		GetFSUsedPercentage func(path string) (usedPercentage int64, ok bool)
@@ -370,7 +371,7 @@ func (j *lruJ) evict() (size int64, err error) {
 	// evict(sic!) and house-keep
 	for h.Len() > 0 && j.totalSize > 0 {
 		lom := heap.Pop(h).(*cluster.LOM)
-		if !evictObj(lom) {
+		if !j.evictObj(lom) {
 			cluster.FreeLOM(lom)
 			continue
 		}
@@ -429,16 +430,19 @@ func (j *lruJ) _throttle(usedPct int64) (err error) {
 	return
 }
 
-// remove local copies that "belong" to different LRU joggers; hence, space accounting may be temporarily not precise
-func evictObj(lom *cluster.LOM) (ok bool) {
+// remove local copies that "belong" to different LRU joggers (space accounting may be temporarily not precise)
+func (j *lruJ) evictObj(lom *cluster.LOM) bool {
 	lom.Lock(true)
-	if err := lom.Remove(); err == nil {
-		ok = true
-	} else {
-		glog.Errorf("%s: failed to remove, err: %v", lom, err)
-	}
+	err := lom.Remove()
 	lom.Unlock(true)
-	return
+	if err != nil {
+		glog.Errorf("%s: failed to evict %s: %v", j, lom, err)
+		return false
+	}
+	if j.ini.Config.FastV(5, glog.SmoduleSpace) {
+		glog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
+	}
+	return true
 }
 
 func (j *lruJ) evictSize() (err error) {

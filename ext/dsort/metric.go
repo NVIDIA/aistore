@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -280,7 +281,7 @@ func (m *Metrics) Marshal() []byte {
 	m.lock()
 	b, err := jsoniter.Marshal(m)
 	m.unlock()
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	return b
 }
 

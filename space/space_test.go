@@ -347,6 +347,7 @@ func newIniLRU(t cluster.Target) *space.IniLRU {
 	xlru.InitBase(cos.GenUUID(), apc.ActLRU, nil)
 	return &space.IniLRU{
 		Xaction:             xlru,
+		Config:              cmn.GCO.Get(),
 		StatsT:              mock.NewStatsTracker(),
 		T:                   t,
 		GetFSUsedPercentage: mockGetFSUsedPercentage,
@@ -356,9 +357,10 @@ func newIniLRU(t cluster.Target) *space.IniLRU {
 
 func newInitStoreCln(t cluster.Target) *space.IniCln {
 	xcln := &space.XactCln{}
-	xcln.InitBase(cos.GenUUID(), apc.ActLRU, nil)
+	xcln.InitBase(cos.GenUUID(), apc.ActStoreCleanup, nil)
 	return &space.IniCln{
 		Xaction: xcln,
+		Config:  cmn.GCO.Get(),
 		StatsT:  mock.NewStatsTracker(),
 		T:       t,
 	}
@@ -370,6 +372,7 @@ func initConfig() {
 	config.Space.HighWM = hwm
 	config.Space.LowWM = lwm
 	config.LRU.Enabled = true
+	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
 }
 

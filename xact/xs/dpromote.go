@@ -56,7 +56,7 @@ func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *proFactory) Start() error {
 	xctn := &XactDirPromote{dir: p.args.SrcFQN, args: p.args}
-	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JgroupOpts{T: p.T})
+	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JgroupOpts{T: p.T}, cmn.GCO.Get())
 	p.xctn = xctn
 	return nil
 }
@@ -78,7 +78,7 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	glog.Infof("%s(%s)", r.Name(), r.dir)
 
-	r.smap = r.Target().Sowner().Get()
+	r.smap = r.T.Sowner().Get()
 	var (
 		err  error
 		opts = &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
@@ -109,7 +109,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != r.Target().SID() {
+		if si.ID() != r.T.SID() {
 			return nil
 		}
 	}
@@ -123,11 +123,14 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 			DeleteSrc:    r.args.DeleteSrc,
 		},
 	}
-	// TODO: options to ignore specific error types, limited number of errors,
-	// all errors... (archive)
-	_, err = r.Target().Promote(params)
+	// TODO: continue-on-error (unify w/ x-archive)
+	_, err = r.T.Promote(params)
 	if cmn.IsNotExist(err) {
 		err = nil
+	}
+	if r.BckJog.Config.FastV(5, glog.SmoduleXs) {
+		glog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
+			r.args.OverwriteDst, r.args.DeleteSrc, r.confirmedFshare, err)
 	}
 	return err
 }

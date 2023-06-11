@@ -56,7 +56,7 @@ func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *mncFactory) Start() error {
 	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
-	cos.AssertNoErr(err)
+	debug.AssertNoErr(err)
 	p.xctn = newXactMNC(p.Bck, p, slab)
 	return nil
 }
@@ -82,17 +82,17 @@ func newXactMNC(bck *meta.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
-		DoLoad:   mpather.Load, // Required to fetch `NumCopies()` and skip copies.
-		Throttle: true,
+		DoLoad:   mpather.Load, // to support `NumCopies()` config
+		Throttle: true,         // NOTE: always throttling
 	}
 	mpopts.Bck.Copy(bck.Bucket())
-	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, bck, mpopts)
+	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, bck, mpopts, cmn.GCO.Get())
 	return
 }
 
 func (r *xactMNC) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	tname := r.Target().String()
+	tname := r.T.String()
 	if err := fs.ValidateNCopies(tname, r.copies); err != nil {
 		r.Finish(err)
 		return
@@ -104,29 +104,45 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 }
 
 func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
-	var size int64
-	if n := lom.NumCopies(); n == r.copies {
+	var (
+		size int64
+		n    = lom.NumCopies()
+	)
+	switch {
+	case n == r.copies:
 		return nil
-	} else if n > r.copies {
+	case n > r.copies:
 		size, err = delCopies(lom, r.copies)
-	} else {
+	default:
 		size, err = addCopies(lom, r.copies, buf)
 	}
 
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil && cos.IsErrOOS(err) {
-		return cmn.NewErrAborted(r.Name(), "visit-obj", err)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if cos.IsErrOOS(err) {
+			return cmn.NewErrAborted(r.Name(), "mnc", err)
+		}
+		if cs := fs.Cap(); cs.Err != nil {
+			return cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
+		}
+		if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+			glog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
+		}
+		return
 	}
 
+	if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+		glog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
+	}
 	r.ObjsAdd(1, size)
-	if r.Objs()%100 == 0 {
+	if cnt := r.Objs(); cnt%128 == 0 { // TODO: tuneup
 		if cs := fs.Cap(); cs.Err != nil {
-			return cmn.NewErrAborted(r.Name(), "visit-obj", cs.Err)
+			err = cmn.NewErrAborted(r.Name(), "mnc", cs.Err)
 		}
 	}
-	return nil
+	return
 }
 
 func (r *xactMNC) String() string {

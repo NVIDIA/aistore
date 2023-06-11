@@ -69,6 +69,7 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 	ini := space.IniLRU{
 		T:                   t,
 		Xaction:             xlru.(*space.XactLRU),
+		Config:              cmn.GCO.Get(),
 		StatsT:              t.statsT,
 		Buckets:             bcks,
 		GetFSUsedPercentage: ios.GetFSUsedPercentage,
@@ -106,6 +107,7 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 	ini := space.IniCln{
 		T:       t,
 		Xaction: xcln.(*space.XactCln),
+		Config:  cmn.GCO.Get(),
 		StatsT:  t.statsT,
 		Buckets: bcks,
 		WG:      wg,

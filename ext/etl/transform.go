@@ -221,7 +221,7 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	case HpushStdin:
 		ftp = append(ftp, "<COMMAND>", "['python /code/code.py']")
 	default:
-		cos.AssertMsg(false, msg.CommTypeX)
+		debug.Assert(false, msg.CommTypeX)
 	}
 	return
 }

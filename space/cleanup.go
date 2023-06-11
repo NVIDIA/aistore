@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -33,6 +33,7 @@ import (
 type (
 	IniCln struct {
 		T       cluster.Target
+		Config  *cmn.Config
 		Xaction *XactCln
 		StatsT  stats.Tracker
 		Buckets []cmn.Bck // optional list of specific buckets to cleanup
@@ -237,11 +238,13 @@ func (j *clnJ) run(providers []string) {
 		size     int64
 		err, erm error
 	)
-	defer j.p.wg.Done()
+	// globally
 	erm = j.removeDeleted()
 	if erm != nil {
 		glog.Error(erm)
 	}
+
+	// traverse
 	if len(j.ini.Buckets) != 0 {
 		size, err = j.jogBcks(j.ini.Buckets)
 	} else {
@@ -251,13 +254,13 @@ func (j *clnJ) run(providers []string) {
 		err = erm
 	}
 	if err == nil {
-		if size == 0 {
-			return
+		if size != 0 {
+			glog.Infof(f, j, cos.ToSizeIEC(size, 1))
 		}
-		glog.Infof(f, j, cos.ToSizeIEC(size, 1))
 	} else {
-		glog.Errorf(f+", err %v", j, cos.ToSizeIEC(size, 1), err)
+		glog.Errorf(f+", err: %v", j, cos.ToSizeIEC(size, 1), err)
 	}
+	j.p.wg.Done()
 }
 
 func (j *clnJ) jog(providers []string) (size int64, rerr error) {
@@ -321,11 +324,13 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 }
 
 func (j *clnJ) removeDeleted() (err error) {
-	var errCap error
 	err = j.mi.RemoveDeleted(j.String())
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
 		return
 	}
+
+	// last rm-deleted done: refresh cap now
+	var errCap error
 	j.p.cs.b, errCap = fs.CapRefresh(nil, nil)
 	if err != nil {
 		glog.Errorf("%s: %v", j, errCap)
@@ -413,9 +418,7 @@ func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
 
 // TODO: add stats error counters (stats.ErrLmetaCorruptedCount, ...)
 // TODO: revisit rm-ed byte counting
-func (j *clnJ) visitObj(fqn string) {
-	lom := cluster.AllocLOM("")
-	defer cluster.FreeLOM(lom)
+func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
 		return
 	}
@@ -505,9 +508,10 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	if parsedFQN.ContentType != fs.ObjectType {
 		j.visitCT(parsedFQN, fqn)
 	} else {
-		j.visitObj(fqn)
+		lom := cluster.AllocLOM("")
+		j.visitObj(fqn, lom)
+		cluster.FreeLOM(lom)
 	}
-
 	return nil
 }
 
@@ -517,6 +521,10 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		fevicted, bevicted int64
 		xcln               = j.ini.Xaction
 	)
+	if j.ini.Config.FastV(4, glog.SmoduleSpace) {
+		glog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
+	}
+
 	// 1. rm older work
 	for _, workfqn := range j.oldWork {
 		finfo, erw := os.Stat(workfqn)

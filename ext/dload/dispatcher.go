@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -263,7 +263,7 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 				}
 			} else {
 				src := result.Src
-				cos.Assert(result.Action == DiffResolverDelete)
+				debug.Assertf(result.Action == DiffResolverDelete, "%d vs %d", result.Action, DiffResolverDelete)
 				obj = dlObj{
 					objName:    src.ObjName,
 					link:       "",
@@ -285,7 +285,8 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			}
 
 			if result.Action == DiffResolverDelete {
-				cos.Assert(job.Sync())
+				requiresSync := job.Sync()
+				debug.Assert(requiresSync)
 				if _, err := d.xdl.t.EvictObject(result.Src); err != nil {
 					task.markFailed(err.Error())
 				} else {
@@ -305,7 +306,8 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 				return false
 			}
 		case DiffResolverSend:
-			cos.Assert(job.Sync())
+			requiresSync := job.Sync()
+			debug.Assert(requiresSync)
 		case DiffResolverEOF:
 			dlStore.setAllDispatched(job.ID(), true)
 			return true
