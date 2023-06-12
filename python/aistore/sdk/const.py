@@ -18,7 +18,10 @@ AIS_CHECKSUM_VALUE = "ais-checksum-value"
 AIS_ACCESS_TIME = "ais-atime"
 AIS_VERSION = "ais-version"
 AIS_CUSTOM_MD = "ais-custom-md"
-
+# Bucket Props Header keys
+HEADER_PREFIX = "ais-"
+HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
+HEADER_BUCKET_SUMM = HEADER_PREFIX + "bucket-summ"
 
 # URL Params
 # See api/apc/query.go
@@ -26,6 +29,7 @@ QPARAM_WHAT = "what"
 QPARAM_ETL_NAME = "etl_name"
 QPARAM_PROVIDER = "provider"
 QPARAM_BCK_TO = "bck_to"
+QPARAM_FLT_PRESENCE = "presence"
 QPARAM_KEEP_REMOTE = "keep_bck_md"
 QPARAM_ARCHPATH = "archpath"
 QPARAM_FORCE = "frc"
@@ -77,6 +81,7 @@ ACT_EVICT_REMOTE_BCK = "evict-remote-bck"
 ACT_LIST = "list"
 ACT_MOVE_BCK = "move-bck"
 ACT_PROMOTE = "promote"
+ACT_SUMMARY_BCK = "summary-bck"
 # Multi-object actions
 ACT_DELETE_OBJECTS = "delete-listrange"
 ACT_EVICT_OBJECTS = "evict-listrange"
@@ -94,3 +99,8 @@ DEFAULT_DSORT_WAIT_TIMEOUT = 300
 
 # ENCODING
 UTF_ENCODING = "utf-8"
+
+# Status Codes
+STATUS_ACCEPTED = 202
+STATUS_OK = 200
+STATUS_BAD_REQUEST = 400

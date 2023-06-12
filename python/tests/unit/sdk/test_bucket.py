@@ -16,12 +16,14 @@ from aistore.sdk.const import (
     ACT_EVICT_REMOTE_BCK,
     ACT_LIST,
     ACT_MOVE_BCK,
+    ACT_SUMMARY_BCK,
     PROVIDER_AMAZON,
     PROVIDER_AIS,
     QPARAM_BCK_TO,
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     QPARAM_KEEP_REMOTE,
+    QPARAM_FLT_PRESENCE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
@@ -29,14 +31,25 @@ from aistore.sdk.const import (
     HTTP_METHOD_POST,
     URL_PATH_BUCKETS,
     HEADER_ACCEPT,
+    HEADER_BUCKET_PROPS,
+    HEADER_BUCKET_SUMM,
     MSGPACK_CONTENT_TYPE,
+    STATUS_ACCEPTED,
+    STATUS_BAD_REQUEST,
+    STATUS_OK,
 )
-from aistore.sdk.errors import InvalidBckProvider, ErrBckAlreadyExists, ErrBckNotFound
+from aistore.sdk.errors import (
+    InvalidBckProvider,
+    ErrBckAlreadyExists,
+    ErrBckNotFound,
+    UnexpectedHTTPStatusCode,
+)
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import (
     ActionMsg,
     BucketList,
     BucketEntry,
+    BsummCtrlMsg,
     Namespace,
     TCBckMsg,
     TransformBckMsg,
@@ -574,6 +587,112 @@ class TestBucket(unittest.TestCase):
             json=ActionMsg(action=action, value=value).dict(),
             params=params,
         )
+
+    def test_summary(self):
+        # Mock responses for request calls
+        response1 = Mock()
+        response1.status_code = STATUS_ACCEPTED
+        response1.text = '"job_id"'
+
+        response2 = Mock()
+        response2.status_code = STATUS_OK
+        response2.content = (
+            b'[{"name":"temporary","provider":"ais","namespace":{"uuid":"","name":""},'
+            b'"ObjCount":{"obj_count_present":"137160","obj_count_remote":"0"},'
+            b'"ObjSize":{"obj_min_size":1024,"obj_avg_size":1024,"obj_max_size":1024},'
+            b'"TotalSize":{"size_on_disk":"148832256","size_all_present_objs":"140451840",'
+            b'"size_all_remote_objs":"0","total_disks_size":"4955520307200"},'
+            b'"used_pct":0,"is_present":false}]\n'
+        )
+
+        # Set the side_effect of the request method to return the two responses in sequence
+        self.mock_client.request.side_effect = [response1, response2]
+
+        # Call the summary method
+        result = self.ais_bck.summary()
+
+        # Ensure that request was called with the correct sequence of calls
+        bsumm_ctrl_msg = BsummCtrlMsg(
+            uuid="", prefix="", fast=True, cached=True, present=True
+        ).dict()
+        bsumm_ctrl_msg_with_uuid = BsummCtrlMsg(
+            uuid="job_id", prefix="", fast=True, cached=True, present=True
+        ).dict()
+        calls = [
+            call(
+                HTTP_METHOD_GET,
+                path="buckets/bucket_name",
+                json={"action": ACT_SUMMARY_BCK, "name": "", "value": bsumm_ctrl_msg},
+                params=self.ais_bck.qparam,
+            ),
+            call(
+                HTTP_METHOD_GET,
+                path="buckets/bucket_name",
+                json={
+                    "action": ACT_SUMMARY_BCK,
+                    "name": "",
+                    "value": bsumm_ctrl_msg_with_uuid,
+                },
+                params=self.ais_bck.qparam,
+            ),
+        ]
+        self.mock_client.request.assert_has_calls(calls)
+
+        # Assert that the result has the expected structure
+        self.assertIsInstance(result, dict)
+        self.assertIn("name", result)
+        self.assertIn("provider", result)
+        self.assertIn("ObjCount", result)
+        self.assertIn("ObjSize", result)
+        self.assertIn("TotalSize", result)
+
+    def test_summary_error_handling(self):
+        # Mock responses for the first and second request call
+        first_response = Mock()
+        first_response.status_code = STATUS_ACCEPTED
+
+        second_response = Mock()
+        second_response.status_code = STATUS_BAD_REQUEST
+        second_response.text = '"job_id"'
+
+        # Set the side_effect of the request method to return the correct mock response
+        self.mock_client.request.side_effect = [first_response, second_response]
+
+        # Call the summary method and expect an UnexpectedHTTPStatusCode exception
+        with self.assertRaises(UnexpectedHTTPStatusCode):
+            self.ais_bck.summary()
+
+        # Verify that the request method was called twice
+        assert self.mock_client.request.call_count == 2
+
+    def test_info(self):
+        # Mock response for request calls
+        response = Mock()
+        response.status_code = 200
+        response.headers = {
+            HEADER_BUCKET_PROPS: '{"some": "props"}',
+            HEADER_BUCKET_SUMM: '{"some": "summary"}',
+        }
+
+        self.mock_client.request.return_value = response
+
+        # Call the info method
+        bucket_props, bucket_summ = self.ais_bck.info(flt_presence=0)
+
+        # Ensure the request was made correctly
+        self.mock_client.request.assert_called_once_with(
+            HTTP_METHOD_HEAD,
+            path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
+            params={**self.ais_bck.qparam, QPARAM_FLT_PRESENCE: 0},
+        )
+
+        # Check the return values
+        self.assertEqual(bucket_props, {"some": "props"})
+        self.assertEqual(bucket_summ, {"some": "summary"})
+
+        # Test with invalid flt_presence
+        with self.assertRaises(ValueError):
+            self.ais_bck.info(6)
 
 
 if __name__ == "__main__":

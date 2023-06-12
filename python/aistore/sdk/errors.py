@@ -91,3 +91,19 @@ class JobInfoNotFound(Exception):
 
     def __init__(self, message):
         super().__init__(f"Job information not found on the cluster: {message}")
+
+
+class UnexpectedHTTPStatusCode(Exception):
+    """
+    Raised when the status code from a response is not what's expected.
+    """
+
+    def __init__(self, expected_status_codes, received_status_code):
+        expected_codes = ", ".join(str(code) for code in expected_status_codes)
+        super().__init__(
+            (
+                f"Unexpected status code received. "
+                f"Expected one of the following: {expected_codes}, "
+                f"but received: {received_status_code}"
+            )
+        )

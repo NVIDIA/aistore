@@ -34,7 +34,7 @@ def _create_files(folder, file_dict):
             file.write(data)
 
 
-# pylint: disable=unused-variable
+# pylint: disable=unused-variable, too-many-public-methods
 class TestBucketOps(RemoteEnabledTest):
     def setUp(self) -> None:
         super().setUp()
@@ -289,6 +289,55 @@ class TestBucketOps(RemoteEnabledTest):
         self.assertEqual(OBJECT_COUNT, len(objects))
         for obj in objects:
             self.assertTrue(obj.size > 0)
+
+    def test_summary(self):
+        # Create a new bucket
+        summ_test_bck = self._create_bucket("summary-test")
+
+        # Initially, the bucket should be empty
+        bucket_summary = summ_test_bck.summary()
+        self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "0")
+        self.assertEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bucket_summary["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bucket_summary["used_pct"], 0)
+
+        summ_test_bck.object("test-object").put_content("test-content")
+        # Now, the bucket should have 1 object
+        bucket_summary = summ_test_bck.summary()
+        self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "1")
+        self.assertNotEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
+
+        summ_test_bck.delete()
+        # Accessing the summary of a deleted bucket should raise an error
+        with self.assertRaises(ErrBckNotFound):
+            summ_test_bck.summary()
+
+    def test_info(self):
+        # Create a new bucket in the setup method
+        info_test_bck = self._create_bucket("info-test")
+
+        # Initially, the bucket should be empty
+        bck_props, bck_summ = info_test_bck.info(flt_presence=0)
+
+        # For an empty bucket, the object count and total size should be zero
+        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_summ["provider"], "ais")
+        self.assertEqual(bck_summ["name"], "info-test")
+
+        # Upload an object to the bucket
+        info_test_bck.object("test-object").put_content("test-content")
+
+        # Now that the bucket has one object, let's call the info method again
+        bck_props, bck_summ = info_test_bck.info(flt_presence=0)
+
+        # Now we should have one object and non-zero size
+        self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "1")
+        self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
+        self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
+        self.assertEqual(bck_summ["provider"], "ais")
+        self.assertEqual(bck_summ["name"], "info-test")
 
 
 if __name__ == "__main__":

@@ -4,8 +4,10 @@
 
 from __future__ import annotations  # pylint: disable=unused-variable
 
+import json
 import logging
 from pathlib import Path
+import time
 from typing import Dict, List, NewType, Iterable
 import requests
 
@@ -20,24 +22,31 @@ from aistore.sdk.const import (
     ACT_EVICT_REMOTE_BCK,
     ACT_LIST,
     ACT_MOVE_BCK,
+    ACT_SUMMARY_BCK,
+    HEADER_ACCEPT,
+    HEADER_BUCKET_PROPS,
+    HEADER_BUCKET_SUMM,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
     HTTP_METHOD_POST,
+    MSGPACK_CONTENT_TYPE,
     PROVIDER_AIS,
     QPARAM_BCK_TO,
+    QPARAM_FLT_PRESENCE,
     QPARAM_KEEP_REMOTE,
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     URL_PATH_BUCKETS,
-    HEADER_ACCEPT,
-    MSGPACK_CONTENT_TYPE,
+    STATUS_ACCEPTED,
+    STATUS_OK,
 )
 
 from aistore.sdk.errors import (
     InvalidBckProvider,
     ErrBckAlreadyExists,
     ErrBckNotFound,
+    UnexpectedHTTPStatusCode,
 )
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
 from aistore.sdk.request_client import RequestClient
@@ -47,6 +56,7 @@ from aistore.sdk.types import (
     BucketEntry,
     BucketList,
     BucketModel,
+    BsummCtrlMsg,
     Namespace,
     CopyBckMsg,
     TransformBckMsg,
@@ -248,6 +258,110 @@ class Bucket(AISSource):
             path=f"{URL_PATH_BUCKETS}/{self.name}",
             params=self.qparam,
         ).headers
+
+    def summary(self):
+        """
+        Returns bucket summary (starts xaction job and polls for results).
+
+        Raises:
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.exceptions.HTTPError: Service unavailable
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ReadTimeout: Timed out receiving response from AIStore
+            aistore.sdk.errors.AISError: All other types of errors with AIStore
+        """
+        bsumm_ctrl_msg = BsummCtrlMsg(
+            uuid="", prefix="", fast=True, cached=True, present=True
+        )
+
+        # Start the job and get the job ID
+        resp = self.make_request(
+            HTTP_METHOD_GET,
+            ACT_SUMMARY_BCK,
+            params=self.qparam,
+            value=bsumm_ctrl_msg.dict(),
+        )
+
+        # Initial response status code should be 202
+        if resp.status_code == STATUS_OK:
+            raise UnexpectedHTTPStatusCode([STATUS_ACCEPTED], resp.status_code)
+
+        job_id = resp.text.strip('"')
+
+        # Update the uuid in the control message
+        bsumm_ctrl_msg.uuid = job_id
+
+        # Sleep and request frequency in sec (starts at 200 ms)
+        sleep_time = 0.2
+
+        # Poll async task for http.StatusOK completion
+        while True:
+            resp = self.make_request(
+                HTTP_METHOD_GET,
+                ACT_SUMMARY_BCK,
+                params=self.qparam,
+                value=bsumm_ctrl_msg.dict(),
+            )
+
+            # If task completed successfully, break the loop
+            if resp.status_code == STATUS_OK:
+                break
+            # If task is still running, wait for some time and try again
+            if resp.status_code == STATUS_ACCEPTED:
+                time.sleep(sleep_time)
+                sleep_time = min(
+                    10, sleep_time * 1.5
+                )  # Increase sleep_time by 50%, but don't exceed 10 seconds
+            # Otherwise, if status code received is neither STATUS_OK or STATUS_ACCEPTED, raise an exception
+            else:
+                raise UnexpectedHTTPStatusCode(
+                    [STATUS_OK, STATUS_ACCEPTED], resp.status_code
+                )
+
+        return json.loads(resp.content.decode("utf-8"))[0]
+
+    def info(self, flt_presence: int):
+        """
+        Returns bucket summary and information/properties.
+
+        Args:
+            flt_presence (int): Describes the presence of buckets and objects with respect to their existence
+                                or non-existence in the AIS cluster.
+
+                                Expected values are:
+                                0 - (object | bucket) exists inside and/or outside cluster
+                                1 - same as 0 but no need to return summary
+                                2 - bucket: is present | object: present and properly located
+                                3 - same as 2 but no need to return summary
+                                4 - objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
+                                5 - not present - exists _outside_ cluster
+
+        Raises:
+            requests.ConnectionError: Connection error
+            requests.ConnectionTimeout: Timed out connecting to AIStore
+            requests.exceptions.HTTPError: Service unavailable
+            requests.RequestException: "There was an ambiguous exception that occurred while handling..."
+            requests.ReadTimeout: Timed out receiving response from AIStore
+            ValueError: `flt_presence` is not one of the expected values
+            aistore.sdk.errors.AISError: All other types of errors with AIStore
+        """
+        if flt_presence not in range(6):
+            raise ValueError("`flt_presence` must be one of 0, 1, 2, 3, 4, or 5.")
+
+        params = self.qparam.copy()
+        params.update({QPARAM_FLT_PRESENCE: flt_presence})
+
+        response = self.client.request(
+            HTTP_METHOD_HEAD,
+            path=f"{URL_PATH_BUCKETS}/{self.name}",
+            params=params,
+        )
+
+        bucket_props = json.loads(response.headers.get(HEADER_BUCKET_PROPS, "{}"))
+        bucket_summ = json.loads(response.headers.get(HEADER_BUCKET_SUMM, "{}"))
+
+        return bucket_props, bucket_summ
 
     # pylint: disable=too-many-arguments
     def copy(

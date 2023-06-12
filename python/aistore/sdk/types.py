@@ -168,6 +168,18 @@ class BucketModel(BaseModel):
         return dict_rep
 
 
+class BsummCtrlMsg(BaseModel):
+    """
+    Represents the bucket summary control message
+    """
+
+    uuid: str
+    prefix: str
+    fast: bool
+    cached: bool
+    present: bool
+
+
 class JobArgs(BaseModel):
     """
     Represents the set of args to pass when making a job-related request
