@@ -82,7 +82,7 @@ func (f DurationFlag) Apply(set *flag.FlagSet) { _ = f.ApplyWithError(set) }
 //
 
 // flag's printable name
-func flprn(f cli.Flag) string { return "--" + fl1n(f.GetName()) }
+func flprn(f cli.Flag) string { return flagPrefix + fl1n(f.GetName()) }
 
 // in single quotes
 func qflprn(f cli.Flag) string { return "'" + flprn(f) + "'" }

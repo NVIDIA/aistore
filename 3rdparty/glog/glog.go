@@ -93,7 +93,7 @@ const (
 
 const recycleBufMaxSize = 1024
 
-const severityChar = "IWEF"
+const severityChar = "IWE"
 
 // severity identifies the sort of log: info, warning etc. It also implements
 // the flag.Value interface. The -stderrthreshold flag is of type severity and
@@ -178,9 +178,8 @@ type (
 
 var (
 	severityName = []string{
-		infoLog:    "INFO",
-		warningLog: "WARNING",
-		errorLog:   "ERROR",
+		infoLog:  "INFO",
+		errorLog: "ERROR",
 	}
 
 	// assorted filenames (and their line numbers) that we don't want to clutter the logs
@@ -408,7 +407,7 @@ func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 	case l.toStderr:
 		os.Stderr.Write(data)
 	default:
-		if alsoToStderr || l.alsoToStderr {
+		if alsoToStderr || l.alsoToStderr || s >= errorLog {
 			os.Stderr.Write(data)
 		}
 		l.mu.Lock()
@@ -419,14 +418,9 @@ func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 			}
 		}
 		switch s {
-		case errorLog:
+		case errorLog, warningLog:
 			if l.file[errorLog] != nil {
 				l.file[errorLog].Write(data)
-			}
-			fallthrough
-		case warningLog:
-			if l.file[warningLog] != nil {
-				l.file[warningLog].Write(data)
 			}
 			fallthrough
 		case infoLog:
@@ -515,10 +509,10 @@ func (l *loggingT) createFiles(sev severity) error {
 	// Files are created in decreasing severity order, so as soon as we find one
 	// has already been created, we can stop.
 	for s := sev; s >= infoLog && l.file[s] == nil; s-- {
-		sb := &syncBuffer{
-			logger: l,
-			sev:    s,
+		if s == warningLog {
+			continue
 		}
+		sb := &syncBuffer{logger: l, sev: s}
 		if err := sb.rotateFile(now); err != nil {
 			return err
 		}

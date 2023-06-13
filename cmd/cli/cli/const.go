@@ -182,6 +182,8 @@ const (
 // more constants
 //
 
+const flagPrefix = "--"
+
 const (
 	fileStdIO = "-"         // STDIN (for `ais put`), STDOUT (for `ais put`)
 	discardIO = "/dev/null" // (io.Discard)
@@ -577,34 +579,26 @@ var (
 		Usage: "wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)",
 	}
 
-	// multi-object
+	// multi-object / multi-file
 	listFlag = cli.StringFlag{
 		Name: "list",
-		Usage: "comma-separated list of object names, e.g.:\n" +
+		Usage: "comma-separated list of object or file names, e.g.:\n" +
 			indent4 + "\t--list 'o1,o2,o3'\n" +
-			indent4 + "\t--list \"abc/1.tar, abc/1.cls, abc/1.jpeg\"",
-	}
-	listFileFlag = cli.StringFlag{
-		Name: "list",
-		Usage: "comma-separated list of file names, e.g.:\n" +
-			indent4 + "\t--list 'f1,f2,f3'\n" +
-			indent4 + "\t--list \"/home/abc/1.tar, /home/abc/1.cls, /home/abc/1.jpeg\"",
+			indent4 + "\t--list \"abc/1.tar, abc/1.cls, abc/1.jpeg\"\n" +
+			indent4 + "\tor, when listing files and/or directories:\n" +
+			indent4 + "\t--list \"/home/docs, /home/abc/1.tar, /home/abc/1.jpeg\"",
 	}
 	templateFlag = cli.StringFlag{
 		Name: "template",
-		Usage: "template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:\n" +
+		Usage: "template to match object or file names; may contain prefix (that could be empty) with zero or more ranges\n" +
+			"\t(with optional steps and gaps), e.g.:\n" +
+			indent4 + "\t--template \"\" # (an empty or '*' template matches eveything)\n" +
 			indent4 + "\t--template 'dir/subdir/'\n" +
 			indent4 + "\t--template 'shard-{1000..9999}.tar'\n" +
 			indent4 + "\t--template \"prefix-{0010..0013..2}-gap-{1..2}-suffix\"\n" +
-			indent4 + "\t--template \"prefix-{0010..9999..2}-suffix\"",
-	}
-	templateFileFlag = cli.StringFlag{
-		Name: "template",
-		Usage: "template to match file names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:\n" +
+			indent4 + "\tand similarly, when specifying files and directories:\n" +
 			indent4 + "\t--template '/home/dir/subdir/'\n" +
-			indent4 + "\t--template 'shard-{1000..9999}.tar'\n" +
-			indent4 + "\t--template \"prefix-{0010..0013..2}-gap-{1..2}-suffix\"\n" +
-			indent4 + "\t--template \"prefix-{0010..9999..2}-suffix\"",
+			indent4 + "\t--template \"/abc/prefix-{0010..9999..2}-suffix\"",
 	}
 
 	listrangeFlags = []cli.Flag{
@@ -612,12 +606,6 @@ var (
 		templateFlag,
 		waitFlag,
 		waitJobXactFinishedFlag,
-		progressFlag,
-		refreshFlag,
-	}
-	listrangeFileFlags = []cli.Flag{
-		listFileFlag,
-		templateFileFlag,
 		progressFlag,
 		refreshFlag,
 	}

@@ -172,7 +172,7 @@ func TestError(t *testing.T) {
 		t.Error("Error failed")
 	}
 	str := contents(errorLog)
-	if !contains(warningLog, str) {
+	if !contains(errorLog, str) {
 		t.Error("Warning failed")
 	}
 	if !contains(infoLog, str) {
@@ -187,10 +187,10 @@ func TestWarning(t *testing.T) {
 	setFlags()
 	defer logging.swap(logging.newBuffers())
 	Warning("test")
-	if !contains(warningLog, "W") {
+	if !contains(errorLog, "W") {
 		t.Errorf("Warning has wrong character: %q", contents(warningLog))
 	}
-	if !contains(warningLog, "test") {
+	if !contains(errorLog, "test") {
 		t.Error("Warning failed")
 	}
 	str := contents(warningLog)

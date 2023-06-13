@@ -230,3 +230,12 @@ func _errUsage(c *cli.Context, msg string) (err *errUsage) {
 	}
 	return
 }
+
+func mistypedFlag(extraArgs []string) error {
+	for _, arg := range extraArgs {
+		if strings.HasPrefix(arg, flagPrefix) {
+			return fmt.Errorf("unrecognized option %q (a typo? see '--help' for details)", arg)
+		}
+	}
+	return nil
+}

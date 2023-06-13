@@ -48,7 +48,7 @@ var (
 		},
 
 		commandPut: append(
-			listrangeFileFlags,
+			listrangeFlags,
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,

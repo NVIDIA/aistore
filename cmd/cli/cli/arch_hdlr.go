@@ -8,6 +8,7 @@ package cli
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -42,7 +43,7 @@ var (
 			waitFlag,
 		},
 		commandPut: append(
-			listrangeFileFlags,
+			listrangeFlags,
 			archAppendIfExistFlag,
 			archAppendFlag,
 			archpathFlag,
@@ -78,9 +79,9 @@ var (
 			},
 			{
 				Name: commandPut,
-				Usage: "archive a file, a directory, or multiple files and/or directories \n" +
-					indent1 + "as a " + archExts + "-formatted object (\"shard\").\n" +
-					indent1 + "Both APPEND (to an existing shard) and PUT (new version) variants are supported.\n" +
+				Usage: "archive a file, a directory, or multiple files and/or directories as\n" +
+					indent1 + archExts + "-formatted object - aka \"shard\".\n" +
+					indent1 + "Both APPEND (to an existing shard) and PUT (new version of the shard) variants are supported.\n" +
 					indent1 + "Examples:\n" +
 					indent1 + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append a file to a given shard and name it as specified;\n" +
 					indent1 + "- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
@@ -126,6 +127,15 @@ var (
 )
 
 func archMultiObjHandler(c *cli.Context) error {
+	// parse for put/append and re-route if need be
+	{
+		a := archput{}
+		if err := a.parse(c); err == nil {
+			msg := "expecting " + c.Command.ArgsUsage + "\n(hint: use 'ais archive put' commandi, '--help' for details)"
+			return errors.New(msg)
+		}
+	}
+
 	// parse
 	var a archbck
 	a.apndIfExist = flagIsSet(c, archAppendIfExistFlag)
@@ -178,14 +188,16 @@ ex:
 }
 
 func putApndArchHandler(c *cli.Context) (err error) {
-	a := archput{
-		archpath:   parseStrFlag(c, archpathFlag),
-		appendOnly: flagIsSet(c, archAppendFlag),
-		appendIf:   flagIsSet(c, archAppendIfExistFlag),
+	{
+		src, dst := c.Args().Get(0), c.Args().Get(1)
+		if _, _, err := parseBckObjURI(c, src, true); err == nil {
+			if _, _, err := parseBckObjURI(c, dst, true); err == nil {
+				msg := "expecting " + c.Command.ArgsUsage + "\n(hint: use 'ais archive bucket' command, '--help' for details)"
+				return errors.New(msg)
+			}
+		}
 	}
-	if a.appendOnly && a.appendIf {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archAppendFlag), qflprn(archAppendIfExistFlag))
-	}
+	a := archput{}
 	if err = a.parse(c); err != nil {
 		return
 	}

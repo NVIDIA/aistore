@@ -78,10 +78,10 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if flagIsSet(c, listFileFlag) && flagIsSet(c, templateFileFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFileFlag), qflprn(templateFileFlag))
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
-	if flagIsSet(c, progressFlag) || flagIsSet(c, listFileFlag) || flagIsSet(c, templateFileFlag) {
+	if flagIsSet(c, progressFlag) || flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
 		// check connectivity (since '--progress' steals STDOUT with multi-object producing
 		// scary looking errors when there's no cluster)
 		if _, err = api.GetClusterMap(apiBP); err != nil {
@@ -96,18 +96,18 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 			return
 		}
 		// src via local filenames
-		if !flagIsSet(c, listFileFlag) && !flagIsSet(c, templateFileFlag) {
+		if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
 			return fmt.Errorf("missing source arg in %q", c.Command.ArgsUsage)
 		}
-		if flagIsSet(c, listFileFlag) {
-			csv := parseStrFlag(c, listFileFlag)
+		if flagIsSet(c, listFlag) {
+			csv := parseStrFlag(c, listFlag)
 			a.src.fdnames = splitCsv(csv)
 			return
 		}
 		// optional template to select local source(s)
 		var (
 			pt   cos.ParsedTemplate
-			tmpl = parseStrFlag(c, templateFileFlag)
+			tmpl = parseStrFlag(c, templateFlag)
 		)
 		pt, err = cos.NewParsedTemplate(tmpl)
 		if err == nil {
@@ -125,11 +125,11 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		}
 
 		const efmt = "source (%q) and flag (%s) cannot are mutually exclusive"
-		if flagIsSet(c, listFileFlag) {
-			return fmt.Errorf(efmt, a.src.arg, qflprn(listFileFlag))
+		if flagIsSet(c, listFlag) {
+			return fmt.Errorf(efmt, a.src.arg, qflprn(listFlag))
 		}
-		if flagIsSet(c, templateFileFlag) {
-			return fmt.Errorf(efmt, a.src.arg, qflprn(templateFileFlag))
+		if flagIsSet(c, templateFlag) {
+			return fmt.Errorf(efmt, a.src.arg, qflprn(templateFlag))
 		}
 
 		// STDIN
@@ -174,6 +174,10 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		return
 	}
 
+	if err := mistypedFlag(c.Args()[2:]); err != nil {
+		return err
+	}
+
 	const (
 		efmt = "too many arguments: '%s'"
 		hint = "(hint: wildcards must be in single or double quotes, see `--help` for details)"
@@ -191,7 +195,7 @@ func (a *archbck) dest() string { return a.dst.bck.Cname(a.dst.oname) }
 
 func (a *archbck) parse(c *cli.Context) (err error) {
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
-	if a.dst.bck.IsEmpty() || err == nil /* TODO -- FIXME: archive local file(s) */ {
+	if a.dst.bck.IsEmpty() || err == nil {
 		return
 	}
 	//
@@ -224,6 +228,12 @@ func (*archput) verb() string { return "APPEND" }
 func (a *archput) dest() string { return a.dst.bck.Cname(a.dst.oname) }
 
 func (a *archput) parse(c *cli.Context) (err error) {
+	a.archpath = parseStrFlag(c, archpathFlag)
+	a.appendOnly = flagIsSet(c, archAppendFlag)
+	a.appendIf = flagIsSet(c, archAppendIfExistFlag)
+	if a.appendOnly && a.appendIf {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archAppendFlag), qflprn(archAppendIfExistFlag))
+	}
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	return
 }

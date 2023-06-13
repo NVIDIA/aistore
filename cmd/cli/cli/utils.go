@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
@@ -807,6 +806,8 @@ func selectProvidersExclRais(bcks cmn.Bcks) (sorted []string) {
 	return
 }
 
+// see related: `verboseWarnings()`
+
 func actionDone(c *cli.Context, msg string) { fmt.Fprintln(c.App.Writer, msg) }
 func actionWarn(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fcyan("Warning: ")+msg) }
 func actionNote(c *cli.Context, msg string) { fmt.Fprintln(c.App.ErrWriter, fblue("Note: ")+msg) }
@@ -819,10 +820,7 @@ func actionCptn(c *cli.Context, prefix, msg string) {
 	}
 }
 
-// (more warning)
-func verboseWarnings() bool {
-	return os.Getenv(env.DEBUG) != "" // anything for now
-}
+func verboseWarnings() bool { return false } // TODO: if need be
 
 func dryRunCptn(c *cli.Context) {
 	const (
