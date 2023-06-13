@@ -6,7 +6,6 @@ package ais
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -221,11 +220,6 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 }
 
 func setConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {
-	if toUpdate.Log != nil && toUpdate.Log.Level != nil {
-		if err := cmn.SetLogLevel(*toUpdate.Log.Level); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", *toUpdate.Log.Level, err)
-		}
-	}
 	err = config.UpdateClusterConfig(toUpdate, asType)
 	return
 }

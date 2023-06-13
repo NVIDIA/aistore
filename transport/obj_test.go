@@ -10,11 +10,11 @@ package transport_test
 // 1) run all tests while redirecting glog to STDERR:
 // go test -v -logtostderr=true
 //
-// 2) run tests matching "Multi" with debug enabled and glog level=1 (non-verbose):
-// AIS_DEBUG=transport=1 go test -v -run=Multi -tags=debug
+// 2) run tests matching "Multi" with debug enabled:
+// go test -v -run=Multi -tags=debug
 //
-// 3) run tests matching "Multi" with debug enabled, glog level=4 (super-verbose) and glog redirect:
-// AIS_DEBUG=transport=4 go test -v -run=Multi -tags=debug -logtostderr=true
+// 3) run tests matching "Multi" with debug enabled and glog redirect:
+// go test -v -run=Multi -tags=debug -logtostderr=true
 
 import (
 	"encoding/binary"

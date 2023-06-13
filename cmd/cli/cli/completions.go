@@ -28,9 +28,16 @@ import (
 // Cluster / Daemon //
 //////////////////////
 
+// Log level doubles as level per se and (s)modules, the latter enumerated
+const (
+	confLogLevel   = "log.level"
+	confLogModules = "log.modules"
+)
+
 var (
 	supportedBool = []string{"true", "false"}
 	propCmpls     = map[string][]string{
+		confLogModules:                        append(cos.Smodules, NilValue),
 		cmn.PropBucketAccessAttrs:             apc.SupportedPermissions(),
 		apc.HdrObjCksumType:                   cos.SupportedChecksums(),
 		feat.FeaturesPropName:                 append(feat.All, NilValue),
@@ -68,16 +75,12 @@ func completionErr(c *cli.Context, err error) {
 	fmt.Fprintln(c.App.ErrWriter, formatErr(err))
 }
 
-func lastValueIsAccess(c *cli.Context) bool {
-	return lastValueIs(c, propCmpls[cmn.PropBucketAccessAttrs])
-}
-
-func lastValueIsFeatures(c *cli.Context) bool {
-	return lastValueIs(c, propCmpls[feat.FeaturesPropName])
-}
+func lastIsSmodule(c *cli.Context) bool { return _lastv(c, propCmpls[confLogModules]) }
+func lastIsAccess(c *cli.Context) bool  { return _lastv(c, propCmpls[cmn.PropBucketAccessAttrs]) }
+func lastIsFeature(c *cli.Context) bool { return _lastv(c, propCmpls[feat.FeaturesPropName]) }
 
 // Returns true if the last arg is any of the enumerated constants
-func lastValueIs(c *cli.Context, values []string) bool {
+func _lastv(c *cli.Context, values []string) bool {
 	if c.NArg() == 0 {
 		return false
 	}
@@ -90,17 +93,15 @@ func lastValueIs(c *cli.Context, values []string) bool {
 	return false
 }
 
-// Completes command line with not-yet-typed permission constant
-func accessCompletions(c *cli.Context) {
-	enumCompletions(c, propCmpls[cmn.PropBucketAccessAttrs])
-}
+// not-yet-typed:
+// - log modules
+// - access permissions
+// - features
+func smoduleCompletions(c *cli.Context) { remaining(c, propCmpls[confLogModules]) }
+func accessCompletions(c *cli.Context)  { remaining(c, propCmpls[cmn.PropBucketAccessAttrs]) }
+func featureCompletions(c *cli.Context) { remaining(c, propCmpls[feat.FeaturesPropName]) }
 
-// Completes command line with not-yet-typed feature constant
-func featureCompletions(c *cli.Context) {
-	enumCompletions(c, propCmpls[feat.FeaturesPropName])
-}
-
-func enumCompletions(c *cli.Context, values []string) {
+func remaining(c *cli.Context, values []string) {
 	typedList := c.Args()
 outer:
 	for _, v := range values {
@@ -114,17 +115,20 @@ outer:
 }
 
 func propValueCompletion(c *cli.Context) bool {
-	if c.NArg() == 0 {
+	switch {
+	case c.NArg() == 0:
 		return false
-	}
-	if lastValueIsAccess(c) {
+	case lastIsAccess(c):
 		accessCompletions(c)
 		return true
-	}
-	if lastValueIsFeatures(c) {
+	case lastIsFeature(c):
 		featureCompletions(c)
 		return true
+	case lastIsSmodule(c):
+		smoduleCompletions(c)
+		return true
 	}
+	// default
 	list, ok := propCmpls[argLast(c)]
 	if !ok {
 		return false
@@ -201,8 +205,11 @@ func setNodeConfigCompletions(c *cli.Context) {
 		} else if argLast(c) == cfgScopeInherited {
 			fmt.Println(cmdReset)
 		}
-		err := cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-			props.Set(uniqueTag)
+		err := cmn.IterFields(v, func(tag string, _ cmn.IterField) (err error, b bool) {
+			props.Set(tag)
+			if tag == confLogLevel {
+				props.Set(confLogModules) // (ref 836)
+			}
 			return nil, false
 		})
 		debug.AssertNoErr(err)
@@ -291,6 +298,9 @@ func setCluConfigCompletions(c *cli.Context) {
 	)
 	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
+		if tag == confLogLevel {
+			propList = append(propList, confLogModules) // insert to assign separately and combine below (ref 836)
+		}
 		return
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)

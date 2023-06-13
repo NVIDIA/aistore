@@ -7,10 +7,12 @@ package authn
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 )
 
@@ -70,6 +72,12 @@ func (c *Config) Secret() (secret string) {
 	secret = c.Server.Secret
 	c.RUnlock()
 	return
+}
+
+func (c *Config) Verbose() bool {
+	level, err := strconv.Atoi(c.Log.Level)
+	debug.AssertNoErr(err)
+	return level > 3
 }
 
 func (c *Config) ApplyUpdate(cu *ConfigToUpdate) error {

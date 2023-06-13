@@ -521,7 +521,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		fevicted, bevicted int64
 		xcln               = j.ini.Xaction
 	)
-	if j.ini.Config.FastV(4, glog.SmoduleSpace) {
+	if j.ini.Config.FastV(4, cos.SmoduleSpace) {
 		glog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
 	}
 

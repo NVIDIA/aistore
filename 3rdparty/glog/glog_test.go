@@ -19,8 +19,6 @@ package glog
 import (
 	"bytes"
 	"fmt"
-	stdLog "log"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -136,33 +134,6 @@ func TestInfoDepth(t *testing.T) {
 	}
 }
 
-func init() {
-	CopyStandardLogTo("INFO")
-}
-
-// Test that CopyStandardLogTo panics on bad input.
-func TestCopyStandardLogToPanic(t *testing.T) {
-	defer func() {
-		if s, ok := recover().(string); !ok || !strings.Contains(s, "LOG") {
-			t.Errorf(`CopyStandardLogTo("LOG") should have panicked: %v`, s)
-		}
-	}()
-	CopyStandardLogTo("LOG")
-}
-
-// Test that using the standard log package logs to INFO.
-func TestStandardLog(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	stdLog.Print("test")
-	if !contains(infoLog, "I") {
-		t.Errorf("Info has wrong character: %q", contents(infoLog))
-	}
-	if !contains(infoLog, "test") {
-		t.Error("Info failed")
-	}
-}
-
 // Test that the header has the correct format.
 func TestHeader(t *testing.T) {
 	setFlags()
@@ -228,98 +199,6 @@ func TestWarning(t *testing.T) {
 	}
 }
 
-// Test that a V log goes to Info.
-func TestV(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.verbosity.Set("2")
-	defer logging.verbosity.Set("0")
-	V(2).Info("test")
-	if !contains(infoLog, "I") {
-		t.Errorf("Info has wrong character: %q", contents(infoLog))
-	}
-	if !contains(infoLog, "test") {
-		t.Error("Info failed")
-	}
-}
-
-// Test that a vmodule enables a log in this file.
-func TestVmoduleOn(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.vmodule.Set("glog_test=2")
-	defer logging.vmodule.Set("")
-	if !V(1) {
-		t.Error("V not enabled for 1")
-	}
-	if !V(2) {
-		t.Error("V not enabled for 2")
-	}
-	if V(3) {
-		t.Error("V enabled for 3")
-	}
-	V(2).Info("test")
-	if !contains(infoLog, "I") {
-		t.Errorf("Info has wrong character: %q", contents(infoLog))
-	}
-	if !contains(infoLog, "test") {
-		t.Error("Info failed")
-	}
-}
-
-// Test that a vmodule of another file does not enable a log in this file.
-func TestVmoduleOff(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	logging.vmodule.Set("notthisfile=2")
-	defer logging.vmodule.Set("")
-	for i := 1; i <= 3; i++ {
-		if V(Level(i)) {
-			t.Errorf("V enabled for %d", i)
-		}
-	}
-	V(2).Info("test")
-	if contents(infoLog) != "" {
-		t.Error("V logged incorrectly")
-	}
-}
-
-// vGlobs are patterns that match/don't match this file at V=2.
-var vGlobs = map[string]bool{
-	// Easy to test the numeric match here.
-	"glog_test=1": false, // If -vmodule sets V to 1, V(2) will fail.
-	"glog_test=2": true,
-	"glog_test=3": true, // If -vmodule sets V to 1, V(3) will succeed.
-	// These all use 2 and check the patterns. All are true.
-	".*=2":          true,
-	"?l*=2":         true,
-	"...._.*=2":     true,
-	"..[mno]._*t=2": true,
-	// These all use 2 and check the patterns. All are false.
-	"*x=2":          false,
-	"x.*=2":         false,
-	"??_*=2":        false,
-	".[abc]._.*t=2": false,
-}
-
-// Test that vmodule globbing works as advertised.
-func testVmoduleGlob(pat string, match bool, t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	defer logging.vmodule.Set("")
-	logging.vmodule.Set(pat)
-	if V(2) != Verbose(match) {
-		t.Errorf("incorrect match for %q: got %t expected %t", pat, V(2), match)
-	}
-}
-
-// Test that a vmodule globbing works as advertised.
-func TestVmoduleGlob(t *testing.T) {
-	for glob, match := range vGlobs {
-		testVmoduleGlob(glob, match, t)
-	}
-}
-
 func TestRollover(t *testing.T) {
 	setFlags()
 	var err error
@@ -365,45 +244,9 @@ func TestRollover(t *testing.T) {
 	}
 }
 
-func TestLogBacktraceAt(t *testing.T) {
-	setFlags()
-	defer logging.swap(logging.newBuffers())
-	// The peculiar style of this code simplifies line counting and maintenance of the
-	// tracing block below.
-	var infoLine string
-	setTraceLocation := func(file string, line int, ok bool, delta int) {
-		if !ok {
-			t.Fatal("could not get file:line")
-		}
-		_, file = filepath.Split(file)
-		infoLine = fmt.Sprintf("%s:%d", file, line+delta)
-		err := logging.traceLocation.Set(infoLine)
-		if err != nil {
-			t.Fatal("error setting log_backtrace_at: ", err)
-		}
-	}
-	{
-		// Start of tracing block. These lines know about each other's relative position.
-		_, file, line, ok := runtime.Caller(0)
-		setTraceLocation(file, line, ok, +2) // Two lines between Caller and Info calls.
-		Info("we want a stack trace here")
-	}
-	numAppearances := strings.Count(contents(infoLog), infoLine)
-	if numAppearances < 2 {
-		// Need 2 appearances, one in the log header and one in the trace:
-		//   log_test.go:281: I0511 16:36:06.952398 02238 log_test.go:280] we want a stack trace here
-		//   ...
-		//   github.com/glog/glog_test.go:280 (0x41ba91)
-		//   ...
-		// We could be more precise but that would require knowing the details
-		// of the traceback format, which may not be dependable.
-		t.Fatal("got no trace back; log is ", contents(infoLog))
-	}
-}
-
 func BenchmarkHeader(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		buf, _, _ := logging.header(infoLog, 0)
+		buf := logging.header(infoLog, 0)
 		logging.putBuffer(buf)
 	}
 }

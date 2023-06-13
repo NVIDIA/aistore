@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -70,7 +71,7 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		glog.Errorf("(reb: %s) %s is greater than %s", xreb.xctn, xreb.Args.UUID, p.Args.UUID)
 		wpr = xreg.WprUse
 	} else if xreb.Args.UUID == p.Args.UUID {
-		if cmn.FastV(4, glog.SmoduleXs) {
+		if cmn.FastV(4, cos.SmoduleXs) {
 			glog.Infof("%s already running, nothing to do", xreb.xctn)
 		}
 		wpr = xreg.WprUse

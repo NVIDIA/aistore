@@ -95,7 +95,8 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	// given dSort job. Also bug where we could send abort (which triggers cleanup)
 	// to not yet initialized target.
 
-	if glog.V(4) {
+	config := cmn.GCO.Get()
+	if config.FastV(4, cos.SmoduleDsort) {
 		glog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := apc.URLPathdSortInit.Join(managerUUID)
@@ -104,7 +105,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 		return
 	}
 
-	if glog.V(4) {
+	if config.FastV(4, cos.SmoduleDsort) {
 		glog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = apc.URLPathdSortStart.Join(managerUUID)
@@ -364,12 +365,14 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortInit.L)
-	if err != nil {
+	apiItems, errV := checkRESTItems(w, r, 1, apc.URLPathdSortInit.L)
+	if errV != nil {
 		return
 	}
-	var rs *ParsedRequestSpec
-	b, err := io.ReadAll(r.Body)
+	var (
+		rs     *ParsedRequestSpec
+		b, err = io.ReadAll(r.Body)
+	)
 	if err != nil {
 		cmn.WriteErr(w, r, fmt.Errorf("could not read request body, err: %w", err))
 		return
@@ -381,16 +384,15 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, err := Managers.Add(managerUUID)
+	dsortManager, err := Managers.Add(managerUUID) // returns manager locked
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	defer dsortManager.unlock()
 	if err = dsortManager.init(rs); err != nil {
 		cmn.WriteErr(w, r, err)
-		return
 	}
+	dsortManager.unlock()
 }
 
 // startSortHandler is the handler called for the HTTP endpoint /v1/sort/start.
@@ -572,7 +574,8 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager.addCompressionSizes(compressed, uncompressed)
 		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
-		if glog.V(4) {
+
+		if dsortManager.config.FastV(4, cos.SmoduleDsort) {
 			glog.Infof(
 				"[dsort] %s total times received records from another target: %d",
 				dsortManager.ManagerUUID, dsortManager.received.count.Load(),

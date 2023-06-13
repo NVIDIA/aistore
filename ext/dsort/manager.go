@@ -140,6 +140,8 @@ type (
 		dsorterStarted sync.WaitGroup
 
 		callTimeout time.Duration // Maximal time we will wait for other node to respond
+
+		config *cmn.Config
 	}
 )
 
@@ -199,12 +201,12 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 
 	// NOTE: Total size of the records metadata can sometimes be large
 	// and so this is why we need such a long timeout.
-	config := cmn.GCO.Get()
+	m.config = cmn.GCO.Get()
 	m.client = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,
-		UseHTTPS:    config.Net.HTTP.UseHTTPS,
-		SkipVerify:  config.Net.HTTP.SkipVerify,
+		UseHTTPS:    m.config.Net.HTTP.UseHTTPS,
+		SkipVerify:  m.config.Net.HTTP.SkipVerify,
 	})
 
 	m.fileExtension = rs.Extension
@@ -245,7 +247,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.setAbortedTo(false)
 	m.state.cleanWait = sync.NewCond(&m.mu)
 
-	m.callTimeout = config.DSort.CallTimeout.D()
+	m.callTimeout = m.config.DSort.CallTimeout.D()
 	return nil
 }
 
@@ -415,13 +417,17 @@ func (m *Manager) abort(errs ...error) {
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
 	if inProgress {
-		debug.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
+		if m.config.FastV(4, cos.SmoduleDsort) {
+			glog.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
+		}
 		// Wait for dsorter to initialize all the resources.
 		m.waitDSorterToStart()
 
 		m.dsorter.onAbort()
 		m.waitForFinish()
-		debug.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
+		if m.config.FastV(4, cos.SmoduleDsort) {
+			glog.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
+		}
 	}
 
 	go func() {
@@ -674,8 +680,10 @@ func (m *Manager) makeRecvShardFunc() transport.RecvObj {
 		}
 		if err == nil {
 			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
-				glog.V(4).Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
-					m.ManagerUUID, lom)
+				if m.config.FastV(4, cos.SmoduleDsort) {
+					glog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
+						m.ManagerUUID, lom)
+				}
 				return nil
 			}
 			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)

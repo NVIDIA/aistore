@@ -372,7 +372,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 				mpathInfo, _, err := fs.FQN2Mpath(copyFQN)
 				if err != nil {
 					// Mountpath with the copy is missing.
-					if glog.V(4) {
+					if cmn.FastV(4, cos.SmoduleCluster) {
 						glog.Warning(err)
 					}
 					// For utilities and tests: fill the map with mpath names always

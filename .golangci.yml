@@ -111,18 +111,6 @@ linters-settings:
     disable:
       - fieldalignment # TODO: Enable, for now reports a lot of problems.
       - shadow # Reports a lot of false-positives and conflicts with other linters.
-    settings:
-      printf: # Analyzer name, run `go tool vet help` to see all analyzers.
-        funcs: # Run `go tool vet help printf` to see available settings for `printf` analyzer.
-          - github.com/NVIDIA/aistore/3rdparty/glog.Infof
-          - github.com/NVIDIA/aistore/3rdparty/glog.Warningf
-          - github.com/NVIDIA/aistore/3rdparty/glog.Errorf
-          - github.com/NVIDIA/aistore/3rdparty/glog.Fatalf
-          - github.com/NVIDIA/aistore/cmn/debug.Assertf
-          - github.com/NVIDIA/aistore/cmn/debug.Errorf
-          - github.com/NVIDIA/aistore/cmn/debug.Infof
-          - github.com/NVIDIA/aistore/cmn/cos.Exitf
-          - github.com/NVIDIA/aistore/cmn/cos.ExitLogf
   golint:
     min-confidence: 0
   errcheck:

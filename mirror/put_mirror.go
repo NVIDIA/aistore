@@ -116,7 +116,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 	copies := int(lom.Bprops().Mirror.Copies)
 	size, err := addCopies(lom, copies, buf)
-	if (err != nil && (r.total.Load()%logError) == 0) || r.config.FastV(5, glog.SmoduleMirror) {
+	if (err != nil && (r.total.Load()%logError) == 0) || r.config.FastV(5, cos.SmoduleMirror) {
 		var s string
 		if err != nil {
 			s = "Error: " + err.Error() + ": "

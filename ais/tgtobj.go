@@ -162,7 +162,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
-			if poi.config.FastV(4, glog.SmoduleAIS) {
+			if poi.config.FastV(4, cos.SmoduleAIS) {
 				glog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
@@ -197,7 +197,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		// xaction in-objs counters, promote first
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
-	if poi.config.FastV(4, glog.SmoduleAIS) {
+	if poi.config.FastV(4, cos.SmoduleAIS) {
 		glog.Infoln(poi.loghdr())
 	}
 	return
@@ -281,7 +281,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
-			if poi.config.FastV(4, glog.SmoduleAIS) {
+			if poi.config.FastV(4, cos.SmoduleAIS) {
 				glog.Warningf("(%s) is busy", poi.loghdr())
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
@@ -1107,7 +1107,7 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
 		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("APPEND %s: %s", a.lom, delta)
 	}
 	return

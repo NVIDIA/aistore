@@ -78,7 +78,7 @@ func (j *jogger) jog() {
 		j.mtx.Unlock()
 
 		lom := cluster.AllocLOM(t.obj.objName)
-		t.download(lom)
+		t.download(lom, j.parent.config)
 		cluster.FreeLOM(lom)
 		t.cancel()
 

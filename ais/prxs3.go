@@ -30,7 +30,7 @@ var (
 
 // [METHOD] /s3
 func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
 
@@ -395,7 +395,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
 	}
 	started := time.Now()
@@ -430,7 +430,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
@@ -468,7 +468,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
@@ -545,7 +545,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 
@@ -578,7 +578,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()

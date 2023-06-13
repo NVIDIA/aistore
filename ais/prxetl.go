@@ -120,6 +120,10 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	// add to cluster MD and start running
 	if err := p.startETL(w, initMsg, true /*add to etlMD*/); err != nil {
 		p.writeErr(w, r, err)
+		return
+	}
+	if cmn.FastV(4, cos.SmoduleETL) {
+		glog.Infoln(p.String() + ": " + initMsg.String())
 	}
 }
 

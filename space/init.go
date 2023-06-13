@@ -7,8 +7,8 @@
 package space
 
 import (
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -18,5 +18,5 @@ func Xreg(config *cmn.Config) {
 	xreg.RegNonBckXact(&lruFactory{})
 	xreg.RegNonBckXact(&clnFactory{})
 
-	verbose = config.FastV(4, glog.SmoduleSpace)
+	verbose = config.FastV(4, cos.SmoduleSpace)
 }

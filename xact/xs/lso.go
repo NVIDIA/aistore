@@ -117,7 +117,7 @@ func (p *lsoFactory) Start() error {
 /////////////
 
 func (r *LsoXact) Run(*sync.WaitGroup) {
-	if r.config.FastV(4, glog.SmoduleXs) {
+	if r.config.FastV(4, cos.SmoduleXs) {
 		glog.Infoln(r.String())
 	}
 	if !r.listRemote() {
@@ -375,7 +375,7 @@ func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err err
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-	} else if r.config.FastV(4, glog.SmoduleXs) || !cos.IsRetriableConnErr(err) {
+	} else if r.config.FastV(4, cos.SmoduleXs) || !cos.IsRetriableConnErr(err) {
 		glog.Infof("Warning: %s: failed to send [%+v]: %v", r.p.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)

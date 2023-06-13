@@ -180,18 +180,21 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 	)
 	nvs = cos.StrKVs{}
 	for i < ll {
-		if args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator) {
+		switch {
+		case args[i] != keyAndValueSeparator && strings.Contains(args[i], keyAndValueSeparator):
 			pairs := strings.SplitN(args[i], keyAndValueSeparator, 2)
 			nvs[pairs[0]] = pairs[1]
 			i++
-		} else if i < ll-2 && args[i+1] == keyAndValueSeparator {
+		case i < ll-2 && args[i+1] == keyAndValueSeparator:
 			nvs[args[i]] = args[i+2]
 			i += 3
-		} else if args[i] == feat.FeaturesPropName && i < ll-1 {
+		case args[i] == feat.FeaturesPropName && i < ll-1:
 			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only features nothing else in the tail
 			return
-		} else {
-			// last name without a value
+		case args[i] == confLogModules && i < ll-1:
+			nvs[args[i]] = strings.Join(args[i+1:], ",") // NOTE: only smodules nothing else in the tail
+			return
+		default: // last name without a value
 			if i == ll-1 {
 				return nil, fmt.Errorf("invalid key=value pair %q", args[i])
 			}

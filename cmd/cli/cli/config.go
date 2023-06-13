@@ -143,6 +143,9 @@ func setCluConfigHandler(c *cli.Context) error {
 	)
 	err := cmn.IterFields(&config.ClusterConfig, func(tag string, _ cmn.IterField) (err error, b bool) {
 		propList = append(propList, tag)
+		if tag == confLogLevel {
+			propList = append(propList, confLogModules) // insert to assign separately and combine below (ref 836)
+		}
 		return
 	}, cmn.IterOpts{Allowed: apc.Cluster})
 	debug.AssertNoErr(err)
@@ -177,7 +180,6 @@ func setCluConfigHandler(c *cli.Context) error {
 		}
 		goto show
 	}
-
 	for k, v := range nvs {
 		if k == feat.FeaturesPropName {
 			featfl, err := parseFeatureFlags(v)
@@ -185,6 +187,12 @@ func setCluConfigHandler(c *cli.Context) error {
 				return fmt.Errorf("invalid feature flag %q", v)
 			}
 			nvs[k] = featfl.Value()
+		}
+		if k == confLogModules { // (ref 836)
+			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
+				return err
+			}
+			delete(nvs, confLogModules)
 		}
 	}
 
@@ -212,6 +220,21 @@ show:
 	}
 	actionDone(c, "Cluster config updated")
 	return nil
+}
+
+// an extra call to get the current (ref 836)
+func parseLogModules(v string) (string, error) {
+	config, err := api.GetClusterConfig(apiBP)
+	if err != nil {
+		return "", err
+	}
+	level, _ := config.Log.Level.Parse()
+	if v == "" || v == NilValue {
+		config.Log.Level.Set(level, []string{""})
+	} else {
+		config.Log.Level.Set(level, splitCsv(v))
+	}
+	return string(config.Log.Level), nil
 }
 
 // E.g.:
@@ -307,6 +330,15 @@ func setNodeConfigHandler(c *cli.Context) error {
 	if args.Get(1) == cfgScopeLocal {
 		return errors.New(localNodeCfgErr)
 	}
+	for k, v := range nvs { // (ref 836)
+		if k == confLogModules {
+			if nvs[confLogLevel], err = parseLogModules(v); err != nil {
+				return err
+			}
+			delete(nvs, confLogModules)
+			break
+		}
+	}
 	for k := range nvs {
 		if !cos.StringInSlice(k, propList) {
 			return fmt.Errorf("invalid property name %q%s", k, examplesNodeSetCfg)
@@ -333,9 +365,14 @@ func setNodeConfigHandler(c *cli.Context) error {
 		return err
 	}
 
-	s, err := jsonMarshalIndent(nvs)
+	// show the update
+	var res []byte
+	if v, ok := nvs[confLogLevel]; ok { // (ref 836)
+		nvs[confLogLevel] = cos.LogLevel(v).String()
+	}
+	res, err = jsonMarshalIndent(nvs)
 	debug.AssertNoErr(err)
-	fmt.Fprintf(c.App.Writer, "%s\n", string(s))
+	fmt.Fprintf(c.App.Writer, "%s\n", string(res))
 	fmt.Fprintf(c.App.Writer, "\nnode %s config updated\n", sname)
 	return nil
 }

@@ -115,7 +115,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 	// Read the data into the slice writer and notify the slice when
 	// the transfer is completed
 	case respPut:
-		if glog.V(4) {
+		if r.config.FastV(4, cos.SmoduleEC) {
 			glog.Infof("Response from %s, %s", hdr.SID, uname)
 		}
 		r.dOwner.mtx.Lock()
@@ -189,7 +189,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	for {
 		select {
 		case <-ticker.C:
-			if config.FastV(4, glog.SmoduleEC) {
+			if config.FastV(4, cos.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
 					glog.Info(s)
 				}

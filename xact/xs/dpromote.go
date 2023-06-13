@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -128,7 +129,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if cmn.IsNotExist(err) {
 		err = nil
 	}
-	if r.BckJog.Config.FastV(5, glog.SmoduleXs) {
+	if r.BckJog.Config.FastV(5, cos.SmoduleXs) {
 		glog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
 			r.args.OverwriteDst, r.args.DeleteSrc, r.confirmedFshare, err)
 	}

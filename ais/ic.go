@@ -393,7 +393,7 @@ func (ic *ic) bcastListenIC(nl nl.Listener) {
 
 func (ic *ic) sendOwnershipTbl(si *meta.Snode) error {
 	if ic.p.notifs.size() == 0 {
-		if cmn.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(4, cos.SmoduleAIS) {
 			glog.Infof("%s: notifs empty, not sending to %s", ic.p, si)
 		}
 		return nil

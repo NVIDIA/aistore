@@ -105,7 +105,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 // Utility function to cleanup both object/slice and its meta on the local node
 // Used when processing object deletion request
 func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
-	if r.config.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, cos.SmoduleEC) {
 		glog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
@@ -141,7 +141,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		md           *Metadata
 		objName      = hdr.ObjName
 	)
-	if r.config.FastV(4, glog.SmoduleEC) {
+	if r.config.FastV(4, cos.SmoduleEC) {
 		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
@@ -199,7 +199,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			return
 		}
 
-		if r.config.FastV(4, glog.SmoduleEC) {
+		if r.config.FastV(4, cos.SmoduleEC) {
 			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
 				iReq.meta.SliceID, hdr.Cname(), meta.ObjVersion, meta.CksumValue)
 		}

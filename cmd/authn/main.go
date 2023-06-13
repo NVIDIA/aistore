@@ -69,9 +69,6 @@ func main() {
 			svcName, confDirFlag.Name, env.AuthN.ConfDir)
 	}
 	configPath = filepath.Join(configDir, fname.AuthNConfig)
-	if glog.V(4) {
-		glog.Infof("Loading configuration from %s", configPath)
-	}
 	if _, err := jsp.LoadMeta(configPath, Conf); err != nil {
 		cos.ExitLogf("Failed to load configuration from %q: %v", configPath, err)
 	}
@@ -81,6 +78,10 @@ func main() {
 	if err := updateLogOptions(); err != nil {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
+	if Conf.Verbose() {
+		glog.Infof("Loaded configuration from %s", configPath)
+	}
+
 	dbPath := filepath.Join(configDir, fname.AuthNDB)
 	driver, err := kvdb.NewBuntDB(dbPath)
 	if err != nil {
@@ -109,16 +110,6 @@ func updateLogOptions() error {
 		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
 	}
 	glog.SetLogDirRole(Conf.Log.Dir, "auth")
-
-	if Conf.Log.Level != "" {
-		v := flag.Lookup("v").Value
-		if v == nil {
-			return fmt.Errorf("nil -v Value")
-		}
-		if err := v.Set(Conf.Log.Level); err != nil {
-			return fmt.Errorf("failed to set log level = %s, err: %v", Conf.Log.Level, err)
-		}
-	}
 	return nil
 }
 

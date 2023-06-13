@@ -228,7 +228,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
-	if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		glog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), r.args.BckTo.Cname(objNameTo))
 	}
 	params := cluster.AllocCpObjParams()

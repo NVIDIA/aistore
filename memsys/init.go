@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -59,7 +58,7 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	gmm.sibling = smm
 
 	// verbosity
-	verbose = config.FastV(5, glog.SmoduleMemsys)
+	verbose = config.FastV(5, cos.SmoduleMemsys)
 }
 
 func NewMMSA(name string) (mem *MMSA, err error) {

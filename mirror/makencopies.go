@@ -127,13 +127,13 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		if cs := fs.Cap(); cs.Err != nil {
 			return cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
 		}
-		if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 			glog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
 		}
 		return
 	}
 
-	if r.BckJog.Config.FastV(5, glog.SmoduleMirror) {
+	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		glog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
 	}
 	r.ObjsAdd(1, size)

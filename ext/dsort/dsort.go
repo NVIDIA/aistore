@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
@@ -65,18 +64,22 @@ type (
 
 var js = jsoniter.ConfigFastest
 
-func (m *Manager) start() (err error) {
-	defer func() {
-		debug.Infof("[dsort] %s finished", m.ManagerUUID)
-		m.lock()
-		m.setInProgressTo(false)
-		m.unlock()
+func (m *Manager) finish() {
+	if m.config.FastV(4, cos.SmoduleDsort) {
+		glog.Infof("[dsort] %s finished", m.ManagerUUID)
+	}
+	m.lock()
+	m.setInProgressTo(false)
+	m.unlock()
 
-		// Trigger decrement reference counter. If it is already 0 it will
-		// trigger cleanup because progress is set to false. Otherwise, the
-		// cleanup will be triggered by decrementRef in load content handlers.
-		m.decrementRef(0)
-	}()
+	// Trigger decrement reference counter. If it is already 0 it will
+	// trigger cleanup because progress is set to false. Otherwise, the
+	// cleanup will be triggered by decrementRef in load content handlers.
+	m.decrementRef(0)
+}
+
+func (m *Manager) start() (err error) {
+	defer m.finish()
 
 	if err := m.startDSorter(); err != nil {
 		return err
@@ -90,7 +93,7 @@ func (m *Manager) start() (err error) {
 
 	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
-	if glog.V(4) {
+	if m.config.FastV(4, cos.SmoduleDsort) {
 		glog.Infof("[dsort] %s final target in targetOrder => URL: %s, Daemon ID: %s", m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
@@ -112,7 +115,7 @@ func (m *Manager) start() (err error) {
 			// rs.ShardSizeBytes) can be estimated.
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
-			if glog.V(4) {
+			if m.config.FastV(4, cos.SmoduleDsort) {
 				glog.Infof("[dsort] %s estimated output shard size required before gzip compression: %d", m.ManagerUUID, shardSize)
 			}
 		}

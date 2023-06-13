@@ -4,7 +4,7 @@ go 1.20
 
 // direct
 require (
-	github.com/NVIDIA/aistore v1.3.18-0.20230609210241-4f42041c80f6
+	github.com/NVIDIA/aistore v1.3.18-0.20230613171532-dc39e7243f99
 	github.com/OneOfOne/xxhash v1.2.8
 	github.com/jacobsa/daemonize v0.0.0-20160101105449-e460293e890f
 	github.com/jacobsa/fuse v0.0.0-20230124164109-5e0f2e6b432b

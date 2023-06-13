@@ -9,28 +9,60 @@ redirect_from:
 
 ## Table of Contents
 
-- [Debugging](#debugging)
+- [Debugging: build time](#debugging-build-time)
+- [Debugging: run time](#debugging-run-time)
 - [MsgPack](/docs/msgp.md)
 - [Useful scripts](#scripts)
   - [Clean deploy](#clean-deploy)
   - [Performance comparison](#performance-comparison)
 - [More](#more)
 
-## Debugging
+## Debugging: build time
 
 By default, the cluster is deployed in `production` mode with verbose logging and asserts disabled.
 
 To turn on the `debug` mode, deploy a cluster with `MODE="debug"` env variable (eg. `MODE="debug" make deploy`).
 A cluster deployed in `debug` mode will produce a log like this:
 
-```
-... [DEBUG] starting with debug asserts/logs
+## Debugging: run time
+
+As of v3.18 (git tag 1.3.18), the following can be done at any point in time:
+
+```console
+$ ais config cluster log.modules <TAB-TAB>
+transport    memsys       fs           ec           ios          backend      mirror       downloader
+ais          cluster      reb          stats        xs           space        dsort        etl     none
+
+$ ais config cluster log.modules ec xs
+
+log.level: "3 (modules: ec,xs)"
 ```
 
-As this only enables general debug asserts and logs it is also possible to enable verbose logging per package.
-To do that deploy cluster with eg. `AIS_DEBUG="fs=4,reb=4"` what means that packages `fs` and `reb` will have logging level set to `4` (generally used for verbose logging).
+The example above elevates verbosity level of two specific modules: EC (erasure coding) and xactions (batch jobs).
 
-> See `cmn/debug/debug_on.go` for the list of all package names, including `fs` and `reb` mentioned above.
+The change takes an effect immediately. But you can also change logging verbosity for the entire cluster - all modules:
+
+```console
+$ ais config cluster log
+PROPERTY         VALUE
+log.level        3
+log.max_size     1MiB
+log.max_total    64MiB
+log.flush_time   40s
+log.stats_time   1m
+
+$ ais config cluster log.level 5
+PROPERTY         VALUE
+log.level        5
+log.max_size     1MiB
+log.max_total    64MiB
+log.flush_time   40s
+log.stats_time   1m
+```
+
+**Caution**: `5` is the maximum (super-verbose) level - use for shorter intervals of time and always reset back to the default (`3`).
+
+**NOTE**: for module names, see `cmn/cos/log_modules.go`. Or, type `ais config cluster` or `ais config node`, and press `<TAB-TAB>`.
 
 ## Scripts
 

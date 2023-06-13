@@ -114,7 +114,7 @@ func (r *streamingX) TxnAbort() {
 }
 
 func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
-	if r.config.FastV(4, glog.SmoduleXs) {
+	if r.config.FastV(4, cos.SmoduleXs) {
 		glog.InfoDepth(1, "Error: ", err, errCode)
 	}
 	if contOnErr {

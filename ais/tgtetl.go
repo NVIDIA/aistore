@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -73,6 +74,9 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
+	}
+	if cmn.FastV(4, cos.SmoduleETL) {
+		glog.Infoln(t.String() + ": " + initMsg.String())
 	}
 }
 

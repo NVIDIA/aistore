@@ -50,6 +50,8 @@ func updateTestConfig() {
 	config := cmn.GCO.BeginUpdate()
 	config.FSHC.Enabled = true
 	config.FSHC.ErrorLimit = 2
+	config.FSHC.TestFileCount = 4
+	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
 }
 
@@ -84,7 +86,7 @@ func TestFSCheckerInaccessibleMountpath(t *testing.T) {
 		failedMpath = fsCheckerTmpDir + "/3"
 		filePath    = failedMpath + "/testfile"
 	)
-	_, _, exists := testMountpath(filePath, failedMpath, 4, cos.KiB)
+	_, _, exists := testMountpath(cmn.GCO.Get(), filePath, failedMpath, cos.KiB)
 	tassert.Errorf(t, !exists, "testing non-existing mountpath must fail")
 }
 

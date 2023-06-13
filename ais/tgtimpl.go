@@ -150,7 +150,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	case cmn.OwtGetTryLock, cmn.OwtGetLock:
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
-				if cmn.FastV(4, glog.SmoduleAIS) {
+				if cmn.FastV(4, cos.SmoduleAIS) {
 					glog.Warningf("%s: %s(%s) is busy", t, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going

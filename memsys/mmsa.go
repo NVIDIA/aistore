@@ -60,7 +60,6 @@ import (
 // 	"AIS_MINMEM_FREE"
 // 	"AIS_MINMEM_PCT_TOTAL"
 // 	"AIS_MINMEM_PCT_FREE"
-// 	"AIS_DEBUG"
 // These names must be self-explanatory.
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator

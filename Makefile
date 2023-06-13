@@ -80,9 +80,6 @@ else
 endif
 
 ifdef AIS_DEBUG
-	# Enable `debug` tag also when `AIS_DEBUG` is set.
-	# Example AIS_DEBUG usage: $ AIS_DEBUG="fs=4,reb=4" make deploy ...
-	# See also: docs/development.md
 	BUILD_TAGS += debug
 endif
 

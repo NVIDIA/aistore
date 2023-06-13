@@ -12,13 +12,13 @@ package memsys_test
 //
 // go test -v -logtostderr=true -duration 2m
 //
-// 2) same as above with DEBUG and glog level = 4 (verbose):
+// 2) same as above with DEBUG:
 //
-// AIS_DEBUG=memsys=4 go test -v -logtostderr=true -duration 2m -tags=debug
+// go test -v -logtostderr=true -duration 2m -tags=debug
 //
-// 3) run tests matching "No" with debug and glog level = 1 (non-verbose):
+// 3) run tests matching "No" with debug:
 //
-// AIS_DEBUG=memsys=1 go test -v -logtostderr=true -run=No -tags=debug
+// go test -v -logtostderr=true -run=No -tags=debug
 //
 // 4) run each test for 10 minutes with the permission to use up to 90% of total RAM
 //

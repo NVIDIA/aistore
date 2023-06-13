@@ -166,15 +166,16 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	if err = validateAdminPerms(w, r); err != nil {
 		return
 	}
-
-	userID := apiItems[0]
-	updateReq := &authn.User{}
+	var (
+		userID    = apiItems[0]
+		updateReq = &authn.User{}
+	)
 	err = jsoniter.NewDecoder(r.Body).Decode(updateReq)
 	if err != nil {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	if glog.V(4) {
+	if Conf.Verbose() {
 		glog.Infof("PUT user %q", userID)
 	}
 	if err := h.mgr.updateUser(userID, updateReq); err != nil {
@@ -196,7 +197,7 @@ func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
 		return
 	}
-	if glog.V(4) {
+	if Conf.Verbose() {
 		glog.Infof("Add user %q", info.ID)
 	}
 }
@@ -508,7 +509,7 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		cmn.WriteErrMsg(w, r, "Invalid request")
 		return
 	}
-	if glog.V(4) {
+	if Conf.Verbose() {
 		glog.Infof("PUT role %q\n", role)
 	}
 	if err := h.mgr.updateRole(role, updateReq); err != nil {

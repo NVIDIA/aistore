@@ -141,7 +141,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 		if err != nil {
 			return
 		}
-		if r.config.FastV(5, glog.SmoduleXs) {
+		if r.config.FastV(5, cos.SmoduleXs) {
 			glog.Infof("%s: begin%s %s", s, r.Base.Name(), msg.Cname())
 		}
 
@@ -281,6 +281,9 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	wi, ok := r.pending.m[txnUUID]
 	r.pending.RUnlock()
 	if !ok {
+		if r.Finished() || r.IsAborted() {
+			return nil
+		}
 		debug.Assert(r.err.Cnt() > 0) // see cleanup
 		return r.err.Err()
 	}
@@ -318,8 +321,12 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	errCode, err := r.fini(wi)
 	r.DecPending()
-	if r.config.FastV(5, glog.SmoduleXs) {
-		glog.Infof("%s: finalize %s: %v(%d)", r.Base.Name(), wi.msg.Cname(), err, errCode)
+	if r.config.FastV(5, cos.SmoduleXs) {
+		var s string
+		if err != nil {
+			s = fmt.Sprintf(": %v(%d)", err, errCode)
+		}
+		glog.Infof("%s: finalize %s%s", r.Base.Name(), wi.msg.Cname(), s)
 	}
 	if err == nil || r.IsAborted() { // done ok (unless aborted)
 		return

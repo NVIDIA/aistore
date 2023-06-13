@@ -54,7 +54,6 @@ OPTIONS:
   --hdfs              Support HDFS as a backend provider (experimental)
   --loopback          Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks.
   --dir               The root directory of the aistore repository
-  --debug             Change the logging level of a specific package or packages
   --https             Use HTTPS
   --override_backends Configure remote backends at deployment time (override previously stored backend configuration)
   --standby           When starting up, do not join cluster - wait instead for admin request (advanced usage, target-only)
@@ -65,7 +64,6 @@ OPTIONS:
 # NOTE: `AIS_USE_HTTPS` and other system environment variables are listed in the `env` package:
 # https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
 
-# NOTE: debug build with assertions compiled in (not to confuse with `AIS_DEBUG` tracing verbosity)
 export MODE="debug"
 
 # NOTE: additional `aisnode` command-line (run `aisnode --help`)
@@ -81,7 +79,6 @@ while (( "$#" )); do
     --hdfs)  hdfs_provider="y";  shift;;
     --loopback) loopback=$2;  shift; shift;;
     --dir) root_dir=$2; shift; shift;;
-    --debug) export AIS_DEBUG=$2; shift; shift;;
     --deployment) deployment=$2; shift; shift;;
     --remote-alias) remote_alias=$2; shift; shift;;
     --target-cnt) target_cnt=$2; shift; shift;;

@@ -8,7 +8,6 @@ package cmn
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"net/url"
@@ -190,14 +189,14 @@ type (
 	}
 
 	LogConf struct {
-		Level     string       `json:"level"`      // log level (aka verbosity)
+		Level     cos.LogLevel `json:"level"`      // log level (aka verbosity)
 		MaxSize   cos.SizeIEC  `json:"max_size"`   // exceeding this size triggers log rotation
 		MaxTotal  cos.SizeIEC  `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
 		StatsTime cos.Duration `json:"stats_time"` // log stats interval (must be a multiple of `PeriodConf.StatsTime`)
 	}
 	LogConfToUpdate struct {
-		Level     *string       `json:"level,omitempty"`
+		Level     *cos.LogLevel `json:"level,omitempty"`
 		MaxSize   *cos.SizeIEC  `json:"max_size,omitempty"`
 		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
 		FlushTime *cos.Duration `json:"flush_time,omitempty"`
@@ -690,10 +689,7 @@ func (c *Config) TestingEnv() bool {
 	return c.LocalConfig.TestingEnv()
 }
 
-func (c *Config) FastV(verbosity int, pkg uint8) bool {
-	level := int(c.Log.Level[0] - '0') // validated LogConf
-	return level >= verbosity || glog.FastV(verbosity, pkg)
-}
+func (c *Config) FastV(verbosity, fl int) bool { return c.Log.Level.FastV(verbosity, fl) }
 
 ///////////////////
 // ClusterConfig //
@@ -753,10 +749,8 @@ func (c *PeriodConf) Validate() error {
 /////////////
 
 func (c *LogConf) Validate() error {
-	switch c.Level {
-	case "0", "1", "2", "3", "4", "5":
-	default:
-		return fmt.Errorf("invalid log.level=%q (expecting values 1 through 5(max))", c.Level)
+	if err := c.Level.Validate(); err != nil {
+		return err
 	}
 	if c.MaxSize < cos.KiB || c.MaxSize > cos.GiB {
 		return fmt.Errorf("invalid log.max_size=%s (expected range [1KB, 1GB])", c.MaxSize)
@@ -1662,20 +1656,8 @@ func (ctu *ConfigToUpdate) FillFromKVS(kvs []string) (err error) {
 // misc config utils
 //
 
-// NOTE: convenience method, simple delegation
-func FastV(verbosity int, pkg uint8) bool {
-	return GCO.Get().FastV(verbosity, pkg)
-}
-
-func SetLogLevel(loglevel string) (err error) {
-	v := flag.Lookup("v").Value
-	if v == nil {
-		err = errors.New("log.level nil")
-	} else {
-		err = v.Set(loglevel)
-	}
-	return
-}
+// (rather, use config instance if available)
+func FastV(verbosity, fl int) bool { return GCO.Get().FastV(verbosity, fl) }
 
 // checks if the two comma-separated IPv4 address lists contain at least one common IPv4
 func hostnamesOverlap(alist, blist string) (overlap bool, addr string) {
@@ -1788,13 +1770,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		glog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", glog.MaxSize)
 		glog.MaxSize = 4 * cos.MiB
 	}
-	// log level
-	if err := SetLogLevel(config.Log.Level); err != nil {
-		return fmt.Errorf("failed to set log level %q: %s", config.Log.Level, err)
-	}
 	// log header
 	glog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
-		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level)
+		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level.String())
 	glog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
 		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.keys())
 	return nil

@@ -66,7 +66,7 @@ func (task *singleTask) init() {
 	task.downloadCtx, task.cancel = context.WithCancel(context.Background())
 }
 
-func (task *singleTask) download(lom *cluster.LOM) {
+func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 	err := lom.InitBck(task.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
@@ -76,7 +76,7 @@ func (task *singleTask) download(lom *cluster.LOM) {
 		return
 	}
 
-	if glog.V(4) {
+	if config.FastV(4, cos.SmoduleDload) {
 		glog.Infof("Starting download for %v", task)
 	}
 

@@ -69,17 +69,11 @@ func init() {
 
 	// Sanitize userName since it may contain filepath separators on Windows.
 	userName = strings.ReplaceAll(userName, `\`, "_")
+}
 
-	flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
-	flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
-	flag.Var(&logging.verbosity, "v", "log level for V logs")
-	flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
-	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
-
-	// Default stderrThreshold is ERROR.
-	logging.stderrThreshold = errorLog
-
-	logging.setVState(0, nil, false)
+func InitFlags(flset *flag.FlagSet) {
+	flset.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
+	flset.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
 }
 
 func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }

@@ -16,70 +16,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
-// Examples usage:
-// $ AIS_DEBUG="fs=4,reb=4" go test ...
-// or
-// $ AIS_DEBUG="fs=4,reb=4" make deploy ...
-//
-// See also: 3rdparty/glog/glog.go
-
-var (
-	xmodules map[uint8]*expvar.Map
-
-	smodules = map[string]uint8{
-		"transport": glog.SmoduleTransport,
-		"ais":       glog.SmoduleAIS,
-		"memsys":    glog.SmoduleMemsys,
-		"cluster":   glog.SmoduleCluster,
-		"fs":        glog.SmoduleFS,
-		"reb":       glog.SmoduleReb,
-		"ec":        glog.SmoduleEC,
-		"stats":     glog.SmoduleStats,
-		"ios":       glog.SmoduleIOS,
-		"xs":        glog.SmoduleXs,
-		"backend":   glog.SmoduleBackend,
-		"space":     glog.SmoduleSpace,
-		"mirror":    glog.SmoduleMirror,
-	}
-)
-
-func init() {
-	xmodules = make(map[uint8]*expvar.Map, 2)
-	loadLogLevel()
-}
-
 func ON() bool { return true }
-
-func NewExpvar(smodule uint8) {
-	var smod string
-	for k, v := range smodules {
-		if v == smodule {
-			smod = "ais." + k
-			break
-		}
-	}
-	if smod == "" {
-		fatalMsg("invalid smodule %d - expecting %+v", smodule, smodules)
-	}
-	xmodules[smodule] = expvar.NewMap(smod)
-}
-
-func SetExpvar(smodule uint8, name string, val int64) {
-	m := xmodules[smodule]
-	v, ok := m.Get(name).(*expvar.Int)
-	if !ok {
-		v = new(expvar.Int)
-		m.Set(name, v)
-	}
-	v.Set(val)
-}
 
 func Infof(f string, a ...any) {
 	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
@@ -186,35 +129,6 @@ func Handlers() map[string]http.HandlerFunc {
 		"/debug/pprof/heap":         pprof.Handler("heap").ServeHTTP,
 		"/debug/pprof/goroutine":    pprof.Handler("goroutine").ServeHTTP,
 		"/debug/pprof/threadcreate": pprof.Handler("threadcreate").ServeHTTP,
-	}
-}
-
-// loadLogLevel sets debug verbosity for different packages based on
-// environment variables. It is to help enable asserts that were originally
-// used for testing/initial development and to set the verbosity of glog.
-func loadLogLevel() {
-	var opts []string
-
-	// Input will be in the format of AIS_DEBUG=transport=4,memsys=3 (same as GODEBUG).
-	if val := os.Getenv("AIS_DEBUG"); val != "" {
-		opts = strings.Split(val, ",")
-	}
-
-	for _, ele := range opts {
-		pair := strings.Split(ele, "=")
-		if len(pair) != 2 {
-			fatalMsg("failed to get module=level element: %q", ele)
-		}
-		module, level := pair[0], pair[1]
-		logModule, exists := smodules[module]
-		if !exists {
-			fatalMsg("unknown module: %s", module)
-		}
-		logLvl, err := strconv.Atoi(level)
-		if err != nil || logLvl <= 0 {
-			fatalMsg("invalid verbosity level=%s, err: %s", level, err)
-		}
-		glog.SetV(logModule, glog.Level(logLvl))
 	}
 }
 

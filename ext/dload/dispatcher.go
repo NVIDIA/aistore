@@ -35,6 +35,7 @@ type (
 		abortJob    map[string]*cos.StopCh // jobID -> abort job chan
 		workCh      chan jobif
 		stopCh      *cos.StopCh
+		config      *cmn.Config
 	}
 
 	startupSema struct {
@@ -47,8 +48,7 @@ type (
 ////////////////
 
 func newDispatcher(xdl *Xact) *dispatcher {
-	initInfoStore(db) // initialize only once // TODO -- FIXME: why here?
-
+	initInfoStore(db) // initialize only once
 	return &dispatcher{
 		xdl:         xdl,
 		startupSema: startupSema{},
@@ -56,6 +56,7 @@ func newDispatcher(xdl *Xact) *dispatcher {
 		workCh:      make(chan jobif),
 		stopCh:      cos.NewStopCh(),
 		abortJob:    make(map[string]*cos.StopCh, 100),
+		config:      cmn.GCO.Get(),
 	}
 }
 
@@ -142,17 +143,28 @@ func (d *dispatcher) cleanupJob(jobID string) {
 	d.mtx.Unlock()
 }
 
+func (d *dispatcher) finish(job jobif) {
+	verbose := d.config.FastV(4, cos.SmoduleDload)
+	if verbose {
+		glog.Infof("Waiting for job %q", job.ID())
+	}
+	d.waitFor(job.ID())
+	if verbose {
+		glog.Infof("Job %q finished waiting for all tasks", job.ID())
+	}
+	d.cleanupJob(job.ID())
+	if verbose {
+		glog.Infof("Job %q cleaned up", job.ID())
+	}
+	job.cleanup()
+	if verbose {
+		glog.Infof("Job %q has finished", job.ID())
+	}
+}
+
 // forward request to designated jogger
 func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
-	defer func() {
-		debug.Infof("Waiting for job %q", job.ID())
-		d.waitFor(job.ID())
-		debug.Infof("Job %q finished waiting for all tasks", job.ID())
-		d.cleanupJob(job.ID())
-		debug.Infof("Job %q cleaned up", job.ID())
-		job.cleanup()
-		debug.Infof("Job %q has finished", job.ID())
-	}()
+	defer d.finish(job)
 
 	if aborted := d.checkAborted(); aborted || d.checkAbortedJob(job) {
 		return !aborted
@@ -387,8 +399,9 @@ func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 }
 
 func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error) {
-	debug.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
-
+	if d.config.FastV(4, cos.SmoduleDload) {
+		glog.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+	}
 	// Need to make sure that the dispatcher has fully initialized and started,
 	// and it's ready for processing the requests.
 	d.startupSema.waitForStartup()

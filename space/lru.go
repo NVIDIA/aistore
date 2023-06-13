@@ -439,7 +439,7 @@ func (j *lruJ) evictObj(lom *cluster.LOM) bool {
 		glog.Errorf("%s: failed to evict %s: %v", j, lom, err)
 		return false
 	}
-	if j.ini.Config.FastV(5, glog.SmoduleSpace) {
+	if j.ini.Config.FastV(5, cos.SmoduleSpace) {
 		glog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
 	}
 	return true

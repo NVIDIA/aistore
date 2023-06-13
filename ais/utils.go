@@ -155,7 +155,7 @@ func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, 
 		}
 		return ip, nil
 	}
-	if config.FastV(4, glog.SmoduleAIS) {
+	if config.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%d IPv4s:", len(addrList))
 		for _, addr := range addrList {
 			glog.Infof("    %#v\n", *addr)

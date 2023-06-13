@@ -76,45 +76,53 @@ type (
 
 var daemon = daemonCtx{}
 
-func init() {
+func initFlags(flset *flag.FlagSet) {
 	// role aka `DaeType`
-	flag.StringVar(&daemon.cli.role, "role", "", "_role_ of this aisnode: 'proxy' OR 'target'")
-	flag.StringVar(&daemon.cli.daemonID, "daemon_id", "", "user-specified node ID (advanced usage only!)")
+	flset.StringVar(&daemon.cli.role, "role", "", "_role_ of this aisnode: 'proxy' OR 'target'")
+	flset.StringVar(&daemon.cli.daemonID, "daemon_id", "", "user-specified node ID (advanced usage only!)")
 
 	// config itself and its command line overrides
-	flag.StringVar(&daemon.cli.globalConfigPath, "config", "",
+	flset.StringVar(&daemon.cli.globalConfigPath, "config", "",
 		"config filename: local file that stores the global cluster configuration")
-	flag.StringVar(&daemon.cli.localConfigPath, "local_config", "",
+	flset.StringVar(&daemon.cli.localConfigPath, "local_config", "",
 		"config filename: local file that stores daemon's local configuration")
-	flag.StringVar(&daemon.cli.confCustom, "config_custom", "",
+	flset.StringVar(&daemon.cli.confCustom, "config_custom", "",
 		"\"key1=value1,key2=value2\" formatted string to override selected entries in config")
-	flag.BoolVar(&daemon.cli.transient, "transient", false,
+	flset.BoolVar(&daemon.cli.transient, "transient", false,
 		"false: store customized (via '-config_custom') configuration\ntrue: keep '-config_custom' settings in memory only (non-persistent)")
-	flag.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
+	flset.BoolVar(&daemon.cli.usage, "h", false, "show usage and exit")
 
 	// target-only
-	flag.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
-	flag.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
-	flag.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false, "use loopback devices (local playground, target-only)")
-	flag.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false, "force starting up with a lost or missing mountpath (target-only)")
+	flset.BoolVar(&daemon.cli.target.standby, "standby", false, "when starting up, do not try to auto-join cluster - stand by and wait for admin request (target-only)")
+	flset.BoolVar(&daemon.cli.target.allowSharedDisksAndNoDisks, "allow_shared_no_disks", false, "disk sharing by multiple mountpaths and mountpaths with no disks whatsoever (target-only)")
+	flset.BoolVar(&daemon.cli.target.useLoopbackDevs, "loopback", false, "use loopback devices (local playground, target-only)")
+	flset.BoolVar(&daemon.cli.target.startWithLostMountpath, "start_with_lost_mountpath", false, "force starting up with a lost or missing mountpath (target-only)")
 
 	// primary-only:
-	flag.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")
-	flag.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
+	flset.IntVar(&daemon.cli.primary.ntargets, "ntargets", 0, "number of storage targets expected to be joining at startup (optional, primary-only)")
+	flset.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
 		"whether primary, when starting up, should skip waiting for target joins (used only in tests)")
+
+	// glog
+	glog.InitFlags(flset)
 }
 
 func initDaemon(version, buildTime string) cos.Runner {
 	const erfm = "Missing `%s` flag pointing to configuration file (must be provided via command line)\n"
 	var (
+		flset  *flag.FlagSet
 		config *cmn.Config
 		err    error
 	)
-	flag.Parse()
+	// flags
+	flset = flag.NewFlagSet(os.Args[0], flag.ExitOnError) // discard flags of imported packages
+	initFlags(flset)
+	flset.Parse(os.Args[1:])
 	if daemon.cli.usage || len(os.Args) == 1 {
 		fmt.Fprintln(os.Stderr, "  Usage: "+os.Args[0]+usecli+"\n")
-		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\n  Version %s (build: %s)\n", version, buildTime)
+		flset.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "  ---")
+		fmt.Fprintf(os.Stderr, "  Version %s (build: %s)\n", version, buildTime)
 		fmt.Fprintln(os.Stderr, "  Usage:\n\t"+os.Args[0]+usecli)
 		os.Exit(0)
 	}
@@ -122,6 +130,10 @@ func initDaemon(version, buildTime string) cos.Runner {
 		fmt.Fprintf(os.Stderr, "version %s (build: %s)\n", version, buildTime)
 		os.Exit(0)
 	}
+	os.Args = []string{os.Args[0]}
+	flag.Parse() // so that imported packages don't complain
+
+	// validation
 	if daemon.cli.role != apc.Proxy && daemon.cli.role != apc.Target {
 		cos.ExitLogf("invalid node's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)
 	}
@@ -132,8 +144,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		cos.ExitLogf(erfm, "local-config")
 	}
 
-	// TODO: detect graceful shutdown, delete shutdown marker
-
+	// config
 	config = &cmn.Config{}
 	err = cmn.LoadConfig(daemon.cli.globalConfigPath, daemon.cli.localConfigPath, daemon.cli.role, config)
 	if err != nil {
@@ -150,6 +161,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	//    (won't persist across restarts):
 	// $ aisnode -config=/etc/ais.json -local_config=/etc/ais_local.json -role=target -transient=true \
 	//   -config_custom="client.client_timeout=13s"
+	// 3) e.g. updating log level:
+	//   -config_custom="log.level=4611"
+	//   (once done, `ais config node ... inherited log` will show "3 (modules: ec,xs)")
 	if daemon.cli.confCustom != "" {
 		var (
 			toUpdate = &cmn.ConfigToUpdate{}

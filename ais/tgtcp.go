@@ -245,7 +245,7 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 	}
 
 	if prepare {
-		if cmn.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(4, cos.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
@@ -970,7 +970,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ntid := msg.UUID
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {

@@ -213,7 +213,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		cksumValue, cksumType string
 		ecConf                = lom.Bprops().EC
 	)
-	if c.parent.config.FastV(4, glog.SmoduleEC) {
+	if c.parent.config.FastV(4, cos.SmoduleEC) {
 		glog.Infof("Encoding %q...", lom.FQN)
 	}
 	if lom.Checksum() != nil {
@@ -540,7 +540,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 		glog.Errorf("Error while copying (data=%d, parity=%d) for %q: %v",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName, copyErr)
 		err = errSliceSendFailed
-	} else if c.parent.config.FastV(4, glog.SmoduleEC) {
+	} else if c.parent.config.FastV(4, cos.SmoduleEC) {
 		glog.Infof("EC created (data=%d, parity=%d) for %q",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName)
 	}

@@ -154,7 +154,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 	}
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
 		reb.laterx.Store(true)
-		if stage > rebStageFin && cmn.FastV(4, glog.SmoduleReb) {
+		if stage > rebStageFin && cmn.FastV(4, cos.SmoduleReb) {
 			glog.Infof("Warning: %s: post stage-fin receive from %s %s (stage %s)",
 				reb.t.Snode(), meta.Tname(tsid), lom, stages[stage])
 		}

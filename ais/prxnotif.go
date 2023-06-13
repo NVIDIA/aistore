@@ -215,7 +215,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 		return
 	}
 	nl.SetAddedTime()
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infoln("add " + nl.String())
 	}
 	return
@@ -223,7 +223,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
-	if ok && cmn.FastV(4, glog.SmoduleAIS) {
+	if ok && cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infoln("del " + nl.String())
 	}
 	return
@@ -429,7 +429,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
-		} else if config.FastV(4, glog.SmoduleAIS) {
+		} else if config.FastV(4, cos.SmoduleAIS) {
 			glog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
 		}
 	}

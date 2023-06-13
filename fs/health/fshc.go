@@ -1,6 +1,6 @@
 // Package health provides a basic mountpath health monitor.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package health
@@ -108,11 +108,11 @@ func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (pa
 
 func (f *FSHC) runMpathTest(mpath, filepath string) {
 	var (
-		config    = &cmn.GCO.Get().FSHC
+		config    = cmn.GCO.Get()
 		whyFailed error
 		passed    bool
 	)
-	readErrs, writeErrs, exists := testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
+	readErrs, writeErrs, exists := testMountpath(config, filepath, mpath, fshcFileSize)
 	if passed, whyFailed = isTestPassed(mpath, readErrs, writeErrs, exists); passed {
 		return
 	}
@@ -188,9 +188,8 @@ func tryWriteFile(mpath string, fileSize int64) error {
 //
 //	is accessible. When the specified local directory is inaccessible the
 //	function returns immediately without any read/write operations
-func testMountpath(filePath, mountpath string,
-	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
-	if glog.V(4) {
+func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int) (readFails, writeFails int, accessible bool) {
+	if config.FastV(4, cos.SmoduleFS) {
 		glog.Infof("Testing mountpath %q", mountpath)
 	}
 	if err := cos.Stat(mountpath); err != nil {
@@ -215,11 +214,12 @@ func testMountpath(filePath, mountpath string,
 	}
 
 	// 2. Read a few more files up to maxReads files.
+	maxTestFiles := config.FSHC.TestFileCount
 	for totalReads < maxTestFiles {
 		fqn, err := getRandomFileName(mountpath)
 		if err == io.EOF {
 			// No files in the mountpath.
-			if glog.V(4) {
+			if config.FastV(4, cos.SmoduleFS) {
 				glog.Infof("Mountpath %q contains no files", mountpath)
 			}
 			break
@@ -234,7 +234,7 @@ func testMountpath(filePath, mountpath string,
 			)
 			continue
 		}
-		if glog.V(4) {
+		if config.FastV(4, cos.SmoduleFS) {
 			glog.Infof("Reading random file (fqn: %q)", fqn)
 		}
 		if err = tryReadFile(fqn); err != nil {

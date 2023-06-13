@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -31,8 +31,8 @@ func httpConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Conf.RLock()
-	defer Conf.RUnlock()
 	writeJSON(w, Conf, "config")
+	Conf.RUnlock()
 }
 
 func httpConfigPut(w http.ResponseWriter, r *http.Request) {

@@ -202,7 +202,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 ex:
-	if err != nil && r.config.FastV(4, glog.SmoduleXs) {
+	if err != nil && r.config.FastV(4, cos.SmoduleXs) {
 		glog.Error(err)
 	}
 	return err
@@ -260,7 +260,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 	err = r.p.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 
-	if r.config.FastV(5, glog.SmoduleXs) {
+	if r.config.FastV(5, cos.SmoduleXs) {
 		glog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
 	return
@@ -291,7 +291,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	cluster.FreeCpObjParams(params)
 	if err != nil {
 		wi.r.raiseErr(err, wi.msg.ContinueOnError)
-	} else if wi.r.config.FastV(5, glog.SmoduleXs) {
+	} else if wi.r.config.FastV(5, cos.SmoduleXs) {
 		glog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}
 }

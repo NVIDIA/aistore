@@ -9,7 +9,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
@@ -19,7 +18,7 @@ type ctx = context.Context // used when omitted for shortness sake
 var verbose bool
 
 func Init(config *cmn.Config) {
-	verbose = config.FastV(4, glog.SmoduleBackend)
+	verbose = config.FastV(4, cos.SmoduleBackend)
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {

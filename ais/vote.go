@@ -263,7 +263,7 @@ func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSe
 			}
 			n++
 		} else {
-			if config.FastV(4, glog.SmoduleAIS) {
+			if config.FastV(4, cos.SmoduleAIS) {
 				glog.Infof("Node %s responded with (winner: %t)", res.daemonID, res.yes)
 			}
 			if res.yes {
@@ -587,7 +587,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
 	if !h.keepalive.isTimeToPing(currPrimaryID) {
-		if config.FastV(4, glog.SmoduleAIS) {
+		if config.FastV(4, cos.SmoduleAIS) {
 			glog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
 		return false, nil
@@ -602,7 +602,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	}
 
 	vote := nextPrimaryProxy.ID() == daemonID
-	if config.FastV(4, glog.SmoduleAIS) {
+	if config.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s: voting '%t' for %s", h, vote, daemonID)
 	}
 	return vote, nil

@@ -631,7 +631,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
@@ -702,7 +702,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 			return
 		}
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -736,7 +736,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -954,7 +954,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if err := p.pready(smap); err != nil {
-				if cmn.FastV(4, glog.SmoduleAIS) {
+				if cmn.FastV(4, cos.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
@@ -1785,7 +1785,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -1813,7 +1813,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -1882,7 +1882,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
 			glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
@@ -2247,7 +2247,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
 	}
 
@@ -2742,7 +2742,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if prepare {
-		if cmn.FastV(4, glog.SmoduleAIS) {
+		if cmn.FastV(4, cos.SmoduleAIS) {
 			glog.Info("Preparation step: do nothing")
 		}
 		return
@@ -2894,7 +2894,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {

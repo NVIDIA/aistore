@@ -69,19 +69,15 @@ package glog
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	stdLog "log"
 	"os"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -98,25 +94,6 @@ const (
 const recycleBufMaxSize = 1024
 
 const severityChar = "IWEF"
-
-// NOTE: for module names mapped to these constants, see cmn/debug/debug_on.go
-const (
-	SmoduleTransport = iota
-	SmoduleAIS
-	SmoduleMemsys
-	SmoduleCluster
-	SmoduleFS
-	SmoduleReb
-	SmoduleEC
-	SmoduleStats
-	SmoduleIOS
-	SmoduleXs
-	SmoduleBackend
-	SmoduleSpace
-	SmoduleMirror
-	// NOTE: guard to define the size of 'smodules' array - make sure it is always the last.
-	_smoduleLast
-)
 
 // severity identifies the sort of log: info, warning etc. It also implements
 // the flag.Value interface. The -stderrthreshold flag is of type severity and
@@ -143,28 +120,6 @@ type (
 	// only through the flag.Value interface.
 	Level int32
 
-	// moduleSpec represents the setting of the -vmodule flag.
-	// * vmodule=ec/jogger=4 - matches file ec/jogger.go
-	// * vmodule=jo.*er=4 - match all files which are in form of jo<some_text>er
-	// * vmodule=ais/.*=4 - match all files from ais package.
-	moduleSpec struct {
-		filter []modulePat
-	}
-
-	// modulePat contains a filter for the -vmodule flag.
-	// It holds a verbosity level and a file pattern to match.
-	modulePat struct {
-		pattern string
-		level   Level
-		literal bool // The pattern is a literal string
-	}
-
-	// traceLocation represents the setting of the -log_backtrace_at flag.
-	traceLocation struct {
-		file string
-		line int
-	}
-
 	// flushSyncWriter is the interface satisfied by logging destinations.
 	flushSyncWriter interface {
 		Flush() error
@@ -180,10 +135,6 @@ type loggingT struct {
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
 	toStderr     bool // The -logtostderr flag.
 	alsoToStderr bool // The -alsologtostderr flag.
-	oos          bool // if filesystem used for logs is out of space
-
-	// Level flag. Handled atomically.
-	stderrThreshold severity // The -stderrthreshold flag.
 
 	// freeList is a list of byte buffers, maintained under freeListMu.
 	freeList *buffer
@@ -195,23 +146,9 @@ type loggingT struct {
 	// mu protects the remaining elements of this structure and is
 	// used to synchronize logging.
 	mu sync.Mutex
+
 	// file holds writer for each of the log types.
 	file [numSeverity]flushSyncWriter
-	// pcs is used in V to avoid an allocation when computing the caller's PC.
-	pcs [1]uintptr
-	// vmap is a cache of the V Level for each V() call site, identified by PC.
-	// It is wiped whenever the vmodule flag changes state.
-	vmap map[uintptr]Level
-	// filterLength stores the length of the vmodule filter chain. If greater
-	// than zero, it means vmodule is enabled. It may be read safely
-	// using sync.LoadInt32, but is only modified under mu.
-	filterLength int32
-	// traceLocation is the state of the -log_backtrace_at flag.
-	traceLocation traceLocation
-	// These flags are modified only under lock, although verbosity may be fetched
-	// safely using atomic.LoadInt32.
-	vmodule   moduleSpec // The state of the -vmodule flag.
-	verbosity Level      // V logging level, the value of the -v flag/
 }
 
 type (
@@ -234,10 +171,6 @@ type (
 		sev    severity
 	}
 
-	// logBridge provides the Write method that enables CopyStandardLogTo to connect
-	// Go's standard logs to the logs provided by this package.
-	logBridge severity
-
 	// Verbose is a boolean type that implements Infof (like Printf) etc.
 	// See the documentation of V for more information.
 	Verbose bool
@@ -250,30 +183,12 @@ var (
 		errorLog:   "ERROR",
 	}
 
-	smodules [_smoduleLast]Level
-
 	// assorted filenames (and their line numbers) that we don't want to clutter the logs
 	redactFnames = map[string]int{
 		"target_stats.go": 0,
 		"proxy_stats.go":  0,
 		"common_stats.go": 0,
 	}
-
-	// Stats tracks the number of lines of output and number of bytes
-	// per severity level. Values must be read with atomic.LoadInt64.
-	Stats struct {
-		Info, Warning, Error OutputStats
-	}
-
-	severityStats = [numSeverity]*OutputStats{
-		infoLog:    &Stats.Info,
-		warningLog: &Stats.Warning,
-		errorLog:   &Stats.Error,
-	}
-
-	errVmoduleSyntax = errors.New("syntax error: expect comma-separated list of filename=N")
-
-	errTraceSyntax = errors.New("syntax error: expect file.go:234")
 
 	logging loggingT
 
@@ -291,53 +206,6 @@ var (
 	_ flushSyncWriter = (*syncBuffer)(nil)
 )
 
-// get returns the value of the severity.
-func (s *severity) get() severity {
-	return severity(atomic.LoadInt32((*int32)(s)))
-}
-
-// set sets the value of the severity.
-func (s *severity) set(val severity) {
-	atomic.StoreInt32((*int32)(s), int32(val))
-}
-
-// String is part of the flag.Value interface.
-func (s *severity) String() string {
-	return strconv.FormatInt(int64(*s), 10)
-}
-
-// Get is part of the flag.Value interface.
-func (s *severity) Get() any {
-	return *s
-}
-
-// Set is part of the flag.Value interface.
-func (*severity) Set(value string) error {
-	var threshold severity
-	// Is it a known name?
-	if v, ok := severityByName(value); ok {
-		threshold = v
-	} else {
-		v, err := strconv.Atoi(value)
-		if err != nil {
-			return err
-		}
-		threshold = severity(v)
-	}
-	logging.stderrThreshold.set(threshold)
-	return nil
-}
-
-func severityByName(s string) (severity, bool) {
-	s = strings.ToUpper(s)
-	for i, name := range severityName {
-		if name == s {
-			return severity(i), true
-		}
-	}
-	return 0, false
-}
-
 // Lines returns the number of lines written.
 func (s *OutputStats) Lines() int64 {
 	return atomic.LoadInt64(&s.lines)
@@ -346,16 +214,6 @@ func (s *OutputStats) Lines() int64 {
 // Bytes returns the number of bytes written.
 func (s *OutputStats) Bytes() int64 {
 	return atomic.LoadInt64(&s.bytes)
-}
-
-// get returns the value of the Level.
-func (l *Level) get() Level {
-	return Level(atomic.LoadInt32((*int32)(l)))
-}
-
-// set sets the value of the Level.
-func (l *Level) set(val Level) {
-	atomic.StoreInt32((*int32)(l), int32(val))
 }
 
 // String is part of the flag.Value interface.
@@ -368,167 +226,9 @@ func (l *Level) Get() any {
 	return *l
 }
 
-// Set is part of the flag.Value interface.
-func (*Level) Set(value string) error {
-	v, err := strconv.Atoi(value)
-	if err != nil {
-		return err
-	}
-	logging.mu.Lock()
-	defer logging.mu.Unlock()
-	logging.setVState(Level(v), logging.vmodule.filter, false)
-	return nil
-}
-
-// match reports whether the file matches the pattern.
-func (m *modulePat) match(file string) bool {
-	if m.literal {
-		return strings.HasSuffix(file, m.pattern)
-	}
-	// .* is added to make sure that we match any prefix
-	match, _ := regexp.MatchString(".*"+m.pattern, file)
-	return match
-}
-
-func (m *moduleSpec) String() string {
-	// Lock because the type is not atomic. TODO: clean this up.
-	logging.mu.Lock()
-	defer logging.mu.Unlock()
-	var b bytes.Buffer
-	for i, f := range m.filter {
-		if i > 0 {
-			b.WriteRune(',')
-		}
-		fmt.Fprintf(&b, "%s=%d", f.pattern, f.level)
-	}
-	return b.String()
-}
-
-// Get is part of the (Go 1.2)  flag.Getter interface. It always returns nil for this flag type since the
-// struct is not exported.
-func (*moduleSpec) Get() any { return nil }
-
-// Syntax: -vmodule=recordio=2,file=1,gfs*=3
-func (*moduleSpec) Set(value string) error {
-	filter := make([]modulePat, 0, 2)
-	for _, pat := range strings.Split(value, ",") {
-		if pat == "" {
-			// Empty strings such as from a trailing comma can be ignored.
-			continue
-		}
-		patLev := strings.Split(pat, "=")
-		if len(patLev) != 2 || patLev[0] == "" || patLev[1] == "" {
-			return errVmoduleSyntax
-		}
-		pattern := patLev[0]
-		v, err := strconv.Atoi(patLev[1])
-		if err != nil {
-			return errors.New("syntax error: expect comma-separated list of filename=N")
-		}
-		if v < 0 {
-			return errors.New("negative value for vmodule level")
-		}
-		if v == 0 {
-			continue // Ignore. It's harmless but no point in paying the overhead.
-		}
-		// TODO: check syntax of filter?
-		filter = append(filter, modulePat{pattern: pattern, level: Level(v), literal: isLiteral(pattern)})
-	}
-	logging.mu.Lock()
-	defer logging.mu.Unlock()
-	logging.setVState(logging.verbosity, filter, true)
-	return nil
-}
-
-// isLiteral reports whether the pattern is a literal string, that is, has no metacharacters
-// that require filepath.Match to be called to match the pattern.
-func isLiteral(pattern string) bool {
-	return !strings.ContainsAny(pattern, `\*+?[]()^$|`)
-}
-
-// isSet reports whether the trace location has been specified.
-// logging.mu is held.
-func (t *traceLocation) isSet() bool {
-	return t.line > 0
-}
-
-// match reports whether the specified file and line matches the trace location.
-// The argument file name is the full path, not the basename specified in the flag.
-// logging.mu is held.
-func (t *traceLocation) match(file string, line int) bool {
-	if t.line != line {
-		return false
-	}
-	if i := strings.LastIndex(file, "/"); i >= 0 {
-		file = file[i+1:]
-	}
-	return t.file == file
-}
-
-func (t *traceLocation) String() string {
-	// Lock because the type is not atomic. TODO: clean this up.
-	logging.mu.Lock()
-	defer logging.mu.Unlock()
-	return fmt.Sprintf("%s:%d", t.file, t.line)
-}
-
-// Get is part of the (Go 1.2) flag.Getter interface. It always returns nil for this flag type since the
-// struct is not exported
-func (*traceLocation) Get() any { return nil }
-
-// Syntax: -log_backtrace_at=gopherflakes.go:234
-// Note that unlike vmodule the file extension is included here.
-func (t *traceLocation) Set(value string) error {
-	if value == "" {
-		// Unset.
-		t.line = 0
-		t.file = ""
-	}
-	fields := strings.Split(value, ":")
-	if len(fields) != 2 {
-		return errTraceSyntax
-	}
-	file, line := fields[0], fields[1]
-	if !strings.Contains(file, ".") {
-		return errTraceSyntax
-	}
-	v, err := strconv.Atoi(line)
-	if err != nil {
-		return errTraceSyntax
-	}
-	if v <= 0 {
-		return errors.New("negative or zero value for level")
-	}
-	logging.mu.Lock()
-	defer logging.mu.Unlock()
-	t.line = v
-	t.file = file
-	return nil
-}
-
 // Flush flushes all pending log I/O.
 func Flush() {
 	logging.lockAndFlushAll()
-}
-
-// setVState sets a consistent state for V logging.
-// l.mu is held.
-func (*loggingT) setVState(verbosity Level, filter []modulePat, setFilter bool) {
-	// Turn verbosity off so V will not fire while we are in transition.
-	logging.verbosity.set(0)
-	// Ditto for filter length.
-	atomic.StoreInt32(&logging.filterLength, 0)
-
-	// Set the new filters and wipe the pc->Level map if the filter has changed.
-	if setFilter {
-		logging.vmodule.filter = filter
-		logging.vmap = make(map[uintptr]Level)
-	}
-
-	// Things are consistent now, so enable filtering and verbosity.
-	// They are enabled in order opposite to that in V.
-	atomic.StoreInt32(&logging.filterLength, int32(len(filter)))
-	logging.verbosity.set(verbosity)
 }
 
 // getBuffer returns a new, ready-to-use buffer.
@@ -575,7 +275,7 @@ where the fields are defined as follows:
 	msg              The user-supplied message
 */
 
-func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
+func (l *loggingT) header(s severity, depth int) *buffer {
 	var redact bool
 	_, file, line, ok := runtime.Caller(3 + depth)
 	if !ok {
@@ -588,7 +288,7 @@ func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
 		}
 		_, redact = redactFnames[file]
 	}
-	return l.formatHeader(s, file, line, redact), file, line
+	return l.formatHeader(s, file, line, redact)
 }
 
 // formatHeader formats a log header using the provided file name and line number.
@@ -671,9 +371,9 @@ func (buf *buffer) someDigits(i, d int) int {
 }
 
 func (l *loggingT) println(s severity, args ...any) {
-	buf, file, line := l.header(s, 0)
+	buf := l.header(s, 0)
 	fmt.Fprintln(buf, args...)
-	l.output(s, buf, file, line, false)
+	l.output(s, buf, false)
 }
 
 func (l *loggingT) print(s severity, args ...any) {
@@ -681,64 +381,39 @@ func (l *loggingT) print(s severity, args ...any) {
 }
 
 func (l *loggingT) printDepth(s severity, depth int, args ...any) {
-	buf, file, line := l.header(s, depth)
+	buf := l.header(s, depth)
 	fmt.Fprint(buf, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
-	l.output(s, buf, file, line, false)
+	l.output(s, buf, false)
 }
 
 func (l *loggingT) printf(s severity, format string, args ...any) {
-	buf, file, line := l.header(s, 0)
+	buf := l.header(s, 0)
 	fmt.Fprintf(buf, format, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
-	l.output(s, buf, file, line, false)
-}
-
-// printWithFileLine behaves like print but uses the provided file and line number.  If
-// alsoLogToStderr is true, the log message always appears on standard error; it
-// will also appear in the log file unless --logtostderr is set.
-func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStderr bool, args ...any) {
-	buf := l.formatHeader(s, file, line, false)
-	fmt.Fprint(buf, args...)
-	if buf.Bytes()[buf.Len()-1] != '\n' {
-		buf.WriteByte('\n')
-	}
-	l.output(s, buf, file, line, alsoToStderr)
+	l.output(s, buf, false)
 }
 
 // output writes the data to the log files and releases the buffer.
-func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoToStderr bool) {
-	l.mu.Lock()
-	if l.traceLocation.isSet() {
-		if l.traceLocation.match(file, line) {
-			buf.Write(stacks(false))
-		}
-	}
+func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 	data := buf.Bytes()
-	if l.oos {
-		os.Stderr.WriteString("ERROR: out of space: ")
-		os.Stderr.Write(data)
-		l.mu.Unlock()
-		return
-	}
-	if !flag.Parsed() {
+	switch {
+	case !flag.Parsed():
 		os.Stderr.WriteString("ERROR: logging before flag.Parse: ")
 		os.Stderr.Write(data)
-	} else if l.toStderr {
+	case l.toStderr:
 		os.Stderr.Write(data)
-	} else {
-		if alsoToStderr || l.alsoToStderr || s >= l.stderrThreshold.get() {
+	default:
+		if alsoToStderr || l.alsoToStderr {
 			os.Stderr.Write(data)
 		}
+		l.mu.Lock()
 		if l.file[s] == nil {
 			if err := l.createFiles(s); err != nil {
-				if errors.Is(err, syscall.ENOSPC) {
-					l.oos = true
-				}
 				os.Stderr.Write(data) // Make sure the message appears somewhere.
 				l.exit(err)
 			}
@@ -759,32 +434,10 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 				l.file[infoLog].Write(data)
 			}
 		}
+		l.mu.Unlock()
 	}
+	// free buf
 	l.putBuffer(buf)
-	l.mu.Unlock()
-	if stats := severityStats[s]; stats != nil {
-		atomic.AddInt64(&stats.lines, 1)
-		atomic.AddInt64(&stats.bytes, int64(len(data)))
-	}
-}
-
-// stacks is a wrapper for runtime.Stack that attempts to recover the data for all goroutines.
-func stacks(all bool) []byte {
-	// We don't know how big the traces are, so grow a few times if they don't fit. Start large, though.
-	n := 10000
-	if all {
-		n = 100000
-	}
-	var trace []byte
-	for i := 0; i < 5; i++ {
-		trace = make([]byte, n)
-		nbytes := runtime.Stack(trace, all)
-		if nbytes < len(trace) {
-			return trace[:nbytes]
-		}
-		n *= 2
-	}
-	return trace
 }
 
 // exit is called if there is trouble creating or writing log files.
@@ -891,148 +544,6 @@ func (l *loggingT) flushAll() {
 			sb.Flush() // ignore error
 			sb.Sync()  // ignore error
 		}
-	}
-}
-
-// CopyStandardLogTo arranges for messages written to the Go "log" package's
-// default logs to also appear in the Google logs for the named and lower
-// severities.  Subsequent changes to the standard log's default output location
-// or format may break this behavior.
-//
-// Valid names are "INFO", "WARNING", "ERROR", and "FATAL".  If the name is not
-// recognized, CopyStandardLogTo panics.
-func CopyStandardLogTo(name string) {
-	sev, ok := severityByName(name)
-	if !ok {
-		panic(fmt.Sprintf("log.CopyStandardLogTo(%q): unrecognized severity name", name))
-	}
-	// Set a log format that captures the user's file and line:
-	//   d.go:23: message
-	stdLog.SetFlags(stdLog.Lshortfile)
-	stdLog.SetOutput(logBridge(sev))
-}
-
-// Write parses the standard logging line and passes its components to the
-// logger for severity(lb).
-func (lb logBridge) Write(b []byte) (n int, err error) {
-	var (
-		file = "???"
-		line = 1
-		text string
-	)
-	// Split "d.go:23: message" into "d.go", "23", and "message".
-	if parts := bytes.SplitN(b, []byte{':'}, 3); len(parts) != 3 || len(parts[0]) < 1 || len(parts[2]) < 1 {
-		text = fmt.Sprintf("bad log format: %s", b)
-	} else {
-		file = string(parts[0])
-		text = string(parts[2][1:]) // skip leading space
-		line, err = strconv.Atoi(string(parts[1]))
-		if err != nil {
-			text = fmt.Sprintf("bad line number: %s", b)
-			line = 1
-		}
-	}
-	// printWithFileLine with alsoToStderr=true, so standard log messages
-	// always appear on standard error.
-	logging.printWithFileLine(severity(lb), file, line, true, text)
-	return len(b), nil
-}
-
-// setV computes and remembers the V level for a given PC
-// when vmodule is enabled.
-// File pattern matching takes the basename of the file, stripped
-// of its .go suffix, and uses filepath.Match, which is a little more
-// general than the *? matching used in C++.
-// l.mu is held.
-func (l *loggingT) setV(pc uintptr) Level {
-	fn := runtime.FuncForPC(pc)
-	file, _ := fn.FileLine(pc)
-	// The file is something like /a/b/c/d.go. We want just the d.
-	file = strings.TrimSuffix(file, ".go")
-	for _, filter := range l.vmodule.filter {
-		if filter.match(file) {
-			l.vmap[pc] = filter.level
-			return filter.level
-		}
-	}
-	l.vmap[pc] = 0
-	return 0
-}
-
-// V reports whether verbosity at the call site is at least the requested level.
-// The returned value is a boolean of type Verbose, which implements Info, Infoln
-// and Infof. These methods will write to the Info log if called.
-// Thus, one may write either if glog.V(2) { glog.Info("log this") }
-// or glog.V(2).Info("log this")
-// The second form is shorter but the first is cheaper if logging is off because it does
-// not evaluate its arguments.
-//
-// Whether an individual call to V generates a log record depends on the setting of
-// the -v and --vmodule flags; both are off by default. If the level in the call to
-// V is at least the value of -v, or of -vmodule for the source file containing the
-// call, the V call will log.
-func V(level Level) Verbose {
-	// This function tries hard to be cheap unless there's work to do.
-	// The fast path is two atomic loads and compares.
-
-	// Here is a cheap but safe test to see if V logging is enabled globally.
-	if logging.verbosity.get() >= level {
-		return Verbose(true)
-	}
-
-	// It's off globally but it vmodule may still be set.
-	// Here is another cheap but safe test to see if vmodule is enabled.
-	if atomic.LoadInt32(&logging.filterLength) > 0 {
-		// Now we need a proper lock to use the logging structure. The pcs field
-		// is shared so we must lock before accessing it. This is fairly expensive,
-		// but if V logging is enabled we're slow anyway.
-		logging.mu.Lock()
-		defer logging.mu.Unlock()
-		if runtime.Callers(2, logging.pcs[:]) == 0 {
-			return Verbose(false)
-		}
-		v, ok := logging.vmap[logging.pcs[0]]
-		if !ok {
-			v = logging.setV(logging.pcs[0])
-		}
-		return Verbose(v >= level)
-	}
-	return Verbose(false)
-}
-
-func FastV(verbosity int, smodule uint8) bool {
-	return smodules[smodule] >= Level(verbosity)
-}
-
-// SetV sets verbosity level for static module.
-//
-// NOTE: SetV should be set in the init. Bugs are expected when SetV is called
-// in-flight since no locks are taken.
-func SetV(smodule uint8, level Level) {
-	smodules[smodule] = level
-}
-
-// Info is equivalent to the global Info function, guarded by the value of v.
-// See the documentation of V for usage.
-func (v Verbose) Info(args ...any) {
-	if v {
-		logging.print(infoLog, args...)
-	}
-}
-
-// Infoln is equivalent to the global Infoln function, guarded by the value of v.
-// See the documentation of V for usage.
-func (v Verbose) Infoln(args ...any) {
-	if v {
-		logging.println(infoLog, args...)
-	}
-}
-
-// Infof is equivalent to the global Infof function, guarded by the value of v.
-// See the documentation of V for usage.
-func (v Verbose) Infof(format string, args ...any) {
-	if v {
-		logging.printf(infoLog, format, args...)
 	}
 }
 

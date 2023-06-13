@@ -166,7 +166,7 @@ func (txns *transactions) begin(txn txn) (err error) {
 	txns.m[txn.uuid()] = txn
 	txns.Unlock()
 
-	if cmn.FastV(4, glog.SmoduleAIS) {
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s begin: %s", txns.t, txn)
 	}
 	return
@@ -189,7 +189,7 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	}
 	txns.Unlock()
 
-	if act != "" && cmn.FastV(4, glog.SmoduleAIS) {
+	if act != "" && cmn.FastV(4, cos.SmoduleAIS) {
 		glog.Infof("%s %s: %s", txns.t, act, txn)
 	}
 	return

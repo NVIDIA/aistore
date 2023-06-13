@@ -967,7 +967,7 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
 	}
 
-	verbose := config.FastV(4, glog.SmoduleStats)
+	verbose := config.FastV(4, cos.SmoduleStats)
 	if verbose {
 		glog.Infoln(prefix + ": started")
 	}

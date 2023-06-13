@@ -220,7 +220,9 @@ where `NODE` is, effectively, any clustered proxy (that'll show up if you type `
 
 Other variables, such as `AIS_IS_PRIMARY` and `AIS_USE_HTTPS` can prove to be useful at deployment time for the most part.
 
-For developers, `AIS_DEBUG="fs=4,reb=4,transport=1"` (for instance) would allow to selectively raise and/or reduce logging verbosity on a per module bases - modules `fs` , `reb`, and `transport` in this particular case.
+For developers, CLI `ais config cluster log.modules ec xs` (for instance) would allow to selectively raise and/or reduce logging verbosity on a per module bases - modules EC (erasure coding) and xactions (batch jobs) in this particular case.
+
+> To list all log modules, type `ais config cluster` or `ais config node` and press `<TAB-TAB>`.
 
 ## Multiple deployment options
 
