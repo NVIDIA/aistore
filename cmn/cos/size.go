@@ -34,38 +34,7 @@ const (
 	TB = 1000 * GB
 )
 
-func _suffix(s string) string {
-	switch {
-	case strings.HasSuffix(s, "KIB"):
-		return "KIB"
-	case strings.HasSuffix(s, "MIB"):
-		return "MIB"
-	case strings.HasSuffix(s, "GIB"):
-		return "GIB"
-	case strings.HasSuffix(s, "TIB"):
-		return "TIB"
-	case strings.HasSuffix(s, "KB"):
-		return "KB"
-	case strings.HasSuffix(s, "MB"):
-		return "MB"
-	case strings.HasSuffix(s, "GB"):
-		return "GB"
-	case strings.HasSuffix(s, "TB"):
-		return "TB"
-	case strings.HasSuffix(s, "K"):
-		return "K"
-	case strings.HasSuffix(s, "M"):
-		return "M"
-	case strings.HasSuffix(s, "G"):
-		return "G"
-	case strings.HasSuffix(s, "T"):
-		return "T"
-	case strings.HasSuffix(s, "B"):
-		return "B"
-	default:
-		return ""
-	}
-}
+var suffX = []string{"KIB", "MIB", "GIB", "TIB", "KB", "MB", "GB", "TB", "K", "M", "G", "T", "B"}
 
 /////////////
 // SizeIEC //
@@ -158,6 +127,15 @@ func ParseSize(size, units string) (int64, error) {
 	default:
 		return _convert(s, u, 1, 1)
 	}
+}
+
+func _suffix(s string) string {
+	for _, suffix := range suffX {
+		if strings.HasSuffix(s, suffix) {
+			return suffix
+		}
+	}
+	return ""
 }
 
 func _convert(s, units string, mult, multIEC int64) (val int64, err error) {
