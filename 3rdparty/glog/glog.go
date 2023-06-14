@@ -74,10 +74,8 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -102,24 +100,6 @@ const severityChar = "IWE"
 type (
 	severity int32 // sync/atomic int32
 
-	// OutputStats tracks the number of output lines and bytes written.
-	OutputStats struct {
-		lines int64
-		bytes int64
-	}
-
-	// Level is exported because it appears in the arguments to V and is
-	// the type of the v flag, which can be set programmatically.
-	// It's a distinct type because we want to discriminate it from logType.
-	// Variables of type level are only changed under logging.mu.
-	// The -v flag is read only with atomic ops, so the state of the logging
-	// module is consistent.
-	// Level is treated as a sync/atomic int32.
-	// Level specifies a level of verbosity for V logs. *Level implements
-	// flag.Value; the -v flag is of type Level and should be modified
-	// only through the flag.Value interface.
-	Level int32
-
 	// flushSyncWriter is the interface satisfied by logging destinations.
 	flushSyncWriter interface {
 		Flush() error
@@ -130,14 +110,16 @@ type (
 
 // loggingT collects all the global state of the logging setup.
 type loggingT struct {
-	// Boolean flags. Not handled atomically because the flag.Value interface
-	// does not let us avoid the =true, and that shorthand is necessary for
-	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
+	// freeList is a list of byte buffers, maintained under freeListMu.
+	freeList *buffer
+
+	// file holds writer for each of the log types.
+	file [numSeverity]flushSyncWriter
+
+	// Boolean flags.
 	toStderr     bool // The -logtostderr flag.
 	alsoToStderr bool // The -alsologtostderr flag.
 
-	// freeList is a list of byte buffers, maintained under freeListMu.
-	freeList *buffer
 	// freeListMu maintains the free list. It is separate from the main mutex
 	// so buffers can be grabbed and printed to without holding the main lock,
 	// for better parallelization.
@@ -146,9 +128,6 @@ type loggingT struct {
 	// mu protects the remaining elements of this structure and is
 	// used to synchronize logging.
 	mu sync.Mutex
-
-	// file holds writer for each of the log types.
-	file [numSeverity]flushSyncWriter
 }
 
 type (
@@ -204,26 +183,6 @@ var (
 	// interface guard
 	_ flushSyncWriter = (*syncBuffer)(nil)
 )
-
-// Lines returns the number of lines written.
-func (s *OutputStats) Lines() int64 {
-	return atomic.LoadInt64(&s.lines)
-}
-
-// Bytes returns the number of bytes written.
-func (s *OutputStats) Bytes() int64 {
-	return atomic.LoadInt64(&s.bytes)
-}
-
-// String is part of the flag.Value interface.
-func (l *Level) String() string {
-	return strconv.FormatInt(int64(*l), 10)
-}
-
-// Get is part of the flag.Value interface.
-func (l *Level) Get() any {
-	return *l
-}
 
 // Flush flushes all pending log I/O.
 func Flush() {

@@ -30,8 +30,8 @@ import (
 	"time"
 )
 
-// MaxSize is the maximum size of a log file in bytes.
-var MaxSize uint64 = 1024 * 1024 * 1800
+// log rotation size (initialized via LoadConfig; any change requires restart)
+var MaxSize uint64 = 1024 * 1024 * 1024
 
 var (
 	// logDirs lists the candidate directories for new log files.
