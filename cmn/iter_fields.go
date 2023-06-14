@@ -322,59 +322,64 @@ func (f *field) String() (s string) {
 
 func (f *field) SetValue(src any, force ...bool) error {
 	debug.Assert(!f.opts.OnlyRead)
-
 	dst := f.v
 	if f.listTag == tagReadonly && (len(force) == 0 || !force[0]) {
 		return fmt.Errorf("property %q is readonly", f.name)
 	}
-
 	if !dst.CanSet() {
 		return fmt.Errorf("failed to set value: %v", dst)
 	}
 
 	srcVal := reflect.ValueOf(src)
+reflectDst:
+	if srcVal.Kind() == reflect.String {
+		dstType := dst.Type().Name()
+		// added types: cos.Duration and cos.SizeIEC
+		if dstType == "Duration" || dstType == "SizeIEC" {
+			var (
+				err error
+				d   time.Duration
+				n   int64
+				s   = srcVal.String()
+			)
+			if dstType == "Duration" {
+				d, err = time.ParseDuration(s)
+				n = int64(d)
+			} else {
+				n, err = cos.ParseSize(s, cos.UnitsIEC)
+			}
+			if err == nil {
+				dst.SetInt(n)
+				f.dirty = true
+			}
+			return err
+		}
+	}
 	switch srcVal.Kind() {
 	case reflect.String:
-		s := srcVal.String()
-	reflectDst:
 		switch dst.Kind() {
 		case reflect.String:
-			dst.SetString(s)
+			dst.SetString(srcVal.String())
 		case reflect.Bool:
-			n, err := cos.ParseBool(s)
+			n, err := cos.ParseBool(srcVal.String())
 			if err != nil {
 				return err
 			}
 			dst.SetBool(n)
-		case reflect.Int64:
-			n, err := strconv.ParseInt(s, 10, 64)
-			if err != nil {
-				if dst.Type().Name() == "Duration" /*cos.Duration*/ {
-					var d time.Duration
-					d, err = time.ParseDuration(s)
-					n = int64(d)
-				} else if dst.Type().Name() == "Size" /*cos.Size*/ {
-					n, err = cos.ParseSize(s, cos.UnitsIEC)
-				}
-			}
-			if err != nil {
-				return err
-			}
-			dst.SetInt(n)
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-			n, err := strconv.ParseInt(s, 10, 64)
+		case reflect.Int64, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+			n, err := strconv.ParseInt(srcVal.String(), 10, 64)
 			if err != nil {
 				return err
 			}
 			dst.SetInt(n)
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-			n, err := strconv.ParseUint(s, 10, 64)
+			n, err := strconv.ParseUint(srcVal.String(), 10, 64)
 			if err != nil {
 				return err
 			}
 			dst.SetUint(n)
 		case reflect.Float32, reflect.Float64:
-			n, err := strconv.ParseFloat(s, dst.Type().Bits())
+			n, err := strconv.ParseFloat(srcVal.String(), dst.Type().Bits())
 			if err != nil {
 				return err
 			}

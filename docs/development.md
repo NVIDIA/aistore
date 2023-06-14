@@ -46,7 +46,7 @@ The change takes an effect immediately. But you can also change logging verbosit
 $ ais config cluster log
 PROPERTY         VALUE
 log.level        3
-log.max_size     1MiB
+log.max_size     4MiB
 log.max_total    64MiB
 log.flush_time   40s
 log.stats_time   1m
@@ -54,7 +54,7 @@ log.stats_time   1m
 $ ais config cluster log.level 5
 PROPERTY         VALUE
 log.level        5
-log.max_size     1MiB
+log.max_size     4MiB
 log.max_total    64MiB
 log.flush_time   40s
 log.stats_time   1m

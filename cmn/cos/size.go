@@ -34,6 +34,39 @@ const (
 	TB = 1000 * GB
 )
 
+func _suffix(s string) string {
+	switch {
+	case strings.HasSuffix(s, "KIB"):
+		return "KIB"
+	case strings.HasSuffix(s, "MIB"):
+		return "MIB"
+	case strings.HasSuffix(s, "GIB"):
+		return "GIB"
+	case strings.HasSuffix(s, "TIB"):
+		return "TIB"
+	case strings.HasSuffix(s, "KB"):
+		return "KB"
+	case strings.HasSuffix(s, "MB"):
+		return "MB"
+	case strings.HasSuffix(s, "GB"):
+		return "GB"
+	case strings.HasSuffix(s, "TB"):
+		return "TB"
+	case strings.HasSuffix(s, "K"):
+		return "K"
+	case strings.HasSuffix(s, "M"):
+		return "M"
+	case strings.HasSuffix(s, "G"):
+		return "G"
+	case strings.HasSuffix(s, "T"):
+		return "T"
+	case strings.HasSuffix(s, "B"):
+		return "B"
+	default:
+		return ""
+	}
+}
+
 /////////////
 // SizeIEC //
 /////////////
@@ -41,32 +74,6 @@ const (
 // is used in cmn/config; is known*** to cmn/iter-fields parser (compare w/ duration.go)
 
 type SizeIEC int64
-
-var iecBytes = map[string]int64{
-	"K":   KiB,
-	"KB":  KiB,
-	"KIB": KiB,
-	"M":   MiB,
-	"MB":  MiB,
-	"MIB": MiB,
-	"G":   GiB,
-	"GB":  GiB,
-	"GIB": GiB,
-	"T":   TiB,
-	"TB":  TiB,
-	"TIB": TiB,
-}
-
-var siBytes = map[string]int64{
-	"K":  KB,
-	"KB": KB,
-	"M":  MB,
-	"MB": MB,
-	"G":  GB,
-	"GB": GB,
-	"T":  TB,
-	"TB": TB,
-}
 
 func (siz SizeIEC) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(siz.String()) }
 func (siz SizeIEC) String() string               { return ToSizeIEC(int64(siz), 0) }
@@ -100,33 +107,74 @@ func ToSizeIEC(b int64, digits int) string {
 	}
 }
 
+// when `units` arg is empty conversion is defined by the suffix
 func ParseSize(size, units string) (int64, error) {
 	if size == "" {
 		return 0, nil
 	}
-	switch units {
-	case "", UnitsIEC: // NOTE default
-		return _parseSize(size, iecBytes)
-	case UnitsSI:
-		return _parseSize(size, siBytes)
-	case UnitsRaw:
-		return strconv.ParseInt(size, 10, 64)
-	}
-	return 0, fmt.Errorf("invalid %q (expecting one of: %s, %s, %s or \"\")", units, UnitsIEC, UnitsSI, UnitsRaw)
-}
-
-func _parseSize(s string, multipliers map[string]int64) (int64, error) {
-	s = strings.ToUpper(s)
-	for k, v := range multipliers {
-		if ns := strings.TrimSuffix(s, k); ns != s {
-			if strings.IndexByte(ns, '.') >= 0 {
-				f, err := strconv.ParseFloat(strings.TrimSpace(ns), 64)
-				return int64(float64(v) * f), err
-			}
-			i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
-			return i * v, err
+	// validation
+	if len(units) > 0 {
+		switch units {
+		case "", UnitsIEC, UnitsSI, UnitsRaw:
+		default:
+			return 0, fmt.Errorf("ParseSize %q: invalid units %q (expecting %s, %s, or %s)", size, units,
+				UnitsRaw, UnitsSI, UnitsIEC)
 		}
 	}
-	ns := strings.TrimSuffix(s, "B")
-	return strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
+	// units, more validation
+	var (
+		u      = UnitsRaw
+		s      = strings.ToUpper(strings.TrimSpace(size))
+		suffix = _suffix(s)
+	)
+	if suffix == "KIB" || suffix == "MIB" || suffix == "GIB" || suffix == "TIB" {
+		u = UnitsIEC
+		if units != "" && units != UnitsIEC {
+			return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)
+		}
+	} else if suffix != "" && suffix != "B" {
+		u = UnitsSI
+		if units != "" {
+			if units == UnitsRaw {
+				return 0, fmt.Errorf("ParseSize %q error: %q vs %q units", size, u, units)
+			}
+			// NOTE: the case when units (arg) take precedence over the suffix
+			u = units
+		}
+	}
+	// trim suffix and convert
+	if len(suffix) > 0 {
+		s = strings.TrimSuffix(s, suffix)
+	}
+	switch {
+	case strings.IndexByte(suffix, 'K') >= 0:
+		return _convert(s, u, KB, KiB)
+	case strings.IndexByte(suffix, 'M') >= 0:
+		return _convert(s, u, MB, MiB)
+	case strings.IndexByte(suffix, 'G') >= 0:
+		return _convert(s, u, GB, GiB)
+	case strings.IndexByte(suffix, 'T') >= 0:
+		return _convert(s, u, TB, TiB)
+	default:
+		return _convert(s, u, 1, 1)
+	}
+}
+
+func _convert(s, units string, mult, multIEC int64) (val int64, err error) {
+	if strings.IndexByte(s, '.') >= 0 {
+		var f float64
+		f, err = strconv.ParseFloat(s, 64)
+		if err != nil {
+			return
+		}
+		if units == UnitsIEC {
+			return int64(f * float64(multIEC)), err
+		}
+		return int64(f * float64(mult)), err
+	}
+	val, err = strconv.ParseInt(s, 10, 64)
+	if units == UnitsIEC {
+		return val * multIEC, err
+	}
+	return val * mult, err
 }
