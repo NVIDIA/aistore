@@ -98,9 +98,11 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 // - is obtained via GetBucketInfo() API
 // - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
 //
-// NOTE: the API utilizes HEAD method (compare with HeadBucket) and always executes the (cached-only, fast)
-// version of the bucket summary
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
+// NOTE:
+//   - the API utilizes HEAD method (compare with HeadBucket) and by default executes the (cached-only, fast)
+//     version of the bucket summary. To override, provide the last (optional) parameter.
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int, countRemoteObjs ...bool) (p *cmn.BucketProps, info *cmn.BsummResult,
+	err error) {
 	var (
 		hdr  http.Header
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -108,6 +110,9 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 	)
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
+	if len(countRemoteObjs) > 0 && countRemoteObjs[0] {
+		q.Set(apc.QparamCountRemoteObjs, "true")
+	}
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
 	{
@@ -115,16 +120,24 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int) (p *cmn.BucketPr
 		reqParams.Path = path
 		reqParams.Query = q
 	}
-	if hdr, err = reqParams.doReqHdr(); err == nil {
-		p = &cmn.BucketProps{}
-		if err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketProps)), p); err == nil {
-			info = &cmn.BsummResult{}
-			err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketSumm)), info)
-		}
-	} else {
+	defer FreeRp(reqParams)
+
+	if hdr, err = reqParams.doReqHdr(); err != nil {
 		err = hdr2msg(bck, err)
+		return
 	}
-	FreeRp(reqParams)
+	hdrProps := hdr.Get(apc.HdrBucketProps)
+	if hdrProps != "" {
+		p = &cmn.BucketProps{}
+		if err = jsoniter.Unmarshal([]byte(hdrProps), p); err != nil {
+			return
+		}
+	}
+	hdrSumm := hdr.Get(apc.HdrBucketSumm)
+	if hdrSumm != "" {
+		info = &cmn.BsummResult{}
+		err = jsoniter.Unmarshal([]byte(hdrSumm), info)
+	}
 	return
 }
 

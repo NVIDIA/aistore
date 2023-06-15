@@ -170,6 +170,7 @@ func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtr
 		if err := npg.nextPageA(); err != nil {
 			return err
 		}
+		summ.ObjCount.Present += uint64(len(npg.page.Entries))
 		for _, v := range npg.page.Entries {
 			summ.TotalSize.PresentObjs += uint64(v.Size)
 			if v.Size < summ.ObjSize.Min {
@@ -178,7 +179,6 @@ func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtr
 			if v.Size > summ.ObjSize.Max {
 				summ.ObjSize.Max = v.Size
 			}
-			summ.ObjCount.Present++
 		}
 		freeLsoEntries(npg.page.Entries)
 		if npg.page.ContinuationToken == "" {
@@ -201,9 +201,9 @@ func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtr
 		if err != nil {
 			return err
 		}
+		summ.ObjCount.Remote += uint64(len(lst.Entries))
 		for _, v := range lst.Entries {
 			summ.TotalSize.RemoteObjs += uint64(v.Size)
-			summ.ObjCount.Remote++
 		}
 		freeLsoEntries(lst.Entries)
 		if lsmsg.ContinuationToken = lst.ContinuationToken; lsmsg.ContinuationToken == "" {

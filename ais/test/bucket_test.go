@@ -31,6 +31,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var (
+	fltPresentEnum = []int{apc.FltExists, apc.FltExistsNoProps, apc.FltPresent, apc.FltExistsOutside}
+	fltPresentText = map[int]string{
+		apc.FltExists:        "flt-exists",
+		apc.FltExistsNoProps: "flt-exists-no-props",
+		apc.FltPresent:       "flt-present",
+		apc.FltExistsOutside: "flt-exists-outside",
+	}
+)
+
 func TestHTTPProviderBucket(t *testing.T) {
 	var (
 		bck = cmn.Bck{
@@ -179,6 +189,55 @@ func TestListBuckets(t *testing.T) {
 	tassert.CheckError(t, err)
 	if len(aisBuckets) != len(bcks.Select(qbck)) {
 		t.Fatalf("ais buckets: %d != %d\n", len(aisBuckets), len(bcks.Select(qbck)))
+	}
+}
+
+// NOTE: for remote bucket, enter the bucket name directly (as TestMain makes it "present" at init time)
+func TestGetBucketInfo(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cliBck
+		isPresent  bool
+	)
+	if bck.IsRemote() {
+		_, _, err := api.GetBucketInfo(baseParams, bck, apc.FltPresent)
+		isPresent = err == nil
+	}
+	for _, fltPresence := range fltPresentEnum {
+		text := fltPresentText[fltPresence]
+		tlog.Logf("%q %s\n", text, strings.Repeat("-", 60-len(text)))
+		props, info, err := api.GetBucketInfo(baseParams, bck, fltPresence, bck.IsRemote() /*count remote obj-s*/)
+		if err != nil {
+			if herr := cmn.Str2HTTPErr(err.Error()); herr != nil {
+				tlog.Logln(herr.TypeCode + ": " + herr.Message)
+			} else {
+				tlog.Logln(err.Error())
+			}
+		} else {
+			ps := "bucket-props = nil"
+			if props != nil {
+				ps = fmt.Sprintf("bucket-props(mirror) %+v", props.Mirror)
+			}
+			tlog.Logf("%s: %s\n", bck.Cname(""), ps)
+
+			is := "bucket-summary = nil"
+			if info != nil {
+				is = fmt.Sprintf("bucket-summary %+v", info.BsummResult)
+			}
+			tlog.Logf("%s: %s\n", bck.Cname(""), is)
+		}
+		if bck.IsRemote() && !isPresent {
+			// undo the side effect of calling api.GetBucketInfo
+			_ = api.EvictRemoteBucket(baseParams, bck, false)
+		}
+		tlog.Logln("")
+	}
+	if bck.IsRemote() {
+		_, _, err := api.GetBucketInfo(baseParams, bck, apc.FltPresent)
+		isPresentEnd := err == nil
+		tassert.Errorf(t, isPresent == isPresentEnd, "presence in the beginning (%t) != (%t) at the end",
+			isPresent, isPresentEnd)
 	}
 }
 

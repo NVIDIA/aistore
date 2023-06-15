@@ -27,6 +27,7 @@ type dpq struct {
 	owt                 string // object write transaction { OwtPut, ... }
 	fltPresence         string // QparamFltPresence
 	dontAddRemote       string // QparamDontAddRemote
+	countRemoteObjs     string // QparamCountRemoteObjs
 	etlName             string // QparamETLName
 }
 
@@ -106,6 +107,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.fltPresence = value
 		case apc.QparamDontAddRemote:
 			dpq.dontAddRemote = value
+		case apc.QparamCountRemoteObjs:
+			dpq.countRemoteObjs = value
 		case apc.QparamETLName:
 			dpq.etlName = value
 

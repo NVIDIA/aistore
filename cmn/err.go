@@ -926,14 +926,12 @@ func IsStatusGone(err error) (yes bool) {
 	return hErr.Status == http.StatusGone
 }
 
-func S2HTTPErr(r *http.Request, msg string, status int) *ErrHTTP {
-	if msg != "" {
-		var herr ErrHTTP
-		if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
-			return &herr
-		}
+func Str2HTTPErr(msg string) *ErrHTTP {
+	var herr ErrHTTP
+	if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
+		return &herr
 	}
-	return NewErrHTTP(r, errors.New(msg), status)
+	return nil
 }
 
 func Err2HTTPErr(err error) *ErrHTTP {

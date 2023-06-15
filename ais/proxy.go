@@ -1607,29 +1607,33 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
 	var (
-		info           *cmn.BsummResult
-		hdr            = w.Header()
-		fltPresence    int  // operate on present-only or otherwise (as per apc.Flt* enum)
-		wantBckSummary bool // whether to include bucket summary in the response
+		info            *cmn.BsummResult
+		hdr             = w.Header()
+		fltPresence     int  // operate on present-only or otherwise (as per apc.Flt* enum)
+		wantBckSummary  bool // whether to include bucket summary in the response
+		countRemoteObjs bool // whether to count remote objects (NOTE: slow, use w/ caution)
 	)
-	if err := p.parseReq(w, r, apireq); err != nil {
+	err := p.parseReq(w, r, apireq)
+	if err != nil {
 		return
 	}
-
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD,
-		dpq: apireq.dpq, query: apireq.query}
-
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.dontAddRemote = cos.IsParseBool(apireq.dpq.dontAddRemote) // QparamDontAddRemote
 
 	// present-only [+ bucket summary]
 	if apireq.dpq.fltPresence != "" {
-		wantBckSummary = true
-		fltPresence, _ = strconv.Atoi(apireq.dpq.fltPresence)
+		fltPresence, err = strconv.Atoi(apireq.dpq.fltPresence)
+		if err != nil {
+			p.writeErrf(w, r, "%s: parse 'flt-presence': %w", p, err)
+		}
+		if wantBckSummary = !apc.IsFltNoProps(fltPresence); wantBckSummary {
+			info = &cmn.BsummResult{}
+			if apireq.dpq.countRemoteObjs != "" {
+				countRemoteObjs = cos.IsParseBool(apireq.dpq.countRemoteObjs)
+			}
+		}
 		// bckArgs.dontHeadRemote == false will have an effect of adding an (existing)
 		// bucket to the cluster's BMD - right here and now, ie., on the fly.
-		// This could be easily prevented but then again, it is currently impossible
-		// to run xactions on buckets that are not present.
-		// See also: comments to `QparamFltPresence` and `apc.Flt*` enum
 		bckArgs.dontHeadRemote = bckArgs.dontHeadRemote || apc.IsFltPresent(fltPresence)
 	}
 	bckArgs.createAIS = false
@@ -1638,18 +1642,19 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err != nil {
 		return
 	}
-	if wantBckSummary {
-		info = &cmn.BsummResult{} // IsBckPresent false (see below)
-	}
+
+	// 1. bucket is present (and was present prior to this call), and we are done with it here
 	if bckArgs.isPresent {
+		if fltPresence == apc.FltExistsOutside {
+			p.writeErrf(w, r, "%s is present (vs requested 'flt-outside')", bck.Cname(""))
+			return
+		}
 		if wantBckSummary {
-			if !apc.IsFltNoProps(fltPresence) {
-				// get runtime bucket info (aka /summary/):
-				// broadcast to all targets, collect, and summarize
-				if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
-					p.writeErr(w, r, err)
-					return
-				}
+			// get runtime bucket info (aka /summary/):
+			// broadcast to all targets, collect, and summarize
+			if err := p.bsummDoWait(bck, info, fltPresence, countRemoteObjs); err != nil {
+				p.writeErr(w, r, err)
+				return
 			}
 			info.IsBckPresent = true
 		}
@@ -1657,31 +1662,26 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 		return
 	}
 
-	debug.Assert(bck.IsRemote())
+	// 2. bucket is remote and does exist
+	debug.Assert(bck.IsRemote(), bck.String())
+	debug.Assert(bckArgs.exists)
 
-	// [filter] when the bucket that must be present is not
-	if apc.IsFltPresent(fltPresence) {
-		toHdr(bck, hdr, info)
-		return
-	}
-	if bckArgs.dontAddRemote {
-		debug.Assert(bckArgs.exists)
+	// [filtering] when the bucket that must be present is not
+	if apc.IsFltPresent(fltPresence) || bckArgs.dontAddRemote {
 		toHdr(bck, hdr, info)
 		return
 	}
 
 	bmd := p.owner.bmd.get()
 	bck.Props, bckArgs.isPresent = bmd.Get(bck)
+	debug.Assert(bckArgs.isPresent, bck.String())
 
 	if wantBckSummary {
 		// NOTE: summarizing freshly added remote
 		runtime.Gosched()
-		debug.Assert(bckArgs.isPresent)
-		if !apc.IsFltNoProps(fltPresence) {
-			if err := p.bsummDoWait(bck, info, fltPresence); err != nil {
-				p.writeErr(w, r, err)
-				return
-			}
+		if err := p.bsummDoWait(bck, info, fltPresence, countRemoteObjs); err != nil {
+			p.writeErr(w, r, err)
+			return
 		}
 		info.IsBckPresent = true
 	}
@@ -1689,9 +1689,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 }
 
 func toHdr(bck *meta.Bck, hdr http.Header, info *cmn.BsummResult) {
-	if bck.Props == nil {
-		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(&cmn.BucketProps{}))
-	} else {
+	if bck.Props != nil {
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
 	}
 	if info != nil {

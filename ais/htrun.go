@@ -672,11 +672,11 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
 			msg := resp.Header.Get(apc.HdrError)
-			res.err = cmn.S2HTTPErr(req, msg, res.status)
+			res.err = res2HTTPErr(req, msg, res.status)
 		} else {
 			b := cmn.NewBuffer()
 			b.ReadFrom(resp.Body)
-			res.err = cmn.S2HTTPErr(req, b.String(), res.status)
+			res.err = res2HTTPErr(req, b.String(), res.status)
 			cmn.FreeBuffer(b)
 		}
 		res.details = res.err.Error()
@@ -996,6 +996,16 @@ func (h *htrun) logerr(tag string, v any, err error) {
 	}
 	glog.Errorln(msg + ")")
 	h.statsT.IncErr(stats.ErrHTTPWriteCount)
+}
+
+func res2HTTPErr(r *http.Request, msg string, status int) (herr *cmn.ErrHTTP) {
+	if msg != "" {
+		herr = cmn.Str2HTTPErr(msg)
+	}
+	if herr == nil {
+		herr = cmn.NewErrHTTP(r, errors.New(msg), status)
+	}
+	return
 }
 
 func _parseNCopies(value any) (copies int64, err error) {

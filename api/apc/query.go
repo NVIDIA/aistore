@@ -39,6 +39,11 @@ const (
 	// When evicting, keep remote bucket in BMD (i.e., evict data only)
 	QparamKeepRemote = "keep_bck_md"
 
+	// When summarizing via a (blocking) api.GetBucketInfo call, provide remote stats as well
+	// NOTE: to be used with caution! depending on remote bucket size and network speed
+	//       the waiting time may be significant
+	QparamCountRemoteObjs = "count_remote_objs"
+
 	// NOTE: "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
 	// See also:
 	// - Flt* enum below
