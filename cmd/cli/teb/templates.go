@@ -218,11 +218,11 @@ const (
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{$xctn.AbortedX}}\n"
 
-	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t TOTAL SIZE (apparent, objects)\t USAGE(%)\n"
+	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t SIZE (apparent, objects, remote)\t USAGE(%)\n"
 	ListBucketsSummBody = "{{range $k, $v := . }}" +
 		"{{FormatBckName $v.Bck}}\t {{FormatBool $v.Info.IsBckPresent}}\t " +
-		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.ObjCount.Present}} {{end}}\t " +
-		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{FormatBytesUns $v.Info.TotalSize.OnDisk 2}} {{FormatBytesUns $v.Info.TotalSize.PresentObjs 2}}{{end}}\t " +
+		"{{$v.Info.ObjCount.Present}} {{$v.Info.ObjCount.Remote}}\t " +
+		"{{FormatBytesUns $v.Info.TotalSize.OnDisk 2}} {{FormatBytesUns $v.Info.TotalSize.PresentObjs 2}} {{FormatBytesUns $v.Info.TotalSize.RemoteObjs 2}}\t " +
 		"{{if (IsFalse $v.Info.IsBckPresent)}}-{{else}}{{$v.Info.UsedPct}}%{{end}}\n" +
 		"{{end}}"
 	ListBucketsSummTmpl = listBucketsSummHdr + ListBucketsSummBody

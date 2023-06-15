@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -142,7 +143,7 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
-func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error) {
+func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int, countRemoteObjs bool) (err error) {
 	var (
 		regex  *regexp.Regexp
 		fmatch = func(_ cmn.Bck) bool { return true }
@@ -189,7 +190,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 		if provider == apc.AIS {
 			qbck.Ns = cmn.NsGlobal // "local" cluster
 		}
-		cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence)
+		cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence, countRemoteObjs)
 		if cnt > 0 {
 			fmt.Fprintln(c.App.Writer)
 			total += cnt
@@ -197,7 +198,7 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 	}
 	// finally, list remote ais buckets, if any
 	qbck = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
-	cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence)
+	cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence, countRemoteObjs)
 	if cnt > 0 || total == 0 {
 		fmt.Fprintln(c.App.Writer)
 	}
@@ -205,7 +206,8 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int) (err error
 }
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool, fltPresence int) (cnt int) {
+func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool,
+	fltPresence int, countRemoteObjs bool) (cnt int) {
 	var (
 		filtered = make(cmn.Bcks, 0, len(bcks))
 		unique   = make(cos.StrSet, len(bcks))
@@ -223,7 +225,7 @@ func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches fun
 		return
 	}
 	if flagIsSet(c, bckSummaryFlag) {
-		listBckTableWithSummary(c, qbck, filtered, fltPresence)
+		listBckTableWithSummary(c, qbck, filtered, fltPresence, countRemoteObjs)
 	} else {
 		listBckTableNoSummary(c, qbck, filtered, fltPresence)
 	}
@@ -295,7 +297,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 }
 
 // (compare with `showBucketSummary` and `bsummSlow`)
-func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
+func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int, countRemoteObjs bool) {
 	var (
 		footer      lsbFooter
 		hideHeader  = flagIsSet(c, noHeaderFlag)
@@ -307,8 +309,13 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		actionWarn(c, errU.Error())
 		units = ""
 	}
-	for _, bck := range filtered {
-		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence)
+	var (
+		opts = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+		prev = mono.NanoTime()
+		max  = 10 * time.Second
+	)
+	for i, bck := range filtered {
+		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence, countRemoteObjs)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
 				warn := fmt.Sprintf("%s, err: %s\n", bck.Cname(""), herr.Message)
@@ -328,13 +335,29 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
 		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: info})
+
+		now := mono.NanoTime()
+		if elapsed := time.Duration(now - prev); elapsed < max && i < len(filtered)-1 {
+			continue
+		}
+		// print
+		if hideHeader {
+			teb.Print(data, teb.ListBucketsSummBody, opts)
+		} else {
+			teb.Print(data, teb.ListBucketsSummTmpl, opts)
+		}
+		data = data[:0]
+		prev = now
+		if i < len(filtered)-1 {
+			fmt.Fprintln(c.App.Writer)
+		}
 	}
 
-	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
-	if hideHeader {
-		teb.Print(data, teb.ListBucketsSummBody, opts)
-	} else {
-		teb.Print(data, teb.ListBucketsSummTmpl, opts)
+	if footer.robj == 0 && apc.IsRemoteProvider(qbck.Provider) && !countRemoteObjs {
+		fmt.Fprintln(c.App.Writer)
+		note := fmt.Sprintf("to count and size remote buckets and objects outside ais cluster, use %s switch, see '--help' for details",
+			qflprn(allObjsOrBcksFlag))
+		actionNote(c, note)
 	}
 
 	if hideFooter || footer.nbp <= 1 {

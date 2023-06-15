@@ -489,7 +489,7 @@ var (
 	}
 	bckSummaryFlag = cli.BoolFlag{
 		Name:  "summary",
-		Usage: "show bucket sizes and used capacity; applies _only_ to buckets and objects that are _present_ in the cluster",
+		Usage: "show object numbers, bucket sizes, and used capacity; applies _only_ to buckets and objects that are _present_ in the cluster",
 	}
 	pagedFlag = cli.BoolFlag{
 		Name:  "paged",

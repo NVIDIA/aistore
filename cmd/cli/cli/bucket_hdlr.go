@@ -520,19 +520,20 @@ func listAnyHandler(c *cli.Context) error {
 		}
 		return showObjProps(c, bck, objName)
 	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list bucket(s)
-		fltPresence := apc.FltPresent
+		var (
+			fltPresence     = apc.FltPresent
+			countRemoteObjs bool
+		)
 		if flagIsSet(c, allObjsOrBcksFlag) {
 			fltPresence = apc.FltExists
-		}
-		if flagIsSet(c, bckSummaryFlag) {
-			if !apc.IsFltPresent(fltPresence) && bck.Provider != apc.AIS {
-				warn := fmt.Sprintf("cannot _summarize_ non-present buckets and/or remote content - ignoring flag %s "+
-					"(hint: use 'ais storage summary')\n", qflprn(allObjsOrBcksFlag))
+			if flagIsSet(c, bckSummaryFlag) && bck.Provider != apc.AIS {
+				countRemoteObjs = true
+				const warn = "counting and sizing _non-present_ objects from remote Cloud buckets may take considerable time\n" +
+					"(hint: run 'ais storage summary' async job)\n"
 				actionWarn(c, warn)
-				fltPresence = apc.FltPresent
 			}
 		}
-		return listBuckets(c, cmn.QueryBcks(bck), fltPresence)
+		return listBuckets(c, cmn.QueryBcks(bck), fltPresence, countRemoteObjs)
 	default: // list objects
 		prefix := parseStrFlag(c, listObjPrefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested

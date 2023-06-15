@@ -175,6 +175,7 @@ func (t *target) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Q
 }
 
 func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (bcks cmn.Bcks, errCode int, err error) {
+	// validate
 	debug.Assert(!qbck.IsAIS())
 	if qbck.IsCloud() || qbck.IsHDFS() { // must be configured
 		if config.Backend.Get(qbck.Provider) == nil {
@@ -188,12 +189,24 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 			// otherwise go ahead and try to list below
 		}
 	}
-	if qbck.IsHDFS() { // excepting HDFS (that cannot list buckets)
+	// hdfs cannot list
+	if qbck.IsHDFS() {
 		bcks = bmd.Select(qbck)
 		return
 	}
 	backend := t.Backend((*meta.Bck)(qbck))
-	bcks, errCode, err = backend.ListBuckets(*qbck)
+	if qbck.IsBucket() && !qbck.IsRemoteAIS() { // TODO -- FIXME: remove IsRemoteAIS check (unify w/ Cloud)
+		var (
+			bck = (*meta.Bck)(qbck)
+			ctx = context.Background()
+		)
+		_, errCode, err = backend.HeadBucket(ctx, bck)
+		if err == nil {
+			bcks = cmn.Bcks{bck.Clone()}
+		}
+	} else {
+		bcks, errCode, err = backend.ListBuckets(*qbck)
+	}
 	if err == nil && len(bcks) > 1 {
 		sort.Sort(bcks)
 	}

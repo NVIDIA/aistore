@@ -187,6 +187,10 @@ func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtr
 		lsmsg.ContinuationToken = npg.page.ContinuationToken
 	}
 
+	if summ.ObjCount.Present == 0 {
+		summ.TotalSize.OnDisk = 0 // fixup (is correct here)
+	}
+
 	if msg.ObjCached {
 		return nil
 	}
