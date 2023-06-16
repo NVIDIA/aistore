@@ -911,7 +911,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 			return
 		}
 		if fltPresence == apc.FltExistsOutside {
-			err = fmt.Errorf("%s is present (flt %d=\"outside\")", lom.Cname(), fltPresence)
+			err = fmt.Errorf(fmtOutside, lom.Cname(), fltPresence)
 			return
 		}
 	} else {

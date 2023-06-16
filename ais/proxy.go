@@ -1646,7 +1646,8 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	// 1. bucket is present (and was present prior to this call), and we are done with it here
 	if bckArgs.isPresent {
 		if fltPresence == apc.FltExistsOutside {
-			p.writeErrf(w, r, "%s is present (vs requested 'flt-outside')", bck.Cname(""))
+			err = fmt.Errorf(fmtOutside, bck.Cname(""), fltPresence)
+			p.writeErr(w, r, err)
 			return
 		}
 		if wantBckSummary {

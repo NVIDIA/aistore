@@ -100,8 +100,21 @@ var (
 
 	// commands
 	bucketsObjectsCmdList = cli.Command{
-		Name:         commandList,
-		Usage:        "list buckets, objects in buckets, and files in objects formatted as archives",
+		Name: commandList,
+		Usage: "list buckets, objects in buckets, and files in " + archExts + "-formatted objects,\n" +
+			indent1 + "e.g.:\n" +
+			indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
+			indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
+			indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
+			indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
+			indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in a cluster;\n" +
+			indent1 + "with template, regex, and/or prefix:\n" +
+			indent1 + "\t* ais ls ais://abc --regex \".md\" --props size,checksum \t- list *.md objects with their respective sizes and checksums;\n" +
+			indent1 + "\t* ais ls gs://abc --template images/\t- list all objects from the virtual subdirectory called \"images\";\n" +
+			indent1 + "\t* ais ls gs://abc --prefix images/\t- same as above (for more examples, see '--template' below);\n" +
+			indent1 + "and more:\n" +
+			indent1 + "\t* ais ls s3 --summary \t- for each s3 bucket in a cluster: print object numbers and total size(s);\n" +
+			indent1 + "\t* ais ls s3 --summary --all \t- generate summary report for all s3 buckets; include remote objects and buckets that are _not present_",
 		ArgsUsage:    listAnyCommandArgument,
 		Flags:        bucketCmdsFlags[commandList],
 		Action:       listAnyHandler,

@@ -41,7 +41,7 @@ type (
 
 	entryFilter func(*cmn.LsoEntry) bool
 
-	objectListFilter struct {
+	lstFilter struct {
 		predicates []entryFilter
 	}
 )
@@ -384,14 +384,22 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 }
 
 func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {
-	var (
-		msg                   = &apc.LsoMsg{Prefix: prefix}
-		objectListFilter, err = newObjectListFilter(c)
-		addCachedCol          = bck.IsRemote()
-	)
+	// prefix and filter
+	lstFilter, prefixFromTemplate, err := newLstFilter(c)
 	if err != nil {
 		return err
 	}
+	if prefixFromTemplate != "" {
+		if prefix != "" && prefix != prefixFromTemplate {
+			return fmt.Errorf("which prefix to use: %q (from %s) or %q (from %s)?",
+				prefix, qflprn(listObjPrefixFlag), prefixFromTemplate, qflprn(templateFlag))
+		}
+		prefix = prefixFromTemplate
+	}
+
+	// lsmsg
+	msg := &apc.LsoMsg{Prefix: prefix}
+	addCachedCol := bck.IsRemote()
 	if flagIsSet(c, listObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
 		addCachedCol = false
@@ -414,7 +422,6 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		debug.Assert(apc.LsPropsSepa == ",", "',' is documented in 'objPropsFlag' usage and elsewhere")
 		props = splitCsv(propsStr) // split apc.LsPropsSepa
 	}
-
 	// NOTE: compare w/ `showObjProps()`
 	if flagIsSet(c, nameOnlyFlag) {
 		if len(props) > 2 {
@@ -466,7 +473,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 			} else {
 				toPrint = objList.Entries
 			}
-			err = printObjProps(c, toPrint, objectListFilter, msg.Props, addCachedCol)
+			err = printObjProps(c, toPrint, lstFilter, msg.Props, addCachedCol)
 			if err != nil {
 				return err
 			}
@@ -505,7 +512,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if err != nil {
 		return err
 	}
-	return printObjProps(c, objList.Entries, objectListFilter, msg.Props, addCachedCol)
+	return printObjProps(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
 }
 
 func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
@@ -706,7 +713,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	return
 }
 
-func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectListFilter, props string, addCachedCol bool) error {
+func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *lstFilter, props string, addCachedCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
 		matched, other = objectFilter.filter(entries)
@@ -737,50 +744,47 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *objectL
 	return nil
 }
 
-//////////////////////
-// objectListFilter //
-//////////////////////
+///////////////
+// lstFilter //
+///////////////
 
-func newObjectListFilter(c *cli.Context) (*objectListFilter, error) {
-	objFilter := &objectListFilter{}
-
+func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
+	flt = &lstFilter{}
 	if !flagIsSet(c, allObjsOrBcksFlag) {
-		// Filter out objects with a status different from OK
-		objFilter.addFilter(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
+		// filter objects with not OK status
+		flt.addFilter(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
 	}
-
 	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
-
-		objFilter.addFilter(func(obj *cmn.LsoEntry) bool { return regex.MatchString(obj.Name) })
+		flt.addFilter(func(obj *cmn.LsoEntry) bool { return regex.MatchString(obj.Name) })
 	}
-
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
-		pt, err := cos.ParseBashTemplate(bashTemplate)
+		pt, err := cos.NewParsedTemplate(bashTemplate)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
-
-		matchingObjectNames := make(cos.StrSet)
-
-		pt.InitIter()
-		for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
-			matchingObjectNames[objName] = struct{}{}
+		if len(pt.Ranges) == 0 {
+			prefix, pt.Prefix = pt.Prefix, "" // NOTE: when template is a "pure" prefix
+		} else {
+			matchingObjectNames := make(cos.StrSet)
+			pt.InitIter()
+			for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
+				matchingObjectNames[objName] = struct{}{}
+			}
+			flt.addFilter(func(obj *cmn.LsoEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 		}
-		objFilter.addFilter(func(obj *cmn.LsoEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 	}
-
-	return objFilter, nil
+	return flt, prefix, nil
 }
 
-func (o *objectListFilter) addFilter(f entryFilter) {
+func (o *lstFilter) addFilter(f entryFilter) {
 	o.predicates = append(o.predicates, f)
 }
 
-func (o *objectListFilter) matchesAll(obj *cmn.LsoEntry) bool {
+func (o *lstFilter) matchesAll(obj *cmn.LsoEntry) bool {
 	// Check if object name matches *all* specified predicates
 	for _, predicate := range o.predicates {
 		if !predicate(obj) {
@@ -790,7 +794,7 @@ func (o *objectListFilter) matchesAll(obj *cmn.LsoEntry) bool {
 	return true
 }
 
-func (o *objectListFilter) filter(entries cmn.LsoEntries) (matching, rest []cmn.LsoEntry) {
+func (o *lstFilter) filter(entries cmn.LsoEntries) (matching, rest []cmn.LsoEntry) {
 	for _, obj := range entries {
 		if o.matchesAll(obj) {
 			matching = append(matching, *obj)

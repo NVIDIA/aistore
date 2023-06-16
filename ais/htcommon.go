@@ -47,6 +47,7 @@ const (
 	fmtErrInvaldAction  = "invalid action %q (expected one of %v)"
 	fmtUnknownQue       = "unexpected query [what=%s]"
 	fmtNested           = "%s: nested (%v): failed to %s %q: %v"
+	fmtOutside          = "%s is present (vs requested 'flt-outside'(%d))"
 )
 
 // intra-cluster JSON control
