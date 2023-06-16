@@ -246,7 +246,7 @@ func clusterShutdownHandler(c *cli.Context) (err error) {
 		}
 	}
 	if err := api.ShutdownCluster(apiBP); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, "Cluster successfully shut down")
 	return
@@ -267,7 +267,7 @@ func clusterDecommissionHandler(c *cli.Context) error {
 	}
 	rmUserData := flagIsSet(c, rmUserDataFlag)
 	if err := api.DecommissionCluster(apiBP, rmUserData); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, "Cluster successfully decommissioned")
 	return nil
@@ -491,7 +491,7 @@ func stopClusterRebalanceHandler(c *cli.Context) error {
 
 	xargs.ID, xargs.OnlyRunning = snap.ID, false
 	if err := api.AbortXaction(apiBP, xargs); err != nil {
-		return err
+		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "Stopped %s[%s]\n", apc.ActRebalance, snap.ID)
 	return nil
@@ -540,7 +540,7 @@ func resetStatsHandler(c *cli.Context) error {
 	// 1. node
 	if node != nil {
 		if err := api.ResetDaemonStats(apiBP, node, errorsOnly); err != nil {
-			return err
+			return V(err)
 		}
 		msg := fmt.Sprintf("%s %s successfully reset", sname, tag)
 		actionDone(c, msg)
@@ -548,7 +548,7 @@ func resetStatsHandler(c *cli.Context) error {
 	}
 	// 2. or cluster
 	if err := api.ResetClusterStats(apiBP, errorsOnly); err != nil {
-		return err
+		return V(err)
 	}
 	msg := fmt.Sprintf("Cluster %s successfully reset", tag)
 	actionDone(c, msg)

@@ -345,7 +345,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexJobsFlag), onlyActive)
 		l := len(list)
 		if err != nil || l == 0 {
-			return l, err
+			return l, V(err)
 		}
 		if caption {
 			jobCptn(c, cmdDsort, onlyActive, id, false)
@@ -389,7 +389,7 @@ func showClusterHandler(c *cli.Context) error {
 	}
 	cluConfig, err := api.GetClusterConfig(apiBP)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if sid != "" {
 		return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, sid)
@@ -595,7 +595,7 @@ func showConfigHandler(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, "missing arguments (hint: "+tabtab+")")
 	}
 	if c.Args().Get(0) == cmdCLI {
-		return showCLIConfigHandler(c)
+		return showCfgCLI(c)
 	}
 	if c.Args().Get(0) == cmdCluster {
 		return showClusterConfig(c, c.Args().Get(1))
@@ -647,7 +647,7 @@ func showNodeConfig(c *cli.Context) error {
 	}
 	config, err := api.GetDaemonConfig(apiBP, node)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	data := struct {
@@ -719,7 +719,7 @@ func showNodeConfig(c *cli.Context) error {
 	default: // cfgScopeInherited | cfgScopeAll
 		cluConf, err := api.GetClusterConfig(apiBP)
 		if err != nil {
-			return err
+			return V(err)
 		}
 		// diff cluster <=> this node
 		flatNode := flattenConfig(config.ClusterConfig, section)
@@ -771,12 +771,12 @@ func showNodeLogHandler(c *cli.Context) error {
 		)
 		config, err := api.GetDaemonConfig(apiBP, node)
 		if err != nil {
-			return err
+			return V(err)
 		}
 		if config.Log.FlushTime.D() != flushRate {
 			nvs[nodeLogFlushName] = flushRate.String()
 			if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, true /*transient*/); err != nil {
-				return err
+				return V(err)
 			}
 			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
 				sname, nodeLogFlushName, config.Log.FlushTime)
@@ -791,13 +791,13 @@ func showNodeLogHandler(c *cli.Context) error {
 	if err == nil {
 		addLongRunOffset(c, readsize)
 	}
-	return err
+	return V(err)
 }
 
 func showRemoteAISHandler(c *cli.Context) error {
 	all, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	tw := &tabwriter.Writer{}
 	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)

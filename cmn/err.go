@@ -805,7 +805,7 @@ func (e *ErrHTTP) Error() (s string) {
 
 // Example:
 // ErrBckNotFound: bucket "ais://abc" does not exist: HEAD /v1/buckets/abc (p[kWQp8080]: htrun.go:1035 <- prxtrybck.go:180 <- ...
-func (e *ErrHTTP) _string() (s string) {
+func (e *ErrHTTP) StringEx() (s string) {
 	s = e.Error()
 	if e.Method != "" || e.URLPath != "" {
 		if !strings.HasSuffix(s, ".") {
@@ -841,7 +841,7 @@ func (e *ErrHTTP) _jsonError(buf *bytes.Buffer) {
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	if !silent {
-		s := e._string()
+		s := e.StringEx()
 		if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
 			// node name instead of generic stack:
 			replaced1 := strings.Replace(s, stackTracePrefix, thisNodeName+": ", 1)

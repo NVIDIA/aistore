@@ -254,7 +254,7 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 	}
 	bcks, err := api.ListBuckets(apiBP, queryBcks, apc.FltPresent)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	bckSums := make([]*bucketHealth, 0)
 	msg := &apc.LsoMsg{Flags: apc.LsAll}
@@ -312,24 +312,22 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 	return teb.Print(bckSums, teb.BucketSummaryValidateTmpl)
 }
 
-func summaryBucketHandler(c *cli.Context) (err error) {
+func summaryBucketHandler(c *cli.Context) error {
 	if flagIsSet(c, validateSummaryFlag) {
 		return showMisplacedAndMore(c)
 	}
-
 	return summaryStorageHandler(c)
 }
 
-func showMisplacedAndMore(c *cli.Context) (err error) {
+func showMisplacedAndMore(c *cli.Context) error {
 	queryBcks, err := parseQueryBckURI(c, c.Args().Get(0))
 	if err != nil {
 		return err
 	}
-
-	fValidate := func() error {
+	f := func() error {
 		return checkObjectHealth(queryBcks)
 	}
-	return cmn.WaitForFunc(fValidate, longClientTimeout)
+	return cmn.WaitForFunc(f, longClientTimeout)
 }
 
 func mvBucketHandler(c *cli.Context) error {
@@ -343,15 +341,15 @@ func mvBucketHandler(c *cli.Context) error {
 	return mvBucket(c, bckFrom, bckTo)
 }
 
-func removeBucketHandler(c *cli.Context) (err error) {
-	var buckets []cmn.Bck
-	if buckets, err = bucketsFromArgsOrEnv(c); err != nil {
-		return
+func removeBucketHandler(c *cli.Context) error {
+	buckets, err := bucketsFromArgsOrEnv(c)
+	if err != nil {
+		return err
 	}
 	return destroyBuckets(c, buckets)
 }
 
-func evictHandler(c *cli.Context) (err error) {
+func evictHandler(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
@@ -399,7 +397,7 @@ func resetPropsHandler(c *cli.Context) error {
 		return err
 	}
 	if _, err := api.ResetBucketProps(apiBP, bck); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, "Bucket props successfully reset to cluster defaults")
 	return nil

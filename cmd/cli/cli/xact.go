@@ -65,7 +65,7 @@ func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
 	// otherwise, IC
 	status, err := api.WaitForXactionIC(apiBP, args)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if status.Aborted() {
 		return fmt.Errorf("%s[%s] aborted", xname, status.UUID)
@@ -175,7 +175,7 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
-		return nil, err
+		return nil, V(err)
 	}
 	for _, snaps := range xs {
 		for _, snap := range snaps {

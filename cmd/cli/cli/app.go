@@ -5,20 +5,15 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
 )
@@ -86,6 +81,8 @@ var helpCommand = cli.Command{
 		}
 	},
 }
+
+func verbose() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
 
 func helpCmdHandler(c *cli.Context) error {
 	args := c.Args()
@@ -155,56 +152,6 @@ func (a *acli) runNTimes(args []string) error {
 		}
 	}
 	return nil
-}
-
-func isUnreachableError(err error) (msg string, unreachable bool) {
-	switch err := err.(type) {
-	case *cmn.ErrHTTP:
-		errHTTP := cmn.Err2HTTPErr(err)
-		msg = errHTTP.Message
-		unreachable = cos.IsUnreachable(err, err.Status) || strings.Contains(msg, cmn.EmptyProtoSchemeForURL)
-	case *errUsage, *errAdditionalInfo:
-		return "", false
-	default:
-		msg = err.Error()
-		regx := regexp.MustCompile("dial.*(timeout|refused)")
-		if unreachable = regx.MatchString(msg); unreachable {
-			i := strings.Index(msg, "dial")
-			debug.Assert(i >= 0)
-			msg = msg[i:]
-		}
-	}
-	return
-}
-
-func redErr(err error) error {
-	msg := strings.TrimRight(err.Error(), "\n")
-	return errors.New(fred("Error: ") + msg)
-}
-
-// Formats error message
-func formatErr(err error) error {
-	if err == nil {
-		return nil
-	}
-	if _, unreachable := isUnreachableError(err); unreachable {
-		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
-		errmsg += fmt.Sprintf("Make sure that environment '%s' has the address of any AIS gateway (proxy).\n"+
-			"For defaults, see CLI config at %s or run `ais show config cli`.",
-			env.AIS.Endpoint, config.Path())
-		return redErr(errors.New(errmsg))
-	}
-	switch err := err.(type) {
-	case *cmn.ErrHTTP:
-		return redErr(err)
-	case *errUsage:
-		return err
-	case *errAdditionalInfo:
-		err.baseErr = formatErr(err.baseErr)
-		return err
-	default:
-		return redErr(err)
-	}
 }
 
 func (a *acli) init(version string) {

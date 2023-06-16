@@ -107,27 +107,27 @@ var (
 	clicfgCmd = cli.Command{
 		Name:   cmdCLI,
 		Usage:  "display and change AIS CLI configuration",
-		Action: showCLIConfigHandler,
+		Action: showCfgCLI,
 		Flags:  clicfgCmdFlags[cmdCLIShow],
 		Subcommands: []cli.Command{
 			{
 				Name:   cmdCLIShow,
 				Usage:  "display CLI configuration",
 				Flags:  clicfgCmdFlags[cmdCLIShow],
-				Action: showCLIConfigHandler,
+				Action: showCfgCLI,
 			},
 			{
 				Name:         cmdCLISet,
 				Usage:        "change CLI configuration",
 				ArgsUsage:    keyValuePairsArgument,
 				Flags:        clicfgCmdFlags[cmdCLISet],
-				Action:       setCLIConfigHandler,
+				Action:       setCfgCLI,
 				BashComplete: cliPropCompletions,
 			},
 			{
 				Name:   cmdCLIReset,
 				Usage:  "reset CLI configurations to system defaults",
-				Action: resetCLIConfigHandler,
+				Action: resetCfgCLI,
 			},
 		},
 	}
@@ -157,7 +157,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		return showClusterConfigHandler(c)
 	}
 	if nvs, err = makePairs(kvs); err != nil {
-		if strings.Contains(err.Error(), "key=value pair") {
+		if _, ok := err.(*errInvalidNVpair); ok {
 			if err = showClusterConfigHandler(c); err != nil {
 				err = fmt.Errorf("%v%s", err, examplesCluSetCfg)
 			}
@@ -203,7 +203,7 @@ func setCluConfigHandler(c *cli.Context) error {
 		actionWarn(c, warn)
 	}
 	if err := api.SetClusterConfig(apiBP, nvs, flagIsSet(c, transientFlag)); err != nil {
-		return err
+		return V(err)
 	}
 
 show:
@@ -226,7 +226,7 @@ show:
 func parseLogModules(v string) (string, error) {
 	config, err := api.GetClusterConfig(apiBP)
 	if err != nil {
-		return "", err
+		return "", V(err)
 	}
 	level, _ := config.Log.Level.Parse()
 	if v == "" || v == NilValue {
@@ -275,7 +275,7 @@ func setcfg(c *cli.Context, nvs cos.StrKVs) error {
 			return fmt.Errorf("cannot update config using JSON-formatted %q - not implemented yet", k)
 		}
 		if err := api.SetClusterConfigUsingMsg(apiBP, toUpdate, flagIsSet(c, transientFlag)); err != nil {
-			return err
+			return V(err)
 		}
 	}
 	return nil
@@ -320,7 +320,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 	}
 
 	if nvs, err = makePairs(kvs); err != nil {
-		if strings.Contains(err.Error(), "key=value pair") {
+		if _, ok := err.(*errInvalidNVpair); ok {
 			if err = showNodeConfig(c); err != nil {
 				err = fmt.Errorf("%v%s", err, examplesNodeSetCfg)
 			}
@@ -362,7 +362,7 @@ func setNodeConfigHandler(c *cli.Context) error {
 		return fmt.Errorf("cannot update node configuration using JSON-formatted %q - not implemented yet", jsonval)
 	}
 	if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, flagIsSet(c, transientFlag)); err != nil {
-		return err
+		return V(err)
 	}
 
 	// show the update
@@ -383,7 +383,7 @@ func resetConfigHandler(c *cli.Context) (err error) {
 	}
 	switch c.Args().Get(0) {
 	case cmdCLI:
-		err = resetCLIConfigHandler(c)
+		err = resetCfgCLI(c)
 		return
 	case cmdCluster:
 		err = api.ResetClusterConfig(apiBP)
@@ -405,7 +405,7 @@ func resetNodeConfigHandler(c *cli.Context) error {
 		return err
 	}
 	if err := api.ResetDaemonConfig(apiBP, node.ID()); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, sname+": inherited config successfully reset to the current cluster-wide defaults")
 	return nil
@@ -415,7 +415,7 @@ func resetNodeConfigHandler(c *cli.Context) error {
 // cli config (default location: ~/.config/ais/cli/)
 //
 
-func showCLIConfigHandler(c *cli.Context) (err error) {
+func showCfgCLI(c *cli.Context) (err error) {
 	if flagIsSet(c, cliConfigPathFlag) {
 		fmt.Fprintf(c.App.Writer, "%s\n", config.Path())
 		return
@@ -429,20 +429,23 @@ func showCLIConfigHandler(c *cli.Context) (err error) {
 		return
 	}
 
-	flat := flattenConfig(cfg, "")
+	flat := flattenConfig(cfg, c.Args().Get(0))
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
 	return teb.Print(flat, teb.ConfigTmpl)
 }
 
-func setCLIConfigHandler(c *cli.Context) (err error) {
+func setCfgCLI(c *cli.Context) (err error) {
 	if c.NArg() == 0 {
 		return missingKeyValueError(c)
 	}
 
 	var nvs cos.StrKVs
 	if nvs, err = makePairs(c.Args()); err != nil {
+		if _, ok := err.(*errInvalidNVpair); ok {
+			return showCfgCLI(c)
+		}
 		return err
 	}
 
@@ -465,7 +468,7 @@ func setCLIConfigHandler(c *cli.Context) (err error) {
 	return config.Save(cfg)
 }
 
-func resetCLIConfigHandler(c *cli.Context) (err error) {
+func resetCfgCLI(c *cli.Context) (err error) {
 	if err = config.Reset(); err == nil {
 		actionDone(c, "CLI config successfully reset to all defaults")
 	}

@@ -123,7 +123,7 @@ func randMountpath(c *cli.Context) error {
 	}
 	daeStatus, err := api.GetStatsAndStatus(apiBP, tsi)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	cdf := daeStatus.Node.TargetCDF
 	for mpath := range cdf.Mountpaths {

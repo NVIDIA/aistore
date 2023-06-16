@@ -69,12 +69,6 @@ var (
 	}
 )
 
-// prints completion (TAB-TAB) error when calling AIS APIs
-func completionErr(c *cli.Context, err error) {
-	fmt.Fprintln(c.App.ErrWriter)
-	fmt.Fprintln(c.App.ErrWriter, formatErr(err))
-}
-
 func lastIsSmodule(c *cli.Context) bool { return _lastv(c, propCmpls[confLogModules]) }
 func lastIsAccess(c *cli.Context) bool  { return _lastv(c, propCmpls[cmn.PropBucketAccessAttrs]) }
 func lastIsFeature(c *cli.Context) bool { return _lastv(c, propCmpls[feat.FeaturesPropName]) }

@@ -89,7 +89,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	// list-objects
 	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), nil /*progress ctx*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	// can't do many to one
 	l := len(objList.Entries)

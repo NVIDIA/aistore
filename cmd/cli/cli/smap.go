@@ -33,11 +33,11 @@ func getClusterMap(c *cli.Context) (*meta.Smap, error) {
 	}
 	smap, err := api.GetClusterMap(apiBP)
 	if err != nil {
-		return nil, err
+		return nil, V(err)
 	}
 	curSmap = smap
 	if smap.Primary.PubNet.URL != apiBP.URL {
-		if verboseWarnings() {
+		if verbose() {
 			what := env.AIS.Endpoint
 			if os.Getenv(env.AIS.Endpoint) == "" {
 				what = "CLI config URL"

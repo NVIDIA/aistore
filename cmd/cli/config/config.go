@@ -1,6 +1,6 @@
 // Package config provides types and functions to configure AIS CLI.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package config
 
@@ -54,6 +54,7 @@ type (
 		Aliases         AliasConfig   `json:"aliases"`
 		DefaultProvider string        `json:"default_provider,omitempty"` // NOTE: not supported yet (see app.go)
 		NoColor         bool          `json:"no_color"`
+		Verbose         bool          `json:"verbose"` // more warnings, errors with backtraces and details
 	}
 )
 

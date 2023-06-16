@@ -217,7 +217,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 
 	xid, err := api.ETLInit(apiBP, msg)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
@@ -287,7 +287,7 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	// start
 	xid, err := api.ETLInit(apiBP, msg)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "ETL[%s]: job %q\n", msg.Name(), xid)
 	return nil
@@ -310,7 +310,7 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 	list, err := api.ETLList(apiBP)
 	l := len(list)
 	if err != nil || l == 0 {
-		return l, err
+		return l, V(err)
 	}
 	if caption {
 		onlyActive := !flagIsSet(c, allJobsFlag)
@@ -336,7 +336,7 @@ func etlShowInitMsgHandler(c *cli.Context) error {
 func etlPrintInitMsg(c *cli.Context, id string) error {
 	msg, err := api.ETLGetInitMsg(apiBP, id)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
 		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
@@ -363,7 +363,7 @@ func etlLogsHandler(c *cli.Context) (err error) {
 
 	logs, err := api.ETLLogs(apiBP, id, targetID)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	if targetID != "" {
@@ -398,7 +398,7 @@ func stopETLs(c *cli.Context, name string) (err error) {
 		}
 		res, err := api.ETLList(apiBP)
 		if err != nil {
-			return err
+			return V(err)
 		}
 		for _, etlInfo := range res {
 			etlNames = append(etlNames, etlInfo.Name)
@@ -416,7 +416,7 @@ func stopETLs(c *cli.Context, name string) (err error) {
 				actionWarn(c, msg+" not found, nothing to do")
 				continue
 			}
-			return err
+			return V(err)
 		}
 		actionDone(c, msg+" stopped")
 	}
@@ -432,7 +432,7 @@ func etlStartHandler(c *cli.Context) (err error) {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			color.New(color.FgYellow).Fprintf(c.App.Writer, "ETL[%s] not found", etlName)
 		}
-		return err
+		return V(err)
 	}
 	fmt.Fprintf(c.App.Writer, "ETL[%s] started successfully\n", etlName)
 	return nil

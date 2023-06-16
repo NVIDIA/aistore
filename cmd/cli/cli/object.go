@@ -45,7 +45,7 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 	}
 	xid, err := api.Promote(promoteArgs)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	var s1, s2 string
 	if recurs {
@@ -215,7 +215,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 		Handle:     handle,
 	})
 	if err != nil {
-		return fmt.Errorf("%v. Object not created", err)
+		return V(err)
 	}
 
 	units, errU := parseUnitsFlag(c, unitsFlag)
@@ -234,7 +234,7 @@ func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
 			return nil
 		}
-		return err
+		return V(err)
 	}
 
 	fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)

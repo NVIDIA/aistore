@@ -309,7 +309,7 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 	xargs := xact.ArgsMsg{Kind: xname, Bck: bck, DaemonID: sid}
 	xid, err := api.StartXaction(apiBP, xargs)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if xid == "" {
 		warn := fmt.Sprintf("The operation returned an empty UUID (a no-op?). %s\n",
@@ -413,7 +413,7 @@ func startDownloadHandler(c *cli.Context) error {
 
 			p, err := api.HeadBucket(apiBP, basePayload.Bck, false /* don't add */)
 			if err != nil {
-				return err
+				return V(err)
 			}
 			if !p.BackendBck.Equal(&source.backend.bck) {
 				warn := fmt.Sprintf("%s does not have Cloud bucket %s as its *backend* - proceeding to download anyway.",
@@ -520,7 +520,7 @@ func wtDownload(c *cli.Context, id string) error {
 	}
 	resp, err := api.DownloadStatus(apiBP, id, true /*only active*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if resp.ErrorCnt != 0 {
 		msg := toShowMsg(c, id, "For details", true)
@@ -586,7 +586,7 @@ func waitDownload(c *cli.Context, id string) (err error) {
 	for {
 		resp, err := api.DownloadStatus(apiBP, id, true)
 		if err != nil {
-			return err
+			return V(err)
 		}
 
 		aborted = resp.Aborted
@@ -867,7 +867,7 @@ func stopJobHandler(c *cli.Context) error {
 	// abort
 	args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: snap.Bck}
 	if err := api.AbortXaction(apiBP, args); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, fmt.Sprintf("Stopped %s\n", msg))
 	return nil
@@ -877,7 +877,7 @@ func stopJobHandler(c *cli.Context) error {
 func stopXactionKind(c *cli.Context, xactKind, xname string, bck cmn.Bck) error {
 	xactIDs, err := api.GetAllRunningXactions(apiBP, xactKind)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if len(xactIDs) == 0 {
 		actionDone(c, fmt.Sprintf("No running '%s' jobs, nothing to do", xname))
@@ -919,7 +919,7 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 func stopDownloadRegex(c *cli.Context, regex string) error {
 	dlList, err := api.DownloadGetList(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	var cnt int
@@ -951,7 +951,7 @@ func stopDownloadHandler(c *cli.Context, id string) (err error) {
 func stopDsortRegex(c *cli.Context, regex string) error {
 	dsortLst, err := api.ListDSort(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	var cnt int
@@ -1077,7 +1077,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 	for {
 		resp, err := api.DownloadStatus(apiBP, id, true /*onlyActive*/)
 		if err != nil {
-			return err
+			return V(err)
 		}
 		if resp.Aborted {
 			if total > wasFast {
@@ -1121,7 +1121,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 	for {
 		resp, err := api.MetricsDSort(apiBP, id)
 		if err != nil {
-			return err
+			return V(err)
 		}
 		finished := true
 		for _, targetMetrics := range resp {
@@ -1167,7 +1167,7 @@ func removeDownloadHandler(c *cli.Context) error {
 	}
 	id := c.Args().Get(0)
 	if err := api.RemoveDownload(apiBP, id); err != nil {
-		return err
+		return V(err)
 	}
 	actionDone(c, fmt.Sprintf("Removed finished download job %q", id))
 	return nil
@@ -1176,7 +1176,7 @@ func removeDownloadHandler(c *cli.Context) error {
 func removeDownloadRegex(c *cli.Context, regex string) error {
 	dlList, err := api.DownloadGetList(apiBP, regex, false /*onlyActive*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	var cnt int
@@ -1215,7 +1215,7 @@ func removeDsortHandler(c *cli.Context) error {
 	}
 	id := c.Args().Get(0)
 	if err := api.RemoveDSort(apiBP, id); err != nil {
-		return err
+		return V(err)
 	}
 
 	actionDone(c, fmt.Sprintf("Removed finished dsort job %q", id))
@@ -1225,7 +1225,7 @@ func removeDsortHandler(c *cli.Context) error {
 func removeDsortRegex(c *cli.Context, regex string) error {
 	dsortLst, err := api.ListDSort(apiBP, regex, false /*onlyActive*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	var cnt int

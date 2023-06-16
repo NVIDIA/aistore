@@ -36,19 +36,19 @@ var phasesOrdered = []string{
 func setupBucket(c *cli.Context, bck cmn.Bck) error {
 	exists, err := api.QueryBuckets(apiBP, cmn.QueryBcks(bck), apc.FltPresent)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	cleanup := flagIsSet(c, cleanupFlag)
 	if exists && cleanup {
 		if err := api.DestroyBucket(apiBP, bck); err != nil {
-			return err
+			return V(err)
 		}
 	}
 
 	if !exists || cleanup {
 		if err := api.CreateBucket(apiBP, bck, nil); err != nil {
-			return err
+			return V(err)
 		}
 	}
 
@@ -139,7 +139,7 @@ func (b *dsortPB) run() (dsortResult, error) {
 		metrics, err := api.MetricsDSort(b.apiBP, b.id)
 		if err != nil {
 			b.cleanBars()
-			return dsortResult{}, err
+			return dsortResult{}, V(err)
 		}
 
 		var targetMetrics *dsort.Metrics
@@ -167,9 +167,8 @@ func (b *dsortPB) run() (dsortResult, error) {
 func (b *dsortPB) start() (bool, error) {
 	metrics, err := api.MetricsDSort(b.apiBP, b.id)
 	if err != nil {
-		return false, err
+		return false, V(err)
 	}
-
 	finished := b.updateBars(metrics)
 	return finished, nil
 }
@@ -259,7 +258,7 @@ func (b *dsortPB) result() dsortResult {
 func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finished bool, errV error) {
 	resp, err := api.MetricsDSort(apiBP, jobID)
 	if err != nil {
-		return false, false, err
+		return false, false, V(err)
 	}
 	if len(daemonIds) > 0 {
 		// Check if targets exist in the metric output.
@@ -302,7 +301,7 @@ func printCondensedStats(w io.Writer, id string, errhint bool) error {
 	)
 	resp, err := api.MetricsDSort(apiBP, id)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	finished = true
 	for _, tm := range resp {

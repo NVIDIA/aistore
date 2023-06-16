@@ -97,7 +97,7 @@ func showRebalanceHandler(c *cli.Context) error {
 					return nil
 				}
 			}
-			return err
+			return V(err)
 		}
 
 		var (

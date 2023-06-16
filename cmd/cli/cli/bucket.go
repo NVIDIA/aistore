@@ -58,6 +58,9 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 				}
 				return errors.New(desc)
 			}
+			if verbose() {
+				herr.Message = herr.StringEx()
+			}
 			return fmt.Errorf("failed to create %q: %s", bck, herr.Message)
 		}
 		return fmt.Errorf("failed to create %q: %v", bck, err)
@@ -103,7 +106,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	}
 	xid, err := api.RenameBucket(apiBP, bckFrom, bckTo)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	_, xname := xact.GetKindName(apc.ActMoveBck)
 	text := fmt.Sprintf("%s[%s] %s => %s", xname, xid, bckFrom, bckTo)
@@ -155,9 +158,9 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int, countRemot
 		}
 		fmatch = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
 	}
-	bcks, err := api.ListBuckets(apiBP, qbck, fltPresence)
-	if err != nil {
-		return
+	bcks, errV := api.ListBuckets(apiBP, qbck, fltPresence)
+	if errV != nil {
+		return V(errV)
 	}
 
 	// NOTE:
@@ -317,10 +320,9 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	for i, bck := range filtered {
 		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence, countRemoteObjs)
 		if err != nil {
-			if herr, ok := err.(*cmn.ErrHTTP); ok {
-				warn := fmt.Sprintf("%s, err: %s\n", bck.Cname(""), herr.Message)
-				actionWarn(c, warn)
-			}
+			err = V(err)
+			warn := fmt.Sprintf("%s: %v\n", bck.Cname(""), err)
+			actionWarn(c, warn)
 			continue
 		}
 		footer.nb++
@@ -462,7 +464,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		for {
 			objList, err := api.ListObjectsPage(apiBP, bck, msg)
 			if err != nil {
-				return err
+				return V(err)
 			}
 
 			// print exact number of objects if it is `limit`ed: in case of
@@ -510,7 +512,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	ctx := api.NewProgressContext(cb, listPagesCallbackTime)
 	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), ctx)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	return printObjProps(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
 }

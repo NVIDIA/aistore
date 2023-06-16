@@ -60,6 +60,9 @@ var (
 )
 
 type (
+	errInvalidNVpair struct {
+		notpair string
+	}
 	nvpair struct {
 		Name  string
 		Value string
@@ -130,7 +133,7 @@ func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
 	}
 	cfg, err := api.GetDaemonConfig(apiBP, tsi)
 	if err != nil {
-		return nil, err
+		return nil, V(err)
 	}
 	return cfg, err
 }
@@ -195,7 +198,7 @@ func makePairs(args []string) (nvs cos.StrKVs, err error) {
 			return
 		default: // last name without a value
 			if i == ll-1 {
-				return nil, fmt.Errorf("invalid key=value pair %q", args[i])
+				return nil, &errInvalidNVpair{args[i]}
 			}
 			nvs[args[i]] = args[i+1]
 			i += 2
@@ -437,11 +440,15 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) 
 		return
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
-		if herr.Status == http.StatusNotFound {
-			err = fmt.Errorf("bucket %q does not exist", bck)
-		} else if herr.Message != "" {
+		switch {
+		case verbose():
+			herr.Message = herr.StringEx()
 			err = errors.New(herr.Message)
-		} else {
+		case herr.Status == http.StatusNotFound:
+			err = fmt.Errorf("bucket %q does not exist", bck)
+		case herr.Message != "":
+			err = errors.New(herr.Message)
+		default:
 			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, herr.Message)
 		}
 	} else {
@@ -584,7 +591,7 @@ func isBucketEmpty(bck cmn.Bck) (bool, error) {
 	msg.SetFlag(apc.LsNameOnly)
 	objList, err := api.ListObjectsPage(apiBP, bck, msg)
 	if err != nil {
-		return false, err
+		return false, V(err)
 	}
 	return len(objList.Entries) == 0, nil
 }
@@ -740,7 +747,7 @@ done:
 func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 	cfg, err := api.GetClusterConfig(apiBP)
 	if err != nil {
-		return nil, err
+		return nil, V(err)
 	}
 	props := bck.DefaultProps(cfg)
 	return props, nil
@@ -819,8 +826,6 @@ func actionCptn(c *cli.Context, prefix, msg string) {
 		fmt.Fprintln(c.App.Writer, fcyan(prefix)+msg)
 	}
 }
-
-func verboseWarnings() bool { return false } // TODO: if need be
 
 func dryRunCptn(c *cli.Context) {
 	const (
@@ -919,3 +924,9 @@ func parseSource(rawURL string) (source dlSource, err error) {
 		backend: cloudSource,
 	}, err
 }
+
+//////////////////////
+// errInvalidNVpair //
+//////////////////////
+
+func (e *errInvalidNVpair) Error() string { return fmt.Sprintf("invalid key=value pair %q", e.notpair) }

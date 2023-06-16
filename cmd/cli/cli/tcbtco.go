@@ -74,7 +74,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 
 	xid, err := api.CopyBucket(apiBP, bckFrom, bckTo, msg, fltPresence)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	// NOTE: may've transitioned TCB => TCO
 	kind := apc.ActCopyBck
@@ -196,7 +196,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	// [DRY-RUN]
 	snaps, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	dryRunCptn(c)
 	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
@@ -217,7 +217,7 @@ func handleETLHTTPError(err error, etlName string) error {
 				etlName, commandETL, cmdInit)
 		}
 	}
-	return err
+	return V(err)
 }
 
 //

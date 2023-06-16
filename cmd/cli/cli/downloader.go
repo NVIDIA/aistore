@@ -123,7 +123,7 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 		resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 		if err != nil {
 			b.cleanBars()
-			return downloadingResult{}, err
+			return downloadingResult{}, V(err)
 		}
 		if resp.Aborted {
 			b.aborted = true
@@ -139,7 +139,7 @@ func (b *downloaderPB) run() (downloadingResult, error) {
 func (b *downloaderPB) start() (bool /*finishedE early*/, error) {
 	resp, err := api.DownloadStatus(b.apiBP, b.id, true)
 	if err != nil {
-		return false, err
+		return false, V(err)
 	}
 
 	b.updateStatus(resp)
@@ -323,7 +323,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 	onlyActive := !flagIsSet(c, allJobsFlag)
 	list, err := api.DownloadGetList(apiBP, regex, onlyActive)
 	if err != nil || len(list) == 0 {
-		return 0, err
+		return 0, V(err)
 	}
 	if caption {
 		jobCptn(c, cmdDownload, onlyActive, "", false)
@@ -375,7 +375,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 
 	resp, err := api.DownloadStatus(apiBP, id, false /*onlyActive*/)
 	if err != nil {
-		return err
+		return V(err)
 	}
 
 	// without progress bar

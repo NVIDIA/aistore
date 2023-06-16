@@ -164,7 +164,7 @@ func archMultiObjHandler(c *cli.Context) error {
 	// do
 	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	// check (NOTE: not waiting through idle-ness, not looking at multiple returned xids)
 	var (
@@ -424,7 +424,7 @@ loop:
 					SkipVC:     true,
 				}
 				_, err := api.PutObject(putArgs)
-				return err
+				return V(err)
 			}
 		}(shardNum, shardName))
 		shardNum++

@@ -6,12 +6,17 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
 
@@ -72,9 +77,37 @@ func (e *errAdditionalInfo) Error() string {
 	return fmt.Sprintf("%s.\n%s\n", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
 }
 
-/////////////////
-// error utils //
-/////////////////
+//
+// misc. utils, helpers
+//
+
+func isUnreachableError(err error) (msg string, unreachable bool) {
+	switch err := err.(type) {
+	case *cmn.ErrHTTP:
+		herr := cmn.Err2HTTPErr(err)
+		if verbose() {
+			herr.Message = herr.StringEx()
+		}
+		msg = herr.Message
+		unreachable = cos.IsUnreachable(err, err.Status) || strings.Contains(msg, cmn.EmptyProtoSchemeForURL)
+	case *errUsage, *errAdditionalInfo:
+		return "", false
+	default:
+		msg = err.Error()
+		regx := regexp.MustCompile("dial.*(timeout|refused)")
+		if unreachable = regx.MatchString(msg); unreachable {
+			i := strings.Index(msg, "dial")
+			debug.Assert(i >= 0)
+			msg = msg[i:]
+		}
+	}
+	return
+}
+
+func redErr(err error) error {
+	msg := strings.TrimRight(err.Error(), "\n")
+	return errors.New(fred("Error: ") + msg)
+}
 
 func commandNotFoundError(c *cli.Context, cmd string) *errUsage {
 	msg := "unknown subcommand \"" + cmd + "\""
@@ -238,4 +271,49 @@ func mistypedFlag(extraArgs []string) error {
 		}
 	}
 	return nil
+}
+
+// prints completion (TAB-TAB) error when calling AIS APIs
+func completionErr(c *cli.Context, err error) {
+	fmt.Fprintln(c.App.ErrWriter)
+	fmt.Fprintln(c.App.ErrWriter, formatErr(err))
+}
+
+//
+// ais errors -- formatting
+//
+
+func V(err error) error {
+	if err != nil && verbose() {
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
+			herr.Message = herr.StringEx()
+			return herr
+		}
+	}
+	return err
+}
+
+func formatErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, unreachable := isUnreachableError(err); unreachable {
+		errmsg := fmt.Sprintf("AIStore cannot be reached at %s\n", clusterURL)
+		errmsg += fmt.Sprintf("Make sure that environment '%s' has the address of any AIS gateway (proxy).\n"+
+			"For defaults, see CLI config at %s or run `ais show config cli`.",
+			env.AIS.Endpoint, config.Path())
+		return redErr(errors.New(errmsg))
+	}
+	switch err := err.(type) {
+	case *cmn.ErrHTTP:
+		herr := err
+		return redErr(herr)
+	case *errUsage:
+		return err
+	case *errAdditionalInfo:
+		err.baseErr = formatErr(err.baseErr)
+		return err
+	default:
+		return redErr(err)
+	}
 }

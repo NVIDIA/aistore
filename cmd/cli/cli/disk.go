@@ -33,7 +33,7 @@ type (
 func (ctx *dstatsCtx) get() error {
 	diskStats, err := api.GetDiskStats(apiBP, ctx.tid)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	ctx.ch <- dstats{stats: diskStats, tid: ctx.tid}
 	return nil

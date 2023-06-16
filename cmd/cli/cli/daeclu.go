@@ -23,7 +23,7 @@ func getBMD(c *cli.Context) error {
 	usejs := flagIsSet(c, jsonFlag)
 	bmd, err := api.GetBMD(apiBP)
 	if err != nil {
-		return err
+		return V(err)
 	}
 	if usejs {
 		return teb.Print(bmd, "", teb.Jopts(usejs))

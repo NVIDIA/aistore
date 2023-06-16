@@ -288,7 +288,7 @@ func multiobjArg(c *cli.Context, command string) error {
 		switch command {
 		case commandRemove:
 			if err := api.DeleteObject(apiBP, bck, objName); err != nil {
-				return err
+				return V(err)
 			}
 			fmt.Fprintf(c.App.Writer, "deleted %q from %s\n", objName, bck.Cname(""))
 		case commandEvict:
@@ -304,7 +304,7 @@ func multiobjArg(c *cli.Context, command string) error {
 				if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 					err = fmt.Errorf("object %s does not exist (not \"cached\")", bck.Cname(objName))
 				}
-				return err
+				return V(err)
 			}
 			fmt.Fprintf(c.App.Writer, "evicted %q from %s\n", objName, bck.Cname(""))
 		}
