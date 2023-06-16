@@ -383,6 +383,8 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 
 	err = api.DestroyBucket(baseParams, bck)
 	tassert.CheckFatal(t, err)
+
+	tlog.Logf("%s destroyed\n", bck.Cname(""))
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(bck), apc.FltExists)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, !tools.BucketsContain(bcks, cmn.QueryBcks(bck)), "expected bucket to not be listed")

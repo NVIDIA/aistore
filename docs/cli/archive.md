@@ -7,11 +7,42 @@ redirect_from:
  - /docs/cli/archive.md/
 ---
 
-# When objects are, in fact, archives
+# When objects are, in fact, archives (shards)
 
 In this document: commands to read, write, and list *archives* - objects formatted as TAR, TGZ, ZIP, etc. For the most recently updated archival types that AIS supports, please refer to [this source](/cmn/cos/archive.go).
 
 The corresponding subset of CLI commands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual (reading, writing, listing) operation.
+
+```console
+$ ais archive --help
+
+NAME:
+   ais archive - Archive multiple objects from a given bucket; archive local files and directories; list archived content
+
+USAGE:
+   ais archive command [command options] [arguments...]
+
+COMMANDS:
+   bucket      archive multiple objects from SRC_BUCKET as (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted shard
+   put         archive a file, a directory, or multiple files and/or directories as
+               (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object - aka "shard".
+               Both APPEND (to an existing shard) and PUT (new version of the shard) variants are supported.
+               Examples:
+               - 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append a file to a given shard and name it as specified;
+               - 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;
+               - '"sys, docs" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.
+               Tips:
+               - use '--dry-run' option if in doubt;
+               - to archive objects from a local or remote bucket, run 'ais archive bucket', see --help for details.
+   get         get a shard, an archived file, or a range of bytes from the above;
+               - use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)
+               - write the content locally with destination options including: filename, directory, STDOUT ('-')
+   ls          list archived content (supported formats: .tar, .tgz or .tar.gz, .zip, .tar.lz4)
+   gen-shards  generate random (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), e.g.:
+               - gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1
+               - gen-shards "gs://bucket2/shard-{01..20..2}.tgz" - 10 random gzipped tarfiles to Cloud bucket
+               (notice quotation marks in both cases)
+```
 
 See also:
 

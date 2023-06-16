@@ -80,15 +80,15 @@ var (
 			{
 				Name: commandPut,
 				Usage: "archive a file, a directory, or multiple files and/or directories as\n" +
-					indent1 + archExts + "-formatted object - aka \"shard\".\n" +
-					indent1 + "Both APPEND (to an existing shard) and PUT (new version of the shard) variants are supported.\n" +
-					indent1 + "Examples:\n" +
-					indent1 + "- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append a file to a given shard and name it as specified;\n" +
-					indent1 + "- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
-					indent1 + "- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
-					indent1 + "Tips:\n" +
-					indent1 + "- use '--dry-run' option if in doubt;\n" +
-					indent1 + "- to archive objects from a local or remote bucket, run 'ais archive bucket', see --help for details.",
+					indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
+					indent1 + "\tBoth APPEND (to an existing shard) and PUT (new version of the shard) variants are supported.\n" +
+					indent1 + "\tExamples:\n" +
+					indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append a file to a given shard and name it as specified;\n" +
+					indent1 + "\t- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
+					indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
+					indent1 + "\tTips:\n" +
+					indent1 + "\t- use '--dry-run' option if in doubt;\n" +
+					indent1 + "\t- to archive objects from a local or remote bucket, run 'ais archive bucket', see --help for details.",
 				ArgsUsage:    putApndArchArgument,
 				Flags:        archCmdsFlags[commandPut],
 				Action:       putApndArchHandler,

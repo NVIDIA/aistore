@@ -11,6 +11,7 @@ redirect_from:
 
 - [Debugging: build time](#debugging-build-time)
 - [Debugging: run time](#debugging-run-time)
+- [Using CLI to debug](#using-cli-to-debug)
 - [MsgPack](/docs/msgp.md)
 - [Useful scripts](#scripts)
   - [Clean deploy](#clean-deploy)
@@ -21,7 +22,7 @@ redirect_from:
 
 By default, the cluster is deployed in `production` mode with verbose logging and asserts disabled.
 
-To turn on the `debug` mode, deploy a cluster with `MODE="debug"` env variable (eg. `MODE="debug" make deploy`).
+To turn on the debug mode, deploy a cluster with `MODE=debug` env variable (eg. `MODE=debug make deploy`).
 A cluster deployed in `debug` mode will produce a log like this:
 
 ## Debugging: run time
@@ -63,6 +64,10 @@ log.stats_time   1m
 **Caution**: `5` is the maximum (super-verbose) level - use for shorter intervals of time and always reset back to the default (`3`).
 
 **NOTE**: for module names, see `cmn/cos/log_modules.go`. Or, type `ais config cluster` or `ais config node`, and press `<TAB-TAB>`.
+
+## Using CLI to debug
+
+Please refer [CLI: verbose mode](cli.md#verbose-errors).
 
 ## Scripts
 
@@ -161,10 +166,10 @@ $ bash ./deploy/scripts/clean-deploy --deployment all --remote-alias remoteAIS -
 | `--loopback` | Loopback device size, e.g. 10G, 100M (default: 0). Zero size means: no loopbacks. The minimum size is 100M. |
 | `--deployment` | Choose which AIS cluster to deploy. `local` to deploy only one AIS cluster, `remote` to only start an AIS-behind-AIS cluster, and `all` to deploy both the local and remote clusters. |
 | `--remote-alias` | Alias to assign to the remote cluster |
-| `--https` | Start cluster with HTTPS enabled (*) |
+| `--https` | Start cluster with HTTPS enabled (**) |
 | `--debug PKG=LOG_LEVEL` | Change logging level of particular package(s) |
 
-(*) To use this option, you must have generated certificates in `$HOME` directory. Here is a script which can help you with that:
+(**) To use this option, you must have generated certificates in `$HOME` directory. Here is a script which can help you with that:
 ```console
 $ cd $HOME && openssl req -x509 -out localhost.crt -keyout localhost.key \
     -newkey rsa:2048 -nodes -sha256 \

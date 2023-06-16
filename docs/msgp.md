@@ -14,7 +14,7 @@ redirect_from:
 
 ## Introduction
 
-MsgPack is a binary exchange format that provides better performance and lower bandwidth usage comparing to JSON.
+MsgPack (aka "MessagePack") is a binary exchange format that provides better performance and lower bandwidth usage comparing to JSON.
 To make a struct MsgPack-compatible, add tags to the struct in the same way you add JSON tags.
 
 Example from `cmn/objlist.go`:

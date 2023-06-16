@@ -156,11 +156,77 @@ Operation "destroy-bck" is not supported by "aws://bucket_name"
 
 ## List buckets
 
-`ais ls [command options] [PROVIDER:]
+`ais ls [command options] PROVIDER:[//BUCKET_NAME]`
 
-can conveniently list buckets (with or without "summarizing" them - see `--summary`) amd objects.
+Notice the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will list buckets. Otherwise, it'll list objects.
 
-Notice the optional `[//BUCKET_NAME]`. When there's no bucket, `ais ls` will list buckets. Otherwise, naturally it'll list objects.
+## Usage
+
+```console
+$ ais ls --help
+NAME:
+   ais ls - (alias for "bucket ls") list buckets, objects in buckets, and files in (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects,
+   e.g.:
+     * ais ls                                              - list all buckets in a cluster (all providers);
+     * ais ls ais://abc -props name,size,copies,location   - list all objects from a given bucket, include only the (4) specified properties;
+     * ais ls ais://abc -props all                         - same as above but include all properties;
+     * ais ls ais                                          - list all ais buckets;
+     * ais ls s3                                           - list all s3 buckets that are present in the cluster;
+   with template, regex, and/or prefix:
+     * ais ls gs: --regex "^abc" --all                        - list all accessible GCP buckets with names starting with "abc";
+     * ais ls ais://abc --regex ".md" --props size,checksum   - list *.md objects with their respective sizes and checksums;
+     * ais ls gs://abc --template images/                     - list all objects from the virtual subdirectory called "images";
+     * ais ls gs://abc --prefix images/                       - same as above (for more examples, see '--template' below);
+   and more:
+     * ais ls s3 --summary         - for each s3 bucket in the cluster: print object numbers and total size(s);
+     * ais ls s3 --summary --all   - generate summary report for all s3 buckets; include remote objects and buckets that are _not present_
+```
+
+## Command-line options
+
+The options are numerous. Here's a non-exhaustive list (for the most recent update, run `ais ls --help`)
+
+```console
+OPTIONS:
+   --all                depending on the context:
+                        - all objects in a given bucket, including misplaced and copies, or
+                        - all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster
+   --cached             list only those objects from a remote bucket that are present ("cached")
+   --name-only          faster request to retrieve only the names of objects (if defined, '--props' flag will be ignored)
+   --props value        comma-separated list of object properties including name, size, version, copies, and more; e.g.:
+                        --props all
+                        --props name,size,cached
+                        --props "ec, copies, custom, location"
+   --regex value        regular expression; use it to match either bucket names or objects in a given bucket, e.g.:
+                        ais ls --regex "(m|n)"         - match buckets such as ais://nnn, s3://mmm, etc.;
+                        ais ls ais://nnn --regex "^A"  - match object names starting with letter A
+   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                        (with optional steps and gaps), e.g.:
+                        --template "" # (an empty or '*' template matches eveything)
+                        --template 'dir/subdir/'
+                        --template 'shard-{1000..9999}.tar'
+                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                        and similarly, when specifying files and directories:
+                        --template '/home/dir/subdir/'
+                        --template "/abc/prefix-{0010..9999..2}-suffix"
+   --prefix value       list objects that start with the specified prefix, e.g.:
+                        '--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory
+                        a/b that have their names (relative to this directory) starting with the letter c
+   --page-size value    maximum number of names per page (0 - the maximum is defined by the corresponding backend) (default: 0)
+   --paged              list objects page by page, one page at a time (see also '--page-size' and '--limit')
+   --limit value        limit object name count (0 - unlimited) (default: 0)
+   --show-unmatched     list objects that were not matched by regex and template
+   --max-pages value    display up to this number pages of bucket objects (default: 0)
+   --summary            show object numbers, bucket sizes, and used capacity; applies _only_ to buckets and objects that are _present_ in the cluster
+   --anonymous          list public-access Cloud buckets that may disallow certain operations (e.g., 'HEAD(bucket)')
+   --archive            list archived content (see docs/archive.md for details)
+   --units value        show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                        si  - SI (metric) format, e.g.: KB, MB, GB
+                        raw - do not convert to (or from) human-readable format
+   --no-headers, -H     display tables without headers
+   --no-footers         display tables without footers
+```
 
 ### `ais ls --regex "ngn*"`
 

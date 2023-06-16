@@ -195,7 +195,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		return
 	}
 	backend := t.Backend((*meta.Bck)(qbck))
-	if qbck.IsBucket() && !qbck.IsRemoteAIS() { // TODO -- FIXME: remove IsRemoteAIS check (unify w/ Cloud)
+	if qbck.IsBucket() {
 		var (
 			bck = (*meta.Bck)(qbck)
 			ctx = context.Background()
@@ -203,6 +203,8 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		_, errCode, err = backend.HeadBucket(ctx, bck)
 		if err == nil {
 			bcks = cmn.Bcks{bck.Clone()}
+		} else if errCode == http.StatusNotFound {
+			err = nil
 		}
 	} else {
 		bcks, errCode, err = backend.ListBuckets(*qbck)

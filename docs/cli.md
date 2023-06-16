@@ -15,6 +15,7 @@ redirect_from:
 - [First steps](#first-steps)
 - [Global options](#global-options)
 - [Backend Provider](#backend-provider)
+- [Verbose errors](#verbose-errors)
 
 
 AIS CLI (command-line interface) is intended to easily control and monitor every aspect of the AIS cluster life-cycle.
@@ -27,6 +28,12 @@ To build CLI from source, run the following two steps:
 ```console
 $ make cli			# 1. build CLI binary and install it into your `$GOPATH/bin` directory
 $ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
+```
+
+To build with debug, run:
+
+```console
+$ MODE=debug make cli
 ```
 
 Alternatively, install directly from GitHub:
@@ -64,6 +71,22 @@ See also:
 > You can find more about $GOPATH environment [here](https://golang.org/doc/code.html#GOPATH).
 
 ## CLI Reference
+
+The recommended and, actually, fastest way to get started with CLI is to type `ais` and press `<TAB-TAB>`:
+
+```console
+$ ais <TAB-TAB>
+bucket       config       auth        advanced     log              alias        put         wait       rmb
+object       etl          show        storage      performance      cp           start       get        search
+cluster      job          help        archive      remote-cluster   create       stop        ls
+```
+
+These are the top-level commands as of mid-2023. Each command has its own extended help (`--help`) and sub-commands
+(which, in turn, have their respective helps and subcommands).
+
+The list of top-level commands must give maybe the first idea of the supported functionality and functional grouping.
+
+Following is a brief summary (that's non-exhaustive and slightly outdated):
 
 | Command | Use Case |
 |---------|----------|
@@ -104,25 +127,33 @@ When used the very first time, *or* if the `$HOME/.config/ais/cli/cli.json` does
 
 ```json
 {
-  "cluster": {
-    "url": "http://127.0.0.1:8080",
-    "default_ais_host": "http://127.0.0.1:8080",
-    "default_docker_host": "http://172.50.0.2:8080",
-    "skip_verify_crt": false
-  },
-  "timeout": {
-    "tcp_timeout": "60s",
-    "http_timeout": "0s"
-  },
-  "auth": {
-    "url": "http://127.0.0.1:52001"
-  },
-  "aliases": {
-    "get": "object get",
-    "ls": "bucket ls",
-    "put": "object put"
-  },
-  "default_provider": "ais"
+    "cluster": {
+        "url": "http://127.0.0.1:8080",
+        "default_ais_host": "http://127.0.0.1:8080",
+        "default_docker_host": "http://172.50.0.2:8080",
+        "skip_verify_crt": false
+    },
+    "timeout": {
+        "tcp_timeout": "60s",
+        "http_timeout": "0s"
+    },
+    "auth": {
+        "url": "http://127.0.0.1:52001"
+    },
+    "aliases": {
+        "cp": "bucket cp",
+        "create": "bucket create",
+        "wait": "job wait",
+        "stop": "job stop",
+        "get": "object get",
+        "ls": "bucket ls",
+        "put": "object put",
+        "rmb": "bucket rm",
+        "start": "job start"
+    },
+    "default_provider": "ais",
+    "no_color": false,
+    "verbose": false
 }
 ```
 
@@ -184,3 +215,26 @@ See also:
 
 > [Backend Providers](/docs/providers.md)
 > [Buckets: definition, operations, properties](/docs/bucket.md)
+
+## Verbose errors
+
+CLI uses [AIS API](https://github.com/NVIDIA/aistore/tree/master/api) to execute operations on a cluster.
+
+Of course, a remote API call - any API call, for that matter - may return errors. For developers, it may be sometimes useful to see a complete and unredacted error information.
+
+Here's an example where we are trying to rename a non-existing bucket:
+
+```console
+$ ais bucket mv ais://ddd ais://mmm
+Error: bucket "ais://ddd" does not exist
+```
+
+But here's how it'll look once we put CLI in verbose mode:
+
+```console
+$ ais config cli set verbose true
+"verbose" set to: "true" (was: "false")
+
+$ ais bucket mv ais://ddd ais://mmm
+Error: {"tcode":"ErrBckNotFound","message":"bucket \"ais://ddd\" does not exist","method":"HEAD","url_path":"/v1/buckets/ddd","remote_addr":"127.0.0.1:57026","caller":"","node":"p[JFkp8080]","status":404}: HEAD /v1/buckets/ddd (stack: [utils.go:445 <- bucket.go:104 <- bucket_hdlr.go:343])
+```
