@@ -20,6 +20,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// additional and optional list-objets args (see also: GetArgs, PutArgs)
+type ListArgs struct {
+	Progress *ProgressContext // with a callback
+	Num      uint             // aka limit
+}
+
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (string, error) {
@@ -379,12 +385,7 @@ func EvictRemoteBucket(bp BaseParams, bck cmn.Bck, keepMD bool) error {
 // See also:
 // - `ListObjectsPage`
 // - usage examples in CLI docs under docs/cli.
-func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint) (*cmn.LsoResult, error) {
-	return ListObjectsWithOpts(bp, bck, lsmsg, numObj, nil)
-}
-
-// additional argument may include "progress-bar" context
-func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj uint, progress *ProgressContext) (*cmn.LsoResult, error) {
+func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
 	var (
 		q    url.Values
 		path = apc.URLPathBuckets.Join(bck.Name)
@@ -407,7 +408,7 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 		reqParams.Header = hdr
 		reqParams.Query = q
 	}
-	lst, err := lso(reqParams, lsmsg, numObj, progress)
+	lst, err := lso(reqParams, lsmsg, args)
 	FreeRp(reqParams)
 	return lst, err
 }
@@ -416,12 +417,13 @@ func ListObjectsWithOpts(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, numObj u
 // the entire bucket). Each iteration lists a page of objects and reduces `toRead`
 // accordingly. When the latter gets below page size, we perform the final
 // iteration for the reduced page.
-func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, numObj uint, progress *ProgressContext) (*cmn.LsoResult, error) {
+func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
 	var (
 		lst      = &cmn.LsoResult{}
 		nextPage = &cmn.LsoResult{}
-		toRead   = numObj
-		listAll  = numObj == 0
+		progress = args.Progress
+		toRead   = args.Num
+		listAll  = args.Num == 0
 	)
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {

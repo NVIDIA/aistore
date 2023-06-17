@@ -170,6 +170,7 @@ NAME:
      * ais ls                                              - list all buckets in a cluster (all providers);
      * ais ls ais://abc -props name,size,copies,location   - list all objects from a given bucket, include only the (4) specified properties;
      * ais ls ais://abc -props all                         - same as above but include all properties;
+     * ais ls ais://abc --page-size 20 --refresh 3s        - list a very large bucket (20 items in each page), report progress every 3s;
      * ais ls ais                                          - list all ais buckets;
      * ais ls s3                                           - list all s3 buckets that are present in the cluster;
    with template, regex, and/or prefix:

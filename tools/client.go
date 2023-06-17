@@ -124,7 +124,7 @@ func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLim
 	if cached {
 		msg.Flags = apc.LsObjCached
 	}
-	data, err := api.ListObjects(bp, bck, msg, objectCountLimit)
+	data, err := api.ListObjects(bp, bck, msg, api.ListArgs{Num: objectCountLimit})
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func WaitForObjectToBeDowloaded(bp api.BaseParams, bck cmn.Bck, objName string, 
 		if time.Now().After(maxTime) {
 			return fmt.Errorf("timed out (%v) waiting for %s download", timeout, bck.Cname(objName))
 		}
-		reslist, err := api.ListObjects(bp, bck, &apc.LsoMsg{}, 0)
+		reslist, err := api.ListObjects(bp, bck, &apc.LsoMsg{}, api.ListArgs{})
 		if err != nil {
 			return err
 		}
@@ -395,7 +395,7 @@ func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, obj
 
 func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFormat string) (time.Time, string) {
 	msg := &apc.LsoMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: object}
-	bucketList, err := api.ListObjects(bp, bck, msg, 0)
+	bucketList, err := api.ListObjects(bp, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	for _, entry := range bucketList.Entries {

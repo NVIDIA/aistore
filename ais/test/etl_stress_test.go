@@ -252,7 +252,7 @@ def transform(input_bytes):
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Transforming bucket %s took %v\n", bckFrom.Cname(""), total)
 
-			objList, err := api.ListObjects(baseParams, bckTo, nil, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(
 				t, len(objList.Entries) == m.num,

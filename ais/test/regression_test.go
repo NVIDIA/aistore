@@ -75,7 +75,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 	m.puts()
 
 	msg := &apc.LsoMsg{Props: apc.GetPropsLocation}
-	lst, err := api.ListObjects(baseParams, m.bck, msg, uint(m.num))
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Num: uint(m.num)})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {
@@ -129,7 +129,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.Props = ""
-	lst, err = api.ListObjects(baseParams, m.bck, msg, uint(m.num))
+	lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Num: uint(m.num)})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {
@@ -166,7 +166,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 	m.puts()
 
 	listObjectsMsg := &apc.LsoMsg{Props: apc.GetPropsLocation, Flags: apc.LsObjCached}
-	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, 0)
+	lst, err := api.ListObjects(baseParams, bck, listObjectsMsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) < m.num {
@@ -215,7 +215,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listObjectsMsg.Props = ""
-	lst, err = api.ListObjects(baseParams, bck, listObjectsMsg, 0)
+	lst, err = api.ListObjects(baseParams, bck, listObjectsMsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {
@@ -390,7 +390,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		t.Fatalf("renamed ais bucket %s does not exist after rename", rtd.renamedBck)
 	}
 
-	lst, err := api.ListObjects(baseParams, rtd.renamedBck, &apc.LsoMsg{}, 0)
+	lst, err := api.ListObjects(baseParams, rtd.renamedBck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	unique := make(map[string]bool)
 	for _, e := range lst.Entries {
@@ -809,7 +809,7 @@ func TestDeleteList(t *testing.T) {
 
 		// 3. Check to see that all the files have been deleted
 		msg := &apc.LsoMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -922,7 +922,7 @@ func TestDeleteRange(t *testing.T) {
 
 		// 3. Check to see that the correct files have been deleted
 		msg := &apc.LsoMsg{Prefix: prefix}
-		bktlst, err := api.ListObjects(baseParams, b, msg, 0)
+		bktlst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != objCnt-smallrangesize {
 			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), objCnt-smallrangesize)
@@ -950,7 +950,7 @@ func TestDeleteRange(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		// 5. Check to see that all the files have been deleted
-		bktlst, err = api.ListObjects(baseParams, b, msg, 0)
+		bktlst, err = api.ListObjects(baseParams, b, msg, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		if len(bktlst.Entries) != 0 {
 			t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1029,7 +1029,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &apc.LsoMsg{Prefix: objNamePrefix}
-	lst, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d",
@@ -1060,7 +1060,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all files have been deleted
 	msg = &apc.LsoMsg{Prefix: objNamePrefix}
-	lst, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(lst.Entries))

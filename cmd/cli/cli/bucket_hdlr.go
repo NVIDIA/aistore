@@ -79,6 +79,7 @@ var (
 			pageSizeFlag,
 			pagedFlag,
 			objLimitFlag,
+			refreshFlag,
 			showUnmatchedFlag,
 			noHeaderFlag,
 			noFooterFlag,
@@ -106,6 +107,7 @@ var (
 			indent1 + "\t* ais ls \t- list all buckets in a cluster (all providers);\n" +
 			indent1 + "\t* ais ls ais://abc -props name,size,copies,location \t- list all objects from a given bucket, include only the (4) specified properties;\n" +
 			indent1 + "\t* ais ls ais://abc -props all \t- same as above but include all properties;\n" +
+			indent1 + "\t* ais ls ais://abc --page-size 20 --refresh 3s \t- list a very large bucket (20 items in each page), report progress every 3s;\n" +
 			indent1 + "\t* ais ls ais \t- list all ais buckets;\n" +
 			indent1 + "\t* ais ls s3 \t- list all s3 buckets that are present in the cluster;\n" +
 			indent1 + "with template, regex, and/or prefix:\n" +
@@ -275,7 +277,7 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 		}
 		copies := int16(p.Mirror.Copies)
 		stats := &bucketHealth{Bck: bck}
-		objList, err = api.ListObjects(apiBP, bck, msg, 0)
+		objList, err = api.ListObjects(apiBP, bck, msg, api.ListArgs{})
 		if err != nil {
 			return err
 		}

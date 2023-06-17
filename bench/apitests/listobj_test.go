@@ -86,7 +86,7 @@ func BenchmarkListObject(b *testing.B) {
 				if test.useCache {
 					msg.SetFlag(apc.UseListObjsCache)
 				}
-				objs, err := api.ListObjects(baseParams, bck, msg, 0)
+				objs, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 				tassert.CheckFatal(b, err)
 				tassert.Errorf(
 					b, len(objs.Entries) == int(test.objectCnt),

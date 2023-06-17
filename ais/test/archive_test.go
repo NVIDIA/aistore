@@ -327,7 +327,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				tlog.Logf("List %s\n", bckTo)
 				msg := &apc.LsoMsg{Prefix: "test_"}
 				msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-				objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
+				objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				for _, en := range objList.Entries {
 					tlog.Logf("%s: %dB\n", en.Name, en.Size)
@@ -346,7 +346,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			msg := &apc.LsoMsg{Prefix: "test_"}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
 			msg.SetFlag(apc.LsArchDir)
-			objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			num := len(objList.Entries)
 			expectedNum := numArchs + numArchs*numInArch
@@ -506,7 +506,7 @@ func TestAppendToArch(t *testing.T) {
 
 			lsmsg := &apc.LsoMsg{Prefix: "test_lst"}
 			lsmsg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, bckTo, lsmsg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
@@ -557,7 +557,7 @@ func TestAppendToArch(t *testing.T) {
 			}
 
 			lsmsg.SetFlag(apc.LsArchDir)
-			objList, err = api.ListObjects(baseParams, bckTo, lsmsg, 0)
+			objList, err = api.ListObjects(baseParams, bckTo, lsmsg, api.ListArgs{})
 			tassert.CheckError(t, err)
 			num = len(objList.Entries)
 			expectedNum := numArchs + numArchs*(numInArch+numAdd)

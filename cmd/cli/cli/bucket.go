@@ -315,7 +315,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	var (
 		opts = teb.Opts{AltMap: teb.FuncMapUnits(units)}
 		prev = mono.NanoTime()
-		max  = 10 * time.Second
+		max  = listObjectsWaitTime
 	)
 	for i, bck := range filtered {
 		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence, countRemoteObjs)
@@ -458,7 +458,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 	msg.PageSize = uint(pageSize)
 
-	// list bucket's objects page by page and print pages, one at a time
+	// list page by page, print pages one at a time
 	if flagIsSet(c, pagedFlag) {
 		pageCounter, maxPages, toShow := 0, parseIntFlag(c, maxPagesFlag), limit
 		for {
@@ -509,8 +509,12 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	// list all pages up to a limit, show progress
-	ctx := api.NewProgressContext(cb, listPagesCallbackTime)
-	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), ctx)
+	callAfter := listObjectsWaitTime
+	if flagIsSet(c, refreshFlag) {
+		callAfter = parseDurationFlag(c, refreshFlag)
+	}
+	ctx := api.NewProgressContext(cb, callAfter)
+	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit), Progress: ctx})
 	if err != nil {
 		return V(err)
 	}

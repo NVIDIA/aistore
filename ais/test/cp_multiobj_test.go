@@ -89,7 +89,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 
 	tlog.Logln("prefix: test/")
 	msg := &apc.LsoMsg{Prefix: "test/"}
-	lst, err := api.ListObjects(baseParams, bckTo, msg, 0)
+	lst, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == copyCnt, "%d != %d", copyCnt, len(lst.Entries))
 	rangeStart := 10 // rand.Intn(objCnt - copyCnt - 1)
@@ -255,7 +255,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 
 			msg := &apc.LsoMsg{Prefix: m.prefix}
 			msg.AddProps(apc.GetPropsName, apc.GetPropsSize)
-			objList, err := api.ListObjects(baseParams, bckTo, msg, 0)
+			objList, err := api.ListObjects(baseParams, bckTo, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tlog.Logf("Total (`ls %s/%s*`): %d objects\n", bckTo, m.prefix, len(objList.Entries))
 		})

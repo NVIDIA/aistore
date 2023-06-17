@@ -175,7 +175,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 
 	// list
 	tlog.Logln("Listing and counting...")
-	list, err := api.ListObjects(baseParams, m.bck, nil, 0)
+	list, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	//
@@ -252,7 +252,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 
 	// list
 	tlog.Logln("Listing and counting the 2nd time...")
-	list, err = api.ListObjects(baseParams, m.bck, nil, 0)
+	list, err = api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	// num promoted

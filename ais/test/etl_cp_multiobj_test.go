@@ -171,7 +171,7 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	err = api.WaitForXactionIdle(baseParams, wargs)
 	tassert.CheckFatal(t, err)
 
-	list, err := api.ListObjects(baseParams, bckTo, nil, 0)
+	list, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == objCnt, "expected %d objects from offline ETL, got %d", objCnt, len(list.Entries))
 	for _, objName := range objList {

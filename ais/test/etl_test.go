@@ -544,7 +544,7 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 	err = tetl.WaitForFinished(bp, xid, kind, timeout)
 	tassert.CheckFatal(t, err)
 
-	list, err := api.ListObjects(bp, bckTo, nil, 0)
+	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d objects, got %d", m.num, len(list.Entries))
 

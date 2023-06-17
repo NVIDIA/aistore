@@ -215,14 +215,14 @@ func TestNamespace(t *testing.T) {
 			)
 
 			// Test listing objects
-			objects, err := api.ListObjects(baseParams, m1.bck, nil, 0)
+			objects, err := api.ListObjects(baseParams, m1.bck, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, len(objects.Entries) == m1.num,
 				"number of entries (%d) should be (%d)", len(objects.Entries), m1.num,
 			)
 
-			objects, err = api.ListObjects(baseParams, m2.bck, nil, 0)
+			objects, err = api.ListObjects(baseParams, m2.bck, nil, api.ListArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, len(objects.Entries) == m2.num,
@@ -325,7 +325,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 	)
 
 	for _, bck := range []cmn.Bck{m1.bck, m2.bck} {
-		objects, err := api.ListObjects(baseParams, bck, nil, 0)
+		objects, err := api.ListObjects(baseParams, bck, nil, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 		tassert.Errorf(
 			t, len(objects.Entries) == m1.num+m2.num,
@@ -375,7 +375,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	tassert.Fatalf(t, len(buckets) == 1, "number of buckets (%d) should be 1", len(buckets))
 
 	// Test listing objects
-	_, err = api.ListObjects(baseParams, m.bck, nil, 0)
+	_, err = api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
 	tassert.Fatalf(t, err != nil, "expected list-objects to fail w/ \"bucket does not exist\"")
 
 	// TODO: it works until this point

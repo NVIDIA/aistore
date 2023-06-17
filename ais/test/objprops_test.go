@@ -614,7 +614,7 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg
 			bck, msg.Prefix, msg.PageSize, msg.IsFlagSet(apc.LsObjCached), msg.ContinuationToken)
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
-	resList, err := api.ListObjects(baseParams, bck, msg, 0)
+	resList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	if err != nil {
 		t.Errorf("List objects %s failed, err = %v", bck, err)
 		return nil

@@ -212,7 +212,7 @@ func TestHttpProviderObjectGet(t *testing.T) {
 		httpAnotherObjectOutput, w.String())
 
 	// list object should contain both the objects
-	reslist, err := api.ListObjects(baseParams, hbo.Bck, &apc.LsoMsg{}, 0)
+	reslist, err := api.ListObjects(baseParams, hbo.Bck, &apc.LsoMsg{}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(reslist.Entries) == 2, "should have exactly 2 entries in bucket")
 
@@ -488,7 +488,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	_, err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, 0)
+	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
@@ -501,7 +501,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	_, err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
 
-	resRemote, err := api.ListObjects(baseParams, bckRemote, msg, 0)
+	resRemote, err := api.ListObjects(baseParams, bckRemote, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	if len(resLocal.Entries) != 1 {
@@ -1525,7 +1525,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta
-					objList, err := api.ListObjects(baseParams, b, msg, 0)
+					objList, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
 					if err != nil {
 						t.Error(err)
 						continue
@@ -1540,7 +1540,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 
 				msg := &apc.LsoMsg{Prefix: "test/"}
-				lst, err := api.ListObjects(baseParams, b, msg, 0)
+				lst, err := api.ListObjects(baseParams, b, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 
 				tlog.Logf("Cleaning up remaining objects...\n")

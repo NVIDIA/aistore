@@ -386,7 +386,7 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 		msg.PageSize = apc.DefaultPageSizeAIS
 	}
 	ctx := api.NewProgressContext(listObjCallback, longListTime)
-	objList, err := api.ListObjectsWithOpts(baseParams, bck, msg, 0, ctx)
+	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{Progress: ctx})
 	if err != nil {
 		return nil, err
 	}

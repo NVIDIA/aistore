@@ -181,7 +181,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	)
 	tlog.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bck)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Props: apc.GetPropsLocation}, 0)
+	lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Props: apc.GetPropsLocation}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
 		tname, _ := cluster.ParseObjLoc(obj.Location)
@@ -266,7 +266,7 @@ func (m *ioContext) remoteRefill() {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
 	m.objNames = m.objNames[:0]
@@ -328,7 +328,7 @@ func (m *ioContext) evict() {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 	if len(objList.Entries) != m.num {
 		m.t.Fatalf("list_objects err: %d != %d", len(objList.Entries), m.num)
@@ -345,7 +345,7 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 		msg        = &apc.LsoMsg{Prefix: m.prefix, Props: apc.GetPropsName}
 	)
 
-	objList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
 	tlog.Logf("remote PREFETCH %d objects...\n", prefetchCnt)
@@ -398,7 +398,7 @@ func (m *ioContext) del(opts ...int) {
 	if toRemoveCnt < 0 && m.prefix != "" {
 		lsmsg.Prefix = "" // all means all
 	}
-	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, 0)
+	objList, err := api.ListObjects(baseParams, m.bck, lsmsg, api.ListArgs{})
 	if err != nil {
 		if errors.As(err, &herr) && herr.Status == http.StatusNotFound {
 			return
@@ -560,7 +560,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	// List Bucket - primarily for the copies
 	msg := &apc.LsoMsg{Flags: apc.LsObjCached, Prefix: m.prefix}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsAtime, apc.GetPropsStatus)
-	objectList, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	objectList, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(m.t, err)
 
 	total := 0
@@ -924,7 +924,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string, bck cmn.Bck, fileNames [
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		msg := &apc.LsoMsg{Prefix: lookFor}
-		objList, err := api.ListObjects(baseParams, bck, msg, 0)
+		objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -973,7 +973,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string, bck cmn.Bck, objName
 
 		tlog.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		msg := &apc.LsoMsg{Prefix: p}
-		objList, err := api.ListObjects(baseParams, bck, msg, 0)
+		objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return

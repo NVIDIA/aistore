@@ -80,7 +80,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map
 	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsVersion, apc.GetPropsCopies, apc.GetPropsSize)
-	lst, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -115,7 +115,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// 3. Check if we can list all the objects
-	lst, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -220,7 +220,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 
 	tools.WaitForRebalanceByID(t, origActiveTargetCount, baseParams, rebID, rebalanceTimeout)
 	msgList := &apc.LsoMsg{Prefix: objPath}
-	lst, err := api.ListObjects(baseParams, bck, msgList, 0)
+	lst, err := api.ListObjects(baseParams, bck, msgList, api.ListArgs{})
 	tassert.CheckError(t, err)
 	if lst != nil && len(lst.Entries) != objCount {
 		t.Errorf("Wrong number of objects: have %d, expected %d", len(lst.Entries), objCount)
@@ -259,7 +259,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckError(t, err)
 	}
 
-	lst, err = api.ListObjects(baseParams, bck, msgList, 0)
+	lst, err = api.ListObjects(baseParams, bck, msgList, api.ListArgs{})
 	tassert.CheckError(t, err)
 	if lst != nil && len(lst.Entries) != objCount {
 		t.Errorf("Invalid number of objects: %d, expected %d", len(lst.Entries), objCount)
@@ -544,7 +544,7 @@ func TestShutdownListObjects(t *testing.T) {
 	// 1. Perform list-object and populate entries map.
 	msg := &apc.LsoMsg{}
 	msg.AddProps(apc.GetPropsChecksum, apc.GetPropsCopies, apc.GetPropsSize)
-	lst, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))
@@ -605,7 +605,7 @@ func TestShutdownListObjects(t *testing.T) {
 		return
 	}
 	tlog.Logln("Listing objects")
-	lst, err = api.ListObjects(baseParams, bck, msg, 0)
+	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, len(lst.Entries) == m.num, "list-object should return %d objects - returned %d",
 		m.num, len(lst.Entries))

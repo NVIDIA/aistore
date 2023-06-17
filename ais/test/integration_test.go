@@ -1184,7 +1184,7 @@ func TestAtimeRebalance(t *testing.T) {
 	msg := &apc.LsoMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	lst, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	objNames := make(cos.StrKVs, 10)
@@ -1208,7 +1208,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	msg = &apc.LsoMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
-	lstReb, err := api.ListObjects(baseParams, m.bck, msg, 0)
+	lstReb, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
 	itemCount, itemCountOk := len(lstReb.Entries), 0
@@ -1358,7 +1358,7 @@ func TestAtimePrefetch(t *testing.T) {
 
 	timeFormat := time.RFC3339Nano
 	msg := &apc.LsoMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}
-	lst, err := api.ListObjects(baseParams, bck, msg, 0)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	if len(lst.Entries) != numObjs {
 		t.Errorf("Number of objects mismatch: expected %d, found %d", numObjs, len(lst.Entries))

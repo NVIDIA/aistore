@@ -356,7 +356,7 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
 	var (
 		l, cnt       int
-		objList, err = api.ListObjects(apiBP, bck, nil, 0)
+		objList, err = api.ListObjects(apiBP, bck, nil, api.ListArgs{})
 	)
 	if err != nil {
 		return err

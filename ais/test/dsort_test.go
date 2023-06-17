@@ -478,7 +478,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 	allShardRecords := make([]shardRecords, 0, 10)
 
-	list, err := api.ListObjects(df.baseParams, bck, nil, 0)
+	list, err := api.ListObjects(df.baseParams, bck, nil, api.ListArgs{})
 	tassert.CheckFatal(df.m.t, err)
 
 	if len(list.Entries) == 0 {

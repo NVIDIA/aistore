@@ -87,7 +87,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	msg.PageSize = uint(pageSize)
 
 	// list-objects
-	objList, err := api.ListObjectsWithOpts(apiBP, bck, msg, uint(limit), nil /*progress ctx*/)
+	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit)})
 	if err != nil {
 		return V(err)
 	}
