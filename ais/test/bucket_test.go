@@ -3273,26 +3273,26 @@ func TestBucketListAndSummary(t *testing.T) {
 					num: 12345,
 				}
 				baseParams = tools.BaseAPIParams()
-			)
-			bckTest := cmn.Bck{Provider: test.provider, Ns: cmn.NsGlobal}
-			if !bckTest.IsAIS() {
-				m.num /= 10
-				m.del(-1 /* delete all */)
-			}
 
-			cacheSize := m.num / 2 // determines number of objects which should be cached
+				expectedFiles = m.num
+				cacheSize     int
+			)
 
 			m.initWithCleanupAndSaveState()
 			m.expectTargets(1)
 
-			expectedFiles := m.num
-			if bckTest.IsAIS() {
+			if m.bck.IsAIS() {
 				tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 				m.puts()
-			} else if bckTest.IsRemote() {
-				m.bck.Name = cliBck.Name
-
+			} else if m.bck.IsRemote() {
+				m.bck = cliBck
 				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+				tlog.Logf("remote %s - %s\n", m.bck.Cname(""), p[3])
+				m.del(-1 /* delete all */)
+
+				m.num /= 10
+				cacheSize = m.num / 2
+				expectedFiles = m.num
 
 				m.remotePuts(true /*evict*/)
 				if test.cached {
@@ -3334,7 +3334,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				tassert.CheckFatal(t, err)
 
 				if len(objList.Entries) != expectedFiles {
-					t.Errorf("number of listed objects (%d) is different than expected (%d)",
+					t.Errorf("number of listed objects (%d) is different from expected (%d)",
 						len(objList.Entries), expectedFiles)
 				}
 			}

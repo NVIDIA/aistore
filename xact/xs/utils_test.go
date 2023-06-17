@@ -65,7 +65,7 @@ func TestConcatObjLists(t *testing.T) {
 			objs := cmn.ConcatLso(lists, test.maxSize)
 			tassert.Errorf(
 				t, test.maxSize == 0 || len(objs.Entries) == expectedObjCnt,
-				"number of objects (%d) is different than expected (%d)", len(objs.Entries), expectedObjCnt,
+				"number of objects (%d) is different from expected (%d)", len(objs.Entries), expectedObjCnt,
 			)
 			tassert.Errorf(
 				t, (objs.ContinuationToken != "") == test.token,

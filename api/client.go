@@ -261,7 +261,7 @@ func (reqParams *ReqParams) readAny(resp *http.Response, out any) error {
 	}
 	if resp.StatusCode == http.StatusOK {
 		if err := decodeResp(resp, out); err != nil {
-			return fmt.Errorf("failed to read response: %w", err)
+			return fmt.Errorf("failed to decode response: %v -> %T", err, out)
 		}
 	}
 	return nil
@@ -272,7 +272,6 @@ func decodeResp(resp *http.Response, out any) error {
 		r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
 		return out.(msgp.Decodable).DecodeMsg(r)
 	}
-
 	return jsoniter.NewDecoder(resp.Body).Decode(out)
 }
 

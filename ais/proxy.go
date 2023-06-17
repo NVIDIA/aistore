@@ -526,7 +526,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	}
 	ctype := r.Header.Get(cos.HdrContentType)
 	if r.ContentLength == 0 && !strings.HasPrefix(ctype, cos.ContentJSON) {
-		// must be an "easy URL" request, e.g.: curl -L -X GET 'http://aistore/ais/abc'
+		// e.g. "easy URL" request: curl -L -X GET 'http://aistore/ais/abc'
 		msg = &apc.ActMsg{Action: apc.ActList, Value: &apc.LsoMsg{}}
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
@@ -539,56 +539,64 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		p.writeErr(w, r, err)
 		return
 	}
-	switch msg.Action {
-	case apc.ActList:
-		// list buckets if `qbck` indicates a bucket-type query
-		// (see api.ListBuckets and the line below)
-		if !qbck.IsBucket() {
-			qbck.Name = msg.Name
-			if qbck.IsRemoteAIS() {
-				qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
-			}
-			if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
-				p.listBuckets(w, r, qbck, msg, dpq)
-			}
-			return
-		}
 
-		// list objects
-		// NOTE #1: TODO: currently, always primary - hrw redirect vs scenarios***
-		if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
-			return
-		}
-		var (
-			err   error
-			lsmsg apc.LsoMsg
-			bck   = meta.CloneBck((*cmn.Bck)(qbck))
-		)
-		if err = cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
-			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
-			return
-		}
-		bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
-		bckArgs.createAIS = false
-
-		// mutually exclusive
-		debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
-		//
-		// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
-		//
-		debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
-
-		if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
-			bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsTryHeadRemote)
-		}
-		if bck, err = bckArgs.initAndTry(); err == nil {
-			begin := mono.NanoTime()
-			p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg, begin)
-		}
-	case apc.ActSummaryBck:
+	// b-summary
+	if msg.Action == apc.ActSummaryBck {
 		p.bucketSummary(w, r, qbck, msg, dpq)
-	default:
+		return
+	}
+	// invalid action
+	if msg.Action != apc.ActList {
 		p.writeErrAct(w, r, msg.Action)
+		return
+	}
+	// list buckets
+	if msg.Value == nil {
+		if qbck.Name != "" && qbck.Name != msg.Name {
+			p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, msg.Name, qbck, msg)
+			return
+		}
+		qbck.Name = msg.Name
+		if qbck.IsRemoteAIS() {
+			qbck.Ns.UUID = p.a2u(qbck.Ns.UUID)
+		}
+		if err := p.checkAccess(w, r, nil, apc.AceListBuckets); err == nil {
+			p.listBuckets(w, r, qbck, msg, dpq)
+		}
+		return
+	}
+
+	// list objects (NOTE -- TODO: currently, always forwarding)
+	if !qbck.IsBucket() {
+		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck)
+		return
+	}
+	if p.forwardCP(w, r, msg, lsotag+" "+qbck.String()) {
+		return
+	}
+	var (
+		lsmsg apc.LsoMsg
+		bck   = meta.CloneBck((*cmn.Bck)(qbck))
+	)
+	if err = cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
+		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+		return
+	}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
+	bckArgs.createAIS = false
+
+	// mutually exclusive
+	debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
+
+	// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
+	debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
+
+	if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
+		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsTryHeadRemote)
+	}
+	if bck, err = bckArgs.initAndTry(); err == nil {
+		begin := mono.NanoTime()
+		p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg, begin)
 	}
 }
 
@@ -974,7 +982,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if prr || cos.IsParseBool(query.Get(apc.QparamAskPrimary)) {
 		caller := r.Header.Get(apc.HdrCallerName)
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
-			p.si, caller, smap.StringEx())
+			p, caller, smap.StringEx())
 		return
 	}
 	w.WriteHeader(http.StatusOK)

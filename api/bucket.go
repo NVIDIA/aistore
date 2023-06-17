@@ -160,10 +160,12 @@ func hdr2msg(bck cmn.Bck, err error) error {
 }
 
 // ListBuckets returns buckets for provided query, where
+//   - `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
+//   - ListBuckets utiizes `cmn.QueryBcks` - control structure that's practically identical to `cmn.Bck`,
+//     except for the fact that some or all its fields can be empty (to facilitate the corresponding
+//     query).
 //
-// `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
-//
-// (ListBuckets must not be confused with `ListObjects()` and friends below).
+// See also: QueryBuckets, ListObjects
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	q := make(url.Values, 4)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
@@ -192,8 +194,7 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 
 // QueryBuckets is a little convenience helper. It returns true if the selection contains
 // at least one bucket that satisfies the (qbck) criteria.
-//
-// `fltPresence` - as per QparamFltPresence enum (see api/apc/query.go)
+// - `fltPresence` - as per QparamFltPresence enum (see api/apc/query.go)
 func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, error) {
 	bcks, err := ListBuckets(bp, qbck, fltPresence)
 	return len(bcks) > 0, err

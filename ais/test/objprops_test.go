@@ -552,7 +552,7 @@ func TestObjProps(t *testing.T) {
 				)
 				tassert.Errorf(
 					t, uint64(props.Size) == m.fileSize,
-					"object size (%d) is different than expected (%d)", props.Size, m.fileSize,
+					"object size (%d) is different from expected (%d)", props.Size, m.fileSize,
 				)
 				if test.bucketType != typeLocal {
 					if test.evict {
