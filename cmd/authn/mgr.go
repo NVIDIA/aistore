@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -522,7 +522,6 @@ func initializeDB(driver kvdb.Driver) error {
 		// return on erros or when DB is already initialized
 		return err
 	}
-
 	role := &authn.Role{
 		ID:      authn.AdminRole,
 		Desc:    "AuthN administrator",
@@ -531,7 +530,6 @@ func initializeDB(driver kvdb.Driver) error {
 	if err := driver.Set(rolesCollection, authn.AdminRole, role); err != nil {
 		return err
 	}
-
 	su := &authn.User{
 		ID:       adminUserID,
 		Password: encryptPassword(adminUserPass),

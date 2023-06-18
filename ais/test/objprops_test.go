@@ -182,15 +182,16 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[string]string, msg *apc.LsoMsg, versionEnabled bool) {
 	tlog.Logf("Reading...\n")
 	propsReadObjects(t, proxyURL, bck, objs)
-	tlog.Logf("Checking object properties...\n")
+
+	tlog.Logf("Listing objects...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
-	if reslist == nil {
-		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
-	}
+	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck)
+
 	var (
 		version string
 		ok      bool
 	)
+	tlog.Logf("Checking object properties...\n")
 	for _, m := range reslist.Entries {
 		if version, ok = objs[m.Name]; !ok {
 			continue
@@ -253,15 +254,16 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 	tassert.CheckFatal(t, err)
 	tools.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
 
+	tlog.Logf("Listing objects...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)
-	if reslist == nil {
-		t.Fatalf("Unexpected error: no objects in the bucket %s", bck)
-	}
+	tassert.Fatalf(t, reslist != nil && len(reslist.Entries) > 0, "Unexpected: no objects in the bucket %s", bck)
+
 	var (
 		version  string
 		ok       bool
 		objFound int
 	)
+	tlog.Logf("Checking object properties...\n")
 	for _, m := range reslist.Entries {
 		if version, ok = newobjs[m.Name]; !ok {
 			continue
@@ -615,9 +617,6 @@ func testListObjects(t *testing.T, proxyURL string, bck cmn.Bck, msg *apc.LsoMsg
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
 	resList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
-	if err != nil {
-		t.Errorf("List objects %s failed, err = %v", bck, err)
-		return nil
-	}
+	tassert.Fatalf(t, err == nil, "%s: list-objects failed: %v", bck, err)
 	return resList
 }

@@ -1,11 +1,10 @@
 // Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package kvdb
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -50,11 +49,6 @@ type (
 		// Return subkeys with their values: map[key]value
 		GetAll(collection, pattern string) (map[string]string, error)
 	}
-
-	ErrNotFound struct {
-		collection string
-		key        string
-	}
 )
 
 // Extract collection and key names from full key path
@@ -64,17 +58,4 @@ func ParsePath(path string) (string, string) {
 		return path, ""
 	}
 	return path[:pos], path[pos+len(CollectionSepa):]
-}
-
-func NewErrNotFound(collection, key string) *ErrNotFound {
-	return &ErrNotFound{collection: collection, key: key}
-}
-
-func (e *ErrNotFound) Error() string {
-	return fmt.Sprintf("%s %q not found", e.collection, e.key)
-}
-
-func IsErrNotFound(err error) bool {
-	_, ok := err.(*ErrNotFound)
-	return ok
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 )
 
@@ -48,11 +49,11 @@ func newDownloadDB(driver kvdb.Driver) *downloaderDB {
 func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
 	key := path.Join(downloaderErrors, id)
 	if err := db.driver.Get(downloaderCollection, key, &errors); err != nil {
-		if !kvdb.IsErrNotFound(err) {
+		if !cos.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}
-		// If there was nothing in DB, return only values in the cache
+		// nothing in DB - return an empty list
 		return db.errCache[id], nil
 	}
 
@@ -95,11 +96,11 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	key := path.Join(downloaderTasks, id)
 	if err := db.driver.Get(downloaderCollection, key, &tasks); err != nil {
-		if !kvdb.IsErrNotFound(err) {
+		if !cos.IsErrNotFound(err) {
 			glog.Error(err)
 			return nil, err
 		}
-		// If there was nothing in DB, return empty list
+		// nothing in DB - return an empty list
 		return db.taskInfoCache[id], nil
 	}
 	tasks = append(tasks, db.taskInfoCache[id]...)

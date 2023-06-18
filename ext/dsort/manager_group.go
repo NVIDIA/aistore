@@ -1,11 +1,10 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
 import (
-	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
@@ -82,10 +82,12 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 		}
 	}
 
-	// Always check persistent db for now
+	// Always check persistent db
 	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		glog.Error(err)
+		if !cos.IsErrNotFound(err) {
+			glog.Error(err)
+		}
 		return jobsInfos
 	}
 	for _, r := range records {
@@ -126,7 +128,7 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 	if !exists && allowPersisted {
 		key := path.Join(managersKey, managerUUID)
 		if err := mg.db.Get(dsortCollection, key, &manager); err != nil {
-			if !os.IsNotExist(err) {
+			if !cos.IsErrNotFound(err) {
 				glog.Error(err)
 			}
 			return nil, false
@@ -195,10 +197,9 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 
 	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
-		if kvdb.IsErrNotFound(err) {
+		if cos.IsErrNotFound(err) {
 			return regularInterval
 		}
-
 		glog.Error(err)
 		return retryInterval
 	}

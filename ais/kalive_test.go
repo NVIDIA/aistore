@@ -20,9 +20,6 @@ func TestTimeoutStatsForDaemon(t *testing.T) {
 		maxKeepalive: int64(maxKeepalive),
 	}
 	ts := k.timeoutStats(daemonID)
-	if ts == nil {
-		t.Fatal("timeoutStats should not be nil")
-	}
 	timeout := time.Duration(ts.timeout)
 	srtt := time.Duration(ts.srtt)
 	rttvar := time.Duration(ts.rttvar)

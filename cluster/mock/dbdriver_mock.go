@@ -56,7 +56,7 @@ func (bd *DBDriver) GetString(collection, key string) (string, error) {
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
-		return "", kvdb.NewErrNotFound(collection, key)
+		return "", cos.NewErrNotFound(collection + " \"" + key + "\"")
 	}
 	return value, nil
 }
@@ -67,7 +67,7 @@ func (bd *DBDriver) Delete(collection, key string) error {
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
-		return kvdb.NewErrNotFound(collection, key)
+		return cos.NewErrNotFound(collection + " \"" + key + "\"")
 	}
 	delete(bd.values, name)
 	return nil

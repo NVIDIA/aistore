@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -56,7 +55,7 @@ func deleteUsers(mgr *mgr, skipNotExist bool, t *testing.T) {
 	for _, username := range users {
 		err = mgr.delUser(username)
 		if err != nil {
-			if !kvdb.IsErrNotFound(err) || !skipNotExist {
+			if !cos.IsErrNotFound(err) || !skipNotExist {
 				t.Errorf("Failed to delete user %s: %v", username, err)
 			}
 		}
