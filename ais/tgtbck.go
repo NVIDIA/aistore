@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -249,7 +248,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 		rns  = xreg.RenewLso(t, bck, msg.UUID, msg)
 	)
 	// check that xaction hasn't finished prior to this page read, restart if needed
-	if rns.Err == xs.ErrGone || transport.IsErrDuplicateTrname(rns.Err) {
+	if rns.Err == xs.ErrGone {
 		runtime.Gosched()
 		rns = xreg.RenewLso(t, bck, msg.UUID, msg)
 	}
@@ -257,12 +256,25 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 		t.writeErr(w, r, rns.Err)
 		return
 	}
+	// run
 	xctn = rns.Entry.Get()
 	if !rns.IsRunning() {
 		go xctn.Run(nil)
 		runtime.Gosched()
 	}
 	xls := xctn.(*xs.LsoXact)
+
+	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
+		var s string
+		if msg.ContinuationToken != "" {
+			s = " cont=" + msg.ContinuationToken
+		}
+		if msg.SID != "" {
+			s += " via t[" + msg.SID + "]"
+		}
+		glog.Infoln(xls.Name() + s)
+	}
+
 	resp := xls.Do(msg) // NOTE: blocking request/response
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
@@ -470,7 +482,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 		inBMD = false
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		pid := apireq.query.Get(apc.QparamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
 	}

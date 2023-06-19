@@ -36,7 +36,7 @@ func init() {
 }
 
 func Init(st cos.StatsUpdater, config *cmn.Config) *StreamCollector {
-	verbose = config.FastV(4, cos.SmoduleTransport)
+	verbose = config.FastV(5 /*super-verbose*/, cos.SmoduleTransport)
 	dfltMaxHdr = dfltSizeHeader
 	if config.Transport.MaxHeaderSize > 0 {
 		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)

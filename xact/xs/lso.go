@@ -30,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -84,11 +85,12 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 		streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActList},
 		msg:        args.Custom.(*apc.LsoMsg),
 	}
-	debug.Assert(p.Bck.Props != nil && p.msg.PageSize > 0 && p.msg.PageSize < 100000)
+	debug.Assert(p.Bck.Props != nil && p.msg.PageSize > 0 &&
+		p.msg.PageSize < cos.MaxUint(100000, 10*apc.DefaultPageSizeAIS))
 	return p
 }
 
-func (p *lsoFactory) Start() error {
+func (p *lsoFactory) Start() (err error) {
 	r := &LsoXact{
 		streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()},
 		msg:        p.msg,
@@ -98,15 +100,28 @@ func (p *lsoFactory) Start() error {
 	}
 	r.lastPage = allocLsoEntries()
 	r.stopCh.Init()
-	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, cmn.Timeout.MaxKeepalive() /*hk idle*/)
+	// NOTE: idle timeout vs delayed next-page request
+	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
 	if r.listRemote() {
 		trname := "lso-" + p.UUID()
-		if err := p.newDM(trname, r.recv, 0 /*pdu*/); err != nil {
-			return err
+		dmxtra := bundle.Extra{Multiplier: 1}
+		p.dm, err = bundle.NewDataMover(p.Args.T, trname, r.recv, cmn.OwtPut, dmxtra)
+		if err != nil {
+			return
+		}
+		if err = p.dm.RegRecv(); err != nil {
+			if p.msg.ContinuationToken != "" {
+				err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", p.Args.T,
+					p.msg.UUID, p.msg.ContinuationToken, err)
+			}
+			glog.Error(err)
+			return
 		}
 		p.dm.SetXact(r)
 		p.dm.Open()
+
+		runtime.Gosched()
 	}
 	p.xctn = r
 	return nil
@@ -455,35 +470,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Callback: r.cb, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
-	opts.ValidateCallback = func(fqn string, de fs.DirEntry) error {
-		if de.IsDir() {
-			err := r.walk.wi.processDir(fqn)
-			if err != nil || !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
-				return err
-			}
-
-			ct, err := cluster.NewCTFromFQN(fqn, nil)
-			if err != nil {
-				return nil
-			}
-			relPath := ct.ObjectName()
-			if cmn.ObjHasPrefix(relPath, r.walk.wi.msg.Prefix) {
-				suffix := strings.TrimPrefix(relPath, r.walk.wi.msg.Prefix)
-				if strings.Contains(suffix, "/") {
-					// We are deeper than it is allowed by prefix, skip dir's content
-					return filepath.SkipDir
-				}
-				entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
-				select {
-				case r.walk.pageCh <- entry:
-					/* do nothing */
-				case <-r.walk.stopCh.Listen():
-					return errStopped
-				}
-			}
-		}
-		return nil
-	}
+	opts.ValidateCallback = r.validateCb
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
 			glog.Errorf("%s walk failed, err %v", r, err)
@@ -491,6 +478,36 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	}
 	close(r.walk.pageCh)
 	r.walk.wg.Done()
+}
+
+func (r *LsoXact) validateCb(fqn string, de fs.DirEntry) error {
+	if !de.IsDir() {
+		return nil
+	}
+	err := r.walk.wi.processDir(fqn)
+	if err != nil || !r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
+		return err
+	}
+	ct, err := cluster.NewCTFromFQN(fqn, nil)
+	if err != nil {
+		return nil
+	}
+	relPath := ct.ObjectName()
+	if cmn.ObjHasPrefix(relPath, r.walk.wi.msg.Prefix) {
+		suffix := strings.TrimPrefix(relPath, r.walk.wi.msg.Prefix)
+		if strings.Contains(suffix, "/") {
+			// We are deeper than it is allowed by prefix, skip dir's content
+			return filepath.SkipDir
+		}
+		entry := &cmn.LsoEntry{Name: relPath, Flags: apc.EntryIsDir}
+		select {
+		case r.walk.pageCh <- entry:
+			/* do nothing */
+		case <-r.walk.stopCh.Listen():
+			return errStopped
+		}
+	}
+	return nil
 }
 
 func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
@@ -562,14 +579,9 @@ func (r *LsoXact) Snap() (snap *cluster.Snap) {
 
 func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(r.listRemote())
-	r.IncPending()
-	defer func() {
-		r.DecPending()
-		transport.DrainAndFreeReader(objReader)
-	}()
 
 	if hdr.Opcode == opcodeAbrt {
-		err = errors.New(hdr.ObjName) // see `sendTerm`
+		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
 	}
 	if err != nil && !cos.IsEOF(err) {
 		glog.Error(err)
@@ -578,10 +590,21 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	}
 
 	debug.Assert(hdr.Opcode == 0)
+	r.IncPending()
+	buf, slab := r.p.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+
+	err = r._recv(hdr, objReader, buf)
+
+	slab.Free(buf)
+	r.DecPending()
+	transport.DrainAndFreeReader(objReader)
+	return err
+}
+
+func (r *LsoXact) _recv(hdr transport.ObjHdr, objReader io.Reader, buf []byte) (err error) {
 	var (
-		page      = &cmn.LsoResult{}
-		buf, slab = r.p.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
-		mr        = msgp.NewReaderBuf(objReader, buf)
+		page = &cmn.LsoResult{}
+		mr   = msgp.NewReaderBuf(objReader, buf)
 	)
 	err = page.DecodeMsg(mr)
 	if err == nil {
@@ -594,6 +617,5 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 			hdr.SID, hdr.Bck.Cname(""), string(hdr.Opaque), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 	}
-	slab.Free(buf)
-	return err
+	return
 }

@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -91,7 +91,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 		cloudBck = bck.RemoteBck()
 	)
 	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
-	if verbose {
+	if superVerbose {
 		glog.Infof("[head_bucket] %s (%v)", cloudBck.Name, errC)
 	}
 	if region == "" {
@@ -131,17 +131,16 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 // LIST OBJECTS //
 //////////////////
 
-// NOTE: asking for the remote s3 version might be extremely taxing, performance wise!!!
+// NOTE: obtaining versioning info is extremely slow - to avoid timeouts, imposing a hard limit on the page size
+const versionedPageSize = 20
 
 func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
-		svc      *s3.S3
-		h        = cmn.BackendHelpers.Amazon
-		cloudBck = bck.RemoteBck()
+		svc        *s3.S3
+		h          = cmn.BackendHelpers.Amazon
+		cloudBck   = bck.RemoteBck()
+		versioning bool
 	)
-	if verbose {
-		glog.Infof("list_objects %s", cloudBck.Name)
-	}
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil && verbose {
 		glog.Warning(err)
@@ -154,11 +153,19 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	if msg.ContinuationToken != "" {
 		params.ContinuationToken = aws.String(msg.ContinuationToken)
 	}
+
+	versioning = bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
+	if versioning {
+		msg.PageSize = cos.MinUint(versionedPageSize, msg.PageSize)
+	}
 	params.MaxKeys = aws.Int64(int64(msg.PageSize))
 
 	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
+		if verbose {
+			glog.Infof("list_objects %s: %v", cloudBck.Name, err)
+		}
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
@@ -184,30 +191,24 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	}
 	lst.Entries = lst.Entries[:l]
 
-	if verbose {
-		glog.Infof("[list_objects] count %d", len(lst.Entries))
-	}
 	if *resp.IsTruncated {
 		lst.ContinuationToken = *resp.NextContinuationToken
 	}
 
-	if len(lst.Entries) == 0 {
+	if len(lst.Entries) == 0 || !versioning {
+		if verbose {
+			glog.Infof("[list_objects] count %d", len(lst.Entries))
+		}
 		return
 	}
 
-	// versioning
-	if !bck.Props.Versioning.Enabled {
-		return
-	}
-	if !msg.WantProp(apc.GetPropsVersion) {
-		return
-	}
-	// NOTE: this s3 bucket appears to be versioned and the call to `ListObjectVersions` - is slow.
-	// That is exactly why if user did not explicitly request versioning we simply return (above).
-	// But if they did -
-	// for each already listed object, we set the `ListObjectVersionsInput.Prefix` to the object's
-	// full name and then read its versions looking for the latest.
-	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
+	// [slow path] for each already listed object:
+	// - set the `ListObjectVersionsInput.Prefix` to the object's full name
+	// - get the versions and lookup the latest one
+	var (
+		verParams = &s3.ListObjectVersionsInput{Bucket: aws.String(cloudBck.Name)}
+		num       int
+	)
 	for _, entry := range lst.Entries {
 		verParams.Prefix = aws.String(entry.Name)
 		verResp, err := svc.ListObjectVersions(verParams)
@@ -222,8 +223,12 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 				v, ok := h.EncodeVersion(vers.VersionId)
 				debug.Assert(ok, entry.Name+": "+*(vers.VersionId))
 				entry.Version = v
+				num++
 			}
 		}
+	}
+	if verbose {
+		glog.Infof("[list_objects] count %d/%d", len(lst.Entries), num)
 	}
 	return
 }
@@ -307,7 +312,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 		}
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
@@ -335,7 +340,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 		params.Atime = time.Now()
 	}
 	err = awsp.t.PutObject(lom, params)
-	if verbose {
+	if superVerbose {
 		glog.Infof("[get_object] %s: %v", lom, err)
 	}
 	return
@@ -353,7 +358,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
-	if err != nil && verbose {
+	if err != nil && superVerbose {
 		glog.Warning(err)
 	}
 	obj, err = svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
@@ -411,7 +416,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 	defer cos.Close(r)
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
-	if err != nil && verbose {
+	if err != nil && superVerbose {
 		glog.Warning(err)
 	}
 
@@ -441,7 +446,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 			lom.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[put_object] %s", lom)
 	}
 	return
@@ -468,7 +473,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return

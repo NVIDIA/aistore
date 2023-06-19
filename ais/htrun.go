@@ -1958,21 +1958,29 @@ func ptLatency(tts int64, ptime string) (delta int64) {
 // aisMsg reader & constructors
 //
 
-func (h *htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
+func (*htrun) readAisMsg(w http.ResponseWriter, r *http.Request) (msg *aisMsg, err error) {
 	msg = &aisMsg{}
 	err = cmn.ReadJSON(w, r, msg)
-	if err == nil && cmn.FastV(4, cos.SmoduleAIS) {
-		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
-	}
 	return
 }
 
 func (msg *aisMsg) String() string {
-	s := msg.ActMsg.String()
-	if msg.UUID == "" {
-		return s
+	s := "aism[" + msg.Action
+	if msg.UUID != "" {
+		s += "[" + msg.UUID + "]"
 	}
-	return s + ", uuid=" + msg.UUID
+	if msg.Name != "" {
+		s += ", name=" + msg.Name
+	}
+	return s + "]"
+}
+
+func (msg *aisMsg) StringEx() (s string) {
+	s = msg.String()
+	vs, err := jsoniter.Marshal(msg.Value)
+	debug.AssertNoErr(err)
+	s += ",(" + strings.ReplaceAll(string(vs), ",", ", ") + ")"
+	return
 }
 
 func (h *htrun) newAmsgStr(msgStr string, bmd *bucketMD) *aisMsg {
@@ -1997,12 +2005,9 @@ func (h *htrun) newAmsg(actionMsg *apc.ActMsg, bmd *bucketMD, uuid ...string) *a
 }
 
 // apc.ActMsg c-tor and reader
-func (h *htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActMsg, err error) {
+func (*htrun) readActionMsg(w http.ResponseWriter, r *http.Request) (msg *apc.ActMsg, err error) {
 	msg = &apc.ActMsg{}
 	err = cmn.ReadJSON(w, r, msg)
-	if err == nil && cmn.FastV(4, cos.SmoduleAIS) {
-		glog.InfoDepth(1, h.si.String()+": "+msg.StringEx())
-	}
 	return
 }
 

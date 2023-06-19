@@ -37,6 +37,8 @@ const (
 	_smoduleLast
 )
 
+const maxLevel = 5
+
 // NOTE: keep in-sync
 var Smodules = []string{
 	"transport", "ais", "memsys", "cluster", "fs", "reb", "ec", "stats",
@@ -66,7 +68,7 @@ func (l *LogLevel) Set(level int, sm []string) {
 
 func (l LogLevel) Validate() (err error) {
 	level, modules := l.Parse()
-	if level == 0 || level > 5 || modules > _smoduleLast {
+	if level == 0 || level > maxLevel || modules > _smoduleLast {
 		err = fmt.Errorf(ferl, string(l), level, modules)
 	}
 	return

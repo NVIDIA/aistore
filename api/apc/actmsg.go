@@ -185,12 +185,12 @@ type (
 func (msg *ActMsg) String() string   { return msg._string(false) }
 func (msg *ActMsg) StringEx() string { return msg._string(true) }
 
-func (msg *ActMsg) _string(inclVal bool) string {
-	s := "amsg[" + msg.Action
+func (msg *ActMsg) _string(wval bool) string {
+	s := "actm[" + msg.Action
 	if msg.Name != "" {
 		s += ", name=" + msg.Name
 	}
-	if !inclVal || msg.Value == nil {
+	if !wval || msg.Value == nil {
 		return s + "]"
 	}
 	vs, err := jsoniter.Marshal(msg.Value)

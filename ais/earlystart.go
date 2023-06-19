@@ -502,11 +502,11 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 
 	targetCnt := p.owner.smap.get().CountTargets()
 	if definedTargetCnt {
+		s, pname := cos.Plural(ntargets), p.si.StringEx()
 		if targetCnt >= ntargets {
-			glog.Infof("%s: reached expected %d targets (registered: %d)", p.si.StringEx(), ntargets, targetCnt)
+			glog.Infof("%s: reached expected cluster of %d target%s (registered: %d)", pname, ntargets, s, targetCnt)
 		} else {
-			glog.Warningf("%s: timed out waiting for %d targets (registered: %d)",
-				p.si.StringEx(), ntargets, targetCnt)
+			glog.Warningf("%s: timed out waiting for %d target%s (registered: %d)", pname, ntargets, s, targetCnt)
 		}
 	} else {
 		glog.Infof("%s: registered %d new targets", p.si.StringEx(), targetCnt)

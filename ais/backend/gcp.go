@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -131,7 +131,7 @@ func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 /////////////////
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
-	if verbose {
+	if superVerbose {
 		glog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
@@ -161,9 +161,6 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		h        = cmn.BackendHelpers.Google
 		cloudBck = bck.RemoteBck()
 	)
-	if verbose {
-		glog.Infof("list_objects %s", cloudBck.Name)
-	}
 	msg.PageSize = calcPageSize(msg.PageSize, gcpp.MaxPageSize())
 	if msg.Prefix != "" {
 		query = &storage.Query{Prefix: msg.Prefix}
@@ -175,6 +172,9 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	)
 	nextPageToken, errPage := pager.NextPage(&objs)
 	if errPage != nil {
+		if verbose {
+			glog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
+		}
 		errCode, err = gcpErrorToAISError(errPage, cloudBck)
 		return
 	}
@@ -281,7 +281,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
-	if verbose {
+	if superVerbose {
 		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
@@ -308,7 +308,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if err != nil {
 		return
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -405,7 +405,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int,
 		return
 	}
 	_ = setCustomGs(lom, attrs)
-	if verbose {
+	if superVerbose {
 		glog.Infof("[put_object] %s, size %d", lom, written)
 	}
 	return
@@ -424,7 +424,7 @@ func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[delete_object] %s", lom)
 	}
 	return

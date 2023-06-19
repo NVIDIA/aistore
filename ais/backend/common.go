@@ -15,10 +15,11 @@ import (
 
 type ctx = context.Context // used when omitted for shortness sake
 
-var verbose bool
+var verbose, superVerbose bool
 
 func Init(config *cmn.Config) {
 	verbose = config.FastV(4, cos.SmoduleBackend)
+	superVerbose = config.FastV(5, cos.SmoduleBackend)
 }
 
 func wrapReader(ctx context.Context, r io.ReadCloser) io.ReadCloser {

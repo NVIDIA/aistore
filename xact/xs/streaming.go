@@ -154,9 +154,7 @@ func (r *streamingX) fin(err error, unreg bool) error {
 		err = r.AbortErr()
 	}
 	if err == nil {
-		if err = r.err.Err(); err != nil {
-			err = cmn.NewErrAborted(r.Name(), "streaming-fin", err)
-		}
+		err = r.err.Err()
 	}
 	r.p.dm.Close(err)
 	r.Finish(err)

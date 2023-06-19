@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -341,7 +341,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
 		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -368,7 +368,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if err != nil {
 		return
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[get_object] %s", lom)
 	}
 	return
@@ -481,7 +481,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (int, error) 
 		lom.SetCustomKey(cmn.ETag, v) // NOTE: using ETag as version
 		lom.SetVersion(v)
 	}
-	if verbose {
+	if superVerbose {
 		glog.Infof("[put_object] %s", lom)
 	}
 	return http.StatusOK, nil

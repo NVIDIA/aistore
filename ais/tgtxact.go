@@ -100,6 +100,9 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
+		glog.Infof("%s %s", msg.Action, xargs.String())
+	}
 	switch msg.Action {
 	case apc.ActXactStart:
 		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())

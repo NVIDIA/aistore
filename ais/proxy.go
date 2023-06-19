@@ -639,7 +639,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
@@ -710,7 +710,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 			return
 		}
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -744,7 +744,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -962,7 +962,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if err := p.pready(smap); err != nil {
-				if cmn.FastV(4, cos.SmoduleAIS) {
+				if cmn.FastV(5, cos.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
@@ -1405,8 +1405,7 @@ func crerrStatus(err error) (errCode int) {
 	return
 }
 
-func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg,
-	lsmsg *apc.LsoMsg, beg int64) {
+func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, beg int64) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
@@ -1429,6 +1428,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	var (
+		nl                         nl.Listener
 		err                        error
 		tsi                        *meta.Snode
 		lst                        *cmn.LsoResult
@@ -1444,7 +1444,6 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		p.writeErr(w, r, err)
 		return
 	}
-	var nl nl.Listener
 	if newls {
 		if wantOnlyRemote {
 			nl = xact.NewXactNL(lsmsg.UUID, apc.ActList, &smap.Smap, meta.NodeMap{tsi.ID(): tsi}, bck.Bucket())
@@ -1474,7 +1473,21 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 			p.writeErr(w, r, err, http.StatusNotImplemented)
 			return
 		}
+		// verbose log
+		config := cmn.GCO.Get()
+		if config.FastV(4, cos.SmoduleAIS) {
+			var s string
+			if lsmsg.ContinuationToken != "" {
+				s = " cont=" + lsmsg.ContinuationToken
+			}
+			if lsmsg.SID != "" {
+				s += " via " + tsi.StringEx()
+			}
+			glog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
+		}
+
 		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, wantOnlyRemote)
+
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
 		// cached objects. This isn't easy as we basically need to start a new
@@ -1496,7 +1509,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		return
 	}
 
-	// Free memory allocated for temporary slice immediately as it can take up to a few GB
+	// Free the memory allocated for temp slice as it can take up to a few GBs
 	lst.Entries = lst.Entries[:0]
 	lst.Entries = nil
 	lst = nil
@@ -1508,8 +1521,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 }
 
 // list-objects flow control helper
-func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta.Snode, listRemote, wantOnlyRemote bool,
-	err error) {
+func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta.Snode, listRemote, wantOnlyRemote bool, err error) {
 	listRemote = bck.IsRemote() && !lsmsg.IsFlagSet(apc.LsObjCached)
 	if !listRemote {
 		return
@@ -1521,6 +1533,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
 			err = &errNodeNotFound{lsotag + " failure", lsmsg.SID, p.si, smap}
+			glog.Error(err)
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err
@@ -1533,7 +1546,6 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		}
 		return
 	}
-
 	if tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap); err == nil {
 		lsmsg.SID = tsi.ID()
 	}
@@ -1792,7 +1804,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -1820,7 +1832,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -1871,11 +1883,11 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		primary.url = smap.Primary.PubNet.URL
 		uparsed, err := url.Parse(smap.Primary.PubNet.URL)
 		cos.AssertNoErr(err)
-		cfg := cmn.GCO.Get()
+		config := cmn.GCO.Get()
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
 		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
+			UseHTTPS:   config.Net.HTTP.UseHTTPS,
+			SkipVerify: config.Net.HTTP.SkipVerify,
 		})
 		primary.rp.ErrorHandler = p.rpErrHandler
 	}
@@ -1889,7 +1901,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // Directly setting `Content-Length` header.
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
 			glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
@@ -2254,7 +2266,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
 	}
 
@@ -2901,7 +2913,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.FastV(5, cos.SmoduleAIS) {
 		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {

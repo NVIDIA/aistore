@@ -197,7 +197,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		// xaction in-objs counters, promote first
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
-	if poi.config.FastV(4, cos.SmoduleAIS) {
+	if poi.config.FastV(5, cos.SmoduleAIS) {
 		glog.Infoln(poi.loghdr())
 	}
 	return
