@@ -4,6 +4,7 @@
 import unittest
 from pathlib import Path
 
+import time
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -313,11 +314,10 @@ class TestBucketOps(RemoteEnabledTest):
             summ_test_bck.summary()
 
     def test_info(self):
-        # Create a new bucket in the setup method
         info_test_bck = self._create_bucket("info-test")
 
         # Initially, the bucket should be empty
-        bck_props, bck_summ = info_test_bck.info(flt_presence=0)
+        _, bck_summ = info_test_bck.info(flt_presence=0)
 
         # For an empty bucket, the object count and total size should be zero
         self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "0")
@@ -329,8 +329,21 @@ class TestBucketOps(RemoteEnabledTest):
         # Upload an object to the bucket
         info_test_bck.object("test-object").put_content("test-content")
 
-        # Now that the bucket has one object, let's call the info method again
-        bck_props, bck_summ = info_test_bck.info(flt_presence=0)
+        # Sleep and request frequency in sec (starts at 100 ms)
+        sleep_time = 0.1
+        max_retry_time = 2  # 2 seconds
+
+        while sleep_time < max_retry_time:
+            _, bck_summ = info_test_bck.info(flt_presence=0)
+
+            if bck_summ["ObjCount"]["obj_count_present"] == "1":
+                break
+
+            # If the object count is not updated, wait for some time and try again
+            time.sleep(sleep_time)
+            sleep_time = min(
+                2, sleep_time * 1.5
+            )  # Increase sleep_time by 50%, but don't exceed 2 seconds
 
         # Now we should have one object and non-zero size
         self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "1")
