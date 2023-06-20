@@ -34,18 +34,20 @@ type (
 	// Stores Query and Headers for providing arguments that are not used commonly in API requests
 	//  See also: cmn.HreqArgs
 	ReqParams struct {
-		Query  url.Values
-		Header http.Header
-
+		Query      url.Values
+		Header     http.Header
 		BaseParams BaseParams
-
-		Path string
+		Path       string
 
 		// Authentication
 		User     string
 		Password string
 
+		// amsg, lsmsg etc.
 		Body []byte
+
+		// mem-pool (when cos.HdrContentType = cos.ContentMsgPack)
+		buf []byte
 	}
 )
 
@@ -93,27 +95,6 @@ func GetWhatRawQuery(getWhat, getProps string) string {
 		q.Add(apc.QparamProps, getProps)
 	}
 	return q.Encode()
-}
-
-///////////////
-// ReqParams //
-///////////////
-
-var (
-	reqParamPool sync.Pool
-	reqParams0   ReqParams
-)
-
-func AllocRp() *ReqParams {
-	if v := reqParamPool.Get(); v != nil {
-		return v.(*ReqParams)
-	}
-	return &ReqParams{}
-}
-
-func FreeRp(reqParams *ReqParams) {
-	*reqParams = reqParams0
-	reqParamPool.Put(reqParams)
 }
 
 //
@@ -254,25 +235,23 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 // check, read, write, validate http.Response ----------------------------------------------
 //
 
-func (reqParams *ReqParams) readAny(resp *http.Response, out any) error {
+func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 	debug.Assert(out != nil)
-	if err := reqParams.checkResp(resp); err != nil {
-		return err
+	if err = reqParams.checkResp(resp); err != nil || resp.StatusCode != http.StatusOK {
+		return
 	}
-	if resp.StatusCode == http.StatusOK {
-		if err := decodeResp(resp, out); err != nil {
-			return fmt.Errorf("failed to decode response: %v -> %T", err, out)
-		}
-	}
-	return nil
-}
-
-func decodeResp(resp *http.Response, out any) error {
+	// decode response
 	if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
-		r := msgp.NewReaderSize(resp.Body, 10*cos.KiB)
-		return out.(msgp.Decodable).DecodeMsg(r)
+		debug.Assert(cap(reqParams.buf) > cos.KiB) // caller must allocate
+		r := msgp.NewReaderBuf(resp.Body, reqParams.buf)
+		err = out.(msgp.Decodable).DecodeMsg(r)
+	} else {
+		err = jsoniter.NewDecoder(resp.Body).Decode(out)
 	}
-	return jsoniter.NewDecoder(resp.Body).Decode(out)
+	if err != nil {
+		err = fmt.Errorf("failed to decode response: %v -> %T", err, out)
+	}
+	return
 }
 
 func (reqParams *ReqParams) readStr(resp *http.Response, out *string) error {
@@ -374,3 +353,37 @@ func (rr *reqResp) call() (status int, err error) {
 	}
 	return
 }
+
+//
+// mem-pools
+//
+
+var (
+	reqParamPool sync.Pool
+	reqParams0   ReqParams
+
+	msgpPool sync.Pool
+)
+
+func AllocRp() *ReqParams {
+	if v := reqParamPool.Get(); v != nil {
+		return v.(*ReqParams)
+	}
+	return &ReqParams{}
+}
+
+func FreeRp(reqParams *ReqParams) {
+	*reqParams = reqParams0
+	reqParamPool.Put(reqParams)
+}
+
+func allocMbuf() (buf []byte) {
+	if v := msgpPool.Get(); v != nil {
+		buf = *(v.(*[]byte))
+	} else {
+		buf = make([]byte, msgpBufSize)
+	}
+	return
+}
+
+func freeMbuf(buf []byte) { msgpPool.Put(&buf) }
