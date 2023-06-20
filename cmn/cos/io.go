@@ -19,6 +19,15 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
+// POSIX permissions
+const (
+	PermRWR   os.FileMode = 0o640
+	PermRWRR  os.FileMode = 0o644 // (archived)
+	PermRWXRX os.FileMode = 0o750
+
+	configDirMode = PermRWXRX | os.ModeDir
+)
+
 const ContentLengthUnknown = -1
 
 // readers

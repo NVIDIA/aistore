@@ -22,15 +22,6 @@ import (
 
 const MLCG32 = 1103515245 // xxhash seed
 
-// POSIX permissions
-const (
-	PermRWR   os.FileMode = 0o640
-	PermRWRR  os.FileMode = 0o644 // (archived)
-	PermRWXRX os.FileMode = 0o750
-
-	configDirMode = PermRWXRX | os.ModeDir
-)
-
 type (
 	StrSet map[string]struct{}
 	StrKVs map[string]string

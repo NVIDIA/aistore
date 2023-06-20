@@ -51,7 +51,7 @@ var (
 
 var FileHeaderCB func() string
 
-var onceLogDirs sync.Once
+var onceInitFiles sync.Once
 
 func init() {
 	pid = os.Getpid()
@@ -76,6 +76,16 @@ func InitFlags(flset *flag.FlagSet) {
 	flset.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
 }
 
+func initFiles() {
+	if logDir != "" {
+		logDirs = append(logDirs, logDir)
+	}
+	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
+	if err := logging.createFiles(errorLog); err != nil {
+		panic(err)
+	}
+}
+
 func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }
 
 func shortProgram() (prog string) {
@@ -89,13 +99,6 @@ func shortProgram() (prog string) {
 func InfoLogName() string { return shortProgram() + ".INFO" }
 func WarnLogName() string { return shortProgram() + ".WARNING" }
 func ErrLogName() string  { return shortProgram() + ".ERROR" }
-
-func appendLogDirs() {
-	if logDir != "" {
-		logDirs = append(logDirs, logDir)
-	}
-	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
-}
 
 // shortHostname returns its argument, truncating at the first period.
 // For instance, given "www.google.com" it returns "www".
@@ -139,9 +142,8 @@ func logName(tag string, t time.Time) (name, link string) {
 // successfully, create also attempts to update the symlink for that tag, ignoring
 // errors.
 func create(tag string, t time.Time) (f *os.File, filename string, err error) {
-	onceLogDirs.Do(appendLogDirs)
 	if len(logDirs) == 0 {
-		return nil, "", errors.New("log: no log dirs")
+		return nil, "", errors.New("no log dirs")
 	}
 	name, link := logName(tag, t)
 	var lastErr error
@@ -152,7 +154,7 @@ func create(tag string, t time.Time) (f *os.File, filename string, err error) {
 		}
 
 		fname := filepath.Join(dir, name)
-		f, err := os.Create(fname)
+		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
 		if err != nil {
 			lastErr = err
 			continue
@@ -162,5 +164,5 @@ func create(tag string, t time.Time) (f *os.File, filename string, err error) {
 		os.Symlink(name, symlink) // ignore err
 		return f, fname, nil
 	}
-	return nil, "", fmt.Errorf("log: cannot create log: %v", lastErr)
+	return nil, "", fmt.Errorf("cannot create log: %v", lastErr)
 }

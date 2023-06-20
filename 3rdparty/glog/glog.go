@@ -14,56 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package glog implements logging analogous to the Google-internal C++ INFO/ERROR/V setup.
-// It provides functions Info, Warning, Error, Fatal, plus formatting variants such as
-// Infof. It also provides V-style logging controlled by the -v and -vmodule=file=2 flags.
-//
-// Basic examples:
-//
-//	glog.Info("Prepare to repel boarders")
-//
-//	glog.Fatalf("Initialization failed: %s", err)
-//
-// See the documentation for the V function for an explanation of these examples:
-//
-//	if glog.V(2) {
-//		glog.Info("Starting transaction...")
-//	}
-//
-//	glog.V(2).Infoln("Processed", nItems, "elements")
-//
-// Log output is buffered and written periodically using Flush. Programs
-// should call Flush before exiting to guarantee all log output is written.
-//
-// By default, all log statements write to files in a temporary directory.
-// This package provides several flags that modify this behavior.
-// As a result, flag.Parse must be called before any logging is done.
-//
-//	-logtostderr=false
-//		Logs are written to standard error instead of to files.
-//	-alsologtostderr=false
-//		Logs are written to standard error as well as to files.
-//	-stderrthreshold=ERROR
-//		Log events at or above this severity are logged to standard
-//		error as well as to files.
-//
-//	Other flags provide aids to debugging.
-//
-//	-log_backtrace_at=""
-//		When set to a file and line number holding a logging statement,
-//		such as
-//			-log_backtrace_at=gopherflakes.go:234
-//		a stack trace will be written to the Info log whenever execution
-//		hits that statement. (Unlike with -vmodule, the ".go" must be
-//		present.)
-//	-v=0
-//		Enable V-leveled logging at the specified level.
-//	-vmodule=""
-//		The syntax of the argument is a comma-separated list of pattern=N,
-//		where pattern is a literal file name (minus the ".go" suffix) or
-//		"glob" pattern and N is a V level. For instance,
-//			-vmodule=gopher*=3
-//		sets the V level to 3 in all Go files whose names begin "gopher".
 package glog
 
 import (
@@ -173,16 +123,8 @@ var (
 	timeNow = time.Now // Stubbed out for testing.
 )
 
-var (
-	// logExitFunc provides a simple mechanism to override the default behavior
-	// of exiting on error. Used in testing and to guarantee we reach a required exit
-	// for fatal logs. Instead, exit could be a function rather than a method but that
-	// would make its use clumsier.
-	logExitFunc func(error)
-
-	// interface guard
-	_ flushSyncWriter = (*syncBuffer)(nil)
-)
+// interface guard
+var _ flushSyncWriter = (*syncBuffer)(nil)
 
 // Flush flushes all pending log I/O.
 func Flush() {
@@ -358,6 +300,8 @@ func (l *loggingT) printf(s severity, format string, args ...any) {
 
 // output writes the data to the log files and releases the buffer.
 func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
+	onceInitFiles.Do(initFiles)
+
 	data := buf.Bytes()
 	switch {
 	case !flag.Parsed():
@@ -370,40 +314,17 @@ func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 			os.Stderr.Write(data)
 		}
 		l.mu.Lock()
-		if l.file[s] == nil {
-			if err := l.createFiles(s); err != nil {
-				os.Stderr.Write(data) // Make sure the message appears somewhere.
-				l.exit(err)
-			}
-		}
 		switch s {
 		case errorLog, warningLog:
-			if l.file[errorLog] != nil {
-				l.file[errorLog].Write(data)
-			}
-			fallthrough
+			l.file[errorLog].Write(data)
+			l.file[infoLog].Write(data)
 		case infoLog:
-			if l.file[infoLog] != nil {
-				l.file[infoLog].Write(data)
-			}
+			l.file[infoLog].Write(data)
 		}
 		l.mu.Unlock()
 	}
 	// free buf
 	l.putBuffer(buf)
-}
-
-// exit is called if there is trouble creating or writing log files.
-// l.mu is held.
-func (*loggingT) exit(err error) {
-	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
-	if logExitFunc != nil {
-		logExitFunc(err)
-	}
-
-	// Originally, glog calls os.Exit(2) here. However for the sake of resilience,
-	// we don't want glog to kill a ais process only is there is trouble creating
-	// or writing log files.
 }
 
 func (sb *syncBuffer) Sync() error {
@@ -413,35 +334,33 @@ func (sb *syncBuffer) Sync() error {
 func (sb *syncBuffer) Write(p []byte) (n int, err error) {
 	if sb.nbytes+uint64(len(p)) >= MaxSize {
 		if err := sb.rotateFile(time.Now()); err != nil {
-			sb.logger.exit(err)
+			os.Stderr.WriteString(err.Error())
 		}
 	}
 	n, err = sb.Writer.Write(p)
 	sb.nbytes += uint64(n)
 	if err != nil {
-		sb.logger.exit(err)
+		os.Stderr.WriteString(err.Error())
 	}
 	return
 }
 
 // rotateFile closes the syncBuffer's file and starts a new one.
-func (sb *syncBuffer) rotateFile(now time.Time) error {
+func (sb *syncBuffer) rotateFile(now time.Time) (err error) {
 	if sb.file != nil {
 		sb.Flush()
 		sb.file.Close()
 	}
-	var err error
-	sb.file, _, err = create(severityName[sb.sev], now)
-	sb.nbytes = 0
-	if err != nil {
-		return err
+	if sb.file, _, err = create(severityName[sb.sev], now); err != nil {
+		return
 	}
-
+	sb.nbytes = 0
 	sb.Writer = bufio.NewWriterSize(sb.file, bufferSize)
 
 	// Write header.
 	var (
 		buf  bytes.Buffer
+		n    int
 		x    = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		snow = now.Format("2006/01/02 15:04:05")
 	)
@@ -451,9 +370,9 @@ func (sb *syncBuffer) rotateFile(now time.Time) error {
 		fmt.Fprintf(&buf, "Created at %s, %s", snow, x)
 		fmt.Fprint(&buf, FileHeaderCB())
 	}
-	n, err := sb.file.Write(buf.Bytes())
+	n, err = sb.file.Write(buf.Bytes())
 	sb.nbytes += uint64(n)
-	return err
+	return
 }
 
 // bufferSize sizes the buffer associated with each log file. It's large
