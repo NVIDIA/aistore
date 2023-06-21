@@ -292,19 +292,35 @@ class TestBucketOps(RemoteEnabledTest):
             self.assertTrue(obj.size > 0)
 
     def test_summary(self):
-        # Create a new bucket
         summ_test_bck = self._create_bucket("summary-test")
 
         # Initially, the bucket should be empty
         bucket_summary = summ_test_bck.summary()
+
         self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "0")
         self.assertEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
         self.assertEqual(bucket_summary["TotalSize"]["size_all_remote_objs"], "0")
         self.assertEqual(bucket_summary["used_pct"], 0)
 
         summ_test_bck.object("test-object").put_content("test-content")
+
+        # Sleep and request frequency in sec (starts at 100 ms)
+        sleep_time = 0.1
+        max_retry_time = 2  # 2 seconds
+
+        while sleep_time < max_retry_time:
+            bucket_summary = summ_test_bck.summary()
+
+            if bucket_summary["ObjCount"]["obj_count_present"] == "1":
+                break
+
+            # If the object count is not updated, wait for some time and try again
+            time.sleep(sleep_time)
+            sleep_time = min(
+                2, sleep_time * 1.5
+            )  # Increase sleep_time by 50%, but don't exceed 2 seconds
+
         # Now, the bucket should have 1 object
-        bucket_summary = summ_test_bck.summary()
         self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "1")
         self.assertNotEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
 
