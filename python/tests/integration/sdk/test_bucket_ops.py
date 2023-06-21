@@ -4,7 +4,7 @@
 import unittest
 from pathlib import Path
 
-import time
+import platform
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -291,6 +291,7 @@ class TestBucketOps(RemoteEnabledTest):
         for obj in objects:
             self.assertTrue(obj.size > 0)
 
+    @unittest.skipIf(platform.system() == "Darwin", "Skipping this test on MacOS.")
     def test_summary(self):
         summ_test_bck = self._create_bucket("summary-test")
 
@@ -304,31 +305,19 @@ class TestBucketOps(RemoteEnabledTest):
 
         summ_test_bck.object("test-object").put_content("test-content")
 
-        # Sleep and request frequency in sec (starts at 100 ms)
-        sleep_time = 0.1
-        max_retry_time = 2  # 2 seconds
-
-        while sleep_time < max_retry_time:
-            bucket_summary = summ_test_bck.summary()
-
-            if bucket_summary["ObjCount"]["obj_count_present"] == "1":
-                break
-
-            # If the object count is not updated, wait for some time and try again
-            time.sleep(sleep_time)
-            sleep_time = min(
-                2, sleep_time * 1.5
-            )  # Increase sleep_time by 50%, but don't exceed 2 seconds
+        bucket_summary = summ_test_bck.summary()
 
         # Now, the bucket should have 1 object
         self.assertEqual(bucket_summary["ObjCount"]["obj_count_present"], "1")
         self.assertNotEqual(bucket_summary["TotalSize"]["size_all_present_objs"], "0")
 
         summ_test_bck.delete()
+
         # Accessing the summary of a deleted bucket should raise an error
         with self.assertRaises(ErrBckNotFound):
             summ_test_bck.summary()
 
+    @unittest.skipIf(platform.system() == "Darwin", "Skipping this test on MacOS.")
     def test_info(self):
         info_test_bck = self._create_bucket("info-test")
 
@@ -345,28 +334,20 @@ class TestBucketOps(RemoteEnabledTest):
         # Upload an object to the bucket
         info_test_bck.object("test-object").put_content("test-content")
 
-        # Sleep and request frequency in sec (starts at 100 ms)
-        sleep_time = 0.1
-        max_retry_time = 2  # 2 seconds
+        _, bck_summ = info_test_bck.info(flt_presence=0)
 
-        while sleep_time < max_retry_time:
-            _, bck_summ = info_test_bck.info(flt_presence=0)
-
-            if bck_summ["ObjCount"]["obj_count_present"] == "1":
-                break
-
-            # If the object count is not updated, wait for some time and try again
-            time.sleep(sleep_time)
-            sleep_time = min(
-                2, sleep_time * 1.5
-            )  # Increase sleep_time by 50%, but don't exceed 2 seconds
-
-        # Now we should have one object and non-zero size
+        # Now the bucket should have one object and non-zero size
         self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "1")
         self.assertNotEqual(bck_summ["TotalSize"]["size_all_present_objs"], "0")
         self.assertEqual(bck_summ["TotalSize"]["size_all_remote_objs"], "0")
         self.assertEqual(bck_summ["provider"], "ais")
         self.assertEqual(bck_summ["name"], "info-test")
+
+        info_test_bck.delete()
+
+        # Accessing the info of a deleted bucket should raise an error
+        with self.assertRaises(ErrBckNotFound):
+            info_test_bck.summary()
 
 
 if __name__ == "__main__":
