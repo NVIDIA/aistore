@@ -51,6 +51,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 
 	r.core.initMetricClient(p.Snode(), &r.statsRunner)
 
+	r.sorted = make([]string, 0, 24)
 	return &r.statsRunner.startedUp
 }
 
@@ -64,12 +65,16 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	s.promLock()
 	idle := s.copyT(r.ctracker)
 	s.promUnlock()
+
 	if now >= r.next || !idle {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
-		r.ctracker.write(s.sgl, false /*target*/)
+		r.ctracker.write(s.sgl, r.sorted, false /*target*/, idle)
 		if s.sgl.Len() > 3 { // skip '{}'
-			bytes := s.sgl.Bytes()
-			glog.Infoln(string(bytes))
+			line := string(s.sgl.Bytes())
+			if line != r.prev {
+				glog.Infoln(line)
+				r.prev = line
+			}
 		}
 		if idle {
 			r.next = now + maxStatsLogInterval

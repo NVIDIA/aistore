@@ -142,7 +142,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 			return
 		}
 		if r.config.FastV(5, cos.SmoduleXs) {
-			glog.Infof("%s: begin%s %s", s, r.Base.Name(), msg.Cname())
+			glog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
 		}
 
 		// construct format-specific writer; serialize for multi-target conc. writing

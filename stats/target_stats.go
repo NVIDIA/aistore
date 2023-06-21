@@ -132,6 +132,8 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
 
 	r.core.initMetricClient(t.Snode(), &r.statsRunner)
+
+	r.sorted = make([]string, 0, 48)
 	return &r.statsRunner.startedUp
 }
 
@@ -271,10 +273,13 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	if now >= r.next || !idle {
 		s.sgl.Reset() // sharing w/ CoreStats.copyT
-		r.ctracker.write(s.sgl, true /*target*/)
+		r.ctracker.write(s.sgl, r.sorted, true /*target*/, idle)
 		if s.sgl.Len() > 3 { // skip '{}'
-			bytes := s.sgl.Bytes()
-			r.lines = append(r.lines, string(bytes))
+			line := string(s.sgl.Bytes())
+			if line != r.prev {
+				r.lines = append(r.lines, line)
+				r.prev = line
+			}
 		}
 		if idle {
 			r.next = now + maxStatsLogInterval

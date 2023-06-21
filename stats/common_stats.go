@@ -138,7 +138,9 @@ type (
 		ticker    *time.Ticker
 		core      *coreStats
 		ctracker  copyTracker // to avoid making it at runtime
+		sorted    []string    // sorted names
 		name      string      // this stats-runner's name
+		prev      string      // prev ctracker.write
 		next      int64       // mono.NanoTime()
 		startedUp atomic.Bool
 	}
@@ -567,13 +569,21 @@ func (v *copyValue) UnmarshalJSON(b []byte) error      { return jsoniter.Unmarsh
 /////////////////
 
 // serialize itself (slightly more efficiently than JSON)
-func (ctracker copyTracker) write(sgl *memsys.SGL, target bool) {
+func (ctracker copyTracker) write(sgl *memsys.SGL, sorted []string, target, idle bool) {
 	var (
 		next  bool
 		disks bool // whether to write target disk metrics
 	)
+	if len(sorted) == 0 {
+		for n := range ctracker {
+			sorted = append(sorted, n)
+		}
+		sort.Strings(sorted)
+	}
 	sgl.WriteByte('{')
-	for n, v := range ctracker {
+	for _, n := range sorted {
+		v := ctracker[n]
+		// exclude
 		if v.Value == 0 || n == Uptime { // always skip zeros and uptime
 			continue
 		}
@@ -583,6 +593,10 @@ func (ctracker copyTracker) write(sgl *memsys.SGL, target bool) {
 			}
 			continue
 		}
+		if idle && n == KeepAliveLatency {
+			continue
+		}
+		// add
 		if next {
 			sgl.WriteByte(',')
 		}
