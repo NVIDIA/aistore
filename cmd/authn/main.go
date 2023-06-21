@@ -38,7 +38,7 @@ func init() {
 
 func glogFlush() {
 	for {
-		time.Sleep(30 * time.Second)
+		time.Sleep(time.Minute) // TODO: must be configurable
 		glog.Flush()
 	}
 }
@@ -98,6 +98,8 @@ func main() {
 
 	srv := newServer(mgr)
 	err = srv.Run()
+
+	glog.FlushExit()
 	cos.Close(mgr.db)
 	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)

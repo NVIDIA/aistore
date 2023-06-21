@@ -17,21 +17,22 @@
 package glog
 
 import (
-	"bufio"
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 )
 
-// These constants identify the log levels in order of increasing severity.
-// A message written to a high-severity log file is also written to each
-// lower-severity log file.
+type severity int32
+
 const (
 	infoLog severity = iota
 	warningLog
@@ -39,106 +40,216 @@ const (
 	numSeverity = 3
 )
 
-const recycleBufMaxSize = 1024
-
-const severityChar = "IWE"
-
-// severity identifies the sort of log: info, warning etc. It also implements
-// the flag.Value interface. The -stderrthreshold flag is of type severity and
-// should be modified only through the flag.Value interface. The values match
-// the corresponding constants in C++.
-type (
-	severity int32 // sync/atomic int32
-
-	// flushSyncWriter is the interface satisfied by logging destinations.
-	flushSyncWriter interface {
-		Flush() error
-		Sync() error
-		io.Writer
-	}
+const (
+	freeListBufMaxSize = 1024
+	severityChar       = "IWE"
+	digits             = "0123456789"
 )
 
-// loggingT collects all the global state of the logging setup.
-type loggingT struct {
-	// freeList is a list of byte buffers, maintained under freeListMu.
-	freeList *buffer
-
-	// file holds writer for each of the log types.
-	file [numSeverity]flushSyncWriter
-
-	// Boolean flags.
-	toStderr     bool // The -logtostderr flag.
-	alsoToStderr bool // The -alsologtostderr flag.
-
-	// freeListMu maintains the free list. It is separate from the main mutex
-	// so buffers can be grabbed and printed to without holding the main lock,
-	// for better parallelization.
-	freeListMu sync.Mutex
-
-	// mu protects the remaining elements of this structure and is
-	// used to synchronize logging.
-	mu sync.Mutex
-}
-
 type (
-	// buffer holds a byte Buffer for reuse. The zero value is ready for use.
+	flushSyncWriter interface {
+		flush(waitPrev bool)
+		flushExit()
+		io.Writer
+	}
+	loggingT struct {
+		freeList     *buffer
+		file         [numSeverity]flushSyncWriter
+		toStderr     bool
+		alsoToStderr bool
+		mu           sync.Mutex
+	}
 	buffer struct {
 		bytes.Buffer
-		tmp  [64]byte // temporary byte array for creating headers.
+		tmp  [64]byte // for headers
 		next *buffer
 	}
-
-	// syncBuffer joins a bufio.Writer to its underlying file, providing access to the
-	// file's Sync method and providing a wrapper for the Write method that provides log
-	// file rotation. There are conflicting methods, so the file cannot be embedded.
-	// l.mu is held for all its methods.
-	syncBuffer struct {
-		*bufio.Writer
-		logger *loggingT
-		file   *os.File
-		nbytes uint64 // The number of bytes written to this file
-		sev    severity
-	}
-
-	// Verbose is a boolean type that implements Infof (like Printf) etc.
-	// See the documentation of V for more information.
-	Verbose bool
 )
 
 var (
+	MaxSize int64 = 4 * 1024 * 1024
+
 	severityName = []string{
 		infoLog:  "INFO",
 		errorLog: "ERROR",
 	}
-
 	// assorted filenames (and their line numbers) that we don't want to clutter the logs
 	redactFnames = map[string]int{
 		"target_stats.go": 0,
 		"proxy_stats.go":  0,
 		"common_stats.go": 0,
 	}
-
 	logging loggingT
 
-	timeNow = time.Now // Stubbed out for testing.
+	logDirs  []string
+	logDir   string
+	pid      int
+	program  string
+	aisrole  string
+	host     = "unknownhost"
+	userName = "unknownuser"
+
+	FileHeaderCB func() string
+
+	onceInitFiles sync.Once
 )
 
-// interface guard
-var _ flushSyncWriter = (*syncBuffer)(nil)
+func init() {
+	pid = os.Getpid()
+	program = filepath.Base(os.Args[0])
 
-// Flush flushes all pending log I/O.
-func Flush() {
-	logging.lockAndFlushAll()
+	h, err := os.Hostname()
+	if err == nil {
+		host = shortHostname(h)
+	}
+
+	current, err := user.Current()
+	if err == nil {
+		userName = current.Username
+	}
+
+	// Sanitize userName since it may contain filepath separators on Windows.
+	userName = strings.ReplaceAll(userName, `\`, "_")
 }
 
-// getBuffer returns a new, ready-to-use buffer.
+func InitFlags(flset *flag.FlagSet) {
+	flset.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
+	flset.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
+}
+
+func initFiles() {
+	if logDir != "" {
+		logDirs = append(logDirs, logDir)
+	}
+	logDirs = append(logDirs, filepath.Join(os.TempDir(), "aislogs"))
+	if err := logging.fcreateAll(errorLog); err != nil {
+		panic(err)
+	}
+}
+
+func Info(args ...any)                    { logging.print(infoLog, args...) }
+func InfoDepth(depth int, args ...any)    { logging.printDepth(infoLog, depth, args...) }
+func Infoln(args ...any)                  { logging.println(infoLog, args...) }
+func Infof(format string, args ...any)    { logging.printf(infoLog, format, args...) }
+func Warning(args ...any)                 { logging.print(warningLog, args...) }
+func WarningDepth(depth int, args ...any) { logging.printDepth(warningLog, depth, args...) }
+func Warningln(args ...any)               { logging.println(warningLog, args...) }
+func Warningf(format string, args ...any) { logging.printf(warningLog, format, args...) }
+func Error(args ...any)                   { logging.print(errorLog, args...) }
+func ErrorDepth(depth int, args ...any)   { logging.printDepth(errorLog, depth, args...) }
+func Errorln(args ...any)                 { logging.println(errorLog, args...) }
+func Errorf(format string, args ...any)   { logging.printf(errorLog, format, args...) }
+
+func SetLogDirRole(dir, role string) { logDir, aisrole = dir, role }
+
+func shortProgram() (prog string) {
+	prog = program
+	if prog == "aisnode" && aisrole != "" {
+		prog = "ais" + aisrole
+	}
+	return
+}
+
+func InfoLogName() string { return shortProgram() + ".INFO" }
+func WarnLogName() string { return shortProgram() + ".WARNING" }
+func ErrLogName() string  { return shortProgram() + ".ERROR" }
+
+func shortHostname(hostname string) string {
+	if i := strings.Index(hostname, "."); i >= 0 {
+		return hostname[:i]
+	}
+	if len(hostname) < 16 || strings.IndexByte(hostname, '-') < 0 {
+		return hostname
+	}
+	// shorten even more (e.g. "runner-r9rhlq8--project-4149-concurrent-0")
+	parts := strings.Split(hostname, "-")
+	if len(parts) < 2 {
+		return hostname
+	}
+	if parts[1] != "" || len(parts) == 2 {
+		return parts[0] + "-" + parts[1]
+	}
+	return parts[0] + "-" + parts[2]
+}
+
+func logName(tag string, t time.Time) (name, link string) {
+	prog := shortProgram()
+	name = fmt.Sprintf("%s.%s.%s.%02d%02d-%02d%02d%02d.%d",
+		prog,
+		host,
+		tag,
+		t.Month(),
+		t.Day(),
+		t.Hour(),
+		t.Minute(),
+		t.Second(),
+		pid)
+	return name, prog + "." + tag
+}
+
+func fcreate(tag string, t time.Time) (f *os.File, filename string, err error) {
+	if len(logDirs) == 0 {
+		return nil, "", errors.New("no log dirs")
+	}
+	name, link := logName(tag, t)
+	var lastErr error
+	for _, dir := range logDirs {
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			lastErr = nil
+			continue
+		}
+
+		fname := filepath.Join(dir, name)
+		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0o640)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		symlink := filepath.Join(dir, link)
+		os.Remove(symlink)        // ignore err
+		os.Symlink(name, symlink) // ignore err
+		return f, fname, nil
+	}
+	return nil, "", fmt.Errorf("cannot create log: %v", lastErr)
+}
+
+func Flush() {
+	l := &logging
+	l.file[errorLog].flush(false)
+	l.file[infoLog].flush(false)
+}
+
+func FlushExit() {
+	l := &logging
+	l.file[errorLog].flushExit()
+	l.file[infoLog].flushExit()
+}
+
+//////////////
+// loggingT //
+//////////////
+
+func (l *loggingT) fcreateAll(sev severity) error {
+	now := time.Now()
+	for s := sev; s >= infoLog && l.file[s] == nil; s-- {
+		if s == warningLog {
+			continue
+		}
+		nlog := newNlog(s)
+		if err := nlog.rotate(now, 0); err != nil {
+			return err
+		}
+		l.file[s] = nlog
+	}
+	return nil
+}
 func (l *loggingT) getBuffer() *buffer {
-	l.freeListMu.Lock()
+	l.mu.Lock()
 	b := l.freeList
 	if b != nil {
 		l.freeList = b.next
 	}
-	l.freeListMu.Unlock()
+	l.mu.Unlock()
 	if b == nil {
 		b = new(buffer)
 	} else {
@@ -148,32 +259,15 @@ func (l *loggingT) getBuffer() *buffer {
 	return b
 }
 
-// putBuffer returns a buffer to the free list.
 func (l *loggingT) putBuffer(b *buffer) {
-	if b.Len() > recycleBufMaxSize {
-		// Let big buffers die a natural death.
+	if b.Len() > freeListBufMaxSize {
 		return
 	}
-	l.freeListMu.Lock()
+	l.mu.Lock()
 	b.next = l.freeList
 	l.freeList = b
-	l.freeListMu.Unlock()
+	l.mu.Unlock()
 }
-
-/*
-header formats a log header as defined by the C++ implementation.
-It returns a buffer containing the formatted header and the user's file and line number.
-The depth specifies how many stack frames above lives the source line to be identified in the log message.
-
-Log lines have this form:
-	L hh:mm:ss.uuuuuu file:line] msg...
-where the fields are defined as follows:
-	L                A single character, representing the log level (eg 'I' for INFO)
-	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
-	file             The file name
-	line             The line number
-	msg              The user-supplied message
-*/
 
 func (l *loggingT) header(s severity, depth int) *buffer {
 	var redact bool
@@ -191,9 +285,8 @@ func (l *loggingT) header(s severity, depth int) *buffer {
 	return l.formatHeader(s, file, line, redact)
 }
 
-// formatHeader formats a log header using the provided file name and line number.
 func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) *buffer {
-	now := timeNow()
+	now := time.Now()
 	if line < 0 {
 		line = 0 // not a real line number, but acceptable to someDigits
 	}
@@ -229,20 +322,12 @@ func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) 
 	return buf
 }
 
-// Some custom tiny helper functions to print the log header efficiently.
-
-const digits = "0123456789"
-
-// twoDigits formats a zero-prefixed two-digit integer at buf.tmp[i].
 func (buf *buffer) twoDigits(i, d int) {
 	buf.tmp[i+1] = digits[d%10]
 	d /= 10
 	buf.tmp[i] = digits[d%10]
 }
 
-// nDigits formats an n-digit integer at buf.tmp[i],
-// padding with pad on the left.
-// It assumes d >= 0.
 func (buf *buffer) nDigits(n, i, d int, pad byte) {
 	j := n - 1
 	for ; j >= 0 && d > 0; j-- {
@@ -254,10 +339,7 @@ func (buf *buffer) nDigits(n, i, d int, pad byte) {
 	}
 }
 
-// someDigits formats a zero-prefixed variable-width integer at buf.tmp[i].
 func (buf *buffer) someDigits(i, d int) int {
-	// Print into the top, then copy down. We know there's space for at least
-	// a 10-digit number.
 	j := len(buf.tmp)
 	for {
 		j--
@@ -298,11 +380,14 @@ func (l *loggingT) printf(s severity, format string, args ...any) {
 	l.output(s, buf, false)
 }
 
-// output writes the data to the log files and releases the buffer.
+// main method
 func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 	onceInitFiles.Do(initFiles)
 
 	data := buf.Bytes()
+	if len(data) == 0 {
+		return
+	}
 	switch {
 	case !flag.Parsed():
 		os.Stderr.WriteString("ERROR: logging before flag.Parse: ")
@@ -313,7 +398,6 @@ func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 		if alsoToStderr || l.alsoToStderr || s >= errorLog {
 			os.Stderr.Write(data)
 		}
-		l.mu.Lock()
 		switch s {
 		case errorLog, warningLog:
 			l.file[errorLog].Write(data)
@@ -321,172 +405,7 @@ func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
 		case infoLog:
 			l.file[infoLog].Write(data)
 		}
-		l.mu.Unlock()
 	}
 	// free buf
 	l.putBuffer(buf)
-}
-
-func (sb *syncBuffer) Sync() error {
-	return sb.file.Sync()
-}
-
-func (sb *syncBuffer) Write(p []byte) (n int, err error) {
-	if sb.nbytes+uint64(len(p)) >= MaxSize {
-		if err := sb.rotateFile(time.Now()); err != nil {
-			os.Stderr.WriteString(err.Error())
-		}
-	}
-	n, err = sb.Writer.Write(p)
-	sb.nbytes += uint64(n)
-	if err != nil {
-		os.Stderr.WriteString(err.Error())
-	}
-	return
-}
-
-// rotateFile closes the syncBuffer's file and starts a new one.
-func (sb *syncBuffer) rotateFile(now time.Time) (err error) {
-	if sb.file != nil {
-		sb.Flush()
-		sb.file.Close()
-	}
-	if sb.file, _, err = create(severityName[sb.sev], now); err != nil {
-		return
-	}
-	sb.nbytes = 0
-	sb.Writer = bufio.NewWriterSize(sb.file, bufferSize)
-
-	// Write header.
-	var (
-		buf  bytes.Buffer
-		n    int
-		x    = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-		snow = now.Format("2006/01/02 15:04:05")
-	)
-	if FileHeaderCB == nil {
-		fmt.Fprintf(&buf, "Started up at %s, %s", snow, x)
-	} else {
-		fmt.Fprintf(&buf, "Created at %s, %s", snow, x)
-		fmt.Fprint(&buf, FileHeaderCB())
-	}
-	n, err = sb.file.Write(buf.Bytes())
-	sb.nbytes += uint64(n)
-	return
-}
-
-// bufferSize sizes the buffer associated with each log file. It's large
-// so that log records can accumulate without the logging thread blocking
-// on disk I/O. The flushDaemon will block instead.
-const bufferSize = 256 * 1024
-
-// createFiles creates all the log files for severity from sev down to infoLog.
-// l.mu is held.
-func (l *loggingT) createFiles(sev severity) error {
-	now := time.Now()
-	// Files are created in decreasing severity order, so as soon as we find one
-	// has already been created, we can stop.
-	for s := sev; s >= infoLog && l.file[s] == nil; s-- {
-		if s == warningLog {
-			continue
-		}
-		sb := &syncBuffer{logger: l, sev: s}
-		if err := sb.rotateFile(now); err != nil {
-			return err
-		}
-		l.file[s] = sb
-	}
-	return nil
-}
-
-// lockAndFlushAll is like flushAll but locks l.mu first.
-func (l *loggingT) lockAndFlushAll() {
-	l.mu.Lock()
-	l.flushAll()
-	l.mu.Unlock()
-}
-
-// flushAll flushes all the logs and attempts to "sync" their data to disk.
-// l.mu is held.
-func (l *loggingT) flushAll() {
-	// Flush from fatal down, in case there's trouble flushing.
-	for s := errorLog; s >= infoLog; s-- {
-		sb := l.file[s]
-		if sb != nil {
-			sb.Flush() // ignore error
-			sb.Sync()  // ignore error
-		}
-	}
-}
-
-// Info logs to the INFO log.
-// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Info(args ...any) {
-	logging.print(infoLog, args...)
-}
-
-// InfoDepth acts as Info but uses depth to determine which call frame to log.
-// InfoDepth(0, "msg") is the same as Info("msg").
-func InfoDepth(depth int, args ...any) {
-	logging.printDepth(infoLog, depth, args...)
-}
-
-// Infoln logs to the INFO log.
-// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Infoln(args ...any) {
-	logging.println(infoLog, args...)
-}
-
-// Infof logs to the INFO log.
-// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Infof(format string, args ...any) {
-	logging.printf(infoLog, format, args...)
-}
-
-// Warning logs to the WARNING and INFO logs.
-// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Warning(args ...any) {
-	logging.print(warningLog, args...)
-}
-
-// WarningDepth acts as Warning but uses depth to determine which call frame to log.
-// WarningDepth(0, "msg") is the same as Warning("msg").
-func WarningDepth(depth int, args ...any) {
-	logging.printDepth(warningLog, depth, args...)
-}
-
-// Warningln logs to the WARNING and INFO logs.
-// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Warningln(args ...any) {
-	logging.println(warningLog, args...)
-}
-
-// Warningf logs to the WARNING and INFO logs.
-// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Warningf(format string, args ...any) {
-	logging.printf(warningLog, format, args...)
-}
-
-// Error logs to the ERROR, WARNING, and INFO logs.
-// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
-func Error(args ...any) {
-	logging.print(errorLog, args...)
-}
-
-// ErrorDepth acts as Error but uses depth to determine which call frame to log.
-// ErrorDepth(0, "msg") is the same as Error("msg").
-func ErrorDepth(depth int, args ...any) {
-	logging.printDepth(errorLog, depth, args...)
-}
-
-// Errorln logs to the ERROR, WARNING, and INFO logs.
-// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
-func Errorln(args ...any) {
-	logging.println(errorLog, args...)
-}
-
-// Errorf logs to the ERROR, WARNING, and INFO logs.
-// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
-func Errorf(format string, args ...any) {
-	logging.printf(errorLog, format, args...)
 }

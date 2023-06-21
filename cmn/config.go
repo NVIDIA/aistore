@@ -1765,7 +1765,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	}
 
 	// rotate log
-	glog.MaxSize = uint64(config.Log.MaxSize)
+	glog.MaxSize = int64(config.Log.MaxSize)
 	if glog.MaxSize > cos.GiB {
 		glog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", glog.MaxSize)
 		glog.MaxSize = 4 * cos.MiB

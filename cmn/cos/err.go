@@ -145,7 +145,7 @@ func ExitLogf(f string, a ...any) {
 	msg := fmt.Sprintf(fatalPrefix+f, a...)
 	if flag.Parsed() {
 		glog.ErrorDepth(1, msg+"\n")
-		glog.Flush()
+		glog.FlushExit()
 	}
 	_exit(msg)
 }
@@ -154,7 +154,7 @@ func ExitLog(a ...any) {
 	msg := fatalPrefix + fmt.Sprint(a...)
 	if flag.Parsed() {
 		glog.ErrorDepth(1, msg+"\n")
-		glog.Flush()
+		glog.FlushExit()
 	}
 	_exit(msg)
 }

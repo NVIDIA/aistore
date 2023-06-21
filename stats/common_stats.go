@@ -34,11 +34,9 @@ import (
 )
 
 const (
-	dfltPeriodicFlushTime = 40 * time.Second // when `config.Log.FlushTime` == time.Duration(0)
-	dfltPeriodicTimeStamp = time.Hour        // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
-
-	// when idle or configured `statsTime` greater than
-	maxStatsLogInterval = int64(2*time.Minute) - int64(10*time.Millisecond)
+	dfltPeriodicFlushTime = time.Minute            // when `config.Log.FlushTime` is 0 (zero)
+	dfltPeriodicTimeStamp = time.Hour              // extended date/time complementary to log timestamps (e.g., "11:29:11.644596")
+	maxStatsLogInterval   = int64(3 * time.Minute) // when idle; secondly, an upper limit on `config.Log.StatsTime`
 )
 
 // more periodic

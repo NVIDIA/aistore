@@ -1138,9 +1138,7 @@ func _sev2logname(sev string) (log string, err error) {
 	switch v[0] {
 	case apc.LogInfo[0]:
 		log = filepath.Join(dir, glog.InfoLogName())
-	case apc.LogWarn[0]:
-		log = filepath.Join(dir, glog.WarnLogName())
-	case apc.LogErr[0]:
+	case apc.LogWarn[0], apc.LogErr[0]:
 		log = filepath.Join(dir, glog.ErrLogName())
 	default:
 		err = fmt.Errorf("unknown log severity %q", sev)

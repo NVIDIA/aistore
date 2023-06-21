@@ -243,8 +243,6 @@ func newTarget(co *configOwner) *target {
 
 // Run is the 'main' where everything gets started
 func Run(version, buildTime string) int {
-	defer glog.Flush() // always flush
-
 	rmain := initDaemon(version, buildTime)
 	err := daemon.rg.runAll(rmain)
 

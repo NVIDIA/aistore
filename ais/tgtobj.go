@@ -821,7 +821,9 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	errCode, erp := poi.putObject()
 	freePOI(poi)
 	if erp == nil {
-		glog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
+		if config.FastV(5, cos.SmoduleAIS) {
+			glog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
+		}
 		return true
 	}
 	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t, erp, errCode)

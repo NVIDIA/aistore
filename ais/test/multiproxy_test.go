@@ -70,16 +70,12 @@ var (
 )
 
 func TestMultiProxy(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
-
-	proxyURL := tools.RandomProxyURL(t)
-	smap := tools.GetClusterMap(t, proxyURL)
-	if cnt := smap.CountActivePs(); cnt < 3 {
-		t.Fatalf("Not enough proxies (%d) to run tests (must be at least 3)", cnt)
-	}
-	if smap.CountActiveTs() < 1 {
-		t.Fatalf("No active targets to run tests (%s, num-t-active=0)", smap.StringEx())
-	}
+	tools.CheckSkip(t, tools.SkipTestArgs{
+		Long:               true,
+		RequiredDeployment: tools.ClusterTypeLocal,
+		MinProxies:         3,
+		MinTargets:         1,
+	})
 
 	defer tools.EnsureOrigClusterState(t)
 	for _, test := range voteTests {
@@ -553,7 +549,6 @@ func joinWhileVoteInProgress(t *testing.T) {
 		t.Skipf("skipping %s (docker is not supported)", t.Name())
 	}
 	var (
-		proxyURL     = tools.RandomProxyURL(t)
 		smap         = tools.GetClusterMap(t, proxyURL)
 		oldTargetCnt = smap.CountActiveTs()
 		oldProxyCnt  = smap.CountActivePs()
@@ -566,9 +561,13 @@ func joinWhileVoteInProgress(t *testing.T) {
 	)
 	tlog.Logf("targets: %d, proxies: %d\n", oldTargetCnt, oldProxyCnt)
 
+	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
+	tassert.CheckFatal(t, err)
+	proxyURL := proxy.URL(cmn.NetPublic)
+
 	go runMockTarget(t, proxyURL, mocktgt, stopch, smap)
 
-	_, err := tools.WaitForClusterState(proxyURL, "synchronize on 'new mock target'",
+	_, err = tools.WaitForClusterState(proxyURL, "synchronize on 'new mock target'",
 		smap.Version, oldProxyCnt, oldTargetCnt+1)
 	tassert.CheckFatal(t, err)
 

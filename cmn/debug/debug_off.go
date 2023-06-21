@@ -13,9 +13,6 @@ import (
 
 func ON() bool { return false }
 
-func NewExpvar(_ uint8)                    {}
-func SetExpvar(_ uint8, _ string, _ int64) {}
-
 func Infof(_ string, _ ...any) {}
 
 func Func(_ func()) {}

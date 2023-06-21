@@ -7,6 +7,7 @@ package main
 import (
 	"os"
 
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -21,5 +22,6 @@ func main() {
 	debug.Assert(build != "", "missing build")
 	debug.Assert(buildtime != "", "missing build time")
 	ecode := ais.Run(cmn.VersionAIStore+"."+build, buildtime)
+	glog.FlushExit()
 	os.Exit(ecode)
 }

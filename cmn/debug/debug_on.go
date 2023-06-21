@@ -54,7 +54,7 @@ func _panic(a ...any) {
 		}
 	}
 	glog.Errorf("%s", buffer.Bytes())
-	glog.Flush()
+	glog.FlushExit()
 	panic(msg)
 }
 
