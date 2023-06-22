@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"golang.org/x/sys/unix"
 )
@@ -24,16 +25,25 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 }
 
 // - on-disk size is sometimes referred to as "apparent size"
-// - NOTE: ignore exec error: `du` exits with status 1 if encounters non-regular file that can't be accessed (perm)
 // - `withNonDirPrefix` is allowed to match nothing
-func DirSizeOnDisk(dirPath string, withNonDirPrefix bool) (uint64, error) {
-	cmd := exec.Command("du", "-bc", dirPath, "2>/dev/null")
-	out, err := cmd.Output()
-	if len(out) == 0 {
-		return 0, fmt.Errorf("failed to 'du %s': %v", dirPath, err)
+func executeDU(cmd *exec.Cmd, dirPath string, withNonDirPrefix bool, outputBlockSize uint64) (uint64, error) {
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		switch {
+		// FATAL exit on err-s: access perm-s, invalid command-line, executable missing (pkg not installed)
+		case strings.Contains(string(out), "cannot access"),
+			strings.Contains(err.Error(), "exit status"),
+			strings.Contains(err.Error(), "not found"):
+			cos.ExitLog("du "+dirPath+": ", err)
+		// otherwise, return an err
+		case len(out) == 0:
+			return 0, fmt.Errorf("du %s: combined output empty, err: %v", dirPath, err)
+		default:
+			return 0, fmt.Errorf("failed to du %s: %v (%s)", dirPath, err, string(out))
+		}
 	}
-	err = nil                                 // (see above)
-	lines := strings.Split(string(out), "\n") // NOTE: on Windows, use instead strings.FieldsFunc('\n' and '\r')
+
+	lines := strings.Split(string(out), "\n") // on Windows, use instead strings.FieldsFunc('\n' and '\r'), here and elsewhere
 	if n := len(lines); n > 8 {
 		lines = lines[n-8:]
 	}
@@ -41,7 +51,7 @@ func DirSizeOnDisk(dirPath string, withNonDirPrefix bool) (uint64, error) {
 	for i := len(lines) - 1; i >= 0; i-- {
 		s := lines[i]
 		if strings.HasSuffix(s, "total") && s[0] > '0' && s[0] <= '9' {
-			return uint64(_parseTotal(s)), nil
+			return uint64(_parseTotal(s)) * outputBlockSize, nil
 		}
 	}
 	if !withNonDirPrefix {

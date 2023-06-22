@@ -7,11 +7,18 @@ package ios
 
 import (
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
+
+func DirSizeOnDisk(dirPath string, withNonDirPrefix bool) (uint64, error) {
+	// GNU implementation of du uses -b to get apparent size with a block size of 1 and -c to show a total
+	cmd := exec.Command("du", "-bc", dirPath)
+	return executeDU(cmd, dirPath, withNonDirPrefix, 1)
+}
 
 func GetFSStats(path string) (blocks, bavail uint64, bsize int64, err error) {
 	var fsStats unix.Statfs_t

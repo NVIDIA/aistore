@@ -4,7 +4,6 @@
 import unittest
 from pathlib import Path
 
-import platform
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -291,7 +290,6 @@ class TestBucketOps(RemoteEnabledTest):
         for obj in objects:
             self.assertTrue(obj.size > 0)
 
-    @unittest.skipIf(platform.system() == "Darwin", "Skipping this test on MacOS.")
     def test_summary(self):
         summ_test_bck = self._create_bucket("summary-test")
 
@@ -317,7 +315,6 @@ class TestBucketOps(RemoteEnabledTest):
         with self.assertRaises(ErrBckNotFound):
             summ_test_bck.summary()
 
-    @unittest.skipIf(platform.system() == "Darwin", "Skipping this test on MacOS.")
     def test_info(self):
         info_test_bck = self._create_bucket("info-test")
 
