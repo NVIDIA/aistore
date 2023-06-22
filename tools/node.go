@@ -808,7 +808,7 @@ func waitSmapSync(bp api.BaseParams, ctx *Ctx, timeout time.Time, smap *meta.Sma
 	return nil
 }
 
-// Quick remove node from SMap
+// remove node unsafe
 func _removeNodeFromSmap(ctx *Ctx, proxyURL, sid string, timeout time.Duration) error {
 	var (
 		bp        = api.BaseParams{Client: ctx.Client, URL: proxyURL, Token: LoggedUserToken}

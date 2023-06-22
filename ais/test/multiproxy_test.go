@@ -115,7 +115,7 @@ func killRestorePrimary(t *testing.T, proxyURL string, restoreAsPrimary bool,
 	cmd, err := tools.KillNode(smap.Primary)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(newPrimaryURL, "designate new primary", smap.Version,
+	smap, err = tools.WaitForClusterState(newPrimaryURL, "new primary elected", smap.Version,
 		smap.CountActivePs()-1, smap.CountActiveTs())
 	tassert.CheckFatal(t, err)
 	tlog.Logf("New primary elected: %s\n", newPrimaryID)
@@ -257,7 +257,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	tcmd, err := tools.KillNode(targetNode)
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(newPrimaryURL, "designate new primary",
+	smap, err = tools.WaitForClusterState(newPrimaryURL, "new primary elected",
 		smap.Version, origProxyCount-1, origTargetCount-1)
 	tassert.CheckFatal(t, err)
 
@@ -489,8 +489,7 @@ func targetRejoin(t *testing.T) {
 
 	cmd, err := tools.KillNode(node)
 	tassert.CheckFatal(t, err)
-	smap, err = tools.WaitForClusterState(proxyURL, "synchronize on 'target crashed'",
-		smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
+	smap, err = tools.WaitForClusterState(proxyURL, "target crashed", smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -500,7 +499,7 @@ func targetRejoin(t *testing.T) {
 	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 
-	smap, err = tools.WaitForClusterState(proxyURL, "synchronize on 'target rejoined'",
+	smap, err = tools.WaitForClusterState(proxyURL, "target rejoined",
 		smap.Version, smap.CountActivePs(), smap.CountActiveTs()+1)
 	tassert.CheckFatal(t, err)
 
@@ -564,11 +563,12 @@ func joinWhileVoteInProgress(t *testing.T) {
 	proxy, err := smap.GetRandProxy(true /*exclude primary*/)
 	tassert.CheckFatal(t, err)
 	proxyURL := proxy.URL(cmn.NetPublic)
+	wg := &sync.WaitGroup{}
 
-	go runMockTarget(t, proxyURL, mocktgt, stopch, smap)
+	wg.Add(1)
+	go runMockTarget(t, proxyURL, mocktgt, stopch, smap, wg)
 
-	_, err = tools.WaitForClusterState(proxyURL, "synchronize on 'new mock target'",
-		smap.Version, oldProxyCnt, oldTargetCnt+1)
+	_, err = tools.WaitForClusterState(proxyURL, "mock target joined", smap.Version, oldProxyCnt, oldTargetCnt+1)
 	tassert.CheckFatal(t, err)
 
 	smap = killRestorePrimary(t, proxyURL, false, nil)
@@ -593,12 +593,13 @@ func joinWhileVoteInProgress(t *testing.T) {
 	select {
 	case err := <-errCh:
 		t.Errorf("Mock Target Error: %v", err)
-
 	default:
 	}
 
+	wg.Wait()
+
 	_, err = tools.WaitForClusterState(smap.Primary.URL(cmn.NetPublic),
-		"to kill mock target", smap.Version, oldProxyCnt, oldTargetCnt)
+		"cluster to stabilize", smap.Version, oldProxyCnt, oldTargetCnt)
 	tassert.CheckFatal(t, err)
 }
 
@@ -1317,7 +1318,7 @@ func primaryAndNextCrash(t *testing.T) {
 	if errSecond == nil {
 		// the cluster should vote, so the smap version should be increased at
 		// least by 100, that is why +99
-		smap, err = tools.WaitForClusterState(finalPrimaryURL, "designate new primary",
+		smap, err = tools.WaitForClusterState(finalPrimaryURL, "new primary elected",
 			smap.Version+99, origProxyCount-2, 0)
 		tassert.CheckFatal(t, err)
 	}

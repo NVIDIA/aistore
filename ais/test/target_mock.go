@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/NVIDIA/aistore/ais"
@@ -18,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/tools"
-	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,7 +38,8 @@ type MockRegRequest struct {
 	SI *meta.Snode `json:"si"`
 }
 
-func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *meta.Smap) {
+func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *meta.Smap, wg *sync.WaitGroup) {
+	defer wg.Done()
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(apc.URLPathBuckets.S, mocktgt.filehdlr)
@@ -57,10 +59,15 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 		t.Errorf("failed to start http server for mock target: %v", err)
 		return
 	}
+	tlog.Logf("t[%s] is up\n", tools.MockDaemonID)
 
 	<-stopch
+
+	tlog.Logf("started unsafe removal of t[%s]\n", tools.MockDaemonID)
 	err = tools.RemoveNodeUnsafe(proxyURL, tools.MockDaemonID)
-	tassert.CheckFatal(t, err)
+	if err != nil {
+		tlog.Logf("Error: failed to unsafely remove t[%s]: %v\n", tools.MockDaemonID, err)
+	}
 	s.Shutdown(context.Background())
 }
 
