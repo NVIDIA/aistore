@@ -256,14 +256,14 @@ func (s *coreStats) initMetricClient(node *meta.Snode, parent *statsRunner) {
 	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
 		if portNum, err := cmn.ParsePort(portStr); err != nil {
 			debug.AssertNoErr(err)
-			glog.Error(err)
+			glog.Errorln(err)
 		} else {
 			port = portNum
 		}
 	}
 	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
 		if probeBool, err := cos.ParseBool(probeStr); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 		} else {
 			probe = probeBool
 		}

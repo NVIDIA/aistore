@@ -175,7 +175,7 @@ func (m *InitCodeMsg) Validate() error {
 		return fmt.Errorf("unsupported runtime %q (supported: %v)", m.Runtime, runtime.GetNames())
 	}
 	if m.CommTypeX == "" {
-		cos.Warningf("empty comm-type, defaulting to %q (%q)", Hpush, m.Runtime)
+		cos.Infof("Warning: empty comm-type, defaulting to %q (%q)", Hpush, m.Runtime)
 		m.CommTypeX = Hpush
 	} else if !cos.StringInSlice(m.CommTypeX, commTypes) {
 		return fmt.Errorf("unsupported comm-type %q (%q)", m.CommTypeX, m.Runtime)

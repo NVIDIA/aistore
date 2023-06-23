@@ -158,7 +158,7 @@ func readProxyID(config *cmn.Config) (id string) {
 	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	return
 }
@@ -290,7 +290,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else {
 		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Config)
@@ -299,7 +299,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else if cm.Smap != nil {
 		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Smap)
@@ -308,7 +308,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveBMD(cm.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else {
 		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.BMD)
@@ -317,7 +317,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveRMD(cm.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else {
 		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.RMD)
@@ -326,7 +326,7 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, caller, nil); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else if cm.EtlMD != nil {
 		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.EtlMD)
@@ -1533,7 +1533,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
 			err = &errNodeNotFound{lsotag + " failure", lsmsg.SID, p.si, smap}
-			glog.Error(err)
+			glog.Errorln(err)
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err
@@ -2762,7 +2762,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	if prepare {
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Info("Preparation step: do nothing")
+			glog.Infoln("Preparation step: do nothing")
 		}
 		return
 	}
@@ -2810,7 +2810,7 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})

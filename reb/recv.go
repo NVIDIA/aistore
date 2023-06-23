@@ -37,7 +37,7 @@ func (reb *Reb) _recvErr(err error) error {
 func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 
@@ -62,7 +62,7 @@ func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) er
 
 func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 
@@ -114,7 +114,7 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
 		if ntfn.stage == rebStageAbort {
 			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
-			glog.Error(err)
+			glog.Errorln(err)
 			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*meta.Smap)(rsmap)), err))
 		}
 		return nil
@@ -149,7 +149,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)
 	if err := lom.InitBck(&hdr.Bck); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return nil
 	}
 	if stage := reb.stages.stage.Load(); stage >= rebStageFin {
@@ -178,7 +178,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 	erp := reb.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
-		glog.Error(erp)
+		glog.Errorln(erp)
 		return erp
 	}
 	// stats
@@ -188,7 +188,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 	tsi := smap.GetTarget(tsid)
 	if tsi == nil {
 		err := fmt.Errorf("%s is not in the %s", meta.Tname(tsid), smap)
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
@@ -196,7 +196,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return err
 		}
 	}
@@ -217,7 +217,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 	lom := cluster.AllocLOM(hdr.ObjName)
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		cluster.FreeLOM(lom)
-		glog.Error(err)
+		glog.Errorln(err)
 		return nil
 	}
 

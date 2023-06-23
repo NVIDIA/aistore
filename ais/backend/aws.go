@@ -143,7 +143,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil && verbose {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
@@ -275,7 +275,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil && verbose {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 	headOutput, err = svc.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -359,7 +359,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil && superVerbose {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 	obj, err = svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -417,7 +417,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil && superVerbose {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 
 	md[cos.S3MetadataChecksumType] = aws.String(cksumType)
@@ -463,7 +463,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
 	if err != nil && verbose {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),

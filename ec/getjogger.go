@@ -627,7 +627,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	// Generate the list of targets that should have a slice.
 	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
-		glog.Warning(err)
+		glog.Warningln(err)
 		return nil, err
 	}
 	empty := make([]string, 0, len(targets))

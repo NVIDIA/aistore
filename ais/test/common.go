@@ -1023,12 +1023,12 @@ func initFS() {
 	proxyURL := tools.GetPrimaryURL()
 	primary, err := tools.GetPrimaryProxy(proxyURL)
 	if err != nil {
-		tlog.Logf("ERROR: %v", err)
+		tlog.Logf("Error: %v", err)
 	}
 	baseParams := tools.BaseAPIParams(proxyURL)
 	cfg, err := api.GetDaemonConfig(baseParams, primary)
 	if err != nil {
-		tlog.Logf("ERROR: %v", err)
+		tlog.Logf("Error: %v", err)
 	}
 
 	config := cmn.GCO.BeginUpdate()

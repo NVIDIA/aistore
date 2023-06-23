@@ -360,7 +360,7 @@ func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
 	if osi, err = m.IsDupNet(nsi); err == nil {
 		return
 	}
-	glog.Error(err)
+	glog.Errorln(err)
 	if !del {
 		return
 	}

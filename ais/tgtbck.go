@@ -183,7 +183,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		}
 	} else if qbck.IsRemoteAIS() && qbck.Ns.IsAnyRemote() {
 		if config.Backend.Get(apc.AIS) == nil {
-			glog.Warning(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
+			glog.Warningln(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
 			return
 			// otherwise go ahead and try to list below
 		}

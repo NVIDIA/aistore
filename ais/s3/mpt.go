@@ -138,7 +138,7 @@ func FinishUpload(id, fqn string, aborted bool) (exists bool) {
 	}
 	for _, part := range mpt.parts {
 		if err := os.Remove(part.FQN); err != nil && !os.IsNotExist(err) {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	}
 	return true

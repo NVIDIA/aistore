@@ -297,7 +297,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 			r.lines = append(r.lines, mpath+": "+ln)
 		}
 	} else if errfs != nil {
-		glog.Error(errfs)
+		glog.Errorln(errfs)
 	}
 
 	// 4. append disk stats to log

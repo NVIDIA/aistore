@@ -222,7 +222,7 @@ repeat:
 	case obj, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
-			glog.Warning(err)
+			glog.Warningln(err)
 			return
 		}
 		s.sendoff.obj = *obj

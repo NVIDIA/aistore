@@ -51,7 +51,7 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 		if !dent.IsDir() {
 			err := fmt.Errorf("%s: unexpected non-directory item %q in 'deleted'", who, fqn)
 			debug.AssertNoErr(err)
-			glog.Error(err)
+			glog.Errorln(err)
 			continue
 		}
 		if err = os.RemoveAll(fqn); err == nil {
@@ -118,7 +118,7 @@ func (mi *Mountpath) ClearMDs(inclBMD bool) (rerr error) {
 		}
 		fpath := filepath.Join(mi.Path, mdfd)
 		if err := RemoveAll(fpath); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			rerr = err
 		}
 	}
@@ -180,7 +180,7 @@ func deworld(allmpi []MPI) (rerr error) {
 					err = os.RemoveAll(mi.Path)
 				}
 				if err != nil {
-					glog.Error(err)
+					glog.Errorln(err)
 					rerr = err
 				}
 			}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -47,26 +46,20 @@ const (
 )
 
 type (
-	flushSyncWriter interface {
-		flush(waitPrev bool)
-		flushExit()
-		io.Writer
-	}
 	loggingT struct {
-		freeList     *buffer
-		file         [numSeverity]flushSyncWriter
+		nlog         [numSeverity]*nlog
 		toStderr     bool
 		alsoToStderr bool
-		mu           sync.Mutex
 	}
-	buffer struct {
+	linebuf struct {
 		bytes.Buffer
-		tmp  [64]byte // for headers
-		next *buffer
+		tmp [64]byte // for headers
 	}
 )
 
 var (
+	pool sync.Pool // linebuf mem pool - used for errors and warnings only
+
 	MaxSize int64 = 4 * 1024 * 1024
 
 	severityName = []string{
@@ -127,15 +120,11 @@ func initFiles() {
 	}
 }
 
-func Info(args ...any)                    { logging.print(infoLog, args...) }
 func InfoDepth(depth int, args ...any)    { logging.printDepth(infoLog, depth, args...) }
 func Infoln(args ...any)                  { logging.println(infoLog, args...) }
 func Infof(format string, args ...any)    { logging.printf(infoLog, format, args...) }
-func Warning(args ...any)                 { logging.print(warningLog, args...) }
-func WarningDepth(depth int, args ...any) { logging.printDepth(warningLog, depth, args...) }
 func Warningln(args ...any)               { logging.println(warningLog, args...) }
 func Warningf(format string, args ...any) { logging.printf(warningLog, format, args...) }
-func Error(args ...any)                   { logging.print(errorLog, args...) }
 func ErrorDepth(depth int, args ...any)   { logging.printDepth(errorLog, depth, args...) }
 func Errorln(args ...any)                 { logging.println(errorLog, args...) }
 func Errorf(format string, args ...any)   { logging.printf(errorLog, format, args...) }
@@ -151,7 +140,6 @@ func shortProgram() (prog string) {
 }
 
 func InfoLogName() string { return shortProgram() + ".INFO" }
-func WarnLogName() string { return shortProgram() + ".WARNING" }
 func ErrLogName() string  { return shortProgram() + ".ERROR" }
 
 func shortHostname(hostname string) string {
@@ -200,7 +188,7 @@ func fcreate(tag string, t time.Time) (f *os.File, filename string, err error) {
 		}
 
 		fname := filepath.Join(dir, name)
-		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0o640)
+		f, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
 		if err != nil {
 			lastErr = err
 			continue
@@ -215,85 +203,30 @@ func fcreate(tag string, t time.Time) (f *os.File, filename string, err error) {
 
 func Flush() {
 	l := &logging
-	l.file[errorLog].flush(false)
-	l.file[infoLog].flush(false)
+	l.nlog[errorLog].flush(false)
+	l.nlog[infoLog].flush(false)
 }
 
 func FlushExit() {
 	l := &logging
-	l.file[errorLog].flushExit()
-	l.file[infoLog].flushExit()
+	l.nlog[errorLog].flushExit()
+	l.nlog[infoLog].flushExit()
 }
 
-//////////////
-// loggingT //
-//////////////
-
-func (l *loggingT) fcreateAll(sev severity) error {
-	now := time.Now()
-	for s := sev; s >= infoLog && l.file[s] == nil; s-- {
-		if s == warningLog {
-			continue
-		}
-		nlog := newNlog(s)
-		if err := nlog.rotate(now, 0); err != nil {
-			return err
-		}
-		l.file[s] = nlog
-	}
-	return nil
-}
-func (l *loggingT) getBuffer() *buffer {
-	l.mu.Lock()
-	b := l.freeList
-	if b != nil {
-		l.freeList = b.next
-	}
-	l.mu.Unlock()
-	if b == nil {
-		b = new(buffer)
-	} else {
-		b.next = nil
-		b.Reset()
-	}
-	return b
-}
-
-func (l *loggingT) putBuffer(b *buffer) {
-	if b.Len() > freeListBufMaxSize {
-		return
-	}
-	l.mu.Lock()
-	b.next = l.freeList
-	l.freeList = b
-	l.mu.Unlock()
-}
-
-func (l *loggingT) header(s severity, depth int) *buffer {
+func formatHdr(s severity, depth int, buf *linebuf) {
 	var redact bool
-	_, file, line, ok := runtime.Caller(3 + depth)
+	_, fn, ln, ok := runtime.Caller(4 + depth)
 	if !ok {
-		file = "???"
-		line = 1
+		fn = "???"
+		ln = 1
 	} else {
-		slash := strings.LastIndex(file, "/")
+		slash := strings.LastIndex(fn, "/")
 		if slash >= 0 {
-			file = file[slash+1:]
+			fn = fn[slash+1:]
 		}
-		_, redact = redactFnames[file]
+		_, redact = redactFnames[fn]
 	}
-	return l.formatHeader(s, file, line, redact)
-}
-
-func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) *buffer {
 	now := time.Now()
-	if line < 0 {
-		line = 0 // not a real line number, but acceptable to someDigits
-	}
-	if s > errorLog {
-		s = infoLog // for safety.
-	}
-	buf := l.getBuffer()
 
 	// Avoid Fprintf, for speed. The format is so simple that we can do it quickly by hand.
 	// It's worth about 3X. Fprintf is hard.
@@ -313,22 +246,96 @@ func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) 
 	if redact {
 		buf.WriteString("")
 	} else {
-		buf.WriteString(file)
+		buf.WriteString(fn)
 		buf.tmp[0] = ':'
-		n := buf.someDigits(1, line)
+		n := buf.someDigits(1, ln)
 		buf.tmp[n+1] = ' '
 		buf.Write(buf.tmp[:n+2])
 	}
-	return buf
 }
 
-func (buf *buffer) twoDigits(i, d int) {
+func sprintf(sev severity, depth int, format string, buf *linebuf, args ...any) {
+	formatHdr(sev, depth+1, buf)
+	if format == "" {
+		fmt.Fprint(buf, args...)
+	} else {
+		fmt.Fprintf(buf, format, args...)
+	}
+	if buf.Bytes()[buf.Len()-1] != '\n' {
+		buf.WriteByte('\n')
+	}
+}
+
+//////////////
+// loggingT //
+//////////////
+
+func (l *loggingT) fcreateAll(sev severity) error {
+	now := time.Now()
+	for s := sev; s >= infoLog && l.nlog[s] == nil; s-- {
+		if s == warningLog {
+			continue
+		}
+		nlog := newNlog(s)
+		if err := nlog.rotate(now, 0); err != nil {
+			return err
+		}
+		l.nlog[s] = nlog
+	}
+	return nil
+}
+
+func (l *loggingT) println(sev severity, args ...any) {
+	l.output(sev, 0, "", args...)
+}
+
+func (l *loggingT) printDepth(sev severity, depth int, args ...any) {
+	l.output(sev, depth, "", args...)
+}
+
+func (l *loggingT) printf(sev severity, format string, args ...any) {
+	l.output(sev, 0, format, args...)
+}
+
+// main method
+func (l *loggingT) output(sev severity, depth int, format string, args ...any) {
+	onceInitFiles.Do(initFiles)
+
+	switch {
+	case !flag.Parsed():
+		os.Stderr.WriteString("Error: logging before flag.Parse: ")
+		fallthrough
+	case l.toStderr:
+		buf := alloc()
+		sprintf(sev, depth+1, format, buf, args...)
+		os.Stderr.Write(buf.Bytes())
+		free(buf)
+	case l.alsoToStderr || sev >= warningLog:
+		buf := alloc()
+		sprintf(sev, depth+1, format, buf, args...)
+		if l.alsoToStderr || sev >= errorLog {
+			os.Stderr.Write(buf.Bytes())
+		}
+		l.nlog[errorLog].write(buf.Bytes())
+		l.nlog[infoLog].write(buf.Bytes())
+		free(buf)
+	default:
+		// fast path
+		l.nlog[infoLog].printf(sev, depth, format, args...)
+	}
+}
+
+////////////
+// linebuf //
+////////////
+
+func (buf *linebuf) twoDigits(i, d int) {
 	buf.tmp[i+1] = digits[d%10]
 	d /= 10
 	buf.tmp[i] = digits[d%10]
 }
 
-func (buf *buffer) nDigits(n, i, d int, pad byte) {
+func (buf *linebuf) nDigits(n, i, d int, pad byte) {
 	j := n - 1
 	for ; j >= 0 && d > 0; j-- {
 		buf.tmp[i+j] = digits[d%10]
@@ -339,7 +346,7 @@ func (buf *buffer) nDigits(n, i, d int, pad byte) {
 	}
 }
 
-func (buf *buffer) someDigits(i, d int) int {
+func (buf *linebuf) someDigits(i, d int) int {
 	j := len(buf.tmp)
 	for {
 		j--
@@ -350,62 +357,4 @@ func (buf *buffer) someDigits(i, d int) int {
 		}
 	}
 	return copy(buf.tmp[i:], buf.tmp[j:])
-}
-
-func (l *loggingT) println(s severity, args ...any) {
-	buf := l.header(s, 0)
-	fmt.Fprintln(buf, args...)
-	l.output(s, buf, false)
-}
-
-func (l *loggingT) print(s severity, args ...any) {
-	l.printDepth(s, 1, args...)
-}
-
-func (l *loggingT) printDepth(s severity, depth int, args ...any) {
-	buf := l.header(s, depth)
-	fmt.Fprint(buf, args...)
-	if buf.Bytes()[buf.Len()-1] != '\n' {
-		buf.WriteByte('\n')
-	}
-	l.output(s, buf, false)
-}
-
-func (l *loggingT) printf(s severity, format string, args ...any) {
-	buf := l.header(s, 0)
-	fmt.Fprintf(buf, format, args...)
-	if buf.Bytes()[buf.Len()-1] != '\n' {
-		buf.WriteByte('\n')
-	}
-	l.output(s, buf, false)
-}
-
-// main method
-func (l *loggingT) output(s severity, buf *buffer, alsoToStderr bool) {
-	onceInitFiles.Do(initFiles)
-
-	data := buf.Bytes()
-	if len(data) == 0 {
-		return
-	}
-	switch {
-	case !flag.Parsed():
-		os.Stderr.WriteString("ERROR: logging before flag.Parse: ")
-		os.Stderr.Write(data)
-	case l.toStderr:
-		os.Stderr.Write(data)
-	default:
-		if alsoToStderr || l.alsoToStderr || s >= errorLog {
-			os.Stderr.Write(data)
-		}
-		switch s {
-		case errorLog, warningLog:
-			l.file[errorLog].Write(data)
-			l.file[infoLog].Write(data)
-		case infoLog:
-			l.file[infoLog].Write(data)
-		}
-	}
-	// free buf
-	l.putBuffer(buf)
 }

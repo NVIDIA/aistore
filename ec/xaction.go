@@ -153,7 +153,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (rea
 		return nil, err
 	}
 	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		glog.Warning(err)
+		glog.Warningln(err)
 		return nil, err
 	}
 	reader, err = cos.NewFileHandle(lom.FQN)

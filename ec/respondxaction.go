@@ -90,7 +90,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 		select {
 		case <-ticker.C:
 			if s := r.stats.stats().String(); s != "" {
-				glog.Info(s)
+				glog.Infoln(s)
 			}
 		case <-r.IdleTimer():
 			r.stop(nil)
@@ -172,7 +172,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqGet:
 		err := r.trySendCT(iReq, hdr, bck)
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	default:
 		// invalid request detected
@@ -224,7 +224,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			cluster.FreeLOM(lom)
 		}
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		r.ObjsAdd(1, hdr.ObjAttrs.Size)

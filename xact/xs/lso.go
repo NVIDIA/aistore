@@ -115,7 +115,7 @@ func (p *lsoFactory) Start() (err error) {
 				err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", p.Args.T,
 					p.msg.UUID, p.msg.ContinuationToken, err)
 			}
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		p.dm.SetXact(r)
@@ -584,7 +584,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
 	}
 	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
+		glog.Errorln(err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 		return err
 	}

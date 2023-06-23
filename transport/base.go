@@ -166,7 +166,7 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 		// slow path
 		reason, errT := s.TermInfo()
 		err = cmn.NewErrStreamTerminated(s.String(), errT, reason, "dropping "+streamable.String())
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 
@@ -311,7 +311,7 @@ func dryrun() (dryrun bool) {
 	var err error
 	if a := os.Getenv("AIS_STREAM_DRY_RUN"); a != "" {
 		if dryrun, err = strconv.ParseBool(a); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	}
 	return

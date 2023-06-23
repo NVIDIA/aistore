@@ -382,7 +382,7 @@ func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error
 
 	err = m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return "", errInvalidCredentials
 	}
 	if !isSamePassword(pwd, uInfo.Password) {

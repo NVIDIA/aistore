@@ -64,7 +64,7 @@ func (f *FSHC) Run() error {
 		case filePath := <-f.fileListCh:
 			mi, err := fs.Path2Mpath(filePath)
 			if err != nil {
-				glog.Error(err)
+				glog.Errorln(err)
 				break
 			}
 

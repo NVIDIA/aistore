@@ -644,7 +644,7 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		if _, split := err.(*errBmdUUIDSplit); split {
 			cos.ExitLogf("%s (primary), err: %v", p.si, err) // cluster integrity error
 		}
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	for si, smap := range smaps {
 		if !si.IsTarget() {

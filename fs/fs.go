@@ -214,7 +214,7 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 		return
 	}
 	if err := os.Rename(fromPath, backupPath); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		os.Remove(fromPath)
 	} else {
 		newBcnt = bcnt + 1
@@ -372,7 +372,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 				if contentType != WorkfileType {
 					return num, err
 				}
-				glog.Error(err)
+				glog.Errorln(err)
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
@@ -689,7 +689,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
 			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-			glog.Error(err)
+			glog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
 		}
@@ -758,7 +758,7 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 
 	if _, exists = disabledPaths[cleanMpath]; exists {
 		err := fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-		glog.Error(err)
+		glog.Errorln(err)
 		debug.AssertNoErr(err)
 		return nil, err
 	}
@@ -843,7 +843,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
 			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-			glog.Error(err)
+			glog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
 		}
@@ -975,7 +975,7 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
 		fromPath := mi.MakePathBck(bckTo)
 		toPath := mi.MakePathBck(bckFrom)
 		if erd := os.Rename(fromPath, toPath); erd != nil {
-			glog.Error(erd)
+			glog.Errorln(erd)
 		}
 	}
 	return

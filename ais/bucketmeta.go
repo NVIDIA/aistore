@@ -410,7 +410,7 @@ func (*bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 		return
 	}
 	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
-	glog.Error(err)
+	glog.Errorln(err)
 	return
 }
 

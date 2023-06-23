@@ -122,7 +122,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 
 		bmd.Range(pq, nil, func(bck *meta.Bck) bool {
 			if err := r.runBck(bck, listRemote); err != nil {
-				glog.Error(err)
+				glog.Errorln(err)
 			}
 			return false // keep going
 		})
@@ -249,7 +249,7 @@ func (*bsummXact) sizeOnDisk(bck *meta.Bck, prefix string) (size, ecnt uint64) {
 func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG, withNonDirPrefix bool) {
 	sz, err := ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		gatomic.AddUint64(pecnt, 1)
 	}
 	gatomic.AddUint64(psize, sz)

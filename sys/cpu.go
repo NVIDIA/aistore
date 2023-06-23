@@ -28,7 +28,7 @@ func init() {
 		if c, err := containerNumCPU(); err == nil {
 			contCPUs = c
 		} else {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	}
 }

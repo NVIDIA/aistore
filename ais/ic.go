@@ -446,7 +446,7 @@ func (ic *ic) syncICBundle() error {
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/, ic.p.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Error(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
+			glog.Errorln(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
 		}
 	} else {
 		smap = ic.p.owner.smap.get()

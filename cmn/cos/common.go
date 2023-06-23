@@ -223,14 +223,6 @@ func Infof(format string, a ...any) {
 	}
 }
 
-func Warningf(format string, a ...any) {
-	if flag.Parsed() {
-		glog.WarningDepth(1, fmt.Sprintf(format, a...))
-	} else {
-		fmt.Printf(format+"\n", a...)
-	}
-}
-
 func Errorf(format string, a ...any) {
 	if flag.Parsed() {
 		glog.ErrorDepth(1, fmt.Sprintf(format, a...))

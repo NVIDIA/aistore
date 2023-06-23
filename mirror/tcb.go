@@ -251,7 +251,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 	// ref-count done-senders
@@ -272,7 +272,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		r.err.Store(err)
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
@@ -299,7 +299,7 @@ func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		r.err.Store(erp)
-		glog.Error(erp)
+		glog.Errorln(erp)
 		return erp // NOTE: non-nil signals transport to terminate
 	}
 	r.rxlast.Store(mono.NanoTime())

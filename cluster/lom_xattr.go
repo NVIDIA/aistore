@@ -373,7 +373,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 				if err != nil {
 					// Mountpath with the copy is missing.
 					if cmn.FastV(4, cos.SmoduleCluster) {
-						glog.Warning(err)
+						glog.Warningln(err)
 					}
 					// For utilities and tests: fill the map with mpath names always
 					if os.Getenv(DumpLomEnvVar) != "" {

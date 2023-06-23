@@ -136,7 +136,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}()
 	if num == 0 {
 		xcln.Finish(cmn.ErrNoMountpaths)
-		glog.Error(cmn.ErrNoMountpaths)
+		glog.Errorln(cmn.ErrNoMountpaths)
 		return fs.CapStatus{}
 	}
 	for mpath, mi := range availablePaths {
@@ -241,7 +241,7 @@ func (j *clnJ) run(providers []string) {
 	// globally
 	erm = j.removeDeleted()
 	if erm != nil {
-		glog.Error(erm)
+		glog.Errorln(erm)
 	}
 
 	// traverse
@@ -272,7 +272,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 			opts = fs.WalkOpts{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			if rerr == nil {
 				rerr = err
 			}

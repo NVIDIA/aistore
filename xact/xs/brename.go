@@ -130,7 +130,7 @@ loop:
 	var err error
 	if total >= bmvMaxWait {
 		err = fmt.Errorf("%s: timeout", r)
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish(err)

@@ -363,14 +363,14 @@ func (m *Manager) finalCleanup() {
 	now := time.Now()
 
 	if err := m.cleanupStreams(); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 
 	// Wait for all in-flight stream requests after cleaning up streams.
 	m.waitForInFlight()
 
 	if err := m.dsorter.finalCleanup(); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 
 	// The reason why this is not in regular cleanup is because we are only sure

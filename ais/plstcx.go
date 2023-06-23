@@ -92,7 +92,7 @@ func (c *lstcx) pages(smap *smapX) {
 		// next page
 		lst, err := p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, true)
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		if len(lst.Entries) == 0 {
@@ -110,7 +110,7 @@ func (c *lstcx) pages(smap *smapX) {
 		c.altmsg.Value = &c.tcomsg
 		xid, err := p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		debug.Assertf(c.tcomsg.TxnUUID == xid, "%q vs %q", c.tcomsg.TxnUUID, xid)

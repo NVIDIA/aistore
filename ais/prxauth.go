@@ -128,7 +128,7 @@ func (a *authManager) validateAddRm(token string, now time.Time) (*tok.Token, er
 			secret = cmn.GCO.Get().Auth.Secret
 		)
 		if tk, err = tok.DecryptToken(token, secret); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return nil, tok.ErrInvalidToken
 		}
 		a.tkList[token] = tk

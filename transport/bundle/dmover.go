@@ -216,11 +216,11 @@ func (dm *DataMover) UnregRecv() {
 		dm.Quiesce(dm.config.Transport.QuiesceTime.D())
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	if dm.useACKs() {
 		if err := transport.Unhandle(dm.ack.trname); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	}
 	dm.stage.regred.Store(false)

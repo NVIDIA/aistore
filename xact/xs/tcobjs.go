@@ -139,7 +139,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 
 			// this target must be active (ref: ignoreMaintenance)
 			if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
-				glog.Error(err)
+				glog.Errorln(err)
 				goto fin
 			}
 			nat := smap.CountActiveTs()
@@ -203,7 +203,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	transport.DrainAndFreeReader(objReader)
 ex:
 	if err != nil && r.config.FastV(4, cos.SmoduleXs) {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	return err
 }

@@ -76,7 +76,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else {
 		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Config)
@@ -93,7 +93,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	} else {
 		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
@@ -102,7 +102,7 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, t.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Error(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
+			glog.Errorln(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
 		}
 	} else if cm.Smap != nil {
 		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
@@ -246,7 +246,7 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 
 	if prepare {
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Info("Preparation step: do nothing")
+			glog.Infoln("Preparation step: do nothing")
 		}
 		return
 	}
@@ -544,7 +544,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
 		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 		return
 	}
@@ -563,7 +563,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 	}
 	return
@@ -577,7 +577,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 	t.owner.bmd.Unlock()
 
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	} else if oldVer < newBMD.Version {
 		t.regstate.prevbmd.Store(false)
 		t._postBMD(tag, rmbcks)
@@ -804,7 +804,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	time.Sleep(200 * time.Millisecond)
 	newBucketMD, err := t.getPrimaryBMD(bck.Name)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	msg := t.newAmsgStr("get-what="+apc.WhatBMD, newBucketMD)
@@ -819,7 +819,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	err = t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/)
 	t.regstate.mu.Unlock()
 	if err != nil && !isErrDowngrade(err) {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 }
 

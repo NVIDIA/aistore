@@ -146,7 +146,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 
 	if err != nil {
 		if sb.extra.Config.FastV(5, cos.SmoduleTransport) {
-			glog.Warning(err)
+			glog.Warningln(err)
 		}
 		// compare w/ transport doCmpl()
 		_doCmpl(obj, roc, err)

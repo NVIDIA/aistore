@@ -98,7 +98,7 @@ func (m *mgr) syncTokenList(clu *authn.CluACL) {
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
 	}
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 }
 

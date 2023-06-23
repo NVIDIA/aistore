@@ -177,7 +177,7 @@ func (r *XactPut) mainLoop() {
 		case <-ticker.C:
 			if r.config.FastV(4, cos.SmoduleEC) {
 				if s := fmt.Sprintf("%v", r.Snap()); s != "" {
-					glog.Info(s)
+					glog.Infoln(s)
 				}
 			}
 		case <-r.IdleTimer():

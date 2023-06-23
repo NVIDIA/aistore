@@ -191,7 +191,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 		case <-ticker.C:
 			if config.FastV(4, cos.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
-					glog.Info(s)
+					glog.Infoln(s)
 				}
 			}
 		case mpathRequest := <-r.mpathReqCh:

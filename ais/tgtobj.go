@@ -143,7 +143,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 		// resolve cluster-wide xact "behind" this PUT (promote via a single target won't show up)
 		xctn, err := xreg.GetXact(dpq.uuid)
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return 0, err
 		}
 		if xctn != nil {
@@ -303,7 +303,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 				debug.Assert(err == nil)
 			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
-					glog.Error(err)
+					glog.Errorln(err)
 				}
 			}
 		}
@@ -567,7 +567,7 @@ do:
 		cold, errCode, err = goi.validateRecover()
 		if err != nil {
 			if !cold {
-				glog.Error(err)
+				glog.Errorln(err)
 				return
 			}
 			glog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
@@ -635,7 +635,7 @@ validate:
 		return
 	}
 
-	glog.Warning(err)
+	glog.Warningln(err)
 	redundant := lom.HasCopies() || lom.Bprops().EC.Enabled
 	//
 	// return err if there's no redundancy OR already recovered once (and failed)
@@ -956,7 +956,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 		if !cos.IsRetriableConnErr(err) {
 			goi.t.fsErr(err, fqn)
 		}
-		glog.Error(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
+		glog.Errorln(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
 		// at this point, error is already written into the response -
 		// return special code to indicate just that
 		return errSendingResp

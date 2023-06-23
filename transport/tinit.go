@@ -62,7 +62,7 @@ func burst(config *cmn.Config) (burst int) {
 	}
 	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
 		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 		} else {
 			burst = int(burst64)
 		}

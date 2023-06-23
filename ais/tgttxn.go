@@ -553,7 +553,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		custom := txnTcb.xtcb.Args()
 		if custom.Phase != apc.ActBegin {
 			err = fmt.Errorf("%s: %s is already running", t, txnTcb) // never here
-			glog.Error(err)
+			glog.Errorln(err)
 			return "", err
 		}
 		custom.Phase = apc.ActCommit

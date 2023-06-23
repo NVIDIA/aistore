@@ -162,14 +162,14 @@ func (ios *ios) AddMpath(mpath, fs string, testingEnv bool) (fsdisks FsDisks, er
 func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
 		err = fmt.Errorf("mountpath %s already exists, disks %v (%v)", mpath, dd, fsdisks)
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
 			err = fmt.Errorf("disk %s: disk sharing is not allowed: %s vs %s", disk, mpath, mp)
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		ios.disk2mpath[disk] = mpath

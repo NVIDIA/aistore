@@ -24,7 +24,7 @@ func (lom *LOM) whingeCopy() (yes bool) {
 	}
 	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
 	debug.Assert(false, msg)
-	glog.Error(msg)
+	glog.Errorln(msg)
 	return true
 }
 
@@ -96,7 +96,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 	// 3. Remove the copies
 	for _, copyFQN := range copiesFQN {
 		if err1 := cos.RemoveFile(copyFQN); err1 != nil {
-			glog.Error(err1) // TODO: LRU should take care of that later.
+			glog.Errorln(err1) // TODO: LRU should take care of that later.
 			continue
 		}
 	}
@@ -254,7 +254,7 @@ add:
 	err = lom.Persist()
 	if err != nil {
 		lom.delCopyMd(copyFQN)
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 	err = lom.syncMetaWithCopies()
@@ -415,7 +415,7 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 		hrwMi, _, err  = HrwMpath(lom.md.uname)
 	)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))

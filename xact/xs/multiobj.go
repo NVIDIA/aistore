@@ -272,7 +272,7 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
 	}
 	if err != nil {
 		if !cmn.IsErrObjNought(err) {
-			glog.Warning(err)
+			glog.Warningln(err)
 		}
 		return
 	}
@@ -304,7 +304,7 @@ func (p *prfFactory) Start() error {
 		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
-		glog.Warning(err) // may show up later via ais/prxtrybck.go logic
+		glog.Warningln(err) // may show up later via ais/prxtrybck.go logic
 	} else if b.IsAIS() {
 		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
@@ -362,7 +362,7 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock); err != nil {
 		if err != cmn.ErrSkip {
-			glog.Warning(err)
+			glog.Warningln(err)
 		}
 		return
 	}

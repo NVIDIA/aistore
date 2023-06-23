@@ -438,7 +438,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	// NOTE: not enforcing Snode's immutability - in particular, IPs that may change upon restart
 	// in certain environments
 	if _, err := smap.IsDupNet(h.si); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	reliable = true
@@ -732,7 +732,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 			if si := smap.GetActiveNode(dst); si != nil {
 				nodes = append(nodes, si)
 			} else {
-				glog.Error(&errNodeNotFound{"failed to notify", dst, h.si, smap})
+				glog.Errorln(&errNodeNotFound{"failed to notify", dst, h.si, smap})
 			}
 		}
 	}
@@ -1883,7 +1883,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
 		if erP != nil {
 			debug.AssertNoErr(erP)
-			glog.Error(erP)
+			glog.Errorln(erP)
 			return
 		}
 		// we still trust the request when the sender's Smap is more current

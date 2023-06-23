@@ -491,7 +491,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
 		fromNode := ds.m.smap.GetTarget(hdr.SID)
 		if fromNode == nil {
 			err := fmt.Errorf("received request from node %q which is not present in the smap", hdr.SID)
-			glog.Error(err)
+			glog.Errorln(err)
 			return err
 		}
 

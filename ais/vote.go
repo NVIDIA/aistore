@@ -226,7 +226,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	glog.Infof("%s: primary %s is confirmed down: %v", p, curPrimary, err)
 
 	// 2. election phase 1
-	glog.Info("Moving to election state phase 1 (prepare)")
+	glog.Infoln("Moving to election state phase 1 (prepare)")
 	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
 		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", curPrimary)
@@ -234,7 +234,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 	}
 
 	// 3. election phase 2
-	glog.Info("Moving to election state phase 2 (commit)")
+	glog.Infoln("Moving to election state phase 2 (commit)")
 	confirmationErrors := p.confirmElectionVictory(vr)
 	for sid := range confirmationErrors {
 		if !votingErrors.Contains(sid) {

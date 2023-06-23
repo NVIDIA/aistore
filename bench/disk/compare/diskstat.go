@@ -42,7 +42,7 @@ func GetDiskstats() (output map[string]DiskStat) {
 
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 

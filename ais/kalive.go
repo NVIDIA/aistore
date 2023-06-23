@@ -250,7 +250,7 @@ func (pkr *palive) updateSmap() (stopped bool) {
 		if ctx.msg != nil {
 			glog.Errorf("FATAL: %v", err)
 		} else {
-			glog.Warning(err)
+			glog.Warningln(err)
 		}
 	}
 	return
@@ -540,7 +540,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 			}
 			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", si, meta.Pname(pid), err, status)
 			debug.AssertNoErr(err)
-			glog.Warning(err)
+			glog.Warningln(err)
 		case sig := <-k.controlCh:
 			if sig.msg == kaStopMsg {
 				return true

@@ -228,8 +228,9 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 	co.Lock()
 	oldConfig := cmn.GCO.Get()
 	config, err := co.get()
-	if err != nil {
+	if err != nil || config == nil {
 		co.Unlock()
+		glog.Infof("Warning: reset config %s: %v", oldConfig, err)
 		return err
 	}
 	cmn.GCO.PutOverrideConfig(nil)

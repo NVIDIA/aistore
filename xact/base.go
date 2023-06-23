@@ -243,7 +243,7 @@ func (xctn *Base) onFinished(err error) {
 	xactRecord := Table[xctn.kind]
 	if xactRecord.RefreshCap {
 		if cs, _ := fs.CapRefresh(nil, nil); cs.Err != nil {
-			glog.Error(cs.Err) // log warning
+			glog.Errorln(cs.Err) // log warning
 		}
 	}
 

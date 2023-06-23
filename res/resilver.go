@@ -89,7 +89,7 @@ func (res *Res) RunResilver(args Args) {
 	}
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 1 {
-		glog.Error(cmn.ErrNoMountpaths)
+		glog.Errorln(cmn.ErrNoMountpaths)
 		return
 	}
 	xres := xreg.RenewResilver(args.UUID).(*xs.Resilver)
@@ -168,7 +168,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
-		glog.Warning(err)
+		glog.Warningln(err)
 		return
 	}
 	if destMpath.Path == ct.Mountpath().Path {
@@ -314,7 +314,7 @@ redo:
 				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
-				glog.Error(errHrw)
+				glog.Errorln(errHrw)
 				return
 			}
 			copied = false

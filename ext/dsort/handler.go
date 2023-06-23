@@ -151,7 +151,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
 		if r.err != nil {
-			glog.Error(r.err)
+			glog.Errorln(r.err)
 			continue
 		}
 
@@ -176,7 +176,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 
 	body := cos.MustMarshal(resultList)
 	if _, err := w.Write(body); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return
@@ -436,7 +436,7 @@ func (m *Manager) startDSort() {
 				m.abort()
 			}
 
-			glog.Warning("broadcasting abort to other targets")
+			glog.Warningln("broadcasting abort to other targets")
 			path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
 			broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 		}
@@ -648,7 +648,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	body := cos.MustMarshal(Managers.List(regex, onlyActive))
 	if _, err := w.Write(body); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return
@@ -677,7 +677,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.Metrics.update()
 	body := dsortManager.Metrics.Marshal()
 	if _, err := w.Write(body); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return

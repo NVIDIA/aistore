@@ -242,7 +242,7 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
 	if err := y.isPrimary(); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return req.wg
 	}
 	req.wg.Add(1)
@@ -623,7 +623,7 @@ func (y *metasyncer) isPrimary() (err error) {
 		return
 	}
 	err = newErrNotPrimary(y.p.si, smap)
-	glog.Error(err)
+	glog.Errorln(err)
 	return
 }
 

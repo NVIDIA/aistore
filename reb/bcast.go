@@ -231,7 +231,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		detail := fmt.Sprintf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
 		err := cmn.NewErrAborted(logHdr, detail, nil)
 		if xreb.Abort(err) {
-			glog.Warning(err)
+			glog.Warningln(err)
 		}
 		return
 	}

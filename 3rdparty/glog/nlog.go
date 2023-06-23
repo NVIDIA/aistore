@@ -26,6 +26,7 @@ type (
 		pw, pf     *bytes.Buffer
 		file       *os.File
 		buf1, buf2 *bytes.Buffer
+		line       linebuf
 		rsize      int64
 		sev        severity
 		err        error
@@ -35,9 +36,6 @@ type (
 		err error
 	}
 )
-
-// interface guard
-var _ flushSyncWriter = (*nlog)(nil)
 
 func newErrLogAborted(err error) error {
 	e := &errLogAborted{err}
@@ -59,29 +57,47 @@ func newNlog(sev severity) *nlog {
 	}
 	nlog.buf1.Reset()
 	nlog.buf2.Reset()
+	nlog.line.Grow(1024) // for life
 	nlog.pw = nlog.buf1
 	return nlog
 }
 
-func (nlog *nlog) Write(p []byte) (n int, err error) {
+func (nlog *nlog) printf(sev severity, depth int, format string, args ...any) {
+	nlog.mw.Lock()
+	nlog.line.Reset()
+	sprintf(sev, depth+1, format, &nlog.line, args...)
+	if nlog.err != nil {
+		nlog.mw.Unlock()
+		os.Stderr.Write(nlog.line.Bytes())
+		return
+	}
+	nlog._write(nlog.line.Bytes())
+	nlog.mw.Unlock()
+}
+
+func (nlog *nlog) write(p []byte) {
 	nlog.mw.Lock()
 	if nlog.err != nil {
 		nlog.mw.Unlock()
 		os.Stderr.Write(p)
 		return
 	}
+	nlog._write(p)
+	nlog.mw.Unlock()
+}
+
+func (nlog *nlog) _write(p []byte) {
 	rem := nlog.pw.Cap() - nlog.pw.Len()
 	assert(rem >= nlogBufFlushBoundary, "unexpected remaining length", nlog.pw.Len(), nlogBufSize, rem)
 	if len(p) > rem {
 		p = p[:rem] // truncate in an unlikely event
 	}
-	n, err = nlog.pw.Write(p)
+	n, err := nlog.pw.Write(p)
 	nlog.rsize += int64(n)
 	nlog.err = err
 
 	flush := nlog.pw.Len() >= nlogBufSize-nlogBufFlushBoundary && err == nil
 	if !flush {
-		nlog.mw.Unlock()
 		return
 	}
 
@@ -91,10 +107,8 @@ func (nlog *nlog) Write(p []byte) (n int, err error) {
 	nlog.swap()
 	pf := nlog.pf
 	nlog.mf.Unlock()
-	nlog.mw.Unlock()
 
-	go nlog._flush(pf, rsize) // TODO: linger & reuse
-	return
+	go nlog._flush(pf, rsize) // TODO: linger for awhile and reuse
 }
 
 func (nlog *nlog) swap() {
@@ -126,7 +140,6 @@ func (nlog *nlog) _flush(pf *bytes.Buffer, rsize int64) {
 		nlog.mw.Unlock()
 	}
 	nlog.mf.Lock()
-	// TODO -- FIXME: compile-out asserts, here and elsewhere
 	assert(pf == nlog.pf, fmt.Sprintf("buffer-to-flush has changed: %+v (%p) != %+v (%p)", pf, pf, nlog.pf, nlog.pf))
 	if pf == nlog.pf {
 		nlog.pf.Reset()
@@ -213,3 +226,19 @@ func (nlog *nlog) rotate(now time.Time, rsize int64) (err error) {
 	}
 	return
 }
+
+//
+// linebuf mem pool - used for errors and warnings only
+//
+
+func alloc() (buf *linebuf) {
+	if v := pool.Get(); v != nil {
+		buf = v.(*linebuf)
+		buf.Reset()
+	} else {
+		buf = &linebuf{}
+	}
+	return
+}
+
+func free(buf *linebuf) { pool.Put(buf) }

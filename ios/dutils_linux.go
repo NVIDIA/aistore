@@ -60,7 +60,7 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	if len(out) == 0 {
@@ -75,7 +75,7 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		glog.Error(err)
+		glog.Errorln(err)
 		res = nil
 	}
 	return

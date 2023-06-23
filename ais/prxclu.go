@@ -740,7 +740,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 			glog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
 			continue
 		}
-		glog.Error(err)
+		glog.Errorln(err)
 		break
 	}
 	freeCargs(cargs)
@@ -796,7 +796,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		pairs  = make([]revsPair, 0, 5)
 	)
 	if config, err := p.owner.config.get(); err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
@@ -1560,7 +1560,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 			if !cos.StringInSlice(u, urls) {
 				return false, errors.New(errmsg)
 			}
-			glog.Warning(errmsg + " - proceeding anyway")
+			glog.Warningln(errmsg + " - proceeding anyway")
 		}
 		// rule #2: aliases and UUIDs are two distinct non-overlapping sets
 		p.remais.mu.RLock()
@@ -1840,14 +1840,14 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 		switch msg.Action {
 		case apc.ActShutdownNode, apc.ActDecommissionNode: // expecting EOF
 			if !cos.IsEOF(err) {
-				glog.Error(emsg)
+				glog.Errorln(emsg)
 			}
 		case apc.ActRmNodeUnsafe:
 			if cmn.FastV(4, cos.SmoduleAIS) {
-				glog.Error(emsg)
+				glog.Errorln(emsg)
 			}
 		default:
-			glog.Error(emsg)
+			glog.Errorln(emsg)
 		}
 		err = nil // NOTE: proceeding anyway
 	}

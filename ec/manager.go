@@ -201,7 +201,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 	// check if the header contains a valid request
 	if len(hdr.Opaque) == 0 {
 		err := fmt.Errorf("invalid header: [%+v]", hdr)
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 
@@ -241,7 +241,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
 		err := fmt.Errorf("invalid header: [%+v]", hdr)
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 
@@ -254,7 +254,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
-			glog.Error(err)
+			glog.Errorln(err)
 			return err
 		}
 	}

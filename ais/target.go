@@ -297,7 +297,7 @@ func (t *target) Run() error {
 	}
 	if writeErr != nil {
 		glog.Errorln("")
-		glog.Error(writeErr)
+		glog.Errorln(writeErr)
 		glog.Errorln("")
 	}
 
@@ -416,7 +416,7 @@ func (t *target) gojoin(config *cmn.Config) {
 
 func (t *target) goreslver(interrupted bool) {
 	if interrupted {
-		glog.Info("Resuming resilver...")
+		glog.Infoln("Resuming resilver...")
 	} else if daemon.resilver.required {
 		glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
 	}

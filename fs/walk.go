@@ -136,7 +136,7 @@ func Walk(opts *WalkOpts) error {
 		}
 		// NOTE: mountpath is getting detached or disabled
 		if cmn.IsErrMountpathNotFound(err1) {
-			glog.Error(err1)
+			glog.Errorln(err1)
 			continue
 		}
 		if cmn.IsErrAborted(err1) {
@@ -148,7 +148,7 @@ func Walk(opts *WalkOpts) error {
 			continue
 		}
 		if err1 != context.Canceled {
-			glog.Error(err1)
+			glog.Errorln(err1)
 		}
 		err = err1
 	}

@@ -170,7 +170,7 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 		_, err = fs.Disable(rmi.Path, g.redistributeMD)
 	}
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
@@ -191,7 +191,7 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 			_, err = fs.Disable(mi.Path, g.redistributeMD)
 		}
 		if err != nil {
-			glog.Error(err)
+			glog.Errorln(err)
 			return
 		}
 		fspathsConfigAddDel(mi.Path, false /*add*/)
@@ -216,7 +216,7 @@ func fspathsConfigAddDel(mpath string, add bool) {
 	if err := localConfig.FSP.Validate(config); err != nil {
 		debug.AssertNoErr(err)
 		cmn.GCO.DiscardUpdate()
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	// do
@@ -229,7 +229,7 @@ func fspathsSave(config *cmn.Config) {
 	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 		debug.AssertNoErr(err)
 		cmn.GCO.DiscardUpdate()
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 	cmn.GCO.CommitUpdate(config)

@@ -486,7 +486,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	}
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		debug.AssertNoErr(err)
 	}
 	c.msg.RMDVersion = rmd.version()
@@ -1130,7 +1130,7 @@ func (r *_rmbck) cb(nl nl.Listener) {
 	if err == nil {
 		return
 	}
-	glog.Error(err)
+	glog.Errorln(err)
 	if r.existed {
 		return
 	}

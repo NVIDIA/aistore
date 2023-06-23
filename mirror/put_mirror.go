@@ -70,7 +70,7 @@ func (p *putFactory) Start() error {
 	debug.AssertNoErr(err)
 	xctn, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {
-		glog.Error(err)
+		glog.Errorln(err)
 		return err
 	}
 	p.xctn = xctn

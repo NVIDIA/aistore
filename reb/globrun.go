@@ -221,7 +221,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	if err == nil {
 		errCnt = reb.rebWaitAck(rargs)
 	} else {
-		glog.Warning(err)
+		glog.Warningln(err)
 	}
 	reb.changeStage(rebStageFin)
 
@@ -350,7 +350,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 		}
 		err = fmt.Errorf("%s: acquire/release asymmetry vs %s%s", logHdr, rlogHdr, s)
 		if errcnt%2 == 1 {
-			glog.Error(err)
+			glog.Errorln(err)
 		}
 		return
 	}
@@ -366,7 +366,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 	}
 	if total > maxTotal {
 		err = fmt.Errorf("%s: preempting older %s takes too much time", logHdr, otherXreb)
-		glog.Error(err)
+		glog.Errorln(err)
 		if xreb := reb.xctn(); xreb != nil && xreb.ID() == otherXreb.ID() {
 			debug.Assert(reb.dm.GetXact().ID() == otherXreb.ID())
 			glog.Warningf("%s: aborting older streams...", logHdr)

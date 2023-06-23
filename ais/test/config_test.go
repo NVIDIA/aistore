@@ -211,7 +211,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 	cmd, err := tools.KillNode(proxy)
 	tassert.CheckFatal(t, err)
 	smap, err = tools.WaitForClusterState(proxyURL, "proxy removed", smap.Version, origProxyCnt-1, origTargetCnt)
-	tassert.CheckError(t, err)
+	tassert.CheckFatal(t, err)
 
 	err = tools.RestoreNode(cmd, false, apc.Proxy)
 	tassert.CheckFatal(t, err)

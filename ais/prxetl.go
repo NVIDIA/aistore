@@ -215,7 +215,7 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) e
 			continue
 		}
 		err = res.toErr()
-		glog.Error(err)
+		glog.Errorln(err)
 	}
 	freeBcastRes(results)
 

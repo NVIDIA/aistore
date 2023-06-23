@@ -558,7 +558,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
 		// NOTE: cannot send error because we have already written a header.
-		glog.Error(err)
+		glog.Errorln(err)
 		return
 	}
 
