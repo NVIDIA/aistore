@@ -1,7 +1,6 @@
 // Package statsd provides a client to send basic statd metrics (timer, counter and gauge) to listening UDP StatsD server.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package statsd
 
@@ -11,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -32,7 +31,7 @@ const (
 )
 
 const (
-	numErrsLog    = 100 // inc num errors to glog error
+	numErrsLog    = 100 // log one every so many
 	numTestProbes = 10  // num UDP probes at startup (optional)
 )
 
@@ -159,7 +158,7 @@ func (c Client) write(bytes []byte, l int) {
 	if err != nil || n < l {
 		errcnt++
 		if errcnt%numErrsLog == 0 {
-			glog.Errorf("StatsD: %v(%d/%d) %d", err, n, l, errcnt)
+			nlog.Errorf("StatsD: %v(%d/%d) %d", err, n, l, errcnt)
 		}
 	}
 }

@@ -18,18 +18,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // This source contains common AIS node inter-module errors -
 // the errors that some AIS packages (within a given running AIS node) return
 // and other AIS packages handle.
-
-var thisNodeName string
 
 const (
 	stackTracePrefix = "stack: ["
@@ -187,6 +185,10 @@ type (
 		detail string
 	}
 )
+
+var thisNodeName string
+
+func SetNodeName(sname string) { thisNodeName = sname }
 
 var (
 	ErrSkip             = errors.New("skip")
@@ -852,7 +854,7 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 				}
 			}
 		}
-		glog.Errorln(s)
+		nlog.Errorln(s)
 	}
 	hdr := w.Header()
 	hdr.Set(cos.HdrContentType, cos.ContentJSON)

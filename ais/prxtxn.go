@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -69,7 +69,7 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid str
 	for _, res := range results {
 		if res.err != nil {
 			err = res.toErr()
-			glog.Errorf("Failed to commit %q %s: %v %s", c.msg.Action, what, err, c.msg)
+			nlog.Errorf("Failed to commit %q %s: %v %s", c.msg.Action, what, err, c.msg)
 			xid = ""
 			break
 		}
@@ -130,7 +130,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 }
 
 func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
-	glog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
+	nlog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
 	results := c.bcast(apc.ActAbort, 0)
 	freeBcastRes(results)
 	return err
@@ -486,7 +486,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	}
 	rmd, err := p.owner.rmd.modify(ctx)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		debug.AssertNoErr(err)
 	}
 	c.msg.RMDVersion = rmd.version()
@@ -501,7 +501,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
-		glog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
+		nlog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
 		return
 	}
 
@@ -1085,7 +1085,7 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BucketPropsToU
 	}
 	err = nprops.Validate(targetCnt)
 	if cmn.IsErrSoft(err) && propsToUpdate.Force {
-		glog.Warningf("Ignoring soft error: %v", err)
+		nlog.Warningf("Ignoring soft error: %v", err)
 		err = nil
 	}
 	return
@@ -1130,7 +1130,7 @@ func (r *_rmbck) cb(nl nl.Listener) {
 	if err == nil {
 		return
 	}
-	glog.Errorln(err)
+	nlog.Errorln(err)
 	if r.existed {
 		return
 	}

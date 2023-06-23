@@ -10,7 +10,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -18,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
@@ -216,11 +216,11 @@ func (dm *DataMover) UnregRecv() {
 		dm.Quiesce(dm.config.Transport.QuiesceTime.D())
 	}
 	if err := transport.Unhandle(dm.data.trname); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	if dm.useACKs() {
 		if err := transport.Unhandle(dm.ack.trname); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 	dm.stage.regred.Store(false)

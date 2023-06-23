@@ -10,10 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -46,7 +46,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 				if x > 0 {
 					freed += x
 					if verbose {
-						glog.Infof("%s: idle for %v - cleanup", s.tag, idle)
+						nlog.Infof("%s: idle for %v - cleanup", s.tag, idle)
 					}
 				}
 			}
@@ -206,7 +206,7 @@ func (r *MMSA) freeIdle() (total int64) {
 		}
 		total += freed
 		if verbose && freed > 0 {
-			glog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
+			nlog.Infof("%s idle for %v: freed %s", s.tag, idle, cos.ToSizeIEC(freed, 1))
 		}
 	}
 	return
@@ -219,7 +219,7 @@ func (r *MMSA) freeIdle() (total int64) {
 func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
-		glog.Errorf("Failed to load averages, err: %v", err) // (should never happen)
+		nlog.Errorf("Failed to load averages, err: %v", err) // (should never happen)
 		avg.One = 999
 	}
 	if avg.One > loadAvg /*idle*/ && !force { // NOTE
@@ -231,10 +231,10 @@ func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	}
 	sgc := cos.ToSizeIEC(togc, 1)
 	if force {
-		glog.Warningf("%s: freeing %s to the OS (load %.2f)", r, sgc, avg.One)
+		nlog.Warningf("%s: freeing %s to the OS (load %.2f)", r, sgc, avg.One)
 		cos.FreeMemToOS()
 	} else {
-		glog.Warningf("%s: GC %s (load %.2f)", r, sgc, avg.One)
+		nlog.Warningf("%s: GC %s (load %.2f)", r, sgc, avg.One)
 		runtime.GC()
 	}
 	gced = true

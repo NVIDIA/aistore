@@ -10,11 +10,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -29,7 +29,7 @@ func (reb *Reb) AbortLocal(olderSmapV int64, err error) {
 		smap := (*meta.Smap)(reb.smap.Load())
 		if smap.Version == olderSmapV {
 			if xreb.Abort(err) {
-				glog.Warningf("%v - aborted", err)
+				nlog.Warningf("%v - aborted", err)
 			}
 		}
 	}
@@ -73,7 +73,7 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 		curwt  time.Duration
 	)
 	maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
-	glog.Warningf("%s: waiting to start...", reb.t)
+	nlog.Warningf("%s: waiting to start...", reb.t)
 	time.Sleep(sleep)
 	for curwt < maxwt {
 		smap = (*meta.Smap)(reb.smap.Load())
@@ -101,7 +101,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 	hdr.Opaque = reb.encodeStageNtfn(&req)
 	// second, notify all
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		glog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
+		nlog.Warningf("Failed to broadcast ack %s: %v", stages[newStage], err)
 	}
 }
 
@@ -121,7 +121,7 @@ func (reb *Reb) abortAndBroadcast(err error) {
 	)
 	hdr.Opaque = reb.encodeStageNtfn(&req)
 	if err := reb.pushes.Send(&transport.Obj{Hdr: hdr}, nil); err != nil {
-		glog.Errorf("Failed to broadcast abort notification: %v", err)
+		nlog.Errorf("Failed to broadcast abort notification: %v", err)
 	}
 }
 

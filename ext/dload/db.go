@@ -9,9 +9,9 @@ import (
 	"path"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -50,7 +50,7 @@ func (db *downloaderDB) errors(id string) (errors []TaskErrInfo, err error) {
 	key := path.Join(downloaderErrors, id)
 	if err := db.driver.Get(downloaderCollection, key, &errors); err != nil {
 		if !cos.IsErrNotFound(err) {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return nil, err
 		}
 		// nothing in DB - return an empty list
@@ -79,14 +79,14 @@ func (db *downloaderDB) persistError(id, objName, errMsg string) {
 
 	errMsgs, err := db.errors(id) // it will also append errors from cache
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	errMsgs = append(errMsgs, errInfo)
 
 	key := path.Join(downloaderErrors, id)
 	if err := db.driver.Set(downloaderCollection, key, errMsgs); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	key := path.Join(downloaderTasks, id)
 	if err := db.driver.Get(downloaderCollection, key, &tasks); err != nil {
 		if !cos.IsErrNotFound(err) {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return nil, err
 		}
 		// nothing in DB - return an empty list
@@ -124,7 +124,7 @@ func (db *downloaderDB) persistTaskInfo(id string, task TaskDlInfo) error {
 
 	key := path.Join(downloaderTasks, id)
 	if err := db.driver.Set(downloaderCollection, key, persistedTasks); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 
@@ -151,7 +151,7 @@ func (db *downloaderDB) flush(id string) error {
 
 		key := path.Join(downloaderErrors, id)
 		if err := db.driver.Set(downloaderCollection, key, errMsgs); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return err
 		}
 
@@ -166,7 +166,7 @@ func (db *downloaderDB) flush(id string) error {
 
 		key := path.Join(downloaderTasks, id)
 		if err := db.driver.Set(downloaderCollection, key, persistedTasks); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return err
 		}
 

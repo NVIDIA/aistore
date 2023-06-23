@@ -11,12 +11,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -56,7 +56,7 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 					if writeErr == nil {
 						writeErr = err
 					}
-					glog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
+					nlog.Errorf("Failed to cleanup %q marker: %v", fpath, err)
 				} else {
 					cnt--
 				}
@@ -67,7 +67,7 @@ func PersistMarker(marker string) (fatalErr, writeErr error) {
 				file.Close()
 				cnt++
 			} else {
-				glog.Errorf("Failed to create %q marker: %v", fpath, err)
+				nlog.Errorf("Failed to create %q marker: %v", fpath, err)
 			}
 		}
 	}
@@ -84,7 +84,7 @@ func RemoveMarker(marker string) (err error) {
 	)
 	for _, mi := range availableMpaths {
 		if er1 := cos.RemoveFile(filepath.Join(mi.Path, relname)); er1 != nil {
-			glog.Errorf("Failed to remove %q marker from %q: %v", relname, mi.Path, er1)
+			nlog.Errorf("Failed to remove %q marker from %q: %v", relname, mi.Path, er1)
 			err = er1
 		}
 	}
@@ -121,7 +121,7 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 			wto = sgl // not reopening - see sgl.WriteTo()
 		}
 		if err := jsp.SaveMeta(fpath, meta, wto); err != nil {
-			glog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
+			nlog.Errorf("Failed to persist %q on %q, err: %v", fname, mi, err)
 		} else {
 			cnt++
 		}

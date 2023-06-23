@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -21,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -136,7 +136,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}()
 	if num == 0 {
 		xcln.Finish(cmn.ErrNoMountpaths)
-		glog.Errorln(cmn.ErrNoMountpaths)
+		nlog.Errorln(cmn.ErrNoMountpaths)
 		return fs.CapStatus{}
 	}
 	for mpath, mi := range availablePaths {
@@ -161,9 +161,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 
 	parent.cs.a = fs.Cap()
 	if parent.cs.a.Err != nil {
-		glog.Warningf("%s started, %s", xcln, parent.cs.a.String())
+		nlog.Warningf("%s started, %s", xcln, parent.cs.a.String())
 	} else {
-		glog.Infof("%s started, %s", xcln, parent.cs.a.String())
+		nlog.Infof("%s started, %s", xcln, parent.cs.a.String())
 	}
 	if ini.WG != nil {
 		ini.WG.Done()
@@ -177,9 +177,9 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	xcln.Finish(nil)
 	parent.cs.c, _ = fs.CapRefresh(nil, nil)
 	if parent.cs.c.Err != nil {
-		glog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
+		nlog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
 	} else {
-		glog.Infof("%s finished, %s", xcln, parent.cs.c.String())
+		nlog.Infof("%s finished, %s", xcln, parent.cs.c.String())
 	}
 	return parent.cs.c
 }
@@ -213,9 +213,9 @@ func (p *clnP) rmMisplaced() bool {
 		info = "resilver interrupted"
 	}
 	if p.cs.a.Err != nil {
-		glog.Errorln(warn + info)
+		nlog.Errorln(warn + info)
 	} else {
-		glog.Warningln(warn + info)
+		nlog.Warningln(warn + info)
 	}
 	return false
 }
@@ -241,7 +241,7 @@ func (j *clnJ) run(providers []string) {
 	// globally
 	erm = j.removeDeleted()
 	if erm != nil {
-		glog.Errorln(erm)
+		nlog.Errorln(erm)
 	}
 
 	// traverse
@@ -255,10 +255,10 @@ func (j *clnJ) run(providers []string) {
 	}
 	if err == nil {
 		if size != 0 {
-			glog.Infof(f, j, cos.ToSizeIEC(size, 1))
+			nlog.Infof(f, j, cos.ToSizeIEC(size, 1))
 		}
 	} else {
-		glog.Errorf(f+", err: %v", j, cos.ToSizeIEC(size, 1), err)
+		nlog.Errorf(f+", err: %v", j, cos.ToSizeIEC(size, 1), err)
 	}
 	j.p.wg.Done()
 }
@@ -272,7 +272,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 			opts = fs.WalkOpts{Mi: j.mi, Bck: cmn.Bck{Provider: provider, Ns: cmn.NsGlobal}}
 		)
 		if bcks, err = fs.AllMpathBcks(&opts); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			if rerr == nil {
 				rerr = err
 			}
@@ -304,13 +304,13 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 			if cmn.IsErrBckNotFound(err) || cmn.IsErrRemoteBckNotFound(err) {
 				const act = "delete non-existing"
 				if err = fs.DestroyBucket(act, &bck, 0 /*unknown BID*/); err == nil {
-					glog.Infof("%s: %s %s", j, act, bck)
+					nlog.Infof("%s: %s %s", j, act, bck)
 				} else {
-					glog.Errorf("%s %s: %v - skipping", j, act, err)
+					nlog.Errorf("%s %s: %v - skipping", j, act, err)
 				}
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
-				glog.Errorf("%s: %v - skipping %s", j, err, bck)
+				nlog.Errorf("%s: %v - skipping %s", j, err, bck)
 			}
 			continue
 		}
@@ -333,12 +333,12 @@ func (j *clnJ) removeDeleted() (err error) {
 	var errCap error
 	j.p.cs.b, errCap = fs.CapRefresh(nil, nil)
 	if err != nil {
-		glog.Errorf("%s: %v", j, errCap)
+		nlog.Errorf("%s: %v", j, errCap)
 	} else {
 		if j.p.cs.b.Err != nil {
-			glog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
+			nlog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
 		} else {
-			glog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
+			nlog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
 		}
 	}
 	return
@@ -438,15 +438,15 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 		}
 		if cmn.IsErrLmetaCorrupted(err) {
 			if err := cos.RemoveFile(lom.FQN); err != nil {
-				glog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
+				nlog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
 			} else {
-				glog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
+				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
 		} else if cmn.IsErrLmetaNotFound(err) {
 			if err := cos.RemoveFile(lom.FQN); err != nil {
-				glog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
+				nlog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
 			} else {
-				glog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
+				nlog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
 			}
 		}
 		return
@@ -490,7 +490,7 @@ func (j *clnJ) rmExtraCopies(lom *cluster.LOM) {
 		return // extremely unlikely but ok
 	}
 	if _, err := lom.DelExtraCopies(); err != nil {
-		glog.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
+		nlog.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
 	}
 }
 
@@ -522,7 +522,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		xcln               = j.ini.Xaction
 	)
 	if j.ini.Config.FastV(4, cos.SmoduleSpace) {
-		glog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
+		nlog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
 	}
 
 	// 1. rm older work
@@ -530,13 +530,13 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		finfo, erw := os.Stat(workfqn)
 		if erw == nil {
 			if err := cos.RemoveFile(workfqn); err != nil {
-				glog.Errorf("%s: failed to rm old work %q: %v", j, workfqn, err)
+				nlog.Errorf("%s: failed to rm old work %q: %v", j, workfqn, err)
 			} else {
 				size += finfo.Size()
 				fevicted++
 				bevicted += finfo.Size()
 				if verbose {
-					glog.Infof("%s: rm old work %q, size=%d", j, workfqn, size)
+					nlog.Infof("%s: rm old work %q, size=%d", j, workfqn, size)
 				}
 			}
 		}
@@ -563,7 +563,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				fevicted++
 				bevicted += mlom.SizeBytes(true /*not loaded*/)
 				if verbose {
-					glog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.SizeBytes(true /*not loaded*/))
+					nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.SizeBytes(true /*not loaded*/))
 				}
 				if err = j.yieldTerm(); err != nil {
 					return

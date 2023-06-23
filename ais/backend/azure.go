@@ -18,13 +18,13 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -235,7 +235,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		opts     = azblob.ListBlobsSegmentOptions{Prefix: msg.Prefix, MaxResults: int32(msg.PageSize)}
 	)
 	if verbose {
-		glog.Infof("list_objects %s", cloudBck.Name)
+		nlog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
 		marker.Val = api.String(msg.ContinuationToken)
@@ -276,7 +276,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		lst.ContinuationToken = *resp.NextMarker.Val
 	}
 	if verbose {
-		glog.Infof("[list_bucket] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
+		nlog.Infof("[list_bucket] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
 	}
 	return
 }
@@ -342,7 +342,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
 	if superVerbose {
-		glog.Infof("[head_object] %s", lom)
+		nlog.Infof("[head_object] %s", lom)
 	}
 	return
 }
@@ -369,7 +369,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 		return
 	}
 	if superVerbose {
-		glog.Infof("[get_object] %s", lom)
+		nlog.Infof("[get_object] %s", lom)
 	}
 	return
 }
@@ -482,7 +482,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (int, error) 
 		lom.SetVersion(v)
 	}
 	if superVerbose {
-		glog.Infof("[put_object] %s", lom)
+		nlog.Infof("[put_object] %s", lom)
 	}
 	return http.StatusOK, nil
 }

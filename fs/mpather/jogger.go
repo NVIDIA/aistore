@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -123,7 +123,7 @@ func NewJoggerGroup(opts *JgroupOpts, selectedMpaths ...string) *Jgroup {
 
 	// NOTE: this jogger group is a no-op
 	if len(joggers) == 0 {
-		glog.Errorf("%v: avail=%v, disabled=%v, selected=%v",
+		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%v",
 			cmn.ErrNoMountpaths, available, disabled, selectedMpaths)
 		jg.finishedCh.Close()
 	}
@@ -247,7 +247,7 @@ func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 
 	if err != nil {
 		if cmn.IsErrAborted(err) {
-			glog.Infof("%s stopping traversal: %v", j, err)
+			nlog.Infof("%s stopping traversal: %v", j, err)
 			return true, nil
 		}
 		return false, err

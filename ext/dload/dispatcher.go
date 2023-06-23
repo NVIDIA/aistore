@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"golang.org/x/sync/errgroup"
 )
@@ -77,10 +77,10 @@ mloop:
 	for {
 		select {
 		case <-d.xdl.IdleTimer():
-			glog.Infof("%s timed out. Exiting...", d.xdl.Name())
+			nlog.Infof("%s timed out. Exiting...", d.xdl.Name())
 			break mloop
 		case errCause := <-d.xdl.ChanAbort():
-			glog.Infof("%s aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
+			nlog.Infof("%s aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
 			break mloop
 		case <-ctx.Done():
 			break mloop
@@ -94,10 +94,10 @@ mloop:
 
 			select {
 			case <-d.xdl.IdleTimer():
-				glog.Infof("%s has timed out. Exiting...", d.xdl.Name())
+				nlog.Infof("%s has timed out. Exiting...", d.xdl.Name())
 				break mloop
 			case errCause := <-d.xdl.ChanAbort():
-				glog.Infof("%s has been aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
+				nlog.Infof("%s has been aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
 				break mloop
 			case <-ctx.Done():
 				break mloop
@@ -146,19 +146,19 @@ func (d *dispatcher) cleanupJob(jobID string) {
 func (d *dispatcher) finish(job jobif) {
 	verbose := d.config.FastV(4, cos.SmoduleDload)
 	if verbose {
-		glog.Infof("Waiting for job %q", job.ID())
+		nlog.Infof("Waiting for job %q", job.ID())
 	}
 	d.waitFor(job.ID())
 	if verbose {
-		glog.Infof("Job %q finished waiting for all tasks", job.ID())
+		nlog.Infof("Job %q finished waiting for all tasks", job.ID())
 	}
 	d.cleanupJob(job.ID())
 	if verbose {
-		glog.Infof("Job %q cleaned up", job.ID())
+		nlog.Infof("Job %q cleaned up", job.ID())
 	}
 	job.cleanup()
 	if verbose {
-		glog.Infof("Job %q has finished", job.ID())
+		nlog.Infof("Job %q has finished", job.ID())
 	}
 }
 
@@ -309,7 +309,7 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 
 			ok, err := d.doSingle(task)
 			if err != nil {
-				glog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
+				nlog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
 				dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
 				return ok
 			}
@@ -400,7 +400,7 @@ func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 
 func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error) {
 	if d.config.FastV(4, cos.SmoduleDload) {
-		glog.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
+		nlog.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 	}
 	// Need to make sure that the dispatcher has fully initialized and started,
 	// and it's ready for processing the requests.
@@ -540,7 +540,7 @@ func (ss *startupSema) waitForStartup() {
 		// should never happen even on slowest machines
 		debug.Assert(total < timeout, errmsg)
 		if total >= timeout && total < timeout+sleep*2 {
-			glog.Errorln(errmsg)
+			nlog.Errorln(errmsg)
 		}
 	}
 }

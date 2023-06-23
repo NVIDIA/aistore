@@ -13,13 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/ios"
@@ -148,7 +148,7 @@ func RunLRU(ini *IniLRU) {
 		}
 	}()
 	if num == 0 {
-		glog.Warningln(cmn.ErrNoMountpaths)
+		nlog.Warningln(cmn.ErrNoMountpaths)
 		xlru.Finish(cmn.ErrNoMountpaths)
 		return
 	}
@@ -171,7 +171,7 @@ func RunLRU(ini *IniLRU) {
 		go j.run(providers)
 	}
 	cs := fs.Cap()
-	glog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs.String())
+	nlog.Infof("%s started, dont-evict-time %v, %s", xlru, config.LRU.DontEvictTime, cs.String())
 	if ini.WG != nil {
 		ini.WG.Done()
 		ini.WG = nil
@@ -183,7 +183,7 @@ func RunLRU(ini *IniLRU) {
 	}
 	xlru.Finish(nil)
 	cs = fs.Cap()
-	glog.Infof("%s finished, %s", xlru, cs.String())
+	nlog.Infof("%s finished, %s", xlru, cs.String())
 }
 
 func (*XactLRU) Run(*sync.WaitGroup) { debug.Assert(false) }
@@ -214,11 +214,11 @@ func (j *lruJ) run(providers []string) {
 		goto ex
 	}
 	if j.totalSize < minEvictThresh {
-		glog.Infof("%s: used cap below threshold, nothing to do", j)
+		nlog.Infof("%s: used cap below threshold, nothing to do", j)
 		return
 	}
 	if len(j.ini.Buckets) != 0 {
-		glog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
+		nlog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
 		err = j.jogBcks(j.ini.Buckets, j.ini.Force)
 	} else {
 		err = j.jog(providers)
@@ -227,11 +227,11 @@ ex:
 	if err == nil || cmn.IsErrBucketNought(err) || cmn.IsErrObjNought(err) {
 		return
 	}
-	glog.Errorf("%s: exited with err %v", j, err)
+	nlog.Errorf("%s: exited with err %v", j, err)
 }
 
 func (j *lruJ) jog(providers []string) (err error) {
-	glog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
+	nlog.Infof("%s: freeing-up %s", j, cos.ToSizeIEC(j.totalSize, 2))
 	for _, provider := range providers { // for each provider (NOTE: ordering is random)
 		var (
 			bcks []cmn.Bck
@@ -261,7 +261,7 @@ func (j *lruJ) jogBcks(bcks []cmn.Bck, force bool) (err error) {
 		var size int64
 		j.bck = bck
 		if j.allowDelObj, err = j.allow(); err != nil {
-			glog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck)
+			nlog.Errorf("%s: %v - skipping %s (Hint: run 'ais storage cleanup' to cleanup)", j, err, bck)
 			err = nil
 			continue
 		}
@@ -436,11 +436,11 @@ func (j *lruJ) evictObj(lom *cluster.LOM) bool {
 	err := lom.Remove()
 	lom.Unlock(true)
 	if err != nil {
-		glog.Errorf("%s: failed to evict %s: %v", j, lom, err)
+		nlog.Errorf("%s: failed to evict %s: %v", j, lom, err)
 		return false
 	}
 	if j.ini.Config.FastV(5, cos.SmoduleSpace) {
-		glog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
+		nlog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
 	}
 	return true
 }

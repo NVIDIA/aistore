@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -245,7 +245,7 @@ func (m *mgr) createRolesForCluster(clu *authn.CluACL) {
 			{ID: clu.ID, Access: pr.perms},
 		}
 		if err := m.db.Set(rolesCollection, uid, rInfo); err != nil {
-			glog.Errorf("Failed to create role %s: %v", uid, err)
+			nlog.Errorf("Failed to create role %s: %v", uid, err)
 		}
 	}
 }
@@ -263,7 +263,7 @@ func (m *mgr) clus() (map[string]*authn.CluACL, error) {
 	for cid, s := range clusters {
 		cInfo := &authn.CluACL{}
 		if err := jsoniter.Unmarshal([]byte(s), cInfo); err != nil {
-			glog.Errorf("Failed to parse cluster %s info: %v", cid, err)
+			nlog.Errorf("Failed to parse cluster %s info: %v", cid, err)
 			continue
 		}
 		clus[cInfo.ID] = cInfo
@@ -382,7 +382,7 @@ func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error
 
 	err = m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return "", errInvalidCredentials
 	}
 	if !isSamePassword(pwd, uInfo.Password) {
@@ -488,7 +488,7 @@ func (m *mgr) generateRevokedTokenList() ([]string, error) {
 			continue
 		}
 		if tk.Expires.Before(now) {
-			glog.Infof("removing %s", tk)
+			nlog.Infof("removing %s", tk)
 			m.db.Delete(revokedCollection, token)
 			continue
 		}

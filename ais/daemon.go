@@ -12,12 +12,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
@@ -103,8 +103,7 @@ func initFlags(flset *flag.FlagSet) {
 	flset.BoolVar(&daemon.cli.primary.skipStartup, "skip_startup", false,
 		"whether primary, when starting up, should skip waiting for target joins (used only in tests)")
 
-	// glog
-	glog.InitFlags(flset)
+	nlog.InitFlags(flset)
 }
 
 func initDaemon(version, buildTime string) cos.Runner {
@@ -186,15 +185,13 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	daemon.version, daemon.buildTime = version, buildTime
 	loghdr := fmt.Sprintf("Version %s, build time %s, debug %t", version, buildTime, debug.ON())
-	glog.Infoln(loghdr)
-	cmn.AppGloghdr(loghdr)
 	cpus := sys.NumCPU()
 	if containerized := sys.Containerized(); containerized {
-		loghdr = fmt.Sprintf("CPUs(%d, runtime=%d), containerized", cpus, runtime.NumCPU())
+		loghdr += fmt.Sprintf(", CPUs(%d, runtime=%d), containerized", cpus, runtime.NumCPU())
 	} else {
-		loghdr = fmt.Sprintf("CPUs(%d, runtime=%d)", cpus, runtime.NumCPU())
+		loghdr += fmt.Sprintf(", CPUs(%d, runtime=%d)", cpus, runtime.NumCPU())
 	}
-	glog.Infoln(loghdr)
+	nlog.Infoln(loghdr) // redundant (see below), prior to start/init
 	sys.SetMaxProcs()
 
 	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
@@ -210,7 +207,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.role == apc.Proxy {
 		p := newProxy(co)
 		p.init(config)
-		cmn.AppGloghdr("Node: " + p.si.Name() + ", " + loghdr)
+		title := "Node " + p.si.Name() + ", " + loghdr + "\n"
+		nlog.Infoln(title)
+		nlog.SetTitle(title)
 		cmn.SetNodeName(p.si.Name())
 		return p
 	}
@@ -221,7 +220,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	t := newTarget(co)
 	t.init(config)
-	cmn.AppGloghdr("Node: " + t.si.Name() + ", " + loghdr)
+	title := "Node " + t.si.Name() + ", " + loghdr + "\n"
+	nlog.Infoln(title)
+	nlog.SetTitle(title)
 	cmn.SetNodeName(t.si.Name())
 
 	return t
@@ -247,20 +248,20 @@ func Run(version, buildTime string) int {
 	err := daemon.rg.runAll(rmain)
 
 	if err == nil {
-		glog.Infoln("Terminated OK")
+		nlog.Infoln("Terminated OK")
 		return 0
 	}
 	if e, ok := err.(*cos.ErrSignal); ok {
-		glog.Infof("Terminated OK via %v", e)
+		nlog.Infof("Terminated OK via %v", e)
 		return e.ExitCode()
 	}
 	if errors.Is(err, cmn.ErrStartupTimeout) {
 		// NOTE: stats and keepalive runners wait for the ClusterStarted() - i.e., for the primary
 		//       to reach the corresponding stage. There must be an external "restarter" (e.g. K8s)
 		//       to restart the daemon if the primary gets killed or panics prior (to reaching that state)
-		glog.Errorln("Timed-out while starting up")
+		nlog.Errorln("Timed-out while starting up")
 	}
-	glog.Errorf("Terminated with err: %v", err)
+	nlog.Errorf("Terminated with err: %v", err)
 	return 1
 }
 
@@ -279,7 +280,7 @@ func (g *rungroup) add(r cos.Runner) {
 func (g *rungroup) run(r cos.Runner) {
 	err := r.Run()
 	if err != nil {
-		glog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
+		nlog.Warningf("runner [%s] exited with err [%v]", r.Name(), err)
 	}
 	g.errCh <- runRet{r.Name(), err}
 }
@@ -327,11 +328,11 @@ const (
 
 func envDaemonID(daemonType string) (daemonID string) {
 	if daemon.cli.daemonID != "" {
-		glog.Warningf("%s[%q] ID from command-line", daemonType, daemon.cli.daemonID)
+		nlog.Warningf("%s[%q] ID from command-line", daemonType, daemon.cli.daemonID)
 		return daemon.cli.daemonID
 	}
 	if daemonID = os.Getenv(daemonIDEnv); daemonID != "" {
-		glog.Warningf("%s[%q] ID from env", daemonType, daemonID)
+		nlog.Warningf("%s[%q] ID from env", daemonType, daemonID)
 	}
 	return
 }

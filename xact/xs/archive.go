@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -23,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -142,7 +142,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 			return
 		}
 		if r.config.FastV(5, cos.SmoduleXs) {
-			glog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
+			nlog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
 		}
 
 		// construct format-specific writer; serialize for multi-target conc. writing
@@ -181,7 +181,7 @@ func (r *XactArch) Do(msg *cmn.ArchiveBckMsg) {
 
 func (r *XactArch) Run(wg *sync.WaitGroup) {
 	var err error
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	wg.Done()
 	for {
 		select {
@@ -326,7 +326,7 @@ func (r *XactArch) finalize(wi *archwi) {
 		if err != nil {
 			s = fmt.Sprintf(": %v(%d)", err, errCode)
 		}
-		glog.Infof("%s: finalize %s%s", r.Base.Name(), wi.msg.Cname(), s)
+		nlog.Infof("%s: finalize %s%s", r.Base.Name(), wi.msg.Cname(), s)
 	}
 	if err == nil || r.IsAborted() { // done ok (unless aborted)
 		return
@@ -449,7 +449,7 @@ func (wi *archwi) openTarForAppend() (err error) {
 	wi.wfh = nil
 roll:
 	if errV := wi.archlom.RenameFrom(wi.fqn); errV != nil {
-		glog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
+		nlog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
 			wi.tsi, wi.archlom, err, wi.fqn, errV)
 	} else {
 		wi.fqn = ""

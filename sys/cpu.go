@@ -8,7 +8,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const maxProcsEnvVar = "GOMAXPROCS"
@@ -28,7 +28,7 @@ func init() {
 		if c, err := containerNumCPU(); err == nil {
 			contCPUs = c
 		} else {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 }
@@ -39,13 +39,13 @@ func NumCPU() int         { return contCPUs }
 // SetMaxProcs sets GOMAXPROCS = NumCPU unless already overridden via Go environment
 func SetMaxProcs() {
 	if val, exists := os.LookupEnv(maxProcsEnvVar); exists {
-		glog.Warningf("GOMAXPROCS is set via Go environment %q: %q", maxProcsEnvVar, val)
+		nlog.Warningf("GOMAXPROCS is set via Go environment %q: %q", maxProcsEnvVar, val)
 		return
 	}
 	maxprocs := runtime.GOMAXPROCS(0)
 	ncpu := NumCPU()
 	if maxprocs > ncpu {
-		glog.Warningf("Reducing GOMAXPROCS (%d) to %d (num CPUs)", maxprocs, ncpu)
+		nlog.Warningf("Reducing GOMAXPROCS (%d) to %d (num CPUs)", maxprocs, ncpu)
 		runtime.GOMAXPROCS(ncpu)
 	}
 }

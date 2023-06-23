@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -133,12 +133,12 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		glog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
+		nlog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
 	}
 }
 
 func (c *putJogger) run(wg *sync.WaitGroup) {
-	glog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	nlog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	defer wg.Done()
 	c.buffer, c.slab = mm.Alloc()
 	for {
@@ -157,7 +157,7 @@ func (c *putJogger) run(wg *sync.WaitGroup) {
 }
 
 func (c *putJogger) stop() {
-	glog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	nlog.Infof("Stopping EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	c.stopCh.Close()
 }
 
@@ -214,7 +214,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		ecConf                = lom.Bprops().EC
 	)
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Encoding %q...", lom.FQN)
+		nlog.Infof("Encoding %q...", lom.FQN)
 	}
 	if lom.Checksum() != nil {
 		cksumType, cksumValue = lom.Checksum().Get()
@@ -281,7 +281,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	}
 	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
-			glog.Errorf("nested error: encode -> remove metafile: %v", errRm)
+			nlog.Errorf("nested error: encode -> remove metafile: %v", errRm)
 		}
 		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 	}
@@ -291,7 +291,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 func (c *putJogger) ctSendCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	c.parent.t.ByteMM().Free(hdr.Opaque)
 	if err != nil {
-		glog.Errorf("failed to send o[%s]: %v", hdr.Cname(), err)
+		nlog.Errorf("failed to send o[%s]: %v", hdr.Cname(), err)
 	}
 	c.parent.DecPending()
 }
@@ -497,7 +497,7 @@ func (c *putJogger) sendSlice(ctx *encodeCtx, data *slice, node *meta.Snode, idx
 			data.release()
 		}
 		if err != nil {
-			glog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
+			nlog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
 		}
 	}
 
@@ -537,11 +537,11 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 	}
 
 	if copyErr != nil {
-		glog.Errorf("Error while copying (data=%d, parity=%d) for %q: %v",
+		nlog.Errorf("Error while copying (data=%d, parity=%d) for %q: %v",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName, copyErr)
 		err = errSliceSendFailed
 	} else if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("EC created (data=%d, parity=%d) for %q",
+		nlog.Infof("EC created (data=%d, parity=%d) for %q",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName)
 	}
 

@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -18,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -70,7 +70,7 @@ func (p *putFactory) Start() error {
 	debug.AssertNoErr(err)
 	xctn, err := runXactPut(p.lom, slab, p.T)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 	p.xctn = xctn
@@ -121,7 +121,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 		if err != nil {
 			s = "Error: " + err.Error() + ": "
 		}
-		glog.Infof("%s: %s%s, copies=%d, size=%d", r.Base.Name(), s, lom.Cname(), copies, size)
+		nlog.Infof("%s: %s%s, copies=%d, size=%d", r.Base.Name(), s, lom.Cname(), copies, size)
 	}
 	r.DecPending() // to support action renewal on-demand
 	cluster.FreeLOM(lom)
@@ -130,7 +130,7 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 // control logic: stop and idle timer
 // (LOMs get dispatched directly to workers)
 func (r *XactPut) Run(*sync.WaitGroup) {
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	r.config = cmn.GCO.Get()
 	r.workers.Run()
 	for {
@@ -141,9 +141,9 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 			return
 		case errCause := <-r.ChanAbort():
 			if err := r.stop(); err != nil {
-				glog.Errorf("%s aborted (cause %v), traversal err %v", r, errCause, err)
+				nlog.Errorf("%s aborted (cause %v), traversal err %v", r, errCause, err)
 			} else {
-				glog.Infof("%s aborted (cause %v)", r, errCause)
+				nlog.Infof("%s aborted (cause %v)", r, errCause)
 			}
 			r.Finish(cmn.NewErrAborted(r.Name(), "", errCause))
 			return
@@ -158,7 +158,7 @@ func (r *XactPut) Repl(lom *cluster.LOM) {
 
 	pending, max := int(r.Pending()), r.mirror.Burst
 	if pending > 1 && pending >= max && (total%logPending) == 0 {
-		glog.Warningf("%s: pending=%d exceeded %d=burst (total=%d)", r, pending, max, total)
+		nlog.Warningf("%s: pending=%d exceeded %d=burst (total=%d)", r, pending, max, total)
 	}
 	r.IncPending() // ref-count via base to support on-demand action
 

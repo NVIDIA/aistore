@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -31,7 +31,7 @@ var (
 // [METHOD] /s3
 func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("S3Request: %s - %s", r.Method, r.URL)
+		nlog.Infof("S3Request: %s - %s", r.Method, r.URL)
 	}
 
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
@@ -188,7 +188,7 @@ func (p *proxy) delBckS3(w http.ResponseWriter, r *http.Request, bucket string) 
 	if err := p.destroyBucket(&msg, bck); err != nil {
 		errCode := http.StatusInternalServerError
 		if _, ok := err.(*cmn.ErrBucketAlreadyExists); ok {
-			glog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
+			nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			return
 		}
 		s3.WriteErr(w, r, err, errCode)
@@ -396,7 +396,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
+		nlog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -431,7 +431,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -469,7 +469,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
@@ -546,7 +546,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 
 	p.reverseNodeRequest(w, r, si)
@@ -579,7 +579,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)

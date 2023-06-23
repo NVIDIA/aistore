@@ -1,24 +1,35 @@
-// Package glog
+// Package nlog - aistore logger, provides buffering, timestamping, writing, and
+// flushing/syncing/rotating
 /*
  * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
  */
-package glog
+package nlog
 
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
-// nlog replaces glog's original buffering, writing, and flushing/syncing
-
 const (
 	nlogBufSize          = 64 * 1024
 	nlogBufFlushBoundary = 512
+)
+
+type severity int
+
+const (
+	sevInfo severity = iota
+	sevWarn
+	sevErr
 )
 
 type (
@@ -26,7 +37,7 @@ type (
 		pw, pf     *bytes.Buffer
 		file       *os.File
 		buf1, buf2 *bytes.Buffer
-		line       linebuf
+		line       bytes.Buffer
 		rsize      int64
 		sev        severity
 		err        error
@@ -60,6 +71,34 @@ func newNlog(sev severity) *nlog {
 	nlog.line.Grow(1024) // for life
 	nlog.pw = nlog.buf1
 	return nlog
+}
+
+// main function
+func log(sev severity, depth int, format string, args ...any) {
+	onceInitFiles.Do(initFiles)
+
+	switch {
+	case !flag.Parsed():
+		os.Stderr.WriteString("Error: logging before flag.Parse: ")
+		fallthrough
+	case toStderr:
+		buf := alloc()
+		sprintf(sev, depth, format, buf, args...)
+		os.Stderr.Write(buf.Bytes())
+		free(buf)
+	case alsoToStderr || sev >= sevWarn:
+		buf := alloc()
+		sprintf(sev, depth, format, buf, args...)
+		if alsoToStderr || sev >= sevErr {
+			os.Stderr.Write(buf.Bytes())
+		}
+		nlogs[sevErr].write(buf.Bytes())
+		nlogs[sevInfo].write(buf.Bytes())
+		free(buf)
+	default:
+		// fast path
+		nlogs[sevInfo].printf(sev, depth, format, args...)
+	}
 }
 
 func (nlog *nlog) printf(sev severity, depth int, format string, args ...any) {
@@ -204,7 +243,7 @@ func (nlog *nlog) rotate(now time.Time, rsize int64) (err error) {
 		x    = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		snow = now.Format("2006/01/02 15:04:05")
 	)
-	if nlog.file, _, err = fcreate(severityName[nlog.sev], now); err != nil {
+	if nlog.file, _, err = fcreate(sevText[nlog.sev], now); err != nil {
 		nlog.err = newErrLogAborted(err)
 		return
 	}
@@ -212,11 +251,11 @@ func (nlog *nlog) rotate(now time.Time, rsize int64) (err error) {
 	assert(nlog.rsize >= 0, "negative rsize", nlog.rsize)
 
 	// direct write under w-lock
-	if FileHeaderCB == nil {
-		n, err = fmt.Fprintf(nlog.file, "Started up at %s, %s", snow, x)
+	if title == "" {
+		n, err = nlog.file.WriteString("Started up at " + snow + ", " + x)
 	} else {
-		n1, _ := fmt.Fprintf(nlog.file, "Created at %s, %s", snow, x)
-		n, err = fmt.Fprint(nlog.file, FileHeaderCB())
+		n1, _ := nlog.file.WriteString("Rotated at " + snow + ", " + x)
+		n, err = nlog.file.WriteString(title)
 		n += n1
 	}
 	nlog.rsize += int64(n)
@@ -228,17 +267,91 @@ func (nlog *nlog) rotate(now time.Time, rsize int64) (err error) {
 }
 
 //
-// linebuf mem pool - used for errors and warnings only
+// utils
 //
 
-func alloc() (buf *linebuf) {
+func logfname(tag string, t time.Time) (name, link string) {
+	s := sname()
+	name = fmt.Sprintf("%s.%s.%s.%02d%02d-%02d%02d%02d.%d",
+		s,
+		host,
+		tag,
+		t.Month(),
+		t.Day(),
+		t.Hour(),
+		t.Minute(),
+		t.Second(),
+		pid)
+	return name, s + "." + tag
+}
+
+func formatHdr(s severity, depth int, buf *bytes.Buffer) {
+	const char = "IWE"
+	_, fn, ln, ok := runtime.Caller(3 + depth)
+	if !ok {
+		return
+	}
+	idx := strings.LastIndexByte(fn, filepath.Separator)
+	if idx > 0 {
+		fn = fn[idx+1:]
+	}
+	if l := len(fn); l > 3 {
+		fn = fn[:l-3]
+	}
+	buf.WriteByte(char[s])
+	buf.WriteByte(' ')
+	now := time.Now()
+	buf.WriteString(now.Format("15:04:05.000000"))
+
+	buf.WriteByte(' ')
+	if _, redact := redactFnames[fn]; redact {
+		return
+	}
+	buf.WriteString(fn)
+	buf.WriteByte(':')
+	buf.WriteString(strconv.Itoa(ln))
+	buf.WriteByte(' ')
+}
+
+func sprintf(sev severity, depth int, format string, buf *bytes.Buffer, args ...any) {
+	formatHdr(sev, depth+1, buf)
+	if format == "" {
+		fmt.Fprint(buf, args...)
+	} else {
+		fmt.Fprintf(buf, format, args...)
+	}
+	if buf.Bytes()[buf.Len()-1] != '\n' {
+		buf.WriteByte('\n')
+	}
+}
+
+func fcreateAll(sev severity) error {
+	now := time.Now()
+	for s := sev; s >= sevInfo && nlogs[s] == nil; s-- {
+		if s == sevWarn {
+			continue
+		}
+		nlog := newNlog(s)
+		if err := nlog.rotate(now, 0); err != nil {
+			return err
+		}
+		nlogs[s] = nlog
+	}
+	return nil
+}
+
+//
+// buffer pool for errors and warnings
+//
+
+func alloc() (buf *bytes.Buffer) {
 	if v := pool.Get(); v != nil {
-		buf = v.(*linebuf)
+		buf = v.(*bytes.Buffer)
 		buf.Reset()
 	} else {
-		buf = &linebuf{}
+		buf = &bytes.Buffer{}
 	}
 	return
 }
 
-func free(buf *linebuf) { pool.Put(buf) }
+func free(buf *bytes.Buffer) { pool.Put(buf) }

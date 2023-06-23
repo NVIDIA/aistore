@@ -16,7 +16,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -26,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -293,9 +293,9 @@ func (bo *bmdOwnerPrx) init() (prev bool) {
 	bmd, err := _loadBMD(bo.fpath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			glog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
+			nlog.Errorf("failed to load %s from %s, err: %v", bmd, bo.fpath, err)
 		} else {
-			glog.Infof("%s does not exist at %s - initializing", bmd, bo.fpath)
+			nlog.Infof("%s does not exist at %s - initializing", bmd, bo.fpath)
 		}
 	}
 	bo.put(bmd)
@@ -364,16 +364,16 @@ func (bo *bmdOwnerTgt) init() (prev bool) {
 		available = fs.GetAvail()
 	)
 	if bmd = loadBMD(available, fname.Bmd); bmd != nil {
-		glog.Infof("loaded %s", bmd)
+		nlog.Infof("loaded %s", bmd)
 		goto finalize
 	}
 	if bmd = loadBMD(available, fname.BmdPrevious); bmd != nil {
-		glog.Errorf("loaded previous version of the %s (%q)", bmd, fname.BmdPrevious)
+		nlog.Errorf("loaded previous version of the %s (%q)", bmd, fname.BmdPrevious)
 		prev = true
 		goto finalize
 	}
 	bmd = newBucketMD()
-	glog.Warningf("initializing new %s", bmd)
+	nlog.Warningf("initializing new %s", bmd)
 
 finalize:
 	bo.put(bmd)
@@ -406,11 +406,11 @@ func (*bmdOwnerTgt) persist(clone *bucketMD, payload msPayload) (err error) {
 		return
 	}
 	if availCnt == 0 {
-		glog.Errorf("Cannot store %s: %v", clone, cmn.ErrNoMountpaths)
+		nlog.Errorf("Cannot store %s: %v", clone, cmn.ErrNoMountpaths)
 		return
 	}
 	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
-	glog.Errorln(err)
+	nlog.Errorln(err)
 	return
 }
 
@@ -435,7 +435,7 @@ func loadBMD(mpaths fs.MPI, path string) (mainBMD *bucketMD) {
 		if mainBMD.Version == bmd.Version {
 			cos.ExitLogf("BMD is different (%q): %v vs %v", mpath, mainBMD, bmd)
 		}
-		glog.Errorf("Warning: detected different BMD versions (%q): %v != %v", mpath, mainBMD, bmd)
+		nlog.Errorf("Warning: detected different BMD versions (%q): %v != %v", mpath, mainBMD, bmd)
 		if mainBMD.Version < bmd.Version {
 			mainBMD = bmd
 		}
@@ -447,7 +447,7 @@ func _loadBMD(path string) (bmd *bucketMD, err error) {
 	bmd = newBucketMD()
 	bmd.cksum, err = jsp.LoadMeta(path, bmd)
 	if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-		glog.Errorf(cmn.FmtErrBackwardCompat, err)
+		nlog.Errorf(cmn.FmtErrBackwardCompat, err)
 	}
 	return
 }
@@ -463,7 +463,7 @@ func loadBMDFromMpath(mpath *fs.Mountpath, path string) (bmd *bucketMD) {
 	}
 	if !os.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant bmds stored.
-		glog.Errorf("failed to load %s from %s, err: %v", bmd, fpath, err)
+		nlog.Errorf("failed to load %s from %s, err: %v", bmd, fpath, err)
 	}
 	return nil
 }

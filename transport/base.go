@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -166,14 +166,14 @@ func (s *streamBase) startSend(streamable fmt.Stringer) (err error) {
 		// slow path
 		reason, errT := s.TermInfo()
 		err = cmn.NewErrStreamTerminated(s.String(), errT, reason, "dropping "+streamable.String())
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 
 	if s.sessST.CAS(inactive, active) {
 		s.postCh <- struct{}{}
 		if verbose {
-			glog.Infof("%s: inactive => active", s)
+			nlog.Infof("%s: inactive => active", s)
 		}
 	}
 	return
@@ -217,20 +217,20 @@ func (s *streamBase) isNextReq() (reason string) {
 		select {
 		case <-s.lastCh.Listen():
 			if verbose {
-				glog.Infof("%s: end-of-stream", s)
+				nlog.Infof("%s: end-of-stream", s)
 			}
 			reason = endOfStream
 			return
 		case <-s.stopCh.Listen():
 			if verbose {
-				glog.Infof("%s: stopped", s)
+				nlog.Infof("%s: stopped", s)
 			}
 			reason = reasonStopped
 			return
 		case <-s.postCh:
 			s.sessST.Store(active)
 			if verbose {
-				glog.Infof("%s: active <- posted", s)
+				nlog.Infof("%s: active <- posted", s)
 			}
 			return
 		}
@@ -241,7 +241,7 @@ func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
 	if verbose {
 		num := s.stats.Num.Load()
-		glog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
+		nlog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
 	}
 	return
 }
@@ -264,7 +264,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 					break
 				}
 				retried = true
-				glog.Errorf("%s: %v - retrying...", s, errR)
+				nlog.Errorf("%s: %v - retrying...", s, errR)
 				time.Sleep(connErrWait)
 			}
 		}
@@ -283,7 +283,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// termination is caused by anything other than Fin()
 	// (reasonStopped is, effectively, abort via Stop() - totally legit)
 	if reason != reasonStopped {
-		glog.Errorf("%s: terminating (%s, %v)", s, reason, err)
+		nlog.Errorf("%s: terminating (%s, %v)", s, reason, err)
 	}
 
 	// wait for the SCQ/cmplCh to empty
@@ -311,7 +311,7 @@ func dryrun() (dryrun bool) {
 	var err error
 	if a := os.Getenv("AIS_STREAM_DRY_RUN"); a != "" {
 		if dryrun, err = strconv.ParseBool(a); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 	return

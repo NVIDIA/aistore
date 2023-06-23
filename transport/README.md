@@ -235,24 +235,11 @@ Finally, there are two important facts to remember:
 
 ## Testing
 
-* **Run all tests while redirecting glog to STDERR**:
-
-```console
-$ go test -v -logtostderr=true
-```
-
-* **Run tests matching "Multi" with debug-enabled assertions and glog level=1 (non-verbose)**:
+* **Run tests matching "Multi" with debug-enabled assertions**:
 
 ```console
 $ go test -v -run=Multi -tags=debug
 ```
-
-* **Same as above, with -logtostderr=true**:
-
-```console
-$ go test -v -run=Multi -tags=debug -logtostderr=true
-```
-
 
 * **Use `nethttp` build tag to run with net/http, e.g.**:
 

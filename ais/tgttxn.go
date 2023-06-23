@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -23,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
@@ -433,7 +433,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		}
 		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.ActCommit)
 		if rns.Err != nil {
-			glog.Errorf("%s: %s %v", t, txn, rns.Err)
+			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
@@ -516,7 +516,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 			if !msg.Force {
 				return "", err
 			}
-			glog.Errorf("%s: %v - %q is \"forced\", proceeding anyway", t, err, c.msg.Action)
+			nlog.Errorf("%s: %v - %q is \"forced\", proceeding anyway", t, err, c.msg.Action)
 		}
 		bmd := t.owner.bmd.get()
 		if _, present := bmd.Get(bckFrom); !present {
@@ -553,14 +553,14 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		custom := txnTcb.xtcb.Args()
 		if custom.Phase != apc.ActBegin {
 			err = fmt.Errorf("%s: %s is already running", t, txnTcb) // never here
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return "", err
 		}
 		custom.Phase = apc.ActCommit
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort()
-			glog.Errorf("%s: %s %v", t, txn, rns.Err)
+			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -595,7 +595,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
 	rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
-		glog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
+		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
 		return
 	}
 	xctn := rns.Entry.Get()
@@ -643,7 +643,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
 		rns := xreg.RenewTCObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
-			glog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
+			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
 			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -731,7 +731,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		}
 		rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
 		if rns.Err != nil {
-			glog.Errorf("%s: %s %v", t, txn, rns.Err)
+			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -791,7 +791,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 
 		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom, bckTo)
 		if rns.Err != nil {
-			glog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
+			nlog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
@@ -928,7 +928,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		defer t.transactions.find(c.uuid, apc.ActCommit)
 
 		if txnPrm.totalN == 0 {
-			glog.Infof("%s: nothing to do (%s)", t, txnPrm)
+			nlog.Infof("%s: nothing to do (%s)", t, txnPrm)
 			return "", nil
 		}
 		// set by controlling proxy upon collecting and comparing all the begin-phase results
@@ -937,14 +937,14 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		// promote synchronously wo/ xaction;
 		// (set by proxy to eliminate any ambiguity vis-a-vis `promoteNumSync` special)
 		if noXact := c.query.Get(apc.QparamActNoXact) != ""; noXact {
-			glog.Infof("%s: promote synchronously %s", t, txnPrm)
+			nlog.Infof("%s: promote synchronously %s", t, txnPrm)
 			err := t.prmNumFiles(c, txnPrm, txnPrm.fshare)
 			return "", err
 		}
 
 		rns := xreg.RenewPromote(t, c.uuid, c.bck, txnPrm.msg)
 		if rns.Err != nil {
-			glog.Errorf("%s: %s %v", t, txnPrm, rns.Err)
+			nlog.Errorf("%s: %s %v", t, txnPrm, rns.Err)
 			return "", rns.Err
 		}
 		xprm := rns.Entry.Get().(*xs.XactDirPromote)
@@ -1065,7 +1065,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 			if delta := ptLatency(time.Now().UnixNano(), ptime); delta != 0 {
 				bound := cmn.GCO.Get().Timeout.CplaneOperation / 2
 				if delta > int64(bound) || delta < -int64(bound) {
-					glog.Errorf("%s: txn %s[%s] latency=%v(!), caller %s, phase=%s, bucket %q",
+					nlog.Errorf("%s: txn %s[%s] latency=%v(!), caller %s, phase=%s, bucket %q",
 						t.si, msg.Action, c.msg.UUID, time.Duration(delta),
 						c.callerName, phase, bucket)
 				}

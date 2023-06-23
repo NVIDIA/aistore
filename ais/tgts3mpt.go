@@ -15,13 +15,13 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -113,7 +113,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	slab.Free(buf)
 	if err != nil {
 		if nerr := cos.RemoveFile(wfqn); nerr != nil {
-			glog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
+			nlog.Errorf(fmtNested, t, err, "remove", wfqn, nerr)
 		}
 		s3.WriteErr(w, r, err, 0)
 		return

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
@@ -117,7 +117,7 @@ func (r *rmdOwner) load() {
 		return
 	}
 	if !os.IsNotExist(err) {
-		glog.Errorf("failed to load rmd: %v", err)
+		nlog.Errorf("failed to load rmd: %v", err)
 	}
 }
 
@@ -189,11 +189,11 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	)
 	switch {
 	case err == nil && !abrt:
-		glog.Infoln(name + "done")
+		nlog.Infoln(name + "done")
 	case abrt:
-		glog.Warningln(name + "aborted")
+		nlog.Warningln(name + "aborted")
 	default:
-		glog.Errorf("%s failed: %v", name, err)
+		nlog.Errorf("%s failed: %v", name, err)
 	}
 }
 
@@ -206,6 +206,6 @@ func (m *rmdModifier) rmNode(nl nl.Listener) {
 	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
 	debug.Assert(si.IsTarget())
 	if _, err := m.p.rmNodeFinal(m.smapCtx.msg, si, m.smapCtx); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 }

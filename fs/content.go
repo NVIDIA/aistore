@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 /*
@@ -121,7 +121,7 @@ func (f *contentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	}
 	spec, found := f.m[parsedFQN.ContentType]
 	if !found {
-		glog.Errorf("%q: unknown content type %s", fqn, parsedFQN.ContentType)
+		nlog.Errorf("%q: unknown content type %s", fqn, parsedFQN.ContentType)
 		return
 	}
 	origBase, old, ok := spec.ParseUniqueFQN(base)

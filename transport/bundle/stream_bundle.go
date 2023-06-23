@@ -10,13 +10,13 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -146,7 +146,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 
 	if err != nil {
 		if sb.extra.Config.FastV(5, cos.SmoduleTransport) {
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		}
 		// compare w/ transport doCmpl()
 		_doCmpl(obj, roc, err)
@@ -359,7 +359,7 @@ func (sb *Streams) Resync() {
 		}
 		// not connecting to the peer that's in maintenance and already rebalanced-out
 		if si.InMaintPostReb() {
-			glog.Infof("%s => %s[-/%#b] - skipping", sb, si.StringEx(), si.Flags)
+			nlog.Infof("%s => %s[-/%#b] - skipping", sb, si.StringEx(), si.Flags)
 			continue
 		}
 

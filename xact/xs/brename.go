@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -110,7 +110,7 @@ func (r *bckRename) Run(wg *sync.WaitGroup) {
 		flt   = xreg.Flt{ID: r.rebID, Kind: apc.ActRebalance}
 		sleep = cos.ProbingFrequency(bmvAvgWait)
 	)
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	wg.Done()
 loop:
 	for total < bmvMaxWait {
@@ -130,7 +130,7 @@ loop:
 	var err error
 	if total >= bmvMaxWait {
 		err = fmt.Errorf("%s: timeout", r)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish(err)

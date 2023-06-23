@@ -15,7 +15,7 @@ import (
 
 // in addition to standard layouts at /usr/local/go/src/time/format.go
 const (
-	StampMicro = "15:04:05.000000" // time.StampMicro without a date, same as glog
+	StampMicro = "15:04:05.000000" // time.StampMicro without a date
 	StampSec   = "15:04:05"        // time.Stamp without a date
 
 	// S3 ListObjectsV2

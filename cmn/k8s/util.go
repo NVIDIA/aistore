@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -36,14 +36,14 @@ func initDetect() {
 		podName  = os.Getenv(k8sPodNameEnv)
 	)
 
-	glog.Infof(
+	nlog.Infof(
 		"Verifying type of deployment (%s: %q, %s: %q)",
 		k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName,
 	)
 
 	client, err := GetClient()
 	if err != nil {
-		glog.Infof("Couldn't initiate a K8s client, assuming non-Kubernetes deployment")
+		nlog.Infof("Couldn't initiate a K8s client, assuming non-Kubernetes deployment")
 		return
 	}
 
@@ -54,13 +54,13 @@ func initDetect() {
 	}
 
 	if podName == "" {
-		glog.Infof("%s environment not found, assuming non-Kubernetes deployment", k8sPodNameEnv)
+		nlog.Infof("%s environment not found, assuming non-Kubernetes deployment", k8sPodNameEnv)
 		return
 	}
 
 	pod, err = client.Pod(podName)
 	if err != nil {
-		glog.Errorf("Failed to get pod %q, err: %v. Try setting %q env variable", podName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get pod %q, err: %v. Try setting %q env variable", podName, err, k8sNodeNameEnv)
 		return
 	}
 	nodeName = pod.Spec.NodeName
@@ -68,12 +68,12 @@ func initDetect() {
 checkNode:
 	node, err := client.Node(nodeName)
 	if err != nil {
-		glog.Errorf("Failed to get node %q, err: %v. Try setting %q env variable", nodeName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get node %q, err: %v. Try setting %q env variable", nodeName, err, k8sNodeNameEnv)
 		return
 	}
 
 	NodeName = node.Name
-	glog.Infof("Successfully got node name %q, assuming Kubernetes deployment", NodeName)
+	nlog.Infof("Successfully got node name %q, assuming Kubernetes deployment", NodeName)
 }
 
 func Detect() error {

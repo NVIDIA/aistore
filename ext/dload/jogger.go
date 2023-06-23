@@ -7,9 +7,9 @@ package dload
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const queueChSize = 1000
@@ -45,7 +45,7 @@ func newJogger(d *dispatcher, mpath string) (j *jogger) {
 }
 
 func (j *jogger) jog() {
-	glog.Infof("[downloader] starting jogger for mpath %q", j.mpath)
+	nlog.Infof("[downloader] starting jogger for mpath %q", j.mpath)
 	for {
 		t := j.q.get()
 		if t == nil {
@@ -99,7 +99,7 @@ func (j *jogger) jog() {
 
 // stop terminates the jogger and waits for it to finish.
 func (j *jogger) stop() {
-	glog.Infof("Stopping jogger for mpath: %s", j.mpath)
+	nlog.Infof("Stopping jogger for mpath: %s", j.mpath)
 
 	j.mtx.Lock()
 	j.stopAgent = true

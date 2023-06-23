@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 )
@@ -154,7 +154,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	xctn.abort.mu.Unlock()
 
 	if xctn.Kind() != apc.ActList {
-		glog.Infof("%s aborted(%v)", xctn.Name(), err)
+		nlog.Infof("%s aborted(%v)", xctn.Name(), err)
 	}
 	return true
 }
@@ -243,7 +243,7 @@ func (xctn *Base) onFinished(err error) {
 	xactRecord := Table[xctn.kind]
 	if xactRecord.RefreshCap {
 		if cs, _ := fs.CapRefresh(nil, nil); cs.Err != nil {
-			glog.Errorln(cs.Err) // log warning
+			nlog.Errorln(cs.Err) // log warning
 		}
 	}
 
@@ -263,9 +263,9 @@ func (xctn *Base) Finish(err error) {
 		xctn.onFinished(err)
 		if xctn.Kind() != apc.ActList {
 			if err == nil {
-				glog.Infof("%s finished", xctn)
+				nlog.Infof("%s finished", xctn)
 			} else {
-				glog.Warningf("%s finished w/err: %v", xctn, err)
+				nlog.Warningf("%s finished w/err: %v", xctn, err)
 			}
 		}
 	}

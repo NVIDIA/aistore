@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -210,7 +210,7 @@ func newXact(t cluster.Target, statsT stats.Tracker, xid string) (xld *Xact) {
 }
 
 func (xld *Xact) Run(*sync.WaitGroup) {
-	glog.Infof("starting %s", xld.Name())
+	nlog.Infof("starting %s", xld.Name())
 	err := xld.dispatcher.run()
 	xld.stop(err)
 }

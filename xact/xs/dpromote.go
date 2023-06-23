@@ -9,13 +9,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -77,7 +77,7 @@ func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is calle
 
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	glog.Infof("%s(%s)", r.Name(), r.dir)
+	nlog.Infof("%s(%s)", r.Name(), r.dir)
 
 	r.smap = r.T.Sowner().Get()
 	var (
@@ -130,7 +130,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		err = nil
 	}
 	if r.BckJog.Config.FastV(5, cos.SmoduleXs) {
-		glog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
+		nlog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
 			r.args.OverwriteDst, r.args.DeleteSrc, r.confirmedFshare, err)
 	}
 	return err

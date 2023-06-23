@@ -19,13 +19,13 @@ import (
 	ratomic "sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats/statsd"
@@ -243,7 +243,7 @@ func (s *coreStats) promUnlock() {
 func (s *coreStats) initMetricClient(node *meta.Snode, parent *statsRunner) {
 	// Either Prometheus
 	if prom := os.Getenv("AIS_PROMETHEUS"); prom != "" {
-		glog.Infoln("Using Prometheus")
+		nlog.Infoln("Using Prometheus")
 		prometheus.MustRegister(parent) // as prometheus.Collector
 		return
 	}
@@ -256,14 +256,14 @@ func (s *coreStats) initMetricClient(node *meta.Snode, parent *statsRunner) {
 	if portStr := os.Getenv("AIS_STATSD_PORT"); portStr != "" {
 		if portNum, err := cmn.ParsePort(portStr); err != nil {
 			debug.AssertNoErr(err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		} else {
 			port = portNum
 		}
 	}
 	if probeStr := os.Getenv("AIS_STATSD_PROBE"); probeStr != "" {
 		if probeBool, err := cos.ParseBool(probeStr); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		} else {
 			probe = probeBool
 		}
@@ -271,9 +271,9 @@ func (s *coreStats) initMetricClient(node *meta.Snode, parent *statsRunner) {
 	id := strings.ReplaceAll(node.ID(), ":", "_") // ":" delineates name and value for StatsD
 	statsD, err := statsd.New("localhost", port, "ais"+node.Type()+"."+id, probe)
 	if err != nil {
-		glog.Errorf("Starting up without StatsD: %v", err)
+		nlog.Errorf("Starting up without StatsD: %v", err)
 	} else {
-		glog.Infoln("Using StatsD")
+		nlog.Infoln("Using StatsD")
 	}
 	s.statsdC = statsD
 }
@@ -841,7 +841,7 @@ waitStartup:
 			}
 			i += sleep
 			if i > config.Timeout.Startup.D() && !logger.standingBy() {
-				glog.Errorln("startup is taking unusually long time...")
+				nlog.Errorln("startup is taking unusually long time...")
 				i = 0
 			}
 		}
@@ -850,7 +850,7 @@ waitStartup:
 
 	config = cmn.GCO.Get()
 	goMaxProcs := runtime.GOMAXPROCS(0)
-	glog.Infof("Starting %s", r.Name())
+	nlog.Infof("Starting %s", r.Name())
 	hk.Reg(r.Name()+"-logs"+hk.NameSuffix, recycleLogs, logsMaxSizeCheckTime)
 
 	statsTime := config.Periodic.StatsTime.D() // (NOTE: not to confuse with config.Log.StatsTime)
@@ -885,11 +885,11 @@ waitStartup:
 				flushTime = config.Log.FlushTime.D()
 			}
 			if time.Duration(now-lastGlogFlushTime) > flushTime {
-				glog.Flush()
+				nlog.Flush()
 				lastGlogFlushTime = mono.NanoTime()
 			}
 			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
-				glog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
+				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now
 			}
 		case <-r.stopCh:
@@ -909,13 +909,13 @@ func _whingeGoroutines(now, checkNumGorHigh int64, goMaxProcs int) int64 {
 	}
 	if ngr >= goMaxProcs*numGorExtreme {
 		extreme = true
-		glog.Errorf("Extremely high number of goroutines: %d", ngr)
+		nlog.Errorf("Extremely high number of goroutines: %d", ngr)
 	}
 	if checkNumGorHigh == 0 {
 		checkNumGorHigh = now
 	} else if time.Duration(now-checkNumGorHigh) > numGorHighCheckTime {
 		if !extreme {
-			glog.Warningf("High number of goroutines: %d", ngr)
+			nlog.Warningf("High number of goroutines: %d", ngr)
 		}
 		checkNumGorHigh = 0
 	}
@@ -925,7 +925,7 @@ func _whingeGoroutines(now, checkNumGorHigh int64, goMaxProcs int) int64 {
 func (r *statsRunner) StartedUp() bool { return r.startedUp.Load() }
 
 func (r *statsRunner) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.Name(), err)
+	nlog.Infof("Stopping %s, err: %v", r.Name(), err)
 	r.stopCh <- struct{}{}
 	if !r.IsPrometheus() {
 		r.core.statsdC.Close()
@@ -943,7 +943,7 @@ func removeLogs(config *cmn.Config) {
 	maxtotal := int64(config.Log.MaxTotal)
 	dentries, err := os.ReadDir(config.LogDir)
 	if err != nil {
-		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.LogDir, err)
+		nlog.Errorf("GC logs: cannot read log dir %s, err: %v", config.LogDir, err)
 		_ = cos.CreateDir(config.LogDir) // FIXME: (local non-containerized + kill/restart under test)
 		return
 	}
@@ -972,7 +972,7 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 	const prefix = "GC logs"
 	l := len(filteredInfos)
 	if l <= 1 {
-		glog.Warningf("%s: cannot cleanup %s, dir %s, tot %d, max %d", prefix, logtype, logdir, tot, maxtotal)
+		nlog.Warningf("%s: cannot cleanup %s, dir %s, tot %d, max %d", prefix, logtype, logdir, tot, maxtotal)
 		return
 	}
 	fiLess := func(i, j int) bool {
@@ -981,7 +981,7 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 
 	verbose := config.FastV(4, cos.SmoduleStats)
 	if verbose {
-		glog.Infoln(prefix + ": started")
+		nlog.Infoln(prefix + ": started")
 	}
 	sort.Slice(filteredInfos, fiLess)
 	filteredInfos = filteredInfos[:l-1] // except the last = current
@@ -990,17 +990,17 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 		if err := cos.RemoveFile(logfqn); err == nil {
 			tot -= logfi.Size()
 			if verbose {
-				glog.Infof("%s: removed %s", prefix, logfqn)
+				nlog.Infof("%s: removed %s", prefix, logfqn)
 			}
 			if tot < maxtotal {
 				break
 			}
 		} else {
-			glog.Errorf("%s: failed to remove %s", prefix, logfqn)
+			nlog.Errorf("%s: failed to remove %s", prefix, logfqn)
 		}
 	}
 	if verbose {
-		glog.Infoln(prefix + ": done")
+		nlog.Infoln(prefix + ": done")
 	}
 }
 

@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
@@ -101,7 +101,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s", msg.Action, xargs.String())
+		nlog.Infof("%s %s", msg.Action, xargs.String())
 	}
 	switch msg.Action {
 	case apc.ActXactStart:
@@ -168,7 +168,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 	// 1. global x-s
 	case apc.ActLRU:
 		if bck != nil {
-			glog.Errorf(erfmb, args.Kind, bck)
+			nlog.Errorf(erfmb, args.Kind, bck)
 		}
 		q := r.URL.Query()
 		force := cos.IsParseBool(q.Get(apc.QparamForce)) // NOTE: the only 'force' use case so far
@@ -183,7 +183,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		wg.Wait()
 	case apc.ActResilver:
 		if bck != nil {
-			glog.Errorf(erfmb, args.Kind, bck)
+			nlog.Errorf(erfmb, args.Kind, bck)
 		}
 		notif := &xact.NotifXact{
 			Base: nl.Base{
@@ -203,7 +203,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		)
 		rns := xreg.RenewPrefetch(args.ID, t, bck, smsg)
 		if rns.Err != nil {
-			glog.Errorf("%s: %s %v", t, bck, rns.Err)
+			nlog.Errorf("%s: %s %v", t, bck, rns.Err)
 			debug.AssertNoErr(rns.Err)
 			return rns.Err
 		}

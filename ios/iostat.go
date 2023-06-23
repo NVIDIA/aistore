@@ -11,12 +11,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // public
@@ -162,14 +162,14 @@ func (ios *ios) AddMpath(mpath, fs string, testingEnv bool) (fsdisks FsDisks, er
 func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
 		err = fmt.Errorf("mountpath %s already exists, disks %v (%v)", mpath, dd, fsdisks)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
 			err = fmt.Errorf("disk %s: disk sharing is not allowed: %s vs %s", disk, mpath, mp)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		ios.disk2mpath[disk] = mpath
@@ -202,7 +202,7 @@ func (ios *ios) RemoveMpath(mpath string, testingEnv bool) {
 func (ios *ios) _del(mpath string, testingEnv bool) {
 	oldDisks, ok := ios.mpath2disks[mpath]
 	if !ok {
-		glog.Warningf("mountpath %s already removed", mpath)
+		nlog.Warningf("mountpath %s already removed", mpath)
 		return
 	}
 	for disk := range oldDisks {

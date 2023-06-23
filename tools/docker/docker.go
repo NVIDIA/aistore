@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // naming
@@ -151,7 +151,7 @@ func _exec(containerName string, args ...string) error {
 
 	_, err := cmd.Output()
 	if err != nil {
-		glog.Infof("%q error executing docker command: docker exec %s %v.\n", err.Error(), containerName, args)
+		nlog.Infof("%q error executing docker command: docker exec %s %v.\n", err.Error(), containerName, args)
 		return err
 	}
 	return nil

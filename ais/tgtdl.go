@@ -11,13 +11,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -85,7 +85,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Infoln("Downloading: " + dljob.ID())
+			nlog.Infoln("Downloading: " + dljob.ID())
 		}
 
 		dljob.AddNotif(&dload.NotifDownload{

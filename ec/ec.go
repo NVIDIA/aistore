@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -24,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -224,7 +224,7 @@ func (s *slice) free() {
 	}
 	if s.workFQN != "" {
 		if err := os.Remove(s.workFQN); err != nil && !os.IsNotExist(err) {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 }
@@ -425,10 +425,10 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 			return
 		}
 		if rmErr := cos.RemoveFile(ct.FQN()); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+			nlog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
 		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}()
 	if args.Generation != 0 {
@@ -479,10 +479,10 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 			return
 		}
 		if rmErr := cos.RemoveFile(lom.FQN); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
+			nlog.Errorf("nested error: save replica -> remove replica: %v", rmErr)
 		}
 		if rmErr := cos.RemoveFile(ctMeta.FQN()); rmErr != nil {
-			glog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
+			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}()
 	if err = ctMeta.Write(t, bytes.NewReader(args.MD), -1); err != nil {

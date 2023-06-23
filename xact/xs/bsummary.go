@@ -12,7 +12,6 @@ import (
 	gatomic "sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/xact"
@@ -88,9 +88,9 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	)
 	rwg.Done()
 	if r.Bck() == nil || r.Bck().IsEmpty() {
-		glog.Infof("%s - all buckets", r.Name())
+		nlog.Infof("%s - all buckets", r.Name())
 	} else {
-		glog.Infof("%s - bucket(s) %s", r.Name(), r.Bck().Bucket())
+		nlog.Infof("%s - bucket(s) %s", r.Name(), r.Bck().Bucket())
 	}
 	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
 		r.updRes(err)
@@ -122,7 +122,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 
 		bmd.Range(pq, nil, func(bck *meta.Bck) bool {
 			if err := r.runBck(bck, listRemote); err != nil {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 			}
 			return false // keep going
 		})
@@ -139,7 +139,7 @@ func (r *bsummXact) runBck(bck *meta.Bck, listRemote bool) (err error) {
 	if bck.IsRemote() {
 		msg.ObjCached = msg.ObjCached || !listRemote
 		if bck.IsHTTP() && !msg.ObjCached {
-			glog.Warningf("cannot list %s buckets, assuming 'cached'", apc.DisplayProvider(bck.Provider))
+			nlog.Warningf("cannot list %s buckets, assuming 'cached'", apc.DisplayProvider(bck.Provider))
 			msg.ObjCached = true
 		}
 	} else {
@@ -249,7 +249,7 @@ func (*bsummXact) sizeOnDisk(bck *meta.Bck, prefix string) (size, ecnt uint64) {
 func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG, withNonDirPrefix bool) {
 	sz, err := ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		gatomic.AddUint64(pecnt, 1)
 	}
 	gatomic.AddUint64(psize, sz)

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // NOTE: xattr stores only the (*) marked attributes
@@ -125,7 +125,7 @@ func FinishUpload(id, fqn string, aborted bool) (exists bool) {
 	mpt, ok := ups[id]
 	if !ok {
 		mu.Unlock()
-		glog.Warningf("fqn %s, id %s", fqn, id)
+		nlog.Warningf("fqn %s, id %s", fqn, id)
 		return false
 	}
 	delete(ups, id)
@@ -133,12 +133,12 @@ func FinishUpload(id, fqn string, aborted bool) (exists bool) {
 
 	if !aborted {
 		if err := storeMptXattr(fqn, mpt); err != nil {
-			glog.Warningf("fqn %s, id %s: %v", fqn, id, err)
+			nlog.Warningf("fqn %s, id %s: %v", fqn, id, err)
 		}
 	}
 	for _, part := range mpt.parts {
 		if err := os.Remove(part.FQN); err != nil && !os.IsNotExist(err) {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 	return true

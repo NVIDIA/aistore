@@ -12,9 +12,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -57,14 +57,14 @@ func NewFSHC(dispatcher fspathDispatcher) (f *FSHC) {
 func (*FSHC) Name() string { return "fshc" }
 
 func (f *FSHC) Run() error {
-	glog.Infof("Starting %s", f.Name())
+	nlog.Infof("Starting %s", f.Name())
 
 	for {
 		select {
 		case filePath := <-f.fileListCh:
 			mi, err := fs.Path2Mpath(filePath)
 			if err != nil {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 				break
 			}
 
@@ -76,7 +76,7 @@ func (f *FSHC) Run() error {
 }
 
 func (f *FSHC) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", f.Name(), err)
+	nlog.Infof("Stopping %s, err: %v", f.Name(), err)
 	f.stopCh.Close()
 }
 
@@ -89,7 +89,7 @@ func (f *FSHC) OnErr(fqn string) {
 
 func isTestPassed(mpath string, readErrors, writeErrors int, available bool) (passed bool, err error) {
 	config := &cmn.GCO.Get().FSHC
-	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
+	nlog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
 		readErrors, config.ErrorLimit, fshcFileSize,
 		writeErrors, config.ErrorLimit)
@@ -116,9 +116,9 @@ func (f *FSHC) runMpathTest(mpath, filepath string) {
 	if passed, whyFailed = isTestPassed(mpath, readErrs, writeErrs, exists); passed {
 		return
 	}
-	glog.Errorf("Disabling mountpath %s...", mpath)
+	nlog.Errorf("Disabling mountpath %s...", mpath)
 	if err := f.dispatcher.DisableMpath(mpath, whyFailed.Error()); err != nil {
-		glog.Errorf("Failed to disable mountpath: %s", err.Error())
+		nlog.Errorf("Failed to disable mountpath: %s", err.Error())
 	}
 }
 
@@ -147,7 +147,7 @@ func tryWriteFile(mpath string, fileSize int64) error {
 	}
 	mi, ok := available[mpath]
 	if !ok {
-		glog.Warningf("Tried to write %s to non-existing mountpath %q", ftag, mpath)
+		nlog.Warningf("Tried to write %s to non-existing mountpath %q", ftag, mpath)
 		return nil
 	}
 
@@ -163,10 +163,10 @@ func tryWriteFile(mpath string, fileSize int64) error {
 
 	defer func() {
 		if err := tmpFile.Close(); err != nil {
-			glog.Errorf("Failed to close %s %q, err: %v", ftag, tmpFileName, err)
+			nlog.Errorf("Failed to close %s %q, err: %v", ftag, tmpFileName, err)
 		}
 		if err := cos.RemoveFile(tmpFileName); err != nil {
-			glog.Errorf("Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
+			nlog.Errorf("Failed to remove %s %q, err: %v", ftag, tmpFileName, err)
 		}
 	}()
 
@@ -190,10 +190,10 @@ func tryWriteFile(mpath string, fileSize int64) error {
 //	function returns immediately without any read/write operations
 func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int) (readFails, writeFails int, accessible bool) {
 	if config.FastV(4, cos.SmoduleFS) {
-		glog.Infof("Testing mountpath %q", mountpath)
+		nlog.Infof("Testing mountpath %q", mountpath)
 	}
 	if err := cos.Stat(mountpath); err != nil {
-		glog.Errorf("Mountpath %q is unavailable", mountpath)
+		nlog.Errorf("Mountpath %q is unavailable", mountpath)
 		return 0, 0, false
 	}
 
@@ -205,7 +205,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 			totalReads++
 
 			if err := tryReadFile(filePath); err != nil {
-				glog.Errorf("Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
+				nlog.Errorf("Failed to read file (fqn: %q, read_fails: %d, err: %v)", filePath, readFails, err)
 				if cos.IsIOError(err) {
 					readFails++
 				}
@@ -220,7 +220,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 		if err == io.EOF {
 			// No files in the mountpath.
 			if config.FastV(4, cos.SmoduleFS) {
-				glog.Infof("Mountpath %q contains no files", mountpath)
+				nlog.Infof("Mountpath %q contains no files", mountpath)
 			}
 			break
 		}
@@ -229,16 +229,16 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 			if cos.IsIOError(err) {
 				readFails++
 			}
-			glog.Errorf("Failed to select a random file (mountpath: %q, read_fails: %d, err: %v)",
+			nlog.Errorf("Failed to select a random file (mountpath: %q, read_fails: %d, err: %v)",
 				mountpath, readFails, err,
 			)
 			continue
 		}
 		if config.FastV(4, cos.SmoduleFS) {
-			glog.Infof("Reading random file (fqn: %q)", fqn)
+			nlog.Infof("Reading random file (fqn: %q)", fqn)
 		}
 		if err = tryReadFile(fqn); err != nil {
-			glog.Errorf("Failed to read file (fqn: %q, err: %v)", fqn, err)
+			nlog.Errorf("Failed to read file (fqn: %q, err: %v)", fqn, err)
 			if cos.IsIOError(err) {
 				readFails++
 			}
@@ -249,7 +249,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 	for totalWrites < maxTestFiles {
 		totalWrites++
 		if err := tryWriteFile(mountpath, int64(fileSize)); err != nil {
-			glog.Errorf("Failed to write file (mountpath: %q, err: %v)", mountpath, err)
+			nlog.Errorf("Failed to write file (mountpath: %q, err: %v)", mountpath, err)
 			if cos.IsIOError(err) {
 				writeFails++
 			}
@@ -257,7 +257,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 	}
 
 	if readFails != 0 || writeFails != 0 {
-		glog.Errorf("Mountpath results (mountpath: %q, read_fails: %d, total_reads: %d, write_fails: %d, total_writes: %d)",
+		nlog.Errorf("Mountpath results (mountpath: %q, read_fails: %d, total_reads: %d, write_fails: %d, total_writes: %d)",
 			mountpath, readFails, totalReads, writeFails, totalWrites,
 		)
 	}

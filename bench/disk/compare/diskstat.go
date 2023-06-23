@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type DiskStat struct {
@@ -42,7 +42,7 @@ func GetDiskstats() (output map[string]DiskStat) {
 
 	file, err := os.Open("/proc/diskstats")
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 
@@ -81,7 +81,7 @@ func GetDiskstats() (output map[string]DiskStat) {
 func _exI64(field string) int64 {
 	val, err := strconv.ParseInt(field, 10, 64)
 	if err != nil {
-		glog.Errorf("Failed to convert field value %q to int: %v \n",
+		nlog.Errorf("Failed to convert field value %q to int: %v \n",
 			field, err)
 		return 0
 	}

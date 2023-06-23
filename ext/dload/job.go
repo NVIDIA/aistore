@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/nl"
 )
 
@@ -196,7 +196,7 @@ func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
 	err := dlStore.markFinished(j.ID())
 	if err != nil {
-		glog.Errorf("%s: %v", j, err)
+		nlog.Errorf("%s: %v", j, err)
 	}
 	dlStore.flush(j.ID())
 	nl.OnFinished(j.Notif(), err)

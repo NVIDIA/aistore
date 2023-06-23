@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -182,7 +182,7 @@ func attrsFromLink(link string, resp *http.Response, oah cos.OAH) (size int64) {
 				case cos.ChecksumCRC32C:
 					oah.SetCustomKey(cmn.CRC32CObjMD, cksumValue)
 				default:
-					glog.Errorf("unimplemented cksum type for custom metadata: %s", cksumType)
+					nlog.Errorf("unimplemented cksum type for custom metadata: %s", cksumType)
 				}
 			}
 		}

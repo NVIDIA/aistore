@@ -7,12 +7,12 @@ package reb
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -46,7 +46,7 @@ func (reb *Reb) RebStatus(status *Status) {
 			if marked.Xact.ID() != xreb.ID() {
 				id, _ := xact.S2RebID(marked.Xact.ID())
 				debug.Assert(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
-				glog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
+				nlog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
 					reb.t, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
@@ -54,7 +54,7 @@ func (reb *Reb) RebStatus(status *Status) {
 			}
 		}
 	} else if status.Running {
-		glog.Warningf("%s: transitioning (renewing) to %s", reb.t, marked.Xact)
+		nlog.Warningf("%s: transitioning (renewing) to %s", reb.t, marked.Xact)
 		status.Running = false
 	}
 
@@ -63,7 +63,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
-		glog.Warningf("%s: Smap version %d != %d", reb.t, status.SmapVersion, status.RebVersion)
+		nlog.Warningf("%s: Smap version %d != %d", reb.t, status.SmapVersion, status.RebVersion)
 		return
 	}
 	reb.awaiting.mtx.Lock()

@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/res"
@@ -116,7 +116,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 	rmi.EvictLomCache()
 
 	if noResil || dontResilver || !cmn.GCO.Get().Resilver.Enabled {
-		glog.Infof("%s: %q %s: no resilvering (%t, %t, %t)", g.t, action, rmi,
+		nlog.Infof("%s: %q %s: no resilvering (%t, %t, %t)", g.t, action, rmi,
 			noResil, !dontResilver, cmn.GCO.Get().Resilver.Enabled)
 		g.postDD(rmi, action, nil /*xaction*/, nil /*error*/) // ditto (compare with the one below)
 		return rmi, nil
@@ -124,9 +124,9 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 
 	prevActive := g.t.res.IsActive(1 /*interval-of-inactivity multiplier*/)
 	if prevActive {
-		glog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t, action, rmi)
+		nlog.Infof("%s: %q %s: starting to resilver when previous (resilvering) is active", g.t, action, rmi)
 	} else {
-		glog.Infof("%s: %q %s: starting to resilver", g.t, action, rmi)
+		nlog.Infof("%s: %q %s: starting to resilver", g.t, action, rmi)
 	}
 	args := res.Args{
 		Rmi:             rmi,
@@ -152,11 +152,11 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 			err = errCause
 		}
 		if err == cmn.ErrXactUserAbort {
-			glog.Errorf("[post-dd interrupted - clearing the state] %s: %q %s %s: %v",
+			nlog.Errorf("[post-dd interrupted - clearing the state] %s: %q %s %s: %v",
 				g.t.si, action, rmi, xres, err)
 			rmi.ClearDD()
 		} else {
-			glog.Errorf("[post-dd interrupted - keeping the state] %s: %q %s %s: %v",
+			nlog.Errorf("[post-dd interrupted - keeping the state] %s: %q %s %s: %v",
 				g.t.si, action, rmi, xres, err)
 		}
 		return
@@ -170,11 +170,11 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 		_, err = fs.Disable(rmi.Path, g.redistributeMD)
 	}
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	fspathsConfigAddDel(rmi.Path, false /*add*/)
-	glog.Infof("%s: %s %q %s done", g.t, rmi, action, xres)
+	nlog.Infof("%s: %s %q %s done", g.t, rmi, action, xres)
 
 	// 3. the case of multiple overlapping detach _or_ disable operations
 	//    (ie., commit previously aborted xs.Resilver, if any)
@@ -191,11 +191,11 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 			_, err = fs.Disable(mi.Path, g.redistributeMD)
 		}
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		fspathsConfigAddDel(mi.Path, false /*add*/)
-		glog.Infof("%s: %s %s %s was previously aborted and now done", g.t, action, mi, xres)
+		nlog.Infof("%s: %s %s %s was previously aborted and now done", g.t, action, mi, xres)
 	}
 }
 
@@ -216,7 +216,7 @@ func fspathsConfigAddDel(mpath string, add bool) {
 	if err := localConfig.FSP.Validate(config); err != nil {
 		debug.AssertNoErr(err)
 		cmn.GCO.DiscardUpdate()
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	// do
@@ -229,7 +229,7 @@ func fspathsSave(config *cmn.Config) {
 	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 		debug.AssertNoErr(err)
 		cmn.GCO.DiscardUpdate()
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	cmn.GCO.CommitUpdate(config)
@@ -259,11 +259,11 @@ func (g *fsprungroup) redistributeMD() {
 func (g *fsprungroup) checkEnable(action, mpath string) {
 	availablePaths := fs.GetAvail()
 	if len(availablePaths) > 1 {
-		glog.Infof("%s mountpath %s", action, mpath)
+		nlog.Infof("%s mountpath %s", action, mpath)
 	} else {
-		glog.Infof("%s the first mountpath %s", action, mpath)
+		nlog.Infof("%s the first mountpath %s", action, mpath)
 		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-join %s (self), err: %v", g.t, err)
+			nlog.Errorf("Failed to re-join %s (self), err: %v", g.t, err)
 		}
 	}
 }

@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -14,13 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const secretKeyPodEnv = "SECRETKEY" // via https://kubernetes.io/docs/concepts/configuration/secret
@@ -36,10 +36,10 @@ func init() {
 	flag.StringVar(&configPath, "config", "", svcName+" configuration")
 }
 
-func glogFlush() {
+func logFlush() {
 	for {
 		time.Sleep(time.Minute) // TODO: must be configurable
-		glog.Flush()
+		nlog.Flush()
 	}
 }
 
@@ -79,7 +79,7 @@ func main() {
 		cos.ExitLogf("Failed to set up logger: %v", err)
 	}
 	if Conf.Verbose() {
-		glog.Infof("Loaded configuration from %s", configPath)
+		nlog.Infof("Loaded configuration from %s", configPath)
 	}
 
 	dbPath := filepath.Join(configDir, fname.AuthNDB)
@@ -92,26 +92,25 @@ func main() {
 		cos.ExitLogf("Failed to init manager: %v", err)
 	}
 
-	glog.Infof("Version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
+	nlog.Infof("Version %s (build %s)\n", cmn.VersionAuthN+"."+build, buildtime)
 
-	go glogFlush()
+	go logFlush()
 
 	srv := newServer(mgr)
 	err = srv.Run()
 
-	glog.FlushExit()
+	nlog.FlushExit()
 	cos.Close(mgr.db)
 	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)
 	}
 }
 
-// Set up glog with options from configuration file
 func updateLogOptions() error {
 	if err := cos.CreateDir(Conf.Log.Dir); err != nil {
 		return fmt.Errorf("failed to create log dir %q, err: %v", Conf.Log.Dir, err)
 	}
-	glog.SetLogDirRole(Conf.Log.Dir, "auth")
+	nlog.SetLogDirRole(Conf.Log.Dir, "auth")
 	return nil
 }
 

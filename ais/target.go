@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -34,6 +33,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -98,9 +98,9 @@ func (t *target) initBackends() {
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisBackend.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
-			glog.Errorf("%s: %v - proceeding to start anyway...", t, err)
+			nlog.Errorf("%s: %v - proceeding to start anyway...", t, err)
 		} else {
-			glog.Infof("%s: remote-ais %v", t, aisConf)
+			nlog.Infof("%s: remote-ais %v", t, aisConf)
 		}
 	}
 
@@ -150,11 +150,11 @@ func (t *target) _initBuiltin() error {
 	}
 	switch {
 	case len(notlinked) > 0:
-		glog.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
+		nlog.Errorf("%s backends: enabled %v, disabled %v, missing in the build %v", t, enabled, disabled, notlinked)
 	case len(disabled) > 0:
-		glog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
+		nlog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
 	default:
-		glog.Infof("%s backends: %v", t, enabled)
+		nlog.Infof("%s backends: %v", t, enabled)
 	}
 	return nil
 }
@@ -228,7 +228,7 @@ func (t *target) initHostIP() {
 	t.si.PubNet.Hostname = extAddr.String()
 	t.si.PubNet.Port = strconv.Itoa(extPort)
 	t.si.PubNet.URL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
-	glog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
+	nlog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
 
 	// applies to intra-cluster networks unless separately defined
 	if !config.HostNet.UseIntraControl {
@@ -242,7 +242,7 @@ func (t *target) initHostIP() {
 func initTID(config *cmn.Config) (tid string, generated bool) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
-			glog.Errorf("Warning: %v", err)
+			nlog.Errorf("Warning: %v", err)
 		}
 		return
 	}
@@ -258,7 +258,7 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 	tid = genDaemonID(apc.Target, config)
 	err = cos.ValidateDaemonID(tid)
 	debug.AssertNoErr(err)
-	glog.Infof("t[%s] ID randomly generated", tid)
+	nlog.Infof("t[%s] ID randomly generated", tid)
 	generated = true
 	return
 }
@@ -296,9 +296,9 @@ func (t *target) Run() error {
 		cos.ExitLog(fatalErr)
 	}
 	if writeErr != nil {
-		glog.Errorln("")
-		glog.Errorln(writeErr)
-		glog.Errorln("")
+		nlog.Errorln("")
+		nlog.Errorln(writeErr)
+		nlog.Errorln("")
 	}
 
 	// register object type and workfile type
@@ -320,14 +320,14 @@ func (t *target) Run() error {
 		smap = newSmap()
 		smap.Tmap[t.SID()] = t.si // add self to initial temp smap
 	} else {
-		glog.Infof("%s: loaded %s", t.si.StringEx(), smap.StringEx())
+		nlog.Infof("%s: loaded %s", t.si.StringEx(), smap.StringEx())
 	}
 	t.owner.smap.put(smap)
 
 	if daemon.cli.target.standby {
 		tstats.Standby(true)
 		t.regstate.disabled.Store(true)
-		glog.Warningf("%s not joining - standing by...", t)
+		nlog.Warningf("%s not joining - standing by...", t)
 
 		go t.gostandby(2 * config.Periodic.StatsTime.D())
 
@@ -335,8 +335,8 @@ func (t *target) Run() error {
 	} else {
 		// discover primary and join cluster (compare with manual `apc.AdminJoin`)
 		if status, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
-			glog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
-			glog.Errorf("%s is terminating", t)
+			nlog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
+			nlog.Errorf("%s is terminating", t)
 			return err
 		}
 		t.markNodeStarted()
@@ -347,7 +347,7 @@ func (t *target) Run() error {
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
-		glog.Errorf("Failed to initialize DB: %v", err)
+		nlog.Errorf("Failed to initialize DB: %v", err)
 		return err
 	}
 
@@ -389,7 +389,7 @@ func (t *target) gostandby(sleep time.Duration) {
 	sleep = cos.MaxDuration(sleep, 10*time.Second)
 	for !t.ClusterStarted() {
 		time.Sleep(sleep)
-		glog.Flush()
+		nlog.Flush()
 	}
 }
 
@@ -402,7 +402,7 @@ func (t *target) gojoin(config *cmn.Config) {
 	if cii != nil {
 		if status, err := t.joinCluster(apc.ActSelfJoinTarget,
 			cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-			glog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
+			nlog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", t, status, err)
 			return
 		}
 	}
@@ -416,9 +416,9 @@ func (t *target) gojoin(config *cmn.Config) {
 
 func (t *target) goreslver(interrupted bool) {
 	if interrupted {
-		glog.Infoln("Resuming resilver...")
+		nlog.Infoln("Resuming resilver...")
 	} else if daemon.resilver.required {
-		glog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
+		nlog.Infof("Starting resilver, reason: %q", daemon.resilver.reason)
 	}
 	t.runResilver(res.Args{}, nil /*wg*/)
 }
@@ -448,7 +448,7 @@ func (t *target) endStartupStandby() (err error) {
 	t.regstate.disabled.Store(false)
 	tstats := t.statsT.(*stats.Trunner)
 	tstats.Standby(false)
-	glog.Infof("%s enabled and joined (%s)", t, smap.StringEx())
+	nlog.Infof("%s enabled and joined (%s)", t, smap.StringEx())
 
 	config := cmn.GCO.Get()
 	if t.fsprg.newVol && !config.TestingEnv() {
@@ -485,7 +485,7 @@ func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
 		// NOTE the risk: duplicate aisnode run - which'll fail shortly with "bind:
 		// address already in use" but not before triggering (`NodeRestartedPrev` => GFN)
-		// sequence and stealing glog symlinks - that's why we go extra length
+		// sequence and stealing nlog symlinks - that's why we go extra length
 		if _lsof(t.si.PubNet.TCPEndpoint()) {
 			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)",
 				t, t.si.PubNet.TCPEndpoint())
@@ -1133,7 +1133,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	_, err = io.Copy(w, file) // No need for `io.CopyBuffer` as `sendfile` syscall will be used.
 	cos.Close(file)
 	if err != nil {
-		glog.Errorf("Failed to send slice %s: %v", bck.Cname(objName), err)
+		nlog.Errorf("Failed to send slice %s: %v", bck.Cname(objName), err)
 	}
 }
 
@@ -1254,16 +1254,16 @@ func (t *target) putMirror(lom *cluster.LOM) {
 		nanotim := mono.NanoTime()
 		if nanotim&0x7 == 7 {
 			if mpathCnt == 0 {
-				glog.Errorf("%s: %v", t, cmn.ErrNoMountpaths)
+				nlog.Errorf("%s: %v", t, cmn.ErrNoMountpaths)
 			} else {
-				glog.Errorf(fmtErrInsuffMpaths2, t, mpathCnt, lom, mconfig.Copies)
+				nlog.Errorf(fmtErrInsuffMpaths2, t, mpathCnt, lom, mconfig.Copies)
 			}
 		}
 		return
 	}
 	rns := xreg.RenewPutMirror(t, lom)
 	if rns.Err != nil {
-		glog.Errorf("%s: %s %v", t, lom, rns.Err)
+		nlog.Errorf("%s: %s %v", t, lom, rns.Err)
 		debug.AssertNoErr(rns.Err)
 		return
 	}
@@ -1283,7 +1283,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error
 	// - aws-error[InternalError: We encountered an internal error. Please try again.]
 	if err != nil && isback {
 		if code == http.StatusServiceUnavailable || strings.Contains(err.Error(), "try again") {
-			glog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
+			nlog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
 			time.Sleep(time.Second)
 			code, err = t.Backend(lom.Bck()).DeleteObj(lom)
 		}
@@ -1324,7 +1324,7 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 			if !os.IsNotExist(aisErr) {
 				if backendErr != nil {
 					// unlikely
-					glog.Errorf("double-failure to delete %s: ais err %v, backend err %v(%d)",
+					nlog.Errorf("double-failure to delete %s: ais err %v, backend err %v(%d)",
 						lom, aisErr, backendErr, backendErrCode)
 				}
 				return 0, aisErr, false
@@ -1373,7 +1373,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
 	// TODO: combine copy+delete under a single write lock
 	lom.Lock(true)
 	if err := lom.Remove(); err != nil {
-		glog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)
+		nlog.Warningf("%s: failed to delete renamed object %s (new name %s): %v", t, lom, msg.Name, err)
 	}
 	lom.Unlock(true)
 	return nil
@@ -1389,10 +1389,10 @@ func (t *target) fsErr(err error, filepath string) {
 	}
 	if cos.IsErrOOS(err) {
 		cs := t.OOS(nil)
-		glog.Errorf("%s: %s", t, cs.String())
+		nlog.Errorf("%s: %s", t, cs.String())
 		return
 	}
-	glog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)
+	nlog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)
 	keyName := mi.Path
 	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 	t.statsT.AddMany(cos.NamedVal64{Name: stats.ErrIOCount, NameSuffix: keyName, Value: 1})

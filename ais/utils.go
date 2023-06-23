@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -109,17 +109,17 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 // selectConfiguredHostname returns the first Hostname from a preconfigured Hostname list that
 // matches any local unicast IPv4
 func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string) (hostname string, err error) {
-	glog.Infof("Selecting one of the configured IPv4 addresses: %s...", configuredList)
+	nlog.Infof("Selecting one of the configured IPv4 addresses: %s...", configuredList)
 
 	var localList, ipv4 string
 	for i, host := range configuredList {
 		if net.ParseIP(host) != nil {
 			ipv4 = strings.TrimSpace(host)
 		} else {
-			glog.Warningf("failed to parse IP for hostname %q", host)
+			nlog.Warningf("failed to parse IP for hostname %q", host)
 			ip, err := resolveHostIPv4(host)
 			if err != nil {
-				glog.Errorf("failed to get IPv4 for host=%q; err %v", host, err)
+				nlog.Errorf("failed to get IPv4 for host=%q; err %v", host, err)
 				continue
 			}
 			ipv4 = ip.String()
@@ -129,13 +129,13 @@ func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string
 				localList += " " + localaddr.ipv4
 			}
 			if localaddr.ipv4 == ipv4 {
-				glog.Warningf("Selected IPv4 %s from the configuration file", ipv4)
+				nlog.Warningf("Selected IPv4 %s from the configuration file", ipv4)
 				return host, nil
 			}
 		}
 	}
 
-	glog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s",
+	nlog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s",
 		localList, configuredList)
 	return "", fmt.Errorf("configured Hostname does not match any local one")
 }
@@ -146,9 +146,9 @@ func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, 
 		return nil, fmt.Errorf("no addresses to choose from")
 	}
 	if len(addrList) == 1 {
-		glog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
+		nlog.Infof("Found only one IPv4: %s, MTU %d", addrList[0].ipv4, addrList[0].mtu)
 		if addrList[0].mtu <= 1500 {
-			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrList[0].ipv4, addrList[0].mtu)
+			nlog.Warningf("IPv4 %s MTU size is small: %d\n", addrList[0].ipv4, addrList[0].mtu)
 		}
 		if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
 			return nil, fmt.Errorf("failed to parse IP address: %s", addrList[0].ipv4)
@@ -156,9 +156,9 @@ func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, 
 		return ip, nil
 	}
 	if config.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%d IPv4s:", len(addrList))
+		nlog.Infof("%d IPv4s:", len(addrList))
 		for _, addr := range addrList {
-			glog.Infof("    %#v\n", *addr)
+			nlog.Infof("    %#v\n", *addr)
 		}
 	}
 	if ip = net.ParseIP(addrList[0].ipv4); ip == nil {
@@ -333,7 +333,7 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 	filepath.Walk(config.ConfigDir, func(path string, finfo os.FileInfo, err error) error {
 		if strings.HasPrefix(finfo.Name(), ".ais.") {
 			if err := cos.RemoveFile(path); err != nil {
-				glog.Errorf("%s: failed to cleanup %q, err: %v", name, path, err)
+				nlog.Errorf("%s: failed to cleanup %q, err: %v", name, path, err)
 			}
 		}
 		return nil

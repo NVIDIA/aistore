@@ -13,12 +13,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -170,7 +170,7 @@ func (s *Stream) Send(obj *Obj) (err error) {
 
 	s.workCh <- obj
 	if verbose {
-		glog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))
+		nlog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))
 	}
 	return
 }
@@ -206,7 +206,7 @@ func (s *MsgStream) Send(msg *Msg) (err error) {
 	}
 	s.workCh <- msg
 	if verbose {
-		glog.Infof("%s: send %s[sq=%d]", s, msg, len(s.workCh))
+		nlog.Infof("%s: send %s[sq=%d]", s, msg, len(s.workCh))
 	}
 	return
 }

@@ -19,13 +19,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 func ON() bool { return true }
 
 func Infof(f string, a ...any) {
-	glog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
+	nlog.InfoDepth(1, fmt.Sprintf("[DEBUG] "+f, a...))
 }
 
 func Func(f func()) { f() }
@@ -53,8 +53,8 @@ func _panic(a ...any) {
 			fmt.Fprintf(buffer, "%s:%d", f, line)
 		}
 	}
-	glog.Errorf("%s", buffer.Bytes())
-	glog.FlushExit()
+	nlog.Errorf("%s", buffer.Bytes())
+	nlog.FlushExit()
 	panic(msg)
 }
 

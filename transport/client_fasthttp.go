@@ -15,10 +15,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/valyala/fasthttp"
 )
 
@@ -73,7 +73,7 @@ func (s *streamBase) do(body io.Reader) (err error) {
 	err = s.client.Do(req, resp)
 	if err != nil {
 		if verbose {
-			glog.Errorf("%s: Error [%v]", s, err)
+			nlog.Errorf("%s: Error [%v]", s, err)
 		}
 		return
 	}

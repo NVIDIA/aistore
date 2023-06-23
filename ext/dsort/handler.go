@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -69,7 +69,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 			if resp.err == nil {
 				continue
 			}
-			glog.Errorf("[%s] start sort request failed to be broadcast, err: %s",
+			nlog.Errorf("[%s] start sort request failed to be broadcast, err: %s",
 				managerUUID, resp.err.Error())
 
 			path := apc.URLPathdSortAbort.Join(managerUUID)
@@ -97,7 +97,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 
 	config := cmn.GCO.Get()
 	if config.FastV(4, cos.SmoduleDsort) {
-		glog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
+		nlog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := apc.URLPathdSortInit.Join(managerUUID)
 	responses := broadcastTargets(http.MethodPost, path, nil, b, smap)
@@ -106,7 +106,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *Par
 	}
 
 	if config.FastV(4, cos.SmoduleDsort) {
-		glog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
+		nlog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = apc.URLPathdSortStart.Join(managerUUID)
 	responses = broadcastTargets(http.MethodPost, path, nil, nil, smap)
@@ -151,7 +151,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
 		if r.err != nil {
-			glog.Errorln(r.err)
+			nlog.Errorln(r.err)
 			continue
 		}
 
@@ -176,7 +176,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 
 	body := cos.MustMarshal(resultList)
 	if _, err := w.Write(body); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return
@@ -422,7 +422,7 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 
 func (m *Manager) startDSort() {
 	errHandler := func(err error) {
-		glog.Errorf("%+v", err) // print error with stack trace
+		nlog.Errorf("%+v", err) // print error with stack trace
 
 		// If we were aborted by some other process this means that we do not
 		// broadcast abort (we assume that daemon aborted us, aborted also others).
@@ -436,7 +436,7 @@ func (m *Manager) startDSort() {
 				m.abort()
 			}
 
-			glog.Warningln("broadcasting abort to other targets")
+			nlog.Warningln("broadcasting abort to other targets")
 			path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
 			broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 		}
@@ -447,7 +447,7 @@ func (m *Manager) startDSort() {
 		return
 	}
 
-	glog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
+	nlog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
 	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.ID())
 	broadcastTargets(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
 }
@@ -576,7 +576,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 		dsortManager.incrementReceived()
 
 		if dsortManager.config.FastV(4, cos.SmoduleDsort) {
-			glog.Infof(
+			nlog.Infof(
 				"[dsort] %s total times received records from another target: %d",
 				dsortManager.ManagerUUID, dsortManager.received.count.Load(),
 			)
@@ -648,7 +648,7 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	body := cos.MustMarshal(Managers.List(regex, onlyActive))
 	if _, err := w.Write(body); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return
@@ -677,7 +677,7 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.Metrics.update()
 	body := dsortManager.Metrics.Marshal()
 	if _, err := w.Write(body); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
 		return

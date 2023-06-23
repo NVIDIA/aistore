@@ -7,12 +7,12 @@ package ais
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/nl"
@@ -29,12 +29,12 @@ func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	} else {
 		cs, err = fs.CapRefresh(nil, nil)
 		if err != nil {
-			glog.Errorf("%s: %v", t, err)
+			nlog.Errorf("%s: %v", t, err)
 			return
 		}
 	}
 	if cs.Err != nil {
-		glog.Warningf("%s: %s", t, cs.String())
+		nlog.Warningf("%s: %s", t, cs.String())
 	}
 	// run serially, cleanup first and LRU iff out-of-space persists
 	go func() {

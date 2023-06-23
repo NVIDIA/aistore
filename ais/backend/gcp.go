@@ -17,12 +17,12 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
@@ -73,12 +73,12 @@ func NewGCP(t cluster.TargetPut) (bp cluster.BackendProvider, err error) {
 		return
 	} else if credProjectID != "" {
 		projectID = credProjectID
-		glog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, credPathEnvVar)
+		nlog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, credPathEnvVar)
 	} else if envProjectID != "" {
 		projectID = envProjectID
-		glog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, projectIDEnvVar)
+		nlog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, projectIDEnvVar)
 	} else {
-		glog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client",
+		nlog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client",
 			projectIDField, projectIDEnvVar, credPathEnvVar)
 	}
 	gcpp := &gcpProvider{t: t, projectID: projectID}
@@ -132,7 +132,7 @@ func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	if superVerbose {
-		glog.Infof("head_bucket %s", bck.Name)
+		nlog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
 	_, err = gcpClient.Bucket(cloudBck.Name).Attrs(ctx)
@@ -173,7 +173,7 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	nextPageToken, errPage := pager.NextPage(&objs)
 	if errPage != nil {
 		if verbose {
-			glog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
+			nlog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
 		}
 		errCode, err = gcpErrorToAISError(errPage, cloudBck)
 		return
@@ -205,7 +205,7 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	}
 	lst.Entries = lst.Entries[:l]
 	if verbose {
-		glog.Infof("[list_objects] count %d", len(lst.Entries))
+		nlog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
 	return
 }
@@ -239,7 +239,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			Provider: apc.GCP,
 		})
 		if verbose {
-			glog.Infof("[bucket_names] %s: created %v, versioning %t",
+			nlog.Infof("[bucket_names] %s: created %v, versioning %t",
 				battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
 	}
@@ -282,7 +282,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
 	if superVerbose {
-		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
+		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
 }
@@ -309,7 +309,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 		return
 	}
 	if superVerbose {
-		glog.Infof("[get_object] %s", lom)
+		nlog.Infof("[get_object] %s", lom)
 	}
 	return
 }
@@ -406,7 +406,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int,
 	}
 	_ = setCustomGs(lom, attrs)
 	if superVerbose {
-		glog.Infof("[put_object] %s, size %d", lom, written)
+		nlog.Infof("[put_object] %s, size %d", lom, written)
 	}
 	return
 }
@@ -425,7 +425,7 @@ func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		return
 	}
 	if superVerbose {
-		glog.Infof("[delete_object] %s", lom)
+		nlog.Infof("[delete_object] %s", lom)
 	}
 	return
 }

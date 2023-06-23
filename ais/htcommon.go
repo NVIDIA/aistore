@@ -19,7 +19,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/3rdparty/golang/mux"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -27,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -212,7 +212,7 @@ type (
 		sndRcvBufSize int
 	}
 
-	glogWriter struct{}
+	nlogWriter struct{}
 
 	// error types
 	errTgtBmdUUIDDiffer struct{ detail string } // BMD & its uuid
@@ -504,22 +504,22 @@ func (cresBsumm) newV() any                              { return &cmn.AllBsummR
 func (c cresBsumm) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 ////////////////
-// glogWriter //
+// nlogWriter //
 ////////////////
 
 const tlsHandshakeErrorPrefix = "http: TLS handshake error"
 
-func (*glogWriter) Write(p []byte) (int, error) {
+func (*nlogWriter) Write(p []byte) (int, error) {
 	s := string(p)
 	// Ignore TLS handshake errors (see: https://github.com/golang/go/issues/26918).
 	if strings.Contains(s, tlsHandshakeErrorPrefix) {
 		return len(p), nil
 	}
 
-	glog.Errorln(s)
+	nlog.Errorln(s)
 
 	stacktrace := rdebug.Stack()
-	glog.Errorln(string(stacktrace))
+	nlog.Errorln(string(stacktrace))
 	return len(p), nil
 }
 
@@ -558,7 +558,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
 		// NOTE: cannot send error because we have already written a header.
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 
@@ -604,12 +604,12 @@ retry:
 		return nil
 	}
 	if errors.Is(err, syscall.EADDRINUSE) && !retried {
-		glog.Warningf("%q - shutting-down-and-restarting or else? will retry once...", err)
+		nlog.Warningf("%q - shutting-down-and-restarting or else? will retry once...", err)
 		time.Sleep(cos.MaxDuration(5*time.Second, config.Timeout.MaxKeepalive.D()))
 		retried = true
 		goto retry
 	}
-	glog.Errorf("%s terminated with error: %v", tag, err)
+	nlog.Errorf("%s terminated with error: %v", tag, err)
 	return
 }
 
@@ -633,7 +633,7 @@ func (server *netServer) shutdown() {
 	config := cmn.GCO.Get()
 	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout.MaxHostBusy.D())
 	if err := server.s.Shutdown(ctx); err != nil {
-		glog.Infof("Stopped server, err: %v", err)
+		nlog.Infof("Stopped server, err: %v", err)
 	}
 	cancel()
 }
@@ -746,11 +746,11 @@ func (c *getMaxCii) haveEnough() (yes bool) {
 func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *clusterInfo {
 	var cii clusterInfo
 	if err := jsoniter.Unmarshal(body, &cii); err != nil {
-		glog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
+		nlog.Errorf("%s: failed to unmarshal clusterInfo, err: %v", self, err)
 		return nil
 	}
 	if smap.UUID != cii.Smap.UUID {
-		glog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
+		nlog.Errorf("%s: Smap have different UUIDs: %s and %s from %s", self, smap.UUID, cii.Smap.UUID, si)
 		return nil
 	}
 	return &cii

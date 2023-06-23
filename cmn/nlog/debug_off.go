@@ -1,9 +1,9 @@
 //go:build !debug
 
-// Package glog
+// Package nlog
 /*
  * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
  */
-package glog
+package nlog
 
 func assert(_ bool, _ ...any) {}

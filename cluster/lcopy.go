@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -24,7 +24,7 @@ func (lom *LOM) whingeCopy() (yes bool) {
 	}
 	msg := fmt.Sprintf("unexpected: %s([fqn=%s] [hrw=%s] %+v)", lom, lom.FQN, lom.HrwFQN, lom.md.copies)
 	debug.Assert(false, msg)
-	glog.Errorln(msg)
+	nlog.Errorln(msg)
 	return true
 }
 
@@ -96,7 +96,7 @@ func (lom *LOM) DelCopies(copiesFQN ...string) (err error) {
 	// 3. Remove the copies
 	for _, copyFQN := range copiesFQN {
 		if err1 := cos.RemoveFile(copyFQN); err1 != nil {
-			glog.Errorln(err1) // TODO: LRU should take care of that later.
+			nlog.Errorln(err1) // TODO: LRU should take care of that later.
 			continue
 		}
 	}
@@ -244,7 +244,7 @@ func (lom *LOM) Copy(mi *fs.Mountpath, buf []byte) (err error) {
 	}
 	if err = cos.Rename(workFQN, copyFQN); err != nil {
 		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
-			glog.Errorf(fmtNestedErr, errRemove)
+			nlog.Errorf(fmtNestedErr, errRemove)
 		}
 		return
 	}
@@ -254,7 +254,7 @@ add:
 	err = lom.Persist()
 	if err != nil {
 		lom.delCopyMd(copyFQN)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 	err = lom.syncMetaWithCopies()
@@ -305,7 +305,7 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 
 	if err = cos.Rename(workFQN, dstFQN); err != nil {
 		if errRemove := cos.RemoveFile(workFQN); errRemove != nil {
-			glog.Errorf(fmtNestedErr, errRemove)
+			nlog.Errorf(fmtNestedErr, errRemove)
 		}
 		return
 	}
@@ -328,19 +328,19 @@ func (lom *LOM) copy2fqn(dst *LOM, buf []byte) (err error) {
 		if err = lom.syncMetaWithCopies(); err != nil {
 			if _, ok := lom.md.copies[dst.FQN]; !ok {
 				if errRemove := os.Remove(dst.FQN); errRemove != nil {
-					glog.Errorf("nested err: %v", errRemove)
+					nlog.Errorf("nested err: %v", errRemove)
 				}
 			}
 			// `lom.syncMetaWithCopies()` may have made changes notwithstanding
 			if errPersist := lom.Persist(); errPersist != nil {
-				glog.Errorf("nested err: %v", errPersist)
+				nlog.Errorf("nested err: %v", errPersist)
 			}
 			return
 		}
 		err = lom.Persist()
 	} else if err = dst.Persist(); err != nil {
 		if errRemove := os.Remove(dst.FQN); errRemove != nil {
-			glog.Errorf("nested err: %v", errRemove)
+			nlog.Errorf("nested err: %v", errRemove)
 		}
 	}
 	return
@@ -415,7 +415,7 @@ func (lom *LOM) ToMpath() (mi *fs.Mountpath, isHrw bool) {
 		hrwMi, _, err  = HrwMpath(lom.md.uname)
 	)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	debug.Assert(!hrwMi.IsAnySet(fs.FlagWaitingDD))

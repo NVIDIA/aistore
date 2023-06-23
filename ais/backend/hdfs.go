@@ -16,13 +16,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/colinmarc/hdfs/v2"
 )
@@ -223,7 +223,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 	oa.SetCustomKey(cmn.SourceObjMD, apc.HDFS)
 	oa.Size = fr.Stat().Size()
 	if verbose {
-		glog.Infof("[head_object] %s", lom)
+		nlog.Infof("[head_object] %s", lom)
 	}
 	return
 }
@@ -248,7 +248,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 		return
 	}
 	if verbose {
-		glog.Infof("[get_object] %s", lom)
+		nlog.Infof("[get_object] %s", lom)
 	}
 	return
 }
@@ -310,7 +310,7 @@ finish:
 		return errCode, err
 	}
 	if verbose {
-		glog.Infof("[put_object] %s", lom)
+		nlog.Infof("[put_object] %s", lom)
 	}
 
 	return 0, nil
@@ -327,7 +327,7 @@ func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		return errCode, err
 	}
 	if verbose {
-		glog.Infof("[delete_object] %s", lom)
+		nlog.Infof("[delete_object] %s", lom)
 	}
 	return 0, nil
 }

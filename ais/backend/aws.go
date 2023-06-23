@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -92,7 +92,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 	)
 	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
 	if superVerbose {
-		glog.Infof("[head_bucket] %s (%v)", cloudBck.Name, errC)
+		nlog.Infof("[head_bucket] %s (%v)", cloudBck.Name, errC)
 	}
 	if region == "" {
 		// AWS bucket may not yet exist in the BMD -
@@ -143,7 +143,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
 	if err != nil && verbose {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 	}
 
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(cloudBck.Name)}
@@ -164,7 +164,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
 		if verbose {
-			glog.Infof("list_objects %s: %v", cloudBck.Name, err)
+			nlog.Infof("list_objects %s: %v", cloudBck.Name, err)
 		}
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
@@ -197,7 +197,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	if len(lst.Entries) == 0 || !versioning {
 		if verbose {
-			glog.Infof("[list_objects] count %d", len(lst.Entries))
+			nlog.Infof("[list_objects] count %d", len(lst.Entries))
 		}
 		return
 	}
@@ -228,7 +228,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		}
 	}
 	if verbose {
-		glog.Infof("[list_objects] count %d/%d", len(lst.Entries), num)
+		nlog.Infof("[list_objects] count %d/%d", len(lst.Entries), num)
 	}
 	return
 }
@@ -252,7 +252,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
 		if verbose {
-			glog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
+			nlog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
 		}
 		bcks[idx] = cmn.Bck{
 			Name:     aws.StringValue(bck.Name),
@@ -275,7 +275,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
 	if err != nil && verbose {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 	}
 	headOutput, err = svc.HeadObject(&s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -313,7 +313,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
 	if superVerbose {
-		glog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
+		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
 }
@@ -341,7 +341,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	}
 	err = awsp.t.PutObject(lom, params)
 	if superVerbose {
-		glog.Infof("[get_object] %s: %v", lom, err)
+		nlog.Infof("[get_object] %s: %v", lom, err)
 	}
 	return
 }
@@ -359,7 +359,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil && superVerbose {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 	}
 	obj, err = svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -417,7 +417,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil && superVerbose {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 	}
 
 	md[cos.S3MetadataChecksumType] = aws.String(cksumType)
@@ -447,7 +447,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 		}
 	}
 	if superVerbose {
-		glog.Infof("[put_object] %s", lom)
+		nlog.Infof("[put_object] %s", lom)
 	}
 	return
 }
@@ -463,7 +463,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
 	if err != nil && verbose {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 	}
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
@@ -474,7 +474,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		return
 	}
 	if superVerbose {
-		glog.Infof("[delete_object] %s", lom)
+		nlog.Infof("[delete_object] %s", lom)
 	}
 	return
 }

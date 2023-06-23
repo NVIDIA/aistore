@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -272,7 +272,7 @@ func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
 	}
 	if err != nil {
 		if !cmn.IsErrObjNought(err) {
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		}
 		return
 	}
@@ -304,9 +304,9 @@ func (p *prfFactory) Start() error {
 		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
-		glog.Warningln(err) // may show up later via ais/prxtrybck.go logic
+		nlog.Warningln(err) // may show up later via ais/prxtrybck.go logic
 	} else if b.IsAIS() {
-		glog.Errorf("bucket %q: can only prefetch remote buckets", b)
+		nlog.Errorf("bucket %q: can only prefetch remote buckets", b)
 		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
 	}
 	p.xctn = newPrefetch(&p.Args, p.Kind(), p.Bck, p.msg)
@@ -362,7 +362,7 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock); err != nil {
 		if err != cmn.ErrSkip {
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		}
 		return
 	}

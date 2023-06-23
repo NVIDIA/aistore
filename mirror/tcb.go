@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -177,7 +177,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.wg.Done()
 
 	r.BckJog.Run()
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 
 	err := r.BckJog.Wait()
 
@@ -229,7 +229,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	objNameTo := r.args.Msg.ToName(lom.ObjName)
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
-		glog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), r.args.BckTo.Cname(objNameTo))
+		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), r.args.BckTo.Cname(objNameTo))
 	}
 	params := cluster.AllocCpObjParams()
 	{
@@ -251,7 +251,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 // NOTE: strict(est) error handling: abort on any of the errors below
 func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 	// ref-count done-senders
@@ -272,7 +272,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		r.err.Store(err)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
@@ -299,7 +299,7 @@ func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		r.err.Store(erp)
-		glog.Errorln(erp)
+		nlog.Errorln(erp)
 		return erp // NOTE: non-nil signals transport to terminate
 	}
 	r.rxlast.Store(mono.NanoTime())

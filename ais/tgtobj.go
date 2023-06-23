@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -29,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -143,7 +143,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 		// resolve cluster-wide xact "behind" this PUT (promote via a single target won't show up)
 		xctn, err := xreg.GetXact(dpq.uuid)
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return 0, err
 		}
 		if xctn != nil {
@@ -163,7 +163,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if poi.config.FastV(4, cos.SmoduleAIS) {
-				glog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
+				nlog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
 			return 0, nil
@@ -198,7 +198,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
 	if poi.config.FastV(5, cos.SmoduleAIS) {
-		glog.Infoln(poi.loghdr())
+		nlog.Infoln(poi.loghdr())
 	}
 	return
 rerr:
@@ -230,7 +230,7 @@ func (poi *putOI) finalize() (errCode int, err error) {
 			}
 			poi.t.fsErr(err1, poi.workFQN)
 			if err2 := cos.RemoveFile(poi.workFQN); err2 != nil {
-				glog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
+				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
 		poi.lom.Uncache(true /*delDirty*/)
@@ -260,7 +260,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		errCode, err = poi.putRemote()
 		if err != nil {
 			loghdr := poi.loghdr()
-			glog.Errorf("PUT (%s): %v(%d)", loghdr, err, errCode)
+			nlog.Errorf("PUT (%s): %v(%d)", loghdr, err, errCode)
 			if errCode != http.StatusServiceUnavailable {
 				return
 			}
@@ -270,7 +270,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 			if err != nil {
 				return
 			}
-			glog.Infof("PUT (%s): retried OK", loghdr)
+			nlog.Infof("PUT (%s): retried OK", loghdr)
 		}
 	}
 
@@ -282,7 +282,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			if poi.config.FastV(4, cos.SmoduleAIS) {
-				glog.Warningf("(%s) is busy", poi.loghdr())
+				nlog.Warningf("(%s) is busy", poi.loghdr())
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 		}
@@ -303,7 +303,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 				debug.Assert(err == nil)
 			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
-					glog.Errorln(err)
+					nlog.Errorln(err)
 				}
 			}
 		}
@@ -315,7 +315,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 	}
 	if lom.HasCopies() {
 		if errdc := lom.DelAllCopies(); errdc != nil {
-			glog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
+			nlog.Errorf("PUT (%s): failed to delete old copies [%v], proceeding to PUT anyway...", poi.loghdr(), errdc)
 		}
 	}
 	if lom.AtimeUnix() == 0 { // (is set when migrating within cluster; prefetch special case)
@@ -460,10 +460,10 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 	// not ok
 	poi.r.Close()
 	if nerr := lmfh.Close(); nerr != nil {
-		glog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
+		nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
 	}
 	if nerr := cos.RemoveFile(poi.workFQN); nerr != nil {
-		glog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
+		nlog.Errorf(fmtNested, poi.t, err, "remove", poi.workFQN, nerr)
 	}
 }
 
@@ -567,10 +567,10 @@ do:
 		cold, errCode, err = goi.validateRecover()
 		if err != nil {
 			if !cold {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 				return
 			}
-			glog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
+			nlog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
 		}
 	}
 
@@ -601,11 +601,11 @@ fin:
 	if goi.retry {
 		goi.retry = false
 		if !retried {
-			glog.Warningf("GET %s: retrying...", goi.lom)
+			nlog.Warningf("GET %s: retrying...", goi.lom)
 			retried = true // only once
 			goto do
 		}
-		glog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, errCode)
+		nlog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, errCode)
 	}
 	return
 }
@@ -635,7 +635,7 @@ validate:
 		return
 	}
 
-	glog.Warningln(err)
+	nlog.Warningln(err)
 	redundant := lom.HasCopies() || lom.Bprops().EC.Enabled
 	//
 	// return err if there's no redundancy OR already recovered once (and failed)
@@ -645,7 +645,7 @@ validate:
 		// TODO: mark `deleted` and postpone actual deletion
 		//
 		if erl := lom.Remove(true /*force through rlock*/); erl != nil {
-			glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
+			nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 		}
 		return
 	}
@@ -661,7 +661,7 @@ validate:
 		restored := lom.RestoreToLocation()
 		goi.lom.Lock(false)
 		if restored {
-			glog.Warningf("%s: recovered corrupted %s from local replica", goi.t, lom)
+			nlog.Warningf("%s: recovered corrupted %s from local replica", goi.t, lom)
 			code = 0
 			goto validate
 		}
@@ -673,7 +673,7 @@ validate:
 		_, code, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
 		if err == nil {
-			glog.Warningf("%s: recovered corrupted %s from EC slices", goi.t, lom)
+			nlog.Warningf("%s: recovered corrupted %s from EC slices", goi.t, lom)
 			code = 0
 			goto validate
 		}
@@ -681,7 +681,7 @@ validate:
 
 	// TODO: ditto
 	if erl := lom.Remove(true /*force through rlock*/); erl != nil {
-		glog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
+		nlog.Warningf("%s: failed to remove corrupted %s, err: %v", goi.t, lom, erl)
 	}
 	return
 }
@@ -711,7 +711,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 		)
 		if resMarked.Interrupted || running || gfnActive {
 			if goi.lom.RestoreToLocation() { // from copies
-				glog.Infof("%s restored to location", goi.lom)
+				nlog.Infof("%s restored to location", goi.lom)
 				return
 			}
 			doubleCheck = running
@@ -755,7 +755,7 @@ gfn:
 		ecErr = goi.lom.Load(true /*cache it*/, false /*locked*/) // TODO: optimize locking
 		debug.AssertNoErr(ecErr)
 		if ecErr == nil {
-			glog.Infof("%s: EC-recovered %s", tname, goi.lom)
+			nlog.Infof("%s: EC-recovered %s", tname, goi.lom)
 			return
 		}
 		err = cmn.NewErrFailedTo(tname, "load EC-recovered", goi.lom, ecErr)
@@ -801,7 +801,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	resp, err := goi.t.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
 	if err != nil {
-		glog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
+		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
 		return false
 	}
 
@@ -822,11 +822,11 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	freePOI(poi)
 	if erp == nil {
 		if config.FastV(5, cos.SmoduleAIS) {
-			glog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
+			nlog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
 		}
 		return true
 	}
-	glog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t, erp, errCode)
+	nlog.Errorf("%s: gfn-GET failed to PUT locally: %v(%d)", goi.t, erp, errCode)
 	return false
 }
 
@@ -956,7 +956,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 		if !cos.IsRetriableConnErr(err) {
 			goi.t.fsErr(err, fqn)
 		}
-		glog.Errorln(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
+		nlog.Errorln(cmn.NewErrFailedTo(goi.t, "GET", fqn, err))
 		// at this point, error is already written into the response -
 		// return special code to indicate just that
 		return errSendingResp
@@ -964,7 +964,7 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 	// GFN: atime must be already set
 	if !coldGet && !goi.isGFN {
 		if err := goi.lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			glog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)
+			nlog.Errorf("%s: GET post-transmission failure: %v", goi.t, err)
 			return errSendingResp
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
@@ -1110,7 +1110,7 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
 	)
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("APPEND %s: %s", a.lom, delta)
+		nlog.Infof("APPEND %s: %s", a.lom, delta)
 	}
 	return
 }
@@ -1498,7 +1498,7 @@ func (a *putA2I) do() (int, error) {
 			}
 		}
 		if errV := a.lom.RenameFrom(workFQN); errV != nil {
-			glog.Errorf(fmtNested, a.t, err, "append and rename back", workFQN, errV)
+			nlog.Errorf(fmtNested, a.t, err, "append and rename back", workFQN, errV)
 		}
 		return http.StatusInternalServerError, err
 	}

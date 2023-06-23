@@ -11,13 +11,13 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -139,7 +139,7 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 	attrs.Size = stat.Size()
 	reader, err = cos.NewFileHandle(fqn)
 	if err != nil {
-		glog.Warningf("Failed to read file stats: %s", err)
+		nlog.Warningf("Failed to read file stats: %s", err)
 		return nil, err
 	}
 	return reader, nil
@@ -153,7 +153,7 @@ func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (rea
 		return nil, err
 	}
 	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 		return nil, err
 	}
 	reader, err = cos.NewFileHandle(lom.FQN)
@@ -201,7 +201,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		r.t.ByteMM().Free(hdr.Opaque)
 		if err != nil {
-			glog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
+			nlog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
 		}
 		r.DecPending()
 	}
@@ -226,7 +226,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
 		if !ok {
-			glog.Errorf("Target with ID %s not found", id)
+			nlog.Errorf("Target with ID %s not found", id)
 			continue
 		}
 		nodes = append(nodes, si)
@@ -267,7 +267,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.regWriter(uname, sw)
 
 	if r.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Requesting object %s from %s", lom, daemonID)
+		nlog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
 		r.unregWriter(uname)
@@ -281,7 +281,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	r.unregWriter(uname)
 
 	if r.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Received object %s from %s", lom, daemonID)
+		nlog.Infof("Received object %s from %s", lom, daemonID)
 	}
 	if sw.version != "" {
 		lom.SetVersion(sw.version)
@@ -297,7 +297,7 @@ func (r *xactECBase) regWriter(uname string, writer *slice) bool {
 	r.dOwner.mtx.Lock()
 	_, ok := r.dOwner.slices[uname]
 	if ok {
-		glog.Errorf("Writer for %s is already registered", uname)
+		nlog.Errorf("Writer for %s is already registered", uname)
 	} else {
 		r.dOwner.slices[uname] = writer
 	}

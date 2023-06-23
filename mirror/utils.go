@@ -7,8 +7,8 @@ package mirror
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -72,7 +72,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 			return
 		}
 		if err = lom.Copy(mi, buf); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		size += lom.SizeBytes()

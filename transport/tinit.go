@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // transport defaults
@@ -62,7 +62,7 @@ func burst(config *cmn.Config) (burst int) {
 	}
 	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
 		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		} else {
 			burst = int(burst64)
 		}

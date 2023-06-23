@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/karrick/godirwalk"
 )
@@ -136,7 +136,7 @@ func Walk(opts *WalkOpts) error {
 		}
 		// NOTE: mountpath is getting detached or disabled
 		if cmn.IsErrMountpathNotFound(err1) {
-			glog.Errorln(err1)
+			nlog.Errorln(err1)
 			continue
 		}
 		if cmn.IsErrAborted(err1) {
@@ -148,7 +148,7 @@ func Walk(opts *WalkOpts) error {
 			continue
 		}
 		if err1 != context.Canceled {
-			glog.Errorln(err1)
+			nlog.Errorln(err1)
 		}
 		err = err1
 	}

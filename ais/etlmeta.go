@@ -12,13 +12,13 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -158,9 +158,9 @@ func (eo *etlMDOwnerPrx) init() {
 	_, err := jsp.LoadMeta(eo.fpath, etlMD)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			glog.Errorf("failed to load %s from %s, err: %v", etlMD, eo.fpath, err)
+			nlog.Errorf("failed to load %s from %s, err: %v", etlMD, eo.fpath, err)
 		} else {
-			glog.Infof("%s does not exist at %s - initializing", etlMD, eo.fpath)
+			nlog.Infof("%s does not exist at %s - initializing", etlMD, eo.fpath)
 		}
 	}
 	eo.put(etlMD)
@@ -214,11 +214,11 @@ func (eo *etlMDOwnerTgt) init() {
 		available = fs.GetAvail()
 	)
 	if etlMD = loadEtlMD(available, fname.Emd); etlMD != nil {
-		glog.Infof("loaded %s", etlMD)
+		nlog.Infof("loaded %s", etlMD)
 		goto finalize
 	}
 	etlMD = newEtlMD()
-	glog.Infof("initializing new %s", etlMD)
+	nlog.Infof("initializing new %s", etlMD)
 finalize:
 	eo.put(etlMD)
 }
@@ -245,11 +245,11 @@ func (*etlMDOwnerTgt) persist(clone *etlMD, payload msPayload) (err error) {
 		return
 	}
 	if availCnt == 0 {
-		glog.Errorf("Cannot store %s: %v", clone, cmn.ErrNoMountpaths)
+		nlog.Errorf("Cannot store %s: %v", clone, cmn.ErrNoMountpaths)
 		return
 	}
 	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
-	glog.Errorln(err)
+	nlog.Errorln(err)
 	return
 }
 
@@ -277,7 +277,7 @@ func loadEtlMD(mpaths fs.MPI, path string) (mainEtlMD *etlMD) {
 		if mainEtlMD.Version == etlMD.Version {
 			cos.ExitLogf("EtlMD is different (%q): %v vs %v", mpath, mainEtlMD, etlMD)
 		}
-		glog.Errorf("Warning: detected different EtlMD versions (%q): %v != %v", mpath, mainEtlMD, etlMD)
+		nlog.Errorf("Warning: detected different EtlMD versions (%q): %v != %v", mpath, mainEtlMD, etlMD)
 		if mainEtlMD.Version < etlMD.Version {
 			mainEtlMD = etlMD
 		}
@@ -297,7 +297,7 @@ func loadEtlMDFromMpath(mpath *fs.Mountpath, path string) (etlMD *etlMD) {
 	}
 	if !os.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant etlMDs stored.
-		glog.Errorf("failed to load %s from %s, err: %v", etlMD, fpath, err)
+		nlog.Errorf("failed to load %s from %s, err: %v", etlMD, fpath, err)
 	}
 	return nil
 }

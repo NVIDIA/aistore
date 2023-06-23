@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
@@ -76,7 +76,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleETL) {
-		glog.Infoln(t.String() + ": " + initMsg.String())
+		nlog.Infoln(t.String() + ": " + initMsg.String())
 	}
 }
 

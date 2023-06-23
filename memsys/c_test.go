@@ -6,12 +6,7 @@
  */
 package memsys_test
 
-// E.g. running this specific test:
-//
-// go test -v -run=SGLS -verbose=true -logtostderr=true
-//
-// For more examples, see the README in this directory
-//
+// to run: go test -v -run=SGLS -verbose=true
 
 import (
 	"bytes"

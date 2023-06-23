@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -32,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -164,7 +164,7 @@ func (h *htrun) cluStartedWithRetry() bool {
 	time.Sleep(time.Second)
 	clutime := h.startup.cluster.Load()
 	if clutime == 0 {
-		glog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up", h.si))
+		nlog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up", h.si))
 	}
 	return clutime > 0
 }
@@ -332,7 +332,7 @@ func (h *htrun) initNetworks() {
 	// public hostname could be LoadBalancer external IP or a service DNS
 	k8sDetected := k8s.Detect() == nil
 	if k8sDetected && config.HostNet.Hostname != "" {
-		glog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
+		nlog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
 		pubAddr = *meta.NewNetInfo(proto, config.HostNet.Hostname, port)
 	} else {
 		pubAddr, err = getNetInfo(config, addrList, proto, config.HostNet.Hostname, port)
@@ -343,7 +343,7 @@ func (h *htrun) initNetworks() {
 	if config.HostNet.Hostname != "" {
 		s = " (config: " + config.HostNet.Hostname + ")"
 	}
-	glog.Infof("%s (user) access: [%s]%s", cmn.NetPublic, pubAddr, s)
+	nlog.Infof("%s (user) access: [%s]%s", cmn.NetPublic, pubAddr, s)
 
 	intraControlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
@@ -356,7 +356,7 @@ func (h *htrun) initNetworks() {
 		if config.HostNet.HostnameIntraControl != "" {
 			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
-		glog.Infof("%s access: [%s]%s", cmn.NetIntraControl, intraControlAddr, s)
+		nlog.Infof("%s access: [%s]%s", cmn.NetIntraControl, intraControlAddr, s)
 	}
 	intraDataAddr = pubAddr
 	if config.HostNet.UseIntraData {
@@ -369,7 +369,7 @@ func (h *htrun) initNetworks() {
 		if config.HostNet.HostnameIntraData != "" {
 			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
-		glog.Infof("%s access: [%s]%s", cmn.NetIntraData, intraDataAddr, s)
+		nlog.Infof("%s access: [%s]%s", cmn.NetIntraData, intraDataAddr, s)
 	}
 	mustDiffer(pubAddr,
 		config.HostNet.Port,
@@ -417,7 +417,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	loaded, err := h.owner.smap.load(smap)
 
 	if err != nil {
-		glog.Errorf("Failed to load cluster map (\"Smap\"): %v - reinitializing", err)
+		nlog.Errorf("Failed to load cluster map (\"Smap\"): %v - reinitializing", err)
 		return
 	}
 	if !loaded {
@@ -438,7 +438,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 	// NOTE: not enforcing Snode's immutability - in particular, IPs that may change upon restart
 	// in certain environments
 	if _, err := smap.IsDupNet(h.si); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	reliable = true
@@ -478,9 +478,8 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 func (h *htrun) run() error {
 	config := cmn.GCO.Get()
 
-	// A wrapper to glog http.Server errors - otherwise
-	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
-	logger := log.New(&glogWriter{}, "net/http err: ", 0)
+	// A wrapper to log http.Server errors
+	logger := log.New(&nlogWriter{}, "net/http err: ", 0)
 	if config.HostNet.UseIntraControl || config.HostNet.UseIntraData {
 		var errCh chan error
 		if config.HostNet.UseIntraControl && config.HostNet.UseIntraData {
@@ -541,7 +540,7 @@ func (h *htrun) stop(rmFromSmap bool) {
 	if rmFromSmap {
 		h.unregisterSelf(true)
 	}
-	glog.Warningln("Shutting down HTTP")
+	nlog.Warningln("Shutting down HTTP")
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -554,7 +553,7 @@ func (h *htrun) stop(rmFromSmap bool) {
 		time.Sleep(time.Second)
 		entry = xreg.GetRunning(xreg.Flt{})
 		if entry != nil {
-			glog.Warningf("Timed out waiting for %q to finish aborting", entry.Kind())
+			nlog.Warningf("Timed out waiting for %q to finish aborting", entry.Kind())
 		}
 	}
 	if h.si.IsTarget() {
@@ -732,7 +731,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 			if si := smap.GetActiveNode(dst); si != nil {
 				nodes = append(nodes, si)
 			} else {
-				glog.Errorln(&errNodeNotFound{"failed to notify", dst, h.si, smap})
+				nlog.Errorln(&errNodeNotFound{"failed to notify", dst, h.si, smap})
 			}
 		}
 	}
@@ -741,7 +740,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	}
 	msg.NodeID = h.si.ID()
 	if len(nodes) == 0 {
-		glog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
+		nlog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
 		return
 	}
 	path := apc.URLPathNotifs.Join(upon)
@@ -994,7 +993,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		f := filepath.Base(file)
 		msg += fmt.Sprintf("%s:%d", f, line)
 	}
-	glog.Errorln(msg + ")")
+	nlog.Errorln(msg + ")")
 	h.statsT.IncErr(stats.ErrHTTPWriteCount)
 }
 
@@ -1058,7 +1057,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		var err error
 		body, err = h.cluMeta(cmetaFillOpt{htext: htext})
 		if err != nil {
-			glog.Errorf("failed to fetch cluster config, err: %v", err)
+			nlog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
 	case apc.WhatSnode:
 		body = h.si
@@ -1122,7 +1121,7 @@ func (h *htrun) sendlog(w http.ResponseWriter, r *http.Request, query url.Values
 	buf, slab := h.gmm.Alloc()
 	if written, err := io.CopyBuffer(w, fh, buf); err != nil {
 		// at this point, http err must be already on its way
-		glog.Errorf("failed to read %s: %v (written=%d)", log, err, written)
+		nlog.Errorf("failed to read %s: %v (written=%d)", log, err, written)
 	}
 	cos.Close(fh)
 	slab.Free(buf)
@@ -1131,15 +1130,15 @@ func (h *htrun) sendlog(w http.ResponseWriter, r *http.Request, query url.Values
 func _sev2logname(sev string) (log string, err error) {
 	dir := cmn.GCO.Get().LogDir
 	if sev == "" {
-		log = filepath.Join(dir, glog.InfoLogName()) // symlink
+		log = filepath.Join(dir, nlog.InfoLogName()) // symlink
 		return
 	}
 	v := strings.ToLower(sev)
 	switch v[0] {
 	case apc.LogInfo[0]:
-		log = filepath.Join(dir, glog.InfoLogName())
+		log = filepath.Join(dir, nlog.InfoLogName())
 	case apc.LogWarn[0], apc.LogErr[0]:
-		log = filepath.Join(dir, glog.ErrLogName())
+		log = filepath.Join(dir, nlog.ErrLogName())
 	default:
 		err = fmt.Errorf("unknown log severity %q", sev)
 	}
@@ -1232,7 +1231,7 @@ func (h *htrun) Health(si *meta.Snode, timeout time.Duration, query url.Values) 
 // - consider adding max-ver BMD bit here as well (TODO)
 func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num confirmations*/) {
 	if !smap.isValid() {
-		glog.Errorf("%s: cannot execute with invalid %s", h.si, smap)
+		nlog.Errorf("%s: cannot execute with invalid %s", h.si, smap)
 		return nil, 0
 	}
 	c := getMaxCii{
@@ -1248,7 +1247,7 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num
 	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
 		h._bch(&c, smap, apc.Target)
 	}
-	glog.Infof("%s: %s", h.si, c.maxCii.String())
+	nlog.Infof("%s: %s", h.si, c.maxCii.String())
 	return c.maxCii, c.cnt
 }
 
@@ -1301,7 +1300,7 @@ func logmsync(ver int64, revs revs, msg *aisMsg, opts ...string) {
 		what = opts[1]
 	}
 	s := fmt.Sprintf("msync Rx: %s (up from v%d), %s <-- %s", what, ver, msg, caller)
-	glog.InfoDepth(1, s)
+	nlog.InfoDepth(1, s)
 }
 
 func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *globalConfig, msg *aisMsg, err error) {
@@ -1415,7 +1414,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 			err = newErrDowngrade(h.si, smap.StringEx(), newSmap.StringEx())
 			return
 		}
-		glog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
+		nlog.Warningf("%s: %s and %s are otherwise identical", h.si, newSmap.StringEx(), smap.StringEx())
 		newSmap = nil
 	}
 	return
@@ -1564,7 +1563,7 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cos.BHead(bytes), err)
 		return nil, err
 	}
-	glog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,
+	nlog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,
 		len(tokenList.Tokens), msg.Action, msg.UUID)
 	return tokenList, nil
 }
@@ -1642,7 +1641,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 			if res.err == nil {
-				glog.Infof("%s: primary responded Ok via %s", h.si, candidateURL)
+				nlog.Infof("%s: primary responded Ok via %s", h.si, candidateURL)
 				return // ok
 			}
 			resPrev = res
@@ -1671,7 +1670,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {
-		glog.Infof("%s: joined cluster via %s", h.si, primaryURL)
+		nlog.Infof("%s: joined cluster via %s", h.si, primaryURL)
 	}
 	return
 }
@@ -1765,20 +1764,20 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			continue
 		}
 		if h.si.IsProxy() && smap.isPrimary(h.si) { // TODO: unlikely - see httpRequestNewPrimary
-			glog.Warningf("%s: started as a non-primary and got ELECTED during startup", h.si)
+			nlog.Warningf("%s: started as a non-primary and got ELECTED during startup", h.si)
 			return
 		}
 		if _, _, err := h.Health(smap.Primary, healthTimeout, query /*ask primary*/); err == nil {
 			// log
 			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
-				glog.Warningln(s + "; NOTE: not present in the cluster map")
+				nlog.Warningln(s + "; NOTE: not present in the cluster map")
 			} else if self.Flags.IsSet(meta.SnodeMaint) {
-				glog.Warningln(s + "; NOTE: starting in maintenance mode")
+				nlog.Warningln(s + "; NOTE: starting in maintenance mode")
 			} else if rmd := h.owner.rmd.get(); rmd != nil && rmd.version() > 0 {
-				glog.Infoln(s + ", " + rmd.String())
+				nlog.Infoln(s + ", " + rmd.String())
 			} else {
-				glog.Infoln(s)
+				nlog.Infoln(s)
 			}
 			return
 		}
@@ -1791,7 +1790,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 					pid = psi.ID()
 				}
 				if cii.Smap.Primary.ID != pid && cnt >= maxVerConfirmations {
-					glog.Warningf("%s: change of primary %s => %s - must rejoin",
+					nlog.Warningf("%s: change of primary %s => %s - must rejoin",
 						h.si, pid, cii.Smap.Primary.ID)
 					maxCii = cii
 					return
@@ -1799,7 +1798,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			}
 		}
 		if total > config.Timeout.Startup.D() {
-			glog.Errorf("%s: cluster startup is taking unusually long time...", h.si)
+			nlog.Errorf("%s: cluster startup is taking unusually long time...", h.si)
 		}
 	}
 }
@@ -1819,9 +1818,9 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	res := h.call(cargs)
 	status, err = res.status, res.err
 	if err != nil {
-		f := glog.Errorf
+		f := nlog.Errorf
 		if ignoreErr {
-			f = glog.Warningf
+			f = nlog.Warningf
 		}
 		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
 	}
@@ -1837,7 +1836,7 @@ func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (resp
 	if callerID == "" && caller == "" {
 		readiness := cos.IsParseBool(r.URL.Query().Get(apc.QparamHealthReadiness))
 		if cmn.FastV(5, cos.SmoduleAIS) {
-			glog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
+			nlog.Infof("%s: external health-ping from %s (readiness=%t)", h.si, r.RemoteAddr, readiness)
 		}
 		// respond with 503 as per https://tools.ietf.org/html/rfc7231#section-6.6.4
 		// see also:
@@ -1883,13 +1882,13 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		callerVer, erP = strconv.ParseInt(callerSver, 10, 64)
 		if erP != nil {
 			debug.AssertNoErr(erP)
-			glog.Errorln(erP)
+			nlog.Errorln(erP)
 			return
 		}
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
 			if h.ClusterStarted() {
-				glog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h.si, smap, callerSver, callerName)
+				nlog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h.si, smap, callerSver, callerName)
 			}
 			runtime.Gosched()
 			return

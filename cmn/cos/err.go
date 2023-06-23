@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type (
@@ -140,12 +140,12 @@ func Exitf(f string, a ...any) {
 	_exit(msg)
 }
 
-// +glog
+// +log
 func ExitLogf(f string, a ...any) {
 	msg := fmt.Sprintf(fatalPrefix+f, a...)
 	if flag.Parsed() {
-		glog.ErrorDepth(1, msg+"\n")
-		glog.FlushExit()
+		nlog.ErrorDepth(1, msg+"\n")
+		nlog.FlushExit()
 	}
 	_exit(msg)
 }
@@ -153,8 +153,8 @@ func ExitLogf(f string, a ...any) {
 func ExitLog(a ...any) {
 	msg := fatalPrefix + fmt.Sprint(a...)
 	if flag.Parsed() {
-		glog.ErrorDepth(1, msg+"\n")
-		glog.FlushExit()
+		nlog.ErrorDepth(1, msg+"\n")
+		nlog.FlushExit()
 	}
 	_exit(msg)
 }

@@ -15,13 +15,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/OneOfOne/xxhash"
 )
@@ -214,7 +214,7 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 		return
 	}
 	if err := os.Rename(fromPath, backupPath); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		os.Remove(fromPath)
 	} else {
 		newBcnt = bcnt + 1
@@ -358,7 +358,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 				// in both cases, BMD cannot be fully trusted, and so we ignore that fact
 				// that the directory exists
 				// (scenario: decommission without proper cleanup, followed by rejoin)
-				glog.Errorf("Warning: %s bdir %s exists but local BMD is not the latest", bck, dir)
+				nlog.Errorf("Warning: %s bdir %s exists but local BMD is not the latest", bck, dir)
 				num++
 				continue
 			}
@@ -372,7 +372,7 @@ func (mi *Mountpath) createBckDirs(bck *cmn.Bck, nilbmd bool) (int, error) {
 				if contentType != WorkfileType {
 					return num, err
 				}
-				glog.Errorln(err)
+				nlog.Errorln(err)
 			}
 		} else if err := cos.CreateDir(dir); err != nil {
 			return num, fmt.Errorf("bucket %s: failed to create directory %s: %w", bck, dir, err)
@@ -486,7 +486,7 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 	// dd-transition
 	if ddmi, ok := availablePaths[mi.Path]; ok && ddmi.IsAnySet(FlagWaitingDD) {
 		availableCopy := _cloneOne(availablePaths)
-		glog.Warningf("%s (%s): interrupting dd-transition - adding&enabling", mi, ddmi)
+		nlog.Warningf("%s (%s): interrupting dd-transition - adding&enabling", mi, ddmi)
 		availableCopy[mi.Path] = mi
 		putAvailMPI(availableCopy)
 		return
@@ -521,7 +521,7 @@ func (mi *Mountpath) ClearDD() {
 // create a new singleton
 func New(num int, allowSharedDisksAndNoDisks bool) {
 	if allowSharedDisksAndNoDisks {
-		glog.Warningln("allowed: (I) disk sharing by multiple mountpaths and (II) mountpaths with no disks")
+		nlog.Warningln("allowed: (I) disk sharing by multiple mountpaths and (II) mountpaths with no disks")
 	}
 	mfs = &MountedFS{fsIDs: make(map[cos.FsID]string, 10), allowSharedDisksAndNoDisks: allowSharedDisksAndNoDisks}
 	mfs.ios = ios.New(num)
@@ -629,7 +629,7 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err erro
 			if !force {
 				return
 			}
-			glog.Errorf("%v - ignoring since force=%t", err, force)
+			nlog.Errorf("%v - ignoring since force=%t", err, force)
 		}
 	}
 	mfs.mu.Lock()
@@ -643,7 +643,7 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err erro
 	mfs.mu.Unlock()
 
 	if mi.Path != mpath {
-		glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+		nlog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
 	}
 	return
 }
@@ -689,7 +689,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
 			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
 		}
@@ -697,12 +697,12 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 			availableCopy := _cloneOne(availablePaths)
 			mi, ok = availableCopy[cleanMpath]
 			debug.Assert(ok)
-			glog.Warningf("%s: re-enabling during dd-transition", mi)
+			nlog.Warningf("%s: re-enabling during dd-transition", mi)
 			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMpath = mi
 			putAvailMPI(availableCopy)
 		} else if config.FastV(4, cos.SmoduleFS) {
-			glog.Infof("%s: %s is already available, nothing to do", tid, mi)
+			nlog.Infof("%s: %s is already available, nothing to do", tid, mi)
 		}
 		return
 	}
@@ -758,7 +758,7 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 
 	if _, exists = disabledPaths[cleanMpath]; exists {
 		err := fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		debug.AssertNoErr(err)
 		return nil, err
 	}
@@ -771,9 +771,9 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 
 	availCnt := len(availableCopy)
 	if availCnt == 0 {
-		glog.Errorf("removed the last available mountpath %s", mi)
+		nlog.Errorf("removed the last available mountpath %s", mi)
 	} else {
-		glog.Infof("removed mountpath %s (remain available: %d)", mi, availCnt)
+		nlog.Infof("removed mountpath %s (remain available: %d)", mi, availCnt)
 	}
 	moveMarkers(availableCopy, mi)
 	putAvailMPI(availableCopy)
@@ -810,7 +810,7 @@ func begdd(action string, flags uint64, mpath string) (mi *Mountpath, numAvail i
 			return
 		}
 		if action == apc.ActMountpathDisable {
-			glog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
+			nlog.Infof("%s(%q) is already fully disabled - nothing to do", mi, action)
 			mi = nil
 		}
 		numAvail = len(avail)
@@ -843,7 +843,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		debug.Assert(cleanMpath == mi.Path)
 		if _, ok = disabledPaths[cleanMpath]; ok {
 			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
 		}
@@ -858,12 +858,12 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		moveMarkers(availableCopy, mi)
 		PutMPI(availableCopy, disabledCopy)
 		if l := len(availableCopy); l == 0 {
-			glog.Errorf("disabled the last available mountpath %s", mi)
+			nlog.Errorf("disabled the last available mountpath %s", mi)
 		} else {
 			if len(cb) > 0 {
 				cb[0]()
 			}
-			glog.Infof("disabled mountpath %s (%d remain%s active)", mi, l, cos.Plural(l))
+			nlog.Infof("disabled mountpath %s (%d remain%s active)", mi, l, cos.Plural(l))
 		}
 		return mi, nil
 	}
@@ -938,7 +938,7 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 		mi.evictLomBucketCache(bck)
 		dir := mi.makeDelPathBck(bck, bid)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
-			glog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)
+			nlog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)
 			// TODO: call fshc
 		} else {
 			n++
@@ -975,7 +975,7 @@ func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
 		fromPath := mi.MakePathBck(bckTo)
 		toPath := mi.MakePathBck(bckFrom)
 		if erd := os.Rename(fromPath, toPath); erd != nil {
-			glog.Errorln(erd)
+			nlog.Errorln(erd)
 		}
 	}
 	return
@@ -988,7 +988,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 	)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			glog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
+			nlog.Errorf("Failed to read markers' dir %q: %v", fromPath, err)
 		}
 		return
 	}
@@ -1009,7 +1009,7 @@ func moveMarkers(available MPI, from *Mountpath) {
 			)
 			_, _, err := cos.CopyFile(fromPath, toPath, nil, cos.ChecksumNone)
 			if err != nil && os.IsNotExist(err) {
-				glog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
+				nlog.Errorf("Failed to move marker %q to %q: %v)", fromPath, toPath, err)
 				ok = false
 			}
 		}
@@ -1105,7 +1105,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 	high, oos := config.Space.HighWM, config.Space.OOS
 	for path, mi := range availablePaths {
 		if c, err = mi.getCapacity(config, true); err != nil {
-			glog.Errorf("%s: %v", mi, err)
+			nlog.Errorf("%s: %v", mi, err)
 			return
 		}
 		cs.TotalUsed += c.Used

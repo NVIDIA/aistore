@@ -11,13 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -80,7 +80,7 @@ func NewRespondXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactRespond {
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 
 	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
@@ -90,7 +90,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 		select {
 		case <-ticker.C:
 			if s := r.stats.stats().String(); s != "" {
-				glog.Infoln(s)
+				nlog.Infoln(s)
 			}
 		case <-r.IdleTimer():
 			r.stop(nil)
@@ -106,7 +106,7 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 // Used when processing object deletion request
 func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 	if r.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Delete request for %s", bck.Cname(objName))
+		nlog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
 	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
@@ -142,7 +142,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		objName      = hdr.ObjName
 	)
 	if r.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
+		nlog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
 		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
@@ -167,16 +167,16 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			glog.Errorf("%s failed to delete %s: %v", r.t, bck.Cname(hdr.ObjName), err)
+			nlog.Errorf("%s failed to delete %s: %v", r.t, bck.Cname(hdr.ObjName), err)
 		}
 	case reqGet:
 		err := r.trySendCT(iReq, hdr, bck)
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	default:
 		// invalid request detected
-		glog.Errorf("Invalid request type %d", hdr.Opcode)
+		nlog.Errorf("Invalid request type %d", hdr.Opcode)
 	}
 }
 
@@ -195,12 +195,12 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			glog.Errorf("%s: no metadata for %s", r.t, hdr.Cname())
+			nlog.Errorf("%s: no metadata for %s", r.t, hdr.Cname())
 			return
 		}
 
 		if r.config.FastV(4, cos.SmoduleEC) {
-			glog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
+			nlog.Infof("Got slice=%t from %s (#%d of %s) v%s, cksum: %s", iReq.isSlice, hdr.SID,
 				iReq.meta.SliceID, hdr.Cname(), meta.ObjVersion, meta.CksumValue)
 		}
 		md := meta.NewPack()
@@ -224,13 +224,13 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			cluster.FreeLOM(lom)
 		}
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		r.ObjsAdd(1, hdr.ObjAttrs.Size)
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request type: %d", hdr.Opcode)
+		nlog.Errorf("Invalid request type: %d", hdr.Opcode)
 	}
 }
 

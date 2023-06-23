@@ -13,11 +13,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -196,13 +196,13 @@ func (d *Snode) Equals(o *Snode) (eq bool) {
 		// generally, expecting network equality with local reconfig (and re-join) considered
 		// legit
 		if !d.PubNet.eq(&o.PubNet) {
-			glog.Errorf("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
+			nlog.Errorf("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
 		}
 		if !d.ControlNet.eq(&o.ControlNet) {
-			glog.Errorf("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
+			nlog.Errorf("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
 		}
 		if !d.DataNet.eq(&o.DataNet) {
-			glog.Errorf("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
+			nlog.Errorf("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
 		}
 	})
 	return

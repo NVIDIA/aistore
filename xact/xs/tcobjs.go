@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -120,7 +120,7 @@ func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
 
 func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 	var err error
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	wg.Done()
 	for {
 		select {
@@ -139,7 +139,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 
 			// this target must be active (ref: ignoreMaintenance)
 			if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 				goto fin
 			}
 			nat := smap.CountActiveTs()
@@ -203,7 +203,7 @@ func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) 
 	transport.DrainAndFreeReader(objReader)
 ex:
 	if err != nil && r.config.FastV(4, cos.SmoduleXs) {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	return err
 }
@@ -261,7 +261,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 	cluster.FreePutObjParams(params)
 
 	if r.config.FastV(5, cos.SmoduleXs) {
-		glog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
+		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
 	return
 }
@@ -292,6 +292,6 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	if err != nil {
 		wi.r.raiseErr(err, wi.msg.ContinueOnError)
 	} else if wi.r.config.FastV(5, cos.SmoduleXs) {
-		glog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
+		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}
 }

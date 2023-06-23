@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type Slab struct {
@@ -63,7 +63,7 @@ func (s *Slab) _allocSlow() (buf []byte) {
 	lput := len(s.put)
 	if cnt := (curMinDepth - lput) >> 1; cnt > 0 {
 		if verbose {
-			glog.Infof("%s: grow by %d to %d, caps=(%d, %d)", s.tag, cnt, lput+cnt, cap(s.get), cap(s.put))
+			nlog.Infof("%s: grow by %d to %d, caps=(%d, %d)", s.tag, cnt, lput+cnt, cap(s.get), cap(s.put))
 		}
 		s.grow(cnt)
 	}
@@ -103,7 +103,7 @@ func (s *Slab) reduce(todepth int) int64 {
 	}
 	s.muput.Unlock()
 	if pfreed > 0 && verbose {
-		glog.Infof("%s: reduce lput %d to %d (freed %dB)", s.tag, lput, lput-cnt, pfreed)
+		nlog.Infof("%s: reduce lput %d to %d (freed %dB)", s.tag, lput, lput-cnt, pfreed)
 	}
 
 	s.muget.Lock()
@@ -118,7 +118,7 @@ func (s *Slab) reduce(todepth int) int64 {
 	}
 	s.muget.Unlock()
 	if gfreed > 0 && verbose {
-		glog.Infof("%s: reduce lget %d to %d (freed %dB)", s.tag, lget, lget-cnt, gfreed)
+		nlog.Infof("%s: reduce lget %d to %d (freed %dB)", s.tag, lget, lget-cnt, gfreed)
 	}
 	return pfreed + gfreed
 }

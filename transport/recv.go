@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/OneOfOne/xxhash"
@@ -106,7 +106,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	xxh, _ := UID2SessID(uid)
 	loghdr := fmt.Sprintf("%s[%d:%d]", trname, xxh, sessID)
 	if verbose {
-		glog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+		nlog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
 	}
 	stats := statsif.(*Stats)
 
@@ -185,7 +185,7 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 				break
 			}
 			// grow
-			glog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
+			nlog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
 			mm.Free(it.hbuf)
 			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
 		}
@@ -398,7 +398,7 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 			if obj.IsUnsized() {
 				obj.hdr.ObjAttrs.Size = obj.off
 			} else if obj.Size() != obj.off {
-				glog.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
+				nlog.Errorf("sbr9 %s: off %d != %s", obj.loghdr, obj.off, obj)
 			}
 		} else {
 			pdu.reset()

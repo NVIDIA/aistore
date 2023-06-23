@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -84,12 +84,12 @@ func (res *Res) RunResilver(args Args) {
 	res._begin()
 	defer res._end()
 	if fatalErr, writeErr := fs.PersistMarker(fname.ResilverMarker); fatalErr != nil || writeErr != nil {
-		glog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
+		nlog.Errorf("FATAL: %v, WRITE: %v", fatalErr, writeErr)
 		return
 	}
 	availablePaths, _ := fs.Get()
 	if len(availablePaths) < 1 {
-		glog.Errorln(cmn.ErrNoMountpaths)
+		nlog.Errorln(cmn.ErrNoMountpaths)
 		return
 	}
 	xres := xreg.RenewResilver(args.UUID).(*xs.Resilver)
@@ -118,13 +118,13 @@ func (res *Res) RunResilver(args Args) {
 
 	if args.SingleRmiJogger {
 		jg = mpather.NewJoggerGroup(opts, args.Rmi.Path)
-		glog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
+		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
 		jg = mpather.NewJoggerGroup(opts)
 		if args.Rmi != nil {
-			glog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
+			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
 		} else {
-			glog.Infof("%s, num %d", xres.Name(), jg.Num())
+			nlog.Infof("%s, num %d", xres.Name(), jg.Num())
 		}
 	}
 
@@ -147,14 +147,14 @@ func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 		select {
 		case errCause := <-xres.ChanAbort():
 			if err = jg.Stop(); err != nil {
-				glog.Errorf("%s: %s aborted (cause %v), traversal err %v", tsi, xres, errCause, err)
+				nlog.Errorf("%s: %s aborted (cause %v), traversal err %v", tsi, xres, errCause, err)
 			} else {
-				glog.Infof("%s: %s aborted (cause %v)", tsi, xres, errCause)
+				nlog.Infof("%s: %s aborted (cause %v)", tsi, xres, errCause)
 			}
 			return cmn.NewErrAborted(xres.Name(), "", errCause)
 		case <-jg.ListenFinished():
 			if err = fs.RemoveMarker(fname.ResilverMarker); err == nil {
-				glog.Infof("%s: %s removed marker ok", tsi, xres)
+				nlog.Infof("%s: %s removed marker ok", tsi, xres)
 			}
 			return
 		}
@@ -168,7 +168,7 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 		return
 	}
 	if destMpath.Path == ct.Mountpath().Path {
@@ -185,18 +185,18 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleReb) {
-		glog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
+		nlog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
-		glog.Errorf("Failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
+		nlog.Errorf("Failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
 		if err = os.Remove(destMetaFQN); err != nil {
-			glog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
+			nlog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
 		}
 	}
 	errMeta := os.Remove(srcMetaFQN)
 	errSlice := os.Remove(ct.FQN())
 	if errMeta != nil || errSlice != nil {
-		glog.Warningf("Failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
+		nlog.Warningf("Failed to cleanup %q: %v, %v", ct.FQN(), errSlice, errMeta)
 	}
 }
 
@@ -254,13 +254,13 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 		// copy metafile
 		newMpath, _, errEc := cluster.ResolveFQN(lom.HrwFQN)
 		if errEc != nil {
-			glog.Warningf("%s: %s %v", xname, lom, errEc)
+			nlog.Warningf("%s: %s %v", xname, lom, errEc)
 			return nil
 		}
 		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
 		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.Mountpath(), newMpath.Mountpath, buf)
 		if errEc != nil {
-			glog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
+			nlog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
 				xname, lom, lom.Mountpath().Path, newMpath.Mountpath.Path, errEc)
 			return nil
 		}
@@ -284,12 +284,12 @@ redo:
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
-				glog.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
+				nlog.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
 			}
 			// EC cleanup and return
 			if metaNewPath != "" {
 				if errHrw = os.Remove(metaNewPath); errHrw != nil {
-					glog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
+					nlog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
 				}
 			}
 			return
@@ -314,7 +314,7 @@ redo:
 				}
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
-				glog.Errorln(errHrw)
+				nlog.Errorln(errHrw)
 				return
 			}
 			copied = false
@@ -330,7 +330,7 @@ redo:
 		if cos.IsErrOOS(err) {
 			err = cmn.NewErrAborted(xname, "visit-obj", err)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
-			glog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
+			nlog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
 		}
 		break
 	}
@@ -338,7 +338,7 @@ ret:
 	// EC: remove old metafile
 	if metaOldPath != "" {
 		if err := os.Remove(metaOldPath); err != nil {
-			glog.Warningf("%s: failed to cleanup %s old metafile %q: %v", xname, lom, metaOldPath, err)
+			nlog.Warningf("%s: failed to cleanup %s old metafile %q: %v", xname, lom, metaOldPath, err)
 		}
 	}
 	return nil

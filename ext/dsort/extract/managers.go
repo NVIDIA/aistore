@@ -12,11 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -338,7 +338,7 @@ func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, v
 		rm.extractionPaths.Store(diskPath, struct{}{})
 
 		if _, err := cos.SaveReader(diskPath, sgl, buf, cos.ChecksumNone, -1); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 	default:
@@ -364,7 +364,7 @@ func (rm *RecordManager) Cleanup() {
 	rm.Records.Drain()
 	rm.extractionPaths.Range(func(k, v any) bool {
 		if err := fs.RemoveAll(k.(string)); err != nil {
-			glog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
+			nlog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
 		}
 		rm.extractionPaths.Delete(k)
 		return true

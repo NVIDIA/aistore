@@ -15,7 +15,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -24,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -289,7 +289,7 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 		}
 		m.addProxy(nsi)
 		if flags.IsSet(meta.SnodeNonElectable) {
-			glog.Warningf("%s won't be electable", nsi)
+			nlog.Warningf("%s won't be electable", nsi)
 		}
 	} else {
 		debug.Assert(nsi.IsTarget())
@@ -299,9 +299,9 @@ func (m *smapX) putNode(nsi *meta.Snode, flags cos.BitFlags, silent bool) {
 		m.addTarget(nsi)
 	}
 	if old != nil {
-		glog.Errorf("Warning: same ID %s vs (joining) %s, %s", old.StringEx(), nsi.StringEx(), m.StringEx())
+		nlog.Errorf("Warning: same ID %s vs (joining) %s, %s", old.StringEx(), nsi.StringEx(), m.StringEx())
 	} else if !silent {
-		glog.Infof("joined %s, %s", nsi, m.StringEx())
+		nlog.Infof("joined %s, %s", nsi, m.StringEx())
 	}
 }
 
@@ -360,12 +360,12 @@ func (m *smapX) handleDuplicateNode(nsi *meta.Snode, del bool) (err error) {
 	if osi, err = m.IsDupNet(nsi); err == nil {
 		return
 	}
-	glog.Errorln(err)
+	nlog.Errorln(err)
 	if !del {
 		return
 	}
 	// TODO: more diligence in determining old-ness
-	glog.Errorf("%v: removing old (?) %s from the current %s and future Smaps", err, osi, m)
+	nlog.Errorf("%v: removing old (?) %s from the current %s and future Smaps", err, osi, m)
 	err = nil
 	if osi.IsProxy() {
 		m.delProxy(osi.ID())
@@ -503,7 +503,7 @@ func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayloa
 
 	if err == nil {
 		if ofl != nfl {
-			glog.Infof("%s flags: from %#b to %#b", si, ofl, nfl)
+			nlog.Infof("%s flags: from %#b to %#b", si, ofl, nfl)
 		}
 		cb(newSmap, smap, nfl, ofl)
 	}

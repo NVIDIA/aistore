@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
@@ -86,14 +86,14 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 	records, err := mg.db.GetAll(dsortCollection, managersKey)
 	if err != nil {
 		if !cos.IsErrNotFound(err) {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 		return jobsInfos
 	}
 	for _, r := range records {
 		var m Manager
 		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			continue
 		}
 		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
@@ -129,7 +129,7 @@ func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
 		key := path.Join(managersKey, managerUUID)
 		if err := mg.db.Get(dsortCollection, key, &manager); err != nil {
 			if !cos.IsErrNotFound(err) {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 			}
 			return nil, false
 		}
@@ -171,7 +171,7 @@ func (mg *ManagerGroup) persist(managerUUID string) {
 	manager.Metrics.Archived.Store(true)
 	key := path.Join(managersKey, managerUUID)
 	if err := mg.db.Set(dsortCollection, key, manager); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	delete(mg.managers, managerUUID)
@@ -200,14 +200,14 @@ func (mg *ManagerGroup) housekeep() time.Duration {
 		if cos.IsErrNotFound(err) {
 			return regularInterval
 		}
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return retryInterval
 	}
 
 	for _, r := range records {
 		var m Manager
 		if err := jsoniter.Unmarshal([]byte(r), &m); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return retryInterval
 		}
 		if time.Since(m.Metrics.Extraction.End) > regularInterval {

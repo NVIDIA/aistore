@@ -12,12 +12,12 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 )
 
@@ -123,7 +123,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.FastV(4, cos.SmoduleETL) {
-		glog.Infoln(p.String() + ": " + initMsg.String())
+		nlog.Infoln(p.String() + ": " + initMsg.String())
 	}
 }
 
@@ -215,7 +215,7 @@ func (p *proxy) startETL(w http.ResponseWriter, msg etl.InitMsg, addToMD bool) e
 			continue
 		}
 		err = res.toErr()
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	freeBcastRes(results)
 
@@ -303,7 +303,7 @@ func (p *proxy) listETL(w http.ResponseWriter, r *http.Request) {
 			if !reflect.DeepEqual(etls, another) {
 				// TODO: Should we return an error to a user?
 				// Or stop mismatching ETLs and return internal server error?
-				glog.Warningf("Targets returned different ETLs: %v vs %v", etls, another)
+				nlog.Warningf("Targets returned different ETLs: %v vs %v", etls, another)
 			}
 		}
 	}

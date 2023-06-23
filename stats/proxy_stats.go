@@ -8,12 +8,12 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // NOTE: currently, proxy's stats == common and hardcoded
@@ -72,7 +72,7 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 		if s.sgl.Len() > 3 { // skip '{}'
 			line := string(s.sgl.Bytes())
 			if line != r.prev {
-				glog.Infoln(line)
+				nlog.Infoln(line)
 				r.prev = line
 			}
 		}

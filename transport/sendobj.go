@@ -10,10 +10,10 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pierrec/lz4/v3"
 )
@@ -144,7 +144,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	}
 	if obj.Reader != nil {
 		if err != nil && cmn.IsFileAlreadyClosed(err) {
-			glog.Errorf("%s %s: %v", s, obj, err)
+			nlog.Errorf("%s %s: %v", s, obj, err)
 		} else {
 			cos.Close(obj.Reader) // otherwise, always closing
 		}
@@ -222,7 +222,7 @@ repeat:
 	case obj, ok := <-s.workCh: // next object OR idle tick
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
-			glog.Warningln(err)
+			nlog.Warningln(err)
 			return
 		}
 		s.sendoff.obj = *obj
@@ -240,7 +240,7 @@ repeat:
 	case <-s.stopCh.Listen():
 		num := s.stats.Num.Load()
 		if verbose {
-			glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
+			nlog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
 		}
 		err = io.EOF
 		return
@@ -257,7 +257,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	s.stats.Offset.Add(s.sendoff.off)
 	if verbose {
 		num := s.stats.Num.Load()
-		glog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
+		nlog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
 	}
 	obj := &s.sendoff.obj
 	if s.usePDU() && !obj.IsHeaderOnly() {
@@ -268,7 +268,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	s.sendoff.off = 0
 	if obj.Hdr.isFin() {
 		if verbose {
-			glog.Infof("%s: sent last", s)
+			nlog.Infof("%s: sent last", s)
 		}
 		err = io.EOF
 		s.lastCh.Close()
@@ -326,14 +326,14 @@ func (s *Stream) eoObj(err error) {
 	s.Numcur++
 	s.stats.Num.Inc()
 	if verbose {
-		glog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
+		nlog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
 	}
 	// target stats
 	statsTracker.Inc(OutObjCount)
 	statsTracker.Add(OutObjSize, objSize)
 exit:
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 
 	// next completion => SCQ
@@ -401,7 +401,7 @@ func (s *Stream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
 		s.workCh <- &Obj{Hdr: ObjHdr{Opcode: opcIdleTick}}
 		if verbose {
-			glog.Infof("%s: active => inactive", s)
+			nlog.Infof("%s: active => inactive", s)
 		}
 	}
 }

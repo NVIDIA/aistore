@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -26,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
@@ -115,7 +115,7 @@ func (p *lsoFactory) Start() (err error) {
 				err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", p.Args.T,
 					p.msg.UUID, p.msg.ContinuationToken, err)
 			}
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		p.dm.SetXact(r)
@@ -133,7 +133,7 @@ func (p *lsoFactory) Start() (err error) {
 
 func (r *LsoXact) Run(*sync.WaitGroup) {
 	if r.config.FastV(4, cos.SmoduleXs) {
-		glog.Infoln(r.String())
+		nlog.Infoln(r.String())
 	}
 	if !r.listRemote() {
 		r.initWalk()
@@ -391,7 +391,7 @@ func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err err
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
 	} else if r.config.FastV(4, cos.SmoduleXs) || !cos.IsRetriableConnErr(err) {
-		glog.Infof("Warning: %s: failed to send [%+v]: %v", r.p.T, hdr, err)
+		nlog.Infof("Warning: %s: failed to send [%+v]: %v", r.p.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)
 	debug.Assertf(ok, "%T", arg)
@@ -473,7 +473,7 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	opts.ValidateCallback = r.validateCb
 	if err := fs.WalkBck(opts); err != nil {
 		if err != filepath.SkipDir && err != errStopped {
-			glog.Errorf("%s walk failed, err %v", r, err)
+			nlog.Errorf("%s walk failed, err %v", r, err)
 		}
 	}
 	close(r.walk.pageCh)
@@ -584,7 +584,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
 	}
 	if err != nil && !cos.IsEOF(err) {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 		return err
 	}
@@ -612,7 +612,7 @@ func (r *LsoXact) _recv(hdr transport.ObjHdr, objReader io.Reader, buf []byte) (
 		// using generic in-counter to count received pages
 		r.InObjsAdd(1, hdr.ObjAttrs.Size)
 	} else {
-		glog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
+		nlog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
 			r.p.T, page.UUID, page.ContinuationToken, len(page.Entries),
 			hdr.SID, hdr.Bck.Cname(""), string(hdr.Opaque), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}

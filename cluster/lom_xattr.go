@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
@@ -138,7 +138,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	}
 	size = int64(len(read))
 	if size == 0 {
-		glog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
+		nlog.Errorf("%s[%s]: ENOENT", lom, lom.FQN)
 		err = os.NewSyscallError(getxattr, syscall.ENOENT)
 		slab.Free(buf)
 		return
@@ -373,7 +373,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 				if err != nil {
 					// Mountpath with the copy is missing.
 					if cmn.FastV(4, cos.SmoduleCluster) {
-						glog.Warningln(err)
+						nlog.Warningln(err)
 					}
 					// For utilities and tests: fill the map with mpath names always
 					if os.Getenv(DumpLomEnvVar) != "" {

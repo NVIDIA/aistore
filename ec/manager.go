@@ -11,7 +11,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -89,7 +89,7 @@ func (mgr *Manager) initECBundles() error {
 	}
 	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 		if err != nil {
-			glog.Errorf("failed to request %s: %v", hdr.Cname(), err)
+			nlog.Errorf("failed to request %s: %v", hdr.Cname(), err)
 		}
 	}
 	var (
@@ -195,20 +195,20 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err error) error {
 	defer transport.FreeRecv(object)
 	if err != nil {
-		glog.Errorf("request failed: %v", err)
+		nlog.Errorf("request failed: %v", err)
 		return err
 	}
 	// check if the header contains a valid request
 	if len(hdr.Opaque) == 0 {
 		err := fmt.Errorf("invalid header: [%+v]", hdr)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
-		glog.Errorf("failed to unmarshal request: %v", err)
+		nlog.Errorf("failed to unmarshal request: %v", err)
 		return err
 	}
 
@@ -216,14 +216,14 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
 		if _, err := io.ReadAll(object); err != nil {
-			glog.Errorf("failed to read request body: %v", err)
+			nlog.Errorf("failed to read request body: %v", err)
 			return err
 		}
 	}
 	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
-			glog.Errorf("failed to init bucket %s: %v", bck, err)
+			nlog.Errorf("failed to init bucket %s: %v", bck, err)
 			return err
 		}
 	}
@@ -235,26 +235,26 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(object)
 	if err != nil {
-		glog.Errorf("receive failed: %v", err)
+		nlog.Errorf("receive failed: %v", err)
 		return err
 	}
 	// check if the request is valid
 	if len(hdr.Opaque) == 0 {
 		err := fmt.Errorf("invalid header: [%+v]", hdr)
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return err
 	}
 
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
-		glog.Errorf("Failed to unmarshal request: %v", err)
+		nlog.Errorf("Failed to unmarshal request: %v", err)
 		return err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
 	if err = bck.Init(mgr.t.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return err
 		}
 	}
@@ -417,7 +417,7 @@ func (mgr *Manager) ListenSmapChanged() {
 			return false
 		}
 		if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
-			glog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
+			nlog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
 				bckName, targetCnt, required)
 			bckXacts.AbortPut()
 		}
@@ -425,7 +425,7 @@ func (mgr *Manager) ListenSmapChanged() {
 		// if one target was killed, and a new one joined, this condition will be satisfied even though
 		// slices of the object are not present on the new target
 		if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
-			glog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
+			nlog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
 				bckName, targetCnt, required)
 			bckXacts.AbortGet()
 		}

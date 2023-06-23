@@ -13,13 +13,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -394,7 +394,7 @@ func (ic *ic) bcastListenIC(nl nl.Listener) {
 func (ic *ic) sendOwnershipTbl(si *meta.Snode) error {
 	if ic.p.notifs.size() == 0 {
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Infof("%s: notifs empty, not sending to %s", ic.p, si)
+			nlog.Infof("%s: notifs empty, not sending to %s", ic.p, si)
 		}
 		return nil
 	}
@@ -446,11 +446,11 @@ func (ic *ic) syncICBundle() error {
 
 	if err := ic.p.owner.smap.synchronize(ic.p.si, bundle.Smap, nil /*ms payload*/, ic.p.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
-			glog.Errorln(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
+			nlog.Errorln(cmn.NewErrFailedTo(ic.p, "sync", bundle.Smap, err))
 		}
 	} else {
 		smap = ic.p.owner.smap.get()
-		glog.Infof("%s: synch %s", ic.p, smap)
+		nlog.Infof("%s: synch %s", ic.p, smap)
 	}
 
 	if !smap.IsIC(ic.p.si) {

@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -76,7 +76,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 	}
 
 	if verbose {
-		glog.Infof("[head_bucket] original_url: %q", origURL)
+		nlog.Infof("[head_bucket] original_url: %q", origURL)
 	}
 
 	// Contact the original URL - as long as we can make connection we assume it's good.
@@ -93,7 +93,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 
 	if resp.Header.Get(cos.HdrETag) == "" {
 		// TODO: improve validation
-		glog.Errorf("Warning: missing header %s (response header: %+v)", cos.HdrETag, resp.Header)
+		nlog.Errorf("Warning: missing header %s (response header: %+v)", cos.HdrETag, resp.Header)
 	}
 
 	bckProps = make(cos.StrKVs)
@@ -135,7 +135,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 	debug.AssertNoErr(err)
 
 	if verbose {
-		glog.Infof("[head_object] original_url: %q", origURL)
+		nlog.Infof("[head_object] original_url: %q", origURL)
 	}
 	resp, err := hp.client(origURL).Head(origURL)
 	if err != nil {
@@ -154,7 +154,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 		oa.SetCustomKey(cmn.ETag, v)
 	}
 	if verbose {
-		glog.Infof("[head_object] %s", lom)
+		nlog.Infof("[head_object] %s", lom)
 	}
 	return
 }
@@ -177,7 +177,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 		return
 	}
 	if verbose {
-		glog.Infof("[get_object] %s", lom)
+		nlog.Infof("[get_object] %s", lom)
 	}
 	return
 }
@@ -193,7 +193,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	debug.AssertNoErr(err)
 
 	if verbose {
-		glog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
+		nlog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
 	resp, err := hp.client(origURL).Get(origURL) //nolint:bodyclose // is closed by the caller
@@ -205,7 +205,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	}
 
 	if verbose {
-		glog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
+		nlog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 
 	lom.SetCustomKey(cmn.SourceObjMD, apc.HTTP)

@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -410,7 +410,7 @@ func (cw *cbWriter) Write(b []byte) (n int, err error) {
 func pruneQuery(rawQuery string) string {
 	vals, err := url.ParseQuery(rawQuery)
 	if err != nil {
-		glog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
+		nlog.Errorf("failed to parse raw query %q, err: %v", rawQuery, err)
 		return ""
 	}
 	for _, filtered := range []string{apc.QparamETLName, apc.QparamProxyID, apc.QparamUnixTime} {

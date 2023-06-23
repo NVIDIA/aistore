@@ -7,10 +7,10 @@ package cluster
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -43,7 +43,7 @@ func (lchk *lcHK) housekeep() (d time.Duration) {
 	d, tag = lchk.mp()
 	if !lchk.running.CAS(false, true) {
 		if tag != "" {
-			glog.Infof("running now: memory pressure %q, next sched %v", tag, d)
+			nlog.Infof("running now: memory pressure %q, next sched %v", tag, d)
 		}
 		return
 	}
@@ -109,6 +109,6 @@ func (lchk *lcHK) evictAll(d time.Duration) {
 		cache.Range(f)
 	}
 	if _, tag := lchk.mp(); tag != "" {
-		glog.Infof("memory pressure %q, total %d, evicted %d", tag, totalCnt, evictedCnt)
+		nlog.Infof("memory pressure %q, total %d, evicted %d", tag, totalCnt, evictedCnt)
 	}
 }

@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -116,23 +116,23 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 	// the transfer is completed
 	case respPut:
 		if r.config.FastV(4, cos.SmoduleEC) {
-			glog.Infof("Response from %s, %s", hdr.SID, uname)
+			nlog.Infof("Response from %s, %s", hdr.SID, uname)
 		}
 		r.dOwner.mtx.Lock()
 		writer, ok := r.dOwner.slices[uname]
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			glog.Errorf("No writer for %s", bck.Cname(objName))
+			nlog.Errorf("No writer for %s", bck.Cname(objName))
 			return
 		}
 
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			glog.Errorf("Failed to read replica: %v", err)
+			nlog.Errorf("Failed to read replica: %v", err)
 		}
 	default:
 		// should be unreachable
-		glog.Errorf("Invalid request: %d", hdr.Opcode)
+		nlog.Errorf("Invalid request: %d", hdr.Opcode)
 	}
 }
 
@@ -173,7 +173,7 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 }
 
 func (r *XactGet) Run(*sync.WaitGroup) {
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 
 	for _, jog := range r.getJoggers {
 		go jog.run()
@@ -191,7 +191,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 		case <-ticker.C:
 			if config.FastV(4, cos.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
-					glog.Infoln(s)
+					nlog.Infoln(s)
 				}
 			}
 		case mpathRequest := <-r.mpathReqCh:
@@ -247,7 +247,7 @@ func (r *XactGet) decode(req *request, lom *cluster.LOM) {
 	req.tm = time.Now()
 
 	if err := r.dispatchRequest(req, lom); err != nil {
-		glog.Errorf("Failed to restore %s: %v", lom, err)
+		nlog.Errorf("Failed to restore %s: %v", lom, err)
 		freeReq(req)
 	}
 }
@@ -278,7 +278,7 @@ func (r *XactGet) EnableRequests() {
 func (r *XactGet) addMpath(mpath string) {
 	jogger, ok := r.getJoggers[mpath]
 	if ok && jogger != nil {
-		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
+		nlog.Warningf("Attempted to add already existing mountpath: %s", mpath)
 		return
 	}
 	getJog := r.newGetJogger(mpath)

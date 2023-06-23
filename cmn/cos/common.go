@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -217,7 +217,7 @@ func CopyStruct(dst, src any) {
 
 func Infof(format string, a ...any) {
 	if flag.Parsed() {
-		glog.InfoDepth(1, fmt.Sprintf(format, a...))
+		nlog.InfoDepth(1, fmt.Sprintf(format, a...))
 	} else {
 		fmt.Printf(format+"\n", a...)
 	}
@@ -225,8 +225,8 @@ func Infof(format string, a ...any) {
 
 func Errorf(format string, a ...any) {
 	if flag.Parsed() {
-		glog.ErrorDepth(1, fmt.Sprintf(format, a...))
-		glog.Flush()
+		nlog.ErrorDepth(1, fmt.Sprintf(format, a...))
+		nlog.Flush()
 	} else {
 		fmt.Fprintf(os.Stderr, format+"\n", a...)
 	}

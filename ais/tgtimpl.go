@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -151,7 +151,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
 				if cmn.FastV(4, cos.SmoduleAIS) {
-					glog.Warningf("%s: %s(%s) is busy", t, lom, owt)
+					nlog.Warningf("%s: %s(%s) is busy", t, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 			}
@@ -163,7 +163,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 			// The action was performed by some other goroutine and we don't need
 			// to do it again. But we need to check on the object.
 			if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				glog.Errorf("%s: %s load err: %v - retrying...", t, lom, err)
+				nlog.Errorf("%s: %s load err: %v - retrying...", t, lom, err)
 				continue
 			}
 			return 0, nil
@@ -178,7 +178,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		glog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
+		nlog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		} else {
 			errCode = http.StatusInternalServerError
 			lom.Unlock(true)
-			glog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.Cname(), owt, err)
+			nlog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.Cname(), owt, err)
 		}
 	}
 	return
@@ -235,7 +235,7 @@ func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errC
 	}
 	if params.DeleteSrc {
 		if errRm := cos.RemoveFile(params.SrcFQN); errRm != nil {
-			glog.Errorf("%s: failed to remove promoted source %q: %v", t, params.SrcFQN, errRm)
+			nlog.Errorf("%s: failed to remove promoted source %q: %v", t, params.SrcFQN, errRm)
 		}
 	}
 	return
@@ -344,7 +344,7 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 //
 
 func (t *target) DisableMpath(mpath, reason string) (err error) {
-	glog.Warningf("Disabling mountpath %s: %s", mpath, reason)
+	nlog.Warningf("Disabling mountpath %s: %s", mpath, reason)
 	_, err = t.fsprg.disableMpath(mpath, true /*dont-resilver*/) // NOTE: not resilvering upon FSCH calling
 	return
 }

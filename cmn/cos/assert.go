@@ -7,7 +7,7 @@ package cos
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const assertMsg = "assertion failed"
@@ -21,7 +21,7 @@ func Assertf(cond bool, f string, a ...any) {
 
 func Assert(cond bool) {
 	if !cond {
-		glog.FlushExit()
+		nlog.FlushExit()
 		panic(assertMsg)
 	}
 }
@@ -29,14 +29,14 @@ func Assert(cond bool) {
 // NOTE: when using Sprintf and such, `if (!cond) { AssertMsg(false, msg) }` is the preferable usage.
 func AssertMsg(cond bool, msg string) {
 	if !cond {
-		glog.FlushExit()
+		nlog.FlushExit()
 		panic(assertMsg + ": " + msg)
 	}
 }
 
 func AssertNoErr(err error) {
 	if err != nil {
-		glog.FlushExit()
+		nlog.FlushExit()
 		panic(err)
 	}
 }

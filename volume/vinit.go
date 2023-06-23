@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -43,13 +43,13 @@ func Init(t cluster.Target, config *cmn.Config,
 		if err := configInitMPI(tid, config); err != nil {
 			cos.ExitLogf("%s: %v", t, err)
 		}
-		glog.Warningf("%s: creating new VMD from %v config", t, config.FSP.Paths.ToSlice())
+		nlog.Warningf("%s: creating new VMD from %v config", t, config.FSP.Paths.ToSlice())
 		if v, err := NewFromMPI(tid); err != nil {
 			cos.ExitLogf("%s: %v", t, err)
 		} else {
 			vmd = v
 		}
-		glog.Warningf("%s: %s created", t, vmd)
+		nlog.Warningf("%s: %s created", t, vmd)
 		created = true
 		return
 	}
@@ -76,7 +76,7 @@ func Init(t cluster.Target, config *cmn.Config,
 			vmd.persist()
 		}
 	}
-	glog.Infoln(vmd.String())
+	nlog.Infoln(vmd.String())
 	return
 }
 
@@ -88,7 +88,7 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 	)
 	vmd, err = loadVMD(tid, nil)
 	if err != nil {
-		glog.Warningln(err) // TODO: handle
+		nlog.Warningln(err) // TODO: handle
 	}
 	if vmd != nil {
 		curVersion = vmd.Version
@@ -166,14 +166,14 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 		if err != nil {
 			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
 			if pass == 1 || ignoreMissingMountpath {
-				glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+				nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
 				err = nil
 				continue
 			}
 			return
 		}
 		if mi.Path != mpath {
-			glog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
+			nlog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
 		}
 
 		// The (mountpath => filesystem) relationship is persistent and must _not_ change upon reboot.
@@ -191,17 +191,17 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
 				}
 				if pass == 1 || ignoreMissingMountpath {
-					glog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
+					nlog.Errorf("%v (pass=%d, ignore-missing=%t)", err, pass, ignoreMissingMountpath)
 					err = nil
 					continue
 				}
 				return
 			}
 			if mi.Fs == fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID {
-				glog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
+				nlog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
 					mpath, mi.FS, *fsMpathMD, pass)
 			} else if mi.Fs != fsMpathMD.Fs && mi.FsID == fsMpathMD.FsID {
-				glog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v (pass %d)",
+				nlog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v (pass %d)",
 					mpath, mi.FS, *fsMpathMD, pass)
 			}
 		}
@@ -214,14 +214,14 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 				debug.AssertNoErr(errLoad)
 				haveOld = true
 			} else if errLoad != nil {
-				glog.Warningf("%s: %v", mi, errLoad)
+				nlog.Warningf("%s: %v", mi, errLoad)
 			}
 		} else {
 			if err = mi.AddEnabled(tid, availablePaths, config); err != nil {
 				return
 			}
 			if err = mi.CheckDisks(); err != nil {
-				glog.Errorf("Warning: %v", err)
+				nlog.Errorf("Warning: %v", err)
 			}
 		}
 	}
@@ -234,13 +234,13 @@ func vmdInitMPI(tid string, config *cmn.Config, vmd *VMD, pass int, ignoreMissin
 			err = cmn.ErrNoMountpaths
 			return
 		}
-		glog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(availablePaths), len(disabledPaths))
+		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", err, len(availablePaths), len(disabledPaths))
 	}
 	fs.PutMPI(availablePaths, disabledPaths)
 	// TODO: insufficient
 	if la, lc := len(availablePaths), len(config.FSP.Paths); la != lc {
-		glog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
-		glog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
+		nlog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
+		nlog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or ignore")
 	}
 	return
 }
@@ -258,7 +258,7 @@ func RecoverTID(generatedID string, configPaths cos.StrSet) (tid string) {
 		}
 		debug.Assert(vmd.DaemonID != "" && vmd.DaemonID != generatedID)
 		if tid == "" {
-			glog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
+			nlog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
 			tid = vmd.DaemonID
 		} else if tid != vmd.DaemonID {
 			cos.ExitLogf("multiple conflicting target IDs %q(%q) vs %q", vmd.DaemonID, mpath, tid)
@@ -345,7 +345,7 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 	}
 	if v.Version > vmd.Version {
 		if !_mpathGreaterEq(v, vmd, mpath) {
-			glog.Warningf("mpath %s stores newer VMD: %s > %s", mpath, v, vmd)
+			nlog.Warningf("mpath %s stores newer VMD: %s > %s", mpath, v, vmd)
 		}
 		return v, false, nil
 	}
@@ -354,7 +354,7 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 			md := vmd.Mountpaths[mpath]
 			// warn of an older version only if this mpath is enabled in the newer one
 			if md != nil && md.Enabled {
-				glog.Warningf("mpath %s stores older VMD: %s < %s", mpath, v, vmd)
+				nlog.Warningf("mpath %s stores older VMD: %s < %s", mpath, v, vmd)
 			}
 		}
 		return nil, true, nil // true: outdated copy that must be updated

@@ -11,13 +11,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
@@ -149,7 +149,7 @@ func (r *Trunner) InitCDF() error {
 		return err
 	}
 	if cs.Err != nil {
-		glog.Errorf("%s: %s", r.t, cs.String())
+		nlog.Errorf("%s: %s", r.t, cs.String())
 	}
 	return nil
 }
@@ -297,7 +297,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 			r.lines = append(r.lines, mpath+": "+ln)
 		}
 	} else if errfs != nil {
-		glog.Errorln(errfs)
+		nlog.Errorln(errfs)
 	}
 
 	// 4. append disk stats to log
@@ -333,7 +333,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 
 	// 7. and, finally
 	for _, ln := range r.lines {
-		glog.Infoln(ln)
+		nlog.Infoln(ln)
 	}
 }
 

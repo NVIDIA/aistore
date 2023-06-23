@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -18,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xact/xs"
@@ -167,7 +167,7 @@ func (txns *transactions) begin(txn txn) (err error) {
 	txns.Unlock()
 
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s begin: %s", txns.t, txn)
+		nlog.Infof("%s begin: %s", txns.t, txn)
 	}
 	return
 }
@@ -190,7 +190,7 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 	txns.Unlock()
 
 	if act != "" && cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s: %s", txns.t, act, txn)
+		nlog.Infof("%s %s: %s", txns.t, act, txn)
 	}
 	return
 rerr:
@@ -224,10 +224,10 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 		if isErrDowngrade(err) {
 			err = nil
 			bmd := txns.t.owner.bmd.get()
-			glog.Warningf("%s: commit with downgraded (current: %s)", txn, bmd)
+			nlog.Warningf("%s: commit with downgraded (current: %s)", txn, bmd)
 		}
 		if running, errDone = txn.commitAfter(caller, msg, err, args...); running {
-			glog.Infoln(txn.String())
+			nlog.Infoln(txn.String())
 		}
 	}
 	if !running {
@@ -351,7 +351,7 @@ func (txns *transactions) housekeep() (d time.Duration) {
 	}
 	txns.Unlock()
 	for _, s := range errs {
-		glog.Errorln(s)
+		nlog.Errorln(s)
 	}
 	return
 }
@@ -426,7 +426,7 @@ func (txn *txnBckBase) cleanup() {
 
 func (txn *txnBckBase) abort() {
 	txn.cleanup()
-	glog.Infof("aborted: %s", txn)
+	nlog.Infof("aborted: %s", txn)
 }
 
 // NOTE: not keeping locks for the duration; see also: txnTCB

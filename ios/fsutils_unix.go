@@ -11,15 +11,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"golang.org/x/sys/unix"
 )
 
 func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 	if err = unix.Statfs(path, &fsStats); err != nil {
-		glog.Errorf("failed to statfs %q, err: %v", path, err)
+		nlog.Errorf("failed to statfs %q, err: %v", path, err)
 	}
 	return
 }

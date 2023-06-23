@@ -5,13 +5,13 @@
 package ais
 
 import (
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type lstcx struct {
@@ -55,7 +55,7 @@ func (c *lstcx) do() (string, error) {
 		return "", err
 	}
 	if len(lst.Entries) == 0 {
-		glog.Infof("%s: %s => %s: lso counts zero - nothing to do", c.amsg.Action, c.bckFrom, c.bckTo)
+		nlog.Infof("%s: %s => %s: lso counts zero - nothing to do", c.amsg.Action, c.bckFrom, c.bckTo)
 		return c.lsmsg.UUID, nil
 	}
 
@@ -75,7 +75,7 @@ func (c *lstcx) do() (string, error) {
 		c.altmsg.Action = apc.ActETLObjects
 	}
 	cnt := cos.Min(len(names), 10)
-	glog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
+	nlog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
 
 	c.tcomsg.TxnUUID, err = p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
 	if lst.ContinuationToken != "" {
@@ -92,7 +92,7 @@ func (c *lstcx) pages(smap *smapX) {
 		// next page
 		lst, err := p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, true)
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		if len(lst.Entries) == 0 {
@@ -110,7 +110,7 @@ func (c *lstcx) pages(smap *smapX) {
 		c.altmsg.Value = &c.tcomsg
 		xid, err := p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
 		if err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return
 		}
 		debug.Assertf(c.tcomsg.TxnUUID == xid, "%q vs %q", c.tcomsg.TxnUUID, xid)

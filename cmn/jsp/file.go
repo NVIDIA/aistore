@@ -11,9 +11,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -48,7 +48,7 @@ func Save(filepath string, v any, opts Options, wto io.WriterTo) (err error) {
 			return
 		}
 		if nestedErr := cos.RemoveFile(tmp); nestedErr != nil {
-			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
+			nlog.Errorf("Nested (%v): failed to remove %s, err: %v", err, tmp, nestedErr)
 		}
 	}()
 	if wto != nil {
@@ -58,12 +58,12 @@ func Save(filepath string, v any, opts Options, wto io.WriterTo) (err error) {
 		err = Encode(file, v, opts)
 	}
 	if err != nil {
-		glog.Errorf("Failed to encode %s: %v", filepath, err)
+		nlog.Errorf("Failed to encode %s: %v", filepath, err)
 		cos.Close(file)
 		return
 	}
 	if err = cos.FlushClose(file); err != nil {
-		glog.Errorf("Failed to flush and close %s: %v", tmp, err)
+		nlog.Errorf("Failed to flush and close %s: %v", tmp, err)
 		return
 	}
 	err = os.Rename(tmp, filepath)
@@ -87,10 +87,10 @@ func Load(filepath string, v any, opts Options) (checksum *cos.Cksum, err error)
 	if errors.Is(err, &cos.ErrBadCksum{}) {
 		if errRm := os.Remove(filepath); errRm == nil {
 			if flag.Parsed() {
-				glog.Errorf("bad checksum: removing %s", filepath)
+				nlog.Errorf("bad checksum: removing %s", filepath)
 			}
 		} else if flag.Parsed() {
-			glog.Errorf("bad checksum: failed to remove %s: %v", filepath, errRm)
+			nlog.Errorf("bad checksum: failed to remove %s: %v", filepath, errRm)
 		}
 	}
 	return

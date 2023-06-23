@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -91,7 +91,7 @@ const (
 	reqNotify
 )
 
-const faisync = "failing to sync"
+const failsync = "failing to sync"
 
 type (
 	revs interface {
@@ -161,7 +161,7 @@ func newMetasyncer(p *proxy) (y *metasyncer) {
 }
 
 func (y *metasyncer) Run() error {
-	glog.Infof("Starting %s", y.Name())
+	nlog.Infof("Starting %s", y.Name())
 	for {
 		config := cmn.GCO.Get()
 		select {
@@ -207,7 +207,7 @@ func (y *metasyncer) Run() error {
 }
 
 func (y *metasyncer) Stop(err error) {
-	glog.Infof("Stopping %s: %v", y.Name(), err)
+	nlog.Infof("Stopping %s: %v", y.Name(), err)
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)
@@ -242,7 +242,7 @@ func (y *metasyncer) sync(pairs ...revsPair) *sync.WaitGroup {
 	req := revsReq{pairs: pairs}
 	req.wg = &sync.WaitGroup{}
 	if err := y.isPrimary(); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return req.wg
 	}
 	req.wg.Add(1)
@@ -265,7 +265,7 @@ drain:
 		}
 	}
 	y.workCh <- revsReq{}
-	glog.Infof("%s: becoming non-primary", y.p)
+	nlog.Infof("%s: becoming non-primary", y.p)
 }
 
 // main method; see top of the file; returns number of "sync" failures
@@ -351,7 +351,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 		err := res.unwrap()
 		// failing to sync - not retrying, ignoring
 		if res.si.InMaintOrDecomm() {
-			glog.Infof("%s: %s %s (maintenance %#b): %v(%d)", y.p, faisync, sname, res.si.Flags, err, res.status)
+			nlog.Infof("%s: %s %s (maintenance %#b): %v(%d)", y.p, failsync, sname, res.si.Flags, err, res.status)
 			continue
 		}
 		// - retrying, counting
@@ -361,7 +361,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			}
 			refused.Add(res.si)
 		} else {
-			glog.Warningf("%s: %s %s: %v(%d)", y.p, faisync, sname, err, res.status)
+			nlog.Warningf("%s: %s %s: %v(%d)", y.p, failsync, sname, err, res.status)
 			failedCnt++
 		}
 	}
@@ -371,7 +371,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	for i := 0; i < 4; i++ {
 		if len(refused) == 0 {
 			if lr > 0 {
-				glog.Infof("%s: %d node%s sync-ed", y.p, lr, cos.Plural(lr))
+				nlog.Infof("%s: %d node%s sync-ed", y.p, lr, cos.Plural(lr))
 			}
 			break
 		}
@@ -421,9 +421,9 @@ func (y *metasyncer) jit(pair revsPair) revs {
 		s = ", " + msg.String()
 	}
 	if skipping {
-		glog.Infof("%s: newer %s v%d%s - skipping %s", y.p, tag, jitRevs.version(), s, revs)
+		nlog.Infof("%s: newer %s v%d%s - skipping %s", y.p, tag, jitRevs.version(), s, revs)
 	} else {
-		glog.Infof("%s: %s v%d%s", y.p, tag, revs.version(), s)
+		nlog.Infof("%s: %s v%d%s", y.p, tag, revs.version(), s)
 	}
 	return revs
 }
@@ -467,17 +467,17 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
-				msg := fmt.Sprintf("%s [hr]: %s %s: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				msg := fmt.Sprintf("%s [hr]: %s %s: %s [%v]", y.p.si, failsync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
-					glog.Errorln(msg + " - aborting")
+					nlog.Errorln(msg + " - aborting")
 					freeBcastRes(results)
 					return false
 				}
-				glog.Warningln(msg)
+				nlog.Warningln(msg)
 				continue
 			}
 		}
-		glog.Warningf("%s [hr]: %s %s: %v(%d)", y.p, faisync, res.si, res.unwrap(), res.status)
+		nlog.Warningf("%s [hr]: %s %s: %v(%d)", y.p, failsync, res.si, res.unwrap(), res.status)
 	}
 	freeBcastRes(results)
 	return true
@@ -508,7 +508,7 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 						break
 					} else if v > revs.version() {
 						// skip older versions (TODO: don't skip sending associated aisMsg)
-						glog.Errorf("v: %d; revs.version: %d", v, revs.version())
+						nlog.Errorf("v: %d; revs.version: %d", v, revs.version())
 					}
 				}
 				if inSync {
@@ -529,7 +529,7 @@ func (y *metasyncer) _pending() (pending meta.NodeMap, smap *smapX) {
 func (y *metasyncer) handlePending() (failedCnt int) {
 	pending, smap := y._pending()
 	if len(pending) == 0 {
-		glog.Infof("no pending revs - all good")
+		nlog.Infof("no pending revs - all good")
 		return
 	}
 	var (
@@ -574,18 +574,18 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 		// failing to sync
 		if res.status == http.StatusConflict {
 			if e := err2MsyncErr(res.err); e != nil {
-				msg := fmt.Sprintf("%s [hp]: %s %s: %s [%v]", y.p.si, faisync, res.si, e.Message, e.Cii)
+				msg := fmt.Sprintf("%s [hp]: %s %s: %s [%v]", y.p.si, failsync, res.si, e.Message, e.Cii)
 				if !y.remainPrimary(e, res.si, smap) {
 					// return zero so that the caller stops retrying (y.retryTimer)
-					glog.Errorln(msg + " - aborting")
+					nlog.Errorln(msg + " - aborting")
 					freeBcastRes(results)
 					return 0
 				}
-				glog.Warningln(msg)
+				nlog.Warningln(msg)
 				continue
 			}
 		}
-		glog.Warningf("%s [hp]: %s %s: %v(%d)", y.p, faisync, res.si, res.err, res.status)
+		nlog.Warningf("%s [hp]: %s %s: %v(%d)", y.p, failsync, res.si, res.err, res.status)
 	}
 	freeBcastRes(results)
 	return
@@ -605,7 +605,7 @@ func (y *metasyncer) remainPrimary(e *errMsync, from *meta.Snode, smap *smapX) b
 		return true
 	}
 	if e.Cii.Smap.Version > smap.Version {
-		glog.Warningf("%s: detected primary change: %s vs %s [%v] from %s", y.p, smap.StringEx(),
+		nlog.Warningf("%s: detected primary change: %s vs %s [%v] from %s", y.p, smap.StringEx(),
 			e.Message, e.Cii, from)
 		y.becomeNonPrimary()
 		return false
@@ -613,7 +613,7 @@ func (y *metasyncer) remainPrimary(e *errMsync, from *meta.Snode, smap *smapX) b
 	if e.Cii.Smap.Version < smap.Version {
 		return true
 	}
-	glog.Errorf("%s: [%s %s] vs %v from %s", ciError(90), y.p, smap.StringEx(), e.Cii, from)
+	nlog.Errorf("%s: [%s %s] vs %v from %s", ciError(90), y.p, smap.StringEx(), e.Cii, from)
 	return true // TODO: iffy; may need to do more
 }
 
@@ -623,7 +623,7 @@ func (y *metasyncer) isPrimary() (err error) {
 		return
 	}
 	err = newErrNotPrimary(y.p.si, smap)
-	glog.Errorln(err)
+	nlog.Errorln(err)
 	return
 }
 

@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // TODO: undelete (feature)
@@ -51,14 +51,14 @@ func (mi *Mountpath) RemoveDeleted(who string) (rerr error) {
 		if !dent.IsDir() {
 			err := fmt.Errorf("%s: unexpected non-directory item %q in 'deleted'", who, fqn)
 			debug.AssertNoErr(err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			continue
 		}
 		if err = os.RemoveAll(fqn); err == nil {
 			continue
 		}
 		if !os.IsNotExist(err) {
-			glog.Errorf("%s: failed to remove %q from 'deleted', err %v", who, fqn, err)
+			nlog.Errorf("%s: failed to remove %q from 'deleted', err %v", who, fqn, err)
 			if rerr == nil {
 				rerr = err
 			}
@@ -106,7 +106,7 @@ rm:
 		err = errRm
 	}
 	if cs.OOS {
-		glog.Errorf("%s %s: OOS (%v)", mi, cs.String(), err)
+		nlog.Errorf("%s %s: OOS (%v)", mi, cs.String(), err)
 	}
 	return err
 }
@@ -118,7 +118,7 @@ func (mi *Mountpath) ClearMDs(inclBMD bool) (rerr error) {
 		}
 		fpath := filepath.Join(mi.Path, mdfd)
 		if err := RemoveAll(fpath); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			rerr = err
 		}
 	}
@@ -145,7 +145,7 @@ func Decommission(mdOnly bool) {
 			}
 		}
 		if i < deretries-1 {
-			glog.Errorln("decommission: retrying cleanup...")
+			nlog.Errorln("decommission: retrying cleanup...")
 			time.Sleep(desleep)
 		}
 	}
@@ -180,7 +180,7 @@ func deworld(allmpi []MPI) (rerr error) {
 					err = os.RemoveAll(mi.Path)
 				}
 				if err != nil {
-					glog.Errorln(err)
+					nlog.Errorln(err)
 					rerr = err
 				}
 			}
@@ -197,7 +197,7 @@ func RemoveAll(dir string) (err error) {
 			break
 		}
 		debug.Assert(!os.IsNotExist(err), err)
-		glog.ErrorDepth(1, err)
+		nlog.ErrorDepth(1, err)
 		if !errors.Is(err, syscall.ENOTEMPTY) {
 			break
 		}

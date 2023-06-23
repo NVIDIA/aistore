@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -57,7 +57,7 @@ func (m *mgr) broadcastRevoked(token string) {
 func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 	clus, err := m.clus()
 	if err != nil {
-		glog.Errorf("Failed to read cluster list: %v", err)
+		nlog.Errorf("Failed to read cluster list: %v", err)
 		return
 	}
 	wg := &sync.WaitGroup{}
@@ -71,7 +71,7 @@ func (m *mgr) broadcast(method, path string, body []byte, tag string) {
 				}
 			}
 			if err != nil {
-				glog.Errorf("failed to %s with %s: %v", tag, clu, err)
+				nlog.Errorf("failed to %s with %s: %v", tag, clu, err)
 			}
 			wg.Done()
 		}(clu)
@@ -84,7 +84,7 @@ func (m *mgr) syncTokenList(clu *authn.CluACL) {
 	const tag = "sync-tokens"
 	tokenList, err := m.generateRevokedTokenList()
 	if err != nil {
-		glog.Errorf("failed to sync token list with %q(%q): %v", clu.ID, clu.Alias, err)
+		nlog.Errorf("failed to sync token list with %q(%q): %v", clu.ID, clu.Alias, err)
 		return
 	}
 	if len(tokenList) == 0 {
@@ -98,7 +98,7 @@ func (m *mgr) syncTokenList(clu *authn.CluACL) {
 		err = fmt.Errorf("failed to %s with %s: %v", tag, clu, err)
 	}
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 }
 
@@ -152,7 +152,7 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 			}
 		}
 		if i < retries {
-			glog.Warningf("failed to %q %s: %v - retrying...", tag, url, err)
+			nlog.Warningf("failed to %q %s: %v - retrying...", tag, url, err)
 			time.Sleep(sleep)
 			if i > retries/2+1 && sleep == retrySleep {
 				sleep *= 2

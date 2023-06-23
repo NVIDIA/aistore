@@ -9,13 +9,13 @@ import (
 	"os"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -98,7 +98,7 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 		return
 	}
 	r.BckJog.Run()
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	err := r.BckJog.Wait()
 	r.Finish(err)
 }
@@ -128,13 +128,13 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 			return cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
 		}
 		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
-			glog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
+			nlog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
 		}
 		return
 	}
 
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
-		glog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
+		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
 	}
 	r.ObjsAdd(1, size)
 	if cnt := r.Objs(); cnt%128 == 0 { // TODO: tuneup

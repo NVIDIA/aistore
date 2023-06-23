@@ -13,11 +13,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -77,7 +77,7 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 	}
 
 	if config.FastV(4, cos.SmoduleDload) {
-		glog.Infof("Starting download for %v", task)
+		nlog.Infof("Starting download for %v", task)
 	}
 
 	task.started.Store(time.Now())
@@ -168,20 +168,20 @@ func (task *singleTask) downloadLocal(lom *cluster.LOM) (err error) {
 			return err
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			glog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying...",
+			nlog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying...",
 				task, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
 		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
-			glog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", task, i, retryCnt, err, herr.Status)
+			nlog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", task, i, retryCnt, err, herr.Status)
 			if _, exists := terminalStatuses[herr.Status]; exists {
 				// Nothing we can do...
 				return err
 			}
 			// Otherwise retry...
 		} else if cos.IsRetriableConnErr(err) {
-			glog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", task, i, retryCnt, err)
+			nlog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", task, i, retryCnt, err)
 		} else {
-			glog.Warningf("%s [retries: %d/%d]: unexpected error (%v), retrying...", task, i, retryCnt, err)
+			nlog.Warningf("%s [retries: %d/%d]: unexpected error (%v), retrying...", task, i, retryCnt, err)
 		}
 
 		task.reset()

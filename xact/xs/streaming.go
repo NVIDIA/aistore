@@ -8,13 +8,13 @@ package xs
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -82,7 +82,7 @@ func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32)
 	}
 	if err = p.dm.RegRecv(); err != nil {
 		var total time.Duration // retry for upto waitRegRecv
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		sleep := cos.ProbingFrequency(waitRegRecv)
 		for err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv {
 			time.Sleep(sleep)
@@ -115,7 +115,7 @@ func (r *streamingX) TxnAbort() {
 
 func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
 	if r.config.FastV(4, cos.SmoduleXs) {
-		glog.InfoDepth(1, "Error: ", err, errCode)
+		nlog.InfoDepth(1, "Error: ", err, errCode)
 	}
 	if contOnErr {
 		debug.Assert(!cmn.IsErrAborted(err))
@@ -175,7 +175,7 @@ func (r *streamingX) wurr() time.Duration {
 		if r.maxWt < waitUnregMax {
 			return waitUnregRecv
 		}
-		glog.Errorf("%s: unreg timeout %v, cnt %d", r, r.maxWt, cnt)
+		nlog.Errorf("%s: unreg timeout %v, cnt %d", r, r.maxWt, cnt)
 	}
 	r.p.dm.UnregRecv()
 	return hk.UnregInterval

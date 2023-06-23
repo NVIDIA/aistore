@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // message stream & private types
@@ -74,7 +74,7 @@ repeat:
 	case msg, ok := <-s.workCh:
 		if !ok {
 			err = fmt.Errorf("%s closed prior to stopping", s)
-			glog.Warningln(err)
+			nlog.Warningln(err)
 			return
 		}
 		s.msgoff.msg = *msg
@@ -90,7 +90,7 @@ repeat:
 		return s.send(b)
 	case <-s.stopCh.Listen():
 		num := s.stats.Num.Load()
-		glog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
+		nlog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
 		err = io.EOF
 	}
 	return
@@ -104,13 +104,13 @@ func (s *MsgStream) send(b []byte) (n int, err error) {
 		s.stats.Offset.Add(int64(s.msgoff.off))
 		if verbose {
 			num := s.stats.Num.Load()
-			glog.Infof("%s: hlen=%d (%d/%d)", s, s.msgoff.off, s.Numcur, num)
+			nlog.Infof("%s: hlen=%d (%d/%d)", s, s.msgoff.off, s.Numcur, num)
 		}
 		s.msgoff.ins = inEOB
 		s.msgoff.off = 0
 		if s.msgoff.msg.isFin() {
 			if verbose {
-				glog.Infof("%s: sent last", s)
+				nlog.Infof("%s: sent last", s)
 			}
 			err = io.EOF
 			s.lastCh.Close()
@@ -164,7 +164,7 @@ func (s *MsgStream) idleTick() {
 	if len(s.workCh) == 0 && s.sessST.CAS(active, inactive) {
 		s.workCh <- &Msg{Opcode: opcIdleTick}
 		if verbose {
-			glog.Infof("%s: active => inactive", s)
+			nlog.Infof("%s: active => inactive", s)
 		}
 	}
 }

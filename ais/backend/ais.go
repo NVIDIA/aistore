@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -110,7 +110,7 @@ func (m *AISBackendProvider) Apply(v any, action string, cfg *cmn.ClusterConfig)
 		debug.AssertNoErr(err)
 		return
 	}
-	glog.Infof("%s: apply %q %+v Conf v%d", m.t, action, conf, cfg.Version)
+	nlog.Infof("%s: apply %q %+v Conf v%d", m.t, action, conf, cfg.Version)
 	m.mu.Lock()
 	err = m._apply(cfg, conf, action)
 	if err == nil {
@@ -213,11 +213,11 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 		// online?
 		if smap, err := api.GetClusterMap(api.BaseParams{Client: client, URL: remAis.url, UA: ua}); err == nil {
 			if smap.UUID != uuid {
-				glog.Errorf("%s: UUID has changed %q", remAis, smap.UUID)
+				nlog.Errorf("%s: UUID has changed %q", remAis, smap.UUID)
 				continue
 			}
 			if smap.Version < remAis.smap.Version {
-				glog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, smap)
+				nlog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, smap)
 			}
 			remAis.smap = smap
 		}
@@ -259,7 +259,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 			client = httpsClient
 		}
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua}); err != nil {
-			glog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)
+			nlog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)
 			continue
 		}
 		if remSmap == nil {
@@ -313,10 +313,10 @@ func (m *AISBackendProvider) add(newAis *remAis, newAlias string) (err error) {
 		}
 		m.alias[newAlias] = newAis.smap.UUID // alias
 		if newAis.url != remAis.url {
-			glog.Warningf("%s: different new URL %s - overriding", remAis, newAis)
+			nlog.Warningf("%s: different new URL %s - overriding", remAis, newAis)
 		}
 		if newAis.smap.Version < remAis.smap.Version {
-			glog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, newAis)
+			nlog.Errorf("%s: detected older Smap %s - proceeding to override anyway", remAis, newAis)
 		}
 		tag = "updated"
 		goto ad
@@ -332,7 +332,7 @@ func (m *AISBackendProvider) add(newAis *remAis, newAlias string) (err error) {
 	m.alias[newAlias] = newAis.smap.UUID
 ad:
 	m.remote[newAis.smap.UUID] = newAis
-	glog.Infof("%s %s", newAis, tag)
+	nlog.Infof("%s %s", newAis, tag)
 	return
 }
 

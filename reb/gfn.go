@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 )
 
@@ -46,11 +46,11 @@ func OnTimedGFN() {
 		gfn.trc.Store(1)
 		hk.Reg(hkgfnT+hk.NameSuffix, hkTimed, 0 /*time.Duration*/)
 		gfn.mtx.Unlock()
-		glog.Infoln(gfnT, 1)
+		nlog.Infoln(gfnT, 1)
 	} else {
 		trc := gfn.trc.Inc()
 		gfn.mtx.Unlock()
-		glog.Infoln(gfnT, trc)
+		nlog.Infoln(gfnT, trc)
 	}
 }
 
@@ -64,7 +64,7 @@ func OffTimedGFN(detail string) {
 		gfn.exp.Store(0)
 	}
 	gfn.mtx.Unlock()
-	glog.Infoln(gfnT, trc, detail)
+	nlog.Infoln(gfnT, trc, detail)
 }
 
 func hkTimed() time.Duration {
@@ -75,7 +75,7 @@ func hkTimed() time.Duration {
 		gfn.trc.Store(0)
 		gfn.mtx.Unlock()
 		if exp > 0 {
-			glog.Infoln(gfnT, "off")
+			nlog.Infoln(gfnT, "off")
 		}
 		return hk.UnregInterval
 	}
@@ -87,12 +87,12 @@ func hkTimed() time.Duration {
 func onGFN() (prev bool) {
 	if prev = gfn.gon.Swap(true); !prev {
 		gfn.trc.Store(0) // see IsGFN
-		glog.Infoln(gfnG, "on")
+		nlog.Infoln(gfnG, "on")
 	}
 	return
 }
 
 func offGFN() {
 	gfn.gon.Store(false)
-	glog.Infoln(gfnG, "off")
+	nlog.Infoln(gfnG, "off")
 }

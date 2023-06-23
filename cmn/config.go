@@ -18,13 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -835,7 +835,7 @@ func (c *BackendConf) Validate() (err error) {
 			for _, address := range hdfsConf.Addresses {
 				conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 				if err != nil {
-					glog.Warningf(
+					nlog.Warningf(
 						"Failed to dial %q HDFS address, check connectivity to the HDFS cluster, err: %v",
 						address, err,
 					)
@@ -912,7 +912,7 @@ func (c *BackendConf) EqualRemAIS(o *BackendConf, sname string) bool {
 	erro := cos.MorphMarshal(oais, &oldRemotes)
 	errn := cos.MorphMarshal(nais, &newRemotes)
 	if erro != nil || errn != nil {
-		glog.Errorf("%s: failed to unmarshal remote AIS backends: %v, %v", sname, erro, errn)
+		nlog.Errorf("%s: failed to unmarshal remote AIS backends: %v, %v", sname, erro, errn)
 		debug.AssertNoErr(errn)
 		return errn != nil // "equal" when cannot make use
 	}
@@ -1244,9 +1244,9 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	}
 	if overlap, addr := hostnamesOverlap(c.HostnameIntraControl, c.HostnameIntraData); overlap {
 		if ipv4ListsEqual(c.HostnameIntraControl, c.HostnameIntraData) {
-			glog.Warningf("control and data share one intra-cluster network (%s)", c.HostnameIntraData)
+			nlog.Warningf("control and data share one intra-cluster network (%s)", c.HostnameIntraData)
 		} else {
-			glog.Warningf("intra-cluster control (%s) and data (%s) Hostname lists overlap: %s",
+			nlog.Warningf("intra-cluster control (%s) and data (%s) Hostname lists overlap: %s",
 				c.HostnameIntraControl, c.HostnameIntraData, addr)
 		}
 	}
@@ -1708,7 +1708,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(localConfPath, &config.LocalConfig); err != nil {
 		return fmt.Errorf("failed to load plain-text local config %q: %v", localConfPath, err)
 	}
-	glog.SetLogDirRole(config.LogDir, daeRole)
+	nlog.SetLogDirRole(config.LogDir, daeRole)
 
 	// Global (aka Cluster) config
 	// Normally, when the node is being deployed the very first time the last updated version
@@ -1721,14 +1721,14 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	if _, err := jsp.LoadMeta(globalFpath, &config.ClusterConfig); err != nil {
 		if !os.IsNotExist(err) {
 			if _, ok := err.(*jsp.ErrUnsupportedMetaVersion); ok {
-				glog.Errorf(FmtErrBackwardCompat, err)
+				nlog.Errorf(FmtErrBackwardCompat, err)
 			}
 			return fmt.Errorf("failed to load global config %q: %v", globalConfPath, err)
 		}
 
 		// initial plain-text
 		const itxt = "load initial global config"
-		glog.Warningf("%s %q", itxt, globalConfPath)
+		nlog.Warningf("%s %q", itxt, globalConfPath)
 		_, err = jsp.Load(globalConfPath, &config.ClusterConfig, jsp.Plain())
 		if err != nil {
 			return fmt.Errorf("failed to %s %q: %v", itxt, globalConfPath, err)
@@ -1765,15 +1765,15 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	}
 
 	// rotate log
-	glog.MaxSize = int64(config.Log.MaxSize)
-	if glog.MaxSize > cos.GiB {
-		glog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", glog.MaxSize)
-		glog.MaxSize = 4 * cos.MiB
+	nlog.MaxSize = int64(config.Log.MaxSize)
+	if nlog.MaxSize > cos.GiB {
+		nlog.Warningf("log.max_size %d exceeds 1GB, setting log.max_size=4MB", nlog.MaxSize)
+		nlog.MaxSize = 4 * cos.MiB
 	}
 	// log header
-	glog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
+	nlog.Infof("log.dir: %q; l4.proto: %s; pub port: %d; verbosity: %s",
 		config.LogDir, config.Net.L4.Proto, config.HostNet.Port, config.Log.Level.String())
-	glog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
+	nlog.Infof("config: %q; stats_time: %v; authentication: %t; backends: %v",
 		globalFpath, config.Periodic.StatsTime, config.Auth.Enabled, config.Backend.keys())
 	return nil
 }

@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -86,9 +86,9 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
 	if err := fs.Walk(opts); err != nil {
 		xreb := reb.xctn()
 		if xreb.IsAborted() || xreb.Finished() {
-			glog.Infof("aborting traversal")
+			nlog.Infof("aborting traversal")
 		} else {
-			glog.Warningf("failed to traverse, err: %v", err)
+			nlog.Warningf("failed to traverse, err: %v", err)
 		}
 	}
 }
@@ -231,7 +231,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 			return tsi, nil
 		}
 		if err != nil {
-			glog.Errorf("Failed to read metadata from %s: %v", tsi.StringEx(), err)
+			nlog.Errorf("Failed to read metadata from %s: %v", tsi.StringEx(), err)
 		}
 	}
 	return nil, errors.New("no _free_ targets")
@@ -274,7 +274,7 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *cluster.CT, md *ec.Metadata) (
 	}
 	if moveTo, err = reb.findEmptyTarget(md, ct, req.daemonID); err != nil {
 		if errMv := os.Rename(workFQN, ct.FQN()); errMv != nil {
-			glog.Errorf("Error restoring slice: %v", errMv)
+			nlog.Errorf("Error restoring slice: %v", errMv)
 		}
 	}
 	return
@@ -302,7 +302,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 
 	md, err := ec.LoadMetadata(fqn)
 	if err != nil {
-		glog.Warningf("failed to load %q metadata: %v", fqn, err)
+		nlog.Warningf("failed to load %q metadata: %v", fqn, err)
 		return nil
 	}
 
@@ -325,7 +325,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 		fileFQN = ct.Make(fs.ECSliceType)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
-		glog.Warningf("%s no CT for metadata[%d]: %s", reb.t, md.SliceID, fileFQN)
+		nlog.Warningf("%s no CT for metadata[%d]: %s", reb.t, md.SliceID, fileFQN)
 		return nil
 	}
 

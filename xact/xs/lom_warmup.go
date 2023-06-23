@@ -8,11 +8,11 @@ package xs
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -76,7 +76,7 @@ func newXactLLC(t cluster.Target, uuid string, bck *meta.Bck) (r *xactLLC) {
 
 func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.BckJog.Run()
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 	err := r.BckJog.Wait()
 	r.Finish(err)
 }

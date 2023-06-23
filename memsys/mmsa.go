@@ -27,8 +27,8 @@ import (
 // $ go test -v -tags=debug
 // 3. ... and deadbeef (build tag) enabled, to "DEADBEEF" every freed buffer
 // $ go test -v -tags=debug,deadbeef
-// 4. Run a given named test with the specified build tags for 100s; redirect logs to STDERR
-// $ go test -v -tags=debug,deadbeef -logtostderr=true -run=Test_Sleep -duration=100s
+// 4. Run a given named test with the specified build tags for 100s
+// $ go test -v -tags=debug,deadbeef -run=Test_Sleep -duration=100s
 
 // ============== Memory Manager Slab Allocator (MMSA) ===========================
 //

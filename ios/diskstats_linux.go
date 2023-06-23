@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // The "sectors" in question are the standard UNIX 512-byte sectors, not any device- or filesystem-specific block size
@@ -60,7 +60,7 @@ func readStats(disks, sysfnames cos.StrKVs) diskBlockStats {
 func _read(sysfn string) (dblockStat, bool) {
 	file, err := os.Open(sysfn)
 	if err != nil {
-		glog.Errorf("%s: %v", sysfn, err)
+		nlog.Errorf("%s: %v", sysfn, err)
 		return dblockStat{}, false
 	}
 	scanner := bufio.NewScanner(file)

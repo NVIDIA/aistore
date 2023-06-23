@@ -11,7 +11,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -491,7 +491,7 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
 		fromNode := ds.m.smap.GetTarget(hdr.SID)
 		if fromNode == nil {
 			err := fmt.Errorf("received request from node %q which is not present in the smap", hdr.SID)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return err
 		}
 

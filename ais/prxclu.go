@@ -14,13 +14,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -153,7 +153,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 			return
 		}
 		err := cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
-		glog.Warningf("%s: %v, %s", p, err, smap)
+		nlog.Warningf("%s: %v, %s", p, err, smap)
 	}
 	p.writeJSON(w, r, targetResults, what)
 }
@@ -435,7 +435,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if nsi.IsProxy() {
 		s := r.URL.Query().Get(apc.QparamNonElectable)
 		if nonElectable, err = cos.ParseBool(s); err != nil {
-			glog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
+			nlog.Errorf("%s: failed to parse %s for non-electability: %v", p, s, err)
 		}
 	}
 	if err := validateHostname(nsi.PubNet.Hostname); err != nil {
@@ -471,7 +471,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 				p.writeErrf(w, r, "duplicate node ID %q (%s, %s)", nsi.ID(), osi.StringEx(), nsi.StringEx())
 				return
 			}
-			glog.Warningf("%s: self-joining %s with duplicate node ID %q", p, nsi.StringEx(), nsi.ID())
+			nlog.Warningf("%s: self-joining %s with duplicate node ID %q", p, nsi.StringEx(), nsi.ID())
 		}
 	}
 
@@ -482,7 +482,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
 			if p.owner.rmd.interrupted.CAS(false, true) {
-				glog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(), regReq.RebInterrupted, regReq.Restarted)
+				nlog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(), regReq.RebInterrupted, regReq.Restarted)
 			}
 		}
 	}
@@ -507,7 +507,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &apc.ActMsg{Action: action, Name: nsi.ID()}
-	glog.Infof("%s: %s(%q) %s (%s)", p, apiOp, action, nsi.StringEx(), regReq.Smap)
+	nlog.Infof("%s: %s(%q) %s (%s)", p, apiOp, action, nsi.StringEx(), regReq.Smap)
 
 	if apiOp == apc.AdminJoin {
 		rebID, err := p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
@@ -539,7 +539,7 @@ func (p *proxy) adminJoinHandshake(nsi *meta.Snode, apiOp string) (int, error) {
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-	glog.Infof("%s: %s %s => (%s)", p, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
+	nlog.Infof("%s: %s %s => (%s)", p, apiOp, nsi.StringEx(), p.owner.smap.get().StringEx())
 
 	cargs := allocCargs()
 	{
@@ -575,7 +575,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	osi := smap.GetNode(nsi.ID())
 	if osi == nil {
 		if keepalive {
-			glog.Warningf("%s keepalive %s: adding back to the %s", p, nsi.StringEx(), smap)
+			nlog.Warningf("%s keepalive %s: adding back to the %s", p, nsi.StringEx(), smap)
 		}
 	} else {
 		if osi.Type() != nsi.Type() {
@@ -620,14 +620,14 @@ func (p *proxy) kalive(nsi, osi *meta.Snode) bool {
 	if !osi.Equals(nsi) {
 		duplicate, err := p.detectDuplicate(osi, nsi)
 		if err != nil {
-			glog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
+			nlog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
 			return false
 		}
 		if duplicate {
-			glog.Errorf("%s: %s(%s) is trying to keepalive with duplicate ID", p, nsi.StringEx(), nsi.PubNet.URL)
+			nlog.Errorf("%s: %s(%s) is trying to keepalive with duplicate ID", p, nsi.StringEx(), nsi.PubNet.URL)
 			return false
 		}
-		glog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
+		nlog.Warningf("%s: renewing registration %s (info changed!)", p, nsi.StringEx())
 		return true // NOTE: update cluster map
 	}
 
@@ -640,10 +640,10 @@ func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 		return true
 	}
 	if osi.Equals(nsi) {
-		glog.Infof("%s: %s is already *in*", p, nsi.StringEx())
+		nlog.Infof("%s: %s is already *in*", p, nsi.StringEx())
 		return false
 	}
-	glog.Warningf("%s: renewing %s %+v => %+v", p, nsi.StringEx(), osi, nsi)
+	nlog.Warningf("%s: renewing %s %+v => %+v", p, nsi.StringEx(), osi, nsi)
 	return true
 }
 
@@ -737,10 +737,10 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 		}
 		if cos.IsRetriableConnErr(err) {
 			time.Sleep(sleep)
-			glog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
+			nlog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
 			continue
 		}
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		break
 	}
 	freeCargs(cargs)
@@ -796,7 +796,7 @@ func (p *proxy) _joinedFinal(ctx *smapModifier, clone *smapX) {
 		pairs  = make([]revsPair, 0, 5)
 	)
 	if config, err := p.owner.config.get(); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	} else if config != nil {
 		pairs = append(pairs, revsPair{config, aisMsg})
 	}
@@ -981,9 +981,9 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 }
 
 func whingeToUpdate(what, from, to string) {
-	glog.Warningf("Updating cluster %s configuration: setting %s", what, to)
-	glog.Warningf("Prior-to-update %s values: %s", what, from)
-	glog.Errorln("Warning: this update MAY require cluster restart")
+	nlog.Warningf("Updating cluster %s configuration: setting %s", what, to)
+	nlog.Warningf("Prior-to-update %s values: %s", what, from)
+	nlog.Errorln("Warning: this update MAY require cluster restart")
 }
 
 func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
@@ -1116,7 +1116,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if na := smap.CountActiveTs(); na < 2 {
-		glog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance anyway", p, na)
+		nlog.Warningf("%s: not enough active targets (%d) - proceeding to rebalance anyway", p, na)
 	}
 	rmdCtx := &rmdModifier{
 		pre:     rmdInc,
@@ -1243,7 +1243,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 				return
 			}
 			if !smap.InMaint(si) {
-				glog.Errorln("Warning: " + sname + " is currently being decommissioned")
+				nlog.Errorln("Warning: " + sname + " is currently being decommissioned")
 			}
 			inMaint = true
 			// proceeding anyway
@@ -1261,7 +1261,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
-	glog.Infof("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
+	nlog.Infof("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
 
 	switch {
 	case si.IsProxy():
@@ -1428,7 +1428,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		}
 		if err != nil {
 			debug.Assert(status == http.StatusServiceUnavailable)
-			glog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
+			nlog.Errorf("%s: node %s takes unusually long time to start: %v(%d) - proceeding anyway",
 				p.si, si, err, status)
 		}
 	}
@@ -1498,7 +1498,7 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 				p.writeErr(w, r, fmt.Errorf("%s: failed to attach "+fmerr, p, p.ClusterStarted(), config))
 				return
 			}
-			glog.Errorf("%s: waiting to attach "+fmerr, p, p.ClusterStarted(), config)
+			nlog.Errorf("%s: waiting to attach "+fmerr, p, p.ClusterStarted(), config)
 		}
 	}
 	ctx := &configModifier{
@@ -1560,7 +1560,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 			if !cos.StringInSlice(u, urls) {
 				return false, errors.New(errmsg)
 			}
-			glog.Warningln(errmsg + " - proceeding anyway")
+			nlog.Warningln(errmsg + " - proceeding anyway")
 		}
 		// rule #2: aliases and UUIDs are two distinct non-overlapping sets
 		p.remais.mu.RLock()
@@ -1581,7 +1581,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 		if parsed.Scheme != "http" && parsed.Scheme != "https" {
 			return false, cmn.NewErrFailedTo(p, action, detail, errors.New("invalid URL scheme"))
 		}
-		glog.Infof("%s: %s %s", p, action, detail)
+		nlog.Infof("%s: %s %s", p, action, detail)
 		aisConf[alias] = []string{u}
 	}
 	config.Backend.Set(apc.AIS, aisConf)
@@ -1672,7 +1672,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	if npid == p.SID() {
 		debug.Assert(p.SID() == smap.Primary.ID()) // must be forwardCP-ed
-		glog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
+		nlog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
 		return
 	}
 	if smap.InMaintOrDecomm(psi) {
@@ -1740,7 +1740,7 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.si.ID() == npid {
 			cos.ExitLogf("commit phase failure: new primary %q returned %v", npid, res.err)
 		} else {
-			glog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
+			nlog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
 				res.si.ID(), res.err, npid)
 		}
 	}
@@ -1829,7 +1829,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
 	}
 
-	glog.Infof("%s: %s %s", p, msg.Action, sname)
+	nlog.Infof("%s: %s %s", p, msg.Action, sname)
 	res := p.call(cargs)
 	err = res.unwrap()
 	freeCargs(cargs)
@@ -1840,14 +1840,14 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 		switch msg.Action {
 		case apc.ActShutdownNode, apc.ActDecommissionNode: // expecting EOF
 			if !cos.IsEOF(err) {
-				glog.Errorln(emsg)
+				nlog.Errorln(emsg)
 			}
 		case apc.ActRmNodeUnsafe:
 			if cmn.FastV(4, cos.SmoduleAIS) {
-				glog.Errorln(emsg)
+				nlog.Errorln(emsg)
 			}
 		default:
-			glog.Errorln(emsg)
+			nlog.Errorln(emsg)
 		}
 		err = nil // NOTE: proceeding anyway
 	}
@@ -1864,7 +1864,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 		}
 	}
 	if err != nil {
-		glog.Errorf("%s: (%s %s) FATAL: failed to update %s: %v", p, msg, sname, p.owner.smap.get(), err)
+		nlog.Errorf("%s: (%s %s) FATAL: failed to update %s: %v", p, msg, sname, p.owner.smap.get(), err)
 	}
 	return errCode, err
 }
@@ -1894,11 +1894,11 @@ func (p *proxy) _unregNodePre(ctx *smapModifier, clone *smapX) error {
 	}
 	if node.IsProxy() {
 		clone.delProxy(sid)
-		glog.Infof("%s %s (num proxies %d)", verb, node.StringEx(), clone.CountProxies())
+		nlog.Infof("%s %s (num proxies %d)", verb, node.StringEx(), clone.CountProxies())
 		clone.staffIC()
 	} else {
 		clone.delTarget(sid)
-		glog.Infof("%s %s (num targets %d)", verb, node.StringEx(), clone.CountTargets())
+		nlog.Infof("%s %s (num targets %d)", verb, node.StringEx(), clone.CountTargets())
 	}
 	p.rproxy.nodes.Delete(ctx.sid)
 	return nil

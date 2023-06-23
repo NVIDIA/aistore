@@ -23,7 +23,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cluster"
@@ -36,6 +35,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
@@ -102,7 +102,7 @@ func (p *proxy) initClusterCIDR() {
 		_, network, err := net.ParseCIDR(nodeCIDR)
 		p.si.LocalNet = network
 		cos.AssertNoErr(err)
-		glog.Infof("local network: %+v", *network)
+		nlog.Infof("local network: %+v", *network)
 	}
 }
 
@@ -134,13 +134,13 @@ func (p *proxy) init(config *cmn.Config) {
 func initPID(config *cmn.Config) (pid string) {
 	if pid = envDaemonID(apc.Proxy); pid != "" {
 		if err := cos.ValidateDaemonID(pid); err != nil {
-			glog.Errorf("Warning: %v", err)
+			nlog.Errorf("Warning: %v", err)
 		}
 		return
 	}
 	// try to read ID
 	if pid = readProxyID(config); pid != "" {
-		glog.Infof("p[%s] from %q", pid, fname.ProxyID)
+		nlog.Infof("p[%s] from %q", pid, fname.ProxyID)
 		return
 	}
 	pid = genDaemonID(apc.Proxy, config)
@@ -150,7 +150,7 @@ func initPID(config *cmn.Config) (pid string) {
 	// store ID on disk
 	err = os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR)
 	debug.AssertNoErr(err)
-	glog.Infof("p[%s] ID randomly generated", pid)
+	nlog.Infof("p[%s] ID randomly generated", pid)
 	return
 }
 
@@ -158,7 +158,7 @@ func readProxyID(config *cmn.Config) (id string) {
 	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
 		id = string(b)
 	} else if !os.IsNotExist(err) {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	return
 }
@@ -237,12 +237,12 @@ func (p *proxy) Run() error {
 	}
 	p.regNetHandlers(networkHandlers)
 
-	glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PubNet.URL)
+	nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetPublic, p.si.PubNet.URL)
 	if p.si.PubNet.URL != p.si.ControlNet.URL {
-		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.ControlNet.URL)
+		nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraControl, p.si.ControlNet.URL)
 	}
 	if p.si.PubNet.URL != p.si.DataNet.URL {
-		glog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.DataNet.URL)
+		nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.DataNet.URL)
 	}
 
 	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
@@ -290,46 +290,46 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else {
-		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Config)
+		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.Config)
 	}
 	// Smap
 	if err := p.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, p.smapOnUpdate); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else if cm.Smap != nil {
-		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.Smap)
+		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.Smap)
 	}
 	// BMD
 	if err := p.receiveBMD(cm.BMD, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else {
-		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.BMD)
+		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.BMD)
 	}
 	// RMD
 	if err := p.receiveRMD(cm.RMD, msg, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else {
-		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.RMD)
+		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.RMD)
 	}
 	// EtlMD
 	if err := p.receiveEtlMD(cm.EtlMD, msg, nil, caller, nil); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else if cm.EtlMD != nil {
-		glog.Infof("%s: recv-clumeta %s %s", p, action, cm.EtlMD)
+		nlog.Infof("%s: recv-clumeta %s %s", p, action, cm.EtlMD)
 	}
 
 	switch {
@@ -640,7 +640,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
@@ -711,7 +711,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		}
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
+		nlog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -745,7 +745,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -824,7 +824,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		}
 		if err := p.destroyBucket(msg, bck); err != nil {
 			if cmn.IsErrBckNotFound(err) {
-				glog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
+				nlog.Infof("%s: %s already %q-ed, nothing to do", p, bck, msg.Action)
 			} else {
 				p.writeErr(w, r, err)
 			}
@@ -921,7 +921,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 		if p.SID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *meta.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi); err != nil {
-					glog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
+					nlog.Errorf("%s: failed to send ownership table to %s, err:%v", p, psi, err)
 				}
 			}(psi)
 		}
@@ -1135,7 +1135,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-		glog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
+		nlog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
 		if xid, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1181,7 +1181,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			if p.forwardCP(w, r, msg, bucket) { // to create
 				return
 			}
-			glog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
+			nlog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
 		}
 
 		// start x-tcb or x-tco
@@ -1204,7 +1204,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 			xid, err = lstcx.do()
 		} else {
-			glog.Infof("%s: %s => %s", msg.Action, bck, bckTo)
+			nlog.Infof("%s: %s => %s", msg.Action, bck, bckTo)
 			xid, err = p.tcb(bck, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {
@@ -1226,7 +1226,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 
 		if bck.Equal(bckTo, true, true) {
 			eq = true
-			glog.Warningf("multi-obj %s within the same bucket %q", msg.Action, bck)
+			nlog.Warningf("multi-obj %s within the same bucket %q", msg.Action, bck)
 		}
 		if bckTo.IsHTTP() {
 			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
@@ -1241,11 +1241,11 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				if p.forwardCP(w, r, msg, bucket) { // to create
 					return
 				}
-				glog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
+				nlog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
 			}
 		}
 
-		glog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
+		nlog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
 		if xid, err = p.tcobjs(bck, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -1483,7 +1483,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 			if lsmsg.SID != "" {
 				s += " via " + tsi.StringEx()
 			}
-			glog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
+			nlog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
 		}
 
 		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, wantOnlyRemote)
@@ -1533,13 +1533,13 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
 			err = &errNodeNotFound{lsotag + " failure", lsmsg.SID, p.si, smap}
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err
 				tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
 				if err == nil {
-					glog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
+					nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
 					lsmsg.SID = tsi.ID()
 				}
 			}
@@ -1805,7 +1805,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1833,7 +1833,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1904,9 +1904,9 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	if cmn.FastV(5, cos.SmoduleAIS) {
 		pname := smap.Primary.StringEx()
 		if msg != nil {
-			glog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
+			nlog.Infof("%s: forwarding \"%s:%s\" to the primary %s", p, msg.Action, s, pname)
 		} else {
-			glog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
+			nlog.Infof("%s: forwarding %q to the primary %s", p, s, pname)
 		}
 	}
 	primary.rp.ServeHTTP(w, r)
@@ -1924,9 +1924,9 @@ func (p *proxy) rpErrHandler(w http.ResponseWriter, r *http.Request, err error) 
 		dst = "node " + si.StringEx()
 	}
 	if cos.IsErrConnectionRefused(err) {
-		glog.Errorf("%s: %s is unreachable (%s %s)", p, dst, r.Method, r.URL.Path)
+		nlog.Errorf("%s: %s is unreachable (%s %s)", p, dst, r.Method, r.URL.Path)
 	} else {
-		glog.Errorf("%s rproxy to %s (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
+		nlog.Errorf("%s rproxy to %s (%s %s): %v", p, dst, r.Method, r.URL.Path, err)
 	}
 	w.WriteHeader(http.StatusBadGateway)
 }
@@ -2267,7 +2267,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
+		nlog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
 	}
 
 	// NOTE: Code 307 is the only way to http-redirect with the original JSON payload.
@@ -2343,7 +2343,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// otherwise, warn and go ahead
 		// (e.g. scenario: shutdown when transitioning through states)
-		glog.Warningf("%s: %s status is: %s", p, si.StringEx(), daeStatus)
+		nlog.Warningf("%s: %s status is: %s", p, si.StringEx(), daeStatus)
 	}
 
 	// access control
@@ -2427,7 +2427,7 @@ func (p *proxy) bmodPostMv(ctx *bmdModifier, clone *bucketMD) error {
 		return nil
 	}
 	if props.Renamed == "" {
-		glog.Errorf("%s: renamed bucket %s: unexpected props %+v", p, bck.Name, *bck.Props)
+		nlog.Errorf("%s: renamed bucket %s: unexpected props %+v", p, bck.Name, *bck.Props)
 		ctx.terminate = true
 		return nil
 	}
@@ -2465,7 +2465,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(sleep)
 				smap = p.owner.smap.get()
 				if err := smap.validate(); err != nil {
-					glog.Errorf("%s is starting up, cannot return %s yet: %v", p, smap, err)
+					nlog.Errorf("%s is starting up, cannot return %s yet: %v", p, smap, err)
 				}
 				break
 			}
@@ -2473,7 +2473,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(sleep)
 		}
 		if err := smap.validate(); err != nil {
-			glog.Errorf("%s: startup is taking unusually long time: %s (%v)", p, smap, err)
+			nlog.Errorf("%s: startup is taking unusually long time: %s (%v)", p, smap, err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -2593,7 +2593,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 			p.writeErr(w, r, cmn.NewErrFailedTo(p, "synchronize", newsmap, err))
 			return
 		}
-		glog.Infof("%s: %s %s done", p, apc.SyncSmap, newsmap)
+		nlog.Infof("%s: %s %s done", p, apc.SyncSmap, newsmap)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
 		p.setDaemonConfigQuery(w, r)
 	default:
@@ -2614,7 +2614,7 @@ func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !p.keepalive.paused() {
-		glog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p)
+		nlog.Warningf("%s: keepalive is already active - proceeding to resume (and reset) anyway", p)
 	}
 	p.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
@@ -2662,10 +2662,10 @@ func (p *proxy) smapFromURL(baseURL string) (smap *smapX, err error) {
 // primary connect to the new primary
 func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
 	newPrimaryURL := r.URL.Query().Get(apc.QparamPrimaryCandidate)
-	glog.Infof("%s: force new primary %s (URL: %s)", p, proxyID, newPrimaryURL)
+	nlog.Infof("%s: force new primary %s (URL: %s)", p, proxyID, newPrimaryURL)
 
 	if p.SID() == proxyID {
-		glog.Warningf("%s is already primary", p)
+		nlog.Warningf("%s is already primary", p)
 		return
 	}
 	smap := p.owner.smap.get()
@@ -2762,7 +2762,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	}
 	if prepare {
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Infoln("Preparation step: do nothing")
+			nlog.Infoln("Preparation step: do nothing")
 		}
 		return
 	}
@@ -2787,7 +2787,7 @@ func (p *proxy) _becomePre(ctx *smapModifier, clone *smapX) error {
 	}
 	if ctx.sid != "" && clone.GetNode(ctx.sid) != nil {
 		// decision is made: going ahead to remove
-		glog.Infof("%s: removing failed primary %s", p, ctx.sid)
+		nlog.Infof("%s: removing failed primary %s", p, ctx.sid)
 		clone.delProxy(ctx.sid)
 
 		// Remove reverse proxy entry for the node.
@@ -2807,19 +2807,19 @@ func (p *proxy) _becomeFinal(ctx *smapModifier, clone *smapX) {
 		msg   = p.newAmsgStr(apc.ActNewPrimary, bmd)
 		pairs = []revsPair{{clone, msg}, {bmd, msg}, {rmd, msg}}
 	)
-	glog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
+	nlog.Infof("%s: distributing (%s, %s, %s) with newly elected primary (self)", p, clone, bmd, rmd)
 	config, err := p.ensureConfigPrimaryURL()
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 	if config != nil {
 		pairs = append(pairs, revsPair{config, msg})
-		glog.Infof("%s: plus %s", p, config)
+		nlog.Infof("%s: plus %s", p, config)
 	}
 	etl := p.owner.etl.get()
 	if etl != nil && etl.version() > 0 {
 		pairs = append(pairs, revsPair{etl, msg})
-		glog.Infof("%s: plus %s", p, etl)
+		nlog.Infof("%s: plus %s", p, etl)
 	}
 	debug.Assert(clone._sgl != nil)
 	_ = p.metasyncer.sync(pairs...)
@@ -2914,7 +2914,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
+		nlog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		// bck.IsHTTP()
@@ -2952,7 +2952,7 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msPa
 
 	if !p.NodeStarted() {
 		if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
-			glog.Warningf("%s: cannot handle %s (%s => %s) - starting up...", p, msg, oldConfig, newConfig)
+			nlog.Warningf("%s: cannot handle %s (%s => %s) - starting up...", p, msg, oldConfig, newConfig)
 		}
 		return
 	}
@@ -2993,7 +2993,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 		all, err := p.getRemAises(false /*refresh*/)
 		if err != nil {
 			if retries < maxretries {
-				glog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
+				nlog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
 			}
 			continue
 		}
@@ -3013,7 +3013,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 						break
 					}
 					if b.Alias == a.Alias {
-						glog.Errorf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
+						nlog.Errorf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
 					}
 				}
 				if !found {
@@ -3027,12 +3027,12 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 			break
 		}
 		p.remais.mu.Unlock()
-		glog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, all.Ver, retries-1)
+		nlog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, all.Ver, retries-1)
 		sleep = newConfig.Timeout.CplaneOperation.D()
 	}
 
 	p.remais.in.Store(false)
-	glog.Infof("%s: remais v%d => v%d", p, over, nver)
+	nlog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *aisMsg, caller string) (err error) {
@@ -3093,7 +3093,7 @@ func (p *proxy) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, cal
 	if err = bmd.validateUUID(newBMD, p.si, nil, caller); err != nil {
 		cos.Assert(!p.owner.smap.get().isPrimary(p.si))
 		// cluster integrity error: making exception for non-primary proxies
-		glog.Errorf("%s (non-primary): %v - proceeding to override BMD", p, err)
+		nlog.Errorf("%s (non-primary): %v - proceeding to override BMD", p, err)
 	} else if newBMD.version() <= bmd.version() {
 		p.owner.bmd.Unlock()
 		return newErrDowngrade(p.si, bmd.String(), newBMD.String())
@@ -3299,9 +3299,9 @@ func (p *proxy) Stop(err error) {
 		s += "(primary)"
 	}
 	if err == nil {
-		glog.Infoln(s)
+		nlog.Infoln(s)
 	} else {
-		glog.Warningf("%s: %v", s, err)
+		nlog.Warningf("%s: %v", s, err)
 	}
 	xreg.AbortAll(errors.New("p-stop"))
 

@@ -12,8 +12,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -60,11 +60,11 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	if len(out) == 0 {
-		glog.Errorf("%s: no disks (empty lsblk output)", fs)
+		nlog.Errorf("%s: no disks (empty lsblk output)", fs)
 		return
 	}
 
@@ -75,7 +75,7 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		if !testingEnv {
 			cos.ExitLog(err) // FATAL
 		}
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		res = nil
 	}
 	return
@@ -103,10 +103,10 @@ func fs2disks(res *LsBlk, fs string, testingEnv bool) (disks FsDisks) {
 			// see also: `allowSharedDisksAndNoDisks`
 			if !testingEnv {
 				s, _ := jsoniter.MarshalIndent(res.BlockDevices, "", " ")
-				glog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
+				nlog.Errorf("No disks for %s(%q):\n%s", fs, trimmedFS, string(s))
 			}
 		} else {
-			glog.Infof("%s: %v", fs, disks)
+			nlog.Infof("%s: %v", fs, disks)
 		}
 	}
 	return
@@ -131,7 +131,7 @@ func findDevs(devList []*blkdev, trimmedFS string, disks FsDisks) {
 func _add(bd *blkdev, disks FsDisks) {
 	var err error
 	if disks[bd.Name], err = bd.PhySec.Int64(); err != nil {
-		glog.Errorf("%s[%v]: failed to parse sector: %v", bd.Name, bd, err)
+		nlog.Errorf("%s[%v]: failed to parse sector: %v", bd.Name, bd, err)
 		disks[bd.Name] = 512
 	}
 }

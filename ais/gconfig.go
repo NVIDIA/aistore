@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -101,7 +101,7 @@ func (co *configOwner) get() (clone *globalConfig, err error) {
 	if os.IsNotExist(err) {
 		err = nil
 	} else {
-		glog.Errorf("failed to load global config from %s: %v", co.globalFpath, err)
+		nlog.Errorf("failed to load global config from %s: %v", co.globalFpath, err)
 	}
 	return
 }
@@ -230,7 +230,7 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 	config, err := co.get()
 	if err != nil || config == nil {
 		co.Unlock()
-		glog.Infof("Warning: reset config %s: %v", oldConfig, err)
+		nlog.Infof("Warning: reset config %s: %v", oldConfig, err)
 		return err
 	}
 	cmn.GCO.PutOverrideConfig(nil)

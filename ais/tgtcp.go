@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
@@ -24,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
@@ -76,10 +76,10 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := t.receiveConfig(cm.Config, msg, nil, caller); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else {
-		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Config)
+		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.Config)
 	}
 
 	// There's a window of time between:
@@ -93,19 +93,19 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := t.receiveBMD(cm.BMD, msg, nil /*ms payload */, bmdReg, caller, true /*silent*/); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	} else {
-		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
+		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.BMD)
 	}
 	// Smap
 	if err := t.receiveSmap(cm.Smap, msg, nil /*ms payload*/, caller, t.htrun.smapUpdatedCB); err != nil {
 		if !isErrDowngrade(err) {
 			errs = append(errs, err)
-			glog.Errorln(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
+			nlog.Errorln(cmn.NewErrFailedTo(t, "sync", cm.Smap, err))
 		}
 	} else if cm.Smap != nil {
-		glog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
+		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
 	}
 
 	switch {
@@ -218,7 +218,7 @@ func (t *target) daeputQuery(w http.ResponseWriter, r *http.Request, apiItems []
 		if err := t.owner.smap.synchronize(t.si, newsmap, nil /*ms payload*/, t.htrun.smapUpdatedCB); err != nil {
 			t.writeErr(w, r, cmn.NewErrFailedTo(t, "synchronize", newsmap, err))
 		}
-		glog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
+		nlog.Infof("%s: %s %s done", t, apc.SyncSmap, newsmap)
 	case apc.Mountpaths:
 		t.handleMountpathReq(w, r)
 	case apc.ActSetConfig: // set-config #1 - via query parameters and "?n1=v1&n2=v2..."
@@ -246,7 +246,7 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 
 	if prepare {
 		if cmn.FastV(4, cos.SmoduleAIS) {
-			glog.Infoln("Preparation step: do nothing")
+			nlog.Infoln("Preparation step: do nothing")
 		}
 		return
 	}
@@ -364,12 +364,12 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		if t.keepalive.paused() {
 			t.keepalive.ctrl(kaResumeMsg)
 		} else {
-			glog.Warningf("%s already joined (\"enabled\")- nothing to do", t)
+			nlog.Warningf("%s already joined (\"enabled\")- nothing to do", t)
 		}
 		return
 	}
 	if daemon.cli.target.standby {
-		glog.Infof("%s: transitioning standby => join", t)
+		nlog.Infof("%s: transitioning standby => join", t)
 	}
 	t.keepalive.ctrl(kaResumeMsg)
 	body, err := cmn.ReadBytes(r)
@@ -385,7 +385,7 @@ func (t *target) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	if daemon.cli.target.standby {
 		if err := t.endStartupStandby(); err != nil {
-			glog.Warningf("%s: err %v ending standby...", t, err)
+			nlog.Warningf("%s: err %v ending standby...", t, err)
 		}
 	}
 }
@@ -407,21 +407,21 @@ func (t *target) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 func (t *target) cleanupMark(ctx *cleanmark) {
 	smap := t.owner.smap.get()
 	if smap.version() > ctx.NewVer {
-		glog.Warningf("%s: %s is newer - ignoring (and dropping) %v", t, smap, ctx)
+		nlog.Warningf("%s: %s is newer - ignoring (and dropping) %v", t, smap, ctx)
 		return
 	}
 	if ctx.Interrupted {
 		if err := fs.RemoveMarker(fname.RebalanceMarker); err == nil {
-			glog.Infof("%s: cleanmark 'rebalance', %s", t, smap)
+			nlog.Infof("%s: cleanmark 'rebalance', %s", t, smap)
 		} else {
-			glog.Errorf("%s: failed to cleanmark 'rebalance': %v, %s", t, err, smap)
+			nlog.Errorf("%s: failed to cleanmark 'rebalance': %v, %s", t, err, smap)
 		}
 	}
 	if ctx.Restarted {
 		if err := fs.RemoveMarker(fname.NodeRestartedPrev); err == nil {
-			glog.Infof("%s: cleanmark 'restarted', %s", t, smap)
+			nlog.Infof("%s: cleanmark 'restarted', %s", t, smap)
 		} else {
-			glog.Errorf("%s: failed to cleanmark 'restarted': %v, %s", t, err, smap)
+			nlog.Errorf("%s: failed to cleanmark 'restarted': %v, %s", t, err, smap)
 		}
 	}
 }
@@ -544,7 +544,7 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	if errDone := t.transactions.commitBefore(caller, msg); errDone != nil {
 		err = fmt.Errorf("%s commit-before %s, errDone: %v", t, newBMD, errDone)
 		if !silent {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 		return
 	}
@@ -552,18 +552,18 @@ func (t *target) receiveBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, ta
 	// log
 	switch {
 	case err != nil:
-		glog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), caller, msg.Action, msg.UUID)
+		nlog.Errorf("%s: %v (receive %s from %q, action %q, uuid %q)", t, err, newBMD.StringEx(), caller, msg.Action, msg.UUID)
 	case newBMD.Version > oldVer:
 		logmsync(oldVer, newBMD, msg, caller, newBMD.StringEx())
 	case newBMD.Version == oldVer:
-		glog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
+		nlog.Warningf("%s (same version w/ txn commit): receive %s from %q (action %q, uuid %q)",
 			t, newBMD.StringEx(), caller, msg.Action, msg.UUID)
 	}
 	// --after]
 	if errDone := t.transactions.commitAfter(caller, msg, err, newBMD); errDone != nil {
 		err = fmt.Errorf("%s commit-after %s, err: %v, errDone: %v", t, newBMD, err, errDone)
 		if !silent {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 	return
@@ -577,13 +577,13 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 	t.owner.bmd.Unlock()
 
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	} else if oldVer < newBMD.Version {
 		t.regstate.prevbmd.Store(false)
 		t._postBMD(tag, rmbcks)
 	}
 	if emsg != "" {
-		glog.Errorln(emsg)
+		nlog.Errorln(emsg)
 	}
 	return oldVer, err
 }
@@ -679,7 +679,7 @@ func (t *target) _postBMD(tag string, rmbcks []*meta.Bck) {
 	if tag != bmdReg {
 		// ecmanager will get updated BMD upon its init()
 		if err := ec.ECM.BucketsMDChanged(); err != nil {
-			glog.Errorf("Failed to initialize EC manager: %v", err)
+			nlog.Errorf("Failed to initialize EC manager: %v", err)
 		}
 	}
 	// since some buckets may have been destroyed
@@ -707,7 +707,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	}
 	for _, tsi := range rmd.TargetIDs {
 		if smap.GetNode(tsi) == nil {
-			glog.Warningf("%s: %s (target_id) not present in %s (old %s, new %s)",
+			nlog.Warningf("%s: %s (target_id) not present in %s (old %s, new %s)",
 				t.si, tsi, smap.StringEx(), rmd, newRMD)
 		}
 	}
@@ -719,22 +719,22 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		}
 		if msg.Action == apc.ActRebalance {
-			glog.Infof("%s: starting user-requested rebalance[%s]", t, msg.UUID)
+			nlog.Infof("%s: starting user-requested rebalance[%s]", t, msg.UUID)
 			go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 			return
 		}
 
-		glog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
+		nlog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 
 		if newRMD.Resilver != "" {
-			glog.Infof("%s: ... and resilver", t)
+			nlog.Infof("%s: ... and resilver", t)
 			go t.runResilver(res.Args{UUID: newRMD.Resilver, SkipGlobMisplaced: true}, nil /*wg*/)
 		}
 		t.owner.rmd.put(newRMD)
 		// TODO: move and refactor
 	} else if msg.Action == apc.ActAdminJoinTarget && daemon.cli.target.standby && msg.Name == t.SID() {
-		glog.Warningf("%s: standby => join %s", t, msg)
+		nlog.Warningf("%s: standby => join %s", t, msg)
 		if _, err = t.joinCluster(msg.Action); err == nil {
 			err = t.endStartupStandby()
 		}
@@ -746,11 +746,11 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 func (t *target) ensureLatestBMD(msg *aisMsg, r *http.Request) {
 	bmd, bmdVersion := t.owner.bmd.Get(), msg.BMDVersion
 	if bmd.Version < bmdVersion {
-		glog.Errorf("%s: local %s < v%d %s - running fixup...", t, bmd, bmdVersion, msg)
+		nlog.Errorf("%s: local %s < v%d %s - running fixup...", t, bmd, bmdVersion, msg)
 		t.BMDVersionFixup(r)
 	} else if bmd.Version > bmdVersion {
 		// If metasync outraces the request, we end up here, just log it and continue.
-		glog.Warningf("%s: local %s > v%d %s", t, bmd, bmdVersion, msg)
+		nlog.Warningf("%s: local %s > v%d %s", t, bmd, bmdVersion, msg)
 	}
 }
 
@@ -804,7 +804,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	time.Sleep(200 * time.Millisecond)
 	newBucketMD, err := t.getPrimaryBMD(bck.Name)
 	if err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 		return
 	}
 	msg := t.newAmsgStr("get-what="+apc.WhatBMD, newBucketMD)
@@ -819,7 +819,7 @@ func (t *target) BMDVersionFixup(r *http.Request, bcks ...cmn.Bck) {
 	err = t.receiveBMD(newBucketMD, msg, nil, bmdFixup, caller, true /*silent*/)
 	t.regstate.mu.Unlock()
 	if err != nil && !isErrDowngrade(err) {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 }
 
@@ -906,7 +906,7 @@ func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
 			continue
 		}
 		// TODO: stop only when running
-		glog.Infoln("ETL MD change resulting from action: " + action)
+		nlog.Infoln("ETL MD change resulting from action: " + action)
 		etl.Stop(t, key, nil)
 	}
 }
@@ -925,7 +925,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *aisMsg, payload msP
 
 	if !t.NodeStarted() {
 		if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
-			glog.Errorf("%s: cannot handle %s (%s => %s) - starting up...", t, msg, oldConfig, newConfig)
+			nlog.Errorf("%s: cannot handle %s (%s => %s) - starting up...", t, msg, oldConfig, newConfig)
 		}
 		return
 	}
@@ -971,7 +971,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 	}
 	ntid := msg.UUID
 	if cmn.FastV(4, cos.SmoduleAIS) {
-		glog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
+		nlog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
 	case apc.ActStartGFN:
@@ -988,7 +988,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 // GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
-		glog.Warningf("[health] %s: standing by...", t)
+		nlog.Warningf("[health] %s: standing by...", t)
 	} else if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -1028,7 +1028,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 			s = "newer"
 		}
 		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
-		glog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
+		nlog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
 	getRebStatus := cos.IsParseBool(query.Get(apc.QparamRebStatus))
 	if getRebStatus {
@@ -1057,12 +1057,12 @@ func (t *target) disable(msg string) {
 	}
 	if err := t.unregisterSelf(false); err != nil {
 		t.regstate.mu.Unlock()
-		glog.Errorf("%s but failed to remove self from Smap: %v", msg, err)
+		nlog.Errorf("%s but failed to remove self from Smap: %v", msg, err)
 		return
 	}
 	t.regstate.disabled.Store(true)
 	t.regstate.mu.Unlock()
-	glog.Errorf("Warning: %s => disabled and removed self from Smap", msg)
+	nlog.Errorf("Warning: %s => disabled and removed self from Smap", msg)
 }
 
 // registers the target again if it was disabled by and internal event
@@ -1075,12 +1075,12 @@ func (t *target) enable() error {
 	}
 	if _, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
 		t.regstate.mu.Unlock()
-		glog.Infof("%s failed to re-join: %v", t, err)
+		nlog.Infof("%s failed to re-join: %v", t, err)
 		return err
 	}
 	t.regstate.disabled.Store(false)
 	t.regstate.mu.Unlock()
-	glog.Infof("%s is now active", t)
+	nlog.Infof("%s is now active", t)
 	return nil
 }
 
@@ -1173,13 +1173,13 @@ func (t *target) decommission(action string, opts *apc.ActValRmNode) {
 	daemon.stopping.Store(true)
 	t.regstate.mu.Unlock()
 
-	glog.Infof("%s: %s %v", t, action, opts)
+	nlog.Infof("%s: %s %v", t, action, opts)
 	fs.Decommission(!opts.RmUserData /*ais metadata only*/)
 	cleanupConfigDir(t.Name(), opts.KeepInitialConfig)
 
 	fpath := filepath.Join(cmn.GCO.Get().ConfigDir, dbName)
 	if err := cos.RemoveFile(fpath); err != nil { // delete kvdb
-		glog.Errorf("failed to delete kvdb: %v", err)
+		nlog.Errorf("failed to delete kvdb: %v", err)
 	}
 	if !opts.NoShutdown {
 		t.Stop(&errNoUnregister{action})
@@ -1195,9 +1195,9 @@ func (t *target) Stop(err error) {
 		t.regstate.mu.Unlock()
 	}
 	if err == nil {
-		glog.Infoln("Stopping " + t.String())
+		nlog.Infoln("Stopping " + t.String())
 	} else {
-		glog.Warningf("Stopping %s: %v", t, err)
+		nlog.Warningf("Stopping %s: %v", t, err)
 	}
 	xreg.AbortAll(err)
 	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)

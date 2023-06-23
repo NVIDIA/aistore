@@ -12,12 +12,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 func (p *proxy) bucketSummary(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, amsg *apc.ActMsg, dpq *dpq) {
@@ -59,7 +59,7 @@ retry:
 	// "not started"
 	if orig != "" && !retried {
 		runtime.Gosched()
-		glog.Errorf("%s: checking on the x-%s[%s] status - retrying once...", p, apc.ActSummaryBck, msg.UUID)
+		nlog.Errorf("%s: checking on the x-%s[%s] status - retrying once...", p, apc.ActSummaryBck, msg.UUID)
 		time.Sleep(cos.MaxDuration(cmn.Timeout.CplaneOperation(), time.Second))
 		retried = true
 		goto retry
@@ -114,7 +114,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsum
 			if tsi != nil {
 				s = fmt.Sprintf(", failed targets: [%s ...]", tsi.StringEx())
 			}
-			glog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
+			nlog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
 				p, numNotFound, cos.Plural(numNotFound), apc.ActSummaryBck, msg.UUID, s)
 		}
 		return nil, tsi, numNotFound, nil
@@ -195,7 +195,7 @@ func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int
 		time.Sleep(sleep)
 		summaries, tsi, numNotFound, err := p.bsummDo(qbck, msg)
 		if err != nil {
-			glog.Errorf("%s: x-%s[%s]: %s returned err: %v", p, apc.ActSummaryBck, msg.UUID, tsi, err)
+			nlog.Errorf("%s: x-%s[%s]: %s returned err: %v", p, apc.ActSummaryBck, msg.UUID, tsi, err)
 			return err
 		}
 		if summaries == nil {
@@ -204,7 +204,7 @@ func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int
 				if tsi != nil {
 					s = fmt.Sprintf(", failed targets: [%s ...]", tsi.StringEx())
 				}
-				glog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
+				nlog.Errorf("%s: not found %d instance%s of x-%s[%s]%s",
 					p, numNotFound, cos.Plural(numNotFound), apc.ActSummaryBck, msg.UUID, s)
 			}
 			continue
@@ -212,6 +212,6 @@ func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int
 		*out = *summaries[0]
 		return nil
 	}
-	glog.Warningf("%s: timed-out waiting for %s x-%s[%s]", p, bck, apc.ActSummaryBck, msg.UUID)
+	nlog.Warningf("%s: timed-out waiting for %s x-%s[%s]", p, bck, apc.ActSummaryBck, msg.UUID)
 	return nil
 }

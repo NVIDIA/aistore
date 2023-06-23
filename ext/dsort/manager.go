@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -21,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/ext/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
@@ -306,7 +306,7 @@ func (m *Manager) cleanupStreams() (err error) {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
-	glog.Infof("[dsort] %s started cleanup", m.ManagerUUID)
+	nlog.Infof("[dsort] %s started cleanup", m.ManagerUUID)
 	m.lock()
 	if m.state.cleaned != noCleanedState {
 		m.unlock()
@@ -320,7 +320,7 @@ func (m *Manager) cleanup() {
 		m.state.cleaned = initiallyCleanedState
 		m.state.cleanWait.Signal()
 		m.unlock()
-		glog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
+		nlog.Infof("[dsort] %s finished cleanup in %v", m.ManagerUUID, time.Since(now))
 	}()
 
 	debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
@@ -359,18 +359,18 @@ func (m *Manager) finalCleanup() {
 		}
 	}
 
-	glog.Infof("[dsort] %s started final cleanup", m.ManagerUUID)
+	nlog.Infof("[dsort] %s started final cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	if err := m.cleanupStreams(); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 
 	// Wait for all in-flight stream requests after cleaning up streams.
 	m.waitForInFlight()
 
 	if err := m.dsorter.finalCleanup(); err != nil {
-		glog.Errorln(err)
+		nlog.Errorln(err)
 	}
 
 	// The reason why this is not in regular cleanup is because we are only sure
@@ -390,7 +390,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	glog.Infof("[dsort] %s finished final cleanup in %v", m.ManagerUUID, time.Since(now))
+	nlog.Infof("[dsort] %s finished final cleanup in %v", m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -409,7 +409,7 @@ func (m *Manager) abort(errs ...error) {
 		m.Metrics.unlock()
 	}
 
-	glog.Infof("[dsort] %s has been aborted", m.ManagerUUID)
+	nlog.Infof("[dsort] %s has been aborted", m.ManagerUUID)
 	m.setAbortedTo(true)
 	inProgress := m.inProgress()
 	m.unlock()
@@ -418,7 +418,7 @@ func (m *Manager) abort(errs ...error) {
 	// for it to finish.
 	if inProgress {
 		if m.config.FastV(4, cos.SmoduleDsort) {
-			glog.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
+			nlog.Infof("[dsort] %s is in progress, waiting for finish", m.ManagerUUID)
 		}
 		// Wait for dsorter to initialize all the resources.
 		m.waitDSorterToStart()
@@ -426,7 +426,7 @@ func (m *Manager) abort(errs ...error) {
 		m.dsorter.onAbort()
 		m.waitForFinish()
 		if m.config.FastV(4, cos.SmoduleDsort) {
-			glog.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
+			nlog.Infof("[dsort] %s was in progress and finished", m.ManagerUUID)
 		}
 	}
 
@@ -681,12 +681,12 @@ func (m *Manager) makeRecvShardFunc() transport.RecvObj {
 		if err == nil {
 			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
 				if m.config.FastV(4, cos.SmoduleDsort) {
-					glog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
+					nlog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
 						m.ManagerUUID, lom)
 				}
 				return nil
 			}
-			glog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
+			nlog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
 		}
 		started := time.Now()
 		lom.SetAtimeUnix(started.UnixNano())

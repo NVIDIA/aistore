@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
@@ -216,7 +216,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 	}
 	nl.SetAddedTime()
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infoln("add " + nl.String())
+		nlog.Infoln("add " + nl.String())
 	}
 	return
 }
@@ -224,7 +224,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
 	if ok && cmn.FastV(5, cos.SmoduleAIS) {
-		glog.Infoln("del " + nl.String())
+		nlog.Infoln("del " + nl.String())
 	}
 	return
 }
@@ -411,7 +411,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 		if res.err == nil {
 			stats, finished, aborted, err := nl.UnmarshalStats(res.bytes)
 			if err != nil {
-				glog.Errorf("%s: failed to parse stats from %s: %v", n.p, res.si.StringEx(), err)
+				nlog.Errorf("%s: failed to parse stats from %s: %v", n.p, res.si.StringEx(), err)
 				continue
 			}
 			nl.Lock()
@@ -430,7 +430,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
 		} else if config.FastV(4, cos.SmoduleAIS) {
-			glog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
+			nlog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
 		}
 	}
 	freeBcastRes(results)

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,7 +37,7 @@ func newServer(mgr *mgr) *hserv {
 // Run public server to manage users and generate tokens
 func (h *hserv) Run() (err error) {
 	portstring := fmt.Sprintf(":%d", Conf.Net.HTTP.Port)
-	glog.Infof("Listening on *:%s", portstring)
+	nlog.Infof("Listening on *:%s", portstring)
 
 	h.registerPublicHandlers()
 	h.s = &http.Server{Addr: portstring, Handler: h.mux}
@@ -52,7 +52,7 @@ func (h *hserv) Run() (err error) {
 	}
 rerr:
 	if err != http.ErrServerClosed {
-		glog.Errorf("Terminated with err: %v", err)
+		nlog.Errorf("Terminated with err: %v", err)
 		return err
 	}
 	return nil
@@ -142,7 +142,7 @@ func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.mgr.delUser(apiItems[0]); err != nil {
-		glog.Errorf("Failed to delete user: %v\n", err)
+		nlog.Errorf("Failed to delete user: %v\n", err)
 		cmn.WriteErrMsg(w, r, "Failed to delete user: "+err.Error())
 	}
 }
@@ -176,7 +176,7 @@ func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if Conf.Verbose() {
-		glog.Infof("PUT user %q", userID)
+		nlog.Infof("PUT user %q", userID)
 	}
 	if err := h.mgr.updateUser(userID, updateReq); err != nil {
 		cmn.WriteErr(w, r, err)
@@ -198,7 +198,7 @@ func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if Conf.Verbose() {
-		glog.Infof("Add user %q", info.ID)
+		nlog.Infof("Add user %q", info.ID)
 	}
 }
 
@@ -294,7 +294,7 @@ func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := h.mgr.issueToken(userID, pass, msg)
 	if err != nil {
-		glog.Errorf("Failed to generate token for user %q: %v\n", userID, err)
+		nlog.Errorf("Failed to generate token for user %q: %v\n", userID, err)
 		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
 		return
 	}
@@ -309,7 +309,7 @@ func writeJSON(w http.ResponseWriter, val any, tag string) {
 	if err = jsoniter.NewEncoder(w).Encode(val); err == nil {
 		return
 	}
-	glog.Errorf("%s: failed to write json, err: %v", tag, err)
+	nlog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
 func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
@@ -318,7 +318,7 @@ func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 	if _, err = w.Write(jsbytes); err == nil {
 		return
 	}
-	glog.Errorf("%s: failed to write json, err: %v", tag, err)
+	nlog.Errorf("%s: failed to write json, err: %v", tag, err)
 }
 
 func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
@@ -510,7 +510,7 @@ func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if Conf.Verbose() {
-		glog.Infof("PUT role %q\n", role)
+		nlog.Infof("PUT role %q\n", role)
 	}
 	if err := h.mgr.updateRole(role, updateReq); err != nil {
 		if cos.IsErrNotFound(err) {

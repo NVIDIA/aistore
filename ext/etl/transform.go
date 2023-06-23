@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
@@ -135,10 +135,10 @@ func (e *Aborter) ListenSmapChanged() {
 				TID:     e.t.SID(),
 				ETLName: e.name,
 			}, "targets have changed, aborting...")
-			glog.Warningln(err)
+			nlog.Warningln(err)
 			// Stop will unregister `e` from smap listeners.
 			if err := Stop(e.t, e.name, err); err != nil {
-				glog.Errorln(err)
+				nlog.Errorln(err)
 			}
 		}
 
@@ -150,9 +150,9 @@ func (e *Aborter) ListenSmapChanged() {
 func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts) error {
 	errCtx, podName, svcName, err := start(t, msg, etlName, opts)
 	if err != nil {
-		glog.Warningln(cmn.NewErrETL(errCtx, "%s: cleanup after unsuccessful Start", t))
+		nlog.Warningln(cmn.NewErrETL(errCtx, "%s: cleanup after unsuccessful Start", t))
 		if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
-			glog.Errorln(errV)
+			nlog.Errorln(errV)
 		}
 	}
 	return err
@@ -337,7 +337,7 @@ func StopAll(t cluster.Target) {
 	}
 	for _, e := range List() {
 		if err := Stop(t, e.Name, nil); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 		}
 	}
 }

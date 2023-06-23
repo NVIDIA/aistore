@@ -7,14 +7,11 @@ package transport_test
 
 // How to run:
 //
-// 1) run all tests while redirecting glog to STDERR:
-// go test -v -logtostderr=true
+// 1) run all unit tests
+// go test -v
 //
 // 2) run tests matching "Multi" with debug enabled:
 // go test -v -run=Multi -tags=debug
-//
-// 3) run tests matching "Multi" with debug enabled and glog redirect:
-// go test -v -run=Multi -tags=debug -logtostderr=true
 
 import (
 	"encoding/binary"

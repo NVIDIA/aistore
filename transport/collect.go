@@ -9,9 +9,9 @@ import (
 	"container/heap"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type (
@@ -51,7 +51,7 @@ func (sc *StreamCollector) Run() (err error) {
 }
 
 func (sc *StreamCollector) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", sc.Name(), err)
+	nlog.Infof("Stopping %s, err: %v", sc.Name(), err)
 	gc.stop()
 }
 

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -17,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -73,22 +73,22 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		_, code, err := reb.t.Health(tsi, cmn.Timeout.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
-				glog.Infof("%s: %s is online", logHdr, tsi.StringEx())
+				nlog.Infof("%s: %s is online", logHdr, tsi.StringEx())
 			}
 			return true
 		}
 		if !cos.IsUnreachable(err, code) {
-			glog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
+			nlog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
 			return
 		}
-		glog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi.StringEx(), err, code)
+		nlog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi.StringEx(), err, code)
 		time.Sleep(sleep)
 		nver := reb.t.Sowner().Get().Version
 		if nver > ver {
 			return
 		}
 	}
-	glog.Errorf("%s: timed out waiting for %s", logHdr, tsi.StringEx())
+	nlog.Errorf("%s: timed out waiting for %s", logHdr, tsi.StringEx())
 	return
 }
 
@@ -111,12 +111,12 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 			return
 		}
 		if err := xreb.AbortedAfter(sleep); err != nil {
-			glog.Infof("%s: abort rx-ready (%v)", logHdr, err)
+			nlog.Infof("%s: abort rx-ready (%v)", logHdr, err)
 			return
 		}
 		curwt += sleep
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tsi.StringEx(), stages[rebStageTraverse])
+	nlog.Errorf("%s: timed out waiting for %s to reach %s state", logHdr, tsi.StringEx(), stages[rebStageTraverse])
 	return
 }
 
@@ -136,7 +136,7 @@ func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	debug.Assertf(reb.RebID() == xreb.RebID(), "%s (rebID=%d) vs %s", logHdr, reb.RebID(), xreb)
 	for curwt < maxwt {
 		if err := xreb.AbortedAfter(sleep); err != nil {
-			glog.Infof("%s: abort wack (%v)", logHdr, err)
+			nlog.Infof("%s: abort wack (%v)", logHdr, err)
 			return
 		}
 		if reb.stages.isInStage(tsi, rebStageFin) {
@@ -148,7 +148,7 @@ func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 			return
 		}
 		if err := xreb.AbortErr(); err != nil {
-			glog.Infof("%s: abort wack (%v)", logHdr, err)
+			nlog.Infof("%s: abort wack (%v)", logHdr, err)
 			return
 		}
 		//
@@ -157,20 +157,20 @@ func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		var w4me bool // true: this target is waiting for ACKs from me
 		for _, si := range status.Targets {
 			if si.ID() == reb.t.SID() {
-				glog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi.StringEx(), stages[status.Stage])
+				nlog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi.StringEx(), stages[status.Stage])
 				w4me = true
 				break
 			}
 		}
 		if !w4me {
-			glog.Infof("%s: %s[%s] ok (not waiting for me)", logHdr, tsi.StringEx(), stages[status.Stage])
+			nlog.Infof("%s: %s[%s] ok (not waiting for me)", logHdr, tsi.StringEx(), stages[status.Stage])
 			ok = true
 			return
 		}
 		time.Sleep(sleepRetry)
 		curwt += sleepRetry
 	}
-	glog.Errorf("%s: timed out waiting for %s to reach %s", logHdr, tsi.StringEx(), stages[rebStageFin])
+	nlog.Errorf("%s: timed out waiting for %s to reach %s", logHdr, tsi.StringEx(), stages[rebStageFin])
 	return
 }
 
@@ -192,7 +192,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	body, code, err := reb.t.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := xreb.AbortedAfter(sleepRetry); errAborted != nil {
-			glog.Infof("%s: abort check status (%v)", logHdr, errAborted)
+			nlog.Infof("%s: abort check status (%v)", logHdr, errAborted)
 			return
 		}
 		body, code, err = reb.t.Health(tsi, apc.DefaultTimeout, query) // retry once
@@ -222,7 +222,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	}
 	// let the target to catch-up
 	if status.RebID < reb.RebID() {
-		glog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
+		nlog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID.
@@ -231,7 +231,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		detail := fmt.Sprintf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
 		err := cmn.NewErrAborted(logHdr, detail, nil)
 		if xreb.Abort(err) {
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		}
 		return
 	}
@@ -239,6 +239,6 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		ok = true
 		return
 	}
-	glog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
+	nlog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
 	return
 }

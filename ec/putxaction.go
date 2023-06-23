@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -141,7 +141,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 		debug.Assert(false, "invalid "+lom.Mountpath().String())
 	}
 	if r.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
+		nlog.Infof("ECPUT (bg queue = %d): dispatching object %s....", len(jogger.putCh), lom)
 	}
 	if req.rebuild {
 		jogger.xactCh <- req
@@ -153,7 +153,7 @@ func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
 }
 
 func (r *XactPut) Run(*sync.WaitGroup) {
-	glog.Infoln(r.Name())
+	nlog.Infoln(r.Name())
 
 	var wg sync.WaitGroup
 	for _, jog := range r.putJoggers {
@@ -177,7 +177,7 @@ func (r *XactPut) mainLoop() {
 		case <-ticker.C:
 			if r.config.FastV(4, cos.SmoduleEC) {
 				if s := fmt.Sprintf("%v", r.Snap()); s != "" {
-					glog.Infoln(s)
+					nlog.Infoln(s)
 				}
 			}
 		case <-r.IdleTimer():
@@ -218,7 +218,7 @@ func (r *XactPut) encode(req *request, lom *cluster.LOM) {
 	req.putTime = time.Now()
 	req.tm = time.Now()
 	if err := r.dispatchRequest(req, lom); err != nil {
-		glog.Errorf("Failed to encode %s: %v", lom, err)
+		nlog.Errorf("Failed to encode %s: %v", lom, err)
 		freeReq(req)
 	}
 }
@@ -229,7 +229,7 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	req.tm = time.Now()
 
 	if err := r.dispatchRequest(req, lom); err != nil {
-		glog.Errorf("Failed to cleanup %s: %v", lom, err)
+		nlog.Errorf("Failed to cleanup %s: %v", lom, err)
 		freeReq(req)
 	}
 }

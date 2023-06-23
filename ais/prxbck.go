@@ -10,13 +10,13 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -243,7 +243,7 @@ func (args *bckInitArgs) try() (bck *meta.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
 		if cmn.IsErrBucketAlreadyExists(err) {
-			glog.Errorf("%s: %v - race, proceeding anyway...", args.p, err)
+			nlog.Errorf("%s: %v - race, proceeding anyway...", args.p, err)
 			err = nil
 		} else {
 			args.p.writeErr(args.w, args.r, err, errCode)
@@ -285,7 +285,7 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 		bck = backend
 	}
 	if bck.IsAIS() {
-		glog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
+		nlog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
 		goto creadd
 	}
 	action = apc.ActAddRemoteBck // only if requested via args
@@ -378,8 +378,8 @@ retry:
 			return
 		}
 		// NOTE: assuming OK
-		glog.Warningf("Proceeding to add remote bucket %s to the BMD after getting err: %v(%d)", bck, err, code)
-		glog.Warningf("Using all cluster defaults for %s property values", bck)
+		nlog.Warningf("Proceeding to add remote bucket %s to the BMD after getting err: %v(%d)", bck, err, code)
+		nlog.Warningf("Using all cluster defaults for %s property values", bck)
 		hdr = make(http.Header, 2)
 		hdr.Set(apc.HdrBackendProvider, bck.Provider)
 		hdr.Set(apc.HdrBucketVerEnabled, "false")
@@ -388,7 +388,7 @@ retry:
 	}
 	// NOTE: retrying once (via random target)
 	if err != nil && !retried && cos.IsErrClientURLTimeout(err) {
-		glog.Warningf("%s: HEAD(%s) timeout %q - retrying...", args.p, bck, errors.Unwrap(err))
+		nlog.Warningf("%s: HEAD(%s) timeout %q - retrying...", args.p, bck, errors.Unwrap(err))
 		retried = true
 		goto retry
 	}

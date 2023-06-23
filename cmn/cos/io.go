@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // POSIX permissions
@@ -475,7 +475,7 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 		return
 	}
 	if dstFile, err = CreateFile(dst); err != nil {
-		glog.Errorf("Failed to create %s: %v", dst, err)
+		nlog.Errorf("Failed to create %s: %v", dst, err)
 		Close(srcFile)
 		return
 	}
@@ -486,16 +486,16 @@ func CopyFile(src, dst string, buf []byte, cksumType string) (written int64, cks
 			return
 		}
 		if nestedErr := RemoveFile(dst); nestedErr != nil {
-			glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, dst, nestedErr)
+			nlog.Errorf("Nested (%v): failed to remove %s, err: %v", err, dst, nestedErr)
 		}
 	}()
 	if err != nil {
-		glog.Errorf("Failed to copy %s => %s: %v", src, dst, err)
+		nlog.Errorf("Failed to copy %s => %s: %v", src, dst, err)
 		Close(dstFile)
 		return
 	}
 	if err = FlushClose(dstFile); err != nil {
-		glog.Errorf("Failed to flush and close %s: %v", dst, err)
+		nlog.Errorf("Failed to flush and close %s: %v", dst, err)
 	}
 	return
 }

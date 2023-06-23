@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const NameSuffix = ".gc" // reg name suffix
@@ -178,7 +178,7 @@ func (hk *housekeeper) _run() error {
 			if req.registering {
 				// duplicate name
 				if hk.byName(req.name) != -1 {
-					glog.Errorln(req.name + " is (still) registered - rescheduling...")
+					nlog.Errorln(req.name + " is (still) registered - rescheduling...")
 					time.Sleep(time.Second)
 					hk.workCh <- req
 					break
@@ -195,7 +195,7 @@ func (hk *housekeeper) _run() error {
 					heap.Remove(hk.actions, idx)
 				} else {
 					debug.Assert(false, req.name)
-					glog.Warningln(req.name, "already removed")
+					nlog.Warningln(req.name, "already removed")
 				}
 			}
 			hk.updateTimer()

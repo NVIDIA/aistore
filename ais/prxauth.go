@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -18,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -53,7 +53,7 @@ func (a *authManager) updateRevokedList(newRevoked *tokenList) (allRevoked *toke
 	case newRevoked.Version > a.version:
 		a.version = newRevoked.Version
 	default:
-		glog.Errorf("Current token list v%d is greater than received v%d", a.version, newRevoked.Version)
+		nlog.Errorf("Current token list v%d is greater than received v%d", a.version, newRevoked.Version)
 		a.Unlock()
 		return
 	}
@@ -128,7 +128,7 @@ func (a *authManager) validateAddRm(token string, now time.Time) (*tok.Token, er
 			secret = cmn.GCO.Get().Auth.Secret
 		)
 		if tk, err = tok.DecryptToken(token, secret); err != nil {
-			glog.Errorln(err)
+			nlog.Errorln(err)
 			return nil, tok.ErrInvalidToken
 		}
 		a.tkList[token] = tk
@@ -213,7 +213,7 @@ func (p *proxy) validateToken(hdr http.Header) (*tok.Token, error) {
 	}
 	tk, err := p.authn.validateToken(token)
 	if err != nil {
-		glog.Errorf("invalid token: %v", err)
+		nlog.Errorf("invalid token: %v", err)
 		return nil, err
 	}
 	return tk, nil

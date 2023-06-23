@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -204,7 +204,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	for hardErrCnt, softErrCnt, iter = uint(0), uint(0), uint(1); ; iter++ {
 		if status, err = args.Call(); err == nil {
 			if args.Verbosity == RetryLogVerbose && (hardErrCnt > 0 || softErrCnt > 0) {
-				glog.Warningf("%s Successful %s after (soft/hard errors: %d/%d, last: %v)",
+				nlog.Warningf("%s Successful %s after (soft/hard errors: %d/%d, last: %v)",
 					callerStr, args.Action, softErrCnt, hardErrCnt, nonEmptyErr)
 			}
 			return
@@ -215,7 +215,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			return
 		}
 		if args.Verbosity == RetryLogVerbose {
-			glog.Errorf("%s Failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
+			nlog.Errorf("%s Failed to %s, iter %d, err: %v(%d)", callerStr, args.Action, iter, err, status)
 		}
 		if cos.IsRetriableConnErr(err) {
 			softErrCnt++
@@ -236,7 +236,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 	}
 	// Quiet: print once the summary (Verbose: no need)
 	if args.Verbosity == RetryLogQuiet {
-		glog.Errorf("%sFailed to %s (soft/hard errors: %d/%d, last: %v)",
+		nlog.Errorf("%sFailed to %s (soft/hard errors: %d/%d, last: %v)",
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return

@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -183,7 +183,7 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 		}
 	} else if qbck.IsRemoteAIS() && qbck.Ns.IsAnyRemote() {
 		if config.Backend.Get(apc.AIS) == nil {
-			glog.Warningln(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
+			nlog.Warningln(&cmn.ErrMissingBackend{Provider: qbck.Provider, Msg: "no remote ais clusters"})
 			return
 			// otherwise go ahead and try to list below
 		}
@@ -272,7 +272,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 		if msg.SID != "" {
 			s += " via t[" + msg.SID + "]"
 		}
-		glog.Infoln(xls.Name() + s)
+		nlog.Infoln(xls.Name() + s)
 	}
 
 	resp := xls.Do(msg) // NOTE: blocking request/response
@@ -484,7 +484,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
 		pid := apireq.query.Get(apc.QparamProxyID)
-		glog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
+		nlog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
 	}
 
 	debug.Assert(!apireq.bck.IsAIS())
@@ -515,7 +515,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 			}
 			return
 		}
-		glog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
+		nlog.Warningf("%s: bucket %s, err: %v(%d)", t, apireq.bck, err, code)
 		bucketProps = make(cos.StrKVs)
 		bucketProps[apc.HdrBackendProvider] = apireq.bck.Provider
 		bucketProps[apc.HdrRemoteOffline] = strconv.FormatBool(apireq.bck.IsRemote())
@@ -524,7 +524,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		if k == apc.HdrBucketVerEnabled && apireq.bck.Props != nil {
 			if curr := strconv.FormatBool(apireq.bck.VersionConf().Enabled); curr != v {
 				// e.g., change via vendor-provided CLI and similar
-				glog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
+				nlog.Errorf("%s: %s versioning got out of sync: %s != %s", t, apireq.bck, v, curr)
 			}
 		}
 		hdr.Set(k, v)

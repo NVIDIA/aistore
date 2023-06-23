@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -86,7 +86,7 @@ func (*getJogger) freeCtx(ctx *restoreCtx) {
 }
 
 func (c *getJogger) run() {
-	glog.Infof("started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
+	nlog.Infof("started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 
 	for {
 		select {
@@ -104,14 +104,14 @@ func (c *getJogger) run() {
 }
 
 func (c *getJogger) stop() {
-	glog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bck)
+	nlog.Infof("stopping EC for mountpath: %s, bucket: %s", c.mpath, c.parent.bck)
 	c.stopCh.Close()
 }
 
 // Finalize the EC restore: report an error to a caller, do housekeeping.
 func (*getJogger) finalizeReq(req *request, err error) {
 	if err != nil {
-		glog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
+		nlog.Errorf("Error restoring %s: %v", req.LIF.Uname, err)
 	}
 	if req.ErrCh != nil {
 		if err != nil {
@@ -191,7 +191,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
 	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		if err != nil {
-			glog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemons, err)
+			nlog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemons, err)
 		}
 		freeObject(reader)
 	}
@@ -216,7 +216,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 
 		w := mm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
-			glog.Errorf("%s failed to read from %s", c.parent.t, node)
+			nlog.Errorf("%s failed to read from %s", c.parent.t, node)
 			w.Free()
 			mm.Free(iReqBuf)
 			w = nil
@@ -231,7 +231,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 		w.Free()
 	}
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
+		nlog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
 	}
 
 	if writer == nil {
@@ -272,7 +272,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 
 		w, err := ctx.lom.CreateFile(tmpFQN)
 		if err != nil {
-			glog.Errorf("Failed to create file: %v", err)
+			nlog.Errorf("Failed to create file: %v", err)
 			break
 		}
 		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
@@ -283,7 +283,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 			// A valid replica is found - break and do close file handle
 			err = cos.FlushClose(w)
 			if err != nil {
-				glog.Errorf("Failed to flush and close: %v", err)
+				nlog.Errorf("Failed to flush and close: %v", err)
 				break
 			}
 			ctx.lom.SetSize(n)
@@ -296,7 +296,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 		debug.AssertNoErr(errRm)
 	}
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
+		nlog.Infof("Found meta -> obj get %s, writer found: %v", ctx.lom, writer != nil)
 	}
 
 	if writer == nil {
@@ -317,7 +317,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	}
 	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
-			glog.Errorf("nested error: save restored replica -> remove metafile: %v", errRm)
+			nlog.Errorf("nested error: save restored replica -> remove metafile: %v", errRm)
 		}
 		return fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
 	}
@@ -346,12 +346,12 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	for k, v := range ctx.nodes {
 		if v.SliceID < 1 || v.SliceID > sliceCnt {
-			glog.Warningf("Node %s has invalid slice ID %d", k, v.SliceID)
+			nlog.Warningf("Node %s has invalid slice ID %d", k, v.SliceID)
 			continue
 		}
 
 		if c.parent.config.FastV(4, cos.SmoduleEC) {
-			glog.Infof("Slice %s[%d] requesting from %s", ctx.lom, v.SliceID, k)
+			nlog.Infof("Slice %s[%d] requesting from %s", ctx.lom, v.SliceID, k)
 		}
 		var writer *slice
 		if ctx.toDisk {
@@ -394,7 +394,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	// Broadcast slice request and wait for targets to respond
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Requesting daemons %v for slices of %s", daemons, ctx.lom)
+		nlog.Infof("Requesting daemons %v for slices of %s", daemons, ctx.lom)
 	}
 	if err := c.parent.sendByDaemonID(daemons, hdr, nil, nil, true); err != nil {
 		freeSlices(ctx.slices)
@@ -402,7 +402,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		return err
 	}
 	if wgSlices.WaitTimeout(c.parent.config.Timeout.SendFile.D()) {
-		glog.Errorf("%s timed out waiting for %s slices", c.parent.t, ctx.lom)
+		nlog.Errorf("%s timed out waiting for %s slices", c.parent.t, ctx.lom)
 	}
 	mm.Free(request)
 	return nil
@@ -473,7 +473,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	for i, sl := range ctx.slices {
 		if sl != nil && sl.writer != nil {
 			if c.parent.config.FastV(4, cos.SmoduleEC) {
-				glog.Infof("Got slice %d size %d (want %d) of %s", i+1, sl.n, sliceSize, ctx.lom)
+				nlog.Infof("Got slice %d size %d (want %d) of %s", i+1, sl.n, sliceSize, ctx.lom)
 			}
 			if sl.n == 0 {
 				freeObject(sl.obj)
@@ -508,7 +508,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 
 		errCksum := cksumSlice(cksmReader, sl.cksum, ctx.lom.ObjName)
 		if errCksum != nil {
-			glog.Errorf("error slice %d: %v", i, errCksum)
+			nlog.Errorf("error slice %d: %v", i, errCksum)
 			err = newSliceWriter(ctx, writers, restored, cksums, cksumType, i, sliceSize)
 			if err != nil {
 				break
@@ -522,7 +522,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 	}
 
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Reconstructing %s", ctx.lom)
+		nlog.Infof("Reconstructing %s", ctx.lom)
 	}
 	stream, err := reedsolomon.NewStreamC(ctx.meta.Data, ctx.meta.Parity, true, true)
 	if err != nil {
@@ -584,7 +584,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 
 	src := io.MultiReader(srcReaders...)
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Saving main object %s to %q", ctx.lom, ctx.lom.FQN)
+		nlog.Infof("Saving main object %s to %q", ctx.lom, ctx.lom.FQN)
 	}
 
 	if version != "" {
@@ -627,7 +627,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	// Generate the list of targets that should have a slice.
 	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), sliceCnt+1)
 	if err != nil {
-		glog.Warningln(err)
+		nlog.Warningln(err)
 		return nil, err
 	}
 	empty := make([]string, 0, len(targets))
@@ -641,7 +641,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 		empty = append(empty, t.ID())
 	}
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Empty nodes for %s are %#v", ctx.lom, empty)
+		nlog.Infof("Empty nodes for %s are %#v", ctx.lom, empty)
 	}
 	return empty, nil
 }
@@ -706,21 +706,21 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		}
 
 		if c.parent.config.FastV(4, cos.SmoduleEC) {
-			glog.Infof("Sending slice %s[%d] to %s", ctx.lom, sliceMeta.SliceID, tid)
+			nlog.Infof("Sending slice %s[%d] to %s", ctx.lom, sliceMeta.SliceID, tid)
 		}
 
 		// Every slice's SGL is freed upon transfer completion
 		cb := func(daemonID string, s *slice) transport.ObjSentCB {
 			return func(hdr transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 				if err != nil {
-					glog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemonID, err)
+					nlog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemonID, err)
 				}
 				s.free()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {
 			remoteErr = err
-			glog.Errorf("%s failed to send slice %s[%d] to %s", c.parent.t, ctx.lom, sliceID, tid)
+			nlog.Errorf("%s failed to send slice %s[%d] to %s", c.parent.t, ctx.lom, sliceID, tid)
 		}
 	}
 
@@ -745,7 +745,7 @@ func (c *getJogger) freeDownloaded(ctx *restoreCtx) {
 // Main function that starts restoring an object that was encoded
 func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Starting EC restore %s", ctx.lom)
+		nlog.Infof("Starting EC restore %s", ctx.lom)
 	}
 
 	// Download all slices from the targets that have sent metadata
@@ -758,7 +758,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	// Restore and save locally the main replica
 	restored, err := c.restoreMainObj(ctx)
 	if err != nil {
-		glog.Errorf("%s failed to restore main object %s: %v", c.parent.t, ctx.lom, err)
+		nlog.Errorf("%s failed to restore main object %s: %v", c.parent.t, ctx.lom, err)
 		c.freeDownloaded(ctx)
 		freeSlices(restored)
 		return err
@@ -768,9 +768,9 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 
 	// main replica is ready to download by a client.
 	if err := c.uploadRestoredSlices(ctx, restored); err != nil {
-		glog.Errorf("Failed to upload restored slices of %s: %v", ctx.lom, err)
+		nlog.Errorf("Failed to upload restored slices of %s: %v", ctx.lom, err)
 	} else if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Slices %s restored successfully", ctx.lom)
+		nlog.Infof("Slices %s restored successfully", ctx.lom)
 	}
 
 	c.freeDownloaded(ctx)
@@ -784,11 +784,11 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 	}
 
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Restoring %s", ctx.lom)
+		nlog.Infof("Restoring %s", ctx.lom)
 	}
 	err := c.requestMeta(ctx)
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		glog.Infof("Found meta for %s: %d, err: %v", ctx.lom, len(ctx.nodes), err)
+		nlog.Infof("Found meta for %s: %d, err: %v", ctx.lom, len(ctx.nodes), err)
 	}
 	if err != nil {
 		return err
@@ -825,9 +825,9 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
 		if err != nil {
 			if mdExists {
-				glog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+				nlog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
 			} else if c.parent.config.FastV(4, cos.SmoduleEC) {
-				glog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+				nlog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
 			}
 			return
 		}
@@ -874,7 +874,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	// Cleanup: delete all metadatas with "obsolete" information
 	for k, v := range ctx.nodes {
 		if v.Generation != gen {
-			glog.Warningf("Target %s[slice id %d] old generation: %v == %v",
+			nlog.Warningf("Target %s[slice id %d] old generation: %v == %v",
 				k, v.SliceID, v.Generation, gen)
 			delete(ctx.nodes, k)
 		}

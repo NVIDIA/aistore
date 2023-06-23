@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -17,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -204,7 +204,7 @@ func (pkr *palive) do() (stopped bool) {
 // the resulting map is then metasync-ed.
 func (pkr *palive) updateSmap() (stopped bool) {
 	if !pkr.inProgress.CAS(0, 1) {
-		glog.Infof("%s: primary keepalive is in progress...", pkr.p)
+		nlog.Infof("%s: primary keepalive is in progress...", pkr.p)
 		return
 	}
 	defer pkr.inProgress.CAS(1, 0)
@@ -248,9 +248,9 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	err := p.owner.smap.modify(ctx)
 	if err != nil {
 		if ctx.msg != nil {
-			glog.Errorf("FATAL: %v", err)
+			nlog.Errorf("FATAL: %v", err)
 		} else {
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		}
 	}
 	return
@@ -283,7 +283,7 @@ func (pkr *palive) _pingRetry(to *meta.Snode) (ok, stopped bool) {
 	if err == nil {
 		return true, false
 	}
-	glog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
+	nlog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
 	ok, stopped = pkr.retry(to)
 	return ok, stopped
 }
@@ -326,7 +326,7 @@ loop:
 				cnt++
 			} else {
 				metaction += unknownDaemonID
-				glog.Warningf("%s not present in the %s (old %s)", sid, clone, ctx.smap)
+				nlog.Warningf("%s not present in the %s (old %s)", sid, clone, ctx.smap)
 			}
 			metaction += ":" + sid + "] "
 
@@ -373,14 +373,14 @@ func (pkr *palive) retry(si *meta.Snode) (ok, stopped bool) {
 			if i == kaNumRetries {
 				smap := pkr.p.owner.smap.get()
 				sname := si.StringEx()
-				glog.Warningf("Failed to keepalive %s after %d attempts - removing %s from the %s",
+				nlog.Warningf("Failed to keepalive %s after %d attempts - removing %s from the %s",
 					sname, i, sname, smap)
 				return false, false
 			}
 			if cos.IsUnreachable(err, status) {
 				continue
 			}
-			glog.Warningf("Unexpected error %v(%d) from %s", err, status, si.StringEx())
+			nlog.Warningf("Unexpected error %v(%d) from %s", err, status, si.StringEx())
 		case sig := <-pkr.controlCh:
 			if sig.msg == kaStopMsg {
 				return false, true
@@ -417,7 +417,7 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 			logErr += waitSelfJoin
 			config := cmn.GCO.Get()
 			if logErr > config.Timeout.Startup.D() {
-				glog.Errorln("startup is taking unusually long time...")
+				nlog.Errorln("startup is taking unusually long time...")
 				logErr = 0
 			}
 		case sig := <-k.controlCh:
@@ -434,7 +434,7 @@ func (k *keepalive) Run() error {
 	if k.waitStatsRunner() {
 		return nil // Stopped while waiting - must exit.
 	}
-	glog.Infof("Starting %s", k.Name())
+	nlog.Infof("Starting %s", k.Name())
 	var (
 		ticker    = time.NewTicker(k.interval)
 		lastCheck int64
@@ -463,7 +463,7 @@ func (k *keepalive) Run() error {
 			case kaErrorMsg:
 				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
 					lastCheck = mono.NanoTime()
-					glog.Infof("triggered by %v", sig.err)
+					nlog.Infof("triggered by %v", sig.err)
 					if stopped := k.k.do(); stopped {
 						ticker.Stop()
 						return nil
@@ -499,7 +499,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 		return
 	}
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
-	glog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
+	nlog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
 
 	var (
 		ticker = time.NewTicker(cmn.KeepaliveRetryDuration())
@@ -525,11 +525,11 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 			}
 			timeout = k.updateTimeoutFor(pid, delta)
 			if err == nil {
-				glog.Infof("%s: OK after %d attempt%s", si, i, cos.Plural(i))
+				nlog.Infof("%s: OK after %d attempt%s", si, i, cos.Plural(i))
 				return
 			}
 			if i == kaNumRetries {
-				glog.Warningf("%s: failed to keepalive with %s after %d attempts", si, meta.Pname(pid), i)
+				nlog.Warningf("%s: failed to keepalive with %s after %d attempts", si, meta.Pname(pid), i)
 				return true
 			}
 			if cos.IsUnreachable(err, status) {
@@ -540,7 +540,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 			}
 			err = fmt.Errorf("%s: unexpected response from %s: %v(%d)", si, meta.Pname(pid), err, status)
 			debug.AssertNoErr(err)
-			glog.Warningln(err)
+			nlog.Warningln(err)
 		case sig := <-k.controlCh:
 			if sig.msg == kaStopMsg {
 				return true
@@ -599,13 +599,13 @@ func (k *keepalive) isTimeToPing(sid string) bool {
 }
 
 func (k *keepalive) Stop(err error) {
-	glog.Infof("Stopping %s, err: %v", k.Name(), err)
+	nlog.Infof("Stopping %s, err: %v", k.Name(), err)
 	k.controlCh <- controlSignal{msg: kaStopMsg}
 	close(k.controlCh)
 }
 
 func (k *keepalive) ctrl(msg string) {
-	glog.Infof("Sending %q on the control channel", msg)
+	nlog.Infof("Sending %q on the control channel", msg)
 	k.controlCh <- controlSignal{msg: msg}
 }
 

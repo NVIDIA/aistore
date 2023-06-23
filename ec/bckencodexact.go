@@ -9,12 +9,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -122,7 +122,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 	if err == nil {
 		r.LomAdd(lom)
 	} else if err != errSkipped {
-		glog.Errorf("Failed to erasure-code %s: %v", lom.Cname(), err)
+		nlog.Errorf("Failed to erasure-code %s: %v", lom.Cname(), err)
 	}
 
 	r.wg.Done()
@@ -134,7 +134,7 @@ func (r *XactBckEncode) afterECObj(lom *cluster.LOM, err error) {
 func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	_, local, err := lom.HrwTarget(r.smap)
 	if err != nil {
-		glog.Errorf("%s: %s", lom, err)
+		nlog.Errorf("%s: %s", lom, err)
 		return nil
 	}
 	// An object replica - skip EC.
@@ -143,7 +143,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 	}
 	mdFQN, _, err := cluster.HrwFQN(lom.Bck().Bucket(), fs.ECMetaType, lom.ObjName)
 	if err != nil {
-		glog.Warningf("metadata FQN generation failed %q: %v", lom, err)
+		nlog.Warningf("metadata FQN generation failed %q: %v", lom, err)
 		return nil
 	}
 	err = cos.Stat(mdFQN)
@@ -152,7 +152,7 @@ func (r *XactBckEncode) bckEncode(lom *cluster.LOM, _ []byte) error {
 		return nil
 	}
 	if !os.IsNotExist(err) {
-		glog.Warningf("failed to stat %q: %v", mdFQN, err)
+		nlog.Warningf("failed to stat %q: %v", mdFQN, err)
 		return nil
 	}
 
