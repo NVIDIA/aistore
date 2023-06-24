@@ -12,26 +12,29 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 // NOTE: compare with cluster/lom_dp.go
 
-type OfflineDP struct {
-	tcbmsg         *apc.TCBMsg
-	comm           Communicator
-	requestTimeout time.Duration
-}
+type (
+	OfflineDP struct {
+		comm           Communicator
+		tcbmsg         *apc.TCBMsg
+		config         *cmn.Config
+		requestTimeout time.Duration
+	}
+)
 
 // interface guard
 var _ cluster.DP = (*OfflineDP)(nil)
 
-func NewOfflineDP(msg *apc.TCBMsg, lsnode *meta.Snode) (*OfflineDP, error) {
+func NewOfflineDP(msg *apc.TCBMsg, lsnode *meta.Snode, config *cmn.Config) (*OfflineDP, error) {
 	comm, err := GetCommunicator(msg.Transform.Name, lsnode)
 	if err != nil {
 		return nil, err
 	}
-	pr := &OfflineDP{tcbmsg: msg, comm: comm}
+	pr := &OfflineDP{comm: comm, tcbmsg: msg, config: config}
 	pr.requestTimeout = time.Duration(msg.Transform.Timeout)
 	return pr, nil
 }
@@ -39,10 +42,10 @@ func NewOfflineDP(msg *apc.TCBMsg, lsnode *meta.Snode) (*OfflineDP, error) {
 // Returns reader resulting from lom ETL transformation.
 func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	var (
-		r   cos.ReadCloseSizer // note: +sizer
-		err error
+		r      cos.ReadCloseSizer // note: +sizer
+		err    error
+		action = "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname()
 	)
-	debug.Assert(dp.tcbmsg != nil)
 	call := func() (int, error) {
 		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err
@@ -50,13 +53,16 @@ func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cos.OAH, erro
 	// TODO: Check if ETL pod is healthy and wait some more if not (yet).
 	err = cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call:      call,
-		Action:    "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname(),
+		Action:    action,
 		SoftErr:   5,
 		HardErr:   2,
 		Sleep:     50 * time.Millisecond,
 		BackOff:   true,
 		Verbosity: cmn.RetryLogQuiet,
 	})
+	if dp.config.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(action, err)
+	}
 	if err != nil {
 		return nil, nil, err
 	}

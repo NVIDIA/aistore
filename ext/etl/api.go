@@ -195,7 +195,6 @@ func ParsePodSpec(errCtx *cmn.ETLErrCtx, spec []byte) (*corev1.Pod, error) {
 	if err != nil {
 		return nil, cmn.NewErrETL(errCtx, "failed to parse pod spec: %v\n%q", err, string(spec))
 	}
-
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		kind := obj.GetObjectKind().GroupVersionKind().Kind

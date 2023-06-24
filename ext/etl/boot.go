@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ type etlBootstrapper struct {
 	// construction
 	t      cluster.Target
 	errCtx *cmn.ETLErrCtx
+	config *cmn.Config
 	msg    InitSpecMsg
 	env    map[string]string
 
@@ -71,6 +73,10 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 	b._updReady()
 
 	b._setPodEnv()
+
+	if b.config.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("prep pod spec: %s, %+v", b.msg.String(), b.errCtx)
+	}
 	return
 }
 
@@ -115,11 +121,17 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 	// it is accessible from target.
 	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
 	if err = b._dial(etlSocketAddr); err != nil {
+		if b.config.FastV(4, cos.SmoduleETL) {
+			nlog.Warningf("failed to dial -> %s: %s, %+v, %s", etlSocketAddr, b.msg.String(), b.errCtx, b.uri)
+		}
 		err = cmn.NewErrETL(b.errCtx, err.Error())
 		return
 	}
 
 	b.uri = "http://" + etlSocketAddr
+	if b.config.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("setup connection -> %s, %+v, %s", b.uri, b.msg.String(), b.errCtx)
+	}
 	return nil
 }
 
@@ -156,7 +168,7 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 	case k8s.Svc:
 		err = client.Create(b.svc)
 	default:
-		panic(entity)
+		cos.AssertMsg(false, "invalid K8s entity :"+entity)
 	}
 
 	if err != nil {
@@ -177,21 +189,25 @@ func (b *etlBootstrapper) waitPodReady() error {
 		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
 
+	if b.config.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("waiting pod %q ready (%+v, %s) ...", b.pod.Name, b.msg.String(), b.errCtx)
+	}
 	err = wait.PollImmediate(time.Second, time.Duration(b.msg.Timeout), func() (ready bool, err error) {
 		ready, err = checkPodReady(client, b.pod.Name)
 		return ready, err
 	})
-	if err != nil {
-		pod, _ := client.Pod(b.pod.Name)
-		if pod == nil {
-			return cmn.NewErrETL(b.errCtx, "%v", err)
-		}
-		err = cmn.NewErrETL(b.errCtx,
-			`%v (pod phase: %q, pod conditions: %s; expected condition: %s)`,
-			err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
-			podConditionToString(corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),
-		)
+	if err == nil {
+		return nil
 	}
+	pod, _ := client.Pod(b.pod.Name)
+	if pod == nil {
+		return cmn.NewErrETL(b.errCtx, "%v", err)
+	}
+	err = cmn.NewErrETL(b.errCtx,
+		`%v (pod phase: %q, pod conditions: %s; expected condition: %s)`,
+		err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
+		podConditionToString(corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),
+	)
 	return err
 }
 

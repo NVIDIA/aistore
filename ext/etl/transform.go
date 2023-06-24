@@ -148,12 +148,19 @@ func (e *Aborter) ListenSmapChanged() {
 
 // (common for both `InitCode` and `InitSpec` flows)
 func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts) error {
-	errCtx, podName, svcName, err := start(t, msg, etlName, opts)
-	if err != nil {
-		nlog.Warningln(cmn.NewErrETL(errCtx, "%s: cleanup after unsuccessful Start", t))
-		if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
-			nlog.Errorln(errV)
+	config := cmn.GCO.Get()
+	errCtx, podName, svcName, err := start(t, msg, etlName, opts, config)
+	if err == nil {
+		if config.FastV(4, cos.SmoduleETL) {
+			nlog.Infof("started etl[%s], msg %s, pod %s", etlName, msg, podName)
 		}
+		return nil
+	}
+	// cleanup
+	s := fmt.Sprintf("failed to start etl[%s], msg %s, err %v - cleaning up..", etlName, msg, err)
+	nlog.Warningln(cmn.NewErrETL(errCtx, s))
+	if errV := cleanupEntities(errCtx, podName, svcName); errV != nil {
+		nlog.Errorln(errV)
 	}
 	return err
 }
@@ -250,11 +257,12 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts) (errCtx *cmn.ETLErrCtx, podName, svcName string, err error) {
+func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (errCtx *cmn.ETLErrCtx,
+	podName, svcName string, err error) {
 	debug.Assert(k8s.NodeName != "") // checked above
 
 	errCtx = &cmn.ETLErrCtx{TID: t.SID(), ETLName: msg.IDX}
-	boot := &etlBootstrapper{errCtx: errCtx, t: t, env: opts.Env}
+	boot := &etlBootstrapper{t: t, errCtx: errCtx, config: config, env: opts.Env}
 	boot.msg = *msg
 
 	// Parse spec template and fill Pod object with necessary fields.
@@ -281,6 +289,9 @@ func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts) (errC
 	if err = boot.waitPodReady(); err != nil {
 		return
 	}
+	if config.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("pod %q is ready, %+v, %s", podName, msg, boot.errCtx)
+	}
 	if err = boot.setupConnection(); err != nil {
 		return
 	}
@@ -289,8 +300,8 @@ func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts) (errC
 
 	// finally, add Communicator to the runtime registry
 	c := makeCommunicator(commArgs{
-		listener:     newAborter(t, msg.IDX),
-		bootstrapper: boot,
+		listener: newAborter(t, msg.IDX),
+		boot:     boot,
 	})
 	if err = reg.add(msg.IDX, c); err != nil {
 		return
