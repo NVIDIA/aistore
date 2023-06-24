@@ -29,9 +29,22 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TODO: destination naming: consider adding (explicit) '--trimprefix', here and elsewhere
+var (
+	archPutUsage = "archive a file, a directory, or multiple files and/or directories as\n" +
+		indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
+		indent1 + "\tBoth APPEND (to an existing shard) and PUT (a new version of the shard) are supported.\n" +
+		indent1 + "\tExamples:\n" +
+		indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append file to a given shard,\n" +
+		indent1 + "\t   optionally, rename it (inside archive) as specified;\n" +
+		indent1 + "\t- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
+		indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
+		indent1 + "\tTips:\n" +
+		indent1 + "\t- use '--dry-run' option if in doubt;\n" +
+		indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket', see --help for details."
+)
 
 var (
+	// flags
 	archCmdsFlags = map[string][]cli.Flag{
 		commandBucket: {
 			templateFlag,
@@ -55,7 +68,7 @@ var (
 			unitsFlag,
 			inclSrcDirNameFlag,
 			skipVerCksumFlag,
-			continueOnErrorFlag, // TODO -- FIXME
+			continueOnErrorFlag, // TODO: revisit
 		),
 		cmdGenShards: {
 			cleanupFlag,
@@ -65,69 +78,109 @@ var (
 		},
 	}
 
+	// archive bucket
+	archBucketCmd = cli.Command{
+		Name:         commandBucket,
+		Usage:        "archive multiple objects from " + bucketSrcArgument + " as " + archExts + "-formatted shard",
+		ArgsUsage:    bucketSrcArgument + " " + dstShardArgument,
+		Flags:        archCmdsFlags[commandBucket],
+		Action:       archMultiObjHandler,
+		BashComplete: putPromApndCompletions,
+	}
+
+	// archive put
+	archPutCmd = cli.Command{
+		Name:         commandPut,
+		Usage:        archPutUsage,
+		ArgsUsage:    putApndArchArgument,
+		Flags:        archCmdsFlags[commandPut],
+		Action:       putApndArchHandler,
+		BashComplete: putPromApndCompletions,
+	}
+
+	// archive get
+	archGetCmd = cli.Command{
+		Name: commandGet,
+		Usage: "get a shard, an archived file, or a range of bytes from the above;\n" +
+			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
+			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-')",
+		ArgsUsage:    getShardArgument,
+		Flags:        objectCmdsFlags[commandGet],
+		Action:       getHandler,
+		BashComplete: bucketCompletions(bcmplop{separator: true}),
+	}
+
+	// archive ls
+	archLsCmd = cli.Command{
+		Name:         cmdList,
+		Usage:        "list archived content (supported formats: " + archFormats + ")",
+		ArgsUsage:    optionalShardArgument,
+		Flags:        rmFlags(bucketCmdsFlags[commandList], listArchFlag),
+		Action:       listArchHandler,
+		BashComplete: bucketCompletions(bcmplop{}),
+	}
+
+	// gen shards
+	genShardsCmd = cli.Command{
+		Name: cmdGenShards,
+		Usage: "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
+			indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
+			indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
+			indent4 + "\t(notice quotation marks in both cases)",
+		ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
+		Flags:     archCmdsFlags[cmdGenShards],
+		Action:    genShardsHandler,
+	}
+
+	// main `ais archive`
 	archCmd = cli.Command{
-		Name:  commandArch,
-		Usage: "Archive multiple objects from a given bucket; archive local files and directories; list archived content",
+		Name:   commandArch,
+		Usage:  "Archive multiple objects from a given bucket; archive local files and directories; list archived content",
+		Action: archUsageHandler,
 		Subcommands: []cli.Command{
-			{
-				Name:         commandBucket,
-				Usage:        "archive multiple objects from " + bucketSrcArgument + " as " + archExts + "-formatted shard",
-				ArgsUsage:    bucketSrcArgument + " " + dstShardArgument,
-				Flags:        archCmdsFlags[commandBucket],
-				Action:       archMultiObjHandler,
-				BashComplete: putPromApndCompletions,
-			},
-			{
-				Name: commandPut,
-				Usage: "archive a file, a directory, or multiple files and/or directories as\n" +
-					indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
-					indent1 + "\tBoth APPEND (to an existing shard) and PUT (new version of the shard) variants are supported.\n" +
-					indent1 + "\tExamples:\n" +
-					indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append a file to a given shard and name it as specified;\n" +
-					indent1 + "\t- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
-					indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
-					indent1 + "\tTips:\n" +
-					indent1 + "\t- use '--dry-run' option if in doubt;\n" +
-					indent1 + "\t- to archive objects from a local or remote bucket, run 'ais archive bucket', see --help for details.",
-				ArgsUsage:    putApndArchArgument,
-				Flags:        archCmdsFlags[commandPut],
-				Action:       putApndArchHandler,
-				BashComplete: putPromApndCompletions,
-			},
-			{
-				Name: commandGet,
-				Usage: "get a shard, an archived file, or a range of bytes from the above;\n" +
-					indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
-					indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-')",
-				ArgsUsage:    getShardArgument,
-				Flags:        objectCmdsFlags[commandGet],
-				Action:       getHandler,
-				BashComplete: bucketCompletions(bcmplop{separator: true}),
-			},
-			{
-				Name:         cmdList,
-				Usage:        "list archived content (supported formats: " + archFormats + ")",
-				ArgsUsage:    optionalShardArgument,
-				Flags:        rmFlags(bucketCmdsFlags[commandList], listArchFlag),
-				Action:       listArchHandler,
-				BashComplete: bucketCompletions(bcmplop{}),
-			},
-			{
-				Name: cmdGenShards,
-				Usage: "generate random " + archExts + "-formatted objects (\"shards\"), e.g.:\n" +
-					indent4 + "\t- gen-shards 'ais://bucket1/shard-{001..999}.tar' - write 999 random shards (default sizes) to ais://bucket1\n" +
-					indent4 + "\t- gen-shards \"gs://bucket2/shard-{01..20..2}.tgz\" - 10 random gzipped tarfiles to Cloud bucket\n" +
-					indent4 + "\t(notice quotation marks in both cases)",
-				ArgsUsage: `"BUCKET/TEMPLATE.EXT"`,
-				Flags:     archCmdsFlags[cmdGenShards],
-				Action:    genShardsHandler,
-			},
+			archBucketCmd,
+			archPutCmd,
+			archGetCmd,
+			archLsCmd,
+			genShardsCmd,
 		},
 	}
 )
 
+func archUsageHandler(c *cli.Context) error {
+	{
+		// parse for put/append
+		a := archput{}
+		if err := a.parse(c); err == nil {
+			msg := "missing " + commandArch + " subcommand"
+			hint := strings.Join(findCmdMultiKeyAlt(commandArch, commandPut), " ")
+			if c.NArg() > 0 {
+				hint += " " + strings.Join(c.Args(), " ")
+			}
+			msg += " (did you mean: '" + hint + "')"
+			return errors.New(msg)
+		}
+	}
+	{
+		// parse for x-archive multi-object
+		src, dst := c.Args().Get(0), c.Args().Get(1)
+		if _, _, err := parseBckObjURI(c, src, true); err == nil {
+			if _, _, err := parseBckObjURI(c, dst, true); err == nil {
+				msg := "missing " + commandArch + " subcommand"
+				hint := strings.Join(findCmdMultiKeyAlt(commandArch, commandBucket), " ")
+				if c.NArg() > 0 {
+					hint += " " + strings.Join(c.Args(), " ")
+				}
+				msg += " (did you mean: '" + hint + "')"
+				return errors.New(msg)
+			}
+		}
+	}
+	return fmt.Errorf("unrecognized or misplaced option '%+v', see '--help' for details", c.Args())
+}
+
 func archMultiObjHandler(c *cli.Context) error {
-	// parse for put/append and re-route if need be
+	// ditto
 	{
 		a := archput{}
 		if err := a.parse(c); err == nil {
