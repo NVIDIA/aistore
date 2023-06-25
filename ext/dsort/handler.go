@@ -783,7 +783,7 @@ func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bo
 }
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
-	items, err := cmn.MatchItems(r.URL.Path, itemsAfter, true, items)
+	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, true, items)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return nil, err

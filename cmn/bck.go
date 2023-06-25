@@ -266,6 +266,22 @@ func (b *Bck) ValidateName() (err error) {
 	return
 }
 
+// related, inlined
+func ValidateObjname(s string) error {
+	if !strings.Contains(s, "../") {
+		return nil
+	}
+	return fmt.Errorf("invalid object name %q", s)
+}
+
+// ditto
+func ValidatePrefix(s string) error {
+	if !strings.Contains(s, "../") {
+		return nil
+	}
+	return fmt.Errorf("invalid prefix %q", s)
+}
+
 // canonical name, with or without object
 func (b *Bck) Cname(objname string) (s string) {
 	sch := apc.ToScheme(b.Provider)

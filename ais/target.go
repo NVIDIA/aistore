@@ -802,13 +802,17 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
+	objName := apireq.items[1]
+	if !t.isValidObjname(w, r, objName) {
+		return
+	}
 	if isRedirect(apireq.query) == "" {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected", t.si, r.Method)
 		return
 	}
 
 	evict := msg.Action == apc.ActEvictObjects
-	lom := cluster.AllocLOM(apireq.items[1])
+	lom := cluster.AllocLOM(objName)
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		cluster.FreeLOM(lom)

@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	iofs "io/fs"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,8 +43,6 @@ const (
 
 	// (see ErrFailedTo)
 	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
-
-	EmptyProtoSchemeForURL = "empty protocol scheme for URL path"
 
 	BadSmapPrefix = "[bad cluster map]"
 )
@@ -186,9 +184,12 @@ type (
 	}
 )
 
-var thisNodeName string
+var (
+	thisNodeName string
+	cleanPathErr func(path string) string
+)
 
-func SetNodeName(sname string) { thisNodeName = sname }
+func InitErrs(a string, b func(path string) string) { thisNodeName, cleanPathErr = a, b }
 
 var (
 	ErrSkip             = errors.New("skip")
@@ -210,6 +211,9 @@ func NewErrFailedTo(actor any, action string, what any, err error, errCode ...in
 	if e, ok := err.(*ErrFailedTo); ok {
 		return e
 	}
+
+	_clean(err)
+
 	e := &ErrFailedTo{actor: actor, action: action, what: what, err: err, status: 0}
 	if actor == nil {
 		e.actor = thisNodeName
@@ -515,6 +519,7 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 	if e, ok := err.(*ErrAborted); ok {
 		return e
 	}
+	_clean(err)
 	return &ErrAborted{what: what, ctx: ctx, err: err, timestamp: time.Now()}
 }
 
@@ -737,7 +742,7 @@ func IsObjNotExist(err error) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	return errors.Is(err, iofs.ErrNotExist) // when wrapped
+	return errors.Is(err, fs.ErrNotExist) // when wrapped
 }
 
 // usage: everywhere where applicable (directories, xactions, nodes, ...)
@@ -746,14 +751,14 @@ func IsNotExist(err error) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	if errors.Is(err, iofs.ErrNotExist) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return true
 	}
 	return cos.IsErrNotFound(err)
 }
 
 func IsFileAlreadyClosed(err error) bool {
-	return errors.Is(err, iofs.ErrClosed)
+	return errors.Is(err, fs.ErrClosed)
 }
 
 func IsErrBucketLevel(err error) bool { return IsErrBucketNought(err) }
@@ -787,6 +792,7 @@ func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 			e.TypeCode = tcode[i+1:]
 		}
 	}
+	_clean(err)
 	e.Message = err.Error()
 	if r != nil {
 		e.Method, e.URLPath = r.Method, r.URL.Path
@@ -794,6 +800,16 @@ func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 		e.Caller = r.Header.Get(apc.HdrCallerName)
 	}
 	e.Node = thisNodeName
+}
+
+func _clean(err error) {
+	var pathErr *fs.PathError
+	if cleanPathErr != nil && errors.As(err, &pathErr) {
+		if npath := cleanPathErr(pathErr.Path); npath != "" {
+			// cleanup fs.PathErr
+			pathErr.Path = npath
+		}
+	}
 }
 
 func (e *ErrHTTP) Error() (s string) {

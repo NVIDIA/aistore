@@ -171,7 +171,7 @@ func (p *proxy) tokenHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.apiItems(w, r, 0, false, apc.URLPathTokens.L); err != nil {
+	if _, err := p.parseURL(w, r, 0, false, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	cksum := cos.NewCksumHash(cos.ChecksumSHA256)
@@ -188,7 +188,7 @@ func (p *proxy) validateSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.apiItems(w, r, 0, false, apc.URLPathTokens.L); err != nil {
+	if _, err := p.parseURL(w, r, 0, false, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "revoke token") {

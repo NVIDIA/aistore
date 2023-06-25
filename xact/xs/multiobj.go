@@ -107,6 +107,10 @@ func (r *lriterator) iterateRange(wi lrwi, smap *meta.Smap) error {
 	if err != nil {
 		return err
 	}
+	if err := cmn.ValidatePrefix(pt.Prefix); err != nil {
+		nlog.Errorln(err)
+		return err
+	}
 	if len(pt.Ranges) != 0 {
 		return r.iterateTemplate(smap, &pt, wi)
 	}
@@ -130,6 +134,9 @@ func (r *lriterator) iterateTemplate(smap *meta.Smap, pt *cos.ParsedTemplate, wi
 }
 
 func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) error {
+	if err := cmn.ValidatePrefix(prefix); err != nil {
+		return err
+	}
 	var (
 		err     error
 		lst     *cmn.LsoResult

@@ -26,7 +26,7 @@ import (
 
 // verb /v1/xactions
 func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
-	if _, err := t.apiItems(w, r, 0, true, apc.URLPathXactions.L); err != nil {
+	if _, err := t.parseURL(w, r, 0, true, apc.URLPathXactions.L); err != nil {
 		return
 	}
 	switch r.Method {

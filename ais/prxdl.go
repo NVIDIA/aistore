@@ -56,7 +56,7 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodDelete {
-		items, err := cmn.MatchItems(r.URL.Path, 1, false, apc.URLPathDownload.L)
+		items, err := cmn.ParseURL(r.URL.Path, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -81,7 +81,7 @@ func (p *proxy) httpdladm(w http.ResponseWriter, r *http.Request) {
 
 // POST /v1/download
 func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+	if _, err := p.parseURL(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 		return
 	}
 

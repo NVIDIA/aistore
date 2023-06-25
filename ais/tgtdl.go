@@ -37,7 +37,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPost:
-		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+		if _, err := t.parseURL(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
 		var (
@@ -100,7 +100,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		response, statusCode, respErr = xdl.Download(dljob)
 
 	case http.MethodGet:
-		if _, err := t.apiItems(w, r, 0, false, apc.URLPathDownload.L); err != nil {
+		if _, err := t.parseURL(w, r, 0, false, apc.URLPathDownload.L); err != nil {
 			return
 		}
 		msg := &dload.AdminBody{}
@@ -136,7 +136,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodDelete:
-		items, err := t.apiItems(w, r, 1, false, apc.URLPathDownload.L)
+		items, err := t.parseURL(w, r, 1, false, apc.URLPathDownload.L)
 		if err != nil {
 			return
 		}

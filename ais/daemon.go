@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/sys"
@@ -210,7 +211,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 		title := "Node " + p.si.Name() + ", " + loghdr + "\n"
 		nlog.Infoln(title)
 		nlog.SetTitle(title)
-		cmn.SetNodeName(p.si.Name())
+		cmn.InitErrs(p.si.Name(), nil)
 		return p
 	}
 
@@ -223,7 +224,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	title := "Node " + t.si.Name() + ", " + loghdr + "\n"
 	nlog.Infoln(title)
 	nlog.SetTitle(title)
-	cmn.SetNodeName(t.si.Name())
+	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
 
 	return t
 }

@@ -36,7 +36,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Fix the hack, https://github.com/tensorflow/tensorflow/issues/41798
 	cos.ReparseQuery(r)
-	apiItems, err := p.apiItems(w, r, 0, true, apc.URLPathS3.L)
+	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
 		return
 	}

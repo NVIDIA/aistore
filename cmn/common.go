@@ -69,6 +69,9 @@ func PropToHeader(prop string) string {
 
 // promoted destination object's name
 func PromotedObjDstName(objfqn, dirfqn, givenObjName string) (objName string, err error) {
+	if err = ValidateObjname(givenObjName); err != nil {
+		return
+	}
 	var baseName string
 	givenObjName = strings.TrimRightFunc(givenObjName, func(r rune) bool {
 		return r == filepath.Separator

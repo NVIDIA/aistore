@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -86,13 +86,15 @@ func MakeRangeHdr(start, length int64) (hdr http.Header) {
 	return
 }
 
-// MatchItems splits URL path at "/" and matches resulting items against the specified, if any.
+// ParseURL splits URL path at "/" and matches resulting items against the specified, if any.
 // - splitAfter == true:  strings.Split() the entire path;
 // - splitAfter == false: strings.SplitN(len(items)+itemsAfter)
 // Returns all items that follow the specified `items`.
-func MatchItems(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
-	var split []string
-	escaped := html.EscapeString(unescapedPath)
+func ParseURL(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
+	var (
+		split   []string
+		escaped = html.EscapeString(unescapedPath)
+	)
 	if len(escaped) > 0 && escaped[0] == '/' {
 		escaped = escaped[1:] // remove leading slash
 	}
@@ -108,24 +110,24 @@ func MatchItems(unescapedPath string, itemsAfter int, splitAfter bool, items []s
 		}
 	}
 	if len(apiItems) < len(items) {
-		return nil, fmt.Errorf("expected %d items, but got: %d", len(items), len(apiItems))
+		return nil, fmt.Errorf("invalid URL path '%s': expected %d items, got %d",
+			unescapedPath, len(items), len(apiItems))
 	}
-
 	for idx, item := range items {
 		if item != apiItems[idx] {
-			return nil, fmt.Errorf("expected %s in path, but got: %s", item, apiItems[idx])
+			return nil, fmt.Errorf("invalid URL '%s': expected '%s', got '%s'",
+				unescapedPath, item, apiItems[idx])
 		}
 	}
-
 	apiItems = apiItems[len(items):]
 	if len(apiItems) < itemsAfter {
-		return nil, fmt.Errorf("URL path is too short: got %d items, expected %d",
-			len(apiItems)+len(items), itemsAfter+len(items))
-	} else if len(apiItems) > itemsAfter && !splitAfter {
-		return nil, fmt.Errorf("URL path is too long: got %d items, expected %d",
-			len(apiItems)+len(items), itemsAfter+len(items))
+		return nil, fmt.Errorf("URL path '%s' is too short: expected %d items, got %d",
+			unescapedPath, itemsAfter+len(items), len(apiItems)+len(items))
 	}
-
+	if len(apiItems) > itemsAfter && !splitAfter {
+		return nil, fmt.Errorf("URL path '%s' is too long: expected %d items, got %d",
+			unescapedPath, itemsAfter+len(items), len(apiItems)+len(items))
+	}
 	return apiItems, nil
 }
 

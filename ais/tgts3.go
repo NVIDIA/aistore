@@ -25,7 +25,7 @@ import (
 
 // [METHOD] /s3
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathS3.L)
+	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathS3.L)
 	if err != nil {
 		return
 	}

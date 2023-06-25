@@ -159,3 +159,11 @@ func Path2Mpath(path string) (found *Mountpath, err error) {
 	found, _, err = FQN2Mpath(filepath.Clean(path))
 	return
 }
+
+func CleanPathErr(fqn string) string {
+	parsed, err := ParseFQN(fqn)
+	if err != nil {
+		return ""
+	}
+	return parsed.Bck.Cname(parsed.ObjName)
+}

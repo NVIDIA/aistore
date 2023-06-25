@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -32,6 +32,15 @@ func newServer(mgr *mgr) *hserv {
 	srv.mux = http.NewServeMux()
 
 	return srv
+}
+
+func parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
+	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, true, items)
+	if err != nil {
+		cmn.WriteErr(w, r, err)
+		return nil, err
+	}
+	return items, err
 }
 
 // Run public server to manage users and generate tokens
@@ -114,7 +123,7 @@ func (h *hserv) clusterHandler(w http.ResponseWriter, r *http.Request) {
 
 // Deletes existing token, h.k.h log out
 func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, apc.URLPathTokens.L); err != nil {
+	if _, err := parseURL(w, r, 0, apc.URLPathTokens.L); err != nil {
 		return
 	}
 	msg := &authn.TokenMsg{}
@@ -134,7 +143,7 @@ func (h *hserv) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -148,7 +157,7 @@ func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpUserPost(w http.ResponseWriter, r *http.Request) {
-	if apiItems, err := checkRESTItems(w, r, 0, apc.URLPathUsers.L); err != nil {
+	if apiItems, err := parseURL(w, r, 0, apc.URLPathUsers.L); err != nil {
 		return
 	} else if len(apiItems) == 0 {
 		h.userAdd(w, r)
@@ -159,7 +168,7 @@ func (h *hserv) httpUserPost(w http.ResponseWriter, r *http.Request) {
 
 // Updates user credentials
 func (h *hserv) httpUserPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -204,7 +213,7 @@ func (h *hserv) userAdd(w http.ResponseWriter, r *http.Request) {
 
 // Returns list of users (without superusers)
 func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
-	items, err := checkRESTItems(w, r, 0, apc.URLPathUsers.L)
+	items, err := parseURL(w, r, 0, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -277,7 +286,7 @@ func validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 // token is returned
 func (h *hserv) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathUsers.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathUsers.L)
 	if err != nil {
 		return
 	}
@@ -322,7 +331,7 @@ func writeBytes(w http.ResponseWriter, jsbytes []byte, tag string) {
 }
 
 func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L); err != nil {
+	if _, err := parseURL(w, r, 0, apc.URLPathClusters.L); err != nil {
 		return
 	}
 	if err := validateAdminPerms(w, r); err != nil {
@@ -338,7 +347,7 @@ func (h *hserv) httpSrvPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathClusters.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -356,7 +365,7 @@ func (h *hserv) httpSrvPut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L)
+	apiItems, err := parseURL(w, r, 0, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -378,7 +387,7 @@ func (h *hserv) httpSrvDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpSrvGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathClusters.L)
+	apiItems, err := parseURL(w, r, 0, apc.URLPathClusters.L)
 	if err != nil {
 		return
 	}
@@ -424,7 +433,7 @@ func (h *hserv) roleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 0, apc.URLPathRoles.L)
+	apiItems, err := parseURL(w, r, 0, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -462,7 +471,7 @@ func (h *hserv) httpRoleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpRoleDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathRoles.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -477,7 +486,7 @@ func (h *hserv) httpRoleDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpRolePost(w http.ResponseWriter, r *http.Request) {
-	_, err := checkRESTItems(w, r, 0, apc.URLPathRoles.L)
+	_, err := parseURL(w, r, 0, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}
@@ -494,7 +503,7 @@ func (h *hserv) httpRolePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpRolePut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathRoles.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathRoles.L)
 	if err != nil {
 		return
 	}

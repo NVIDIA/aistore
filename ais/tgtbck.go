@@ -36,7 +36,7 @@ import (
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	var bckName string
-	apiItems, err := t.apiItems(w, r, 0, true, apc.URLPathBuckets.L)
+	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
 	}
@@ -395,6 +395,11 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		if err := cos.MorphMarshal(msg.Value, lrMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
+		}
+		for _, name := range lrMsg.ObjNames {
+			if !t.isValidObjname(w, r, name) {
+				return
+			}
 		}
 		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, apireq.bck, lrMsg)
 		if rns.Err != nil {

@@ -21,6 +21,7 @@ var (
 		"target_stats": 0,
 		"proxy_stats":  0,
 		"common_stats": 0,
+		"err":          0,
 	}
 	sevText = []string{sevInfo: "INFO", sevErr: "ERROR"}
 )

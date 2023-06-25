@@ -89,7 +89,7 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 			herr.Message = herr.StringEx()
 		}
 		msg = herr.Message
-		unreachable = cos.IsUnreachable(err, err.Status) || strings.Contains(msg, cmn.EmptyProtoSchemeForURL)
+		unreachable = cos.IsUnreachable(err, err.Status)
 	case *errUsage, *errAdditionalInfo:
 		return "", false
 	default:

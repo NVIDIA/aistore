@@ -102,7 +102,7 @@ func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
-	apireq.items, err = h.apiItems(w, r, apireq.after, false, apireq.prefix)
+	apireq.items, err = h.parseURL(w, r, apireq.after, false, apireq.prefix)
 	if err != nil {
 		return
 	}
@@ -164,7 +164,7 @@ func (h *htrun) cluStartedWithRetry() bool {
 	time.Sleep(time.Second)
 	clutime := h.startup.cluster.Load()
 	if clutime == 0 {
-		nlog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up", h.si))
+		nlog.ErrorDepth(1, fmt.Sprintf("%s: cluster is starting up", h))
 	}
 	return clutime > 0
 }
@@ -451,7 +451,7 @@ func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *
 		toUpdate  = &cmn.ConfigToUpdate{}
 	)
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
-		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h.si, msg.Action, msg.Value, err)
+		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h, msg.Action, msg.Value, err)
 		return
 	}
 	if err := h.owner.config.setDaemonConfig(toUpdate, transient); err != nil {
@@ -740,7 +740,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	}
 	msg.NodeID = h.si.ID()
 	if len(nodes) == 0 {
-		nlog.Errorf("%s: have no nodes to send notification %s", h.si, &msg)
+		nlog.Errorf("%s: have no nodes to send [%s] notification", h, &msg)
 		return
 	}
 	path := apc.URLPathNotifs.Join(upon)
@@ -754,9 +754,9 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	freeBcArgs(args)
 }
 
-///////////////
-// broadcast //
-///////////////
+//
+// intra-cluster comm
+//
 
 // bcastGroup broadcasts a message to a specific group of nodes: targets, proxies, all.
 func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
@@ -888,14 +888,14 @@ func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, args *bcas
 	freeBcastRes(results)
 }
 
-//////////////////////////////////
-// HTTP request parsing helpers //
-//////////////////////////////////
+//
+// parsing helpers
+//
 
 // remove validated fields and return the resulting slice
-func (h *htrun) apiItems(w http.ResponseWriter, r *http.Request, itemsAfter int,
+func (h *htrun) parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int,
 	splitAfter bool, items []string) ([]string, error) {
-	items, err := cmn.MatchItems(r.URL.Path, itemsAfter, splitAfter, items)
+	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, splitAfter, items)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return nil, err
@@ -1030,9 +1030,9 @@ func _checkAction(msg *apc.ActMsg, expectedActions ...string) (err error) {
 	return
 }
 
-///////////
-// htrun //
-///////////
+//
+// common cplane cont-d
+//
 
 func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Values, htext htext) {
 	var (
@@ -1180,14 +1180,14 @@ func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string,
 
 func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Scheme != "" {
-		h.writeErrf(w, r, "%s: invalid URL path %q", h.si, r.URL.Path)
+		h.writeErrf(w, r, "request '%s %s://%s': invalid URL path", r.Method, r.URL.Scheme, r.URL.Path)
 		return
 	}
 	// ignore GET /favicon.ico by Browsers
 	if r.URL.Path == "/favicon.ico" || r.URL.Path == "favicon.ico" {
 		return
 	}
-	h.writeErrf(w, r, "%s: %s %q", h.si, cmn.EmptyProtoSchemeForURL, r.URL.Path)
+	h.writeErrf(w, r, "invalid request: '%s %s'", r.Method, r.RequestURI)
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {
@@ -1202,6 +1202,15 @@ func (h *htrun) writeErrActf(w http.ResponseWriter, r *http.Request, action stri
 	err := cmn.InitErrHTTP(r, fmt.Errorf("invalid action %q: %s", action, detail), 0)
 	h.writeErr(w, r, err)
 	cmn.FreeHterr(err)
+}
+
+// also, validatePrefix
+func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name string) bool {
+	if err := cmn.ValidateObjname(name); err != nil {
+		h.writeErr(w, r, err)
+		return false
+	}
+	return true
 }
 
 //
@@ -1231,7 +1240,7 @@ func (h *htrun) Health(si *meta.Snode, timeout time.Duration, query url.Values) 
 // - consider adding max-ver BMD bit here as well (TODO)
 func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num confirmations*/) {
 	if !smap.isValid() {
-		nlog.Errorf("%s: cannot execute with invalid %s", h.si, smap)
+		nlog.Errorf("%s: cannot execute with invalid %s", h, smap)
 		return nil, 0
 	}
 	c := getMaxCii{
@@ -1311,12 +1320,12 @@ func (h *htrun) extractConfig(payload msPayload, caller string) (newConfig *glob
 	confValue := payload[revsConfTag]
 	reader := bytes.NewBuffer(confValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newConfig, newConfig.JspOpts(), "extractConfig"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Config", cos.BHead(confValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Config", cos.BHead(confValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsConfTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1341,12 +1350,12 @@ func (h *htrun) extractEtlMD(payload msPayload, caller string) (newMD *etlMD, ms
 	etlMDValue := payload[revsEtlMDTag]
 	reader := bytes.NewBuffer(etlMDValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newMD, newMD.JspOpts(), "extractEtlMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new EtlMD", cos.BHead(etlMDValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new EtlMD", cos.BHead(etlMDValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsEtlMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1371,12 +1380,12 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 	smapValue := payload[revsSmapTag]
 	reader := bytes.NewBuffer(smapValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newSmap, newSmap.JspOpts(), "extractSmap"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new Smap", cos.BHead(smapValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new Smap", cos.BHead(smapValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsSmapTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1398,7 +1407,7 @@ func (h *htrun) extractSmap(payload msPayload, caller string, skipValidation boo
 		return
 	}
 	if !newSmap.isPresent(h.si) {
-		err = fmt.Errorf("%s: not finding ourselves in %s", h.si, newSmap)
+		err = fmt.Errorf("%s: not finding ourselves in %s", h, newSmap)
 		return
 	}
 	if err = smap.validateUUID(h.si, newSmap, caller, 50 /* ciError */); err != nil {
@@ -1427,12 +1436,12 @@ func (h *htrun) extractRMD(payload msPayload, caller string) (newRMD *rebMD, msg
 	newRMD, msg = &rebMD{}, &aisMsg{}
 	rmdValue := payload[revsRMDTag]
 	if err1 := jsoniter.Unmarshal(rmdValue, newRMD); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new RMD", cos.BHead(rmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new RMD", cos.BHead(rmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsRMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1457,12 +1466,12 @@ func (h *htrun) extractBMD(payload msPayload, caller string) (newBMD *bucketMD, 
 	bmdValue := payload[revsBMDTag]
 	reader := bytes.NewBuffer(bmdValue)
 	if _, err1 := jsp.Decode(io.NopCloser(reader), newBMD, newBMD.JspOpts(), "extractBMD"); err1 != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "new BMD", cos.BHead(bmdValue), err1)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "new BMD", cos.BHead(bmdValue), err1)
 		return
 	}
 	if msgValue, ok := payload[revsBMDTag+revsActionTag]; ok {
 		if err1 := jsoniter.Unmarshal(msgValue, msg); err1 != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err1)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err1)
 			return
 		}
 	}
@@ -1491,7 +1500,7 @@ func (h *htrun) receiveSmap(newSmap *smapX, msg *aisMsg, payload msPayload, call
 	logmsync(smap.Version, newSmap, msg, caller, newSmap.StringEx())
 
 	if !newSmap.isPresent(h.si) {
-		return fmt.Errorf("%s: not finding self in the new %s", h.si, newSmap)
+		return fmt.Errorf("%s: not finding self in the new %s", h, newSmap)
 	}
 	return h.owner.smap.synchronize(h.si, newSmap, payload, cb)
 }
@@ -1554,13 +1563,13 @@ func (h *htrun) extractRevokedTokenList(payload msPayload, caller string) (*toke
 	}
 	if msgValue, ok := payload[revsTokenTag+revsActionTag]; ok {
 		if err := jsoniter.Unmarshal(msgValue, &msg); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "action message", cos.BHead(msgValue), err)
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "action message", cos.BHead(msgValue), err)
 			return nil, err
 		}
 	}
 	tokenList := &tokenList{}
 	if err := jsoniter.Unmarshal(bytes, tokenList); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, h.si, "blocked token list", cos.BHead(bytes), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, h, "blocked token list", cos.BHead(bytes), err)
 		return nil, err
 	}
 	nlog.Infof("extract token list from %q (count: %d, action: %q, uuid: %q)", caller,
@@ -1714,7 +1723,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 
 func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid string, status int, err error) {
 	if daemon.stopping.Load() {
-		err = fmt.Errorf("%s is stopping", h.si)
+		err = fmt.Errorf("%s is stopping", h)
 		return
 	}
 	primaryURL, psi := h.getPrimaryURLAndSI(smap)
@@ -1798,7 +1807,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			}
 		}
 		if total > config.Timeout.Startup.D() {
-			nlog.Errorf("%s: cluster startup is taking unusually long time...", h.si)
+			nlog.Errorf("%s: cluster startup is taking unusually long time...", h)
 		}
 	}
 }
@@ -1869,7 +1878,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		erP        error
 	)
 	if ok := callerID != "" && callerName != ""; !ok {
-		return fmt.Errorf("%s: expected %s request", h.si, cmn.NetIntraControl)
+		return fmt.Errorf("%s: expected %s request", h, cmn.NetIntraControl)
 	}
 	if !smap.isValid() {
 		return
@@ -1888,7 +1897,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		// we still trust the request when the sender's Smap is more current
 		if callerVer > smap.version() {
 			if h.ClusterStarted() {
-				nlog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h.si, smap, callerSver, callerName)
+				nlog.Errorf("%s: %s < Smap(v%s) from %s - proceeding anyway...", h, smap, callerSver, callerName)
 			}
 			runtime.Gosched()
 			return
@@ -1899,9 +1908,9 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 			// assume request from a newly joined node and proceed
 			return nil
 		}
-		return fmt.Errorf("%s: expected %s from a valid node, %s", h.si, cmn.NetIntraControl, smap)
+		return fmt.Errorf("%s: expected %s from a valid node, %s", h, cmn.NetIntraControl, smap)
 	}
-	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h.si, cmn.NetIntraControl, caller, smap)
+	return fmt.Errorf("%s: expected %s from primary (and not %s), %s", h, cmn.NetIntraControl, caller, smap)
 }
 
 func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyPrimary bool) (isIntra bool) {
@@ -1919,7 +1928,7 @@ func (h *htrun) ensureIntraControl(w http.ResponseWriter, r *http.Request, onlyP
 	if srvAddr == intraAddr {
 		return true
 	}
-	h.writeErrf(w, r, "%s: expected %s request", h.si, cmn.NetIntraControl)
+	h.writeErrf(w, r, "%s: expected %s request", h, cmn.NetIntraControl)
 	return
 }
 
