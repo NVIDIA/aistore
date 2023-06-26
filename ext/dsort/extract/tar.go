@@ -1,4 +1,5 @@
-// Package extract provides provides functions for working with compressed files
+// Package extract provides ExtractShard and associated methods for dsort
+// across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -18,14 +19,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var (
-	// Predefined padding buffer (zero-initialized).
-	padBuf [archive.TarBlockSize]byte
-
-	// interface guard
-	_ Creator = (*tarExtractCreator)(nil)
-)
-
 type (
 	tarExtractCreator struct {
 		t cluster.Target
@@ -42,6 +35,18 @@ type (
 		tarWriter    *tar.Writer
 	}
 )
+
+var (
+	// Predefined padding buffer (zero-initialized).
+	padBuf [archive.TarBlockSize]byte
+
+	// interface guard
+	_ Creator = (*tarExtractCreator)(nil)
+)
+
+func NewTarExtractCreator(t cluster.Target) Creator {
+	return &tarExtractCreator{t: t}
+}
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
@@ -122,7 +127,8 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
-		} else if header.Format == tar.FormatPAX {
+		}
+		if header.Format == tar.FormatPAX {
 			// When dealing with `tar.FormatPAX` we also need to take into
 			// consideration the `tar.TypeXHeader` that comes before the actual header.
 			// Together it looks like this: [x-header][pax-records][pax-header][pax-file].
@@ -165,10 +171,6 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 		// .tar format pads all block to 512 bytes
 		offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize)
 	}
-}
-
-func NewTarExtractCreator(t cluster.Target) Creator {
-	return &tarExtractCreator{t: t}
 }
 
 // CreateShard creates a new shard locally based on the Shard.

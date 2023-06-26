@@ -1,6 +1,7 @@
-// Package extract provides provides functions for working with compressed files
+// Package extract provides ExtractShard and associated methods for dsort
+// across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
@@ -15,9 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
-
-// interface guard
-var _ Creator = (*zipExtractCreator)(nil)
 
 type (
 	zipExtractCreator struct {
@@ -43,6 +41,13 @@ type (
 		writer io.Writer
 	}
 )
+
+// interface guard
+var _ Creator = (*zipExtractCreator)(nil)
+
+func NewZipExtractCreator(t cluster.Target) Creator {
+	return &zipExtractCreator{t: t}
+}
 
 func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
@@ -157,10 +162,6 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 	}
 
 	return extractedSize, extractedCount, nil
-}
-
-func NewZipExtractCreator(t cluster.Target) Creator {
-	return &zipExtractCreator{t: t}
 }
 
 // CreateShard creates a new shard locally based on the Shard.

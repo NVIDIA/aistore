@@ -482,6 +482,8 @@ func (m *Manager) setExtractCreator() (err error) {
 		extractCreator = extract.NewTargzExtractCreator(m.ctx.t)
 	case archive.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
+	case archive.ExtTarLz4:
+		extractCreator = extract.NewTarlz4ExtractCreator(m.ctx.t)
 	default:
 		debug.Assertf(false, "unknown extension %s", m.rs.Extension)
 	}

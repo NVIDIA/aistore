@@ -17,18 +17,23 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
+// usage boils down to a) constructing (`NewReader`) and b) iterating (`Range`) - that's all
+// (all supported formats)
 type (
 	ReadCB func(filename string, size int64, reader io.ReadCloser, hdr any) (bool, error)
 
 	Reader interface {
-		// non-empty filename to facilitate a simple-single selection
+		// pass non-empty filename to facilitate a simple/single selection
 		// (generalize as a multi-selection callback? no need yet...)
 		Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error)
 
 		// private
 		init(fh io.Reader) error
 	}
+)
 
+// private implementation
+type (
 	baseR struct {
 		fh io.Reader
 	}

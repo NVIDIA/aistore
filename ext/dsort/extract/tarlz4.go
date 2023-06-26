@@ -1,13 +1,12 @@
 // Package extract provides ExtractShard and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"io"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -16,21 +15,22 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/pierrec/lz4/v3"
 )
 
-type targzExtractCreator struct {
+type tarlz4ExtractCreator struct {
 	t cluster.Target
 }
 
 // interface guard
-var _ Creator = (*targzExtractCreator)(nil)
+var _ Creator = (*tarlz4ExtractCreator)(nil)
 
-func NewTargzExtractCreator(t cluster.Target) Creator {
-	return &targzExtractCreator{t: t}
+func NewTarlz4ExtractCreator(t cluster.Target) Creator {
+	return &tarlz4ExtractCreator{t: t}
 }
 
-// ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
+// ExtractShard  the tarball f and extracts its metadata.
+func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
 	toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
 		size    int64
@@ -38,12 +38,8 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 		workFQN = fs.CSM.Gen(lom, filetype.DSortFileType, "") // tarFQN
 	)
 
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer cos.Close(gzr)
-	tr := tar.NewReader(gzr)
+	lzr := lz4.NewReader(r)
+	tr := tar.NewReader(lzr)
 
 	// extract to .tar
 	f, err := cos.CreateFile(workFQN)
@@ -77,24 +73,10 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 		offset += t.MetadataSize()
 
 		if header.Typeflag == tar.TypeDir {
-			// We can safely ignore this case because we do `MkdirAll` anyway
-			// when we create files. And since dirs can appear after all the files
-			// we must have this `MkdirAll` before files.
 			continue
 		}
 		if header.Format == tar.FormatPAX {
-			// When dealing with `tar.FormatPAX` we also need to take into
-			// consideration the `tar.TypeXHeader` that comes before the actual header.
-			// Together it looks like this: [x-header][pax-records][pax-header][pax-file].
-			// Since `tar.Reader` skips over this header and writes to `header.PAXRecords`
-			// we need to manually adjust the offset, otherwise when using the
-			// offset we will point to totally wrong location.
-
-			// Add offset for `tar.TypeXHeader`.
 			offset += t.MetadataSize()
-
-			// Add offset for size of PAX records - there is no way of knowing
-			// the size, so we must estimate it by ourselves...
 			size := estimateXHeaderSize(header.PAXRecords)
 			size = cos.CeilAlignInt64(size, archive.TarBlockSize)
 			offset += size
@@ -131,20 +113,20 @@ func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt,
 }
 
 // CreateShard creates a new shard locally based on the Shard.
-// Note that the order of closing must be trw, gzw, then finally tarball.
-func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
+// Note that the order of closing must be trw, lzw, then finally tarball.
+func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
-		gzw, _    = gzip.NewWriterLevel(tarball, gzip.BestSpeed)
-		tw        = tar.NewWriter(gzw)
+		lzw       = lz4.NewWriter(tarball)
+		tw        = tar.NewWriter(lzw)
 		rdReader  = newTarRecordDataReader(t.t)
 	)
 
 	defer func() {
 		rdReader.free()
 		cos.Close(tw)
-		cos.Close(gzw)
+		cos.Close(lzw)
 	}()
 
 	for _, rec := range s.Records.All() {
@@ -160,14 +142,14 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 					needFlush = false
 				}
 
-				if n, err = loadContent(gzw, rec, obj); err != nil {
+				if n, err = loadContent(lzw, rec, obj); err != nil {
 					return written + n, err
 				}
 
 				// pad to 512 bytes
 				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
 				if diff > 0 {
-					if _, err = gzw.Write(padBuf[:diff]); err != nil {
+					if _, err = lzw.Write(padBuf[:diff]); err != nil {
 						return written + n, err
 					}
 					n += diff
@@ -192,6 +174,6 @@ func (t *targzExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadConte
 	return written, nil
 }
 
-func (*targzExtractCreator) UsingCompression() bool { return true }
-func (*targzExtractCreator) SupportsOffset() bool   { return true }
-func (*targzExtractCreator) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding
+func (*tarlz4ExtractCreator) UsingCompression() bool { return true }
+func (*tarlz4ExtractCreator) SupportsOffset() bool   { return true }
+func (*tarlz4ExtractCreator) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding

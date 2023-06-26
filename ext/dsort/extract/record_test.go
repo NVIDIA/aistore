@@ -1,6 +1,7 @@
-// Package extract provides provides functions for working with compressed files
+// Package extract provides ExtractShard and associated methods for dsort
+// across all suppported archival formats (see cmn/archive/mime.go)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package extract
 
