@@ -6,6 +6,7 @@
 package aisloader
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -129,12 +130,12 @@ func prettyTimestamp() string {
 }
 
 func preWriteStats(to io.Writer, jsonFormat bool) {
-	fmt.Fprintln(to)
 	if !jsonFormat {
+		fmt.Fprintln(to)
 		fmt.Fprintf(to, statsPrintHeader,
 			"Time", "OP", "Count", "Size (Total)", "Latency (min, avg, max)", "Throughput (Avg)", "Errors (Total)")
 	} else {
-		fmt.Fprintln(to, "[")
+		fmt.Fprint(to, "[")
 	}
 }
 
@@ -197,7 +198,8 @@ func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
 		Cfg: jsonStatsFromReq(s.getConfig),
 	}
 
-	jsonOutput := cos.MustMarshal(jStats)
+	jsonOutput, err := json.MarshalIndent(jStats, "", "  ")
+	cos.AssertNoErr(err)
 	fmt.Fprintf(to, "\n%s", string(jsonOutput))
 	// print comma by default
 	if len(withcomma) == 0 || withcomma[0] {
@@ -305,7 +307,7 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 
 // printRunParams show run parameters in json format
 func printRunParams(p params) {
-	b, _ := jsoniter.MarshalIndent(struct {
+	b, err := jsoniter.MarshalIndent(struct {
 		Seed          int64  `json:"seed,string"`
 		URL           string `json:"proxy"`
 		Bucket        string `json:"bucket"`
@@ -336,6 +338,7 @@ func printRunParams(p params) {
 		Backing:       p.readerType,
 		Cleanup:       p.cleanUp.Val,
 	}, "", "   ")
+	cos.AssertNoErr(err)
 
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
 }

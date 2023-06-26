@@ -925,11 +925,13 @@ Done:
 		completeWorkOrder(wo, true)
 	}
 
-	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 	finalizeStats(statsWriter)
+	fmt.Printf("Stats written to %s\n", statsWriter.Name())
 	if runParams.cleanUp.Val {
 		cleanup()
 	}
+
+	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 
 	return err
 }
