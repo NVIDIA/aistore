@@ -37,10 +37,11 @@ const (
 )
 
 const (
-	xactStateFinished = "Finished"
-	xactStateRunning  = "Running"
-	xactStateIdle     = "Idle"
-	xactStateAborted  = "Aborted"
+	xfinished     = "Finished"
+	xfinishedErrs = "Finished with errors"
+	xrunning      = "Running"
+	xidle         = "Idle"
+	xaborted      = "Aborted"
 )
 
 // output templates

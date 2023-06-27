@@ -142,7 +142,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	}
 
 	if err == nil {
-		err = cmn.ErrXactNoErrAbort
+		err = cmn.ErrXactUserAbort // NOTE: only user can cause no-errors abort
 	} else if errAborted := cmn.AsErrAborted(err); errAborted != nil {
 		if errCause := errAborted.Unwrap(); errCause != nil {
 			err = errCause

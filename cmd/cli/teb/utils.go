@@ -202,33 +202,52 @@ func fmtNameArch(val string, flags uint16) string {
 // cluster.Snap helpers
 //
 
-func fmtRebStatus(rebSnap *cluster.Snap) string {
-	if rebSnap == nil {
+func fmtRebStatus(snap *cluster.Snap) string {
+	if snap == nil {
 		return unknownVal
 	}
-	if rebSnap.IsAborted() {
-		return fmt.Sprintf("aborted(%s)", rebSnap.ID)
+	if snap.IsAborted() {
+		if snap.AbortErr == cmn.ErrXactUserAbort.Error() {
+			return fmt.Sprintf("user-abort(%s)", snap.ID)
+		}
+		return fmt.Sprintf("%s(%s): %s", strings.ToLower(xaborted), snap.ID, snap.AbortErr)
 	}
-	if rebSnap.EndTime.IsZero() {
-		return fmt.Sprintf("running(%s)", rebSnap.ID)
+	if snap.EndTime.IsZero() {
+		if snap.Err == "" {
+			return fmt.Sprintf("%s(%s)", strings.ToLower(xrunning), snap.ID)
+		}
+		return fmt.Sprintf("%s(%s) with errors: %s", strings.ToLower(xrunning), snap.ID, snap.Err)
 	}
-	if time.Since(rebSnap.EndTime) < rebalanceForgetTime {
-		return fmt.Sprintf("finished(%s)", rebSnap.ID)
+	if time.Since(snap.EndTime) < rebalanceForgetTime {
+		if snap.Err == "" {
+			return fmt.Sprintf("%s(%s)", strings.ToLower(xfinished), snap.ID)
+		}
+		return fmt.Sprintf("%s(%s): %s", strings.ToLower(xfinishedErrs), snap.ID, snap.Err)
 	}
 	return unknownVal
 }
 
-func FmtXactStatus(snap *cluster.Snap) string {
-	if snap.AbortedX {
-		return xactStateAborted
+func FmtXactStatus(snap *cluster.Snap) (s string) {
+	switch {
+	case snap.AbortedX:
+		if snap.AbortErr == cmn.ErrXactUserAbort.Error() {
+			return xaborted + " by user"
+		}
+		return xaborted + ": " + snap.AbortErr
+	case !snap.EndTime.IsZero():
+		if snap.Err == "" {
+			return xfinished
+		}
+		return xfinishedErrs + ": " + snap.Err
+	case snap.IsIdle():
+		s = xidle
+	default:
+		s = xrunning
 	}
-	if !snap.EndTime.IsZero() {
-		return xactStateFinished
+	if snap.Err != "" {
+		s += " with errors: " + snap.Err
 	}
-	if snap.IsIdle() {
-		return xactStateIdle
-	}
-	return xactStateRunning
+	return
 }
 
 func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {

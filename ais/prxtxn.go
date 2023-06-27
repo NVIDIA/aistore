@@ -1130,7 +1130,9 @@ func (r *_rmbck) cb(nl nl.Listener) {
 	if err == nil {
 		return
 	}
-	nlog.Errorln(err)
+	if err != cmn.ErrXactUserAbort {
+		nlog.Errorln(err)
+	}
 	if r.existed {
 		return
 	}

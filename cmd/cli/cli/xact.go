@@ -128,6 +128,7 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 		nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
 		nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
 		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
+		nvpair{Name: ".state", Value: teb.FmtXactStatus(snap)},
 	)
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
 		printtedVal := teb.FmtSize(snap.Stats.Bytes, units, 2)

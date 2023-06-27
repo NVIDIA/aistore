@@ -202,7 +202,6 @@ var (
 	ErrXactRenewAbort   = errors.New("renewal abort")
 	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop
 	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
-	ErrXactNoErrAbort   = errors.New("no-error abort")
 )
 
 // ErrFailedTo
