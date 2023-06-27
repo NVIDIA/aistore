@@ -149,7 +149,8 @@ func RunLRU(ini *IniLRU) {
 	}()
 	if num == 0 {
 		nlog.Warningln(cmn.ErrNoMountpaths)
-		xlru.Finish(cmn.ErrNoMountpaths)
+		xlru.AddErr(cmn.ErrNoMountpaths)
+		xlru.Finish()
 		return
 	}
 	for mpath, mi := range availablePaths {
@@ -181,7 +182,7 @@ func RunLRU(ini *IniLRU) {
 	for _, j := range joggers {
 		j.stop()
 	}
-	xlru.Finish(nil)
+	xlru.Finish()
 	cs = fs.Cap()
 	nlog.Infof("%s finished, %s", xlru, cs.String())
 }

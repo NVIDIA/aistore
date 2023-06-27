@@ -208,7 +208,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 		reb.semaCh.Release()
 		fs.RemoveMarker(fname.RebalanceMarker)
 		fs.RemoveMarker(fname.NodeRestartedPrev)
-		reb.xctn().Finish(nil)
+		reb.xctn().Finish()
 		return
 	}
 
@@ -690,7 +690,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	reb.unregRecv()
 	reb.semaCh.Release()
 	if !xreb.Finished() {
-		xreb.Finish(nil)
+		xreb.Finish()
 	}
 	nlog.Infof("%s: done (%s)", logHdr, xreb)
 }

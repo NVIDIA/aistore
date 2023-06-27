@@ -36,7 +36,7 @@ type (
 		srcCh    chan *cluster.LOM
 		dstCh    chan *DstElement
 		resultCh chan DiffResolverResult
-		err      cos.ErrValue
+		err      cos.Errs
 		stopped  atomic.Bool
 	}
 
@@ -179,10 +179,9 @@ func (dr *DiffResolver) PushDst(v any) {
 func (dr *DiffResolver) CloseDst() { close(dr.dstCh) }
 
 func (dr *DiffResolver) Next() (DiffResolverResult, error) {
-	if err := dr.err.Err(); err != nil {
+	if cnt, err := dr.err.JoinErr(); cnt > 0 {
 		return DiffResolverResult{}, err
 	}
-
 	r, ok := <-dr.resultCh
 	if !ok {
 		return DiffResolverResult{Action: DiffResolverEOF}, nil
@@ -192,7 +191,7 @@ func (dr *DiffResolver) Next() (DiffResolverResult, error) {
 
 func (dr *DiffResolver) Stop()           { dr.stopped.Store(true) }
 func (dr *DiffResolver) Stopped() bool   { return dr.stopped.Load() }
-func (dr *DiffResolver) Abort(err error) { dr.err.Store(err) }
+func (dr *DiffResolver) Abort(err error) { dr.err.Add(err) }
 
 func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
 	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {

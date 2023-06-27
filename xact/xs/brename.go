@@ -127,13 +127,11 @@ loop:
 			sleep = cos.MinDuration(sleep+sleep/2, bmvMaxSleep)
 		}
 	}
-	var err error
 	if total >= bmvMaxWait {
-		err = fmt.Errorf("%s: timeout", r)
-		nlog.Errorln(err)
+		r.AddErr(fmt.Errorf("timeout %s", total))
 	}
 	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
-	r.Finish(err)
+	r.Finish()
 }
 
 func (r *bckRename) String() string {

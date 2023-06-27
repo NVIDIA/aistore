@@ -177,7 +177,7 @@ func (c *baseComm) ObjCount() int64    { return c.xctn.Objs() }
 func (c *baseComm) InBytes() int64     { return c.xctn.InBytes() }
 func (c *baseComm) OutBytes() int64    { return c.xctn.OutBytes() }
 
-func (c *baseComm) Stop() { c.xctn.Finish(nil) }
+func (c *baseComm) Stop() { c.xctn.Finish() }
 
 func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration, tag string) (r cos.ReadCloseSizer, err error) {
 	if err := c.xctn.AbortErr(); err != nil {

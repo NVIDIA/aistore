@@ -23,8 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/nl"
 )
 
-const abortErrWait = time.Second
-
 type (
 	Base struct {
 		notif  *NotifXact
@@ -36,7 +34,7 @@ type (
 		abort  struct {
 			ch   chan error
 			err  error
-			mu   sync.Mutex
+			mu   sync.RWMutex
 			done atomic.Bool
 		}
 		stats struct {
@@ -47,6 +45,7 @@ type (
 			inobjs   atomic.Int64 // receive
 			inbytes  atomic.Int64
 		}
+		err cos.Errs
 	}
 	Marked struct {
 		Xact        cluster.Xact
@@ -107,18 +106,21 @@ func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
 func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }
 
+// NOTE: polls for `wait` time
 func (xctn *Base) AbortErr() (err error) {
+	const wait = time.Second
 	if !xctn.IsAborted() {
 		return
 	}
-	sleep := cos.ProbingFrequency(abortErrWait)
-	for elapsed := time.Duration(0); elapsed < abortErrWait; elapsed += sleep {
-		xctn.abort.mu.Lock()
+	sleep := cos.ProbingFrequency(wait)
+	for elapsed := time.Duration(0); elapsed < wait; elapsed += sleep {
+		xctn.abort.mu.RLock()
 		err = xctn.abort.err
-		xctn.abort.mu.Unlock()
+		xctn.abort.mu.RUnlock()
 		if err != nil {
 			break
 		}
+		time.Sleep(sleep)
 	}
 	return
 }
@@ -158,6 +160,26 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	}
 	return true
 }
+
+//
+// multi-error
+//
+
+func (xctn *Base) AddErr(err error) {
+	if err != nil && !xctn.IsAborted() {
+		xctn.err.Add(err) // NOTE: no more errors once aborted
+	}
+}
+
+func (xctn *Base) Err() error {
+	if xctn.ErrCnt() == 0 {
+		return nil
+	}
+	return &xctn.err
+}
+
+func (xctn *Base) JoinErr() (int, error) { return xctn.err.JoinErr() }
+func (xctn *Base) ErrCnt() int           { return xctn.err.Cnt() }
 
 // count all the way to duration; reset and adjust every time activity is detected
 func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
@@ -257,17 +279,39 @@ func (xctn *Base) AddNotif(n cluster.Notif) {
 }
 
 // atomically set end-time
-func (xctn *Base) Finish(err error) {
-	if xctn.eutime.CAS(0, 1) {
-		xctn.eutime.Store(time.Now().UnixNano())
-		xctn.onFinished(err)
-		if xctn.Kind() != apc.ActList {
-			if err == nil {
-				nlog.Infof("%s finished", xctn)
-			} else {
-				nlog.Warningf("%s finished w/err: %v", xctn, err)
-			}
+func (xctn *Base) Finish() {
+	var (
+		err, infoErr error
+		aborted      bool
+	)
+	if !xctn.eutime.CAS(0, 1) {
+		return
+	}
+	xctn.eutime.Store(time.Now().UnixNano())
+	if aborted = xctn.IsAborted(); aborted {
+		xctn.abort.mu.RLock()
+		err = xctn.abort.err
+		xctn.abort.mu.RUnlock()
+	}
+	if xctn.ErrCnt() > 0 {
+		if err == nil {
+			debug.Assert(!aborted)
+			err = xctn.Err()
+		} else {
+			infoErr = xctn.Err() // abort takes precedence
 		}
+	}
+	xctn.onFinished(err)
+	// log
+	if xctn.Kind() == apc.ActList {
+		return
+	}
+	if err == nil {
+		nlog.Infof("%s finished", xctn)
+	} else if aborted {
+		nlog.Warningf("%s aborted: %v (%v)", xctn, err, infoErr)
+	} else {
+		nlog.Warningf("%s finished w/err: %v", xctn, infoErr)
 	}
 }
 
@@ -314,8 +358,11 @@ func (xctn *Base) ToSnap(snap *cluster.Snap) {
 	snap.Kind = xctn.Kind()
 	snap.StartTime = xctn.StartTime()
 	snap.EndTime = xctn.EndTime()
-	snap.AbortedX = xctn.IsAborted()
-
+	if err := xctn.AbortErr(); err != nil {
+		snap.AbortErr = err.Error()
+		snap.AbortedX = true
+	}
+	snap.Err = xctn.err.Error()
 	if b := xctn.Bck(); b != nil {
 		snap.Bck = b.Clone()
 	}

@@ -93,10 +93,10 @@ func (r *XactRespond) Run(*sync.WaitGroup) {
 				nlog.Infoln(s)
 			}
 		case <-r.IdleTimer():
-			r.stop(nil)
+			r.stop()
 			return
-		case errCause := <-r.ChanAbort():
-			r.stop(errCause)
+		case <-r.ChanAbort():
+			r.stop()
 			return
 		}
 	}
@@ -236,9 +236,9 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 
 func (r *XactRespond) Stop(err error) { r.Abort(err) }
 
-func (r *XactRespond) stop(err error) {
+func (r *XactRespond) stop() {
 	r.DemandBase.Stop()
-	r.Finish(err)
+	r.Finish()
 }
 
 // (compare w/ XactGet/Put)

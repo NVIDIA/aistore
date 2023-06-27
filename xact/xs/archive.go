@@ -101,7 +101,7 @@ func (p *archFactory) Start() error {
 
 func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err error) {
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
-		r.raiseErr(err, false)
+		r.addErr(err, false)
 		return
 	}
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
@@ -120,7 +120,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 
 	wi.tsi, err = cluster.HrwTarget(msg.ToBck.MakeUname(msg.ArchName), smap)
 	if err != nil {
-		r.raiseErr(err, false)
+		r.addErr(err, false)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			if !ok {
-				debug.Assert(r.err.Cnt() > 0) // see cleanup
+				debug.Assert(r.ErrCnt() > 0) // see cleanup
 				goto fin
 			}
 			var (
@@ -207,10 +207,8 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
 				}
 			}
-			if err == nil {
-				err = r.AbortErr()
-			}
-			if err != nil {
+			r.AddErr(err)
+			if r.Err() != nil {
 				wi.cleanup()
 				goto fin
 			}
@@ -228,15 +226,13 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			}
 		case <-r.IdleTimer():
 			goto fin
-		case errCause := <-r.ChanAbort():
-			if err == nil {
-				err = errCause
-			}
+		case <-r.ChanAbort():
 			goto fin
 		}
 	}
 fin:
-	if r.streamingX.fin(err, true /*unreg Rx*/) == nil {
+	r.streamingX.fin(true /*unreg Rx*/)
+	if r.Err() == nil {
 		return
 	}
 
@@ -264,7 +260,7 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 
 func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
-		r.raiseErr(err, false /*contOnErr*/)
+		r.addErr(err, false /*contOnErr*/)
 		return err
 	}
 
@@ -284,8 +280,9 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		if r.Finished() || r.IsAborted() {
 			return nil
 		}
-		debug.Assert(r.err.Cnt() > 0) // see cleanup
-		return r.err.Err()
+		cnt, err := r.JoinErr()
+		debug.Assert(cnt > 0) // see cleanup
+		return err
 	}
 	debug.Assert(wi.tsi.ID() == r.p.T.SID() && wi.msg.TxnUUID == txnUUID)
 
@@ -301,7 +298,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		r.raiseErr(err, wi.msg.ContinueOnError)
+		r.addErr(err, wi.msg.ContinueOnError)
 	}
 	return nil
 }
@@ -311,7 +308,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	q := wi.quiesce()
 	if q == cluster.QuiTimeout {
 		err := fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
-		r.raiseErr(err, wi.msg.ContinueOnError)
+		r.addErr(err, wi.msg.ContinueOnError)
 	}
 
 	r.pending.Lock()
@@ -334,7 +331,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	debug.Assert(q != cluster.QuiAborted)
 
 	wi.cleanup()
-	r.raiseErr(err, wi.msg.ContinueOnError, errCode)
+	r.addErr(err, wi.msg.ContinueOnError, errCode)
 }
 
 func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
@@ -352,7 +349,11 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 		if wi.appendPos > 0 {
 			s = "no new appends to"
 		}
-		err = fmt.Errorf("%s: %s %s (%v)", r, s, wi.archlom, r.err.Err())
+		if cnt, errs := r.JoinErr(); cnt > 0 {
+			err = fmt.Errorf("%s: %s %s, err: %v (cnt=%d)", r, s, wi.archlom, errs, cnt)
+		} else {
+			err = fmt.Errorf("%s: %s %s", r, s, wi.archlom)
+		}
 	} else {
 		size, err = wi.finalize()
 	}
@@ -462,11 +463,11 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			wi.r.raiseErr(err, wi.msg.ContinueOnError)
+			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return
 		}
 		if coldGet = lom.Bck().IsRemote(); !coldGet {
-			wi.r.raiseErr(err, wi.msg.ContinueOnError)
+			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return
 		}
 	}
@@ -478,7 +479,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
 				return
 			}
-			wi.r.raiseErr(err, wi.msg.ContinueOnError)
+			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return
 		}
 	}
@@ -486,7 +487,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	fh, err := cos.NewFileHandle(lom.FQN)
 	debug.AssertNoErr(err)
 	if err != nil {
-		wi.r.raiseErr(err, wi.msg.ContinueOnError)
+		wi.r.addErr(err, wi.msg.ContinueOnError)
 		return
 	}
 	if t.SID() != wi.tsi.ID() {
@@ -499,7 +500,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		wi.r.raiseErr(err, wi.msg.ContinueOnError)
+		wi.r.addErr(err, wi.msg.ContinueOnError)
 	}
 }
 

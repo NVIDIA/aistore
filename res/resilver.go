@@ -132,12 +132,13 @@ func (res *Res) RunResilver(args Args) {
 	res.end.Store(0)
 	jg.Run()
 	err = res.wait(jg, xres)
+	xres.AddErr(err)
 
 	// callback to, finally, detach-disable
 	if args.PostDD != nil {
 		args.PostDD(args.Rmi, args.Action, xres, err)
 	}
-	xres.Finish(err)
+	xres.Finish()
 }
 
 // Wait for an abort or for resilvering joggers to finish.

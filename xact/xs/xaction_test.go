@@ -226,7 +226,7 @@ func TestXactionQueryFinished(t *testing.T) {
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
 	rns2 := xreg.RenewBckRename(tMock, bck2, bck2, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns2.Err == nil && rns2.Entry.Get() != nil, "Xaction must be created %v", rns2.Err)
-	rns1.Entry.Get().Finish(nil)
+	rns1.Entry.Get().Finish()
 
 	rns1 = xreg.RenewBckRename(tMock, bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")

@@ -78,7 +78,8 @@ func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.BckJog.Run()
 	nlog.Infoln(r.Name())
 	err := r.BckJog.Wait()
-	r.Finish(err)
+	r.AddErr(err)
+	r.Finish()
 }
 
 func (r *xactLLC) Snap() (snap *cluster.Snap) {

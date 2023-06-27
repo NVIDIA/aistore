@@ -200,7 +200,7 @@ func (m *rmdModifier) log(nl nl.Listener) {
 // deactivate or remove node from the cluster (as per msg.Action)
 func (m *rmdModifier) rmNode(nl nl.Listener) {
 	m.log(nl)
-	if err, abrt := nl.Err(), nl.Aborted(); err != nil || abrt {
+	if cnt, abrt := nl.ErrCnt(), nl.Aborted(); cnt > 0 || abrt {
 		return
 	}
 	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)

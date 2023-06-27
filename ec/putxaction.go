@@ -164,7 +164,7 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 	r.mainLoop()
 	wg.Wait()
 	// Don't close bundles, they are shared between different EC xactions
-	r.Finish(nil)
+	r.Finish()
 }
 
 func (r *XactPut) mainLoop() {
@@ -210,7 +210,7 @@ func (r *XactPut) stop() {
 	}
 
 	// Don't close bundles, they are shared between bucket's EC actions
-	r.Finish(nil)
+	r.Finish()
 }
 
 // Encode schedules FQN for erasure coding process

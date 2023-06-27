@@ -42,7 +42,7 @@ type (
 		commitAfter(caller string, msg *aisMsg, err error, args ...any) (bool, error)
 		rsvp(err error)
 		// cleanup
-		abort()
+		abort(error)
 		commit()
 		// log
 		String() string
@@ -182,7 +182,7 @@ func (txns *transactions) find(uuid, act string) (txn txn, err error) {
 		delete(txns.m, uuid)
 		delete(txns.rendezvous, uuid)
 		if act == apc.ActAbort {
-			txn.abort()
+			txn.abort(errors.New("action: abort"))
 		} else {
 			txn.commit()
 		}
@@ -345,7 +345,7 @@ func (txns *transactions) housekeep() (d time.Duration) {
 	}
 	txns.Lock()
 	for _, txn := range orphans {
-		txn.abort()
+		txn.abort(errors.New("cleanup orphaned txn"))
 		delete(txns.m, txn.uuid())
 		delete(txns.rendezvous, txn.uuid())
 	}
@@ -424,9 +424,9 @@ func (txn *txnBckBase) cleanup() {
 	txn.nlps = txn.nlps[:0]
 }
 
-func (txn *txnBckBase) abort() {
+func (txn *txnBckBase) abort(err error) {
 	txn.cleanup()
-	nlog.Infof("aborted: %s", txn)
+	nlog.Infof("%s aborted: %v", txn, err)
 }
 
 // NOTE: not keeping locks for the duration; see also: txnTCB
@@ -530,9 +530,9 @@ func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
 	return
 }
 
-func (txn *txnTCB) abort() {
-	txn.txnBckBase.abort()
-	txn.xtcb.TxnAbort()
+func (txn *txnTCB) abort(err error) {
+	txn.txnBckBase.abort(err)
+	txn.xtcb.TxnAbort(err)
 }
 
 func (txn *txnTCB) String() string {
@@ -551,9 +551,9 @@ func newTxnTCObjs(c *txnServerCtx, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *
 	return
 }
 
-func (txn *txnTCObjs) abort() {
-	txn.txnBckBase.abort()
-	txn.xtco.TxnAbort()
+func (txn *txnTCObjs) abort(err error) {
+	txn.txnBckBase.abort(err)
+	txn.xtco.TxnAbort(err)
 }
 
 func (txn *txnTCObjs) String() string {
@@ -583,9 +583,9 @@ func newTxnArchMultiObj(c *txnServerCtx, bckFrom *meta.Bck, xarch *xs.XactArch, 
 	return
 }
 
-func (txn *txnArchMultiObj) abort() {
-	txn.txnBckBase.abort()
-	txn.xarch.TxnAbort()
+func (txn *txnArchMultiObj) abort(err error) {
+	txn.txnBckBase.abort(err)
+	txn.xarch.TxnAbort(err)
 }
 
 func (txn *txnArchMultiObj) String() string {

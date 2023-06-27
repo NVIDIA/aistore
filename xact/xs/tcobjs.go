@@ -133,7 +133,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			wi, ok := r.pending.m[msg.TxnUUID]
 			r.pending.RUnlock()
 			if !ok {
-				debug.Assert(r.err.Cnt() > 0) // see cleanup
+				debug.Assert(r.ErrCnt() > 0) // see cleanup
 				goto fin
 			}
 
@@ -162,16 +162,13 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			r.DecPending()
 		case <-r.IdleTimer():
 			goto fin
-		case errCause := <-r.ChanAbort():
-			if err == nil {
-				err = errCause
-			}
+		case <-r.ChanAbort():
 			goto fin
 		}
 	}
 fin:
-	err = r.fin(err, true /*unreg Rx*/)
-	if err != nil {
+	r.fin(true /*unreg Rx*/)
+	if r.Err() != nil {
 		// cleanup: destroy destination iff it was created by this copy
 		r.pending.Lock()
 		for uuid := range r.pending.m {
@@ -215,7 +212,8 @@ func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		wi, ok := r.pending.m[txnUUID]
 		r.pending.RUnlock()
 		if !ok {
-			return r.err.Err()
+			_, err := r.JoinErr()
+			return err
 		}
 		refc := wi.refc.Dec()
 		if refc == 0 {
@@ -290,7 +288,7 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	slab.Free(buf)
 	cluster.FreeCpObjParams(params)
 	if err != nil {
-		wi.r.raiseErr(err, wi.msg.ContinueOnError)
+		wi.r.addErr(err, wi.msg.ContinueOnError)
 	} else if wi.r.config.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}

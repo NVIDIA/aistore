@@ -175,7 +175,7 @@ func (*notifs) handleProgress(nl nl.Listener, tsi *meta.Snode, data []byte, srcE
 	defer nl.Unlock()
 
 	if srcErr != nil {
-		nl.SetErr(srcErr)
+		nl.AddErr(srcErr)
 	}
 	if data != nil {
 		stats, _, _, err := nl.UnmarshalStats(data)
@@ -290,7 +290,7 @@ func (*notifs) markFinished(nl nl.Listener, tsi *meta.Snode, srcErr error, abort
 		}
 	}
 	if srcErr != nil {
-		nl.SetErr(srcErr)
+		nl.AddErr(srcErr)
 	}
 	return nl.ActiveCount() == 0 || aborted
 }
@@ -489,7 +489,7 @@ func (n *notifs) ListenSmapChanged() {
 		sid := remid[uuid]
 		err := &errNodeNotFound{s, sid, n.p.si, smap}
 		nl.Lock()
-		nl.SetErr(err)
+		nl.AddErr(err)
 		nl.SetAborted()
 		nl.Unlock()
 	}

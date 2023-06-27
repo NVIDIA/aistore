@@ -135,7 +135,8 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 		}
 	}()
 	if num == 0 {
-		xcln.Finish(cmn.ErrNoMountpaths)
+		xcln.AddErr(cmn.ErrNoMountpaths)
+		xcln.Finish()
 		nlog.Errorln(cmn.ErrNoMountpaths)
 		return fs.CapStatus{}
 	}
@@ -174,7 +175,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	for _, j := range joggers {
 		j.stop()
 	}
-	xcln.Finish(nil)
+	xcln.Finish()
 	parent.cs.c, _ = fs.CapRefresh(nil, nil)
 	if parent.cs.c.Err != nil {
 		nlog.Warningf("%s finished, %s", xcln, parent.cs.c.String())

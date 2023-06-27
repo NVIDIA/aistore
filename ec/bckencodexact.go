@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
@@ -85,11 +84,13 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	bck := r.bck
 	if err := bck.Init(r.t.Bowner()); err != nil {
-		r.Finish(err)
+		r.AddErr(err)
+		r.Finish()
 		return
 	}
 	if !bck.Props.EC.Enabled {
-		r.Finish(fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name))
+		r.AddErr(fmt.Errorf("bucket %q does not have EC enabled", r.bck.Name))
+		r.Finish()
 		return
 	}
 
@@ -103,17 +104,16 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	jg := mpather.NewJoggerGroup(opts)
 	jg.Run()
 
-	var err error
 	select {
-	case errCause := <-r.ChanAbort():
+	case <-r.ChanAbort():
 		jg.Stop()
-		err = cmn.NewErrAborted(r.Name(), "", errCause)
 	case <-jg.ListenFinished():
-		err = jg.Stop()
+		err := jg.Stop()
+		r.AddErr(err)
 	}
 	r.wg.Wait() // Need to wait for all async actions to finish.
 
-	r.Finish(err)
+	r.Finish()
 }
 
 func (r *XactBckEncode) beforeECObj() { r.wg.Add(1) }

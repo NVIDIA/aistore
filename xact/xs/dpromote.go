@@ -89,7 +89,8 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	} else {
 		err = fs.WalkDir(r.dir, r.walk) // Go filepath.WalkDir
 	}
-	r.Finish(err)
+	r.AddErr(err)
+	r.Finish()
 }
 
 func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {

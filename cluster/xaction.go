@@ -37,12 +37,16 @@ type (
 		EndTime() time.Time
 		Finished() bool
 		Running() bool
+		Quiesce(time.Duration, QuiCB) QuiRes
+		Result() (any, error)
+
+		// abrt
 		IsAborted() bool
 		AbortErr() error
 		AbortedAfter(time.Duration) error
 		ChanAbort() <-chan error
-		Quiesce(time.Duration, QuiCB) QuiRes
-		Result() (any, error)
+		// err (info)
+		Err() error
 
 		Snap() *Snap // (struct below)
 
@@ -51,7 +55,7 @@ type (
 		Name() string
 
 		// modifiers
-		Finish(error)
+		Finish()
 		Abort(error) bool
 		AddNotif(n Notif)
 
@@ -86,6 +90,10 @@ type (
 		DstBck    cmn.Bck   `json:"dst-bck"`
 		ID        string    `json:"id"`
 		Kind      string    `json:"kind"`
+
+		// extended error info
+		AbortErr string `json:"abort-err"`
+		Err      string `json:"err"`
 
 		// rebalance-only
 		RebID int64 `json:"glob.id,string"`

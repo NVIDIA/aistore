@@ -94,13 +94,15 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	tname := r.T.String()
 	if err := fs.ValidateNCopies(tname, r.copies); err != nil {
-		r.Finish(err)
+		r.AddErr(err)
+		r.Finish()
 		return
 	}
 	r.BckJog.Run()
 	nlog.Infoln(r.Name())
 	err := r.BckJog.Wait()
-	r.Finish(err)
+	r.AddErr(err)
+	r.Finish()
 }
 
 func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {

@@ -155,18 +155,18 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 			}
 			r.respCh <- resp
 		case <-r.IdleTimer():
-			r.stop(nil)
+			r.stop()
 			return
-		case errCause := <-r.ChanAbort():
-			r.stop(errCause)
+		case <-r.ChanAbort():
+			r.stop()
 			return
 		}
 	}
 }
 
-func (r *LsoXact) stop(err error) {
+func (r *LsoXact) stop() {
 	if r.listRemote() {
-		r.streamingX.fin(err, false /*postponeUnregRx below*/)
+		r.streamingX.fin(false /*postponeUnregRx below*/)
 		r.stopCh.Close()
 		r.lastmsg()
 		r.postponeUnregRx()
@@ -179,7 +179,7 @@ func (r *LsoXact) stop(err error) {
 	r.walk.stopCh.Close()
 	r.walk.wg.Wait()
 	r.lastmsg()
-	r.Finish(err)
+	r.Finish()
 ex:
 	if r.lastPage != nil {
 		freeLsoEntries(r.lastPage)
@@ -214,7 +214,7 @@ func (r *LsoXact) fcleanup() (d time.Duration) {
 // skip on-demand idleness check
 func (r *LsoXact) Abort(err error) (ok bool) {
 	if ok = r.Base.Abort(err); ok {
-		r.Finish(err)
+		r.Finish()
 	}
 	return
 }

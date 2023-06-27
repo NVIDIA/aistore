@@ -186,7 +186,7 @@ func (p *proxy) startElection(vr *VoteRecord) {
 	xele := rns.Entry.Get()
 	nlog.Infoln(xele.Name())
 	p.doProxyElection(vr)
-	xele.Finish(nil)
+	xele.Finish()
 }
 
 func (p *proxy) doProxyElection(vr *VoteRecord) {

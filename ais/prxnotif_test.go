@@ -171,7 +171,7 @@ var _ = Describe("Notifications xaction test", func() {
 			srcErr := errors.New("some error")
 			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), srcErr)
 			Expect(err).To(BeNil())
-			Expect(srcErr).To(BeEquivalentTo(nl.Err()))
+			Expect(srcErr.Error()).To(BeEquivalentTo(nl.Err().Error()))
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 		})
 

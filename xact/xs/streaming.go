@@ -49,7 +49,6 @@ type (
 	streamingX struct {
 		p      *streamingF
 		config *cmn.Config
-		err    cos.ErrValue
 		xact.DemandBase
 		wiCnt atomic.Int32
 		maxWt time.Duration
@@ -106,21 +105,23 @@ func (r *streamingX) String() (s string) {
 }
 
 // limited pre-run abort
-func (r *streamingX) TxnAbort() {
-	err := cmn.NewErrAborted(r.Name(), "txn-abort", nil)
+func (r *streamingX) TxnAbort(err error) {
+	err = cmn.NewErrAborted(r.Name(), "txn-abort", err)
 	r.p.dm.CloseIf(err)
 	r.p.dm.UnregRecv()
-	r.Base.Finish(err)
+	r.AddErr(err)
+	r.Base.Finish()
 }
 
-func (r *streamingX) raiseErr(err error, contOnErr bool, errCode ...int) {
+func (r *streamingX) addErr(err error, contOnErr bool, errCode ...int) {
 	if r.config.FastV(4, cos.SmoduleXs) {
 		nlog.InfoDepth(1, "Error: ", err, errCode)
 	}
 	if contOnErr {
+		// TODO -- FIXME: niy
 		debug.Assert(!cmn.IsErrAborted(err))
 	} else {
-		r.err.Store(err)
+		r.AddErr(err)
 	}
 }
 
@@ -141,29 +142,21 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 	}
 }
 
-func (r *streamingX) fin(err error, unreg bool) error {
+func (r *streamingX) fin(unreg bool) {
 	if r.DemandBase.Finished() {
 		// must be aborted
-		r.p.dm.CloseIf(err)
+		r.p.dm.CloseIf(r.Err())
 		r.p.dm.UnregRecv()
-		return err
+		return
 	}
 
 	r.DemandBase.Stop()
-	if err == nil {
-		err = r.AbortErr()
-	}
-	if err == nil {
-		err = r.err.Err()
-	}
-	r.p.dm.Close(err)
-	r.Finish(err)
-
+	r.p.dm.Close(r.Err())
+	r.Finish()
 	if unreg {
 		r.maxWt = 0
 		r.postponeUnregRx()
 	}
-	return err
 }
 
 // compare w/ lso

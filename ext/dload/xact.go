@@ -212,13 +212,14 @@ func newXact(t cluster.Target, statsT stats.Tracker, xid string) (xld *Xact) {
 func (xld *Xact) Run(*sync.WaitGroup) {
 	nlog.Infof("starting %s", xld.Name())
 	err := xld.dispatcher.run()
-	xld.stop(err)
+	xld.AddErr(err)
+	xld.stop()
 }
 
 // stop terminates the downloader and all dependent entities.
-func (xld *Xact) stop(err error) {
+func (xld *Xact) stop() {
 	xld.DemandBase.Stop()
-	xld.Finish(err)
+	xld.Finish()
 }
 
 func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {

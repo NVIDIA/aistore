@@ -137,7 +137,8 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 		select {
 		case <-r.IdleTimer():
 			err := r.stop()
-			r.Finish(err)
+			r.AddErr(err)
+			r.Finish()
 			return
 		case errCause := <-r.ChanAbort():
 			if err := r.stop(); err != nil {
@@ -145,7 +146,7 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 			} else {
 				nlog.Infof("%s aborted (cause %v)", r, errCause)
 			}
-			r.Finish(cmn.NewErrAborted(r.Name(), "", errCause))
+			r.Finish()
 			return
 		}
 	}

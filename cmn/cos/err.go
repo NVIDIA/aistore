@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sync/atomic"
+	"sync"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -26,9 +26,10 @@ type (
 	ErrSignal struct {
 		signal syscall.Signal
 	}
-	ErrValue struct {
-		atomic.Value
-		cnt atomic.Int64
+	Errs struct {
+		errs []error
+		mu   sync.RWMutex
+		cnt  int
 	}
 )
 
@@ -45,34 +46,47 @@ func IsErrNotFound(err error) bool {
 	return ok
 }
 
-// ErrValue (TODO: extend via errors.Join and Unwrap() []error Go 1.20)
+// Errs
+// add Unwrap() if need be
 
-func (ea *ErrValue) Store(err error) {
-	if ea.cnt.Add(1) == 1 {
-		ea.Value.Store(err)
+const maxErrs = 4
+
+func (e *Errs) Add(err error) {
+	debug.Assert(err != nil)
+	e.mu.Lock()
+	e.cnt++
+	if len(e.errs) < maxErrs {
+		e.errs = append(e.errs, err)
 	}
+	e.mu.Unlock()
 }
 
-// NOTE: hide atomic.Value.Load() - must use Err() below
-func (*ErrValue) Load() any { debug.Assert(false); return nil }
-
-func (ea *ErrValue) _load() (err error) {
-	if x := ea.Value.Load(); x != nil {
-		err = x.(error)
-		debug.Assert(err != nil)
-	}
+func (e *Errs) Cnt() (cnt int) {
+	e.mu.RLock()
+	cnt = e.cnt
+	e.mu.RUnlock()
 	return
 }
 
-func (ea *ErrValue) Cnt() int { return int(ea.cnt.Load()) }
+func (e *Errs) JoinErr() (cnt int, err error) {
+	e.mu.RLock()
+	err = errors.Join(e.errs...) // up to maxErrs
+	cnt = e.cnt
+	e.mu.RUnlock()
+	return
+}
 
-func (ea *ErrValue) Err() (err error) {
-	err = ea._load()
-	if err == nil {
-		return
-	}
-	if cnt := ea.cnt.Load(); cnt > 1 {
-		err = fmt.Errorf("%w (cnt=%d)", err, cnt)
+// Errs is an error
+func (e *Errs) Error() (s string) {
+	e.mu.RLock()
+	errs, cnt := e.errs, e.cnt
+	e.mu.RUnlock()
+	if cnt > 0 {
+		err := errs[0]
+		if cnt > 1 {
+			err = fmt.Errorf("%v (and %d more error%s)", err, cnt-1, Plural(cnt-1))
+		}
+		s = err.Error()
 	}
 	return
 }

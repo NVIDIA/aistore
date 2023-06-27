@@ -258,11 +258,12 @@ func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG, withNonDirPrefix boo
 
 func (r *bsummXact) updRes(err error) {
 	res := &taskState{Err: err}
+	r.AddErr(err)
 	if err == nil {
 		res.Result = r.summaries
 	}
 	r.res.Store(unsafe.Pointer(res))
-	r.Finish(err)
+	r.Finish()
 }
 
 func (r *bsummXact) Result() (any, error) {

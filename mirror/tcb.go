@@ -46,7 +46,6 @@ type (
 		// finishing
 		rxlast atomic.Int64
 		refc   atomic.Int32
-		err    cos.ErrValue
 	}
 )
 
@@ -137,11 +136,12 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 
 // limited pre-run abort
-func (r *XactTCB) TxnAbort() {
-	err := cmn.NewErrAborted(r.Name(), "tcb: txn-abort", nil)
+func (r *XactTCB) TxnAbort(err error) {
+	err = cmn.NewErrAborted(r.Name(), "tcb: txn-abort", err)
 	r.dm.CloseIf(err)
 	r.dm.UnregRecv()
-	r.Base.Finish(err)
+	r.AddErr(err)
+	r.Base.Finish()
 }
 
 // XactTCB copies one bucket _into_ another with or without transformation.
@@ -186,30 +186,24 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.dm.Bcast(o, nil)
 
 	q := r.Quiesce(cmn.Timeout.CplaneOperation(), r.qcb)
-	if err == nil && q == cluster.QuiAborted {
-		err = r.AbortErr()
-		debug.Assert(err != nil)
-	}
-	if err == nil {
-		debug.Assert(!r.IsAborted())
-		err = r.err.Err()
-	}
-	if err == nil && q == cluster.QuiTimeout {
-		err = fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
+	if q == cluster.QuiTimeout {
+		r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
 	}
 
 	// close
 	r.dm.Close(err)
 	r.dm.UnregRecv()
 
-	r.Finish(err)
+	r.Finish()
 }
 
 func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
-	if r.err.Err() != nil {
-		// to break quiescence - r.err.Err() will take precedence
+	// TODO -- FIXME =======================
+	if cnt := r.ErrCnt(); cnt > 0 {
+		// to break quiescence - the waiter will look at r.Err() first anyway
 		return cluster.QuiTimeout
 	}
+
 	since := mono.Since(r.rxlast.Load())
 	if r.refc.Load() > 0 {
 		if since > cmn.Timeout.MaxKeepalive() {
@@ -271,7 +265,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 
 func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
-		r.err.Store(err)
+		r.AddErr(err)
 		nlog.Errorln(err)
 		return err
 	}
@@ -298,7 +292,7 @@ func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.
 	erp := r.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
-		r.err.Store(erp)
+		r.AddErr(erp)
 		nlog.Errorln(erp)
 		return erp // NOTE: non-nil signals transport to terminate
 	}

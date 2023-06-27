@@ -269,7 +269,8 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 	} else {
 		err = r.iterateRange(r, smap)
 	}
-	r.Finish(err)
+	r.AddErr(err)
+	r.Finish()
 }
 
 func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
@@ -345,7 +346,8 @@ func (r *prefetch) Run(*sync.WaitGroup) {
 	} else {
 		err = r.iterateRange(r, smap)
 	}
-	r.Finish(err)
+	r.AddErr(err)
+	r.Finish()
 }
 
 func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {

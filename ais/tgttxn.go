@@ -543,7 +543,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 
 		if c.query.Get(apc.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-				txnTcb.xtcb.TxnAbort()
+				txnTcb.xtcb.TxnAbort(err)
 				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 			}
 		} else {
@@ -559,7 +559,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		custom.Phase = apc.ActCommit
 		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
-			txnTcb.xtcb.TxnAbort()
+			txnTcb.xtcb.TxnAbort(rns.Err)
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
 		}
@@ -676,7 +676,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		var done bool
 		if c.query.Get(apc.QparamWaitMetasync) != "" {
 			if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
-				txnTco.xtco.TxnAbort()
+				txnTco.xtco.TxnAbort(err)
 				return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 			}
 			done = true

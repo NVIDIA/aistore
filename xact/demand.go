@@ -125,7 +125,7 @@ func (r *DemandBase) Abort(err error) (ok bool) {
 		err = cmn.NewErrAborted(r.Name(), "aborting non-idle", nil)
 	}
 	if ok = r.Base.Abort(err); ok {
-		r.Finish(err)
+		r.Finish()
 	}
 	return
 }

@@ -203,7 +203,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 			}
 		case <-r.IdleTimer():
 			// It's OK not to notify ecmanager, it'll just have stopped xctn in a map.
-			r.stop(nil)
+			r.stop()
 			return
 		case msg := <-r.controlCh:
 			if msg.Action == ActEnableRequests {
@@ -213,10 +213,10 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 			debug.Assert(msg.Action == ActClearRequests)
 
 			r.setEcRequestsDisabled()
-			r.stop(nil)
+			r.stop()
 			return
-		case errCause := <-r.ChanAbort():
-			r.stop(errCause)
+		case <-r.ChanAbort():
+			r.stop()
 			return
 		}
 	}
@@ -224,14 +224,14 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 
 func (r *XactGet) Stop(err error) { r.Abort(err) }
 
-func (r *XactGet) stop(err error) {
+func (r *XactGet) stop() {
 	r.DemandBase.Stop()
 	for _, jog := range r.getJoggers {
 		jog.stop()
 	}
 
 	// Don't close bundles, they are shared between bucket's EC actions
-	r.Finish(err)
+	r.Finish()
 }
 
 // Decode schedules an object to be restored from existing slices.

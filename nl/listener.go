@@ -28,8 +28,9 @@ type Listener interface {
 	Notifiers() meta.NodeMap
 	Kind() string
 	Bcks() []*cmn.Bck
-	SetErr(error)
+	AddErr(error)
 	Err() error
+	ErrCnt() int
 	UUID() string
 	SetAborted()
 	Aborted() bool
@@ -85,7 +86,7 @@ type (
 		// runtime
 		EndTimeX atomic.Int64 // timestamp when finished
 		AbortedX atomic.Bool  // sets if the xaction is Aborted
-		ErrValue cos.ErrValue // reported error and count
+		Errs     cos.Errs     // reported error and count
 	}
 
 	Status struct {
@@ -159,8 +160,15 @@ func (nlb *ListenerBase) Callback(nl Listener, ts int64) {
 	}
 }
 
-func (nlb *ListenerBase) SetErr(err error) { nlb.ErrValue.Store(err) }
-func (nlb *ListenerBase) Err() error       { return nlb.ErrValue.Err() }
+func (nlb *ListenerBase) AddErr(err error) { nlb.Errs.Add(err) }
+func (nlb *ListenerBase) ErrCnt() int      { return nlb.Errs.Cnt() }
+
+func (nlb *ListenerBase) Err() error {
+	if nlb.ErrCnt() == 0 {
+		return nil
+	}
+	return &nlb.Errs
+}
 
 func (nlb *ListenerBase) SetStats(daeID string, stats any) {
 	debug.AssertRWMutexLocked(&nlb.mu)
@@ -218,8 +226,8 @@ func (nlb *ListenerBase) String() string {
 		}
 	}
 	if tfin := nlb.EndTimeX.Load(); tfin > 0 {
-		if err := nlb.ErrValue.Err(); err != nil {
-			res = "-" + err.Error()
+		if cnt := nlb.ErrCnt(); cnt > 0 {
+			res = "-" + nlb.Err().Error()
 		} else {
 			res = "-done"
 		}
