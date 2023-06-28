@@ -5,7 +5,9 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -160,10 +162,16 @@ func Path2Mpath(path string) (found *Mountpath, err error) {
 	return
 }
 
-func CleanPathErr(fqn string) string {
-	parsed, err := ParseFQN(fqn)
-	if err != nil {
-		return ""
+// TODO: define fs.PathErr to return "ais://nnn/shard-99.tar not found"
+// instead of the current "  no such file or directory"
+func CleanPathErr(err error) {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		parsed, errV := ParseFQN(pathErr.Path)
+		if errV != nil {
+			return
+		}
+		pathErr.Path = parsed.Bck.Cname(parsed.ObjName)
+		pathErr.Op = ""
 	}
-	return parsed.Bck.Cname(parsed.ObjName)
 }

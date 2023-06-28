@@ -166,8 +166,9 @@ func (xctn *Base) Abort(err error) (ok bool) {
 //
 
 func (xctn *Base) AddErr(err error) {
-	if err != nil && !xctn.IsAborted() {
-		xctn.err.Add(err) // NOTE: no more errors once aborted
+	if err != nil && !xctn.IsAborted() { // no more errors once aborted
+		fs.CleanPathErr(err)
+		xctn.err.Add(err)
 	}
 }
 

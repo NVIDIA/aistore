@@ -147,13 +147,9 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 
 			lrit.init(r, r.p.T, &msg.ListRange)
 			if msg.IsList() {
-				err = lrit.iterateList(wi, smap)
+				err = lrit.iterList(wi, smap)
 			} else {
-				err = lrit.iterateRange(wi, smap)
-				if err == cos.ErrEmptyTemplate {
-					// motivation: copy the entire bucket via x-tco rather than x-tcb
-					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
-				}
+				err = lrit.rangeOrPref(wi, smap)
 			}
 			if r.IsAborted() || err != nil {
 				goto fin
@@ -258,7 +254,12 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 	err = r.p.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 
-	if r.config.FastV(5, cos.SmoduleXs) {
+	if err != nil {
+		r.AddErr(err)
+		if r.config.FastV(5, cos.SmoduleXs) {
+			nlog.Infoln("Error: ", err)
+		}
+	} else if r.config.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
 	return
@@ -268,9 +269,9 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 // tcowi //
 ///////////
 
-func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
+func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
 	objNameTo := wi.msg.ToName(lom.ObjName)
-	buf, slab := lri.t.PageMM().Alloc()
+	buf, slab := lrit.t.PageMM().Alloc()
 	params := cluster.AllocCpObjParams()
 	{
 		params.BckTo = wi.r.args.BckTo
@@ -284,11 +285,13 @@ func (wi *tcowi) do(lom *cluster.LOM, lri *lriterator) {
 	// under ETL, the returned sizes of transformed objects are unknown (cos.ContentLengthUnknown)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := lri.t.CopyObject(lom, params, wi.msg.DryRun)
+	_, err := lrit.t.CopyObject(lom, params, wi.msg.DryRun)
 	slab.Free(buf)
 	cluster.FreeCpObjParams(params)
 	if err != nil {
-		wi.r.addErr(err, wi.msg.ContinueOnError)
+		if !cmn.IsObjNotExist(err) || lrit.lrp != lrpList {
+			wi.r.addErr(err, wi.msg.ContinueOnError)
+		}
 	} else if wi.r.config.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}

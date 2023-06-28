@@ -186,10 +186,10 @@ type (
 
 var (
 	thisNodeName string
-	cleanPathErr func(path string) string
+	cleanPathErr func(error)
 )
 
-func InitErrs(a string, b func(path string) string) { thisNodeName, cleanPathErr = a, b }
+func InitErrs(a string, b func(error)) { thisNodeName, cleanPathErr = a, b }
 
 var (
 	ErrSkip             = errors.New("skip")
@@ -801,16 +801,6 @@ func (e *ErrHTTP) init(r *http.Request, err error, errCode int) {
 	e.Node = thisNodeName
 }
 
-func _clean(err error) {
-	var pathErr *fs.PathError
-	if cleanPathErr != nil && errors.As(err, &pathErr) {
-		if npath := cleanPathErr(pathErr.Path); npath != "" {
-			// cleanup fs.PathErr
-			pathErr.Path = npath
-		}
-	}
-}
-
 func (e *ErrHTTP) Error() (s string) {
 	if e.TypeCode != "" && e.TypeCode != "ErrFailedTo" {
 		if !strings.Contains(e.Message, e.TypeCode+":") {
@@ -818,6 +808,12 @@ func (e *ErrHTTP) Error() (s string) {
 		}
 	}
 	return e.Message
+}
+
+func _clean(err error) {
+	if cleanPathErr != nil {
+		cleanPathErr(err)
+	}
 }
 
 // Example:

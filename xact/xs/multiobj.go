@@ -29,8 +29,12 @@ import (
 //   1. bash-extension style: `file-{0..100}`
 //   2. at-style: `file-@100`
 //   3. if none of the above, fall back to just prefix matching
-//
-// NOTE: rebalancing vs performance comment below.
+
+const (
+	lrpList = iota + 1
+	lrpRange
+	lrpPrefix
+)
 
 // common for all list-range
 type (
@@ -38,19 +42,21 @@ type (
 	lrwi interface {
 		do(*cluster.LOM, *lriterator)
 	}
-	// two selected methods that lriterator needs for itself (a strict subset of cluster.Xact)
+	// a strict subset of cluster.Xact, includes only the methods
+	// lriterator needs for itself
 	lrxact interface {
 		Bck() *meta.Bck
 		IsAborted() bool
 		Finished() bool
 	}
 	// common mult-obj operation context
-	// common iterateList()/iterateRange() logic
+	// common iterList()/iterRangeOrPref() logic
 	lriterator struct {
 		xctn lrxact
 		t    cluster.Target
 		ctx  context.Context
 		msg  *apc.ListRange
+		lrp  int // { lrpList, ... } enum
 	}
 )
 
@@ -65,6 +71,7 @@ type (
 	evictDelete struct {
 		lriterator
 		xact.Base
+		config *cmn.Config
 	}
 	prfFactory struct {
 		xreg.RenewBase
@@ -74,6 +81,7 @@ type (
 	prefetch struct {
 		lriterator
 		xact.Base
+		config *cmn.Config
 	}
 
 	TestXFactory struct{ prfFactory } // tests only
@@ -102,9 +110,16 @@ func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *apc.ListRange) {
 	r.msg = msg
 }
 
-func (r *lriterator) iterateRange(wi lrwi, smap *meta.Smap) error {
+func (r *lriterator) rangeOrPref(wi lrwi, smap *meta.Smap) error {
 	pt, err := cos.NewParsedTemplate(r.msg.Template)
 	if err != nil {
+		// NOTE: [making an exception] treating an empty or '*' template
+		// as an empty prefix to facilitate scope 'all-objects'
+		// (e.g., "archive entire bucket as a single shard (caution!)
+		if err == cos.ErrEmptyTemplate {
+			pt.Prefix = ""
+			goto pref
+		}
 		return err
 	}
 	if err := cmn.ValidatePrefix(pt.Prefix); err != nil {
@@ -112,12 +127,15 @@ func (r *lriterator) iterateRange(wi lrwi, smap *meta.Smap) error {
 		return err
 	}
 	if len(pt.Ranges) != 0 {
-		return r.iterateTemplate(smap, &pt, wi)
+		r.lrp = lrpRange
+		return r.iterRange(smap, &pt, wi)
 	}
+pref:
+	r.lrp = lrpPrefix
 	return r.iteratePrefix(smap, pt.Prefix, wi)
 }
 
-func (r *lriterator) iterateTemplate(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
+func (r *lriterator) iterRange(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi) error {
 	pt.InitIter()
 	for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
@@ -196,7 +214,8 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 	return nil
 }
 
-func (r *lriterator) iterateList(wi lrwi, smap *meta.Smap) error {
+func (r *lriterator) iterList(wi lrwi, smap *meta.Smap) error {
+	r.lrp = lrpList
 	for _, objName := range r.msg.ObjNames {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
@@ -253,38 +272,39 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 }
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete) {
-	ed = &evictDelete{}
+	ed = &evictDelete{config: cmn.GCO.Get()}
 	ed.lriterator.init(ed, xargs.T, msg)
 	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
 
 func (r *evictDelete) Run(*sync.WaitGroup) {
-	var (
-		err  error
-		smap = r.t.Sowner().Get()
-	)
+	smap := r.t.Sowner().Get()
 	if r.msg.IsList() {
-		err = r.iterateList(r, smap)
+		_ = r.iterList(r, smap)
 	} else {
-		err = r.iterateRange(r, smap)
+		_ = r.rangeOrPref(r, smap)
 	}
-	r.AddErr(err)
 	r.Finish()
 }
 
-func (r *evictDelete) do(lom *cluster.LOM, _ *lriterator) {
+func (r *evictDelete) do(lom *cluster.LOM, lrit *lriterator) {
 	errCode, err := r.t.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
-	if errCode == http.StatusNotFound {
+	if err == nil { // done
+		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
 	}
-	if err != nil {
-		if !cmn.IsErrObjNought(err) {
-			nlog.Warningln(err)
+	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
+		if lrit.lrp == lrpList {
+			goto eret // unlike range and prefix
 		}
 		return
 	}
-	r.ObjsAdd(1, lom.SizeBytes(true)) // loaded and evicted
+eret:
+	r.AddErr(err)
+	if r.config.FastV(5, cos.SmoduleXs) {
+		nlog.Warningln(err)
+	}
 }
 
 func (r *evictDelete) Snap() (snap *cluster.Snap) {
@@ -329,7 +349,7 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 }
 
 func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (prf *prefetch) {
-	prf = &prefetch{}
+	prf = &prefetch{config: cmn.GCO.Get()}
 	prf.lriterator.init(prf, xargs.T, msg)
 	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xctn = prf
@@ -337,20 +357,16 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRang
 }
 
 func (r *prefetch) Run(*sync.WaitGroup) {
-	var (
-		err  error
-		smap = r.t.Sowner().Get()
-	)
+	smap := r.t.Sowner().Get()
 	if r.msg.IsList() {
-		err = r.iterateList(r, smap)
+		_ = r.iterList(r, smap)
 	} else {
-		err = r.iterateRange(r, smap)
+		_ = r.rangeOrPref(r, smap)
 	}
-	r.AddErr(err)
 	r.Finish()
 }
 
-func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
+func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			return
@@ -369,13 +385,25 @@ func (r *prefetch) do(lom *cluster.LOM, _ *lriterator) {
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see cluster/lom_cache_hk.go).
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	if _, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock); err != nil {
-		if err != cmn.ErrSkip {
-			nlog.Warningln(err)
+	errCode, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	if err == nil { // done
+		r.ObjsAdd(1, lom.SizeBytes())
+		return
+	}
+	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
+		if lrit.lrp == lrpList {
+			goto eret // listing is explicit
 		}
 		return
 	}
-	r.ObjsAdd(1, lom.SizeBytes())
+	if err == cmn.ErrSkip {
+		return
+	}
+eret:
+	r.AddErr(err)
+	if r.config.FastV(5, cos.SmoduleXs) {
+		nlog.Warningln(err)
+	}
 }
 
 func (r *prefetch) Snap() (snap *cluster.Snap) {

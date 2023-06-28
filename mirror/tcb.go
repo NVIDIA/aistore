@@ -235,8 +235,15 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 		params.Xact = r
 	}
 	_, err = r.T.CopyObject(lom, params, r.args.Msg.DryRun)
-	if err != nil && cos.IsErrOOS(err) {
-		err = cmn.NewErrAborted(r.Name(), "tcb", err)
+	if err != nil {
+		r.AddErr(err)
+		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
+			nlog.Infof("Error: %v", err)
+		}
+		if cos.IsErrOOS(err) {
+			// TODO: call r.Abort() instead
+			err = cmn.NewErrAborted(r.Name(), "tcb", err)
+		}
 	}
 	cluster.FreeCpObjParams(params)
 	return

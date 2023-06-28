@@ -199,13 +199,9 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 			)
 			lrit.init(r, r.p.T, &msg.ListRange)
 			if msg.IsList() {
-				err = lrit.iterateList(wi, smap)
+				err = lrit.iterList(wi, smap)
 			} else {
-				err = lrit.iterateRange(wi, smap)
-				if err == cos.ErrEmptyTemplate {
-					// motivation: archive the entire bucket
-					err = lrit.iteratePrefix(smap, "" /*prefix*/, wi)
-				}
+				err = lrit.rangeOrPref(wi, smap)
 			}
 			r.AddErr(err)
 			if r.Err() != nil {
@@ -467,7 +463,10 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 			return
 		}
 		if coldGet = lom.Bck().IsRemote(); !coldGet {
-			wi.r.addErr(err, wi.msg.ContinueOnError)
+			if lrit.lrp == lrpList {
+				// listed, not found
+				wi.r.addErr(err, wi.msg.ContinueOnError)
+			}
 			return
 		}
 	}
@@ -476,7 +475,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	if coldGet {
 		// cold
 		if errCode, err := t.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
-			if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
+			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cmn.IsObjNotExist(err)) {
 				return
 			}
 			wi.r.addErr(err, wi.msg.ContinueOnError)
@@ -485,7 +484,6 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	}
 
 	fh, err := cos.NewFileHandle(lom.FQN)
-	debug.AssertNoErr(err)
 	if err != nil {
 		wi.r.addErr(err, wi.msg.ContinueOnError)
 		return
