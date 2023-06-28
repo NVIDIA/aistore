@@ -175,13 +175,14 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	for _, j := range joggers {
 		j.stop()
 	}
-	xcln.Finish()
 	parent.cs.c, _ = fs.CapRefresh(nil, nil)
 	if parent.cs.c.Err != nil {
+		xcln.AddErr(parent.cs.c.Err)
 		nlog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
 	} else {
 		nlog.Infof("%s finished, %s", xcln, parent.cs.c.String())
 	}
+	xcln.Finish()
 	return parent.cs.c
 }
 
@@ -307,10 +308,12 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 				if err = fs.DestroyBucket(act, &bck, 0 /*unknown BID*/); err == nil {
 					nlog.Infof("%s: %s %s", j, act, bck)
 				} else {
+					j.ini.Xaction.AddErr(err)
 					nlog.Errorf("%s %s: %v - skipping", j, act, err)
 				}
 			} else {
 				// TODO: config option to scrub `fs.AllMpathBcks` buckets
+				j.ini.Xaction.AddErr(err)
 				nlog.Errorf("%s: %v - skipping %s", j, err, bck)
 			}
 			continue
@@ -326,6 +329,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 
 func (j *clnJ) removeDeleted() (err error) {
 	err = j.mi.RemoveDeleted(j.String())
+	j.ini.Xaction.AddErr(err)
 	if cnt := j.p.jcnt.Dec(); cnt > 0 {
 		return
 	}
@@ -429,6 +433,7 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 		if err != nil {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
+				j.ini.Xaction.AddErr(err)
 				j.ini.T.FSHC(err, lom.FQN)
 			}
 			return
@@ -440,12 +445,14 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 		if cmn.IsErrLmetaCorrupted(err) {
 			if err := cos.RemoveFile(lom.FQN); err != nil {
 				nlog.Errorf("%s: failed to rm MD-corrupted %s: %v (nested: %v)", j, lom, errLoad, err)
+				j.ini.Xaction.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed MD-corrupted %s: %v", j, lom, errLoad)
 			}
 		} else if cmn.IsErrLmetaNotFound(err) {
 			if err := cos.RemoveFile(lom.FQN); err != nil {
 				nlog.Errorf("%s: failed to rm no-MD %s: %v (nested: %v)", j, lom, errLoad, err)
+				j.ini.Xaction.AddErr(err)
 			} else {
 				nlog.Errorf("%s: removed no-MD %s: %v", j, lom, errLoad)
 			}
@@ -454,6 +461,9 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 	}
 	// too early
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
+		if j.ini.Config.FastV(5, cos.SmoduleSpace) {
+			nlog.Infof("too early for %s: atime %v", lom, lom.Atime())
+		}
 		return
 	}
 	if lom.IsHRW() {
@@ -482,6 +492,9 @@ func (j *clnJ) rmExtraCopies(lom *cluster.LOM) {
 	defer lom.Unlock(true)
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		if !cmn.IsObjNotExist(err) {
+			j.ini.Xaction.AddErr(err)
+		}
 		return
 	}
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
@@ -491,7 +504,11 @@ func (j *clnJ) rmExtraCopies(lom *cluster.LOM) {
 		return // extremely unlikely but ok
 	}
 	if _, err := lom.DelExtraCopies(); err != nil {
-		nlog.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
+		err = fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
+		j.ini.Xaction.AddErr(err)
+		if j.ini.Config.FastV(5, cos.SmoduleSpace) {
+			nlog.Infoln("Error: ", err)
+		}
 	}
 }
 

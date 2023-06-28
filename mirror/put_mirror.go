@@ -28,7 +28,6 @@ import (
 // sparse logging
 const (
 	logPending = 256
-	logError   = 32
 )
 
 type (
@@ -99,7 +98,7 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 	r = &XactPut{mirror: mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
 	r.DemandBase.Init(cos.GenUUID(), apc.ActPutCopies, bck, 0 /*use default*/)
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
-		Callback:  r.workCb,
+		Callback:  r.do,
 		Slab:      slab,
 		QueueSize: mirror.Burst,
 	})
@@ -112,16 +111,21 @@ func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactP
 // XactPut //
 /////////////
 
-// mpather/worker callback (one worker per mountpath)
-func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
+// (one worker per mountpath)
+func (r *XactPut) do(lom *cluster.LOM, buf []byte) {
 	copies := int(lom.Bprops().Mirror.Copies)
+
+	lom.Lock(true)
 	size, err := addCopies(lom, copies, buf)
-	if (err != nil && (r.total.Load()%logError) == 0) || r.config.FastV(5, cos.SmoduleMirror) {
-		var s string
-		if err != nil {
-			s = "Error: " + err.Error() + ": "
+	lom.Unlock(true)
+
+	if err != nil {
+		r.AddErr(err)
+		if r.config.FastV(5, cos.SmoduleMirror) {
+			nlog.Infof("Error: %v", err)
 		}
-		nlog.Infof("%s: %s%s, copies=%d, size=%d", r.Base.Name(), s, lom.Cname(), copies, size)
+	} else {
+		r.ObjsAdd(1, size)
 	}
 	r.DecPending() // to support action renewal on-demand
 	cluster.FreeLOM(lom)
@@ -130,26 +134,23 @@ func (r *XactPut) workCb(lom *cluster.LOM, buf []byte) {
 // control logic: stop and idle timer
 // (LOMs get dispatched directly to workers)
 func (r *XactPut) Run(*sync.WaitGroup) {
+	var err error
 	nlog.Infoln(r.Name())
 	r.config = cmn.GCO.Get()
 	r.workers.Run()
+loop:
 	for {
 		select {
 		case <-r.IdleTimer():
-			err := r.stop()
-			r.AddErr(err)
-			r.Finish()
-			return
-		case errCause := <-r.ChanAbort():
-			if err := r.stop(); err != nil {
-				nlog.Errorf("%s aborted (cause %v), traversal err %v", r, errCause, err)
-			} else {
-				nlog.Infof("%s aborted (cause %v)", r, errCause)
-			}
-			r.Finish()
-			return
+			break loop
+		case <-r.ChanAbort():
+			break loop
 		}
 	}
+
+	err = r.stop()
+	r.AddErr(err)
+	r.Finish()
 }
 
 // main method: replicate onto a given (and different) mountpath
@@ -188,9 +189,9 @@ func (r *XactPut) stop() (err error) {
 	}
 	if n > 0 {
 		r.SubPending(n)
-		err = fmt.Errorf("%s: dropped (ie., failed to mirror) %d object%s", r, n, cos.Plural(n))
+		err = fmt.Errorf("%s: dropped %d object%s", r, n, cos.Plural(n))
 	}
-	return err
+	return
 }
 
 func (r *XactPut) Snap() (snap *cluster.Snap) {

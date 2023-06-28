@@ -54,6 +54,13 @@ const maxErrs = 4
 func (e *Errs) Add(err error) {
 	debug.Assert(err != nil)
 	e.mu.Lock()
+	// first, check for duplication
+	for _, added := range e.errs {
+		if added.Error() == err.Error() {
+			e.mu.Unlock()
+			return
+		}
+	}
 	e.cnt++
 	if len(e.errs) < maxErrs {
 		e.errs = append(e.errs, err)

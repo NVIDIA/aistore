@@ -138,6 +138,7 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 	if !r.listRemote() {
 		r.initWalk()
 	}
+loop:
 	for {
 		select {
 		case msg := <-r.msgCh:
@@ -155,13 +156,12 @@ func (r *LsoXact) Run(*sync.WaitGroup) {
 			}
 			r.respCh <- resp
 		case <-r.IdleTimer():
-			r.stop()
-			return
+			break loop
 		case <-r.ChanAbort():
-			r.stop()
-			return
+			break loop
 		}
 	}
+	r.stop()
 }
 
 func (r *LsoXact) stop() {
@@ -343,6 +343,7 @@ func (r *LsoXact) nextPageR() error {
 ex:
 	if err != nil {
 		r.nextToken = ""
+		r.AddErr(err)
 		return err
 	}
 	if page.ContinuationToken == "" {

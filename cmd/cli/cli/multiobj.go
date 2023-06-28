@@ -26,8 +26,9 @@ const dryRunExamplesCnt = 10
 // x-TCO: multi-object transform or copy
 func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etlName string) error {
 	var (
-		lrMsg   apc.ListRange
-		numObjs int64
+		lrMsg        apc.ListRange
+		numObjs      int64
+		showProgress = flagIsSet(c, progressFlag)
 	)
 	// 1. list or template
 	if listObjs != "" {
@@ -38,11 +39,17 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 		// (compare with copying or transforming not "cached" data from remote buckets, etc.)
 	} else {
 		pt, err := cos.NewParsedTemplate(tmplObjs)
-		if err != nil {
+		if err != nil && err != cos.ErrEmptyTemplate { // NOTE same as above: empty => entire bucket
 			return err
 		}
-		numObjs = pt.Count()
+		if len(pt.Ranges) > 0 {
+			numObjs = pt.Count()
+		}
 		lrMsg.Template = tmplObjs
+	}
+	if showProgress && numObjs == 0 {
+		actionWarn(c, "cannot show progress bar with an empty list/range type option - not implemented yet")
+		showProgress = false
 	}
 
 	// 2. TCO message
@@ -76,7 +83,6 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 	}
 
 	// 4. progress bar, if requested
-	var showProgress = flagIsSet(c, progressFlag)
 	if showProgress {
 		var cpr = cprCtx{
 			xid:  xid,
@@ -224,8 +230,8 @@ func _rangeOp(c *cli.Context, bck cmn.Bck) (xid, xname, text string, num int64, 
 		rangeStr = parseStrFlag(c, templateFlag)
 		pt       cos.ParsedTemplate
 	)
-	pt, err = cos.NewParsedTemplate(rangeStr) // NOTE: prefix w/ no range is fine
-	if err != nil {
+	pt, err = cos.NewParsedTemplate(rangeStr)      // NOTE: prefix w/ no range is fine
+	if err != nil && err != cos.ErrEmptyTemplate { // NOTE: empty ok
 		fmt.Fprintf(c.App.Writer, "invalid template %q: %v\n", rangeStr, err)
 		return
 	}

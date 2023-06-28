@@ -6,7 +6,6 @@ package mirror
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -65,8 +64,7 @@ func (*mncFactory) Kind() string        { return apc.ActMakeNCopies }
 func (p *mncFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
-	err = fmt.Errorf("%s is currently running, cannot start a new %q",
-		prevEntry.Get(), p.Str(p.Kind()))
+	err = fmt.Errorf("%s is currently running, cannot start a new %q", prevEntry.Get(), p.Str(p.Kind()))
 	return
 }
 
@@ -114,28 +112,32 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	case n == r.copies:
 		return nil
 	case n > r.copies:
+		lom.Lock(true)
 		size, err = delCopies(lom, r.copies)
+		lom.Unlock(true)
 	default:
+		lom.Lock(true)
 		size, err = addCopies(lom, r.copies, buf)
+		lom.Unlock(true)
 	}
-
+	config := r.BckJog.Config
 	if err != nil {
-		if os.IsNotExist(err) {
+		if cmn.IsObjNotExist(err) {
 			return nil
 		}
 		if cos.IsErrOOS(err) {
-			return cmn.NewErrAborted(r.Name(), "mnc", err)
+			err = cmn.NewErrAborted(r.Name(), "mnc", err)
+		} else if cs := fs.Cap(); cs.Err != nil {
+			err = cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
 		}
-		if cs := fs.Cap(); cs.Err != nil {
-			return cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
-		}
-		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
+		r.AddErr(err)
+		if config.FastV(5, cos.SmoduleMirror) {
 			nlog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
 		}
 		return
 	}
 
-	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
+	if config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
 	}
 	r.ObjsAdd(1, size)

@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"golang.org/x/sys/unix"
@@ -26,16 +25,11 @@ func getFSStats(path string) (fsStats unix.Statfs_t, err error) {
 
 // - on-disk size is sometimes referred to as "apparent size"
 // - `withNonDirPrefix` is allowed to match nothing
+// - TODO: carefully differentiate FATAL err-s: access perm-s, invalid command-line, executable missing
 func executeDU(cmd *exec.Cmd, dirPath string, withNonDirPrefix bool, outputBlockSize uint64) (uint64, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		switch {
-		// FATAL exit on err-s: access perm-s, invalid command-line, executable missing (pkg not installed)
-		case strings.Contains(string(out), "cannot access"),
-			strings.Contains(err.Error(), "exit status"),
-			strings.Contains(err.Error(), "not found"):
-			cos.ExitLog("du "+dirPath+": ", err)
-		// otherwise, return an err
 		case len(out) == 0:
 			return 0, fmt.Errorf("du %s: combined output empty, err: %v", dirPath, err)
 		default:

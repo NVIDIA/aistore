@@ -769,7 +769,7 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 	}
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
 		pt, err := cos.NewParsedTemplate(bashTemplate)
-		if err != nil {
+		if err != nil && err != cos.ErrEmptyTemplate { // NOTE: empty template => entire bucket
 			return nil, "", err
 		}
 		if len(pt.Ranges) == 0 {
