@@ -1,0 +1,17 @@
+- name: Update sysctl network configs
+  hosts: aisloader_hosts
+  become: true
+  gather_facts: no
+
+  vars_files:
+    - "vars/sysctl_config.yaml"
+
+  tasks:
+    - name: Tweak sysctl.conf - optional network tweaks
+      sysctl:
+        reload: yes
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: "{{ item.state }}"
+      with_items:
+        - "{{ sysctl_network_tweaks }}"

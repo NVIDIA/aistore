@@ -1,0 +1,30 @@
+- name: Set up target netdata reporting
+  hosts: target_hosts
+  gather_facts: yes
+
+  tasks:
+    - name: Copy netdata exporting config to target (directs stats to graphite host)
+      ansible.builtin.copy:
+        src: ../containers/exporting.conf
+        dest: exporting.conf
+
+    - name: Set graphite host in netdata config
+      ansible.builtin.replace:
+        path: exporting.conf
+        regexp: '\bGRAPHITE_HOST\b'
+        replace: "{{ hostvars[grafana_host].ansible_host }}"
+
+    - name: Set hostname in netdata config
+      ansible.builtin.replace:
+        path: exporting.conf
+        regexp: '\bNETDATA_HOST\b'
+        replace: "{{ ansible_hostname }}"
+
+    - name: Ensure docker daemon is running
+      service:
+        name: docker
+        state: started
+      become: true
+
+    - name: Start netdata container on target
+      ansible.builtin.script: ../containers/deploy_netdata.sh

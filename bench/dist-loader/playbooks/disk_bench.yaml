@@ -1,0 +1,37 @@
+- hosts: "{{ target_hosts}}" 
+  gather_facts: no
+  tasks:
+
+  - name: install fio
+    ansible.builtin.apt:
+      name: fio
+      state: latest
+
+  - name: upload fio job configs
+    ansible.builtin.copy:
+      src: "{{ item.src }}" 
+      dest: "{{ item.dest }}"
+    loop:
+      - src: ../fio/rand_read.fio
+        dest: rand_read.fio
+      # - src: fio/rand_write.fio
+      #   dest: rand_write.fio
+      - src: ../fio/seq_read.fio
+        dest: seq_read.fio
+
+  - name: start benchmark 
+    ansible.builtin.script: scripts/disk_bench.sh
+
+  - name: find output files
+    find:
+      paths: "/tmp/diskbench/"
+      patterns: "fio*"
+      use_regex: False
+    register: outfiles
+
+  - name: fetch output files
+    fetch:
+      src: "{{ item.path }}"
+      dest: ../output/disk/
+      flat: yes
+    with_items: "{{ outfiles.files }}" 

@@ -1,0 +1,7 @@
+- name: Stop existing aisloader processes
+  hosts: aisloader_hosts
+  gather_facts: no
+  tasks:
+    - name: Kill aisloader processes
+      shell: pkill -f "aisloader*"
+      ignore_errors: yes

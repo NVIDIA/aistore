@@ -1,0 +1,21 @@
+sysctl_network_tweaks:
+  - name: net.core.somaxconn
+    value: 100000
+    default: 128
+    state: present
+    comment: Maximum number of connection requests that can be queued to a given listening socket. Needs to absorb burst of connection requests. AIS clients will usually keep connections open to proxy and targets, so we do not expect ongoing high new connection rate.
+  - name: net.ipv4.tcp_tw_reuse
+    value: 1
+    default: 2
+    state: present
+    comment: If sockets hang around in timewait state for long then (since we're PUTting and GETting lots of objects) we very soon find that we exhaust local port range. So we stretch the available range of local ports (ip_local_port_range), increase the max number of timewait buckets held by the system simultaneously (tcp_max_tw_buckets), and reuse sockets in timewait state as soon as it is "safe from a protocol point of view" (whatever that means, tcp_tw_reuse).
+  - name: net.ipv4.ip_local_port_range
+    value:   2048 65535 
+    default: 32768 60999 
+    state: present
+    comment: See comment for tw_reuse
+  - name: net.ipv4.tcp_max_tw_buckets
+    value:   1440000
+    default:  262144
+    state: present
+    comment: See comment for tw_reuse

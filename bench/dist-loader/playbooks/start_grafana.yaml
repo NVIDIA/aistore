@@ -1,0 +1,16 @@
+- name: Start grafana
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Copy graphite carbon config to allow higher metric creation for netdata
+      ansible.builtin.copy:
+        src: ../containers/carbon_config/
+        dest: ~/carbon_config/
+      delegate_to: "{{ grafana_host }}"
+      when: grafana_host is defined
+      
+    - name: Start grafana host
+      ansible.builtin.script: ../containers/deploy_grafana.sh
+      delegate_to: "{{ grafana_host }}"
+      when: grafana_host is defined

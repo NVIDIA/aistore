@@ -1,0 +1,15 @@
+ais_port:
+  value: 51080
+  default: 51080
+  comment: Port for AIS proxy
+
+put_workers:
+  value: 10
+  default: 10
+  comment: Number of aisloader worker threads to use on each host for PUT benchmarks
+
+
+get_workers:
+  value: 10
+  default: 10
+  comment: Number of aisloader worker threads to use on each host for GET benchmarks

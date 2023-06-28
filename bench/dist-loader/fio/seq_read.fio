@@ -1,0 +1,15 @@
+[global]
+bs=64K
+iodepth=64
+direct=1
+ioengine=libaio
+group_reporting
+time_based
+ramp_time=5
+runtime=120
+numjobs=4
+name=raw-read
+rw=read
+
+[job1]
+filename=/dev/sda:/dev/sdb:/dev/sdc:/dev/sdd:/dev/sde:/dev/sdf:/dev/sdg:/dev/sdh:/dev/sdi:/dev/sdj

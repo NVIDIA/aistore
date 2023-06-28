@@ -1,0 +1,32 @@
+- name: Run aisloader for bench "{{ bench_type }}" with size {{ bench_size }}
+  hosts: aisloader_hosts
+  gather_facts: no
+  vars_files:
+    - "vars/bench.yaml"
+
+  tasks:
+  - name: Set ansible fact for ips of target hosts
+    set_fact:
+      target_host_ips: "{{ groups['target_hosts'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+
+  - name: Start aisloader GET
+    ansible.builtin.script: scripts/aisloader_{{ bench_type }}.sh --ais_proxies={{ target_host_ips }} --ais_port={{ ais_port.value }} --each_size={{ bench_size }} --duration={{ duration }} --grafana_host={{ hostvars[grafana_host].ansible_host }} --workers={{ get_workers.value }}
+    when: bench_type == "get"
+
+  - name: Start aisloader PUT
+    ansible.builtin.script: scripts/aisloader_{{ bench_type }}.sh --ais_proxies={{ target_host_ips }} --ais_port={{ ais_port.value }} --each_size={{ bench_size }} --total_size={{ total_size }} --grafana_host={{ hostvars[grafana_host].ansible_host }} --workers={{ put_workers.value }}
+    when: bench_type == "put"
+
+  - name: Find the output files
+    find:
+      paths: /tmp/aisloader/
+      patterns: "bench-{{ bench_size }}-{{ bench_type }}*"
+      use_regex: False
+    register: outfiles
+
+  - name: Fetch the output files from remote
+    fetch:
+      src: "{{ item.path }}"
+      dest: ../output/{{ bench_type }}/{{ bench_size }}/
+      flat: yes
+    with_items: "{{ outfiles.files }}"

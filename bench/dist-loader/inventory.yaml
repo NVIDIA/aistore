@@ -1,0 +1,31 @@
+aisloader_hosts:
+  hosts:
+    dgx5826:
+      ansible_host: 10.150.56.235
+    dgx6328:
+      ansible_host: 10.150.56.242
+    dgx1897:
+      ansible_host: 10.150.56.233
+    dgx7173:
+      ansible_host: 10.150.56.238
+    dgx5921:
+      ansible_host: 10.150.56.237
+    dgx5036:
+      ansible_host: 10.150.56.236
+    dgx544:
+      ansible_host: 10.150.56.240
+    dgx7994:
+      ansible_host: 10.150.56.231
+    dgx9633:
+      ansible_host: 10.150.56.243
+    dgx842:
+      ansible_host: 10.150.56.239
+
+target_hosts:
+  hosts:
+    aistorecpu1010:
+      ansible_host: 10.150.56.227
+    aistorecpu1011:
+      ansible_host: 10.150.56.230
+    aistorecpu1012:
+      ansible_host: 10.150.56.225
