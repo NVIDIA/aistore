@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -165,13 +166,32 @@ func Path2Mpath(path string) (found *Mountpath, err error) {
 // TODO: define fs.PathErr to return "ais://nnn/shard-99.tar not found"
 // instead of the current "  no such file or directory"
 func CleanPathErr(err error) {
-	var pathErr *fs.PathError
-	if errors.As(err, &pathErr) {
-		parsed, errV := ParseFQN(pathErr.Path)
-		if errV != nil {
-			return
+	var (
+		pathErr *fs.PathError
+		what    string
+	)
+	if !errors.As(err, &pathErr) {
+		return
+	}
+	parsed, errV := ParseFQN(pathErr.Path)
+	if errV != nil {
+		return
+	}
+	pathErr.Path = parsed.Bck.Cname(parsed.ObjName)
+	pathErr.Op = "[fs-path]"
+	if strings.Contains(pathErr.Err.Error(), "no such file") {
+		switch parsed.ContentType {
+		case ObjectType:
+			what = "object"
+		case WorkfileType:
+			what = "work file"
+		case ECSliceType:
+			what = "ec slice"
+		case ECMetaType:
+			what = "ec metadata"
+		default:
+			what = "????"
 		}
-		pathErr.Path = parsed.Bck.Cname(parsed.ObjName)
-		pathErr.Op = ""
+		pathErr.Err = cos.NewErrNotFound(what)
 	}
 }

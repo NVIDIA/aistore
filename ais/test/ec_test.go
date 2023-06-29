@@ -2326,7 +2326,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	registered = true
 	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
 
-	tlog.Logln("Getting the number of objects after rebalance")
+	tlog.Logln("list objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n",
@@ -2602,7 +2602,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)
 		tassert.CheckError(t, err)
 	}
-	tlog.Logln("Getting the number of objects after rebalance")
+	tlog.Logln("list objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after rebalance\n",
@@ -2617,7 +2617,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		tassert.CheckError(t, err)
 	}
 
-	tlog.Logln("Getting the number of objects after reading")
+	tlog.Logln("list objects after reading")
 	resECNew, err = api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%d objects in %s after reading\n",

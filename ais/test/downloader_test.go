@@ -499,7 +499,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
 
-			tlog.Logln("putting objects into remote bucket...")
+			tlog.Logf("putting %d objects into remote bucket %s...\n", fileCnt, test.srcBck)
 
 			expectedObjs := make([]string, 0, fileCnt)
 			for i := 0; i < fileCnt; i++ {
@@ -518,7 +518,7 @@ func TestDownloadRemote(t *testing.T) {
 				expectedObjs = append(expectedObjs, objName)
 			}
 
-			tlog.Logln("evicting remote bucket...")
+			tlog.Logf("(1) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck)
 			xid, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
@@ -530,7 +530,7 @@ func TestDownloadRemote(t *testing.T) {
 				tools.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
-			tlog.Logln("starting remote download...")
+			tlog.Logf("starting remote download => %s...\n", test.dstBck)
 			id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{
 				Base: dload.Base{
 					Bck:         test.dstBck,
@@ -541,20 +541,26 @@ func TestDownloadRemote(t *testing.T) {
 			})
 			tassert.CheckFatal(t, err)
 
-			tlog.Logln("wait for remote download...")
+			tlog.Logln("waiting for remote download...")
 			waitForDownload(t, id, time.Minute)
 
+			tlog.Logf("listing %s...\n", test.dstBck)
 			objs, err := tools.ListObjectNames(proxyURL, test.dstBck, prefix, 0, true /*cached*/)
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(t, reflect.DeepEqual(objs, expectedObjs), "expected objs: %s, got: %s", expectedObjs, objs)
 
 			// Test cancellation
-			tlog.Logln("evicting remote bucket...")
+			tlog.Logf("(2) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck)
 			xid, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
-			tassert.CheckFatal(t, err)
+			if test.srcBck.Equal(&test.dstBck) {
+				tassert.CheckFatal(t, err)
+			} else {
+				// this time downloaded a different bucket - test.srcBck remained empty
+				tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
+			}
 
 			tlog.Logln("starting remote download...")
 			id, err = api.DownloadWithParam(baseParams, dload.TypeBackend, dload.BackendBody{

@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -366,6 +367,13 @@ func (m *ioContext) remotePrefetch(prefetchCnt int) {
 	wg.Wait()
 }
 
+func isContextDeadline(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err == context.DeadlineExceeded || strings.Contains(err.Error(), context.DeadlineExceeded.Error())
+}
+
 // bucket cleanup
 // is called in a variety of ways including (post-test) t.Cleanup => _cleanup()
 // and (pre-test) via deleteRemoteBckObjs
@@ -378,6 +386,17 @@ func (m *ioContext) del(opts ...int) {
 	)
 	// checks, params
 	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltExists)
+	if isContextDeadline(err) {
+		if m.bck.IsRemote() {
+			time.Sleep(time.Second)
+			tlog.Logf("Warning: 2nd attempt to query buckets %q\n", cmn.QueryBcks(m.bck))
+			exists, err = api.QueryBuckets(baseParams, cmn.QueryBcks(m.bck), apc.FltExists)
+			if isContextDeadline(err) {
+				tlog.Logf("Error: failing to query buckets %q: %v - proceeding anyway...\n", cmn.QueryBcks(m.bck), err)
+				exists, err = false, nil
+			}
+		}
+	}
 	tassert.CheckFatal(m.t, err)
 	if !exists {
 		return

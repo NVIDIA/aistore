@@ -348,26 +348,26 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
-	tlog.Logf("PrefetchList %d\n", len(files))
+	tlog.Logf("PrefetchList num=%d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("PrefetchRange\n")
+	tlog.Logf("PrefetchRange %s\n", objRange)
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("EvictList\n")
+	tlog.Logf("EvictList %v\n", files)
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
@@ -379,7 +379,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tools.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
 
 	// PUT
-	tlog.Logf("Putting %s and %s into buckets...\n", fileName1, fileName2)
+	tlog.Logf("PUT %s and %s into buckets...\n", fileName1, fileName2)
 	_, err = api.PutObject(putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.ObjName = fileName2
@@ -478,7 +478,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	bucketPropsRemote := &cmn.BucketPropsToUpdate{}
 
 	// Put
-	tlog.Logf("Putting object (%s) into ais bucket %s...\n", fileName, bckLocal)
+	tlog.Logf("PUT %s => %s\n", fileName, bckLocal)
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
@@ -491,7 +491,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("Putting object (%s) into cloud bucket %s...\n", fileName, bckRemote)
+	tlog.Logf("PUT %s => %s\n", fileName, bckRemote)
 	putArgs = api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,

@@ -615,9 +615,13 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cmn.IsObjNotExist(err) {
-					nlog.Warningf("%s: object not found (lom: %s, err: %v)", loghdr, lom, err)
+					if rargs.config.FastV(4, cos.SmoduleReb) {
+						nlog.Infof("%s: %s not found", loghdr, lom)
+					}
 				} else {
-					nlog.Errorf("%s: failed loading %s, err: %s", loghdr, lom, err)
+					err = fmt.Errorf("%s: failed loading %s: %w", loghdr, lom, err)
+					nlog.Errorln(err)
+					rj.xreb.AddErr(err)
 				}
 				delete(lomAck.q, uname)
 				continue
@@ -636,12 +640,17 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 				err = rj.doSend(lom, tsi, roc)
 			}
 			if err == nil {
-				nlog.Warningf("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
+				if rargs.config.FastV(4, cos.SmoduleReb) {
+					nlog.Infof("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
+				}
 				cnt++
 			} else {
-				nlog.Errorf("%s: failed to retransmit %s => %s: %v", loghdr, lom, tsi.StringEx(), err)
 				if cmn.IsErrStreamTerminated(err) {
 					xreb.Abort(err)
+					nlog.Errorf("%s: stream term-ed (%v)", loghdr, err)
+				} else {
+					err = fmt.Errorf("%s: failed to retransmit %s => %s: %w", loghdr, lom, tsi.StringEx(), err)
+					rj.xreb.AddErr(err)
 				}
 			}
 			if reb._aborted(rargs) {
