@@ -580,7 +580,7 @@ func (t *target) applyBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, tag 
 		nlog.Errorln(err)
 	} else if oldVer < newBMD.Version {
 		t.regstate.prevbmd.Store(false)
-		t._postBMD(tag, rmbcks)
+		t._postBMD(newBMD, tag, rmbcks)
 	}
 	if emsg != "" {
 		nlog.Errorln(emsg)
@@ -666,10 +666,11 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	return
 }
 
-func (t *target) _postBMD(tag string, rmbcks []*meta.Bck) {
+func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	// evict LOM cache
 	if len(rmbcks) > 0 {
-		xreg.AbortAllBuckets(errors.New("post-bmd"), rmbcks...)
+		errV := fmt.Errorf("[post-bmd] %s %s: remove bucket%s", tag, newBMD, cos.Plural(len(rmbcks)))
+		xreg.AbortAllBuckets(errV, rmbcks...)
 		go func(bcks ...*meta.Bck) {
 			for _, b := range bcks {
 				cluster.EvictLomCache(b)
@@ -896,8 +897,8 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cii.fill(&t.htrun)
-	err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, nil)
-	t.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
+	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, nil)
+	t.writeErr(w, r, retErr, http.StatusConflict)
 }
 
 func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {

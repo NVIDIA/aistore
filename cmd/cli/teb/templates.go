@@ -181,7 +181,7 @@ const (
 	XactECGetTmpl      = xactECGetStatsHdr + XactECGetNoHdrTmpl
 	XactECGetNoHdrTmpl = "{{range $daemon := . }}" + xactECGetBody + "{{end}}"
 
-	xactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t ABORTED\n"
+	xactECGetStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t START\t END\t STATE\n"
 	xactECGetBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECGetStatsBody + "{{end}}"
 	xactECGetStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -196,12 +196,12 @@ const (
 
 		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{$xctn.AbortedX}}\n"
+		"{{FormatXactState $xctn}}\n"
 
 	XactECPutTmpl      = xactECPutStatsHdr + XactECPutNoHdrTmpl
 	XactECPutNoHdrTmpl = "{{range $daemon := . }}" + xactECPutBody + "{{end}}"
 
-	xactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t ABORTED\n"
+	xactECPutStatsHdr  = "NODE\t ID\t BUCKET\t OBJECTS\t BYTES\t ERRORS\t QUEUE\t AVG TIME\t ENC TIME\t START\t END\t STATE\n"
 	xactECPutBody      = "{{range $key, $xctn := $daemon.XactSnaps}}" + xactECPutStatsBody + "{{end}}"
 	xactECPutStatsBody = "{{ $daemon.DaemonID }}\t " +
 		"{{if $xctn.ID}}{{$xctn.ID}}{{else}}-{{end}}\t " +
@@ -217,7 +217,7 @@ const (
 
 		"{{FormatStart $xctn.StartTime $xctn.EndTime}}\t " +
 		"{{FormatEnd $xctn.StartTime $xctn.EndTime}}\t " +
-		"{{$xctn.AbortedX}}\n"
+		"{{FormatXactState $xctn}}\n"
 
 	listBucketsSummHdr  = "NAME\t PRESENT\t OBJECTS\t SIZE (apparent, objects, remote)\t USAGE(%)\n"
 	ListBucketsSummBody = "{{range $k, $v := . }}" +
@@ -396,7 +396,6 @@ var (
 		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
 		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
-		"FormatEC":          FmtEC,
 		"FormatObjStatus":   fmtObjStatus,
 		"FormatObjCustom":   fmtObjCustom,
 		"FormatObjIsCached": fmtObjIsCached,

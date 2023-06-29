@@ -908,8 +908,8 @@ func (p *proxy) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cii.fill(&p.htrun)
-	err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
-	p.writeErr(w, r, errors.New(cos.MustMarshalToString(err)), http.StatusConflict)
+	retErr := err.message(errConf, errSmap, errBMD, errRMD, errEtlMD, errTokens)
+	p.writeErr(w, r, retErr, http.StatusConflict)
 }
 
 func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {

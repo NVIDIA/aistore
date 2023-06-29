@@ -142,11 +142,11 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
-	targetResults, erred := p._tresRaw(w, r, results)
+	resRaw, erred := p._tresRaw(w, r, results)
 	if erred {
 		return
 	}
-	if len(targetResults) == 0 {
+	if len(resRaw) == 0 {
 		smap := p.owner.smap.get()
 		if smap.CountActiveTs() > 0 {
 			p.writeErrStatusf(w, r, http.StatusNotFound, "%q not found", xactMsg.String())
@@ -155,7 +155,10 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 		err := cmn.NewErrNoNodes(apc.Target, smap.CountTargets())
 		nlog.Warningf("%s: %v, %s", p, err, smap)
 	}
-	p.writeJSON(w, r, targetResults, what)
+
+	// TODO: if voteInProgress snap and append xele, or else
+
+	p.writeJSON(w, r, resRaw, what)
 }
 
 // apc.WhatAllRunningXacts

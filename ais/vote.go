@@ -90,18 +90,18 @@ func (p *proxy) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == apc.Proxy:
-		p.httpproxyvote(w, r)
+		p.httpgetvote(w, r)
 	case r.Method == http.MethodPut && apiItems[0] == apc.Voteres:
-		p.httpsetprimaryproxy(w, r)
+		p.httpsetprimary(w, r)
 	case r.Method == http.MethodPut && apiItems[0] == apc.VoteInit:
-		p.httpRequestNewPrimary(w, r)
+		p.httpelect(w, r)
 	default:
 		p.writeErrURL(w, r)
 	}
 }
 
-// PUT /v1/vote/init
-func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
+// PUT /v1/vote/init (via sendElectionRequest)
+func (p *proxy) httpelect(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, 0, false, apc.URLPathVoteInit.L); err != nil {
 		return
 	}
@@ -149,7 +149,8 @@ func (p *proxy) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 	if psi.ID() != p.SID() {
 		nlog.Warningf("%s: not next in line %s", p, psi)
 		return
-	} else if !p.ClusterStarted() {
+	}
+	if !p.ClusterStarted() {
 		nlog.Warningf("%s: not ready yet to be elected - starting up", p)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
@@ -369,9 +370,9 @@ func (t *target) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodGet && apiItems[0] == apc.Proxy:
-		t.httpproxyvote(w, r)
+		t.httpgetvote(w, r)
 	case r.Method == http.MethodPut && apiItems[0] == apc.Voteres:
-		t.httpsetprimaryproxy(w, r)
+		t.httpsetprimary(w, r)
 	default:
 		t.writeErrURL(w, r)
 	}
@@ -431,7 +432,7 @@ func (h *htrun) onPrimaryFail(self *proxy) {
 		// No response from the candidate (or it failed to start election) - remove
 		// it from the Smap and try the next candidate
 		// TODO: handle http.StatusServiceUnavailable from the candidate that is currently starting up
-		//       (see httpRequestNewPrimary)
+		// (see httpelect)
 		if clone.GetProxy(nextPrimaryProxy.ID()) != nil {
 			clone.delProxy(nextPrimaryProxy.ID())
 		}
@@ -439,7 +440,7 @@ func (h *htrun) onPrimaryFail(self *proxy) {
 }
 
 // GET /v1/vote/proxy
-func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) httpgetvote(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.parseURL(w, r, 0, false, apc.URLPathVoteProxy.L); err != nil {
 		return
 	}
@@ -507,7 +508,7 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /v1/vote/result
-func (h *htrun) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
+func (h *htrun) httpsetprimary(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.parseURL(w, r, 0, false, apc.URLPathVoteVoteres.L); err != nil {
 		return
 	}

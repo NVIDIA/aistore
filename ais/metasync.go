@@ -706,14 +706,22 @@ func (payload msPayload) unmarshal(reader io.ReadCloser, tag string) (err error)
 
 func (e *errMsync) Error() string { return e.Message }
 
-func (e *errMsync) message(errs ...error) {
+// TODO: use cos.Errs
+func (e *errMsync) message(errs ...error) error {
 	var filtered []error
 	for _, err := range errs {
 		if err != nil {
 			filtered = append(filtered, err)
 		}
 	}
+	l := len(filtered)
+	debug.Assert(l > 0)
 	e.Message = fmt.Sprintf("%v", filtered)
+	nlog.Warningln(cos.MustMarshalToString(e)) // extended info
+	if l == 1 {
+		return filtered[0]
+	}
+	return fmt.Errorf("%v (and %d more error%s)", filtered[0], l-1, cos.Plural(l-1))
 }
 
 func err2MsyncErr(err error) (e *errMsync) {
