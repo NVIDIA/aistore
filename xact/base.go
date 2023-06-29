@@ -363,7 +363,7 @@ func (xctn *Base) ToSnap(snap *cluster.Snap) {
 		snap.AbortErr = err.Error()
 		snap.AbortedX = true
 	}
-	snap.Err = xctn.err.Error()
+	snap.Err = xctn.err.Error() // TODO: a (verbose) option to respond with xctn.err.JoinErr() :NOTE
 	if b := xctn.Bck(); b != nil {
 		snap.Bck = b.Clone()
 	}

@@ -65,13 +65,13 @@ func freeRestoreCtx(ctx *restoreCtx) {
 	restoreCtxPool.Put(ctx)
 }
 
-func (*getJogger) newCtx(req *request) (*restoreCtx, error) {
+func (c *getJogger) newCtx(req *request) (*restoreCtx, error) {
 	lom, err := req.LIF.LOM()
 	if err != nil {
 		return nil, err
 	}
 	ctx := allocRestoreCtx()
-	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/)
+	ctx.toDisk = useDisk(0 /*size of the original object is unknown*/, c.parent.config)
 	ctx.lom = lom
 	err = lom.Load(true /*cache it*/, false /*locked*/)
 	if os.IsNotExist(err) {

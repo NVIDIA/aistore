@@ -34,8 +34,9 @@ type (
 	Res struct {
 		t cluster.Target
 		// last or current resilver's time interval
-		begin atomic.Int64
-		end   atomic.Int64
+		begin  atomic.Int64
+		end    atomic.Int64
+		config *cmn.Config
 	}
 	Args struct {
 		UUID              string
@@ -47,13 +48,14 @@ type (
 		SingleRmiJogger   bool
 	}
 	joggerCtx struct {
-		xres *xs.Resilver
-		t    cluster.Target
+		t      cluster.Target
+		xres   *xs.Resilver
+		config *cmn.Config
 	}
 )
 
 func New(t cluster.Target) *Res {
-	return &Res{t: t}
+	return &Res{t: t, config: cmn.GCO.Get()}
 }
 
 func (res *Res) IsActive(multiplier int64) (yes bool) {
@@ -102,7 +104,7 @@ func (res *Res) RunResilver(args Args) {
 	var (
 		jg        *mpather.Jgroup
 		slab, err = res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		jctx      = &joggerCtx{xres: xres, t: res.t}
+		jctx      = &joggerCtx{xres: xres, t: res.t, config: res.config}
 
 		opts = &mpather.JgroupOpts{
 			T:                     res.t,
@@ -149,6 +151,7 @@ func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 		case errCause := <-xres.ChanAbort():
 			if err = jg.Stop(); err != nil {
 				nlog.Errorf("%s: %s aborted (cause %v), traversal err %v", tsi, xres, errCause, err)
+				xres.AddErr(err)
 			} else {
 				nlog.Infof("%s: %s aborted (cause %v)", tsi, xres, errCause)
 			}
@@ -165,10 +168,11 @@ func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 // Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func _mvSlice(ct *cluster.CT, buf []byte) {
+func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := cluster.HrwMpath(uname)
 	if err != nil {
+		jg.xres.AddErr(err)
 		nlog.Warningln(err)
 		return
 	}
@@ -179,19 +183,24 @@ func _mvSlice(ct *cluster.CT, buf []byte) {
 	destFQN := destMpath.MakePathFQN(ct.Bucket(), fs.ECSliceType, ct.ObjectName())
 	srcMetaFQN, destMetaFQN, err := _moveECMeta(ct, ct.Mountpath(), destMpath, buf)
 	if err != nil {
+		jg.xres.AddErr(err)
 		return
 	}
 	// Slice without metafile - skip it as unusable, let LRU clean it up
 	if srcMetaFQN == "" {
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleReb) {
-		nlog.Infof("Resilver moving %q -> %q", ct.FQN(), destFQN)
+	if jg.config.FastV(4, cos.SmoduleReb) {
+		nlog.Infof("%s: moving %q -> %q", jg.t, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
-		nlog.Errorf("Failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
+		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
+		nlog.Errorln(errV)
+		jg.xres.AddErr(errV)
 		if err = os.Remove(destMetaFQN); err != nil {
-			nlog.Warningf("Failed to cleanup metafile copy %q: %v", destMetaFQN, err)
+			errV := fmt.Errorf("failed to cleanup metafile %q: %v", destMetaFQN, err)
+			nlog.Warningln(errV)
+			jg.xres.AddErr(errV)
 		}
 	}
 	errMeta := os.Remove(srcMetaFQN)
@@ -285,12 +294,16 @@ redo:
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {
 			if !os.IsNotExist(errHrw) && !strings.Contains(errHrw.Error(), "does not exist") {
-				nlog.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
+				errV := fmt.Errorf("%s: failed to restore %s, errHrw: %v", xname, lom, errHrw)
+				nlog.Errorln(errV)
+				jg.xres.AddErr(errV)
 			}
 			// EC cleanup and return
 			if metaNewPath != "" {
 				if errHrw = os.Remove(metaNewPath); errHrw != nil {
-					nlog.Warningf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
+					errV := fmt.Errorf("%s: nested (%s %s: %v)", xname, lom, metaNewPath, errHrw)
+					nlog.Warningln(errV)
+					jg.xres.AddErr(errV)
 				}
 			}
 			return
@@ -316,6 +329,7 @@ redo:
 				errHrw = fmt.Errorf("%s: hrw mountpaths keep changing (%s(%s) => %s => %s ...)",
 					xname, orig, orig.Mountpath(), hmi, mi)
 				nlog.Errorln(errHrw)
+				jg.xres.AddErr(errHrw)
 				return
 			}
 			copied = false
@@ -329,9 +343,13 @@ redo:
 			continue
 		}
 		if cos.IsErrOOS(err) {
-			err = cmn.NewErrAborted(xname, "visit-obj", err)
+			errV := fmt.Errorf("%s: %s OOS, err: %w", jg.t, mi, err)
+			jg.xres.AddErr(errV)
+			err = cmn.NewErrAborted(xname, "", errV)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
-			nlog.Warningf("%s: failed to copy %s to %s, err: %v", xname, lom, mi, err)
+			errV := fmt.Errorf("%s: failed to copy %s to %s, err: %w", xname, lom, mi, err)
+			nlog.Warningln(errV)
+			jg.xres.AddErr(errV)
 		}
 		break
 	}
@@ -361,13 +379,13 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 	return
 }
 
-func (*joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
+func (jg *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
 	debug.Assert(ct.ContentType() == fs.ECSliceType)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip
 		// the entire `%ec` directory when EC is disabled for the bucket.
 		return filepath.SkipDir
 	}
-	_mvSlice(ct, buf)
+	jg._mvSlice(ct, buf)
 	return nil
 }

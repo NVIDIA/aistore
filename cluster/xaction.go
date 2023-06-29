@@ -46,7 +46,7 @@ type (
 		AbortedAfter(time.Duration) error
 		ChanAbort() <-chan error
 		// err (info)
-		Err() error
+		AddErr(error)
 
 		Snap() *Snap // (struct below)
 

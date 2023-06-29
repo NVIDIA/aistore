@@ -5,6 +5,7 @@
 package ec
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -110,10 +111,10 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 	uname := unique(hdr.SID, bck, objName)
 	switch hdr.Opcode {
 	// It is response to slice/replica request by an object
-	// restoration process. In this case there should exists
-	// a slice waiting for the data to come(registered with `regWriter`.
+	// restoration process. In this case, there should exists
+	// a slice "waiting" for the data to arrive (registered with `regWriter`.
 	// Read the data into the slice writer and notify the slice when
-	// the transfer is completed
+	// the transfer is complete
 	case respPut:
 		if r.config.FastV(4, cos.SmoduleEC) {
 			nlog.Infof("Response from %s, %s", hdr.SID, uname)
@@ -123,15 +124,18 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			nlog.Errorf("No writer for %s", bck.Cname(objName))
+			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", r.t, bck.Cname(objName), uname)
+			nlog.Errorln(err)
+			r.AddErr(err)
 			return
 		}
-
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			nlog.Errorf("Failed to read replica: %v", err)
+			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", r.t, bck.Cname(objName), err, uname)
+			nlog.Errorln(err)
+			r.AddErr(err)
 		}
 	default:
-		// should be unreachable
+		debug.Assert(false, "opcode", hdr.Opcode)
 		nlog.Errorf("Invalid request: %d", hdr.Opcode)
 	}
 }
@@ -174,22 +178,18 @@ func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
 
 func (r *XactGet) Run(*sync.WaitGroup) {
 	nlog.Infoln(r.Name())
-
 	for _, jog := range r.getJoggers {
 		go jog.run()
 	}
 
-	var (
-		config = cmn.GCO.Get()
-		ticker = time.NewTicker(config.Periodic.StatsTime.D())
-	)
+	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
 	defer ticker.Stop()
 
 	// as of now all requests are equal. Some may get throttling later
 	for {
 		select {
 		case <-ticker.C:
-			if config.FastV(4, cos.SmoduleEC) {
+			if r.config.FastV(4, cos.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
 					nlog.Infoln(s)
 				}

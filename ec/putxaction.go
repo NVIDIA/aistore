@@ -161,17 +161,16 @@ func (r *XactPut) Run(*sync.WaitGroup) {
 		go jog.run(&wg)
 	}
 
-	r.mainLoop()
+	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
+	r.mainLoop(ticker)
+	ticker.Stop()
 	wg.Wait()
-	// Don't close bundles, they are shared between different EC xactions
+	// not closing stream bundles as they are shared across EC xactions
 	r.Finish()
 }
 
-func (r *XactPut) mainLoop() {
-	ticker := time.NewTicker(r.config.Periodic.StatsTime.D())
-	defer ticker.Stop()
-
-	// as of now all requests are equal. Some may get throttling later
+// all requests are equal, throttle TODO
+func (r *XactPut) mainLoop(ticker *time.Ticker) {
 	for {
 		select {
 		case <-ticker.C:

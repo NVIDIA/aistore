@@ -127,13 +127,15 @@ func (c *putJogger) processRequest(req *request) {
 		}
 		ecConf := lom.Bprops().EC
 		memRequired := lom.SizeBytes() * int64(ecConf.DataSlices+ecConf.ParitySlices) / int64(ecConf.ParitySlices)
-		c.toDisk = useDisk(memRequired)
+		c.toDisk = useDisk(memRequired, c.parent.config)
 	}
 
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		nlog.Errorf("Failed to %s object %s (fqn: %q, err: %v)", req.Action, lom, lom.FQN, err)
+		err = fmt.Errorf("%s: failed to %s %s: %w", c.parent.t, req.Action, lom.StringEx(), err)
+		nlog.Errorln(err)
+		c.parent.AddErr(err)
 	}
 }
 

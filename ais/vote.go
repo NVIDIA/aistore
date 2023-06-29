@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 const (
@@ -183,19 +184,22 @@ func (p *proxy) startElection(vr *VoteRecord) {
 	if rns.IsRunning() {
 		return
 	}
-	xele := rns.Entry.Get()
+	xctn := rns.Entry.Get()
+	xele, ok := xctn.(*xs.Election)
+	debug.Assert(ok)
 	nlog.Infoln(xele.Name())
-	p.doProxyElection(vr)
+	p.elect(vr, xele)
 	xele.Finish()
 }
 
-func (p *proxy) doProxyElection(vr *VoteRecord) {
+func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 	var (
 		err        error
 		curPrimary = vr.Smap.Primary
-		timeout    = cmn.Timeout.CplaneOperation() / 2
+		config     = cmn.GCO.Get()
+		timeout    = config.Timeout.CplaneOperation.D() / 2
 	)
-	// 1. ping current primary (not using apc.QparamAskPrimary as it might be transitioning)
+	// 1. ping the current primary (not using apc.QparamAskPrimary as it might be transitioning)
 	for i := 0; i < 2; i++ {
 		if i > 0 {
 			runtime.Gosched()
@@ -209,7 +213,7 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		if err == nil {
 			break
 		}
-		timeout = cmn.Timeout.CplaneOperation()
+		timeout = config.Timeout.CplaneOperation.D()
 	}
 	if err == nil {
 		// move back to idle
@@ -218,41 +222,44 @@ func (p *proxy) doProxyElection(vr *VoteRecord) {
 		if err == nil {
 			nlog.Infof("%s: current primary %s is up, moving back to idle", p, curPrimary)
 		} else {
-			nlog.Errorf("%s: current primary(?) %s responds but does not consider itself primary",
-				p.si, curPrimary)
+			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary", p, curPrimary)
+			nlog.Errorln(errV)
+			xele.AddErr(errV)
 		}
 		return
 	}
-	nlog.Infof("%s: primary %s is confirmed down: %v", p, curPrimary, err)
+	nlog.Infof("%s: primary %s is confirmed down: %v - moving to election state phase 1 (prepare)", p, curPrimary, err)
 
 	// 2. election phase 1
-	nlog.Infoln("Moving to election state phase 1 (prepare)")
-	elected, votingErrors := p.electAmongProxies(vr)
+	elected, votingErrors := p.electPhase1(vr, config)
 	if !elected {
-		nlog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", curPrimary)
+		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle", p, curPrimary)
+		nlog.Errorln(errV)
+		xele.AddErr(errV)
 		return
 	}
 
 	// 3. election phase 2
-	nlog.Infoln("Moving to election state phase 2 (commit)")
-	confirmationErrors := p.confirmElectionVictory(vr)
+	nlog.Infof("%s: moving to election state phase 2 (commit)", p)
+	confirmationErrors := p.electPhase2(vr)
 	for sid := range confirmationErrors {
 		if !votingErrors.Contains(sid) {
-			nlog.Errorf("Error confirming the election: %s was healthy when voting", sid)
+			errV := fmt.Errorf("%s: error confirming the election: %s was healthy when voting", p, sid)
+			nlog.Errorln(errV)
+			xele.AddErr(errV)
 		}
 	}
 
 	// 4. become!
-	nlog.Infof("%s: moving (self) to primary state", p)
+	nlog.Infof("%s: becoming primary", p)
 	p.becomeNewPrimary(vr.Primary /*proxyIDToRemove*/)
 }
 
-// Simple majority voting.
-func (p *proxy) electAmongProxies(vr *VoteRecord) (winner bool, errors cos.StrSet) {
+// phase 1: prepare (via simple majority voting)
+func (p *proxy) electPhase1(vr *VoteRecord, config *cmn.Config) (winner bool, errors cos.StrSet) {
 	var (
-		config = cmn.GCO.Get()
-		resCh  = p.requestVotes(vr)
-		y, n   int
+		resCh = p.requestVotes(vr)
+		y, n  int
 	)
 	for res := range resCh {
 		if res.err != nil {
@@ -316,7 +323,8 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 	return resCh
 }
 
-func (p *proxy) confirmElectionVictory(vr *VoteRecord) cos.StrSet {
+// phase 2: confirm and commit
+func (p *proxy) electPhase2(vr *VoteRecord) cos.StrSet {
 	var (
 		errors = cos.StrSet{}
 		msg    = &VoteResultMessage{
@@ -386,17 +394,17 @@ func (h *htrun) onPrimaryFail(self *proxy) {
 		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
 		if err != nil {
 			if !daemon.stopping.Load() {
-				nlog.Errorf("%s: failed to execute HRW selection, err: %v", h.si, err)
+				nlog.Errorf("%s: failed to execute HRW selection, err: %v", h, err)
 			}
 			return
 		}
-		nlog.Infof("%s: trying %s as the new primary candidate", h.si, meta.Pname(nextPrimaryProxy.ID()))
+		nlog.Infof("%s: trying %s as the new primary candidate", h, meta.Pname(nextPrimaryProxy.ID()))
 
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		if nextPrimaryProxy.ID() == h.si.ID() {
 			debug.Assert(h.si.IsProxy())
 			debug.Assert(h.SID() == self.SID())
-			nlog.Infof("%s: starting election (candidate = self)", h.si)
+			nlog.Infof("%s: starting election (candidate = self)", h)
 			vr := &VoteRecord{
 				Candidate: nextPrimaryProxy.ID(),
 				Primary:   clone.Primary.ID(),
@@ -441,28 +449,27 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	candidate := msg.Record.Candidate
 	if candidate == "" {
-		h.writeErrf(w, r, "%s: unexpected: empty candidate field [%v]", h.si, msg.Record)
+		h.writeErrf(w, r, "%s: unexpected: empty candidate field [%v]", h, msg.Record)
 		return
 	}
 	smap := h.owner.smap.get()
 	if smap.Primary == nil {
-		h.writeErrf(w, r, "%s: current primary undefined, %s", h.si, smap)
+		h.writeErrf(w, r, "%s: current primary undefined, %s", h, smap)
 		return
 	}
 	currPrimaryID := smap.Primary.ID()
 	if candidate == currPrimaryID {
-		h.writeErrf(w, r, "%s: candidate %q _is_ the current primary, %s", h.si, candidate, smap)
+		h.writeErrf(w, r, "%s: candidate %q _is_ the current primary, %s", h, candidate, smap)
 		return
 	}
 	newSmap := msg.Record.Smap
 	psi := newSmap.GetProxy(candidate)
 	if psi == nil {
-		h.writeErrf(w, r, "%s: candidate %q not present in the VoteRecord %s",
-			h.si, candidate, newSmap)
+		h.writeErrf(w, r, "%s: candidate %q not present in the VoteRecord %s", h, candidate, newSmap)
 		return
 	}
 	if !newSmap.isPresent(h.si) {
-		h.writeErrf(w, r, "%s: not present in the VoteRecord %s", h.si, newSmap)
+		h.writeErrf(w, r, "%s: not present in the VoteRecord %s", h, newSmap)
 		return
 	}
 
@@ -476,7 +483,7 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if err != nil {
-			nlog.Errorf("%s: failed to synch %s, err %v - voting No", h.si, newSmap, err)
+			nlog.Errorf("%s: failed to synch %s, err %v - voting No", h, newSmap, err)
 			w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteNo)))
 			_, err := w.Write([]byte(VoteNo))
 			debug.AssertNoErr(err)
@@ -489,7 +496,6 @@ func (h *htrun) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.writeErr(w, r, err)
 		return
 	}
-
 	if vote {
 		w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(VoteYes)))
 		_, err = w.Write([]byte(VoteYes))

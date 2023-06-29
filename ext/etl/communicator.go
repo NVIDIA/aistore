@@ -45,10 +45,10 @@ type (
 
 		String() string
 
-		// OnlineTransform uses one of the two ETL container endpoints:
+		// InlineTransform uses one of the two ETL container endpoints:
 		//  - Method "PUT", Path "/"
 		//  - Method "GET", Path "/bucket/object"
-		OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error
+		InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error
 
 		// OfflineTransform interface implementations realize offline ETL.
 		// OfflineTransform is driven by `OfflineDP` - not to confuse
@@ -179,9 +179,9 @@ func (c *baseComm) OutBytes() int64    { return c.xctn.OutBytes() }
 
 func (c *baseComm) Stop() { c.xctn.Finish() }
 
-func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration, tag string) (r cos.ReadCloseSizer, err error) {
+func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	if err := c.xctn.AbortErr(); err != nil {
-		return nil, cmn.NewErrAborted(c.String(), "get"+"-"+tag, err)
+		return nil, err
 	}
 
 	var (
@@ -196,11 +196,9 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration,
 	} else {
 		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
 	}
-	if err != nil {
-		goto finish
+	if err == nil {
+		resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	}
-	resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
-finish:
 	if err != nil {
 		if cancel != nil {
 			cancel()
@@ -243,7 +241,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Dura
 
 func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
 	if err := pc.xctn.AbortErr(); err != nil {
-		return nil, cmn.NewErrAborted(pc.String(), "do", err)
+		return nil, err
 	}
 
 	lom.Lock(false)
@@ -307,15 +305,15 @@ finish:
 	}), nil
 }
 
-func (pc *pushComm) OnlineTransform(w http.ResponseWriter, _ *http.Request, bck *meta.Bck, objName string) error {
+func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck *meta.Bck, objName string) error {
 	lom := cluster.AllocLOM(objName)
 	r, err := pc.doRequest(bck, lom, 0 /*timeout*/)
 	cluster.FreeLOM(lom)
-	if pc.config.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpush, lom.Cname(), err)
-	}
 	if err != nil {
 		return err
+	}
+	if pc.config.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 	defer r.Close()
 
@@ -333,7 +331,7 @@ func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time
 	lom := cluster.AllocLOM(objName)
 	r, err = pc.doRequest(bck, lom, timeout)
 	cluster.FreeLOM(lom)
-	if pc.config.FastV(5, cos.SmoduleETL) {
+	if err == nil && pc.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 	return
@@ -343,9 +341,9 @@ func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time
 // redirectComm //
 //////////////////
 
-func (rc *redirectComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
+func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
 	if err := rc.xctn.AbortErr(); err != nil {
-		return cmn.NewErrAborted(rc.String(), "online", err)
+		return err
 	}
 
 	size, err := lomLoad(bck, objName)
@@ -369,7 +367,7 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 		return nil, errV
 	}
 	etlURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
-	r, err := rc.getWithTimeout(etlURL, size, timeout, "offline" /*tag*/)
+	r, err := rc.getWithTimeout(etlURL, size, timeout)
 	if rc.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, bck.Cname(objName), err)
 	}
@@ -380,7 +378,7 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 // revProxyComm //
 //////////////////
 
-func (rp *revProxyComm) OnlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
+func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
 	size, err := lomLoad(bck, objName)
 	if err != nil {
 		return err
@@ -401,7 +399,7 @@ func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 		return nil, errV
 	}
 	etlURL := cos.JoinPath(rp.uri, transformerPath(bck, objName))
-	r, err := rp.getWithTimeout(etlURL, size, timeout, "offline" /*tag*/)
+	r, err := rp.getWithTimeout(etlURL, size, timeout)
 	if rp.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, bck.Cname(objName), err)
 	}

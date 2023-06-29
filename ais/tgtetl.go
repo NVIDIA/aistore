@@ -153,21 +153,20 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, b
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
-			t.writeErrStatusf(w, r,
-				http.StatusNotFound,
-				"%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
-				err.Error(), smap.Primary.URL(cmn.NetPublic))
+			errV := fmt.Errorf("%v - try starting new ETL with \"%s/v1/etl/init\" endpoint",
+				err, smap.Primary.URL(cmn.NetPublic))
+			t.writeErr(w, r, errV, http.StatusNotFound)
 			return
 		}
 		t.writeErr(w, r, err)
 		return
 	}
-	if err := comm.OnlineTransform(w, r, bck, objName); err != nil {
-		t.writeErr(w, r, cmn.NewErrETL(&cmn.ETLErrCtx{
-			ETLName: etlName,
-			PodName: comm.PodName(),
-			SvcName: comm.SvcName(),
-		}, err.Error()))
+	if err := comm.InlineTransform(w, r, bck, objName); err != nil {
+		errV := cmn.NewErrETL(&cmn.ETLErrCtx{ETLName: etlName, PodName: comm.PodName(), SvcName: comm.SvcName()},
+			err.Error())
+		xetl := comm.Xact()
+		xetl.AddErr(errV)
+		t.writeErr(w, r, errV)
 	}
 }
 

@@ -198,14 +198,17 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 
 	r.ObjsAdd(1, objAttrs.Size)
 	r.IncPending()
-	cb := func(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
-		r.t.ByteMM().Free(hdr.Opaque)
-		if err != nil {
-			nlog.Errorf("Failed to send %s: %v", hdr.Cname(), err)
-		}
-		r.DecPending()
+	return r.sendByDaemonID([]string{hdr.SID}, rHdr, reader, r.sendCb, false)
+}
+
+func (r *xactECBase) sendCb(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+	r.t.ByteMM().Free(hdr.Opaque)
+	if err != nil {
+		err = fmt.Errorf("failed to send %s: %w", hdr.Cname(), err)
+		nlog.Errorln(err)
+		r.AddErr(err)
 	}
-	return r.sendByDaemonID([]string{hdr.SID}, rHdr, reader, cb, false)
+	r.DecPending()
 }
 
 // Send a data or request to one or few targets by their DaemonIDs. Most of the time
@@ -271,12 +274,14 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
 		r.unregWriter(uname)
+		r.AddErr(err)
 		return 0, err
 	}
-	c := cmn.GCO.Get()
-	if sw.twg.WaitTimeout(c.Timeout.SendFile.D()) {
+	if sw.twg.WaitTimeout(r.config.Timeout.SendFile.D()) {
 		r.unregWriter(uname)
-		return 0, fmt.Errorf("timed out waiting for %s is read", uname)
+		err := fmt.Errorf("timed out waiting for %s is read", uname)
+		r.AddErr(err)
+		return 0, err
 	}
 	r.unregWriter(uname)
 

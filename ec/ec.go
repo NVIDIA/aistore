@@ -306,8 +306,8 @@ func IsECCopy(size int64, ecConf *cmn.ECConf) bool {
 
 // returns whether EC must use disk instead of keeping everything in memory.
 // Depends on available free memory and size of an object to process
-func useDisk(objSize int64) bool {
-	if cmn.GCO.Get().EC.DiskOnly {
+func useDisk(objSize int64, config *cmn.Config) bool {
+	if config.EC.DiskOnly {
 		return true
 	}
 	memPressure := mm.Pressure()
@@ -444,7 +444,8 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 		return err
 	}
 	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
-		err = fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+		err = fmt.Errorf("slice-and-meta: %s metafile saved while bucket %s was being destroyed",
+			ctMeta.ObjectName(), ctMeta.Bucket())
 		return err
 	}
 	err = validateBckBID(t, &hdr.Bck, args.BID)
@@ -462,6 +463,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 		}
 	}
 	lom.Unlock(false)
+
 	if err = writeObject(t, lom, args.Reader, lom.SizeBytes(true), args.Xact); err != nil {
 		return
 	}
@@ -473,6 +475,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 	}
 	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
 	ctMeta.Lock(true)
+
 	defer func() {
 		ctMeta.Unlock(true)
 		if err == nil {
@@ -489,7 +492,8 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 		return
 	}
 	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
-		err = fmt.Errorf("%s metafile saved while bucket %s was being destroyed", ctMeta.ObjectName(), ctMeta.Bucket())
+		err = fmt.Errorf("replica-and-meta: %s metafile saved while bucket %s was being destroyed",
+			ctMeta.ObjectName(), ctMeta.Bucket())
 		return
 	}
 	err = validateBckBID(t, lom.Bucket(), args.BID)
