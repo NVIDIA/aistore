@@ -660,7 +660,7 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 
 	resp, res.err = client.Do(req)
 	if res.err != nil {
-		res.details = fmt.Sprintf("details(%s %s://%s)", args.req.Method, sid, args.req.URL())
+		res.details = "[control-plane]" // tcp level, e.g.: connection refused
 		return
 	}
 	defer resp.Body.Close()
@@ -2079,7 +2079,7 @@ func (res *callResult) toErr() error {
 	if res.details == "" {
 		return res.err
 	}
-	return cmn.NewErrFailedTo(nil, "call "+res.si.String(), res.details, res.err)
+	return cmn.NewErrFailedTo(nil, "call "+res.si.StringEx(), res.details, res.err)
 }
 
 func (res *callResult) errorf(format string, a ...any) error {
