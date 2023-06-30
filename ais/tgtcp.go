@@ -107,15 +107,13 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	} else if cm.Smap != nil {
 		nlog.Infof("%s: recv-clumeta %s %s", t, action, cm.Smap)
 	}
-
 	switch {
 	case errs == nil:
 		return nil
 	case len(errs) == 1:
 		return errs[0]
 	default:
-		s := fmt.Sprintf("%v", errs)
-		return cmn.NewErrFailedTo(t, action, "clumeta", errors.New(s))
+		return cmn.NewErrFailedTo(t, action, "clumeta", errors.Join(errs...))
 	}
 }
 
@@ -621,8 +619,8 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 		return false
 	})
 	if len(createErrs) > 0 {
-		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v (total errors: %d)",
-			t, newBMD, bmd, nilbmd, createErrs[0], len(createErrs))
+		err = fmt.Errorf("%s: failed to add new buckets: %s, old/cur %s(%t): %v",
+			t, newBMD, bmd, nilbmd, errors.Join(createErrs...))
 		return
 	}
 
@@ -661,7 +659,7 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 	})
 	if len(destroyErrs) > 0 {
 		emsg = fmt.Sprintf("%s: failed to cleanup destroyed buckets: %s, old/cur %s(%t): %v",
-			t, newBMD, bmd, nilbmd, destroyErrs)
+			t, newBMD, bmd, nilbmd, errors.Join(destroyErrs...))
 	}
 	return
 }
