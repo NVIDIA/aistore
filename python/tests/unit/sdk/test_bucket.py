@@ -23,6 +23,7 @@ from aistore.sdk.const import (
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     QPARAM_KEEP_REMOTE,
+    QPARAM_COUNT_REMOTE_OBJS,
     QPARAM_FLT_PRESENCE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -677,13 +678,17 @@ class TestBucket(unittest.TestCase):
         self.mock_client.request.return_value = response
 
         # Call the info method
-        bucket_props, bucket_summ = self.ais_bck.info(flt_presence=0)
+        bucket_props, bucket_summ = self.ais_bck.info()
 
         # Ensure the request was made correctly
         self.mock_client.request.assert_called_once_with(
             HTTP_METHOD_HEAD,
             path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
-            params={**self.ais_bck.qparam, QPARAM_FLT_PRESENCE: 0},
+            params={
+                **self.ais_bck.qparam,
+                QPARAM_FLT_PRESENCE: 0,
+                QPARAM_COUNT_REMOTE_OBJS: True,
+            },
         )
 
         # Check the return values
@@ -692,7 +697,7 @@ class TestBucket(unittest.TestCase):
 
         # Test with invalid flt_presence
         with self.assertRaises(ValueError):
-            self.ais_bck.info(6)
+            self.ais_bck.info(flt_presence=6)
 
 
 if __name__ == "__main__":

@@ -331,7 +331,7 @@ class TestBucketOps(RemoteEnabledTest):
         # Upload an object to the bucket
         info_test_bck.object("test-object").put_content("test-content")
 
-        _, bck_summ = info_test_bck.info(flt_presence=0)
+        _, bck_summ = info_test_bck.info()
 
         # Now the bucket should have one object and non-zero size
         self.assertEqual(bck_summ["ObjCount"]["obj_count_present"], "1")
