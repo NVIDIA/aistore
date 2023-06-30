@@ -2,7 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// This is a minor fork of the ServeMux portion of the https://golang.org/src/net/http/server.go
+// NOTE:
+// This is a minor fork of the ServeMux portion of https://golang.org/src/net/http/server.go
+// primarily motivated by the need to dynamically "unhandle" registered handlers.
+// That's what mux.Unhandle does - a separate source in this package.
+// Last update: June 2023.
+// See also: transport (in particular, transport/recv.go).
 
 package mux
 
@@ -217,15 +222,8 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 
 	if path != r.URL.Path {
 		_, pattern = mux.handler(host, path)
-		url := *r.URL
-		url.Path = path
-		// Some clients resend POST as GET when a server responds with 301 or 302.
-		// RFC 7238 defines 308 (Permanent Redirect) status code
-		// specifically _not_ to allow the request method to be changed from POST
-		if r.Method == http.MethodPost {
-			return http.RedirectHandler(url.String(), http.StatusPermanentRedirect), pattern
-		}
-		return http.RedirectHandler(url.String(), http.StatusMovedPermanently), pattern
+		u := &url.URL{Path: path, RawQuery: r.URL.RawQuery}
+		return http.RedirectHandler(u.String(), http.StatusMovedPermanently), pattern
 	}
 
 	return mux.handler(host, r.URL.Path)
@@ -235,7 +233,6 @@ func (mux *ServeMux) Handler(r *http.Request) (h http.Handler, pattern string) {
 // The path is known to be in canonical form, except for CONNECT methods.
 func (mux *ServeMux) handler(host, path string) (h http.Handler, pattern string) {
 	mux.mu.RLock()
-	defer mux.mu.RUnlock()
 
 	// Host-specific pattern takes precedence over generic ones
 	if mux.hosts {
@@ -247,6 +244,7 @@ func (mux *ServeMux) handler(host, path string) (h http.Handler, pattern string)
 	if h == nil {
 		h, pattern = http.NotFoundHandler(), ""
 	}
+	mux.mu.RUnlock()
 	return
 }
 
@@ -264,18 +262,8 @@ func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-// Handle registers the handler for the given pattern.
-// If a handler already exists for pattern, Handle panics.
-func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
-	mux.mu.Lock()
-	defer mux.mu.Unlock()
-
-	if pattern == "" {
-		panic("http: invalid pattern")
-	}
-	if handler == nil {
-		panic("http: nil handler")
-	}
+// Registers the handler for the given pattern.
+func (mux *ServeMux) _handle(pattern string, handler http.Handler) {
 	if _, exist := mux.m[pattern]; exist {
 		panic("http: multiple registrations for " + pattern)
 	}
@@ -311,20 +299,7 @@ func appendSorted(es []muxEntry, e muxEntry) []muxEntry {
 
 // HandleFunc registers the handler function for the given pattern.
 func (mux *ServeMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	if handler == nil {
-		panic("http: nil handler")
-	}
-	mux.Handle(pattern, http.HandlerFunc(handler))
-}
-
-// Handle registers the handler for the given pattern
-// in the DefaultServeMux.
-// The documentation for ServeMux explains how patterns are matched.
-func Handle(pattern string, handler http.Handler) { DefaultServeMux.Handle(pattern, handler) }
-
-// HandleFunc registers the handler function for the given pattern
-// in the DefaultServeMux.
-// The documentation for ServeMux explains how patterns are matched.
-func HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
-	DefaultServeMux.HandleFunc(pattern, handler)
+	mux.mu.Lock()
+	mux._handle(pattern, http.HandlerFunc(handler))
+	mux.mu.Unlock()
 }
