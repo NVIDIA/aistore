@@ -18,10 +18,13 @@ def bucket_exists(bucket):
 
 def bucket_size(bucket):
     _, bsumm = bucket.info()
+    present_size = int(bsumm["TotalSize"]["size_all_present_objs"])
+    remote_size = int(bsumm["TotalSize"]["size_all_remote_objs"])
 
-    return int(bsumm["TotalSize"]["size_all_present_objs"]) + int(
-        bsumm["TotalSize"]["size_all_remote_objs"]
-    )
+    if remote_size > 0:
+        return remote_size
+    else:
+        return present_size
 
 
 def bucket_obj_count(bucket):

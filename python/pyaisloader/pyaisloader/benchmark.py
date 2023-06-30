@@ -21,7 +21,7 @@ from pyaisloader.utils.cli_utils import (
     underline,
 )
 from pyaisloader.utils.concurrency_utils import multiworker_deploy
-from pyaisloader.utils.parse_utils import format_time
+from pyaisloader.utils.parse_utils import format_size, format_time
 from pyaisloader.utils.random_utils import generate_bytes, generate_random_str
 from pyaisloader.utils.stat_utils import combine_results, print_results
 
@@ -85,24 +85,25 @@ class Benchmark:
                     + bold(f"{self.bucket.provider}://{self.bucket.name}")
                     + " does not exist and AIStore Python SDK does not yet support cloud bucket creation (re-run with existing cloud bucket)."
                 )
-
-        if bucket_exists(self.bucket):
-            print_caution(
-                "The bucket "
-                + bold(f"{self.bucket.provider}://{self.bucket.name}")
-                + " already exists."
-            )
-            confirm_continue()
         else:
-            print_in_progress(
-                "Creating bucket "
-                + bold(f"{self.bucket.provider}://{self.bucket.name}")
-            )
-            self.bucket.create()
-            self.bck_created = True
-            print_success(
-                "Created bucket " + bold(f"{self.bucket.provider}://{self.bucket.name}")
-            )
+            if bucket_exists(self.bucket):
+                print_caution(
+                    "The bucket "
+                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + " already exists."
+                )
+                confirm_continue()
+            else:
+                print_in_progress(
+                    "Creating bucket "
+                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                )
+                self.bucket.create()
+                self.bck_created = True
+                print_success(
+                    "Created bucket "
+                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                )
 
     def prepopulate(self, type_list=False):
         prefix = (
@@ -193,7 +194,8 @@ class PutGetMixedBenchmark(Benchmark):
         if self.put_pct == 100:
             self.__run_put()
         elif self.put_pct == 0:
-            self.__run_prepopulate()
+            if self.totalsize is not None:
+                self.__run_prepopulate()
             self.__run_get()
         else:
             self.__run_mixed()
@@ -253,23 +255,33 @@ class PutGetMixedBenchmark(Benchmark):
         print_results(result_get)
 
     def __run_prepopulate(self):
-        if self.totalsize is not None:
-            curr_bck_size = bucket_size(self.bucket)
-            if curr_bck_size < self.totalsize:
-                print_in_progress("Pre-Populating Bucket")
-                self.target = ((self.totalsize) - curr_bck_size) // self.workers
-                result = multiworker_deploy(
-                    self,
-                    self.prepopulate,
-                    (False,),
-                )
-                self.objs_created.extend(list(itertools.chain(*result)))
-                remaining_bytes = ((self.totalsize) - curr_bck_size) % self.workers
-                if remaining_bytes != 0:  #
-                    self.target = remaining_bytes
-                    objs_created = self.prepopulate(type_list=False)
-                    self.objs_created.extend(objs_created)
-                print_success("Completed Pre-Population")
+        print_in_progress("Starting Pre-Population")
+        curr_bck_size = bucket_size(self.bucket)
+        if curr_bck_size < self.totalsize:
+            self.target = ((self.totalsize) - curr_bck_size) // self.workers
+            result = multiworker_deploy(
+                self,
+                self.prepopulate,
+                (False,),
+            )
+            self.objs_created.extend(list(itertools.chain(*result)))
+            remaining_bytes = ((self.totalsize) - curr_bck_size) % self.workers
+            if remaining_bytes != 0:  #
+                self.target = remaining_bytes
+                objs_created = self.prepopulate(type_list=False)
+                self.objs_created.extend(objs_created)
+            print_success("Completed Pre-Population")
+        else:
+            print(
+                "\nBucket "
+                + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                + f" currently has a total size of "
+                + bold(f"{format_size(curr_bck_size)}")
+                + f", which already meets the specified total size of "
+                + bold(f"{format_size(self.totalsize)}")
+                + ". "
+            )
+            print_success("Skipped Pre-Population")
 
     def put_benchmark(self, duration, totalsize):  # Done
         prefix = generate_random_str()  # Each worker with unique prefix
@@ -353,21 +365,33 @@ class ListBenchmark(Benchmark):
         self.maxsize = 1000
 
         # Pre-Population
-        curr_bck_count = bucket_obj_count(self.bucket)
-        if self.num_objects and self.num_objects > curr_bck_count:
+        if self.num_objects:
             print_in_progress("Pre-Populating Bucket")
-            self.target = (self.num_objects - curr_bck_count) // self.workers
-            result = multiworker_deploy(
-                self,
-                self.prepopulate,
-                (True,),
-            )
-            self.objs_created.extend(list(itertools.chain(*result)))
-            if ((self.num_objects - curr_bck_count) % self.workers) != 0:
-                self.target = (self.num_objects - curr_bck_count) % self.workers
-                objs_created = self.prepopulate(type_list=True)
-                self.objs_created.extend(objs_created)
-            print_success("Completed Pre-Population")
+            curr_bck_count = bucket_obj_count(self.bucket)
+            if self.num_objects > curr_bck_count:
+                self.target = (self.num_objects - curr_bck_count) // self.workers
+                result = multiworker_deploy(
+                    self,
+                    self.prepopulate,
+                    (True,),
+                )
+                self.objs_created.extend(list(itertools.chain(*result)))
+                if ((self.num_objects - curr_bck_count) % self.workers) != 0:
+                    self.target = (self.num_objects - curr_bck_count) % self.workers
+                    objs_created = self.prepopulate(type_list=True)
+                    self.objs_created.extend(objs_created)
+                print_success("Completed Pre-Population")
+            else:
+                print(
+                    "\nBucket "
+                    + bold(f"{self.bucket.provider}://{self.bucket.name}")
+                    + f" currently has "
+                    + bold(f"{curr_bck_count}")
+                    + f" objects, which already meets the specified total count of "
+                    + bold(f"{self.num_objects}")
+                    + ". "
+                )
+                print_success("Skipped Pre-Population")
 
     def __print_results(self):
         num_listed_objs = len(self.listed_objs)
