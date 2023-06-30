@@ -4,8 +4,8 @@ from tabulate import tabulate
 
 from colorama import Back, Fore, Style
 
-from ..const import BOLD, END, UNDERLINE
-from .parse_utils import format_size, format_time
+from pyaisloader.const import BOLD, END, UNDERLINE
+from pyaisloader.utils.parse_utils import format_size, format_time
 
 
 def bold(msg):

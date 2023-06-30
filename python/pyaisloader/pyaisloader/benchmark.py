@@ -4,13 +4,13 @@ import time
 
 from aistore.sdk.const import PROVIDER_AIS
 
-from .utils.bucket_utils import (
+from pyaisloader.utils.bucket_utils import (
     add_one_object,
     bucket_exists,
     bucket_obj_count,
     bucket_size,
 )
-from .utils.cli_utils import (
+from pyaisloader.utils.cli_utils import (
     bold,
     confirm_continue,
     print_caution,
@@ -20,10 +20,10 @@ from .utils.cli_utils import (
     terminate,
     underline,
 )
-from .utils.concurrency_utils import multiworker_deploy
-from .utils.parse_utils import format_time
-from .utils.random_utils import generate_bytes, generate_random_str
-from .utils.stat_utils import combine_results, print_results
+from pyaisloader.utils.concurrency_utils import multiworker_deploy
+from pyaisloader.utils.parse_utils import format_time
+from pyaisloader.utils.random_utils import generate_bytes, generate_random_str
+from pyaisloader.utils.stat_utils import combine_results, print_results
 
 
 class BenchmarkStats:

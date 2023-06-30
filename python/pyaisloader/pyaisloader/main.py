@@ -1,12 +1,12 @@
 import argparse
 import pkg_resources
 
-from .benchmark import PutGetMixedBenchmark, ListBenchmark
-from .const import PROVIDERS
-from .client_config import client
+from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
+from pyaisloader.const import PROVIDERS
+from pyaisloader.client_config import client
 
-from .utils.parse_utils import parse_size, parse_time, parse_bool
-from .utils.print_utils import bold
+from pyaisloader.utils.parse_utils import parse_size, parse_time, parse_bool
+from pyaisloader.utils.print_utils import bold
 
 
 VERSION = pkg_resources.require("pyaisloader")[0].version

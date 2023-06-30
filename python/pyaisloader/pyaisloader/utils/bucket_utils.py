@@ -1,7 +1,11 @@
 from requests.exceptions import HTTPError
 
-from .print_utils import print_caution, print_in_progress, print_success
-from .random_utils import generate_bytes
+from pyaisloader.utils.print_utils import (
+    print_caution,
+    print_in_progress,
+    print_success,
+)
+from pyaisloader.utils.random_utils import generate_bytes
 
 
 def bucket_exists(bucket):

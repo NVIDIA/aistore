@@ -1,7 +1,7 @@
 import humanfriendly
 import pendulum
 
-from ..const import BOOLEAN_VALUES
+from pyaisloader.const import BOOLEAN_VALUES
 
 
 def parse_time(time_str):

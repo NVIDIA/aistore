@@ -1,7 +1,7 @@
 from tabulate import tabulate
 
-from ..const import BOLD, END
-from .parse_utils import format_size, format_time
+from pyaisloader.const import BOLD, END
+from pyaisloader.utils.parse_utils import format_size, format_time
 
 
 def combine_results(results, num_workers):

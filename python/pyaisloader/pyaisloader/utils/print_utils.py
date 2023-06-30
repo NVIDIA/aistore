@@ -1,7 +1,7 @@
 from colorama import Back, Fore, Style
 
-from ..const import BOLD, END, UNDERLINE
-from .cli_utils import terminate
+from pyaisloader.const import BOLD, END, UNDERLINE
+from pyaisloader.utils.cli_utils import terminate
 
 
 def bold(msg):
