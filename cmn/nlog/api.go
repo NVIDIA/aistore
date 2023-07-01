@@ -37,6 +37,6 @@ func Flush() {
 }
 
 func FlushExit() {
-	nlogs[sevErr].flushExit()
-	nlogs[sevInfo].flushExit()
+	nlogs[sevErr].flush(true)
+	nlogs[sevInfo].flush(true)
 }
