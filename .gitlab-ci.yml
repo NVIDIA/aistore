@@ -140,12 +140,15 @@ test:short:
 test:short:python:
   <<: *test_short_def
   variables:
+    AIS_ENDPOINT: "http://localhost:8080"
     BUCKET: "aws://ais-ci-python"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
     - make python_sdk_tests
     - make python_botocore_tests
+    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
+
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
@@ -273,10 +276,13 @@ test:long:aisloader:
   timeout: 10m
   only:
     - schedules
+  variables:
+    AIS_ENDPOINT: "http://localhost:8080"
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
+    - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
 
 #
 # Kubernetes stages

@@ -3,6 +3,7 @@ SHELL := /bin/bash
 PYTHON = python3
 PIP = pip3
 DOCFILE := ../docs/python_sdk.md
+PYAISLOADER_TEST_TYPE ?= short
 define PREFIX =
 ---
 layout: post
@@ -98,3 +99,7 @@ generate-docs:
 	@ echo "$$PREFIX" > $(DOCFILE)
 	@ pydoc-markdown -I ./aistore/sdk -m client -m cluster -m bucket -m object -m multiobj.object_group -m multiobj.object_names -m multiobj.object_range -m multiobj.object_template -m job -m object_reader -m object_iterator -m etl '{ renderer: { type: markdown, descriptive_class_title: "Class: ", render_toc: true, render_toc_title: "", render_module_header: false, classdef_with_decorators: true } }' >> $(DOCFILE)
 	@ sed -i -e 's/####/###/g' $(DOCFILE)
+
+.PHONY:
+test-pyaisloader:
+	@./pyaisloader/ci-test.sh $(PYAISLOADER_TEST_TYPE)
