@@ -17,7 +17,11 @@ Sharding - is exactly the approach that we took in AIStore. Archiving or shardin
 
 > While I/O performance was always the primary motivation, the fact that a sharded dataset is, effectively, a backup of the original one must be considered an important added bonus.
 
-Today AIS equally supports formats: TAR, TGZ (TAR.GZ), and ZIP.
+Today AIS equally supports formats: TAR, TGZ (TAR.GZ), TAR.LZ4, ZIP, where:
+
+* TAR is a well-known format first introduced in Unix V7 circa 1979 with specific formatting flavors including USTAR, PAX, and GNU TAR (all three are equally supported);
+* TGZ (aka TAR.GZ) and TAR.LZ4 provide, respectively, gzip and lz4 compression to tar files (aka tarballs);
+* and ZIP is [PKWARE ZIP](https://www.pkware.com/appnote) first introduced in 1989.
 
 AIS can natively read, write, append(**), and list archives.
 

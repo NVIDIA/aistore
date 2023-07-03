@@ -34,13 +34,15 @@ var (
 		indent1 + "\t" + archExts + "-formatted object - aka \"shard\".\n" +
 		indent1 + "\tBoth APPEND (to an existing shard) and PUT (a new version of the shard) are supported.\n" +
 		indent1 + "\tExamples:\n" +
-		indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --archpath name-in-archive' - append file to a given shard,\n" +
+		indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,\n" +
 		indent1 + "\t   optionally, rename it (inside archive) as specified;\n" +
-		indent1 + "\t- 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;\n" +
+		indent1 + "\t- 'local-filename bucket/shard-00123.tar.lz4 --append-if --archpath name-in-archive' - append file to a given shard if exists,\n" +
+		indent1 + "\t   otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);\n" +
+		indent1 + "\t- 'src-dir bucket/shard-99999.zip --append' - archive entire 'src-dir' directory; iff the destination .zip doesn't exist create a new one;\n" +
 		indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
 		indent1 + "\tTips:\n" +
 		indent1 + "\t- use '--dry-run' option if in doubt;\n" +
-		indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket', see --help for details."
+		indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details)."
 )
 
 var (
@@ -100,14 +102,16 @@ var (
 
 	// archive get
 	archGetCmd = cli.Command{
-		Name: commandGet,
-		Usage: "get a shard, an archived file, or a range of bytes from the above;\n" +
-			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
-			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-')",
+		Name: objectCmdGet.Name,
+		Usage: "get a shard, an archived file or files, or a range of bytes from the above;\n" +
+			indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-');\n" +
+			indent4 + "\tassorted options include\n" +
+			indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
+			indent4 + "\t- '--extract' to extract archived content",
 		ArgsUsage:    getShardArgument,
-		Flags:        objectCmdsFlags[commandGet],
-		Action:       getHandler,
-		BashComplete: bucketCompletions(bcmplop{separator: true}),
+		Flags:        objectCmdGet.Flags,
+		Action:       objectCmdGet.Action,
+		BashComplete: objectCmdGet.BashComplete,
 	}
 
 	// archive ls
@@ -276,11 +280,15 @@ func putApndArchHandler(c *cli.Context) (err error) {
 	//
 	// multi-file cases
 	//
+	if !a.appendOnly && !a.appendIf {
+		return incorrectUsageMsg(c, "multi-file operation requires either %s or %s",
+			qflprn(archAppendFlag), qflprn(archAppendIfExistFlag))
+	}
 
 	// archpath
 	if a.archpath != "" && !strings.HasSuffix(a.archpath, "/") {
 		if !flagIsSet(c, yesFlag) {
-			warn := fmt.Sprintf("no traling filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
+			warn := fmt.Sprintf("no trailing filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
 			actionWarn(c, warn)
 			if ok := confirm(c, "Proceed anyway?"); !ok {
 				return

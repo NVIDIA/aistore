@@ -48,6 +48,27 @@ func getHandler(c *cli.Context) error {
 	// destination (empty "" implies using source `basename`)
 	outFile := c.Args().Get(1)
 
+	//
+	// TODO -- FIXME: `ais archive get` must have its own flags
+	//
+	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
+	}
+	if flagIsSet(c, checkObjCachedFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, offsetFlag) && flagIsSet(c, extractFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(offsetFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, checkObjCachedFlag) {
+		return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
+			qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+	}
+	if flagIsSet(c, getObjPrefixFlag) && (flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag)) {
+		return fmt.Errorf("extracting content (%s, %s) from multiple objects (%s) is not implemented yet",
+			qflprn(archpathGetFlag), qflprn(extractFlag), qflprn(getObjPrefixFlag))
+	}
+
 	// GET multiple
 	if flagIsSet(c, getObjPrefixFlag) {
 		if objName != "" {
@@ -188,20 +209,6 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 		oah     api.ObjAttrs
 		units   string
 	)
-	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, extractFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
-	}
-	if flagIsSet(c, checkObjCachedFlag) && flagIsSet(c, extractFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
-	}
-	if flagIsSet(c, offsetFlag) && flagIsSet(c, extractFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(offsetFlag), qflprn(archpathGetFlag))
-	}
-	// TODO: easy
-	if flagIsSet(c, archpathGetFlag) && flagIsSet(c, checkObjCachedFlag) {
-		return fmt.Errorf("checking presence (%s) of archived files (%s) not implemented yet",
-			qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
-	}
 	if outFile == fileStdIO && flagIsSet(c, extractFlag) {
 		return fmt.Errorf("cannot extract archived files (%s) to standard output - not implemented yet",
 			qflprn(extractFlag))
@@ -336,6 +343,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, outFile string, silent bool
 	} else {
 		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s)\n", objName, bn, outFile, sz)
 	}
+	return
 
 extract:
 	var (

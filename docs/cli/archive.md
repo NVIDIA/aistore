@@ -50,35 +50,35 @@ See also:
 > [Archive multiple objects](/docs/cli/object.md#archive-multiple-objects)
 
 ## Table of Contents
+- [Archive files and directories](#archive-files-and-directories)
+  - [Append files and directories to an existing archive](#append-files-and-directoriesto-an-existing-archive)
 - [Archive multiple objects](#archive-multiple-objects)
-- [List archive content](#list-archive-content)
-- [Append file to archive](#append-file-to-archive)
+- [List archived content](#list-archived-content)
+- [Get archived content](#get-archived-content)
 
-## Archive multiple objects
+## Archive files and directories
 
 Archive multiple objects from the source bucket.
 
 ```console
 $ ais archive put --help
 NAME:
-   ais archive put - put multi-object (.tar, .tgz or .tar.gz, .zip, .tar.lz4) archive
+   ais archive put - archive a file, a directory, or multiple files and/or directories as
+     (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted object - aka "shard".
+     Both APPEND (to an existing shard) and PUT (a new version of the shard) are supported.
+     Examples:
+     - 'local-filename bucket/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,
+        optionally, rename it (inside archive) as specified;
+     - 'local-filename bucket/shard-00123.tar.lz4 --append-if --archpath name-in-archive' - append file to a given shard if exists,
+        otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);
+     - 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;
+     - '"sys, docs" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.
+     Tips:
+     - use '--dry-run' option if in doubt;
+     - to archive objects from a ais:// or remote bucket, run 'ais archive bucket', see --help for details.
 
 USAGE:
-   ais archive put [command options] SRC_BUCKET DST_BUCKET/OBJECT_NAME
-
-OPTIONS:
-   --template value   template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
-                      --template 'dir/subdir/'
-                      --template 'shard-{1000..9999}.tar'
-                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                      --template "prefix-{0010..9999..2}-suffix"
-   --list value       comma-separated list of object names, e.g.:
-                      --list 'o1,o2,o3'
-                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-   --include-src-bck  prefix names of archived objects with the source bucket name
-   --append           if destination object ("archive", "shard") already exists, append to it
-                      (instead of creating a new one)
-   --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
+   ais archive put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME
 ```
 
 The operation accepts either an explicitly defined *list* or template-defined *range* of object names (to archive).
@@ -93,89 +93,9 @@ For the most recently updated list of supported archival formats, please see:
 
 * [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
 
-### Examples
+### Append files and directories to an existing archive
 
-1. Archive list of objects from a given bucket:
-
-```console
-$ ais archive put ais://bck/arch.tar --list obj1,obj2
-Archiving "ais://bck/arch.tar" ...
-```
-
-Resulting `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
-
-2. Archive objects from a different bucket, use template (range):
-
-```console
-$ ais archive put ais://src ais://dst/arch.tar --template "obj-{0..9}"
-
-Archiving "ais://dst/arch.tar" ...
-```
-
-`ais://dst/arch.tar` now contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
-
-3. Archive 3 objects and then append 2 more:
-
-```console
-$ ais archive put ais://bck/arch1.tar --template "obj{1..3}"
-Archived "ais://bck/arch1.tar" ...
-$ ais archive ls ais://bck/arch1.tar
-NAME                     SIZE
-arch1.tar                31.00KiB
-    arch1.tar/obj1       9.26KiB
-    arch1.tar/obj2       9.26KiB
-    arch1.tar/obj3       9.26KiB
-
-$ ais archive put ais://bck/arch1.tar --template "obj{4..5}" --append
-Archived "ais://bck/arch1.tar"
-
-$ ais archive ls ais://bck/arch1.tar
-NAME                     SIZE
-arch1.tar                51.00KiB
-    arch1.tar/obj1       9.26KiB
-    arch1.tar/obj2       9.26KiB
-    arch1.tar/obj3       9.26KiB
-    arch1.tar/obj4       9.26KiB
-    arch1.tar/obj5       9.26KiB
-```
-
-## List archive content
-
-`ais archive ls BUCKET/OBJECT`
-
-Display an archive content as a tree, where the root is the archive name and leaves are files inside the archive.
-The filenames are always sorted alphabetically.
-
-### Options
-
-| Name | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--props` | `string` | Comma-separated properties to return with object names | `"size"`
-| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
-
-### Examples
-
-```console
-$ ais archive ls ais://bck/arch.tar
-NAME                SIZE
-arch.tar            4.5KiB
-    arch.tar/obj1   1.0KiB
-    arch.tar/obj2   1.0KiB
-```
-
-## Append file to archive
-
-Add a file to an existing archive.
-
-### Options
-
-| Name | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--archpath` | `string` | Path inside the archive for the new file | `""`
-
-**NOTE:** the option `--archpath` cannot be omitted (MUST be specified).
-
-### Example 1
+#### Examples
 
 ```console
 # contents _before_:
@@ -186,7 +106,7 @@ arch.tar            4.5KiB
     arch.tar/obj2   1.0KiB
 
 # Do append:
-$ ais archive /tmp/obj1.bin ais://bck/arch.tar --archpath bin/obj1
+$ ais archive put /tmp/obj1.bin ais://bck/arch.tar --archpath bin/obj1
 APPEND "/tmp/obj1.bin" to object "ais://bck/arch.tar[/bin/obj1]"
 
 # contents _after_:
@@ -197,8 +117,6 @@ arch.tar                6KiB
     arch.tar/obj1       1.0KiB
     arch.tar/obj2       1.0KiB
 ```
-
-### Example 2
 
 ```console
 # contents _before_:
@@ -224,6 +142,176 @@ shard-2.tar                                      7.50KiB
     shard-2.tar/504c563d14852368575b-5.test      1.00KiB
     shard-2.tar/c7bcb7014568b5e7d13b-4.test      1.00KiB
     shard-2.tar/license.test                     1.05KiB
+```
+
+## Archive multiple objects
+
+```console
+$ ais archive bucket --help
+NAME:
+   ais archive bucket - archive multiple objects from SRC_BUCKET as (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted shard
+
+USAGE:
+   ais archive bucket [command options] SRC_BUCKET DST_BUCKET/SHARD_NAME
+
+OPTIONS:
+   --template value   template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                      (with optional steps and gaps), e.g.:
+                      --template "" # (an empty or '*' template matches eveything)
+                      --template 'dir/subdir/'
+                      --template 'shard-{1000..9999}.tar'
+                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                      and similarly, when specifying files and directories:
+                      --template '/home/dir/subdir/'
+                      --template "/abc/prefix-{0010..9999..2}-suffix"
+   --list value       comma-separated list of object or file names, e.g.:
+                      --list 'o1,o2,o3'
+                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                      or, when listing files and/or directories:
+                      --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --dry-run          preview the results without really running the action
+   --include-src-bck  prefix the names of archived files with the source bucket name
+   --append-if        if destination object ("archive", "shard") exists append to it, otherwise archive a new one
+   --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
+   --wait             wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --help, -h         show help
+```
+
+### Examples
+
+1. Archive a list of objects from a given bucket:
+
+```console
+$ ais archive bucket ais://bck/arch.tar --list obj1,obj2
+Archiving "ais://bck/arch.tar" ...
+```
+
+Resulting `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
+
+2. Archive objects from a different bucket, use template (range):
+
+```console
+$ ais archive bucket ais://src ais://dst/arch.tar --template "obj-{0..9}"
+
+Archiving "ais://dst/arch.tar" ...
+```
+
+`ais://dst/arch.tar` now contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
+
+3. Archive 3 objects and then append 2 more:
+
+```console
+$ ais archive bucket ais://bck/arch1.tar --template "obj{1..3}"
+Archived "ais://bck/arch1.tar" ...
+$ ais archive ls ais://bck/arch1.tar
+NAME                     SIZE
+arch1.tar                31.00KiB
+    arch1.tar/obj1       9.26KiB
+    arch1.tar/obj2       9.26KiB
+    arch1.tar/obj3       9.26KiB
+
+$ ais archive bucket ais://bck/arch1.tar --template "obj{4..5}" --append
+Archived "ais://bck/arch1.tar"
+
+$ ais archive ls ais://bck/arch1.tar
+NAME                     SIZE
+arch1.tar                51.00KiB
+    arch1.tar/obj1       9.26KiB
+    arch1.tar/obj2       9.26KiB
+    arch1.tar/obj3       9.26KiB
+    arch1.tar/obj4       9.26KiB
+    arch1.tar/obj5       9.26KiB
+```
+
+## List archived content
+
+```console
+NAME:
+   ais archive ls - list archived content (supported formats: .tar, .tgz or .tar.gz, .zip, .tar.lz4)
+
+USAGE:
+   ais archive ls [command options] BUCKET[/SHARD_NAME]
+```
+
+List archived content as a tree with archive ("shard") name as a root and archived files as leaves.
+Filenames are always sorted alphabetically.
+
+### Options
+
+| Name | Type | Description | Default |
+| --- | --- | --- | --- |
+| `--props` | `string` | Comma-separated properties to return with object names | `"size"`
+| `--all` | `bool` | Show all objects, including misplaced, duplicated, etc. | `false` |
+
+### Examples
+
+```console
+$ ais archive ls ais://bck/arch.tar
+NAME                SIZE
+arch.tar            4.5KiB
+    arch.tar/obj1   1.0KiB
+    arch.tar/obj2   1.0KiB
+```
+
+## Get archived content
+
+```console
+$ ais archive get --help
+NAME:
+   ais archive get - get a shard, an archived file or files, or a range of bytes from the above;
+              write the content locally with destination options including: filename, directory, STDOUT ('-');
+              assorted options include
+              - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)
+              - '--extract' to extract archived content
+
+USAGE:
+   ais archive get [command options] BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-]
+
+OPTIONS:
+   --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --length value    object read length; default formatting: IEC (use '--units' to override)
+   --check-cached    check if a given object from a remote bucket is present ("cached") in AIS
+   --archpath value  extract the specified file from archive (shard)
+   --extract, -x     extract all files from archive(s)
+   --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
+                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                     si  - SI (metric) format, e.g.: KB, MB, GB
+                     raw - do not convert to (or from) human-readable format
+   --verbose, -v     verbose
+   --help, -h        show help
+```
+
+### Example: extract all files
+
+Let's say, we have a certain shard in a certain bucket:
+
+```console
+$ ais ls ais://dst --archive
+NAME                     SIZE
+A.tar.gz                 5.18KiB
+    A.tar.gz/111.ext1    12.56KiB
+    A.tar.gz/222.ext1    12.56KiB
+    A.tar.gz/333.ext2    12.56KiB
+```
+
+We can then go ahead and extract it to local directory, e.g.:
+
+```console
+$ ais archive get ais://dst/A.tar.gz /tmp/www --extract
+GET A.tar.gz from ais://dst as "/tmp/www/A.tar.gz" (5.18KiB) and extract to /tmp/www/A/
+
+$ ls /tmp/www/A
+111.ext1  222.ext1  333.ext2
+```
+
+### Example: extract one specific file
+
+```console
+$ ais archive get ais://dst/A.tar.gz /tmp/w --archpath 111.ext1
+GET 111.ext1 from ais://dst/A.tar.gz as "/tmp/w/111.ext1" (12.56KiB)
+
+$ ls /tmp/w
+111.ext1
 ```
 
 ## Generate shards
