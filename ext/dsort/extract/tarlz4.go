@@ -13,103 +13,45 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dsort/filetype"
+	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/pierrec/lz4/v3"
 )
 
 type tarlz4ExtractCreator struct {
-	t cluster.Target
+	t   cluster.Target
+	ext string
 }
 
 // interface guard
 var _ Creator = (*tarlz4ExtractCreator)(nil)
 
 func NewTarlz4ExtractCreator(t cluster.Target) Creator {
-	return &tarlz4ExtractCreator{t: t}
+	return &tarlz4ExtractCreator{t: t, ext: archive.ExtTarLz4}
 }
 
 // ExtractShard  the tarball f and extracts its metadata.
-func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
-	toDisk bool) (extractedSize int64, extractedCount int, err error) {
-	var (
-		size    int64
-		header  *tar.Header
-		workFQN = fs.CSM.Gen(lom, filetype.DSortFileType, "") // tarFQN
-	)
-
-	lzr := lz4.NewReader(r)
-	tr := tar.NewReader(lzr)
-
-	// extract to .tar
-	f, err := cos.CreateFile(workFQN)
+func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(t.ext, r)
 	if err != nil {
 		return 0, 0, err
 	}
-	tw := tar.NewWriter(f)
-	defer func() {
-		cos.Close(tw)
-		cos.Close(f)
-	}()
-
-	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
-	defer slab.Free(buf)
-
-	offset := int64(0)
-	for {
-		header, err = tr.Next()
-		if err == io.EOF {
-			return extractedSize, extractedCount, nil
-		} else if err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		bmeta := cos.MustMarshal(header)
-
-		if err := tw.WriteHeader(header); err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		offset += t.MetadataSize()
-
-		if header.Typeflag == tar.TypeDir {
-			continue
-		}
-		if header.Format == tar.FormatPAX {
-			offset += t.MetadataSize()
-			size := estimateXHeaderSize(header.PAXRecords)
-			size = cos.CeilAlignInt64(size, archive.TarBlockSize)
-			offset += size
-		}
-
-		data := cos.NewSizedReader(tr, header.Size)
-		extractMethod := ExtractToMem
-		if toDisk {
-			extractMethod = ExtractToDisk
-		}
-		extractMethod.Set(ExtractToWriter)
-
-		args := extractRecordArgs{
-			shardName:     lom.ObjName,
-			fileType:      filetype.DSortFileType,
-			recordName:    header.Name,
-			r:             data,
-			w:             tw,
-			metadata:      bmeta,
-			extractMethod: extractMethod,
-			offset:        offset,
-			buf:           buf,
-		}
-		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		extractedSize += size
-		extractedCount++
-
-		// .tar format pads all block to 512 bytes
-		offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize)
+	workFQN := fs.CSM.Gen(lom, ct.DSortFileType, "") // tarFQN
+	wfh, err := cos.CreateFile(workFQN)
+	if err != nil {
+		return 0, 0, err
 	}
+
+	s := &rcbCtx{parent: t, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	s.tw = tar.NewWriter(wfh)
+	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
+
+	_, err = ar.Range("", s.xtar)
+
+	slab.Free(buf)
+	cos.Close(s.tw)
+	cos.Close(wfh)
+	return s.extractedSize, s.extractedCount, err
 }
 
 // CreateShard creates a new shard locally based on the Shard.

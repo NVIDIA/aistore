@@ -14,14 +14,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
 	tarExtractCreator struct {
-		t cluster.Target
+		t   cluster.Target
+		ext string
 	}
 
 	// tarRecordDataReader is used for writing metadata as well as data to the buffer.
@@ -45,7 +45,7 @@ var (
 )
 
 func NewTarExtractCreator(t cluster.Target) Creator {
-	return &tarExtractCreator{t: t}
+	return &tarExtractCreator{t: t, ext: archive.ExtTar}
 }
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
@@ -99,78 +99,19 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
-	toDisk bool) (extractedSize int64, extractedCount int, err error) {
-	var (
-		size   int64
-		header *tar.Header
-		tr     = tar.NewReader(r)
-	)
-
-	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
-	defer slab.Free(buf)
-
-	offset := int64(0)
-	for {
-		header, err = tr.Next()
-		if err == io.EOF {
-			return extractedSize, extractedCount, nil
-		} else if err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		bmeta := cos.MustMarshal(header)
-		offset += t.MetadataSize()
-
-		if header.Typeflag == tar.TypeDir {
-			// We can safely ignore this case because we do `MkdirAll` anyway
-			// when we create files. And since dirs can appear after all the files
-			// we must have this `MkdirAll` before files.
-			continue
-		}
-		if header.Format == tar.FormatPAX {
-			// When dealing with `tar.FormatPAX` we also need to take into
-			// consideration the `tar.TypeXHeader` that comes before the actual header.
-			// Together it looks like this: [x-header][pax-records][pax-header][pax-file].
-			// Since `tar.Reader` skips over this header and writes to `header.PAXRecords`
-			// we need to manually adjust the offset, otherwise when using the
-			// offset we will point to totally wrong location.
-
-			// Add offset for `tar.TypeXHeader`.
-			offset += t.MetadataSize()
-
-			// Add offset for size of PAX records - there is no way of knowing
-			// the size, so we must estimate it by ourselves...
-			size := estimateXHeaderSize(header.PAXRecords)
-			size = cos.CeilAlignInt64(size, archive.TarBlockSize)
-			offset += size
-		}
-
-		data := cos.NewSizedReader(tr, header.Size)
-		extractMethod := ExtractToMem
-		if toDisk {
-			extractMethod = ExtractToDisk
-		}
-		args := extractRecordArgs{
-			shardName:     lom.ObjName,
-			fileType:      fs.ObjectType,
-			recordName:    header.Name,
-			r:             data,
-			metadata:      bmeta,
-			extractMethod: extractMethod,
-			offset:        offset,
-			buf:           buf,
-		}
-		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		extractedSize += size
-		extractedCount++
-
-		// .tar format pads all block to 512 bytes
-		offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize)
+func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(t.ext, r)
+	if err != nil {
+		return 0, 0, err
 	}
+	s := &rcbCtx{parent: t, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
+	s.buf = buf
+
+	_, err = ar.Range("", s.xtar)
+
+	slab.Free(buf)
+	return s.extractedSize, s.extractedCount, err
 }
 
 // CreateShard creates a new shard locally based on the Shard.

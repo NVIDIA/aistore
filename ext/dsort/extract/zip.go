@@ -10,16 +10,17 @@ import (
 	"io"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
 type (
 	zipExtractCreator struct {
-		t cluster.Target
+		t   cluster.Target
+		ext string
 	}
 
 	zipFileHeader struct {
@@ -46,7 +47,7 @@ type (
 var _ Creator = (*zipExtractCreator)(nil)
 
 func NewZipExtractCreator(t cluster.Target) Creator {
-	return &zipExtractCreator{t: t}
+	return &zipExtractCreator{t: t, ext: archive.ExtZip}
 }
 
 func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
@@ -106,62 +107,18 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
-	toDisk bool) (extractedSize int64, extractedCount int, err error) {
-	var (
-		zr   *zip.Reader
-		size int64
-	)
-
-	if zr, err = zip.NewReader(r, lom.SizeBytes()); err != nil {
-		return extractedSize, extractedCount, err
+func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(z.ext, r, lom.SizeBytes())
+	if err != nil {
+		return 0, 0, err
 	}
-
+	s := &rcbCtx{parent: z, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	buf, slab := z.t.PageMM().AllocSize(lom.SizeBytes())
-	defer slab.Free(buf)
 
-	for _, f := range zr.File {
-		header := f.FileHeader
-		metadata := zipFileHeader{
-			Name:    header.Name,
-			Comment: header.Comment,
-		}
+	_, err = ar.Range("", s.xzip)
 
-		bmeta := cos.MustMarshal(metadata)
-
-		if f.FileInfo().IsDir() {
-			// We can safely ignore this case because we do `MkdirAll` anyway
-			// when we create files. And since dirs can appear after all the files
-			// we must have this `MkdirAll` before files.
-			continue
-		}
-		file, err := f.Open()
-		if err != nil {
-			return extractedSize, extractedCount, err
-		}
-		extractMethod := ExtractToMem
-		if toDisk {
-			extractMethod = ExtractToDisk
-		}
-		args := extractRecordArgs{
-			shardName:     lom.ObjName,
-			fileType:      fs.ObjectType,
-			recordName:    header.Name,
-			r:             cos.NewSizedReader(file, int64(header.UncompressedSize64)),
-			metadata:      bmeta,
-			extractMethod: extractMethod,
-			buf:           buf,
-		}
-		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-			cos.Close(file)
-			return extractedSize, extractedCount, err
-		}
-		cos.Close(file)
-		extractedSize += size
-		extractedCount++
-	}
-
-	return extractedSize, extractedCount, nil
+	slab.Free(buf)
+	return s.extractedSize, s.extractedCount, err
 }
 
 // CreateShard creates a new shard locally based on the Shard.

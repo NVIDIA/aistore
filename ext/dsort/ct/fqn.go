@@ -1,14 +1,14 @@
-// Package filetype provides the implementation of custom content file type for dsort.
-// This content type is used when creating files during local extraction phase if no memory is
-// left to be used by the given dsort process.
+// Package ct provides additional dsort-specific content types
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package filetype
+package ct
 
 import (
 	"github.com/NVIDIA/aistore/fs"
 )
+
+// for common content types, see fs/content.go
 
 const (
 	DSortFileType     = "ds"

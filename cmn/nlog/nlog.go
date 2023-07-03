@@ -111,11 +111,13 @@ func (nlog *nlog) flush(exit bool) {
 	nlog.mw.Lock()
 	if nlog.pw.woff > 0 {
 		if exit {
-			nlog.ch <- nlog.pw // always have two spare slots (see below)
+			nlog.ch <- nlog.pw // always have two spare slots (see `cap` below)
 			nlog.ch <- nil
 		} else if (nlog.pw.avail() < nlogBufSize/2) || (mono.Since(nlog.last.Load()) > 10*time.Second) {
-			nlog.ch <- nlog.pw // ditto
-			nlog.get()
+			if len(nlog.ch) < cap(nlog.ch)-1 { // ditto
+				nlog.ch <- nlog.pw
+				nlog.get()
+			}
 		}
 	}
 	nlog.mw.Unlock()
@@ -128,11 +130,11 @@ func (nlog *nlog) write(line *fixed) {
 	if nlog.pw.avail() > nlogLineSize {
 		return
 	}
-	if len(nlog.ch) < cap(nlog.ch)-2 {
+	if len(nlog.ch) < cap(nlog.ch)-2 { // ditto
 		nlog.ch <- nlog.pw
 		nlog.get()
 	} else {
-		msg := fmt.Sprintf("Error: [nlog] drop %dB\n", nlog.pw.woff)
+		msg := fmt.Sprintf("Error: [nlog] drop %dB\n", nlog.pw.woff) // discard
 		os.Stderr.WriteString(msg)
 		nlog.pw.reset()
 	}

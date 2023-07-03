@@ -14,120 +14,45 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dsort/filetype"
+	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 type targzExtractCreator struct {
-	t cluster.Target
+	t   cluster.Target
+	ext string
 }
 
 // interface guard
 var _ Creator = (*targzExtractCreator)(nil)
 
-func NewTargzExtractCreator(t cluster.Target) Creator {
-	return &targzExtractCreator{t: t}
+func NewTargzExtractCreator(t cluster.Target, ext string) Creator {
+	return &targzExtractCreator{t: t, ext: ext}
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor,
-	toDisk bool) (extractedSize int64, extractedCount int, err error) {
-	var (
-		size    int64
-		header  *tar.Header
-		workFQN = fs.CSM.Gen(lom, filetype.DSortFileType, "") // tarFQN
-	)
-
-	gzr, err := gzip.NewReader(r)
+func (t *targzExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(t.ext, r)
 	if err != nil {
 		return 0, 0, err
 	}
-	defer cos.Close(gzr)
-	tr := tar.NewReader(gzr)
-
-	// extract to .tar
-	f, err := cos.CreateFile(workFQN)
+	workFQN := fs.CSM.Gen(lom, ct.DSortFileType, "") // tarFQN
+	wfh, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return 0, 0, err
 	}
-	tw := tar.NewWriter(f)
-	defer func() {
-		cos.Close(tw)
-		cos.Close(f)
-	}()
 
+	s := &rcbCtx{parent: t, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	s.tw = tar.NewWriter(wfh)
 	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
-	defer slab.Free(buf)
+	s.buf = buf
 
-	offset := int64(0)
-	for {
-		header, err = tr.Next()
-		if err == io.EOF {
-			return extractedSize, extractedCount, nil
-		} else if err != nil {
-			return extractedSize, extractedCount, err
-		}
+	_, err = ar.Range("", s.xtar)
 
-		bmeta := cos.MustMarshal(header)
-
-		if err := tw.WriteHeader(header); err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		offset += t.MetadataSize()
-
-		if header.Typeflag == tar.TypeDir {
-			// We can safely ignore this case because we do `MkdirAll` anyway
-			// when we create files. And since dirs can appear after all the files
-			// we must have this `MkdirAll` before files.
-			continue
-		}
-		if header.Format == tar.FormatPAX {
-			// When dealing with `tar.FormatPAX` we also need to take into
-			// consideration the `tar.TypeXHeader` that comes before the actual header.
-			// Together it looks like this: [x-header][pax-records][pax-header][pax-file].
-			// Since `tar.Reader` skips over this header and writes to `header.PAXRecords`
-			// we need to manually adjust the offset, otherwise when using the
-			// offset we will point to totally wrong location.
-
-			// Add offset for `tar.TypeXHeader`.
-			offset += t.MetadataSize()
-
-			// Add offset for size of PAX records - there is no way of knowing
-			// the size, so we must estimate it by ourselves...
-			size := estimateXHeaderSize(header.PAXRecords)
-			size = cos.CeilAlignInt64(size, archive.TarBlockSize)
-			offset += size
-		}
-
-		data := cos.NewSizedReader(tr, header.Size)
-		extractMethod := ExtractToMem
-		if toDisk {
-			extractMethod = ExtractToDisk
-		}
-		extractMethod.Set(ExtractToWriter)
-
-		args := extractRecordArgs{
-			shardName:     lom.ObjName,
-			fileType:      filetype.DSortFileType,
-			recordName:    header.Name,
-			r:             data,
-			w:             tw,
-			metadata:      bmeta,
-			extractMethod: extractMethod,
-			offset:        offset,
-			buf:           buf,
-		}
-		if size, err = extractor.ExtractRecordWithBuffer(args); err != nil {
-			return extractedSize, extractedCount, err
-		}
-
-		extractedSize += size
-		extractedCount++
-
-		// .tar format pads all block to 512 bytes
-		offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize)
-	}
+	slab.Free(buf)
+	cos.Close(s.tw)
+	cos.Close(wfh)
+	return s.extractedSize, s.extractedCount, err
 }
 
 // CreateShard creates a new shard locally based on the Shard.

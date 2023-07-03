@@ -20,7 +20,7 @@ import (
 // usage boils down to a) constructing (`NewReader`) and b) iterating (`Range`) - that's all
 // (all supported formats)
 type (
-	ReadCB func(filename string, size int64, reader io.ReadCloser, hdr any) (bool, error)
+	ReadCB func(filename string, reader cos.ReadCloseSizer, hdr any) (bool, error)
 
 	Reader interface {
 		// pass non-empty filename to facilitate a simple/single selection
@@ -112,7 +112,7 @@ func (tr *tarReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, err
 		}
 		// otherwise, read them all until stopped
 		csl := &cslLimited{LimitedReader: io.LimitedReader{R: tr.tr, N: hdr.Size}}
-		stop, err := rcb(hdr.Name, hdr.Size, csl, hdr)
+		stop, err := rcb(hdr.Name, csl, hdr)
 		if stop || err != nil {
 			return nil, err
 		}
@@ -171,11 +171,15 @@ func (zr *zipReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSiz
 			}
 			continue
 		}
-		csf := &cslFile{size: finfo.Size()}
+
+		debug.Assertf(finfo.Size() == int64(f.FileHeader.UncompressedSize64),
+			"%d vs %d", finfo.Size(), f.FileHeader.UncompressedSize64)
+
+		csf := &cslFile{size: int64(f.FileHeader.UncompressedSize64)}
 		if csf.file, err = f.Open(); err != nil {
 			return
 		}
-		stop, err := rcb(f.FileHeader.Name, int64(f.FileHeader.UncompressedSize64), csf, &f.FileHeader)
+		stop, err := rcb(f.FileHeader.Name, csf, &f.FileHeader)
 		if stop || err != nil {
 			return nil, err
 		}

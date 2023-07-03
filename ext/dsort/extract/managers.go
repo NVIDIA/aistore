@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/ext/dsort/filetype"
+	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
@@ -265,9 +265,9 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := cos.Ext(recordName)
 		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
-		ct, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
+		c, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
-		return contentPath, ct.Make(filetype.DSortFileType)
+		return contentPath, c.Make(ct.DSortFileType)
 	default:
 		debug.Assert(false, storeType)
 		return "", ""
@@ -290,9 +290,9 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		ct, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
+		c, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
-		return ct.Make(filetype.DSortFileType)
+		return c.Make(ct.DSortFileType)
 	default:
 		debug.Assert(false, obj.StoreType)
 		return ""

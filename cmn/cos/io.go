@@ -66,10 +66,6 @@ type (
 		io.Reader
 		io.ReaderAt
 	}
-	sizedRC struct {
-		io.ReadCloser
-		size int64
-	}
 	deferRCS struct {
 		ReadCloseSizer
 		cb func()
@@ -223,9 +219,6 @@ func (f *FileHandle) Open() (ReadOpenCloser, error) {
 
 func NewSizedReader(r io.Reader, size int64) ReadSizer { return &sizedReader{r, size} }
 func (f *sizedReader) Size() int64                     { return f.size }
-
-func NewSizedRC(r io.ReadCloser, size int64) ReadCloseSizer { return &sizedRC{r, size} }
-func (f *sizedRC) Size() int64                              { return f.size }
 
 //////////////
 // deferRCS //

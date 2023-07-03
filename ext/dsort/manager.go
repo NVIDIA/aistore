@@ -21,8 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
-	"github.com/NVIDIA/aistore/ext/dsort/filetype"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -162,9 +162,9 @@ func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode
 
 	if ctx.node.IsTarget() {
 		mm = t.PageMM()
-		err := fs.CSM.Reg(filetype.DSortFileType, &filetype.DSortFile{})
+		err := fs.CSM.Reg(ct.DSortFileType, &ct.DSortFile{})
 		debug.AssertNoErr(err)
-		err = fs.CSM.Reg(filetype.DSortWorkfileType, &filetype.DSortFile{})
+		err = fs.CSM.Reg(ct.DSortWorkfileType, &ct.DSortFile{})
 		debug.AssertNoErr(err)
 	}
 }
@@ -479,13 +479,14 @@ func (m *Manager) setExtractCreator() (err error) {
 	case archive.ExtTar:
 		extractCreator = extract.NewTarExtractCreator(m.ctx.t)
 	case archive.ExtTarTgz, archive.ExtTgz:
-		extractCreator = extract.NewTargzExtractCreator(m.ctx.t)
+		extractCreator = extract.NewTargzExtractCreator(m.ctx.t, m.rs.Extension)
 	case archive.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)
 	case archive.ExtTarLz4:
 		extractCreator = extract.NewTarlz4ExtractCreator(m.ctx.t)
 	default:
 		debug.Assertf(false, "unknown extension %s", m.rs.Extension)
+		return archive.NewErrUnknownMime(m.rs.Extension)
 	}
 
 	if !m.rs.DryRun {
@@ -696,7 +697,7 @@ func (m *Manager) makeRecvShardFunc() transport.RecvObj {
 
 		params := cluster.AllocPutObjParams()
 		{
-			params.WorkTag = filetype.WorkfileRecvShard
+			params.WorkTag = ct.WorkfileRecvShard
 			params.Reader = rc
 			params.Cksum = nil
 			params.Atime = started
