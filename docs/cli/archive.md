@@ -51,7 +51,7 @@ See also:
 
 ## Table of Contents
 - [Archive files and directories](#archive-files-and-directories)
-- [Append files and directories to an existing archive](#append-files-and-directoriesto-an-existing-archive)
+- [Append files and directories to an existing archive](#append-files-and-directories-to-an-existing-archive)
 - [Archive multiple objects](#archive-multiple-objects)
 - [List archived content](#list-archived-content)
 - [Get archived content](#get-archived-content)
