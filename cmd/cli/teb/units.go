@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/stats"
-	"k8s.io/apimachinery/pkg/util/duration"
 )
 
 type unitsCtx struct {
@@ -132,11 +131,24 @@ func fmtDuration(ns int64, units string) string {
 	if units == cos.UnitsRaw {
 		return fmt.Sprintf("%dns", ns)
 	}
-	dur := time.Duration(ns)
-	if dur > 10*time.Second {
-		return duration.HumanDuration(dur)
+	return FormatDuration(time.Duration(ns))
+}
+
+// round to an assorted set of multiples
+func FormatDuration(d time.Duration) string {
+	switch {
+	case d < 100*time.Millisecond:
+		// do nothing on purpose
+	case d < time.Second:
+		d = d.Round(time.Millisecond)
+	case d < 10*time.Second:
+		d = d.Round(10 * time.Millisecond)
+	case d < 100*time.Second:
+		d = d.Round(100 * time.Millisecond)
+	default:
+		d = d.Round(time.Second)
 	}
-	return dur.String()
+	return d.String()
 }
 
 func fmtMilli(val cos.Duration, units string) string {

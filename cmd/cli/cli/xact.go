@@ -23,6 +23,12 @@ import (
 	"github.com/urfave/cli"
 )
 
+const (
+	fmtXactFailed      = "Failed to %s (%q => %q)\n"
+	fmtXactSucceeded   = "Done.\n"
+	fmtXactWaitStarted = "%s %s => %s ...\n"
+)
+
 func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {
 	out = toShowMsg(c, xjid, "To monitor the progress", false)
 	if suffix != "" && out != "" {
