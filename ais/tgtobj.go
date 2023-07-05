@@ -83,7 +83,7 @@ type (
 		nodeID       string
 		filePath     string
 	}
-	// (see also apndArchI)
+	// (see also putA2I)
 	apndOI struct {
 		started time.Time     // started time of receiving - used to calculate the recv duration
 		r       io.ReadCloser // reader with the content of the object.

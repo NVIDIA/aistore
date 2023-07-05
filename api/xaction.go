@@ -182,7 +182,7 @@ func (reqParams *ReqParams) waitBsumm(msg *apc.BsummCtrlMsg, bsumm *cmn.AllBsumm
 	}
 	if status != http.StatusAccepted {
 		if status == http.StatusOK {
-			return errors.New("expected 202 response code on first call, got 200")
+			return errors.New("expected 202 (\"accepted\") response, got 200 (\"ok\")")
 		}
 		return fmt.Errorf("invalid response code: %d", status)
 	}

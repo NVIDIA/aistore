@@ -51,7 +51,7 @@ See also:
 
 ## Table of Contents
 - [Archive files and directories](#archive-files-and-directories)
-  - [Append files and directories to an existing archive](#append-files-and-directoriesto-an-existing-archive)
+- [Append files and directories to an existing archive](#append-files-and-directoriesto-an-existing-archive)
 - [Archive multiple objects](#archive-multiple-objects)
 - [List archived content](#list-archived-content)
 - [Get archived content](#get-archived-content)
@@ -69,7 +69,7 @@ NAME:
      Examples:
      - 'local-filename bucket/shard-00123.tar.lz4 --append --archpath name-in-archive' - append file to a given shard,
         optionally, rename it (inside archive) as specified;
-     - 'local-filename bucket/shard-00123.tar.lz4 --append-if --archpath name-in-archive' - append file to a given shard if exists,
+     - 'local-filename bucket/shard-00123.tar.lz4 --append-or-put --archpath name-in-archive' - append file to a given shard if exists,
         otherwise, create a new shard (and name it shard-00123.tar.lz4, as specified);
      - 'src-dir bucket/shard-99999.zip -put' - one directory; iff the destination .zip doesn't exist create a new one;
      - '"sys, docs" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.
@@ -93,9 +93,16 @@ For the most recently updated list of supported archival formats, please see:
 
 * [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
 
-### Append files and directories to an existing archive
+## Append files and directories to an existing archive
 
-#### Examples
+APPEND operation provides for appending files to existing archives (shards). As such, APPEND is a variation of PUT (above) with additional **two boolean flags**:
+
+| Name | Description |
+| --- | --- |
+| `--append` | add newly archived content to the destination object (\"archive\", \"shard\") that **must** exist |
+| `--append-or-put` | **if** destination object (\"archive\", \"shard\") exists append to it, otherwise archive a new one |
+
+### Examples
 
 ```console
 # contents _before_:
@@ -129,7 +136,7 @@ shard-2.tar                                      5.50KiB
     shard-2.tar/c7bcb7014568b5e7d13b-4.test      1.00KiB
 
 # Do append
-# Note that --archpath can specify fully qualified name of the destination
+# Note that `--archpath` can specify fully qualified name of the destination
 
 $ ais archive put LICENSE ais://nnn/shard-2.tar --archpath shard-2.tar/license.test
 APPEND "/go/src/github.com/NVIDIA/aistore/LICENSE" to "ais://nnn/shard-2.tar[/shard-2.tar/license.test]"
@@ -171,7 +178,7 @@ OPTIONS:
                       --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
    --dry-run          preview the results without really running the action
    --include-src-bck  prefix the names of archived files with the source bucket name
-   --append-if        if destination object ("archive", "shard") exists append to it, otherwise archive a new one
+   --append-or-put    if destination object ("archive", "shard") exists append to it, otherwise archive a new one
    --cont-on-err      keep running archiving xaction in presence of errors in a any given multi-object transaction
    --wait             wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --help, -h         show help
@@ -256,32 +263,54 @@ arch.tar            4.5KiB
 ## Get archived content
 
 ```console
-$ ais archive get --help
-NAME:
-   ais archive get - get a shard, an archived file or files, or a range of bytes from the above;
-              write the content locally with destination options including: filename, directory, STDOUT ('-');
-              assorted options include
-              - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)
-              - '--extract' to extract archived content
+$ ais get --help
+
+   ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
+              write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
+              assorted options further include:
+              - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);
+              - '--extract' or '--archpath' to extract archived content;
+              - '--progress' and '--refresh' to watch progress bar;
+              - '-v' to produce verbose output when getting multiple objects.
 
 USAGE:
-   ais archive get [command options] BUCKET[/SHARD_NAME] [OUT_FILE|OUT_DIR|-]
+   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
 
 OPTIONS:
    --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
-   --length value    object read length; default formatting: IEC (use '--units' to override)
-   --check-cached    check if a given object from a remote bucket is present ("cached") in AIS
-   --archpath value  extract the specified file from archive (shard)
+   --checksum        validate checksum
+   --yes, -y         assume 'yes' to all questions
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress        show progress bar(s) and progress of execution in real time
+   --archpath value  extract the specified file from an archive (shard)
    --extract, -x     extract all files from archive(s)
+   --prefix value    get objects that start with the specified prefix, e.g.:
+                     '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
+                     a/b that have their names (relative to this directory) starting with c;
+                     '--prefix ""' - get entire bucket
+   --cached          get only those objects from a remote bucket that are present ("cached") in AIS
+   --archive         list archived content (see docs/archive.md for details)
+   --limit value     limit object name count (0 - unlimited) (default: 0)
    --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
                      raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose
+   --verbose, -v     verbose outout when getting multiple objects
    --help, -h        show help
 ```
 
-### Example: extract all files
+### Example: extract one file
+
+```console
+$ ais archive get ais://dst/A.tar.gz /tmp/w --archpath 111.ext1
+GET 111.ext1 from ais://dst/A.tar.gz as "/tmp/w/111.ext1" (12.56KiB)
+
+$ ls /tmp/w
+111.ext1
+```
+
+### Example: extract all files from a single shard
 
 Let's say, we have a certain shard in a certain bucket:
 
@@ -294,7 +323,7 @@ A.tar.gz                 5.18KiB
     A.tar.gz/333.ext2    12.56KiB
 ```
 
-We can then go ahead and extract it to local directory, e.g.:
+We can then go ahead to GET and extract it to local directory, e.g.:
 
 ```console
 $ ais archive get ais://dst/A.tar.gz /tmp/www --extract
@@ -304,14 +333,51 @@ $ ls /tmp/www/A
 111.ext1  222.ext1  333.ext2
 ```
 
-### Example: extract one specific file
+But here's an alternative syntax to achieve the same:
 
 ```console
-$ ais archive get ais://dst/A.tar.gz /tmp/w --archpath 111.ext1
-GET 111.ext1 from ais://dst/A.tar.gz as "/tmp/w/111.ext1" (12.56KiB)
+$ ais get ais://dst --archive --prefix A.tar.gz /tmp/www
+```
 
-$ ls /tmp/w
-111.ext1
+or even:
+
+```console
+$ ais get ais://dst --archive --prefix A.tar.gz /tmp/www --progress --refresh 1 -y
+
+GET 51 objects from ais://dst/tmp/ggg (total size 1.08MiB)
+Objects:                   51/51 [==============================================================] 100 %
+Total size:  1.08 MiB / 1.08 MiB [==============================================================] 100 %
+```
+
+The difference is that:
+
+* in the first case we ask for a specific shard,
+* while in the second (and third) we filter bucket's content using a certain prefix
+* and the fact (the convention) that archived filenames are prefixed with their parent (shard) name.
+
+### Example: extract all files from all shards (with a given prefix)
+
+Let's say, there's a bucket `ais://dst` with a virtual directory `abc/` that in turn contains:
+
+```console
+$ ais ls ais://dst
+NAME             SIZE
+A.tar.gz         5.18KiB
+B.tar.lz4        247.88KiB
+C.tar.zip        4.15KiB
+D.tar            2.00KiB
+```
+
+Next, we GET and extract them all in the respective sub-directories (note `--verbose` option):
+
+```console
+$ ais archive get ais://dst /tmp/w --prefix "" --extract -v
+
+GET 4 objects from ais://dst to /tmp/w (total size 259.21KiB) [Y/N]: y
+GET D.tar from ais://dst as "/tmp/w/D.tar" (2.00KiB) and extract as /tmp/w/D
+GET A.tar.gz from ais://dst as "/tmp/w/A.tar.gz" (5.18KiB) and extract as /tmp/w/A
+GET C.tar.zip from ais://dst as "/tmp/w/C.tar.zip" (4.15KiB) and extract as /tmp/w/C
+GET B.tar.lz4 from ais://dst as "/tmp/w/B.tar.lz4" (247.88KiB) and extract as /tmp/w/B
 ```
 
 ## Generate shards

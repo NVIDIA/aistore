@@ -89,9 +89,13 @@ var (
 	// define separately to allow for aliasing (see alias_hdlr.go)
 	objectCmdGet = cli.Command{
 		Name: commandGet,
-		Usage: "get an object, an archived file, or a range of bytes from the above;\n" +
-			indent4 + "\t- use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket)\n" +
-			indent4 + "\t- write the content locally with destination options including: filename, directory, STDOUT ('-').",
+		Usage: "get an object, a shard, an archived file, or a range of bytes from all of the above;\n" +
+			indent4 + "\twrite the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);\n" +
+			indent4 + "\tassorted options further include:\n" +
+			indent4 + "\t- '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);\n" +
+			indent4 + "\t- '--extract' or '--archpath' to extract archived content;\n" +
+			indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
+			indent4 + "\t- '-v' to produce verbose output when getting multiple objects.",
 		ArgsUsage:    getObjectArgument,
 		Flags:        objectCmdsFlags[commandGet],
 		Action:       getHandler,

@@ -56,9 +56,9 @@ type (
 	// 'ais archive put' (with an option to append)
 	archput struct {
 		putargs
-		archpath   string
-		appendOnly bool
-		appendIf   bool
+		archpath    string
+		appendOnly  bool
+		appendOrPut bool
 	}
 )
 
@@ -229,10 +229,10 @@ func (a *archput) dest() string { return a.dst.bck.Cname(a.dst.oname) }
 
 func (a *archput) parse(c *cli.Context) (err error) {
 	a.archpath = parseStrFlag(c, archpathFlag)
-	a.appendOnly = flagIsSet(c, archAppendFlag)
-	a.appendIf = flagIsSet(c, archAppendIfExistFlag)
-	if a.appendOnly && a.appendIf {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archAppendFlag), qflprn(archAppendIfExistFlag))
+	a.appendOnly = flagIsSet(c, archAppendOnlyFlag)
+	a.appendOrPut = flagIsSet(c, archAppendOrPutFlag)
+	if a.appendOnly && a.appendOrPut {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(archAppendOnlyFlag), qflprn(archAppendOrPutFlag))
 	}
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	return

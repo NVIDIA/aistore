@@ -96,10 +96,11 @@ const (
 	LocIsCopy
 	LocIsCopyMissingObj
 
-	// Flags
-	EntryIsCached = 1 << (EntryStatusBits + 1)
-	EntryInArch   = 1 << (EntryStatusBits + 2)
-	EntryIsDir    = 1 << (EntryStatusBits + 3)
+	// LsoEntry Flags
+	EntryIsCached  = 1 << (EntryStatusBits + 1)
+	EntryInArch    = 1 << (EntryStatusBits + 2)
+	EntryIsDir     = 1 << (EntryStatusBits + 3)
+	EntryIsArchive = 1 << (EntryStatusBits + 4)
 )
 
 // ObjEntry.Flags field
@@ -138,11 +139,11 @@ type LsoMsg struct {
 	UUID              string `json:"uuid"`               // ID to identify a single multi-page request
 	Props             string `json:"props"`              // comma-delimited, e.g. "checksum,size,custom" (see GetProps* enum)
 	TimeFormat        string `json:"time_format"`        // RFC822 is the default
-	Prefix            string `json:"prefix"`             // objname filter: return names starting with prefix
+	Prefix            string `json:"prefix"`             // return obj names starting with prefix (TODO: e.g. "A.tar/tutorials/")
 	StartAfter        string `json:"start_after"`        // start listing after (AIS buckets only)
-	ContinuationToken string `json:"continuation_token"` // BucketList.ContinuationToken
+	ContinuationToken string `json:"continuation_token"` // => LsoResult.ContinuationToken => LsoMsg.ContinuationToken
 	SID               string `json:"target"`             // selected target to solely execute backend.list-objects
-	Flags             uint64 `json:"flags,string"`       // enum {LsObjCached, ...} - see above
+	Flags             uint64 `json:"flags,string"`       // enum {LsObjCached, ...} - "LsoMsg flags" above
 	PageSize          uint   `json:"pagesize"`           // max entries returned by list objects call
 }
 
@@ -206,6 +207,7 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 	return s
 }
 
+// LsoMsg flags enum: LsObjCached, ...
 func (lsmsg *LsoMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
 func (lsmsg *LsoMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }
 

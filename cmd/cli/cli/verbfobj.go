@@ -84,7 +84,7 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		return err
 	}
 
-	// ask a user for confirmation
+	// confirm
 	if !flagIsSet(c, yesFlag) {
 		if ok := confirm(c, cptn+"?"); !ok {
 			fmt.Fprintln(c.App.Writer, "Operation canceled")
@@ -171,7 +171,11 @@ func (p *uparams) do(c *cli.Context) error {
 		return fmt.Errorf("failed to %s %d file%s", p.wop.verb(), numFailed, cos.Plural(int(numFailed)))
 	}
 	if !flagIsSet(c, dryRunFlag) {
-		actionDone(c, p.cptn)
+		if !flagIsSet(c, yesFlag) {
+			actionDone(c, "Done") // confirmed above (2nd time redundant)
+		} else {
+			actionDone(c, p.cptn)
+		}
 	}
 	return nil
 }
@@ -225,7 +229,7 @@ func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 	if a.appendOnly {
 		putApndArchArgs.Flags = apc.ArchAppend
 	}
-	if a.appendIf {
+	if a.appendOrPut {
 		debug.Assert(!a.appendOnly)
 		putApndArchArgs.Flags = apc.ArchAppendIfExist
 	}

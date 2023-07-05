@@ -17,9 +17,9 @@ const MsgpLsoBufSize = 32 * cos.KiB
 // NOTE: all json tags except `Flags` must belong to the (apc.GetPropsName, apc.GetPropsSize, etc.) enumeration
 //
 
-// LsoEntry corresponds to a single entry in the LsoResult and
-// contains file and directory metadata as per the ListObjsMsg
-// `Flags` is a bit field where ibits 0-2 are reserved for object status
+// LsoEntry is a single entry in LsoResult.Entries slice (below) containing list-objects result
+// for the corresponding (listed) object or an archived file;
+// `Flags` is a bit field where `EntryStatusBits` bits [0-4] are reserved for object status
 // (all statuses are mutually exclusive)
 type (
 	LsoEntry struct {
@@ -31,7 +31,7 @@ type (
 		Custom   string `json:"custom-md,omitempty" msg:"m,omitempty"`   // custom metadata: ETag, MD5, CRC, user-defined ...
 		Size     int64  `json:"size,string,omitempty" msg:"s,omitempty"` // size in bytes
 		Copies   int16  `json:"copies,omitempty" msg:"c,omitempty"`      // ## copies (NOTE: for non-replicated object copies == 1)
-		Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`
+		Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // enum { EntryIsCached, EntryIsDir, EntryInArch, ...}
 	}
 
 	// LsoResult carries the results of `api.ListObjects`, `BackendProvider.ListObjects`, and friends
@@ -55,6 +55,7 @@ func (be *LsoEntry) SetPresent()       { be.Flags |= apc.EntryIsCached }
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
 func (be *LsoEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
+func (be *LsoEntry) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
 func (be *LsoEntry) String() string     { return "{" + be.Name + "}" }
 
 func (be *LsoEntry) CopyWithProps(propsSet cos.StrSet) (ne *LsoEntry) {

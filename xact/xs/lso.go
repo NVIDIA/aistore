@@ -521,9 +521,8 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if r.walk.wi.msg.IsFlagSet(apc.LsNoRecursion) {
-		// Check if the object is nested deeper than it is allowed.
-		// Do not return SkipDir in this case as it may result in missing
-		// directories and objects in the response.
+		// Check if the object is nested deeper than requested.
+		// Note that it'd be incorrect to return `SkipDir` in this case.
 		relName := strings.TrimPrefix(entry.Name, r.walk.wi.msg.Prefix)
 		if strings.Contains(relName, "/") {
 			return nil
@@ -541,7 +540,8 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	// arch
+	// ls arch
+	// looking only at the file extension - not reading ("detecting") file magic (TODO: add lsmsg flag)
 	archList, err := archive.List(fqn)
 	if err != nil {
 		if archive.IsErrUnknownFileExt(err) {
@@ -550,6 +550,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		}
 		return err
 	}
+	entry.Flags |= apc.EntryIsArchive // the parent archive
 	for _, archEntry := range archList {
 		e := &cmn.LsoEntry{
 			Name:  path.Join(entry.Name, archEntry.Name),

@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"net/textproto"
@@ -187,13 +188,13 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah Ob
 //
 // Returns `cmn.ErrInvalidCksum` when the expected and actual checksum values
 // are different.
-func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah ObjAttrs, err error) {
+func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
 	w, q, hdr := args.ret()
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = bck.AddToQuery(q)
 		reqParams.Header = hdr
 	}
@@ -213,6 +214,8 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, object string, args *Ge
 	FreeRp(reqParams)
 	if err == nil {
 		oah.wrespHeader, oah.n = wresp.Header, wresp.n
+	} else if err.Error() == errNilCksum {
+		err = fmt.Errorf("%s is not checksummed, cannot validate", bck.Cname(objName))
 	}
 	return
 }

@@ -18,6 +18,7 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Check if object is _cached_](#check-if-object-is-cached)
   - [Read range](#read-range)
 - [GET multiple objects](#get-multiple-objects)
+- [GET archived content](#get-archived-content)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
 - [PUT object](#put-object)
@@ -54,33 +55,37 @@ The command is very useful in terms getting your data out of the cluster. In its
 
 `ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]`
 
-there's a
+there's
 
-* bucket source with an optional object name (`BUCKET[/OBJECT_NAME]`), and
-* the destination (but also optional) `[OUT_FILE]` or standard output (`-`)
+* a bucket source with an optional object name (`BUCKET[/OBJECT_NAME]`), and
+* destination (but also optional) `[OUT_FILE]` or standard output (`-`)
 
-Here's how it goes and what gives:
+Here's in detail:
 
 ```console
 $ ais get --help
-NAME:
-   ais get - (alias for "object get") get an object, an archived file, or a range of bytes from the above, and in addition:
-           - write the content locally with destination options including: filename, directory, STDOUT ('-');
-           - use '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket).
 
+   ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
+              write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
+              assorted options further include:
+              - '--prefix' to get multiple objects in one shot (empty prefix for the entire bucket);
+              - '--extract' or '--archpath' to extract archived content;
+              - '--progress' and '--refresh' to watch progress bar;
+              - '-v' to produce verbose output when getting multiple objects.
 USAGE:
-   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]
+   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
 
 OPTIONS:
    --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
    --length value    object read length; default formatting: IEC (use '--units' to override)
-   --archpath value  filename in archive
    --checksum        validate checksum
-   --yes, -y         assume 'yes' for all questions
+   --yes, -y         assume 'yes' to all questions
    --check-cached    check if a given object from a remote bucket is present ("cached") in AIS
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --progress        show progress bar(s) and progress of execution in real time
+   --archpath value  extract the specified file from an archive (shard)
+   --extract, -x     extract all files from archive(s)
    --prefix value    get objects that start with the specified prefix, e.g.:
                      '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
                      a/b that have their names (relative to this directory) starting with c;
@@ -92,7 +97,7 @@ OPTIONS:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
                      raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose
+   --verbose, -v     verbose outout when getting multiple objects
    --help, -h        show help
 ```
 
@@ -163,6 +168,32 @@ $ ais get --offset 1024 --length 1024 ais://texts/list.txt ~/list.txt
 Read 1.00KiB (1024 B)
 ```
 
+### Example: read-range multiple objects
+
+Let's say, bucket ais://src contains 4 copies of [aistore readme](https://github.com/NVIDIA/aistore/blob/master/README.md) in its virtual directory `docs/`:
+
+The following reads 10 bytes from each copy and prints the result:
+
+```console
+$ ais get ais://src --prefix "docs/" --offset 0 --length 10 -
+Read range 4 objects from ais://src to standard output (total size 50.23KiB) [Y/N]: y
+
+**AIStore **AIStore **AIStore **AIStore $
+```
+
+Same as above with automatic confirmation and writing results to `/tmp/w`:
+
+```console
+$ ais get ais://src --prefix "docs/" --offset 0 --length 10 /tmp/w -y
+
+$ ls -al /tmp/w | awk '{print $5,$9}'
+
+10 README.md
+10 copy1.md
+10 copy2.md
+10 copy3.md
+```
+
 # GET multiple objects
 
 Note that destination in this case is a local directory and that (an empty) prefix indicates getting entire bucket; see `--help` for details.
@@ -173,6 +204,42 @@ GET 60 objects from s3://abc to /tmp/w (size 92.47MiB) [Y/N]: y
 Objects:                     59/60 [============================================================>-] 98 %
 Total size:  63.00 MiB / 92.47 MiB [=========================================>--------------------] 68 %
 ```
+
+# GET archived content
+
+For objects formatted as (.tar, .tar.gz, .tar.lz4, or .zip), it is possible to GET and extract them in one shot. There are two "responsible" options:
+
+| Name | Description |
+| --- | --- |
+| `--archpath` | extract the specified file from an archive (shard) |
+| `--extract` | extract all files from archive(s) |
+
+## Example: extract all files from all shards with a given prefix
+
+Let's say, there's a bucket `ais://dst` with a virtual directory `abc/` that in turn contains:
+
+```console
+$ ais ls ais://dst --prefix abc/
+NAME             SIZE
+abc/A.tar.gz         5.18KiB
+abc/B.tar.lz4        247.88KiB
+abc/C.tar.zip        4.15KiB
+abc/D.tar            2.00KiB
+```
+
+Next, we GET and extract them all in the respective sub-directories (note also the `--verbose` option):
+
+```console
+$ ais archive get ais://dst /tmp/w --prefix "abc/" --extract -v
+
+GET 4 objects from ais://dst to /tmp/w (total size 259.21KiB) [Y/N]: y
+GET D.tar from ais://dst as "/tmp/w/D.tar" (2.00KiB) and extract as /tmp/w/D
+GET A.tar.gz from ais://dst as "/tmp/w/A.tar.gz" (5.18KiB) and extract as /tmp/w/A
+GET C.tar.zip from ais://dst as "/tmp/w/C.tar.zip" (4.15KiB) and extract as /tmp/w/C
+GET B.tar.lz4 from ais://dst as "/tmp/w/B.tar.lz4" (247.88KiB) and extract as /tmp/w/B
+```
+
+> **NOTE:** for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
 # Print object content
 
@@ -325,7 +392,7 @@ OPTIONS:
    --dry-run           preview the results without really running the action
    --recursive, -r     recursive operation
    --verbose, -v       verbose
-   --yes, -y           assume 'yes' for all questions
+   --yes, -y           assume 'yes' to all questions
    --include-src-bck   prefix names of archived objects with the source bucket name
    --cont-on-err       keep running archiving xaction in presence of errors in a any given multi-object transaction
    --units value       show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
@@ -693,36 +760,36 @@ TOTAL            33      66B
 
 # Append file to archive
 
-`ais put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH`
+> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
-Append a file to an existing archive in a specified bucket. More specifically,
-the command allows a user to append any reader (e.g., an open file) to an existing object formatted as
-one of the supported archives.
+`ais put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH --append`
 
-Environment variable `ARCH_PATH` defines the path inside the archive for the new file.
+Append a file to an existing archive. `ARCH_PATH` here defines (destination) filename in archive.
 
 ## Examples
 
 Add a file to an archive:
 
 ```console
-$ # list archived content prior to appending new files
-$ ais ls ais://bck --prefix test --list-archive
+# list archived content prior to appending new files
+$ ais ls ais://bck --prefix test --archive
 NAME                             SIZE
 test.tar                         42.00KiB
     test.tar/main.c              40.00KiB
 
-$ # add a new file to the archive
-$ ais put readme.txt ais://bck/test.tar --archpath=doc/README
+# add a new file to the archive
+$ ais put readme.txt ais://bck/test.tar --archpath=doc/README --append
 APPEND "readme.txt" to object "ais://abc/test.tar[/doc/README]"
 
 $ # check that the archive is updated
-$ ais ls ais://bck --prefix test --list-archive
+$ ais ls ais://bck --prefix test --archive
 NAME                             SIZE
 test.tar                         45.50KiB
     test.tar/doc/README          3.11KiB
     test.tar/main.c              40.00KiB
 ```
+
+> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
 # Promote files and directories
 
@@ -1076,6 +1143,8 @@ $ ais bucket evict aws://cloudbucket --template "shard-{900..999}.tar"
 ```
 
 ## Archive multiple objects
+
+> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
 This is an archive-**creating** operation that takes in multiple objects from a source bucket and archives them all into a destination bucket, where:
 

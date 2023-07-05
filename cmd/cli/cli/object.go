@@ -252,8 +252,8 @@ func calcPutRefresh(c *cli.Context) time.Duration {
 	return refresh
 }
 
-// Displays object properties
-func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
+// via `ais ls bucket/object` and `ais show bucket/object`
+func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 	var (
 		propsFlag     []string
 		selectedProps []string
@@ -262,7 +262,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 	if flagIsSet(c, objNotCachedPropsFlag) {
 		fltPresence = apc.FltExists
 	}
-	objProps, err := api.HeadObject(apiBP, bck, object, fltPresence)
+	objProps, err := api.HeadObject(apiBP, bck, objName, fltPresence)
 	if err != nil {
 		if !cmn.IsStatusNotFound(err) {
 			return err
@@ -271,8 +271,9 @@ func showObjProps(c *cli.Context, bck cmn.Bck, object string) error {
 		if apc.IsFltPresent(fltPresence) && bck.IsRemote() {
 			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
 		}
-		return fmt.Errorf("%q not found in %s%s", object, bck.Cname(""), hint)
+		return fmt.Errorf("%q not found in %s%s", objName, bck.Cname(""), hint)
 	}
+
 	if flagIsSet(c, jsonFlag) {
 		opts := teb.Jopts(true)
 		return teb.Print(objProps, teb.PropsSimpleTmpl, opts)

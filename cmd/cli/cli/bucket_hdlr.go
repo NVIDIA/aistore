@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
@@ -532,7 +533,14 @@ func listAnyHandler(c *cli.Context) error {
 		if _, err := headBucket(bck, true /* don't add */); err != nil {
 			return err
 		}
-		return showObjProps(c, bck, objName)
+		err := showObjProps(c, bck, objName)
+		if err == nil {
+			if _, errV := archive.Mime("", objName); errV == nil {
+				fmt.Fprintf(c.App.Writer, "\n('ais ls %s %s' to list archived contents, '--help' for details)\n",
+					bck.Cname(objName), flprn(listArchFlag))
+			}
+		}
+		return err
 	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list bucket(s)
 		var (
 			fltPresence     = apc.FltPresent
