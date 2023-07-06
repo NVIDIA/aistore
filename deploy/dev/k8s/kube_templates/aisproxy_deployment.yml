@@ -51,7 +51,7 @@ spec:
         export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
         source /etc/ais/aisnode_config.sh &&
-        aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=proxy -ntargets=${TARGET_CNT} -stderrthreshold=1;
+        aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=proxy -ntargets=${TARGET_CNT};
   volumes:
     - name: collectd-config
       configMap:

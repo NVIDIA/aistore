@@ -47,8 +47,6 @@ The common executable, typically called `aisnode`, supports the following comman
         whether primary, when starting up, should skip waiting for target joins (used only in tests)
   -standby
         when starting up, do not try to join cluster - standby and wait for admin request (target-only)
-  -stderrthreshold value
-        logs at or above this threshold go to stderr
   -transient
         false: store customized (via config_custom) configuration
         true: runtime only (non-persistent)
