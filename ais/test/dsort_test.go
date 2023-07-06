@@ -5,6 +5,7 @@
 package integration
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
 	"os"
@@ -54,6 +55,7 @@ type (
 	dsortTestSpec struct {
 		p          bool // determines if the tests should be ran in parallel mode
 		types      []string
+		tarFormats []tar.Format
 		phases     []string
 		reactions  []string
 		scopes     []string
@@ -81,6 +83,7 @@ type (
 		recordDuplicationsCnt int
 		recordExts            []string
 
+		tarFormat       tar.Format
 		extension       string
 		algorithm       *dsort.SortAlgorithm
 		missingKeys     bool
@@ -117,7 +120,18 @@ func runDSortTest(t *testing.T, dts dsortTestSpec, f any) {
 				t.Parallel()
 			}
 
-			if len(dts.phases) > 0 {
+			if len(dts.tarFormats) > 0 {
+				g := f.(func(dsorterType string, tarFormat tar.Format, t *testing.T))
+				for _, tf := range dts.tarFormats {
+					tarFormat := tf // pin
+					t.Run("format-"+tarFormat.String(), func(t *testing.T) {
+						if dts.p {
+							t.Parallel()
+						}
+						g(dsorterType, tarFormat, t)
+					})
+				}
+			} else if len(dts.phases) > 0 {
 				g := f.(func(dsorterType, phase string, t *testing.T))
 				for _, phase := range dts.phases {
 					phase := phase // pin
@@ -274,11 +288,11 @@ func (df *dsortFramework) createInputShards() {
 				tarName = path + df.extension
 			}
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = tarch.CreateArchCustomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
-				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
 			} else if df.extension == archive.ExtTarTgz || df.extension == archive.ExtZip || df.extension == archive.ExtTarLz4 {
-				err = tarch.CreateArchRandomFiles(tarName, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else {
 				df.m.t.Fail()
 			}
@@ -2184,6 +2198,52 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 
 			df.checkMetrics(false /*expectAbort*/)
 			df.checkOutputShards(0)
+		},
+	)
+}
+
+func TestDistributedSortWithTarFormats(t *testing.T) {
+	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+
+	runDSortTest(
+		// Include empty ("") type - in this case type must be selected automatically.
+		t, dsortTestSpec{p: true, types: append(dsorterTypes, ""),
+			tarFormats: []tar.Format{tar.FormatUnknown, tar.FormatGNU, tar.FormatPAX}},
+		func(dsorterType string, tarFormat tar.Format, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:                m,
+					dsorterType:      dsorterType,
+					tarballCnt:       500,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "1B",
+					tarFormat:        tarFormat,
+					recordExts:       []string{".txt"},
+				}
+			)
+
+			// Initialize ioContext
+			m.initWithCleanupAndSaveState()
+			m.expectTargets(1)
+
+			// Create ais bucket
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+
+			df.init()
+			df.createInputShards()
+
+			tlog.Logln("starting distributed sort...")
+			df.start()
+
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tlog.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
 		},
 	)
 }

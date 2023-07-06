@@ -112,6 +112,7 @@ type (
 		owt       cmn.OWT
 	}
 
+	// put/append-to arch
 	putA2I struct {
 		r        io.ReadCloser // read bytes to append
 		t        *target       // this
@@ -1460,7 +1461,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 }
 
 //
-// PUT a new shard or APPEND to an existing one (w/ read/write/list via cmn/archive)
+// PUT a new shard _or_ APPEND to an existing one (w/ read/write/list via cmn/archive)
 //
 
 func (a *putA2I) do() (int, error) {
@@ -1471,15 +1472,16 @@ func (a *putA2I) do() (int, error) {
 	// for TAR there is an optimizing workaround not requiring a full copy
 	if a.mime == archive.ExtTar && !a.put {
 		var (
-			err     error
-			fh      *os.File
-			size    int64
-			workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
+			err       error
+			fh        *os.File
+			size      int64
+			tarFormat tar.Format
+			workFQN   = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppendToArch)
 		)
 		if err = os.Rename(a.lom.FQN, workFQN); err != nil {
 			return http.StatusInternalServerError, err
 		}
-		fh, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
+		fh, tarFormat, err = archive.OpenTarSeekEnd(a.lom.Cname(), workFQN)
 		if err != nil {
 			if errV := a.lom.RenameFrom(workFQN); errV != nil {
 				return http.StatusInternalServerError, errV
@@ -1491,7 +1493,7 @@ func (a *putA2I) do() (int, error) {
 			return http.StatusInternalServerError, err
 		}
 		// do - fast
-		if size, err = a.fast(fh); err == nil {
+		if size, err = a.fast(fh, tarFormat); err == nil {
 			// NOTE: checksum traded off
 			if err = a.finalize(size, cos.NoneCksum, workFQN); err == nil {
 				return http.StatusInternalServerError, nil // ok
@@ -1553,7 +1555,7 @@ cpap: // copy + append
 }
 
 // TAR only - fast & direct
-func (a *putA2I) fast(rwfh *os.File) (size int64, err error) {
+func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format) (size int64, err error) {
 	var (
 		buf, slab = a.t.gmm.AllocSize(a.size)
 		tw        = tar.NewWriter(rwfh)
@@ -1563,6 +1565,7 @@ func (a *putA2I) fast(rwfh *os.File) (size int64, err error) {
 			Size:     a.size,
 			ModTime:  a.started,
 			Mode:     int64(cos.PermRWRR),
+			Format:   tarFormat,
 		}
 	)
 	tw.WriteHeader(&hdr)

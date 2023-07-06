@@ -25,6 +25,7 @@ type (
 	HeaderCallback func(any)
 	Opts           struct {
 		CB        HeaderCallback
+		TarFormat tar.Format
 		Serialize bool
 	}
 )
@@ -50,7 +51,8 @@ type (
 	}
 	tarWriter struct {
 		baseW
-		tw *tar.Writer
+		format tar.Format
+		tw     *tar.Writer
 	}
 	tgzWriter struct {
 		tw  tarWriter
@@ -117,6 +119,9 @@ func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 
 func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tw.baseW.init(w, cksum, opts)
+	tw.format = opts.TarFormat
+	debug.Assert(tw.format == tar.FormatUnknown || tw.format == tar.FormatUSTAR ||
+		tw.format == tar.FormatPAX || tw.format == tar.FormatGNU, tw.format.String())
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 
@@ -132,6 +137,7 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 		Size:     oah.SizeBytes(),
 		ModTime:  time.Unix(0, oah.AtimeUnix()),
 		Mode:     int64(cos.PermRWRR),
+		Format:   tw.format,
 	}
 	tw.cb(&hdr)
 	tw.lck.Lock()

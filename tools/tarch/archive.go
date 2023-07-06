@@ -5,6 +5,7 @@
 package tarch
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
 	"io"
@@ -46,13 +47,14 @@ func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (
 	return aw.Write(path, oah, &b)
 }
 
-func CreateArchRandomFiles(shardName, ext string, fileCnt, fileSize int, dup bool, recExts, randNames []string) error {
+func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
+	dup bool, recExts, randNames []string) error {
 	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
 	}
 
-	aw := archive.NewWriter(ext, wfh, nil, nil /*opts*/)
+	aw := archive.NewWriter(ext, wfh, nil, &archive.Opts{TarFormat: tarFormat})
 	defer func() {
 		aw.Fini()
 		wfh.Close()
@@ -89,8 +91,9 @@ func CreateArchRandomFiles(shardName, ext string, fileCnt, fileSize int, dup boo
 	return nil
 }
 
-func CreateArchCustomFilesToW(w io.Writer, ext string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
-	aw := archive.NewWriter(ext, w, nil, nil /*opts*/)
+func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fileCnt, fileSize int,
+	customFileType, customFileExt string, missingKeys bool) error {
+	aw := archive.NewWriter(ext, w, nil, &archive.Opts{TarFormat: tarFormat})
 	defer aw.Fini()
 	for i := 0; i < fileCnt; i++ {
 		fileName := fmt.Sprintf("%d", rand.Int()) // generate random names
@@ -119,13 +122,14 @@ func CreateArchCustomFilesToW(w io.Writer, ext string, fileCnt, fileSize int, cu
 	return nil
 }
 
-func CreateArchCustomFiles(shardName, ext string, fileCnt, fileSize int, customFileType, customFileExt string, missingKeys bool) error {
+func CreateArchCustomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
+	customFileType, customFileExt string, missingKeys bool) error {
 	wfh, err := cos.CreateFile(shardName)
 	if err != nil {
 		return err
 	}
 	defer wfh.Close()
-	return CreateArchCustomFilesToW(wfh, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys)
+	return CreateArchCustomFilesToW(wfh, tarFormat, ext, fileCnt, fileSize, customFileType, customFileExt, missingKeys)
 }
 
 func newArchReader(mime string, buffer *bytes.Buffer) (ar archive.Reader, err error) {

@@ -5,6 +5,7 @@
 package readers
 
 import (
+	"archive/tar"
 	"bytes"
 	"errors"
 	"fmt"
@@ -384,7 +385,7 @@ func newTarReader(size int64, cksumType string) (r Reader, err error) {
 		singleFileSize = cos.MinI64(size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
-	err = tarch.CreateArchCustomFilesToW(buff, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
+	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
 		int(singleFileSize), extract.FormatTypeInt, ".cls", true)
 	if err != nil {
 		return nil, err

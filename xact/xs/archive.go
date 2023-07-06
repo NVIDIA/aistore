@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"archive/tar"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,16 +37,18 @@ type (
 		streamingF
 	}
 	archwi struct { // archival work item; implements lrwi
-		writer    archive.Writer
-		r         *XactArch
-		msg       *cmn.ArchiveBckMsg
-		tsi       *meta.Snode
-		archlom   *cluster.LOM
-		fqn       string   // workFQN --/--
-		wfh       *os.File // --/--
-		cksum     cos.CksumHashSize
-		appendPos int64        // append to existing archive
-		cnt       atomic.Int32 // num archived
+		writer  archive.Writer
+		r       *XactArch
+		msg     *cmn.ArchiveBckMsg
+		tsi     *meta.Snode
+		archlom *cluster.LOM
+		fqn     string   // workFQN --/--
+		wfh     *os.File // --/--
+		cksum   cos.CksumHashSize
+		cnt     atomic.Int32 // num archived
+		// tar only
+		appendPos int64 // append to existing
+		tarFormat tar.Format
 		// finishing
 		refc atomic.Int32
 	}
@@ -106,7 +109,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	}
 	debug.Assert(archlom.Cname() == msg.Cname()) // relying on it
 
-	wi := &archwi{r: r, msg: msg, archlom: archlom}
+	wi := &archwi{r: r, msg: msg, archlom: archlom, tarFormat: tar.FormatUnknown}
 	wi.fqn = fs.CSM.Gen(wi.archlom, fs.WorkfileType, fs.WorkfileCreateArch)
 	wi.cksum.Init(archlom.CksumType())
 
@@ -146,7 +149,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 		}
 
 		// construct format-specific writer; serialize for multi-target conc. writing
-		opts := archive.Opts{Serialize: nat > 1}
+		opts := archive.Opts{Serialize: nat > 1, TarFormat: wi.tarFormat}
 		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, &opts)
 
 		// append case (above)
@@ -433,15 +436,15 @@ func (wi *archwi) openTarForAppend() (err error) {
 		return
 	}
 	// open (rw) lom itself
-	wi.wfh, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
+	wi.wfh, wi.tarFormat, err = archive.OpenTarSeekEnd(wi.archlom.ObjName, wi.fqn)
 	if err != nil {
 		goto roll
 	}
 	wi.appendPos, err = wi.wfh.Seek(0, io.SeekCurrent)
 	if err == nil {
-		return // ok
+		return // can append
 	}
-	wi.appendPos = 0
+	wi.appendPos, wi.tarFormat = 0, tar.FormatUnknown // reset
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 roll:

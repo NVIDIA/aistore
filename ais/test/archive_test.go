@@ -5,10 +5,12 @@
 package integration
 
 import (
+	"archive/tar"
 	"fmt"
 	"math/rand"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/tools"
@@ -92,66 +95,74 @@ func TestGetFromArch(t *testing.T) {
 		if testing.Short() {
 			numArchived = 10
 		}
+		var sparsePrint atomic.Int64
 		for _, test := range subtests {
 			tname := fmt.Sprintf("%s/nested=%t/auto=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
-			t.Run(tname, func(t *testing.T) {
-				var (
-					err      error
-					fsize    = rand.Intn(10*cos.KiB) + 1
-					archName = tmpDir + "/" + cos.GenTie() + test.ext
-					dirs     = []string{"a", "b", "c", "a/b", "a/c", "b/c", "a/b/c", "a/c/b", "b/a/c"}
-				)
-				for i := 0; i < numArchived; i++ {
-					j := rand.Int()
-					randomNames[i] = fmt.Sprintf("%d.txt", j)
-					if test.nested {
-						k := j % len(dirs)
-						dir := dirs[k]
-						randomNames[i] = dir + "/" + randomNames[i]
+			for _, tf := range []tar.Format{tar.FormatUnknown, tar.FormatGNU, tar.FormatPAX} {
+				tarFormat := tf
+				t.Run(path.Join(tname, "format-"+tarFormat.String()), func(t *testing.T) {
+					var (
+						err      error
+						fsize    = rand.Intn(10*cos.KiB) + 1
+						archName = tmpDir + "/" + cos.GenTie() + test.ext
+						dirs     = []string{"a", "b", "c", "a/b", "a/c", "b/c", "a/b/c", "a/c/b", "b/a/c"}
+					)
+					for i := 0; i < numArchived; i++ {
+						j := rand.Int()
+						randomNames[i] = fmt.Sprintf("%d.txt", j)
+						if test.nested {
+							k := j % len(dirs)
+							dir := dirs[k]
+							randomNames[i] = dir + "/" + randomNames[i]
+						}
+						if j%3 == 0 {
+							randomNames[i] = "/" + randomNames[i]
+						}
 					}
-					if j%3 == 0 {
-						randomNames[i] = "/" + randomNames[i]
-					}
-				}
-				err = tarch.CreateArchRandomFiles(
-					archName,
-					test.ext,
-					numArchived,
-					fsize,
-					false,       // duplication
-					nil,         // record extensions
-					randomNames, // pregenerated filenames
-				)
-				tassert.CheckFatal(t, err)
-				defer os.Remove(archName)
-
-				objname := filepath.Base(archName)
-				if test.autodetect {
-					objname = objname[0 : len(objname)-len(test.ext)]
-				}
-				reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
-				tassert.CheckFatal(t, err)
-
-				tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
-				tassert.SelectErr(t, errCh, "put", true)
-				defer tools.Del(m.proxyURL, m.bck, objname, nil, nil, true)
-
-				for _, randomName := range randomNames {
-					var mime string
-					if test.mime {
-						mime = "application/x-" + test.ext[1:]
-					}
-					getArgs := api.GetArgs{
-						Query: url.Values{
-							apc.QparamArchpath: []string{randomName},
-							apc.QparamArchmime: []string{mime},
-						},
-					}
-					oah, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
-					tlog.Logf("%s?%s=%s(%dB)\n", m.bck.Cname(objname), apc.QparamArchpath, randomName, oah.Size())
+					err = tarch.CreateArchRandomFiles(
+						archName,
+						tarFormat,
+						test.ext,
+						numArchived,
+						fsize,
+						false,       // duplication
+						nil,         // record extensions
+						randomNames, // pregenerated filenames
+					)
 					tassert.CheckFatal(t, err)
-				}
-			})
+					defer os.Remove(archName)
+
+					objname := filepath.Base(archName)
+					if test.autodetect {
+						objname = objname[0 : len(objname)-len(test.ext)]
+					}
+					reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
+					tassert.CheckFatal(t, err)
+
+					tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
+					tassert.SelectErr(t, errCh, "put", true)
+					defer tools.Del(m.proxyURL, m.bck, objname, nil, nil, true)
+
+					for _, randomName := range randomNames {
+						var mime string
+						if test.mime {
+							mime = "application/x-" + test.ext[1:]
+						}
+						getArgs := api.GetArgs{
+							Query: url.Values{
+								apc.QparamArchpath: []string{randomName},
+								apc.QparamArchmime: []string{mime},
+							},
+						}
+						oah, err := api.GetObject(baseParams, m.bck, objname, &getArgs)
+						if sparsePrint.Inc()%13 == 0 {
+							tlog.Logf("%s?%s=%s(%dB)\n", m.bck.Cname(objname), apc.QparamArchpath,
+								randomName, oah.Size())
+						}
+						tassert.CheckFatal(t, err)
+					}
+				})
+			}
 		}
 	})
 }
@@ -511,6 +522,7 @@ func TestAppendToArch(t *testing.T) {
 			num := len(objList.Entries)
 			tassert.Errorf(t, num == numArchs, "expected %d, have %d", numArchs, num)
 
+			var sparsePrint atomic.Int64
 			for i := 0; i < numArchs; i++ {
 				archName := fmt.Sprintf(objPattern, i, test.ext)
 				if test.multi {
@@ -545,7 +557,9 @@ func TestAppendToArch(t *testing.T) {
 							ArchPath: archpath,
 							Flags:    apc.ArchAppend, // existence required
 						}
-						tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo, archName, archpath)
+						if sparsePrint.Inc()%13 == 0 {
+							tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo, archName, archpath)
+						}
 						err = api.PutApndArch(appendArchArgs)
 						tassert.CheckError(t, err)
 					}
