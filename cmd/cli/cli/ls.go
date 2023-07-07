@@ -229,7 +229,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	// when prefix crosses shard boundary
-	if external, internal := splitPrefix(prefix); len(internal) > 0 {
+	if external, internal := splitShardBoundary(prefix); len(internal) > 0 {
 		origPrefix := prefix
 		prefix = external
 		lstFilter._add(func(obj *cmn.LsoEntry) bool { return strings.HasPrefix(obj.Name, origPrefix) })
@@ -446,7 +446,7 @@ func (o *lstFilter) apply(entries cmn.LsoEntries) (matching, rest cmn.LsoEntries
 
 // prefix that crosses shard boundary, e.g.:
 // `ais ls bucket --prefix virt-subdir/A.tar.gz/dir-or-prefix-inside`
-func splitPrefix(prefix string) (external, internal string) {
+func splitShardBoundary(prefix string) (external, internal string) {
 	if prefix == "" {
 		return
 	}

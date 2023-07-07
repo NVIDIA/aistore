@@ -76,6 +76,11 @@ type (
 	}
 )
 
+// TODO: use it instead of splitting handlers into functions (unify)
+func actionIsHandler(action any, handler func(c *cli.Context) error) bool {
+	return fmt.Sprintf("%p", action) == fmt.Sprintf("%p", handler) // TODO: reflect and unsafe doesn't help but still
+}
+
 func argLast(c *cli.Context) (last string) {
 	if l := c.NArg(); l > 0 {
 		last = c.Args().Get(l - 1)

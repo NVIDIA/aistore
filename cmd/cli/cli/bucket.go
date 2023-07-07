@@ -37,7 +37,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (
 			if verbose() {
 				herr.Message = herr.StringEx()
 			}
-			return fmt.Errorf("failed to create %q: %s", bck, herr.Message)
+			return fmt.Errorf("failed to create %q: %w", bck, herr)
 		}
 		return fmt.Errorf("failed to create %q: %v", bck, err)
 	}

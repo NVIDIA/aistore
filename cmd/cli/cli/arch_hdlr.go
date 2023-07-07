@@ -106,7 +106,7 @@ var (
 		Usage:        objectCmdGet.Usage,
 		ArgsUsage:    getShardArgument,
 		Flags:        rmFlags(objectCmdGet.Flags, checkObjCachedFlag, lengthFlag, offsetFlag),
-		Action:       objectCmdGet.Action,
+		Action:       getArchHandler,
 		BashComplete: objectCmdGet.BashComplete,
 	}
 
@@ -375,6 +375,10 @@ func a2aRegular(c *cli.Context, a *archput) error {
 	return err
 }
 
+func getArchHandler(c *cli.Context) error {
+	return getHandler(c)
+}
+
 func listArchHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -384,7 +388,7 @@ func listArchHandler(c *cli.Context) error {
 		return err
 	}
 	prefix := parseStrFlag(c, listObjPrefixFlag)
-	if objName != "" && prefix != "" {
+	if objName != "" && prefix != "" && !strings.HasPrefix(prefix, objName) {
 		return fmt.Errorf("cannot handle object name ('%s') and prefix ('%s') simultaneously - not implemented yet",
 			objName, prefix)
 	}

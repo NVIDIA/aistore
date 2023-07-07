@@ -8,6 +8,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -316,4 +317,17 @@ func formatErr(err error) error {
 	default:
 		return redErr(err)
 	}
+}
+
+func isStartingUp(err error) bool {
+	if herr, ok := err.(*cmn.ErrHTTP); ok {
+		return herr.Status == http.StatusServiceUnavailable
+	}
+	// TODO: look for fmt.Errorf("... %v", api-error) - must use %w instead
+	if uerr := errors.Unwrap(err); uerr != nil {
+		if herr, ok := uerr.(*cmn.ErrHTTP); ok {
+			return herr.Status == http.StatusServiceUnavailable
+		}
+	}
+	return false
 }

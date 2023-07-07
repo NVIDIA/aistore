@@ -344,6 +344,18 @@ $ ls /tmp/w
 111.ext1
 ```
 
+Alternatively, use fully qualified name:
+
+```console
+$ ais archive get ais://dst/A.tar.gz/111.ext1 /tmp/w
+```
+
+### Example: extract one file using its fully-qualified name::
+
+```console
+$ ais archive get ais://nnn/A.tar/tutorials/README.md /tmp/out
+```
+
 ### Example: extract all files from a single shard
 
 Let's say, we have a certain shard in a certain bucket:
@@ -435,10 +447,10 @@ NAME                                             SIZE
 Listed: 5 names
 ```
 
-Now, extract matching files _from_ the shard to /tmp/out:
+Now, extract matching files _from_ the bucket to /tmp/out:
 
 ```console
-$ ais archive get ais://nnn/A.tar --prefix A.tar/tutorials /tmp/out --archpath ""
+$ ais archive get ais://nnn --prefix A.tar/tutorials /tmp/out
 GET 6 objects from ais://nnn/tmp/out (total size 17.81MiB) [Y/N]: y
 
 $ ls -al /tmp/out/tutorials/
@@ -448,14 +460,6 @@ drwxr-xr-x 3 root root 4096 May 13 20:05 ../
 drwxr-x--- 2 root root 4096 May 13 20:05 etl/
 -rw-r--r-- 1 root root  561 May 13 20:05 README.md
 drwxr-x--- 2 root root 4096 May 13 20:05 various/
-```
-
-In fact, "ais archive get" command could be simplified as:
-
-```console
-$ ais get ais://nnn/A.tar --prefix A.tar/tutorials /tmp/out --archpath ""
-GET 6 objects from ais://nnn/tmp/out (total size 17.81MiB) [Y/N]: y
-...
 ```
 
 ## Generate shards

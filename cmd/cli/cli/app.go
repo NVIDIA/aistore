@@ -117,6 +117,19 @@ func Run(version, buildtime string, args []string) error {
 
 func (a *acli) runOnce(args []string) error {
 	err := a.app.Run(args)
+	if err == nil {
+		return nil
+	}
+	if isStartingUp(err) {
+		for i := 0; i < 4; i++ {
+			time.Sleep(2 * time.Second)
+			fmt.Fprint(a.app.Writer, ". ")
+			if err = a.app.Run(args); err == nil {
+				fmt.Fprintln(a.app.Writer)
+				break
+			}
+		}
+	}
 	return formatErr(err)
 }
 
@@ -264,7 +277,7 @@ func commandNotFoundHandler(c *cli.Context, cmd string) {
 		return
 	}
 	err := commandNotFoundError(c, cmd)
-	fmt.Fprint(c.App.ErrWriter, err.Error())
+	fmt.Fprint(c.App.ErrWriter, err)
 	os.Exit(1)
 }
 

@@ -214,6 +214,16 @@ For objects formatted as (.tar, .tar.gz, .tar.lz4, or .zip), it is possible to G
 | `--archpath` | extract the specified file from an archive (shard) |
 | `--extract` | extract all files from archive(s) |
 
+Maybe the most basic:
+
+### Example: extracting one file using its fully-qualified name::
+
+```console
+$ ais get ais://nnn/A.tar/tutorials/README.md /tmp/out --archive
+```
+
+> assuming, ais://nnn/A.tar was previously created via (e.g.) `ais archive put docs ais://nnn/A.tar -r`
+
 ## Example: extract all files from all shards with a given prefix
 
 Let's say, there's a bucket `ais://dst` with a virtual directory `abc/` that in turn contains:
@@ -230,7 +240,7 @@ abc/D.tar            2.00KiB
 Next, we GET and extract them all in the respective sub-directories (note also the `--verbose` option):
 
 ```console
-$ ais archive get ais://dst /tmp/w --prefix "abc/" --extract -v
+$ ais get ais://dst /tmp/w --prefix "abc/" --extract -v
 
 GET 4 objects from ais://dst to /tmp/w (total size 259.21KiB) [Y/N]: y
 GET D.tar from ais://dst as "/tmp/w/D.tar" (2.00KiB) and extract as /tmp/w/D
@@ -260,10 +270,10 @@ NAME                                             SIZE
 Listed: 5 names
 ```
 
-Now, extract matching files _from_ the shard to /tmp/out:
+Now, extract matching files _from_ the bucket to /tmp/out:
 
 ```console
-$ ais get ais://nnn/A.tar --prefix A.tar/tutorials /tmp/out --archpath ""
+$ ais get ais://nnn --prefix A.tar/tutorials /tmp/out --archive
 GET 6 objects from ais://nnn/tmp/out (total size 17.81MiB) [Y/N]: y
 
 $ ls -al /tmp/out/tutorials/
@@ -273,6 +283,21 @@ drwxr-xr-x 3 root root 4096 May 13 20:05 ../
 drwxr-x--- 2 root root 4096 May 13 20:05 etl/
 -rw-r--r-- 1 root root  561 May 13 20:05 README.md
 drwxr-x--- 2 root root 4096 May 13 20:05 various/
+```
+
+The result:
+```console
+$ tree /tmp/out
+/tmp/out
+├── A.tar
+└── tutorials
+    ├── etl
+    │   ├── compute_md5.md
+    │   ├── etl_imagenet_pytorch.md
+    │   └── etl_webdataset.md
+    ├── README.md
+    └── various
+        └── hdfs_backend.md
 ```
 
 > **NOTE:** for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).

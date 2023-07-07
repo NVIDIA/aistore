@@ -35,7 +35,7 @@ func catHandler(c *cli.Context) error {
 		return err
 	}
 	archpath := parseStrFlag(c, archpathGetFlag)
-	return getObject(c, bck, objName, archpath, fileStdIO, true /*silent*/)
+	return getObject(c, bck, objName, archpath, fileStdIO, true /*silent*/, false /*via archive get*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -45,6 +45,8 @@ func getHandler(c *cli.Context) error {
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return fmt.Errorf("%s and %s must be both present (or not)", qflprn(lengthFlag), qflprn(offsetFlag))
 	}
+
+	isArchGet := actionIsHandler(c.Command.Action, getArchHandler)
 
 	// source
 	uri := c.Args().Get(0)
@@ -77,6 +79,9 @@ func getHandler(c *cli.Context) error {
 		}
 	}
 	if flagIsSet(c, extractFlag) {
+		if isArchGet {
+			return fmt.Errorf("'ais archive get': flag %s is redundant (implied)", qflprn(extractFlag))
+		}
 		if flagIsSet(c, checkObjCachedFlag) {
 			return fmt.Errorf(errFmtExclusive, qflprn(checkObjCachedFlag), qflprn(extractFlag))
 		}
@@ -95,7 +100,7 @@ func getHandler(c *cli.Context) error {
 					uri, qflprn(getObjPrefixFlag))
 			}
 		}
-		return getMultiObj(c, bck, outFile) // calls `getObject` with progress bar and bells and whistles..
+		return getMultiObj(c, bck, outFile, isArchGet) // calls `getObject` with progress bar and bells and whistles..
 	}
 
 	// GET
@@ -104,27 +109,24 @@ func getHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	return getObject(c, bck, objName, archpath, outFile, false /*silent*/)
+	return getObject(c, bck, objName, archpath, outFile, false /*silent*/, isArchGet)
 }
 
 // GET multiple -- currently, only prefix (TODO: list/range)
-func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
+func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, isArchGet bool) error {
 	var (
 		prefix     = parseStrFlag(c, getObjPrefixFlag)
 		origPrefix = prefix
 		lstFilter  = &lstFilter{}
 		listArch   = flagIsSet(c, listArchFlag) ||
+			isArchGet || // when calling via `ais archive get`
 			flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag) // when getting from arch is implied
 	)
 	if listArch && prefix != "" {
 		// when prefix crosses shard boundary
-		if external, internal := splitPrefix(prefix); len(internal) > 0 {
+		if external, internal := splitShardBoundary(prefix); len(internal) > 0 {
 			prefix = external
 			debug.Assert(prefix != origPrefix)
-
-			if flagIsSet(c, extractFlag) {
-				return fmt.Errorf("when getting multiple archived files flag %s is redundant (implied)", qflprn(extractFlag))
-			}
 			lstFilter._add(func(obj *cmn.LsoEntry) bool { return obj.Name == external || strings.HasPrefix(obj.Name, origPrefix) })
 		}
 	}
@@ -252,7 +254,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 			}
 		}
 		u.wg.Add(1)
-		go u.get(c, bck, entry, shardName, outFile, silent)
+		go u.get(c, bck, entry, shardName, outFile, silent, isArchGet)
 	}
 	u.wg.Wait()
 
@@ -270,7 +272,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 // uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, silent bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, silent, isArchGet bool) {
 	var (
 		objName  = entry.Name
 		archpath string
@@ -287,7 +289,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 			}
 		}
 	}
-	err := getObject(c, bck, objName, archpath, outFile, silent)
+	err := getObject(c, bck, objName, archpath, outFile, silent, isArchGet)
 	if err != nil {
 		u.errCount.Inc()
 	}
@@ -305,11 +307,14 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 }
 
 // get one (main function)
-func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, silent bool) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, silent, isArchGet bool) (err error) {
 	var (
-		getArgs api.GetArgs
-		oah     api.ObjAttrs
-		units   string
+		getArgs  api.GetArgs
+		oah      api.ObjAttrs
+		units    string
+		listArch = flagIsSet(c, listArchFlag) ||
+			isArchGet || // when calling via `ais archive get`
+			flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag) // when getting from arch is implied
 	)
 	if outFile == fileStdIO && flagIsSet(c, extractFlag) {
 		return fmt.Errorf("cannot extract archived files (%s) to standard output - not implemented yet",
@@ -318,6 +323,11 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	if outFile == discardIO && flagIsSet(c, extractFlag) {
 		return fmt.Errorf("cannot extract (%s) and discard archived files - not implemented yet",
 			qflprn(extractFlag))
+	}
+	if listArch && archpath == "" {
+		if external, internal := splitShardBoundary(objName); len(internal) > 0 {
+			objName, archpath = external, internal
+		}
 	}
 
 	// just check if a remote object is present (do not GET)
@@ -439,7 +449,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	} else if outFile == fileStdIO {
 		out = " to standard output"
 	} else {
-		out = " as " + cos.Basename(outFile)
+		out = " as " + outFile
 		if out[len(out)-1] == filepath.Separator {
 			out = out[:len(out)-1]
 		}
