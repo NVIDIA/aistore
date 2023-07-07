@@ -422,8 +422,8 @@ func ExpandPath(path string) string {
 	return filepath.Clean(filepath.Join(currentUser.HomeDir, path[1:]))
 }
 
-// CreateDir creates directory if does not exist. Does not return error when
-// directory already exists.
+// CreateDir creates directory if does not exist.
+// If the directory already exists returns nil.
 func CreateDir(dir string) error {
 	return os.MkdirAll(dir, configDirMode)
 }

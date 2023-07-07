@@ -119,9 +119,14 @@ func (bw *baseW) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 
 func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tw.baseW.init(w, cksum, opts)
-	tw.format = opts.TarFormat
+
+	tw.format = tar.FormatUnknown // default
+	if opts != nil {
+		tw.format = opts.TarFormat
+	}
 	debug.Assert(tw.format == tar.FormatUnknown || tw.format == tar.FormatUSTAR ||
 		tw.format == tar.FormatPAX || tw.format == tar.FormatGNU, tw.format.String())
+
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 

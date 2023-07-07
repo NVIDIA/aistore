@@ -415,7 +415,6 @@ coco-train2014-seg-000003.tar    958.22MiB     113024d5def81365cbb6c404c908efb1 
 ...
 ```
 
-
 #### List bucket from AIS remote cluster
 
 List objects in the bucket `bucket_name` and `ml` namespace contained on AIS remote cluster with `Bghort1l` UUID.
@@ -439,7 +438,7 @@ shard-1.tar	16.00KiB	1
 shard-10.tar	16.00KiB	1
 ```
 
-#### List archive contect
+#### List archived contect
 
 ```console
 $ ais ls ais://abc/ --prefix log
@@ -470,6 +469,39 @@ coco-train2014-seg-000003.tar    958.22MiB
 coco-train2014-seg-000004.tar    958.56MiB
 coco-train2014-seg-000005.tar    958.19MiB
 ...
+```
+
+#### Use '--prefix' that crosses shard boundary
+
+For starters, we archive all aistore docs:
+
+```console
+$ ais put docs ais://A.tar --archive -r
+```
+To list a certain virtual subdirectory _inside_ this newly created shard:
+
+```console
+$ ais archive ls ais://nnn --prefix "A.tar/tutorials"
+NAME                                             SIZE
+    A.tar/tutorials/README.md                    561B
+    A.tar/tutorials/etl/compute_md5.md           8.28KiB
+    A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
+    A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
+    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
+Listed: 5 names
+````
+
+or, same:
+
+```console
+$ ais ls ais://nnn --prefix "A.tar/tutorials" --archive
+NAME                                             SIZE
+    A.tar/tutorials/README.md                    561B
+    A.tar/tutorials/etl/compute_md5.md           8.28KiB
+    A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
+    A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
+    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
+Listed: 5 names
 ```
 
 ## Evict remote bucket

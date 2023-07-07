@@ -105,7 +105,7 @@ var (
 		Name:         objectCmdGet.Name,
 		Usage:        objectCmdGet.Usage,
 		ArgsUsage:    getShardArgument,
-		Flags:        rmFlags(objectCmdGet.Flags, getObjPrefixFlag, checkObjCachedFlag, lengthFlag, offsetFlag),
+		Flags:        rmFlags(objectCmdGet.Flags, checkObjCachedFlag, lengthFlag, offsetFlag),
 		Action:       objectCmdGet.Action,
 		BashComplete: objectCmdGet.BashComplete,
 	}
@@ -383,7 +383,15 @@ func listArchHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return listObjects(c, bck, objName, true /*list arch*/)
+	prefix := parseStrFlag(c, listObjPrefixFlag)
+	if objName != "" && prefix != "" {
+		return fmt.Errorf("cannot handle object name ('%s') and prefix ('%s') simultaneously - not implemented yet",
+			objName, prefix)
+	}
+	if prefix == "" {
+		prefix = objName
+	}
+	return listObjects(c, bck, prefix, true /*list arch*/)
 }
 
 //

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 )
@@ -58,19 +59,21 @@ func getHandler(c *cli.Context) error {
 	var archpath string
 	if flagIsSet(c, archpathGetFlag) {
 		archpath = parseStrFlag(c, archpathGetFlag)
-		if flagIsSet(c, extractFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
-		}
-		if flagIsSet(c, getObjPrefixFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
-		}
-		if flagIsSet(c, checkObjCachedFlag) {
-			return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
-				qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
-		}
-		if flagIsSet(c, lengthFlag) {
-			return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-				qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
+		if archpath != "" {
+			if flagIsSet(c, extractFlag) {
+				return fmt.Errorf(errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
+			}
+			if flagIsSet(c, getObjPrefixFlag) {
+				return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
+			}
+			if flagIsSet(c, checkObjCachedFlag) {
+				return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
+					qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+			}
+			if flagIsSet(c, lengthFlag) {
+				return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
+					qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
+			}
 		}
 	}
 	if flagIsSet(c, extractFlag) {
@@ -86,8 +89,11 @@ func getHandler(c *cli.Context) error {
 	// GET multiple -- currently, only prefix (TODO: list/range)
 	if flagIsSet(c, getObjPrefixFlag) {
 		if objName != "" {
-			return fmt.Errorf("object name in %q and %s cannot be used together (hint: use directory as destination)",
-				uri, qflprn(getObjPrefixFlag))
+			if _, err := archive.Mime("", objName); err != nil {
+				// not an archive
+				return fmt.Errorf("object name in %q and %s cannot be used together (hint: use directory as destination)",
+					uri, qflprn(getObjPrefixFlag))
+			}
 		}
 		return getMultiObj(c, bck, outFile) // calls `getObject` with progress bar and bells and whistles..
 	}
@@ -104,12 +110,27 @@ func getHandler(c *cli.Context) error {
 // GET multiple -- currently, only prefix (TODO: list/range)
 func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	var (
-		prefix   = parseStrFlag(c, getObjPrefixFlag)
-		msg      = &apc.LsoMsg{Prefix: prefix}
-		listArch = flagIsSet(c, listArchFlag) ||
+		prefix     = parseStrFlag(c, getObjPrefixFlag)
+		origPrefix = prefix
+		lstFilter  = &lstFilter{}
+		listArch   = flagIsSet(c, listArchFlag) ||
 			flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag) // when getting from arch is implied
 	)
+	if listArch && prefix != "" {
+		// when prefix crosses shard boundary
+		if external, internal := splitPrefix(prefix); len(internal) > 0 {
+			prefix = external
+			debug.Assert(prefix != origPrefix)
+
+			if flagIsSet(c, extractFlag) {
+				return fmt.Errorf("when getting multiple archived files flag %s is redundant (implied)", qflprn(extractFlag))
+			}
+			lstFilter._add(func(obj *cmn.LsoEntry) bool { return obj.Name == external || strings.HasPrefix(obj.Name, origPrefix) })
+		}
+	}
+
 	// setup list-objects control msg and api call
+	msg := &apc.LsoMsg{Prefix: prefix}
 	msg.AddProps(apc.GetPropsMinimal...)
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
@@ -128,6 +149,10 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	if err != nil {
 		return V(err)
 	}
+	if lstFilter._len() > 0 {
+		objList.Entries, _ = lstFilter.apply(objList.Entries)
+	}
+
 	// can't do many to one
 	l := len(objList.Entries)
 	if l > 1 {
@@ -161,7 +186,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 		out = " to standard output"
 	} else {
 		out = outFile
-		if out[len(out)-1] == filepath.Separator {
+		if out != "" && out[len(out)-1] == filepath.Separator {
 			out = out[:len(out)-1]
 		}
 	}
@@ -203,6 +228,16 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string) error {
 	for _, entry := range objList.Entries {
 		var shardName string
 		if entry.IsInsideArch() {
+			if origPrefix != msg.Prefix {
+				if !strings.HasPrefix(entry.Name, origPrefix) {
+					// skip
+					if u.showProgress {
+						u.barObjs.IncrInt64(1)
+						u.barSize.IncrInt64(entry.Size)
+					}
+					continue
+				}
+			}
 			for _, shardEntry := range objList.Entries {
 				if shardEntry.IsListedArch() && strings.HasPrefix(entry.Name, shardEntry.Name+"/") {
 					shardName = shardEntry.Name
@@ -243,6 +278,14 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 	if shardName != "" {
 		objName = shardName
 		archpath = strings.TrimPrefix(entry.Name, shardName+"/")
+		if outFile != fileStdIO && outFile != discardIO {
+			// when getting multiple retain the full archpath
+			// (compare w/ filepath.Base usage otherwise)
+			outFile = filepath.Join(outFile, archpath)
+			if err := cos.CreateDir(filepath.Dir(outFile)); err != nil {
+				actionWarn(c, err.Error())
+			}
+		}
 	}
 	err := getObject(c, bck, objName, archpath, outFile, silent)
 	if err != nil {

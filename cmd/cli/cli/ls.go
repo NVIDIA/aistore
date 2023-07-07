@@ -7,6 +7,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -14,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -226,6 +228,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		prefix = prefixFromTemplate
 	}
 
+	// when prefix crosses shard boundary
+	if external, internal := splitPrefix(prefix); len(internal) > 0 {
+		origPrefix := prefix
+		prefix = external
+		lstFilter._add(func(obj *cmn.LsoEntry) bool { return strings.HasPrefix(obj.Name, origPrefix) })
+	}
+
 	// lsmsg
 	msg := &apc.LsoMsg{Prefix: prefix}
 	addCachedCol := bck.IsRemote()
@@ -380,15 +389,15 @@ func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {
 func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 	flt = &lstFilter{}
 	if !flagIsSet(c, allObjsOrBcksFlag) {
-		// filter objects with not OK status
-		flt.addFilter(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
+		// filter objects that are "not OK" (e.g., misplaced)
+		flt._add(func(obj *cmn.LsoEntry) bool { return obj.IsStatusOK() })
 	}
 	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
 		regex, err := regexp.Compile(regexStr)
 		if err != nil {
 			return nil, "", err
 		}
-		flt.addFilter(func(obj *cmn.LsoEntry) bool { return regex.MatchString(obj.Name) })
+		flt._add(func(obj *cmn.LsoEntry) bool { return regex.MatchString(obj.Name) })
 	}
 	if bashTemplate := parseStrFlag(c, templateFlag); bashTemplate != "" {
 		pt, err := cos.NewParsedTemplate(bashTemplate)
@@ -403,18 +412,16 @@ func newLstFilter(c *cli.Context) (flt *lstFilter, prefix string, _ error) {
 			for objName, hasNext := pt.Next(); hasNext; objName, hasNext = pt.Next() {
 				matchingObjectNames[objName] = struct{}{}
 			}
-			flt.addFilter(func(obj *cmn.LsoEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
+			flt._add(func(obj *cmn.LsoEntry) bool { _, ok := matchingObjectNames[obj.Name]; return ok })
 		}
 	}
 	return flt, prefix, nil
 }
 
-func (o *lstFilter) addFilter(f entryFilter) {
-	o.predicates = append(o.predicates, f)
-}
+func (o *lstFilter) _add(f entryFilter) { o.predicates = append(o.predicates, f) }
+func (o *lstFilter) _len() int          { return len(o.predicates) }
 
-func (o *lstFilter) matchesAll(obj *cmn.LsoEntry) bool {
-	// Check if object name matches *all* specified predicates
+func (o *lstFilter) and(obj *cmn.LsoEntry) bool {
 	for _, predicate := range o.predicates {
 		if !predicate(obj) {
 			return false
@@ -423,13 +430,35 @@ func (o *lstFilter) matchesAll(obj *cmn.LsoEntry) bool {
 	return true
 }
 
-func (o *lstFilter) filter(entries cmn.LsoEntries) (matching, rest []cmn.LsoEntry) {
+func (o *lstFilter) apply(entries cmn.LsoEntries) (matching, rest cmn.LsoEntries) {
+	if o._len() == 0 {
+		return entries, nil
+	}
 	for _, obj := range entries {
-		if o.matchesAll(obj) {
-			matching = append(matching, *obj)
+		if o.and(obj) {
+			matching = append(matching, obj)
 		} else {
-			rest = append(rest, *obj)
+			rest = append(rest, obj)
 		}
+	}
+	return
+}
+
+// prefix that crosses shard boundary, e.g.:
+// `ais ls bucket --prefix virt-subdir/A.tar.gz/dir-or-prefix-inside`
+func splitPrefix(prefix string) (external, internal string) {
+	if prefix == "" {
+		return
+	}
+	external = prefix
+	for _, ext := range archive.FileExtensions {
+		i := strings.Index(prefix, ext+"/")
+		if i <= 0 {
+			continue
+		}
+		internal = prefix[i+len(ext)+1:]
+		external = prefix[:i+len(ext)]
+		break
 	}
 	return
 }

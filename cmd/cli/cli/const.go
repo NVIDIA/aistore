@@ -495,7 +495,7 @@ var (
 		Name:  "paged",
 		Usage: "list objects page by page, one page at a time (see also '--page-size' and '--limit')",
 	}
-	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list objects that were not matched by regex and template"}
+	showUnmatchedFlag = cli.BoolFlag{Name: "show-unmatched", Usage: "list also objects that were _not_ matched by regex and/or template (range)"}
 
 	keepMDFlag       = cli.BoolFlag{Name: "keep-md", Usage: "keep bucket metadata"}
 	dataSlicesFlag   = cli.IntFlag{Name: "data-slices,data,d", Usage: "number of data slices", Required: true}

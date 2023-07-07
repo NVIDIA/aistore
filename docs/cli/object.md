@@ -239,6 +239,42 @@ GET C.tar.zip from ais://dst as "/tmp/w/C.tar.zip" (4.15KiB) and extract as /tmp
 GET B.tar.lz4 from ais://dst as "/tmp/w/B.tar.lz4" (247.88KiB) and extract as /tmp/w/B
 ```
 
+### Example: use '--prefix' that crosses shard boundary
+
+For starters, we recursively archive all aistore docs:
+
+```console
+$ ais put docs ais://A.tar --archive -r
+```
+
+To list a virtual subdirectory _inside_ this newly created shard (e.g.):
+
+```console
+$ ais archive ls ais://nnn --prefix A.tar/tutorials
+NAME                                             SIZE
+    A.tar/tutorials/README.md                    561B
+    A.tar/tutorials/etl/compute_md5.md           8.28KiB
+    A.tar/tutorials/etl/etl_imagenet_pytorch.md  4.16KiB
+    A.tar/tutorials/etl/etl_webdataset.md        3.97KiB
+    A.tar/tutorials/various/hdfs_backend.md      5.39KiB
+Listed: 5 names
+```
+
+Now, extract matching files _from_ the shard to /tmp/out:
+
+```console
+$ ais get ais://nnn/A.tar --prefix A.tar/tutorials /tmp/out --archpath ""
+GET 6 objects from ais://nnn/tmp/out (total size 17.81MiB) [Y/N]: y
+
+$ ls -al /tmp/out/tutorials/
+total 20
+drwxr-x--- 4 root root 4096 May 13 20:05 ./
+drwxr-xr-x 3 root root 4096 May 13 20:05 ../
+drwxr-x--- 2 root root 4096 May 13 20:05 etl/
+-rw-r--r-- 1 root root  561 May 13 20:05 README.md
+drwxr-x--- 2 root root 4096 May 13 20:05 various/
+```
+
 > **NOTE:** for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
 # Print object content

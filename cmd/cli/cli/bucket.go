@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -356,10 +357,10 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 	return
 }
 
-func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *lstFilter, props string, addCachedCol bool) error {
+func printObjProps(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, addCachedCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
-		matched, other = objectFilter.filter(entries)
+		matched, other = lstFilter.apply(entries)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -372,16 +373,15 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, objectFilter *lstFilt
 	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
 	}
-
-	if flagIsSet(c, showUnmatchedFlag) {
-		unmatched := fcyan("\nNames that don't match:")
-		if len(other) == 0 {
-			fmt.Fprintln(c.App.Writer, unmatched+" none")
-		} else {
-			tmpl = unmatched + "\n" + tmpl
-			if err := teb.Print(other, tmpl, opts); err != nil {
-				return err
-			}
+	if len(matched) > 10 {
+		listed := fblue("Listed:")
+		fmt.Fprintln(c.App.Writer, listed, len(matched), "names")
+	}
+	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
+		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))
+		tmpl = unmatched + "\n" + tmpl
+		if err := teb.Print(other, tmpl, opts); err != nil {
+			return err
 		}
 	}
 	return nil

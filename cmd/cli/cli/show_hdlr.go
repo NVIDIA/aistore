@@ -837,8 +837,6 @@ func showRemoteAISHandler(c *cli.Context) error {
 	if flagIsSet(c, verboseFlag) {
 		for _, ra := range all.A {
 			if ra.Smap == nil {
-				// if ra.UUID == apc.RemAisDefunct { // DEBUG
-				// }
 				continue
 			}
 			fmt.Fprintln(c.App.Writer)
