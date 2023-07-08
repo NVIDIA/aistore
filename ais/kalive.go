@@ -233,7 +233,7 @@ func (pkr *palive) updateSmap() (stopped bool) {
 			}
 			// do keepalive
 			wg.Add(1)
-			go pkr.ping(si, wg)
+			go pkr.ping(si, wg, smap)
 		}
 	}
 	wg.Wait()
@@ -256,12 +256,12 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	return
 }
 
-func (pkr *palive) ping(si *meta.Snode, wg cos.WG) {
+func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX) {
 	defer wg.Done()
 	if len(pkr.stoppedCh) > 0 {
 		return
 	}
-	ok, stopped := pkr._pingRetry(si)
+	ok, stopped := pkr._pingRetry(si, smap)
 	if stopped {
 		pkr.stoppedCh <- struct{}{}
 	}
@@ -270,11 +270,11 @@ func (pkr *palive) ping(si *meta.Snode, wg cos.WG) {
 	}
 }
 
-func (pkr *palive) _pingRetry(to *meta.Snode) (ok, stopped bool) {
+func (pkr *palive) _pingRetry(to *meta.Snode, smap *smapX) (ok, stopped bool) {
 	var (
 		timeout        = time.Duration(pkr.timeoutStats(to.ID()).timeout)
 		t              = mono.NanoTime()
-		_, status, err = pkr.p.Health(to, timeout, nil)
+		_, status, err = pkr.p.reqHealth(to, timeout, nil, smap)
 	)
 	delta := mono.Since(t)
 	pkr.updateTimeoutFor(to.ID(), delta)
@@ -283,8 +283,12 @@ func (pkr *palive) _pingRetry(to *meta.Snode) (ok, stopped bool) {
 	if err == nil {
 		return true, false
 	}
-	nlog.Warningf("%s fails to respond, err: %v(%d) - retrying...", to.StringEx(), err, status)
-	ok, stopped = pkr.retry(to)
+
+	nlog.Warningf("%s fails to respond: %v(%d) - retrying...", to.StringEx(), err, status)
+	ticker := time.NewTicker(cmn.KeepaliveRetryDuration())
+	ok, stopped = pkr.retry(to, ticker)
+	ticker.Stop()
+
 	return ok, stopped
 }
 
@@ -350,28 +354,26 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 }
 
-func (pkr *palive) retry(si *meta.Snode) (ok, stopped bool) {
+func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool) {
 	var (
 		timeout = time.Duration(pkr.timeoutStats(si.ID()).timeout)
-		ticker  = time.NewTicker(cmn.KeepaliveRetryDuration())
 		i       int
 	)
-	defer ticker.Stop()
 	for {
 		if !pkr.isTimeToPing(si.ID()) {
 			return true, false
 		}
 		select {
 		case <-ticker.C:
-			t := mono.NanoTime()
-			_, status, err := pkr.p.Health(si, timeout, nil)
-			timeout = pkr.updateTimeoutFor(si.ID(), mono.Since(t))
+			now := mono.NanoTime()
+			smap := pkr.p.owner.smap.get()
+			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
+			timeout = pkr.updateTimeoutFor(si.ID(), mono.Since(now))
 			if err == nil {
 				return true, false
 			}
 			i++
 			if i == kaNumRetries {
-				smap := pkr.p.owner.smap.get()
 				sname := si.StringEx()
 				nlog.Warningf("Failed to keepalive %s after %d attempts - removing %s from the %s",
 					sname, i, sname, smap)

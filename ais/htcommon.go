@@ -708,7 +708,7 @@ func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {
 
 func (c *getMaxCii) do(si *meta.Snode, wg cos.WG, smap *smapX) {
 	var cii *clusterInfo
-	body, _, err := c.h.Health(si, c.timeout, c.query)
+	body, _, err := c.h.reqHealth(si, c.timeout, c.query, smap)
 	if err != nil {
 		goto ret
 	}

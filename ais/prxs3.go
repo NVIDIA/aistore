@@ -499,7 +499,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 		)
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: r.URL.Path, Query: q}
-		res := p.call(cargs)
+		res := p.call(cargs, smap)
 		b, err := res.bytes, res.err
 		freeCargs(cargs)
 		freeCR(res)

@@ -776,10 +776,11 @@ func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 		cargs.timeout = timeout
 		cargs.cresv = cresBM{}
 	}
-	res := t.call(cargs)
+	res := t.call(cargs, smap)
 	if res.err != nil {
 		time.Sleep(timeout / 2)
-		res = t.call(cargs)
+		smap = t.owner.smap.get()
+		res = t.call(cargs, smap)
 		if res.err != nil {
 			err = res.errorf("%s: failed to GET(%q)", t.si, what)
 		}
@@ -1083,13 +1084,9 @@ func (t *target) enable() error {
 	return nil
 }
 
-//
-// HeadObj* where target acts as a client
-//
-
-// HeadObjT2T checks with a given target to see if it has the object.
-// (compare with api.HeadObject)
-func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *meta.Snode) (ok bool) {
+// checks with a given target to see if it has the object.
+// target acts as a client - compare with api.HeadObject
+func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
 	q := lom.Bck().AddToQuery(nil)
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
@@ -1108,7 +1105,7 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, tsi *meta.Snode) (ok bool) {
 		}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
-	res := t.call(cargs)
+	res := t.call(cargs, smap)
 	ok = res.err == nil
 	freeCargs(cargs)
 	freeCR(res)

@@ -391,7 +391,7 @@ func (ic *ic) bcastListenIC(nl nl.Listener) {
 	ic.p.bcastAsyncIC(msg)
 }
 
-func (ic *ic) sendOwnershipTbl(si *meta.Snode) error {
+func (ic *ic) sendOwnershipTbl(si *meta.Snode, smap *smapX) error {
 	if ic.p.notifs.size() == 0 {
 		if cmn.FastV(4, cos.SmoduleAIS) {
 			nlog.Infof("%s: notifs empty, not sending to %s", ic.p, si)
@@ -405,7 +405,7 @@ func (ic *ic) sendOwnershipTbl(si *meta.Snode) error {
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathIC.S, Body: cos.MustMarshal(msg)}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
-	res := ic.p.call(cargs)
+	res := ic.p.call(cargs, smap)
 	freeCargs(cargs)
 	return res.err
 }
@@ -435,7 +435,7 @@ func (ic *ic) syncICBundle() error {
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 		cargs.cresv = cresIC{} // -> icBundle
 	}
-	res := ic.p.call(cargs)
+	res := ic.p.call(cargs, smap)
 	freeCargs(cargs)
 	if res.err != nil {
 		return res.err

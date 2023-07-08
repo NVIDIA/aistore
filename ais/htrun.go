@@ -578,7 +578,7 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 		cargs.req.BodyR, _ = bargs.req.BodyR.(cos.ReadOpenCloser).Open()
 	}
 	cargs.cresv = bargs.cresv
-	res := h.call(cargs)
+	res := h.call(cargs, bargs.smap)
 	if bargs.async {
 		freeCR(res) // discard right away
 	} else {
@@ -589,7 +589,7 @@ func (h *htrun) _call(si *meta.Snode, bargs *bcastArgs, results *bcastResults) {
 	freeCargs(cargs)
 }
 
-func (h *htrun) call(args *callArgs) (res *callResult) {
+func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	var (
 		req    *http.Request
 		resp   *http.Response
@@ -653,7 +653,8 @@ func (h *htrun) call(args *callArgs) (res *callResult) {
 
 	req.Header.Set(apc.HdrCallerID, h.si.ID())
 	req.Header.Set(apc.HdrCallerName, h.si.Name())
-	if smap := h.owner.smap.get(); smap != nil && smap.vstr != "" {
+	debug.Assert(smap != nil)
+	if smap.vstr != "" {
 		req.Header.Set(apc.HdrCallerSmapVersion, smap.vstr)
 	}
 	req.Header.Set(cos.HdrUserAgent, ua)
@@ -749,6 +750,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.selected = nodes
 	args.nodeCount = len(nodes)
+	args.smap = smap
 	args.async = true
 	_ = h.bcastSelected(args)
 	freeBcArgs(args)
@@ -866,7 +868,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 				cargs.req = args.req
 				cargs.timeout = args.timeout
 			}
-			res := h.call(cargs)
+			res := h.call(cargs, smap)
 			freeCargs(cargs)
 			freeCR(res) // discard right away
 			wg.Done()
@@ -1213,11 +1215,8 @@ func (h *htrun) isValidObjname(w http.ResponseWriter, r *http.Request, name stri
 	return true
 }
 
-//
 // health client
-//
-
-func (h *htrun) Health(si *meta.Snode, timeout time.Duration, query url.Values) (b []byte, status int, err error) {
+func (h *htrun) reqHealth(si *meta.Snode, timeout time.Duration, query url.Values, smap *smapX) (b []byte, status int, err error) {
 	var (
 		path  = apc.URLPathHealth.S
 		url   = si.URL(cmn.NetIntraControl)
@@ -1228,14 +1227,15 @@ func (h *htrun) Health(si *meta.Snode, timeout time.Duration, query url.Values) 
 		cargs.req = cmn.HreqArgs{Method: http.MethodGet, Base: url, Path: path, Query: query}
 		cargs.timeout = timeout
 	}
-	res := h.call(cargs)
+	res := h.call(cargs, smap)
 	b, status, err = res.bytes, res.status, res.err
 	freeCargs(cargs)
 	freeCR(res)
 	return
 }
 
-// - utilizes internal API: Health(clusterInfo) to discover a _better_ Smap, if exists
+// - utilizes reqHealth (above) to discover a _better_ Smap, if exists
+// - via getMaxCii.do()
 // - checkAll: query all nodes
 // - consider adding max-ver BMD bit here as well (TODO)
 func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num confirmations*/) {
@@ -1716,7 +1716,11 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: url, Path: path, Query: q, Body: cos.MustMarshal(cm)}
 		cargs.timeout = tout
 	}
-	res := h.call(cargs)
+	smap := cm.Smap
+	if smap == nil {
+		smap = h.owner.smap.get()
+	}
+	res := h.call(cargs, smap)
 	freeCargs(cargs)
 	return res
 }
@@ -1776,7 +1780,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			nlog.Warningf("%s: started as a non-primary and got ELECTED during startup", h.si)
 			return
 		}
-		if _, _, err := h.Health(smap.Primary, healthTimeout, query /*ask primary*/); err == nil {
+		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap); err == nil {
 			// log
 			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
@@ -1824,7 +1828,7 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 		cargs.req = cmn.HreqArgs{Method: http.MethodDelete, Path: apc.URLPathCluDaemon.Join(h.si.ID())}
 		cargs.timeout = apc.DefaultTimeout
 	}
-	res := h.call(cargs)
+	res := h.call(cargs, smap)
 	status, err = res.status, res.err
 	if err != nil {
 		f := nlog.Errorf

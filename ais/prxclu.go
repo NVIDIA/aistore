@@ -244,7 +244,7 @@ func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 	}
 	var (
 		v   *cluster.Remotes
-		res = p.call(cargs)
+		res = p.call(cargs, smap)
 		err = res.toErr()
 	)
 	if err == nil {
@@ -458,7 +458,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// handshake | check dup
 	if apiOp == apc.AdminJoin {
 		// call the node with cluster-metadata included
-		if errCode, err := p.adminJoinHandshake(nsi, apiOp); err != nil {
+		if errCode, err := p.adminJoinHandshake(smap, nsi, apiOp); err != nil {
 			p.writeErr(w, r, err, errCode)
 			return
 		}
@@ -537,7 +537,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 // when joining manually: update the node with cluster meta that does not include Smap
 // (the later gets finalized and metasync-ed upon success)
-func (p *proxy) adminJoinHandshake(nsi *meta.Snode, apiOp string) (int, error) {
+func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (int, error) {
 	cm, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 	if err != nil {
 		return http.StatusInternalServerError, err
@@ -550,7 +550,7 @@ func (p *proxy) adminJoinHandshake(nsi *meta.Snode, apiOp string) (int, error) {
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathDaeAdminJoin.S, Body: cos.MustMarshal(cm)}
 		cargs.timeout = cmn.Timeout.CplaneOperation()
 	}
-	res := p.call(cargs)
+	res := p.call(cargs, smap)
 	err = res.err
 	status := res.status
 	if err != nil {
@@ -722,6 +722,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 		}
 		msg     = apc.ActMsg{Action: apc.ActCleanupMarkers, Value: &val}
 		cargs   = allocCargs()
+		smap    = p.owner.smap.get()
 		timeout = cmn.Timeout.CplaneOperation()
 		sleep   = timeout >> 1
 	)
@@ -732,7 +733,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 	}
 	time.Sleep(sleep)
 	for i := 0; i < 4; i++ { // retry
-		res := p.call(cargs)
+		res := p.call(cargs, smap)
 		err := res.err
 		freeCR(res)
 		if err == nil {
@@ -740,6 +741,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 		}
 		if cos.IsRetriableConnErr(err) {
 			time.Sleep(sleep)
+			smap = p.owner.smap.get()
 			nlog.Warningf("%s: %v (cleanmark #%d)", p, err, i+1)
 			continue
 		}
@@ -1151,7 +1153,7 @@ func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.Act
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
 	}
-	res := p.call(cargs)
+	res := p.call(cargs, smap)
 	freeCargs(cargs)
 	if res.err != nil {
 		p.writeErr(w, r, res.toErr())
@@ -1184,7 +1186,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 	}
 	if smap.IsIC(p.si) && !p.si.Equals(dst) {
 		// node has older version than dst node handle locally
-		if err := p.ic.sendOwnershipTbl(dst); err != nil {
+		if err := p.ic.sendOwnershipTbl(dst, smap); err != nil {
 			p.writeErr(w, r, err)
 		}
 		return
@@ -1203,7 +1205,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 			continue
 		}
 		cargs.si = psi
-		res := p.call(cargs)
+		res := p.call(cargs, smap)
 		if res.err != nil {
 			err = res.toErr()
 		}
@@ -1415,12 +1417,12 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		return
 	}
 	timeout := cmn.GCO.Get().Timeout.CplaneOperation.D()
-	if _, status, err := p.Health(si, timeout, nil); err != nil {
+	if _, status, err := p.reqHealth(si, timeout, nil, smap); err != nil {
 		sleep, retries := timeout/2, 5
 		time.Sleep(sleep)
 		for i := 0; i < retries; i++ {
 			time.Sleep(sleep)
-			_, status, err = p.Health(si, timeout, nil)
+			_, status, err = p.reqHealth(si, timeout, nil, smap)
 			if err == nil {
 				break
 			}
@@ -1833,7 +1835,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 	}
 
 	nlog.Infof("%s: %s %s", p, msg.Action, sname)
-	res := p.call(cargs)
+	res := p.call(cargs, smap)
 	err = res.unwrap()
 	freeCargs(cargs)
 	freeCR(res)

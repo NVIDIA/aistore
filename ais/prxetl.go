@@ -323,8 +323,9 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 	if len(apiItems) > 0 {
 		// specific target
 		var (
-			tid = apiItems[0]
-			si  = p.owner.smap.get().GetTarget(tid)
+			tid  = apiItems[0]
+			smap = p.owner.smap.get()
+			si   = smap.GetTarget(tid)
 		)
 		if si == nil {
 			p.writeErrf(w, r, "unknown target %q", tid)
@@ -338,7 +339,7 @@ func (p *proxy) logsETL(w http.ResponseWriter, r *http.Request, etlName string, 
 			cargs.timeout = apc.DefaultTimeout
 			cargs.cresv = cresEL{} // -> etl.Logs
 		}
-		results[0] = p.call(cargs)
+		results[0] = p.call(cargs, smap)
 		freeCargs(cargs)
 	} else {
 		// all targets

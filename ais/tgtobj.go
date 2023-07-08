@@ -734,7 +734,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 		doubleCheck = true
 	}
 	if running && tsi.ID() != goi.t.SID() {
-		if goi.t.HeadObjT2T(goi.lom, tsi) {
+		if goi.t.headt2t(goi.lom, tsi, smap) {
 			gfnNode = tsi
 			goto gfn
 		}

@@ -36,6 +36,10 @@ func (*target) GetAllRunning(xactKind string, separateIdle bool) (running, idle 
 	return xreg.GetAllRunning(xactKind, separateIdle)
 }
 
+func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {
+	return t.reqHealth(si, timeout, query, t.owner.smap.get())
+}
+
 func (t *target) Backend(bck *meta.Bck) cluster.BackendProvider {
 	if bck.IsRemoteAIS() {
 		return t.backend[apc.AIS]
@@ -101,6 +105,10 @@ func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact
 func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
 	errCode, err = t.DeleteObject(lom, true /*evict*/)
 	return
+}
+
+func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
+	return t.headt2t(lom, si, t.owner.smap.get())
 }
 
 // CopyObject:
@@ -214,7 +222,8 @@ func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) 
 }
 
 func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errCode int, err error) {
-	tsi, local, erh := lom.HrwTarget(t.owner.smap.Get())
+	smap := t.owner.smap.get()
+	tsi, local, erh := lom.HrwTarget(&smap.Smap)
 	if erh != nil {
 		return 0, erh
 	}
@@ -222,7 +231,7 @@ func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errC
 	if local {
 		size, errCode, err = t._promLocal(params, lom)
 	} else {
-		size, err = t._promRemote(params, lom, tsi)
+		size, err = t._promRemote(params, lom, tsi, smap)
 		if err == nil && size >= 0 && params.Xact != nil {
 			params.Xact.OutObjsAdd(1, size)
 		}
@@ -319,11 +328,11 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 
 // TODO: use DM streams
 // TODO: Xact.InObjsAdd on the receive side
-func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *meta.Snode) (int64, error) {
+func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (int64, error) {
 	lom.FQN = params.SrcFQN
 
 	// when not overwriting check w/ remote target first (and separately)
-	if !params.OverwriteDst && t.HeadObjT2T(lom, tsi) {
+	if !params.OverwriteDst && t.headt2t(lom, tsi, smap) {
 		return -1, nil
 	}
 
@@ -346,27 +355,5 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 func (t *target) DisableMpath(mpath, reason string) (err error) {
 	nlog.Warningf("Disabling mountpath %s: %s", mpath, reason)
 	_, err = t.fsprg.disableMpath(mpath, true /*dont-resilver*/) // NOTE: not resilvering upon FSCH calling
-	return
-}
-
-func (t *target) RebalanceNamespace(si *meta.Snode) (b []byte, status int, err error) {
-	// pull the data
-	query := url.Values{}
-	query.Set(apc.QparamRebData, "true")
-	cargs := allocCargs()
-	{
-		cargs.si = si
-		cargs.req = cmn.HreqArgs{
-			Method: http.MethodGet,
-			Base:   si.URL(cmn.NetIntraData),
-			Path:   apc.URLPathRebalance.S,
-			Query:  query,
-		}
-		cargs.timeout = apc.DefaultTimeout
-	}
-	res := t.call(cargs)
-	b, status, err = res.bytes, res.status, res.err
-	freeCargs(cargs)
-	freeCR(res)
 	return
 }

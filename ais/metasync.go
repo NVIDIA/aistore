@@ -449,14 +449,14 @@ func (y *metasyncer) syncDone(si *meta.Snode, pairs []revsPair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused meta.NodeMap, pairs []revsPair,
-	smap *smapX) (ok bool) {
+func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refused meta.NodeMap, pairs []revsPair, smap *smapX) (ok bool) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetIntraControl
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []meta.NodeMap{refused}
 	args.nodeCount = len(refused)
+	args.smap = smap
 	results := y.p.bcastNodes(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -563,6 +563,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	args.timeout = cmn.Timeout.MaxKeepalive()
 	args.nodes = []meta.NodeMap{pending}
 	args.nodeCount = len(pending)
+	args.smap = smap
 	defer body.Free()
 	results := y.p.bcastNodes(args)
 	freeBcArgs(args)

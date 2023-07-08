@@ -52,7 +52,6 @@ func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                
 func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                  { return 0, nil }
 func (*TargetMock) Backend(*meta.Bck) cluster.BackendProvider                   { return nil }
 func (*TargetMock) HeadObjT2T(*cluster.LOM, *meta.Snode) bool                   { return false }
-func (*TargetMock) RebalanceNamespace(*meta.Snode) ([]byte, int, error)         { return nil, 0, nil }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   {}
 func (*TargetMock) FSHC(error, string)                                          {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                              { return fs.CapStatus{} }

@@ -321,6 +321,7 @@ func (n *notifs) done(nl nl.Listener) {
 			args.timeout = cmn.Timeout.MaxKeepalive()
 			args.nodes = []meta.NodeMap{nl.Notifiers()}
 			args.nodeCount = len(args.nodes[0])
+			args.smap = smap
 			args.async = true
 			_ = n.p.bcastNodes(args) // args.async: result is already discarded/freed
 			freeBcArgs(args)
@@ -384,7 +385,7 @@ func (n *notifs) housekeep() time.Duration {
 	return hk.PruneActiveIval
 }
 
-// conditional: ask targets iff they delayed updating
+// conditional: query targets iff they delayed updating
 func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 	var (
 		config           = cmn.GCO.Get()
@@ -403,6 +404,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 	args.req = nl.QueryArgs() // nodes to fetch stats from
 	args.nodes = []meta.NodeMap{nodesTardy}
 	args.nodeCount = len(args.nodes[0])
+	args.smap = n.p.owner.smap.get()
 	debug.Assert(args.nodeCount > 0) // Ensure that there is at least one node to fetch.
 
 	results := n.p.bcastNodes(args)
