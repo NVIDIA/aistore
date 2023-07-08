@@ -151,12 +151,13 @@ func TestMaintenanceMD(t *testing.T) {
 		api.WaitForXactionIC(baseParams, args)
 	})
 
+	tlog.Logf("Decommission %s\n", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), SkipRebalance: true, KeepInitialConfig: true}
 	_, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckFatal(t, err)
 
-	_, err = tools.WaitForClusterState(proxyURL, "target decommission", smap.Version, smap.CountActivePs(),
+	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(),
 		smap.CountTargets()-1)
 	tassert.CheckFatal(t, err)
 
@@ -210,11 +211,12 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	tlog.Logf("Decommission %s\n", dcmTarget.StringEx())
 	cmd := tools.GetRestoreCmd(dcmTarget)
 	msg := &apc.ActValRmNode{DaemonID: dcmTarget.ID(), RmUserData: true, KeepInitialConfig: true}
 	rebID, err := api.DecommissionNode(baseParams, msg)
 	tassert.CheckError(t, err)
-	_, err = tools.WaitForClusterState(proxyURL, "target decommission",
+	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned",
 		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
 	tassert.CheckFatal(t, err)
 

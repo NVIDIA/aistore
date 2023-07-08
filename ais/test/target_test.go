@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 func TestPutObjectNoDaemonID(t *testing.T) {
@@ -55,6 +56,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		SkipRebalance:     true,
 		KeepInitialConfig: true,
 	}
+	tlog.Logf("Decommission invalid node %s (expecting to fail)\n", val.DaemonID)
 	if _, err := api.DecommissionNode(tools.BaseAPIParams(), val); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}

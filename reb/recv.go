@@ -352,8 +352,9 @@ func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reade
 		err := reb.receiveMD(req, hdr)
 		if err != nil {
 			nlog.Errorf("failed to receive MD for %s: %v", hdr.Cname(), err)
+			nlog.Errorf("Warning: (g%d, %s) ignoring, proceeding anyway...", req.rebID, reb.t) // TODO: revisit
 		}
-		return err
+		return nil
 	}
 	if err := reb.receiveCT(req, hdr, reader); err != nil {
 		nlog.Errorf("failed to receive CT for %s: %v", hdr.Cname(), err)
