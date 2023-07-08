@@ -240,7 +240,7 @@ type (
 		detail string
 	}
 	errNoUnregister struct {
-		detail string
+		action string
 	}
 	apiRequest struct {
 		bck *meta.Bck // out: initialized bucket
@@ -284,14 +284,11 @@ func (e *errNodeNotFound) Error() string {
 // errNoUnregister //
 /////////////////////
 
-func (e *errNoUnregister) Error() string { return e.detail }
+func (e *errNoUnregister) Error() string { return e.action }
 
-func isErrNoUnregister(err error) bool {
-	if _, ok := err.(*errNoUnregister); ok {
-		return true
-	}
-	enu := &errNoUnregister{}
-	return errors.As(err, &enu)
+func isErrNoUnregister(err error) (ok bool) {
+	_, ok = err.(*errNoUnregister)
+	return
 }
 
 //////////////////

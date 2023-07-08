@@ -1833,7 +1833,7 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	if err != nil {
 		f := nlog.Errorf
 		if ignoreErr {
-			f = nlog.Warningf
+			f = nlog.Infof
 		}
 		f("%s: failed to unreg self, err: %v(%d)", h.si, err, status)
 	}

@@ -3302,9 +3302,15 @@ func (p *proxy) Stop(err error) {
 		s         = "Stopping " + p.String()
 		smap      = p.owner.smap.get()
 		isPrimary = smap.isPrimary(p.si)
+		e, isEnu  = err.(*errNoUnregister)
 	)
 	if isPrimary {
 		s += "(primary)"
+		if !isEnu || e.action != apc.ActShutdownCluster {
+			if npsi, err := cluster.HrwProxy(&smap.Smap, p.SID()); err == nil {
+				p.notifyCandidate(npsi, smap)
+			}
+		}
 	}
 	if err == nil {
 		nlog.Infoln(s)
@@ -3313,6 +3319,19 @@ func (p *proxy) Stop(err error) {
 	}
 	xreg.AbortAll(errors.New("p-stop"))
 
-	rmFromSmap := !isPrimary && smap.isValid() && !isErrNoUnregister(err)
-	p.htrun.stop(rmFromSmap)
+	p.htrun.stop(!isPrimary && smap.isValid() && !isEnu /*rmFromSmap*/)
+}
+
+// on a best-effort basis, ignoring errors and bodyclose
+func (p *proxy) notifyCandidate(npsi *meta.Snode, smap *smapX) {
+	cargs := allocCargs()
+	cargs.si = npsi
+	cargs.req = cmn.HreqArgs{Method: http.MethodPut, Base: npsi.URL(cmn.NetIntraControl), Path: apc.URLPathVotePriStop.S}
+	req, err := cargs.req.Req()
+	if err != nil {
+		return
+	}
+	req.Header.Set(apc.HdrCallerID, p.SID())
+	req.Header.Set(apc.HdrCallerSmapVersion, smap.vstr)
+	p.client.control.Do(req) //nolint:bodyclose // exiting
 }

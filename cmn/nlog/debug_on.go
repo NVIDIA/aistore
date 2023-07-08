@@ -13,7 +13,7 @@ import (
 
 func assert(cond bool, a ...any) {
 	if !cond {
-		msg := "DEBUG PANIC: "
+		msg := "nlog assertion failed: "
 		if len(a) > 0 {
 			msg += fmt.Sprint(a...)
 		}

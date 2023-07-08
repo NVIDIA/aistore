@@ -46,7 +46,9 @@ func _panic(a ...any) {
 				break
 			}
 			f := filepath.Base(file)
-
+			if l := len(f); l > 3 {
+				f = f[:l-3]
+			}
 			if buffer.Len() > len(msg) {
 				buffer.WriteString(" <- ")
 			}

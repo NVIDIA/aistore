@@ -38,6 +38,7 @@ const (
 
 	Voteres  = "result"
 	VoteInit = "init"
+	PriStop  = "primary-stopping"
 
 	// (see the corresponding action messages above)
 	Keepalive = "keepalive"
@@ -130,6 +131,7 @@ var (
 	URLPathVoteInit    = urlpath(Version, Vote, Init)
 	URLPathVoteProxy   = urlpath(Version, Vote, Proxy)
 	URLPathVoteVoteres = urlpath(Version, Vote, Voteres)
+	URLPathVotePriStop = urlpath(Version, Vote, PriStop)
 
 	URLPathdSort        = urlpath(Version, Sort)
 	URLPathdSortInit    = urlpath(Version, Sort, Init)
