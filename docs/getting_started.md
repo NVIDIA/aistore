@@ -79,7 +79,7 @@ The rest of this document is structured as follows:
 
 ## Local Playground
 
-For a quick evaluation, experimenting with features, first-time usage, and (of course) development - for any and all of the above running AIS from its GitHub source is maybe the first option to consider.
+If you're looking for a speedy evaluation, feature experimentation, initial usage, or development, running AIS from its GitHub source might be a good option.
 
 Hence, **Local Playground** - one of the several supported [deployment options](#multiple-deployment-options).
 
@@ -87,13 +87,13 @@ Hence, **Local Playground** - one of the several supported [deployment options](
 
 To run AIStore from source, you'd typically need **Go**: compiler, linker, tools, and required packages. However:
 
-> `CROSS_COMPILE` option (see below) can be used to build AIStore without having (to install) [Go](https://golang.org/dl/) and its toolchain.
+> `CROSS_COMPILE` option (see below) can be used to build AIStore without having (to install) [Go](https://golang.org/dl/) and its toolchain (requires Docker).
 
 To install Go(lang) on Linux:
 
-* download the latest `go1.19.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
-* follow [installation instructions](https://go.dev/doc/install)
-* or simply run: `tar -C /usr/local -xzf go1.19.<x>.linux-amd64.tar.gz`
+* Download the latest `go1.20.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* Follow [installation instructions](https://go.dev/doc/install)
+* **Or** simply run: `tar -C /usr/local -xzf go1.20.<x>.linux-amd64.tar.gz` and add `/usr/local/go/bin` to $PATH
 
 Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 
@@ -112,7 +112,7 @@ The steps:
 $ cd $GOPATH/src/github.com/NVIDIA
 $ git clone https://github.com/NVIDIA/aistore.git
 $ cd aistore
-# optionally, run `make mod-tidy` to preload dependencies
+# Optionally, run `make mod-tidy` to preload dependencies
 $ ./deploy/scripts/clean_deploy.sh
 
 $ ais show cluster
@@ -202,7 +202,7 @@ The variables include `AIS_ENDPOINT`, `AIS_AUTHN_TOKEN_FILE`, and [more](/api/en
 
 Almost in all cases, there's an "AIS_" prefix (hint: `git grep AIS_`).
 
-And in all cases with no exception, the variable takes presedence over the corresponding configuration, if exists. For instance:
+And in all cases with no exception, the variable takes precedence over the corresponding configuration, if exists. For instance:
 
 ```console
 AIS_ENDPOINT=https://10.0.1.138 ais show cluster
@@ -210,7 +210,7 @@ AIS_ENDPOINT=https://10.0.1.138 ais show cluster
 
 overrides the default endpoint as per `ais config cli` or (same) `ais config cli --json`
 
-> Endpoints are equally provided by each and every running AIS gateway (aka "proxy") and each endpoint can be (equally) used to acess the cluster. To find out what's currently configured, run (e.g.):
+> Endpoints are equally provided by each and every running AIS gateway (aka "proxy") and each endpoint can be (equally) used to access the cluster. To find out what's currently configured, run (e.g.):
 
 ```console
 $ ais config node <NODE> local host_net --json
@@ -230,7 +230,7 @@ All [containerized deployments](/deploy/README.md) have their own separate `Make
 
 > This separation is typically small in size and easily readable and maintainable.
 
-Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](Makefile).
+Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](./../Makefile).
 
 AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
 
@@ -242,7 +242,7 @@ For any Kubernetes deployments (including, of course, production deployments) pl
 
 In particular, [AIS-K8s GitHub repository](https://github.com/NVIDIA/ais-k8s/blob/master/terraform/README.md) provides a single-line command to deploy Kubernetes cluster and the underlying infrastructure with the AIStore cluster running inside (see below). The only requirement is having a few dependencies preinstalled (in particular, `helm`) and a Cloud account.
 
-The following GIF illustrates steps to deploy AIS on the Google Cloud Platform (GCP):
+The following GIF illustrates the steps to deploy AIS on the Google Cloud Platform (GCP):
 
 ![Kubernetes cloud deployment](images/ais-k8s-deploy.gif)
 
