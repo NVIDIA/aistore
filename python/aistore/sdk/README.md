@@ -32,6 +32,12 @@ $ git clone https://github.com/NVIDIA/aistore.git
 
 $ cd aistore/python/
 
+# upgrade pip to latest version
+$ python -m pip install --upgrade pip       
+
+# install dependencies 
+$ pip install -r aistore/common_requirements
+
 $ pip install -e .
 ```
 ---
