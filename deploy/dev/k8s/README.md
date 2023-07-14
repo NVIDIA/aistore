@@ -39,8 +39,9 @@ $ sudo usermod -aG docker $USER && newgrp docker
 4. Install [minikube](https://minikube.sigs.k8s.io/docs/start/).
 5. Install [kubectl](https://kubernetes.io/docs/tasks/tools/).
 
->  **Note:  Running minikube on a VPN might be [problematic](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/). For smoother
-   operations try running with VPN disabled.**
+**Notes:**
+- Running minikube on a VPN might be problematic. For smoother operations, try running with VPN disabled. More information can be found [here](https://minikube.sigs.k8s.io/docs/handbook/vpn_and_proxy/).
+- Running minikube with the Docker driver on newer macOS versions may encounter problems. Please refer to the [known issues](#known-issues) section for more details.
 
 All commands below are running from the same directory i.e `${AISTORE_ROOT}/deploy/dev/k8s`
 
@@ -119,9 +120,16 @@ $ make stop
 
 NOTE: If the default jupyter local directory was overwritten while deploying, ensure `JUPYTER_LOCAL_DIR` is pointing to the correct directory when performing a cleanup.
 
-## Troubleshooting minikube
+## Known Issues
 
 See [known issues](https://minikube.sigs.k8s.io/docs/drivers/docker/#known-issues) with using Docker driver.
+
+**macOS only:** One of the scripts to start AIS uses the `envsubst` command, which is not available by default. Please run the following commands as a workaround:
+```
+brew install gettext
+brew link --force gettext
+```
+The ingress, and ingress-dns addons are currently only supported on Linux. See [issue](https://github.com/kubernetes/minikube/issues/7332).
 
 ## Demo
 
