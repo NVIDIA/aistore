@@ -121,6 +121,11 @@ func (nlog *nlog) flush(exit bool) {
 		}
 	}
 	nlog.mw.Unlock()
+	lim := 8 // 2s
+	for exit && len(nlog.ch) > 0 && lim > 0 {
+		time.Sleep(time.Second >> 2)
+		lim--
+	}
 }
 
 // under mw-lock
@@ -171,9 +176,10 @@ func (nlog *nlog) put(pw *fixed) {
 	nlog.mw.Lock()
 	if nlog.buf1 == nil {
 		nlog.buf1 = pw
-	} else {
-		assert(nlog.buf2 == nil)
+	} else if nlog.buf2 == nil {
 		nlog.buf2 = pw
+	} else {
+		assert(nlog.buf1 == pw || nlog.buf2 == pw) // via FlushExit()
 	}
 	nlog.mw.Unlock()
 }
@@ -211,7 +217,7 @@ func (nlog *nlog) flusher() {
 		if cap(pw.buf) == nlogLineSize {
 			free(pw)
 		} else {
-			assert(cap(pw.buf) == nlogBufSize)
+			assert(cap(pw.buf) == nlogBufSize, fmt.Sprintf("%d vs %d", cap(pw.buf), nlogBufSize))
 			nlog.put(pw)
 		}
 
@@ -219,15 +225,6 @@ func (nlog *nlog) flusher() {
 		if size >= MaxSize {
 			err = nlog.rotate(time.Now())
 			size = 0
-		}
-	}
-	// drain
-	runtime.Gosched()
-	for {
-		select {
-		case <-nlog.ch:
-		default:
-			return
 		}
 	}
 }

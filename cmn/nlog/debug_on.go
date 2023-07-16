@@ -9,15 +9,17 @@ package nlog
 import (
 	"fmt"
 	"os"
+	rdebug "runtime/debug"
 )
 
 func assert(cond bool, a ...any) {
 	if !cond {
-		msg := "nlog assertion failed: "
+		msg := "nlog assertion failed"
 		if len(a) > 0 {
-			msg += fmt.Sprint(a...)
+			msg += ": " + fmt.Sprint(a...)
 		}
-		os.Stderr.WriteString(msg)
+		os.Stderr.WriteString(msg + "\n")
+		rdebug.PrintStack()
 		os.Exit(1)
 	}
 }

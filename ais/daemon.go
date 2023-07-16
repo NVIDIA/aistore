@@ -263,6 +263,7 @@ func Run(version, buildTime string) int {
 		nlog.Errorln("Timed-out while starting up")
 	}
 	nlog.Errorf("Terminated with err: %v", err)
+	nlog.FlushExit()
 	return 1
 }
 
