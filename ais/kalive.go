@@ -284,7 +284,7 @@ func (pkr *palive) _pingRetry(to *meta.Snode, smap *smapX) (ok, stopped bool) {
 		return true, false
 	}
 
-	nlog.Warningf("%s fails to respond: %v(%d) - retrying...", to.StringEx(), err, status)
+	nlog.Warningf("%s fails to respond: [%v(%d)] - retrying...", to.StringEx(), err, status)
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration())
 	ok, stopped = pkr.retry(to, ticker)
 	ticker.Stop()

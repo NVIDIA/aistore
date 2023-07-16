@@ -177,7 +177,7 @@ func (p *proxy) httpelect(w http.ResponseWriter, r *http.Request) {
 	// include resulting Smap in the response
 	vr.Smap = p.owner.smap.get()
 
-	// election should be started in a goroutine as it must not hang the http handler
+	// xaction (minimal and, unlike target xactions, not visible via API (TODO))
 	go p.startElection(vr)
 }
 
@@ -236,20 +236,41 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		if err == nil {
 			nlog.Infof("%s: current primary %s is up, moving back to idle", p, curPrimary)
 		} else {
-			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary", p, curPrimary)
+			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary", p, curPrimary.StringEx())
 			nlog.Errorln(errV)
 			xele.AddErr(errV)
 		}
 		return
 	}
-	nlog.Infof("%s: primary %s is confirmed down: %v - moving to election state phase 1 (prepare)", p, curPrimary, err)
+	nlog.Infof("%s: primary %s is confirmed down: [%v] - moving to election state phase 1 (prepare)", p, curPrimary.StringEx(), err)
 
 	// 2. election phase 1
 	elected, votingErrors := p.electPhase1(vr, config)
 	if !elected {
-		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary remains %s, moving back to idle", p, curPrimary)
+		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary still %s w/ status unknown", p, curPrimary.StringEx())
 		nlog.Errorln(errV)
 		xele.AddErr(errV)
+
+		smap = p.owner.smap.get()
+		if smap.version() > vr.Smap.version() {
+			nlog.Warningf("%s: %s updated from %s, moving back to idle", p, smap, vr.Smap)
+			return
+		}
+
+		// best-effort
+		svm, _, slowp := p.bcastMaxVer(smap, nil, nil)
+		if svm.Smap != nil && !slowp {
+			if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
+				nlog.Warningf("%s: upgrading local %s to cluster max-ver %s", p, smap.StringEx(), svm.Smap.StringEx())
+				if svm.Smap.Primary.ID() != smap.Primary.ID() {
+					nlog.Warningf("%s: new primary %s is already elected ...", p, svm.Smap.Primary.StringEx())
+				}
+				if errV := p.owner.smap.synchronize(p.si, svm.Smap, nil /*ms payload*/, p.smapUpdatedCB); errV != nil {
+					cos.ExitLog(errV)
+				}
+			}
+		}
+
 		return
 	}
 
@@ -360,7 +381,7 @@ func (p *proxy) electPhase2(vr *VoteRecord) cos.StrSet {
 		if res.err == nil {
 			continue
 		}
-		nlog.Warningf("%s: failed to confirm election with %s: %v", p, res.si, res.err)
+		nlog.Warningf("%s: failed to confirm election with %s: %v", p, res.si.StringEx(), res.err)
 		errors.Set(res.si.ID())
 	}
 	freeBcastRes(results)
