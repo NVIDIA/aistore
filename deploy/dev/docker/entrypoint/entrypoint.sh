@@ -20,5 +20,4 @@ ${GOBIN}/aisnode \
     -ntargets=${TARGET_CNT} \
     -nodiskio=${AIS_NO_DISK_IO} \
     -dryobjsize=${AIS_DRY_OBJ_SIZE} \
-    -alsologtostderr=true \
     -allow_shared_no_disks=${AIS_ALLOW_SHARED_NO_DISKS}
