@@ -5,13 +5,11 @@
 package reb
 
 import (
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/hk"
 )
 
 const timedDuration = time.Minute + time.Minute/2
@@ -24,75 +22,46 @@ const (
 
 // get-from-neighbors (GFN) state
 type gfnCtx struct {
-	mtx sync.Mutex
 	exp atomic.Int64
-	trc atomic.Int64
 	gon atomic.Bool
 }
 
 var gfn = &gfnCtx{}
 
 func IsGFN() bool {
-	return gfn.gon.Load() || (gfn.exp.Load() != 0 && gfn.trc.Load() > 0)
+	return gfn.gon.Load() || gfn.exp.Load() > mono.NanoTime()
 }
 
 func OnTimedGFN() {
 	if gfn.gon.Load() {
 		return
 	}
-	gfn.mtx.Lock()
-	now := mono.NanoTime()
-	if gfn.exp.Swap(now+timedDuration.Nanoseconds()) == 0 {
-		gfn.trc.Store(1)
-		hk.Reg(hkgfnT+hk.NameSuffix, hkTimed, 0 /*time.Duration*/)
-		gfn.mtx.Unlock()
-		nlog.Infoln(gfnT, 1)
-	} else {
-		trc := gfn.trc.Inc()
-		gfn.mtx.Unlock()
-		nlog.Infoln(gfnT, trc)
+	act := " updated"
+	exp := mono.NanoTime() + timedDuration.Nanoseconds()
+	if gfn.exp.Swap(exp) == 0 {
+		act = " on"
 	}
+	nlog.Infoln(gfnT, act)
 }
 
 func OffTimedGFN(detail string) {
-	if gfn.gon.Load() {
-		return
-	}
-	gfn.mtx.Lock()
-	trc := gfn.trc.Dec()
-	if trc == 0 {
-		gfn.exp.Store(0)
-	}
-	gfn.mtx.Unlock()
-	nlog.Infoln(gfnT, trc, detail)
-}
-
-func hkTimed() time.Duration {
-	gfn.mtx.Lock()
-	now := mono.NanoTime()
-	exp := gfn.exp.Swap(0)
-	if gfn.gon.Load() || exp <= now {
-		gfn.trc.Store(0)
-		gfn.mtx.Unlock()
-		if exp > 0 {
-			nlog.Infoln(gfnT, "off")
-		}
-		return hk.UnregInterval
-	}
-	gfn.exp.Store(exp)
-	gfn.mtx.Unlock()
-	return time.Duration(exp - now + 100)
+	gfn.exp.Store(0)
+	nlog.Infoln(gfnT, " off ", detail)
 }
 
 func onGFN() (prev bool) {
-	if prev = gfn.gon.Swap(true); !prev {
-		gfn.trc.Store(0) // see IsGFN
-		nlog.Infoln(gfnG, "on")
+	if prev = gfn.gon.Swap(true); prev {
+		return
+	}
+	if exp := gfn.exp.Swap(0); exp > mono.NanoTime() {
+		nlog.Infoln(gfnG, " on ", gfnT, " off")
+	} else {
+		nlog.Infoln(gfnG, " on")
 	}
 	return
 }
 
 func offGFN() {
 	gfn.gon.Store(false)
-	nlog.Infoln(gfnG, "off")
+	nlog.Infoln(gfnG, " off")
 }
