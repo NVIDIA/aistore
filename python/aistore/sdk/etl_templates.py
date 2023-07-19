@@ -12,7 +12,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/transformer_md5:latest
+      image: aistorage/transformer_md5:latest
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
@@ -38,14 +38,12 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/transformer_hello_world:latest
+      image: aistorage/transformer_hello_world:latest
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
           containerPort: 80
-      command: ['/code/server.py']
-      # This is a health check endpoint which one should specify
-      # for aistore to determine the health of the ETL container.
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
       readinessProbe:
         httpGet:
           path: /health
@@ -66,7 +64,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/transformer_echo_go:latest
+      image: aistorage/transformer_echo_go:latest
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
@@ -92,7 +90,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/transformer_echo:latest
+      image: aistorage/transformer_echo:latest
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
@@ -118,7 +116,7 @@ metadata:
 spec:
   containers:
     - name: server
-      image: aistore/transformer_tar2tf:latest
+      image: aistorage/transformer_tar2tf:latest
       imagePullPolicy: IfNotPresent
       ports:
         - name: default
