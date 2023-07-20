@@ -50,7 +50,7 @@ func run() int {
 	}
 
 	exitCode := ais.Run(cmn.VersionAIStore+"."+build, buildtime)
-	nlog.FlushExit()
+	nlog.Flush(true)
 
 	if s := *memProfile; s != "" {
 		*memProfile = s + "." + strconv.Itoa(syscall.Getpid())

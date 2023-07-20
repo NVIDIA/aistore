@@ -99,7 +99,7 @@ func main() {
 	srv := newServer(mgr)
 	err = srv.Run()
 
-	nlog.FlushExit()
+	nlog.Flush(true)
 	cos.Close(mgr.db)
 	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)

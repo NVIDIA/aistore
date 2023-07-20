@@ -397,30 +397,29 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 
 func (k *keepalive) Name() string { return k.name }
 
-func (k *keepalive) waitStatsRunner() (stopped bool) {
-	var (
-		logErr time.Duration
-		ticker *time.Ticker
-	)
+func (k *keepalive) Run() error {
+	var ticker *time.Ticker
 	if daemon.cli.target.standby {
 		ticker = time.NewTicker(waitStandby)
 	} else {
 		ticker = time.NewTicker(waitSelfJoin)
 	}
-	defer ticker.Stop()
+	stopped := k.waitStatsRunner(ticker)
+	ticker.Stop()
+	if stopped {
+		return nil // exit
+	}
+	nlog.Infof("Starting %s", k.Name())
+	k._run()
+	return nil
+}
 
-	// Wait for stats runner to start
+func (k *keepalive) waitStatsRunner(ticker *time.Ticker) (stopped bool) {
 	for {
 		select {
 		case <-ticker.C:
-			if k.startedUp.Load() {
+			if k.startedUp.Load() { // i.e., `statsRunner.startedUp`
 				return false
-			}
-			logErr += waitSelfJoin
-			config := cmn.GCO.Get()
-			if logErr > config.Timeout.Startup.D() {
-				nlog.Errorln("startup is taking unusually long time...")
-				logErr = 0
 			}
 		case sig := <-k.controlCh:
 			switch sig.msg {
@@ -432,11 +431,7 @@ func (k *keepalive) waitStatsRunner() (stopped bool) {
 	}
 }
 
-func (k *keepalive) Run() error {
-	if k.waitStatsRunner() {
-		return nil // Stopped while waiting - must exit.
-	}
-	nlog.Infof("Starting %s", k.Name())
+func (k *keepalive) _run() {
 	var (
 		ticker    = time.NewTicker(k.interval)
 		lastCheck int64
@@ -461,14 +456,14 @@ func (k *keepalive) Run() error {
 				}
 			case kaStopMsg:
 				ticker.Stop()
-				return nil
+				return
 			case kaErrorMsg:
 				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
 					lastCheck = mono.NanoTime()
 					nlog.Infof("triggered by %v", sig.err)
 					if stopped := k.k.do(); stopped {
 						ticker.Stop()
-						return nil
+						return
 					}
 				}
 			}

@@ -21,7 +21,7 @@ func Assertf(cond bool, f string, a ...any) {
 
 func Assert(cond bool) {
 	if !cond {
-		nlog.FlushExit()
+		nlog.Flush(true)
 		panic(assertMsg)
 	}
 }
@@ -29,14 +29,14 @@ func Assert(cond bool) {
 // NOTE: when using Sprintf and such, `if (!cond) { AssertMsg(false, msg) }` is the preferable usage.
 func AssertMsg(cond bool, msg string) {
 	if !cond {
-		nlog.FlushExit()
+		nlog.Flush(true)
 		panic(assertMsg + ": " + msg)
 	}
 }
 
 func AssertNoErr(err error) {
 	if err != nil {
-		nlog.FlushExit()
+		nlog.Flush(true)
 		panic(err)
 	}
 }

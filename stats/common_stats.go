@@ -841,7 +841,7 @@ waitStartup:
 			}
 			i += sleep
 			if i > config.Timeout.Startup.D() && !logger.standingBy() {
-				nlog.Errorln("startup is taking unusually long time...")
+				nlog.Errorln(r.Name() + ": " + cmn.StartupMayTimeout)
 				i = 0
 			}
 		}
@@ -859,7 +859,6 @@ waitStartup:
 	var (
 		checkNumGorHigh   int64
 		startTime         = mono.NanoTime() // uptime henceforth
-		lastGlogFlushTime = startTime
 		lastDateTimestamp = startTime
 	)
 	for {
@@ -884,10 +883,14 @@ waitStartup:
 			if config.Log.FlushTime != 0 {
 				flushTime = config.Log.FlushTime.D()
 			}
-			if time.Duration(now-lastGlogFlushTime) > flushTime {
+			//
+			// NOTE: stats runner is now solely responsible to flush the logs
+			// both periodically and on (OOB) demand
+			//
+			if nlog.Since() > flushTime || nlog.OOB() {
 				nlog.Flush()
-				lastGlogFlushTime = mono.NanoTime()
 			}
+
 			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
 				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now

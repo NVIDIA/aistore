@@ -7,6 +7,7 @@ package nlog
 
 import (
 	"io"
+	"os"
 )
 
 type fixed struct {
@@ -37,8 +38,18 @@ func (fb *fixed) writeByte(c byte) {
 	}
 }
 
-func (fb *fixed) reset()     { fb.woff = 0 }
-func (fb *fixed) avail() int { return cap(fb.buf) - fb.woff }
+func (fb *fixed) flush(file *os.File) (n int, err error) {
+	n, err = file.Write(fb.buf[:fb.woff])
+	if err != nil {
+		os.Stderr.WriteString(err.Error() + "\n")
+	}
+	return
+}
+
+func (fb *fixed) reset()      { fb.woff = 0 }
+func (fb *fixed) length() int { return fb.woff }
+func (fb *fixed) size() int   { return cap(fb.buf) }
+func (fb *fixed) avail() int  { return cap(fb.buf) - fb.woff }
 
 func (fb *fixed) eol() {
 	if fb.woff == 0 || (fb.buf[fb.woff-1] != '\n' && fb.avail() > 0) {

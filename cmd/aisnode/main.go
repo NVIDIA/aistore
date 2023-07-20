@@ -21,6 +21,6 @@ var (
 func main() {
 	debug.Assert(build != "", "missing build")
 	ecode := ais.Run(cmn.VersionAIStore+"."+build, buildtime)
-	nlog.FlushExit()
+	nlog.Flush(true)
 	os.Exit(ecode)
 }

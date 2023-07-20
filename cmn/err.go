@@ -45,6 +45,8 @@ const (
 	fmtErrFailedTo = "%s: failed to %s %s, err: %w"
 
 	BadSmapPrefix = "[bad cluster map]"
+
+	StartupMayTimeout = "cluster startup is taking unusually long time..." // related ErrStartupTimeout
 )
 
 type (
@@ -193,7 +195,7 @@ func InitErrs(a string, b func(error)) { thisNodeName, cleanPathErr = a, b }
 
 var (
 	ErrSkip             = errors.New("skip")
-	ErrStartupTimeout   = errors.New("startup timeout")
+	ErrStartupTimeout   = errors.New("startup timeout") // related StartupMayTimeout
 	ErrQuiesceTimeout   = errors.New("timed out waiting for quiescence")
 	ErrNotEnoughTargets = errors.New("not enough target nodes")
 	ErrNoMountpaths     = errors.New("no mountpaths")

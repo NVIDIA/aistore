@@ -508,7 +508,12 @@ var (
 	}
 
 	// Log severity (cmn.LogInfo, ....) enum
-	logSevFlag   = cli.StringFlag{Name: "severity", Usage: "show the specified log, one of: 'i[nfo]','w[arning]','e[rror]'"}
+	logSevFlag = cli.StringFlag{
+		Name: "severity",
+		Usage: "show 'info' log (default, can be omitted) or 'error' log (contains both errors and warnings), e.g.:\n" +
+			indent1 + "\t- 'ais show log NODE'\n" +
+			indent1 + "\t- 'ais show log NODE --severity error' - errors and warnings only",
+	}
 	logFlushFlag = DurationFlag{
 		Name:  "log-flush",
 		Usage: "can be used in combination with " + qflprn(refreshFlag) + " to override configured '" + nodeLogFlushName + "'",

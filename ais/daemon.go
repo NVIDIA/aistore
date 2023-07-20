@@ -195,7 +195,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	nlog.Infoln(loghdr) // redundant (see below), prior to start/init
 	sys.SetMaxProcs()
 
-	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 8)}
+	daemon.rg = &rungroup{rs: make(map[string]cos.Runner, 6)}
 	hk.Init(&daemon.stopping)
 	daemon.rg.add(hk.DefaultHK)
 
@@ -210,6 +210,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 		p.init(config)
 		title := "Node " + p.si.Name() + ", " + loghdr + "\n"
 		nlog.Infoln(title)
+
+		// aux plumbing
 		nlog.SetTitle(title)
 		cmn.InitErrs(p.si.Name(), nil)
 		return p
@@ -223,6 +225,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 	t.init(config)
 	title := "Node " + t.si.Name() + ", " + loghdr + "\n"
 	nlog.Infoln(title)
+
+	// aux plumbing
 	nlog.SetTitle(title)
 	cmn.InitErrs(t.si.Name(), fs.CleanPathErr)
 
@@ -263,7 +267,6 @@ func Run(version, buildTime string) int {
 		nlog.Errorln("Timed-out while starting up")
 	}
 	nlog.Errorf("Terminated with err: %v", err)
-	nlog.FlushExit()
 	return 1
 }
 
@@ -272,9 +275,9 @@ func Run(version, buildTime string) int {
 //////////////
 
 func (g *rungroup) add(r cos.Runner) {
-	cos.Assert(r.Name() != "")
+	debug.Assert(r.Name() != "")
 	_, exists := g.rs[r.Name()]
-	cos.Assert(!exists)
+	debug.Assert(!exists)
 
 	g.rs[r.Name()] = r
 }

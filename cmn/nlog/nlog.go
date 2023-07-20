@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	nlogBufSize  = 64 * 1024
-	nlogLineSize = 4 * 1024
-	nlogChSize   = 32
+	fixedSize   = 64 * 1024
+	extraSize   = 32 * 1024 // via mem pool
+	maxLineSize = 2 * 1024
 )
 
 type severity int
@@ -38,31 +38,16 @@ type (
 	nlog struct {
 		file           *os.File
 		pw, buf1, buf2 *fixed
-		ch             chan *fixed
 		line           fixed
+		toFlush        []*fixed
 		last           atomic.Int64
+		written        atomic.Int64
 		sev            severity
+		oob            atomic.Bool
+		erred          atomic.Bool
 		mw             sync.Mutex
 	}
 )
-
-//
-// nlog
-//
-
-func newNlog(sev severity) *nlog {
-	nlog := &nlog{
-		sev:  sev,
-		buf1: &fixed{buf: make([]byte, nlogBufSize)},
-		buf2: &fixed{buf: make([]byte, nlogBufSize)},
-		line: fixed{buf: make([]byte, nlogLineSize)},
-		ch:   make(chan *fixed, nlogChSize),
-	}
-	nlog.pw = nlog.buf1
-
-	go nlog.flusher()
-	return nlog
-}
 
 // main function
 func log(sev severity, depth int, format string, args ...any) {
@@ -75,20 +60,21 @@ func log(sev severity, depth int, format string, args ...any) {
 	case toStderr:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
-		os.Stderr.Write(fb.buf[:fb.woff])
+		fb.flush(os.Stderr)
 		free(fb)
 	case alsoToStderr || sev >= sevWarn:
 		fb := alloc()
 		sprintf(sev, depth, format, fb, args...)
 		if alsoToStderr || sev >= sevErr {
-			os.Stderr.Write(fb.buf[:fb.woff])
+			fb.flush(os.Stderr)
 		}
-		nlog := nlogs[sevErr]
-		nlog.mw.Lock()
-		nlog.write(fb)
-		nlog.mw.Unlock()
-
-		nlog = nlogs[sevInfo]
+		if sev >= sevWarn {
+			nlog := nlogs[sevErr]
+			nlog.mw.Lock()
+			nlog.write(fb)
+			nlog.mw.Unlock()
+		}
+		nlog := nlogs[sevInfo]
 		nlog.mw.Lock()
 		nlog.write(fb)
 		nlog.mw.Unlock()
@@ -99,6 +85,24 @@ func log(sev severity, depth int, format string, args ...any) {
 	}
 }
 
+//
+// nlog
+//
+
+func newNlog(sev severity) *nlog {
+	nlog := &nlog{
+		sev:     sev,
+		buf1:    &fixed{buf: make([]byte, fixedSize)},
+		buf2:    &fixed{buf: make([]byte, fixedSize)},
+		line:    fixed{buf: make([]byte, maxLineSize)},
+		toFlush: make([]*fixed, 0, 4),
+	}
+	nlog.pw = nlog.buf1
+	return nlog
+}
+
+func (nlog *nlog) since(now int64) time.Duration { return time.Duration(now - nlog.last.Load()) }
+
 func (nlog *nlog) printf(sev severity, depth int, format string, args ...any) {
 	nlog.mw.Lock()
 	nlog.line.reset()
@@ -107,61 +111,39 @@ func (nlog *nlog) printf(sev severity, depth int, format string, args ...any) {
 	nlog.mw.Unlock()
 }
 
-func (nlog *nlog) flush(exit bool) {
-	nlog.mw.Lock()
-	if nlog.pw.woff > 0 {
-		if exit {
-			nlog.ch <- nlog.pw // always have two spare slots (see `cap` below)
-			nlog.ch <- nil
-		} else if (nlog.pw.avail() < nlogBufSize/2) || (mono.Since(nlog.last.Load()) > 10*time.Second) {
-			if len(nlog.ch) < cap(nlog.ch)-1 { // ditto
-				nlog.ch <- nlog.pw
-				nlog.get()
-			}
-		}
-	}
-	nlog.mw.Unlock()
-	lim := 8 // 2s
-	for exit && len(nlog.ch) > 0 && lim > 0 {
-		time.Sleep(time.Second >> 2)
-		lim--
-	}
-}
-
 // under mw-lock
 func (nlog *nlog) write(line *fixed) {
 	buf := line.buf[:line.woff]
 	nlog.pw.Write(buf)
-	if nlog.pw.avail() > nlogLineSize {
+
+	if nlog.pw.avail() > maxLineSize {
 		return
 	}
-	if len(nlog.ch) < cap(nlog.ch)-2 { // ditto
-		nlog.ch <- nlog.pw
-		nlog.get()
-	} else {
-		msg := fmt.Sprintf("Error: [nlog] drop %dB\n", nlog.pw.woff) // discard
-		os.Stderr.WriteString(msg)
-		nlog.pw.reset()
-	}
+
+	nlog.toFlush = append(nlog.toFlush, nlog.pw)
+	nlog.oob.Store(true)
+	nlog.get()
 }
 
 func (nlog *nlog) get() {
+	prev := nlog.pw
+	assert(prev == nlog.toFlush[len(nlog.toFlush)-1])
 	switch {
-	case nlog.pw == nlog.buf1:
+	case prev == nlog.buf1:
 		if nlog.buf2 != nil {
 			nlog.pw = nlog.buf2
 		} else {
 			nlog.pw = alloc()
 		}
 		nlog.buf1 = nil
-	case nlog.pw == nlog.buf2:
+	case prev == nlog.buf2:
 		if nlog.buf1 != nil {
 			nlog.pw = nlog.buf1
 		} else {
 			nlog.pw = alloc()
 		}
 		nlog.buf2 = nil
-	default:
+	default: // prev was alloc-ed
 		if nlog.buf1 != nil {
 			nlog.pw = nlog.buf1
 		} else if nlog.buf2 != nil {
@@ -172,60 +154,62 @@ func (nlog *nlog) get() {
 	}
 }
 
-func (nlog *nlog) put(pw *fixed) {
+func (nlog *nlog) put(pw *fixed /* to reuse */) {
 	nlog.mw.Lock()
 	if nlog.buf1 == nil {
 		nlog.buf1 = pw
 	} else if nlog.buf2 == nil {
 		nlog.buf2 = pw
 	} else {
-		assert(nlog.buf1 == pw || nlog.buf2 == pw) // via FlushExit()
+		assert(nlog.buf1 == pw || nlog.buf2 == pw) // via Flush(true)
 	}
 	nlog.mw.Unlock()
 }
 
-func (nlog *nlog) flusher() {
-	var (
-		n    int
-		size int64
-		err  error // fatal for this log
-	)
+func (nlog *nlog) flush() {
 	for {
-		pw := <-nlog.ch
-		// via FlushExit
-		if pw == nil {
-			nlog.file.Close()
+		nlog.mw.Lock()
+		if len(nlog.toFlush) == 0 {
+			nlog.oob.Store(false)
+			nlog.mw.Unlock()
 			break
 		}
+		pw := nlog.toFlush[0]
+		copy(nlog.toFlush, nlog.toFlush[1:])
+		nlog.toFlush = nlog.toFlush[:len(nlog.toFlush)-1]
+		nlog.mw.Unlock()
 
-		// do
-		if err != nil { // log aborted
-			os.Stderr.Write(pw.buf[:pw.woff])
-		} else {
-			n, err = nlog.file.Write(pw.buf[:pw.woff])
-			if err != nil {
-				os.Stderr.WriteString(err.Error())
-				size = 0
-			} else {
-				size += int64(n)
-			}
+		nlog.do(pw)
+	}
+}
+
+func (nlog *nlog) do(pw *fixed) {
+	// write
+	if nlog.erred.Load() {
+		os.Stderr.Write(pw.buf[:pw.woff])
+	} else {
+		n, err := pw.flush(nlog.file)
+		if err != nil {
+			nlog.erred.Store(true)
 		}
-		pw.reset()
+		nlog.written.Add(int64(n))
 		nlog.last.Store(mono.NanoTime())
+	}
 
-		// recycle
-		if cap(pw.buf) == nlogLineSize {
-			free(pw)
-		} else {
-			assert(cap(pw.buf) == nlogBufSize, fmt.Sprintf("%d vs %d", cap(pw.buf), nlogBufSize))
-			nlog.put(pw)
-		}
+	// recycle buf
+	pw.reset()
+	if pw.size() == extraSize {
+		free(pw)
+	} else {
+		assert(pw.size() == fixedSize)
+		nlog.put(pw)
+	}
 
-		// rotate
-		if size >= MaxSize {
-			err = nlog.rotate(time.Now())
-			size = 0
-		}
+	// rotate
+	if nlog.written.Load() >= MaxSize {
+		err := nlog.file.Close()
+		assert(err == nil)
+		nlog.rotate(time.Now())
 	}
 }
 
@@ -235,8 +219,11 @@ func (nlog *nlog) rotate(now time.Time) (err error) {
 		snow = now.Format("2006/01/02 15:04:05")
 	)
 	if nlog.file, _, err = fcreate(sevText[nlog.sev], now); err != nil {
+		nlog.erred.Store(true)
 		return
 	}
+	nlog.written.Store(0)
+	nlog.erred.Store(false)
 	if title == "" {
 		_, err = nlog.file.WriteString("Started up at " + snow + ", " + s)
 	} else {
@@ -303,33 +290,22 @@ func sprintf(sev severity, depth int, format string, fb *fixed, args ...any) {
 	fb.eol()
 }
 
-func fcreateAll(sev severity) error {
-	now := time.Now()
-	for s := sev; s >= sevInfo && nlogs[s] == nil; s-- {
-		if s == sevWarn {
-			continue
-		}
-		nlog := newNlog(s)
-		if err := nlog.rotate(now); err != nil {
-			return err
-		}
-		nlogs[s] = nlog
-	}
-	return nil
-}
-
-//
-// buffer pool for errors and warnings
-//
+// mem pool of additional buffers
+// usage:
+// - none of the "fixed" ones available
+// - alsoToStderr
 
 func alloc() (fb *fixed) {
 	if v := pool.Get(); v != nil {
 		fb = v.(*fixed)
 		fb.reset()
 	} else {
-		fb = &fixed{buf: make([]byte, nlogLineSize)}
+		fb = &fixed{buf: make([]byte, extraSize)}
 	}
 	return
 }
 
-func free(fb *fixed) { pool.Put(fb) }
+func free(fb *fixed) {
+	assert(fb.size() == extraSize)
+	pool.Put(fb)
+}

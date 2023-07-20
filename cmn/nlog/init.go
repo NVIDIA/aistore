@@ -62,6 +62,21 @@ func initFiles() {
 	}
 }
 
+func fcreateAll(sev severity) error {
+	now := time.Now()
+	for s := sev; s >= sevInfo && nlogs[s] == nil; s-- {
+		if s == sevWarn {
+			continue
+		}
+		nlog := newNlog(s)
+		if err := nlog.rotate(now); err != nil {
+			return err
+		}
+		nlogs[s] = nlog
+	}
+	return nil
+}
+
 func sname() (name string) {
 	name = arg0
 	if name == "aisnode" && aisrole != "" {

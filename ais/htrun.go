@@ -343,7 +343,7 @@ func (h *htrun) initNetworks() {
 	if config.HostNet.Hostname != "" {
 		s = " (config: " + config.HostNet.Hostname + ")"
 	}
-	nlog.Infof("%s (user) access: [%s]%s", cmn.NetPublic, pubAddr, s)
+	nlog.Infof("%s (user) access: %v%s", cmn.NetPublic, pubAddr, s)
 
 	intraControlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
@@ -356,7 +356,7 @@ func (h *htrun) initNetworks() {
 		if config.HostNet.HostnameIntraControl != "" {
 			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
-		nlog.Infof("%s access: [%s]%s", cmn.NetIntraControl, intraControlAddr, s)
+		nlog.Infof("%s access: %v%s", cmn.NetIntraControl, intraControlAddr, s)
 	}
 	intraDataAddr = pubAddr
 	if config.HostNet.UseIntraData {
@@ -369,7 +369,7 @@ func (h *htrun) initNetworks() {
 		if config.HostNet.HostnameIntraData != "" {
 			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
-		nlog.Infof("%s access: [%s]%s", cmn.NetIntraData, intraDataAddr, s)
+		nlog.Infof("%s access: %v%s", cmn.NetIntraData, intraDataAddr, s)
 	}
 	mustDiffer(pubAddr,
 		config.HostNet.Port,
@@ -1811,7 +1811,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 			}
 		}
 		if total > config.Timeout.Startup.D() {
-			nlog.Errorf("%s: cluster startup is taking unusually long time...", h)
+			nlog.Errorln(h.String() + ": " + cmn.StartupMayTimeout)
 		}
 	}
 }

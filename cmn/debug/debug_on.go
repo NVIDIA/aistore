@@ -56,7 +56,7 @@ func _panic(a ...any) {
 		}
 	}
 	nlog.Errorf("%s", buffer.Bytes())
-	nlog.FlushExit()
+	nlog.Flush(true)
 	panic(msg)
 }
 
