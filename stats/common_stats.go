@@ -828,10 +828,13 @@ waitStartup:
 			if r.daemon.ClusterStarted() {
 				break waitStartup
 			}
-			if logger.standingBy() && sleep == startupSleep {
+			if logger.standingBy() && sleep == startupSleep /*first time*/ {
 				sleep = config.Periodic.StatsTime.D()
 				ticker.Reset(sleep)
 				deadline = time.Hour
+				if nlog.Since() > dfltPeriodicFlushTime {
+					nlog.Flush()
+				}
 				continue
 			}
 			j += sleep
@@ -878,19 +881,17 @@ waitStartup:
 				r.ticker.Reset(statsTime)
 				logger.statsTime(statsTime)
 			}
-			now = mono.NanoTime()
+			// stats runner is now solely responsible to flush the logs
+			// both periodically and on (OOB) demand
 			flushTime := dfltPeriodicFlushTime
 			if config.Log.FlushTime != 0 {
 				flushTime = config.Log.FlushTime.D()
 			}
-			//
-			// NOTE: stats runner is now solely responsible to flush the logs
-			// both periodically and on (OOB) demand
-			//
 			if nlog.Since() > flushTime || nlog.OOB() {
 				nlog.Flush()
 			}
 
+			now = mono.NanoTime()
 			if time.Duration(now-lastDateTimestamp) > dfltPeriodicTimeStamp {
 				nlog.Infoln(cos.FormatTime(time.Now(), "" /* RFC822 */) + " =============")
 				lastDateTimestamp = now
