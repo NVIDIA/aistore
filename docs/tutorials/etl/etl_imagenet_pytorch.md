@@ -10,9 +10,6 @@ redirect_from:
 # PyTorch ImageNet preprocessing with ETL
 
 In this example, we will see how to use ETL to preprocess the images of ImageNet which then can be used for training.
-The following GIF presents the whole operation:
-
-![etl-imagenet](../../images/etl-imagenet.gif)
 
 `Note: ETL is still in development so some steps may not work exactly as written below.`
 

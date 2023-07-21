@@ -13,41 +13,25 @@ redirect_from:
 * **T**ransform - to the unified common format optimized for subsequent computation (e.g., training deep learning model);
 * **L**oad - transformed data into a new destination - e.g., a storage system that supports high-performance computing over large scale datasets.
 
-The latter can be AIStore (AIS). The system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. You can easily task the AIS cluster by running custom transformations:
+The latter can be AIStore (AIS). The system is designed from the ground up to support all 3 stages of the ETL pre (or post) processing. With AIS, you can effortlessly manage the AIS cluster by executing custom transformations in two ways:
 
-* *inline* - that is, transforming datasets on the fly by (randomly) reading them and streaming a resulting transformed output directly to (computing) clients that perform those reads;
-* *offline* - storing transformed output as a new dataset that AIStore will make available for any number of future computations.
+1. **Inline**: This involves transforming datasets on the fly, where the data is read and streamed in a transformed format directly to computing clients.
+2. **Offline**: Here, the transformed output is stored as a new dataset, which AIS makes accessible for any future computations.
+
 
 > Implementation-wise, *offline* transformations of any kind, on the one hand, and copying datasets, on the other, are closely related - the latter being, effectively, a *no-op* offline transformation.
 
 Most notably, AIS always runs transformations locally - *close to data*. Running *close to data* has always been one of the cornerstone design principles whereby in a deployed cluster each AIStore target proportionally contributes to the resulting cumulative bandwidth - the bandwidth that, in turn, will scale linearly with each added target.
 
 This was the principle behind *distributed shuffle* (code-named [dSort](/docs/dsort.md)).
-And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore.
+And this is exactly how we have more recently implemented **AIS-ETL** - the ETL service provided by AIStore. Find more information on the architecture and implementation of `ais-etl` [here](/ext/etl/README.md).
 
-Technically, the service supports running user-provided ETL containers **and** custom Python scripts *in the* (and *by the*) storage cluster.
+Technically, the service supports running user-provided ETL containers **and** custom Python scripts within the storage cluster.
 
 **Note:** AIS-ETL (service) requires [Kubernetes](https://kubernetes.io).
 
-## References
+## Table of Contents
 
-* For technical blogs with in-depth background and working real-life examples, see:
-  - [ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
-  - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk)
-  - [ETL: Using WebDataset to train on a sharded dataset](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
-* For step-by-step tutorials, see:
-  - [PyTorch ImageNet preprocessing](/docs/tutorials/etl/etl_imagenet_pytorch.md)
-  - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
-* For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
-* For initializing ETLs with AIStore Python SDK, see:
-  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md#etls)
-  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/examples/ais-etl)
-  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/sdk-etl-tutorial.ipynb)
-
-
-The rest of this text is organized as follows:
-
-- [References](#references)
 - [Getting Started](#getting-started)
 - [Inline ETL example](#inline-etl-example)
 - [Offline ETL example](#offline-etl-example)
@@ -68,72 +52,140 @@ The rest of this text is organized as follows:
 - [API Reference](#api-reference)
 - [ETL name specifications](#etl-name-specifications)
 
-## Getting Started
+## Getting Started with ETL in AIStore
 
-The following [video](https://www.youtube.com/watch?v=4PHkqTSE0ls "AIStore ETL Getting Started (Youtube video)") demonstrates AIStore's ETL feature using Jupyter Notebook.
+To begin using ETLs in AIStore, you'll need to run AIStore within a Kubernetes cluster. There are several ways to achieve this, each suited for different purposes:
 
-{% include youtubePlayer.html id="4PHkqTSE0ls" %}
+1. **AIStore Development with Native Kubernetes (minikube)**:
+   - Folder: [deploy/dev/k8s](/deploy/dev/k8s)
+   - Intended for: AIStore development using native Kubernetes provided by [minikube](https://minikube.sigs.k8s.io/docs)
+   - How to use: Run minikube and deploy the AIS cluster on it using the carefully documented steps available [here](/deploy/dev/k8s/README.md).
+   - Documentation: [README](/deploy/dev/k8s/README.md)
+
+2. **Production Deployment with Kubernetes**:
+   - Folder: [deploy/prod/k8s](/deploy/prod/k8s)
+   - Intended for: Production use
+   - How to use: Utilize the Dockerfiles in this folder to build AIS images for production deployment. For this purpose, there is a separate dedicated [repository](https://github.com/NVIDIA/ais-k8s) that contains corresponding tools, scripts, and documentation.
+   - Documentation: [AIS/K8s Operator and Deployment Playbooks](https://github.com/NVIDIA/ais-k8s)
+
+To verify that your deployment is correctly set up, execute the following [CLI](/docs/cli.md) command:
+
+```console
+$ ais etl show
+```
+
+If you receive an empty response without any errors, your AIStore cluster is now ready to run ETL tasks.
 
 ## Inline ETL example
 
-![etl-md5](images/etl-md5.gif)
+To follow this and subsequent examples, make sure you have the [AIS CLI](/docs/cli.md) installed on your system.
 
-The example above uses [AIS CLI](/docs/cli.md) to:
-1. **Create** a new bucket;
-2. **PUT** an object into this bucket;
-3. **Init** ETL container that performs MD5 computation.
-4. **Transform** the object on the fly via custom ETL - the "transformation" in this case boils down to computing the object's MD5.
-5. **Compare** the output with locally computed MD5.
-
-Note that both the container itself and its [YAML specification](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml) (below) are included primarily for illustration purposes.
-
-* [MD5 ETL YAML](https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml)
-
-## Offline ETL example
-
-![etl-imagenet](images/etl-imagenet.gif)
-
-The example above uses [AIS CLI](/docs/cli.md) to:
-1. **Create** a new AIS bucket;
-2. **PUT** multiple TAR files containing ImageNet images into the created bucket;
-3. **Init** ETL container-based only on a simple python function;
-4. **Transform** offline each TAR from the source bucket by standardizing images from the TAR and putting results in a destination bucket;
-5. **Verify** the transformation output by downloading one of the transformed TARs and checking its content.
-
-## Kubernetes Deployment
-
-> If you already have a running AIStore cluster deployed on Kubernetes, skip this section and go to the [Initialize ETL](#defining-and-initializing-etl) section.
-
-To deploy the ETL-ready AIStore cluster, please refer to [Getting Started](getting_started.md).
-
-> Note that you have to choose one of the deployment types that supports Kubernetes - for example, [Cloud Deployment](getting_started.md#cloud-deployment).
-
-> During the AIStore on Kubernetes deployment, the `HOSTNAME` environment variable, set by Kubernetes, **shouldn't** be overwritten - AIS target uses it to discover its Pod and Node name.
-
-To verify that your deployment is set up correctly, run the following [CLI](/docs/cli.md) command:
 ```console
-$ ais etl ls
+# Prerequisites:
+# AIStore must be running on Kubernetes. AIS CLI (Command-Line Interface) must be installed. Make sure you have a running AIStore cluster before proceeding. 
+
+# Step 1: Create a new bucket
+$ ais bucket create ais://src
+
+# Step 2: Show existing ETLs
+$ ais etl show
+
+# Step 3: Create a temporary file and add it to the bucket
+$ echo "hello world" > text.txt
+$ ais put text.txt ais://src
+
+# Step 4: Create a spec file to initialize the ETL process
+# In this example, we are using the MD5 transformer as a sample ETL.
+$ curl -s https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/md5/pod.yaml -o md5_spec.yaml
+
+# Step 5: Initialize the ETL process
+$ ais etl init spec --from-file md5_spec.yaml --name etl-md5
+
+# Step 6: Check if the ETL is running
+$ ais etl show
+
+# Step 7: Run the transformation
+# Replace 'ais://src/text.txt' with the appropriate source object location and '-' with the desired destination (e.g., local file path or another AIS bucket).
+$ ais etl object etl-md5 ais://src/text.txt -
 ```
 
-If you see an empty response (and no errors) - your AIStore cluster is ready to run ETL.
+## Offline ETL example
+```console
+$ # Download Imagenet dataset
+$ wget -O imagenet.tar https://image-net.org/data/ILSVRC/2012/ILSVRC2012_img_val.tar --no-check-certificate
 
-To deploy AIStore on Minkube, see:
+$ # Extract Imagenet
+$ mkdir imagenet && tar -C imagenet -xvf imagenet.tar >/dev/null
 
-- [Deploying AIStore on Minikube](https://github.com/NVIDIA/aistore/tree/master/deploy/dev/k8s#developing-aistore-on-minikube)
+$ # Check if the dataset is extracted correctly
+$ cd imagenet
+$ ls | head -5
 
+$ # Add the entire dataset to a bucket
+$ ais bucket create ais://imagenet
+$ ais put . ais://imagenet -r
 
-## Extract, Transform and Load using user-defined functions
+$ # Check if the dataset is available in the bucket
+$ ais ls ais://imagenet | head -5
 
-1. Send transform function in the [**init code** request](#init-code-request) to an AIStore endpoint
-2. Upon receiving the **init code** request, the AIS proxy broadcasts the request to all AIS targets in the cluster.
-3. When an AIS target receives **init code**, it starts the container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+$ # Create a custom transformation using torchvision
+$ # The `code.py` file contains the Python code for the transformation function, and `deps.txt` lists the dependencies required to run `code.py`
+$ cat code.py
+import io
+from PIL import Image
+from torchvision import transforms as T
 
-## Extract, Transform and Load using custom containers
+preprocess = T.Compose(
+    [
+        T.Resize(256),
+        T.CenterCrop(224),
+        T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        T.ToPILImage(),
+    ]
+)
 
-1. execute [**init spec** API](#init-spec-request) to an AIStore endpoint.
-   >  The request carries YAML spec and ultimately triggers creating [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
-2. Upon receiving the **init spec** request, the AIS proxy broadcasts the request to all AIS targets in the cluster.
-3. When a target receives **init spec**, it starts the user container **locally** on the target's machine (aka [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+# Define the transform function
+def transform(data: bytes) -> bytes:
+    image = Image.open(io.BytesIO(data))    
+    processed = preprocess(image)
+    buf = io.BytesIO()
+    processed.save(buf, format='JPEG')
+    byte_im = buf.getvalue()
+    return byte_im
+
+$ cat deps.txt
+torch==2.0.1
+torchvision==0.15.2
+
+$ ais etl init code --name etl-torchvision --from-file code.py --deps-file deps.txt --runtime python3.11v2
+
+$ # Perform an offline transformation 
+$ ais etl bucket etl-torchvision ais://imagenet ais://imagenet-transformed --ext="{JPEG:JPEG}" 
+
+$ # Check if the transformed dataset is available in the bucket
+$ ais ls ais://imagenet-transformed | head -5
+
+$ # Verify one of the images by downloading its content
+$ ais object get ais://imagenet-transformed/ILSVRC2012_val_00050000.JPEG test.JPEG
+```
+## Extract, Transform, and Load using User-Defined Functions
+
+1. To perform Extract, Transform, and Load (ETL) using user-defined functions, send the transform function in the [**init code** request](#init-code-request) to an AIStore endpoint.
+
+2. Upon receiving the **init code** request, the AIStore proxy broadcasts the request to all AIStore targets in the cluster.
+
+3. When an AIStore target receives the **init code**, it initiates the execution of the container **locally** on the target's machine (also known as [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
+
+## Extract, Transform, and Load using Custom Containers
+
+1. To perform Extract, Transform, and Load (ETL) using custom containers, execute the [**init spec** API](#init-spec-request) to an AIStore endpoint.
+   
+   > The request contains a YAML spec and ultimately triggers the creation of [Kubernetes Pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/) that run the user's ETL logic inside.
+
+2. Upon receiving the **init spec** request, the AIStore proxy broadcasts the request to all AIStore targets in the cluster.
+
+3. When a target receives the **init spec**, it starts the user container **locally** on the target's machine (also known as [Kubernetes Node](https://kubernetes.io/docs/concepts/architecture/nodes/)).
 
 ## *init code* request
 
@@ -156,23 +208,11 @@ In `hpush` communication type, the user has to define a function that takes byte
 def transform(input_bytes: bytes) -> bytes
 ```
 
-We realize that sometimes the transformation function is not that straightforward, and you might need some initialization prior to the function as well post the function. For that, we have included `before(context)` and `after(context)` functions in python runtime for AIS-ETL.
-
-```python
-def before(context: Dict[str, object]) -> None
-
-def transform(input_bytes: bytes) -> Union[bytes, None]
-
-def after(context: Dict[str, object]) -> bytes
-```
-
 You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0).
 
-e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_md5_hpush.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_torchvision_hpush.py).
+e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_md5_hpush_streaming.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_torchvision_hpush.py).
 
 > **Note:**
->- `before(context)` and `after(context)` functions are optional and not always needed.
->- If your `transform()` function uses streaming (`CHUNK_SIZE`> 0), and has no `after(context)` function to consolidate result, please add the result into `context["result"]`.
 >- If the function uses external dependencies, a user can provide an optional dependencies file or in the `elt().init()` function of Python SDK. These requirements will be installed on the machine executing the `transform` function and will be available for the function.
 
 ### `io://` communication
@@ -270,9 +310,10 @@ Users  can choose and specify (via YAML spec) any of the following:
 AIStore supports both *inline* transformation of selected objects and *offline* transformation of an entire bucket.
 
 There are two ways to run ETL transformations:
-- HTTP RESTful APIs are described in [API Reference section](#api-reference) of this document,
-- [ETL CLI](/docs/cli/etl.md),
-- [AIS Loader](/docs/aisloader.md).
+- HTTP RESTful APIs are described in [API Reference section](#api-reference) of this document.
+- [ETL CLI](/docs/cli/etl.md)
+- [Python SDK](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md#etls)
+- [AIS Loader](/docs/aisloader.md)
 
 ## API Reference
 
@@ -318,3 +359,18 @@ Below are specifications for a valid `ETL_NAME`:
 2. Can contain alphabets, numbers, underscore ('_'), or hyphen ('-').
 3. Should have a length greater than 5 and less than 21.
 4. Shouldn't contain special characters, except for underscore and hyphen.
+
+
+## References
+
+* For technical blogs with in-depth background and working real-life examples, see:
+  - [ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
+  - [AIStore SDK & ETL: Transform an image dataset with AIS SDK and load into PyTorch](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk)
+  - [ETL: Using WebDataset to train on a sharded dataset ](https://aiatscale.org/blog/2021/10/29/ais-etl-3)
+* For step-by-step tutorials, see:
+  - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
+* For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
+* For initializing ETLs with AIStore Python SDK, see:
+  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md#etls)
+  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/examples/ais-etl)
+  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/sdk-etl-tutorial.ipynb)

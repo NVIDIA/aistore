@@ -44,14 +44,6 @@ This section comprises a number of videos illustrating different aspects of the 
 
 {% include youtubePlayer.html id="4PHkqTSE0ls" %}
 
-### ETL init with code: ImageNet Transformation
-
-![etl-imagenet](images/etl-imagenet.gif)
-
-### ETL init with spec: MD5 Computation
-
-![etl-md5](images/etl-md5.gif)
-
 ## S3 and TensorFlow: TF Training
 
 ![ais-s3-tf](images/ais-s3-tf.gif)
