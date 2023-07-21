@@ -389,7 +389,6 @@ func (t *target) gostandby(sleep time.Duration) {
 	sleep = cos.MaxDuration(sleep, 10*time.Second)
 	for !t.ClusterStarted() {
 		time.Sleep(sleep)
-		nlog.Flush()
 	}
 }
 

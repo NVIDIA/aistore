@@ -226,7 +226,6 @@ func Infof(format string, a ...any) {
 func Errorf(format string, a ...any) {
 	if flag.Parsed() {
 		nlog.ErrorDepth(1, fmt.Sprintf(format, a...))
-		nlog.Flush()
 	} else {
 		fmt.Fprintf(os.Stderr, format+"\n", a...)
 	}
