@@ -1066,7 +1066,11 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		body = h.si
 	case apc.WhatLog:
 		if cos.IsParseBool(query.Get(apc.QparamAllLogs)) {
-			h.sendAllLogs(w, r, query)
+			tempdir := h.sendAllLogs(w, r, query)
+			if tempdir != "" {
+				err := os.RemoveAll(tempdir)
+				debug.AssertNoErr(err)
+			}
 		} else {
 			h.sendOneLog(w, r, query)
 		}
@@ -1084,28 +1088,25 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
 }
 
-func (h *htrun) sendAllLogs(w http.ResponseWriter, r *http.Request, query url.Values) {
+func (h *htrun) sendAllLogs(w http.ResponseWriter, r *http.Request, query url.Values) string {
 	sev := query.Get(apc.QparamLogSev)
 	tempdir, archname, err := h.targzLogs(sev)
 	if err != nil {
-		if tempdir != "" {
-			os.RemoveAll(tempdir)
-		}
 		h.writeErr(w, r, err)
-		return
+		return tempdir
 	}
 	fh, err := os.Open(archname)
 	if err != nil {
 		h.writeErr(w, r, err)
-		return
+		return tempdir
 	}
 	buf, slab := h.gmm.Alloc()
 	if written, err := io.CopyBuffer(w, fh, buf); err != nil {
 		nlog.Errorf("failed to read %s: %v (written=%d)", archname, err, written)
 	}
-
 	cos.Close(fh)
 	slab.Free(buf)
+	return tempdir
 }
 
 func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Values) {
@@ -1167,15 +1168,18 @@ func (h *htrun) targzLogs(severity string) (tempdir, archname string, err error)
 	)
 	dentries, err = os.ReadDir(logdir)
 	if err != nil {
+		err = fmt.Errorf("read-dir %w", err)
 		return
 	}
 	tempdir = filepath.Join(os.TempDir(), "aislogs-"+h.SID())
 	err = cos.CreateDir(tempdir)
 	if err != nil {
+		err = fmt.Errorf("create-dir %w", err)
 		return
 	}
 	wfh, err = os.CreateTemp(tempdir, "")
 	if err != nil {
+		err = fmt.Errorf("create-temp %w", err)
 		return
 	}
 	archname = wfh.Name()
@@ -1203,6 +1207,9 @@ func (h *htrun) targzLogs(severity string) (tempdir, archname string, err error)
 		}
 		rfh, err = os.Open(fullPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			return
 		}
 		oah := cos.SimpleOAH{Size: finfo.Size(), Atime: finfo.ModTime().UnixNano()}

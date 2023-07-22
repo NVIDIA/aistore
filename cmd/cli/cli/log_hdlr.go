@@ -18,8 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/urfave/cli"
 )
+
+const clusterCompletion = "cluster"
 
 var (
 	nodeLogFlags = map[string][]cli.Flag{
@@ -48,19 +51,27 @@ var (
 	}
 	getCmdLog = cli.Command{
 		Name: commandGet,
-		Usage: "for a given node: download its current log or all logs, e.g.:\n" +
-			indent4 + "\t - 'ais get log NODE_ID /tmp' - download the node's current log to the specified directory;\n" +
-			indent4 + "\t - 'ais get log abcdefgh /tmp/target-abcdefgh --refresh 10' - update (ie., append) every 10s",
-		ArgsUsage:    getLogArgument,
-		Flags:        nodeLogFlags[commandGet],
-		Action:       getNodeLogHandler,
-		BashComplete: suggestAllNodes,
+		Usage: "download log (or all logs including history) from selected node or all nodes in the cluster, e.g.:\n" +
+			indent4 + "\t - 'ais log get NODE_ID /tmp' - download the specified node's current log; save the result to the specified directory;\n" +
+			indent4 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10' - download the current log as /tmp/out\n" +
+			indent4 + "\t    keep updating (ie., appending) the latter every 10s;\n" +
+			indent4 + "\t - 'ais log get cluster /tmp' - download TAR.GZ archived logs from _all_ nodes in the cluster\n" +
+			indent4 + "\t    ('cluster' implies '--all') and save the result to the specified destination;\n" +
+			indent4 + "\t - 'ais log get NODE_ID --all' - download the node's TAR.GZ log archive\n" +
+			indent4 + "\t - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings",
+		ArgsUsage: getLogArgument,
+		Flags:     nodeLogFlags[commandGet],
+		Action:    getLogHandler,
+		BashComplete: func(c *cli.Context) {
+			fmt.Println(clusterCompletion)
+			suggestAllNodes(c)
+		},
 	}
 
 	// top-level
 	logCmd = cli.Command{
 		Name:  commandLog,
-		Usage: "view ais node's log in real time; download one or all logs",
+		Usage: "view ais node's log in real time; download the current log; download all logs (history)",
 		Subcommands: []cli.Command{
 			makeAlias(showCmdLog, "", true, commandShow),
 			getCmdLog,
@@ -69,54 +80,97 @@ var (
 )
 
 func showNodeLogHandler(c *cli.Context) error {
-	return _logHandler(c)
+	return _currentLog(c)
 }
 
-func getNodeLogHandler(c *cli.Context) error {
-	//
-	// 1. get the current log
-	//
-	if !flagIsSet(c, allLogsFlag) {
-		return _logHandler(c)
-	}
+func getLogHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	if flagIsSet(c, refreshFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(allLogsFlag), qflprn(refreshFlag))
+	//
+	// either (1) show (or get) the current log
+	//
+	all := flagIsSet(c, allLogsFlag) || c.Args().Get(0) == clusterCompletion
+	if !all {
+		return _currentLog(c)
 	}
 
 	//
-	// 2. get archived logs
+	// or (2) all archived logs from a) single node or b) entire cluster
 	//
 	sev, err := parseLogSev(c)
 	if err != nil {
 		return err
 	}
-	node, sname, err := getNode(c, c.Args().Get(0))
+	if flagIsSet(c, refreshFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(allLogsFlag), qflprn(refreshFlag))
+	}
+	if c.Args().Get(0) == clusterCompletion {
+		// b)
+		if flagIsSet(c, refreshFlag) {
+			return fmt.Errorf("flag %s requires selecting a node (to view or download its current log), see %s for details",
+				qflprn(refreshFlag), qflprn(cli.HelpFlag))
+		}
+		err = _getAllClusterLogs(c, sev)
+	} else {
+		// a)
+		node, sname, errV := getNode(c, c.Args().Get(0))
+		if errV != nil {
+			return errV
+		}
+		err = _getAllNodeLogs(c, node, sev, sname)
+	}
+	if err == nil {
+		actionDone(c, "Done")
+	}
+	return err
+}
+
+func _getAllClusterLogs(c *cli.Context, sev string) error {
+	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
+
+	wg := cos.NewLimitedWaitGroup(sys.NumCPU(), smap.Count())
+	_alll(c, smap.Pmap, sev, wg)
+	_alll(c, smap.Tmap, sev, wg)
+	wg.Wait()
+	return nil
+}
+
+func _alll(c *cli.Context, nodeMap meta.NodeMap, sev string, wg cos.WG) {
+	for _, si := range nodeMap {
+		wg.Add(1)
+		go func(si *meta.Snode) {
+			sname := si.StringEx()
+			if err := _getAllNodeLogs(c, si, sev, sname); err != nil {
+				actionWarn(c, sname+" returned error: "+err.Error())
+			}
+			wg.Done()
+		}(si)
+	}
+}
+
+func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, sname string) error {
 	var (
-		outFile    = c.Args().Get(1)
-		tempdir, s string
-		file       *os.File
-		confirmed  bool
+		outFile           = c.Args().Get(1)
+		tempdir, fname, s string
+		confirmed         bool
 	)
 	if outFile == fileStdIO {
 		return fmt.Errorf("cannot deliver archived logs to standard output")
 	}
 	if outFile == "" {
-		tempdir = filepath.Join(os.TempDir(), "aislogs-"+node.ID())
-		err = cos.CreateDir(tempdir)
-		if err != nil {
+		tempdir = filepath.Join(os.TempDir(), "aislogs")
+		if err := cos.CreateDir(tempdir); err != nil {
 			return fmt.Errorf("failed to create temp dir %s: %v", tempdir, err)
 		}
-		if node.IsTarget() {
-			outFile = filepath.Join(tempdir, apc.Target+archive.ExtTarGz) // see also: targzLogs
-		} else {
-			outFile = filepath.Join(tempdir, apc.Proxy+archive.ExtTarGz) // ditto
+		fname = apc.Target + "-" + node.ID() + archive.ExtTarGz
+		if node.IsProxy() {
+			fname = apc.Proxy + "-" + node.ID() + archive.ExtTarGz
 		}
+		outFile = filepath.Join(tempdir, fname)
 	} else {
 		outFile, confirmed = _logDestName(c, node, outFile)
 		if !confirmed {
@@ -128,7 +182,8 @@ func getNodeLogHandler(c *cli.Context) error {
 			}
 		}
 	}
-	if file, err = os.Create(outFile); err != nil {
+	file, err := os.Create(outFile)
+	if err != nil {
 		return fmt.Errorf("failed to create destination %s: %v", outFile, err)
 	}
 
@@ -145,14 +200,11 @@ func getNodeLogHandler(c *cli.Context) error {
 	args := api.GetLogInput{Writer: file, Severity: sev, All: true}
 	_, err = api.GetDaemonLog(apiBP, node, args)
 	file.Close()
-	if err == nil {
-		actionDone(c, "Done")
-	}
 	return V(err)
 }
 
 // common (show, get) one log
-func _logHandler(c *cli.Context) error {
+func _currentLog(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
@@ -280,7 +332,7 @@ func _logDestName(c *cli.Context, node *meta.Snode, outFile string) (string, boo
 		} else {
 			outFile = filepath.Join(outFile, "ais"+apc.Proxy+"-"+node.ID())
 		}
-		// TODO: strictly speaking: fstat again and confirm if exists
+		// TODO: strictly, fstat again and confirm
 	} else if finfo.Mode().IsRegular() && !flagIsSet(c, yesFlag) {
 		warn := fmt.Sprintf("overwrite existing %q", outFile)
 		if ok := confirm(c, warn); !ok {

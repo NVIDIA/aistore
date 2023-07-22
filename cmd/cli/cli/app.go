@@ -157,15 +157,15 @@ func printLongRunFooter(w io.Writer, repeat int) {
 }
 
 func (a *acli) runN(args []string) error {
-	var (
-		countdown = a.longRun.count - 1
-		rate      = a.longRun.refreshRate
-	)
-	for ; countdown > 0; countdown-- {
-		time.Sleep(rate)
-		fmt.Fprintln(a.outWriter, fcyan("--------"))
+	delim := fcyan(strings.Repeat("-", 16))
+	fmt.Fprintln(a.outWriter, delim)
+	for i := 2; i <= a.longRun.count; i++ {
+		time.Sleep(a.longRun.refreshRate)
 		if err := a.runOnce(args); err != nil {
 			return err
+		}
+		if i < a.longRun.count {
+			fmt.Fprintln(a.outWriter, delim)
 		}
 	}
 	return nil
@@ -318,6 +318,7 @@ func (p *longRun) init(c *cli.Context, runOnce bool) {
 			warn := fmt.Sprintf("option '%s=%d' is invalid (must be >= 1). Proceeding with '%s=%d' (default).",
 				n, p.count, n, countDefault)
 			actionWarn(c, warn)
+			time.Sleep(2 * time.Second)
 			p.count = countDefault
 		}
 	}

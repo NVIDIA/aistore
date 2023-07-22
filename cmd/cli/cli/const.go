@@ -419,8 +419,9 @@ var (
 			indent4 + "\tvalid time units: " + timeUnits,
 	}
 	countFlag = cli.IntFlag{
-		Name:  "count",
-		Usage: "used together with " + qflprn(refreshFlag) + " to limit the number of generated reports",
+		Name: "count",
+		Usage: "used together with " + qflprn(refreshFlag) + " to limit the number of generated reports, e.g.:\n" +
+			indent4 + "\t '--refresh 10 --count 5' - run 5 times with 10s interval",
 	}
 	longRunFlags = []cli.Flag{refreshFlag, countFlag}
 
@@ -518,7 +519,7 @@ var (
 		Name: "severity",
 		Usage: "log severity is either 'info' (default) or 'error', whereby error logs contain both errors and warnings, e.g.:\n" +
 			indent1 + "\t- 'ais show log NODE_ID'\n" +
-			indent1 + "\t- 'ais show log NODE_ID --severity i' - same as above\n" +
+			indent1 + "\t- 'ais log show NODE_ID --severity i' - same as above\n" +
 			indent1 + "\t- 'ais show log NODE_ID --severity error' - errors and warnings only\n" +
 			indent1 + "\t- 'ais show log NODE_ID --severity w' - same as above",
 	}
