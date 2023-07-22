@@ -58,7 +58,7 @@ func TestGetFromArch(t *testing.T) {
 					ext: archive.ExtTar, nested: false, autodetect: false, mime: false,
 				},
 				{
-					ext: archive.ExtTarTgz, nested: false, autodetect: false, mime: false,
+					ext: archive.ExtTarGz, nested: false, autodetect: false, mime: false,
 				},
 				{
 					ext: archive.ExtZip, nested: false, autodetect: false, mime: false,
@@ -70,7 +70,7 @@ func TestGetFromArch(t *testing.T) {
 					ext: archive.ExtTar, nested: true, autodetect: true, mime: false,
 				},
 				{
-					ext: archive.ExtTarTgz, nested: true, autodetect: true, mime: false,
+					ext: archive.ExtTarGz, nested: true, autodetect: true, mime: false,
 				},
 				{
 					ext: archive.ExtZip, nested: true, autodetect: true, mime: false,
@@ -82,7 +82,7 @@ func TestGetFromArch(t *testing.T) {
 					ext: archive.ExtTar, nested: true, autodetect: true, mime: true,
 				},
 				{
-					ext: archive.ExtTarTgz, nested: true, autodetect: true, mime: true,
+					ext: archive.ExtTarGz, nested: true, autodetect: true, mime: true,
 				},
 				{
 					ext: archive.ExtZip, nested: true, autodetect: true, mime: true,

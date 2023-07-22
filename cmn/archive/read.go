@@ -68,7 +68,7 @@ func NewReader(mime string, fh io.Reader, size ...int64) (ar Reader, err error) 
 	switch mime {
 	case ExtTar:
 		ar = &tarReader{}
-	case ExtTgz, ExtTarTgz:
+	case ExtTgz, ExtTarGz:
 		ar = &tgzReader{}
 	case ExtZip:
 		debug.Assert(len(size) > 0 && size[0] > 0, "size required")

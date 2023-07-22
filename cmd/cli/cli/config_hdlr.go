@@ -55,9 +55,9 @@ For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.
 
 const examplesNodeSetCfg = `
 Usage examples:
-- ais config node [NODE] inherited log.level=4
-- ais config node [NODE] inherited log
-- ais config node [NODE] inherited disk.disk_util_high_wm=93
+- ais config node [NODE_ID] inherited log.level=4
+- ais config node [NODE_ID] inherited log
+- ais config node [NODE_ID] inherited disk.disk_util_high_wm=93
 For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.md
 `
 

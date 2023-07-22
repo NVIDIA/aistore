@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -1064,7 +1065,11 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	case apc.WhatSnode:
 		body = h.si
 	case apc.WhatLog:
-		h.sendlog(w, r, query)
+		if cos.IsParseBool(query.Get(apc.QparamAllLogs)) {
+			h.sendAllLogs(w, r, query)
+		} else {
+			h.sendOneLog(w, r, query)
+		}
 		return
 	case apc.WhatNodeStats:
 		statsNode := h.statsT.GetStats()
@@ -1079,9 +1084,33 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 	h.writeJSON(w, r, body, "httpdaeget-"+what)
 }
 
-func (h *htrun) sendlog(w http.ResponseWriter, r *http.Request, query url.Values) {
+func (h *htrun) sendAllLogs(w http.ResponseWriter, r *http.Request, query url.Values) {
 	sev := query.Get(apc.QparamLogSev)
-	log, err := _sev2logname(sev)
+	tempdir, archname, err := h.targzLogs(sev)
+	if err != nil {
+		if tempdir != "" {
+			os.RemoveAll(tempdir)
+		}
+		h.writeErr(w, r, err)
+		return
+	}
+	fh, err := os.Open(archname)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	buf, slab := h.gmm.Alloc()
+	if written, err := io.CopyBuffer(w, fh, buf); err != nil {
+		nlog.Errorf("failed to read %s: %v (written=%d)", archname, err, written)
+	}
+
+	cos.Close(fh)
+	slab.Free(buf)
+}
+
+func (h *htrun) sendOneLog(w http.ResponseWriter, r *http.Request, query url.Values) {
+	sev := query.Get(apc.QparamLogSev)
+	log, err := sev2Logname(sev)
 	if err != nil {
 		h.writeErr(w, r, err)
 		return
@@ -1129,22 +1158,94 @@ func (h *htrun) sendlog(w http.ResponseWriter, r *http.Request, query url.Values
 	slab.Free(buf)
 }
 
-func _sev2logname(sev string) (log string, err error) {
-	dir := cmn.GCO.Get().LogDir
-	if sev == "" {
-		log = filepath.Join(dir, nlog.InfoLogName()) // symlink
+// see also: cli 'log get --all'
+func (h *htrun) targzLogs(severity string) (tempdir, archname string, err error) {
+	var (
+		wfh      *os.File
+		dentries []os.DirEntry
+		logdir   = cmn.GCO.Get().LogDir
+	)
+	dentries, err = os.ReadDir(logdir)
+	if err != nil {
 		return
 	}
-	v := strings.ToLower(sev)
-	switch v[0] {
+	tempdir = filepath.Join(os.TempDir(), "aislogs-"+h.SID())
+	err = cos.CreateDir(tempdir)
+	if err != nil {
+		return
+	}
+	wfh, err = os.CreateTemp(tempdir, "")
+	if err != nil {
+		return
+	}
+	archname = wfh.Name()
+	aw := archive.NewWriter(archive.ExtTarGz, wfh, nil /*checksum*/, nil /*opts*/)
+
+	defer func() {
+		aw.Fini()
+		wfh.Close()
+	}()
+
+	for _, dent := range dentries {
+		if !dent.Type().IsRegular() {
+			continue
+		}
+		finfo, errV := dent.Info()
+		if errV != nil {
+			continue
+		}
+		var (
+			fullPath = filepath.Join(logdir, finfo.Name())
+			rfh      *os.File
+		)
+		if !logname2Sev(fullPath, severity) {
+			continue
+		}
+		rfh, err = os.Open(fullPath)
+		if err != nil {
+			return
+		}
+		oah := cos.SimpleOAH{Size: finfo.Size(), Atime: finfo.ModTime().UnixNano()}
+		err = aw.Write(finfo.Name(), oah, rfh)
+		rfh.Close()
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+func sev2Logname(severity string) (log string, err error) {
+	var (
+		dir = cmn.GCO.Get().LogDir
+		sev = apc.LogInfo[0] // default
+	)
+	if severity != "" {
+		sev = strings.ToLower(severity)[0]
+	}
+	switch sev {
 	case apc.LogInfo[0]:
 		log = filepath.Join(dir, nlog.InfoLogName())
 	case apc.LogWarn[0], apc.LogErr[0]:
 		log = filepath.Join(dir, nlog.ErrLogName())
 	default:
-		err = fmt.Errorf("unknown log severity %q", sev)
+		err = fmt.Errorf("unknown log severity %q", severity)
 	}
 	return
+}
+
+func logname2Sev(fname, severity string) bool {
+	log, err := sev2Logname(severity)
+	if err != nil {
+		nlog.Warningln(err)
+		return false
+	}
+	i := strings.LastIndexByte(log, '.')
+	if i < 0 {
+		nlog.Warningf("%q: unexpected log name format", log)
+		return false
+	}
+	return strings.Contains(fname, log[i:])
 }
 
 //

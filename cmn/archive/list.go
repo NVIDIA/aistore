@@ -42,7 +42,7 @@ func List(fqn string) ([]*Entry, error) {
 	switch mime {
 	case ExtTar:
 		lst, err = lsTar(fh)
-	case ExtTgz, ExtTarTgz:
+	case ExtTgz, ExtTarGz:
 		lst, err = lsTgz(fh)
 	case ExtZip:
 		finfo, err = os.Stat(fqn)

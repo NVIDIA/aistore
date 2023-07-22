@@ -176,7 +176,7 @@ func archUsageHandler(c *cli.Context) error {
 			}
 		}
 	}
-	return fmt.Errorf("unrecognized or misplaced option '%+v', see '--help' for details", c.Args())
+	return fmt.Errorf("unrecognized or misplaced option '%+v', see %s for details", c.Args(), qflprn(cli.HelpFlag))
 }
 
 func archMultiObjHandler(c *cli.Context) error {
@@ -184,7 +184,8 @@ func archMultiObjHandler(c *cli.Context) error {
 	{
 		a := archput{}
 		if err := a.parse(c); err == nil {
-			msg := "expecting " + c.Command.ArgsUsage + "\n(hint: use 'ais archive put' commandi, '--help' for details)"
+			msg := fmt.Sprintf("expecting %s\n(hint: use 'ais archive put' command, %s for details)",
+				c.Command.ArgsUsage, qflprn(cli.HelpFlag))
 			return errors.New(msg)
 		}
 	}
@@ -245,9 +246,8 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		src, dst := c.Args().Get(0), c.Args().Get(1)
 		if _, _, err := parseBckObjURI(c, src, true); err == nil {
 			if _, _, err := parseBckObjURI(c, dst, true); err == nil {
-				msg := "expecting " + c.Command.ArgsUsage +
-					"\n(hint: use 'ais archive bucket' command, '--help' for details)"
-				return errors.New(msg)
+				return fmt.Errorf("expecting %s\n(hint: use 'ais archive bucket' command, see %s for details)",
+					c.Command.ArgsUsage, qflprn(cli.HelpFlag))
 			}
 		}
 	}

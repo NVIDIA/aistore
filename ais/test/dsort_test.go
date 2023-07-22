@@ -291,7 +291,7 @@ func (df *dsortFramework) createInputShards() {
 				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
-			} else if df.extension == archive.ExtTarTgz || df.extension == archive.ExtZip || df.extension == archive.ExtTarLz4 {
+			} else if df.extension == archive.ExtTarGz || df.extension == archive.ExtZip || df.extension == archive.ExtTarLz4 {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
 			} else {
 				df.m.t.Fail()
@@ -916,7 +916,7 @@ func TestDistributedSortDisk(t *testing.T) {
 }
 
 func TestDistributedSortCompressionDisk(t *testing.T) {
-	for _, ext := range []string{archive.ExtTarTgz, archive.ExtTarLz4} {
+	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1021,7 +1021,7 @@ func TestDistributedSortMemDisk(t *testing.T) {
 
 func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTarTgz, archive.ExtTarLz4} {
+	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			var (
 				m = &ioContext{
@@ -1132,7 +1132,7 @@ func TestDistributedSortZipLz4(t *testing.T) {
 
 func TestDistributedSortTarCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTarTgz, archive.ExtTarLz4} {
+	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1765,7 +1765,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 func TestDistributedSortDuplications(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTar} { // TODO: currently, fails archive.ExtTarLz4 and archive.ExtTarTgz, both
+	for _, ext := range []string{archive.ExtTar} { // TODO: currently, fails archive.ExtTarLz4 and archive.ExtTarGz, both
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{

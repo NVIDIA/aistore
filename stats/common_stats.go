@@ -832,9 +832,9 @@ waitStartup:
 				sleep = config.Periodic.StatsTime.D()
 				ticker.Reset(sleep)
 				deadline = time.Hour
-				if nlog.Since() > dfltPeriodicFlushTime {
-					nlog.Flush()
-				}
+
+				nlog.Infoln(r.Name() + ": standing by...")
+				nlog.Flush()
 				continue
 			}
 			j += sleep

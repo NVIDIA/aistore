@@ -81,7 +81,7 @@ func NewWriter(mime string, w io.Writer, cksum *cos.CksumHashSize, opts *Opts) (
 	switch mime {
 	case ExtTar:
 		aw = &tarWriter{}
-	case ExtTgz, ExtTarTgz:
+	case ExtTgz, ExtTarGz:
 		aw = &tgzWriter{}
 	case ExtZip:
 		aw = &zipWriter{}

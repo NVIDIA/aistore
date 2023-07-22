@@ -72,8 +72,9 @@ const (
 
 	cmdSmap   = apc.WhatSmap
 	cmdBMD    = apc.WhatBMD
-	cmdConfig = "config"
+	cmdConfig = "config" // apc.WhatNodeConfig and apc.WhatClusterConfig
 	cmdLog    = apc.WhatLog
+
 	cmdBucket = "bucket"
 	cmdObject = "object"
 	cmdProps  = "props"
@@ -276,6 +277,10 @@ const (
 	joinNodeArgument          = "IP:PORT"
 	nodeMountpathPairArgument = "NODE_ID=MOUNTPATH [NODE_ID=MOUNTPATH...]"
 
+	// node log
+	showLogArgument = nodeIDArgument
+	getLogArgument  = nodeIDArgument + " [OUT_FILE|OUT_DIR|-]"
+
 	// cluster
 	showClusterArgument = "[NODE_ID] | [target [NODE_ID]] | [proxy [NODE_ID]] | " +
 		"[smap [NODE_ID]] | [bmd [NODE_ID]] | [config [NODE_ID]] | [stats [NODE_ID]]"
@@ -348,6 +353,7 @@ var (
 	allRunningJobsFlag  = cli.BoolFlag{Name: scopeAll, Usage: "all running jobs"}
 	allFinishedJobsFlag = cli.BoolFlag{Name: scopeAll, Usage: "all finished jobs"}
 	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
+	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "download all logs"}
 
 	allColumnsFlag = cli.BoolFlag{
 		Name:  scopeAll,
@@ -510,9 +516,11 @@ var (
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{
 		Name: "severity",
-		Usage: "show 'info' log (default, can be omitted) or 'error' log (contains both errors and warnings), e.g.:\n" +
-			indent1 + "\t- 'ais show log NODE'\n" +
-			indent1 + "\t- 'ais show log NODE --severity error' - errors and warnings only",
+		Usage: "log severity is either 'info' (default) or 'error', whereby error logs contain both errors and warnings, e.g.:\n" +
+			indent1 + "\t- 'ais show log NODE_ID'\n" +
+			indent1 + "\t- 'ais show log NODE_ID --severity i' - same as above\n" +
+			indent1 + "\t- 'ais show log NODE_ID --severity error' - errors and warnings only\n" +
+			indent1 + "\t- 'ais show log NODE_ID --severity w' - same as above",
 	}
 	logFlushFlag = DurationFlag{
 		Name:  "log-flush",

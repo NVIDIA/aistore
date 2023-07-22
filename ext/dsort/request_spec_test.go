@@ -132,7 +132,7 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse spec with .tar.gz extension", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTarTgz,
+				Extension:       archive.ExtTarGz,
 				InputFormat:     "prefix-{0010..0111}-suffix",
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
@@ -141,7 +141,7 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Extension).To(Equal(archive.ExtTarTgz))
+			Expect(parsed.Extension).To(Equal(archive.ExtTarGz))
 		})
 
 		It("should parse spec with .tar.gz extension", func() {

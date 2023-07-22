@@ -478,7 +478,7 @@ func (m *Manager) setExtractCreator() (err error) {
 	switch m.rs.Extension {
 	case archive.ExtTar:
 		extractCreator = extract.NewTarExtractCreator(m.ctx.t)
-	case archive.ExtTarTgz, archive.ExtTgz:
+	case archive.ExtTarGz, archive.ExtTgz:
 		extractCreator = extract.NewTargzExtractCreator(m.ctx.t, m.rs.Extension)
 	case archive.ExtZip:
 		extractCreator = extract.NewZipExtractCreator(m.ctx.t)

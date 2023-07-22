@@ -57,9 +57,10 @@ const (
 	// HTTP bucket support.
 	QparamOrigURL = "original_url"
 
-	// Log severity
-	QparamLogSev = "severity" // see { LogInfo, ...} enum
-	QparamLogOff = "offset"
+	// Get logs
+	QparamLogSev  = "severity" // see { LogInfo, ...} enum
+	QparamLogOff  = "offset"
+	QparamAllLogs = "all"
 
 	// Archive filename and format (mime type)
 	QparamArchpath = "archpath"
@@ -72,8 +73,10 @@ const (
 	// - we simply don't care.
 	QparamSkipVC = "skip_vc"
 
-	// force the operation; allows to overcome certain restrictions (e.g., shutdown primary and the entire cluster)
-	// or errors (e.g., attach invalid mountpath)
+	// force operation
+	// used to overcome certain restrictions, e.g.:
+	// - shutdown the primary and the entire cluster
+	// - attach invalid mountpath
 	QparamForce = "frc"
 )
 

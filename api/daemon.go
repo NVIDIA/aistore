@@ -22,6 +22,7 @@ type GetLogInput struct {
 	Writer   io.Writer
 	Severity string // one of: {cmn.LogInfo, ...}
 	Offset   int64
+	All      bool
 }
 
 // GetMountpaths given the direct public URL of the target, returns the target's mountpaths or error.
@@ -246,6 +247,9 @@ func GetDaemonLog(bp BaseParams, node *meta.Snode, args GetLogInput) (int64, err
 	}
 	if args.Offset != 0 {
 		q.Set(apc.QparamLogOff, strconv.FormatInt(args.Offset, 10))
+	}
+	if args.All {
+		q.Set(apc.QparamAllLogs, "true")
 	}
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()

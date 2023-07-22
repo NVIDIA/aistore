@@ -44,7 +44,7 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: archive.ExtTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &ParsedRequestSpec{Extension: archive.ExtTarGz, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
 	})

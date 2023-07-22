@@ -7,7 +7,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -21,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
@@ -87,11 +85,6 @@ var (
 			verboseFlag,
 			jsonFlag,
 		},
-		cmdLog: append(
-			longRunFlags,
-			logSevFlag,
-			logFlushFlag,
-		),
 	}
 
 	showCmd = cli.Command{
@@ -189,15 +182,6 @@ var (
 		ArgsUsage: "",
 		Flags:     showCmdsFlags[cmdShowRemoteAIS],
 		Action:    showRemoteAISHandler,
-	}
-
-	showCmdLog = cli.Command{
-		Name:         cmdLog,
-		Usage:        "show log",
-		ArgsUsage:    nodeIDArgument,
-		Flags:        showCmdsFlags[cmdLog],
-		Action:       showNodeLogHandler,
-		BashComplete: suggestAllNodes,
 	}
 
 	showCmdJob = cli.Command{
@@ -742,56 +726,6 @@ func showNodeConfig(c *cli.Context) error {
 		actionDone(c, msg)
 	}
 	return err
-}
-
-func showNodeLogHandler(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-	node, sname, err := getNode(c, c.Args().Get(0))
-	if err != nil {
-		return err
-	}
-
-	firstIteration := setLongRunParams(c, 0)
-
-	sev := strings.ToLower(parseStrFlag(c, logSevFlag))
-	if sev != "" {
-		switch sev[0] {
-		case apc.LogInfo[0], apc.LogWarn[0], apc.LogErr[0]:
-		default:
-			return fmt.Errorf("invalid log severity, expecting empty string or one of: %s, %s, %s",
-				apc.LogInfo, apc.LogWarn, apc.LogErr)
-		}
-	}
-	if firstIteration && flagIsSet(c, logFlushFlag) {
-		var (
-			flushRate = parseDurationFlag(c, logFlushFlag)
-			nvs       = make(cos.StrKVs)
-		)
-		config, err := api.GetDaemonConfig(apiBP, node)
-		if err != nil {
-			return V(err)
-		}
-		if config.Log.FlushTime.D() != flushRate {
-			nvs[nodeLogFlushName] = flushRate.String()
-			if err := api.SetDaemonConfig(apiBP, node.ID(), nvs, true /*transient*/); err != nil {
-				return V(err)
-			}
-			warn := fmt.Sprintf("run 'ais config node %s inherited %s %s' to change it back",
-				sname, nodeLogFlushName, config.Log.FlushTime)
-			actionWarn(c, warn)
-			time.Sleep(2 * time.Second)
-			fmt.Fprintln(c.App.Writer)
-		}
-	}
-
-	args := api.GetLogInput{Writer: os.Stdout, Severity: sev, Offset: getLongRunOffset(c)}
-	readsize, err := api.GetDaemonLog(apiBP, node, args)
-	if err == nil {
-		addLongRunOffset(c, readsize)
-	}
-	return V(err)
 }
 
 func showRemoteAISHandler(c *cli.Context) error {

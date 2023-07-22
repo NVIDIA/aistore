@@ -536,8 +536,8 @@ func listAnyHandler(c *cli.Context) error {
 		err := showObjProps(c, bck, objName)
 		if err == nil {
 			if _, errV := archive.Mime("", objName); errV == nil {
-				fmt.Fprintf(c.App.Writer, "\n('ais ls %s %s' to list archived contents, '--help' for details)\n",
-					bck.Cname(objName), flprn(listArchFlag))
+				fmt.Fprintf(c.App.Writer, "\n('ais ls %s %s' to list archived contents, %s for details)\n",
+					bck.Cname(objName), flprn(listArchFlag), qflprn(cli.HelpFlag))
 			}
 		}
 		return err

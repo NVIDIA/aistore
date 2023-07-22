@@ -268,7 +268,7 @@ func _errUsage(c *cli.Context, msg string) (err *errUsage) {
 func mistypedFlag(extraArgs []string) error {
 	for _, arg := range extraArgs {
 		if strings.HasPrefix(arg, flagPrefix) {
-			return fmt.Errorf("unrecognized option %q (a typo? see '--help' for details)", arg)
+			return fmt.Errorf("unrecognized option %q (a typo? see %s for details)", arg, qflprn(cli.HelpFlag))
 		}
 	}
 	return nil

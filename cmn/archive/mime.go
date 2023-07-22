@@ -20,7 +20,7 @@ import (
 const (
 	ExtTar    = ".tar"
 	ExtTgz    = ".tgz"
-	ExtTarTgz = ".tar.gz"
+	ExtTarGz  = ".tar.gz"
 	ExtZip    = ".zip"
 	ExtTarLz4 = ".tar.lz4"
 )
@@ -38,12 +38,12 @@ type detect struct {
 }
 
 // when adding/removing update `allMagics` below
-var FileExtensions = []string{ExtTar, ExtTgz, ExtTarTgz, ExtZip, ExtTarLz4}
+var FileExtensions = []string{ExtTar, ExtTgz, ExtTarGz, ExtZip, ExtTarLz4}
 
 // standard file signatures
 var (
 	magicTar  = detect{offset: 257, sig: []byte("ustar"), mime: ExtTar}
-	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarTgz}
+	magicGzip = detect{sig: []byte{0x1f, 0x8b}, mime: ExtTarGz}
 	magicZip  = detect{sig: []byte{0x50, 0x4b}, mime: ExtZip}
 	magicLz4  = detect{sig: []byte{0x04, 0x22, 0x4d, 0x18}, mime: ExtTarLz4}
 
@@ -78,8 +78,8 @@ func Mime(mime, filename string) (string, error) {
 // e.g. MIME: "application/zip"
 func normalize(mime string) (string, error) {
 	switch {
-	case strings.Contains(mime, ExtTarTgz[1:]): // ExtTarTgz contains ExtTar
-		return ExtTarTgz, nil
+	case strings.Contains(mime, ExtTarGz[1:]): // ExtTarGz contains ExtTar
+		return ExtTarGz, nil
 	case strings.Contains(mime, ExtTarLz4[1:]): // ditto
 		return ExtTarLz4, nil
 	default:

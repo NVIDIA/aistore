@@ -186,8 +186,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 
 	if footer.robj == 0 && apc.IsRemoteProvider(qbck.Provider) && !countRemoteObjs {
 		fmt.Fprintln(c.App.Writer)
-		note := fmt.Sprintf("to count and size remote buckets and objects outside ais cluster, use %s switch, see '--help' for details",
-			qflprn(allObjsOrBcksFlag))
+		note := fmt.Sprintf("to count and size remote buckets and objects outside ais cluster, use %s switch, see %s for details",
+			qflprn(allObjsOrBcksFlag), qflprn(cli.HelpFlag))
 		actionNote(c, note)
 	}
 

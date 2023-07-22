@@ -370,6 +370,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 				} else {
 					outFile = filepath.Join(outFile, filepath.Base(objName))
 				}
+				// TODO: strictly speaking: fstat again and confirm if exists
 			} else if finfo.Mode().IsRegular() && !flagIsSet(c, yesFlag) { // `/dev/null` is fine
 				warn := fmt.Sprintf("overwrite existing %q", outFile)
 				if ok := confirm(c, warn); !ok {

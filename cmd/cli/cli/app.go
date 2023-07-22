@@ -55,6 +55,7 @@ type (
 		refreshRate      time.Duration
 		offset           int64
 		mapBegin, mapEnd teb.StstMap
+		outFile          *os.File
 	}
 )
 
@@ -109,10 +110,13 @@ func Run(version, buildtime string, args []string) error {
 	if !a.longRun.isSet() {
 		return nil
 	}
+	if a.longRun.outFile != nil {
+		defer a.longRun.outFile.Close()
+	}
 	if a.longRun.isForever() {
 		return a.runForever(args)
 	}
-	return a.runNTimes(args)
+	return a.runN(args)
 }
 
 func (a *acli) runOnce(args []string) error {
@@ -152,7 +156,7 @@ func printLongRunFooter(w io.Writer, repeat int) {
 	}
 }
 
-func (a *acli) runNTimes(args []string) error {
+func (a *acli) runN(args []string) error {
 	var (
 		countdown = a.longRun.count - 1
 		rate      = a.longRun.refreshRate
@@ -319,6 +323,11 @@ func (p *longRun) init(c *cli.Context, runOnce bool) {
 	}
 }
 
+func isLongRun(c *cli.Context) bool {
+	params := c.App.Metadata[metadata].(*longRun)
+	return params.isSet()
+}
+
 func setLongRunParams(c *cli.Context, footer ...int) bool {
 	params := c.App.Metadata[metadata].(*longRun)
 	if params.isSet() {
@@ -342,10 +351,24 @@ func getLongRunParams(c *cli.Context) *longRun {
 
 func addLongRunOffset(c *cli.Context, off int64) {
 	params := c.App.Metadata[metadata].(*longRun)
-	params.offset += off
+	if params.isSet() {
+		params.offset += off
+	}
 }
 
 func getLongRunOffset(c *cli.Context) int64 {
 	params := c.App.Metadata[metadata].(*longRun)
 	return params.offset
+}
+
+func setLongRunOutfile(c *cli.Context, file *os.File) {
+	params := c.App.Metadata[metadata].(*longRun)
+	if params.isSet() {
+		params.outFile = file
+	}
+}
+
+func getLongRunOutfile(c *cli.Context) *os.File {
+	params := c.App.Metadata[metadata].(*longRun)
+	return params.outFile
 }
