@@ -103,6 +103,7 @@ Following is a brief summary (that's non-exhaustive and slightly outdated):
 | [`ais object`](/docs/cli/object.md) | PUT and GET (write and read), APPEND, archive, concat, list (buckets, objects), move, evict, promote, ... |
 | [`ais search`](/docs/cli/search.md) | Search `ais` commands. |
 | [`ais show`](/docs/cli/show.md) | Monitor anything and everything: performance (all aspects), buckets, jobs, remote clusters, and more. |
+| [`ais log`](/docs/cli/log.md) | Download ais nodes' logs or view the logs in real time. |
 | [`ais storage`](/docs/cli/storage.md) | Show capacity usage on a per bucket basis (num objects and sizes), attach/detach mountpaths (disks). |
 {: .nobreak}
 
