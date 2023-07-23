@@ -127,8 +127,8 @@ var (
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),
 	}
 	logsCmdETL = cli.Command{
-		Name:         cmdLogs,
-		Usage:        "retrieve ETL logs",
+		Name:         cmdViewLogs,
+		Usage:        "view ETL logs",
 		ArgsUsage:    etlNameArgument + " " + optionalTargetIDArgument,
 		Action:       etlLogsHandler,
 		BashComplete: etlIDCompletions,
@@ -351,33 +351,29 @@ func etlPrintInitMsg(c *cli.Context, id string) error {
 	return err
 }
 
+// TODO: initial, see "download logs"
 func etlLogsHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
 	var (
 		id       = c.Args().Get(0)
 		targetID = c.Args().Get(1) // optional
 	)
-
+	if c.NArg() == 0 {
+		return missingArgumentsError(c, c.Command.ArgsUsage)
+	}
 	logs, err := api.ETLLogs(apiBP, id, targetID)
 	if err != nil {
 		return V(err)
 	}
-
 	if targetID != "" {
 		fmt.Fprintln(c.App.Writer, string(logs[0].Logs))
 		return nil
 	}
-
 	for idx, log := range logs {
 		if idx > 0 {
 			fmt.Fprintln(c.App.Writer)
 		}
 		fmt.Fprintf(c.App.Writer, "%s:\n%s\n", log.TargetID, string(log.Logs))
 	}
-
 	return nil
 }
 

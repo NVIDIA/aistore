@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -51,12 +52,12 @@ var (
 	}
 	getCmdLog = cli.Command{
 		Name: commandGet,
-		Usage: "download log (or all logs including history) from selected node or all nodes in the cluster, e.g.:\n" +
+		Usage: "download the current log or entire log history from a selected node or all nodes, e.g.:\n" +
 			indent4 + "\t - 'ais log get NODE_ID /tmp' - download the specified node's current log; save the result to the specified directory;\n" +
 			indent4 + "\t - 'ais log get NODE_ID /tmp/out --refresh 10' - download the current log as /tmp/out\n" +
 			indent4 + "\t    keep updating (ie., appending) the latter every 10s;\n" +
 			indent4 + "\t - 'ais log get cluster /tmp' - download TAR.GZ archived logs from _all_ nodes in the cluster\n" +
-			indent4 + "\t    ('cluster' implies '--all') and save the result to the specified destination;\n" +
+			indent4 + "\t    (note that 'cluster' implies '--all'), and save the result to the specified destination;\n" +
 			indent4 + "\t - 'ais log get NODE_ID --all' - download the node's TAR.GZ log archive\n" +
 			indent4 + "\t - 'ais log get NODE_ID --all --severity e' - TAR.GZ archive of (only) logged errors and warnings",
 		ArgsUsage: getLogArgument,
@@ -105,20 +106,21 @@ func getLogHandler(c *cli.Context) error {
 	if flagIsSet(c, refreshFlag) {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(allLogsFlag), qflprn(refreshFlag))
 	}
+	outFile := c.Args().Get(1)
 	if c.Args().Get(0) == clusterCompletion {
 		// b)
 		if flagIsSet(c, refreshFlag) {
 			return fmt.Errorf("flag %s requires selecting a node (to view or download its current log), see %s for details",
 				qflprn(refreshFlag), qflprn(cli.HelpFlag))
 		}
-		err = _getAllClusterLogs(c, sev)
+		err = _getAllClusterLogs(c, sev, outFile)
 	} else {
 		// a)
 		node, sname, errV := getNode(c, c.Args().Get(0))
 		if errV != nil {
 			return errV
 		}
-		err = _getAllNodeLogs(c, node, sev, sname)
+		err = _getAllNodeLogs(c, node, sev, outFile, sname)
 	}
 	if err == nil {
 		actionDone(c, "Done")
@@ -126,25 +128,28 @@ func getLogHandler(c *cli.Context) error {
 	return err
 }
 
-func _getAllClusterLogs(c *cli.Context, sev string) error {
+func _getAllClusterLogs(c *cli.Context, sev, outFile string) error {
 	smap, err := getClusterMap(c)
 	if err != nil {
 		return err
 	}
+	if outFile == fileStdIO {
+		return errors.New("cannot download archived logs to standard output")
+	}
 
 	wg := cos.NewLimitedWaitGroup(sys.NumCPU(), smap.Count())
-	_alll(c, smap.Pmap, sev, wg)
-	_alll(c, smap.Tmap, sev, wg)
+	_alll(c, smap.Pmap, sev, outFile, wg)
+	_alll(c, smap.Tmap, sev, outFile, wg)
 	wg.Wait()
 	return nil
 }
 
-func _alll(c *cli.Context, nodeMap meta.NodeMap, sev string, wg cos.WG) {
+func _alll(c *cli.Context, nodeMap meta.NodeMap, sev, outFile string, wg cos.WG) {
 	for _, si := range nodeMap {
 		wg.Add(1)
 		go func(si *meta.Snode) {
 			sname := si.StringEx()
-			if err := _getAllNodeLogs(c, si, sev, sname); err != nil {
+			if err := _getAllNodeLogs(c, si, sev, outFile, sname); err != nil {
 				actionWarn(c, sname+" returned error: "+err.Error())
 			}
 			wg.Done()
@@ -152,14 +157,13 @@ func _alll(c *cli.Context, nodeMap meta.NodeMap, sev string, wg cos.WG) {
 	}
 }
 
-func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, sname string) error {
+func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, outFile, sname string) error {
 	var (
-		outFile           = c.Args().Get(1)
 		tempdir, fname, s string
 		confirmed         bool
 	)
 	if outFile == fileStdIO {
-		return fmt.Errorf("cannot deliver archived logs to standard output")
+		return errors.New("cannot download archived logs to standard output")
 	}
 	if outFile == "" {
 		tempdir = filepath.Join(os.TempDir(), "aislogs")
@@ -191,9 +195,9 @@ func _getAllNodeLogs(c *cli.Context, node *meta.Snode, sev, sname string) error 
 		s = " (errors and warnings)"
 	}
 	if outFile != discardIO {
-		fmt.Fprintf(c.App.Writer, "Downloading %s%s logs as %s ...\n", sname, s, outFile)
+		fmt.Fprintf(c.App.Writer, "Downloading %s%s logs as %s\n", sname, s, outFile)
 	} else {
-		fmt.Fprintf(c.App.Writer, "Downloading (and discarding) %s%s logs ...\n", sname, s)
+		fmt.Fprintf(c.App.Writer, "Downloading (and discarding) %s%s logs\n", sname, s)
 	}
 
 	// call api

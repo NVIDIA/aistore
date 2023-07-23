@@ -112,7 +112,7 @@ Lists all available ETLs.
 
 ## View ETL Logs
 
-`ais etl logs ETL_NAME [TARGET_ID]`
+`ais etl view-logs ETL_NAME [TARGET_ID]`
 
 Output logs produced by given ETL.
 It is possible to pass an additional parameter to specify a particular `TARGET_ID` from which the logs must be retrieved.

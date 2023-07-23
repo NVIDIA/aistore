@@ -129,7 +129,18 @@ var (
 				Action:       setPrimaryHandler,
 				BashComplete: suggestProxies,
 			},
-			// cluster level
+			{
+				Name: cmdDownloadLogs,
+				Usage: "download log archives from all clustered nodes (one TAR.GZ per node), e.g.:\n" +
+					indent4 + "\t - 'download-logs /tmp/www' - save log archives to /tmp/www directory\n" +
+					indent4 + "\t - 'download-logs --severity w' - errors and warnings to system temporary directory\n" +
+					indent4 + "\t   (see related: 'ais log show', 'ais log get')",
+				ArgsUsage: "[OUT_DIR]",
+				Flags:     []cli.Flag{logSevFlag},
+				Action:    downloadAllLogs,
+			},
+
+			// cluster level (compare with the below)
 			{
 				Name:   cmdShutdown,
 				Usage:  "shut down entire cluster",
@@ -553,4 +564,17 @@ func resetStatsHandler(c *cli.Context) error {
 	msg := fmt.Sprintf("Cluster %s successfully reset", tag)
 	actionDone(c, msg)
 	return nil
+}
+
+func downloadAllLogs(c *cli.Context) error {
+	sev, err := parseLogSev(c)
+	if err != nil {
+		return err
+	}
+	outFile := c.Args().Get(0)
+	err = _getAllClusterLogs(c, sev, outFile)
+	if err == nil {
+		actionDone(c, "Done")
+	}
+	return err
 }

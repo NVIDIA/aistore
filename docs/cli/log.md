@@ -10,6 +10,7 @@ redirect_from:
 # Table of Contents
 - [Download log or all logs (including history)](#ais-log-get-command)
 - [View current log](#ais-log-show-command)
+- [Download cluster logs](#ais-cluster-download-logs-command)
 
 # `ais log get` command
 
@@ -65,4 +66,23 @@ OPTIONS:
                       - 'ais show log NODE_ID --severity w' - same as above
    --log-flush value  can be used in combination with '--refresh' to override configured 'log.flush_time'
    --help, -h         show help
+```
+
+# `ais cluster download-logs` command
+
+```console
+$ ais cluster download-logs --help
+NAME:
+   ais cluster download-logs - download log archives from all clustered nodes (one TAR.GZ per node), e.g.:
+               - 'download-logs /tmp/www' - save log archives to /tmp/www directory
+               - 'download-logs --severity w' - errors and warnings to system temporary directory
+                 (see related: 'ais log show', 'ais log get')
+
+USAGE:
+   ais cluster download-logs [command options] [OUT_DIR]
+
+OPTIONS:
+   --severity value  log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain
+                     only errors and warnings, e.g.: '--severity info', '--severity error', '--severity e'
+   --help, -h        show help
 ```

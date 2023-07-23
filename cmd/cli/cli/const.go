@@ -102,7 +102,6 @@ const (
 	cmdNode       = "node"
 	cmdPrimary    = "set-primary"
 	cmdList       = commandList
-	cmdLogs       = "logs"
 	cmdStop       = "stop"
 	cmdStart      = "start"
 	cmdMembership = "add-remove-nodes"
@@ -110,6 +109,9 @@ const (
 	cmdAttach     = "attach"
 	cmdDetach     = "detach"
 	cmdResetStats = "reset-stats"
+
+	cmdDownloadLogs = "download-logs"
+	cmdViewLogs     = "view-logs" // etl
 
 	// Cluster subcommands
 	cmdCluAttach = "remote-" + cmdAttach
@@ -517,11 +519,8 @@ var (
 	// Log severity (cmn.LogInfo, ....) enum
 	logSevFlag = cli.StringFlag{
 		Name: "severity",
-		Usage: "log severity is either 'info' (default) or 'error', whereby error logs contain both errors and warnings, e.g.:\n" +
-			indent1 + "\t- 'ais show log NODE_ID'\n" +
-			indent1 + "\t- 'ais log show NODE_ID --severity i' - same as above\n" +
-			indent1 + "\t- 'ais show log NODE_ID --severity error' - errors and warnings only\n" +
-			indent1 + "\t- 'ais show log NODE_ID --severity w' - same as above",
+		Usage: "log severity is either 'i' or 'info' (default, can be omitted), or 'error', whereby error logs contain\n" +
+			indent4 + "\tonly errors and warnings, e.g.: '--severity info', '--severity error', '--severity e'",
 	}
 	logFlushFlag = DurationFlag{
 		Name:  "log-flush",

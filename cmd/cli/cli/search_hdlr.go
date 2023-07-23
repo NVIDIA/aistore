@@ -58,8 +58,11 @@ var (
 func initSearch(app *cli.App) {
 	searchCommands = []cli.Command{
 		{
-			Name:         commandSearch,
-			Usage:        "search " + cliName + " commands",
+			Name: commandSearch,
+			Usage: "search " + cliName + " commands, e.g.:\n" +
+				indent1 + "\t - 'ais search log' - commands containing 'log' subcommand\n" +
+				indent1 + "\t - 'ais search --regex log' - include all subcommands that contain 'log' substring\n" +
+				indent1 + "\t - 'ais search --regex \"\\blog\"' - slightly narrow the search to those that have 'log' on a word boundary, etc.",
 			ArgsUsage:    searchArgument,
 			Action:       searchCmdHdlr,
 			Flags:        searchCmdFlags,
@@ -137,12 +140,11 @@ func findCmdMatching(pattern string) []string {
 	return result
 }
 
-func searchCmdHdlr(c *cli.Context) error {
+func searchCmdHdlr(c *cli.Context) (err error) {
+	var commands []string
 	if !flagIsSet(c, regexFlag) && c.NArg() == 0 {
 		return missingArgumentsError(c, "keyword")
 	}
-	var commands []string
-
 	if flagIsSet(c, regexFlag) {
 		pattern := parseStrFlag(c, regexFlag)
 		commands = findCmdMatching(pattern)
@@ -163,7 +165,15 @@ func searchCmdHdlr(c *cli.Context) error {
 		commands = findCmdMultiKey(c.Args())
 	}
 
-	return teb.Print(commands, teb.SearchTmpl)
+	if len(commands) > 0 {
+		err = teb.Print(commands, teb.SearchTmpl)
+	}
+	if err == nil && !flagIsSet(c, regexFlag) {
+		msg := fmt.Sprintf("\n(Hint: use %s to include more results, e.g.: '%s %s %s %s')",
+			qflprn(regexFlag), cliName, commandSearch, flprn(regexFlag), c.Args().Get(0))
+		actionDone(c, msg)
+	}
+	return err
 }
 
 func searchBashCmplt(_ *cli.Context) {
