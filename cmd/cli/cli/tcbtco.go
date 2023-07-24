@@ -37,10 +37,10 @@ func copyBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return tcbtco(c, "", bckFrom, bckTo)
+	return tcbtco(c, "", bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
 }
 
-func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
+func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
 	var (
 		showProgress = flagIsSet(c, progressFlag)
 		from, to     = bckFrom.Cname(""), bckTo.Cname("")
@@ -61,7 +61,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	// by default, copying objects in the cluster, with an option to override
 	// TODO: FltExistsOutside maybe later
 	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyAllObjsFlag) {
+	if allIncludingRemote {
 		fltPresence = apc.FltExists
 	}
 
@@ -120,10 +120,10 @@ func etlBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return tcbtco(c, etlName, bckFrom, bckTo)
+	return tcbtco(c, etlName, bckFrom, bckTo, flagIsSet(c, etlAllObjsFlag))
 }
 
-func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
+func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
 	debug.Assert(!flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag))
 	debug.Assert(etlName != "")
 	if c.NArg() == 0 {
@@ -163,7 +163,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) error {
 	// by default, copying objects in the cluster, with an option to override
 	// TODO: FltExistsOutside maybe later
 	fltPresence := apc.FltPresent
-	if flagIsSet(c, copyAllObjsFlag) {
+	if allIncludingRemote {
 		fltPresence = apc.FltExists
 	}
 
@@ -224,7 +224,11 @@ func handleETLHTTPError(err error, etlName string) error {
 // common for both (cp | etl)
 //
 
-func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) {
+func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
+	text1, text2 := "copy", "Copying"
+	if etlName != "" {
+		text1, text2 = "transform", "Transforming"
+	}
 	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
 	}
@@ -239,8 +243,8 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 			actionNote(c, note)
 			return nil
 		}
-		if bckFrom.IsRemote() && !flagIsSet(c, copyAllObjsFlag) {
-			hint := "(hint: use option %s to copy remote objects from the backend store)\n"
+		if bckFrom.IsRemote() && !allIncludingRemote {
+			hint := "(hint: use option %s to " + text1 + " remote objects from the backend store)\n"
 			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
 			actionNote(c, note)
 			return nil
@@ -265,12 +269,12 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 		if dryRun {
 			// TODO -- FIXME: show object names with destinations, make the output consistent with etl dry-run
 			dryRunCptn(c)
-			actionDone(c, "Copying the entire bucket")
+			actionDone(c, text2+" the entire bucket")
 		}
 		if etlName != "" {
-			return etlBucket(c, etlName, bckFrom, bckTo)
+			return etlBucket(c, etlName, bckFrom, bckTo, allIncludingRemote)
 		}
-		return copyBucket(c, bckFrom, bckTo)
+		return copyBucket(c, bckFrom, bckTo, allIncludingRemote)
 	}
 
 	// (II) multi-object TCO
@@ -280,9 +284,9 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck) (err error) 
 	if dryRun {
 		var msg string
 		if listObjs != "" {
-			msg = fmt.Sprintf("Copying %q ...\n", listObjs)
+			msg = fmt.Sprintf("%s %q ...\n", text2, listObjs)
 		} else {
-			msg = fmt.Sprintf("Copying objects that match the pattern %q ...\n", tmplObjs)
+			msg = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
 		}
 		dryRunCptn(c) // TODO -- FIXME: ditto
 		actionDone(c, msg)

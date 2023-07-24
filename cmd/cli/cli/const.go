@@ -375,6 +375,10 @@ var (
 		Name:  scopeAll,
 		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",
 	}
+	etlAllObjsFlag = cli.BoolFlag{
+		Name:  scopeAll,
+		Usage: "transform all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",
+	}
 
 	// obj props
 	objPropsFlag = cli.StringFlag{

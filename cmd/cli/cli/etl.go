@@ -48,7 +48,7 @@ var (
 			allRunningJobsFlag,
 		},
 		cmdBucket: {
-			copyAllObjsFlag,
+			etlAllObjsFlag,
 			continueOnErrorFlag,
 			etlExtFlag,
 			forceFlag,
