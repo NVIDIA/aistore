@@ -1,14 +1,12 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
 	"math"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,7 +31,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111..2}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
@@ -81,7 +79,7 @@ var _ = Describe("RequestSpec", func() {
 				Bck:             cmn.Bck{Provider: apc.AWS, Name: "test"},
 				OutputBck:       cmn.Bck{Provider: apc.AWS, Name: "testing"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111..2}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
@@ -101,7 +99,7 @@ var _ = Describe("RequestSpec", func() {
 				Bck: cmn.Bck{Name: "test"},
 
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80 GB",
@@ -118,7 +116,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTgz,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -133,7 +131,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTarGz,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -148,7 +146,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtZip,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -163,7 +161,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTgz,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-%06d-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -187,7 +185,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTgz,
-				InputFormat:     "prefix@0111-suffix",
+				InputFormat:     newInputFormat("prefix@0111-suffix"),
 				OutputFormat:    "prefix-@000111-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -195,7 +193,6 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.InputFormat.Type).To(Equal(templAt))
 			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix",
 				Ranges: []cos.TemplateRange{{
@@ -223,7 +220,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           archive.ExtTar,
-				InputFormat:         "prefix-{0010..0111}-suffix",
+				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
 				CreateConcMaxLimit:  0,
@@ -246,7 +243,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           archive.ExtTar,
-				InputFormat:         "prefix-{0010..0111}-suffix",
+				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
 				CreateConcMaxLimit:  0,
@@ -275,7 +272,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:          cmn.Bck{Name: "test"},
 				Extension:    archive.ExtTar,
-				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat: "prefix-{10..111}-suffix",
 				MaxMemUsage:  "80%",
 			}
@@ -285,7 +282,7 @@ var _ = Describe("RequestSpec", func() {
 			rs = RequestSpec{
 				Bck:          cmn.Bck{Name: "test"},
 				Extension:    archive.ExtTar,
-				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat: "prefix-@111-suffix",
 				MaxMemUsage:  "80%",
 			}
@@ -334,13 +331,14 @@ var _ = Describe("RequestSpec", func() {
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
 				OutputShardSize: "10KB",
-				InputFormat:     "prefix-{0112..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0112..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidInputTemplate))
+			contains := strings.Contains(err.Error(), "start")
+			Expect(contains).To(BeTrue())
 		})
 
 		It("should fail due to start after end in output format", func() {
@@ -348,13 +346,14 @@ var _ = Describe("RequestSpec", func() {
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
 				OutputShardSize: "10KB",
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0112..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidOutputTemplate))
+			contains := strings.Contains(err.Error(), "start")
+			Expect(contains).To(BeTrue())
 		})
 
 		It("should fail due invalid parentheses", func() {
@@ -362,20 +361,21 @@ var _ = Describe("RequestSpec", func() {
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
 				OutputShardSize: "10KB",
-				InputFormat:     "prefix-}{0001..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-}{0001..0111}-suffix"),
 				OutputFormat:    "prefix-}{0010..0111}-suffix",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidInputTemplate))
+			contains := strings.Contains(err.Error(), "invalid")
+			Expect(contains).To(BeTrue())
 		})
 
 		It("should fail due to invalid extension", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       ".jpg",
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       SortAlgorithm{Kind: SortKindNone},
@@ -389,7 +389,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80",
@@ -404,7 +404,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "120%",
@@ -419,7 +419,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "-1 GB",
@@ -434,7 +434,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:                 cmn.Bck{Name: "test"},
 				Extension:           archive.ExtTar,
-				InputFormat:         "prefix-{0010..0111}-suffix",
+				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
 				ExtractConcMaxLimit: -1,
@@ -449,7 +449,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:                cmn.Bck{Name: "test"},
 				Extension:          archive.ExtTar,
-				InputFormat:        "prefix-{0010..0111}-suffix",
+				InputFormat:        newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:       "prefix-{0010..0111}-suffix",
 				OutputShardSize:    "10KB",
 				CreateConcMaxLimit: -1,
@@ -464,7 +464,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:             cmn.Bck{Name: "test"},
 				Extension:       archive.ExtTar,
-				InputFormat:     "prefix-{0010..0111..2}-suffix",
+				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
@@ -479,7 +479,7 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Bck:          cmn.Bck{Name: "test"},
 				Extension:    archive.ExtTar,
-				InputFormat:  "prefix-{0010..0111..2}-suffix",
+				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat: "prefix-%06d-suffix",
 				MaxMemUsage:  "80%",
 			}
@@ -488,3 +488,5 @@ var _ = Describe("RequestSpec", func() {
 		})
 	})
 })
+
+func newInputFormat(template string) apc.ListRange { return apc.ListRange{Template: template} }

@@ -43,7 +43,7 @@ The following table describes JSON/YAML keys which can be used in the specificat
 | Key | Type | Description | Required | Default |
 | --- | --- | --- | --- | --- |
 | `extension` | `string` | extension of input and output shards (either `.tar`, `.tgz` or `.zip`) | yes | |
-| `input_format` | `string` | name template for input shard | yes | |
+| `input_format.template` | `string` | name template for input shard | yes | |
 | `output_format` | `string` | name template for output shard | yes | |
 | `bck.name` | `string` | bucket name where shards objects are stored | yes | |
 | `bck.provider` | `string` | bucket backend provider, see [docs](/docs/providers.md) | no | `"ais"` |
@@ -88,7 +88,9 @@ Assuming that `dsort_spec.json` contains:
 {
     "extension": ".tar",
     "bck": {"name": "dsort-testing"},
-    "input_format": "shard-{0..9}",
+    "input_format": {
+	template: "shard-{0..9}"
+    },
     "output_format": "new-shard-{0000..1000}",
     "output_shard_size": "10KB",
     "description": "sort shards from 0 to 9",
@@ -116,7 +118,8 @@ $ ais start dsort -f - <<EOM
 extension: .tar
 bck:
     name: dsort-testing
-input_format: shard-{0..9}
+input_format:
+    template: shard-{0..9}
 output_format: new-shard-{0000..1000}
 output_shard_size: 10KB
 description: shuffle shards from 0 to 9
@@ -189,8 +192,8 @@ You can run:
 ```console
 $ ais start dsort '{
     "extension": ".tar",
-    "bck": {name: "dsort-testing"},
-    "input_format": "shard-{0..9}",
+    "bck": {"name": "dsort-testing"},
+    "input_format": {"template": "shard-{0..9}"},
     "output_shard_size": "200KB",
     "description": "pack records into categorized shards",
     "order_file": "http://website.web/static/order_file.txt",

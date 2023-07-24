@@ -1,10 +1,7 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
@@ -20,17 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
-)
-
-const (
-	templBash = "bash"
-	templAt   = "@"
-)
-
-var (
-	templateExamples         = "(examples: bash format: 'prefix{0001..0010}suffix', at format: 'prefix@00100suffix')"
-	errInvalidInputTemplate  = errors.New("could not parse input template " + templateExamples)
-	errInvalidOutputTemplate = errors.New("could not parse output template " + templateExamples)
 )
 
 var (
@@ -50,20 +36,12 @@ var (
 // supportedExtensions is a list of extensions (archives) supported by dSort
 var supportedExtensions = archive.FileExtensions
 
-// TODO: maybe this struct should be composed of `type` and `template` where
-// template is interface and each template has it's own struct. Then we could
-// reflect the interface and based on it start different traverse function.
 type parsedInputTemplate struct {
 	Type string `json:"type"`
 
-	// Used by 'bash' and 'at' template
 	Template cos.ParsedTemplate `json:"template"`
-
-	// Used by 'regex' template
-	Regex string `json:"regex"`
-
-	// Used by 'file' template
-	File []string `json:"file"`
+	ObjNames []string           `json:"objnames"`
+	Prefix   string             `json:"prefix"`
 }
 
 type parsedOutputTemplate struct {
@@ -74,11 +52,11 @@ type parsedOutputTemplate struct {
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
 type RequestSpec struct {
 	// Required
-	Bck             cmn.Bck `json:"bck" yaml:"bck"`
-	Extension       string  `json:"extension" yaml:"extension"`
-	InputFormat     string  `json:"input_format" yaml:"input_format"`
-	OutputFormat    string  `json:"output_format" yaml:"output_format"`
-	OutputShardSize string  `json:"output_shard_size" yaml:"output_shard_size"`
+	Bck             cmn.Bck       `json:"bck" yaml:"bck"`
+	Extension       string        `json:"extension" yaml:"extension"`
+	InputFormat     apc.ListRange `json:"input_format" yaml:"input_format"`
+	OutputFormat    string        `json:"output_format" yaml:"output_format"`
+	OutputShardSize string        `json:"output_shard_size" yaml:"output_shard_size"`
 
 	// Optional
 	Description string `json:"description" yaml:"description"`
@@ -282,16 +260,15 @@ func validateExtension(ext string) bool {
 
 // parseInputFormat makes sure that the input format is either `at` or `bash`
 // (see cmn/cos/template.go for detaiuls)
-func parseInputFormat(inputFormat string) (pit *parsedInputTemplate, err error) {
+func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err error) {
 	pit = &parsedInputTemplate{}
-	template := strings.TrimSpace(inputFormat)
-	if pit.Template, err = cos.ParseBashTemplate(template); err == nil {
-		pit.Type = templBash
-	} else {
-		if pit.Template, err = cos.ParseAtTemplate(template); err != nil {
-			return nil, errInvalidInputTemplate
-		}
-		pit.Type = templAt
+	if inputFormat.IsList() {
+		pit.ObjNames = inputFormat.ObjNames // TODO -- FIXME niy
+		return
+	}
+	pit.Template, err = cos.NewParsedTemplate(inputFormat.Template)
+	if err == cos.ErrEmptyTemplate {
+		err = nil // TODO -- FIXME empty prefix niy
 	}
 	return
 }
@@ -302,8 +279,9 @@ func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err erro
 	if pot.Template, err = cos.NewParsedTemplate(strings.TrimSpace(outputFormat)); err != nil {
 		return
 	}
-	if len(pot.Template.Ranges) == 0 { // with no parsed ranges, we currently assume that there's only prefix
-		return nil, errInvalidOutputTemplate
+	if len(pot.Template.Ranges) == 0 {
+		return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)",
+			outputFormat)
 	}
 	return
 }

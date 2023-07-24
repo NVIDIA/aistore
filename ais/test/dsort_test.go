@@ -71,7 +71,7 @@ type (
 		inputPrefix  string
 		outputPrefix string
 
-		inputTempl            string
+		inputTempl            apc.ListRange
 		outputTempl           string
 		orderFileURL          string
 		tarballCnt            int
@@ -188,8 +188,8 @@ func runDSortTest(t *testing.T, dts dsortTestSpec, f any) {
 }
 
 func (df *dsortFramework) init() {
-	if df.inputTempl == "" {
-		df.inputTempl = fmt.Sprintf("input-{0..%d}", df.tarballCnt-1)
+	if df.inputTempl.Template == "" {
+		df.inputTempl = apc.ListRange{Template: fmt.Sprintf("input-{0..%d}", df.tarballCnt-1)}
 	}
 	if df.outputTempl == "" {
 		df.outputTempl = "output-{00000..10000}"
@@ -200,7 +200,7 @@ func (df *dsortFramework) init() {
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
-	df.inputPrefix = df.inputTempl[:strings.Index(df.inputTempl, "-")+1]
+	df.inputPrefix = df.inputTempl.Template[:strings.Index(df.inputTempl.Template, "-")+1]
 	df.outputPrefix = df.outputTempl[:strings.Index(df.outputTempl, "-")+1]
 
 	if df.fileInTarballSize == 0 {
@@ -547,7 +547,7 @@ func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 	df := &dsortFramework{
 		m:                m,
 		dsorterType:      dsorterType,
-		inputTempl:       fmt.Sprintf("input%d-{0..999}", i),
+		inputTempl:       apc.ListRange{Template: fmt.Sprintf("input%d-{0..999}", i)},
 		outputTempl:      fmt.Sprintf("output%d-{00000..01000}", i),
 		tarballCnt:       500,
 		fileInTarballCnt: 50,

@@ -6,13 +6,13 @@ ais job start dsort '{extension: .tar' // FAIL "failed to determine the type of 
 ais bucket create ais://$BUCKET_1 // IGNORE
 
 # JSON
-echo '{"extension": ".tar","bck": {name: "$BUCKET_1"},"input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' > /tmp/dsort.json
+echo '{"extension": ".tar","bck": {name: "$BUCKET_1"},"input_format": {"template": "shard-{0..9}"},"output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' > /tmp/dsort.json
 ais job start dsort -f /tmp/dsort.json // IGNORE
 rm -f /tmp/dsort.json
-ais job start dsort '{"extension": ".tar","bck": {name: "$BUCKET_1"},"input_format": "shard-{0..9}","output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' // SAVE_RESULT
+ais job start dsort '{"extension": ".tar","bck": {name: "$BUCKET_1"},"input_format": {"template": "shard-{0..9}"},"output_format": "new-shard-{0000..1000}","output_shard_size": "10KB","description": "sort shards from 0 to 9","algorithm": {"kind": "alphanumeric"},"extended_metrics": true}' // SAVE_RESULT
 ais wait $RESULT
 
 # YAML
-echo -e "extension: .tar\nbck:\n    name: $BUCKET_1\ninput_format: shard-{0..9}\noutput_format: new-shard-{0000..1000}\noutput_shard_size: 10KB\ndescription: sort shards from 0 to 9\nalgorithm:\n    kind: alphanumeric\nextended_metrics: true\n" > /tmp/dsort.yaml
+echo -e "extension: .tar\nbck:\n    name: $BUCKET_1\ninput_format:\n    template: shard-{0..9}\noutput_format: new-shard-{0000..1000}\noutput_shard_size: 10KB\ndescription: sort shards from 0 to 9\nalgorithm:\n    kind: alphanumeric\nextended_metrics: true\n" > /tmp/dsort.yaml
 ais job start dsort -f /tmp/dsort.yaml // IGNORE
 rm -f /tmp/dsort.yaml
