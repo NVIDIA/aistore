@@ -74,7 +74,7 @@ class TestDsortOps(unittest.TestCase):
             "extension": ".tar",
             "bck": {"name": input_bck_name},
             "output_bck": {"name": out_bck_name},
-            "input_format": input_object_prefix + "-{0..1}",
+            "input_format": {"template": input_object_prefix + "-{0..1}"},
             "output_format": "out-shard-{0..9}",
             "output_shard_size": "20MB",
             "description": "Dsort Integration Test",
@@ -86,10 +86,7 @@ class TestDsortOps(unittest.TestCase):
         dsort.start(spec_file)
         return dsort
 
-    @test_cases(
-        ("gnu", tarfile.GNU_FORMAT, 2, 3),
-        # ("pax", tarfile.PAX_FORMAT, 2, 3)
-    )
+    @test_cases(("gnu", tarfile.GNU_FORMAT, 2, 3), ("pax", tarfile.PAX_FORMAT, 2, 3))
     def test_dsort(self, test_case):
         tar_type, tar_format, num_shards, num_files = test_case
         # create bucket for output
