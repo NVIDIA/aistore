@@ -62,7 +62,7 @@ type (
 		Extension    string `msg:"e" json:"e"`
 	}
 
-	// Record represents the metadata corresponding to a single file from an archive file.
+	// Record represents the metadata corresponding to a single file from a shard.
 	Record struct {
 		Key      any    `msg:"k" json:"k"` // Used to determine the sorting order.
 		Name     string `msg:"n" json:"n"` // Name which uniquely identifies record across all shards.
@@ -74,13 +74,17 @@ type (
 
 	// Records abstract array of records. It safe to be used concurrently.
 	Records struct {
-		sync.RWMutex     `msg:"-"`
 		arr              []*Record           `msg:"a"`
 		m                map[string]*Record  `msg:"-"`
 		dups             map[string]struct{} `msg:"-"` // contains duplicate object names, if any
 		totalObjectCount int                 `msg:"-"` // total number of objects in all records (dups are removed so not counted)
+		sync.RWMutex     `msg:"-"`
 	}
 )
+
+////////////
+// Record //
+////////////
 
 // Merges two records into single one. It is required for records to have the
 // same Name. Since records should only differ on objects this is the thing that
@@ -127,6 +131,10 @@ func (r *Record) TotalSize() int64 {
 func (r *Record) MakeUniqueName(obj *RecordObj) string {
 	return r.Name + obj.Extension
 }
+
+/////////////
+// Records //
+/////////////
 
 // NewRecords creates new instance of Records struct and allocates n places for
 // the actual Record's

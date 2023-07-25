@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
@@ -66,7 +67,7 @@ var js = jsoniter.ConfigFastest
 
 func (m *Manager) finish() {
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("[dsort] %s finished", m.ManagerUUID)
+		nlog.Infof("%s: %s finished", m.ctx.t, m.ManagerUUID)
 	}
 	m.lock()
 	m.setInProgressTo(false)
@@ -86,7 +87,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	// Phase 1.
-	nlog.Infof("[dsort] %s started extraction stage", m.ManagerUUID)
+	nlog.Infof("%s: %s started extraction stage", m.ctx.t, m.ManagerUUID)
 	if err := m.extractLocalShards(); err != nil {
 		return err
 	}
@@ -94,12 +95,12 @@ func (m *Manager) start() (err error) {
 	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("[dsort] %s final target in targetOrder => URL: %s, Daemon ID: %s", m.ManagerUUID,
+		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", m.ctx.t, m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
 
 	// Phase 2.
-	nlog.Infof("[dsort] %s started sort stage", m.ManagerUUID)
+	nlog.Infof("%s: %s started sort stage", m.ctx.t, m.ManagerUUID)
 	curTargetIsFinal, err := m.participateInRecordDistribution(targetOrder)
 	if err != nil {
 		return err
@@ -116,12 +117,12 @@ func (m *Manager) start() (err error) {
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
 			if m.config.FastV(4, cos.SmoduleDsort) {
-				nlog.Infof("[dsort] %s estimated output shard size required before gzip compression: %d", m.ManagerUUID, shardSize)
+				nlog.Infof("%s: %s estimated output shard size required before gzip compression: %d", m.ctx.t, m.ManagerUUID, shardSize)
 			}
 		}
 
 		// Phase 3.
-		nlog.Infof("[dsort] %s started distribution shard metadata stage", m.ManagerUUID)
+		nlog.Infof("%s: %s started distribution shard metadata stage", m.ctx.t, m.ManagerUUID)
 		if err := m.distributeShardRecords(shardSize); err != nil {
 			return err
 		}
@@ -140,12 +141,12 @@ func (m *Manager) start() (err error) {
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
-	nlog.Infof("[dsort] %s started creation stage", m.ManagerUUID)
+	nlog.Infof("%s: %s started creation stage", m.ctx.t, m.ManagerUUID)
 	if err := m.dsorter.createShardsLocally(); err != nil {
 		return err
 	}
 
-	nlog.Infof("[dsort] %s finished successfully", m.ManagerUUID)
+	nlog.Infof("%s: %s finished successfully", m.ctx.t, m.ManagerUUID)
 	return nil
 }
 
@@ -156,7 +157,7 @@ func (m *Manager) startDSorter() error {
 		return err
 	}
 
-	nlog.Infof("[dsort] %s starting with dsorter: %q", m.ManagerUUID, m.dsorter.name())
+	nlog.Infof("%s: %s starting with dsorter: %q", m.ctx.t, m.ManagerUUID, m.dsorter.name())
 	return m.dsorter.start()
 }
 
@@ -274,50 +275,77 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 	}
 }
 
-// extractLocalShards iterates through files local to the current target and
-// calls ExtractShard on matching files based on the given ParsedRequestSpec.
 func (m *Manager) extractLocalShards() (err error) {
-	phaseInfo := &m.extractionPhase
+	m.extractionPhase.adjuster.start()
+	m.Metrics.Extraction.begin()
 
-	phaseInfo.adjuster.start()
-	defer phaseInfo.adjuster.stop()
-
-	// Metrics
-	metrics := m.Metrics.Extraction
-	metrics.begin()
-	defer metrics.finish()
-
-	metrics.mu.Lock()
-	metrics.TotalCnt = m.rs.InputFormat.Template.Count()
-	metrics.mu.Unlock()
-
+	// compare with xact/xs/multiobj.go
 	group, ctx := errgroup.WithContext(context.Background())
-	pt := m.rs.InputFormat.Template
-	pt.InitIter()
+	switch {
+	case m.rs.Pit.isRange():
+		err = m.iterRange(ctx, group)
+	case m.rs.Pit.isList():
+		err = m.iterList(ctx, group)
+	default:
+		debug.Assert(m.rs.Pit.isPrefix())
+		debug.Assert(false, "not implemented yet") // TODO -- FIXME
+	}
 
-ExtractAllShards:
+	m.dsorter.postExtraction()
+	m.Metrics.Extraction.finish()
+	m.extractionPhase.adjuster.stop()
+	if err == nil {
+		m.incrementRef(int64(m.recManager.Records.TotalObjectCount()))
+	}
+	return
+}
+
+func (m *Manager) iterRange(ctx context.Context, group *errgroup.Group) error {
+	var (
+		metrics = m.Metrics.Extraction
+		pt      = m.rs.Pit.Template
+	)
+	metrics.mu.Lock()
+	metrics.TotalCnt = pt.Count()
+	metrics.mu.Unlock()
+	pt.InitIter()
+outer:
 	for name, hasNext := pt.Next(); hasNext; name, hasNext = pt.Next() {
 		select {
 		case <-m.listenAborted():
 			group.Wait()
 			return newDSortAbortedError(m.ManagerUUID)
 		case <-ctx.Done():
-			break ExtractAllShards // context was canceled, therefore we have an error
+			break outer // context canceled: we have an error
 		default:
 		}
 
-		phaseInfo.adjuster.acquireGoroutineSema()
+		m.extractionPhase.adjuster.acquireGoroutineSema()
 		group.Go(m.extractShard(name, metrics))
 	}
-	if err := group.Wait(); err != nil {
-		return err
+	return group.Wait()
+}
+
+func (m *Manager) iterList(ctx context.Context, group *errgroup.Group) error {
+	metrics := m.Metrics.Extraction
+	metrics.mu.Lock()
+	metrics.TotalCnt = int64(len(m.rs.Pit.ObjNames))
+	metrics.mu.Unlock()
+outer:
+	for _, name := range m.rs.Pit.ObjNames {
+		select {
+		case <-m.listenAborted():
+			group.Wait()
+			return newDSortAbortedError(m.ManagerUUID)
+		case <-ctx.Done():
+			break outer // context canceled: we have an error
+		default:
+		}
+
+		m.extractionPhase.adjuster.acquireGoroutineSema()
+		group.Go(m.extractShard(name, metrics))
 	}
-
-	// We will no longer reserve any memory
-	m.dsorter.postExtraction()
-
-	m.incrementRef(int64(m.recManager.Records.TotalObjectCount()))
-	return nil
+	return group.Wait()
 }
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
@@ -628,7 +656,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, error) {
 	var (
 		n               = m.recManager.Records.Len()
-		pt              = m.rs.OutputFormat.Template
+		pt              = m.rs.Pot.Template
 		shardCount      = pt.Count()
 		start           int
 		curShardSize    int64
@@ -942,7 +970,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	for err := range errCh {
 		return errors.Errorf("error while sending shards, err: %v", err)
 	}
-	nlog.Infof("[dsort] %s finished sending all shards", m.ManagerUUID)
+	nlog.Infof("%s: %s finished sending all shards", m.ctx.t, m.ManagerUUID)
 	return nil
 }
 

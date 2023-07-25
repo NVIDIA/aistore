@@ -31,28 +31,29 @@ var supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKind
 
 type (
 	alphaByKey struct {
-		*extract.Records
-		decreasing bool
-		formatType string
 		err        error
+		records    *extract.Records
+		formatType string
+		decreasing bool
 	}
 )
 
 // interface guard
 var _ sort.Interface = (*alphaByKey)(nil)
 
+func (s *alphaByKey) Len() int      { return s.records.Len() }
+func (s *alphaByKey) Swap(i, j int) { s.records.Swap(i, j) }
+
 func (s *alphaByKey) Less(i, j int) bool {
 	var (
-		less bool
 		err  error
+		less bool
 	)
-
 	if s.decreasing {
-		less, err = s.Records.Less(j, i, s.formatType)
+		less, err = s.records.Less(j, i, s.formatType)
 	} else {
-		less, err = s.Records.Less(i, j, s.formatType)
+		less, err = s.records.Less(i, j, s.formatType)
 	}
-
 	if err != nil {
 		s.err = err
 	}
@@ -79,7 +80,7 @@ func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
 			r.Swap(i, j)
 		}
 	} else {
-		keys := &alphaByKey{r, algo.Decreasing, algo.FormatType, nil}
+		keys := &alphaByKey{records: r, decreasing: algo.Decreasing, formatType: algo.FormatType, err: nil}
 		sort.Sort(keys)
 
 		if keys.err != nil {

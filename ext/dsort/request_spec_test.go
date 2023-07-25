@@ -46,7 +46,7 @@ var _ = Describe("RequestSpec", func() {
 			Expect(parsed.OutputBck.Provider).To(Equal(apc.AIS))
 			Expect(parsed.Extension).To(Equal(archive.ExtTar))
 
-			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
+			Expect(parsed.Pit.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      10,
@@ -57,7 +57,7 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
+			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      10,
@@ -169,7 +169,7 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
+			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,
@@ -193,7 +193,7 @@ var _ = Describe("RequestSpec", func() {
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.InputFormat.Template).To(Equal(cos.ParsedTemplate{
+			Expect(parsed.Pit.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,
@@ -204,7 +204,7 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputFormat.Template).To(Equal(cos.ParsedTemplate{
+			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,

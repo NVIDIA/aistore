@@ -20,14 +20,12 @@ import (
 )
 
 var (
-	errMissingBucket            = errors.New("missing field 'bucket'")
-	errInvalidExtension         = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
-	errNegOutputShardSize       = errors.New("output shard size must be >= 0")
-	errEmptyOutputShardSize     = errors.New("output shard size must be set (cannot be 0)")
-	errNegativeConcurrencyLimit = errors.New("concurrency max limit must be 0 (limits will be calculated) or > 0")
-
-	errInvalidOrderParam = errors.New("could not parse order format, required URL")
-
+	errMissingBucket             = errors.New("missing field 'bucket'")
+	errInvalidExtension          = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
+	errNegOutputShardSize        = errors.New("output shard size must be >= 0")
+	errEmptyOutputShardSize      = errors.New("output shard size must be set (cannot be 0)")
+	errNegativeConcurrencyLimit  = errors.New("concurrency max limit must be 0 (limits will be calculated) or > 0")
+	errInvalidOrderParam         = errors.New("could not parse order format, required URL")
 	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
 	errInvalidSeed               = errors.New("invalid seed provided, should be int")
 	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in the format: .ext")
@@ -37,8 +35,6 @@ var (
 var supportedExtensions = archive.FileExtensions
 
 type parsedInputTemplate struct {
-	Type string `json:"type"`
-
 	Template cos.ParsedTemplate `json:"template"`
 	ObjNames []string           `json:"objnames"`
 	Prefix   string             `json:"prefix"`
@@ -92,8 +88,8 @@ type ParsedRequestSpec struct {
 	OutputBck           cmn.Bck               `json:"output_bck"`
 	Extension           string                `json:"extension"`
 	OutputShardSize     int64                 `json:"output_shard_size,string"`
-	InputFormat         *parsedInputTemplate  `json:"input_format"`
-	OutputFormat        *parsedOutputTemplate `json:"output_format"`
+	Pit                 *parsedInputTemplate  `json:"pit"`
+	Pot                 *parsedOutputTemplate `json:"pot"`
 	Algorithm           *SortAlgorithm        `json:"algorithm"`
 	OrderFileURL        string                `json:"order_file"`
 	OrderFileSep        string                `json:"order_file_sep"`
@@ -101,7 +97,7 @@ type ParsedRequestSpec struct {
 	TargetOrderSalt     []byte                `json:"target_order_salt"`
 	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
 	CreateConcMaxLimit  int                   `json:"create_concurrency_max_limit"`
-	StreamMultiplier    int                   `json:"stream_multiplier"` // TODO: should be removed
+	StreamMultiplier    int                   `json:"stream_multiplier"` // TODO: remove
 	ExtendedMetrics     bool                  `json:"extended_metrics"`
 
 	// debug
@@ -124,6 +120,10 @@ type SortAlgorithm struct {
 	Extension  string `json:"extension"`
 	FormatType string `json:"format_type"`
 }
+
+/////////////////
+// RequestSpec //
+/////////////////
 
 // Parse returns a non-nil error if a RequestSpec is invalid. When RequestSpec
 // is valid it parses all the fields, sets the values and returns ParsedRequestSpec.
@@ -157,7 +157,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 
 	var err error
-	parsedRS.InputFormat, err = parseInputFormat(rs.InputFormat)
+	parsedRS.Pit, err = parseInputFormat(rs.InputFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -183,10 +183,10 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if empty, valid := validateOrderFileURL(rs.OrderFileURL); !valid {
 		return nil, errInvalidOrderParam
 	} else if empty {
-		if parsedRS.OutputFormat, err = parseOutputFormat(rs.OutputFormat); err != nil {
+		if parsedRS.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
-		if parsedRS.OutputFormat.Template.Count() > math.MaxInt32 {
+		if parsedRS.Pot.Template.Count() > math.MaxInt32 {
 			// If the count is not defined then the output shard size must be set.
 			if parsedRS.OutputShardSize == 0 {
 				return nil, errEmptyOutputShardSize
@@ -258,34 +258,6 @@ func validateExtension(ext string) bool {
 	return cos.StringInSlice(ext, supportedExtensions)
 }
 
-// parseInputFormat makes sure that the input format is either `at` or `bash`
-// (see cmn/cos/template.go for detaiuls)
-func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err error) {
-	pit = &parsedInputTemplate{}
-	if inputFormat.IsList() {
-		pit.ObjNames = inputFormat.ObjNames // TODO -- FIXME niy
-		return
-	}
-	pit.Template, err = cos.NewParsedTemplate(inputFormat.Template)
-	if err == cos.ErrEmptyTemplate {
-		err = nil // TODO -- FIXME empty prefix niy
-	}
-	return
-}
-
-// parseOutputFormat validates the output format
-func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
-	pot = &parsedOutputTemplate{}
-	if pot.Template, err = cos.NewParsedTemplate(strings.TrimSpace(outputFormat)); err != nil {
-		return
-	}
-	if len(pot.Template.Ranges) == 0 {
-		return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)",
-			outputFormat)
-	}
-	return
-}
-
 func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
 	if !cos.StringInSlice(algo.Kind, supportedAlgorithms) {
 		return nil, fmt.Errorf(fmtInvalidAlgorithmKind, supportedAlgorithms)
@@ -325,3 +297,46 @@ func validateOrderFileURL(orderURL string) (empty, valid bool) {
 	_, err := url.ParseRequestURI(orderURL)
 	return false, err == nil
 }
+
+//////////////////////////
+// parsedOutputTemplate //
+//////////////////////////
+
+func parseOutputFormat(outputFormat string) (pot *parsedOutputTemplate, err error) {
+	pot = &parsedOutputTemplate{}
+	if pot.Template, err = cos.NewParsedTemplate(strings.TrimSpace(outputFormat)); err != nil {
+		return
+	}
+	if len(pot.Template.Ranges) == 0 {
+		return nil, fmt.Errorf("invalid output template %q: no ranges (prefix-only output is not supported)",
+			outputFormat)
+	}
+	return
+}
+
+/////////////////////////
+// parsedInputTemplate //
+/////////////////////////
+
+func parseInputFormat(inputFormat apc.ListRange) (pit *parsedInputTemplate, err error) {
+	pit = &parsedInputTemplate{}
+	if inputFormat.IsList() {
+		pit.ObjNames = inputFormat.ObjNames
+		return
+	}
+	pit.Template, err = cos.NewParsedTemplate(inputFormat.Template)
+
+	if err == cos.ErrEmptyTemplate {
+		// empty template => empty prefix (match any)
+		err = nil
+		pit.Prefix = ""
+	} else if err == nil && len(pit.Template.Ranges) == 0 {
+		// prefix only
+		pit.Prefix = pit.Template.Prefix
+	}
+	return
+}
+
+func (pit *parsedInputTemplate) isList() bool   { return len(pit.ObjNames) > 0 }
+func (pit *parsedInputTemplate) isRange() bool  { return len(pit.Template.Ranges) > 0 }
+func (pit *parsedInputTemplate) isPrefix() bool { return !pit.isList() && !pit.isRange() }
