@@ -1097,6 +1097,25 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 		return
 	}
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
+
+	if xargs.Kind == apc.ActRebalance {
+		// disallow aborting rebalance during
+		// critical (meta.SnodeMaint => meta.SnodeMaintPostReb) and (meta.SnodeDecomm => removed) transitions
+		smap := p.owner.smap.get()
+		for _, tsi := range smap.Tmap {
+			if tsi.Flags.IsAnySet(meta.SnodeMaint) && !tsi.Flags.IsAnySet(meta.SnodeMaintPostReb) {
+				p.writeErrf(w, r, "cannot abort %s: putting target %s in maintenance mode - rebalancing cluster...",
+					xargs.String(), tsi.StringEx())
+				return
+			}
+			if tsi.Flags.IsAnySet(meta.SnodeDecomm) {
+				p.writeErrf(w, r, "cannot abort %s: decommissioning target %s - rebalancing cluster...",
+					xargs.String(), tsi.StringEx())
+				return
+			}
+		}
+	}
+
 	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
