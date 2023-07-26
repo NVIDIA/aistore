@@ -5,6 +5,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -91,6 +92,39 @@ func GetNodeClusterMap(bp BaseParams, sid string) (smap *meta.Smap, err error) {
 		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
 	}
 	_, err = reqParams.DoReqAny(&smap)
+	FreeRp(reqParams)
+	return
+}
+
+// - get (smap, bmd, config) *cluster-level* metadata from the spec-ed node
+// - compare with GetClusterMap, GetNodeClusterMap, GetClusterConfig et al.
+// - TODO: etl meta
+func GetNodeMeta(bp BaseParams, sid, what string) (out any, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathReverseDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
+		reqParams.Header = http.Header{apc.HdrNodeID: []string{sid}}
+	}
+	switch what {
+	case apc.WhatSmap:
+		smap := meta.Smap{}
+		_, err = reqParams.DoReqAny(&smap)
+		out = &smap
+	case apc.WhatBMD:
+		bmd := meta.BMD{}
+		_, err = reqParams.DoReqAny(&bmd)
+		out = &bmd
+	case apc.WhatClusterConfig:
+		config := cmn.ClusterConfig{}
+		_, err = reqParams.DoReqAny(&config)
+		out = &config
+	default:
+		err = fmt.Errorf("unknown or unsupported cluster-level metadata type %q", what)
+		return
+	}
 	FreeRp(reqParams)
 	return
 }

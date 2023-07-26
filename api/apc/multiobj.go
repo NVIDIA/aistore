@@ -11,6 +11,8 @@ type (
 		ObjNames []string `json:"objnames"`
 	}
 
+	// TODO: ContinueOnError vs. cmn.SupportedReactions - unify
+
 	// ArchiveMsg contains the parameters (all except the destination bucket)
 	// for archiving mutiple objects as one of the supported archive.FileExtensions types
 	// at the specified (bucket) destination.
@@ -33,7 +35,7 @@ type (
 		ListRange
 		TxnUUID string `json:"-"`
 		TCBMsg
-		ContinueOnError bool `json:"coer"` // ditto
+		ContinueOnError bool `json:"coer"` // ditto; TODO above
 	}
 )
 

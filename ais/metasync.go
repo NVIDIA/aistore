@@ -409,7 +409,7 @@ func (y *metasyncer) jit(pair revsPair) revs {
 		// making exception for BMD (and associated bucket-level transactions) unless:
 		if tag == revsBMDTag {
 			jsgl, sgl := jitRevs.sgl(), revs.sgl()
-			if jitRevs.version() > revs.version()+1 || (sgl.IsNil() && !jsgl.IsNil()) {
+			if sgl.IsNil() && !jsgl.IsNil() {
 				revs = jitRevs
 				skipping = true
 			}

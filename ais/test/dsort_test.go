@@ -619,56 +619,65 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 }
 
 func TestDistributedSort(t *testing.T) {
-	for _, lr := range []string{"list", "range"} {
-		t.Run(lr, func(t *testing.T) {
-			runDSortTest(
-				// Include empty ("") type - in this case type must be selected automatically.
-				t, dsortTestSpec{p: true, types: append(dsorterTypes, "")},
-				func(dsorterType string, t *testing.T) {
-					var (
-						m = &ioContext{
-							t: t,
-						}
-						df = &dsortFramework{
-							m:                m,
-							dsorterType:      dsorterType,
-							tarballCnt:       500,
-							fileInTarballCnt: 100,
-							maxMemUsage:      "99%",
-						}
-					)
-					if testing.Short() {
-						df.tarballCnt /= 10
-					}
-
-					// Initialize ioContext
-					m.initWithCleanupAndSaveState()
-					m.expectTargets(1)
-
-					// Create ais bucket
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
-
-					df.init()
-					df.createInputShards()
-
-					if lr == "list" {
-						df.inputTempl.ObjNames = df.inputShards
-						df.inputTempl.Template = ""
-					}
-
-					tlog.Logln("starting distributed sort ...")
-					df.start()
-
-					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-					tassert.CheckFatal(t, err)
-					tlog.Logln("finished distributed sort")
-
-					df.checkMetrics(false /* expectAbort */)
-					df.checkOutputShards(5)
-				},
-			)
-		})
+	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtZip} {
+		for _, lr := range []string{"list", "range"} {
+			t.Run(ext+"/"+lr, func(t *testing.T) {
+				testDsort(t, ext, lr)
+			})
+		}
 	}
+}
+
+func testDsort(t *testing.T, ext, lr string) {
+	runDSortTest(
+		// Include empty ("") type - in this case type must be selected automatically.
+		t, dsortTestSpec{p: true, types: append(dsorterTypes, "")},
+		func(dsorterType string, t *testing.T) {
+			var (
+				m = &ioContext{
+					t: t,
+				}
+				df = &dsortFramework{
+					m:                m,
+					extension:        ext,
+					dsorterType:      dsorterType,
+					tarballCnt:       500,
+					fileInTarballCnt: 100,
+					maxMemUsage:      "99%",
+				}
+			)
+			if testing.Short() {
+				df.tarballCnt /= 10
+			}
+
+			// Initialize ioContext
+			m.initWithCleanupAndSaveState()
+			m.expectTargets(1)
+
+			// Create ais bucket
+			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+
+			df.init()
+			df.createInputShards()
+
+			if lr == "list" {
+				// iterate list
+				df.inputTempl.ObjNames = df.inputShards
+				df.inputTempl.Template = ""
+				df.missingShards = cmn.AbortReaction // (when shards are explicitly enumerated...)
+			}
+
+			tlog.Logln("starting distributed sort ...")
+			df.start()
+
+			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+			tassert.CheckFatal(t, err)
+			tlog.Logln("finished distributed sort")
+
+			df.checkMetrics(false /* expectAbort */)
+			df.checkOutputShards(5)
+		},
+	)
 }
 
 func TestDistributedSortNonExistingBuckets(t *testing.T) {

@@ -468,7 +468,7 @@ type (
 
 	DSortConf struct {
 		DuplicatedRecords   string       `json:"duplicated_records"`
-		MissingShards       string       `json:"missing_shards"`
+		MissingShards       string       `json:"missing_shards"` // cmn.SupportedReactions enum
 		EKMMalformedLine    string       `json:"ekm_malformed_line"`
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`

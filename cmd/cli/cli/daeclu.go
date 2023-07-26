@@ -7,57 +7,13 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
-	"text/tabwriter"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
-
-func getBMD(c *cli.Context) error {
-	usejs := flagIsSet(c, jsonFlag)
-	bmd, err := api.GetBMD(apiBP)
-	if err != nil {
-		return V(err)
-	}
-	if usejs {
-		return teb.Print(bmd, "", teb.Jopts(usejs))
-	}
-
-	tw := &tabwriter.Writer{}
-	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
-	if !flagIsSet(c, noHeaderFlag) {
-		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC(D/P, minsize)\tCREATED")
-	}
-	for provider, namespaces := range bmd.Providers {
-		for nsUname, buckets := range namespaces {
-			ns := cmn.ParseNsUname(nsUname)
-			for bucket, props := range buckets {
-				var copies, ec string
-				if props.Mirror.Enabled {
-					copies = strconv.Itoa(int(props.Mirror.Copies))
-				}
-				if props.EC.Enabled {
-					ec = fmt.Sprintf("%d/%d, %s", props.EC.DataSlices,
-						props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					provider, ns, bucket, props.BackendBck, copies, ec,
-					cos.FormatNanoTime(props.Created, ""))
-			}
-		}
-	}
-	tw.Flush()
-	fmt.Fprintln(c.App.Writer)
-	fmt.Fprintf(c.App.Writer, "Version:\t%d\n", bmd.Version)
-	fmt.Fprintf(c.App.Writer, "UUID:\t\t%s\n", bmd.UUID)
-	return nil
-}
 
 func cluDaeStatus(c *cli.Context, smap *meta.Smap, tstatusMap, pstatusMap teb.StstMap,
 	cfg *cmn.ClusterConfig, sid string) error {

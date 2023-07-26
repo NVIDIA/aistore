@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
@@ -70,9 +71,10 @@ var (
 			longRunFlags,
 			jsonFlag,
 		),
-		cmdBMD: {
+		cmdBMD: append(
+			longRunFlags,
 			jsonFlag,
-		},
+		),
 		cmdBucket: {
 			jsonFlag,
 			compactPropFlag,
@@ -548,6 +550,7 @@ func showSmapHandler(c *cli.Context) error {
 	var (
 		sid              string
 		node, sname, err = arg0Node(c)
+		smap             *meta.Smap
 	)
 	if err != nil {
 		return err
@@ -556,18 +559,88 @@ func showSmapHandler(c *cli.Context) error {
 	setLongRunParams(c)
 
 	if node != nil {
+		var out any
 		sid = node.ID()
 		actionCptn(c, "Cluster map from: ", sname)
+		out, err = api.GetNodeMeta(apiBP, sid, apc.WhatSmap)
+		if err == nil {
+			smap = out.(*meta.Smap)
+		}
+	} else {
+		smap, err = getClusterMap(c)
 	}
-	smap, err := getClusterMap(c)
 	if err != nil {
 		return err // cannot happen
 	}
 	return smapFromNode(smap, sid, flagIsSet(c, jsonFlag))
 }
 
-func showBMDHandler(c *cli.Context) (err error) {
-	return getBMD(c)
+func showBMDHandler(c *cli.Context) error {
+	var (
+		bmd              *meta.BMD
+		sid              string
+		node, sname, err = arg0Node(c)
+	)
+	if err != nil {
+		return err
+	}
+
+	setLongRunParams(c)
+
+	if node != nil {
+		var out any
+		sid = node.ID()
+		actionCptn(c, "BMD from: ", sname)
+		out, err = api.GetNodeMeta(apiBP, sid, apc.WhatBMD)
+		if err == nil {
+			bmd = out.(*meta.BMD)
+		}
+	} else {
+		bmd, err = api.GetBMD(apiBP)
+	}
+	if err != nil {
+		return V(err)
+	}
+
+	if bmd.IsEmpty() {
+		msg := fmt.Sprintf("%s is empty - no buckets", bmd)
+		actionDone(c, msg)
+		return nil
+	}
+
+	usejs := flagIsSet(c, jsonFlag)
+	if usejs {
+		return teb.Print(bmd, "", teb.Jopts(usejs))
+	}
+
+	tw := &tabwriter.Writer{}
+	tw.Init(c.App.Writer, 0, 8, 2, ' ', 0)
+	if !flagIsSet(c, noHeaderFlag) {
+		fmt.Fprintln(tw, "PROVIDER\tNAMESPACE\tNAME\tBACKEND\tCOPIES\tEC(D/P, minsize)\tCREATED")
+	}
+	for provider, namespaces := range bmd.Providers {
+		for nsUname, buckets := range namespaces {
+			ns := cmn.ParseNsUname(nsUname)
+			for bucket, props := range buckets {
+				var copies, ec string
+				if props.Mirror.Enabled {
+					copies = strconv.Itoa(int(props.Mirror.Copies))
+				}
+				if props.EC.Enabled {
+					ec = fmt.Sprintf("%d/%d, %s", props.EC.DataSlices,
+						props.EC.ParitySlices, cos.ToSizeIEC(props.EC.ObjSizeLimit, 0))
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					provider, ns, bucket, props.BackendBck, copies, ec,
+					cos.FormatNanoTime(props.Created, ""))
+			}
+		}
+	}
+	tw.Flush()
+	fmt.Fprintln(c.App.Writer)
+	fmt.Fprintf(c.App.Writer, "Version:\t%d\n", bmd.Version)
+	fmt.Fprintf(c.App.Writer, "UUID:\t\t%s\n", bmd.UUID)
+	return nil
 }
 
 func showClusterConfigHandler(c *cli.Context) (err error) {

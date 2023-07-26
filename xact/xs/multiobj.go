@@ -49,8 +49,7 @@ type (
 		IsAborted() bool
 		Finished() bool
 	}
-	// common mult-obj operation context
-	// common iterList()/iterRangeOrPref() logic
+	// common multi-obj operation context and iterList()/iterRangeOrPref() logic
 	lriterator struct {
 		xctn lrxact
 		t    cluster.Target
@@ -151,6 +150,7 @@ func (r *lriterator) iterRange(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi)
 	return nil
 }
 
+// compare with ais/plstcx.go (TODO: unify)
 func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) error {
 	if err := cmn.ValidatePrefix(prefix); err != nil {
 		return err
@@ -175,7 +175,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		}
 		if bremote {
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			_, err = r.t.Backend(bck).ListObjects(bck, msg, lst)
+			_, err = r.t.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 			}
