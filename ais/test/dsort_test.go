@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/sys"
@@ -82,6 +83,8 @@ type (
 		outputShardCnt        int
 		recordDuplicationsCnt int
 		recordExts            []string
+
+		inputShards []string
 
 		tarFormat       tar.Format
 		extension       string
@@ -269,7 +272,10 @@ func (df *dsortFramework) createInputShards() {
 	var (
 		wg    = cos.NewLimitedWaitGroup(40, 0)
 		errCh = make(chan error, df.tarballCnt)
+
+		mu = &sync.Mutex{} // to collect inputShards (obj names)
 	)
+	debug.Assert(len(df.inputShards) == 0)
 
 	tlog.Logf("creating %d shards...\n", df.tarballCnt)
 	for i := df.tarballCntToSkip; i < df.tarballCnt; i++ {
@@ -288,23 +294,30 @@ func (df *dsortFramework) createInputShards() {
 				tarName = path + df.extension
 			}
 			if df.algorithm.Kind == dsort.SortKindContent {
-				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
+				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt,
+					df.fileInTarballSize, df.algorithm.FormatType, df.algorithm.Extension, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
-				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, df.recordExts, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt,
+					df.fileInTarballSize, duplication, df.recordExts, nil)
 			} else if df.extension == archive.ExtTarGz || df.extension == archive.ExtZip || df.extension == archive.ExtTarLz4 {
-				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt, df.fileInTarballSize, duplication, nil, nil)
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.fileInTarballCnt,
+					df.fileInTarballSize, duplication, nil, nil)
 			} else {
 				df.m.t.Fail()
 			}
 			tassert.CheckFatal(df.m.t, err)
 
-			fqn := path + df.extension
-			defer os.Remove(fqn)
-
-			reader, err := readers.NewFileReaderFromFile(fqn, cos.ChecksumNone)
+			reader, err := readers.NewFileReaderFromFile(tarName, cos.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
-			tools.Put(df.m.proxyURL, df.m.bck, filepath.Base(fqn), reader, errCh)
+			objName := filepath.Base(tarName)
+			tools.Put(df.m.proxyURL, df.m.bck, objName, reader, errCh)
+
+			mu.Lock()
+			df.inputShards = append(df.inputShards, objName)
+			mu.Unlock()
+
+			os.Remove(tarName)
 		}(i)
 	}
 	wg.Wait()
@@ -312,7 +325,7 @@ func (df *dsortFramework) createInputShards() {
 	for err := range errCh {
 		tassert.CheckFatal(df.m.t, err)
 	}
-	tlog.Logln("done creating tarballs")
+	tlog.Logln("done creating shards")
 }
 
 func (df *dsortFramework) checkOutputShards(zeros int) {
@@ -352,9 +365,11 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
 				if file.Ext == df.algorithm.Extension {
-					if strings.TrimSuffix(file.Name, filepath.Ext(file.Name)) != strings.TrimSuffix(lastName, filepath.Ext(lastName)) {
+					if strings.TrimSuffix(file.Name, filepath.Ext(file.Name)) !=
+						strings.TrimSuffix(lastName, filepath.Ext(lastName)) {
 						// custom files should be AFTER the regular files
-						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)", shardName, lastName, file.Name)
+						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)",
+							shardName, lastName, file.Name)
 					}
 
 					switch df.algorithm.FormatType {
@@ -395,7 +410,8 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			for _, file := range files {
 				if df.algorithm.Kind == "" || df.algorithm.Kind == dsort.SortKindAlphanumeric {
 					if lastName > file.Name() && canonicalName(lastName) != canonicalName(file.Name()) {
-						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)", shardName, lastName, file.Name())
+						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)",
+							shardName, lastName, file.Name())
 					}
 				} else if df.algorithm.Kind == dsort.SortKindShuffle {
 					if lastName > file.Name() {
@@ -603,46 +619,56 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 }
 
 func TestDistributedSort(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	for _, lr := range []string{"list", "range"} {
+		t.Run(lr, func(t *testing.T) {
+			runDSortTest(
+				// Include empty ("") type - in this case type must be selected automatically.
+				t, dsortTestSpec{p: true, types: append(dsorterTypes, "")},
+				func(dsorterType string, t *testing.T) {
+					var (
+						m = &ioContext{
+							t: t,
+						}
+						df = &dsortFramework{
+							m:                m,
+							dsorterType:      dsorterType,
+							tarballCnt:       500,
+							fileInTarballCnt: 100,
+							maxMemUsage:      "99%",
+						}
+					)
+					if testing.Short() {
+						df.tarballCnt /= 10
+					}
 
-	runDSortTest(
-		// Include empty ("") type - in this case type must be selected automatically.
-		t, dsortTestSpec{p: true, types: append(dsorterTypes, "")},
-		func(dsorterType string, t *testing.T) {
-			var (
-				m = &ioContext{
-					t: t,
-				}
-				df = &dsortFramework{
-					m:                m,
-					dsorterType:      dsorterType,
-					tarballCnt:       500,
-					fileInTarballCnt: 100,
-					maxMemUsage:      "99%",
-				}
+					// Initialize ioContext
+					m.initWithCleanupAndSaveState()
+					m.expectTargets(1)
+
+					// Create ais bucket
+					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+
+					df.init()
+					df.createInputShards()
+
+					if lr == "list" {
+						df.inputTempl.ObjNames = df.inputShards
+						df.inputTempl.Template = ""
+					}
+
+					tlog.Logln("starting distributed sort ...")
+					df.start()
+
+					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
+					tlog.Logln("finished distributed sort")
+
+					df.checkMetrics(false /* expectAbort */)
+					df.checkOutputShards(5)
+				},
 			)
-
-			// Initialize ioContext
-			m.initWithCleanupAndSaveState()
-			m.expectTargets(1)
-
-			// Create ais bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
-
-			df.init()
-			df.createInputShards()
-
-			tlog.Logln("starting distributed sort...")
-			df.start()
-
-			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckFatal(t, err)
-			tlog.Logln("finished distributed sort")
-
-			df.checkMetrics(false /* expectAbort */)
-			df.checkOutputShards(5)
-		},
-	)
+		})
+	}
 }
 
 func TestDistributedSortNonExistingBuckets(t *testing.T) {

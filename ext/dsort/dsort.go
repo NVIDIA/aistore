@@ -171,7 +171,11 @@ func (m *Manager) extractShard(name string, metrics *LocalExtraction) func() err
 
 		defer phaseInfo.adjuster.releaseGoroutineSema()
 
-		shardName := name + m.rs.Extension
+		shardName := name
+		if !strings.HasSuffix(name, m.rs.Extension) {
+			shardName = name + m.rs.Extension
+		}
+
 		lom := cluster.AllocLOM(shardName)
 		defer cluster.FreeLOM(lom)
 		if err := lom.InitBck(&m.rs.Bck); err != nil {
