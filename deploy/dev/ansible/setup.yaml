@@ -1,0 +1,26 @@
+- name: Setup all hosts
+  hosts: all
+  gather_facts: no
+  become: yes
+  vars_files:
+    - "vars.yaml"
+
+  tasks:
+    - name: Create and mount storage paths
+      ansible.builtin.script: setup_storage.sh {{ directory }} {{ devices }} {{ mountpaths }}
+
+    - name: Clone AIS git repo
+      ansible.builtin.git:
+        repo: https://github.com/NVIDIA/aistore.git
+        dest: "{{ source_root }}"
+
+    - name: Make git repo "safe"
+      community.general.git_config:
+        name: safe.directory
+        value: '*'
+
+    - name: Copy deploy script
+      copy:
+        src: "{{ playbook_dir }}/deploy.sh"
+        dest: "{{ remote_deploy_script }}"
+        mode: 0777

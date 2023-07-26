@@ -1,0 +1,10 @@
+- name: Deploy targets
+  hosts: target
+  gather_facts: no
+  become: yes
+  vars_files:
+    - "vars.yaml"
+
+  tasks:
+    - name: Start a deploy with 1 target and no proxy
+      shell: "nohup {{ remote_deploy_script }} {{ source_root }} {{ directory }} {{ mountpaths }} {{ primary_host }} 0 {{ ais_port }} > {{ deploy_log }} 2>&1 &"

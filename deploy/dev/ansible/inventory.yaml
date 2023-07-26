@@ -1,0 +1,20 @@
+primary: 
+  hosts:
+    aistorecpu1010:
+      ansible_host: 10.150.56.227
+      devices: /dev/sda,/dev/sdb,/dev/sdc,/dev/sdd,/dev/sde,/dev/sdf,/dev/sdg,/dev/sdh,/dev/sdi,/dev/sdj
+      mountpaths: sda,sdb,sdc,sdd,sde,sdf,sdg,sdh,sdi,sdj
+      directory: /ais/storage
+target:
+  hosts:
+    aistorecpu1011:
+      ansible_host: 10.150.56.230
+      devices: /dev/sda,/dev/sdb,/dev/sdc,/dev/sdd,/dev/sde,/dev/sdf,/dev/sdg,/dev/sdh,/dev/sdi,/dev/sdj
+      mountpaths: sda,sdb,sdc,sdd,sde,sdf,sdg,sdh,sdi,sdj
+      directory: /ais/storage
+    aistorecpu1012:
+      ansible_host: 10.150.56.225
+      devices: /dev/sda,/dev/sdb,/dev/sdc,/dev/sdd,/dev/sde,/dev/sdf,/dev/sdg,/dev/sdh,/dev/sdi,/dev/sdj
+      mountpaths: sda,sdb,sdc,sdd,sde,sdf,sdg,sdh,sdi,sdj
+      directory: /ais/storage
+

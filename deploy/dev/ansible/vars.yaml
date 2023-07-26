@@ -1,0 +1,10 @@
+# Location for cloning the aistore repo
+source_root: /github/aistore
+# Primary proxy host
+primary_host: 10.150.56.227
+# Primary proxy port
+ais_port: 51080
+# Output logs for deploy on each host
+deploy_log: /root/aisdeploy.log
+# Location of deployment script copied to each host
+remote_deploy_script: /root/deploy.sh
