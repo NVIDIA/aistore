@@ -102,7 +102,7 @@ func Test_Bundle(t *testing.T) {
 func testBundle(t *testing.T, nvs cos.StrKVs) {
 	var (
 		numCompleted atomic.Int64
-		mmsa, _      = memsys.NewMMSA("bundle")
+		mmsa, _      = memsys.NewMMSA("bundle.test", false)
 		network      = cmn.NetIntraData
 		trname       = "bundle" + nvs["block"]
 		tss          = make([]*httptest.Server, 0, 32)

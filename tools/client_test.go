@@ -183,7 +183,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		mmsa, _ := memsys.NewMMSA("dev-tools")
+		mmsa, _ := memsys.NewMMSA("dev-tools", false)
 		sgl := mmsa.NewSGL(cos.MiB)
 		defer func() {
 			mmsa.Terminate(false)

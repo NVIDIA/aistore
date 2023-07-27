@@ -75,6 +75,7 @@ var (
 		"start": "job start",
 		"stop":  "job stop",
 		"wait":  "job wait",
+		// "dsort": "job start dsort", TODO
 	}
 )
 

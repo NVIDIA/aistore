@@ -29,6 +29,30 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	dsortExampleJ = `$ ais start dsort '{
+			"extension": ".tar",
+			"bck": {"name": "dsort-testing"},
+			"input_format": {"template": "shard-{0..9}"},
+			"output_shard_size": "200KB",
+			"description": "pack records into categorized shards",
+			"order_file": "http://website.web/static/order_file.txt",
+			"order_file_sep": " "
+		}'`
+	dsortExampleY = `$ ais start dsort -f - <<EOM
+			extension: .tar
+			bck:
+			    name: dsort-testing
+			input_format:
+			    template: shard-{0..9}
+			output_format: new-shard-{0000..1000}
+			output_shard_size: 10KB
+			description: shuffle shards from 0 to 9
+			algorithm:
+			    kind: shuffle
+			EOM`
+)
+
 // top-level job command
 var (
 	jobCmd = cli.Command{
@@ -108,9 +132,14 @@ var (
 				Action:    startDownloadHandler,
 			},
 			{
-				Name:      cmdDsort,
-				Usage:     "start " + dsort.DSortName + " job",
-				ArgsUsage: jsonSpecArgument,
+				Name: cmdDsort,
+				Usage: "start " + dsort.DSortName + " job\n" +
+					indent4 + "e.g. inline JSON spec:\n" +
+					indent4 + "\t  " + dsortExampleJ + "\n" +
+					indent4 + "e.g. inline YAML spec:\n" +
+					indent4 + "\t  " + dsortExampleY + "\n" +
+					indent1 + "See also: docs/cli/dsort* and ais/test/scripts/dsort*",
+				ArgsUsage: jsonYamlSpecArgument,
 				Flags:     startSpecialFlags[cmdDsort],
 				Action:    startDsortHandler,
 			},
@@ -611,13 +640,16 @@ func startDsortHandler(c *cli.Context) (err error) {
 		specPath = parseStrFlag(c, dsortSpecFlag)
 	)
 	if c.NArg() == 0 && specPath == "" {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	} else if c.NArg() > 0 && specPath != "" {
+		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
+			c.Command.ArgsUsage, qflprn(cli.HelpFlag))
+	}
+	if c.NArg() > 0 && specPath != "" {
 		return &errUsage{
-			context:      c,
-			message:      "multiple job specifications provided, expected one",
+			context: c,
+			message: fmt.Sprintf("multiple job specifications (%q, %q) provided",
+				specPath, c.Args().Get(0)),
 			helpData:     c.Command,
-			helpTemplate: cli.CommandHelpTemplate,
+			helpTemplate: "",
 		}
 	}
 

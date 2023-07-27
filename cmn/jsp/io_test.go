@@ -192,7 +192,7 @@ func BenchmarkDecode(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(bench.name, func(b *testing.B) {
-			mmsa, _ := memsys.NewMMSA("jsp")
+			mmsa, _ := memsys.NewMMSA("jsp.test", false)
 			defer mmsa.Terminate(false)
 			sgl := mmsa.NewSGL(cos.MiB)
 

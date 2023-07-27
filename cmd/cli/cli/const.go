@@ -238,7 +238,7 @@ const (
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
 	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
-	jsonSpecArgument      = "JSON_SPECIFICATION"
+	jsonYamlSpecArgument  = "JSON_or_YAML_SPECIFICATION"
 
 	// Buckets
 	bucketArgument         = "BUCKET"
@@ -501,8 +501,9 @@ var (
 		Usage: "perform checks (correctness of placement, number of copies, and more) and show the corresponding error counts",
 	}
 	bckSummaryFlag = cli.BoolFlag{
-		Name:  "summary",
-		Usage: "show object numbers, bucket sizes, and used capacity; applies _only_ to buckets and objects that are _present_ in the cluster",
+		Name: "summary",
+		Usage: "show object numbers, bucket sizes, and used capacity;\n" +
+			indent4 + "\tnote: applies only to buckets and objects that are _present_ in the cluster",
 	}
 	pagedFlag = cli.BoolFlag{
 		Name:  "paged",
@@ -566,9 +567,9 @@ var (
 
 	// dSort
 	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
-	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "path to file where the metrics will be saved"}
+	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "filename to log metrics (statistics)"}
 	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
-	dsortSpecFlag   = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to file with dSort specification"}
+	dsortSpecFlag   = cli.StringFlag{Name: "file,f", Value: "", Usage: "path to JSON or YAML job specification"}
 
 	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",

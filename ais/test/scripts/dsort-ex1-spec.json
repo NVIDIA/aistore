@@ -1,0 +1,19 @@
+{
+  "extension": ".tar",
+  "bck": {
+    "name": "src"
+  },
+  "output_bck": {
+    "name": "dst"
+  },
+  "input_format": {
+    "template": "shard-{0..9}"
+  },
+  "output_format": "new-shard-{0000..1000}",
+  "output_shard_size": "10KB",
+  "description": "sort shards alphanumerically",
+  "algorithm": {
+    "kind": "alphanumeric"
+  },
+  "extended_metrics": true
+}

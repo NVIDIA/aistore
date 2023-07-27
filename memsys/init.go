@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 )
 
@@ -50,6 +51,7 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	}
 
 	gmm.Init(0)
+	nlog.InfoDepth(1, gmm.Str(&gmm.mem), " started")
 
 	// byte mmsa:
 	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize, slabIncStep: SmallSlabIncStep}
@@ -61,9 +63,19 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	verbose = config.FastV(5, cos.SmoduleMemsys)
 }
 
-func NewMMSA(name string) (mem *MMSA, err error) {
-	mem = &MMSA{Name: name + ".test.pmm", defBufSize: DefaultBufSize, slabIncStep: PageSlabIncStep, MinFree: minMemFreeTests}
+func NewMMSA(name string, silent bool) (mem *MMSA, err error) {
+	mem = &MMSA{defBufSize: DefaultBufSize, slabIncStep: PageSlabIncStep, MinFree: minMemFreeTests}
+	if gmm == nil {
+		// (alt) gmm via alternative init path - prevent once.do below
+		mem.Name = name + ".gmm"
+		gmm = mem
+	} else {
+		mem.Name = name + ".pmm" // additional
+	}
 	err = mem.Init(0)
+	if !silent {
+		cos.Infof("%s", mem.Str(&mem.mem))
+	}
 	return
 }
 
@@ -71,7 +83,8 @@ func NewMMSA(name string) (mem *MMSA, err error) {
 func PageMM() *MMSA {
 	gmmOnce.Do(func() {
 		if gmm == nil {
-			// tests only
+			// tests calling PageMM without prior explicit NewMMSA()
+			// (tests only)
 			gmm = &MMSA{
 				Name:        "test.pmm",
 				defBufSize:  DefaultBufSize,
@@ -206,10 +219,6 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		slab.pMinDepth = &r.optDepth
 		r.rings[i] = slab
 		r.sorted[i] = slab
-	}
-
-	if gmm != nil {
-		cos.Infof("%s started", r.Str(&r.mem))
 	}
 	return
 }
