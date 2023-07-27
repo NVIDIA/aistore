@@ -434,7 +434,7 @@ func genShardsHandler(c *cli.Context) error {
 		return err
 	}
 
-	mm, err := memsys.NewMMSA("cli-gen-shards")
+	mm, err := memsys.NewMMSA("cli-gen-shards", true /*silent*/)
 	if err != nil {
 		debug.AssertNoErr(err) // unlikely
 		return err
