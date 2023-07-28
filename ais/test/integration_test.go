@@ -75,9 +75,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
-	if rebID != "" {
-		tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
-	}
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
 // All of the above PLUS proxy failover/failback sequence in parallel:
@@ -138,7 +136,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}()
 	wg.Wait()
 
-	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, xargs)
 
 	// Step 5.
@@ -224,7 +222,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	// Register target (bring cluster to normal state)
 	rebID := m.stopMaintenance(target)
 	m.waitAndCheckCluState()
-	tools.WaitForRebalanceByID(m.t, m.originalTargetCount, tools.BaseAPIParams(m.proxyURL), rebID)
+	tools.WaitForRebalanceByID(m.t, tools.BaseAPIParams(m.proxyURL), rebID)
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
@@ -273,7 +271,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		args := &apc.ActValRmNode{DaemonID: targets[0].ID()}
-		tlog.Logf("Take %s out of maintenance\n", targets[0].StringEx())
+		tlog.Logf("Take %s out of maintenance mode ...\n", targets[0].StringEx())
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
 	}()
@@ -293,7 +291,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	rebID := m.stopMaintenance(targets[1])
 
 	// wait for rebalance to complete
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	m.waitAndCheckCluState()
 }
@@ -321,7 +319,7 @@ func TestAckRebalance(t *testing.T) {
 
 	// Wait for everything to finish.
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	m.gets()
 
@@ -403,7 +401,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 
 	// wait for the rebalance to finish
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams)
 
 	// wait for the reads to run out
 	wg.Wait()
@@ -448,7 +446,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		tlog.Logf("Take %s out of maintenance\n", target0.StringEx())
+		tlog.Logf("Take %s out of maintenance mode ...\n", target0.StringEx())
 		args := &apc.ActValRmNode{DaemonID: target0.ID()}
 		_, err = api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
@@ -479,9 +477,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	)
 	tassert.CheckFatal(m.t, err)
 
-	tlog.Logf("Wait for rebalance (%q?)...\n", rebID)
 	time.Sleep(sleep)
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	m.gets()
 
@@ -520,7 +517,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	// Wait for everything to finish.
 	wg.Wait()
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	// Main check - try to read all objects.
 	m.gets()
@@ -611,7 +608,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// make sure that the cluster has all targets enabled
 	_, err = tools.WaitForClusterState(
 		m.proxyURL,
-		"join target back",
+		"target joined back",
 		smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
@@ -620,7 +617,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// wait for rebalance to complete
 	baseParams = tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout) // TODO -- FIXME: revise
+	tools.WaitForRebalAndResil(t, baseParams)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -685,7 +682,7 @@ func TestGetDuringResilver(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	tools.WaitForResilvering(t, baseParams, nil)
@@ -723,7 +720,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Wait for everything to finish.
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance.
@@ -788,7 +785,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 	}
 	wg.Wait()
 	m.waitAndCheckCluState()
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams)
 }
 
 func TestMountpathDetachAll(t *testing.T) {
@@ -823,7 +820,7 @@ func TestMountpathDetachAll(t *testing.T) {
 
 	time.Sleep(time.Second)
 	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n", tname)
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	// Check if mountpaths were actually removed
@@ -845,7 +842,7 @@ func TestMountpathDetachAll(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
-	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	tools.WaitForResilvering(t, baseParams, target)
@@ -1048,7 +1045,7 @@ func TestMountpathDisableAll(t *testing.T) {
 		if len(disabled) != 0 {
 			tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n",
 				tname)
-			args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+			args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 			_, _ = api.WaitForXactionIC(baseParams, args)
 
 			tools.WaitForResilvering(t, baseParams, nil)
@@ -1062,7 +1059,7 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	tlog.Logf("Wait for rebalance (triggered by %s leaving the cluster after having lost all mountpaths)\n", tname)
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	// Check if mountpaths were actually disabled
@@ -1090,7 +1087,7 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 	tlog.Logf("Wait for rebalance (when target %s that has previously lost all mountpaths joins back)\n", target.StringEx())
-	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	tools.WaitForResilvering(t, baseParams, target)
@@ -1197,14 +1194,14 @@ func TestAtimeRebalance(t *testing.T) {
 	// make sure that the cluster has all targets enabled
 	_, err = tools.WaitForClusterState(
 		m.proxyURL,
-		"join target back",
+		"target joined back",
 		m.smap.Version,
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
 	tassert.CheckFatal(t, err)
 
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	msg = &apc.LsoMsg{TimeFormat: time.StampNano}
 	msg.AddProps(apc.GetPropsAtime, apc.GetPropsStatus)
@@ -1344,7 +1341,7 @@ func TestAtimePrefetch(t *testing.T) {
 	}
 	xid, err := api.EvictList(baseParams, bck, objs)
 	tassert.CheckFatal(t, err)
-	args := xact.ArgsMsg{ID: xid, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1352,7 +1349,7 @@ func TestAtimePrefetch(t *testing.T) {
 
 	xid, err = api.PrefetchList(baseParams, bck, objs)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1428,7 +1425,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
 // 1. Unregister target
@@ -1472,9 +1469,9 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	// Reregister target 0
 	rebID := m.stopMaintenance(targets[0])
 
-	// Wait for rebalance and do gets
+	// Wait for rebalance and execute GETs
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	m.gets()
 
@@ -1511,10 +1508,10 @@ func TestRenewRebalance(t *testing.T) {
 
 	// Step 4: Re-register target (triggers rebalance)
 	m.stopMaintenance(target)
-	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceStartTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
 	err := api.WaitForXactionNode(baseParams, xargs, xactSnapRunning)
 	tassert.CheckError(t, err)
-	tlog.Logf("automatic rebalance started\n")
+	tlog.Logf("rebalance started\n")
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -1538,7 +1535,7 @@ func TestRenewRebalance(t *testing.T) {
 	}()
 
 	wg.Wait()
-	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckError(t, err)
 
@@ -1784,7 +1781,7 @@ func TestICRebalance(t *testing.T) {
 	rebID, err = api.StartXaction(baseParams, xact.ArgsMsg{Kind: apc.ActRebalance})
 	tassert.CheckFatal(t, err)
 
-	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceStartTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
 	api.WaitForXactionNode(baseParams, xargs, xactSnapRunning)
 
 	tlog.Logf("Killing %s\n", icNode.StringEx())
@@ -1808,7 +1805,7 @@ func TestICRebalance(t *testing.T) {
 	checkSmaps(t, m.proxyURL)
 
 	tlog.Logf("Wait for rebalance: %s\n", rebID)
-	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 
 	m.waitAndCheckCluState()
@@ -1853,7 +1850,7 @@ func TestICDecommission(t *testing.T) {
 		args := &apc.ActValRmNode{DaemonID: tsi.ID()}
 		rebID, err := api.StopMaintenance(baseParams, args)
 		tassert.CheckFatal(t, err)
-		tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -1898,7 +1895,7 @@ func TestSingleResilver(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Wait for specific resilvering x[id]
-	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: id, Kind: apc.ActResilver, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

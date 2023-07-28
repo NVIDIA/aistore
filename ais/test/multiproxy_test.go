@@ -941,7 +941,7 @@ func proxyStress(t *testing.T) {
 	wg.Add(1)
 	go primaryKiller(t, proxyURL, stopChs[workerCnt], proxyURLChs, errChs[workerCnt], &wg)
 
-	timer := time.After(multiProxyTestTimeout)
+	timer := time.After(tools.MultiProxyTestTimeout)
 loop:
 	for {
 		for _, ch := range errChs {
@@ -1629,7 +1629,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				tools.DestroyBucket(t, proxyURL, dstBck)
 				wg.Done()
 			}()
-			xargs := xact.ArgsMsg{ID: xid, Timeout: rebalanceTimeout}
+			xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, xargs)
 			tassert.CheckError(t, err)
 		}(i)

@@ -133,7 +133,7 @@ func TestETLTargetDown(t *testing.T) {
 		tools.RestoreNode(tcmd, false, "target")
 		m.waitAndCheckCluState()
 
-		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 		_, _ = api.WaitForXactionIC(baseParams, args)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)

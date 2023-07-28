@@ -276,7 +276,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 // wait for an xaction (if there's one) and then query all targets for stats
 func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode, m *ioContext) (locObjs, outObjs, inObjs int64) {
 	time.Sleep(4 * time.Second)
-	xargs := xact.ArgsMsg{Kind: apc.ActPromote, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActPromote, Timeout: tools.RebalanceTimeout}
 	xname := fmt.Sprintf("%q", apc.ActPromote)
 	if xid != "" {
 		xargs.ID = xid

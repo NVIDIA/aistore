@@ -35,15 +35,25 @@ const (
 	// 	1. local instance (no docker) 	- works
 	//	2. local docker instance		- works
 	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
-	MockDaemonID       = "MOCK"
-	dsortFinishTimeout = 6 * time.Minute
-
-	waitClusterStartup = 20 * time.Second
+	MockDaemonID = "MOCK"
 )
 
-const evictPrefetchTimeout = 2 * time.Minute
+// times and timeouts
+const (
+	WaitClusterStartup    = 20 * time.Second
+	RebalanceStartTimeout = 10 * time.Second
+	MaxCplaneTimeout      = 10 * time.Second
 
-const xactPollSleep = time.Second
+	CopyBucketTimeout     = 3 * time.Minute
+	MultiProxyTestTimeout = 3 * time.Minute
+
+	DsortFinishTimeout   = 6 * time.Minute
+	RebalanceTimeout     = 2 * time.Minute
+	EvictPrefetchTimeout = 2 * time.Minute
+	BucketCleanupTimeout = time.Minute
+
+	xactPollSleep = time.Second
+)
 
 type Ctx struct {
 	Client *http.Client
@@ -228,7 +238,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	bp := BaseAPIParams(proxyURL)
 	xid, err := api.DeleteList(bp, bck, toDelete)
 	tassert.CheckFatal(t, err)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: time.Minute}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: BucketCleanupTimeout}
 	_, err = api.WaitForXactionIC(bp, args)
 	tassert.CheckFatal(t, err)
 }
@@ -273,7 +283,7 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *meta.Smap) (*meta.
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies.
 // Use `JoinCluster` to attach node back.
 func RemoveNodeUnsafe(proxyURL, sid string) error {
-	return _removeNodeFromSmap(gctx, proxyURL, sid, time.Minute)
+	return _removeNodeFromSmap(gctx, proxyURL, sid, MaxCplaneTimeout)
 }
 
 func WaitForObjectToBeDowloaded(bp api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {
@@ -416,7 +426,7 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 	tlog.Logln("Waiting for distributed sort to finish...")
 
 	bp := BaseAPIParams(proxyURL)
-	deadline := time.Now().Add(dsortFinishTimeout)
+	deadline := time.Now().Add(DsortFinishTimeout)
 	for time.Now().Before(deadline) {
 		allMetrics, err := api.MetricsDSort(bp, managerUUID)
 		if err != nil {
@@ -488,7 +498,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: evictPrefetchTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: EvictPrefetchTimeout}
 	if _, err := api.WaitForXactionIC(bp, args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
@@ -502,9 +512,8 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 // the function ends with fatal.
 func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Duration) {
 	var (
-		timeout = 2 * time.Minute
-		wg      = &sync.WaitGroup{}
-		errCh   = make(chan error, 2)
+		wg    = &sync.WaitGroup{}
+		errCh = make(chan error, 2)
 	)
 	smap, err := api.GetClusterMap(bp)
 	tassert.CheckFatal(t, err)
@@ -518,6 +527,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	}
 
 	_waitReToStart(bp)
+	timeout := RebalanceTimeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
@@ -577,14 +587,16 @@ func _waitResil(t testing.TB, bp api.BaseParams, timeout time.Duration) {
 	tassert.CheckError(t, err)
 }
 
-func WaitForRebalanceByID(t *testing.T, origTargetCnt int, bp api.BaseParams, rebID string, timeouts ...time.Duration) {
-	if origTargetCnt >= 0 && origTargetCnt < 2 {
+func WaitForRebalanceByID(t *testing.T, bp api.BaseParams, rebID string, timeouts ...time.Duration) {
+	if rebID == "" {
 		return
 	}
-	timeout := 2 * time.Minute
+	tassert.Fatalf(t, xact.IsValidRebID(rebID), "invalid reb ID %q", rebID)
+	timeout := RebalanceTimeout
 	if len(timeouts) > 0 {
 		timeout = timeouts[0]
 	}
+	tlog.Logf("Wait for rebalance %s\n", rebID)
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
 	_, err := api.WaitForXactionIC(bp, xargs)
 	tassert.CheckFatal(t, err)
@@ -593,7 +605,7 @@ func WaitForRebalanceByID(t *testing.T, origTargetCnt int, bp api.BaseParams, re
 func _waitReToStart(bp api.BaseParams) {
 	var (
 		kinds   = []string{apc.ActRebalance, apc.ActResilver}
-		timeout = cos.MaxDuration(10*xactPollSleep, 10*time.Second)
+		timeout = cos.MaxDuration(10*xactPollSleep, MaxCplaneTimeout)
 		retries = int(timeout / xactPollSleep)
 		args    = xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true}
 	)
@@ -690,11 +702,11 @@ func waitForStartup(bp api.BaseParams, ts ...testing.TB) (*meta.Smap, error) {
 		if err != nil {
 			if api.HTTPStatus(err) == http.StatusServiceUnavailable {
 				tlog.Logln("Waiting for the cluster to start up...")
-				time.Sleep(waitClusterStartup)
+				time.Sleep(WaitClusterStartup)
 				continue
 			}
 
-			tlog.Logf("Unable to get usable cluster map, err: %v\n", err)
+			tlog.Logf("Unable to get usable cluster map: %v\n", err)
 			if len(ts) > 0 {
 				tassert.CheckFatal(ts[0], err)
 			}

@@ -1425,7 +1425,8 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 			tassert.CheckError(t, err)
 			if len(allMetrics) == m.originalTargetCount {
-				t.Errorf("number of metrics %d is same as number of original targets %d", len(allMetrics), m.originalTargetCount)
+				t.Errorf("number of metrics %d is same as number of original targets %d",
+					len(allMetrics), m.originalTargetCount)
 			}
 
 			for target, metrics := range allMetrics {
@@ -1435,7 +1436,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 			}
 
 			rebID := m.stopMaintenance(target)
-			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, df.baseParams, rebID)
+			tools.WaitForRebalanceByID(t, df.baseParams, rebID)
 		},
 	)
 }

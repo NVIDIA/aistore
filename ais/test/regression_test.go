@@ -333,7 +333,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	if rtd.rename {
 		// Rename bucket fails when rebalance or resilver is running.
 		// Ensure rebalance or resilver isn't running before performing a rename.
-		tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+		tools.WaitForRebalAndResil(t, baseParams)
 
 		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
 		tassert.CheckFatal(t, err)
@@ -356,7 +356,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 }
 
 func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string) {
-	xargs := xact.ArgsMsg{Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xargs)
 	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
@@ -501,9 +501,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		for _, tgt := range removed {
 			rebID = m.stopMaintenance(tgt)
 		}
-		if len(removed) != 0 && rebID != "" {
-			tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
-		}
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -543,7 +541,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	m.stopGets()
 
 	baseParams := tools.BaseAPIParams(m.proxyURL)
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams)
 
 	clusterStats = tools.GetClusterStats(t, m.proxyURL)
 	for targetID, targetStats := range clusterStats.Target {
@@ -696,7 +694,7 @@ func TestLRU(t *testing.T) {
 	xid, err := api.StartXaction(baseParams, xact.ArgsMsg{Kind: apc.ActLRU})
 	tassert.CheckFatal(t, err)
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActLRU, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActLRU, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -743,7 +741,7 @@ func TestPrefetchList(t *testing.T) {
 		t.Error(err)
 	}
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -753,12 +751,12 @@ func TestPrefetchList(t *testing.T) {
 		t.Error(err)
 	}
 
-	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure that all the prefetches occurred.
-	xargs := xact.ArgsMsg{ID: xid, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
@@ -803,7 +801,7 @@ func TestDeleteList(t *testing.T) {
 		xid, err := api.DeleteList(baseParams, b, files)
 		tassert.CheckError(t, err)
 
-		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -859,18 +857,18 @@ func TestPrefetchRange(t *testing.T) {
 	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
 	xid, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	xid, err = api.PrefetchRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
-	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure all done
-	xargs := xact.ArgsMsg{ID: xid, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
@@ -916,7 +914,7 @@ func TestDeleteRange(t *testing.T) {
 		tlog.Logf("Delete in range %s\n", smallrange)
 		xid, err := api.DeleteRange(baseParams, b, smallrange)
 		tassert.CheckError(t, err)
-		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -945,7 +943,7 @@ func TestDeleteRange(t *testing.T) {
 		// 4. Delete the big range of objects
 		xid, err = api.DeleteRange(baseParams, b, bigrange)
 		tassert.CheckError(t, err)
-		args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+		args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 		_, err = api.WaitForXactionIC(baseParams, args)
 		tassert.CheckFatal(t, err)
 
@@ -1022,7 +1020,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", partialRange)
 	xid, err := api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -1054,7 +1052,7 @@ func TestStressDeleteRange(t *testing.T) {
 	tlog.Logf("Deleting objects in range: %s\n", fullRange)
 	xid, err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
-	args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

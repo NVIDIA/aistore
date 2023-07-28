@@ -521,7 +521,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logf("(1) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck)
 			xid, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			tassert.CheckFatal(t, err)
 
@@ -553,7 +553,7 @@ func TestDownloadRemote(t *testing.T) {
 			tlog.Logf("(2) evicting a _list_ of objects from remote bucket %s...\n", test.srcBck)
 			xid, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
-			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 			_, err = api.WaitForXactionIC(baseParams, args)
 			if test.srcBck.Equal(&test.dstBck) {
 				tassert.CheckFatal(t, err)

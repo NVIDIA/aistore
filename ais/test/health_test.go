@@ -25,7 +25,6 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *meta.Snode) {
 	_, err = api.StartMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	targetCount := smapOrig.CountActiveTs()
-	origTargetCnt := targetCount
 	proxyCount := smapOrig.CountActivePs()
 	if si.IsProxy() {
 		proxyCount--
@@ -41,9 +40,7 @@ func unregisteredNodeHealth(t *testing.T, proxyURL string, si *meta.Snode) {
 		_, err = tools.WaitForClusterState(proxyURL, "join node", smapOrig.Version, smapOrig.CountActivePs(),
 			smapOrig.CountActiveTs())
 		tassert.CheckFatal(t, err)
-		if rebID != "" {
-			tools.WaitForRebalanceByID(t, origTargetCnt, baseParams, rebID)
-		}
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
 
 	err = api.Health(tools.BaseAPIParams(si.PubNet.URL))

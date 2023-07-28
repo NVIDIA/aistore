@@ -1759,7 +1759,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		val := &apc.ActValRmNode{DaemonID: removedTarget.ID()}
 		rebID, err := api.StopMaintenance(baseParams, val)
 		tassert.CheckError(t, err)
-		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
 
 	// 3. Read objects
@@ -1848,7 +1848,7 @@ func TestECEmergencyTargetForReplica(t *testing.T) {
 		if rebID == "" {
 			return
 		}
-		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
 
 	hasTarget := func(targets meta.Nodes, target *meta.Snode) bool {
@@ -2127,9 +2127,9 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 	tassert.CheckFatal(t, err)
 	defer func() {
 		rebID, _ := tools.RestoreTarget(t, proxyURL, removedTarget)
-		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
-	tools.WaitForRebalanceByID(t, -1, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	newObjList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
@@ -2206,8 +2206,8 @@ func TestECBucketEncode(t *testing.T) {
 	_, err = api.SetBucketProps(baseParams, m.bck, bckPropsToUpate)
 	tassert.CheckFatal(t, err)
 
-	tlog.Logf("EC encode must start automatically for bucket %s\n", m.bck)
-	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: rebalanceTimeout}
+	tlog.Logf("Wait for EC %s\n", m.bck)
+	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(t, err)
 
@@ -2281,7 +2281,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
+			tools.WaitForRebalanceByID(t, baseParams, rebID)
 		}
 	}()
 
@@ -2319,12 +2319,12 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 	tlog.Logf("Created %d objects in %s, %d objects in %s. Starting rebalance\n",
 		len(resECOld.Entries), bckEC, len(resRegOld.Entries), bckReg)
 
-	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
+	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	rebID, err := api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
 	registered = true
-	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	tlog.Logln("list objects after rebalance")
 	resECNew, err := api.ListObjects(baseParams, bckEC, msg, api.ListArgs{})
@@ -2522,7 +2522,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 			args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 			rebID, err := api.StopMaintenance(baseParams, args)
 			tassert.CheckError(t, err)
-			tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+			tools.WaitForRebalanceByID(t, baseParams, rebID)
 		}
 	}()
 
@@ -2547,7 +2547,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Created %d objects in %s - starting global rebalance...\n", len(resECOld.Entries), bckEC)
 
-	tlog.Logf("Take %s out of maintenance\n", tgtLost.StringEx())
+	tlog.Logf("Take %s out of maintenance mode ...\n", tgtLost.StringEx())
 	args = &apc.ActValRmNode{DaemonID: tgtLost.ID()}
 	_, err = api.StopMaintenance(baseParams, args)
 	tassert.CheckFatal(t, err)
@@ -2580,7 +2580,7 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 
 	err = api.AbortXaction(baseParams, xargs)
 	tassert.CheckError(t, err)
-	tools.WaitForRebalAndResil(t, baseParams, rebalanceTimeout)
+	tools.WaitForRebalAndResil(t, baseParams)
 	tassert.CheckError(t, err)
 
 	tlog.Logf("Put %s in maintenance\n", tgtGone.StringEx())
@@ -2590,13 +2590,13 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 	defer func() {
 		args = &apc.ActValRmNode{DaemonID: tgtGone.ID()}
 		rebID, _ := api.StopMaintenance(baseParams, args)
-		tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID)
+		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	}()
 
 	stopCh.Close()
 
 	tassert.CheckFatal(t, err)
-	tools.WaitForRebalanceByID(t, -1 /*orig target cnt*/, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 	tlog.Logln("Reading objects")
 	for _, obj := range resECOld.Entries {
 		_, err := api.GetObject(baseParams, bckEC, obj.Name, nil)

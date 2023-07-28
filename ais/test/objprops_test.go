@@ -133,7 +133,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 	}
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -252,7 +252,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 		smap.CountActiveTs()+1,
 	)
 	tassert.CheckFatal(t, err)
-	tools.WaitForRebalanceByID(t, origActiveTargetCnt, baseParams, rebID, rebalanceTimeout)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	tlog.Logf("Listing objects...\n")
 	reslist := testListObjects(t, proxyURL, bck, msg)

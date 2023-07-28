@@ -37,12 +37,8 @@ import (
 const rebalanceObjectDistributionTestCoef = 0.3
 
 const (
-	prefixDir             = "filter"
-	largeFileSize         = 4 * cos.MiB
-	copyBucketTimeout     = 3 * time.Minute
-	rebalanceTimeout      = 5 * time.Minute
-	rebalanceStartTimeout = 10 * time.Second
-	multiProxyTestTimeout = 3 * time.Minute
+	prefixDir     = "filter"
+	largeFileSize = 4 * cos.MiB
 
 	workerCnt = 10
 )
@@ -572,7 +568,7 @@ func (m *ioContext) stopGets() {
 func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies int, greaterOk bool) {
 	m.t.Helper()
 	time.Sleep(time.Second)
-	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: rebalanceTimeout}
+	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xargs)
 	tassert.CheckFatal(m.t, err)
 
@@ -673,7 +669,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	}
 	tlog.Logln("Warning: wait for unfinished rebalance(?)")
 	time.Sleep(5 * time.Second)
-	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 	_, _ = api.WaitForXactionIC(baseParams, args)
 	time.Sleep(5 * time.Second)
 	return true
@@ -696,41 +692,20 @@ func (m *ioContext) startMaintenanceNoRebalance() *meta.Snode {
 	return target
 }
 
-func (m *ioContext) stopMaintenance(target *meta.Snode) (rebID string) {
-	const (
-		timeout    = time.Second * 10
-		interval   = time.Millisecond * 10
-		iterations = int(timeout / interval)
-	)
-	var err error
-	tlog.Logf("Take %s out of maintenance...\n", target.StringEx())
-	args := &apc.ActValRmNode{DaemonID: target.ID()}
-	rebID, err = api.StopMaintenance(tools.BaseAPIParams(m.proxyURL), args)
+func (m *ioContext) stopMaintenance(target *meta.Snode) string {
+	tlog.Logf("Take %s out of maintenance mode...\n", target.StringEx())
+	bp := tools.BaseAPIParams(m.proxyURL)
+	rebID, err := api.StopMaintenance(bp, &apc.ActValRmNode{DaemonID: target.ID()})
 	tassert.CheckFatal(m.t, err)
-	baseParams := tools.BaseAPIParams(target.URL(cmn.NetPublic))
-	smap := tools.GetClusterMap(m.t, m.proxyURL)
-	for i := 0; i < iterations; i++ {
-		time.Sleep(interval)
-		if _, ok := smap.Tmap[target.ID()]; !ok {
-			smap = tools.GetClusterMap(m.t, m.proxyURL)
-		} else {
-			query := cmn.QueryBcks(m.bck)
-			baseParams.URL = m.proxyURL
-			proxyBcks, err := api.ListBuckets(baseParams, query, apc.FltExists)
-			tassert.CheckFatal(m.t, err)
-
-			baseParams.URL = target.URL(cmn.NetPublic)
-			targetBcks, err := api.ListBuckets(baseParams, query, apc.FltExists)
-			tassert.CheckFatal(m.t, err)
-			if proxyBcks.Equal(targetBcks) {
-				tlog.Logf("%s got updated with the current BMD\n", target.StringEx())
-				return
-			}
-		}
+	if rebID == "" {
+		return ""
 	}
-	m.t.Fatalf("failed to bring %s out of maintenance: not in the %s and/or did not get updated BMD",
-		target.StringEx(), smap.StringEx())
-	return
+	tassert.Fatalf(m.t, xact.IsValidRebID(rebID), "invalid reb ID %q", rebID)
+
+	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
+	api.WaitForXactionNode(bp, xargs, xactSnapRunning)
+
+	return rebID
 }
 
 func (m *ioContext) setNonDefaultBucketProps() {

@@ -1567,7 +1567,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 
 	wg.Wait()
 	m.waitAndCheckCluState()
-	tools.WaitForRebalanceByID(t, m.originalTargetCount, baseParams, rebID)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 }
 
 func TestBucketSingleProp(t *testing.T) {
@@ -1972,7 +1972,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 	uuid, err := api.RenameBucket(baseParams, srcBck, dstBck)
 	tassert.CheckFatal(t, err)
 
-	args := xact.ArgsMsg{ID: uuid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: uuid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2037,7 +2037,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 
 	tassert.CheckFatal(t, err)
 
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2153,7 +2153,7 @@ func TestRenameBucketTwice(t *testing.T) {
 	}
 
 	// Wait for rename to complete
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2465,11 +2465,11 @@ func TestCopyBucket(t *testing.T) {
 				// TODO -- FIXME: remove/simplify-out this `if` here and elsewhere
 				if test.evictRemoteSrc {
 					// wait for TCO idle (different x-kind)
-					args := xact.ArgsMsg{ID: uuid, Timeout: copyBucketTimeout}
+					args := xact.ArgsMsg{ID: uuid, Timeout: tools.CopyBucketTimeout}
 					err := api.WaitForXactionIdle(baseParams, args)
 					tassert.CheckFatal(t, err)
 				} else {
-					args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: copyBucketTimeout}
+					args := xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyBck, Timeout: tools.CopyBucketTimeout}
 					_, err := api.WaitForXactionIC(baseParams, args)
 					tassert.CheckFatal(t, err)
 				}
@@ -2782,7 +2782,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	// Wait for rename to finish
 	tlog.Logf("Waiting for x-%s[%s] to finish\n", apc.ActMoveBck, xid)
 	time.Sleep(2 * time.Second)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -2870,7 +2870,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 	}
 
 	// Wait for copy to complete
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 

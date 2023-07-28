@@ -351,28 +351,28 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("PrefetchList num=%d\n", len(files))
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("PrefetchRange %s\n", objRange)
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList %v\n", files)
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -402,13 +402,13 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	// Prefetch/Evict should work
 	prefetchListID, err = api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
 	evictListID, err = api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -416,7 +416,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
@@ -424,7 +424,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: rebalanceTimeout}
+	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
