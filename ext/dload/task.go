@@ -127,7 +127,12 @@ func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return false, cmn.NewErrHTTP(req, errors.New("nil error w/ bad status"), resp.StatusCode)
+		if resp.StatusCode == http.StatusNotFound {
+			return false, cmn.NewErrHTTP(req, fmt.Errorf("%q does not exist", task.obj.link), http.StatusNotFound)
+		}
+		return false, cmn.NewErrHTTP(req,
+			fmt.Errorf("failed to download %q: status %d", task.obj.link, resp.StatusCode),
+			resp.StatusCode)
 	}
 
 	r := task.wrapReader(resp.Body)
