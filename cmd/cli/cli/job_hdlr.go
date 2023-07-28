@@ -139,7 +139,7 @@ var (
 					indent4 + "e.g. inline YAML spec:\n" +
 					indent4 + "\t  " + dsortExampleY + "\n" +
 					indent1 + "See also: docs/cli/dsort* and ais/test/scripts/dsort*",
-				ArgsUsage: jsonYamlSpecArgument,
+				ArgsUsage: dsortSpecArgument,
 				Flags:     startSpecialFlags[cmdDsort],
 				Action:    startDsortHandler,
 			},
@@ -636,29 +636,41 @@ func waitDownload(c *cli.Context, id string) (err error) {
 
 func startDsortHandler(c *cli.Context) (err error) {
 	var (
-		id       string
-		specPath = parseStrFlag(c, dsortSpecFlag)
+		id             string
+		specPath       string
+		specBytes      []byte
+		shift          int
+		srcbck, dstbck cmn.Bck
+		rs             dsort.RequestSpec
 	)
+	// parse command line
+	specPath = parseStrFlag(c, dsortSpecFlag)
 	if c.NArg() == 0 && specPath == "" {
 		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
 			c.Command.ArgsUsage, qflprn(cli.HelpFlag))
 	}
-	if c.NArg() > 0 && specPath != "" {
-		return &errUsage{
-			context: c,
-			message: fmt.Sprintf("multiple job specifications (%q, %q) provided",
-				specPath, c.Args().Get(0)),
-			helpData:     c.Command,
-			helpTemplate: "",
+	if specPath == "" {
+		// spec is inline
+		specBytes = []byte(c.Args().Get(0))
+		shift = 1
+	}
+	if c.NArg() > shift {
+		srcbck, err = parseBckURI(c, c.Args().Get(shift), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse source bucket: %v\n(see %s for details)",
+				err, qflprn(cli.HelpFlag))
+		}
+	}
+	if c.NArg() > shift+1 {
+		dstbck, err = parseBckURI(c, c.Args().Get(shift+1), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse destination bucket: %v\n(see %s for details)",
+				err, qflprn(cli.HelpFlag))
 		}
 	}
 
-	var specBytes []byte
-	if specPath == "" {
-		// Specification provided as an argument.
-		specBytes = []byte(c.Args().Get(0))
-	} else {
-		// Specification provided as path to the file (flag).
+	// load spec from file or standard input
+	if specPath != "" {
 		var r io.Reader
 		if specPath == fileStdIO {
 			r = os.Stdin
@@ -672,16 +684,14 @@ func startDsortHandler(c *cli.Context) (err error) {
 		}
 
 		var b bytes.Buffer
-		// Read at most 1MB so we don't blow up when reading a malicious file.
-		if _, err := io.CopyN(&b, r, cos.MiB); err == nil {
+		// Read at most 1MB so we don't blow up when reading don't know what
+		if _, errV := io.CopyN(&b, r, cos.MiB); errV == nil {
 			return errors.New("file too big")
-		} else if err != io.EOF {
-			return err
+		} else if errV != io.EOF {
+			return errV
 		}
 		specBytes = b.Bytes()
 	}
-
-	var rs dsort.RequestSpec
 	if errj := jsoniter.Unmarshal(specBytes, &rs); errj != nil {
 		if erry := yaml.Unmarshal(specBytes, &rs); erry != nil {
 			return fmt.Errorf(
@@ -691,11 +701,18 @@ func startDsortHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if id, err = api.StartDSort(apiBP, rs); err != nil {
-		return
+	// NOTE: command-line SRC_BUCKET and DST_BUCKET override the spec
+	if !srcbck.IsEmpty() {
+		rs.Bck = srcbck
+	}
+	if !dstbck.IsEmpty() {
+		rs.OutputBck = dstbck
 	}
 
-	fmt.Fprintln(c.App.Writer, id)
+	// execute
+	if id, err = api.StartDSort(apiBP, rs); err == nil {
+		fmt.Fprintln(c.App.Writer, id)
+	}
 	return
 }
 

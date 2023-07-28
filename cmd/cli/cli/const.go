@@ -238,7 +238,6 @@ const (
 	// key/value
 	keyValuePairsArgument = "KEY=VALUE [KEY=VALUE...]"
 	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
-	jsonYamlSpecArgument  = "JSON_or_YAML_SPECIFICATION"
 
 	// Buckets
 	bucketArgument         = "BUCKET"
@@ -249,6 +248,8 @@ const (
 	bucketSrcArgument      = "SRC_BUCKET"
 	bucketDstArgument      = "DST_BUCKET"
 	bucketNewArgument      = "NEW_BUCKET"
+
+	dsortSpecArgument = "[JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]"
 
 	// Objects
 	objectArgument          = "BUCKET/OBJECT_NAME"
