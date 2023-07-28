@@ -128,3 +128,31 @@ spec:
           path: /health
           port: default
 """
+
+KERAS_TRANSFORMER = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-compress
+  annotations:
+    communication_type: "{communication_type}://"
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/transformer_keras:latest
+      imagePullPolicy: Always
+      ports:
+        - name: default
+          containerPort: 80
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      env:
+        - name: FORMAT
+          value: "{format}"
+        - name: TRANSFORM
+          value: '{transform}'
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+"""
