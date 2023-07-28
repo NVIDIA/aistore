@@ -459,7 +459,7 @@ func (m *Manager) setExtractCreator() (err error) {
 
 	switch m.rs.Algorithm.Kind {
 	case SortKindContent:
-		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.FormatType, m.rs.Algorithm.Extension)
+		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.ContentKeyType, m.rs.Algorithm.Extension)
 	case SortKindMD5:
 		keyExtractor, err = extract.NewMD5KeyExtractor()
 	default:

@@ -19,14 +19,14 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
 
+// TODO: move and refactor
 var (
 	errMissingBucket             = errors.New("missing field 'bucket'")
-	errInvalidExtension          = errors.New("extension must be one of '.tar', '.tar.gz', or '.tgz'")
+	errInvalidExtension          = errors.New("extension must be one of: '.tar', '.tar.gz' or '.tgz', '.zip', '.tar.lz4'")
 	errNegOutputShardSize        = errors.New("output shard size must be >= 0")
 	errEmptyOutputShardSize      = errors.New("output shard size must be set (cannot be 0)")
 	errNegativeConcurrencyLimit  = errors.New("concurrency max limit must be 0 (limits will be calculated) or > 0")
 	errInvalidOrderParam         = errors.New("could not parse order format, required URL")
-	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
 	errInvalidSeed               = errors.New("invalid seed provided, should be int")
 	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in the format: .ext")
 )
@@ -107,20 +107,6 @@ type ParsedRequestSpec struct {
 	cmn.DSortConf
 }
 
-type SortAlgorithm struct {
-	Kind string `json:"kind"`
-
-	// Kind: alphanumeric, content
-	Decreasing bool `json:"decreasing"`
-
-	// Kind: shuffle
-	Seed string `json:"seed"` // seed provided to random generator
-
-	// Kind: content
-	Extension  string `json:"extension"`
-	FormatType string `json:"format_type"`
-}
-
 /////////////////
 // RequestSpec //
 /////////////////
@@ -177,7 +163,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 
 	parsedRS.Algorithm, err = parseAlgorithm(rs.Algorithm)
 	if err != nil {
-		return nil, errInvalidAlgorithm
+		return nil, err
 	}
 
 	if empty, valid := validateOrderFileURL(rs.OrderFileURL); !valid {
@@ -274,16 +260,14 @@ func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
 		if algo.Extension == "" {
 			return nil, errInvalidAlgorithmExtension
 		}
-
 		if algo.Extension[0] != '.' { // extension should begin with dot: .cls
 			return nil, errInvalidAlgorithmExtension
 		}
-
-		if err := extract.ValidateAlgorithmFormatType(algo.FormatType); err != nil {
+		if err := extract.ValidateContentKeyT(algo.ContentKeyType); err != nil {
 			return nil, err
 		}
 	} else {
-		algo.FormatType = extract.FormatTypeString
+		algo.ContentKeyType = extract.ContentKeyString
 	}
 
 	return &algo, nil

@@ -29,11 +29,30 @@ const (
 
 var supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
 
+type SortAlgorithm struct {
+	// one of the `supportedAlgorithms` (see above)
+	Kind string `json:"kind"`
+
+	// currently, used with two sorting alg-s: SortKindAlphanumeric and SortKindContent
+	Decreasing bool `json:"decreasing"`
+
+	// when sort is a random shuffle
+	Seed string `json:"seed"`
+
+	// exclusively with sorting alg. Kind = "content" (aka SortKindContent)
+	// used to select files that provide sorting keys - see next
+	Extension string `json:"extension"`
+
+	// ditto: SortKindContent only
+	// one of extract.contentKeyTypes, namely: {"int", "string", ... }
+	ContentKeyType string `json:"content_key_type"`
+}
+
 type (
 	alphaByKey struct {
 		err        error
 		records    *extract.Records
-		formatType string
+		keyType    string
 		decreasing bool
 	}
 )
@@ -50,9 +69,9 @@ func (s *alphaByKey) Less(i, j int) bool {
 		less bool
 	)
 	if s.decreasing {
-		less, err = s.records.Less(j, i, s.formatType)
+		less, err = s.records.Less(j, i, s.keyType)
 	} else {
-		less, err = s.records.Less(i, j, s.formatType)
+		less, err = s.records.Less(i, j, s.keyType)
 	}
 	if err != nil {
 		s.err = err
@@ -80,7 +99,7 @@ func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
 			r.Swap(i, j)
 		}
 	} else {
-		keys := &alphaByKey{records: r, decreasing: algo.Decreasing, formatType: algo.FormatType, err: nil}
+		keys := &alphaByKey{records: r, decreasing: algo.Decreasing, keyType: algo.ContentKeyType, err: nil}
 		sort.Sort(keys)
 
 		if keys.err != nil {

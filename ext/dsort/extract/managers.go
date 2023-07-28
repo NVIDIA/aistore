@@ -113,16 +113,16 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		recordUniqueName = rm.genRecordUniqueName(args.shardName, args.recordName)
 	)
 
-	// If the content already exists we should skip it but set error (caller
-	// needs to handle it properly).
+	// If the content already exists we should skip it but set error
+	// (caller must to handle it properly).
 	if rm.Records.Exists(recordUniqueName, ext) {
 		msg := fmt.Sprintf("record %q has been duplicated", args.recordName)
 		rm.Records.DeleteDup(recordUniqueName, ext)
 
 		// NOTE: There is no need to remove anything from `rm.extractionPaths`
-		//  or `rm.contents` since it will be removed anyway in cleanup.
-		//  Assumption is that there will be not much duplicates and we can live
-		//  with a little bit more files/memory.
+		// or `rm.contents` since it'll be removed anyway during subsequent cleanup.
+		// The assumption is that there will be not too many duplicates and we can live
+		// with a few extra files/memory.
 		return 0, rm.onDuplicatedRecords(msg)
 	}
 

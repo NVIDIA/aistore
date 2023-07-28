@@ -222,7 +222,7 @@ func (r *Records) Len() int {
 
 func (r *Records) Swap(i, j int) { r.arr[i], r.arr[j] = r.arr[j], r.arr[i] }
 
-func (r *Records) Less(i, j int, formatType string) (bool, error) {
+func (r *Records) Less(i, j int, keyType string) (bool, error) {
 	lhs, rhs := r.arr[i].Key, r.arr[j].Key
 	if lhs == nil {
 		return false, errors.Errorf("key is missing for %q", r.arr[i].Name)
@@ -230,28 +230,32 @@ func (r *Records) Less(i, j int, formatType string) (bool, error) {
 		return false, errors.Errorf("key is missing for %q", r.arr[j].Name)
 	}
 
-	switch formatType {
-	case FormatTypeInt:
+	switch keyType {
+	case ContentKeyInt:
 		ilhs, lok := lhs.(int64)
 		irhs, rok := rhs.(int64)
 		if lok && rok {
 			return ilhs < irhs, nil
 		}
-
-		// One side was parsed as float64 - javascript does not support
-		// int64 type and it fallback to float64
+		// (motivation: javascript does not support int64 type)
 		if !lok {
 			ilhs = int64(lhs.(float64))
-		}
-		if !rok {
+		} else {
 			irhs = int64(rhs.(float64))
 		}
-
 		return ilhs < irhs, nil
-	case FormatTypeFloat:
-		return lhs.(float64) < rhs.(float64), nil
-	case FormatTypeString:
-		return lhs.(string) < rhs.(string), nil
+	case ContentKeyFloat:
+		flhs, lok := lhs.(float64)
+		frhs, rok := rhs.(float64)
+		debug.Assert(lok, lhs)
+		debug.Assert(rok, rhs)
+		return flhs < frhs, nil
+	case ContentKeyString:
+		slhs, lok := lhs.(string)
+		srhs, rok := rhs.(string)
+		debug.Assert(lok, lhs)
+		debug.Assert(rok, rhs)
+		return slhs < srhs, nil
 	}
 
 	debug.Assertf(false, "lhs: %v, rhs: %v, arr[i]: %v, arr[j]: %v", lhs, rhs, r.arr[i], r.arr[j])

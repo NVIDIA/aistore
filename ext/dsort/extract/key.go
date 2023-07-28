@@ -14,19 +14,18 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/pkg/errors"
 )
 
 const (
-	FormatTypeInt    = "int"
-	FormatTypeFloat  = "float"
-	FormatTypeString = "string"
+	ContentKeyInt    = "int"
+	ContentKeyFloat  = "float"
+	ContentKeyString = "string"
+
+	fmtErrInvalidSortingKeyType = "invalid content sorting key %q (expecting one of: %+v)"
 )
 
 var (
-	supportedFormatTypes = []string{FormatTypeInt, FormatTypeFloat, FormatTypeString}
-
-	errInvalidAlgorithmFormatTypes = fmt.Errorf("invalid algorithm format type provided, shoule be one of: %+v", supportedFormatTypes)
+	contentKeyTypes = []string{ContentKeyInt, ContentKeyFloat, ContentKeyString}
 )
 
 type (
@@ -48,8 +47,8 @@ type (
 
 	nameKeyExtractor    struct{}
 	contentKeyExtractor struct {
-		ty  string // type of key extracted, supported: supportedFormatTypes
-		ext string // extension of object record whose content will be read
+		ty  string // one of contentKeyTypes: {"int", "string", ... } - see above
+		ext string // file with this extension provides sorting key (of the type `ty`)
 	}
 )
 
@@ -80,10 +79,9 @@ func (*nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
 }
 
 func NewContentKeyExtractor(ty, ext string) (KeyExtractor, error) {
-	if err := ValidateAlgorithmFormatType(ty); err != nil {
+	if err := ValidateContentKeyT(ty); err != nil {
 		return nil, err
 	}
-
 	return &contentKeyExtractor{ty: ty, ext: ext}, nil
 }
 
@@ -91,40 +89,36 @@ func (ke *contentKeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, ex
 	if ke.ext != ext {
 		return r, nil, false
 	}
-
 	buf := &bytes.Buffer{}
 	tee := cos.NewSizedReader(io.TeeReader(r, buf), r.Size())
 	return tee, &SingleKeyExtractor{name: name, buf: buf}, true
 }
 
 func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
-	if ske == nil { // is not valid to be read
+	if ske == nil {
 		return nil, nil
 	}
-
 	b, err := io.ReadAll(ske.buf)
 	ske.buf = nil
 	if err != nil {
 		return nil, err
 	}
-
 	key := string(b)
 	switch ke.ty {
-	case FormatTypeInt:
+	case ContentKeyInt:
 		return strconv.ParseInt(key, 10, 64)
-	case FormatTypeFloat:
+	case ContentKeyFloat:
 		return strconv.ParseFloat(key, 64)
-	case FormatTypeString:
+	case ContentKeyString:
 		return key, nil
 	default:
-		return nil, errors.Errorf("not implemented extractor type: %s", ke.ty)
+		return nil, fmt.Errorf(fmtErrInvalidSortingKeyType, ke.ty, contentKeyTypes)
 	}
 }
 
-func ValidateAlgorithmFormatType(ty string) error {
-	if !cos.StringInSlice(ty, supportedFormatTypes) {
-		return errInvalidAlgorithmFormatTypes
+func ValidateContentKeyT(ty string) error {
+	if !cos.StringInSlice(ty, contentKeyTypes) {
+		return fmt.Errorf(fmtErrInvalidSortingKeyType, ty, contentKeyTypes)
 	}
-
 	return nil
 }

@@ -33,18 +33,15 @@ type (
 )
 
 func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (err error) {
-	var b bytes.Buffer
 	if buf == nil {
 		buf = make([]byte, fileSize)
 		if _, err = cryptorand.Read(buf); err != nil {
 			return
 		}
 	}
-	if _, err = b.Write(buf); err != nil {
-		return
-	}
+	reader := bytes.NewBuffer(buf)
 	oah := cos.SimpleOAH{Size: int64(fileSize)}
-	return aw.Write(path, oah, &b)
+	return aw.Write(path, oah, reader)
 }
 
 func CreateArchRandomFiles(shardName string, tarFormat tar.Format, ext string, fileCnt, fileSize int,
@@ -105,11 +102,11 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 			var buf []byte
 			// random content
 			switch customFileType {
-			case extract.FormatTypeInt:
+			case extract.ContentKeyInt:
 				buf = []byte(strconv.Itoa(rand.Int()))
-			case extract.FormatTypeString:
+			case extract.ContentKeyString:
 				buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
-			case extract.FormatTypeFloat:
+			case extract.ContentKeyFloat:
 				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
 			default:
 				return fmt.Errorf("invalid custom file type: %q", customFileType)
