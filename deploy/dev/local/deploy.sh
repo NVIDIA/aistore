@@ -212,7 +212,7 @@ for (( c=START; c<=END; c++ )); do
 
   pub_port=$(grep "\"port\":" ${AIS_LOCAL_CONF_FILE} | awk '{ print $2 }')
   pub_port=${pub_port:1:$((${#pub_port} - 3))}
-  if [[ $c -eq 0 ]]; then
+  if [[ $c -eq 0 && $PROXY_CNT -gt 0 ]]; then
     export AIS_IS_PRIMARY="true"
     run_cmd "${CMD} ${PROXY_PARAM}"
     listening_on+=${pub_port}
