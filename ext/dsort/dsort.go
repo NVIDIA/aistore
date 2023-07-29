@@ -117,7 +117,8 @@ func (m *Manager) start() (err error) {
 			avgCompressRatio := m.avgCompressionRatio()
 			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
 			if m.config.FastV(4, cos.SmoduleDsort) {
-				nlog.Infof("%s: %s estimated output shard size required before gzip compression: %d", m.ctx.t, m.ManagerUUID, shardSize)
+				nlog.Infof("%s: %s estimated output shard size required before gzip compression: %d",
+					m.ctx.t, m.ManagerUUID, shardSize)
 			}
 		}
 
@@ -659,18 +660,18 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 
 func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, error) {
 	var (
+		start           int
+		curShardSize    int64
 		n               = m.recManager.Records.Len()
 		pt              = m.rs.Pot.Template
 		shardCount      = pt.Count()
-		start           int
-		curShardSize    int64
 		shards          = make([]*extract.Shard, 0)
 		numLocalRecords = make(map[string]int, m.smap.CountActiveTs())
 	)
 	pt.InitIter()
 
 	if maxSize <= 0 {
-		// Heuristic: to count desired size of shard in case when maxSize is not specified.
+		// Heuristic: shard size when maxSize not specified.
 		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
 	}
 
@@ -710,14 +711,12 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		externalKeyMap = make(map[string]string)
 		shardsBuilder  = make(map[string][]*extract.Shard)
 	)
-
 	if maxSize <= 0 {
-		return nil, errors.New("invalid max size of shard was specified when using external key map")
+		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
 	}
-
 	parsedURL, err := url.Parse(m.rs.OrderFileURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse `order_file` url, err: %v", err)
+		return nil, fmt.Errorf(fmtErrOrderURL, m.rs.OrderFileURL, err)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, http.NoBody)
@@ -729,7 +728,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	req.Header.Set(apc.HdrCallerID, tsi.ID())
 	req.Header.Set(apc.HdrCallerName, tsi.String())
 
-	resp, err := m.client.Do(req) //nolint:bodyclose // closed inside cos.Close
+	resp, err := m.client.Do(req) //nolint:bodyclose // closed by cos.Close below
 	if err != nil {
 		return nil, err
 	}

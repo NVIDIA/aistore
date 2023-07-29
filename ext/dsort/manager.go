@@ -458,9 +458,9 @@ func (m *Manager) setExtractCreator() (err error) {
 	var keyExtractor extract.KeyExtractor
 
 	switch m.rs.Algorithm.Kind {
-	case SortKindContent:
-		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.ContentKeyType, m.rs.Algorithm.Extension)
-	case SortKindMD5:
+	case Content:
+		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.ContentKeyType, m.rs.Algorithm.Ext)
+	case MD5:
 		keyExtractor, err = extract.NewMD5KeyExtractor()
 	default:
 		keyExtractor, err = extract.NewNameKeyExtractor()
@@ -800,7 +800,7 @@ func (m *Manager) react(reaction, msg string) error {
 		m.Metrics.unlock()
 		return nil
 	case cmn.AbortReaction:
-		return fmt.Errorf("%s", msg) // error will be reported on abort
+		return fmt.Errorf("%s", msg) // (dsort job aborts and returns this error)
 	default:
 		debug.Assert(false, reaction)
 		return nil

@@ -147,7 +147,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	// Initialize dSort manager
 	rs := &ParsedRequestSpec{
 		Extension: archive.ExtTar,
-		Algorithm: &SortAlgorithm{
+		Algorithm: &Algorithm{
 			ContentKeyType: extract.ContentKeyString,
 		},
 		MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
@@ -454,7 +454,7 @@ var _ = Describe("Distributed Sort", func() {
 						Expect(exists).To(BeTrue())
 
 						rs := &ParsedRequestSpec{
-							Algorithm: &SortAlgorithm{
+							Algorithm: &Algorithm{
 								Decreasing:     true,
 								ContentKeyType: extract.ContentKeyString,
 							},

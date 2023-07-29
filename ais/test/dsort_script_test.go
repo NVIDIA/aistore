@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-func TestDsortUsingScripts(t *testing.T) {
+func TestDistributedSortUsingScripts(t *testing.T) {
 	var (
 		src = cmn.Bck{Name: "src_" + trand.String(6), Provider: apc.AIS}
 		dst = cmn.Bck{Name: "dst_" + trand.String(6), Provider: apc.AIS}

@@ -48,7 +48,7 @@ var (
 
 	dsorterTypes       = []string{dsort.DSorterGeneralType, dsort.DSorterMemType}
 	dsortPhases        = []string{dsort.ExtractionPhase, dsort.SortingPhase, dsort.CreationPhase}
-	dsortAlgorithms    = []string{dsort.SortKindAlphanumeric, dsort.SortKindShuffle}
+	dsortAlgorithms    = []string{dsort.Alphanumeric, dsort.Shuffle}
 	dsortSettingScopes = []string{scopeConfig, scopeSpec}
 )
 
@@ -88,7 +88,7 @@ type (
 
 		tarFormat       tar.Format
 		extension       string
-		alg             *dsort.SortAlgorithm
+		alg             *dsort.Algorithm
 		missingKeys     bool
 		outputShardSize string
 		maxMemUsage     string
@@ -227,7 +227,7 @@ func (df *dsortFramework) init() {
 	}
 
 	if df.alg == nil {
-		df.alg = &dsort.SortAlgorithm{}
+		df.alg = &dsort.Algorithm{}
 	}
 
 	df.baseParams = tools.BaseAPIParams(df.m.proxyURL)
@@ -288,14 +288,14 @@ func (df *dsortFramework) createInputShards() {
 				path        = fmt.Sprintf("%s/%s/%s%d", tmpDir, df.m.bck.Name, df.inputPrefix, i)
 				tarName     string
 			)
-			if df.alg.Kind == dsort.SortKindContent {
+			if df.alg.Kind == dsort.Content {
 				tarName = path + archive.ExtTar
 			} else {
 				tarName = path + df.extension
 			}
-			if df.alg.Kind == dsort.SortKindContent {
+			if df.alg.Kind == dsort.Content {
 				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.filesPerShard,
-					df.fileSz, df.alg.ContentKeyType, df.alg.Extension, df.missingKeys)
+					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys)
 			} else if df.extension == archive.ExtTar {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.filesPerShard,
 					df.fileSz, duplication, df.recordExts, nil)
@@ -360,11 +360,11 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		}
 		tassert.CheckFatal(df.m.t, err)
 
-		if df.alg.Kind == dsort.SortKindContent {
-			files, err := tarch.GetFilesFromArchBuffer(cos.Ext(shardName), buffer, df.alg.Extension)
+		if df.alg.Kind == dsort.Content {
+			files, err := tarch.GetFilesFromArchBuffer(cos.Ext(shardName), buffer, df.alg.Ext)
 			tassert.CheckFatal(df.m.t, err)
 			for _, file := range files {
-				if file.Ext == df.alg.Extension {
+				if file.Ext == df.alg.Ext {
 					if strings.TrimSuffix(file.Name, filepath.Ext(file.Name)) !=
 						strings.TrimSuffix(lastName, filepath.Ext(lastName)) {
 						// custom files should go AFTER the regular files
@@ -408,12 +408,12 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			}
 
 			for _, file := range files {
-				if df.alg.Kind == "" || df.alg.Kind == dsort.SortKindAlphanumeric {
+				if df.alg.Kind == "" || df.alg.Kind == dsort.Alphanumeric {
 					if lastName > file.Name() && canonicalName(lastName) != canonicalName(file.Name()) {
 						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)",
 							shardName, lastName, file.Name())
 					}
-				} else if df.alg.Kind == dsort.SortKindShuffle {
+				} else if df.alg.Kind == dsort.Shuffle {
 					if lastName > file.Name() {
 						inversions++
 					}
@@ -449,7 +449,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		}
 	}
 
-	if df.alg.Kind == dsort.SortKindShuffle {
+	if df.alg.Kind == dsort.Shuffle {
 		if inversions == 0 {
 			df.m.t.Fatal("shuffle sorting did not create any inversions")
 		}
@@ -879,7 +879,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 				df = &dsortFramework{
 					m:             m,
 					dsorterType:   dsorterType,
-					alg:           &dsort.SortAlgorithm{Kind: dsort.SortKindShuffle},
+					alg:           &dsort.Algorithm{Kind: dsort.Shuffle},
 					shardCnt:      500,
 					filesPerShard: 10,
 					maxMemUsage:   "99%",
@@ -1242,9 +1242,9 @@ func TestDistributedSortContent(t *testing.T) {
 						df = &dsortFramework{
 							m:           m,
 							dsorterType: dsorterType,
-							alg: &dsort.SortAlgorithm{
-								Kind:           dsort.SortKindContent,
-								Extension:      entry.extension,
+							alg: &dsort.Algorithm{
+								Kind:           dsort.Content,
+								Ext:            entry.extension,
 								ContentKeyType: entry.contentKeyType,
 							},
 							missingKeys:   entry.missingKeys,
@@ -2169,7 +2169,7 @@ func TestDistributedSortLongerExt(t *testing.T) {
 					shardCnt:      200,
 					filesPerShard: 10,
 					maxMemUsage:   "99%",
-					alg:           &dsort.SortAlgorithm{Kind: alg},
+					alg:           &dsort.Algorithm{Kind: alg},
 					recordExts:    []string{".txt", ".json.info", ".info", ".json"},
 				}
 			)

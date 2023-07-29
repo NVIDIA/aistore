@@ -5,6 +5,7 @@
 package dsort
 
 import (
+	"errors"
 	"math"
 	"strings"
 
@@ -35,7 +36,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -83,7 +84,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -103,7 +104,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80 GB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -119,7 +120,7 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -134,7 +135,7 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -149,7 +150,7 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -164,7 +165,7 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-%06d-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -188,7 +189,7 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix@0111-suffix"),
 				OutputFormat:    "prefix-@000111-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -225,7 +226,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize:     "10KB",
 				CreateConcMaxLimit:  0,
 				ExtractConcMaxLimit: 0,
-				Algorithm:           SortAlgorithm{Kind: SortKindNone},
+				Algorithm:           Algorithm{Kind: None},
 			}
 			parsed, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -248,7 +249,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize:     "10KB",
 				CreateConcMaxLimit:  0,
 				ExtractConcMaxLimit: 0,
-				Algorithm:           SortAlgorithm{Kind: SortKindNone},
+				Algorithm:           Algorithm{Kind: None},
 
 				DSortConf: cmn.DSortConf{
 					DuplicatedRecords:   cmn.AbortReaction,
@@ -296,18 +297,18 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				Extension:       ".txt",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errMissingBucket))
+			Expect(err).To(Equal(errMissingSrcBucket))
 		})
 
 		It("should fail due to invalid bucket provider", func() {
 			rs := RequestSpec{
 				Bck:       cmn.Bck{Provider: "invalid", Name: "test"},
 				Extension: ".txt",
-				Algorithm: SortAlgorithm{Kind: SortKindNone},
+				Algorithm: Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -319,7 +320,7 @@ var _ = Describe("RequestSpec", func() {
 				Bck:       cmn.Bck{Provider: apc.AIS, Name: "test"},
 				OutputBck: cmn.Bck{Provider: "invalid", Name: "test"},
 				Extension: ".txt",
-				Algorithm: SortAlgorithm{Kind: SortKindNone},
+				Algorithm: Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -333,7 +334,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-{0112..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -348,7 +349,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0112..0111}-suffix",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -363,7 +364,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-}{0001..0111}-suffix"),
 				OutputFormat:    "prefix-}{0010..0111}-suffix",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -378,11 +379,12 @@ var _ = Describe("RequestSpec", func() {
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errInvalidExtension))
+			check := archive.IsErrUnknownMime(err)
+			Expect(check).To(BeTrue())
 		})
 
 		It("should fail due to invalid mem usage specification", func() {
@@ -393,7 +395,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -408,7 +410,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "120%",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -423,7 +425,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "-1 GB",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
@@ -438,11 +440,11 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
 				ExtractConcMaxLimit: -1,
-				Algorithm:           SortAlgorithm{Kind: SortKindNone},
+				Algorithm:           Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errNegativeConcurrencyLimit))
+			Expect(errors.Is(err, errNegConcLimit)).To(BeTrue())
 		})
 
 		It("should fail due to invalid create concurrency specified", func() {
@@ -453,11 +455,11 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:       "prefix-{0010..0111}-suffix",
 				OutputShardSize:    "10KB",
 				CreateConcMaxLimit: -1,
-				Algorithm:          SortAlgorithm{Kind: SortKindNone},
+				Algorithm:          Algorithm{Kind: None},
 			}
 			_, err := rs.Parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errNegativeConcurrencyLimit))
+			Expect(errors.Is(err, errNegConcLimit)).To(BeTrue())
 		})
 
 		It("should fail due to invalid dsort config value", func() {
@@ -468,7 +470,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
-				Algorithm:       SortAlgorithm{Kind: SortKindNone},
+				Algorithm:       Algorithm{Kind: None},
 				DSortConf:       cmn.DSortConf{DuplicatedRecords: "something"},
 			}
 			_, err := rs.Parse()

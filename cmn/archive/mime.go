@@ -25,6 +25,10 @@ const (
 	ExtTarLz4 = ".tar.lz4"
 )
 
+const (
+	sizeDetectMime = 512
+)
+
 // - here and elsewhere, mime (string) is a "." + IANA mime
 // - for standard MIME types, see: cmn/cos/http_headers.go
 // - references:
@@ -101,8 +105,6 @@ func byExt(filename string) (string, error) {
 	}
 	return "", NewErrUnknownFileExt(filename, "")
 }
-
-const sizeDetectMime = 512
 
 // NOTE convention: caller may pass nil `smm` _not_ to spend time (usage: listing and reading)
 func MimeFile(file *os.File, smm *memsys.MMSA, mime, archname string) (m string, err error) {

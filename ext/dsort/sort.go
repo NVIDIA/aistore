@@ -15,36 +15,32 @@ import (
 )
 
 const (
-	sortKindEmpty        = ""             // default one - alphanumeric (sort decreasing)
-	SortKindAlphanumeric = "alphanumeric" // sort the records (decreasing or increasing)
-	SortKindNone         = "none"         // none, used for resharding
-	SortKindMD5          = "md5"
-	SortKindShuffle      = "shuffle" // shuffle randomly, can be used with seed to get reproducible results
-	SortKindContent      = "content" // sort by content of given file
+	algDefault   = ""             // default (alphanumeric, decreasing)
+	Alphanumeric = "alphanumeric" // string comparison (decreasing or increasing)
+	None         = "none"         // none (used for resharding)
+	MD5          = "md5"          // compare md5(name)
+	Shuffle      = "shuffle"      // random shuffle (use with the same seed to reproduce)
+	Content      = "content"      // extract (int, string, float) from a given file, and compare
 )
 
-const (
-	fmtInvalidAlgorithmKind = "invalid algorithm kind, expecting one of: %+v" // <--- supportedAlgorithms
-)
+var algorithms = []string{algDefault, Alphanumeric, MD5, Shuffle, Content, None}
 
-var supportedAlgorithms = []string{sortKindEmpty, SortKindAlphanumeric, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
-
-type SortAlgorithm struct {
-	// one of the `supportedAlgorithms` (see above)
+type Algorithm struct {
+	// one of the `algorithms` above
 	Kind string `json:"kind"`
 
-	// currently, used with two sorting alg-s: SortKindAlphanumeric and SortKindContent
+	// used with two sorting alg-s: Alphanumeric and Content
 	Decreasing bool `json:"decreasing"`
 
 	// when sort is a random shuffle
 	Seed string `json:"seed"`
 
-	// exclusively with sorting alg. Kind = "content" (aka SortKindContent)
-	// used to select files that provide sorting keys - see next
-	Extension string `json:"extension"`
+	// exclusively with Content sorting
+	// e.g. usage: ".cls" to provide sorting key for each record (sample) - see next
+	Ext string `json:"extension"`
 
-	// ditto: SortKindContent only
-	// one of extract.contentKeyTypes, namely: {"int", "string", ... }
+	// ditto: Content only
+	// `extract.contentKeyTypes` enum values: {"int", "string", "float" }
 	ContentKeyType string `json:"content_key_type"`
 }
 
@@ -80,28 +76,27 @@ func (s *alphaByKey) Less(i, j int) bool {
 }
 
 // sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
-func sortRecords(r *extract.Records, algo *SortAlgorithm) (err error) {
-	var rnd *rand.Rand
-	if algo.Kind == SortKindNone {
+func sortRecords(r *extract.Records, alg *Algorithm) (err error) {
+	if alg.Kind == None {
 		return nil
-	} else if algo.Kind == SortKindShuffle {
-		seed := time.Now().Unix()
-		if algo.Seed != "" {
-			seed, err = strconv.ParseInt(algo.Seed, 10, 64)
-			// We assert error since we know that the seed should be validated
-			// during request spec validation.
+	}
+	if alg.Kind == Shuffle {
+		var (
+			rnd  *rand.Rand
+			seed = time.Now().Unix()
+		)
+		if alg.Seed != "" {
+			seed, err = strconv.ParseInt(alg.Seed, 10, 64)
 			debug.AssertNoErr(err)
 		}
-
 		rnd = rand.New(rand.NewSource(seed))
 		for i := 0; i < r.Len(); i++ { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
 			j := rnd.Intn(i + 1)
 			r.Swap(i, j)
 		}
 	} else {
-		keys := &alphaByKey{records: r, decreasing: algo.Decreasing, keyType: algo.ContentKeyType, err: nil}
+		keys := &alphaByKey{records: r, decreasing: alg.Decreasing, keyType: alg.ContentKeyType, err: nil}
 		sort.Sort(keys)
-
 		if keys.err != nil {
 			return keys.err
 		}

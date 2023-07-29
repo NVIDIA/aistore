@@ -25,7 +25,7 @@ const (
 var _ = Describe("ManagerGroup", func() {
 	var (
 		mgrp    *ManagerGroup
-		validRS = &ParsedRequestSpec{Extension: archive.ExtTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		validRS = &ParsedRequestSpec{Extension: archive.ExtTar, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 	)
 
 	BeforeEach(func() {

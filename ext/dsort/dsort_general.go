@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -477,21 +476,21 @@ func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
 		}
 	}
 
-	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
+	return func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 		ds.m.inFlightInc()
 		defer ds.m.inFlightDec()
 
-		transport.FreeRecv(object)
+		transport.FreeRecv(objReader)
 		req := remoteRequest{}
 		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-			ds.m.abort(fmt.Errorf("received damaged request: %s", err))
+			err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "recv request", cos.BHead(hdr.Opaque), err)
+			ds.m.abort(err)
 			return err
 		}
 
 		fromNode := ds.m.smap.GetTarget(hdr.SID)
 		if fromNode == nil {
-			err := fmt.Errorf("received request from node %q which is not present in the smap", hdr.SID)
-			nlog.Errorln(err)
+			err := fmt.Errorf("received request (%v) from %q not present in the %s", req.Record, hdr.SID, ds.m.smap)
 			return err
 		}
 

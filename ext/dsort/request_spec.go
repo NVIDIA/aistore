@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -18,21 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
-
-// TODO: move and refactor
-var (
-	errMissingBucket             = errors.New("missing field 'bucket'")
-	errInvalidExtension          = errors.New("extension must be one of: '.tar', '.tar.gz' or '.tgz', '.zip', '.tar.lz4'")
-	errNegOutputShardSize        = errors.New("output shard size must be >= 0")
-	errEmptyOutputShardSize      = errors.New("output shard size must be set (cannot be 0)")
-	errNegativeConcurrencyLimit  = errors.New("concurrency max limit must be 0 (limits will be calculated) or > 0")
-	errInvalidOrderParam         = errors.New("could not parse order format, required URL")
-	errInvalidSeed               = errors.New("invalid seed provided, should be int")
-	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in the format: .ext")
-)
-
-// supportedExtensions is a list of extensions (archives) supported by dSort
-var supportedExtensions = archive.FileExtensions
 
 type parsedInputTemplate struct {
 	Template cos.ParsedTemplate `json:"template"`
@@ -59,7 +43,7 @@ type RequestSpec struct {
 	// Default: same as `bck` field
 	OutputBck cmn.Bck `json:"output_bck" yaml:"output_bck"`
 	// Default: alphanumeric, increasing
-	Algorithm SortAlgorithm `json:"algorithm" yaml:"algorithm"`
+	Algorithm Algorithm `json:"algorithm" yaml:"algorithm"`
 	// Default: ""
 	OrderFileURL string `json:"order_file" yaml:"order_file"`
 	// Default: "\t"
@@ -90,7 +74,7 @@ type ParsedRequestSpec struct {
 	OutputShardSize     int64                 `json:"output_shard_size,string"`
 	Pit                 *parsedInputTemplate  `json:"pit"`
 	Pot                 *parsedOutputTemplate `json:"pot"`
-	Algorithm           *SortAlgorithm        `json:"algorithm"`
+	Algorithm           *Algorithm            `json:"algorithm"`
 	OrderFileURL        string                `json:"order_file"`
 	OrderFileSep        string                `json:"order_file_sep"`
 	MaxMemUsage         cos.ParsedQuantity    `json:"max_mem_usage"`
@@ -120,7 +104,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	)
 
 	if rs.Bck.Name == "" {
-		return parsedRS, errMissingBucket
+		return parsedRS, errMissingSrcBucket
 	}
 	if rs.Bck.Provider == "" {
 		rs.Bck.Provider = apc.AIS
@@ -148,17 +132,19 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, err
 	}
 
-	if !validateExtension(rs.Extension) {
-		return nil, errInvalidExtension
+	var ext string
+	ext, err = archive.Mime(rs.Extension, "")
+	if err != nil {
+		return nil, err
 	}
-	parsedRS.Extension = rs.Extension
+	parsedRS.Extension = ext
 
 	parsedRS.OutputShardSize, err = cos.ParseSize(rs.OutputShardSize, cos.UnitsIEC)
 	if err != nil {
 		return nil, err
 	}
 	if parsedRS.OutputShardSize < 0 {
-		return nil, errNegOutputShardSize
+		return nil, fmt.Errorf(fmtErrNegOutputSize, parsedRS.OutputShardSize)
 	}
 
 	parsedRS.Algorithm, err = parseAlgorithm(rs.Algorithm)
@@ -166,22 +152,24 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, err
 	}
 
-	if empty, valid := validateOrderFileURL(rs.OrderFileURL); !valid {
-		return nil, errInvalidOrderParam
-	} else if empty {
+	empty, err := validateOrderFileURL(rs.OrderFileURL)
+	if err != nil {
+		return nil, fmt.Errorf(fmtErrOrderURL, rs.OrderFileURL, err)
+	}
+	if empty {
 		if parsedRS.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
 		if parsedRS.Pot.Template.Count() > math.MaxInt32 {
-			// If the count is not defined then the output shard size must be set.
+			// If the count is not defined the output shard size must be
 			if parsedRS.OutputShardSize == 0 {
-				return nil, errEmptyOutputShardSize
+				return nil, errMissingOutputSize
 			}
 		}
 	} else { // Valid and not empty.
 		// For the order file the output shard size must be set.
 		if parsedRS.OutputShardSize == 0 {
-			return nil, errEmptyOutputShardSize
+			return nil, errMissingOutputSize
 		}
 
 		parsedRS.OrderFileURL = rs.OrderFileURL
@@ -195,17 +183,15 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	if rs.MaxMemUsage == "" {
 		rs.MaxMemUsage = cfg.DefaultMaxMemUsage
 	}
-
 	parsedRS.MaxMemUsage, err = cos.ParseQuantity(rs.MaxMemUsage)
 	if err != nil {
 		return nil, err
 	}
-
 	if rs.ExtractConcMaxLimit < 0 {
-		return nil, errNegativeConcurrencyLimit
+		return nil, fmt.Errorf("%w ('extract', %d)", errNegConcLimit, rs.ExtractConcMaxLimit)
 	}
 	if rs.CreateConcMaxLimit < 0 {
-		return nil, errNegativeConcurrencyLimit
+		return nil, fmt.Errorf("%w ('create', %d)", errNegConcLimit, rs.CreateConcMaxLimit)
 	}
 
 	parsedRS.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
@@ -239,47 +225,36 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	return parsedRS, nil
 }
 
-// validateExtension checks if extension is supported by dsort
-func validateExtension(ext string) bool {
-	return cos.StringInSlice(ext, supportedExtensions)
-}
-
-func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
-	if !cos.StringInSlice(algo.Kind, supportedAlgorithms) {
-		return nil, fmt.Errorf(fmtInvalidAlgorithmKind, supportedAlgorithms)
+func parseAlgorithm(alg Algorithm) (*Algorithm, error) {
+	if !cos.StringInSlice(alg.Kind, algorithms) {
+		return nil, fmt.Errorf(fmtErrInvalidAlg, algorithms)
 	}
-
-	if algo.Seed != "" {
-		if value, err := strconv.ParseInt(algo.Seed, 10, 64); value < 0 || err != nil {
-			return nil, errInvalidSeed
+	if alg.Seed != "" {
+		if value, err := strconv.ParseInt(alg.Seed, 10, 64); value < 0 || err != nil {
+			return nil, fmt.Errorf(fmtErrSeed, alg.Seed)
 		}
 	}
-
-	if algo.Kind == SortKindContent {
-		algo.Extension = strings.TrimSpace(algo.Extension)
-		if algo.Extension == "" {
-			return nil, errInvalidAlgorithmExtension
+	if alg.Kind == Content {
+		alg.Ext = strings.TrimSpace(alg.Ext)
+		if alg.Ext == "" || alg.Ext[0] != '.' {
+			return nil, fmt.Errorf("%w %q", errAlgExt, alg.Ext)
 		}
-		if algo.Extension[0] != '.' { // extension should begin with dot: .cls
-			return nil, errInvalidAlgorithmExtension
-		}
-		if err := extract.ValidateContentKeyT(algo.ContentKeyType); err != nil {
+		if err := extract.ValidateContentKeyT(alg.ContentKeyType); err != nil {
 			return nil, err
 		}
 	} else {
-		algo.ContentKeyType = extract.ContentKeyString
+		alg.ContentKeyType = extract.ContentKeyString
 	}
 
-	return &algo, nil
+	return &alg, nil
 }
 
-func validateOrderFileURL(orderURL string) (empty, valid bool) {
+func validateOrderFileURL(orderURL string) (empty bool, err error) {
 	if orderURL == "" {
-		return true, true
+		return true, nil
 	}
-
-	_, err := url.ParseRequestURI(orderURL)
-	return false, err == nil
+	_, err = url.ParseRequestURI(orderURL)
+	return
 }
 
 //////////////////////////
