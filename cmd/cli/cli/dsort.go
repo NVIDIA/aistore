@@ -30,6 +30,30 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const (
+	dsortExampleJ = `$ ais start dsort '{
+			"extension": ".tar",
+			"input_bck": {"name": "dsort-testing"},
+			"input_format": {"template": "shard-{0..9}"},
+			"output_shard_size": "200KB",
+			"description": "pack records into categorized shards",
+			"order_file": "http://website.web/static/order_file.txt",
+			"order_file_sep": " "
+		}'`
+	dsortExampleY = `$ ais start dsort -f - <<EOM
+			extension: .tar
+			input_bck:
+			    name: dsort-testing
+			input_format:
+			    template: shard-{0..9}
+			output_format: new-shard-{0000..1000}
+			output_shard_size: 10KB
+			description: shuffle shards from 0 to 9
+			algorithm:
+			    kind: shuffle
+			EOM`
+)
+
 type (
 	dsortResult struct {
 		dur      time.Duration
@@ -55,6 +79,19 @@ type (
 		aborted     bool
 	}
 )
+
+var dsortStartCmd = cli.Command{
+	Name: cmdDsort,
+	Usage: "start " + dsort.DSortName + " job\n" +
+		indent4 + "e.g. inline JSON spec:\n" +
+		indent4 + "\t  " + dsortExampleJ + "\n" +
+		indent4 + "e.g. inline YAML spec:\n" +
+		indent4 + "\t  " + dsortExampleY + "\n" +
+		indent1 + "See also: docs/cli/dsort* and ais/test/scripts/dsort*",
+	ArgsUsage: dsortSpecArgument,
+	Flags:     startSpecialFlags[cmdDsort],
+	Action:    startDsortHandler,
+}
 
 var phasesOrdered = []string{
 	dsort.ExtractionPhase,
@@ -131,7 +168,7 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 	// NOTE: args SRC_BUCKET and DST_BUCKET, if defined, override specBytes/specPath (`dsort.RequestSpec`)
 	if !srcbck.IsEmpty() {
-		spec.Bck = srcbck
+		spec.InputBck = srcbck
 	}
 	if !dstbck.IsEmpty() {
 		spec.OutputBck = dstbck
@@ -157,9 +194,9 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
 	cmn.IterFields(spec, func(tag string, field cmn.IterField) (error, bool) {
 		v := _toStr(field.Value())
 		switch {
-		case tag == "bck.name":
+		case tag == "input_bck.name":
 			src.Name = v
-		case tag == "bck.provider":
+		case tag == "input_bck.provider":
 			src.Provider = v
 		case tag == "output_bck.name":
 			dst.Name = v
@@ -173,7 +210,7 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
 	if dst.IsEmpty() {
 		dst = src
 	}
-	flat = append(flat, nvpair{"bck", src.Cname("")}, nvpair{"output_bck", dst.Cname("")})
+	flat = append(flat, nvpair{"input_bck", src.Cname("")}, nvpair{"output_bck", dst.Cname("")})
 	sort.Slice(flat, func(i, j int) bool {
 		di, dj := flat[i], flat[j]
 		return di.Name < dj.Name

@@ -66,20 +66,20 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		parsedRS = &ParsedRequestSpec{}
 	)
 
-	if rs.Bck.Name == "" {
+	if rs.InputBck.Name == "" {
 		return parsedRS, errMissingSrcBucket
 	}
-	if rs.Bck.Provider == "" {
-		rs.Bck.Provider = apc.AIS
+	if rs.InputBck.Provider == "" {
+		rs.InputBck.Provider = apc.AIS
 	}
-	if _, err := cmn.NormalizeProvider(rs.Bck.Provider); err != nil {
+	if _, err := cmn.NormalizeProvider(rs.InputBck.Provider); err != nil {
 		return parsedRS, err
 	}
-	if err := rs.Bck.Validate(); err != nil {
+	if err := rs.InputBck.Validate(); err != nil {
 		return parsedRS, err
 	}
 	parsedRS.Description = rs.Description
-	parsedRS.Bck = rs.Bck
+	parsedRS.Bck = rs.InputBck
 	parsedRS.OutputBck = rs.OutputBck
 	if parsedRS.OutputBck.IsEmpty() {
 		parsedRS.OutputBck = parsedRS.Bck
@@ -165,10 +165,10 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	parsedRS.DryRun = rs.DryRun
 
 	// Check for values that override the global config.
-	if err := rs.DSortConf.ValidateWithOpts(true); err != nil {
+	if err := rs.Config.ValidateWithOpts(true); err != nil {
 		return nil, err
 	}
-	parsedRS.DSortConf = rs.DSortConf
+	parsedRS.DSortConf = rs.Config
 	if parsedRS.MissingShards == "" {
 		parsedRS.MissingShards = cfg.MissingShards
 	}

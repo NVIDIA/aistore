@@ -241,7 +241,7 @@ func (df *dsortFramework) init() {
 func (df *dsortFramework) gen() dsort.RequestSpec {
 	return dsort.RequestSpec{
 		Description:         generateDSortDesc(),
-		Bck:                 df.m.bck,
+		InputBck:            df.m.bck,
 		OutputBck:           df.outputBck,
 		Extension:           df.extension,
 		InputFormat:         df.inputTempl,
@@ -255,7 +255,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		DSorterType:         df.dsorterType,
 		DryRun:              df.dryRun,
 
-		DSortConf: cmn.DSortConf{
+		Config: cmn.DSortConf{
 			MissingShards:     df.missingShards,
 			DuplicatedRecords: df.duplicatedRecords,
 		},

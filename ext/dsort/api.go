@@ -42,7 +42,7 @@ type Algorithm struct {
 // RequestSpec defines the user specification for requests to the endpoint /v1/sort.
 type RequestSpec struct {
 	// Required
-	Bck             cmn.Bck       `json:"bck" yaml:"bck"`
+	InputBck        cmn.Bck       `json:"input_bck" yaml:"input_bck"`
 	Extension       string        `json:"extension" yaml:"extension"`
 	InputFormat     apc.ListRange `json:"input_format" yaml:"input_format"`
 	OutputFormat    string        `json:"output_format" yaml:"output_format"`
@@ -73,5 +73,5 @@ type RequestSpec struct {
 	DSorterType string `json:"dsorter_type"`
 	DryRun      bool   `json:"dry_run"` // Default: false
 
-	cmn.DSortConf
+	Config cmn.DSortConf
 }
