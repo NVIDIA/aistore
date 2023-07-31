@@ -1,0 +1,1122 @@
+[
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000034920,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "4740",
+    "bytes": "49702502400",
+    "errors": 0,
+    "latency": 125109121,
+    "duration": 10000036095,
+    "min_latency": 39731236,
+    "max_latency": 973541510,
+    "throughput": "4970232249"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000036429,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:17.216750691Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999365681,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:17.216750691Z",
+    "count": "4362",
+    "bytes": "45738885120",
+    "errors": 0,
+    "latency": 138196656,
+    "duration": 9999367247,
+    "min_latency": 37645087,
+    "max_latency": 1282635594,
+    "throughput": "4574177895"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:17.216750691Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999367612,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:27.216545654Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999591571,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:27.216545654Z",
+    "count": "4513",
+    "bytes": "47322234880",
+    "errors": 0,
+    "latency": 132284146,
+    "duration": 9999593450,
+    "min_latency": 42175138,
+    "max_latency": 1232657666,
+    "throughput": "4732415801"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:27.216545654Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999593822,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:37.216570837Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999578393,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:37.216570837Z",
+    "count": "4619",
+    "bytes": "48433725440",
+    "errors": 0,
+    "latency": 129593402,
+    "duration": 9999579346,
+    "min_latency": 39931868,
+    "max_latency": 1447140050,
+    "throughput": "4843576241"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:37.216570837Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999579658,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:47.216527248Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999648999,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:47.216527248Z",
+    "count": "4465",
+    "bytes": "46818918400",
+    "errors": 0,
+    "latency": 133564093,
+    "duration": 9999650723,
+    "min_latency": 40764280,
+    "max_latency": 1199424631,
+    "throughput": "4682055293"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:47.216527248Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999651123,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:57.216541979Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999562424,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:57.216541979Z",
+    "count": "4521",
+    "bytes": "47406120960",
+    "errors": 0,
+    "latency": 134473061,
+    "duration": 9999563544,
+    "min_latency": 40671828,
+    "max_latency": 1309803153,
+    "throughput": "4740818962"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:57.216541979Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999563857,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:07.216667775Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999441025,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:07.216667775Z",
+    "count": "4435",
+    "bytes": "46504345600",
+    "errors": 0,
+    "latency": 134401978,
+    "duration": 9999442913,
+    "min_latency": 39661260,
+    "max_latency": 1236630852,
+    "throughput": "4650693563"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:07.216667775Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999443335,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:17.216442067Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999907698,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:17.216442067Z",
+    "count": "4613",
+    "bytes": "48370810880",
+    "errors": 0,
+    "latency": 130912595,
+    "duration": 9999908991,
+    "min_latency": 40807814,
+    "max_latency": 1117292266,
+    "throughput": "4837125062"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:17.216442067Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999909330,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:27.2165868Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999557920,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:27.2165868Z",
+    "count": "4371",
+    "bytes": "45833256960",
+    "errors": 0,
+    "latency": 137251577,
+    "duration": 9999560219,
+    "min_latency": 40652640,
+    "max_latency": 1130823308,
+    "throughput": "4583527191"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:27.2165868Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999560587,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:37.216296685Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000369803,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:37.216296685Z",
+    "count": "4656",
+    "bytes": "48821698560",
+    "errors": 0,
+    "latency": 128318921,
+    "duration": 10000371288,
+    "min_latency": 39547885,
+    "max_latency": 1151756959,
+    "throughput": "4881988519"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:37.216296685Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000371609,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:47.216902658Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999219380,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:47.216902658Z",
+    "count": "4421",
+    "bytes": "46357544960",
+    "errors": 0,
+    "latency": 134993319,
+    "duration": 9999220576,
+    "min_latency": 39174565,
+    "max_latency": 1201762526,
+    "throughput": "4636115736"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:47.216902658Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999221084,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:06:57.216458307Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999668727,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:06:57.216458307Z",
+    "count": "4321",
+    "bytes": "45308968960",
+    "errors": 0,
+    "latency": 138338087,
+    "duration": 9999669577,
+    "min_latency": 38990635,
+    "max_latency": 1650779269,
+    "throughput": "4531046567"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:06:57.216458307Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999669850,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:07.216301179Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999802640,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:07.216301179Z",
+    "count": "4493",
+    "bytes": "47112519680",
+    "errors": 0,
+    "latency": 132510948,
+    "duration": 9999804325,
+    "min_latency": 39722667,
+    "max_latency": 3093167740,
+    "throughput": "4711344060"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:07.216301179Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999804751,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:17.216376224Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999747155,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:17.216376224Z",
+    "count": "4320",
+    "bytes": "45298483200",
+    "errors": 0,
+    "latency": 138435368,
+    "duration": 9999748497,
+    "min_latency": 38403906,
+    "max_latency": 3805376537,
+    "throughput": "4529962202"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:17.216376224Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999748845,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:27.216317037Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999798008,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:27.216317037Z",
+    "count": "4351",
+    "bytes": "45623541760",
+    "errors": 0,
+    "latency": 135196881,
+    "duration": 9999799324,
+    "min_latency": 38918191,
+    "max_latency": 3502409547,
+    "throughput": "4562445686"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:27.216317037Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999799661,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:37.216374415Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999796197,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:37.216374415Z",
+    "count": "4276",
+    "bytes": "44837109760",
+    "errors": 0,
+    "latency": 143561829,
+    "duration": 9999797250,
+    "min_latency": 40922089,
+    "max_latency": 3758623439,
+    "throughput": "4483801806"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:37.216374415Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999797609,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:47.216428963Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999681222,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:47.216428963Z",
+    "count": "4390",
+    "bytes": "46032486400",
+    "errors": 0,
+    "latency": 133648537,
+    "duration": 9999682997,
+    "min_latency": 37790207,
+    "max_latency": 4091491831,
+    "throughput": "4603394488"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:47.216428963Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999683715,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:07:57.216396292Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10005226605,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:07:57.216396292Z",
+    "count": "1100",
+    "bytes": "11534336000",
+    "errors": 0,
+    "latency": 144653429,
+    "duration": 10005232365,
+    "min_latency": 32131435,
+    "max_latency": 4190990401,
+    "throughput": "1152830366"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:07:57.216396292Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10005240704,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:07.222095091Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10001385549,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:07.222095091Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10001391677,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:07.222095091Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10001392231,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:17.223780443Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10002137156,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:17.223780443Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10002142279,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:17.223780443Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10002142780,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:27.226085354Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9994251023,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:27.226085354Z",
+    "count": "550",
+    "bytes": "5767168000",
+    "errors": 55,
+    "latency": 41266470,
+    "duration": 9994257637,
+    "min_latency": 31896641,
+    "max_latency": 65789090,
+    "throughput": "577048148"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:27.226085354Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9994258134,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:37.220669775Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10005159611,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:37.220669775Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10005208066,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:37.220669775Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10005208735,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:47.226149579Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999134517,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:47.226149579Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999140555,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:47.226149579Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999141024,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:08:57.225518207Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9990594062,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:08:57.225518207Z",
+    "count": "3732",
+    "bytes": "39132856320",
+    "errors": 55,
+    "latency": 94759790,
+    "duration": 9990595021,
+    "min_latency": 32261081,
+    "max_latency": 4726207410,
+    "throughput": "3916969461"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:08:57.225518207Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9990595460,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:07.216273257Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999841652,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:07.216273257Z",
+    "count": "3691",
+    "bytes": "38702940160",
+    "errors": 0,
+    "latency": 136573479,
+    "duration": 9999842945,
+    "min_latency": 36286106,
+    "max_latency": 10063495850,
+    "throughput": "3870354719"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:07.216273257Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999843570,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:17.216393874Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999878890,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:17.216393874Z",
+    "count": "3657",
+    "bytes": "38346424320",
+    "errors": 0,
+    "latency": 113736942,
+    "duration": 9999880811,
+    "min_latency": 37608841,
+    "max_latency": 12640222603,
+    "throughput": "3834688100"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:17.216393874Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999881127,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:27.216607053Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999676665,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:27.216607053Z",
+    "count": "3745",
+    "bytes": "39269171200",
+    "errors": 0,
+    "latency": 119888909,
+    "duration": 9999677830,
+    "min_latency": 35637269,
+    "max_latency": 20359448812,
+    "throughput": "3927043583"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:27.216607053Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999678156,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:37.216555778Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999718749,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:37.216555778Z",
+    "count": "3702",
+    "bytes": "38818283520",
+    "errors": 0,
+    "latency": 138349325,
+    "duration": 9999720470,
+    "min_latency": 34922305,
+    "max_latency": 26233881420,
+    "throughput": "3881936823"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:37.216555778Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999720823,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:47.21665595Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999498503,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:47.21665595Z",
+    "count": "3769",
+    "bytes": "39520829440",
+    "errors": 0,
+    "latency": 154515816,
+    "duration": 9999499984,
+    "min_latency": 34982800,
+    "max_latency": 30962709424,
+    "throughput": "3952280494"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:47.21665595Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999500366,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:09:57.216336395Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999976733,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:09:57.216336395Z",
+    "count": "3425",
+    "bytes": "35913728000",
+    "errors": 0,
+    "latency": 138655289,
+    "duration": 9999977786,
+    "min_latency": 34107994,
+    "max_latency": 32042836705,
+    "throughput": "3591380713"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:09:57.216336395Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 9999978186,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:10:07.216494743Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000152610,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:10:07.216494743Z",
+    "count": "3534",
+    "bytes": "37056675840",
+    "errors": 0,
+    "latency": 168983985,
+    "duration": 10000154185,
+    "min_latency": 34425792,
+    "max_latency": 34104107254,
+    "throughput": "3705610388"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:10:07.216494743Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 10000154546,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+},
+{
+  "get": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 513271664423,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  },
+  "put": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "106832",
+    "bytes": "1120214712320",
+    "errors": 110,
+    "latency": 152934642,
+    "duration": 513271665223,
+    "min_latency": 31896641,
+    "max_latency": 342927706686,
+    "throughput": "2182498641"
+  },
+  "cfg": {
+    "start_time": "2023-08-18T05:05:07.21608772Z",
+    "count": "0",
+    "bytes": "0",
+    "errors": 0,
+    "latency": 0,
+    "duration": 513271665607,
+    "min_latency": 0,
+    "max_latency": 0,
+    "throughput": "0"
+  }
+}
+]

@@ -238,7 +238,7 @@ test-long: test-envcheck ## Run all integration tests
 	@cd $(BUILD_DIR)/cli && go test -v -tags=debug ./...
 
 test-aisloader:
-	@./bench/aisloader/test/ci-test.sh $(FLAGS)
+	@./bench/tools/aisloader/test/ci-test.sh $(FLAGS)
 
 test-run: test-envcheck # runs tests matching a specific regex
 ifeq ($(RE),)

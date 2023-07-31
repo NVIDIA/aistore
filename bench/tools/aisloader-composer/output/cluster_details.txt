@@ -1,0 +1,34 @@
+PROXY		 MEM USED(%)	 MEM AVAIL	 LOAD AVERAGE		 UPTIME		 K8s POD	 STATUS
+p[DIVaPyAg]	 0.00%		 984.07GiB	 [3.8 4.1 4.3]		 6h12m10s	 ais-proxy-8	 online
+p[QxSqFHIz]	 0.00%		 973.13GiB	 [6.5 7.1 7.7]		 7h31m0s	 ais-proxy-2	 online
+p[UgfGZaGr]	 0.00%		 983.62GiB	 [7.4 9.3 10.1]		 7h32m10s	 ais-proxy-7	 online
+p[YUvCxHsy]	 0.00%		 984.40GiB	 [8.3 9.2 9.9]		 6h26m30s	 ais-proxy-4	 online
+p[YtuUtTTL]	 0.00%		 973.30GiB	 [8.9 8.7 8.7]		 7h30m10s	 ais-proxy-0	 online
+p[ZVulolFl][P]	 0.01%		 972.18GiB	 [7.4 8.2 8.6]		 7h32m40s	 ais-proxy-9	 online
+p[dEApdukW]	 0.00%		 983.83GiB	 [8.7 10.1 10.9]	 7h31m50s	 ais-proxy-5	 online
+p[iRQHNOqd]	 0.00%		 983.62GiB	 [7.2 9.9 10.6]		 7h31m20s	 ais-proxy-3	 online
+p[oUCWCHEH]	 0.00%		 973.12GiB	 [7.7 8.3 8.7]		 7h30m40s	 ais-proxy-1	 online
+p[zYEjLPPf]	 0.00%		 973.47GiB	 [7.4 7.7 8.2]		 7h32m0s	 ais-proxy-6	 online
+
+TARGET		 MEM USED(%)	 MEM AVAIL	 CAP USED(%)	 CAP AVAIL	 LOAD AVERAGE		 REBALANCE	 UPTIME		 K8s POD	 STATUS
+t[ByFgFddg]	 0.06%		 973.47GiB	 9%		 84.086TiB	 [7.4 7.7 8.2]		 -		 7h27m40s	 ais-target-4	 online
+t[SGdWpCqS]	 0.06%		 983.83GiB	 9%		 84.168TiB	 [8.7 10.1 10.9]	 -		 7h29m50s	 ais-target-9	 online
+t[Ypuyyvkp]	 0.06%		 973.13GiB	 9%		 84.082TiB	 [6.5 7.1 7.7]		 -		 7h27m10s	 ais-target-3	 online
+t[ZnlMLqoC]	 0.08%		 984.40GiB	 8%		 84.935TiB	 [8.3 9.2 9.9]		 -		 6h26m20s	 ais-target-7	 online
+t[cscivwtv]	 0.07%		 983.62GiB	 9%		 84.083TiB	 [7.2 9.9 10.6]		 -		 7h28m10s	 ais-target-5	 online
+t[gxIyhYKj]	 0.06%		 972.18GiB	 9%		 84.023TiB	 [7.4 8.2 8.6]		 -		 7h25m50s	 ais-target-0	 online
+t[lEfNQFzW]	 0.07%		 983.62GiB	 9%		 84.056TiB	 [7.4 9.3 10.1]		 -		 7h28m30s	 ais-target-6	 online
+t[vMlPAFPX]	 0.06%		 973.30GiB	 9%		 83.992TiB	 [8.9 8.7 8.7]		 -		 7h26m20s	 ais-target-1	 online
+t[wUfhaHTr]	 0.07%		 984.07GiB	 9%		 84.239TiB	 [3.8 4.1 4.3]		 -		 6h12m10s	 ais-target-8	 online
+t[yuGZLEpu]	 0.06%		 973.12GiB	 9%		 84.161TiB	 [7.7 8.3 8.7]		 -		 7h26m40s	 ais-target-2	 online
+
+Summary:
+   Proxies:		10 (all electable)
+   Targets:		10
+   Cluster Map:		version 1190, UUID AgDCnrodQ, primary p[ZVulolFl]
+   Deployment:		K8s
+   Status:		20 online
+   Rebalance:		n/a
+   Authentication:	disabled
+   Version:		3.18.075abdc
+   Build:		2023-08-18T03:55:38+0000

@@ -9,7 +9,7 @@ redirect_from:
 
 # AIS Loader
 
-AIS Loader (`aisloader`) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore). The tool was written in such a way that it can be easily extended to benchmark any S3-compatible backend.
+AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore). The tool was written in such a way that it can be easily extended to benchmark any S3-compatible backend.
 
 In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable), and also avoid compute-side bottlenecks if there are any.
 
@@ -30,6 +30,7 @@ Detailed protocol-level tracing statistics are also available - see [HTTP tracin
 - [Collecting stats](#collecting-stats)
     - [Grafana](#grafana)
 - [HTTP tracing](#http-tracing)
+- [AISLoader-Composer](#aisloader-composer)
 - [References](#references)
 
 ## Setup
@@ -53,10 +54,13 @@ For the most recently updated command-line options and examples, please run `ais
 | -batchsize | `int` | Batch size to list and delete | `100` |
 | -bprops | `json` | JSON string formatted as per the SetBucketProps API and containing bucket properties to apply | `""` |
 | -bucket | `string` | Bucket name. Bucket will be created if doesn't exist. If empty, aisloader generates a new random bucket name | `""` |
-| -check-statsd | `bool` | true: prior to benchmark make sure that StatsD is reachable | `false` |
+| -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash`|
 | -cleanup | `bool` | true: remove bucket upon benchmark termination | `n/a` (required) |
 | -dry-run | `bool` | show the entire set of parameters that aisloader will use when actually running | `false` |
 | -duration | `string`, `int` | Benchmark duration (0 - run forever or until Ctrl-C, default 1m). Note that if both duration and totalputsize are zeros, aisloader will have nothing to do | `1m` |
+| -epochs | `int` |  Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `1`|
+| -etl | `string` | Built-in ETL, one-of: `tar2tf`, `md5`, or `echo`. Each object that `aisloader` GETs undergoes the selected transformation. See also: `-etl-spec` option. | `""` |
+| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification. Each object that `aisloader` GETs will undergo this user-defined transformation. See also: `-etl` option. | `""` |
 | -getconfig | `bool` | true: generate control plane load by reading AIS proxy configuration (that is, instead of reading/writing data exercise control path) | `false` |
 | -getloaderid | `bool` | true: print stored/computed unique loaderID aka aisloader identifier and exit | `false` |
 | -ip | `string` | AIS proxy/gateway IP address or hostname | `localhost` |
@@ -83,11 +87,12 @@ For the most recently updated command-line options and examples, please run `ais
 | -statsdprobe | `bool` | Test-probe StatsD server prior to benchmarks | `true` |
 | -statsinterval | `int` | Interval in seconds to print performance counters; 0 - disabled | `10` |
 | -subdir | `string` | Virtual destination directory for all aisloader-generated objects | `""` |
-| -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
+| -test-probe | `bool`| Test StatsD server prior to running benchmarks | `false` |
 | -timeout | `string` | Client HTTP timeout; `0` = infinity) | `10m` |
-| -etl | `string` | Built-in ETL, one-of: `tar2tf`, `md5`, or `echo`. Each object that `aisloader` GETs undergoes the selected transformation. See also: `-etl-spec` option. | `""` |
-| -etl-spec | `string` | Custom ETL specification (pathname). Must be compatible with Kubernetes Pod specification. Each object that `aisloader` GETs will undergo this user-defined transformation. See also: `-etl` option. | `""` |
+| -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
+| -tokenfile | `string` | Authentication token (FQN) | `""`|
 | -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
+| -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false`
 | -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |
@@ -448,6 +453,11 @@ Detailed latency info is enabled
 ```
 
 > Note that other than `--trace-http`, all command-line options in this section are used for purely illustrative purposes.
+
+# AISLoader Composer
+
+For benchmarking production-level clusters, a single AISLoader instance may not be able to fully saturate the load the cluster can handle. In this case, multiple aisloader instances can be coordinated via the [AISLoader Composer](/bench/tools/aisloader-composer/). See the [README](/bench/tools/aisloader-composer/README.md) for instructions on setting up. 
+
 
 ## References
 

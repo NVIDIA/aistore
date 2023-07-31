@@ -193,7 +193,7 @@ It also can quickly provide an answer if the change that was made actually impro
 The command below will compare the benchmark(s) `BenchmarkRandom*` between the current commit and `f9a1536f...`.
 
 ```console
-$ bash ./deploy/scripts/bootstrap.sh bench cmp f9a1536f4c9af0d1ac84c200e68f2ba73676c487 --dir bench/aisloader --bench BenchmarkRandom
+$ bash ./deploy/scripts/bootstrap.sh bench cmp f9a1536f4c9af0d1ac84c200e68f2ba73676c487 --dir bench/tools/aisloader --bench BenchmarkRandom
 ```
 
 #### Options

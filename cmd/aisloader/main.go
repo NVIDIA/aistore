@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NVIDIA/aistore/bench/aisloader"
+	"github.com/NVIDIA/aistore/bench/tools/aisloader"
 	"github.com/NVIDIA/aistore/cmn"
 )
 
