@@ -188,3 +188,34 @@ spec:
           path: /health
           port: default
 """
+
+# Returns the FFMPEG decoded content. For more information on command options, visit
+# https://github.com/NVIDIA/ais-etl/blob/master/transformers/ffmpeg/README.md.
+# pylint: disable=unused-variable
+FFMPEG = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-ffmpeg
+  annotations:
+    communication_type: "{communication_type}://"
+    wait_timeout: 5m
+spec:
+  containers:
+  - name: server
+    image: aistorage/transformer_ffmpeg:latest
+    imagePullPolicy: Always
+    ports:
+    - name: default
+      containerPort: 80
+    command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+    env:
+    # FFMPEG_OPTIONS is a dictionary (JSON string) of FFMPEG decode parameters. For more information on
+    # FFMPEG decode parameters, refer to https://ffmpeg.org/ffmpeg.html#Synopsis.
+    - name: FFMPEG_OPTIONS
+      value: '{ffmpeg_options}'
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: default
+"""
