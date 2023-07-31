@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	algDefault   = ""             // default (alphanumeric, decreasing)
+	algDefault   = ""             // default (alphanumeric, increasing)
 	Alphanumeric = "alphanumeric" // string comparison (decreasing or increasing)
 	None         = "none"         // none (used for resharding)
 	MD5          = "md5"          // compare md5(name)

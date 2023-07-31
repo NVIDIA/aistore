@@ -83,11 +83,18 @@ type (
 var dsortStartCmd = cli.Command{
 	Name: cmdDsort,
 	Usage: "start " + dsort.DSortName + " job\n" +
-		indent4 + "e.g. inline JSON spec:\n" +
+		indent1 + "Required parameters:\n" +
+		indent1 + "\t- input_bck: source bucket (used as both source and destination if the latter is not specified)\n" +
+		indent1 + "\t- input_format: see docs and examples below\n" +
+		indent1 + "\t- output_format: ditto\n" +
+		indent1 + "\t- output_shard_size: (as the name implies)\n" +
+		indent1 + "E.g. inline JSON spec:\n" +
 		indent4 + "\t  " + dsortExampleJ + "\n" +
-		indent4 + "e.g. inline YAML spec:\n" +
+		indent1 + "E.g. inline YAML spec:\n" +
 		indent4 + "\t  " + dsortExampleY + "\n" +
-		indent1 + "See also: docs/cli/dsort* and ais/test/scripts/dsort*",
+		indent1 + "Tip: use '--dry-run' to see the results without making any changes\n" +
+		indent1 + "Tip: use '--verbose' to print the spec (with all its parameters including applied defaults)\n" +
+		indent1 + "See also: docs/dsort.md, docs/cli/dsort.md, and ais/test/scripts/dsort*",
 	ArgsUsage: dsortSpecArgument,
 	Flags:     startSpecialFlags[cmdDsort],
 	Action:    startDsortHandler,
@@ -176,9 +183,19 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 	// print resulting spec TODO -- FIXME
 	if flagIsSet(c, verboseFlag) {
-		flat := _flattenSpec(&spec)
+		flat, config := _flattenSpec(&spec)
 		err = teb.Print(flat, teb.FlatTmpl)
+		if err != nil {
+			actionWarn(c, err.Error())
+		}
+		if len(config) == 0 {
+			fmt.Fprintln(c.App.Writer, "Config override:\t\t none")
+		} else {
+			fmt.Fprintln(c.App.Writer, "Config override:")
+			_ = teb.Print(config, teb.FlatTmpl)
+		}
 		time.Sleep(time.Second / 2)
+		fmt.Fprintln(c.App.Writer)
 	}
 
 	// execute
@@ -189,10 +206,17 @@ func startDsortHandler(c *cli.Context) (err error) {
 }
 
 // with minor editing
-func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
+func _flattenSpec(spec *dsort.RequestSpec) (flat, config nvpairList) {
 	var src, dst cmn.Bck
 	cmn.IterFields(spec, func(tag string, field cmn.IterField) (error, bool) {
 		v := _toStr(field.Value())
+		// add config override in a 2nd pass
+		if tag[0] == '.' {
+			if v != "" && v != "0" && v != "0s" {
+				config = append(config, nvpair{tag, v})
+			}
+			return nil, false
+		}
 		switch {
 		case tag == "input_bck.name":
 			src.Name = v
@@ -203,6 +227,25 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
 		case tag == "output_bck.provider":
 			dst.Provider = v
 		default:
+			// defaults
+			switch tag {
+			case "input_format.objnames":
+				if v == `[]` {
+					v = teb.NotSetVal
+				}
+			case "algorithm.kind":
+				if v == "" {
+					v = dsort.Alphanumeric
+				}
+			case "order_file_sep":
+				if v == "" {
+					v = `\t`
+				}
+			default:
+				if v == "" {
+					v = teb.NotSetVal
+				}
+			}
 			flat = append(flat, nvpair{tag, v})
 		}
 		return nil, false
@@ -215,6 +258,12 @@ func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
 		di, dj := flat[i], flat[j]
 		return di.Name < dj.Name
 	})
+	if len(config) > 0 {
+		sort.Slice(config, func(i, j int) bool {
+			di, dj := config[i], config[j]
+			return di.Name < dj.Name
+		})
+	}
 	return
 }
 
