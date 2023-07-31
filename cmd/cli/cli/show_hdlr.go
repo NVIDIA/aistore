@@ -679,8 +679,8 @@ func showClusterConfig(c *cli.Context, section string) error {
 	if usejs {
 		return teb.Print(cluConfig, "", teb.Jopts(usejs))
 	}
-	flat := flattenConfig(cluConfig, section)
-	err = teb.Print(flat, teb.ConfigTmpl)
+	flat := flattenJSON(cluConfig, section)
+	err = teb.Print(flat, teb.FlatTmpl)
 	if err == nil && section == "" {
 		msg := fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see %s for details)",
 			flprn(jsonFlag), qflprn(cli.HelpFlag))
@@ -772,18 +772,18 @@ func showNodeConfig(c *cli.Context) error {
 	// fill-in `data`
 	switch scope {
 	case cfgScopeLocal:
-		data.LocalConfigPairs = flattenConfig(config.LocalConfig, section)
+		data.LocalConfigPairs = flattenJSON(config.LocalConfig, section)
 	default: // cfgScopeInherited | cfgScopeAll
 		cluConf, err := api.GetClusterConfig(apiBP)
 		if err != nil {
 			return V(err)
 		}
 		// diff cluster <=> this node
-		flatNode := flattenConfig(config.ClusterConfig, section)
-		flatCluster := flattenConfig(cluConf, section)
+		flatNode := flattenJSON(config.ClusterConfig, section)
+		flatCluster := flattenJSON(cluConf, section)
 		data.ClusterConfigDiff = diffConfigs(flatNode, flatCluster)
 		if scope == cfgScopeAll {
-			data.LocalConfigPairs = flattenConfig(config.LocalConfig, section)
+			data.LocalConfigPairs = flattenJSON(config.LocalConfig, section)
 		}
 	}
 	// show "flat" diff-s

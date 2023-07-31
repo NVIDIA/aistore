@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
-func StartDSort(bp BaseParams, rs dsort.RequestSpec) (id string, err error) {
+func StartDSort(bp BaseParams, rs *dsort.RequestSpec) (id string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{

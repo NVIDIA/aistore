@@ -79,11 +79,12 @@ const (
 		indent1 + "Version:\t{{ ( Versions .Status) }}\n" +
 		indent1 + "Build:\t{{ ( BuildTimes .Status) }}\n"
 
-	// Config
-	ConfigTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
+	// any JSON struct (e.g. config)
+	FlatTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n"
 
+	// Config
 	DaemonConfigTmpl = "{{ if .ClusterConfigDiff }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfigDiff }}" +
 		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
 		"{{end}}\n{{end}}" +

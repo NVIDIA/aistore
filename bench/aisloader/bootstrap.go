@@ -589,22 +589,22 @@ func parseCmdLine() (params, error) {
 func printArguments(set *flag.FlagSet) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 8, 1, '\t', 0)
 
-	_, _ = fmt.Fprintf(w, "==== COMMAND LINE ARGUMENTS ====\n")
-	_, _ = fmt.Fprintf(w, "=========== DEFAULTS ===========\n")
+	fmt.Fprintf(w, "==== COMMAND LINE ARGUMENTS ====\n")
+	fmt.Fprintf(w, "=========== DEFAULTS ===========\n")
 	set.VisitAll(func(f *flag.Flag) {
 		if f.Value.String() == f.DefValue {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
-	_, _ = fmt.Fprintf(w, "============ CUSTOM ============\n")
+	fmt.Fprintf(w, "============ CUSTOM ============\n")
 	set.VisitAll(func(f *flag.Flag) {
 		if f.Value.String() != f.DefValue {
 			_, _ = fmt.Fprintf(w, "%s:\t%s\n", f.Name, f.Value.String())
 		}
 	})
 	fmt.Fprintf(w, "HTTP trace:\t%v\n", runParams.traceHTTP)
-	_, _ = fmt.Fprintf(w, "=================================\n\n")
-	_ = w.Flush()
+	fmt.Fprintf(w, "=================================\n\n")
+	w.Flush()
 }
 
 // newStats returns a new stats object with given time as the starting point

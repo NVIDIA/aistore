@@ -6,10 +6,8 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -26,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -92,6 +89,7 @@ var (
 		},
 		cmdDsort: {
 			dsortSpecFlag,
+			verboseFlag,
 		},
 		commandPrefetch: append(
 			listrangeFlags,
@@ -632,88 +630,6 @@ func waitDownload(c *cli.Context, id string) (err error) {
 		return fmt.Errorf("download job %s was aborted", id)
 	}
 	return nil
-}
-
-func startDsortHandler(c *cli.Context) (err error) {
-	var (
-		id             string
-		specPath       string
-		specBytes      []byte
-		shift          int
-		srcbck, dstbck cmn.Bck
-		rs             dsort.RequestSpec
-	)
-	// parse command line
-	specPath = parseStrFlag(c, dsortSpecFlag)
-	if c.NArg() == 0 && specPath == "" {
-		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
-			c.Command.ArgsUsage, qflprn(cli.HelpFlag))
-	}
-	if specPath == "" {
-		// spec is inline
-		specBytes = []byte(c.Args().Get(0))
-		shift = 1
-	}
-	if c.NArg() > shift {
-		srcbck, err = parseBckURI(c, c.Args().Get(shift), true)
-		if err != nil {
-			return fmt.Errorf("failed to parse source bucket: %v\n(see %s for details)",
-				err, qflprn(cli.HelpFlag))
-		}
-	}
-	if c.NArg() > shift+1 {
-		dstbck, err = parseBckURI(c, c.Args().Get(shift+1), true)
-		if err != nil {
-			return fmt.Errorf("failed to parse destination bucket: %v\n(see %s for details)",
-				err, qflprn(cli.HelpFlag))
-		}
-	}
-
-	// load spec from file or standard input
-	if specPath != "" {
-		var r io.Reader
-		if specPath == fileStdIO {
-			r = os.Stdin
-		} else {
-			f, err := os.Open(specPath)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			r = f
-		}
-
-		var b bytes.Buffer
-		// Read at most 1MB so we don't blow up when reading don't know what
-		if _, errV := io.CopyN(&b, r, cos.MiB); errV == nil {
-			return errors.New("file too big")
-		} else if errV != io.EOF {
-			return errV
-		}
-		specBytes = b.Bytes()
-	}
-	if errj := jsoniter.Unmarshal(specBytes, &rs); errj != nil {
-		if erry := yaml.Unmarshal(specBytes, &rs); erry != nil {
-			return fmt.Errorf(
-				"failed to determine the type of the job specification, errs: (%v, %v)",
-				errj, erry,
-			)
-		}
-	}
-
-	// NOTE: command-line SRC_BUCKET and DST_BUCKET override the spec
-	if !srcbck.IsEmpty() {
-		rs.Bck = srcbck
-	}
-	if !dstbck.IsEmpty() {
-		rs.OutputBck = dstbck
-	}
-
-	// execute
-	if id, err = api.StartDSort(apiBP, rs); err == nil {
-		fmt.Fprintln(c.App.Writer, id)
-	}
-	return
 }
 
 func startLRUHandler(c *cli.Context) (err error) {

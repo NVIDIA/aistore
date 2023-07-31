@@ -16,7 +16,7 @@ import (
 // POST /v1/sort
 func (p *proxy) proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 	rs := &dsort.RequestSpec{}
-	if cmn.ReadJSON(w, r, &rs) != nil {
+	if cmn.ReadJSON(w, r, rs) != nil {
 		return
 	}
 	parsedRS, err := rs.Parse()

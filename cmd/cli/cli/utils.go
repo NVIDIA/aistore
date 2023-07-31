@@ -619,9 +619,9 @@ func parseURLtoBck(strURL string) (bck cmn.Bck) {
 }
 
 // see also authNConfPairs
-func flattenConfig(cfg any, section string) (flat nvpairList) {
+func flattenJSON(jstruct any, section string) (flat nvpairList) {
 	flat = make(nvpairList, 0, 40)
-	cmn.IterFields(cfg, func(tag string, field cmn.IterField) (error, bool) {
+	cmn.IterFields(jstruct, func(tag string, field cmn.IterField) (error, bool) {
 		if section == "" || strings.HasPrefix(tag, section) {
 			v := _toStr(field.Value())
 			flat = append(flat, nvpair{tag, v})
@@ -759,7 +759,7 @@ func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
 	return props, nil
 }
 
-// see also flattenConfig
+// see also flattenJSON
 func authNConfPairs(conf *authn.Config, prefix string) (nvpairList, error) {
 	flat := make(nvpairList, 0, 8)
 	err := cmn.IterFields(conf, func(tag string, field cmn.IterField) (error, bool) {

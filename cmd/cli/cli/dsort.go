@@ -6,10 +6,13 @@
 package cli
 
 import (
+	"bytes"
 	jsonStd "encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -20,15 +23,162 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
+	"gopkg.in/yaml.v2"
+)
+
+type (
+	dsortResult struct {
+		dur      time.Duration
+		created  int64
+		errors   []string
+		warnings []string
+		aborted  bool
+	}
+	dsortPhaseState struct {
+		total    int64
+		progress int64
+		bar      *mpb.Bar
+	}
+	dsortPB struct {
+		id          string
+		apiBP       api.BaseParams
+		refreshTime time.Duration
+		p           *mpb.Progress
+		dur         time.Duration
+		phases      map[string]*dsortPhaseState
+		warnings    []string
+		errors      []string
+		aborted     bool
+	}
 )
 
 var phasesOrdered = []string{
 	dsort.ExtractionPhase,
 	dsort.SortingPhase,
 	dsort.CreationPhase,
+}
+
+func startDsortHandler(c *cli.Context) (err error) {
+	var (
+		id             string
+		specPath       string
+		specBytes      []byte
+		shift          int
+		srcbck, dstbck cmn.Bck
+		spec           dsort.RequestSpec
+	)
+	// parse command line
+	specPath = parseStrFlag(c, dsortSpecFlag)
+	if c.NArg() == 0 && specPath == "" {
+		return fmt.Errorf("missing %q argument (see %s for details and usage examples)",
+			c.Command.ArgsUsage, qflprn(cli.HelpFlag))
+	}
+	if specPath == "" {
+		// spec is inline
+		specBytes = []byte(c.Args().Get(0))
+		shift = 1
+	}
+	if c.NArg() > shift {
+		srcbck, err = parseBckURI(c, c.Args().Get(shift), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse source bucket: %v\n(see %s for details)",
+				err, qflprn(cli.HelpFlag))
+		}
+	}
+	if c.NArg() > shift+1 {
+		dstbck, err = parseBckURI(c, c.Args().Get(shift+1), true)
+		if err != nil {
+			return fmt.Errorf("failed to parse destination bucket: %v\n(see %s for details)",
+				err, qflprn(cli.HelpFlag))
+		}
+	}
+
+	// load spec from file or standard input
+	if specPath != "" {
+		var r io.Reader
+		if specPath == fileStdIO {
+			r = os.Stdin
+		} else {
+			f, err := os.Open(specPath)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			r = f
+		}
+
+		var b bytes.Buffer
+		// Read at most 1MB so we don't blow up when reading don't know what
+		if _, errV := io.CopyN(&b, r, cos.MiB); errV == nil {
+			return errors.New("file too big")
+		} else if errV != io.EOF {
+			return errV
+		}
+		specBytes = b.Bytes()
+	}
+	if errj := jsoniter.Unmarshal(specBytes, &spec); errj != nil {
+		if erry := yaml.Unmarshal(specBytes, &spec); erry != nil {
+			return fmt.Errorf(
+				"failed to determine the type of the job specification, errs: (%v, %v)",
+				errj, erry,
+			)
+		}
+	}
+
+	// NOTE: args SRC_BUCKET and DST_BUCKET, if defined, override specBytes/specPath (`dsort.RequestSpec`)
+	if !srcbck.IsEmpty() {
+		spec.Bck = srcbck
+	}
+	if !dstbck.IsEmpty() {
+		spec.OutputBck = dstbck
+	}
+
+	// print resulting spec TODO -- FIXME
+	if flagIsSet(c, verboseFlag) {
+		flat := _flattenSpec(&spec)
+		err = teb.Print(flat, teb.FlatTmpl)
+		time.Sleep(time.Second / 2)
+	}
+
+	// execute
+	if id, err = api.StartDSort(apiBP, &spec); err == nil {
+		fmt.Fprintln(c.App.Writer, id)
+	}
+	return
+}
+
+// with minor editing
+func _flattenSpec(spec *dsort.RequestSpec) (flat nvpairList) {
+	var src, dst cmn.Bck
+	cmn.IterFields(spec, func(tag string, field cmn.IterField) (error, bool) {
+		v := _toStr(field.Value())
+		switch {
+		case tag == "bck.name":
+			src.Name = v
+		case tag == "bck.provider":
+			src.Provider = v
+		case tag == "output_bck.name":
+			dst.Name = v
+		case tag == "output_bck.provider":
+			dst.Provider = v
+		default:
+			flat = append(flat, nvpair{tag, v})
+		}
+		return nil, false
+	})
+	if dst.IsEmpty() {
+		dst = src
+	}
+	flat = append(flat, nvpair{"bck", src.Cname("")}, nvpair{"output_bck", dst.Cname("")})
+	sort.Slice(flat, func(i, j int) bool {
+		di, dj := flat[i], flat[j]
+		return di.Name < dj.Name
+	})
+	return
 }
 
 // Creates bucket if not exists. If exists uses it or deletes and creates new
@@ -55,14 +205,6 @@ func setupBucket(c *cli.Context, bck cmn.Bck) error {
 	return nil
 }
 
-type dsortResult struct {
-	dur      time.Duration
-	created  int64
-	errors   []string
-	warnings []string
-	aborted  bool
-}
-
 func (d dsortResult) String() string {
 	if d.aborted {
 		return dsort.DSortName + " job was aborted"
@@ -81,27 +223,6 @@ func (d dsortResult) String() string {
 	}
 
 	return sb.String()
-}
-
-type dsortPhaseState struct {
-	total    int64
-	progress int64
-	bar      *mpb.Bar
-}
-
-type dsortPB struct {
-	id          string
-	apiBP       api.BaseParams
-	refreshTime time.Duration
-
-	p *mpb.Progress
-
-	dur     time.Duration
-	phases  map[string]*dsortPhaseState
-	aborted bool
-
-	warnings []string
-	errors   []string
 }
 
 func newPhases() map[string]*dsortPhaseState {

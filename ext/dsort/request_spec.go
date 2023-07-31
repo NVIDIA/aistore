@@ -29,43 +29,6 @@ type parsedOutputTemplate struct {
 	Template cos.ParsedTemplate
 }
 
-// RequestSpec defines the user specification for requests to the endpoint /v1/sort.
-type RequestSpec struct {
-	// Required
-	Bck             cmn.Bck       `json:"bck" yaml:"bck"`
-	Extension       string        `json:"extension" yaml:"extension"`
-	InputFormat     apc.ListRange `json:"input_format" yaml:"input_format"`
-	OutputFormat    string        `json:"output_format" yaml:"output_format"`
-	OutputShardSize string        `json:"output_shard_size" yaml:"output_shard_size"`
-
-	// Optional
-	Description string `json:"description" yaml:"description"`
-	// Default: same as `bck` field
-	OutputBck cmn.Bck `json:"output_bck" yaml:"output_bck"`
-	// Default: alphanumeric, increasing
-	Algorithm Algorithm `json:"algorithm" yaml:"algorithm"`
-	// Default: ""
-	OrderFileURL string `json:"order_file" yaml:"order_file"`
-	// Default: "\t"
-	OrderFileSep string `json:"order_file_sep" yaml:"order_file_sep"`
-	// Default: "80%"
-	MaxMemUsage string `json:"max_mem_usage" yaml:"max_mem_usage"`
-	// Default: calcMaxLimit()
-	ExtractConcMaxLimit int `json:"extract_concurrency_max_limit" yaml:"extract_concurrency_max_limit"`
-	// Default: calcMaxLimit()
-	CreateConcMaxLimit int `json:"create_concurrency_max_limit" yaml:"create_concurrency_max_limit"`
-	// Default: bundle.Multiplier
-	StreamMultiplier int `json:"stream_multiplier" yaml:"stream_multiplier"`
-	// Default: false
-	ExtendedMetrics bool `json:"extended_metrics" yaml:"extended_metrics"`
-
-	// debug
-	DSorterType string `json:"dsorter_type"`
-	DryRun      bool   `json:"dry_run"` // Default: false
-
-	cmn.DSortConf
-}
-
 type ParsedRequestSpec struct {
 	Bck                 cmn.Bck               `json:"bck"`
 	Description         string                `json:"description"`

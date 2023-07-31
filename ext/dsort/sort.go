@@ -14,36 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 )
 
-const (
-	algDefault   = ""             // default (alphanumeric, decreasing)
-	Alphanumeric = "alphanumeric" // string comparison (decreasing or increasing)
-	None         = "none"         // none (used for resharding)
-	MD5          = "md5"          // compare md5(name)
-	Shuffle      = "shuffle"      // random shuffle (use with the same seed to reproduce)
-	Content      = "content"      // extract (int, string, float) from a given file, and compare
-)
-
-var algorithms = []string{algDefault, Alphanumeric, MD5, Shuffle, Content, None}
-
-type Algorithm struct {
-	// one of the `algorithms` above
-	Kind string `json:"kind"`
-
-	// used with two sorting alg-s: Alphanumeric and Content
-	Decreasing bool `json:"decreasing"`
-
-	// when sort is a random shuffle
-	Seed string `json:"seed"`
-
-	// exclusively with Content sorting
-	// e.g. usage: ".cls" to provide sorting key for each record (sample) - see next
-	Ext string `json:"extension"`
-
-	// ditto: Content only
-	// `extract.contentKeyTypes` enum values: {"int", "string", "float" }
-	ContentKeyType string `json:"content_key_type"`
-}
-
 type (
 	alphaByKey struct {
 		err        error
