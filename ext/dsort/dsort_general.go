@@ -141,7 +141,7 @@ func (ds *dsorterGeneral) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if err := transport.HandleObjStream(trname, ds.makeRecvRequestFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.recvReq); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -161,7 +161,7 @@ func (ds *dsorterGeneral) start() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.HandleObjStream(trname, ds.makeRecvResponseFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.recvResp); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -247,8 +247,8 @@ CreateAllShards:
 		}
 
 		ds.creationPhase.adjuster.acquireGoroutineSema()
-		wrap := &dsgExtract{ds, s}
-		group.Go(wrap.do)
+		cs := &dsgCreateShard{ds, s}
+		group.Go(cs.do)
 	}
 
 	return group.Wait()
@@ -457,99 +457,98 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *extract.Record, obj *extr
 	return writer.n, writer.err
 }
 
-func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
-	errHandler := func(err error, node *meta.Snode, o *transport.Obj) {
-		*o = transport.Obj{Hdr: o.Hdr}
-		o.Hdr.Opaque = []byte(err.Error())
-		o.Hdr.ObjAttrs.Size = 0
-		if err = ds.streams.response.Send(o, nil, node); err != nil {
-			ds.m.abort(err)
-		}
+func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.Obj) {
+	*o = transport.Obj{Hdr: o.Hdr}
+	o.Hdr.Opaque = []byte(err.Error())
+	o.Hdr.ObjAttrs.Size = 0
+	if err = ds.streams.response.Send(o, nil, node); err != nil {
+		ds.m.abort(err)
+	}
+}
+
+// implements receiver i/f
+func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	ds.m.inFlightInc()
+	defer ds.m.inFlightDec()
+
+	transport.FreeRecv(objReader)
+	req := remoteRequest{}
+	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "recv request", cos.BHead(hdr.Opaque), err)
+		ds.m.abort(err)
+		return err
 	}
 
-	return func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
-		ds.m.inFlightInc()
-		defer ds.m.inFlightDec()
+	fromNode := ds.m.smap.GetTarget(hdr.SID)
+	if fromNode == nil {
+		err := fmt.Errorf("received request (%v) from %q not present in the %s", req.Record, hdr.SID, ds.m.smap)
+		return err
+	}
 
-		transport.FreeRecv(objReader)
-		req := remoteRequest{}
-		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-			err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "recv request", cos.BHead(hdr.Opaque), err)
-			ds.m.abort(err)
-			return err
-		}
+	if err != nil {
+		ds.errHandler(err, fromNode, &transport.Obj{Hdr: hdr})
+		return err
+	}
 
-		fromNode := ds.m.smap.GetTarget(hdr.SID)
-		if fromNode == nil {
-			err := fmt.Errorf("received request (%v) from %q not present in the %s", req.Record, hdr.SID, ds.m.smap)
-			return err
-		}
+	if ds.m.aborted() {
+		return newDSortAbortedError(ds.m.ManagerUUID)
+	}
 
-		if err != nil {
-			errHandler(err, fromNode, &transport.Obj{Hdr: hdr})
-			return err
-		}
+	var (
+		beforeSend int64
+		o          = transport.AllocSend() // NOTE: Send(o, ...) must be called
+	)
+	if ds.m.Metrics.extended {
+		beforeSend = mono.NanoTime()
+	}
+	o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
+	o.Callback, o.CmplArg = ds.responseCallback, beforeSend
 
-		if ds.m.aborted() {
-			return newDSortAbortedError(ds.m.ManagerUUID)
-		}
+	fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
 
-		var (
-			beforeSend int64
-			o          = transport.AllocSend() // NOTE: Send(o, ...) must be called
-		)
-		if ds.m.Metrics.extended {
-			beforeSend = mono.NanoTime()
-		}
-		o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
-		o.Callback, o.CmplArg = ds.responseCallback, beforeSend
-
-		fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
-
-		if ds.m.rs.DryRun {
-			lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
-			r := cos.NopOpener(io.NopCloser(lr))
-			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			ds.streams.response.Send(o, r, fromNode)
-			return nil
-		}
-
-		switch req.RecordObj.StoreType {
-		case extract.OffsetStoreType:
-			o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
-			offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
-			r, err := cos.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
-			if err != nil {
-				errHandler(err, fromNode, o)
-				return err
-			}
-			ds.streams.response.Send(o, r, fromNode)
-		case extract.SGLStoreType:
-			v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-			debug.Assert(ok, fullContentPath)
-			ds.m.recManager.RecordContents().Delete(fullContentPath)
-			sgl := v.(*memsys.SGL)
-			o.Hdr.ObjAttrs.Size = sgl.Size()
-			ds.streams.response.Send(o, sgl, fromNode)
-		case extract.DiskStoreType:
-			f, err := cos.NewFileHandle(fullContentPath)
-			if err != nil {
-				errHandler(err, fromNode, o)
-				return err
-			}
-			fi, err := f.Stat()
-			if err != nil {
-				cos.Close(f)
-				errHandler(err, fromNode, o)
-				return err
-			}
-			o.Hdr.ObjAttrs.Size = fi.Size()
-			ds.streams.response.Send(o, f, fromNode)
-		default:
-			debug.Assert(false)
-		}
+	if ds.m.rs.DryRun {
+		lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
+		r := cos.NopOpener(io.NopCloser(lr))
+		o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+		ds.streams.response.Send(o, r, fromNode)
 		return nil
 	}
+
+	switch req.RecordObj.StoreType {
+	case extract.OffsetStoreType:
+		o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
+		offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
+		r, err := cos.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
+		if err != nil {
+			ds.errHandler(err, fromNode, o)
+			return err
+		}
+		ds.streams.response.Send(o, r, fromNode)
+	case extract.SGLStoreType:
+		v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
+		debug.Assert(ok, fullContentPath)
+		ds.m.recManager.RecordContents().Delete(fullContentPath)
+		sgl := v.(*memsys.SGL)
+		o.Hdr.ObjAttrs.Size = sgl.Size()
+		ds.streams.response.Send(o, sgl, fromNode)
+	case extract.DiskStoreType:
+		f, err := cos.NewFileHandle(fullContentPath)
+		if err != nil {
+			ds.errHandler(err, fromNode, o)
+			return err
+		}
+		fi, err := f.Stat()
+		if err != nil {
+			cos.Close(f)
+			ds.errHandler(err, fromNode, o)
+			return err
+		}
+		o.Hdr.ObjAttrs.Size = fi.Size()
+		ds.streams.response.Send(o, f, fromNode)
+	default:
+		debug.Assert(false)
+	}
+	return nil
 }
 
 func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, err error) {
@@ -574,54 +573,52 @@ func (ds *dsorterGeneral) postExtraction() {
 	ds.mw.stopWatchingReserved()
 }
 
-func (ds *dsorterGeneral) makeRecvResponseFunc() transport.RecvObj {
-	metrics := ds.m.Metrics.Creation
-	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
-		ds.m.inFlightInc()
-		defer func() {
-			transport.DrainAndFreeReader(object)
-			ds.m.inFlightDec()
-		}()
+func (ds *dsorterGeneral) recvResp(hdr transport.ObjHdr, object io.Reader, err error) error {
+	ds.m.inFlightInc()
+	defer func() {
+		transport.DrainAndFreeReader(object)
+		ds.m.inFlightDec()
+	}()
 
-		if err != nil {
-			ds.m.abort(err)
-			return err
-		}
+	if err != nil {
+		ds.m.abort(err)
+		return err
+	}
 
-		if ds.m.aborted() {
-			return newDSortAbortedError(ds.m.ManagerUUID)
-		}
+	if ds.m.aborted() {
+		return newDSortAbortedError(ds.m.ManagerUUID)
+	}
 
-		writer := ds.pullStreamWriter(hdr.ObjName)
-		if writer == nil { // was removed after timing out
-			return nil
-		}
-
-		if len(hdr.Opaque) > 0 {
-			writer.n, writer.err = 0, errors.New(string(hdr.Opaque))
-			writer.wg.Done()
-			return nil
-		}
-
-		var beforeSend int64
-		if ds.m.Metrics.extended {
-			beforeSend = mono.NanoTime()
-		}
-
-		buf, slab := mm.AllocSize(hdr.ObjAttrs.Size)
-		writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
-		writer.wg.Done()
-		slab.Free(buf)
-
-		if ds.m.Metrics.extended {
-			dur := mono.Since(beforeSend)
-			metrics.mu.Lock()
-			metrics.LocalRecvStats.updateTime(dur)
-			metrics.LocalRecvStats.updateThroughput(writer.n, dur)
-			metrics.mu.Unlock()
-		}
+	writer := ds.pullStreamWriter(hdr.ObjName)
+	if writer == nil { // was removed after timing out
 		return nil
 	}
+
+	if len(hdr.Opaque) > 0 {
+		writer.n, writer.err = 0, errors.New(string(hdr.Opaque))
+		writer.wg.Done()
+		return nil
+	}
+
+	var beforeSend int64
+	if ds.m.Metrics.extended {
+		beforeSend = mono.NanoTime()
+	}
+
+	buf, slab := mm.AllocSize(hdr.ObjAttrs.Size)
+	writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
+	writer.wg.Done()
+	slab.Free(buf)
+
+	if ds.m.Metrics.extended {
+		metrics := ds.m.Metrics.Creation
+		dur := mono.Since(beforeSend)
+		metrics.mu.Lock()
+		metrics.LocalRecvStats.updateTime(dur)
+		metrics.LocalRecvStats.updateThroughput(writer.n, dur)
+		metrics.mu.Unlock()
+	}
+	return nil
 }
 
 func (ds *dsorterGeneral) preShardExtraction(expectedUncompressedSize uint64) bool {
@@ -636,17 +633,19 @@ func (ds *dsorterGeneral) onAbort() {
 	_ = ds.cleanupStreams()
 }
 
-//
-// wrappers
-//
+////////////////////
+// dsgCreateShard //
+////////////////////
 
-type dsgExtract struct {
-	ds *dsorterGeneral
-	s  *extract.Shard
+type dsgCreateShard struct {
+	ds    *dsorterGeneral
+	shard *extract.Shard
 }
 
-func (x *dsgExtract) do() error {
-	err := x.ds.m.createShard(x.s)
-	x.ds.creationPhase.adjuster.releaseGoroutineSema()
-	return err
+func (cs *dsgCreateShard) do() (err error) {
+	lom := cluster.AllocLOM(cs.shard.Name)
+	err = cs.ds.m.createShard(cs.shard, lom)
+	cluster.FreeLOM(lom)
+	cs.ds.creationPhase.adjuster.releaseGoroutineSema()
+	return
 }

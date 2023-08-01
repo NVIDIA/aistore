@@ -219,7 +219,7 @@ func (ds *dsorterMem) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if err := transport.HandleObjStream(trname, ds.makeRecvRequestFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.recvReq); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -235,7 +235,7 @@ func (ds *dsorterMem) start() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.HandleObjStream(trname, ds.makeRecvResponseFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, ds.recvResp); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -368,29 +368,8 @@ func (ds *dsorterMem) createShardsLocally() error {
 				}
 
 				ds.creationPhase.adjuster.read.acquireGoroutineSema()
-				group.Go(func(shard *extract.Shard) func() error {
-					return func() error {
-						defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
-
-						bck := meta.NewBck(ds.m.rs.OutputBck.Name, ds.m.rs.OutputBck.Provider, cmn.NsGlobal)
-						if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
-							return err
-						}
-						toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smapOwner.Get())
-						if err != nil {
-							return err
-						}
-
-						for _, rec := range shard.Records.All() {
-							for _, obj := range rec.Objects {
-								if err := ds.sendRecordObj(rec, obj, toNode); err != nil {
-									return err
-								}
-							}
-						}
-						return nil
-					}
-				}(shard))
+				es := &dsmExtractShard{ds, shard}
+				group.Go(es.do)
 
 				delete(phaseInfo.metadata.SendOrder, shardName)
 			case <-ds.m.listenAborted():
@@ -433,14 +412,8 @@ func (ds *dsorterMem) createShardsLocally() error {
 			sa.alloc(uint64(s.Size))
 
 			ds.creationPhase.adjuster.write.acquireGoroutineSema()
-			group.Go(func(s *extract.Shard) func() error {
-				return func() error {
-					err := ds.m.createShard(s)
-					ds.creationPhase.adjuster.write.releaseGoroutineSema()
-					sa.free(uint64(s.Size))
-					return err
-				}
-			}(s))
+			cs := &dsmCreateShard{ds, s, sa}
+			group.Go(cs.do)
 		}
 
 		errCh <- group.Wait()
@@ -545,81 +518,129 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 
 func (*dsorterMem) postExtraction() {}
 
-func (ds *dsorterMem) makeRecvRequestFunc() transport.RecvObj {
-	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
-		ds.m.inFlightInc()
-		defer func() {
-			transport.DrainAndFreeReader(object)
-			ds.m.inFlightDec()
-		}()
+// implements receiver i/f
+func (ds *dsorterMem) recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	ds.m.inFlightInc()
+	defer func() {
+		transport.DrainAndFreeReader(objReader)
+		ds.m.inFlightDec()
+	}()
 
-		if err != nil {
-			ds.m.abort(err)
-			return err
-		}
-
-		unpacker := cos.NewUnpacker(hdr.Opaque)
-		req := buildingShardInfo{}
-		if err := unpacker.ReadAny(&req); err != nil {
-			ds.m.abort(err)
-			return err
-		}
-
-		if ds.m.aborted() {
-			return newDSortAbortedError(ds.m.ManagerUUID)
-		}
-
-		ds.creationPhase.requestedShards <- req.shardName
-		return nil
+	if err != nil {
+		ds.m.abort(err)
+		return err
 	}
+
+	unpacker := cos.NewUnpacker(hdr.Opaque)
+	req := buildingShardInfo{}
+	if err := unpacker.ReadAny(&req); err != nil {
+		ds.m.abort(err)
+		return err
+	}
+
+	if ds.m.aborted() {
+		return newDSortAbortedError(ds.m.ManagerUUID)
+	}
+
+	ds.creationPhase.requestedShards <- req.shardName
+	return nil
 }
 
-func (ds *dsorterMem) makeRecvResponseFunc() transport.RecvObj {
-	metrics := ds.m.Metrics.Creation
-	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
-		ds.m.inFlightInc()
-		defer func() {
-			transport.DrainAndFreeReader(object)
-			ds.m.inFlightDec()
-		}()
+func (ds *dsorterMem) recvResp(hdr transport.ObjHdr, object io.Reader, err error) error {
+	ds.m.inFlightInc()
+	defer func() {
+		transport.DrainAndFreeReader(object)
+		ds.m.inFlightDec()
+	}()
 
-		if err != nil {
-			ds.m.abort(err)
-			return err
-		}
-
-		req := RemoteResponse{}
-		if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-			ds.m.abort(err)
-			return err
-		}
-
-		var beforeSend int64
-		if ds.m.Metrics.extended {
-			beforeSend = mono.NanoTime()
-		}
-
-		if ds.m.aborted() {
-			return newDSortAbortedError(ds.m.ManagerUUID)
-		}
-
-		uname := req.Record.MakeUniqueName(req.RecordObj)
-		if err := ds.creationPhase.connector.connectReader(uname, object, hdr.ObjAttrs.Size); err != nil {
-			ds.m.abort(err)
-			return err
-		}
-
-		if ds.m.Metrics.extended {
-			dur := mono.Since(beforeSend)
-			metrics.mu.Lock()
-			metrics.LocalRecvStats.updateTime(dur)
-			metrics.LocalRecvStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-			metrics.mu.Unlock()
-		}
-		return nil
+	if err != nil {
+		ds.m.abort(err)
+		return err
 	}
+
+	req := RemoteResponse{}
+	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
+		ds.m.abort(err)
+		return err
+	}
+
+	var beforeSend int64
+	if ds.m.Metrics.extended {
+		beforeSend = mono.NanoTime()
+	}
+
+	if ds.m.aborted() {
+		return newDSortAbortedError(ds.m.ManagerUUID)
+	}
+
+	uname := req.Record.MakeUniqueName(req.RecordObj)
+	if err := ds.creationPhase.connector.connectReader(uname, object, hdr.ObjAttrs.Size); err != nil {
+		ds.m.abort(err)
+		return err
+	}
+
+	if ds.m.Metrics.extended {
+		metrics := ds.m.Metrics.Creation
+		dur := mono.Since(beforeSend)
+		metrics.mu.Lock()
+		metrics.LocalRecvStats.updateTime(dur)
+		metrics.LocalRecvStats.updateThroughput(hdr.ObjAttrs.Size, dur)
+		metrics.mu.Unlock()
+	}
+	return nil
 }
 
 func (*dsorterMem) preShardExtraction(uint64) bool { return true }
 func (*dsorterMem) postShardExtraction(uint64)     {}
 func (ds *dsorterMem) onAbort()                    { _ = ds.cleanupStreams() }
+
+////////////////////
+// dsmCreateShard //
+////////////////////
+
+type dsmCreateShard struct {
+	ds    *dsorterMem
+	shard *extract.Shard
+	sa    *inmemShardAllocator
+}
+
+func (cs *dsmCreateShard) do() (err error) {
+	lom := cluster.AllocLOM(cs.shard.Name)
+	err = cs.ds.m.createShard(cs.shard, lom)
+	cluster.FreeLOM(lom)
+	cs.ds.creationPhase.adjuster.write.releaseGoroutineSema()
+	cs.sa.free(uint64(cs.shard.Size))
+	return
+}
+
+////////////////////
+// dsmExtractShard //
+////////////////////
+
+type dsmExtractShard struct {
+	ds    *dsorterMem
+	shard *extract.Shard
+}
+
+func (es *dsmExtractShard) do() error {
+	ds, shard := es.ds, es.shard
+	defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
+
+	bck := meta.NewBck(ds.m.rs.OutputBck.Name, ds.m.rs.OutputBck.Provider, cmn.NsGlobal)
+	if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
+		return err
+	}
+	toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smapOwner.Get())
+	if err != nil {
+		return err
+	}
+
+	for _, rec := range shard.Records.All() {
+		for _, obj := range rec.Objects {
+			if err := ds.sendRecordObj(rec, obj, toNode); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

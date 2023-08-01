@@ -273,7 +273,7 @@ func (m *Manager) initStreams() error {
 			MMSA:        mm,
 		},
 	}
-	if err := transport.HandleObjStream(trname, m.makeRecvShardFunc()); err != nil {
+	if err := transport.HandleObjStream(trname, m.recvShard); err != nil {
 		return errors.WithStack(err)
 	}
 	client := transport.NewIntraDataClient()
@@ -662,54 +662,52 @@ func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, er
 	}
 }
 
-func (m *Manager) makeRecvShardFunc() transport.RecvObj {
-	return func(hdr transport.ObjHdr, object io.Reader, err error) error {
-		defer transport.DrainAndFreeReader(object)
-		if err != nil {
-			m.abort(err)
-			return err
-		}
-		if m.aborted() {
-			return newDSortAbortedError(m.ManagerUUID)
-		}
-		lom := cluster.AllocLOM(hdr.ObjName)
-		defer cluster.FreeLOM(lom)
-		if err = lom.InitBck(&hdr.Bck); err == nil {
-			err = lom.Load(false /*cache it*/, false /*locked*/)
-		}
-		if err != nil && !os.IsNotExist(err) {
-			m.abort(err)
-			return err
-		}
-		if err == nil {
-			if lom.EqCksum(hdr.ObjAttrs.Cksum) {
-				if m.config.FastV(4, cos.SmoduleDsort) {
-					nlog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
-						m.ManagerUUID, lom)
-				}
-				return nil
-			}
-			nlog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
-		}
-		started := time.Now()
-		lom.SetAtimeUnix(started.UnixNano())
-		rc := io.NopCloser(object)
-
-		params := cluster.AllocPutObjParams()
-		{
-			params.WorkTag = ct.WorkfileRecvShard
-			params.Reader = rc
-			params.Cksum = nil
-			params.Atime = started
-		}
-		erp := m.ctx.t.PutObject(lom, params)
-		cluster.FreePutObjParams(params)
-		if erp != nil {
-			m.abort(err)
-			return erp
-		}
-		return nil
+func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	defer transport.DrainAndFreeReader(objReader)
+	if err != nil {
+		m.abort(err)
+		return err
 	}
+	if m.aborted() {
+		return newDSortAbortedError(m.ManagerUUID)
+	}
+	lom := cluster.AllocLOM(hdr.ObjName)
+	defer cluster.FreeLOM(lom)
+	if err = lom.InitBck(&hdr.Bck); err == nil {
+		err = lom.Load(false /*cache it*/, false /*locked*/)
+	}
+	if err != nil && !os.IsNotExist(err) {
+		m.abort(err)
+		return err
+	}
+	if err == nil {
+		if lom.EqCksum(hdr.ObjAttrs.Cksum) {
+			if m.config.FastV(4, cos.SmoduleDsort) {
+				nlog.Infof("[dsort] %s shard (%s) already exists and checksums are equal, skipping",
+					m.ManagerUUID, lom)
+			}
+			return nil
+		}
+		nlog.Warningf("[dsort] %s shard (%s) already exists, overriding", m.ManagerUUID, lom)
+	}
+	started := time.Now()
+	lom.SetAtimeUnix(started.UnixNano())
+	rc := io.NopCloser(objReader)
+
+	params := cluster.AllocPutObjParams()
+	{
+		params.WorkTag = ct.WorkfileRecvShard
+		params.Reader = rc
+		params.Cksum = nil
+		params.Atime = started
+	}
+	erp := m.ctx.t.PutObject(lom, params)
+	cluster.FreePutObjParams(params)
+	if erp != nil {
+		m.abort(err)
+		return erp
+	}
+	return nil
 }
 
 // doWithAbort sends requests through client. If manager aborts during the call

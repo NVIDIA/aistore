@@ -340,9 +340,9 @@ func TargetHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.Start:
 		startSortHandler(w, r)
 	case apc.Records:
-		recordsHandler(Managers)(w, r)
+		Managers.recordsHandler(w, r)
 	case apc.Shards:
-		shardsHandler(Managers)(w, r)
+		Managers.shardsHandler(w, r)
 	case apc.Abort:
 		abortSortHandler(w, r)
 	case apc.Remove:
@@ -455,132 +455,128 @@ func (m *Manager) startDSort() {
 // shardsHandler is the handler for the HTTP endpoint /v1/sort/shards.
 // A valid POST to this endpoint results in a new shard being created locally based on the contents
 // of the incoming request body. The shard is then sent to the correct target in the cluster as per HRW.
-func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkHTTPMethod(w, r, http.MethodPost) {
-			return
-		}
-		apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortShards.L)
-		if err != nil {
-			return
-		}
-		managerUUID := apiItems[0]
-		dsortManager, exists := managers.Get(managerUUID)
-		if !exists {
-			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-			cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
-			return
-		}
-
-		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
-			return
-		}
-		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
-			return
-		}
-
-		var (
-			buf, slab   = mm.AllocSize(serializationBufSize)
-			tmpMetadata = &CreationPhaseMetadata{}
-		)
-		defer slab.Free(buf)
-
-		if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "creation phase metadata", "-", err)
-			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
-			return
-		}
-
-		if !dsortManager.inProgress() || dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", DSortName))
-			return
-		}
-
-		dsortManager.creationPhase.metadata = *tmpMetadata
-		dsortManager.startShardCreation <- struct{}{}
+func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkHTTPMethod(w, r, http.MethodPost) {
+		return
 	}
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortShards.L)
+	if err != nil {
+		return
+	}
+	managerUUID := apiItems[0]
+	dsortManager, exists := managers.Get(managerUUID)
+	if !exists {
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
+		return
+	}
+
+	if !dsortManager.inProgress() {
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
+		return
+	}
+	if dsortManager.aborted() {
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
+		return
+	}
+
+	var (
+		buf, slab   = mm.AllocSize(serializationBufSize)
+		tmpMetadata = &CreationPhaseMetadata{}
+	)
+	defer slab.Free(buf)
+
+	if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "creation phase metadata", "-", err)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	if !dsortManager.inProgress() || dsortManager.aborted() {
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", DSortName))
+		return
+	}
+
+	dsortManager.creationPhase.metadata = *tmpMetadata
+	dsortManager.startShardCreation <- struct{}{}
 }
 
 // recordsHandler is the handler called for the HTTP endpoint /v1/sort/records.
 // A valid POST to this endpoint updates this target's dsortManager.Records with the
 // []Records from the request body, along with some related state variables.
-func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkHTTPMethod(w, r, http.MethodPost) {
-			return
-		}
-		apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRecords.L)
-		if err != nil {
-			return
-		}
-		managerUUID := apiItems[0]
-		dsortManager, exists := managers.Get(managerUUID)
-		if !exists {
-			s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
-			cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
-			return
-		}
-		if !dsortManager.inProgress() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
-			return
-		}
-		if dsortManager.aborted() {
-			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
-			return
-		}
-		var (
-			query     = r.URL.Query()
-			compStr   = query.Get(apc.QparamTotalCompressedSize)
-			uncompStr = query.Get(apc.QparamTotalUncompressedSize)
-			dStr      = query.Get(apc.QparamTotalInputShardsExtracted)
+func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Request) {
+	if !checkHTTPMethod(w, r, http.MethodPost) {
+		return
+	}
+	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRecords.L)
+	if err != nil {
+		return
+	}
+	managerUUID := apiItems[0]
+	dsortManager, exists := managers.Get(managerUUID)
+	if !exists {
+		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
+		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
+		return
+	}
+	if !dsortManager.inProgress() {
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
+		return
+	}
+	if dsortManager.aborted() {
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
+		return
+	}
+	var (
+		query     = r.URL.Query()
+		compStr   = query.Get(apc.QparamTotalCompressedSize)
+		uncompStr = query.Get(apc.QparamTotalUncompressedSize)
+		dStr      = query.Get(apc.QparamTotalInputShardsExtracted)
+	)
+
+	compressed, err := strconv.ParseInt(compStr, 10, 64)
+	if err != nil {
+		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+			apc.QparamTotalCompressedSize, r.URL.String(), err)
+		cmn.WriteErrMsg(w, r, s)
+		return
+	}
+	uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
+	if err != nil {
+		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+			apc.QparamTotalUncompressedSize, r.URL.String(), err)
+		cmn.WriteErrMsg(w, r, s)
+		return
+	}
+	d, err := strconv.ParseUint(dStr, 10, 64)
+	if err != nil {
+		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
+			apc.QparamTotalInputShardsExtracted, r.URL.String(), err)
+		cmn.WriteErrMsg(w, r, s)
+		return
+	}
+
+	var (
+		buf, slab = mm.AllocSize(serializationBufSize)
+		records   = extract.NewRecords(int(d))
+	)
+	defer slab.Free(buf)
+
+	if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "records", "-", err)
+		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	dsortManager.addCompressionSizes(compressed, uncompressed)
+	dsortManager.recManager.EnqueueRecords(records)
+	dsortManager.incrementReceived()
+
+	if dsortManager.config.FastV(4, cos.SmoduleDsort) {
+		nlog.Infof(
+			"[dsort] %s total times received records from another target: %d",
+			dsortManager.ManagerUUID, dsortManager.received.count.Load(),
 		)
-
-		compressed, err := strconv.ParseInt(compStr, 10, 64)
-		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				apc.QparamTotalCompressedSize, r.URL.String(), err)
-			cmn.WriteErrMsg(w, r, s)
-			return
-		}
-		uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
-		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				apc.QparamTotalUncompressedSize, r.URL.String(), err)
-			cmn.WriteErrMsg(w, r, s)
-			return
-		}
-		d, err := strconv.ParseUint(dStr, 10, 64)
-		if err != nil {
-			s := fmt.Sprintf("invalid %s in request to %s, err: %v",
-				apc.QparamTotalInputShardsExtracted, r.URL.String(), err)
-			cmn.WriteErrMsg(w, r, s)
-			return
-		}
-
-		var (
-			buf, slab = mm.AllocSize(serializationBufSize)
-			records   = extract.NewRecords(int(d))
-		)
-		defer slab.Free(buf)
-
-		if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-			err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "records", "-", err)
-			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
-			return
-		}
-
-		dsortManager.addCompressionSizes(compressed, uncompressed)
-		dsortManager.recManager.EnqueueRecords(records)
-		dsortManager.incrementReceived()
-
-		if dsortManager.config.FastV(4, cos.SmoduleDsort) {
-			nlog.Infof(
-				"[dsort] %s total times received records from another target: %d",
-				dsortManager.ManagerUUID, dsortManager.received.count.Load(),
-			)
-		}
 	}
 }
 

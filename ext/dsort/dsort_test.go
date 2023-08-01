@@ -373,7 +373,7 @@ var _ = Describe("Distributed Sort", func() {
 
 					for _, target := range tctx.targets {
 						handlers := map[string]http.HandlerFunc{
-							apc.URLPathdSortRecords.S + "/": recordsHandler(target.managers),
+							apc.URLPathdSortRecords.S + "/": target.managers.recordsHandler,
 						}
 						target.setHandlers(handlers)
 					}

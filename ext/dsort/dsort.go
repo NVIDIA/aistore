@@ -44,8 +44,13 @@ const DSortName = "dsort"
 const PrefixJobID = "srt-"
 
 type (
+	receiver interface {
+		recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error // aka transport.RecvObj
+	}
 	dsorter interface {
 		extract.ContentLoader
+		receiver
+
 		name() string
 		init() error
 		start() error
@@ -56,7 +61,6 @@ type (
 		postShardCreation(mi *fs.Mountpath)
 		cleanup()
 		finalCleanup() error
-		makeRecvRequestFunc() transport.RecvObj
 		preShardExtraction(expectedUncompressedSize uint64) (toDisk bool)
 		postShardExtraction(expectedUncompressedSize uint64)
 		onAbort()
@@ -237,16 +241,12 @@ outer:
 	return group.Wait()
 }
 
-func (m *Manager) createShard(s *extract.Shard) (err error) {
+func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 	var (
 		metrics   = m.Metrics.Creation
 		shardName = s.Name
 		errCh     = make(chan error, 2)
 	)
-	//
-	// TODO: use cluster.AllocLOM, review `t.PutObject` below
-	//
-	lom := &cluster.LOM{ObjName: shardName}
 	if err = lom.InitBck(&m.rs.OutputBck); err != nil {
 		return
 	}

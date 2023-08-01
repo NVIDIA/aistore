@@ -97,7 +97,7 @@ type (
 	StreamCollector struct{}
 
 	// Rx callbacks
-	RecvObj func(hdr ObjHdr, object io.Reader, err error) error
+	RecvObj func(hdr ObjHdr, objReader io.Reader, err error) error
 	RecvMsg func(msg Msg, err error) error
 )
 
