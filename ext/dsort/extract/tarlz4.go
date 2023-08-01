@@ -56,7 +56,7 @@ func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt
 
 // CreateShard creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, lzw, then finally tarball.
-func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
+func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
@@ -84,7 +84,7 @@ func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadCont
 					needFlush = false
 				}
 
-				if n, err = loadContent(lzw, rec, obj); err != nil {
+				if n, err = loader.Load(lzw, rec, obj); err != nil {
 					return written + n, err
 				}
 
@@ -99,7 +99,7 @@ func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadCont
 				debug.Assert(diff >= 0 && diff < archive.TarBlockSize)
 			case SGLStoreType, DiskStoreType:
 				rdReader.reinit(tw, obj.Size, obj.MetadataSize)
-				if n, err = loadContent(rdReader, rec, obj); err != nil {
+				if n, err = loader.Load(rdReader, rec, obj); err != nil {
 					return written + n, err
 				}
 				written += n

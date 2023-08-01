@@ -107,22 +107,23 @@ func (tm *testSmap) Listeners() meta.SmapListeners {
 }
 
 //
-// MOCKS
+// MOCKs
 //
 
 type extractCreatorMock struct {
 	useCompression bool
-	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
+	createShard    func(s *extract.Shard, w io.Writer, loader extract.ContentLoader) // func to hijack CreateShard function
 }
 
 func (*extractCreatorMock) ExtractShard(*cluster.LOM, cos.ReadReaderAt, extract.RecordExtractor, bool) (int64, int, error) {
 	return 0, 0, nil
 }
 
-func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) (int64, error) {
-	ec.createShard(s, w, loadContent)
+func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loader extract.ContentLoader) (int64, error) {
+	ec.createShard(s, w, loader)
 	return 0, nil
 }
+
 func (*extractCreatorMock) SupportsOffset() bool      { return true }
 func (ec *extractCreatorMock) UsingCompression() bool { return ec.useCompression }
 func (*extractCreatorMock) MetadataSize() int64       { return 0 }

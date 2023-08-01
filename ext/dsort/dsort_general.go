@@ -247,13 +247,8 @@ CreateAllShards:
 		}
 
 		ds.creationPhase.adjuster.acquireGoroutineSema()
-		group.Go(func(s *extract.Shard) func() error {
-			return func() error {
-				err := ds.m.createShard(s)
-				ds.creationPhase.adjuster.releaseGoroutineSema()
-				return err
-			}
-		}(s))
+		wrap := &dsgExtract{ds, s}
+		group.Go(wrap.do)
 	}
 
 	return group.Wait()
@@ -268,202 +263,198 @@ func (ds *dsorterGeneral) postShardCreation(mi *fs.Mountpath) {
 	ds.creationPhase.adjuster.releaseSema(mi)
 }
 
-// loadContent returns function to load content from local storage (either disk or memory).
-func (ds *dsorterGeneral) loadContent() extract.LoadContentFunc {
-	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
-		loadLocal := func(w io.Writer) (written int64, err error) {
-			var (
-				slab      *memsys.Slab
-				buf       []byte
-				storeType = obj.StoreType
-			)
-
-			if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
-				buf, slab = mm.AllocSize(obj.Size)
-			}
-
-			defer func() {
-				if storeType != extract.SGLStoreType {
-					slab.Free(buf)
-				}
-				ds.m.decrementRef(1)
-			}()
-
-			fullContentPath := ds.m.recManager.FullContentPath(obj)
-
-			if ds.m.rs.DryRun {
-				r := cos.NopReader(obj.MetadataSize + obj.Size)
-				written, err = io.CopyBuffer(w, r, buf)
-				return
-			}
-
-			var n int64
-			switch storeType {
-			case extract.OffsetStoreType:
-				f, err := os.Open(fullContentPath) // TODO: it should be open always
-				if err != nil {
-					return written, errors.WithMessage(err, "(offset) open local content failed")
-				}
-				defer cos.Close(f)
-				_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
-				if err != nil {
-					return written, errors.WithMessage(err, "(offset) seek local content failed")
-				}
-				if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
-					return written, errors.WithMessage(err, "(offset) copy local content failed")
-				}
-			case extract.SGLStoreType:
-				debug.Assert(buf == nil)
-				v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
-				debug.Assert(ok, fullContentPath)
-				ds.m.recManager.RecordContents().Delete(fullContentPath)
-				sgl := v.(*memsys.SGL)
-				defer sgl.Free()
-
-				// No need for `io.CopyBuffer` since SGL implements `io.WriterTo`.
-				if n, err = io.Copy(w, sgl); err != nil {
-					return written, errors.WithMessage(err, "(sgl) copy local content failed")
-				}
-			case extract.DiskStoreType:
-				f, err := os.Open(fullContentPath)
-				if err != nil {
-					return written, errors.WithMessage(err, "(disk) open local content failed")
-				}
-				defer cos.Close(f)
-				if n, err = io.CopyBuffer(w, f, buf); err != nil {
-					return written, errors.WithMessage(err, "(disk) copy local content failed")
-				}
-			default:
-				debug.Assert(false, storeType)
-			}
-
-			debug.Assert(n > 0)
-			written += n
-			return
-		}
-
-		loadRemote := func(w io.Writer, daemonID string) (int64, error) {
-			var (
-				cbErr      error
-				beforeRecv int64
-				beforeSend int64
-
-				twg     = cos.NewTimeoutGroup()
-				writer  = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
-				metrics = ds.m.Metrics.Creation
-
-				toNode = ds.m.smap.GetTarget(daemonID)
-			)
-
-			if toNode == nil {
-				return 0, errors.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
-			}
-
-			req := remoteRequest{
-				Record:    rec,
-				RecordObj: obj,
-			}
-			opaque := cos.MustMarshal(req)
-			o := transport.AllocSend()
-			o.Hdr = transport.ObjHdr{Opaque: opaque}
-			if ds.m.Metrics.extended {
-				beforeSend = mono.NanoTime()
-			}
-			o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ any, err error) {
-				if err != nil {
-					cbErr = err
-				}
-				if ds.m.Metrics.extended {
-					delta := mono.Since(beforeSend)
-					metrics.mu.Lock()
-					metrics.RequestStats.updateTime(delta)
-					metrics.mu.Unlock()
-
-					ds.m.ctx.stats.AddMany(
-						cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
-						cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
-					)
-				}
-				twg.Done()
-			}
-
-			twg.Add(1)
-			if err := ds.streams.request.Send(o, nil, toNode); err != nil {
-				return 0, errors.WithStack(err)
-			}
-
-			// Send should be synchronous to make sure that 'wait timeout' is
-			// calculated only for the receive side.
-			twg.Wait()
-
-			if cbErr != nil {
-				return 0, errors.WithStack(cbErr)
-			}
-
-			if ds.m.Metrics.extended {
-				beforeRecv = mono.NanoTime()
-			}
-
-			// It may happen that the target we are trying to contact was
-			// aborted or for some reason is not responding. Thus we need to do
-			// some precaution and wait for the content only for limited time or
-			// until we receive abort signal.
-			var pulled bool
-			timed, stopped := writer.wg.WaitTimeoutWithStop(ds.m.callTimeout, ds.m.listenAborted())
-			if timed || stopped {
-				// In case of time out or abort we need to pull the writer to
-				// avoid concurrent Close and Write on `writer.w`.
-				pulled = ds.pullStreamWriter(rec.MakeUniqueName(obj)) != nil
-			}
-
-			if ds.m.Metrics.extended {
-				delta := mono.Since(beforeRecv)
-				metrics.mu.Lock()
-				metrics.ResponseStats.updateTime(delta)
-				metrics.mu.Unlock()
-
-				ds.m.ctx.stats.AddMany(
-					cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
-					cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
-				)
-			}
-
-			// If we timed out or were stopped but failed to pull the
-			// writer then someone else should've done it and we barely
-			// missed. In this case we should wait for the job to finish
-			// (when stopped we should receive error anyway).
-
-			if pulled { // managed to pull the writer, can safely return error
-				var err error
-				switch {
-				case stopped:
-					err = cmn.NewErrAborted("wait for remote content", "", nil)
-				case timed:
-					err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
-						ds.m.ctx.node.ID(), daemonID)
-				default:
-					debug.Assert(false, "pulled but not stopped or timed?")
-				}
-				return 0, err
-			}
-
-			if timed || stopped {
-				writer.wg.Wait()
-			}
-			return writer.n, writer.err
-		}
-
-		if ds.m.aborted() {
-			return 0, newDSortAbortedError(ds.m.ManagerUUID)
-		}
-
-		if rec.DaemonID != ds.m.ctx.node.ID() { // File source contents are located on a different target.
-			return loadRemote(w, rec.DaemonID)
-		}
-
-		// Load from local source
-		return loadLocal(w)
+// loads content from disk or memory, local or remote
+func (ds *dsorterGeneral) Load(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+	if ds.m.aborted() {
+		return 0, newDSortAbortedError(ds.m.ManagerUUID)
 	}
+	if rec.DaemonID != ds.m.ctx.node.ID() {
+		return ds.loadRemote(w, rec, obj)
+	}
+	return ds.loadLocal(w, obj)
+}
+
+func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (written int64, err error) {
+	var (
+		slab      *memsys.Slab
+		buf       []byte
+		storeType = obj.StoreType
+	)
+
+	if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
+		buf, slab = mm.AllocSize(obj.Size)
+	}
+
+	defer func() {
+		if storeType != extract.SGLStoreType {
+			slab.Free(buf)
+		}
+		ds.m.decrementRef(1)
+	}()
+
+	fullContentPath := ds.m.recManager.FullContentPath(obj)
+
+	if ds.m.rs.DryRun {
+		r := cos.NopReader(obj.MetadataSize + obj.Size)
+		written, err = io.CopyBuffer(w, r, buf)
+		return
+	}
+
+	var n int64
+	switch storeType {
+	case extract.OffsetStoreType:
+		f, err := os.Open(fullContentPath) // TODO: it should be open always
+		if err != nil {
+			return written, errors.WithMessage(err, "(offset) open local content failed")
+		}
+		defer cos.Close(f)
+		_, err = f.Seek(obj.Offset-obj.MetadataSize, io.SeekStart)
+		if err != nil {
+			return written, errors.WithMessage(err, "(offset) seek local content failed")
+		}
+		if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
+			return written, errors.WithMessage(err, "(offset) copy local content failed")
+		}
+	case extract.SGLStoreType:
+		debug.Assert(buf == nil)
+		v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
+		debug.Assert(ok, fullContentPath)
+		ds.m.recManager.RecordContents().Delete(fullContentPath)
+		sgl := v.(*memsys.SGL)
+		defer sgl.Free()
+
+		// No need for `io.CopyBuffer` since SGL implements `io.WriterTo`.
+		if n, err = io.Copy(w, sgl); err != nil {
+			return written, errors.WithMessage(err, "(sgl) copy local content failed")
+		}
+	case extract.DiskStoreType:
+		f, err := os.Open(fullContentPath)
+		if err != nil {
+			return written, errors.WithMessage(err, "(disk) open local content failed")
+		}
+		defer cos.Close(f)
+		if n, err = io.CopyBuffer(w, f, buf); err != nil {
+			return written, errors.WithMessage(err, "(disk) copy local content failed")
+		}
+	default:
+		debug.Assert(false, storeType)
+	}
+
+	debug.Assert(n > 0)
+	written += n
+	return
+}
+
+func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+	var (
+		cbErr      error
+		beforeRecv int64
+		beforeSend int64
+
+		daemonID = rec.DaemonID
+		twg      = cos.NewTimeoutGroup()
+		writer   = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
+		metrics  = ds.m.Metrics.Creation
+
+		toNode = ds.m.smap.GetTarget(daemonID)
+	)
+
+	if toNode == nil {
+		return 0, errors.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
+	}
+
+	req := remoteRequest{
+		Record:    rec,
+		RecordObj: obj,
+	}
+	opaque := cos.MustMarshal(req)
+	o := transport.AllocSend()
+	o.Hdr = transport.ObjHdr{Opaque: opaque}
+	if ds.m.Metrics.extended {
+		beforeSend = mono.NanoTime()
+	}
+	o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ any, err error) {
+		if err != nil {
+			cbErr = err
+		}
+		if ds.m.Metrics.extended {
+			delta := mono.Since(beforeSend)
+			metrics.mu.Lock()
+			metrics.RequestStats.updateTime(delta)
+			metrics.mu.Unlock()
+
+			ds.m.ctx.stats.AddMany(
+				cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
+				cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
+			)
+		}
+		twg.Done()
+	}
+
+	twg.Add(1)
+	if err := ds.streams.request.Send(o, nil, toNode); err != nil {
+		return 0, errors.WithStack(err)
+	}
+
+	// Send should be synchronous to make sure that 'wait timeout' is
+	// calculated only for the receive side.
+	twg.Wait()
+
+	if cbErr != nil {
+		return 0, errors.WithStack(cbErr)
+	}
+
+	if ds.m.Metrics.extended {
+		beforeRecv = mono.NanoTime()
+	}
+
+	// It may happen that the target we are trying to contact was
+	// aborted or for some reason is not responding. Thus we need to do
+	// some precaution and wait for the content only for limited time or
+	// until we receive abort signal.
+	var pulled bool
+	timed, stopped := writer.wg.WaitTimeoutWithStop(ds.m.callTimeout, ds.m.listenAborted())
+	if timed || stopped {
+		// In case of time out or abort we need to pull the writer to
+		// avoid concurrent Close and Write on `writer.w`.
+		pulled = ds.pullStreamWriter(rec.MakeUniqueName(obj)) != nil
+	}
+
+	if ds.m.Metrics.extended {
+		delta := mono.Since(beforeRecv)
+		metrics.mu.Lock()
+		metrics.ResponseStats.updateTime(delta)
+		metrics.mu.Unlock()
+
+		ds.m.ctx.stats.AddMany(
+			cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
+			cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
+		)
+	}
+
+	// If we timed out or were stopped but failed to pull the
+	// writer then someone else should've done it and we barely
+	// missed. In this case we should wait for the job to finish
+	// (when stopped we should receive error anyway).
+
+	if pulled { // managed to pull the writer, can safely return error
+		var err error
+		switch {
+		case stopped:
+			err = cmn.NewErrAborted("wait for remote content", "", nil)
+		case timed:
+			err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
+				ds.m.ctx.node.ID(), daemonID)
+		default:
+			debug.Assert(false, "pulled but not stopped or timed?")
+		}
+		return 0, err
+	}
+
+	if timed || stopped {
+		writer.wg.Wait()
+	}
+	return writer.n, writer.err
 }
 
 func (ds *dsorterGeneral) makeRecvRequestFunc() transport.RecvObj {
@@ -643,4 +634,19 @@ func (ds *dsorterGeneral) postShardExtraction(expectedUncompressedSize uint64) {
 
 func (ds *dsorterGeneral) onAbort() {
 	_ = ds.cleanupStreams()
+}
+
+//
+// wrappers
+//
+
+type dsgExtract struct {
+	ds *dsorterGeneral
+	s  *extract.Shard
+}
+
+func (x *dsgExtract) do() error {
+	err := x.ds.m.createShard(x.s)
+	x.ds.creationPhase.adjuster.releaseGoroutineSema()
+	return err
 }

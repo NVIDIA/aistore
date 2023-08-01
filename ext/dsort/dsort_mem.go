@@ -62,14 +62,12 @@ type (
 	}
 
 	dsorterMem struct {
-		m *Manager
-
+		m       *Manager
 		streams struct {
 			cleanupDone atomic.Bool
 			builder     *bundle.Streams // streams for sending information about building shards
 			records     *bundle.Streams // streams for sending the record
 		}
-
 		creationPhase struct {
 			connector       *rwConnector // used to connect readers (streams, local data) with writers (shards)
 			requestedShards chan string
@@ -308,14 +306,11 @@ func (ds *dsorterMem) postShardCreation(mi *fs.Mountpath) {
 	ds.creationPhase.adjuster.write.releaseSema(mi)
 }
 
-func (ds *dsorterMem) loadContent() extract.LoadContentFunc {
-	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
-		if ds.m.aborted() {
-			return 0, newDSortAbortedError(ds.m.ManagerUUID)
-		}
-
-		return ds.creationPhase.connector.connectWriter(rec.MakeUniqueName(obj), w)
+func (ds *dsorterMem) Load(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+	if ds.m.aborted() {
+		return 0, newDSortAbortedError(ds.m.ManagerUUID)
 	}
+	return ds.creationPhase.connector.connectWriter(rec.MakeUniqueName(obj), w)
 }
 
 // createShardsLocally waits until it's given the signal to start creating

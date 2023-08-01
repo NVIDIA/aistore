@@ -123,7 +123,7 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 
 // CreateShard creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
+func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loader ContentLoader) (written int64, err error) {
 	var n int64
 	zw := zip.NewWriter(w)
 	defer cos.Close(zw)
@@ -132,7 +132,7 @@ func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadC
 	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
 			rdReader.reinit(zw, obj.Size, obj.MetadataSize)
-			if n, err = loadContent(rdReader, rec, obj); err != nil {
+			if n, err = loader.Load(rdReader, rec, obj); err != nil {
 				return written + n, err
 			}
 

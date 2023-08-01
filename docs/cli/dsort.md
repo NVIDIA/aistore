@@ -29,12 +29,12 @@ For background and in-depth presentation, please see this [document](/docs/dsort
 $ ais dsort --help
 NAME:
    ais dsort - (alias for "job start dsort") start dsort job
-            Required parameters:
+   Required parameters:
               - input_bck: source bucket (used as both source and destination if the latter not specified)
               - input_format: (see docs and examples below)
               - output_format: (ditto)
               - output_shard_size: (as the name implies)
-            e.g. inline JSON spec:
+   E.g. inline JSON spec:
                 $ ais start dsort '{
                   "extension": ".tar",
                   "input_bck": {"name": "dsort-testing"},
@@ -44,7 +44,7 @@ NAME:
                   "order_file": "http://website.web/static/order_file.txt",
                   "order_file_sep": " "
                 }'
-            e.g. inline YAML spec:
+   E.g. inline YAML spec:
                 $ ais start dsort -f - <<EOM
                   extension: .tar
                   input_bck:

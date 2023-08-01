@@ -47,15 +47,16 @@ type (
 		buf           []byte        // helper buffer for `CopyBuffer` methods
 	}
 
-	// LoadContentFunc is type for the function which loads content from the
-	// either remote or local target.
-	LoadContentFunc func(w io.Writer, rec *Record, obj *RecordObj) (int64, error)
+	// loads content from local or remote target
+	ContentLoader interface {
+		Load(w io.Writer, rec *Record, obj *RecordObj) (int64, error)
+	}
 
 	// Creator is interface which describes set of functions which each
 	// shard creator should implement.
 	Creator interface {
 		ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
-		CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (int64, error)
+		CreateShard(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool
 		MetadataSize() int64
