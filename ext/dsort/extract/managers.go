@@ -89,17 +89,15 @@ type (
 func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCreator Creator,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
-		Records: NewRecords(1000),
-
+		Records:             NewRecords(1000),
 		t:                   t,
 		bck:                 bck,
 		extension:           extension,
 		onDuplicatedRecords: onDuplicatedRecords,
-
-		extractCreator:  extractCreator,
-		keyExtractor:    keyExtractor,
-		contents:        &sync.Map{},
-		extractionPaths: &sync.Map{},
+		extractCreator:      extractCreator,
+		keyExtractor:        keyExtractor,
+		contents:            &sync.Map{},
+		extractionPaths:     &sync.Map{},
 	}
 }
 

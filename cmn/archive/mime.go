@@ -170,3 +170,15 @@ func _detect(file *os.File, archname string, buf []byte) (m string, n int, err e
 	err = fmt.Errorf("failed to detect file signature in %q", archname)
 	return
 }
+
+func EqExt(ext1, ext2 string) bool {
+	switch {
+	case ext1 == ext2:
+		return true
+	case ext1 == ExtTarGz && ext2 == ExtTgz:
+		return true
+	case ext2 == ExtTarGz && ext1 == ExtTgz:
+		return true
+	}
+	return false
+}

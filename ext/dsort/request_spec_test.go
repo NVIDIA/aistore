@@ -38,16 +38,16 @@ var _ = Describe("RequestSpec", func() {
 				MaxMemUsage:     "80%",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Bck.Name).To(Equal("test"))
-			Expect(parsed.Bck.Provider).To(Equal(apc.AIS))
-			Expect(parsed.OutputBck.Name).To(Equal("test"))
-			Expect(parsed.OutputBck.Provider).To(Equal(apc.AIS))
-			Expect(parsed.Extension).To(Equal(archive.ExtTar))
+			Expect(pars.Bck.Name).To(Equal("test"))
+			Expect(pars.Bck.Provider).To(Equal(apc.AIS))
+			Expect(pars.OutputBck.Name).To(Equal("test"))
+			Expect(pars.OutputBck.Provider).To(Equal(apc.AIS))
+			Expect(pars.Extension).To(Equal(archive.ExtTar))
 
-			Expect(parsed.Pit.Template).To(Equal(cos.ParsedTemplate{
+			Expect(pars.Pit.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      10,
@@ -58,7 +58,7 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
+			Expect(pars.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      10,
@@ -69,10 +69,10 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.OutputShardSize).To(BeEquivalentTo(10 * cos.KiB))
+			Expect(pars.OutputShardSize).To(BeEquivalentTo(10 * cos.KiB))
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(cos.QuantityPercent))
-			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80))
+			Expect(pars.MaxMemUsage.Type).To(Equal(cos.QuantityPercent))
+			Expect(pars.MaxMemUsage.Value).To(BeEquivalentTo(80))
 		})
 
 		It("should set buckets correctly", func() {
@@ -86,13 +86,13 @@ var _ = Describe("RequestSpec", func() {
 				MaxMemUsage:     "80%",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Bck.Name).To(Equal("test"))
-			Expect(parsed.Bck.Provider).To(Equal(apc.AWS))
-			Expect(parsed.OutputBck.Name).To(Equal("testing"))
-			Expect(parsed.OutputBck.Provider).To(Equal(apc.AWS))
+			Expect(pars.Bck.Name).To(Equal("test"))
+			Expect(pars.Bck.Provider).To(Equal(apc.AWS))
+			Expect(pars.OutputBck.Name).To(Equal("testing"))
+			Expect(pars.OutputBck.Provider).To(Equal(apc.AWS))
 		})
 
 		It("should parse spec with mem usage as bytes", func() {
@@ -106,11 +106,11 @@ var _ = Describe("RequestSpec", func() {
 				MaxMemUsage:     "80 GB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.MaxMemUsage.Type).To(Equal(cos.QuantityBytes))
-			Expect(parsed.MaxMemUsage.Value).To(BeEquivalentTo(80 * 1024 * 1024 * 1024))
+			Expect(pars.MaxMemUsage.Type).To(Equal(cos.QuantityBytes))
+			Expect(pars.MaxMemUsage.Value).To(BeEquivalentTo(80 * 1024 * 1024 * 1024))
 		})
 
 		It("should parse spec with .tgz extension", func() {
@@ -122,10 +122,10 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Extension).To(Equal(archive.ExtTgz))
+			Expect(pars.Extension).To(Equal(archive.ExtTgz))
 		})
 
 		It("should parse spec with .tar.gz extension", func() {
@@ -137,10 +137,10 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Extension).To(Equal(archive.ExtTarGz))
+			Expect(pars.Extension).To(Equal(archive.ExtTarGz))
 		})
 
 		It("should parse spec with .tar.gz extension", func() {
@@ -152,10 +152,10 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Extension).To(Equal(archive.ExtZip))
+			Expect(pars.Extension).To(Equal(archive.ExtZip))
 		})
 
 		It("should parse spec with %06d syntax", func() {
@@ -167,10 +167,10 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
+			Expect(pars.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,
@@ -191,10 +191,10 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.Pit.Template).To(Equal(cos.ParsedTemplate{
+			Expect(pars.Pit.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,
@@ -205,7 +205,7 @@ var _ = Describe("RequestSpec", func() {
 				}},
 			}))
 
-			Expect(parsed.Pot.Template).To(Equal(cos.ParsedTemplate{
+			Expect(pars.Pot.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
 				Ranges: []cos.TemplateRange{{
 					Start:      0,
@@ -228,11 +228,11 @@ var _ = Describe("RequestSpec", func() {
 				ExtractConcMaxLimit: 0,
 				Algorithm:           Algorithm{Kind: None},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.CreateConcMaxLimit).To(BeEquivalentTo(0))
-			Expect(parsed.ExtractConcMaxLimit).To(BeEquivalentTo(0))
+			Expect(pars.CreateConcMaxLimit).To(BeEquivalentTo(0))
+			Expect(pars.ExtractConcMaxLimit).To(BeEquivalentTo(0))
 		})
 
 		It("should parse spec and set the global config values or override them", func() {
@@ -259,14 +259,14 @@ var _ = Describe("RequestSpec", func() {
 					DSorterMemThreshold: "",
 				},
 			}
-			parsed, err := rs.Parse()
+			pars, err := rs.Parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(parsed.DuplicatedRecords).To(Equal(cmn.AbortReaction))
-			Expect(parsed.MissingShards).To(Equal(cmn.IgnoreReaction))
-			Expect(parsed.EKMMalformedLine).To(Equal(cmn.IgnoreReaction))
-			Expect(parsed.EKMMissingKey).To(Equal(cmn.WarnReaction))
-			Expect(parsed.DSorterMemThreshold).To(Equal("80%"))
+			Expect(pars.DuplicatedRecords).To(Equal(cmn.AbortReaction))
+			Expect(pars.MissingShards).To(Equal(cmn.IgnoreReaction))
+			Expect(pars.EKMMalformedLine).To(Equal(cmn.IgnoreReaction))
+			Expect(pars.EKMMissingKey).To(Equal(cmn.WarnReaction))
+			Expect(pars.DSorterMemThreshold).To(Equal("80%"))
 		})
 
 		It("should pass when output shard is zero and bash or @ template is used for output format", func() {

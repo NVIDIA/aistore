@@ -38,24 +38,24 @@ type response struct {
 //////////////////
 
 // POST /v1/sort
-func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, parsedRS *ParsedRequestSpec) {
+func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, pars *ParsedRequestSpec) {
 	var err error
-	parsedRS.TargetOrderSalt = []byte(cos.FormatNowStamp())
+	pars.TargetOrderSalt = []byte(cos.FormatNowStamp())
 
 	// TODO: handle case when bucket was removed during dSort job - this should
 	// stop whole operation. Maybe some listeners as we have on smap change?
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
 
-	parsedRS.DSorterType, err = determineDSorterType(parsedRS)
+	pars.DSorterType, err = determineDSorterType(pars)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
 
-	b, err := js.Marshal(parsedRS)
+	b, err := js.Marshal(pars)
 	if err != nil {
-		s := fmt.Sprintf("unable to marshal RequestSpec: %+v, err: %v", parsedRS, err)
+		s := fmt.Sprintf("unable to marshal RequestSpec: %+v, err: %v", pars, err)
 		cmn.WriteErrMsg(w, r, s, http.StatusInternalServerError)
 		return
 	}
@@ -790,9 +790,9 @@ func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, item
 
 // Determine what dsorter type we should use. We need to make this decision
 // based on eg. how much memory targets have.
-func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
-	if parsedRS.DSorterType != "" {
-		return parsedRS.DSorterType, nil // in case the dsorter type is already set, we need to respect it
+func determineDSorterType(pars *ParsedRequestSpec) (string, error) {
+	if pars.DSorterType != "" {
+		return pars.DSorterType, nil // in case the dsorter type is already set, we need to respect it
 	}
 
 	// Get memory stats from targets
@@ -803,7 +803,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 		moreThanThreshold = true
 	)
 
-	dsorterMemThreshold, err := cos.ParseSize(parsedRS.DSorterMemThreshold, cos.UnitsIEC)
+	dsorterMemThreshold, err := cos.ParseSize(pars.DSorterMemThreshold, cos.UnitsIEC)
 	debug.AssertNoErr(err)
 
 	query := make(url.Values)
@@ -820,7 +820,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 		}
 
 		memStat := sys.MemStat{Total: daemonStatus.MemCPUInfo.MemAvail + daemonStatus.MemCPUInfo.MemUsed}
-		dsortAvailMemory := calcMaxMemoryUsage(parsedRS.MaxMemUsage, &memStat)
+		dsortAvailMemory := calcMaxMemoryUsage(pars.MaxMemUsage, &memStat)
 		totalAvailMemory += dsortAvailMemory
 		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
 	}
@@ -834,7 +834,7 @@ func determineDSorterType(parsedRS *ParsedRequestSpec) (string, error) {
 	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
 	// }
 	// msg := &apc.LsoMsg{Props: "size,status"}
-	// objList, err := api.ListObjects(baseParams, parsedRS.Bucket, msg, 0)
+	// objList, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
 	// if err != nil {
 	// 	return "", err
 	// }

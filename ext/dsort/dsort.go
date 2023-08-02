@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -96,7 +97,7 @@ func (m *Manager) start() (err error) {
 		return err
 	}
 
-	s := binary.BigEndian.Uint64(m.rs.TargetOrderSalt)
+	s := binary.BigEndian.Uint64(m.pars.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	if m.config.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", m.ctx.t, m.ManagerUUID,
@@ -112,14 +113,14 @@ func (m *Manager) start() (err error) {
 
 	// Phase 3. - run only by the final target
 	if curTargetIsFinal {
-		shardSize := m.rs.OutputShardSize
+		shardSize := m.pars.OutputShardSize
 		if m.extractCreator.UsingCompression() {
 			// By making the assumption that the input content is reasonably
 			// uniform across all shards, the output shard size required (such
 			// that each gzip compressed output shard will have a size close to
 			// rs.ShardSizeBytes) can be estimated.
 			avgCompressRatio := m.avgCompressionRatio()
-			shardSize = int64(float64(m.rs.OutputShardSize) / avgCompressRatio)
+			shardSize = int64(float64(m.pars.OutputShardSize) / avgCompressRatio)
 			if m.config.FastV(4, cos.SmoduleDsort) {
 				nlog.Infof("%s: %s estimated output shard size required before gzip compression: %d",
 					m.ctx.t, m.ManagerUUID, shardSize)
@@ -156,12 +157,10 @@ func (m *Manager) start() (err error) {
 }
 
 func (m *Manager) startDSorter() error {
-	defer m.markDSorterStarted()
-
+	defer m.markStarted()
 	if err := m.initStreams(); err != nil {
 		return err
 	}
-
 	nlog.Infof("%s: %s starting with dsorter: %q", m.ctx.t, m.ManagerUUID, m.dsorter.name())
 	return m.dsorter.start()
 }
@@ -173,12 +172,12 @@ func (m *Manager) extractLocalShards() (err error) {
 	// compare with xact/xs/multiobj.go
 	group, ctx := errgroup.WithContext(context.Background())
 	switch {
-	case m.rs.Pit.isRange():
+	case m.pars.Pit.isRange():
 		err = m.iterRange(ctx, group)
-	case m.rs.Pit.isList():
+	case m.pars.Pit.isList():
 		err = m.iterList(ctx, group)
 	default:
-		debug.Assert(m.rs.Pit.isPrefix())
+		debug.Assert(m.pars.Pit.isPrefix())
 		debug.Assert(false, "not implemented yet") // TODO -- FIXME
 	}
 
@@ -194,7 +193,7 @@ func (m *Manager) extractLocalShards() (err error) {
 func (m *Manager) iterRange(ctx context.Context, group *errgroup.Group) error {
 	var (
 		metrics = m.Metrics.Extraction
-		pt      = m.rs.Pit.Template
+		pt      = m.pars.Pit.Template
 	)
 	metrics.mu.Lock()
 	metrics.TotalCnt = pt.Count()
@@ -212,7 +211,7 @@ outer:
 		}
 
 		m.extractionPhase.adjuster.acquireGoroutineSema()
-		es := &extractShard{m, metrics, name}
+		es := &extractShard{m, metrics, name, true /*is-range*/}
 		group.Go(es.do)
 	}
 	return group.Wait()
@@ -221,10 +220,10 @@ outer:
 func (m *Manager) iterList(ctx context.Context, group *errgroup.Group) error {
 	metrics := m.Metrics.Extraction
 	metrics.mu.Lock()
-	metrics.TotalCnt = int64(len(m.rs.Pit.ObjNames))
+	metrics.TotalCnt = int64(len(m.pars.Pit.ObjNames))
 	metrics.mu.Unlock()
 outer:
-	for _, name := range m.rs.Pit.ObjNames {
+	for _, name := range m.pars.Pit.ObjNames {
 		select {
 		case <-m.listenAborted():
 			group.Wait()
@@ -235,7 +234,7 @@ outer:
 		}
 
 		m.extractionPhase.adjuster.acquireGoroutineSema()
-		es := &extractShard{m, metrics, name}
+		es := &extractShard{m, metrics, name, false /*is-range*/}
 		group.Go(es.do)
 	}
 	return group.Wait()
@@ -247,7 +246,7 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 		shardName = s.Name
 		errCh     = make(chan error, 2)
 	)
-	if err = lom.InitBck(&m.rs.OutputBck); err != nil {
+	if err = lom.InitBck(&m.pars.OutputBck); err != nil {
 		return
 	}
 	lom.SetAtimeUnix(time.Now().UnixNano())
@@ -276,7 +275,7 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 	wg.Add(1)
 	go func() {
 		var err error
-		if !m.rs.DryRun {
+		if !m.pars.DryRun {
 			params := cluster.AllocPutObjParams()
 			{
 				params.WorkTag = "dsort"
@@ -335,7 +334,7 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
-	if si.ID() != m.ctx.node.ID() && !m.rs.DryRun {
+	if si.ID() != m.ctx.node.ID() && !m.pars.DryRun {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
@@ -484,7 +483,8 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 				err := m.doWithAbort(reqArgs)
 				r.CloseWithError(err)
 				if err != nil {
-					return errors.Errorf("failed to send SortedRecords to next target (%s), err: %v", sendTo.ID(), err)
+					return errors.Errorf("failed to send SortedRecords to next target (%s): %v",
+						sendTo.ID(), err)
 				}
 				return nil
 			})
@@ -533,7 +533,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 		m.recManager.MergeEnqueuedRecords()
 	}
 
-	err = sortRecords(m.recManager.Records, m.rs.Algorithm)
+	err = sortRecords(m.recManager.Records, m.pars.Algorithm)
 	m.dsorter.postRecordDistribution()
 	return true, err
 }
@@ -543,7 +543,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		start           int
 		curShardSize    int64
 		n               = m.recManager.Records.Len()
-		pt              = m.rs.Pot.Template
+		pt              = m.pars.Pot.Template
 		shardCount      = pt.Count()
 		shards          = make([]*extract.Shard, 0)
 		numLocalRecords = make(map[string]int, m.smap.CountActiveTs())
@@ -568,7 +568,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 			return nil, errors.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
 		}
 		shard := &extract.Shard{
-			Name: name + m.rs.Extension,
+			Name: name + m.pars.Extension,
 		}
 
 		shard.Size = curShardSize
@@ -594,12 +594,12 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	if maxSize <= 0 {
 		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
 	}
-	parsedURL, err := url.Parse(m.rs.OrderFileURL)
+	parsedURL, err := url.Parse(m.pars.OrderFileURL)
 	if err != nil {
-		return nil, fmt.Errorf(fmtErrOrderURL, m.rs.OrderFileURL, err)
+		return nil, fmt.Errorf(fmtErrOrderURL, m.pars.OrderFileURL, err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, m.rs.OrderFileURL, http.NoBody)
+	req, err := http.NewRequest(http.MethodGet, m.pars.OrderFileURL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +616,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"unexpected status code (%d) when requesting order file from %q",
-			resp.StatusCode, m.rs.OrderFileURL,
+			resp.StatusCode, m.pars.OrderFileURL,
 		)
 	}
 
@@ -652,10 +652,10 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 				continue
 			}
 
-			parts := strings.Split(line, m.rs.OrderFileSep)
+			parts := strings.Split(line, m.pars.OrderFileSep)
 			if len(parts) != 2 {
 				msg := fmt.Sprintf("malformed line (%d) in external key map: %s", idx, line)
-				if err := m.react(m.rs.EKMMalformedLine, msg); err != nil {
+				if err := m.react(m.pars.EKMMalformedLine, msg); err != nil {
 					return nil, err
 				}
 			}
@@ -669,8 +669,8 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		key := fmt.Sprintf("%v", r.Key)
 		shardNameFmt, ok := externalKeyMap[key]
 		if !ok {
-			msg := fmt.Sprintf("extracted record %q which does not belong in external key map", key)
-			if err := m.react(m.rs.EKMMissingKey, msg); err != nil {
+			msg := fmt.Sprintf("record %q doesn't belong in external key map", key)
+			if err := m.react(m.pars.EKMMissingKey, msg); err != nil {
 				return nil, err
 			}
 		}
@@ -734,7 +734,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			sendOrder[d.ID()] = make(map[string]*extract.Shard, 100)
 		}
 	}
-	if m.rs.OrderFileURL != "" {
+	if m.pars.OrderFileURL != "" {
 		shards, err = m.generateShardsWithOrderingFile(maxSize)
 	} else {
 		shards, err = m.generateShardsWithTemplate(maxSize)
@@ -760,7 +760,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	// 	// target.
 	// }
 
-	bck := meta.CloneBck(&m.rs.OutputBck)
+	bck := meta.CloneBck(&m.pars.OutputBck)
 	if err := bck.Init(m.ctx.bmdOwner); err != nil {
 		return err
 	}
@@ -829,7 +829,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*extract.Shard, order map[string]*ex
 		return err
 	})
 	group.Go(func() error {
-		query := m.rs.Bck.AddToQuery(nil)
+		query := m.pars.Bck.AddToQuery(nil)
 		reqArgs := &cmn.HreqArgs{
 			Method: http.MethodPost,
 			Base:   si.URL(cmn.NetIntraData),
@@ -877,19 +877,32 @@ type extractShard struct {
 	m       *Manager
 	metrics *LocalExtraction
 	name    string
+	isRange bool
 }
 
 func (es *extractShard) do() (err error) {
+	m := es.m
 	shardName := es.name
-	if !strings.HasSuffix(es.name, es.m.rs.Extension) {
-		shardName = es.name + es.m.rs.Extension
+	if es.isRange && m.pars.Extension != "" {
+		ext, errV := archive.Mime("", es.name) // from filename
+		if errV == nil {
+			if !archive.EqExt(ext, m.pars.Extension) {
+				if m.config.FastV(4, cos.SmoduleDsort) {
+					nlog.Infof("%s: %s skipping %s: %q vs %q", m.ctx.t, m.ManagerUUID,
+						es.name, ext, m.pars.Extension)
+				}
+				return
+			}
+		} else {
+			shardName = es.name + m.pars.Extension
+		}
 	}
 	lom := cluster.AllocLOM(shardName)
 
 	err = es._do(lom)
 
 	cluster.FreeLOM(lom)
-	phaseInfo := &es.m.extractionPhase
+	phaseInfo := &m.extractionPhase
 	phaseInfo.adjuster.releaseGoroutineSema()
 	return
 }
@@ -900,7 +913,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		estimateTotalRecordsSize uint64
 		warnPossibleOOM          bool
 	)
-	if err := lom.InitBck(&m.rs.Bck); err != nil {
+	if err := lom.InitBck(&m.pars.Bck); err != nil {
 		return err
 	}
 	if _, local, err := lom.HrwTarget(m.smap); err != nil || !local {
@@ -908,8 +921,8 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsErrObjNought(err) {
-			msg := fmt.Sprintf("shard %q does not exist (is missing)", lom.Cname())
-			return m.react(m.rs.MissingShards, msg)
+			msg := fmt.Sprintf("extract.do: %q does not exist", lom.Cname())
+			return m.react(m.pars.MissingShards, msg)
 		}
 		return err
 	}
@@ -993,7 +1006,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 
 	if warnPossibleOOM {
 		msg := fmt.Sprintf("(estimated) total size of records (%d) will possibly exceed available memory (%s) during sorting phase",
-			estimateTotalRecordsSize, m.rs.MaxMemUsage)
+			estimateTotalRecordsSize, m.pars.MaxMemUsage)
 		return m.react(cmn.WarnReaction, msg)
 	}
 	return nil

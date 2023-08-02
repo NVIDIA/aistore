@@ -62,55 +62,55 @@ type ParsedRequestSpec struct {
 // is valid it parses all the fields, sets the values and returns ParsedRequestSpec.
 func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	var (
-		cfg      = cmn.GCO.Get().DSort
-		parsedRS = &ParsedRequestSpec{}
+		cfg  = cmn.GCO.Get().DSort
+		pars = &ParsedRequestSpec{}
 	)
 
 	if rs.InputBck.Name == "" {
-		return parsedRS, errMissingSrcBucket
+		return pars, errMissingSrcBucket
 	}
 	if rs.InputBck.Provider == "" {
 		rs.InputBck.Provider = apc.AIS
 	}
 	if _, err := cmn.NormalizeProvider(rs.InputBck.Provider); err != nil {
-		return parsedRS, err
+		return pars, err
 	}
 	if err := rs.InputBck.Validate(); err != nil {
-		return parsedRS, err
+		return pars, err
 	}
-	parsedRS.Description = rs.Description
-	parsedRS.Bck = rs.InputBck
-	parsedRS.OutputBck = rs.OutputBck
-	if parsedRS.OutputBck.IsEmpty() {
-		parsedRS.OutputBck = parsedRS.Bck
+	pars.Description = rs.Description
+	pars.Bck = rs.InputBck
+	pars.OutputBck = rs.OutputBck
+	if pars.OutputBck.IsEmpty() {
+		pars.OutputBck = pars.Bck
 	} else if _, err := cmn.NormalizeProvider(rs.OutputBck.Provider); err != nil {
-		return parsedRS, err
+		return pars, err
 	} else if err := rs.OutputBck.Validate(); err != nil {
-		return parsedRS, err
+		return pars, err
 	}
 
 	var err error
-	parsedRS.Pit, err = parseInputFormat(rs.InputFormat)
+	pars.Pit, err = parseInputFormat(rs.InputFormat)
 	if err != nil {
 		return nil, err
 	}
 
-	var ext string
-	ext, err = archive.Mime(rs.Extension, "")
+	if rs.Extension != "" {
+		pars.Extension, err = archive.Mime(rs.Extension, "")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	pars.OutputShardSize, err = cos.ParseSize(rs.OutputShardSize, cos.UnitsIEC)
 	if err != nil {
 		return nil, err
 	}
-	parsedRS.Extension = ext
-
-	parsedRS.OutputShardSize, err = cos.ParseSize(rs.OutputShardSize, cos.UnitsIEC)
-	if err != nil {
-		return nil, err
-	}
-	if parsedRS.OutputShardSize < 0 {
-		return nil, fmt.Errorf(fmtErrNegOutputSize, parsedRS.OutputShardSize)
+	if pars.OutputShardSize < 0 {
+		return nil, fmt.Errorf(fmtErrNegOutputSize, pars.OutputShardSize)
 	}
 
-	parsedRS.Algorithm, err = parseAlgorithm(rs.Algorithm)
+	pars.Algorithm, err = parseAlgorithm(rs.Algorithm)
 	if err != nil {
 		return nil, err
 	}
@@ -120,33 +120,33 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, fmt.Errorf(fmtErrOrderURL, rs.OrderFileURL, err)
 	}
 	if empty {
-		if parsedRS.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
+		if pars.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
-		if parsedRS.Pot.Template.Count() > math.MaxInt32 {
+		if pars.Pot.Template.Count() > math.MaxInt32 {
 			// If the count is not defined the output shard size must be
-			if parsedRS.OutputShardSize == 0 {
+			if pars.OutputShardSize == 0 {
 				return nil, errMissingOutputSize
 			}
 		}
 	} else { // Valid and not empty.
 		// For the order file the output shard size must be set.
-		if parsedRS.OutputShardSize == 0 {
+		if pars.OutputShardSize == 0 {
 			return nil, errMissingOutputSize
 		}
 
-		parsedRS.OrderFileURL = rs.OrderFileURL
+		pars.OrderFileURL = rs.OrderFileURL
 
-		parsedRS.OrderFileSep = rs.OrderFileSep
-		if parsedRS.OrderFileSep == "" {
-			parsedRS.OrderFileSep = "\t"
+		pars.OrderFileSep = rs.OrderFileSep
+		if pars.OrderFileSep == "" {
+			pars.OrderFileSep = "\t"
 		}
 	}
 
 	if rs.MaxMemUsage == "" {
 		rs.MaxMemUsage = cfg.DefaultMaxMemUsage
 	}
-	parsedRS.MaxMemUsage, err = cos.ParseQuantity(rs.MaxMemUsage)
+	pars.MaxMemUsage, err = cos.ParseQuantity(rs.MaxMemUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -157,35 +157,35 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		return nil, fmt.Errorf("%w ('create', %d)", errNegConcLimit, rs.CreateConcMaxLimit)
 	}
 
-	parsedRS.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
-	parsedRS.CreateConcMaxLimit = rs.CreateConcMaxLimit
-	parsedRS.StreamMultiplier = rs.StreamMultiplier
-	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
-	parsedRS.DSorterType = rs.DSorterType
-	parsedRS.DryRun = rs.DryRun
+	pars.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
+	pars.CreateConcMaxLimit = rs.CreateConcMaxLimit
+	pars.StreamMultiplier = rs.StreamMultiplier
+	pars.ExtendedMetrics = rs.ExtendedMetrics
+	pars.DSorterType = rs.DSorterType
+	pars.DryRun = rs.DryRun
 
 	// Check for values that override the global config.
 	if err := rs.Config.ValidateWithOpts(true); err != nil {
 		return nil, err
 	}
-	parsedRS.DSortConf = rs.Config
-	if parsedRS.MissingShards == "" {
-		parsedRS.MissingShards = cfg.MissingShards
+	pars.DSortConf = rs.Config
+	if pars.MissingShards == "" {
+		pars.MissingShards = cfg.MissingShards
 	}
-	if parsedRS.EKMMalformedLine == "" {
-		parsedRS.EKMMalformedLine = cfg.EKMMalformedLine
+	if pars.EKMMalformedLine == "" {
+		pars.EKMMalformedLine = cfg.EKMMalformedLine
 	}
-	if parsedRS.EKMMissingKey == "" {
-		parsedRS.EKMMissingKey = cfg.EKMMissingKey
+	if pars.EKMMissingKey == "" {
+		pars.EKMMissingKey = cfg.EKMMissingKey
 	}
-	if parsedRS.DuplicatedRecords == "" {
-		parsedRS.DuplicatedRecords = cfg.DuplicatedRecords
+	if pars.DuplicatedRecords == "" {
+		pars.DuplicatedRecords = cfg.DuplicatedRecords
 	}
-	if parsedRS.DSorterMemThreshold == "" {
-		parsedRS.DSorterMemThreshold = cfg.DSorterMemThreshold
+	if pars.DSorterMemThreshold == "" {
+		pars.DSorterMemThreshold = cfg.DSorterMemThreshold
 	}
 
-	return parsedRS, nil
+	return pars, nil
 }
 
 func parseAlgorithm(alg Algorithm) (*Algorithm, error) {

@@ -187,11 +187,11 @@ func (ds *dsorterMem) init() error {
 	ds.creationPhase.requestedShards = make(chan string, 10000)
 
 	ds.creationPhase.adjuster.read = newConcAdjuster(
-		ds.m.rs.CreateConcMaxLimit,
+		ds.m.pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/
 	)
 	ds.creationPhase.adjuster.write = newConcAdjuster(
-		ds.m.rs.CreateConcMaxLimit,
+		ds.m.pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/
 	)
 	return nil
@@ -209,8 +209,8 @@ func (ds *dsorterMem) start() error {
 	client := transport.NewIntraDataClient()
 
 	streamMultiplier := config.DSort.SbundleMult
-	if ds.m.rs.StreamMultiplier != 0 {
-		streamMultiplier = ds.m.rs.StreamMultiplier
+	if ds.m.pars.StreamMultiplier != 0 {
+		streamMultiplier = ds.m.pars.StreamMultiplier
 	}
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
@@ -344,7 +344,7 @@ func (ds *dsorterMem) createShardsLocally() error {
 	if err := mem.Get(); err != nil {
 		return err
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(ds.m.rs.MaxMemUsage, &mem)
+	maxMemoryToUse := calcMaxMemoryUsage(ds.m.pars.MaxMemUsage, &mem)
 	sa := newInmemShardAllocator(maxMemoryToUse - mem.ActualUsed)
 
 	// read
@@ -440,7 +440,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		beforeSend int64
 	)
 	fullContentPath := ds.m.recManager.FullContentPath(obj)
-	ct, err := cluster.NewCTFromBO(&ds.m.rs.OutputBck, fullContentPath, nil)
+	ct, err := cluster.NewCTFromBO(&ds.m.pars.OutputBck, fullContentPath, nil)
 	if err != nil {
 		return
 	}
@@ -483,7 +483,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		return
 	}
 
-	if ds.m.rs.DryRun {
+	if ds.m.pars.DryRun {
 		lr := cos.NopReader(obj.MetadataSize + obj.Size)
 		r := cos.NopOpener(io.NopCloser(lr))
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
@@ -626,7 +626,7 @@ func (es *dsmExtractShard) do() error {
 	ds, shard := es.ds, es.shard
 	defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
-	bck := meta.NewBck(ds.m.rs.OutputBck.Name, ds.m.rs.OutputBck.Provider, cmn.NsGlobal)
+	bck := meta.NewBck(ds.m.pars.OutputBck.Name, ds.m.pars.OutputBck.Provider, cmn.NsGlobal)
 	if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
 		return err
 	}
@@ -634,7 +634,6 @@ func (es *dsmExtractShard) do() error {
 	if err != nil {
 		return err
 	}
-
 	for _, rec := range shard.Records.All() {
 		for _, obj := range rec.Objects {
 			if err := ds.sendRecordObj(rec, obj, toNode); err != nil {
