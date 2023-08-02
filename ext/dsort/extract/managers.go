@@ -1,4 +1,4 @@
-// Package extract provides ExtractShard and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -55,8 +55,8 @@ type (
 	// Creator is interface which describes set of functions which each
 	// shard creator should implement.
 	Creator interface {
-		ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
-		CreateShard(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
+		Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
+		Create(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
 		UsingCompression() bool
 		SupportsOffset() bool
 		MetadataSize() int64
@@ -136,6 +136,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		sgl := rm.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
+			sgl.Free()
 			return 0, errors.WithStack(err)
 		}
 
@@ -143,8 +144,8 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 		if args.extractMethod.Has(ExtractToWriter) {
 			dst = io.MultiWriter(sgl, args.w)
 		}
-
 		if size, err = io.CopyBuffer(dst, r, args.buf); err != nil {
+			sgl.Free()
 			return size, errors.WithStack(err)
 		}
 		rm.contents.Store(fullContentPath, sgl)
@@ -298,8 +299,9 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 	}
 }
 
-func (rm *RecordManager) ChangeStoreType(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
-	sgl := value.(*memsys.SGL)
+func (rm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
+	sgl, ok := value.(*memsys.SGL)
+	debug.Assert(ok)
 
 	recordObjExt := cos.Ext(fullContentPath)
 	contentPath := strings.TrimSuffix(fullContentPath, recordObjExt)

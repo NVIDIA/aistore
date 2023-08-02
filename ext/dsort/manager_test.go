@@ -37,7 +37,7 @@ var _ = Describe("Init", func() {
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: archive.ExtTar, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.extractCreator.UsingCompression()).To(BeFalse())
+		Expect(m.ec.UsingCompression()).To(BeFalse())
 	})
 
 	It("should init with tgz extension", func() {
@@ -46,7 +46,7 @@ var _ = Describe("Init", func() {
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: archive.ExtTarGz, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 
 	It("should init with tar.gz extension", func() {
@@ -55,7 +55,7 @@ var _ = Describe("Init", func() {
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: archive.ExtTgz, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 
 	It("should init with zip extension", func() {
@@ -64,7 +64,7 @@ var _ = Describe("Init", func() {
 		defer m.unlock()
 		sr := &ParsedRequestSpec{Extension: archive.ExtZip, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 })
 

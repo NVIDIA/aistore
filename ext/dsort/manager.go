@@ -103,8 +103,8 @@ type (
 		ctx  dsortContext
 		smap *meta.Smap
 
-		recManager     *extract.RecordManager
-		extractCreator extract.Creator
+		recManager *extract.RecordManager
+		ec         extract.Creator
 
 		startShardCreation chan struct{}
 		pars               *ParsedRequestSpec
@@ -198,7 +198,7 @@ func (m *Manager) init(pars *ParsedRequestSpec) error {
 	}
 
 	// Set extract creator depending on extension provided by the user
-	if err := m.setExtractCreator(); err != nil {
+	if err := m.setRW(); err != nil {
 		return err
 	}
 
@@ -324,7 +324,7 @@ func (m *Manager) cleanup() {
 
 	debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
 
-	m.extractCreator = nil
+	m.ec = nil
 	m.client = nil
 
 	m.ctx.smapOwner.Listeners().Unreg(m)
@@ -452,8 +452,8 @@ func (m *Manager) markStarted()               { m.dsorterStarted.Done() }
 func (m *Manager) waitToStart()               { m.dsorterStarted.Wait() }
 func (m *Manager) onDupRecs(msg string) error { return m.react(m.pars.DuplicatedRecords, msg) }
 
-// setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
-func (m *Manager) setExtractCreator() (err error) {
+// setRW sets what type of file extraction and creation is used based on the RequestSpec.
+func (m *Manager) setRW() (err error) {
 	var ke extract.KeyExtractor
 	switch m.pars.Algorithm.Kind {
 	case Content:
@@ -467,28 +467,33 @@ func (m *Manager) setExtractCreator() (err error) {
 		return errors.WithStack(err)
 	}
 
-	var ec extract.Creator
-	switch m.pars.Extension {
-	case archive.ExtTar:
-		ec = extract.NewTarExtractCreator(m.ctx.t)
-	case archive.ExtTarGz, archive.ExtTgz:
-		ec = extract.NewTargzExtractCreator(m.ctx.t, m.pars.Extension)
-	case archive.ExtZip:
-		ec = extract.NewZipExtractCreator(m.ctx.t)
-	case archive.ExtTarLz4:
-		ec = extract.NewTarlz4ExtractCreator(m.ctx.t)
-	default:
-		debug.Assertf(false, "unknown extension %q", m.pars.Extension)
-		return archive.NewErrUnknownMime(m.pars.Extension)
+	m.ec = newExtractCreator(m.ctx.t, m.pars.Extension)
+	if m.ec == nil {
+		debug.Assert(m.pars.Extension == "", m.pars.Extension)
+		// NOTE: [feature] allow non-specified extension; assign default extract-creator;
+		// handle all shards we encounter - all supported formats
+		m.ec = extract.NewTarRW(m.ctx.t)
 	}
-	if !m.pars.DryRun {
-		m.extractCreator = ec
-	} else {
-		m.extractCreator = extract.NopExtractCreator(ec)
+	if m.pars.DryRun {
+		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
+		m.ec = extract.NopRW(m.ec)
 	}
-
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.pars.Bck, m.pars.Extension, m.extractCreator, ke, m.onDupRecs)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.pars.Bck, m.pars.Extension, m.ec, ke, m.onDupRecs)
 	return nil
+}
+
+func newExtractCreator(t cluster.Target, ext string) (ec extract.Creator) {
+	switch ext {
+	case archive.ExtTar:
+		ec = extract.NewTarRW(t)
+	case archive.ExtTarGz, archive.ExtTgz:
+		ec = extract.NewTargzRW(t, ext)
+	case archive.ExtZip:
+		ec = extract.NewZipRW(t)
+	case archive.ExtTarLz4:
+		ec = extract.NewTarlz4RW(t)
+	}
+	return
 }
 
 // updateFinishedAck marks daemonID as finished. If all daemons ack then the

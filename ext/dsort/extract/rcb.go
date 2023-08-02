@@ -1,4 +1,4 @@
-// Package extract provides ExtractShard and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.

@@ -1,4 +1,4 @@
-// Package extract provides ExtractShard and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -19,7 +19,7 @@ import (
 )
 
 type (
-	tarExtractCreator struct {
+	tarRW struct {
 		t   cluster.Target
 		ext string
 	}
@@ -41,11 +41,11 @@ var (
 	padBuf [archive.TarBlockSize]byte
 
 	// interface guard
-	_ Creator = (*tarExtractCreator)(nil)
+	_ Creator = (*tarRW)(nil)
 )
 
-func NewTarExtractCreator(t cluster.Target) Creator {
-	return &tarExtractCreator{t: t, ext: archive.ExtTar}
+func NewTarRW(t cluster.Target) Creator {
+	return &tarRW{t: t, ext: archive.ExtTar}
 }
 
 func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
@@ -98,8 +98,8 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 	return n + int(remainingMetadataSize), err
 }
 
-// ExtractShard reads the tarball f and extracts its metadata.
-func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+// Extract reads the tarball f and extracts its metadata.
+func (t *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
 	ar, err := archive.NewReader(t.ext, r)
 	if err != nil {
 		return 0, 0, err
@@ -114,9 +114,9 @@ func (t *tarExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 	return s.extractedSize, s.extractedCount, err
 }
 
-// CreateShard creates a new shard locally based on the Shard.
+// Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
+func (t *tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
@@ -174,9 +174,9 @@ func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loader Cont
 	return written, nil
 }
 
-func (*tarExtractCreator) UsingCompression() bool { return false }
-func (*tarExtractCreator) SupportsOffset() bool   { return true }
-func (*tarExtractCreator) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding
+func (*tarRW) UsingCompression() bool { return false }
+func (*tarRW) SupportsOffset() bool   { return true }
+func (*tarRW) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding
 
 // NOTE: Mostly taken from `tar.formatPAXRecord`.
 func estimateXHeaderSize(paxRecords map[string]string) int64 {

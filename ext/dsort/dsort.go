@@ -114,7 +114,7 @@ func (m *Manager) start() (err error) {
 	// Phase 3. - run only by the final target
 	if curTargetIsFinal {
 		shardSize := m.pars.OutputShardSize
-		if m.extractCreator.UsingCompression() {
+		if m.ec.UsingCompression() {
 			// By making the assumption that the input content is reasonably
 			// uniform across all shards, the output shard size required (such
 			// that each gzip compressed output shard will have a size close to
@@ -279,13 +279,15 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 			params := cluster.AllocPutObjParams()
 			{
 				params.WorkTag = "dsort"
-				// NOTE: we cannot allow `PutObject` to close original reader
-				// on error as it can cause panic when `CreateShard` writes data.
-				params.Reader = io.NopCloser(r)
 				params.Cksum = nil
 				params.Atime = beforeCreation
 
-				// TODO: params.Xact = ?
+				// NOTE: cannot have `PutObject` closing the original reader
+				// on error as it'll cause writer (below) to panic
+				params.Reader = io.NopCloser(r)
+
+				// TODO: params.Xact - in part, to count PUTs and bytes in a generic fashion
+				// (vs metrics.ShardCreationStats.updateThroughput - see below)
 			}
 			err = m.ctx.t.PutObject(lom, params)
 			cluster.FreePutObjParams(params)
@@ -299,7 +301,15 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 		wg.Done()
 	}()
 
-	_, err = m.extractCreator.CreateShard(s, w, m.dsorter)
+	ec := m.ec
+	if m.pars.Extension == "" {
+		ext, err := archive.Mime("", lom.FQN)
+		debug.AssertNoErr(err)
+		// NOTE: extract-creator for _this_ output shard (compare with extractShard._do)
+		ec = newExtractCreator(m.ctx.t, ext)
+	}
+
+	_, err = ec.Create(s, w, m.dsorter)
 	w.CloseWithError(err)
 	if err != nil {
 		r.CloseWithError(err)
@@ -676,7 +686,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		}
 
 		shards := shardsBuilder[shardNameFmt]
-		recordSize := r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
+		recordSize := r.TotalSize() + m.ec.MetadataSize()*int64(len(r.Objects))
 		shardCount := len(shards)
 		if shardCount == 0 || shards[shardCount-1].Size > maxSize {
 			shard := &extract.Shard{
@@ -927,6 +937,16 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		return err
 	}
 
+	ec := m.ec
+	if m.pars.Extension == "" {
+		ext, err := archive.Mime("", lom.FQN)
+		if err != nil {
+			return nil // skip
+		}
+		// NOTE: extract-creator for _this_ shard (compare with createShard above)
+		ec = newExtractCreator(m.ctx.t, ext)
+	}
+
 	phaseInfo := &m.extractionPhase
 	phaseInfo.adjuster.acquireSema(lom.Mountpath())
 	if m.aborted() {
@@ -949,7 +969,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		return errors.Errorf("unable to open %s: %v", lom.Cname(), err)
 	}
 	var compressedSize int64
-	if m.extractCreator.UsingCompression() {
+	if ec.UsingCompression() {
 		compressedSize = lom.SizeBytes()
 	}
 
@@ -958,7 +978,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 
 	beforeExtraction := mono.NanoTime()
 
-	extractedSize, extractedCount, err := m.extractCreator.ExtractShard(lom, fh, m.recManager, toDisk)
+	extractedSize, extractedCount, err := ec.Extract(lom, fh, m.recManager, toDisk)
 	cos.Close(fh)
 
 	dur := mono.Since(beforeExtraction)

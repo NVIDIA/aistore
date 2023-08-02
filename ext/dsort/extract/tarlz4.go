@@ -1,4 +1,4 @@
-// Package extract provides ExtractShard and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
@@ -18,20 +18,20 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-type tarlz4ExtractCreator struct {
+type tarlz4RW struct {
 	t   cluster.Target
 	ext string
 }
 
 // interface guard
-var _ Creator = (*tarlz4ExtractCreator)(nil)
+var _ Creator = (*tarlz4RW)(nil)
 
-func NewTarlz4ExtractCreator(t cluster.Target) Creator {
-	return &tarlz4ExtractCreator{t: t, ext: archive.ExtTarLz4}
+func NewTarlz4RW(t cluster.Target) Creator {
+	return &tarlz4RW{t: t, ext: archive.ExtTarLz4}
 }
 
-// ExtractShard  the tarball f and extracts its metadata.
-func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+// Extract  the tarball f and extracts its metadata.
+func (t *tarlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
 	ar, err := archive.NewReader(t.ext, r)
 	if err != nil {
 		return 0, 0, err
@@ -54,9 +54,9 @@ func (t *tarlz4ExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt
 	return s.extractedSize, s.extractedCount, err
 }
 
-// CreateShard creates a new shard locally based on the Shard.
+// Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, lzw, then finally tarball.
-func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
+func (t *tarlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
@@ -116,6 +116,6 @@ func (t *tarlz4ExtractCreator) CreateShard(s *Shard, tarball io.Writer, loader C
 	return written, nil
 }
 
-func (*tarlz4ExtractCreator) UsingCompression() bool { return true }
-func (*tarlz4ExtractCreator) SupportsOffset() bool   { return true }
-func (*tarlz4ExtractCreator) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding
+func (*tarlz4RW) UsingCompression() bool { return true }
+func (*tarlz4RW) SupportsOffset() bool   { return true }
+func (*tarlz4RW) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding

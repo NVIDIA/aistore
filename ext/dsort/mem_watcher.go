@@ -151,19 +151,18 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				continue
 			}
 
-			// In case memory is exceeded spill sgls to disk
+			// if memory is exceeded "spill" SGLs to disk
+			storeType := extract.DiskStoreType
+			if mw.m.ec.SupportsOffset() {
+				storeType = extract.OffsetStoreType
+			}
 			mw.m.recManager.RecordContents().Range(func(key, value any) bool {
-				var n int64
-				if mw.m.extractCreator.SupportsOffset() {
-					n = mw.m.recManager.ChangeStoreType(key.(string), extract.OffsetStoreType, value, buf)
-				} else {
-					n = mw.m.recManager.ChangeStoreType(key.(string), extract.DiskStoreType, value, buf)
-				}
+				n := mw.m.recManager.FreeMem(key.(string), storeType, value, buf)
 				memExcess -= n
-				return memExcess > 0 // continue only if we still need to do some memory cleanup
+				return memExcess > 0 // continue if we need more
 			})
 
-			debug.FreeOSMemory() // try to free the memory
+			debug.FreeOSMemory() // free with force
 		case <-mw.m.listenAborted():
 			return
 		case <-mw.excess.stopCh.Listen():

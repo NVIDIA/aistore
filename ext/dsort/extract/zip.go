@@ -1,4 +1,4 @@
-// Package extract provides ExtractShard and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -18,7 +18,7 @@ import (
 )
 
 type (
-	zipExtractCreator struct {
+	zipRW struct {
 		t   cluster.Target
 		ext string
 	}
@@ -44,10 +44,10 @@ type (
 )
 
 // interface guard
-var _ Creator = (*zipExtractCreator)(nil)
+var _ Creator = (*zipRW)(nil)
 
-func NewZipExtractCreator(t cluster.Target) Creator {
-	return &zipExtractCreator{t: t, ext: archive.ExtZip}
+func NewZipRW(t cluster.Target) Creator {
+	return &zipRW{t: t, ext: archive.ExtZip}
 }
 
 func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
@@ -106,8 +106,8 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 	return n + int(remainingMetadataSize), err
 }
 
-// ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+// Extract reads the tarball f and extracts its metadata.
+func (z *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
 	ar, err := archive.NewReader(z.ext, r, lom.SizeBytes())
 	if err != nil {
 		return 0, 0, err
@@ -121,9 +121,9 @@ func (z *zipExtractCreator) ExtractShard(lom *cluster.LOM, r cos.ReadReaderAt, e
 	return s.extractedSize, s.extractedCount, err
 }
 
-// CreateShard creates a new shard locally based on the Shard.
+// Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loader ContentLoader) (written int64, err error) {
+func (z *zipRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64, err error) {
 	var n int64
 	zw := zip.NewWriter(w)
 	defer cos.Close(zw)
@@ -143,6 +143,6 @@ func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loader ContentLoa
 	return written, nil
 }
 
-func (*zipExtractCreator) UsingCompression() bool { return true }
-func (*zipExtractCreator) SupportsOffset() bool   { return false }
-func (*zipExtractCreator) MetadataSize() int64    { return 0 } // zip does not have header size
+func (*zipRW) UsingCompression() bool { return true }
+func (*zipRW) SupportsOffset() bool   { return false }
+func (*zipRW) MetadataSize() int64    { return 0 } // zip does not have header size
