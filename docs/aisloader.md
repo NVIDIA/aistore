@@ -380,21 +380,20 @@ them) until you start the loader.
 
 ## HTTP tracing
 
-Following is a brief (example-illustrated) sequence to enable detailed tracing, capture statistics, and toggle tracing on/off at runtime.
+Following is a brief illustrated sequence to enable detailed tracing, capture statistics, and **toggle** tracing on/off at runtime.
 
-The reason for runtime switch must be clear - the amount of generated (and very detailed) metrics can sometimes put a strain on your StatsD backend server.
+**IMPORTANT NOTE:**
+> The amount of generated (and extremely detailed) metrics can put a strain on your StatsD server. That's exactly the reason for runtime switch to **toggle** HTTP tracing on/off. The example below shows how to do it (in particular, see `kill -HUP`).
 
-> Note that other than `--trace-http`, all command-line options in this section are used for purely illustrative purposes.
+### 1. Run aisloader for 90s (32 workes, 100% write, sizes between 1KB and 1MB) with detailed tracing enabled:
 
 ```console
-# Run aisloader for 90s (32 workes, 100% write, sizes between 1KB and 1MB) with detailed tracing enabled:
-
 $ aisloader -bucket=ais://abc -duration 90s -numworkers=32 -minsize=1K -maxsize=1M -pctput=50 --cleanup=false --trace-http=true
 ```
 
-```console
-# Have `netcat` listening on the default StatsD port `8125`:
+### 2. Have `netcat` listening on the default StatsD port `8125`:
 
+```console
 $ nc 8125 -l -u -k
 
 # The result will look as follows - notice "*latency*" metrics (in milliseconds):
@@ -424,15 +423,19 @@ aisloader.u18044-0.put.latency.target:1.0063602047675682|ms|@0.000052aisproxy.DL
 ...
 ```
 
-```console
-# Finally, let's toggle detailed tracing on and off by sending aisoader `SIGHUP`:
+### 3. Finally, toggle detailed tracing on and off by sending aisoader `SIGHUP`:
 
+```console
 $ pgrep -a aisloader
 3800 aisloader -bucket=ais://abc -duration 90s -numworkers=32 -minsize=1K -maxsize=1M -pctput=100 --cleanup=false --trace-http=true
+
 # kill -1 3800
+# or, same: kill -HUP 3800
+```
 
-# The result will look like:
+### The result:
 
+```console
 Time      OP    Count                   Size (Total)            Latency (min, avg, max)                 Throughput (Avg)        Errors (Total)
 10:11:27  PUT   20,136 (20,136 8 0)     19.7MiB (19.7MiB)       755.308µs  3.929ms    42.493ms         1.97MiB/s (1.97MiB/s)   -
 ...
@@ -443,6 +446,8 @@ Detailed latency info is disabled
 
 Detailed latency info is enabled
 ```
+
+> Note that other than `--trace-http`, all command-line options in this section are used for purely illustrative purposes.
 
 ## References
 
