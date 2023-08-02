@@ -171,7 +171,7 @@ KERAS_TRANSFORMER = """
 apiVersion: v1
 kind: Pod
 metadata:
-  name: transformer-compress
+  name: transformer-keras
   annotations:
     communication_type: "{communication_type}://"
     wait_timeout: 5m
@@ -183,7 +183,7 @@ spec:
       ports:
         - name: default
           containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      command: ["gunicorn", "--bind", "0.0.0.0:80", "app:app"]
       env:
         - name: FORMAT
           value: "{format}"
