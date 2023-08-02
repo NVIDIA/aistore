@@ -153,7 +153,13 @@ spec:
       ports:
         - name: default
           containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80', '{arg1}', '{val1}', '{arg2}', '{val2}']
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      env:
+      # COMPRESS_OPTIONS is a dictionary (JSON string) of additional parameters
+      # `mode` and `compression`. For more information on additional parameters, refer to
+      # https://github.com/NVIDIA/ais-etl/blob/master/transformers/compress/README.md.
+      - name: COMPRESS_OPTIONS
+        value: '{compress_options}'
       readinessProbe:
         httpGet:
           path: /health
