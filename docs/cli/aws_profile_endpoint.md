@@ -22,7 +22,7 @@ For supported backends (that include, but are not limited, to AWS S3), see also:
 ## Table of Contents
 - [Viewing vendor-specific properties](#viewing-vendor-specific-properties)
 - [Environment variables](#environment-variables)
-- [Setting profile with alternative access/secret keys and/or region](#setting-profile-with-alternative-access-secret-keys-and-or-region)
+- [Setting profile with alternative access/secret keys and/or region](#setting-profile-with-alternative-accesssecret-keys-andor-region)
 - [Configuring custom AWS S3 endpoint](#configuring-custom-aws-s3-endpoint)
 
 ## Viewing vendor-specific properties

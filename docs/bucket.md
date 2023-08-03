@@ -595,7 +595,7 @@ AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket
 * named AWS profiles (with alternative credentials and/or region)
 * alternative s3 endpoints
 
-For background and usage examples, please see [AWS-specific bucket configuration](/docs/cli/aws_profile_endpoint.md).
+For background and usage examples, please see [CLI: AWS-specific bucket configuration](/docs/cli/aws_profile_endpoint.md).
 
 # List Objects
 
