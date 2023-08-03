@@ -39,6 +39,10 @@ const (
 	// NOTE: the same can be done on a per-bucket basis, via bucket prop `Extra.AWS.Endpoint`
 	// (bucket override will always take precedence)
 	awsEnvS3Endpoint = "S3_ENDPOINT"
+
+	// ditto non-default profile (the default is [default] in ~/.aws/credentials)
+	// same NOTE in re precedence
+	awsEnvConfigProfile = "AWS_PROFILE"
 )
 
 type (
@@ -52,17 +56,19 @@ type (
 )
 
 var (
-	clients    map[string]map[string]*s3.S3 // one client per (region, endpoint)
+	clients    map[string]*s3.S3 // one s3.Client aka "svc" per (profile, region, endpoint) triplet
 	cmu        sync.RWMutex
 	s3Endpoint string
+	awsProfile string
 )
 
 // interface guard
 var _ cluster.BackendProvider = (*awsProvider)(nil)
 
 func NewAWS(t cluster.TargetPut) (cluster.BackendProvider, error) {
-	clients = make(map[string]map[string]*s3.S3, 2)
+	clients = make(map[string]*s3.S3, 2)
 	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
+	awsProfile = os.Getenv(awsEnvConfigProfile)
 	return &awsProvider{t: t}, nil
 }
 
@@ -491,8 +497,12 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
 func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error) {
-	endpoint := s3Endpoint
+	var (
+		endpoint = s3Endpoint
+		profile  = awsProfile
+	)
 	region = conf.region
+
 	if conf.bck != nil && conf.bck.Props != nil {
 		if region == "" {
 			region = conf.bck.Props.Extra.AWS.CloudRegion
@@ -500,22 +510,22 @@ func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error)
 		if conf.bck.Props.Extra.AWS.Endpoint != "" {
 			endpoint = conf.bck.Props.Extra.AWS.Endpoint
 		}
-	}
-
-	// reuse
-	if region != "" {
-		cmu.RLock()
-		svc = clients[region][endpoint]
-		cmu.RUnlock()
-		if svc != nil {
-			return
+		if conf.bck.Props.Extra.AWS.Profile != "" {
+			profile = conf.bck.Props.Extra.AWS.Profile
 		}
 	}
+	cid := _cid(profile, region, endpoint)
+
+	// reuse
+	cmu.RLock()
+	svc = clients[cid]
+	cmu.RUnlock()
+	if svc != nil {
+		return
+	}
+
 	// create
-	var (
-		sess    = _session(endpoint)
-		awsConf = &aws.Config{}
-	)
+	sess, config := _session(endpoint, profile)
 	if region == "" {
 		if tag != "" {
 			err = fmt.Errorf("%s: unknown region for bucket %s -- proceeding with default", tag, conf.bck)
@@ -523,30 +533,46 @@ func newClient(conf sessConf, tag string) (svc *s3.S3, region string, err error)
 		svc = s3.New(sess)
 		return
 	}
-	// ok
-	awsConf.Region = aws.String(region)
-	svc = s3.New(sess, awsConf)
+	// have region
+	config.Region = aws.String(region)
+	svc = s3.New(sess, config)
 	debug.Assertf(region == *svc.Config.Region, "%s != %s", region, *svc.Config.Region)
 
 	cmu.Lock()
-	eps := clients[region]
-	if eps == nil {
-		eps = make(map[string]*s3.S3, 1)
-		clients[region] = eps
-	}
-	eps[endpoint] = svc
+	clients[cid] = svc
 	cmu.Unlock()
 	return
 }
 
+func _cid(profile, region, endpoint string) string {
+	sb := &strings.Builder{}
+	if profile != "" {
+		sb.WriteString(profile)
+	}
+	sb.WriteByte('#')
+	if region != "" {
+		sb.WriteString(region)
+	}
+	sb.WriteByte('#')
+	if endpoint != "" {
+		sb.WriteString(endpoint)
+	}
+	return sb.String()
+}
+
 // Create session using default creds from ~/.aws/credentials and environment variables.
-func _session(endpoint string) *session.Session {
+func _session(endpoint, profile string) (*session.Session, *aws.Config) {
 	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
-	config.WithEndpoint(endpoint) // normally empty but could also be `Props.Extra.AWS.Endpoint` or `os.Getenv(awsEnvS3Endpoint)`
-	return session.Must(session.NewSessionWithOptions(session.Options{
+	// `endpoint` is normally empty but could also be `Props.Extra.AWS.Endpoint` or `os.Getenv(awsEnvS3Endpoint)`
+	// (with bucket-specific `Props` taking precedence)
+	config.WithEndpoint(endpoint)
+
+	opts := session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config:            config,
-	}))
+		Profile:           profile,
+	}
+	return session.Must(session.NewSessionWithOptions(opts)), &config
 }
 
 func getBucketVersioning(svc *s3.S3, bck *cmn.Bck) (enabled bool, errV error) {

@@ -24,6 +24,7 @@ For types of supported buckets (AIS, Cloud, backend, etc.) and many more example
 - [Start Erasure Coding](#start-erasure-coding)
 - [Show bucket properties](#show-bucket-properties)
 - [Set bucket properties](#set-bucket-properties)
+- [Show and set AWS-specific properties](#show-and-set-aws-specific properties)
 - [Reset bucket properties to cluster defaults](#reset-bucket-properties-to-cluster-defaults)
 - [Show bucket metadata](#show-bucket-metadata)
 
@@ -943,7 +944,6 @@ README.md        8.96KiB
 
 > On the other hand, for any given `s3://bucket` its S3 endpoint can be set, unset, and otherwise changed at any time - at runtime. As shown above.
 
-
 #### Connect/Disconnect AIS bucket to/from cloud bucket
 
 Set backend bucket for AIS bucket `bucket_name` to the GCP cloud bucket `cloud_bucket`.
@@ -1106,6 +1106,17 @@ mirror		 2 copies
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
 ```
+
+## Show and set AWS-specific properties
+
+AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket that is backed up by an AWS S3 bucket (**) can be configured to use alternative:
+
+* named AWS profiles (with alternative credentials and/or region)
+* alternative s3 endpoints
+
+For background and usage examples, please see [AWS-specific bucket configuration](aws_profile_endpoint.md).
+
+> (**) Terminology-wise, "s3 bucket" is a shortcut phrase indicating a bucket in an AIS cluster that either (A) has the same name (e.g. `s3://abc`) or (B) a differently named AIS bucket that has `backend_bck` property that specifies the s3 bucket in question.
 
 ## Reset bucket properties to cluster defaults
 

@@ -70,13 +70,20 @@ type (
 		CloudRegion string `json:"cloud_region,omitempty" list:"readonly"`
 
 		// from https://github.com/aws/aws-sdk-go/blob/main/aws/config.go:
-		//   "An optional endpoint URL (hostname only or fully qualified URI)
-		//    that overrides the default generated endpoint."
+		// - "An optional endpoint URL (hostname only or fully qualified URI)
+		// that overrides the default generated endpoint."
 		Endpoint string `json:"endpoint,omitempty"`
+
+		// from https://github.com/aws/aws-sdk-go/blob/main/aws/session/session.go:
+		// - "Overrides the config profile the Session should be created from. If not
+		// set the value of the environment variable will be loaded (AWS_PROFILE,
+		// or AWS_DEFAULT_PROFILE if the Shared Config is enabled)."
+		Profile string `json:"profile,omitempty"`
 	}
 	ExtraPropsAWSToUpdate struct {
 		CloudRegion *string `json:"cloud_region"`
 		Endpoint    *string `json:"endpoint"`
+		Profile     *string `json:"profile"`
 	}
 
 	ExtraPropsHTTP struct {

@@ -7,7 +7,7 @@ redirect_from:
  - /docs/bucket.md/
 ---
 
-## Table of Contents
+# Table of Contents
 
 - [Bucket](#bucket)
   - [Default Bucket Properties](#default-bucket-properties)
@@ -28,11 +28,12 @@ redirect_from:
 - [Bucket Properties](#bucket-properties)
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Bucket Access Attributes](#bucket-access-attributes)
+- [AWS-specific configuration](#aws-specific-configuration)
 - [List Objects](#list-objects)
   - [Options](#options)
   - [Results](#results)
 
-## Bucket
+# Bucket
 
 AIStore uses the popular and well-known bucket abstraction, originally (likely) introduced by Amazon S3.
 
@@ -63,7 +64,7 @@ All the [supported storage services](storage_svcs.md) equally apply to all stora
 
 3rd party backend-based and AIS buckets support the same API with a few documented exceptions. Remote buckets can be *evicted* from AIS. AIS buckets are the only buckets that can be created, renamed, and deleted via the [RESTful API](http_api.md).
 
-### Default Bucket Properties
+## Default Bucket Properties
 
 By default, created buckets inherit their properties from the cluster-wide global [configuration](configuration.md).
 Similar to other types of cluster-wide metadata, global configuration (also referred to as "cluster configuration")
@@ -100,7 +101,7 @@ $ ais create ais://abc --props="lru.enabled=false mirror.enabled=true mirror.cop
 $ ais create ais://abc --props='{"lru": {"enabled": false}, "mirror": {"enabled": true, "copies": 4}}'
 ```
 
-### Inherited Bucket Properties and LRU
+## Inherited Bucket Properties and LRU
 
 1. [LRU](storage_svcs.md#lru) eviction triggers automatically when the percentage of used capacity exceeds configured ("high") watermark `lru.highwm`. The latter is part of bucket configuration and one of the many bucket properties that can be individually configured.
 2. By default, `lru.highwm` = `90%` of total storage space.
@@ -139,7 +140,7 @@ See also:
 * [CLI: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 * [CLI documentation and many more examples](cli/bucket.md)
 
-### Backend Provider
+## Backend Provider
 
 [Backend Provider](providers.md) is an abstraction, and, simultaneously, an API-supported option that allows to delineate between "remote" and "local" buckets with respect to a given (any given) AIS cluster.
 For complete definition and details, please refer to the [backend provider document](providers.md).
@@ -155,7 +156,7 @@ Backend provider is realized as an optional parameter in the GET, PUT, APPEND, D
 For API reference, please refer [to the RESTful API and examples](http_api.md).
 The rest of this document serves to further explain features and concepts specific to storage buckets.
 
-## List Buckets
+# List Buckets
 
 To list all buckets, both _present_ in the cluster and remote, simply run:
 
@@ -173,12 +174,12 @@ And more:
 * `ais ls s3: --all --regex abc`  - list _all_ s3 buckets that match a given regex ("abc", in the example) 
 * `ais ls gs: --summary`          - report usage statistics: numbers of objects and total sizes
 
-### See also
+## See also
 
 * `ais ls --help`
 * [CLI: `ais ls`](/docs/cli/bucket.md)
 
-## AIS Bucket
+# AIS Bucket
 
 AIS buckets are the AIStore-own distributed buckets that are not associated with any 3rd party Cloud.
 
@@ -189,7 +190,7 @@ New ais buckets must be given a unique name that does not duplicate any existing
 If you are going to use an AIS bucket as an S3-compatible one, consider changing the bucket's checksum to `MD5`.
 For details, see [S3 compatibility](s3compat.md#s3-compatibility).
 
-### CLI: create, rename and, destroy ais bucket
+## CLI: create, rename and, destroy ais bucket
 
 To create an ais bucket with the name `yt8m`, rename it to `yt8m_extended` and delete it, run:
 
@@ -201,7 +202,7 @@ $ ais bucket rm ais://yt8m_extended
 
 Please note that rename bucket is not an instant operation, especially if the bucket contains data. Follow the `rename` command tips to monitor when the operation completes.
 
-### CLI: specifying and listing remote buckets
+## CLI: specifying and listing remote buckets
 
 To list absolutely _all_ buckets that your AIS cluster has access to, run `ais ls`.
 
@@ -226,7 +227,7 @@ Notice the naming notiation reference remote AIS buckets: prefix `@` in the full
 
 And here are CLI examples of listing buckets by a given provider:
 
-#### List Google buckets:
+### List Google buckets:
 ```console
 $ ais ls gs://
 # or, same:
@@ -238,19 +239,19 @@ GCP Buckets (7)
   ...
 ```
 
-#### List AIS buckets:
+### List AIS buckets:
 ```console
 $ ais ls ais://
 # or, same:
 $ ais ls ais:
 ```
 
-#### List remote AIS buckets:
+### List remote AIS buckets:
 ```console
 $ ais ls ais://@
 ```
 
-### CLI: working with remote AIS cluster
+## CLI: working with remote AIS cluster
 
 AIS clusters can be attached to each other, thus forming a global (and globally accessible) namespace of all individually hosted datasets. For background and details on AIS multi-clustering, please refer to this [document](providers.md#remote-ais-cluster).
 
@@ -310,14 +311,14 @@ train-002.tgz     136.44KiB
 ...
 ```
 
-## Remote Bucket
+# Remote Bucket
 
 Remote buckets are buckets that use 3rd party storage (AWS/GCP/Azure or HDFS) when AIS is deployed as [fast tier](overview.md#fast-tier).
 Any reference to "Cloud buckets" refer to remote buckets that use a public cloud bucket as their backend (i.e. AWS/GCP/Azure, but not HDFS).
 
 > By default, AIS does not keep track of the remote buckets in its configuration map. However, if users modify the properties of the remote bucket, AIS will then keep track.
 
-### Public Cloud Buckets
+## Public Cloud Buckets
 
 Public Google Storage supports limited access to its data.
 If AIS cluster is deployed with Google Cloud enabled (Google Storage is selected as 3rd party Backend provider when [deploying an AIS cluster](/docs/getting_started.md#local-playground)), it allows a few operations without providing credentials:
@@ -356,7 +357,7 @@ images-train-000001.tar      964.74MiB
 
 > Job starting, stopping (i.e., aborting), and monitoring commands all have equivalent *shorter* versions. For instance `ais start download` can be expressed as `ais start download`, while `ais wait copy-bucket Z8WkHxwIrr` is the same as `ais wait Z8WkHxwIrr`.
 
-### Remote AIS cluster
+## Remote AIS cluster
 
 AIS cluster can be *attached* to another one which provides immediate capability for one cluster to "see" and transparently access the other's buckets and objects.
 
@@ -371,7 +372,7 @@ Example working with remote AIS cluster (as well as easy-to-use scripts) can be 
 * [readme for developers](development.md)
 * [working with remote AIS cluster](#cli-working-with-remote-ais-cluster)
 
-### Public HTTP(S) Dataset
+## Public HTTP(S) Dataset
 
 It is standard in machine learning community to publish datasets in public domains, so they can be accessed by everyone.
 AIStore has integrated tools like [downloader](/docs/downloader.md) which can help in downloading those large datasets straight into provided AIS bucket.
@@ -432,7 +433,7 @@ minikube-0.6.iso.sha256  65B
 minikube-0.7.iso.sha256  65B
 ```
 
-### Prefetch/Evict Objects
+## Prefetch/Evict Objects
 
 Objects within remote buckets are automatically fetched into storage targets when accessed through AIS and are evicted based on the monitored capacity and configurable high/low watermarks when [LRU](storage_svcs.md#lru) is enabled.
 
@@ -452,7 +453,7 @@ To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects
 $ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 ```
 
-### Evict Remote Bucket
+## Evict Remote Bucket
 
 Before a remote bucket is accessed through AIS, the cluster has no awareness of the bucket.
 
@@ -469,7 +470,7 @@ $ ais bucket evict aws://abc
 Note: When an HDFS bucket is evicted, AIS will only delete objects stored in the cluster. AIS will retain the bucket's metadata to allow the bucket to re-register later.
 This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais bucket evict`.
 
-## Backend Bucket
+# Backend Bucket
 
 So far, we have covered AIS and remote buckets. These abstractions are sufficient for almost all use cases. But there are times when we would like to download objects from an existing remote bucket and then make use of the features available only for AIS buckets.
 
@@ -518,7 +519,7 @@ shard-0.tar	 2.50KiB	 1
 
 For more examples please refer to [CLI docs](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
 
-## Bucket Properties
+# Bucket Properties
 
 The full list of bucket properties are:
 
@@ -534,9 +535,9 @@ The full list of bucket properties are:
 | BID | `bid` | Readonly property: unique bucket ID  | `"bid": "10e45"` |
 | Created | `created` | Readonly property: bucket creation date, in nanoseconds(Unix time) | `"created": "1546300800000000000"` |
 
-### CLI examples: listing and setting bucket properties
+## CLI examples: listing and setting bucket properties
 
-#### List bucket properties
+### List bucket properties
 
 ```console
 $ ais show bucket mybucket
@@ -547,13 +548,13 @@ $ ais show bucket mybucket --json
 ...
 ```
 
-#### Enable erasure coding on a bucket
+### Enable erasure coding on a bucket
 
 ```console
 $ ais bucket props mybucket ec.enabled=true
 ```
 
-#### Enable object versioning and then list updated bucket properties
+### Enable object versioning and then list updated bucket properties
 
 ```console
 $ ais bucket props mybucket versioning.enabled=true
@@ -561,7 +562,7 @@ $ ais show bucket mybucket
 ...
 ```
 
-## Bucket Access Attributes
+# Bucket Access Attributes
 
 Bucket access is controlled by a single 64-bit `access` value in the [Bucket Properties structure](/cmn/api.go), whereby its bits have the following mapping as far as allowed (or denied) operations:
 
@@ -587,7 +588,16 @@ $ curl -i -X PATCH  -H 'Content-Type: application/json' -d '{"action": "set-bpro
 
 > `18446744073709551587 = 0xffffffffffffffe3 = 0xffffffffffffffff ^ (4|8|16)`
 
-## List Objects
+# AWS-specific configuration
+
+AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket that is backed up by an AWS S3 bucket (**) can be configured to use alternative:
+
+* named AWS profiles (with alternative credentials and/or region)
+* alternative s3 endpoints
+
+For background and usage examples, please see [AWS-specific bucket configuration](/docs/cli/aws_profile_endpoint.md).
+
+# List Objects
 
 > Note: some of the following content **may be outdated**. For the most recent updates, please check [`ais ls`](https://github.com/NVIDIA/aistore/blob/master/docs/cli/bucket.md#list-objects) CLI.
 
@@ -600,7 +610,7 @@ The returned [result](#list-result) has non-zero value(the least significant bit
 To get the correct list, either re-request the list after the rebalance ends or read the list with [the option](#list-options) `SelectMisplaced` enabled.
 In the latter case, the list may contain duplicated entries.
 
-### Options
+## Options
 
 The properties-and-options specifier must be a JSON-encoded structure, for instance `{"props": "size"}` (see examples).
 An empty structure `{}` results in getting just the names of the objects (from the specified bucket) with no other metadata.

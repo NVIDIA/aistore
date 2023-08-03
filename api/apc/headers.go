@@ -24,6 +24,7 @@ const (
 	// including BucketProps.Extra.AWS
 	HdrS3Region   = HeaderPrefix + "cloud_region"
 	HdrS3Endpoint = HeaderPrefix + "endpoint"
+	HdrS3Profile  = HeaderPrefix + "profile"
 
 	// including BucketProps.Extra.HTTP
 	HdrOrigURLBck = HeaderPrefix + "original-url"
