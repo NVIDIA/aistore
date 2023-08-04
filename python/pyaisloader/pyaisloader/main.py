@@ -5,7 +5,7 @@ from pyaisloader.benchmark import PutGetMixedBenchmark, ListBenchmark
 from pyaisloader.const import PROVIDERS
 from pyaisloader.client_config import client
 
-from pyaisloader.utils.parse_utils import parse_size, parse_time, parse_bool
+from pyaisloader.utils.parse_utils import parse_size, parse_time
 from pyaisloader.utils.print_utils import bold
 
 
@@ -28,8 +28,8 @@ def append_default_arguments(parser):
     parser.add_argument(
         "-c",
         "--cleanup",
-        type=parse_bool,
-        required=True,
+        action="store_true",
+        default=False,
         help="Whether bucket should be destroyed or not upon benchmark completion",
     )
     parser.add_argument(

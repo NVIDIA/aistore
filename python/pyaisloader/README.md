@@ -15,7 +15,7 @@ make install
 The general usage is:
 
 ```shell
-pyaisloader [TYPE] --bucket [BUCKET] --cleanup [CLEANUP] --workers [WORKERS] ...
+pyaisloader [TYPE] --bucket [BUCKET] --workers [WORKERS] --cleanup ...
 ```
 
 > Options are specific to the type of benchmark being performed. For more information on the benchmark-specific options, run `pyaisloader PUT --help`, `pyaisloader GET --help`, `pyaisloader MIXED --help`, or `pyaisloader LIST --help`, or refer to the documentation below.

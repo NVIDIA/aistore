@@ -12,12 +12,6 @@ def parse_size(size_str):
     return humanfriendly.parse_size(size_str)
 
 
-def parse_bool(bool_str):
-    return BOOLEAN_VALUES.get(
-        bool_str.lower(), ValueError(f"Invalid boolean value: {bool_str}")
-    )
-
-
 def format_time(duration):
     d = pendulum.duration(seconds=duration)
 
