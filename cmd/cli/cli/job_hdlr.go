@@ -554,7 +554,7 @@ func bgDownload(c *cli.Context, id string) (err error) {
 
 	if resp.ErrorCnt != 0 {
 		msg := toShowMsg(c, id, "For details", true)
-		warn := fmt.Sprintf("%d of %d download jobs failed. %sBarFlag)s", resp.ErrorCnt, resp.ScheduledCnt, msg)
+		warn := fmt.Sprintf("%d of %d download jobs failed. %s", resp.ErrorCnt, resp.ScheduledCnt, msg)
 		actionWarn(c, warn)
 	} else if resp.FinishedTime.UnixNano() != 0 {
 		actionDownloaded(c, resp.FinishedCnt)
