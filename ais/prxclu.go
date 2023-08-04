@@ -1372,6 +1372,7 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bo
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
 		return
 	}
+	nlog.Infof("%s mcast-maint: %s, %s reb=(%t, %t)", p, msg, si.StringEx(), reb, maintPostReb)
 	ctx = &smapModifier{
 		pre:     p._markMaint,
 		post:    p._rebPostRm, // (rmdCtx.rmNode => p.rmNodeFinal when all done)
@@ -1417,7 +1418,7 @@ func (p *proxy) _rebPostRm(ctx *smapModifier, clone *smapX) {
 		debug.AssertNoErr(err)
 		return
 	}
-	rmdCtx.listen(rmdCtx.rmNode)
+	rmdCtx.listen(rmdCtx.postRm)
 	ctx.rmdCtx = rmdCtx
 }
 
@@ -1619,6 +1620,7 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 }
 
 func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
+	nlog.Infof("%s mcast-stopm: %s, %s", p, msg, opts.DaemonID)
 	ctx := &smapModifier{
 		pre:     p._stopMaintPre,
 		post:    p._newRMD,
@@ -1899,6 +1901,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 }
 
 func (p *proxy) mcastUnreg(msg *apc.ActMsg, si *meta.Snode) (errCode int, err error) {
+	nlog.Infof("%s mcast-unreg: %s, %s", p, msg, si.StringEx())
 	ctx := &smapModifier{
 		pre:     p._unregNodePre,
 		final:   p._syncFinal,

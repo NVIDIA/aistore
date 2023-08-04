@@ -687,7 +687,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 	}
 }
 
-// NOTE: is called under lock
+// is called under lock
 func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 	rmd := t.owner.rmd.get()
 	if newRMD.Version <= rmd.Version {
@@ -723,7 +723,22 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 			return
 		}
 
-		nlog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
+		switch msg.Action {
+		case apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActShutdownNode, apc.ActRmNodeUnsafe:
+			var opts apc.ActValRmNode
+			if err := cos.MorphMarshal(msg.Value, &opts); err != nil {
+				debug.AssertNoErr(err) // unlikely
+			} else {
+				var s string
+				if opts.DaemonID == t.SID() {
+					s = " (to subsequently deactivate or remove _this_ target)"
+				}
+				nlog.Infof("%s: starting '%s' triggered rebalance[%s]%s: %+v",
+					t, msg.Action, xact.RebID2S(newRMD.Version), s, opts)
+			}
+		default:
+			nlog.Infof("%s: starting rebalance[%s]", t, xact.RebID2S(newRMD.Version))
+		}
 		go t.reb.RunRebalance(&smap.Smap, newRMD.Version, notif)
 
 		if newRMD.Resilver != "" {

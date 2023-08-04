@@ -179,7 +179,40 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	debug.AssertNoErr(err)
 }
 
-// default
+// deactivate or remove node from the cluster (as per msg.Action)
+// called when rebalance is done
+func (m *rmdModifier) postRm(nl nl.Listener) {
+	m.log(nl)
+	var (
+		si    = m.smapCtx.smap.GetNode(m.smapCtx.sid)
+		sname = si.StringEx()
+	)
+	debug.Assert(si.IsTarget(), sname)
+
+	if nl.ErrCnt() > 0 {
+		// NOTE: the point of no return - keep rebalancing until success ============
+		p := m.p
+		cur := m.cur
+		if _, err := p.owner.rmd.modify(m); err != nil {
+			debug.AssertNoErr(err) // unlikely
+			return
+		}
+		if cur.Version == m.prev.Version { // old "cur" is the new "prev"
+			nlog.Warningf("%s [repeat]: new rebalance ID=%s (to remove/deactivate %s)", m.p, m.rebID, sname)
+			m.listen(m.postRm)
+			_ = p.metasyncer.sync(revsPair{m.cur, p.newAmsg(m.smapCtx.msg, nil)})
+			return
+		}
+		// otherwise, proceed to remove
+		nlog.Errorf("%s failed %s - proceeding anyway...", m.p, m.rebID)
+	}
+
+	nlog.Infof("%s: rm-node-final %s, %s", m.p, m.rebID, sname)
+	if _, err := m.p.rmNodeFinal(m.smapCtx.msg, si, m.smapCtx); err != nil {
+		nlog.Errorln(err)
+	}
+}
+
 func (m *rmdModifier) log(nl nl.Listener) {
 	debug.Assert(nl.UUID() == m.rebID)
 	var (
@@ -189,23 +222,11 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	)
 	switch {
 	case err == nil && !abrt:
-		nlog.Infoln(name + "done")
+		nlog.Infoln(name, "done")
 	case abrt:
-		nlog.Warningln(name + "aborted")
+		debug.Assert(err != nil, nl.String()+" - aborted w/ no errors")
+		nlog.Errorf("%s aborted: %v", name, err)
 	default:
 		nlog.Errorf("%s failed: %v", name, err)
-	}
-}
-
-// deactivate or remove node from the cluster (as per msg.Action)
-func (m *rmdModifier) rmNode(nl nl.Listener) {
-	m.log(nl)
-	if cnt, abrt := nl.ErrCnt(), nl.Aborted(); cnt > 0 || abrt {
-		return
-	}
-	si := m.smapCtx.smap.GetNode(m.smapCtx.sid)
-	debug.Assert(si.IsTarget())
-	if _, err := m.p.rmNodeFinal(m.smapCtx.msg, si, m.smapCtx); err != nil {
-		nlog.Errorln(err)
 	}
 }
