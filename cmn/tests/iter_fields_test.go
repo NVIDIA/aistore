@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -93,6 +93,7 @@ var _ = Describe("IterFields", func() {
 
 					"extra.aws.cloud_region": "us-central",
 					"extra.aws.endpoint":     "",
+					"extra.aws.profile":      "",
 
 					"access":  apc.AccessAttrs(0),
 					"created": int64(0),
@@ -153,6 +154,7 @@ var _ = Describe("IterFields", func() {
 					"extra.hdfs.ref_directory": (*string)(nil),
 					"extra.aws.cloud_region":   (*string)(nil),
 					"extra.aws.endpoint":       (*string)(nil),
+					"extra.aws.profile":        (*string)(nil),
 					"extra.http.original_url":  (*string)(nil),
 				},
 			),
