@@ -35,7 +35,8 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: archive.ExtTar, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &parsedReqSpec{InputExtension: archive.ExtTar, Algorithm: &Algorithm{Kind: None},
+			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.ec.UsingCompression()).To(BeFalse())
 	})
@@ -44,7 +45,8 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: archive.ExtTarGz, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &parsedReqSpec{InputExtension: archive.ExtTarGz, Algorithm: &Algorithm{Kind: None},
+			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
@@ -53,7 +55,8 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: archive.ExtTgz, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &parsedReqSpec{InputExtension: archive.ExtTgz, Algorithm: &Algorithm{Kind: None},
+			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
@@ -62,7 +65,8 @@ var _ = Describe("Init", func() {
 		m := &Manager{ctx: dsortContext{t: mock.NewTarget(nil)}}
 		m.lock()
 		defer m.unlock()
-		sr := &ParsedRequestSpec{Extension: archive.ExtZip, Algorithm: &Algorithm{Kind: None}, MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
+		sr := &parsedReqSpec{InputExtension: archive.ExtZip, Algorithm: &Algorithm{Kind: None},
+			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
 		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})

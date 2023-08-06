@@ -107,7 +107,7 @@ type (
 		ec         extract.Creator
 
 		startShardCreation chan struct{}
-		pars               *ParsedRequestSpec
+		pars               *parsedReqSpec
 
 		client      *http.Client // Client for sending records metadata
 		compression struct {
@@ -175,7 +175,7 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
-func (m *Manager) init(pars *ParsedRequestSpec) error {
+func (m *Manager) init(pars *parsedReqSpec) error {
 	debug.AssertMutexLocked(&m.mu)
 
 	m.ctx = ctx
@@ -467,9 +467,9 @@ func (m *Manager) setRW() (err error) {
 		return errors.WithStack(err)
 	}
 
-	m.ec = newExtractCreator(m.ctx.t, m.pars.Extension)
+	m.ec = newExtractCreator(m.ctx.t, m.pars.InputExtension)
 	if m.ec == nil {
-		debug.Assert(m.pars.Extension == "", m.pars.Extension)
+		debug.Assert(m.pars.InputExtension == "", m.pars.InputExtension)
 		// NOTE: [feature] allow non-specified extension; assign default extract-creator;
 		// handle all shards we encounter - all supported formats
 		m.ec = extract.NewTarRW(m.ctx.t)
@@ -478,7 +478,7 @@ func (m *Manager) setRW() (err error) {
 		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
 		m.ec = extract.NopRW(m.ec)
 	}
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.pars.Bck, m.pars.Extension, m.ec, ke, m.onDupRecs)
+	m.recManager = extract.NewRecordManager(m.ctx.t, m.pars.InputBck, m.pars.InputExtension, m.ec, ke, m.onDupRecs)
 	return nil
 }
 

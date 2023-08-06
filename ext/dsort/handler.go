@@ -38,8 +38,11 @@ type response struct {
 //////////////////
 
 // POST /v1/sort
-func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, pars *ParsedRequestSpec) {
-	var err error
+func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
+	var (
+		err  error
+		pars = parsc.pars
+	)
 	pars.TargetOrderSalt = []byte(cos.FormatNowStamp())
 
 	// TODO: handle case when bucket was removed during dSort job - this should
@@ -47,7 +50,7 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, pars *ParsedR
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
 
-	pars.DSorterType, err = determineDSorterType(pars)
+	pars.DSorterType, err = dsorterType(pars)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -64,25 +67,6 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, pars *ParsedR
 		managerUUID = PrefixJobID + cos.GenUUID() // compare w/ p.httpdlpost
 		smap        = ctx.smapOwner.Get()
 	)
-	checkResponses := func(responses []response) error {
-		for _, resp := range responses {
-			if resp.err == nil {
-				continue
-			}
-			nlog.Errorf("[%s] start sort request failed to be broadcast, err: %s",
-				managerUUID, resp.err.Error())
-
-			path := apc.URLPathdSortAbort.Join(managerUUID)
-			broadcastTargets(http.MethodDelete, path, nil, nil, smap)
-
-			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d",
-				resp.err.Error(), resp.statusCode)
-			cmn.WriteErrMsg(w, r, s, http.StatusInternalServerError)
-			return resp.err
-		}
-
-		return nil
-	}
 
 	// Starting dSort has two phases:
 	// 1. Initialization, ensures that all targets successfully initialized all
@@ -95,47 +79,63 @@ func ProxyStartSortHandler(w http.ResponseWriter, r *http.Request, pars *ParsedR
 	// given dSort job. Also bug where we could send abort (which triggers cleanup)
 	// to not yet initialized target.
 
+	// phase 1
 	config := cmn.GCO.Get()
 	if config.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := apc.URLPathdSortInit.Join(managerUUID)
-	responses := broadcastTargets(http.MethodPost, path, nil, b, smap)
-	if err := checkResponses(responses); err != nil {
+	responses := bcast(http.MethodPost, path, nil, b, smap)
+	if err := _handleResp(w, r, smap, managerUUID, responses); err != nil {
 		return
 	}
 
+	// phase 2
 	if config.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = apc.URLPathdSortStart.Join(managerUUID)
-	responses = broadcastTargets(http.MethodPost, path, nil, nil, smap)
-	if err := checkResponses(responses); err != nil {
+	responses = bcast(http.MethodPost, path, nil, nil, smap)
+	if err := _handleResp(w, r, smap, managerUUID, responses); err != nil {
 		return
 	}
 
 	w.Write([]byte(managerUUID))
 }
 
+func _handleResp(w http.ResponseWriter, r *http.Request, smap *meta.Smap, managerUUID string, responses []response) error {
+	for _, resp := range responses {
+		if resp.err == nil {
+			continue
+		}
+		// cleanup
+		path := apc.URLPathdSortAbort.Join(managerUUID)
+		_ = bcast(http.MethodDelete, path, nil, nil, smap)
+
+		msg := fmt.Sprintf("failed to start [dsort] %s: %v(%d)", managerUUID, resp.err, resp.statusCode)
+		cmn.WriteErrMsg(w, r, msg, http.StatusInternalServerError)
+		return resp.err
+	}
+	return nil
+}
+
 // GET /v1/sort
-func ProxyGetHandler(w http.ResponseWriter, r *http.Request) {
+func PgetHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-
 	query := r.URL.Query()
 	managerUUID := query.Get(apc.QparamUUID)
-
 	if managerUUID == "" {
-		proxyListSortHandler(w, r, query)
+		plistHandler(w, r, query)
 		return
 	}
 
-	proxyMetricsSortHandler(w, r, query)
+	pmetricsHandler(w, r, query)
 }
 
 // GET /v1/sort?regex=...
-func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
+func plistHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		path     = apc.URLPathdSortList.S
 		regexStr = query.Get(apc.QparamRegex)
@@ -146,7 +146,7 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 			return
 		}
 	}
-	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
+	responses := bcast(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
 
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
@@ -173,24 +173,22 @@ func proxyListSortHandler(w http.ResponseWriter, r *http.Request, query url.Valu
 			}
 		}
 	}
-
 	body := cos.MustMarshal(resultList)
 	if _, err := w.Write(body); err != nil {
 		nlog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
 		// double header write.
-		return
 	}
 }
 
 // GET /v1/sort?id=...
-func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
+func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		smap        = ctx.smapOwner.Get()
 		allMetrics  = make(map[string]*Metrics, smap.CountActiveTs())
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
-		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
+		responses   = bcast(http.MethodGet, path, nil, nil, smap)
 		notFound    int
 	)
 	for _, resp := range responses {
@@ -226,7 +224,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request, query url.V
 }
 
 // DELETE /v1/sort/abort
-func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
+func PabortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
@@ -239,7 +237,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 		query       = r.URL.Query()
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortAbort.Join(managerUUID)
-		responses   = broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
+		responses   = bcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
 	)
 	allNotFound := true
 	for _, resp := range responses {
@@ -261,7 +259,7 @@ func ProxyAbortSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /v1/sort
-func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
+func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
@@ -275,7 +273,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		query       = r.URL.Query()
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
-		responses   = broadcastTargets(http.MethodGet, path, nil, nil, smap)
+		responses   = bcast(http.MethodGet, path, nil, nil, smap)
 	)
 
 	// First, broadcast to see if process is cleaned up first
@@ -309,7 +307,7 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Next, broadcast the remove once we've checked that all targets have run cleanup
 	path = apc.URLPathdSortRemove.Join(managerUUID)
-	responses = broadcastTargets(http.MethodDelete, path, nil, nil, smap)
+	responses = bcast(http.MethodDelete, path, nil, nil, smap)
 	var failed []string //nolint:prealloc // will remain not allocated when no errors
 	for _, r := range responses {
 		if r.statusCode == http.StatusOK {
@@ -321,6 +319,80 @@ func ProxyRemoveSortHandler(w http.ResponseWriter, r *http.Request) {
 		err := fmt.Errorf("got errors while broadcasting remove: %v", failed)
 		cmn.WriteErr(w, r, err)
 	}
+}
+
+// Determine dsorter type. We need to make this decision based on (e.g.) size targets' memory.
+func dsorterType(pars *parsedReqSpec) (string, error) {
+	if pars.DSorterType != "" {
+		return pars.DSorterType, nil // in case the dsorter type is already set, we need to respect it
+	}
+
+	// Get memory stats from targets
+	var (
+		totalAvailMemory  uint64
+		err               error
+		path              = apc.URLPathDae.S
+		moreThanThreshold = true
+	)
+
+	dsorterMemThreshold, err := cos.ParseSize(pars.DSorterMemThreshold, cos.UnitsIEC)
+	debug.AssertNoErr(err)
+
+	query := make(url.Values)
+	query.Add(apc.QparamWhat, apc.WhatNodeStatsAndStatus)
+	responses := bcast(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
+	for _, response := range responses {
+		if response.err != nil {
+			return "", response.err
+		}
+
+		daemonStatus := stats.NodeStatus{}
+		if err := jsoniter.Unmarshal(response.res, &daemonStatus); err != nil {
+			return "", err
+		}
+
+		memStat := sys.MemStat{Total: daemonStatus.MemCPUInfo.MemAvail + daemonStatus.MemCPUInfo.MemUsed}
+		dsortAvailMemory := calcMaxMemoryUsage(pars.MaxMemUsage, &memStat)
+		totalAvailMemory += dsortAvailMemory
+		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
+	}
+
+	// TODO: currently, we have import cycle: dsort -> api -> dsort. Need to
+	// think of a way to get the total size of bucket without copy-and-paste
+	// the API code.
+	//
+	// baseParams := &api.BaseParams{
+	// 	Client: http.DefaultClient,
+	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
+	// }
+	// msg := &apc.LsoMsg{Props: "size,status"}
+	// objList, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
+	// if err != nil {
+	// 	return "", err
+	// }
+	//
+	// totalBucketSize := uint64(0)
+	// for _, obj := range objList.Entries {
+	// 	if obj.IsStatusOK() {
+	// 		totalBucketSize += uint64(obj.Size)
+	// 	}
+	// }
+	//
+	// if totalBucketSize < totalAvailMemory {
+	// 	// "general type" is capable of extracting whole dataset into memory
+	// 	// In this case the creation phase is super fast.
+	// 	return DSorterGeneralType, nil
+	// }
+
+	if moreThanThreshold {
+		// If there is enough memory to use "memory type", we should do that.
+		// It behaves better for cases when we have a lot of memory available.
+		return DSorterMemType, nil
+	}
+
+	// For all other cases we should use "general type", as we don't know
+	// exactly what to expect, so we should prepare for the worst.
+	return DSorterGeneralType, nil
 }
 
 ///////////////////
@@ -336,32 +408,32 @@ func TargetHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch apiItems[0] {
 	case apc.Init:
-		initSortHandler(w, r)
+		tinitHandler(w, r)
 	case apc.Start:
-		startSortHandler(w, r)
+		tstartHandler(w, r)
 	case apc.Records:
 		Managers.recordsHandler(w, r)
 	case apc.Shards:
 		Managers.shardsHandler(w, r)
 	case apc.Abort:
-		abortSortHandler(w, r)
+		tabortHandler(w, r)
 	case apc.Remove:
-		removeSortHandler(w, r)
+		tremoveHandler(w, r)
 	case apc.List:
-		listSortHandler(w, r)
+		tlistHandler(w, r)
 	case apc.Metrics:
-		metricsHandler(w, r)
+		tmetricsHandler(w, r)
 	case apc.FinishedAck:
-		finishedAckHandler(w, r)
+		tfiniHandler(w, r)
 	default:
 		cmn.WriteErrMsg(w, r, "invalid path")
 	}
 }
 
-// initSortHandler is the handler called for the HTTP endpoint /v1/sort/init.
+// /v1/sort/init.
 // It is responsible for initializing the dSort manager so it will be ready
 // to start receiving requests.
-func initSortHandler(w http.ResponseWriter, r *http.Request) {
+func tinitHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -370,7 +442,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		rs     *ParsedRequestSpec
+		rs     *parsedReqSpec
 		b, err = io.ReadAll(r.Body)
 	)
 	if err != nil {
@@ -378,7 +450,7 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &rs); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "ParsedRequestSpec", cos.BHead(b), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "parsedReqSpec", cos.BHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -395,12 +467,12 @@ func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.unlock()
 }
 
-// startSortHandler is the handler called for the HTTP endpoint /v1/sort/start.
+// /v1/sort/start.
 // There are three major phases to this function:
 //  1. extractLocalShards
 //  2. participateInRecordDistribution
 //  3. distributeShardRecords
-func startSortHandler(w http.ResponseWriter, r *http.Request) {
+func tstartHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -421,35 +493,35 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) startDSort() {
-	errHandler := func(err error) {
-		nlog.Errorf("%+v", err) // print error with stack trace
-
-		// If we were aborted by some other process this means that we do not
-		// broadcast abort (we assume that daemon aborted us, aborted also others).
-		if !m.aborted() {
-			// Self-abort: better do it before sending broadcast to avoid
-			// inconsistent state: other have aborted but we didn't due to some
-			// problem.
-			if isReportableError(err) {
-				m.abort(err)
-			} else {
-				m.abort()
-			}
-
-			nlog.Warningln("broadcasting abort to other targets")
-			path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
-			broadcastTargets(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
-		}
-	}
-
 	if err := m.start(); err != nil {
-		errHandler(err)
+		m.errHandler(err)
 		return
 	}
 
 	nlog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
 	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.ID())
-	broadcastTargets(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
+	bcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
+}
+
+func (m *Manager) errHandler(err error) {
+	nlog.Errorf("%+v", err)
+
+	// If we were aborted by some other process this means that we do not
+	// broadcast abort (we assume that daemon aborted us, aborted also others).
+	if !m.aborted() {
+		// Self-abort: better do it before sending broadcast to avoid
+		// inconsistent state: other have aborted but we didn't due to some
+		// problem.
+		if isReportableError(err) {
+			m.abort(err)
+		} else {
+			m.abort()
+		}
+
+		nlog.Warningln("broadcasting abort to other targets")
+		path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
+		bcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
+	}
 }
 
 // shardsHandler is the handler for the HTTP endpoint /v1/sort/shards.
@@ -501,7 +573,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	dsortManager.startShardCreation <- struct{}{}
 }
 
-// recordsHandler is the handler called for the HTTP endpoint /v1/sort/records.
+// recordsHandler is the handler /v1/sort/records.
 // A valid POST to this endpoint updates this target's dsortManager.Records with the
 // []Records from the request body, along with some related state variables.
 func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Request) {
@@ -580,10 +652,10 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// abortSortHandler is the handler called for the HTTP endpoint /v1/sort/abort.
+// /v1/sort/abort.
 // A valid DELETE to this endpoint aborts currently running sort job and cleans
 // up the state.
-func abortSortHandler(w http.ResponseWriter, r *http.Request) {
+func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
@@ -608,7 +680,7 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", DSortName))
 }
 
-func removeSortHandler(w http.ResponseWriter, r *http.Request) {
+func tremoveHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
@@ -624,7 +696,7 @@ func removeSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func listSortHandler(w http.ResponseWriter, r *http.Request) {
+func tlistHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		query      = r.URL.Query()
 		regexStr   = query.Get(apc.QparamRegex)
@@ -651,9 +723,9 @@ func listSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// metricsHandler is the handler called for the HTTP endpoint /v1/sort/metrics.
+// /v1/sort/metrics.
 // A valid GET to this endpoint sends response with sort metrics.
-func metricsHandler(w http.ResponseWriter, r *http.Request) {
+func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -680,9 +752,9 @@ func metricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// finishedAckHandler is the handler called for the HTTP endpoint /v1/sort/finished-ack.
+// /v1/sort/finished-ack.
 // A valid PUT to this endpoint acknowledges that daemonID has finished dSort operation.
-func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
+func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
 	}
@@ -702,7 +774,11 @@ func finishedAckHandler(w http.ResponseWriter, r *http.Request) {
 	dsortManager.updateFinishedAck(daemonID)
 }
 
-func broadcastTargets(method, path string, urlParams url.Values, body []byte, smap *meta.Smap, ignore ...*meta.Snode) []response {
+//
+// common: PROXY and TARGET
+//
+
+func bcast(method, path string, urlParams url.Values, body []byte, smap *meta.Smap, ignore ...*meta.Snode) []response {
 	var (
 		responses = make([]response, smap.CountActiveTs())
 		wg        = &sync.WaitGroup{}
@@ -786,79 +862,4 @@ func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, item
 	}
 
 	return items, err
-}
-
-// Determine what dsorter type we should use. We need to make this decision
-// based on eg. how much memory targets have.
-func determineDSorterType(pars *ParsedRequestSpec) (string, error) {
-	if pars.DSorterType != "" {
-		return pars.DSorterType, nil // in case the dsorter type is already set, we need to respect it
-	}
-
-	// Get memory stats from targets
-	var (
-		totalAvailMemory  uint64
-		err               error
-		path              = apc.URLPathDae.S
-		moreThanThreshold = true
-	)
-
-	dsorterMemThreshold, err := cos.ParseSize(pars.DSorterMemThreshold, cos.UnitsIEC)
-	debug.AssertNoErr(err)
-
-	query := make(url.Values)
-	query.Add(apc.QparamWhat, apc.WhatNodeStatsAndStatus)
-	responses := broadcastTargets(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
-	for _, response := range responses {
-		if response.err != nil {
-			return "", response.err
-		}
-
-		daemonStatus := stats.NodeStatus{}
-		if err := jsoniter.Unmarshal(response.res, &daemonStatus); err != nil {
-			return "", err
-		}
-
-		memStat := sys.MemStat{Total: daemonStatus.MemCPUInfo.MemAvail + daemonStatus.MemCPUInfo.MemUsed}
-		dsortAvailMemory := calcMaxMemoryUsage(pars.MaxMemUsage, &memStat)
-		totalAvailMemory += dsortAvailMemory
-		moreThanThreshold = moreThanThreshold && dsortAvailMemory > uint64(dsorterMemThreshold)
-	}
-
-	// TODO: currently, we have import cycle: dsort -> api -> dsort. Need to
-	// think of a way to get the total size of bucket without copy-and-paste
-	// the API code.
-	//
-	// baseParams := &api.BaseParams{
-	// 	Client: http.DefaultClient,
-	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
-	// }
-	// msg := &apc.LsoMsg{Props: "size,status"}
-	// objList, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
-	// if err != nil {
-	// 	return "", err
-	// }
-	//
-	// totalBucketSize := uint64(0)
-	// for _, obj := range objList.Entries {
-	// 	if obj.IsStatusOK() {
-	// 		totalBucketSize += uint64(obj.Size)
-	// 	}
-	// }
-	//
-	// if totalBucketSize < totalAvailMemory {
-	// 	// "general type" is capable of extracting whole dataset into memory
-	// 	// In this case the creation phase is super fast.
-	// 	return DSorterGeneralType, nil
-	// }
-
-	if moreThanThreshold {
-		// If there is enough memory to use "memory type", we should do that.
-		// It behaves better for cases when we have a lot of memory available.
-		return DSorterMemType, nil
-	}
-
-	// For all other cases we should use "general type", as we don't know
-	// exactly what to expect, so we should prepare for the worst.
-	return DSorterGeneralType, nil
 }

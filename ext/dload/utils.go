@@ -240,11 +240,11 @@ func headLink(link string) (*http.Response, error) {
 func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	var oa *cmn.ObjAttrs
 	if dst.Link != "" {
-		resp, errHead := headLink(dst.Link)
+		resp, errHead := headLink(dst.Link) //nolint:bodyclose // cos.Close
 		if errHead != nil {
 			return false, errHead
 		}
-		resp.Body.Close()
+		cos.Close(resp.Body)
 		oa = &cmn.ObjAttrs{}
 		oa.Size = attrsFromLink(dst.Link, resp, oa)
 	} else {

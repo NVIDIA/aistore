@@ -1,5 +1,5 @@
 {
-  "extension": ".tar",
+  "input_extension": ".tar",
   "bck": {
     "name": "src"
   },

@@ -71,7 +71,7 @@ class TestDsortOps(unittest.TestCase):
 
     def _start_with_spec(self, input_bck_name, out_bck_name, input_object_prefix):
         spec = {
-            "extension": ".tar",
+            "input_extension": ".tar",
             "input_bck": {"name": input_bck_name},
             "output_bck": {"name": out_bck_name},
             "input_format": {"template": input_object_prefix + "-{0..1}"},

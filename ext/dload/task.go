@@ -103,7 +103,7 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 	task.xdl.ObjsAdd(1, task.currentSize.Load())
 }
 
-func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
+func (task *singleTask) _dlocal(lom *cluster.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
 	ctx, cancel := context.WithTimeout(task.downloadCtx, timeout)
 	defer cancel()
 
@@ -120,12 +120,17 @@ func (task *singleTask) tryDownloadLocal(lom *cluster.LOM, timeout time.Duration
 		req.Header.Add("User-Agent", gcsUA)
 	}
 
-	resp, err := clientForURL(task.obj.link).Do(req)
+	resp, err := clientForURL(task.obj.link).Do(req) //nolint:bodyclose // cos.Close
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
 
+	fatal, err := task._dput(lom, req, resp)
+	cos.Close(resp.Body)
+	return fatal, err
+}
+
+func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Response) (bool /*err is fatal*/, error) {
 	if resp.StatusCode >= http.StatusBadRequest {
 		if resp.StatusCode == http.StatusNotFound {
 			return false, cmn.NewErrHTTP(req, fmt.Errorf("%q does not exist", task.obj.link), http.StatusNotFound)
@@ -164,7 +169,7 @@ func (task *singleTask) downloadLocal(lom *cluster.LOM) (err error) {
 		fatal   bool
 	)
 	for i := 0; i < retryCnt; i++ {
-		fatal, err = task.tryDownloadLocal(lom, timeout)
+		fatal, err = task._dlocal(lom, timeout)
 		if err == nil || fatal {
 			return err
 		}

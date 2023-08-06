@@ -13,6 +13,7 @@ while (( "$#" )); do
   case "${1}" in
     --srcbck) srcbck=$2; shift; shift;;
     --dstbck) dstbck=$2; shift; shift;;
+    --nocleanup) nocleanup="true"; shift;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
 done
@@ -35,6 +36,8 @@ num=$(ais ls $dstbck --summary --H | awk '{print $3}')
 echo "Successfully resharded $srcbck => $dstbck:"
 ais ls $dstbck
 
-## _not_ to remove test buckets comment out the following 2 lines
-echo "Cleanup: deleting $srcbck and $dstbck"
-ais rmb $srcbck $dstbck -y 2>/dev/null 1>&2
+## cleanup
+if [[ ${nocleanup} != "true" ]]; then
+  echo "Cleanup: deleting $srcbck and $dstbck"
+  ais rmb $srcbck $dstbck -y 2>/dev/null 1>&2
+fi

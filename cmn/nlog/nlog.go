@@ -283,11 +283,11 @@ func formatHdr(s severity, depth int, fb *fixed) {
 func sprintf(sev severity, depth int, format string, fb *fixed, args ...any) {
 	formatHdr(sev, depth+1, fb)
 	if format == "" {
-		fmt.Fprint(fb, args...)
+		fmt.Fprintln(fb, args...)
 	} else {
 		fmt.Fprintf(fb, format, args...)
+		fb.eol()
 	}
-	fb.eol()
 }
 
 // mem pool of additional buffers

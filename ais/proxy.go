@@ -1095,18 +1095,14 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	}
 
-	// POST /bucket operations (this cluster)
-
-	// Initialize bucket; if doesn't exist try creating it on the fly
-	// but only if it's a remote bucket (and user did not explicitly disallowed).
-	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, msg: msg, query: query}
+	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: bck, perms: apc.AceObjLIST | apc.AceGET, msg: msg, query: query}
 	bckArgs.createAIS = false
 	if bck, err = bckArgs.initAndTry(); err != nil {
 		return
 	}
 
 	//
-	// {action} on bucket
+	// POST {action} on bucket
 	//
 	var xid string
 	switch msg.Action {
@@ -1293,16 +1289,17 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 
 // init existing or create remote
 // not calling `initAndTry` - delegating ais:from// props cloning to the separate method
-func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Values,
-	bckTo *meta.Bck) (*meta.Bck, int, error) {
+func (p *proxy) initBckTo(w http.ResponseWriter, r *http.Request, query url.Values, bckTo *meta.Bck) (*meta.Bck, int, error) {
 	bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, perms: apc.AcePUT, query: query}
 	bckToArgs.createAIS = true
+
 	errCode, err := bckToArgs.init()
 	if err != nil && errCode != http.StatusNotFound {
 		p.writeErr(w, r, err, errCode)
 		return nil, 0, err
 	}
-	// creating (BMD-wise) remote destination on the fly
+
+	// remote bucket: create it (BMD-wise) on the fly
 	if errCode == http.StatusNotFound && bckTo.IsRemote() {
 		if bckTo, err = bckToArgs.try(); err != nil {
 			return nil, 0, err
@@ -2869,14 +2866,48 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPost:
-		p.proxyStartSortHandler(w, r)
+		// - validate request, check input_bck and output_bck
+		// - start dsort
+		rs := &dsort.RequestSpec{}
+		if cmn.ReadJSON(w, r, rs) != nil {
+			return
+		}
+		parsc, err := rs.ParseCtx()
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		bck := meta.CloneBck(&parsc.InputBck)
+		args := bckInitArgs{p: p, w: w, r: r, bck: bck, perms: apc.AceObjLIST | apc.AceGET}
+		if _, err = args.initAndTry(); err != nil {
+			return
+		}
+		if !parsc.OutputBck.Equal(&parsc.InputBck) {
+			bckTo := meta.CloneBck(&parsc.OutputBck)
+			bckTo, errCode, err := p.initBckTo(w, r, nil /*query*/, bckTo)
+			if err != nil {
+				return
+			}
+			if errCode == http.StatusNotFound {
+				// TODO -- FIXME: reuse common prxtxn logic to create
+				if true {
+					p.writeErr(w, r, cmn.NewErrRemoteBckNotFound(&parsc.OutputBck), http.StatusNotFound)
+					return
+				}
+				if p.forwardCP(w, r, nil /*msg*/, "dsort-create-output-bck") { // to create
+					return
+				}
+				nlog.Warningf("%s: output_bck %s will be created with the input_bck (%s) props", p, bckTo, bck)
+			}
+		}
+		dsort.PstartHandler(w, r, parsc)
 	case http.MethodGet:
-		dsort.ProxyGetHandler(w, r)
+		dsort.PgetHandler(w, r)
 	case http.MethodDelete:
 		if len(apiItems) == 1 && apiItems[0] == apc.Abort {
-			dsort.ProxyAbortSortHandler(w, r)
+			dsort.PabortHandler(w, r)
 		} else if len(apiItems) == 0 {
-			dsort.ProxyRemoveSortHandler(w, r)
+			dsort.PremoveHandler(w, r)
 		} else {
 			p.writeErrURL(w, r)
 		}

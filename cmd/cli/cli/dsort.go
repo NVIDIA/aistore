@@ -32,7 +32,7 @@ import (
 
 const (
 	dsortExampleJ = `$ ais start dsort '{
-			"extension": ".tar",
+			"input_extension": ".tar",
 			"input_bck": {"name": "dsort-testing"},
 			"input_format": {"template": "shard-{0..9}"},
 			"output_shard_size": "200KB",
@@ -41,7 +41,7 @@ const (
 			"order_file_sep": " "
 		}'`
 	dsortExampleY = `$ ais start dsort -f - <<EOM
-			extension: .tar
+			input_extension: .tar
 			input_bck:
 			    name: dsort-testing
 			input_format:

@@ -146,8 +146,8 @@ type testContext struct {
 
 func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	// Initialize dSort manager
-	rs := &ParsedRequestSpec{
-		Extension: archive.ExtTar,
+	rs := &parsedReqSpec{
+		InputExtension: archive.ExtTar,
 		Algorithm: &Algorithm{
 			ContentKeyType: extract.ContentKeyString,
 		},
@@ -454,14 +454,14 @@ var _ = Describe("Distributed Sort", func() {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
 
-						rs := &ParsedRequestSpec{
+						rs := &parsedReqSpec{
 							Algorithm: &Algorithm{
 								Decreasing:     true,
 								ContentKeyType: extract.ContentKeyString,
 							},
-							Extension:   archive.ExtTar,
-							MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
-							DSorterType: DSorterGeneralType,
+							InputExtension: archive.ExtTar,
+							MaxMemUsage:    cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
+							DSorterType:    DSorterGeneralType,
 						}
 						ctx.node = ctx.smapOwner.Get().Tmap[target.daemonID]
 						manager.lock()

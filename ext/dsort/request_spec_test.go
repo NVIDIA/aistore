@@ -31,21 +31,21 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse minimal spec", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(pars.Bck.Name).To(Equal("test"))
-			Expect(pars.Bck.Provider).To(Equal(apc.AIS))
+			Expect(pars.InputBck.Name).To(Equal("test"))
+			Expect(pars.InputBck.Provider).To(Equal(apc.AIS))
 			Expect(pars.OutputBck.Name).To(Equal("test"))
 			Expect(pars.OutputBck.Provider).To(Equal(apc.AIS))
-			Expect(pars.Extension).To(Equal(archive.ExtTar))
+			Expect(pars.InputExtension).To(Equal(archive.ExtTar))
 
 			Expect(pars.Pit.Template).To(Equal(cos.ParsedTemplate{
 				Prefix: "prefix-",
@@ -79,18 +79,18 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Provider: apc.AWS, Name: "test"},
 				OutputBck:       cmn.Bck{Provider: apc.AWS, Name: "testing"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(pars.Bck.Name).To(Equal("test"))
-			Expect(pars.Bck.Provider).To(Equal(apc.AWS))
+			Expect(pars.InputBck.Name).To(Equal("test"))
+			Expect(pars.InputBck.Provider).To(Equal(apc.AWS))
 			Expect(pars.OutputBck.Name).To(Equal("testing"))
 			Expect(pars.OutputBck.Provider).To(Equal(apc.AWS))
 		})
@@ -99,14 +99,14 @@ var _ = Describe("RequestSpec", func() {
 			rs := RequestSpec{
 				InputBck: cmn.Bck{Name: "test"},
 
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80 GB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(pars.MaxMemUsage.Type).To(Equal(cos.QuantityBytes))
@@ -116,58 +116,58 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse spec with .tgz extension", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTgz,
+				InputExtension:  archive.ExtTgz,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(pars.Extension).To(Equal(archive.ExtTgz))
+			Expect(pars.InputExtension).To(Equal(archive.ExtTgz))
 		})
 
 		It("should parse spec with .tar.gz extension", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTarGz,
+				InputExtension:  archive.ExtTarGz,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(pars.Extension).To(Equal(archive.ExtTarGz))
+			Expect(pars.InputExtension).To(Equal(archive.ExtTarGz))
 		})
 
 		It("should parse spec with .tar.gz extension", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtZip,
+				InputExtension:  archive.ExtZip,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(pars.Extension).To(Equal(archive.ExtZip))
+			Expect(pars.InputExtension).To(Equal(archive.ExtZip))
 		})
 
 		It("should parse spec with %06d syntax", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTgz,
+				InputExtension:  archive.ExtTgz,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-%06d-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(pars.Pot.Template).To(Equal(cos.ParsedTemplate{
@@ -185,13 +185,13 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse spec with @ syntax", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTgz,
+				InputExtension:  archive.ExtTgz,
 				InputFormat:     newInputFormat("prefix@0111-suffix"),
 				OutputFormat:    "prefix-@000111-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(pars.Pit.Template).To(Equal(cos.ParsedTemplate{
@@ -220,7 +220,7 @@ var _ = Describe("RequestSpec", func() {
 		It("should parse spec and set default conc limits", func() {
 			rs := RequestSpec{
 				InputBck:            cmn.Bck{Name: "test"},
-				Extension:           archive.ExtTar,
+				InputExtension:      archive.ExtTar,
 				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
@@ -228,7 +228,7 @@ var _ = Describe("RequestSpec", func() {
 				ExtractConcMaxLimit: 0,
 				Algorithm:           Algorithm{Kind: None},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(pars.CreateConcMaxLimit).To(BeEquivalentTo(0))
@@ -243,7 +243,7 @@ var _ = Describe("RequestSpec", func() {
 
 			rs := RequestSpec{
 				InputBck:            cmn.Bck{Name: "test"},
-				Extension:           archive.ExtTar,
+				InputExtension:      archive.ExtTar,
 				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
@@ -259,7 +259,7 @@ var _ = Describe("RequestSpec", func() {
 					DSorterMemThreshold: "",
 				},
 			}
-			pars, err := rs.Parse()
+			pars, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(pars.DuplicatedRecords).To(Equal(cmn.AbortReaction))
@@ -271,23 +271,23 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should pass when output shard is zero and bash or @ template is used for output format", func() {
 			rs := RequestSpec{
-				InputBck:     cmn.Bck{Name: "test"},
-				Extension:    archive.ExtTar,
-				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
-				OutputFormat: "prefix-{10..111}-suffix",
-				MaxMemUsage:  "80%",
+				InputBck:       cmn.Bck{Name: "test"},
+				InputExtension: archive.ExtTar,
+				InputFormat:    newInputFormat("prefix-{0010..0111..2}-suffix"),
+				OutputFormat:   "prefix-{10..111}-suffix",
+				MaxMemUsage:    "80%",
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 
 			rs = RequestSpec{
-				InputBck:     cmn.Bck{Name: "test"},
-				Extension:    archive.ExtTar,
-				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
-				OutputFormat: "prefix-@111-suffix",
-				MaxMemUsage:  "80%",
+				InputBck:       cmn.Bck{Name: "test"},
+				InputExtension: archive.ExtTar,
+				InputFormat:    newInputFormat("prefix-{0010..0111..2}-suffix"),
+				OutputFormat:   "prefix-@111-suffix",
+				MaxMemUsage:    "80%",
 			}
-			_, err = rs.Parse()
+			_, err = rs.parse()
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
@@ -295,34 +295,34 @@ var _ = Describe("RequestSpec", func() {
 	Context("request specs which shall NOT pass", func() {
 		It("should fail due to missing bucket property", func() {
 			rs := RequestSpec{
-				Extension:       ".txt",
+				InputExtension:  ".txt",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(errMissingSrcBucket))
+			Expect(errors.Is(err, errMissingSrcBucket)).To(BeTrue())
 		})
 
 		It("should fail due to invalid bucket provider", func() {
 			rs := RequestSpec{
-				InputBck:  cmn.Bck{Provider: "invalid", Name: "test"},
-				Extension: ".txt",
-				Algorithm: Algorithm{Kind: None},
+				InputBck:       cmn.Bck{Provider: "invalid", Name: "test"},
+				InputExtension: ".txt",
+				Algorithm:      Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).Should(MatchError(&cmn.ErrInvalidBackendProvider{}))
 		})
 
 		It("should fail due to invalid output bucket provider", func() {
 			rs := RequestSpec{
-				InputBck:  cmn.Bck{Provider: apc.AIS, Name: "test"},
-				OutputBck: cmn.Bck{Provider: "invalid", Name: "test"},
-				Extension: ".txt",
-				Algorithm: Algorithm{Kind: None},
+				InputBck:       cmn.Bck{Provider: apc.AIS, Name: "test"},
+				OutputBck:      cmn.Bck{Provider: "invalid", Name: "test"},
+				InputExtension: ".txt",
+				Algorithm:      Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).Should(MatchError(&cmn.ErrInvalidBackendProvider{}))
 		})
@@ -330,13 +330,13 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to start after end in input format", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-{0112..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			contains := strings.Contains(err.Error(), "start")
 			Expect(contains).To(BeTrue())
@@ -345,13 +345,13 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to start after end in output format", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0112..0111}-suffix",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			contains := strings.Contains(err.Error(), "start")
 			Expect(contains).To(BeTrue())
@@ -360,13 +360,13 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due invalid parentheses", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				OutputShardSize: "10KB",
 				InputFormat:     newInputFormat("prefix-}{0001..0111}-suffix"),
 				OutputFormat:    "prefix-}{0010..0111}-suffix",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			contains := strings.Contains(err.Error(), "invalid")
 			Expect(contains).To(BeTrue())
@@ -375,14 +375,15 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid extension", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       ".jpg",
+				InputExtension:  ".jpg",
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
+			err = errors.Unwrap(err)
 			check := archive.IsErrUnknownMime(err)
 			Expect(check).To(BeTrue())
 		})
@@ -390,14 +391,14 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid mem usage specification", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
 		})
@@ -405,14 +406,14 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid mem usage percent specified", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "120%",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).To(Equal(cos.ErrInvalidQuantityPercent))
 		})
@@ -420,14 +421,14 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid mem usage bytes specified", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:    "prefix-{0010..0111}-suffix",
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "-1 GB",
 				Algorithm:       Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
 		})
@@ -435,14 +436,14 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid extract concurrency specified", func() {
 			rs := RequestSpec{
 				InputBck:            cmn.Bck{Name: "test"},
-				Extension:           archive.ExtTar,
+				InputExtension:      archive.ExtTar,
 				InputFormat:         newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:        "prefix-{0010..0111}-suffix",
 				OutputShardSize:     "10KB",
 				ExtractConcMaxLimit: -1,
 				Algorithm:           Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(errors.Is(err, errNegConcLimit)).To(BeTrue())
 		})
@@ -450,14 +451,14 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid create concurrency specified", func() {
 			rs := RequestSpec{
 				InputBck:           cmn.Bck{Name: "test"},
-				Extension:          archive.ExtTar,
+				InputExtension:     archive.ExtTar,
 				InputFormat:        newInputFormat("prefix-{0010..0111}-suffix"),
 				OutputFormat:       "prefix-{0010..0111}-suffix",
 				OutputShardSize:    "10KB",
 				CreateConcMaxLimit: -1,
 				Algorithm:          Algorithm{Kind: None},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 			Expect(errors.Is(err, errNegConcLimit)).To(BeTrue())
 		})
@@ -465,7 +466,7 @@ var _ = Describe("RequestSpec", func() {
 		It("should fail due to invalid dsort config value", func() {
 			rs := RequestSpec{
 				InputBck:        cmn.Bck{Name: "test"},
-				Extension:       archive.ExtTar,
+				InputExtension:  archive.ExtTar,
 				InputFormat:     newInputFormat("prefix-{0010..0111..2}-suffix"),
 				OutputFormat:    "prefix-{10..111}-suffix",
 				OutputShardSize: "10KB",
@@ -473,19 +474,19 @@ var _ = Describe("RequestSpec", func() {
 				Algorithm:       Algorithm{Kind: None},
 				Config:          cmn.DSortConf{DuplicatedRecords: "something"},
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 		})
 
 		It("should fail when output shard size is empty and output format is %06d", func() {
 			rs := RequestSpec{
-				InputBck:     cmn.Bck{Name: "test"},
-				Extension:    archive.ExtTar,
-				InputFormat:  newInputFormat("prefix-{0010..0111..2}-suffix"),
-				OutputFormat: "prefix-%06d-suffix",
-				MaxMemUsage:  "80%",
+				InputBck:       cmn.Bck{Name: "test"},
+				InputExtension: archive.ExtTar,
+				InputFormat:    newInputFormat("prefix-{0010..0111..2}-suffix"),
+				OutputFormat:   "prefix-%06d-suffix",
+				MaxMemUsage:    "80%",
 			}
-			_, err := rs.Parse()
+			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
 		})
 	})

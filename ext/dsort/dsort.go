@@ -302,11 +302,9 @@ func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
 	}()
 
 	ec := m.ec
-	if m.pars.Extension == "" {
-		ext, err := archive.Mime("", lom.FQN)
-		debug.AssertNoErr(err)
-		// NOTE: extract-creator for _this_ output shard (compare with extractShard._do)
-		ec = newExtractCreator(m.ctx.t, ext)
+	if m.pars.InputExtension != m.pars.OutputExtension {
+		// NOTE: resharding into a different format
+		ec = newExtractCreator(m.ctx.t, m.pars.OutputExtension)
 	}
 
 	_, err = ec.Create(s, w, m.dsorter)
@@ -578,7 +576,13 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 			return nil, errors.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
 		}
 		shard := &extract.Shard{
-			Name: name + m.pars.Extension,
+			Name: name,
+		}
+		ext, err := archive.Mime("", name)
+		if err == nil {
+			debug.Assert(m.pars.OutputExtension == ext)
+		} else {
+			shard.Name = name + m.pars.OutputExtension
 		}
 
 		shard.Size = curShardSize
@@ -839,7 +843,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*extract.Shard, order map[string]*ex
 		return err
 	})
 	group.Go(func() error {
-		query := m.pars.Bck.AddToQuery(nil)
+		query := m.pars.InputBck.AddToQuery(nil)
 		reqArgs := &cmn.HreqArgs{
 			Method: http.MethodPost,
 			Base:   si.URL(cmn.NetIntraData),
@@ -893,18 +897,18 @@ type extractShard struct {
 func (es *extractShard) do() (err error) {
 	m := es.m
 	shardName := es.name
-	if es.isRange && m.pars.Extension != "" {
+	if es.isRange && m.pars.InputExtension != "" {
 		ext, errV := archive.Mime("", es.name) // from filename
 		if errV == nil {
-			if !archive.EqExt(ext, m.pars.Extension) {
+			if !archive.EqExt(ext, m.pars.InputExtension) {
 				if m.config.FastV(4, cos.SmoduleDsort) {
 					nlog.Infof("%s: %s skipping %s: %q vs %q", m.ctx.t, m.ManagerUUID,
-						es.name, ext, m.pars.Extension)
+						es.name, ext, m.pars.InputExtension)
 				}
 				return
 			}
 		} else {
-			shardName = es.name + m.pars.Extension
+			shardName = es.name + m.pars.InputExtension
 		}
 	}
 	lom := cluster.AllocLOM(shardName)
@@ -923,7 +927,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		estimateTotalRecordsSize uint64
 		warnPossibleOOM          bool
 	)
-	if err := lom.InitBck(&m.pars.Bck); err != nil {
+	if err := lom.InitBck(&m.pars.InputBck); err != nil {
 		return err
 	}
 	if _, local, err := lom.HrwTarget(m.smap); err != nil || !local {
@@ -938,7 +942,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 
 	ec := m.ec
-	if m.pars.Extension == "" {
+	if m.pars.InputExtension == "" {
 		ext, err := archive.Mime("", lom.FQN)
 		if err != nil {
 			return nil // skip

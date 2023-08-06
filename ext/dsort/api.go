@@ -7,7 +7,10 @@ package dsort
 import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 )
+
+const DefaultExt = archive.ExtTar // default shard extension/format/MIME when spec's input_extension is empty
 
 const (
 	algDefault   = ""             // default (alphanumeric, increasing)
@@ -30,8 +33,9 @@ type Algorithm struct {
 	// when sort is a random shuffle
 	Seed string `json:"seed"`
 
-	// exclusively with Content sorting
-	// e.g. usage: ".cls" to provide sorting key for each record (sample) - see next
+	// usage: exclusively for Content sorting
+	// e.g.: ".cls" containing sorting key for each record (sample) - see next
+	// NOTE: not to confuse with shards "input_extension"
 	Ext string `json:"extension"`
 
 	// ditto: Content only
@@ -43,12 +47,17 @@ type Algorithm struct {
 type RequestSpec struct {
 	// Required
 	InputBck        cmn.Bck       `json:"input_bck" yaml:"input_bck"`
-	Extension       string        `json:"extension" yaml:"extension"`
 	InputFormat     apc.ListRange `json:"input_format" yaml:"input_format"`
 	OutputFormat    string        `json:"output_format" yaml:"output_format"`
 	OutputShardSize string        `json:"output_shard_size" yaml:"output_shard_size"`
 
+	// Desirable
+	InputExtension string `json:"input_extension" yaml:"input_extension"`
+
 	// Optional
+	// Default: InputExtension
+	OutputExtension string `json:"output_extension" yaml:"output_extension"`
+	// Default: ""
 	Description string `json:"description" yaml:"description"`
 	// Default: same as `bck` field
 	OutputBck cmn.Bck `json:"output_bck" yaml:"output_bck"`
@@ -64,8 +73,6 @@ type RequestSpec struct {
 	ExtractConcMaxLimit int `json:"extract_concurrency_max_limit" yaml:"extract_concurrency_max_limit"`
 	// Default: calcMaxLimit()
 	CreateConcMaxLimit int `json:"create_concurrency_max_limit" yaml:"create_concurrency_max_limit"`
-	// Default: bundle.Multiplier
-	StreamMultiplier int `json:"stream_multiplier" yaml:"stream_multiplier"`
 	// Default: false
 	ExtendedMetrics bool `json:"extended_metrics" yaml:"extended_metrics"`
 

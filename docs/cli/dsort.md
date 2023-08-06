@@ -102,7 +102,6 @@ order_file_sep                   \t
 output_bck                       ais://dst
 output_format                    new-shard-{0000..1000}
 output_shard_size                10KB
-stream_multiplier                0
 
 Config override:                 none
 

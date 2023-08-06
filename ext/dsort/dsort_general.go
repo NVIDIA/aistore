@@ -146,12 +146,8 @@ func (ds *dsorterGeneral) start() error {
 	}
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
-	streamMultiplier := config.DSort.SbundleMult
-	if ds.m.pars.StreamMultiplier != 0 {
-		streamMultiplier = ds.m.pars.StreamMultiplier
-	}
 	respSbArgs := bundle.Args{
-		Multiplier: streamMultiplier,
+		Multiplier: ds.m.pars.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,

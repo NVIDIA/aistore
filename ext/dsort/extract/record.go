@@ -65,7 +65,7 @@ type (
 	// Record represents the metadata corresponding to a single file from a shard.
 	Record struct {
 		Key      any    `msg:"k" json:"k"` // Used to determine the sorting order.
-		Name     string `msg:"n" json:"n"` // Name which uniquely identifies record across all shards.
+		Name     string `msg:"n" json:"n"` // Name that uniquely identifies record across all shards.
 		DaemonID string `msg:"d" json:"d"` // ID of the target which maintains the contents for this record.
 		// All objects associated with given record. Record can be composed of
 		// multiple objects which have the same name but different extension.

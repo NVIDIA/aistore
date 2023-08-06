@@ -202,9 +202,8 @@ func (df *dsortFramework) init() {
 	if df.outputTempl == "" {
 		df.outputTempl = "output-{00000..10000}"
 	}
-	// NOTE: default extension/format/MIME
 	if df.extension == "" {
-		df.extension = archive.ExtTar
+		df.extension = dsort.DefaultExt
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -243,7 +242,7 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		Description:         generateDSortDesc(),
 		InputBck:            df.m.bck,
 		OutputBck:           df.outputBck,
-		Extension:           df.extension,
+		InputExtension:      df.extension,
 		InputFormat:         df.inputTempl,
 		OutputFormat:        df.outputTempl,
 		OutputShardSize:     df.outputShardSize,

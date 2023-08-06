@@ -208,13 +208,9 @@ func (ds *dsorterMem) start() error {
 
 	client := transport.NewIntraDataClient()
 
-	streamMultiplier := config.DSort.SbundleMult
-	if ds.m.pars.StreamMultiplier != 0 {
-		streamMultiplier = ds.m.pars.StreamMultiplier
-	}
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
-		Multiplier: streamMultiplier,
+		Multiplier: ds.m.pars.SbundleMult,
 		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -225,7 +221,7 @@ func (ds *dsorterMem) start() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
 	respSbArgs := bundle.Args{
-		Multiplier: streamMultiplier,
+		Multiplier: ds.m.pars.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,

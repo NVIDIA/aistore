@@ -29,11 +29,18 @@ type parsedOutputTemplate struct {
 	Template cos.ParsedTemplate
 }
 
-type ParsedRequestSpec struct {
-	Bck                 cmn.Bck               `json:"bck"`
+type ParsedReq struct {
+	InputBck  cmn.Bck
+	OutputBck cmn.Bck
+	pars      *parsedReqSpec
+}
+
+type parsedReqSpec struct {
+	InputBck            cmn.Bck               `json:"input_bck"`
 	Description         string                `json:"description"`
 	OutputBck           cmn.Bck               `json:"output_bck"`
-	Extension           string                `json:"extension"`
+	InputExtension      string                `json:"input_extension"`
+	OutputExtension     string                `json:"output_extension"`
 	OutputShardSize     int64                 `json:"output_shard_size,string"`
 	Pit                 *parsedInputTemplate  `json:"pit"`
 	Pot                 *parsedOutputTemplate `json:"pot"`
@@ -44,7 +51,7 @@ type ParsedRequestSpec struct {
 	TargetOrderSalt     []byte                `json:"target_order_salt"`
 	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
 	CreateConcMaxLimit  int                   `json:"create_concurrency_max_limit"`
-	StreamMultiplier    int                   `json:"stream_multiplier"` // TODO: remove
+	SbundleMult         int                   `json:"bundle_multiplier"`
 	ExtendedMetrics     bool                  `json:"extended_metrics"`
 
 	// debug
@@ -58,68 +65,95 @@ type ParsedRequestSpec struct {
 // RequestSpec //
 /////////////////
 
-// Parse returns a non-nil error if a RequestSpec is invalid. When RequestSpec
-// is valid it parses all the fields, sets the values and returns ParsedRequestSpec.
-func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
+func specErr(s string, err error) error { return fmt.Errorf("[dsort] parse-spec: %q %w", s, err) }
+
+func (rs *RequestSpec) ParseCtx() (*ParsedReq, error) {
+	pars, err := rs.parse()
+	return &ParsedReq{pars.InputBck, pars.OutputBck, pars}, err
+}
+
+func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 	var (
 		cfg  = cmn.GCO.Get().DSort
-		pars = &ParsedRequestSpec{}
+		pars = &parsedReqSpec{}
 	)
 
-	if rs.InputBck.Name == "" {
-		return pars, errMissingSrcBucket
+	// src bck
+	if rs.InputBck.IsEmpty() {
+		return pars, specErr("input_bck", errMissingSrcBucket)
 	}
+	pars.InputBck = rs.InputBck
 	if rs.InputBck.Provider == "" {
-		rs.InputBck.Provider = apc.AIS
-	}
-	if _, err := cmn.NormalizeProvider(rs.InputBck.Provider); err != nil {
-		return pars, err
+		pars.InputBck.Provider = apc.AIS // NOTE: ais:// is the default
+	} else {
+		normp, err := cmn.NormalizeProvider(rs.InputBck.Provider)
+		if err != nil {
+			return pars, specErr("input_bck_provider", err)
+		}
+		pars.InputBck.Provider = normp
 	}
 	if err := rs.InputBck.Validate(); err != nil {
-		return pars, err
+		return pars, specErr("input_bck", err)
 	}
+
 	pars.Description = rs.Description
-	pars.Bck = rs.InputBck
+
+	// dst bck
 	pars.OutputBck = rs.OutputBck
 	if pars.OutputBck.IsEmpty() {
-		pars.OutputBck = pars.Bck
-	} else if _, err := cmn.NormalizeProvider(rs.OutputBck.Provider); err != nil {
-		return pars, err
-	} else if err := rs.OutputBck.Validate(); err != nil {
-		return pars, err
-	}
-
-	var err error
-	pars.Pit, err = parseInputFormat(rs.InputFormat)
-	if err != nil {
-		return nil, err
-	}
-
-	if rs.Extension != "" {
-		pars.Extension, err = archive.Mime(rs.Extension, "")
+		pars.OutputBck = pars.InputBck // NOTE: source can be the destination as well
+	} else {
+		normp, err := cmn.NormalizeProvider(rs.OutputBck.Provider)
 		if err != nil {
-			return nil, err
+			return pars, specErr("output_bck_provider", err)
+		}
+		pars.OutputBck.Provider = normp
+		if err := rs.OutputBck.Validate(); err != nil {
+			return pars, specErr("output_bck", err)
 		}
 	}
 
+	// input format
+	var err error
+	pars.Pit, err = parseInputFormat(rs.InputFormat)
+	if err != nil {
+		return nil, specErr("input_format", err)
+	}
+	if rs.InputFormat.Template != "" {
+		// template is not a filename but all we do here is
+		// checking the template's suffix for specific supported extensions
+		if ext, err := archive.Mime("", rs.InputFormat.Template); err == nil {
+			if rs.InputExtension != "" && rs.InputExtension != ext {
+				return nil, fmt.Errorf("input_extension: %q vs %q", rs.InputExtension, ext)
+			}
+			rs.InputExtension = ext
+		}
+	}
+	if rs.InputExtension != "" {
+		pars.InputExtension, err = archive.Mime(rs.InputExtension, "")
+		if err != nil {
+			return nil, specErr("input_extension", err)
+		}
+	}
+
+	// output format
 	pars.OutputShardSize, err = cos.ParseSize(rs.OutputShardSize, cos.UnitsIEC)
 	if err != nil {
-		return nil, err
+		return nil, specErr("output_shard_size", err)
 	}
 	if pars.OutputShardSize < 0 {
 		return nil, fmt.Errorf(fmtErrNegOutputSize, pars.OutputShardSize)
 	}
-
 	pars.Algorithm, err = parseAlgorithm(rs.Algorithm)
 	if err != nil {
-		return nil, err
+		return nil, specErr("algorithm", err)
 	}
 
-	empty, err := validateOrderFileURL(rs.OrderFileURL)
-	if err != nil {
+	var isOrder bool
+	if isOrder, err = validateOrderFileURL(rs.OrderFileURL); err != nil {
 		return nil, fmt.Errorf(fmtErrOrderURL, rs.OrderFileURL, err)
 	}
-	if empty {
+	if isOrder {
 		if pars.Pot, err = parseOutputFormat(rs.OutputFormat); err != nil {
 			return nil, err
 		}
@@ -129,20 +163,36 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 				return nil, errMissingOutputSize
 			}
 		}
-	} else { // Valid and not empty.
+		if rs.OutputFormat != "" {
+			// (ditto)
+			if ext, err := archive.Mime("", rs.OutputFormat); err == nil {
+				if rs.OutputExtension != "" && rs.OutputExtension != ext {
+					return nil, fmt.Errorf("output_extension: %q vs %q", rs.OutputExtension, ext)
+				}
+				rs.OutputExtension = ext
+			}
+		}
+	} else {
 		// For the order file the output shard size must be set.
 		if pars.OutputShardSize == 0 {
 			return nil, errMissingOutputSize
 		}
-
 		pars.OrderFileURL = rs.OrderFileURL
-
 		pars.OrderFileSep = rs.OrderFileSep
 		if pars.OrderFileSep == "" {
 			pars.OrderFileSep = "\t"
 		}
 	}
+	if rs.OutputExtension == "" {
+		pars.OutputExtension = pars.InputExtension
+	} else {
+		pars.OutputExtension, err = archive.Mime(rs.OutputExtension, "")
+		if err != nil {
+			return nil, specErr("output_extension", err)
+		}
+	}
 
+	// mem & conc
 	if rs.MaxMemUsage == "" {
 		rs.MaxMemUsage = cfg.DefaultMaxMemUsage
 	}
@@ -159,16 +209,22 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 
 	pars.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
 	pars.CreateConcMaxLimit = rs.CreateConcMaxLimit
-	pars.StreamMultiplier = rs.StreamMultiplier
 	pars.ExtendedMetrics = rs.ExtendedMetrics
 	pars.DSorterType = rs.DSorterType
 	pars.DryRun = rs.DryRun
 
-	// Check for values that override the global config.
+	// `cfg` here contains inherited (aka global) part of the dsort config -
+	// apply this request's rs.Config values to override or assign defaults
+
 	if err := rs.Config.ValidateWithOpts(true); err != nil {
 		return nil, err
 	}
 	pars.DSortConf = rs.Config
+
+	pars.SbundleMult = rs.Config.SbundleMult
+	if pars.SbundleMult == 0 {
+		pars.SbundleMult = cfg.SbundleMult
+	}
 	if pars.MissingShards == "" {
 		pars.MissingShards = cfg.MissingShards
 	}
