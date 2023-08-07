@@ -563,7 +563,7 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 	// 3. create dst bucket if doesn't exist - clone bckFrom props
 	if !dryRun && !existsTo {
 		ctx := &bmdModifier{
-			pre:   bmodTCB,
+			pre:   bmodCpProps,
 			final: p.bmodSync,
 			msg:   msg,
 			txnID: c.uuid,
@@ -605,7 +605,8 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 }
 
 // transform or copy a list or a range of objects
-func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, err error) {
+// TODO: check dry-run
+func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid string, err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
@@ -615,7 +616,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, e
 	_, existsTo := bmd.Get(bckTo)
 	// 2. begin
 	var (
-		waitmsync = !existsTo
+		waitmsync = !dryRun && !existsTo
 		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
 	)
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
@@ -624,9 +625,9 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, e
 	}
 
 	// 3. create dst bucket if doesn't exist - clone bckFrom props
-	if !existsTo {
+	if !dryRun && !existsTo {
 		ctx := &bmdModifier{
-			pre:   bmodTCB,
+			pre:   bmodCpProps,
 			final: p.bmodSync,
 			msg:   msg,
 			txnID: c.uuid,
@@ -660,32 +661,6 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid string, e
 		return
 	}
 	return strings.Join(all, xact.UUIDSepa), nil
-}
-
-func bmodTCB(ctx *bmdModifier, clone *bucketMD) error {
-	var (
-		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
-		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
-	)
-	debug.Assert(present)
-
-	// Skip destination bucket creation if it's dry run or it's already present.
-	if _, present = clone.Get(bckTo); present {
-		ctx.terminate = true
-		return nil
-	}
-
-	debug.Assert(bckTo.IsAIS())
-	bckFrom.Props = bprops.Clone()
-	// replicate bucket props - but only if the source is ais as well
-	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
-		bckTo.Props = bprops.Clone()
-	} else {
-		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
-	}
-	added := clone.add(bckTo, bckTo.Props)
-	debug.Assert(added)
-	return nil
 }
 
 func parseECConf(value any) (*cmn.ECConfToUpdate, error) {
@@ -998,6 +973,42 @@ func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *t
 
 	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
+}
+
+// two helpers to create ais:// destination on the fly, copy source bucket  props
+func bmodCpProps(ctx *bmdModifier, clone *bucketMD) error {
+	var (
+		bckFrom, bckTo  = ctx.bcks[0], ctx.bcks[1]
+		bprops, present = clone.Get(bckFrom) // TODO: Bucket could be removed during begin.
+	)
+	debug.Assert(present)
+
+	// Skip destination bucket creation if it's already present.
+	if _, present = clone.Get(bckTo); present {
+		ctx.terminate = true
+		return nil
+	}
+
+	debug.Assert(bckTo.IsAIS())
+	bckFrom.Props = bprops.Clone()
+	// replicate bucket props - but only if the source is ais as well
+	if bckFrom.IsAIS() || bckFrom.IsRemoteAIS() {
+		bckTo.Props = bprops.Clone()
+	} else {
+		bckTo.Props = defaultBckProps(bckPropsArgs{bck: bckTo})
+	}
+	added := clone.add(bckTo, bckTo.Props)
+	debug.Assert(added)
+	return nil
+}
+
+func (p *proxy) bmodSync(ctx *bmdModifier, clone *bucketMD) {
+	debug.Assert(clone._sgl != nil)
+	msg := p.newAmsg(ctx.msg, clone, ctx.txnID)
+	wg := p.metasyncer.sync(revsPair{clone, msg})
+	if ctx.wait {
+		wg.Wait()
+	}
 }
 
 // rollback create-bucket

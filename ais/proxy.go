@@ -1242,7 +1242,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 
 		nlog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
-		if xid, err = p.tcobjs(bck, bckTo, msg); err != nil {
+		if xid, err = p.tcobjs(bck, bckTo, msg, tcomsg.TCBMsg.CopyBckMsg.DryRun); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
@@ -2857,7 +2857,6 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-
 	apiItems, err := cmn.ParseURL(r.URL.Path, 0, true, apc.URLPathdSort.L)
 	if err != nil {
 		p.writeErrURL(w, r)
@@ -2868,8 +2867,15 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// - validate request, check input_bck and output_bck
 		// - start dsort
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive dsort request: %v", err)
+			return
+		}
 		rs := &dsort.RequestSpec{}
-		if cmn.ReadJSON(w, r, rs) != nil {
+		if err := jsoniter.Unmarshal(body, rs); err != nil {
+			err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "dsort request", cos.BHead(body), err)
+			p.writeErr(w, r, err)
 			return
 		}
 		parsc, err := rs.ParseCtx()
@@ -2889,15 +2895,26 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errCode == http.StatusNotFound {
-				// TODO -- FIXME: reuse common prxtxn logic to create
-				if true {
-					p.writeErr(w, r, cmn.NewErrRemoteBckNotFound(&parsc.OutputBck), http.StatusNotFound)
+				naction := "dsort-create-output-bck"
+				warnfmt := "%s: %screate 'output_bck' %s with the 'input_bck' (%s) props"
+				if p.forwardCP(w, r, nil /*msg*/, naction, body /*orig body*/) { // to create
 					return
 				}
-				if p.forwardCP(w, r, nil /*msg*/, "dsort-create-output-bck") { // to create
+				ctx := &bmdModifier{
+					pre:   bmodCpProps,
+					final: p.bmodSync,
+					msg:   &apc.ActMsg{Action: naction},
+					txnID: "",
+					bcks:  []*meta.Bck{bck, bckTo},
+					wait:  true,
+				}
+				if _, err = p.owner.bmd.modify(ctx); err != nil {
+					debug.AssertNoErr(err)
+					err = fmt.Errorf(warnfmt+": %w", p, "failed to ", bckTo, bck, err)
+					p.writeErr(w, r, err)
 					return
 				}
-				nlog.Warningf("%s: output_bck %s will be created with the input_bck (%s) props", p, bckTo, bck)
+				nlog.Warningf(warnfmt, p, "", bckTo, bck)
 			}
 		}
 		dsort.PstartHandler(w, r, parsc)

@@ -1677,15 +1677,6 @@ func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
 	ctx.rmdCtx = rmdCtx
 }
 
-func (p *proxy) bmodSync(ctx *bmdModifier, clone *bucketMD) {
-	debug.Assert(clone._sgl != nil)
-	msg := p.newAmsg(ctx.msg, clone, ctx.txnID)
-	wg := p.metasyncer.sync(revsPair{clone, msg})
-	if ctx.wait {
-		wg.Wait()
-	}
-}
-
 func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, 1, false, apc.URLPathCluProxy.L)
 	if err != nil {

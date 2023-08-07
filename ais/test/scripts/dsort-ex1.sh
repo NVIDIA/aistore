@@ -18,9 +18,15 @@ while (( "$#" )); do
   esac
 done
 
-## generate 10 tar shards, each containing 5 files
-## (50 files total)
-ais create $srcbck $dstbck 2>/dev/null
+## establish existence
+ais show bucket $srcbck -c 1>/dev/null 2>&1
+srcexists=$?
+ais show bucket $dstbck -c 1>/dev/null 2>&1
+dstexists=$?
+
+## generate 10 tar shards, each containing 5 files (50 files total)
+## note that dstbck, if doesn't exist, will be created on the fly
+[[ $srcexists == 0 ]] || ais create $srcbck || exit 1
 ais archive gen-shards "$srcbck/shard-{0..9}.tar" || \
 exit 1
 
@@ -36,8 +42,12 @@ num=$(ais ls $dstbck --summary --H | awk '{print $3}')
 echo "Successfully resharded $srcbck => $dstbck:"
 ais ls $dstbck
 
-## cleanup
-if [[ ${nocleanup} != "true" ]]; then
-  echo "Cleanup: deleting $srcbck and $dstbck"
-  ais rmb $srcbck $dstbck -y 2>/dev/null 1>&2
+## cleanup: rmb buckets created during this run
+if [[ ${nocleanup} != "true" && $srcexists != 0 ]]; then
+  echo "Deleting source: $srcbck"
+  ais rmb $srcbck -y 2>/dev/null 1>&2
+fi
+if [[ ${nocleanup} != "true" && $dstexists != 0 ]]; then
+  echo "Deleting destination: $dstbck"
+  ais rmb $dstbck -y 2>/dev/null 1>&2
 fi

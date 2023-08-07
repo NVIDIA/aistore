@@ -709,22 +709,23 @@ func TestDistributedSortNonExistingBuckets(t *testing.T) {
 
 			df.init()
 
-			// Create local output bucket
+			// Create ais:// output
 			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
 
 			tlog.Logln(startingDS)
 			spec := df.gen()
+			tlog.Logf("dsort %s(-) => %s\n", m.bck, df.outputBck)
 			if _, err := api.StartDSort(df.baseParams, &spec); err == nil {
-				t.Errorf("expected %s job to fail when input bucket does not exist", dsort.DSortName)
+				t.Error("expected dsort to fail when input bucket doesn't exist")
 			}
 
 			// Now destroy output bucket and create input bucket
 			tools.DestroyBucket(t, m.proxyURL, df.outputBck)
 			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
-			tlog.Logln("starting second distributed sort...")
-			if _, err := api.StartDSort(df.baseParams, &spec); err == nil {
-				t.Errorf("expected %s job to fail when output bucket does not exist", dsort.DSortName)
+			tlog.Logf("dsort %s => %s(-)\n", m.bck, df.outputBck)
+			if _, err := api.StartDSort(df.baseParams, &spec); err != nil {
+				t.Errorf("expected dsort to create output bucket on the fly, got: %v", err)
 			}
 		},
 	)

@@ -77,7 +77,7 @@ func (c *lstcx) do() (string, error) {
 	cnt := cos.Min(len(names), 10)
 	nlog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
 
-	c.tcomsg.TxnUUID, err = p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
+	c.tcomsg.TxnUUID, err = p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg, c.tcbmsg.DryRun)
 	if lst.ContinuationToken != "" {
 		c.lsmsg.ContinuationToken = lst.ContinuationToken
 		go c.pages(smap)
@@ -108,7 +108,7 @@ func (c *lstcx) pages(smap *smapX) {
 
 		// next tco action
 		c.altmsg.Value = &c.tcomsg
-		xid, err := p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg)
+		xid, err := p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg, c.tcbmsg.DryRun)
 		if err != nil {
 			nlog.Errorln(err)
 			return

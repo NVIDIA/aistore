@@ -89,10 +89,10 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		p.writeErrStatusf(w, r, http.StatusInternalServerError, "Error starting download: %v", err)
+		p.writeErrStatusf(w, r, http.StatusInternalServerError, "failed to receive download request: %v", err)
 		return
 	}
-	dlb, dlBase, ok := p.validateStartDownload(w, r, body)
+	dlb, dlBase, ok := p.validateDownload(w, r, body)
 	if !ok {
 		return
 	}
@@ -268,7 +268,7 @@ func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (errCod
 	return http.StatusOK, nil
 }
 
-func (p *proxy) validateStartDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dload.Body, dlBase dload.Base, ok bool) {
+func (p *proxy) validateDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dload.Body, dlBase dload.Base, ok bool) {
 	if err := jsoniter.Unmarshal(body, &dlb); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, p, "download request", cos.BHead(body), err)
 		p.writeErr(w, r, err)
