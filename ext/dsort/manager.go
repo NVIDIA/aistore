@@ -103,8 +103,8 @@ type (
 		ctx  dsortContext
 		smap *meta.Smap
 
-		recManager *extract.RecordManager
-		ec         extract.Creator
+		recm *extract.RecordManager
+		ec   extract.Creator
 
 		startShardCreation chan struct{}
 		pars               *parsedReqSpec
@@ -375,7 +375,7 @@ func (m *Manager) finalCleanup() {
 	// The reason why this is not in regular cleanup is because we are only sure
 	// that this can be freed once we cleanup streams - streams are asynchronous
 	// and we may have race between in-flight request and cleanup.
-	m.recManager.Cleanup()
+	m.recm.Cleanup()
 
 	m.creationPhase.metadata.SendOrder = nil
 	m.creationPhase.metadata.Shards = nil
@@ -478,7 +478,7 @@ func (m *Manager) setRW() (err error) {
 		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
 		m.ec = extract.NopRW(m.ec)
 	}
-	m.recManager = extract.NewRecordManager(m.ctx.t, m.pars.InputBck, m.pars.InputExtension, m.ec, ke, m.onDupRecs)
+	m.recm = extract.NewRecordManager(m.ctx.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
 	return nil
 }
 

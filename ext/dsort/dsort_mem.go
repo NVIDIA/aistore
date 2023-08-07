@@ -435,7 +435,7 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 		}
 		beforeSend int64
 	)
-	fullContentPath := ds.m.recManager.FullContentPath(obj)
+	fullContentPath := ds.m.recm.FullContentPath(obj)
 	ct, err := cluster.NewCTFromBO(&ds.m.pars.OutputBck, fullContentPath, nil)
 	if err != nil {
 		return

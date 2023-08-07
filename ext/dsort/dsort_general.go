@@ -288,7 +288,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 		ds.m.decrementRef(1)
 	}()
 
-	fullContentPath := ds.m.recManager.FullContentPath(obj)
+	fullContentPath := ds.m.recm.FullContentPath(obj)
 
 	if ds.m.pars.DryRun {
 		r := cos.NopReader(obj.MetadataSize + obj.Size)
@@ -313,9 +313,9 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 		}
 	case extract.SGLStoreType:
 		debug.Assert(buf == nil)
-		v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
+		v, ok := ds.m.recm.RecordContents().Load(fullContentPath)
 		debug.Assert(ok, fullContentPath)
-		ds.m.recManager.RecordContents().Delete(fullContentPath)
+		ds.m.recm.RecordContents().Delete(fullContentPath)
 		sgl := v.(*memsys.SGL)
 		defer sgl.Free()
 
@@ -500,7 +500,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
 	o.Callback, o.CmplArg = ds.responseCallback, beforeSend
 
-	fullContentPath := ds.m.recManager.FullContentPath(req.RecordObj)
+	fullContentPath := ds.m.recm.FullContentPath(req.RecordObj)
 
 	if ds.m.pars.DryRun {
 		lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
@@ -521,9 +521,9 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 		}
 		ds.streams.response.Send(o, r, fromNode)
 	case extract.SGLStoreType:
-		v, ok := ds.m.recManager.RecordContents().Load(fullContentPath)
+		v, ok := ds.m.recm.RecordContents().Load(fullContentPath)
 		debug.Assert(ok, fullContentPath)
-		ds.m.recManager.RecordContents().Delete(fullContentPath)
+		ds.m.recm.RecordContents().Delete(fullContentPath)
 		sgl := v.(*memsys.SGL)
 		o.Hdr.ObjAttrs.Size = sgl.Size()
 		ds.streams.response.Send(o, sgl, fromNode)

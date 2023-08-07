@@ -641,7 +641,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	dsortManager.addCompressionSizes(compressed, uncompressed)
-	dsortManager.recManager.EnqueueRecords(records)
+	dsortManager.recm.EnqueueRecords(records)
 	dsortManager.incrementReceived()
 
 	if dsortManager.config.FastV(4, cos.SmoduleDsort) {

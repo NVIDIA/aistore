@@ -412,7 +412,7 @@ var _ = Describe("Distributed Sort", func() {
 							// For each target add sorted record
 							manager, exists := target.managers.Get(globalManagerUUID)
 							Expect(exists).To(BeTrue())
-							manager.recManager.Records = createRecords(target.daemonID)
+							manager.recm.Records = createRecords(target.daemonID)
 
 							targetOrder := randomTargetOrder(1, tctx.smap.Tmap)
 							isFinal, err := manager.participateInRecordDistribution(targetOrder)
@@ -422,7 +422,7 @@ var _ = Describe("Distributed Sort", func() {
 							}
 
 							if isFinal {
-								srecordsCh <- manager.recManager.Records
+								srecordsCh <- manager.recm.Records
 							}
 						}(target)
 					}
@@ -473,7 +473,7 @@ var _ = Describe("Distributed Sort", func() {
 						}
 
 						// For each target add sorted record
-						manager.recManager.Records = createRecords(target.daemonID)
+						manager.recm.Records = createRecords(target.daemonID)
 					}
 
 					for _, target := range tctx.targets {
@@ -493,7 +493,7 @@ var _ = Describe("Distributed Sort", func() {
 							if isFinal {
 								manager, exists := target.managers.Get(globalManagerUUID)
 								Expect(exists).To(BeTrue())
-								srecordsCh <- manager.recManager.Records
+								srecordsCh <- manager.recm.Records
 							}
 						}(target)
 					}

@@ -156,8 +156,8 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 			if mw.m.ec.SupportsOffset() {
 				storeType = extract.OffsetStoreType
 			}
-			mw.m.recManager.RecordContents().Range(func(key, value any) bool {
-				n := mw.m.recManager.FreeMem(key.(string), storeType, value, buf)
+			mw.m.recm.RecordContents().Range(func(key, value any) bool {
+				n := mw.m.recm.FreeMem(key.(string), storeType, value, buf)
 				memExcess -= n
 				return memExcess > 0 // continue if we need more
 			})

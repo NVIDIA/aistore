@@ -31,6 +31,8 @@ const (
 	ExtractToWriter
 )
 
+const recSepa = "|"
+
 // interface guard
 var _ RecordExtractor = (*RecordManager)(nil)
 
@@ -71,7 +73,6 @@ type (
 
 		t                   cluster.Target
 		bck                 cmn.Bck
-		extension           string
 		onDuplicatedRecords func(string) error
 
 		extractCreator  Creator
@@ -86,13 +87,12 @@ type (
 	}
 )
 
-func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCreator Creator,
+func NewRecordManager(t cluster.Target, bck cmn.Bck, extractCreator Creator,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records:             NewRecords(1000),
 		t:                   t,
 		bck:                 bck,
-		extension:           extension,
 		onDuplicatedRecords: onDuplicatedRecords,
 		extractCreator:      extractCreator,
 		keyExtractor:        keyExtractor,
@@ -101,39 +101,39 @@ func NewRecordManager(t cluster.Target, bck cmn.Bck, extension string, extractCr
 	}
 }
 
-func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size int64, err error) {
+func (recm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size int64, err error) {
 	var (
 		storeType       string
 		contentPath     string
 		fullContentPath string
 		mdSize          int64
 
-		ext              = cos.Ext(args.recordName)
-		recordUniqueName = rm.genRecordUniqueName(args.shardName, args.recordName)
+		ext              = cosExt(args.recordName)
+		recordUniqueName = genRecordUname(args.shardName, args.recordName)
 	)
 
 	// If the content already exists we should skip it but set error
 	// (caller must to handle it properly).
-	if rm.Records.Exists(recordUniqueName, ext) {
+	if recm.Records.Exists(recordUniqueName, ext) {
 		msg := fmt.Sprintf("record %q has been duplicated", args.recordName)
-		rm.Records.DeleteDup(recordUniqueName, ext)
+		recm.Records.DeleteDup(recordUniqueName, ext)
 
-		// NOTE: There is no need to remove anything from `rm.extractionPaths`
-		// or `rm.contents` since it'll be removed anyway during subsequent cleanup.
+		// NOTE: There is no need to remove anything from `recm.extractionPaths`
+		// or `recm.contents` since it'll be removed anyway during subsequent cleanup.
 		// The assumption is that there will be not too many duplicates and we can live
 		// with a few extra files/memory.
-		return 0, rm.onDuplicatedRecords(msg)
+		return 0, recm.onDuplicatedRecords(msg)
 	}
 
 	debug.Assert(!args.extractMethod.Has(ExtractToWriter) || args.w != nil)
 
-	r, ske, needRead := rm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
+	r, ske, needRead := recm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
 	if args.extractMethod.Has(ExtractToMem) {
 		mdSize = int64(len(args.metadata))
 		storeType = SGLStoreType
-		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
+		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := rm.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := recm.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
 			sgl.Free()
@@ -148,11 +148,11 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 			sgl.Free()
 			return size, errors.WithStack(err)
 		}
-		rm.contents.Store(fullContentPath, sgl)
-	} else if args.extractMethod.Has(ExtractToDisk) && rm.extractCreator.SupportsOffset() {
-		mdSize, size = rm.extractCreator.MetadataSize(), r.Size()
+		recm.contents.Store(fullContentPath, sgl)
+	} else if args.extractMethod.Has(ExtractToDisk) && recm.extractCreator.SupportsOffset() {
+		mdSize, size = recm.extractCreator.MetadataSize(), r.Size()
 		storeType = OffsetStoreType
-		contentPath, _ = rm.encodeRecordName(storeType, args.shardName, args.recordName)
+		contentPath, _ = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
 		// If extractor was initialized we need to read the content, since it
 		// may contain information about the sorting/shuffling key.
@@ -169,7 +169,7 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 	} else if args.extractMethod.Has(ExtractToDisk) {
 		mdSize = int64(len(args.metadata))
 		storeType = DiskStoreType
-		contentPath, fullContentPath = rm.encodeRecordName(storeType, args.shardName, args.recordName)
+		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
 		var f *os.File
 		if f, err = cos.CreateFile(fullContentPath); err != nil {
@@ -180,23 +180,23 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 			return size, errors.WithStack(err)
 		}
 		cos.Close(f)
-		rm.extractionPaths.Store(fullContentPath, struct{}{})
+		recm.extractionPaths.Store(fullContentPath, struct{}{})
 	} else {
 		debug.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
 	var key any
-	if key, err = rm.keyExtractor.ExtractKey(ske); err != nil {
+	if key, err = recm.keyExtractor.ExtractKey(ske); err != nil {
 		return size, errors.WithStack(err)
 	}
 
 	if contentPath == "" || storeType == "" {
 		debug.Assertf(false, "shardName: %q, recordName: %q, storeType: %q", args.shardName, args.recordName, storeType)
 	}
-	rm.Records.Insert(&Record{
+	recm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: rm.t.SID(),
+		DaemonID: recm.t.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -210,42 +210,31 @@ func (rm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size i
 	return size, nil
 }
 
-func (rm *RecordManager) EnqueueRecords(records *Records) {
-	rm.enqueued.mu.Lock()
-	rm.enqueued.records = append(rm.enqueued.records, records)
-	rm.enqueued.mu.Unlock()
+func (recm *RecordManager) EnqueueRecords(records *Records) {
+	recm.enqueued.mu.Lock()
+	recm.enqueued.records = append(recm.enqueued.records, records)
+	recm.enqueued.mu.Unlock()
 }
 
-func (rm *RecordManager) MergeEnqueuedRecords() {
+func (recm *RecordManager) MergeEnqueuedRecords() {
 	for {
-		rm.enqueued.mu.Lock()
-		lastIdx := len(rm.enqueued.records) - 1
+		recm.enqueued.mu.Lock()
+		lastIdx := len(recm.enqueued.records) - 1
 		if lastIdx < 0 {
-			rm.enqueued.mu.Unlock()
+			recm.enqueued.mu.Unlock()
 			break
 		}
-		records := rm.enqueued.records[lastIdx]
-		rm.enqueued.records[lastIdx] = nil
-		rm.enqueued.records = rm.enqueued.records[:lastIdx]
-		rm.enqueued.mu.Unlock()
+		records := recm.enqueued.records[lastIdx]
+		recm.enqueued.records[lastIdx] = nil
+		recm.enqueued.records = recm.enqueued.records[:lastIdx]
+		recm.enqueued.mu.Unlock()
 
-		rm.Records.merge(records)
+		recm.Records.merge(records)
 	}
 	cos.FreeMemToOS()
 }
 
-func (rm *RecordManager) genRecordUniqueName(shardName, recordName string) string {
-	shardWithoutExt := strings.TrimSuffix(shardName, rm.extension)
-	recordWithoutExt := strings.TrimSuffix(recordName, cos.Ext(recordName))
-	return shardWithoutExt + "|" + recordWithoutExt
-}
-
-func (rm *RecordManager) parseRecordUniqueName(recordUniqueName string) (shardName, recordName string) {
-	splits := strings.SplitN(recordUniqueName, "|", 2)
-	return splits[0] + rm.extension, splits[1]
-}
-
-func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {
+func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {
 	switch storeType {
 	case OffsetStoreType:
 		// For offset:
@@ -256,16 +245,16 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 		// For sgl:
 		//  * contentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
 		//  * fullContentPath = recordUniqueName with extension (eg. shard_1-record_name.cls)
-		recordExt := cos.Ext(recordName)
-		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
+		recordExt := cosExt(recordName)
+		contentPath := genRecordUname(shardName, recordName) + recordExt
 		return contentPath, contentPath // unique key for record
 	case DiskStoreType:
 		// For disk:
 		//  * contentPath = recordUniqueName with extension  (eg. shard_1-record_name.cls)
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
-		recordExt := cos.Ext(recordName)
-		contentPath := rm.genRecordUniqueName(shardName, recordName) + recordExt
-		c, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
+		recordExt := cosExt(recordName)
+		contentPath := genRecordUname(shardName, recordName) + recordExt
+		c, err := cluster.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
 		return contentPath, c.Make(ct.DSortFileType)
 	default:
@@ -274,12 +263,12 @@ func (rm *RecordManager) encodeRecordName(storeType, shardName, recordName strin
 	}
 }
 
-func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
+func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 	switch obj.StoreType {
 	case OffsetStoreType:
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
-		ct, err := cluster.NewCTFromBO(&rm.bck, obj.ContentPath, nil)
+		ct, err := cluster.NewCTFromBO(&recm.bck, obj.ContentPath, nil)
 		debug.AssertNoErr(err)
 		return ct.Make(obj.ObjectFileType)
 	case SGLStoreType:
@@ -290,7 +279,7 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		c, err := cluster.NewCTFromBO(&rm.bck, contentPath, nil)
+		c, err := cluster.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
 		return c.Make(ct.DSortFileType)
 	default:
@@ -299,22 +288,22 @@ func (rm *RecordManager) FullContentPath(obj *RecordObj) string {
 	}
 }
 
-func (rm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
+func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any, buf []byte) (n int64) {
 	sgl, ok := value.(*memsys.SGL)
 	debug.Assert(ok)
 
-	recordObjExt := cos.Ext(fullContentPath)
+	recordObjExt := cosExt(fullContentPath)
 	contentPath := strings.TrimSuffix(fullContentPath, recordObjExt)
 
-	rm.Records.Lock()
-	defer rm.Records.Unlock()
+	recm.Records.Lock()
+	defer recm.Records.Unlock()
 
 	// In SGLs `contentPath == recordUniqueName`
-	record, exists := rm.Records.Find(contentPath)
+	record, exists := recm.Records.Find(contentPath)
 	if !exists {
 		// Generally should not happen but it is not proven that it cannot.
 		// There is nothing wrong with just returning here though.
-		return
+		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO -- FIXME: FastV
 	}
 
 	idx := record.find(recordObjExt)
@@ -328,16 +317,16 @@ func (rm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any
 
 	switch newStoreType {
 	case OffsetStoreType:
-		shardName, _ := rm.parseRecordUniqueName(record.Name)
+		shardName, _ := parseRecordUname(record.Name)
 		obj.ContentPath = shardName
-		obj.MetadataSize = rm.extractCreator.MetadataSize()
+		obj.MetadataSize = recm.extractCreator.MetadataSize()
 	case DiskStoreType:
-		diskPath := rm.FullContentPath(obj)
+		diskPath := recm.FullContentPath(obj)
 		// No matter what the outcome we should store `path` in
 		// `extractionPaths` to make sure that all files, even incomplete ones,
 		// are deleted (if the file will not exist this is not much of a
 		// problem).
-		rm.extractionPaths.Store(diskPath, struct{}{})
+		recm.extractionPaths.Store(diskPath, struct{}{})
 
 		if _, err := cos.SaveReader(diskPath, sgl, buf, cos.ChecksumNone, -1); err != nil {
 			nlog.Errorln(err)
@@ -348,42 +337,42 @@ func (rm *RecordManager) FreeMem(fullContentPath, newStoreType string, value any
 	}
 
 	obj.StoreType = newStoreType
-	rm.contents.Delete(fullContentPath)
+	recm.contents.Delete(fullContentPath)
 	n = sgl.Size()
 	sgl.Free()
 	return
 }
 
-func (rm *RecordManager) RecordContents() *sync.Map {
-	return rm.contents
+func (recm *RecordManager) RecordContents() *sync.Map {
+	return recm.contents
 }
 
-func (rm *RecordManager) ExtractionPaths() *sync.Map {
-	return rm.extractionPaths
+func (recm *RecordManager) ExtractionPaths() *sync.Map {
+	return recm.extractionPaths
 }
 
-func (rm *RecordManager) Cleanup() {
-	rm.Records.Drain()
-	rm.extractionPaths.Range(func(k, v any) bool {
+func (recm *RecordManager) Cleanup() {
+	recm.Records.Drain()
+	recm.extractionPaths.Range(func(k, v any) bool {
 		if err := fs.RemoveAll(k.(string)); err != nil {
 			nlog.Errorf("could not remove extraction path (%v) from previous run, err: %v", k, err)
 		}
-		rm.extractionPaths.Delete(k)
+		recm.extractionPaths.Delete(k)
 		return true
 	})
-	rm.extractionPaths = nil
-	rm.contents.Range(func(k, v any) bool {
+	recm.extractionPaths = nil
+	recm.contents.Range(func(k, v any) bool {
 		if sgl, ok := v.(*memsys.SGL); ok {
 			sgl.Free()
 		}
-		rm.contents.Delete(k)
+		recm.contents.Delete(k)
 		return true
 	})
-	rm.contents = nil
+	recm.contents = nil
 
 	// NOTE: forcefully free all MMSA memory to the OS
 	// TODO: another reason to use a separate MMSA for extractions
-	rm.t.PageMM().FreeSpec(memsys.FreeSpec{
+	recm.t.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system
@@ -397,4 +386,25 @@ func copyMetadataAndData(dst io.Writer, src io.Reader, metadata, buf []byte) (in
 	}
 	// Save data to dst
 	return io.CopyBuffer(dst, src, buf)
+}
+
+// slightly altered cos.Ext to handle an additional "stop": record uname separator
+// (that is, in addition to conventional path separator)
+func cosExt(path string) (ext string) {
+	for i := len(path) - 1; i >= 0 && !os.IsPathSeparator(path[i]) && path[i] != recSepa[0]; i-- {
+		if path[i] == '.' {
+			ext = path[i:]
+		}
+	}
+	return
+}
+
+func genRecordUname(shardName, recordName string) string {
+	recordWithoutExt := strings.TrimSuffix(recordName, cosExt(recordName))
+	return shardName + recSepa + recordWithoutExt
+}
+
+func parseRecordUname(recordUniqueName string) (shardName, recordName string) {
+	splits := strings.SplitN(recordUniqueName, recSepa, 2)
+	return splits[0], splits[1]
 }

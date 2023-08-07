@@ -185,7 +185,7 @@ func (m *Manager) extractLocalShards() (err error) {
 	m.Metrics.Extraction.finish()
 	m.extractionPhase.adjuster.stop()
 	if err == nil {
-		m.incrementRef(int64(m.recManager.Records.TotalObjectCount()))
+		m.incrementRef(int64(m.recm.Records.TotalObjectCount()))
 	}
 	return
 }
@@ -462,7 +462,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 				)
 				defer slab.Free(buf)
 
-				if err := m.recManager.Records.EncodeMsg(msgpw); err != nil {
+				if err := m.recm.Records.EncodeMsg(msgpw); err != nil {
 					w.CloseWithError(err)
 					return errors.Errorf("failed to marshal, err: %v", err)
 				}
@@ -480,7 +480,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 				)
 				query.Add(apc.QparamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
 				query.Add(apc.QparamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
-				query.Add(apc.QparamTotalInputShardsExtracted, strconv.Itoa(m.recManager.Records.Len()))
+				query.Add(apc.QparamTotalInputShardsExtracted, strconv.Itoa(m.recm.Records.Len()))
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
 					Base:   sendTo.URL(cmn.NetIntraData),
@@ -500,7 +500,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 				return false, err
 			}
 
-			m.recManager.Records.Drain() // we do not need it anymore
+			m.recm.Records.Drain() // we do not need it anymore
 
 			metrics.mu.Lock()
 			metrics.SentStats.updateTime(time.Since(beforeSend))
@@ -538,10 +538,10 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 		}
 		targetOrder = t
 
-		m.recManager.MergeEnqueuedRecords()
+		m.recm.MergeEnqueuedRecords()
 	}
 
-	err = sortRecords(m.recManager.Records, m.pars.Algorithm)
+	err = sortRecords(m.recm.Records, m.pars.Algorithm)
 	m.dsorter.postRecordDistribution()
 	return true, err
 }
@@ -550,7 +550,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 	var (
 		start           int
 		curShardSize    int64
-		n               = m.recManager.Records.Len()
+		n               = m.recm.Records.Len()
 		pt              = m.pars.Pot.Template
 		shardCount      = pt.Count()
 		shards          = make([]*extract.Shard, 0)
@@ -563,7 +563,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
 	}
 
-	for i, r := range m.recManager.Records.All() {
+	for i, r := range m.recm.Records.All() {
 		numLocalRecords[r.DaemonID]++
 		curShardSize += r.TotalSize()
 		if curShardSize < maxSize && i < n-1 {
@@ -586,7 +586,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 		}
 
 		shard.Size = curShardSize
-		shard.Records = m.recManager.Records.Slice(start, i+1)
+		shard.Records = m.recm.Records.Slice(start, i+1)
 		shards = append(shards, shard)
 
 		start = i + 1
@@ -679,7 +679,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		}
 	}
 
-	for _, r := range m.recManager.Records.All() {
+	for _, r := range m.recm.Records.All() {
 		key := fmt.Sprintf("%v", r.Key)
 		shardNameFmt, ok := externalKeyMap[key]
 		if !ok {
@@ -805,7 +805,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 	}
 
-	m.recManager.Records.Drain()
+	m.recm.Records.Drain()
 
 	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(shardsToTarget))
 	for si, s := range shardsToTarget {
@@ -982,7 +982,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 
 	beforeExtraction := mono.NanoTime()
 
-	extractedSize, extractedCount, err := ec.Extract(lom, fh, m.recManager, toDisk)
+	extractedSize, extractedCount, err := ec.Extract(lom, fh, m.recm, toDisk)
 	cos.Close(fh)
 
 	dur := mono.Since(beforeExtraction)
@@ -1011,7 +1011,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		// will be required to keep all records in memory. One node
 		// will eventually have all records from all shards so we
 		// don't calculate estimates only for single node.
-		recordSize := int(m.recManager.Records.RecordMemorySize())
+		recordSize := int(m.recm.Records.RecordMemorySize())
 		estimateTotalRecordsSize = uint64(metrics.TotalCnt * int64(extractedCount*recordSize))
 		if estimateTotalRecordsSize > m.freeMemory() {
 			warnPossibleOOM = true
