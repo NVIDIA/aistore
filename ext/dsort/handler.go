@@ -599,28 +599,23 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
 		return
 	}
-	var (
-		query     = r.URL.Query()
-		compStr   = query.Get(apc.QparamTotalCompressedSize)
-		uncompStr = query.Get(apc.QparamTotalUncompressedSize)
-		dStr      = query.Get(apc.QparamTotalInputShardsExtracted)
-	)
 
-	compressed, err := strconv.ParseInt(compStr, 10, 64)
+	query := r.URL.Query()
+	totalShardSize, err := strconv.ParseInt(query.Get(apc.QparamTotalCompressedSize), 10, 64)
 	if err != nil {
 		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
 			apc.QparamTotalCompressedSize, r.URL.String(), err)
 		cmn.WriteErrMsg(w, r, s)
 		return
 	}
-	uncompressed, err := strconv.ParseInt(uncompStr, 10, 64)
+	totalExtractedSize, err := strconv.ParseInt(query.Get(apc.QparamTotalUncompressedSize), 10, 64)
 	if err != nil {
 		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
 			apc.QparamTotalUncompressedSize, r.URL.String(), err)
 		cmn.WriteErrMsg(w, r, s)
 		return
 	}
-	d, err := strconv.ParseUint(dStr, 10, 64)
+	d, err := strconv.ParseUint(query.Get(apc.QparamTotalInputShardsExtracted), 10, 64)
 	if err != nil {
 		s := fmt.Sprintf("invalid %s in request to %s, err: %v",
 			apc.QparamTotalInputShardsExtracted, r.URL.String(), err)
@@ -640,7 +635,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	dsortManager.addCompressionSizes(compressed, uncompressed)
+	dsortManager.addSizes(totalShardSize, totalExtractedSize)
 	dsortManager.recm.EnqueueRecords(records)
 	dsortManager.incrementReceived()
 

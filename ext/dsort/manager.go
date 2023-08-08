@@ -111,8 +111,8 @@ type (
 
 		client      *http.Client // Client for sending records metadata
 		compression struct {
-			compressed   atomic.Int64 // Total compressed size
-			uncompressed atomic.Int64 // Total uncompressed size
+			totalShardSize     atomic.Int64
+			totalExtractedSize atomic.Int64
 		}
 		received struct {
 			count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
@@ -214,12 +214,10 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 
 	m.received.ch = make(chan int32, 10)
 
-	// By default we want avg compression ratio to be equal to 1
-	m.compression.compressed = *atomic.NewInt64(1)
-	m.compression.uncompressed = *atomic.NewInt64(1)
+	m.compression.totalShardSize.Store(1)
+	m.compression.totalExtractedSize.Store(1)
 
-	// Concurrency
-
+	// Concurrency:
 	// Number of goroutines should be larger than number of concurrency limit
 	// but it should not be:
 	// * too small - we don't want to artificially bottleneck the phases.
@@ -520,21 +518,20 @@ func (m *Manager) listenReceived() chan int32 {
 	return m.received.ch
 }
 
-func (m *Manager) addCompressionSizes(compressed, uncompressed int64) {
-	m.compression.compressed.Add(compressed)
-	m.compression.uncompressed.Add(uncompressed)
+func (m *Manager) addSizes(shardSize, extractedSize int64) {
+	if shardSize > extractedSize {
+		// .tar with padding or poor compression
+		shardSize = extractedSize
+	}
+	m.compression.totalShardSize.Add(shardSize)
+	m.compression.totalExtractedSize.Add(extractedSize)
 }
 
-func (m *Manager) totalCompressedSize() int64 {
-	return m.compression.compressed.Load()
-}
+func (m *Manager) totalShardSize() int64     { return m.compression.totalShardSize.Load() }
+func (m *Manager) totalExtractedSize() int64 { return m.compression.totalExtractedSize.Load() }
 
-func (m *Manager) totalUncompressedSize() int64 {
-	return m.compression.uncompressed.Load()
-}
-
-func (m *Manager) avgCompressionRatio() float64 {
-	return float64(m.totalCompressedSize()) / float64(m.totalUncompressedSize())
+func (m *Manager) compressionRatio() float64 {
+	return float64(m.totalShardSize()) / float64(m.totalExtractedSize())
 }
 
 // incrementRef increments reference counter. This prevents from premature cleanup.

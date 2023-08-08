@@ -111,8 +111,7 @@ func (tm *testSmap) Listeners() meta.SmapListeners {
 //
 
 type extractCreatorMock struct {
-	useCompression bool
-	createShard    func(s *extract.Shard, w io.Writer, loader extract.ContentLoader) // func to hijack CreateShard function
+	createShard func(s *extract.Shard, w io.Writer, loader extract.ContentLoader) // func to hijack CreateShard function
 }
 
 func (*extractCreatorMock) Extract(*cluster.LOM, cos.ReadReaderAt, extract.RecordExtractor, bool) (int64, int, error) {
@@ -124,9 +123,8 @@ func (ec *extractCreatorMock) Create(s *extract.Shard, w io.Writer, loader extra
 	return 0, nil
 }
 
-func (*extractCreatorMock) SupportsOffset() bool      { return true }
-func (ec *extractCreatorMock) UsingCompression() bool { return ec.useCompression }
-func (*extractCreatorMock) MetadataSize() int64       { return 0 }
+func (*extractCreatorMock) SupportsOffset() bool { return true }
+func (*extractCreatorMock) MetadataSize() int64  { return 0 }
 
 type targetNodeMock struct {
 	daemonID  string

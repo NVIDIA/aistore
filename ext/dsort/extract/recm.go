@@ -1,4 +1,4 @@
-// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -59,7 +59,6 @@ type (
 	Creator interface {
 		Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
 		Create(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
-		UsingCompression() bool
 		SupportsOffset() bool
 		MetadataSize() int64
 	}

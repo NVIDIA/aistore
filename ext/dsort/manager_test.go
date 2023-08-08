@@ -38,7 +38,6 @@ var _ = Describe("Init", func() {
 		sr := &parsedReqSpec{InputExtension: archive.ExtTar, Algorithm: &Algorithm{Kind: None},
 			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.ec.UsingCompression()).To(BeFalse())
 	})
 
 	It("should init with tgz extension", func() {
@@ -48,7 +47,6 @@ var _ = Describe("Init", func() {
 		sr := &parsedReqSpec{InputExtension: archive.ExtTarGz, Algorithm: &Algorithm{Kind: None},
 			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 
 	It("should init with tar.gz extension", func() {
@@ -58,7 +56,6 @@ var _ = Describe("Init", func() {
 		sr := &parsedReqSpec{InputExtension: archive.ExtTgz, Algorithm: &Algorithm{Kind: None},
 			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 
 	It("should init with zip extension", func() {
@@ -68,7 +65,6 @@ var _ = Describe("Init", func() {
 		sr := &parsedReqSpec{InputExtension: archive.ExtZip, Algorithm: &Algorithm{Kind: None},
 			MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0}, DSorterType: DSorterGeneralType}
 		Expect(m.init(sr)).NotTo(HaveOccurred())
-		Expect(m.ec.UsingCompression()).To(BeTrue())
 	})
 })
 

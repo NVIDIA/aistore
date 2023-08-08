@@ -1,4 +1,4 @@
-// Package extract provides Extract(shard), Create(shard), and associated methods for dsort
+// Package extract provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -117,6 +117,5 @@ func (t *targzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wri
 	return written, nil
 }
 
-func (*targzRW) UsingCompression() bool { return true }
-func (*targzRW) SupportsOffset() bool   { return true }
-func (*targzRW) MetadataSize() int64    { return archive.TarBlockSize } // size of tar header with padding
+func (*targzRW) SupportsOffset() bool { return true }
+func (*targzRW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding

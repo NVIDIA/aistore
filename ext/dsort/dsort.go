@@ -113,23 +113,15 @@ func (m *Manager) start() (err error) {
 
 	// Phase 3. - run only by the final target
 	if curTargetIsFinal {
-		shardSize := m.pars.OutputShardSize
-		if m.ec.UsingCompression() {
-			// By making the assumption that the input content is reasonably
-			// uniform across all shards, the output shard size required (such
-			// that each gzip compressed output shard will have a size close to
-			// rs.ShardSizeBytes) can be estimated.
-			avgCompressRatio := m.avgCompressionRatio()
-			shardSize = int64(float64(m.pars.OutputShardSize) / avgCompressRatio)
-			if m.config.FastV(4, cos.SmoduleDsort) {
-				nlog.Infof("%s: %s estimated output shard size required before gzip compression: %d",
-					m.ctx.t, m.ManagerUUID, shardSize)
-			}
-		}
+		// assuming uniform distribution estimate avg. output shard size
+		ratio := m.compressionRatio()
+		debug.Assertf(m.pars.InputExtension != archive.ExtTar || ratio == 1,
+			"tar ratio=%f, ext=%q", ratio, m.pars.InputExtension)
 
-		// Phase 3.
-		nlog.Infof("%s: %s started distribution shard metadata stage", m.ctx.t, m.ManagerUUID)
-		if err := m.distributeShardRecords(shardSize); err != nil {
+		shardSize := int64(float64(m.pars.OutputShardSize) / ratio)
+
+		nlog.Infof("%s: %s started phase 3 distribution", m.ctx.t, m.ManagerUUID)
+		if err := m.phase3(shardSize); err != nil {
 			return err
 		}
 	}
@@ -478,8 +470,8 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 					query  = url.Values{}
 					sendTo = targetOrder[i+1]
 				)
-				query.Add(apc.QparamTotalCompressedSize, strconv.FormatInt(m.totalCompressedSize(), 10))
-				query.Add(apc.QparamTotalUncompressedSize, strconv.FormatInt(m.totalUncompressedSize(), 10))
+				query.Add(apc.QparamTotalCompressedSize, strconv.FormatInt(m.totalShardSize(), 10))
+				query.Add(apc.QparamTotalUncompressedSize, strconv.FormatInt(m.totalExtractedSize(), 10))
 				query.Add(apc.QparamTotalInputShardsExtracted, strconv.Itoa(m.recm.Records.Len()))
 				reqArgs := &cmn.HreqArgs{
 					Method: http.MethodPost,
@@ -560,7 +552,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 
 	if maxSize <= 0 {
 		// Heuristic: shard size when maxSize not specified.
-		maxSize = int64(math.Ceil(float64(m.totalUncompressedSize()) / float64(shardCount)))
+		maxSize = int64(math.Ceil(float64(m.totalExtractedSize()) / float64(shardCount)))
 	}
 
 	for i, r := range m.recm.Records.All() {
@@ -715,23 +707,19 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 	return shards, nil
 }
 
-// distributeShardRecords creates Shard structs in the order of
-// dsortManager.Records corresponding to a maximum size maxSize. Each Shard is
-// sent in an HTTP request to the appropriate target to create the actual file
-// itself. The strategy used to determine the appropriate target differs
-// depending on whether compression is used.
-//
+// Create `maxSize` output shard structures in the order defined by dsortManager.Records.
+// Each output shard structure is "distributed" (via m._dist below)
+// to one of the targets - to create the corresponding output shard.
+// The logic to map output shard => target:
 //  1. By HRW (not using compression)
-//
 //  2. By locality (using compression),
 //     using two maps:
 //     i) shardsToTarget - tracks the total number of shards creation requests sent to each target URL
 //     ii) numLocalRecords - tracks the number of records in the current shardMeta each target has locally
-//
-//     The appropriate target is determined firstly by locality (i.e. the target with the most local records)
+//     The target is determined firstly by locality (i.e. the target with the most local records)
 //     and secondly (if there is a tie), by least load
-//     (i.e. the target with the least number of shard creation requests sent to it already).
-func (m *Manager) distributeShardRecords(maxSize int64) error {
+//     (i.e. the target with the least number of pending shard creation requests).
+func (m *Manager) phase3(maxSize int64) error {
 	var (
 		shards         []*extract.Shard
 		err            error
@@ -756,23 +744,6 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: The following heuristic doesn't seem to be working correctly in
-	// all cases. When there are very few shards on each disk (e.g. <= 5)
-	// a target may end up having more shards than other
-	// targets and will "win" all output shards which will result in an enormous
-	// skew and slow creation phase (single target will be the bottleneck).
-	//
-	// if m.extractCreator.UsingCompression() {
-	// 	daemonID := nodeForShardRequest(shardsToTarget, numLocalRecords)
-	// 	baseURL = m.smap.GetTarget(daemonID).URL(cmn.NetIntraData)
-	// } else {
-	// 	// If output shards are not compressed, there will always be less
-	// 	// data sent over the network if the shard is constructed on the
-	// 	// correct HRW target as opposed to constructing it on the target
-	// 	// with optimal file content locality and then sent to the correct
-	// 	// target.
-	// }
 
 	bck := meta.CloneBck(&m.pars.OutputBck)
 	if err := bck.Init(m.ctx.bmdOwner); err != nil {
@@ -972,13 +943,9 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		lom.Unlock(false)
 		return errors.Errorf("unable to open %s: %v", lom.Cname(), err)
 	}
-	var compressedSize int64
-	if ec.UsingCompression() {
-		compressedSize = lom.SizeBytes()
-	}
 
-	expectedUncompressedSize := uint64(float64(lom.SizeBytes()) / m.avgCompressionRatio())
-	toDisk := m.dsorter.preShardExtraction(expectedUncompressedSize)
+	expectedExtractedSize := uint64(float64(lom.SizeBytes()) / m.compressionRatio())
+	toDisk := m.dsorter.preShardExtraction(expectedExtractedSize)
 
 	beforeExtraction := mono.NanoTime()
 
@@ -987,13 +954,12 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 
 	dur := mono.Since(beforeExtraction)
 
-	// update compression rate before releasing next extractor goroutine
-	m.addCompressionSizes(compressedSize, extractedSize)
+	m.addSizes(lom.SizeBytes(), extractedSize) // update compression rate
 
 	phaseInfo.adjuster.releaseSema(lom.Mountpath())
 	lom.Unlock(false)
 
-	m.dsorter.postShardExtraction(expectedUncompressedSize) // schedule unreserving reserved memory on next memory update
+	m.dsorter.postShardExtraction(expectedExtractedSize) // schedule unreserving reserved memory on next memory update
 	if err != nil {
 		return errors.Errorf("failed to extract shard %s: %v", lom.Cname(), err)
 	}
