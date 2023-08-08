@@ -12,13 +12,17 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 )
+
+var pool1m, pool128k, pool32k sync.Pool
 
 type (
 	FileContent struct {
@@ -32,15 +36,23 @@ type (
 	}
 )
 
-func addBufferToArch(aw archive.Writer, path string, fileSize int, buf []byte) (err error) {
+func addBufferToArch(aw archive.Writer, path string, l int, buf []byte) error {
 	if buf == nil {
-		buf = make([]byte, fileSize)
-		if _, err = cryptorand.Read(buf); err != nil {
-			return
+		buf = newBuf(l)
+		defer freeBuf(buf)
+		buf = buf[:l]
+		if true {
+			_, errV := cryptorand.Read(buf)
+			debug.AssertNoErr(errV)
+		} else {
+			// TODO -- FIXME: leave some space empty to allow for compression
+			_, err := cryptorand.Read(buf[:l/3])
+			debug.AssertNoErr(err)
+			copy(buf[2*l/3:], buf)
 		}
 	}
 	reader := bytes.NewBuffer(buf)
-	oah := cos.SimpleOAH{Size: int64(fileSize)}
+	oah := cos.SimpleOAH{Size: int64(l)}
 	return aw.Write(path, oah, reader)
 }
 
@@ -201,3 +213,76 @@ func (*dummyFile) Mode() os.FileMode  { return 0 }
 func (*dummyFile) ModTime() time.Time { return time.Now() }
 func (*dummyFile) IsDir() bool        { return false }
 func (*dummyFile) Sys() any           { return nil }
+
+//
+// assorted buf pools
+//
+
+func newBuf(l int) (buf []byte) {
+	switch {
+	case l > cos.MiB:
+		debug.Assertf(false, "buf size exceeds 1MB: %d", l)
+	case l > 128*cos.KiB:
+		return newBuf1m()
+	case l > 32*cos.KiB:
+		return newBuf128k()
+	}
+	return newBuf32k()
+}
+
+func freeBuf(buf []byte) {
+	c := cap(buf)
+	buf = buf[:c]
+	switch c {
+	case cos.MiB:
+		freeBuf1m(buf)
+	case 128 * cos.KiB:
+		freeBuf128k(buf)
+	case 32 * cos.KiB:
+		freeBuf32k(buf)
+	default:
+		debug.Assertf(false, "unexpected buf size: %d", c)
+	}
+}
+
+func newBuf1m() (buf []byte) {
+	if v := pool1m.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, cos.MiB)
+	}
+	return
+}
+
+func freeBuf1m(buf []byte) {
+	pool1m.Put(&buf)
+}
+
+func newBuf128k() (buf []byte) {
+	if v := pool128k.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, 128*cos.KiB)
+	}
+	return
+}
+
+func freeBuf128k(buf []byte) {
+	pool128k.Put(&buf)
+}
+
+func newBuf32k() (buf []byte) {
+	if v := pool32k.Get(); v != nil {
+		pbuf := v.(*[]byte)
+		buf = *pbuf
+	} else {
+		buf = make([]byte, 32*cos.KiB)
+	}
+	return
+}
+
+func freeBuf32k(buf []byte) {
+	pool32k.Put(&buf)
+}
