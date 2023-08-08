@@ -225,3 +225,37 @@ spec:
         path: /health
         port: default
 """
+
+# Returns the transformed images using `Torchvision` pre-processing. For more
+# information on command options, visit
+# https://github.com/NVIDIA/ais-etl/blob/master/transformers/torchvision_preprocess/README.md.
+# pylint: disable=unused-variable
+TORCHVISION_TRANSFORMER = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-torchvision
+  annotations:
+    # Values it can take ["hpull://","hrev://","hpush://"]
+    communication_type: "{communication_type}"
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/transformer_torchvision:latest
+      imagePullPolicy: Always
+      ports:
+        - name: default
+          containerPort: 80
+      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+      env:
+        - name: FORMAT
+        # Expected Values - PNG, JPEG, etc.
+          value: "{format}"
+        - name: TRANSFORM
+          value: '{transform}'
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+"""
