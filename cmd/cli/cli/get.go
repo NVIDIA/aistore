@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -24,6 +25,8 @@ import (
 	"github.com/vbauerster/mpb/v4"
 )
 
+const extractVia = "--extract(*)"
+
 func catHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
@@ -35,7 +38,7 @@ func catHandler(c *cli.Context) error {
 		return err
 	}
 	archpath := parseStrFlag(c, archpathGetFlag)
-	return getObject(c, bck, objName, archpath, fileStdIO, true /*silent*/, false /*via archive get*/)
+	return getObject(c, bck, objName, archpath, fileStdIO, true /*silent*/, false /*extract*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -46,8 +49,6 @@ func getHandler(c *cli.Context) error {
 		return fmt.Errorf("%s and %s must be both present (or not)", qflprn(lengthFlag), qflprn(offsetFlag))
 	}
 
-	isArchGet := actionIsHandler(c.Command.Action, getArchHandler)
-
 	// source
 	uri := c.Args().Get(0)
 	bck, objName, err := parseBckObjURI(c, uri, flagIsSet(c, getObjPrefixFlag))
@@ -57,37 +58,50 @@ func getHandler(c *cli.Context) error {
 	// destination (empty "" implies using source `basename`)
 	outFile := c.Args().Get(1)
 
-	// extraction (from archives) has current limitations
-	var archpath string
+	// extract all or (archpath) selected
+	var (
+		archpath string
+		extract  bool
+	)
 	if flagIsSet(c, archpathGetFlag) {
 		archpath = parseStrFlag(c, archpathGetFlag)
-		if archpath != "" {
-			if flagIsSet(c, extractFlag) {
-				return fmt.Errorf(errFmtExclusive, qflprn(archpathGetFlag), qflprn(extractFlag))
-			}
-			if flagIsSet(c, getObjPrefixFlag) {
-				return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
-			}
-			if flagIsSet(c, checkObjCachedFlag) {
-				return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
-					qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
-			}
-			if flagIsSet(c, lengthFlag) {
-				return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-					qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
-			}
-		}
 	}
-	if flagIsSet(c, extractFlag) {
-		if isArchGet {
+	if actionIsHandler(c.Command.Action, getArchHandler) {
+		if flagIsSet(c, extractFlag) {
 			return fmt.Errorf("'ais archive get': flag %s is redundant (implied)", qflprn(extractFlag))
 		}
+		extract = true
+
+		if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
+			objName = oname
+			archpath = fname
+			extract = false
+		}
+	} else {
+		extract = flagIsSet(c, extractFlag)
+	}
+
+	// validate extract and archpath
+	if extract {
 		if flagIsSet(c, checkObjCachedFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(checkObjCachedFlag), qflprn(extractFlag))
+			return fmt.Errorf(errFmtExclusive, extractVia, qflprn(checkObjCachedFlag))
 		}
 		if flagIsSet(c, lengthFlag) {
 			return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
-				qflprn(lengthFlag), qflprn(offsetFlag), qflprn(extractFlag))
+				qflprn(lengthFlag), qflprn(offsetFlag), extractVia)
+		}
+	}
+	if archpath != "" {
+		if flagIsSet(c, getObjPrefixFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(getObjPrefixFlag), qflprn(archpathGetFlag))
+		}
+		if flagIsSet(c, checkObjCachedFlag) {
+			return fmt.Errorf("checking presence (%s) of archived files (%s) is not implemented yet",
+				qflprn(checkObjCachedFlag), qflprn(archpathGetFlag))
+		}
+		if flagIsSet(c, lengthFlag) {
+			return fmt.Errorf("read range (%s, %s) of archived files (%s) is not implemented yet",
+				qflprn(lengthFlag), qflprn(offsetFlag), qflprn(archpathGetFlag))
 		}
 	}
 
@@ -100,7 +114,8 @@ func getHandler(c *cli.Context) error {
 					uri, qflprn(getObjPrefixFlag))
 			}
 		}
-		return getMultiObj(c, bck, outFile, isArchGet) // calls `getObject` with progress bar and bells and whistles..
+		// calls `getObject` with progress bar and bells and whistles
+		return getMultiObj(c, bck, archpath, outFile, extract)
 	}
 
 	// GET
@@ -109,32 +124,31 @@ func getHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	return getObject(c, bck, objName, archpath, outFile, false /*silent*/, isArchGet)
+	return getObject(c, bck, objName, archpath, outFile, false /*silent*/, extract)
 }
 
 // GET multiple -- currently, only prefix (TODO: list/range)
-func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, isArchGet bool) error {
+func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract bool) error {
 	var (
 		prefix     = parseStrFlag(c, getObjPrefixFlag)
 		origPrefix = prefix
 		lstFilter  = &lstFilter{}
-		listArch   = flagIsSet(c, listArchFlag) ||
-			isArchGet || // when calling via `ais archive get`
-			flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag) // when getting from arch is implied
 	)
-	if listArch && prefix != "" {
+	if flagIsSet(c, listArchFlag) && prefix != "" {
 		// when prefix crosses shard boundary
-		if external, internal := splitShardBoundary(prefix); len(internal) > 0 {
+		if external, internal := splitPrefixShardBoundary(prefix); len(internal) > 0 {
 			prefix = external
 			debug.Assert(prefix != origPrefix)
-			lstFilter._add(func(obj *cmn.LsoEntry) bool { return obj.Name == external || strings.HasPrefix(obj.Name, origPrefix) })
+			lstFilter._add(func(obj *cmn.LsoEntry) bool {
+				return obj.Name == external || strings.HasPrefix(obj.Name, origPrefix)
+			})
 		}
 	}
 
 	// setup list-objects control msg and api call
 	msg := &apc.LsoMsg{Prefix: prefix}
 	msg.AddProps(apc.GetPropsMinimal...)
-	if listArch {
+	if flagIsSet(c, listArchFlag) || extract || archpath != "" {
 		msg.SetFlag(apc.LsArchDir)
 	}
 	if flagIsSet(c, checkObjCachedFlag) {
@@ -254,7 +268,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, isArchGet bool) er
 			}
 		}
 		u.wg.Add(1)
-		go u.get(c, bck, entry, shardName, outFile, silent, isArchGet)
+		go u.get(c, bck, entry, shardName, outFile, silent, extract)
 	}
 	u.wg.Wait()
 
@@ -272,7 +286,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, outFile string, isArchGet bool) er
 // uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, silent, isArchGet bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, silent, extract bool) {
 	var (
 		objName  = entry.Name
 		archpath string
@@ -281,7 +295,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 		objName = shardName
 		archpath = strings.TrimPrefix(entry.Name, shardName+"/")
 		if outFile != fileStdIO && outFile != discardIO {
-			// when getting multiple retain the full archpath
+			// when getting multiple files retain the full archpath
 			// (compare w/ filepath.Base usage otherwise)
 			outFile = filepath.Join(outFile, archpath)
 			if err := cos.CreateDir(filepath.Dir(outFile)); err != nil {
@@ -289,7 +303,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 			}
 		}
 	}
-	err := getObject(c, bck, objName, archpath, outFile, silent, isArchGet)
+	err := getObject(c, bck, objName, archpath, outFile, silent, extract)
 	if err != nil {
 		u.errCount.Inc()
 	}
@@ -307,25 +321,20 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 }
 
 // get one (main function)
-func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, silent, isArchGet bool) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, silent, extract bool) (err error) {
 	var (
-		getArgs  api.GetArgs
-		oah      api.ObjAttrs
-		units    string
-		listArch = flagIsSet(c, listArchFlag) ||
-			isArchGet || // when calling via `ais archive get`
-			flagIsSet(c, archpathGetFlag) || flagIsSet(c, extractFlag) // when getting from arch is implied
+		getArgs api.GetArgs
+		oah     api.ObjAttrs
+		units   string
 	)
-	if outFile == fileStdIO && flagIsSet(c, extractFlag) {
-		return fmt.Errorf("cannot extract archived files (%s) to standard output - not implemented yet",
-			qflprn(extractFlag))
+	if outFile == fileStdIO && extract {
+		return errors.New("cannot extract archived files to standard output - not implemented yet")
 	}
-	if outFile == discardIO && flagIsSet(c, extractFlag) {
-		return fmt.Errorf("cannot extract (%s) and discard archived files - not implemented yet",
-			qflprn(extractFlag))
+	if outFile == discardIO && extract {
+		return errors.New("cannot extract and discard archived files - not implemented yet")
 	}
-	if listArch && archpath == "" {
-		if external, internal := splitShardBoundary(objName); len(internal) > 0 {
+	if flagIsSet(c, listArchFlag) && archpath == "" {
+		if external, internal := splitPrefixShardBoundary(objName); len(internal) > 0 {
 			objName, archpath = external, internal
 		}
 	}
@@ -358,9 +367,8 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	} else if outFile != fileStdIO && outFile != discardIO {
 		finfo, errEx := os.Stat(outFile)
 		if errEx == nil {
-			if !finfo.IsDir() && flagIsSet(c, extractFlag) {
-				return fmt.Errorf("cannot extract (%s) archived files - destination %q exists and is not a directory",
-					qflprn(extractFlag), outFile)
+			if !finfo.IsDir() && extract {
+				return fmt.Errorf("cannot extract archived files - destination %q exists and is not a directory", outFile)
 			}
 			// destination is: directory | file (confirm overwrite)
 			if finfo.IsDir() {
@@ -423,11 +431,16 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 		return
 	}
 
-	objLen := oah.Size()
-
-	if flagIsSet(c, extractFlag) {
-		err = extract(objName, outFile, objLen)
+	var (
+		mime   string
+		objLen = oah.Size()
+	)
+	if extract {
+		mime, err = doExtract(objName, outFile, objLen)
 		if err != nil {
+			if verbose() {
+				return fmt.Errorf("failed to extract %s (from local %q): %v", bck.Cname(objName), outFile, err)
+			}
 			return fmt.Errorf("failed to extract %s: %v", bck.Cname(objName), err)
 		}
 	}
@@ -445,11 +458,18 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 		sz           = teb.FmtSize(objLen, units, 2)
 		bn           = bck.Cname("")
 	)
-	if outFile == discardIO {
+	switch {
+	case outFile == discardIO:
 		discard = " (and discard)"
-	} else if outFile == fileStdIO {
+	case outFile == fileStdIO:
 		out = " to standard output"
-	} else {
+	case extract:
+		out = " to " + outFile
+		if out[len(out)-1] == filepath.Separator {
+			out = out[:len(out)-1]
+		}
+		out = strings.TrimSuffix(out, mime) + "/"
+	default:
 		out = " as " + outFile
 		if out[len(out)-1] == filepath.Separator {
 			out = out[:len(out)-1]
@@ -460,7 +480,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 		fmt.Fprintf(c.App.Writer, "Read%s range (length %s (%dB) at offset %d)%s\n", discard, sz, objLen, offset, out)
 	case archpath != "":
 		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, archpath, bck.Cname(objName), out, sz)
-	case flagIsSet(c, extractFlag):
+	case extract:
 		fmt.Fprintf(c.App.Writer, "GET %s from %s as %q (%s) and extract%s\n", objName, bn, outFile, sz, out)
 	default:
 		fmt.Fprintf(c.App.Writer, "GET%s %s from %s%s (%s)\n", discard, objName, bn, out, sz)
@@ -474,16 +494,16 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 
 type extractor struct {
 	shardName string
+	mime      string
 }
 
-func extract(objName, outFile string, objLen int64) (err error) {
+func doExtract(objName, outFile string, objLen int64) (mime string, err error) {
 	var (
-		mime string
-		rfh  *os.File
-		ar   archive.Reader
+		rfh *os.File
+		ar  archive.Reader
 	)
-	if mime, err = archive.MimeFile(rfh, nil, "", objName); err != nil {
-		return nil // skip silently: consider non-extractable and Ok
+	if mime, err = archive.Mime("", objName); err != nil {
+		return "", nil // skip silently: consider non-extractable and Ok
 	}
 	if rfh, err = os.Open(outFile); err != nil {
 		return
@@ -492,16 +512,14 @@ func extract(objName, outFile string, objLen int64) (err error) {
 		return
 	}
 
-	ex := &extractor{outFile}
-
+	ex := &extractor{outFile, mime}
 	_, err = ar.Range("", ex.do)
-
 	rfh.Close()
-	return err
+	return
 }
 
 func (ex *extractor) do(filename string, reader cos.ReadCloseSizer, _ any) (bool /*stop*/, error) {
-	fqn := filepath.Join(cos.Basename(ex.shardName), filename)
+	fqn := filepath.Join(strings.TrimSuffix(ex.shardName, ex.mime), filename)
 
 	wfh, err := cos.CreateFile(fqn)
 	if err != nil {
