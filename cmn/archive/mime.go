@@ -13,10 +13,15 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
 // supported archive types (file extensions); see also archExts in cmd/cli/cli/const.go
+// NOTE: when adding/removing update:
+// - FileExtensions
+// - IsCompressed
+// - allMagics
 const (
 	ExtTar    = ".tar"
 	ExtTgz    = ".tgz"
@@ -41,8 +46,12 @@ type detect struct {
 	offset int
 }
 
-// when adding/removing update `allMagics` below
 var FileExtensions = []string{ExtTar, ExtTgz, ExtTarGz, ExtZip, ExtTarLz4}
+
+func IsCompressed(mime string) bool {
+	debug.Assert(cos.StringInSlice(mime, FileExtensions), mime)
+	return mime != ExtTar
+}
 
 // standard file signatures
 var (

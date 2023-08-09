@@ -316,14 +316,9 @@ func (ds *dsorterMem) createShardsLocally() error {
 
 	ds.creationPhase.adjuster.read.start()
 	ds.creationPhase.adjuster.write.start()
-	defer func() {
-		ds.creationPhase.adjuster.write.stop()
-		ds.creationPhase.adjuster.read.stop()
-	}()
 
 	metrics := ds.m.Metrics.Creation
 	metrics.begin()
-	defer metrics.finish()
 	metrics.mu.Lock()
 	metrics.ToCreate = int64(len(phaseInfo.metadata.Shards))
 	metrics.mu.Unlock()
@@ -335,7 +330,14 @@ func (ds *dsorterMem) createShardsLocally() error {
 		stopCh = &cos.StopCh{}
 	)
 	stopCh.Init()
-	defer stopCh.Close()
+
+	// cleanup
+	defer func(metrics *ShardCreation, stopCh *cos.StopCh) {
+		stopCh.Close()
+		metrics.finish()
+		ds.creationPhase.adjuster.write.stop()
+		ds.creationPhase.adjuster.read.stop()
+	}(metrics, stopCh)
 
 	if err := mem.Get(); err != nil {
 		return err
@@ -346,73 +348,15 @@ func (ds *dsorterMem) createShardsLocally() error {
 	// read
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		group, ctx := errgroup.WithContext(context.Background())
-	SendAllShards:
-		for {
-			// If that was last shard to send we need to break and we will
-			// be waiting for the result.
-			if len(phaseInfo.metadata.SendOrder) == 0 {
-				break SendAllShards
-			}
-
-			select {
-			case shardName := <-ds.creationPhase.requestedShards:
-				shard, ok := phaseInfo.metadata.SendOrder[shardName]
-				if !ok {
-					break
-				}
-
-				ds.creationPhase.adjuster.read.acquireGoroutineSema()
-				es := &dsmExtractShard{ds, shard}
-				group.Go(es.do)
-
-				delete(phaseInfo.metadata.SendOrder, shardName)
-			case <-ds.m.listenAborted():
-				stopCh.Close()
-				group.Wait()
-				errCh <- newDSortAbortedError(ds.m.ManagerUUID)
-				return
-			case <-ctx.Done(): // context was canceled, therefore we have an error
-				stopCh.Close()
-				break SendAllShards
-			case <-stopCh.Listen(): // writing side stopped we need to do the same
-				break SendAllShards
-			}
-		}
-
-		errCh <- group.Wait()
+		ds.localRead(stopCh, errCh)
+		wg.Done()
 	}()
 
 	// write
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		group, ctx := errgroup.WithContext(context.Background())
-	CreateAllShards:
-		for _, s := range phaseInfo.metadata.Shards {
-			select {
-			case <-ds.m.listenAborted():
-				stopCh.Close()
-				group.Wait()
-				errCh <- newDSortAbortedError(ds.m.ManagerUUID)
-				return
-			case <-ctx.Done(): // context was canceled, therefore we have an error
-				stopCh.Close()
-				break CreateAllShards
-			case <-stopCh.Listen():
-				break CreateAllShards // reading side stopped we need to do the same
-			default:
-			}
-
-			sa.alloc(uint64(s.Size))
-
-			ds.creationPhase.adjuster.write.acquireGoroutineSema()
-			cs := &dsmCreateShard{ds, s, sa}
-			group.Go(cs.do)
-		}
-
-		errCh <- group.Wait()
+		ds.localWrite(sa, stopCh, errCh)
+		wg.Done()
 	}()
 
 	wg.Wait()
@@ -424,6 +368,78 @@ func (ds *dsorterMem) createShardsLocally() error {
 		}
 	}
 	return nil
+}
+
+func (ds *dsorterMem) localRead(stopCh *cos.StopCh, errCh chan error) {
+	var (
+		phaseInfo  = &ds.m.creationPhase
+		group, ctx = errgroup.WithContext(context.Background())
+	)
+outer:
+	for {
+		// If that was the last shard to send we need to break and we will
+		// be waiting for the result.
+		if len(phaseInfo.metadata.SendOrder) == 0 {
+			break outer
+		}
+
+		select {
+		case shardName := <-ds.creationPhase.requestedShards:
+			shard, ok := phaseInfo.metadata.SendOrder[shardName]
+			if !ok {
+				break
+			}
+
+			ds.creationPhase.adjuster.read.acquireGoroutineSema()
+			es := &dsmExtractShard{ds, shard}
+			group.Go(es.do)
+
+			delete(phaseInfo.metadata.SendOrder, shardName)
+		case <-ds.m.listenAborted():
+			stopCh.Close()
+			group.Wait()
+			errCh <- newDSortAbortedError(ds.m.ManagerUUID)
+			return
+		case <-ctx.Done(): // context was canceled, therefore we have an error
+			stopCh.Close()
+			break outer
+		case <-stopCh.Listen(): // writing side stopped we need to do the same
+			break outer
+		}
+	}
+
+	errCh <- group.Wait()
+}
+
+func (ds *dsorterMem) localWrite(sa *inmemShardAllocator, stopCh *cos.StopCh, errCh chan error) {
+	var (
+		phaseInfo  = &ds.m.creationPhase
+		group, ctx = errgroup.WithContext(context.Background())
+	)
+outer:
+	for _, s := range phaseInfo.metadata.Shards {
+		select {
+		case <-ds.m.listenAborted():
+			stopCh.Close()
+			group.Wait()
+			errCh <- newDSortAbortedError(ds.m.ManagerUUID)
+			return
+		case <-ctx.Done(): // context was canceled, therefore we have an error
+			stopCh.Close()
+			break outer
+		case <-stopCh.Listen():
+			break outer // reading side stopped we need to do the same
+		default:
+		}
+
+		sa.alloc(uint64(s.Size))
+
+		ds.creationPhase.adjuster.write.acquireGoroutineSema()
+		cs := &dsmCreateShard{ds, s, sa}
+		group.Go(cs.do)
+	}
+
+	errCh <- group.Wait()
 }
 
 func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *meta.Snode) (err error) {

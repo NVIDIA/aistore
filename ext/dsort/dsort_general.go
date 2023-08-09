@@ -231,14 +231,14 @@ func (ds *dsorterGeneral) createShardsLocally() (err error) {
 
 	group, ctx := errgroup.WithContext(context.Background())
 
-CreateAllShards:
+outer:
 	for _, s := range phaseInfo.metadata.Shards {
 		select {
 		case <-ds.m.listenAborted():
 			_ = group.Wait()
 			return newDSortAbortedError(ds.m.ManagerUUID)
 		case <-ctx.Done():
-			break CreateAllShards // context was canceled, therefore we have an error
+			break outer // context was canceled, therefore we have an error
 		default:
 		}
 

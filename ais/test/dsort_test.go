@@ -349,7 +349,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		}
 
 		_, err := api.GetObject(baseParams, bucket, shardName, &getArgs)
-		if err != nil && df.extension == archive.ExtZip && i > df.outputShardCnt/2 {
+		if err != nil && archive.IsCompressed(df.extension) && i > df.outputShardCnt/2 {
 			// We estimated too much output shards to be produced - zip compression
 			// was so good that we could fit more files inside the shard.
 			//

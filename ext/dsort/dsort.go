@@ -115,8 +115,8 @@ func (m *Manager) start() (err error) {
 	if curTargetIsFinal {
 		// assuming uniform distribution estimate avg. output shard size
 		ratio := m.compressionRatio()
-		debug.Assertf(m.pars.InputExtension != archive.ExtTar || ratio == 1,
-			"tar ratio=%f, ext=%q", ratio, m.pars.InputExtension)
+		debug.Assertf(archive.IsCompressed(m.pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
+			ratio, m.pars.InputExtension)
 
 		shardSize := int64(float64(m.pars.OutputShardSize) / ratio)
 
