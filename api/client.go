@@ -323,31 +323,45 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 		return nil
 	}
 	if reqParams.BaseParams.Method == http.MethodHead {
+		// HEAD request does not return body
 		if msg := resp.Header.Get(apc.HdrError); msg != "" {
-			herr := cmn.NewErrHTTP(nil, errors.New(msg), resp.StatusCode)
-			herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-			return herr
+			return &cmn.ErrHTTP{
+				TypeCode: cmn.TypeCodeHTTPErr(msg),
+				Message:  msg,
+				Status:   resp.StatusCode,
+				Method:   reqParams.BaseParams.Method,
+				URLPath:  reqParams.Path,
+			}
 		}
 	}
-	var (
-		herr   *cmn.ErrHTTP
-		msg, _ = io.ReadAll(resp.Body)
-	)
-	if reqParams.BaseParams.Method != http.MethodHead && resp.StatusCode != http.StatusServiceUnavailable {
-		if jsonErr := jsoniter.Unmarshal(msg, &herr); jsonErr == nil {
-			return herr
+
+	b, _ := io.ReadAll(resp.Body)
+	if len(b) == 0 {
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			msg := fmt.Sprintf("[%s]: starting up, please try again later...", http.StatusText(http.StatusServiceUnavailable))
+			return &cmn.ErrHTTP{Message: msg, Status: resp.StatusCode}
+		}
+		return &cmn.ErrHTTP{
+			Message: "failed to execute " + reqParams.BaseParams.Method + " request",
+			Status:  resp.StatusCode,
+			Method:  reqParams.BaseParams.Method,
+			URLPath: reqParams.Path,
 		}
 	}
-	strMsg := string(msg)
-	if resp.StatusCode == http.StatusServiceUnavailable && strMsg == "" {
-		strMsg = fmt.Sprintf("[%s]: starting up, please try again later...",
-			http.StatusText(http.StatusServiceUnavailable))
+
+	herr := &cmn.ErrHTTP{}
+	if err := jsoniter.Unmarshal(b, herr); err == nil && herr.TypeCode != "" {
+		return herr
 	}
-	// HEAD request does not return the body - create http error
-	// 503 is also to be preserved
-	herr = cmn.NewErrHTTP(nil, errors.New(strMsg), resp.StatusCode)
-	herr.Method, herr.URLPath = reqParams.BaseParams.Method, reqParams.Path
-	return herr
+	// otherwise, recreate
+	msg := string(b)
+	return &cmn.ErrHTTP{
+		TypeCode: cmn.TypeCodeHTTPErr(msg),
+		Message:  msg,
+		Status:   resp.StatusCode,
+		Method:   reqParams.BaseParams.Method,
+		URLPath:  reqParams.Path,
+	}
 }
 
 /////////////

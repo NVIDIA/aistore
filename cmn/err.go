@@ -49,6 +49,23 @@ const (
 	StartupMayTimeout = "cluster startup is taking unusually long time..." // related ErrStartupTimeout
 )
 
+// API error structure
+// is returned to aistore client and carries one of the specific errors enumerated below
+type (
+	ErrHTTP struct {
+		TypeCode   string `json:"tcode,omitempty"`
+		Message    string `json:"message"`
+		Method     string `json:"method"`
+		URLPath    string `json:"url_path"`
+		RemoteAddr string `json:"remote_addr"`
+		Caller     string `json:"caller"`
+		Node       string `json:"node"`
+		trace      []byte
+		Status     int `json:"status"`
+	}
+)
+
+// assorted aistore errors
 type (
 	ErrBucketAlreadyExists struct{ bck Bck }
 	ErrRemoteBckNotFound   struct{ bck Bck }
@@ -143,18 +160,6 @@ type (
 	}
 	ErrSoft struct {
 		what string
-	}
-	// Error structure for HTTP errors
-	ErrHTTP struct {
-		TypeCode   string `json:"tcode,omitempty"`
-		Message    string `json:"message"`
-		Method     string `json:"method"`
-		URLPath    string `json:"url_path"`
-		RemoteAddr string `json:"remote_addr"`
-		Caller     string `json:"caller"`
-		Node       string `json:"node"`
-		trace      []byte
-		Status     int `json:"status"`
 	}
 
 	ErrLmetaCorrupted struct {
@@ -769,6 +774,44 @@ func IsErrObjLevel(err error) bool    { return IsErrObjNought(err) }
 // ErrHTTP //
 /////////////
 
+func Str2HTTPErr(msg string) *ErrHTTP {
+	var herr ErrHTTP
+	if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
+		return &herr
+	}
+	return nil
+}
+
+func Err2HTTPErr(err error) *ErrHTTP {
+	e, ok := err.(*ErrHTTP)
+	if !ok {
+		e = &ErrHTTP{}
+		if !errors.As(err, &e) {
+			return nil
+		}
+	}
+	return e
+}
+
+const maxTypeCodeLen = 30
+
+func TypeCodeHTTPErr(s string) (tcode string) {
+	if !strings.HasPrefix(s, "Err") {
+		return
+	}
+	for i := 3; i < cos.Min(maxTypeCodeLen, len(s)); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			continue
+		}
+		if c == ':' && i+8 < len(s) && s[i+1] == ' ' {
+			tcode = s[:i]
+		}
+		break
+	}
+	return
+}
+
 func NewErrHTTP(r *http.Request, err error, errCode int) (e *ErrHTTP) {
 	e = &ErrHTTP{}
 	e.init(r, err, errCode)
@@ -820,7 +863,7 @@ func _clean(err error) {
 
 // Example:
 // ErrBckNotFound: bucket "ais://abc" does not exist: HEAD /v1/buckets/abc (p[kWQp8080]: htrun.go:1035 <- prxtrybck.go:180 <- ...
-func (e *ErrHTTP) StringEx() (s string) {
+func (e *ErrHTTP) log() (s string) {
 	s = e.Error()
 	if e.Method != "" || e.URLPath != "" {
 		if !strings.HasSuffix(s, ".") {
@@ -856,7 +899,7 @@ func (e *ErrHTTP) _jsonError(buf *bytes.Buffer) {
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 	if !silent {
-		s := e.StringEx()
+		s := e.log()
 		if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
 			// node name instead of generic stack:
 			replaced1 := strings.Replace(s, stackTracePrefix, thisNodeName+": ", 1)
@@ -929,44 +972,11 @@ func IsStatusGone(err error) (yes bool) {
 	return ok && herr.Status == http.StatusGone
 }
 
-func Str2HTTPErr(msg string) *ErrHTTP {
-	var herr ErrHTTP
-	if err := jsoniter.UnmarshalFromString(msg, &herr); err == nil {
-		return &herr
-	}
-	return nil
-}
+//
+// WriteErr and friends
+//
 
-func Err2HTTPErr(err error) *ErrHTTP {
-	e, ok := err.(*ErrHTTP)
-	if !ok {
-		e = &ErrHTTP{}
-		if !errors.As(err, &e) {
-			return nil
-		}
-	}
-	return e
-}
-
-// NOTE: internal use w/ duplication/simplicity traded off
-func err2HTTP(err error) (*ErrHTTP, bool) {
-	if e, ok := err.(*ErrHTTP); ok {
-		return e, false
-	}
-	e := allocHterr()
-	if !errors.As(err, &e) {
-		FreeHterr(e)
-		return nil, false
-	}
-	return e, true
-}
-
-//////////////////////////////
-// invalid message handlers //
-//////////////////////////////
-
-// sends HTTP response header with the provided status
-// (alloc/free via mem-pool)
+// sends HTTP response header with the provided status (alloc/free via mem-pool)
 func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[status[, silent]]*/) {
 	if herr, allocated := err2HTTP(err); herr != nil {
 		herr.Status = http.StatusBadRequest
@@ -999,6 +1009,19 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error, opts ...int /*[
 	herr.init(r, err, status)
 	herr.write(w, r, l > 1)
 	FreeHterr(herr)
+}
+
+// NOTE: internal use w/ duplication/simplicity traded off
+func err2HTTP(err error) (*ErrHTTP, bool) {
+	if e, ok := err.(*ErrHTTP); ok {
+		return e, false
+	}
+	e := allocHterr()
+	if !errors.As(err, &e) {
+		FreeHterr(e)
+		return nil, false
+	}
+	return e, true
 }
 
 // Create ErrHTTP (based on `msg` and `opts`) and write it into HTTP response.
