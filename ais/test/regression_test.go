@@ -67,7 +67,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		smap       = tools.GetClusterMap(t, proxyURL)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
@@ -160,7 +160,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	m.puts()
@@ -248,7 +248,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skipf("%q requires setting xattrs, doesn't work with docker", t.Name())
 	}
 
-	m.initWithCleanup()
+	m.init(true)
 	initMountpaths(t, proxyURL)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
@@ -327,7 +327,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initWithCleanup()
+	m.init(true)
 	m.puts()
 
 	if rtd.rename {
@@ -481,7 +481,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 	targetsToUnregister := m.originalTargetCount - 1
 
@@ -628,7 +628,7 @@ func TestLRU(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 	m.remotePuts(false /*evict*/)
 
 	// Remember targets' watermarks
@@ -730,7 +730,7 @@ func TestPrefetchList(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 	m.puts()
 
@@ -833,7 +833,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 	m.puts()
 	// 1. Parse arguments

@@ -1589,7 +1589,7 @@ func icStressMonitorXactMultiICFail(t *testing.T) {
 	)
 
 	// 1. Populate a bucket required for copy xactions
-	m.initWithCleanup()
+	m.init(true)
 	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 	m.puts()
 

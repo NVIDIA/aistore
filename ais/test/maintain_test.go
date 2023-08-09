@@ -73,7 +73,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.LsoEntry, 1500)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 
 	m.puts()
@@ -297,7 +297,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
@@ -367,7 +367,7 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
@@ -535,7 +535,7 @@ func TestShutdownListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.LsoEntry, m.num)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	origTargetCount := m.smap.CountActiveTs()
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
 	m.puts()

@@ -69,7 +69,7 @@ func TestETLMultiObj(t *testing.T) {
 			m.bck = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
 			tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 		}
-		m.initWithCleanup()
+		m.init(true)
 
 		if bcktest.srcRemote {
 			if bcktest.evictRemoteSrc {

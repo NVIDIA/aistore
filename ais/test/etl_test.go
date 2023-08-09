@@ -436,7 +436,7 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 			m.bck = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
 			tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 		}
-		m.initWithCleanup()
+		m.init(true)
 
 		if bcktest.srcRemote {
 			m.remotePuts(false) // (deleteRemoteBckObjs above)
@@ -620,7 +620,7 @@ def transform(input_bytes: bytes) -> bytes:
 
 	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
 
-	m.initWithCleanup()
+	m.init(true)
 
 	m.puts()
 
@@ -687,7 +687,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
-	m.initWithCleanup()
+	m.init(true)
 
 	m.puts()
 

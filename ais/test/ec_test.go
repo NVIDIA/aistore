@@ -2175,7 +2175,7 @@ func TestECBucketEncode(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	baseParams := tools.BaseAPIParams(proxyURL)
 
 	if m.smap.CountActiveTs() < parityCnt+1 {

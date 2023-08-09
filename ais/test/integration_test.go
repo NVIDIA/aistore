@@ -44,7 +44,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		rebID string
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	// Step 1.
@@ -91,7 +91,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		num:                 150000,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 
 	// Step 1.
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -162,7 +162,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 		targetNode *meta.Snode
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	// Step 1
@@ -204,7 +204,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	m := ioContext{t: t}
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 	target := m.startMaintenanceNoRebalance()
 
@@ -233,7 +233,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -305,7 +305,7 @@ func TestAckRebalance(t *testing.T) {
 		getErrIsFatal: true,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -334,7 +334,7 @@ func TestStressRebalance(t *testing.T) {
 		t: t,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(4)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -353,7 +353,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 		getErrIsFatal: true,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 
 	tgts := m.smap.Tmap.ActiveNodes()
 	i1 := rand.Intn(len(tgts))
@@ -416,7 +416,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		t:   t,
 		num: 10000,
 	}
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -494,7 +494,7 @@ func TestPutDuringRebalance(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -540,7 +540,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		killTarget     *meta.Snode
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -635,7 +635,7 @@ func TestGetDuringResilver(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -699,7 +699,7 @@ func TestGetDuringRebalance(t *testing.T) {
 		num: 30000,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -742,7 +742,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		t: t,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -803,7 +803,7 @@ func TestMountpathDetachAll(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	target, _ := m.smap.GetRandTarget()
@@ -866,7 +866,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -930,7 +930,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		allMps = make(map[string]*apc.MountpathList)
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1013,7 +1013,7 @@ func TestMountpathDisableAll(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	// Remove all mountpaths on the target
@@ -1113,7 +1113,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 1.
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectProxies(2)
 
 	// Step 2.
@@ -1166,7 +1166,7 @@ func TestAtimeRebalance(t *testing.T) {
 		numGetsEachFile: 2,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -1410,7 +1410,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		numGetsEachFile: 5,
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	target := m.startMaintenanceNoRebalance()
@@ -1444,7 +1444,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Initialize ioContext
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1492,7 +1492,7 @@ func TestRenewRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	// Step 1: Unregister a target
@@ -1555,7 +1555,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	// Select one target at random
@@ -1617,7 +1617,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		num:             10000,
 		numGetsEachFile: 4,
 	}
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
@@ -1701,7 +1701,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		num:             1000,
 		numGetsEachFile: 2,
 	}
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
@@ -1763,7 +1763,7 @@ func TestICRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1825,7 +1825,7 @@ func TestICDecommission(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1883,7 +1883,7 @@ func TestICDecommission(t *testing.T) {
 
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target

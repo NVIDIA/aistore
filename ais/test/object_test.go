@@ -610,7 +610,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 
 	baseParams := tools.BaseAPIParams(proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
@@ -761,7 +761,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initWithCleanup()
+	m.init(true)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
@@ -885,7 +885,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 
 	t.Cleanup(func() {
 		m.del()
@@ -977,7 +977,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		cksumConf = m.bck.DefaultProps(initialClusterConfig).Cksum
 	)
 
-	m.initWithCleanup()
+	m.init(true)
 
 	if docker.IsRunning() {
 		t.Skipf("test %q requires write access to xattrs, doesn't work with docker", t.Name())
@@ -1071,7 +1071,7 @@ func TestRangeRead(t *testing.T) {
 			cksumProps = bck.CksumConf()
 		)
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()

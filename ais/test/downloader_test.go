@@ -228,7 +228,7 @@ func TestDownloadSingle(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		defer m.del()
 
 		clearDownloadList(t)
@@ -298,7 +298,7 @@ func TestDownloadRange(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		defer m.del()
 
 		clearDownloadList(t)
@@ -333,7 +333,7 @@ func TestDownloadMultiRange(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -362,7 +362,7 @@ func TestDownloadMultiMap(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -393,7 +393,7 @@ func TestDownloadMultiList(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -598,7 +598,7 @@ func TestDownloadStatus(t *testing.T) {
 		m          = ioContext{t: t}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	var (
@@ -1008,7 +1008,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 	m.remotePuts(false /*evict*/)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -1068,7 +1068,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 	m.remotePuts(false /*evict*/)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
@@ -1106,7 +1106,7 @@ func TestDownloadSync(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 	m.remotePuts(false /*evict*/)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)

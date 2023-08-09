@@ -275,7 +275,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 			if m.bck.IsRemote() {
 				m.num = numPuts >> 1
 			}
-			m.initWithCleanup()
+			m.init(true)
 			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 			if m.bck.IsRemote() {
@@ -480,7 +480,7 @@ func TestAppendToArch(t *testing.T) {
 		t.Run(tname, func(t *testing.T) {
 			tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
 			tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
-			m.initWithCleanup()
+			m.init(true)
 			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 

@@ -76,8 +76,9 @@ type ioContext struct {
 	numPutErrs int
 }
 
-func (m *ioContext) initWithCleanupAndSaveState() {
-	m.initWithCleanup()
+//nolint:unparam // occasionally using cleanup == false to debug
+func (m *ioContext) initAndSaveState(cleanup bool) {
+	m.init(cleanup)
 	m.saveCluState(m.proxyURL)
 }
 
@@ -113,7 +114,7 @@ func (m *ioContext) checkCluState(smap *meta.Smap) {
 	}
 }
 
-func (m *ioContext) initWithCleanup() {
+func (m *ioContext) init(cleanup bool) {
 	m.proxyURL = tools.RandomProxyURL()
 	if m.proxyURL == "" {
 		// if random selection failed, use RO url
@@ -147,8 +148,10 @@ func (m *ioContext) initWithCleanup() {
 		}
 	}
 
-	// cleanup m.bck upon exit from the test
-	m.t.Cleanup(m._cleanup)
+	if cleanup {
+		// cleanup m.bck upon exit from the test
+		m.t.Cleanup(m._cleanup)
+	}
 }
 
 func (m *ioContext) _cleanup() {

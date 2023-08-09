@@ -377,7 +377,7 @@ func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
 			fixedSize: true,
 			bck:       bck,
 		}
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 	}
 
@@ -418,7 +418,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	if testing.Short() {
 		m.num = 50
 	}
-	m.initWithCleanup()
+	m.init(true)
 	m.smap = tools.GetClusterMap(m.t, m.proxyURL)
 
 	for _, target := range m.smap.Tmap.ActiveNodes() {
@@ -501,7 +501,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				silent: true,
 			}
 
-			m.initWithCleanup()
+			m.init(true)
 
 			for i := 0; i < iterCount; i++ {
 				if err := api.CreateBucket(baseParams, m.bck, nil); err != nil {
@@ -675,7 +675,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
@@ -718,7 +718,7 @@ func TestListObjectsSmoke(t *testing.T) {
 			msg   = &apc.LsoMsg{PageSize: 10}
 		)
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 
 		// Run couple iterations to see that we get deterministic results.
@@ -753,7 +753,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			m.num = 300
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -823,7 +823,7 @@ func TestListObjectsRerequestPage(t *testing.T) {
 			m.num = 50
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -871,7 +871,7 @@ func TestListObjectsStartAfter(t *testing.T) {
 			m.num = 20
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -918,7 +918,7 @@ func TestListObjectsProps(t *testing.T) {
 			m.num = rand.Intn(250) + 100
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1043,7 +1043,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 	}
 	tlog.Logf("%s: versioning is %s\n", m.bck.Cname(""), s)
 
-	m.initWithCleanup()
+	m.init(true)
 
 	for _, evict := range []bool{false, true} {
 		tlog.Logf("list remote objects with evict=%t\n", evict)
@@ -1100,7 +1100,7 @@ func TestListObjectsRandProxy(t *testing.T) {
 			m.num = rand.Intn(300) + 100
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1140,7 +1140,7 @@ func TestListObjectsRandPageSize(t *testing.T) {
 			m.num = rand.Intn(200) + 100
 		}
 
-		m.initWithCleanup()
+		m.init(true)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1481,7 +1481,7 @@ func TestListObjectsCache(t *testing.T) {
 		totalIters = 5
 	}
 
-	m.initWithCleanup()
+	m.init(true)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	m.puts()
@@ -1533,7 +1533,7 @@ func TestListObjectsWithRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(2)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -1584,7 +1584,7 @@ func TestBucketSingleProp(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(3)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -1792,7 +1792,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 		m.numGetsEachFile = 3
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 
 	max := cos.Max(numCopies...) + 1
 	skip := tools.SkipTestArgs{MinMountpaths: max}
@@ -1870,7 +1870,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.initWithCleanup()
+	m.init(true)
 	m.remotePuts(true /*evict*/)
 
 	// enable mirror
@@ -1910,7 +1910,7 @@ func TestBucketReadOnly(t *testing.T) {
 		num:             10,
 		numGetsEachFile: 2,
 	}
-	m.initWithCleanup()
+	m.init(true)
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 	baseParams := tools.BaseAPIParams()
 
@@ -1926,7 +1926,7 @@ func TestBucketReadOnly(t *testing.T) {
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
-	m.initWithCleanup()
+	m.init(true)
 	m.puts(true /*ignoreErr*/)
 	tassert.Fatalf(t, m.numPutErrs == m.num, "num failed PUTs %d, expecting %d", m.numPutErrs, m.num)
 
@@ -1935,7 +1935,7 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy
-	m.initWithCleanup()
+	m.init(true)
 	m.puts(true /*ignoreErr*/)
 	tassert.Fatalf(t, m.numPutErrs == 0, "num failed PUTs %d, expecting 0 (zero)", m.numPutErrs)
 }
@@ -1953,7 +1953,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	srcBck := m.bck
@@ -2007,7 +2007,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.proxyURL = tools.RandomProxyURL(t)
 	m.expectTargets(1)
 
@@ -2065,7 +2065,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
@@ -2117,7 +2117,7 @@ func TestRenameBucketTwice(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.proxyURL = tools.RandomProxyURL(t)
 	m.expectTargets(1)
 
@@ -2194,7 +2194,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	for _, srcBck := range srcBcks {
@@ -2381,11 +2381,11 @@ func TestCopyBucket(t *testing.T) {
 				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
 			}
 
-			srcm.initWithCleanupAndSaveState()
+			srcm.initAndSaveState(true)
 			srcm.expectTargets(1)
 
 			for _, dstm := range dstms {
-				dstm.initWithCleanup()
+				dstm.init(true)
 			}
 
 			if bckTest.IsAIS() {
@@ -2573,7 +2573,7 @@ func TestCopyBucketSimple(t *testing.T) {
 
 	tlog.Logf("Preparing source bucket %s\n", srcBck)
 	tools.CreateBucketWithCleanup(t, proxyURL, srcBck, nil)
-	m.initWithCleanup()
+	m.init(true)
 
 	m.puts()
 	m.prefix = "subdir/"
@@ -2742,7 +2742,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		dst2       = cmn.Bck{Name: testBucketName + "_rc_dst2", Provider: apc.AIS}
 	)
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 	tools.DestroyBucket(t, m.proxyURL, dst1)
 
@@ -2831,7 +2831,7 @@ func TestCopyAndRenameBucket(t *testing.T) {
 		}
 	)
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	m.expectTargets(1)
 
 	srcBck := m.bck
@@ -2909,7 +2909,7 @@ func TestBackendBucket(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: remoteBck})
 
-	m.initWithCleanup()
+	m.init(true)
 
 	tools.CreateBucketWithCleanup(t, proxyURL, aisBck, nil)
 
@@ -3063,7 +3063,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 		numCorrupted = 13
 	}
 
-	m.initWithCleanupAndSaveState()
+	m.initAndSaveState(true)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
 
@@ -3278,7 +3278,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				cacheSize     int
 			)
 
-			m.initWithCleanupAndSaveState()
+			m.initAndSaveState(true)
 			m.expectTargets(1)
 
 			if m.bck.IsAIS() {

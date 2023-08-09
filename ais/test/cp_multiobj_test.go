@@ -155,7 +155,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			tname += "/evict-remote-src"
 		}
 		t.Run(tname, func(t *testing.T) {
-			m.initWithCleanup()
+			m.init(true)
 			if m.bck.IsCloud() {
 				defer m.del()
 			}

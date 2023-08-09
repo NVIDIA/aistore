@@ -364,7 +364,7 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	m.initWithCleanup()
+	m.init(true)
 	if m.bck.IsRemote() {
 		m.del(-1 /* delete all */)
 	}
@@ -474,7 +474,7 @@ func TestObjProps(t *testing.T) {
 				prefix:    "props/obj-",
 			}
 
-			m.initWithCleanup()
+			m.init(true)
 
 			switch test.bucketType {
 			case typeCloud:
