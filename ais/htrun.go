@@ -673,11 +673,11 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	if res.status >= http.StatusBadRequest {
 		if args.req.Method == http.MethodHead {
 			msg := resp.Header.Get(apc.HdrError)
-			res.err = res2HTTPErr(req, msg, res.status)
+			res.err = res.herr(req, msg)
 		} else {
 			b := cmn.NewBuffer()
 			b.ReadFrom(resp.Body)
-			res.err = res2HTTPErr(req, b.String(), res.status)
+			res.err = res.herr(req, b.String())
 			cmn.FreeBuffer(b)
 		}
 		res.details = res.err.Error()
@@ -998,16 +998,6 @@ func (h *htrun) logerr(tag string, v any, err error) {
 	}
 	nlog.Errorln(msg + ")")
 	h.statsT.IncErr(stats.ErrHTTPWriteCount)
-}
-
-func res2HTTPErr(r *http.Request, msg string, status int) (herr *cmn.ErrHTTP) {
-	if msg != "" {
-		herr = cmn.Str2HTTPErr(msg)
-	}
-	if herr == nil {
-		herr = cmn.NewErrHTTP(r, errors.New(msg), status)
-	}
-	return
 }
 
 func _parseNCopies(value any) (copies int64, err error) {
@@ -2169,7 +2159,7 @@ func (res *callResult) toErr() error {
 	if res.err == nil {
 		return nil
 	}
-	// cmn.ErrHTTP
+	// is cmn.ErrHTTP
 	if herr := cmn.Err2HTTPErr(res.err); herr != nil {
 		// add status, details
 		if res.status >= http.StatusBadRequest {
@@ -2186,12 +2176,24 @@ func (res *callResult) toErr() error {
 		if res.details != "" {
 			detail = "[" + res.details + "]"
 		}
-		return cmn.NewErrHTTP(nil, fmt.Errorf("%v%s", res.err, detail), res.status)
+		return res.herr(nil, fmt.Sprintf("%v%s", res.err, detail))
 	}
 	if res.details == "" {
 		return res.err
 	}
 	return cmn.NewErrFailedTo(nil, "call "+res.si.StringEx(), res.details, res.err)
+}
+
+func (res *callResult) herr(r *http.Request, msg string) *cmn.ErrHTTP {
+	orig := &cmn.ErrHTTP{}
+	if e := jsoniter.Unmarshal([]byte(msg), orig); e == nil {
+		return orig
+	}
+	nherr := cmn.NewErrHTTP(r, errors.New(msg), res.status)
+	if res.si != nil {
+		nherr.Node = res.si.StringEx()
+	}
+	return nherr
 }
 
 func (res *callResult) errorf(format string, a ...any) error {
