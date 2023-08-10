@@ -41,15 +41,9 @@ func addBufferToArch(aw archive.Writer, path string, l int, buf []byte) error {
 		buf = newBuf(l)
 		defer freeBuf(buf)
 		buf = buf[:l]
-		if true {
-			_, errV := cryptorand.Read(buf)
-			debug.AssertNoErr(errV)
-		} else {
-			// TODO -- FIXME: leave some space empty to allow for compression
-			_, err := cryptorand.Read(buf[:l/3])
-			debug.AssertNoErr(err)
-			copy(buf[2*l/3:], buf)
-		}
+		_, err := cryptorand.Read(buf[:l/3])
+		debug.AssertNoErr(err)
+		copy(buf[2*l/3:], buf)
 	}
 	reader := bytes.NewBuffer(buf)
 	oah := cos.SimpleOAH{Size: int64(l)}

@@ -8,6 +8,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,7 +46,6 @@ const (
 
 const (
 	startingDS = "starting dsort"
-	finishedDS = "finished dsort"
 )
 
 var (
@@ -195,6 +195,17 @@ func runDSortTest(t *testing.T, dts dsortTestSpec, f any) {
 	}
 }
 
+////////////////////
+// dsortFramework //
+////////////////////
+
+func (df *dsortFramework) job() string {
+	if df.managerUUID == "" {
+		return "dsort[-]"
+	}
+	return "dsort[" + df.managerUUID + "]"
+}
+
 func (df *dsortFramework) init() {
 	if df.inputTempl.Template == "" {
 		df.inputTempl = apc.ListRange{Template: fmt.Sprintf("input-{0..%d}", df.shardCnt-1)}
@@ -324,7 +335,7 @@ func (df *dsortFramework) createInputShards() {
 	for err := range errCh {
 		tassert.CheckFatal(df.m.t, err)
 	}
-	tlog.Logln("done creating shards")
+	tlog.Logf("%s: done creating shards\n", df.job())
 }
 
 func (df *dsortFramework) checkOutputShards(zeros int) {
@@ -335,8 +346,11 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		idx        int
 		baseParams = tools.BaseAPIParams(df.m.proxyURL)
 		records    = make(map[string]int, 100)
+
+		realOutputShardCnt int
+		skipped            bool
 	)
-	tlog.Logln("checking that files are sorted...")
+	tlog.Logf("%s: checking that files are sorted...\n", df.job())
 	for i := 0; i < df.outputShardCnt; i++ {
 		var (
 			buffer    bytes.Buffer
@@ -349,15 +363,25 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		}
 
 		_, err := api.GetObject(baseParams, bucket, shardName, &getArgs)
-		if err != nil && archive.IsCompressed(df.extension) && i > df.outputShardCnt/2 {
-			// We estimated too much output shards to be produced - zip compression
-			// was so good that we could fit more files inside the shard.
-			//
-			// Sanity check to make sure that error did not occur before half
-			// of the shards estimated (zip compression should be THAT good).
-			break
+		if err != nil {
+			herr, ok := err.(*cmn.ErrHTTP)
+			if ok && herr.Status == http.StatusNotFound && archive.IsCompressed(df.extension) && i > 0 {
+				// We estimated too much output shards to be produced - zip compression
+				// was so good that we could fit more files inside the shard.
+				//
+				// Sanity check to make sure that error did not occur before half
+				// of the shards estimated (zip compression should be THAT good).
+				if !skipped {
+					tlog.Logf("%s: computed output shard count (%d) vs compression: started skipping at [%s]\n",
+						df.job(), df.outputShardCnt, shardName)
+					skipped = true
+				}
+				continue
+			}
+			tassert.CheckFatal(df.m.t, err)
 		}
-		tassert.CheckFatal(df.m.t, err)
+
+		realOutputShardCnt++
 
 		if df.alg.Kind == dsort.Content {
 			files, err := tarch.GetFilesFromArchBuffer(cos.Ext(shardName), buffer, df.alg.Ext)
@@ -367,8 +391,8 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 					if strings.TrimSuffix(file.Name, filepath.Ext(file.Name)) !=
 						strings.TrimSuffix(lastName, filepath.Ext(lastName)) {
 						// custom files should go AFTER the regular files
-						df.m.t.Fatalf("names are not in the correct order (shard: %s, lastName: %s, curName: %s)",
-							shardName, lastName, file.Name)
+						df.m.t.Fatalf("%s: names out of order (shard: %s, lastName: %s, curName: %s)",
+							df.job(), shardName, lastName, file.Name)
 					}
 
 					switch df.alg.ContentKeyType {
@@ -376,20 +400,20 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 						intValue, err := strconv.ParseInt(string(file.Content), 10, 64)
 						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && intValue < lastValue.(int64) {
-							df.m.t.Fatalf("int values are not in correct order (shard: %s, lastIntValue: %d, curIntValue: %d)", shardName, lastValue.(int64), intValue)
+							df.m.t.Fatalf("%s: int values are not in correct order (shard: %s, lastIntValue: %d, curIntValue: %d)", df.job(), shardName, lastValue.(int64), intValue)
 						}
 						lastValue = intValue
 					case extract.ContentKeyFloat:
 						floatValue, err := strconv.ParseFloat(string(file.Content), 64)
 						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && floatValue < lastValue.(float64) {
-							df.m.t.Fatalf("string values are not in correct order (shard: %s, lastStringValue: %f, curStringValue: %f)", shardName, lastValue.(float64), floatValue)
+							df.m.t.Fatalf("%s: string values are not in correct order (shard: %s, lastStringValue: %f, curStringValue: %f)", df.job(), shardName, lastValue.(float64), floatValue)
 						}
 						lastValue = floatValue
 					case extract.ContentKeyString:
 						stringValue := string(file.Content)
 						if lastValue != nil && stringValue < lastValue.(string) {
-							df.m.t.Fatalf("string values are not in correct order (shard: %s, lastStringValue: %s, curStringValue: %s)", shardName, lastValue.(string), stringValue)
+							df.m.t.Fatalf("%s: string values are not in correct order (shard: %s, lastStringValue: %s, curStringValue: %s)", df.job(), shardName, lastValue.(string), stringValue)
 						}
 						lastValue = stringValue
 					default:
@@ -403,14 +427,14 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 			files, err := tarch.GetFileInfosFromArchBuffer(buffer, df.extension)
 			tassert.CheckFatal(df.m.t, err)
 			if len(files) == 0 {
-				df.m.t.Fatal("number of files inside shard is 0")
+				df.m.t.Fatalf("%s: number of files inside shard is 0", df.job())
 			}
 
 			for _, file := range files {
 				if df.alg.Kind == "" || df.alg.Kind == dsort.Alphanumeric {
 					if lastName > file.Name() && canonicalName(lastName) != canonicalName(file.Name()) {
-						df.m.t.Fatalf("names are not in correct order (shard: %s, lastName: %s, curName: %s)",
-							shardName, lastName, file.Name())
+						df.m.t.Fatalf("%s: names out of order (shard: %s, lastName: %s, curName: %s)",
+							df.job(), shardName, lastName, file.Name())
 					}
 				} else if df.alg.Kind == dsort.Shuffle {
 					if lastName > file.Name() {
@@ -418,7 +442,8 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 					}
 				}
 				if file.Size() != int64(df.fileSz) {
-					df.m.t.Fatalf("file sizes has changed (expected: %d, got: %d)", df.fileSz, file.Size())
+					df.m.t.Fatalf("%s: file sizes has changed (expected: %d, got: %d)",
+						df.job(), df.fileSz, file.Size())
 				}
 				lastName = file.Name()
 
@@ -427,7 +452,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				recordCanonicalName := canonicalName(file.Name())
 				prevIdx, ok := records[recordCanonicalName]
 				if ok && prevIdx != idx-1 {
-					df.m.t.Errorf("record object %q was splitted", file.Name())
+					df.m.t.Errorf("%s: record object %q was splitted", df.job(), file.Name())
 				}
 				records[recordCanonicalName] = idx
 
@@ -436,21 +461,23 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 					ext := cos.Ext(file.Name())
 					expectedExt := df.recordExts[idx%len(df.recordExts)]
 					if ext != expectedExt {
-						df.m.t.Errorf(
-							"record objects %q order has been disrupted: %s != %s",
-							file.Name(), ext, expectedExt,
+						df.m.t.Errorf("%s: record objects %q order has been disrupted: %s != %s",
+							df.job(), file.Name(), ext, expectedExt,
 						)
 					}
 				}
-
 				idx++
 			}
 		}
 	}
 
+	if archive.IsCompressed(df.extension) {
+		tlog.Logf("%s: computed output shard count (%d) vs resulting compressed (%d)\n",
+			df.job(), df.outputShardCnt, realOutputShardCnt)
+	}
 	if df.alg.Kind == dsort.Shuffle {
 		if inversions == 0 {
-			df.m.t.Fatal("shuffle sorting did not create any inversions")
+			df.m.t.Fatalf("%s: shuffle sorting did not create any inversions", df.job())
 		}
 	}
 }
@@ -460,21 +487,21 @@ func canonicalName(recordName string) string {
 }
 
 func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsCnt int) {
-	tlog.Logln("checking metrics and reaction results...")
+	tlog.Logf("%s: checking metrics and reaction results\n", df.job())
 	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
 	if len(allMetrics) != df.m.originalTargetCount {
-		df.m.t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), df.m.originalTargetCount)
+		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d", df.job(), len(allMetrics), df.m.originalTargetCount)
 	}
 
 	switch reaction {
 	case cmn.IgnoreReaction:
 		for target, metrics := range allMetrics {
 			if len(metrics.Warnings) != 0 {
-				df.m.t.Errorf("target %q has %s warnings: %s", target, dsort.DSortName, metrics.Warnings)
+				df.m.t.Errorf("%s: target %q has %s warnings: %s", df.job(), target, dsort.DSortName, metrics.Warnings)
 			}
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has %s errors: %s", target, dsort.DSortName, metrics.Errors)
+				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, dsort.DSortName, metrics.Errors)
 			}
 		}
 	case cmn.WarnReaction:
@@ -483,24 +510,24 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 			totalWarnings += len(metrics.Warnings)
 
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("target %q has %s errors: %s", target, dsort.DSortName, metrics.Errors)
+				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, dsort.DSortName, metrics.Errors)
 			}
 		}
 
 		if totalWarnings != expectedProblemsCnt {
-			df.m.t.Errorf("number of total warnings %d is different than number of deleted shards: %d", totalWarnings, expectedProblemsCnt)
+			df.m.t.Errorf("%s: number of total warnings %d is different than number of deleted shards: %d", df.job(), totalWarnings, expectedProblemsCnt)
 		}
 	case cmn.AbortReaction:
 		totalErrors := 0
 		for target, metrics := range allMetrics {
 			if !metrics.Aborted.Load() {
-				df.m.t.Errorf("%s was not aborted by target: %s", dsort.DSortName, target)
+				df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), dsort.DSortName, target)
 			}
 			totalErrors += len(metrics.Errors)
 		}
 
 		if totalErrors == 0 {
-			df.m.t.Error("expected errors on abort, got nothing")
+			df.m.t.Errorf("%s: expected errors on abort, got nothing", df.job())
 		}
 	}
 }
@@ -539,21 +566,20 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 }
 
 func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metrics {
-	tlog.Logln("checking metrics...")
+	tlog.Logf("%s: checking metrics", df.job())
 	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
 	if len(allMetrics) != df.m.originalTargetCount {
-		df.m.t.Errorf("number of metrics %d is not same as number of targets %d", len(allMetrics), df.m.originalTargetCount)
+		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d",
+			df.job(), len(allMetrics), df.m.originalTargetCount)
 	}
-
 	for target, metrics := range allMetrics {
 		if expectAbort && !metrics.Aborted.Load() {
-			df.m.t.Errorf("%s was not aborted by target: %s", dsort.DSortName, target)
+			df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), dsort.DSortName, target)
 		} else if !expectAbort && metrics.Aborted.Load() {
-			df.m.t.Errorf("%s was aborted by target: %s", dsort.DSortName, target)
+			df.m.t.Errorf("%s: %s was aborted by target: %s", df.job(), dsort.DSortName, target)
 		}
 	}
-
 	return allMetrics
 }
 
@@ -577,7 +603,7 @@ func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 
 	_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(m.t, err)
-	tlog.Logln(finishedDS)
+	tlog.Logf("%s: finished\n", df.job())
 
 	df.checkMetrics(false /* expectAbort */)
 	df.checkOutputShards(5)
@@ -615,6 +641,10 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+//
+// tests
+//
 
 func TestDistributedSort(t *testing.T) {
 	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtZip} {
@@ -670,7 +700,7 @@ func testDsort(t *testing.T, ext, lr string) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(5)
@@ -757,7 +787,7 @@ func TestDistributedSortEmptyBucket(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(reaction == cmn.AbortReaction /*expectAbort*/)
 			df.checkReactionResult(reaction, df.shardCnt)
@@ -804,7 +834,7 @@ func TestDistributedSortOutputBucket(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(5)
@@ -898,7 +928,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(5)
@@ -935,7 +965,7 @@ func TestDistributedSortDisk(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			allMetrics := df.checkMetrics(false /* expectAbort */)
 			for target, metrics := range allMetrics {
@@ -982,7 +1012,7 @@ func TestDistributedSortCompressionDisk(t *testing.T) {
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					tlog.Logln(finishedDS)
+					tlog.Logf("%s: finished\n", df.job())
 
 					df.checkMetrics(false /* expectAbort */)
 					df.checkOutputShards(5)
@@ -1031,7 +1061,7 @@ func TestDistributedSortMemDisk(t *testing.T) {
 
 	_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 	tassert.CheckFatal(t, err)
-	tlog.Logln(finishedDS)
+	tlog.Logf("%s: finished\n", df.job())
 
 	allMetrics := df.checkMetrics(false /* expectAbort */)
 	var (
@@ -1094,7 +1124,7 @@ func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			allMetrics := df.checkMetrics(false /*expectAbort*/)
 			var (
@@ -1153,7 +1183,7 @@ func TestDistributedSortZipLz4(t *testing.T) {
 
 					_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					tlog.Logln(finishedDS)
+					tlog.Logf("%s: finished\n", df.job())
 
 					df.checkMetrics(false /* expectAbort */)
 					df.checkOutputShards(5)
@@ -1197,7 +1227,7 @@ func TestDistributedSortTarCompression(t *testing.T) {
 
 					_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					tlog.Logln(finishedDS)
+					tlog.Logf("%s: finished\n", df.job())
 
 					df.checkMetrics(false /* expectAbort */)
 					df.checkOutputShards(5)
@@ -1625,7 +1655,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(0)
@@ -1668,7 +1698,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			// Wait a while for all targets to abort
 			time.Sleep(2 * time.Second)
@@ -1719,7 +1749,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(5)
@@ -1785,7 +1815,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					tlog.Logln(finishedDS)
+					tlog.Logf("%s: finished\n", df.job())
 
 					df.checkReactionResult(reaction, df.shardCntToSkip)
 				},
@@ -1849,7 +1879,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					tlog.Logln(finishedDS)
+					tlog.Logf("%s: finished\n", df.job())
 
 					df.checkReactionResult(reaction, df.recordDuplicationsCnt)
 				},
@@ -1936,7 +1966,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 			tassert.CheckFatal(t, err)
@@ -2044,7 +2074,7 @@ func TestDistributedSortOrderJSONFile(t *testing.T) {
 
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
 			tassert.CheckFatal(t, err)
@@ -2104,7 +2134,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 		},
@@ -2143,7 +2173,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 		},
@@ -2185,7 +2215,7 @@ func TestDistributedSortLongerExt(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /*expectAbort*/)
 			df.checkOutputShards(5)
@@ -2227,7 +2257,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /*expectAbort*/)
 			df.checkOutputShards(0)
@@ -2273,7 +2303,7 @@ func TestDistributedSortWithTarFormats(t *testing.T) {
 
 			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
-			tlog.Logln(finishedDS)
+			tlog.Logf("%s: finished\n", df.job())
 
 			df.checkMetrics(false /* expectAbort */)
 			df.checkOutputShards(5)
