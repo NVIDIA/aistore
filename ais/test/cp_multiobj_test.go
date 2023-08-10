@@ -51,12 +51,12 @@ func TestCopyMultiObjSimple(t *testing.T) {
 	}
 	if !exists {
 		bckFrom = cmn.Bck{Name: "cp-range-from", Provider: apc.AIS}
-		tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
+		tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	}
 	objList := make([]string, 0, objCnt)
 	tlog.Logf("exists = %t\n", exists)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
 	for i := 0; i < objCnt; i++ {
 		objList = append(objList, fmt.Sprintf("test/a-%04d", i))
 	}
@@ -155,13 +155,13 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			tname += "/evict-remote-src"
 		}
 		t.Run(tname, func(t *testing.T) {
-			m.init(true)
+			m.init(true /*cleanup*/)
 			if m.bck.IsCloud() {
 				defer m.del()
 			}
 			if !bckTo.Equal(&m.bck) && bckTo.IsAIS() {
 				if test.createDst {
-					tools.CreateBucketWithCleanup(t, proxyURL, bckTo, nil)
+					tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
 				} else {
 					t.Cleanup(func() {
 						tools.DestroyBucket(t, proxyURL, bckTo)

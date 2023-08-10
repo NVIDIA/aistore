@@ -150,7 +150,7 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 		expectedOutputFilePath = tools.CreateFileFromReader(t, "object.out", r)
 	}
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logln("PUT object")
 	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)
@@ -325,7 +325,7 @@ func TestETLInline(t *testing.T) {
 			_ = tetl.InitSpec(t, baseParams, test.transformer, test.comm)
 			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, test.transformer) })
 
-			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 			tlog.Logln("PUT object")
 			objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
@@ -366,7 +366,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 	_ = tetl.InitSpec(t, baseParams, transformer, comm)
 	t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, transformer) })
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logln("PUT object")
 	objName := trand.String(10)
@@ -434,9 +434,9 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 			m.deleteRemoteBckObjs = true
 		} else {
 			m.bck = cmn.Bck{Name: "etlsrc_" + cos.GenTie(), Provider: apc.AIS}
-			tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+			tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 		}
-		m.init(true)
+		m.init(true /*cleanup*/)
 
 		if bcktest.srcRemote {
 			m.remotePuts(false) // (deleteRemoteBckObjs above)
@@ -618,9 +618,9 @@ def transform(input_bytes: bytes) -> bytes:
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 
 	m.puts()
 
@@ -686,8 +686,8 @@ func TestETLBucketDryRun(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
-	m.init(true)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.init(true /*cleanup*/)
 
 	m.puts()
 

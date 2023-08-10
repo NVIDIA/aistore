@@ -364,7 +364,7 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 		proxyURL = tools.RandomProxyURL()
 	)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	if m.bck.IsRemote() {
 		m.del(-1 /* delete all */)
 	}
@@ -474,18 +474,18 @@ func TestObjProps(t *testing.T) {
 				prefix:    "props/obj-",
 			}
 
-			m.init(true)
+			m.init(true /*cleanup*/)
 
 			switch test.bucketType {
 			case typeCloud:
 				m.bck = cliBck
 				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 			case typeLocal:
-				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+				tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			case typeRemoteAIS:
 				tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
 				m.bck.Ns.UUID = tools.RemoteCluster.UUID
-				tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+				tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			default:
 				tassert.CheckFatal(t, fmt.Errorf("unknown type %q", test.bucketType))
 			}

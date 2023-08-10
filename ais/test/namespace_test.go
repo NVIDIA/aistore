@@ -354,7 +354,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 		}
 	)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 
 	err := api.CreateBucket(baseParams, m.bck, nil)
 	tassert.CheckFatal(t, err)

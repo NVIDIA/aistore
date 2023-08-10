@@ -336,7 +336,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 		t.Fatal("No available mountpaths found")
 	}
 
-	tools.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
+	tools.CreateBucket(t, md.proxyURL, md.bck, nil, true /*cleanup*/)
 	selectedTarget, selectedMpath, selectedMpathList := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
 	defer func() {
@@ -395,7 +395,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 
 	selectedTarget, selectedMpath, selectedMap := md.randomTargetMpath()
 	tlog.Logf("mountpath %s of %s is selected for the test\n", selectedMpath, selectedTarget.StringEx())
-	tools.CreateBucketWithCleanup(t, md.proxyURL, md.bck, nil)
+	tools.CreateBucket(t, md.proxyURL, md.bck, nil, true /*cleanup*/)
 	defer func() {
 		if err := api.DetachMountpath(md.baseParams, selectedTarget, selectedMpath, true /*dont-resil*/); err != nil {
 			t.Logf("Failed to remove mpath %s of %s: %v", selectedMpath, selectedTarget.StringEx(), err)

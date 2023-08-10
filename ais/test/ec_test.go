@@ -459,7 +459,7 @@ func putRandomFile(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPath
 
 func newLocalBckWithProps(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, bckProps *cmn.BucketPropsToUpdate, o *ecOptions) {
 	proxyURL := tools.RandomProxyURL()
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logf("Changing EC %d:%d [ seed = %d ], concurrent: %d\n",
 		o.dataCnt, o.parityCnt, o.seed, o.concurrency)
@@ -555,7 +555,7 @@ func TestECChange(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	bucketProps := &cmn.BucketPropsToUpdate{
 		EC: &cmn.ECConfToUpdate{
@@ -2175,7 +2175,7 @@ func TestECBucketEncode(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	baseParams := tools.BaseAPIParams(proxyURL)
 
 	if m.smap.CountActiveTs() < parityCnt+1 {
@@ -2183,7 +2183,7 @@ func TestECBucketEncode(t *testing.T) {
 	}
 
 	initMountpaths(t, proxyURL)
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -2263,7 +2263,7 @@ func TestECAndRegularRebalance(t *testing.T) {
 func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, bckEC cmn.Bck) {
 	baseParams := tools.BaseAPIParams(proxyURL)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bckReg, nil)
+	tools.CreateBucket(t, proxyURL, bckReg, nil, true /*cleanup*/)
 	newLocalBckWithProps(t, baseParams, bckEC, defaultECBckProps(o), o)
 
 	// select a target that loses its mpath(simulate drive death),

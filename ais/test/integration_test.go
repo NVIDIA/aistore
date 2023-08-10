@@ -44,11 +44,11 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	// Step 1.
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -91,10 +91,10 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		num:                 150000,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 
 	// Step 1.
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 2.
 	target := m.startMaintenanceNoRebalance()
@@ -162,7 +162,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 		targetNode *meta.Snode
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
 	// Step 1
@@ -178,7 +178,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Step 2
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 3
 	m.puts()
@@ -204,7 +204,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 
 func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	m := ioContext{t: t}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 	target := m.startMaintenanceNoRebalance()
 
@@ -233,12 +233,12 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Unregister target[0]
 	args := &apc.ActValRmNode{DaemonID: targets[0].ID(), SkipRebalance: true}
@@ -305,10 +305,10 @@ func TestAckRebalance(t *testing.T) {
 		getErrIsFatal: true,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -334,10 +334,10 @@ func TestStressRebalance(t *testing.T) {
 		t: t,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(4)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	for i := 1; i <= 3; i++ {
 		tlog.Logf("Iteration #%d ======\n", i)
@@ -353,7 +353,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 		getErrIsFatal: true,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 
 	tgts := m.smap.Tmap.ActiveNodes()
 	i1 := rand.Intn(len(tgts))
@@ -416,12 +416,12 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		t:   t,
 		num: 10000,
 	}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target0, target1 := targets[0], targets[1]
 	args := &apc.ActValRmNode{DaemonID: target0.ID(), SkipRebalance: true}
@@ -494,10 +494,10 @@ func TestPutDuringRebalance(t *testing.T) {
 		num: 10000,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -540,10 +540,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		killTarget     *meta.Snode
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Select a random target to disable one of its mountpaths,
 	// and another random target to unregister.
@@ -635,10 +635,10 @@ func TestGetDuringResilver(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
@@ -699,10 +699,10 @@ func TestGetDuringRebalance(t *testing.T) {
 		num: 30000,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -742,7 +742,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 		t: t,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -780,7 +780,7 @@ func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			tools.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
+			tools.CreateBucket(t, m.proxyURL, bck, nil, true /*cleanup*/)
 		}()
 	}
 	wg.Wait()
@@ -803,7 +803,7 @@ func TestMountpathDetachAll(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	target, _ := m.smap.GetRandTarget()
@@ -832,7 +832,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Add target mountpath again
 	for _, mpath := range origMountpaths.Available {
@@ -866,14 +866,14 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 	target, _ := m.smap.GetRandTarget()
 	mpList, err := api.GetMountpaths(baseParams, target)
 	tassert.CheckFatal(t, err)
 	ensureNoDisabledMountpaths(t, target, mpList)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	if docker.IsRunning() {
 		err := docker.CreateMpathDir(0, testMpath)
@@ -930,12 +930,12 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		allMps = make(map[string]*apc.MountpathList)
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 
 	targets := m.smap.Tmap.ActiveNodes()
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	defer func() {
 		if !docker.IsRunning() {
@@ -1013,7 +1013,7 @@ func TestMountpathDisableAll(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 
 	// Remove all mountpaths on the target
@@ -1076,7 +1076,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	}
 
 	// Create ais bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Re-enable target mountpaths
 	for _, mpath := range origMountpaths.Available {
@@ -1113,7 +1113,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 1.
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectProxies(2)
 
 	// Step 2.
@@ -1129,7 +1129,7 @@ func TestForwardCP(t *testing.T) {
 		time.Sleep(time.Second)
 	})
 
-	tools.CreateBucketWithCleanup(t, nextProxyURL, m.bck, nil)
+	tools.CreateBucket(t, nextProxyURL, m.bck, nil, true /*cleanup*/)
 	tlog.Logf("Created bucket %s via non-primary %s\n", m.bck, nextProxyID)
 
 	// Step 3.
@@ -1166,10 +1166,10 @@ func TestAtimeRebalance(t *testing.T) {
 		numGetsEachFile: 2,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	target := m.startMaintenanceNoRebalance()
 
@@ -1243,7 +1243,7 @@ func TestAtimeLocalGet(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("file content"))
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
@@ -1382,7 +1382,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		objectContent = readers.NewBytesReader([]byte("dummy content"))
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	timeBeforePut := time.Now()
 	_, err := api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
@@ -1410,12 +1410,12 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 		numGetsEachFile: 5,
 	}
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	target := m.startMaintenanceNoRebalance()
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	rebID := m.stopMaintenance(target)
 
@@ -1444,7 +1444,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	}
 
 	// Initialize ioContext
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	targets := m.smap.Tmap.ActiveNodes()
@@ -1462,7 +1462,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	)
 
 	// Create ais bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -1492,14 +1492,14 @@ func TestRenewRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	// Step 1: Unregister a target
 	target := m.startMaintenanceNoRebalance()
 
 	// Step 2: Create an ais bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 3: PUT objects in the bucket
 	m.puts()
@@ -1555,7 +1555,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 
 	// Select one target at random
@@ -1568,7 +1568,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	}
 
 	// Step 1: Create a local bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1617,7 +1617,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		num:             10000,
 		numGetsEachFile: 4,
 	}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
@@ -1630,7 +1630,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 		t.Skipf("%s requires at least 3 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Make the bucket n-copy mirrored
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
@@ -1701,7 +1701,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		num:             1000,
 		numGetsEachFile: 2,
 	}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target
@@ -1715,7 +1715,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 		t.Skipf("%s requires at least 2 mountpaths per target (%s has %d)", t.Name(), target.StringEx(), mpathCount)
 	}
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// PUT
 	m.puts()
@@ -1763,7 +1763,7 @@ func TestICRebalance(t *testing.T) {
 		rebID string
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1771,7 +1771,7 @@ func TestICRebalance(t *testing.T) {
 	m.proxyURL = psi.URL(cmn.NetPublic)
 	icNode := tools.GetICProxy(t, m.smap, psi.ID())
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -1825,7 +1825,7 @@ func TestICDecommission(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
 	m.expectProxies(3)
 	psi, err := m.smap.GetRandProxy(true /*exclude primary*/)
@@ -1834,7 +1834,7 @@ func TestICDecommission(t *testing.T) {
 	tlog.Logf("Monitoring node: %s\n", psi.StringEx())
 	icNode := tools.GetICProxy(t, m.smap, psi.ID())
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -1883,7 +1883,7 @@ func TestICDecommission(t *testing.T) {
 
 func TestSingleResilver(t *testing.T) {
 	m := ioContext{t: t}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 
 	// Select a random target

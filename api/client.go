@@ -350,7 +350,7 @@ func (reqParams *ReqParams) checkResp(resp *http.Response) error {
 	}
 
 	herr := &cmn.ErrHTTP{}
-	if err := jsoniter.Unmarshal(b, herr); err == nil && herr.TypeCode != "" {
+	if err := jsoniter.Unmarshal(b, herr); err == nil {
 		return herr
 	}
 	// otherwise, recreate

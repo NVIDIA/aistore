@@ -55,9 +55,9 @@ def transform(input_bytes):
 	}
 
 	tlog.Logln("Preparing source bucket")
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.puts()
 
 	msg := etl.InitCodeMsg{
@@ -117,7 +117,7 @@ func TestETLTargetDown(t *testing.T) {
 		// TODO: otherwise, error executing LSOF command
 		t.Skipf("skipping %s long test (kill-node vs maintenance vs ETL)", t.Name())
 	}
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
 
 	tlog.Logln("Waiting for ETL to process a few objects...")
@@ -196,8 +196,8 @@ def transform(input_bytes):
 	)
 
 	tlog.Logf("Preparing source bucket (%d objects, %s each)\n", m.num, cos.ToSizeIEC(int64(m.fileSize), 2))
-	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
-	m.initAndSaveState(true)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
 
 	m.puts()
 
@@ -271,8 +271,8 @@ func etlPrepareAndStart(t *testing.T, m *ioContext, etlName, comm string) (xid s
 	m.bck = bckFrom
 
 	tlog.Logf("Preparing source bucket %s\n", bckFrom.Cname(""))
-	tools.CreateBucketWithCleanup(t, proxyURL, bckFrom, nil)
-	m.initAndSaveState(true)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
 
 	m.puts()
 

@@ -84,7 +84,7 @@ func TestObjectInvalidName(t *testing.T) {
 		{op: getOP, objName: "/././../../../../log/aisnode.INFO"},
 	}
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	for _, test := range tests {
 		t.Run(test.op, func(t *testing.T) {
@@ -244,11 +244,10 @@ func TestAppendObject(t *testing.T) {
 				content = objHead + objBody + objTail
 				objSize = len(content)
 			)
-			tools.CreateBucketWithCleanup(t, proxyURL, bck, &cmn.BucketPropsToUpdate{
-				Cksum: &cmn.CksumConfToUpdate{
-					Type: api.String(cksumType),
-				},
-			})
+			tools.CreateBucket(t, proxyURL, bck,
+				&cmn.BucketPropsToUpdate{Cksum: &cmn.CksumConfToUpdate{Type: api.String(cksumType)}},
+				true, /*cleanup*/
+			)
 
 			var (
 				err    error
@@ -376,7 +375,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, args)
 	tassert.CheckFatal(t, err)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
+	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 
 	// PUT
 	tlog.Logf("PUT %s and %s into buckets...\n", fileName1, fileName2)
@@ -468,7 +467,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
+	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 
 	bucketPropsLocal := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -610,7 +609,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 
 	baseParams := tools.BaseAPIParams(proxyURL)
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
@@ -670,7 +669,7 @@ func TestHeadBucket(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	bckPropsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
@@ -761,7 +760,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
@@ -867,7 +866,7 @@ func testEvictRemoteAISBucket(t *testing.T) {
 			UUID: tools.RemoteCluster.UUID,
 		},
 	}
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	testEvictRemoteBucket(t, bck, false)
 }
 
@@ -885,7 +884,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 
 	t.Cleanup(func() {
 		m.del()
@@ -977,7 +976,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 		cksumConf = m.bck.DefaultProps(initialClusterConfig).Cksum
 	)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 
 	if docker.IsRunning() {
 		t.Skipf("test %q requires write access to xattrs, doesn't work with docker", t.Name())
@@ -985,7 +984,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 
 	initMountpaths(t, proxyURL)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -1071,7 +1070,7 @@ func TestRangeRead(t *testing.T) {
 			cksumProps = bck.CksumConf()
 		)
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		m.puts()
 		if m.bck.IsRemote() {
 			defer m.del()
@@ -1374,7 +1373,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		objData      = []byte("I am object data")
 		badCksumVal  = "badchecksum"
 	)
-	tools.CreateBucketWithCleanup(t, proxyURL, bckLocal, nil)
+	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,

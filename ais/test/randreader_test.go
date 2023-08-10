@@ -28,7 +28,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		cksumType  = bck.DefaultProps(initialClusterConfig).Cksum.Type
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)

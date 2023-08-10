@@ -228,7 +228,7 @@ func TestDownloadSingle(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		defer m.del()
 
 		clearDownloadList(t)
@@ -298,7 +298,7 @@ func TestDownloadRange(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		defer m.del()
 
 		clearDownloadList(t)
@@ -333,7 +333,7 @@ func TestDownloadMultiRange(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -362,7 +362,7 @@ func TestDownloadMultiMap(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -393,7 +393,7 @@ func TestDownloadMultiList(t *testing.T) {
 			bck: bck.Clone(),
 		}
 
-		m.init(true)
+		m.init(true /*cleanup*/)
 		defer m.del()
 		clearDownloadList(t)
 
@@ -421,7 +421,7 @@ func TestDownloadTimeout(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	body := dload.SingleBody{
 		SingleObj: dload.SingleObj{
@@ -494,7 +494,7 @@ func TestDownloadRemote(t *testing.T) {
 			clearDownloadList(t)
 
 			if test.dstBck.IsAIS() {
-				tools.CreateBucketWithCleanup(t, proxyURL, test.dstBck, nil)
+				tools.CreateBucket(t, proxyURL, test.dstBck, nil, true /*cleanup*/)
 			}
 
 			tools.CleanupRemoteBucket(t, proxyURL, test.srcBck, prefix)
@@ -598,7 +598,7 @@ func TestDownloadStatus(t *testing.T) {
 		m          = ioContext{t: t}
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	var (
@@ -613,7 +613,7 @@ func TestDownloadStatus(t *testing.T) {
 
 	clearDownloadList(t)
 
-	tools.CreateBucketWithCleanup(t, m.proxyURL, bck, nil)
+	tools.CreateBucket(t, m.proxyURL, bck, nil, true /*cleanup*/)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -657,7 +657,7 @@ func TestDownloadStatusError(t *testing.T) {
 	clearDownloadList(t)
 
 	// Create ais bucket
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	id, err := api.DownloadMulti(baseParams, generateDownloadDesc(), bck, files)
 	tassert.CheckFatal(t, err)
@@ -704,7 +704,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -745,7 +745,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -781,7 +781,7 @@ func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	_, err := api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{ValidateWarmGet: api.Bool(true)},
@@ -838,7 +838,7 @@ func TestDownloadMountpath(t *testing.T) {
 		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
 	}
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	id1, err := api.DownloadRange(baseParams, generateDownloadDesc(), bck, template)
 	tassert.CheckFatal(t, err)
@@ -915,7 +915,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	// disallow updating downloaded objects
 	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
 	props := &cmn.BucketPropsToUpdate{Access: api.AccessAttrs(aattrs)}
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, props)
+	tools.CreateBucket(t, proxyURL, bck, props, true /*cleanup*/)
 
 	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
@@ -1008,10 +1008,10 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
@@ -1034,7 +1034,7 @@ func TestDownloadSkipObject(t *testing.T) {
 		expectedVersion       = "1"
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, expectedVersion)
@@ -1068,10 +1068,10 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	downloadObjectRemote(t, dlBody, m.num, 0)
@@ -1106,10 +1106,10 @@ func TestDownloadSync(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	tools.SetBackendBck(t, baseParams, bck, m.bck)
 
 	tlog.Logln("1. initial sync of remote bucket...")
@@ -1170,7 +1170,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1231,7 +1231,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 		template = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.0.iso"
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
@@ -1325,7 +1325,7 @@ func TestDownloadJobBytesThrottling(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	id, err := api.DownloadWithParam(baseParams, dload.TypeSingle, dload.SingleBody{
 		Base: dload.Base{

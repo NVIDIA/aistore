@@ -73,8 +73,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.LsoEntry, 1500)
 	)
 
-	m.initAndSaveState(true)
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	m.puts()
 	// 1. Perform list-object and populate entries map
@@ -196,7 +196,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	)
 	tlog.Logf("targets: %d, proxies: %d\n", smap.CountActiveTs(), smap.CountActivePs())
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.NewRandReader(int64(fileSize), cos.ChecksumXXHash)
@@ -297,8 +297,8 @@ func TestMaintenanceRebalance(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initAndSaveState(true)
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
 	m.puts()
@@ -367,8 +367,8 @@ func TestMaintenanceGetWhileRebalance(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.initAndSaveState(true)
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	origProxyCnt, origTargetCount := m.smap.CountActivePs(), m.smap.CountActiveTs()
 
 	m.puts()
@@ -460,7 +460,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 				t.Name(), minNumNodes, cos.Plural(minNumNodes), origTargetCount)
 		}
 		bck := cmn.Bck{Name: "shutdown-node" + cos.GenTie(), Provider: apc.AIS}
-		tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 		node, err = smap.GetRandTarget()
 		tdc = 1
@@ -535,9 +535,9 @@ func TestShutdownListObjects(t *testing.T) {
 		origEntries = make(map[string]*cmn.LsoEntry, m.num)
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	origTargetCount := m.smap.CountActiveTs()
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	m.puts()
 
 	// 1. Perform list-object and populate entries map.

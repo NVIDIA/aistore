@@ -67,10 +67,10 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		smap       = tools.GetClusterMap(t, proxyURL)
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -160,7 +160,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 
 	m.puts()
@@ -248,10 +248,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		t.Skipf("%q requires setting xattrs, doesn't work with docker", t.Name())
 	}
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	initMountpaths(t, proxyURL)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, m.bck, nil)
+	tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 
 	m.puts()
 
@@ -274,7 +274,7 @@ func TestRegressionBuckets(t *testing.T) {
 		}
 		proxyURL = tools.RandomProxyURL(t)
 	)
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bck: bck})
 }
 
@@ -295,7 +295,7 @@ func TestRenameBucket(t *testing.T) {
 	)
 	for _, wait := range []bool{true, false} {
 		t.Run(fmt.Sprintf("wait=%v", wait), func(t *testing.T) {
-			tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+			tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 			t.Cleanup(func() {
 				tools.DestroyBucket(t, proxyURL, renamedBck)
 			})
@@ -327,7 +327,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.puts()
 
 	if rtd.rename {
@@ -419,7 +419,7 @@ func TestRenameObjects(t *testing.T) {
 		}
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	objNames, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
 		ProxyURL:  proxyURL,
@@ -481,7 +481,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 		}
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 	targetsToUnregister := m.originalTargetCount - 1
 
@@ -519,7 +519,7 @@ func TestReregisterMultipleTargets(t *testing.T) {
 	tlog.Logf("The cluster now has %d target(s)\n", smap.CountActiveTs())
 
 	// Step 2: PUT objects into a newly created bucket
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	m.puts()
 
 	// Step 3: Start performing GET requests
@@ -628,7 +628,7 @@ func TestLRU(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
-	m.init(true)
+	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
 
 	// Remember targets' watermarks
@@ -730,7 +730,7 @@ func TestPrefetchList(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 	m.puts()
 
@@ -833,7 +833,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
 	m.puts()
 	// 1. Parse arguments
@@ -982,7 +982,7 @@ func TestStressDeleteRange(t *testing.T) {
 		cksumType = bck.DefaultProps(initialClusterConfig).Cksum.Type
 	)
 
-	tools.CreateBucketWithCleanup(t, proxyURL, bck, nil)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	// 1. PUT
 	tlog.Logln("putting objects...")

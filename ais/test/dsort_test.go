@@ -649,11 +649,11 @@ func testDsort(t *testing.T, ext, lr string) {
 			}
 
 			// Initialize ioContext
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(1)
 
 			// Create ais bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -700,13 +700,13 @@ func TestDistributedSortNonExistingBuckets(t *testing.T) {
 			)
 
 			// Initialize ioContext
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
 			df.init()
 
 			// Create ais:// output
-			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
 			tlog.Logln(startingDS)
 			spec := df.gen()
@@ -717,7 +717,7 @@ func TestDistributedSortNonExistingBuckets(t *testing.T) {
 
 			// Now destroy output bucket and create input bucket
 			tools.DestroyBucket(t, m.proxyURL, df.outputBck)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			tlog.Logf("dsort %s => %s(-)\n", m.bck, df.outputBck)
 			if _, err := api.StartDSort(df.baseParams, &spec); err != nil {
@@ -746,9 +746,9 @@ func TestDistributedSortEmptyBucket(t *testing.T) {
 			)
 
 			// Initialize ioContext
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 
@@ -788,13 +788,13 @@ func TestDistributedSortOutputBucket(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 			// Create ais buckets
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			// Create local output bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -826,9 +826,9 @@ func TestDistributedSortParallel(t *testing.T) {
 				dSortsCount = 5
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			wg := &sync.WaitGroup{}
 			for i := 0; i < dSortsCount; i++ {
@@ -857,9 +857,9 @@ func TestDistributedSortChain(t *testing.T) {
 				dSortsCount = 5
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			for i := 0; i < dSortsCount; i++ {
 				dispatchDSortJob(m, dsorterType, i)
@@ -886,9 +886,9 @@ func TestDistributedSortShuffle(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -924,9 +924,9 @@ func TestDistributedSortDisk(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -969,9 +969,9 @@ func TestDistributedSortCompressionDisk(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
@@ -1009,9 +1009,9 @@ func TestDistributedSortMemDisk(t *testing.T) {
 		mem sys.MemStat
 	)
 
-	m.initAndSaveState(true)
+	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(3)
-	tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	df.init()
 	df.createInputShards()
@@ -1072,9 +1072,9 @@ func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 				mem sys.MemStat
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -1141,9 +1141,9 @@ func TestDistributedSortZipLz4(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
@@ -1185,9 +1185,9 @@ func TestDistributedSortTarCompression(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
@@ -1252,9 +1252,9 @@ func TestDistributedSortContent(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
@@ -1308,9 +1308,9 @@ func TestDistributedSortAbort(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -1349,10 +1349,10 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -1394,12 +1394,12 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 				target *meta.Snode
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
 			df.init()
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.createInputShards()
 
@@ -1461,7 +1461,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						mountpaths = make(map[*meta.Snode]string)
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
 
 					// Initialize `df.baseParams`
@@ -1508,7 +1508,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 						tools.WaitForResilvering(t, df.baseParams, nil)
 					})
 
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.createInputShards()
 
@@ -1559,14 +1559,14 @@ func TestDistributedSortAddTarget(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
 			df.init()
 
 			target := m.startMaintenanceNoRebalance()
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.createInputShards()
 
@@ -1612,10 +1612,10 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -1656,10 +1656,10 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 
@@ -1706,10 +1706,10 @@ func TestDistributedSortOnOOM(t *testing.T) {
 			// is 80% so dSort should never go above this number in memory usage.
 			df.shardCnt = int(float64(mem.ActualFree/uint64(df.fileSz)/uint64(df.filesPerShard)) * 1.4)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -1758,14 +1758,15 @@ func TestDistributedSortMissingShards(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
 
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					switch scope {
 					case scopeConfig:
-						defer tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
+						defer tools.SetClusterConfig(t,
+							cos.StrKVs{"distributed_sort.missing_shards": cmn.IgnoreReaction})
 						tools.SetClusterConfig(t, cos.StrKVs{"distributed_sort.missing_shards": reaction})
 
 						tlog.Logf("changed `missing_shards` config to: %s\n", reaction)
@@ -1822,9 +1823,9 @@ func TestDistributedSortDuplications(t *testing.T) {
 							extension:             ext,
 						}
 					)
-					m.initAndSaveState(true)
+					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					switch scope {
 					case scopeConfig:
@@ -1888,7 +1889,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 				baseParams = tools.BaseAPIParams(proxyURL)
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
 			// Set URL for order file (points to the object in cluster).
@@ -1900,10 +1901,10 @@ func TestDistributedSortOrderFile(t *testing.T) {
 
 			df.init()
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			// Create local output bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
 			df.createInputShards()
 
@@ -1993,7 +1994,7 @@ func TestDistributedSortOrderJSONFile(t *testing.T) {
 				baseParams = tools.BaseAPIParams(proxyURL)
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
 			// Set URL for order file (points to the object in cluster).
@@ -2005,10 +2006,10 @@ func TestDistributedSortOrderJSONFile(t *testing.T) {
 
 			df.init()
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			// Create local output bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, df.outputBck, nil)
+			tools.CreateBucket(t, m.proxyURL, df.outputBck, nil, true /*cleanup*/)
 
 			df.createInputShards()
 
@@ -2090,10 +2091,10 @@ func TestDistributedSortDryRun(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -2129,10 +2130,10 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -2171,10 +2172,10 @@ func TestDistributedSortLongerExt(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -2213,10 +2214,10 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 				}
 			)
 
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(3)
 
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
@@ -2258,11 +2259,11 @@ func TestDistributedSortWithTarFormats(t *testing.T) {
 			)
 
 			// Initialize ioContext
-			m.initAndSaveState(true)
+			m.initAndSaveState(true /*cleanup*/)
 			m.expectTargets(1)
 
 			// Create ais bucket
-			tools.CreateBucketWithCleanup(t, m.proxyURL, m.bck, nil)
+			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 			df.init()
 			df.createInputShards()
