@@ -92,7 +92,8 @@ type (
 		inputShards []string
 
 		tarFormat       tar.Format
-		extension       string
+		inputExt        string
+		outputExt       string
 		alg             *dsort.Algorithm
 		missingKeys     bool
 		outputShardSize string
@@ -213,8 +214,8 @@ func (df *dsortFramework) init() {
 	if df.outputTempl == "" {
 		df.outputTempl = "output-{00000..10000}"
 	}
-	if df.extension == "" {
-		df.extension = dsort.DefaultExt
+	if df.inputExt == "" {
+		df.inputExt = dsort.DefaultExt
 	}
 
 	// Assumption is that all prefixes end with dash: "-"
@@ -249,7 +250,8 @@ func (df *dsortFramework) gen() dsort.RequestSpec {
 		Description:         generateDSortDesc(),
 		InputBck:            df.m.bck,
 		OutputBck:           df.outputBck,
-		InputExtension:      df.extension,
+		InputExtension:      df.inputExt,
+		OutputExtension:     df.outputExt,
 		InputFormat:         df.inputTempl,
 		OutputFormat:        df.outputTempl,
 		OutputShardSize:     df.outputShardSize,
@@ -301,16 +303,16 @@ func (df *dsortFramework) createInputShards() {
 			if df.alg.Kind == dsort.Content {
 				tarName = path + archive.ExtTar
 			} else {
-				tarName = path + df.extension
+				tarName = path + df.inputExt
 			}
 			if df.alg.Kind == dsort.Content {
-				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.extension, df.filesPerShard,
+				err = tarch.CreateArchCustomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, df.alg.ContentKeyType, df.alg.Ext, df.missingKeys)
-			} else if df.extension == archive.ExtTar {
-				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.filesPerShard,
+			} else if df.inputExt == archive.ExtTar {
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, df.recordExts, nil)
-			} else if df.extension == archive.ExtTarGz || df.extension == archive.ExtZip || df.extension == archive.ExtTarLz4 {
-				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.extension, df.filesPerShard,
+			} else if df.inputExt == archive.ExtTarGz || df.inputExt == archive.ExtZip || df.inputExt == archive.ExtTarLz4 {
+				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, nil, nil)
 			} else {
 				df.m.t.Fail()
@@ -348,13 +350,14 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		records    = make(map[string]int, 100)
 
 		realOutputShardCnt int
-		skipped            bool
+		skipped            int
 	)
 	tlog.Logf("%s: checking that files are sorted...\n", df.job())
+outer:
 	for i := 0; i < df.outputShardCnt; i++ {
 		var (
 			buffer    bytes.Buffer
-			shardName = fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
+			shardName = fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.inputExt)
 			getArgs   = api.GetArgs{Writer: &buffer}
 			bucket    = df.m.bck
 		)
@@ -365,21 +368,24 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		_, err := api.GetObject(baseParams, bucket, shardName, &getArgs)
 		if err != nil {
 			herr, ok := err.(*cmn.ErrHTTP)
-			if ok && herr.Status == http.StatusNotFound && archive.IsCompressed(df.extension) && i > 0 {
-				// We estimated too much output shards to be produced - zip compression
-				// was so good that we could fit more files inside the shard.
-				//
-				// Sanity check to make sure that error did not occur before half
-				// of the shards estimated (zip compression should be THAT good).
-				if !skipped {
-					tlog.Logf("%s: computed output shard count (%d) vs compression: started skipping at [%s]\n",
+			if ok && herr.Status == http.StatusNotFound && archive.IsCompressed(df.inputExt) && i > 0 {
+				// check for NotFound a few more, and break; see also 'skipped == 0' check below
+				switch skipped {
+				case 0:
+					tlog.Logf("%s: computed output shard count (%d) vs compression: [%s] is the first not-found\n",
 						df.job(), df.outputShardCnt, shardName)
-					skipped = true
+					fallthrough
+				case 1, 2, 3:
+					skipped++
+					continue
+				default:
+					break outer
 				}
-				continue
 			}
 			tassert.CheckFatal(df.m.t, err)
 		}
+
+		tassert.Fatalf(df.m.t, skipped == 0, "%s: got out of order shard %s (not-found >= %d)", df.job(), shardName, skipped)
 
 		realOutputShardCnt++
 
@@ -424,7 +430,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 				}
 			}
 		} else {
-			files, err := tarch.GetFileInfosFromArchBuffer(buffer, df.extension)
+			files, err := tarch.GetFileInfosFromArchBuffer(buffer, df.inputExt)
 			tassert.CheckFatal(df.m.t, err)
 			if len(files) == 0 {
 				df.m.t.Fatalf("%s: number of files inside shard is 0", df.job())
@@ -471,7 +477,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 		}
 	}
 
-	if archive.IsCompressed(df.extension) {
+	if archive.IsCompressed(df.inputExt) {
 		tlog.Logf("%s: computed output shard count (%d) vs resulting compressed (%d)\n",
 			df.job(), df.outputShardCnt, realOutputShardCnt)
 	}
@@ -646,7 +652,7 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 // tests
 //
 
-func TestDistributedSort(t *testing.T) {
+func TestDsort(t *testing.T) {
 	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtZip} {
 		for _, lr := range []string{"list", "range"} {
 			t.Run(ext+"/"+lr, func(t *testing.T) {
@@ -667,7 +673,7 @@ func testDsort(t *testing.T, ext, lr string) {
 				}
 				df = &dsortFramework{
 					m:             m,
-					extension:     ext,
+					inputExt:      ext,
 					dsorterType:   dsorterType,
 					shardCnt:      500,
 					filesPerShard: 100,
@@ -708,7 +714,7 @@ func testDsort(t *testing.T, ext, lr string) {
 	)
 }
 
-func TestDistributedSortNonExistingBuckets(t *testing.T) {
+func TestDsortNonExistingBuckets(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -757,7 +763,7 @@ func TestDistributedSortNonExistingBuckets(t *testing.T) {
 	)
 }
 
-func TestDistributedSortEmptyBucket(t *testing.T) {
+func TestDsortEmptyBucket(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, reactions: cmn.SupportedReactions},
 		func(dsorterType, reaction string, t *testing.T) {
@@ -795,7 +801,7 @@ func TestDistributedSortEmptyBucket(t *testing.T) {
 	)
 }
 
-func TestDistributedSortOutputBucket(t *testing.T) {
+func TestDsortOutputBucket(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -842,8 +848,8 @@ func TestDistributedSortOutputBucket(t *testing.T) {
 	)
 }
 
-// TestDistributedSortParallel runs multiple dSorts in parallel
-func TestDistributedSortParallel(t *testing.T) {
+// TestDsortParallel runs multiple dSorts in parallel
+func TestDsortParallel(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -873,8 +879,8 @@ func TestDistributedSortParallel(t *testing.T) {
 	)
 }
 
-// TestDistributedSortChain runs multiple dSorts one after another
-func TestDistributedSortChain(t *testing.T) {
+// TestDsortChain runs multiple dSorts one after another
+func TestDsortChain(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -898,7 +904,7 @@ func TestDistributedSortChain(t *testing.T) {
 	)
 }
 
-func TestDistributedSortShuffle(t *testing.T) {
+func TestDsortShuffle(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -936,7 +942,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 	)
 }
 
-func TestDistributedSortDisk(t *testing.T) {
+func TestDsortDisk(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -979,7 +985,7 @@ func TestDistributedSortDisk(t *testing.T) {
 	)
 }
 
-func TestDistributedSortCompressionDisk(t *testing.T) {
+func TestDsortCompressionDisk(t *testing.T) {
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
@@ -994,7 +1000,7 @@ func TestDistributedSortCompressionDisk(t *testing.T) {
 							dsorterType:   dsorterType,
 							shardCnt:      200,
 							filesPerShard: 50,
-							extension:     ext,
+							inputExt:      ext,
 							maxMemUsage:   "1KB",
 						}
 					)
@@ -1007,7 +1013,7 @@ func TestDistributedSortCompressionDisk(t *testing.T) {
 					df.createInputShards()
 
 					tlog.Logf("starting dsort: %d/%d, %s\n",
-						df.shardCnt, df.filesPerShard, df.extension)
+						df.shardCnt, df.filesPerShard, df.inputExt)
 					df.start()
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1022,7 +1028,7 @@ func TestDistributedSortCompressionDisk(t *testing.T) {
 	}
 }
 
-func TestDistributedSortMemDisk(t *testing.T) {
+func TestDsortMemDisk(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	var (
@@ -1083,7 +1089,7 @@ func TestDistributedSortMemDisk(t *testing.T) {
 	df.checkOutputShards(5)
 }
 
-func TestDistributedSortMemDiskTarCompression(t *testing.T) {
+func TestDsortMemDiskTarCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
@@ -1097,7 +1103,7 @@ func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 					shardCnt:      400,
 					fileSz:        cos.MiB,
 					filesPerShard: 5,
-					extension:     ext,
+					inputExt:      ext,
 				}
 				mem sys.MemStat
 			)
@@ -1119,7 +1125,7 @@ func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 			df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+300*cos.MiB), 2)
 
 			tlog.Logf("starting dsort with memory, disk, and compression (max mem usage: %s) ... %d/%d, %s\n",
-				df.maxMemUsage, df.shardCnt, df.filesPerShard, df.extension)
+				df.maxMemUsage, df.shardCnt, df.filesPerShard, df.inputExt)
 			df.start()
 
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1148,7 +1154,7 @@ func TestDistributedSortMemDiskTarCompression(t *testing.T) {
 	}
 }
 
-func TestDistributedSortZipLz4(t *testing.T) {
+func TestDsortZipLz4(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	for _, ext := range []string{archive.ExtZip, archive.ExtTarLz4} {
@@ -1166,7 +1172,7 @@ func TestDistributedSortZipLz4(t *testing.T) {
 							dsorterType:   dsorterType,
 							shardCnt:      500,
 							filesPerShard: 100,
-							extension:     ext,
+							inputExt:      ext,
 							maxMemUsage:   "99%",
 						}
 					)
@@ -1178,7 +1184,7 @@ func TestDistributedSortZipLz4(t *testing.T) {
 					df.init()
 					df.createInputShards()
 
-					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.extension)
+					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.inputExt)
 					df.start()
 
 					_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1193,7 +1199,7 @@ func TestDistributedSortZipLz4(t *testing.T) {
 	}
 }
 
-func TestDistributedSortTarCompression(t *testing.T) {
+func TestDsortTarCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
@@ -1210,7 +1216,7 @@ func TestDistributedSortTarCompression(t *testing.T) {
 							dsorterType:   dsorterType,
 							shardCnt:      500,
 							filesPerShard: 50,
-							extension:     ext,
+							inputExt:      ext,
 							maxMemUsage:   "99%",
 						}
 					)
@@ -1222,7 +1228,7 @@ func TestDistributedSortTarCompression(t *testing.T) {
 					df.init()
 					df.createInputShards()
 
-					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.extension)
+					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.inputExt)
 					df.start()
 
 					_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1237,7 +1243,7 @@ func TestDistributedSortTarCompression(t *testing.T) {
 	}
 }
 
-func TestDistributedSortContent(t *testing.T) {
+func TestDsortContent(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -1321,7 +1327,7 @@ func TestDistributedSortContent(t *testing.T) {
 	)
 }
 
-func TestDistributedSortAbort(t *testing.T) {
+func TestDsortAbort(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -1361,7 +1367,7 @@ func TestDistributedSortAbort(t *testing.T) {
 	)
 }
 
-func TestDistributedSortAbortDuringPhases(t *testing.T) {
+func TestDsortAbortDuringPhases(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -1404,7 +1410,7 @@ func TestDistributedSortAbortDuringPhases(t *testing.T) {
 	)
 }
 
-func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
+func TestDsortKillTargetDuringPhases(t *testing.T) {
 	t.Skip("test is flaky, run it only when necessary")
 
 	runDSortTest(
@@ -1468,7 +1474,7 @@ func TestDistributedSortKillTargetDuringPhases(t *testing.T) {
 	)
 }
 
-func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
+func TestDsortManipulateMountpathDuringPhases(t *testing.T) {
 	t.Skipf("skipping %s", t.Name())
 
 	runDSortTest(
@@ -1570,7 +1576,7 @@ func TestDistributedSortManipulateMountpathDuringPhases(t *testing.T) {
 	)
 }
 
-func TestDistributedSortAddTarget(t *testing.T) {
+func TestDsortAddTarget(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -1625,7 +1631,7 @@ func TestDistributedSortAddTarget(t *testing.T) {
 	)
 }
 
-func TestDistributedSortMetricsAfterFinish(t *testing.T) {
+func TestDsortMetricsAfterFinish(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -1669,7 +1675,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	)
 }
 
-func TestDistributedSortSelfAbort(t *testing.T) {
+func TestDsortSelfAbort(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -1708,7 +1714,7 @@ func TestDistributedSortSelfAbort(t *testing.T) {
 	)
 }
 
-func TestDistributedSortOnOOM(t *testing.T) {
+func TestDsortOnOOM(t *testing.T) {
 	t.Skip("test can take more than couple minutes, run it only when necessary")
 
 	runDSortTest(
@@ -1757,7 +1763,7 @@ func TestDistributedSortOnOOM(t *testing.T) {
 	)
 }
 
-func TestDistributedSortMissingShards(t *testing.T) {
+func TestDsortMissingShards(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
@@ -1784,7 +1790,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 							shardCnt:       500,
 							shardCntToSkip: 50,
 							filesPerShard:  200,
-							extension:      ext,
+							inputExt:       ext,
 						}
 					)
 
@@ -1810,7 +1816,7 @@ func TestDistributedSortMissingShards(t *testing.T) {
 					df.init()
 					df.createInputShards()
 
-					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.extension)
+					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.inputExt)
 					df.start()
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1824,9 +1830,10 @@ func TestDistributedSortMissingShards(t *testing.T) {
 	}
 }
 
-func TestDistributedSortDuplications(t *testing.T) {
+// TODO -- FIXME: fails archive.ExtTarLz4 & archive.ExtTarGz
+func TestDsortDuplications(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTar} { // TODO: currently, fails archive.ExtTarLz4 and archive.ExtTarGz, both
+	for _, ext := range []string{archive.ExtTar, archive.ExtZip} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{
@@ -1850,10 +1857,10 @@ func TestDistributedSortDuplications(t *testing.T) {
 							shardCnt:              500,
 							filesPerShard:         200,
 							recordDuplicationsCnt: 50,
-							extension:             ext,
+							inputExt:              ext,
 						}
 					)
-					m.initAndSaveState(true /*cleanup*/)
+					m.initAndSaveState(false /*cleanup*/)
 					m.expectTargets(3)
 					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
@@ -1874,7 +1881,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 					df.init()
 					df.createInputShards()
 
-					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.extension)
+					tlog.Logf("starting dsort: %d/%d, %s\n", df.shardCnt, df.filesPerShard, df.inputExt)
 					df.start()
 
 					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
@@ -1888,7 +1895,7 @@ func TestDistributedSortDuplications(t *testing.T) {
 	}
 }
 
-func TestDistributedSortOrderFile(t *testing.T) {
+func TestDsortOrderFile(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -1993,7 +2000,7 @@ func TestDistributedSortOrderFile(t *testing.T) {
 	)
 }
 
-func TestDistributedSortOrderJSONFile(t *testing.T) {
+func TestDsortOrderJSONFile(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
@@ -2102,7 +2109,7 @@ func TestDistributedSortOrderJSONFile(t *testing.T) {
 	)
 }
 
-func TestDistributedSortDryRun(t *testing.T) {
+func TestDsortDryRun(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -2141,7 +2148,7 @@ func TestDistributedSortDryRun(t *testing.T) {
 	)
 }
 
-func TestDistributedSortDryRunDisk(t *testing.T) {
+func TestDsortDryRunDisk(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -2180,7 +2187,7 @@ func TestDistributedSortDryRunDisk(t *testing.T) {
 	)
 }
 
-func TestDistributedSortLongerExt(t *testing.T) {
+func TestDsortLongerExt(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -2223,7 +2230,7 @@ func TestDistributedSortLongerExt(t *testing.T) {
 	)
 }
 
-func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
+func TestDsortAutomaticallyCalculateOutputShards(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
@@ -2265,7 +2272,7 @@ func TestDistributedSortAutomaticallyCalculateOutputShards(t *testing.T) {
 	)
 }
 
-func TestDistributedSortWithTarFormats(t *testing.T) {
+func TestDsortWithTarFormats(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(

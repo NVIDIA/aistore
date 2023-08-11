@@ -104,14 +104,14 @@ func (t *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordEx
 	if err != nil {
 		return 0, 0, err
 	}
-	s := &rcbCtx{parent: t, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	c := &rcbCtx{parent: t, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
-	s.buf = buf
+	c.buf = buf
 
-	_, err = ar.Range("", s.xtar)
+	_, err = ar.Range("", c.xtar)
 
 	slab.Free(buf)
-	return s.extractedSize, s.extractedCount, err
+	return c.extractedSize, c.extractedCount, err
 }
 
 // Create creates a new shard locally based on the Shard.

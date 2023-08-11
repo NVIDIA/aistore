@@ -64,7 +64,7 @@ type (
 	}
 
 	RecordExtractor interface {
-		ExtractRecordWithBuffer(args extractRecordArgs) (int64, error)
+		RecordWithBuffer(args extractRecordArgs) (int64, error)
 	}
 
 	RecordManager struct {
@@ -100,7 +100,7 @@ func NewRecordManager(t cluster.Target, bck cmn.Bck, extractCreator Creator,
 	}
 }
 
-func (recm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size int64, err error) {
+func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64, err error) {
 	var (
 		storeType       string
 		contentPath     string
@@ -111,13 +111,13 @@ func (recm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size
 		recordUniqueName = genRecordUname(args.shardName, args.recordName)
 	)
 
-	// If the content already exists we should skip it but set error
-	// (caller must to handle it properly).
+	// If the content already exists we should skip it but raise an error
+	// (caller must handle it properly).
 	if recm.Records.Exists(recordUniqueName, ext) {
-		msg := fmt.Sprintf("record %q has been duplicated", args.recordName)
+		msg := fmt.Sprintf("record %q is duplicated", args.recordName)
 		recm.Records.DeleteDup(recordUniqueName, ext)
 
-		// NOTE: There is no need to remove anything from `recm.extractionPaths`
+		// NOTE: no need to remove anything from `recm.extractionPaths`
 		// or `recm.contents` since it'll be removed anyway during subsequent cleanup.
 		// The assumption is that there will be not too many duplicates and we can live
 		// with a few extra files/memory.
@@ -160,7 +160,6 @@ func (recm *RecordManager) ExtractRecordWithBuffer(args extractRecordArgs) (size
 			if args.w != nil {
 				dst = args.w
 			}
-
 			if _, err := io.CopyBuffer(dst, r, args.buf); err != nil {
 				return 0, errors.WithStack(err)
 			}
@@ -302,7 +301,7 @@ func (recm *RecordManager) FreeMem(fullContentPath, newStoreType string, value a
 	if !exists {
 		// Generally should not happen but it is not proven that it cannot.
 		// There is nothing wrong with just returning here though.
-		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO -- FIXME: FastV
+		nlog.Errorln("failed to find", fullContentPath, recordObjExt, contentPath) // TODO: FastV
 	}
 
 	idx := record.find(recordObjExt)

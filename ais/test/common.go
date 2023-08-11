@@ -76,7 +76,6 @@ type ioContext struct {
 	numPutErrs int
 }
 
-//nolint:unparam // occasionally using cleanup == false to debug
 func (m *ioContext) initAndSaveState(cleanup bool) {
 	m.init(cleanup)
 	m.saveCluState(m.proxyURL)

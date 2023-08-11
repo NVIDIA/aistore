@@ -959,7 +959,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	phaseInfo.adjuster.releaseSema(lom.Mountpath())
 	lom.Unlock(false)
 
-	m.dsorter.postShardExtraction(expectedExtractedSize) // schedule unreserving reserved memory on next memory update
+	m.dsorter.postShardExtraction(expectedExtractedSize) // schedule freeing reserved memory on next memory update
 	if err != nil {
 		return errors.Errorf("failed to extract shard %s: %v", lom.Cname(), err)
 	}

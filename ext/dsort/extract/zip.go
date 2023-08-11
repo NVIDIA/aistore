@@ -112,13 +112,14 @@ func (z *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordEx
 	if err != nil {
 		return 0, 0, err
 	}
-	s := &rcbCtx{parent: z, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	c := &rcbCtx{parent: z, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	buf, slab := z.t.PageMM().AllocSize(lom.SizeBytes())
+	c.buf = buf
 
-	_, err = ar.Range("", s.xzip)
+	_, err = ar.Range("", c.xzip)
 
 	slab.Free(buf)
-	return s.extractedSize, s.extractedCount, err
+	return c.extractedSize, c.extractedCount, err
 }
 
 // Create creates a new shard locally based on the Shard.
