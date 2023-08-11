@@ -311,11 +311,9 @@ func (df *dsortFramework) createInputShards() {
 			} else if df.inputExt == archive.ExtTar {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, df.recordExts, nil)
-			} else if df.inputExt == archive.ExtTarGz || df.inputExt == archive.ExtZip || df.inputExt == archive.ExtTarLz4 {
+			} else {
 				err = tarch.CreateArchRandomFiles(tarName, df.tarFormat, df.inputExt, df.filesPerShard,
 					df.fileSz, duplication, nil, nil)
-			} else {
-				df.m.t.Fail()
 			}
 			tassert.CheckFatal(df.m.t, err)
 
@@ -986,7 +984,7 @@ func TestDsortDisk(t *testing.T) {
 }
 
 func TestDsortCompressionDisk(t *testing.T) {
-	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
+	for _, ext := range []string{archive.ExtTgz, archive.ExtTarLz4, archive.ExtZip} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1089,69 +1087,76 @@ func TestDsortMemDisk(t *testing.T) {
 	df.checkOutputShards(5)
 }
 
-func TestDsortMemDiskTarCompression(t *testing.T) {
+func TestDsortMinMemCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
-		t.Run(ext, func(t *testing.T) {
-			var (
-				m = &ioContext{
-					t: t,
-				}
-				df = &dsortFramework{
-					m:             m,
-					dsorterType:   dsort.DSorterGeneralType,
-					shardCnt:      400,
-					fileSz:        cos.MiB,
-					filesPerShard: 5,
-					inputExt:      ext,
-				}
-				mem sys.MemStat
-			)
-
-			m.initAndSaveState(true /*cleanup*/)
-			m.expectTargets(3)
-			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
-
-			df.init()
-			df.createInputShards()
-
-			// Try to free all memory to get estimated actual used memory size
-			cos.FreeMemToOS()
-			time.Sleep(time.Second)
-
-			// Get current memory
-			err := mem.Get()
-			tassert.CheckFatal(t, err)
-			df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+300*cos.MiB), 2)
-
-			tlog.Logf("starting dsort with memory, disk, and compression (max mem usage: %s) ... %d/%d, %s\n",
-				df.maxMemUsage, df.shardCnt, df.filesPerShard, df.inputExt)
-			df.start()
-
-			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckFatal(t, err)
-			tlog.Logf("%s: finished\n", df.job())
-
-			allMetrics := df.checkMetrics(false /*expectAbort*/)
-			var (
-				extractedToDisk int64
-				extractedTotal  int64
-			)
-			for _, metrics := range allMetrics {
-				extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
-				extractedTotal += metrics.Extraction.ExtractedCnt
-			}
-
-			if extractedToDisk == 0 {
-				t.Error("all extractions by all targets were done exclusively into memory")
-			}
-			if extractedToDisk == extractedTotal {
-				t.Error("all extractions by all targets were done exclusively into disk")
-			}
-
-			df.checkOutputShards(5)
-		})
+	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4, archive.ExtZip} {
+		for _, maxMem := range []string{"10%", "1%"} {
+			t.Run(ext+"/mem="+maxMem, func(t *testing.T) {
+				minMemCompression(t, ext, maxMem)
+			})
+		}
 	}
+}
+
+func minMemCompression(t *testing.T, ext, maxMem string) {
+	var (
+		m = &ioContext{
+			t: t,
+		}
+		df = &dsortFramework{
+			m:             m,
+			dsorterType:   dsort.DSorterGeneralType,
+			shardCnt:      500,
+			fileSz:        cos.MiB,
+			filesPerShard: 5,
+			inputExt:      ext,
+			maxMemUsage:   maxMem,
+		}
+		mem sys.MemStat
+	)
+
+	m.initAndSaveState(true /*cleanup*/)
+	m.expectTargets(3)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+
+	df.init()
+	df.createInputShards()
+
+	// Try to free all memory to get estimated actual used memory size
+	cos.FreeMemToOS()
+	time.Sleep(time.Second)
+
+	// Get current memory
+	err := mem.Get()
+	tassert.CheckFatal(t, err)
+	df.maxMemUsage = cos.ToSizeIEC(int64(mem.ActualUsed+300*cos.MiB), 2)
+
+	tlog.Logf("starting dsort with memory, disk, and compression (max mem usage: %s) ... %d/%d, %s\n",
+		df.maxMemUsage, df.shardCnt, df.filesPerShard, df.inputExt)
+	df.start()
+
+	_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+	tassert.CheckFatal(t, err)
+	tlog.Logf("%s: finished\n", df.job())
+
+	allMetrics := df.checkMetrics(false /*expectAbort*/)
+	var (
+		extractedToDisk int64
+		extractedTotal  int64
+	)
+	for _, metrics := range allMetrics {
+		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
+		extractedTotal += metrics.Extraction.ExtractedCnt
+	}
+
+	if extractedToDisk == 0 {
+		t.Error("all extractions by all targets were done exclusively into memory")
+	}
+	if extractedToDisk == extractedTotal {
+		t.Error("all extractions by all targets were done exclusively into disk")
+	}
+
+	df.checkOutputShards(5)
 }
 
 func TestDsortZipLz4(t *testing.T) {
@@ -1199,9 +1204,9 @@ func TestDsortZipLz4(t *testing.T) {
 	}
 }
 
-func TestDsortTarCompression(t *testing.T) {
+func TestDsortMaxMemCompression(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4} {
+	for _, ext := range []string{archive.ExtTgz, archive.ExtTarLz4, archive.ExtZip} {
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{p: true, types: dsorterTypes},
