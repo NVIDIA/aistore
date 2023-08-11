@@ -60,7 +60,7 @@ func (g *fsprungroup) attachMpath(mpath string, force bool) (addedMi *fs.Mountpa
 }
 
 func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
-	// TODO 1: Currently, dSort doesn't handle adding/enabling mountpaths at runtime
+	// TODO 1: Currently, dsort doesn't handle adding/enabling mountpaths at runtime
 	// TODO 2: Integrate with xreg.LimitedCoexistence
 	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, mi))
 
@@ -102,7 +102,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return nil, err
 	}
 
-	// TODO 1: Currently, dSort doesn't handle detaching/disabling mountpaths at runtime
+	// TODO 1: Currently, dsort doesn't handle detaching/disabling mountpaths at runtime
 	// TODO 2: Integrate with xreg.LimitedCoexistence
 	dsort.Managers.AbortAll(fmt.Errorf("%q %s", action, rmi))
 

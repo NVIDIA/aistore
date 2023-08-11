@@ -587,7 +587,7 @@ func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metri
 	return allMetrics
 }
 
-// helper for dispatching i-th dSort job
+// helper for dispatching i-th dsort job
 func dispatchDSortJob(m *ioContext, dsorterType string, i int) {
 	df := &dsortFramework{
 		m:             m,
@@ -1743,8 +1743,8 @@ func TestDsortOnOOM(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			// Calculate number of shards to cause OOM and overestimate it to make sure
-			// that if dSort doesn't prevent it, it will happen. Notice that maxMemUsage
-			// is 80% so dSort should never go above this number in memory usage.
+			// that if dsort doesn't prevent it, it will happen. Notice that maxMemUsage
+			// is 80% so dsort should never go above this number in memory usage.
 			df.shardCnt = int(float64(mem.ActualFree/uint64(df.fileSz)/uint64(df.filesPerShard)) * 1.4)
 
 			m.initAndSaveState(true /*cleanup*/)

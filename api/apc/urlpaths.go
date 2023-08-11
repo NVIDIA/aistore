@@ -57,7 +57,7 @@ const (
 	Finished = "finished"
 	Progress = "progress"
 
-	// dSort, dloader, query
+	// dsort, dloader, query
 	Metrics     = "metrics"
 	Records     = "records"
 	Shards      = "shards"

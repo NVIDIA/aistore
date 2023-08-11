@@ -143,7 +143,7 @@ type testContext struct {
 }
 
 func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
-	// Initialize dSort manager
+	// Initialize dsort manager
 	rs := &parsedReqSpec{
 		InputExtension: archive.ExtTar,
 		Algorithm: &Algorithm{

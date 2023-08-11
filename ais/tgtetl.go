@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 // [METHOD] /v1/etl
@@ -45,6 +46,11 @@ func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/etl
 // start ETL spec/code
 func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
+	// disallow to run when above high wm (let alone OOS)
+	if cs := fs.Cap(); cs.Err != nil {
+		t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
+		return
+	}
 	if _, err := t.parseURL(w, r, 0, false, apc.URLPathETL.L); err != nil {
 		return
 	}

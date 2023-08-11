@@ -208,7 +208,7 @@ func (ds *dsorterGeneral) finalCleanup() error {
 
 func (ds *dsorterGeneral) postRecordDistribution() {
 	// In shard creation we should not expect memory increase (at least
-	// not from dSort). Also it would be really hard to have concurrent
+	// not from dsort). Also it would be really hard to have concurrent
 	// sends and memory cleanup. We must stop before sending records
 	// because it affects content of the records.
 	ds.mw.stopWatchingExcess()

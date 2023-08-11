@@ -233,7 +233,7 @@ For the most recently updated command-line options and examples, please run `ais
         "put upper bound": 0,
         "put %": 50,
         "minimal object size in Bytes": 1024,
-        "maximal object size in Bytes": 1048576,
+        "maximum object size in Bytes": 1048576,
         "worker count": 1,
         "stats interval": "10s",
         "backed by": "sg",

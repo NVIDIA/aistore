@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
@@ -45,7 +46,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 	)
 	pars.TargetOrderSalt = []byte(cos.FormatNowStamp())
 
-	// TODO: handle case when bucket was removed during dSort job - this should
+	// TODO: handle case when bucket was removed during dsort job - this should
 	// stop whole operation. Maybe some listeners as we have on smap change?
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
@@ -68,15 +69,15 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 		smap        = ctx.smapOwner.Get()
 	)
 
-	// Starting dSort has two phases:
+	// Starting dsort has two phases:
 	// 1. Initialization, ensures that all targets successfully initialized all
 	//    structures and are ready to receive requests: start, metrics, abort
-	// 2. Start, where we request targets to start the dSort.
+	// 2. Start, where we request targets to start the dsort.
 	//
-	// This prevents bugs where one targets would just start dSort (other did
+	// This prevents bugs where one targets would just start dsort (other did
 	// not have yet initialized) and starts to communicate with other targets
 	// but because they are not ready with their initialization will not recognize
-	// given dSort job. Also bug where we could send abort (which triggers cleanup)
+	// given dsort job. Also bug where we could send abort (which triggers cleanup)
 	// to not yet initialized target.
 
 	// phase 1
@@ -431,40 +432,45 @@ func TargetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // /v1/sort/init.
-// It is responsible for initializing the dSort manager so it will be ready
-// to start receiving requests.
+// receive parsedReqSpec and initialize dsort manager
 func tinitHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
+	// disallow to run when above high wm (let alone OOS)
+	if cs := fs.Cap(); cs.Err != nil {
+		cmn.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
+		return
+	}
+
 	apiItems, errV := checkRESTItems(w, r, 1, apc.URLPathdSortInit.L)
 	if errV != nil {
 		return
 	}
 	var (
-		rs     *parsedReqSpec
+		pars   *parsedReqSpec
 		b, err = io.ReadAll(r.Body)
 	)
 	if err != nil {
-		cmn.WriteErr(w, r, fmt.Errorf("could not read request body, err: %w", err))
+		cmn.WriteErr(w, r, fmt.Errorf("[dsort]: failed to receive request: %w", err))
 		return
 	}
-	if err = js.Unmarshal(b, &rs); err != nil {
+	if err = js.Unmarshal(b, &pars); err != nil {
 		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "parsedReqSpec", cos.BHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, err := Managers.Add(managerUUID) // returns manager locked
+	m, err := Managers.Add(managerUUID) // NOTE: returns manager locked iff err == nil
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
 	}
-	if err = dsortManager.init(rs); err != nil {
+	if err = m.init(pars); err != nil {
 		cmn.WriteErr(w, r, err)
 	}
-	dsortManager.unlock()
+	m.unlock()
 }
 
 // /v1/sort/start.
@@ -482,14 +488,14 @@ func tstartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, exists := Managers.Get(managerUUID)
+	m, exists := Managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
-	go dsortManager.startDSort()
+	go m.startDSort()
 }
 
 func (m *Manager) startDSort() {
@@ -536,18 +542,18 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	managerUUID := apiItems[0]
-	dsortManager, exists := managers.Get(managerUUID)
+	m, exists := managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
-	if !dsortManager.inProgress() {
+	if !m.inProgress() {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
 		return
 	}
-	if dsortManager.aborted() {
+	if m.aborted() {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
 		return
 	}
@@ -564,13 +570,13 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if !dsortManager.inProgress() || dsortManager.aborted() {
+	if !m.inProgress() || m.aborted() {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", DSortName))
 		return
 	}
 
-	dsortManager.creationPhase.metadata = *tmpMetadata
-	dsortManager.startShardCreation <- struct{}{}
+	m.creationPhase.metadata = *tmpMetadata
+	m.startShardCreation <- struct{}{}
 }
 
 // recordsHandler is the handler /v1/sort/records.
@@ -585,17 +591,17 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	managerUUID := apiItems[0]
-	dsortManager, exists := managers.Get(managerUUID)
+	m, exists := managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
-	if !dsortManager.inProgress() {
+	if !m.inProgress() {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
 		return
 	}
-	if dsortManager.aborted() {
+	if m.aborted() {
 		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
 		return
 	}
@@ -635,14 +641,14 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	dsortManager.addSizes(totalShardSize, totalExtractedSize)
-	dsortManager.recm.EnqueueRecords(records)
-	dsortManager.incrementReceived()
+	m.addSizes(totalShardSize, totalExtractedSize)
+	m.recm.EnqueueRecords(records)
+	m.incrementReceived()
 
-	if dsortManager.config.FastV(4, cos.SmoduleDsort) {
+	if m.config.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof(
 			"[dsort] %s total times received records from another target: %d",
-			dsortManager.ManagerUUID, dsortManager.received.count.Load(),
+			m.ManagerUUID, m.received.count.Load(),
 		)
 	}
 }
@@ -660,19 +666,19 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
+	m, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
-	if dsortManager.Metrics.Archived.Load() {
+	if m.Metrics.Archived.Load() {
 		s := fmt.Sprintf("invalid request: %s job %q has already finished", DSortName, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	dsortManager.abort(fmt.Errorf("%s has been aborted via API (remotely)", DSortName))
+	m.abort(fmt.Errorf("%s has been aborted via API (remotely)", DSortName))
 }
 
 func tremoveHandler(w http.ResponseWriter, r *http.Request) {
@@ -730,15 +736,15 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	dsortManager, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
+	m, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
-	dsortManager.Metrics.update()
-	body := dsortManager.Metrics.Marshal()
+	m.Metrics.update()
+	body := m.Metrics.Marshal()
 	if _, err := w.Write(body); err != nil {
 		nlog.Errorln(err)
 		// When we fail write we cannot call InvalidHandler since it will be
@@ -748,7 +754,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // /v1/sort/finished-ack.
-// A valid PUT to this endpoint acknowledges that daemonID has finished dSort operation.
+// A valid PUT to this endpoint acknowledges that daemonID has finished dsort operation.
 func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
@@ -759,14 +765,14 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID, daemonID := apiItems[0], apiItems[1]
-	dsortManager, exists := Managers.Get(managerUUID)
+	m, exists := Managers.Get(managerUUID)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
-	dsortManager.updateFinishedAck(daemonID)
+	m.updateFinishedAck(daemonID)
 }
 
 //

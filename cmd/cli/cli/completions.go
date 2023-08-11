@@ -595,7 +595,7 @@ func rebalanceCompletions(c *cli.Context) {
 }
 
 //
-// Download & dSort
+// Download & dsort
 //
 
 func downloadIDFinishedCompletions(c *cli.Context) { suggestDownloadID(c, (*dload.Job).JobFinished, 0) }

@@ -65,7 +65,7 @@ func (s *HTTPReq) MinLatency() int64 {
 	return int64(s.minLatency)
 }
 
-// MaxLatency returns the maximal latency in nano second.
+// MaxLatency returns the maximum latency in nano second.
 func (s *HTTPReq) MaxLatency() int64 {
 	if s.cnt == 0 {
 		return 0

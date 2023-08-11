@@ -93,7 +93,7 @@ type (
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
 	Manager struct {
 		// Fields with json tags are the only fields which are persisted
-		// into the disk once the dSort finishes.
+		// into the disk once the dsort finishes.
 		ManagerUUID string   `json:"manager_uuid"`
 		Metrics     *Metrics `json:"metrics"`
 
@@ -176,8 +176,6 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(pars *parsedReqSpec) error {
-	debug.AssertMutexLocked(&m.mu)
-
 	m.ctx = ctx
 	m.smap = m.ctx.smapOwner.Get()
 
@@ -251,8 +249,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	return nil
 }
 
-// TODO: Currently we create streams for each dSort job but maybe we should
-// create streams once and have them available for all the dSort jobs so they
+// TODO: Currently we create streams for each dsort job but maybe we should
+// create streams once and have them available for all the dsort jobs so they
 // would share the resource rather than competing for it.
 func (m *Manager) initStreams() error {
 	config := cmn.GCO.Get()
@@ -333,7 +331,7 @@ func (m *Manager) cleanup() {
 }
 
 // finalCleanup is invoked only when all the target confirmed finishing the
-// dSort operations. To ensure that finalCleanup is not invoked before regular
+// dsort operations. To ensure that finalCleanup is not invoked before regular
 // cleanup is finished, we also ack ourselves.
 //
 // finalCleanup can be invoked only after cleanup and this is ensured by
@@ -738,8 +736,8 @@ func (m *Manager) ListenSmapChanged() {
 	if newSmap.CountActiveTs() != m.smap.CountActiveTs() {
 		// Currently adding new target as well as removing one is not
 		// supported during the run.
-		// TODO: dSort should survive adding new target. For now it is
-		// not possible as rebalance deletes moved object - dSort needs
+		// TODO: dsort should survive adding new target. For now it is
+		// not possible as rebalance deletes moved object - dsort needs
 		// to use `GetObject` method instead of relaying on simple `os.Open`.
 		err := errors.Errorf("number of targets changed during run - aborting")
 		go m.abort(err)

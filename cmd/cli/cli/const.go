@@ -566,7 +566,7 @@ var (
 	}
 	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with Cloud"}
 
-	// dSort
+	// dsort
 	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}
 	dsortLogFlag    = cli.StringFlag{Name: "log", Usage: "filename to log metrics (statistics)"}
 	dsortFcountFlag = cli.IntFlag{Name: "fcount", Value: 5, Usage: "number of files in a shard"}
