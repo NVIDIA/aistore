@@ -244,9 +244,10 @@ func (s *DynSemaphore) Release(cnts ...int) {
 // LimitedWaitGroup //
 //////////////////////
 
-// usage: no more than `limit` goroutines in parallel
-func NewLimitedWaitGroup(limit, have int) WG {
-	if have == 0 || have > limit {
+// usage: no more than `limit` (e.g., sys.NumCPU()) goroutines in parallel
+func NewLimitedWaitGroup(limit, want int) WG {
+	debug.Assert(limit > 0 || want > 0)
+	if want == 0 || want > limit {
 		return &LimitedWaitGroup{wg: &sync.WaitGroup{}, sema: NewDynSemaphore(limit)}
 	}
 	return &sync.WaitGroup{}

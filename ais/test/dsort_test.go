@@ -282,7 +282,7 @@ func (df *dsortFramework) start() {
 func (df *dsortFramework) createInputShards() {
 	const tmpDir = "/tmp"
 	var (
-		wg    = cos.NewLimitedWaitGroup(40, 0)
+		wg    = cos.NewLimitedWaitGroup(sys.NumCPU(), 0)
 		errCh = make(chan error, df.shardCnt)
 
 		mu = &sync.Mutex{} // to collect inputShards (obj names)
@@ -1830,10 +1830,9 @@ func TestDsortMissingShards(t *testing.T) {
 	}
 }
 
-// TODO -- FIXME: fails archive.ExtTarLz4 & archive.ExtTarGz
 func TestDsortDuplications(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
-	for _, ext := range []string{archive.ExtTar, archive.ExtZip} {
+	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtTarGz, archive.ExtZip} { // all supported formats
 		t.Run(ext, func(t *testing.T) {
 			runDSortTest(
 				t, dsortTestSpec{

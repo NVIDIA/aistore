@@ -102,26 +102,24 @@ func NewRecordManager(t cluster.Target, bck cmn.Bck, extractCreator Creator,
 
 func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64, err error) {
 	var (
-		storeType       string
-		contentPath     string
-		fullContentPath string
-		mdSize          int64
-
+		storeType        string
+		contentPath      string
+		fullContentPath  string
+		mdSize           int64
 		ext              = cosExt(args.recordName)
 		recordUniqueName = genRecordUname(args.shardName, args.recordName)
 	)
 
-	// If the content already exists we should skip it but raise an error
-	// (caller must handle it properly).
+	// handle record duplications (see m.react)
 	if recm.Records.Exists(recordUniqueName, ext) {
 		msg := fmt.Sprintf("record %q is duplicated", args.recordName)
 		recm.Records.DeleteDup(recordUniqueName, ext)
 
-		// NOTE: no need to remove anything from `recm.extractionPaths`
-		// or `recm.contents` since it'll be removed anyway during subsequent cleanup.
-		// The assumption is that there will be not too many duplicates and we can live
-		// with a few extra files/memory.
-		return 0, recm.onDuplicatedRecords(msg)
+		err = recm.onDuplicatedRecords(msg)
+		if err != nil {
+			return 0, err // react: abort
+		}
+		// react: ignore or warn
 	}
 
 	debug.Assert(!args.extractMethod.Has(ExtractToWriter) || args.w != nil)

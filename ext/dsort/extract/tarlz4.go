@@ -50,7 +50,11 @@ func (t *tarlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Recor
 	_, err = ar.Range("", c.xtar)
 
 	slab.Free(buf)
-	c.tw.Close()
+	if err == nil {
+		cos.Close(c.tw)
+	} else {
+		_ = c.tw.Close()
+	}
 	cos.Close(wfh)
 
 	return c.extractedSize, c.extractedCount, err

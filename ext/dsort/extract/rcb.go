@@ -79,14 +79,15 @@ func (c *rcbCtx) xtar(_ string, reader cos.ReadCloseSizer, hdr any) (bool /*stop
 	}
 
 	size, err := c.extractor.RecordWithBuffer(args)
-	if err == nil {
-		c.extractedSize += size
-		c.extractedCount++
-		// .tar format pads all block to 512 bytes
-		c.offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize)
-	}
 	reader.Close()
-	return err != nil /*stop*/, err
+	if err != nil {
+		return true /*stop*/, err
+	}
+	debug.Assert(size > 0)
+	c.extractedSize += size
+	c.extractedCount++
+	c.offset += cos.CeilAlignInt64(header.Size, archive.TarBlockSize) // .tar padding
+	return false, nil
 }
 
 // handles .zip

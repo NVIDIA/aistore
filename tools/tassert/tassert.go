@@ -28,7 +28,7 @@ func CheckFatal(tb testing.TB, err error) {
 	mu.Lock()
 	if _, ok := fatalities[tb.Name()]; ok {
 		mu.Unlock()
-		fmt.Printf("--- %s: duplicate CheckFatal\n", tb.Name()) // see #1057
+		fmt.Printf("--- %s: duplicate CheckFatal: %v\n", tb.Name(), err) // see #1057
 		runtime.Goexit()
 	} else {
 		fatalities[tb.Name()] = struct{}{}

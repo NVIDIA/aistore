@@ -218,7 +218,7 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	var (
 		err  = nl.Err()
 		abrt = nl.Aborted()
-		name = "rebalance[" + nl.UUID() + "] "
+		name = "rebalance[" + nl.UUID() + "]"
 	)
 	switch {
 	case err == nil && !abrt:

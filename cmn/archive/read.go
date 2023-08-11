@@ -135,14 +135,17 @@ func (tgr *tgzReader) init(fh io.Reader) (err error) {
 // - when the method returns non-nil reader the responsibility to close the latter goes to the caller (via reader.Close)
 // - otherwise, gzip.Reader is closed upon return
 // currently, non-nil reader is returned iff filename != "" (indicating extraction of a single named file)
-func (tgr *tgzReader) Range(filename string, rcb ReadCB) (reader cos.ReadCloseSizer, err error) {
-	reader, err = tgr.tr.Range(filename, rcb)
-	if err == nil && reader != nil {
+func (tgr *tgzReader) Range(filename string, rcb ReadCB) (cos.ReadCloseSizer, error) {
+	reader, err := tgr.tr.Range(filename, rcb)
+	if err != nil {
+		tgr.gzr.Close()
+		return reader, err
+	}
+	if reader != nil {
 		csc := &cslClose{gzr: tgr.gzr /*to close*/, R: reader /*to read from*/, N: reader.Size()}
 		return csc, err
 	}
-	err = tgr.gzr.Close()
-	return
+	return nil, tgr.gzr.Close()
 }
 
 // zipReader
