@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tarch"
 )
@@ -386,7 +386,7 @@ func newTarReader(size int64, cksumType string) (r Reader, err error) {
 		buff           = bytes.NewBuffer(nil)
 	)
 	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
-		int(singleFileSize), extract.ContentKeyInt, ".cls", true)
+		int(singleFileSize), shard.ContentKeyInt, ".cls", true)
 	if err != nil {
 		return nil, err
 	}

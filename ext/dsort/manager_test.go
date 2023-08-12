@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/trand"
 	. "github.com/onsi/ginkgo"
@@ -149,7 +149,7 @@ func BenchmarkRecordsUnmarshal(b *testing.B) {
 				b.StopTimer()
 				var (
 					r          = bytes.NewReader(network.Bytes())
-					newRecords = extract.NewRecords(bench.recordCnt)
+					newRecords = shard.NewRecords(bench.recordCnt)
 				)
 				b.StartTimer()
 
@@ -245,10 +245,10 @@ func BenchmarkCreationPhaseMetadataUnmarshal(b *testing.B) {
 	}
 }
 
-func generateShards(shardCnt, recordCnt, recordObjCnt int) []*extract.Shard {
-	shards := make([]*extract.Shard, 0, shardCnt)
+func generateShards(shardCnt, recordCnt, recordObjCnt int) []*shard.Shard {
+	shards := make([]*shard.Shard, 0, shardCnt)
 	for i := 0; i < shardCnt; i++ {
-		s := &extract.Shard{
+		s := &shard.Shard{
 			Name:    fmt.Sprintf("shard-%d", i),
 			Size:    rand.Int63(),
 			Records: generateRecords(recordCnt, recordObjCnt),
@@ -258,16 +258,16 @@ func generateShards(shardCnt, recordCnt, recordObjCnt int) []*extract.Shard {
 	return shards
 }
 
-func generateRecords(recordCnt, recordObjCnt int) *extract.Records {
-	records := extract.NewRecords(recordCnt)
+func generateRecords(recordCnt, recordObjCnt int) *shard.Records {
+	records := shard.NewRecords(recordCnt)
 	for i := 0; i < recordCnt; i++ {
-		r := &extract.Record{
+		r := &shard.Record{
 			Key:      trand.String(20),
 			Name:     trand.String(30),
 			DaemonID: trand.String(10),
 		}
 		for j := 0; j < recordObjCnt; j++ {
-			r.Objects = append(r.Objects, &extract.RecordObj{
+			r.Objects = append(r.Objects, &shard.RecordObj{
 				ContentPath:    trand.String(50),
 				ObjectFileType: "abc",
 				StoreType:      "ab",

@@ -21,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -40,7 +40,7 @@ const (
 
 // interface guard
 var (
-	_ extract.Creator    = (*extractCreatorMock)(nil)
+	_ shard.Creator      = (*extractCreatorMock)(nil)
 	_ meta.SmapListeners = (*testSmapListeners)(nil)
 )
 
@@ -111,14 +111,14 @@ func (tm *testSmap) Listeners() meta.SmapListeners {
 //
 
 type extractCreatorMock struct {
-	createShard func(s *extract.Shard, w io.Writer, loader extract.ContentLoader) // func to hijack CreateShard function
+	createShard func(s *shard.Shard, w io.Writer, loader shard.ContentLoader) // func to hijack CreateShard function
 }
 
-func (*extractCreatorMock) Extract(*cluster.LOM, cos.ReadReaderAt, extract.RecordExtractor, bool) (int64, int, error) {
+func (*extractCreatorMock) Extract(*cluster.LOM, cos.ReadReaderAt, shard.RecordExtractor, bool) (int64, int, error) {
 	return 0, 0, nil
 }
 
-func (ec *extractCreatorMock) Create(s *extract.Shard, w io.Writer, loader extract.ContentLoader) (int64, error) {
+func (ec *extractCreatorMock) Create(s *shard.Shard, w io.Writer, loader shard.ContentLoader) (int64, error) {
 	ec.createShard(s, w, loader)
 	return 0, nil
 }
@@ -147,7 +147,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetNodeMock {
 	rs := &parsedReqSpec{
 		InputExtension: archive.ExtTar,
 		Algorithm: &Algorithm{
-			ContentKeyType: extract.ContentKeyString,
+			ContentKeyType: shard.ContentKeyString,
 		},
 		MaxMemUsage: cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},
 		DSorterType: DSorterGeneralType,
@@ -381,10 +381,10 @@ var _ = Describe("Distributed Sort", func() {
 					tctx.teardown()
 				})
 
-				createRecords := func(keys ...string) *extract.Records {
-					records := extract.NewRecords(len(keys))
+				createRecords := func(keys ...string) *shard.Records {
+					records := shard.NewRecords(len(keys))
 					for _, key := range keys {
-						records.Insert(&extract.Record{
+						records.Insert(&shard.Record{
 							Key:  key,
 							Name: key,
 						})
@@ -393,7 +393,7 @@ var _ = Describe("Distributed Sort", func() {
 				}
 
 				It("should report that final target has all the sorted records", func() {
-					srecordsCh := make(chan *extract.Records, 1)
+					srecordsCh := make(chan *shard.Records, 1)
 					for _, target := range tctx.targets {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
@@ -447,7 +447,7 @@ var _ = Describe("Distributed Sort", func() {
 				})
 
 				It("should report that final target has all the records sorted in decreasing order", func() {
-					srecordsCh := make(chan *extract.Records, 1)
+					srecordsCh := make(chan *shard.Records, 1)
 					for _, target := range tctx.targets {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
@@ -455,7 +455,7 @@ var _ = Describe("Distributed Sort", func() {
 						rs := &parsedReqSpec{
 							Algorithm: &Algorithm{
 								Decreasing:     true,
-								ContentKeyType: extract.ContentKeyString,
+								ContentKeyType: shard.ContentKeyString,
 							},
 							InputExtension: archive.ExtTar,
 							MaxMemUsage:    cos.ParsedQuantity{Type: cos.QuantityPercent, Value: 0},

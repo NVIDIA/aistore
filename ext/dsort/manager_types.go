@@ -4,7 +4,7 @@
  */
 package dsort
 
-import "github.com/NVIDIA/aistore/ext/dsort/extract"
+import "github.com/NVIDIA/aistore/ext/dsort/shard"
 
 //
 // NOTE: changes in this source MAY require re-running `msgp` code generation - see docs/msgp.md for details.
@@ -12,12 +12,12 @@ import "github.com/NVIDIA/aistore/ext/dsort/extract"
 
 type (
 	CreationPhaseMetadata struct {
-		Shards    []*extract.Shard          `msg:"shards"`
-		SendOrder map[string]*extract.Shard `msg:"send_order"`
+		Shards    []*shard.Shard          `msg:"shards"`
+		SendOrder map[string]*shard.Shard `msg:"send_order"`
 	}
 
 	RemoteResponse struct {
-		Record    *extract.Record    `msg:"r"`
-		RecordObj *extract.RecordObj `msg:"o"`
+		Record    *shard.Record    `msg:"r"`
+		RecordObj *shard.RecordObj `msg:"o"`
 	}
 )

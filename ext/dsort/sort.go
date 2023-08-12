@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 )
 
 type (
 	alphaByKey struct {
 		err        error
-		records    *extract.Records
+		records    *shard.Records
 		keyType    string
 		decreasing bool
 	}
@@ -46,7 +46,7 @@ func (s *alphaByKey) Less(i, j int) bool {
 }
 
 // sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
-func sortRecords(r *extract.Records, alg *Algorithm) (err error) {
+func sortRecords(r *shard.Records, alg *Algorithm) (err error) {
 	if alg.Kind == None {
 		return nil
 	}

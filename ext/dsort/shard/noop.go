@@ -1,9 +1,9 @@
-// Package extract provides Extract(shard), Create(shard), and associated methods
+// Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package extract
+package shard
 
 import (
 	"io"
@@ -24,7 +24,8 @@ func NopRW(internal Creator) Creator {
 }
 
 // Extract reads the tarball f and extracts its metadata.
-func (t *nopRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
+func (t *nopRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64,
+	extractedCount int, err error) {
 	return t.internal.Extract(lom, r, extractor, toDisk)
 }
 

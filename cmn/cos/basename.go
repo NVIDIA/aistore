@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// See also: cmn/archive/mime.go & ext/dsort/extract/record.go
+// See also: cmn/archive/mime.go & ext/dsort/shard/record.go
 
 // e.g.: "/aaa/bbb/ccc.tar.gz" => ".tar.gz", while "/aaa/bb.b/ccctargz"  => ""
 func Ext(path string) (ext string) {

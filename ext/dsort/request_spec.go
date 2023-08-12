@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 )
 
 type parsedInputTemplate struct {
@@ -258,11 +258,11 @@ func parseAlgorithm(alg Algorithm) (*Algorithm, error) {
 		if alg.Ext == "" || alg.Ext[0] != '.' {
 			return nil, fmt.Errorf("%w %q", errAlgExt, alg.Ext)
 		}
-		if err := extract.ValidateContentKeyT(alg.ContentKeyType); err != nil {
+		if err := shard.ValidateContentKeyT(alg.ContentKeyType); err != nil {
 			return nil, err
 		}
 	} else {
-		alg.ContentKeyType = extract.ContentKeyString
+		alg.ContentKeyType = shard.ContentKeyString
 	}
 
 	return &alg, nil

@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -112,15 +112,17 @@ func (mw *memoryWatcher) watchReserved() {
 	}
 }
 
-// watchExcess watches memory in order to prevent exceeding provided by user
-// limit. If the limit is exceeded watcher tries to spill memory resources
-// to the disk.
-//
-// NOTE: We also watch the memory in `watchReserved` but this may be
+// Runs in a goroutine, watches allocated memory, and frees SGLs if need be
+// ------------------------------------------------------
+// We also watch the memory in `watchReserved` but this may be
 // insufficient because there is more factors than just `SGL`s: `Records`,
 // `Shards`, `RecordContents`, `ExtractionPaths` etc. All these structures
 // require memory, sometimes it can be counted in GBs. That is why we also need
 // excess watcher so that it prevents memory overuse.
+// --------------------------------------------------------
+// Because Go's runtime does not immediately return freed memory
+// to the system it'd be incorrect to treat `maxMemoryToUse - curMem.ActualUsed`
+// as excessively allocated
 func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 	defer mw.excess.wg.Done()
 
@@ -136,14 +138,6 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				continue
 			}
 
-			// We should look at difference of memory that have accumulated
-			// during the interval. It would be incorrect to calculate
-			// difference between `maxMemoryToUse - curMem.ActualUsed` and
-			// treat as memory excess because Go's runtime does not return the
-			// memory immediately to the system and for most of the time the
-			// difference would be always `> 0` and never subside to anything
-			// lower so we would free SGLs without seeing any improvement in
-			// memory usage (we could even free all SGLs, which is absurd!)
 			memExcess := int64(curMem.ActualUsed - lastMemoryUsage)
 			lastMemoryUsage = curMem.ActualUsed
 
@@ -151,10 +145,9 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				continue
 			}
 
-			// if memory is exceeded "spill" SGLs to disk
-			storeType := extract.DiskStoreType
+			storeType := shard.DiskStoreType
 			if mw.m.ec.SupportsOffset() {
-				storeType = extract.OffsetStoreType
+				storeType = shard.OffsetStoreType
 			}
 			mw.m.recm.RecordContents().Range(func(key, value any) bool {
 				n := mw.m.recm.FreeMem(key.(string), storeType, value, buf)

@@ -30,7 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
@@ -49,7 +49,7 @@ type (
 		recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error // aka transport.RecvObj
 	}
 	dsorter interface {
-		extract.ContentLoader
+		shard.ContentLoader
 		receiver
 
 		name() string
@@ -232,7 +232,7 @@ outer:
 	return group.Wait()
 }
 
-func (m *Manager) createShard(s *extract.Shard, lom *cluster.LOM) (err error) {
+func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	var (
 		metrics   = m.Metrics.Creation
 		shardName = s.Name
@@ -538,14 +538,14 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 	return true, err
 }
 
-func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, error) {
+func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*shard.Shard, error) {
 	var (
 		start           int
 		curShardSize    int64
 		n               = m.recm.Records.Len()
 		pt              = m.pars.Pot.Template
 		shardCount      = pt.Count()
-		shards          = make([]*extract.Shard, 0)
+		shards          = make([]*shard.Shard, 0)
 		numLocalRecords = make(map[string]int, m.smap.CountActiveTs())
 	)
 	pt.InitIter()
@@ -567,7 +567,7 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 			// no more shard names are available
 			return nil, errors.Errorf("number of shards to be created exceeds expected number of shards (%d)", shardCount)
 		}
-		shard := &extract.Shard{
+		shard := &shard.Shard{
 			Name: name,
 		}
 		ext, err := archive.Mime("", name)
@@ -591,11 +591,11 @@ func (m *Manager) generateShardsWithTemplate(maxSize int64) ([]*extract.Shard, e
 	return shards, nil
 }
 
-func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shard, error) {
+func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard, error) {
 	var (
-		shards         = make([]*extract.Shard, 0)
+		shards         = make([]*shard.Shard, 0)
 		externalKeyMap = make(map[string]string)
-		shardsBuilder  = make(map[string][]*extract.Shard)
+		shardsBuilder  = make(map[string][]*shard.Shard)
 	)
 	if maxSize <= 0 {
 		return nil, fmt.Errorf(fmtErrInvalidMaxSize, maxSize)
@@ -685,10 +685,10 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 		recordSize := r.TotalSize() + m.ec.MetadataSize()*int64(len(r.Objects))
 		shardCount := len(shards)
 		if shardCount == 0 || shards[shardCount-1].Size > maxSize {
-			shard := &extract.Shard{
+			shard := &shard.Shard{
 				Name:    fmt.Sprintf(shardNameFmt, shardCount),
 				Size:    recordSize,
-				Records: extract.NewRecords(1),
+				Records: shard.NewRecords(1),
 			}
 			shard.Records.Insert(r)
 			shardsBuilder[shardNameFmt] = append(shardsBuilder[shardNameFmt], shard)
@@ -721,10 +721,10 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*extract.Shar
 //     (i.e. the target with the least number of pending shard creation requests).
 func (m *Manager) phase3(maxSize int64) error {
 	var (
-		shards         []*extract.Shard
+		shards         []*shard.Shard
 		err            error
-		shardsToTarget = make(map[*meta.Snode][]*extract.Shard, m.smap.CountActiveTs())
-		sendOrder      = make(map[string]map[string]*extract.Shard, m.smap.CountActiveTs())
+		shardsToTarget = make(map[*meta.Snode][]*shard.Shard, m.smap.CountActiveTs())
+		sendOrder      = make(map[string]map[string]*shard.Shard, m.smap.CountActiveTs())
 		errCh          = make(chan error, m.smap.CountActiveTs())
 	)
 	for _, d := range m.smap.Tmap {
@@ -733,7 +733,7 @@ func (m *Manager) phase3(maxSize int64) error {
 		}
 		shardsToTarget[d] = nil
 		if m.dsorter.name() == DSorterMemType {
-			sendOrder[d.ID()] = make(map[string]*extract.Shard, 100)
+			sendOrder[d.ID()] = make(map[string]*shard.Shard, 100)
 		}
 	}
 	if m.pars.OrderFileURL != "" {
@@ -757,17 +757,17 @@ func (m *Manager) phase3(maxSize int64) error {
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 
 		if m.dsorter.name() == DSorterMemType {
-			singleSendOrder := make(map[string]*extract.Shard)
+			singleSendOrder := make(map[string]*shard.Shard)
 			for _, record := range s.Records.All() {
-				shard, ok := singleSendOrder[record.DaemonID]
+				shrd, ok := singleSendOrder[record.DaemonID]
 				if !ok {
-					shard = &extract.Shard{
+					shrd = &shard.Shard{
 						Name:    s.Name,
-						Records: extract.NewRecords(100),
+						Records: shard.NewRecords(100),
 					}
-					singleSendOrder[record.DaemonID] = shard
+					singleSendOrder[record.DaemonID] = shrd
 				}
-				shard.Records.Insert(record)
+				shrd.Records.Insert(record)
 			}
 
 			for tid, shard := range singleSendOrder {
@@ -794,7 +794,7 @@ func (m *Manager) phase3(maxSize int64) error {
 	return nil
 }
 
-func (m *Manager) _dist(si *meta.Snode, s []*extract.Shard, order map[string]*extract.Shard, errCh chan error, wg cos.WG) {
+func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shard.Shard, errCh chan error, wg cos.WG) {
 	var (
 		group = &errgroup.Group{}
 		r, w  = io.Pipe()
@@ -906,7 +906,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsErrObjNought(err) {
-			msg := fmt.Sprintf("extract.do: %q does not exist", lom.Cname())
+			msg := fmt.Sprintf("shard.do: %q does not exist", lom.Cname())
 			return m.react(m.pars.MissingShards, msg)
 		}
 		return err

@@ -25,7 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
@@ -400,21 +400,21 @@ outer:
 					}
 
 					switch df.alg.ContentKeyType {
-					case extract.ContentKeyInt:
+					case shard.ContentKeyInt:
 						intValue, err := strconv.ParseInt(string(file.Content), 10, 64)
 						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && intValue < lastValue.(int64) {
 							df.m.t.Fatalf("%s: int values are not in correct order (shard: %s, lastIntValue: %d, curIntValue: %d)", df.job(), shardName, lastValue.(int64), intValue)
 						}
 						lastValue = intValue
-					case extract.ContentKeyFloat:
+					case shard.ContentKeyFloat:
 						floatValue, err := strconv.ParseFloat(string(file.Content), 64)
 						tassert.CheckFatal(df.m.t, err)
 						if lastValue != nil && floatValue < lastValue.(float64) {
 							df.m.t.Fatalf("%s: string values are not in correct order (shard: %s, lastStringValue: %f, curStringValue: %f)", df.job(), shardName, lastValue.(float64), floatValue)
 						}
 						lastValue = floatValue
-					case extract.ContentKeyString:
+					case shard.ContentKeyString:
 						stringValue := string(file.Content)
 						if lastValue != nil && stringValue < lastValue.(string) {
 							df.m.t.Fatalf("%s: string values are not in correct order (shard: %s, lastStringValue: %s, curStringValue: %s)", df.job(), shardName, lastValue.(string), stringValue)
@@ -491,11 +491,12 @@ func canonicalName(recordName string) string {
 }
 
 func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsCnt int) {
-	tlog.Logf("%s: checking metrics and reaction results\n", df.job())
+	tlog.Logf("%s: checking metrics and \"reaction\"\n", df.job())
 	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
 	if len(allMetrics) != df.m.originalTargetCount {
-		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d", df.job(), len(allMetrics), df.m.originalTargetCount)
+		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d", df.job(),
+			len(allMetrics), df.m.originalTargetCount)
 	}
 
 	switch reaction {
@@ -570,7 +571,7 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 }
 
 func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metrics {
-	tlog.Logf("%s: checking metrics", df.job())
+	tlog.Logf("%s: checking metrics\n", df.job())
 	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
 	if len(allMetrics) != df.m.originalTargetCount {
@@ -1259,13 +1260,13 @@ func TestDsortContent(t *testing.T) {
 				contentKeyType string
 				missingKeys    bool
 			}{
-				{".loss", extract.ContentKeyInt, false},
-				{".cls", extract.ContentKeyFloat, false},
-				{".smth", extract.ContentKeyString, false},
+				{".loss", shard.ContentKeyInt, false},
+				{".cls", shard.ContentKeyFloat, false},
+				{".smth", shard.ContentKeyString, false},
 
-				{".loss", extract.ContentKeyInt, true},
-				{".cls", extract.ContentKeyFloat, true},
-				{".smth", extract.ContentKeyString, true},
+				{".loss", shard.ContentKeyInt, true},
+				{".cls", shard.ContentKeyFloat, true},
+				{".smth", shard.ContentKeyString, true},
 			}
 
 			for _, entry := range cases {
@@ -1309,7 +1310,7 @@ func TestDsortContent(t *testing.T) {
 						t.Errorf("%s was not aborted", dsort.DSortName)
 					}
 
-					tlog.Logln("checking metrics...")
+					tlog.Logf("%s: checking metrics\n", df.job())
 					allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 					tassert.CheckFatal(t, err)
 					if len(allMetrics) != m.originalTargetCount {
@@ -1459,7 +1460,7 @@ func TestDsortKillTargetDuringPhases(t *testing.T) {
 				t.Errorf("%s was not aborted", dsort.DSortName)
 			}
 
-			tlog.Logln("checking metrics...")
+			tlog.Logf("%s: checking metrics\n", df.job())
 			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 			tassert.CheckError(t, err)
 			if len(allMetrics) == m.originalTargetCount {
@@ -1626,11 +1627,12 @@ func TestDsortAddTarget(t *testing.T) {
 				t.Errorf("%s was not aborted", dsort.DSortName)
 			}
 
-			tlog.Logln("checking metrics...")
+			tlog.Logf("%s: checking metrics\n", df.job())
 			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			if len(allMetrics) != m.originalTargetCount-1 {
-				t.Errorf("number of metrics %d is different than number of targets when %s started %d", len(allMetrics), dsort.DSortName, m.originalTargetCount-1)
+				t.Errorf("number of metrics %d is different than number of targets when %s started %d",
+					len(allMetrics), dsort.DSortName, m.originalTargetCount-1)
 			}
 		},
 	)

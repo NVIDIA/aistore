@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 )
 
@@ -108,11 +108,11 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 			var buf []byte
 			// random content
 			switch customFileType {
-			case extract.ContentKeyInt:
+			case shard.ContentKeyInt:
 				buf = []byte(strconv.Itoa(rand.Int()))
-			case extract.ContentKeyString:
+			case shard.ContentKeyString:
 				buf = []byte(fmt.Sprintf("%d-%d", rand.Int(), rand.Int()))
-			case extract.ContentKeyFloat:
+			case shard.ContentKeyFloat:
 				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
 			default:
 				return fmt.Errorf("invalid custom file type: %q", customFileType)

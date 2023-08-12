@@ -39,7 +39,7 @@ type Algorithm struct {
 	Ext string `json:"extension"`
 
 	// ditto: Content only
-	// `extract.contentKeyTypes` enum values: {"int", "string", "float" }
+	// `shard.contentKeyTypes` enum values: {"int", "string", "float" }
 	ContentKeyType string `json:"content_key_type"`
 }
 

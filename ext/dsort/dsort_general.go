@@ -18,7 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -71,8 +71,8 @@ type (
 	}
 
 	remoteRequest struct {
-		Record    *extract.Record    `json:"r"`
-		RecordObj *extract.RecordObj `json:"o"`
+		Record    *shard.Record    `json:"r"`
+		RecordObj *shard.RecordObj `json:"o"`
 	}
 )
 
@@ -260,7 +260,7 @@ func (ds *dsorterGeneral) postShardCreation(mi *fs.Mountpath) {
 }
 
 // loads content from disk or memory, local or remote
-func (ds *dsorterGeneral) Load(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	if ds.m.aborted() {
 		return 0, newDSortAbortedError(ds.m.ManagerUUID)
 	}
@@ -270,19 +270,19 @@ func (ds *dsorterGeneral) Load(w io.Writer, rec *extract.Record, obj *extract.Re
 	return ds.loadLocal(w, obj)
 }
 
-func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (written int64, err error) {
+func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written int64, err error) {
 	var (
 		slab      *memsys.Slab
 		buf       []byte
 		storeType = obj.StoreType
 	)
 
-	if storeType != extract.SGLStoreType { // SGL does not need buffer as it is buffer itself
+	if storeType != shard.SGLStoreType { // SGL does not need buffer as it is buffer itself
 		buf, slab = mm.AllocSize(obj.Size)
 	}
 
 	defer func() {
-		if storeType != extract.SGLStoreType {
+		if storeType != shard.SGLStoreType {
 			slab.Free(buf)
 		}
 		ds.m.decrementRef(1)
@@ -298,7 +298,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 
 	var n int64
 	switch storeType {
-	case extract.OffsetStoreType:
+	case shard.OffsetStoreType:
 		f, err := os.Open(fullContentPath) // TODO: it should be open always
 		if err != nil {
 			return written, errors.WithMessage(err, "(offset) open local content failed")
@@ -311,7 +311,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 		if n, err = io.CopyBuffer(w, io.LimitReader(f, obj.MetadataSize+obj.Size), buf); err != nil {
 			return written, errors.WithMessage(err, "(offset) copy local content failed")
 		}
-	case extract.SGLStoreType:
+	case shard.SGLStoreType:
 		debug.Assert(buf == nil)
 		v, ok := ds.m.recm.RecordContents().Load(fullContentPath)
 		debug.Assert(ok, fullContentPath)
@@ -323,7 +323,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 		if n, err = io.Copy(w, sgl); err != nil {
 			return written, errors.WithMessage(err, "(sgl) copy local content failed")
 		}
-	case extract.DiskStoreType:
+	case shard.DiskStoreType:
 		f, err := os.Open(fullContentPath)
 		if err != nil {
 			return written, errors.WithMessage(err, "(disk) open local content failed")
@@ -341,7 +341,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *extract.RecordObj) (writte
 	return
 }
 
-func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	var (
 		cbErr      error
 		beforeRecv int64
@@ -511,7 +511,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	}
 
 	switch req.RecordObj.StoreType {
-	case extract.OffsetStoreType:
+	case shard.OffsetStoreType:
 		o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size
 		offset := req.RecordObj.Offset - req.RecordObj.MetadataSize
 		r, err := cos.NewFileSectionHandle(fullContentPath, offset, o.Hdr.ObjAttrs.Size)
@@ -520,14 +520,14 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 			return err
 		}
 		ds.streams.response.Send(o, r, fromNode)
-	case extract.SGLStoreType:
+	case shard.SGLStoreType:
 		v, ok := ds.m.recm.RecordContents().Load(fullContentPath)
 		debug.Assert(ok, fullContentPath)
 		ds.m.recm.RecordContents().Delete(fullContentPath)
 		sgl := v.(*memsys.SGL)
 		o.Hdr.ObjAttrs.Size = sgl.Size()
 		ds.streams.response.Send(o, sgl, fromNode)
-	case extract.DiskStoreType:
+	case shard.DiskStoreType:
 		f, err := cos.NewFileHandle(fullContentPath)
 		if err != nil {
 			ds.errHandler(err, fromNode, o)
@@ -635,7 +635,7 @@ func (ds *dsorterGeneral) onAbort() {
 
 type dsgCreateShard struct {
 	ds    *dsorterGeneral
-	shard *extract.Shard
+	shard *shard.Shard
 }
 
 func (cs *dsgCreateShard) do() (err error) {

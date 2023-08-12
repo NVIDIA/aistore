@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
@@ -103,8 +103,8 @@ type (
 		ctx  dsortContext
 		smap *meta.Smap
 
-		recm *extract.RecordManager
-		ec   extract.Creator
+		recm *shard.RecordManager
+		ec   shard.Creator
 
 		startShardCreation chan struct{}
 		pars               *parsedReqSpec
@@ -450,14 +450,14 @@ func (m *Manager) onDupRecs(msg string) error { return m.react(m.pars.Duplicated
 
 // setRW sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setRW() (err error) {
-	var ke extract.KeyExtractor
+	var ke shard.KeyExtractor
 	switch m.pars.Algorithm.Kind {
 	case Content:
-		ke, err = extract.NewContentKeyExtractor(m.pars.Algorithm.ContentKeyType, m.pars.Algorithm.Ext)
+		ke, err = shard.NewContentKeyExtractor(m.pars.Algorithm.ContentKeyType, m.pars.Algorithm.Ext)
 	case MD5:
-		ke, err = extract.NewMD5KeyExtractor()
+		ke, err = shard.NewMD5KeyExtractor()
 	default:
-		ke, err = extract.NewNameKeyExtractor()
+		ke, err = shard.NewNameKeyExtractor()
 	}
 	if err != nil {
 		return errors.WithStack(err)
@@ -468,26 +468,26 @@ func (m *Manager) setRW() (err error) {
 		debug.Assert(m.pars.InputExtension == "", m.pars.InputExtension)
 		// NOTE: [feature] allow non-specified extension; assign default extract-creator;
 		// handle all shards we encounter - all supported formats
-		m.ec = extract.NewTarRW(m.ctx.t)
+		m.ec = shard.NewTarRW(m.ctx.t)
 	}
 	if m.pars.DryRun {
 		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
-		m.ec = extract.NopRW(m.ec)
+		m.ec = shard.NopRW(m.ec)
 	}
-	m.recm = extract.NewRecordManager(m.ctx.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
+	m.recm = shard.NewRecordManager(m.ctx.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
 	return nil
 }
 
-func newExtractCreator(t cluster.Target, ext string) (ec extract.Creator) {
+func newExtractCreator(t cluster.Target, ext string) (ec shard.Creator) {
 	switch ext {
 	case archive.ExtTar:
-		ec = extract.NewTarRW(t)
+		ec = shard.NewTarRW(t)
 	case archive.ExtTarGz, archive.ExtTgz:
-		ec = extract.NewTargzRW(t, ext)
+		ec = shard.NewTargzRW(t, ext)
 	case archive.ExtZip:
-		ec = extract.NewZipRW(t)
+		ec = shard.NewZipRW(t)
 	case archive.ExtTarLz4:
-		ec = extract.NewTarlz4RW(t)
+		ec = shard.NewTarlz4RW(t)
 	}
 	return
 }

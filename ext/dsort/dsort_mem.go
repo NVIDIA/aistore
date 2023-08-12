@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/ext/dsort/extract"
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
@@ -302,7 +302,7 @@ func (ds *dsorterMem) postShardCreation(mi *fs.Mountpath) {
 	ds.creationPhase.adjuster.write.releaseSema(mi)
 }
 
-func (ds *dsorterMem) Load(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
+func (ds *dsorterMem) Load(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	if ds.m.aborted() {
 		return 0, newDSortAbortedError(ds.m.ManagerUUID)
 	}
@@ -442,7 +442,7 @@ outer:
 	errCh <- group.Wait()
 }
 
-func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj, toNode *meta.Snode) (err error) {
+func (ds *dsorterMem) sendRecordObj(rec *shard.Record, obj *shard.RecordObj, toNode *meta.Snode) (err error) {
 	var (
 		local = toNode.ID() == ds.m.ctx.node.ID()
 		req   = RemoteResponse{
@@ -503,14 +503,14 @@ func (ds *dsorterMem) sendRecordObj(rec *extract.Record, obj *extract.RecordObj,
 	}
 
 	switch obj.StoreType {
-	case extract.OffsetStoreType:
+	case shard.OffsetStoreType:
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
 		r, err := cos.NewFileSectionHandle(fullContentPath, obj.Offset-obj.MetadataSize, hdr.ObjAttrs.Size)
 		if err != nil {
 			return err
 		}
 		return send(r)
-	case extract.DiskStoreType:
+	case shard.DiskStoreType:
 		f, err := cos.NewFileHandle(fullContentPath)
 		if err != nil {
 			return err
@@ -612,7 +612,7 @@ func (ds *dsorterMem) onAbort()                    { _ = ds.cleanupStreams() }
 
 type dsmCreateShard struct {
 	ds    *dsorterMem
-	shard *extract.Shard
+	shard *shard.Shard
 	sa    *inmemShardAllocator
 }
 
@@ -631,7 +631,7 @@ func (cs *dsmCreateShard) do() (err error) {
 
 type dsmExtractShard struct {
 	ds    *dsorterMem
-	shard *extract.Shard
+	shard *shard.Shard
 }
 
 func (es *dsmExtractShard) do() error {

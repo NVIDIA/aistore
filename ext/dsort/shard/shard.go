@@ -1,9 +1,9 @@
-// Package extract provides Extract(shard), Create(shard), and associated methods
+// Package shard provides Extract(shard), Create(shard), and associated methods
 // across all suppported archival formats (see cmn/archive/mime.go)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package extract
+package shard
 
 import "encoding/json"
 
