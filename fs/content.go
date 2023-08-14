@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
@@ -85,7 +86,15 @@ func (f *contentSpecMgr) Resolver(contentType string) ContentResolver {
 
 // Reg registers new content type with a given content resolver.
 // NOTE: all content type registrations must happen at startup.
-func (f *contentSpecMgr) Reg(contentType string, spec ContentResolver) error {
+func (f *contentSpecMgr) Reg(contentType string, spec ContentResolver, unitTest ...bool) {
+	err := f._reg(contentType, spec)
+	if err != nil && len(unitTest) == 0 {
+		debug.Assert(false)
+		cos.ExitLog(err)
+	}
+}
+
+func (f *contentSpecMgr) _reg(contentType string, spec ContentResolver) error {
 	if strings.ContainsRune(contentType, filepath.Separator) {
 		return fmt.Errorf("%s content type cannot contain %q", contentType, filepath.Separator)
 	}

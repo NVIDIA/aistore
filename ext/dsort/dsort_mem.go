@@ -138,7 +138,7 @@ func (c *rwConnector) connectReader(key string, r io.Reader, size int64) (err er
 	c.mu.Unlock()
 
 	if !all {
-		rw.sgl = mm.NewSGL(size)
+		rw.sgl = g.mm.NewSGL(size)
 		_, err = io.Copy(rw.sgl, r)
 		rw.wgr.Done()
 		return
@@ -157,9 +157,10 @@ func (c *rwConnector) connectWriter(key string, w io.Writer) (int64, error) {
 
 	timed, stopped := rw.wgr.WaitTimeoutWithStop(c.m.callTimeout, c.m.listenAborted()) // wait for reader
 	if timed {
-		return 0, errors.Errorf("wait for remote content has timed out (%q was waiting)", c.m.ctx.node.ID())
-	} else if stopped {
-		return 0, errors.Errorf("wait for remote content was aborted")
+		return 0, errors.Errorf("%s: timed out waiting for remote content", g.t)
+	}
+	if stopped {
+		return 0, errors.Errorf("%s: aborted waiting for remote content", g.t)
 	}
 
 	if all { // reader connected and left SGL with the content
@@ -228,15 +229,15 @@ func (ds *dsorterMem) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        mm,
+			MMSA:        g.mm,
 		},
 	}
 	if err := transport.HandleObjStream(trname, ds.recvResp); err != nil {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.builder = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.records = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.builder = bundle.New(g.t.Sowner(), g.t.Snode(), client, reqSbArgs)
+	ds.streams.records = bundle.New(g.t.Sowner(), g.t.Snode(), client, respSbArgs)
 	return nil
 }
 
@@ -287,8 +288,8 @@ func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error
 		shardName: shardName,
 	}
 	o := transport.AllocSend()
-	o.Hdr.Opaque = bsi.NewPack(ds.m.ctx.t.ByteMM())
-	if ds.m.smap.HasActiveTs(ds.m.ctx.t.SID() /*except*/) {
+	o.Hdr.Opaque = bsi.NewPack(g.t.ByteMM())
+	if ds.m.smap.HasActiveTs(g.t.SID() /*except*/) {
 		if err := ds.streams.builder.Send(o, nil); err != nil {
 			return err
 		}
@@ -444,7 +445,7 @@ outer:
 
 func (ds *dsorterMem) sendRecordObj(rec *shard.Record, obj *shard.RecordObj, toNode *meta.Snode) (err error) {
 	var (
-		local = toNode.ID() == ds.m.ctx.node.ID()
+		local = toNode.ID() == g.t.SID()
 		req   = RemoteResponse{
 			Record:    rec,
 			RecordObj: obj,
@@ -467,7 +468,7 @@ func (ds *dsorterMem) sendRecordObj(rec *shard.Record, obj *shard.RecordObj, toN
 		beforeSend = mono.NanoTime()
 	}
 
-	debug.Assert(ds.m.ctx.node.ID() == rec.DaemonID, ds.m.ctx.node.ID()+" vs "+rec.DaemonID)
+	debug.Assert(g.t.SID() == rec.DaemonID, g.t.SID()+" vs "+rec.DaemonID)
 
 	if local {
 		defer ds.m.decrementRef(1)
@@ -639,10 +640,10 @@ func (es *dsmExtractShard) do() error {
 	defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
 	bck := meta.NewBck(ds.m.pars.OutputBck.Name, ds.m.pars.OutputBck.Provider, cmn.NsGlobal)
-	if err := bck.Init(ds.m.ctx.bmdOwner); err != nil {
+	if err := bck.Init(g.t.Bowner()); err != nil {
 		return err
 	}
-	toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), ds.m.ctx.smapOwner.Get())
+	toNode, err := cluster.HrwTarget(bck.MakeUname(shard.Name), g.t.Sowner().Get())
 	if err != nil {
 		return err
 	}

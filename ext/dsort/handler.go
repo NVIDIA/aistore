@@ -11,9 +11,9 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
-	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -37,6 +37,8 @@ type response struct {
 //////////////////
 ///// PROXY //////
 //////////////////
+
+var psi cluster.Node
 
 // POST /v1/sort
 func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
@@ -66,7 +68,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 
 	var (
 		managerUUID = PrefixJobID + cos.GenUUID() // compare w/ p.httpdlpost
-		smap        = ctx.smapOwner.Get()
+		smap        = psi.Sowner().Get()
 	)
 
 	// Starting dsort has two phases:
@@ -147,7 +149,7 @@ func plistHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 			return
 		}
 	}
-	responses := bcast(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
+	responses := bcast(http.MethodGet, path, query, nil, psi.Sowner().Get())
 
 	resultList := make([]*JobInfo, 0)
 	for _, r := range responses {
@@ -185,7 +187,7 @@ func plistHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 // GET /v1/sort?id=...
 func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
-		smap        = ctx.smapOwner.Get()
+		smap        = psi.Sowner().Get()
 		allMetrics  = make(map[string]*Metrics, smap.CountActiveTs())
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
@@ -238,7 +240,7 @@ func PabortHandler(w http.ResponseWriter, r *http.Request) {
 		query       = r.URL.Query()
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortAbort.Join(managerUUID)
-		responses   = bcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get())
+		responses   = bcast(http.MethodDelete, path, nil, nil, psi.Sowner().Get())
 	)
 	allNotFound := true
 	for _, resp := range responses {
@@ -270,7 +272,7 @@ func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		smap        = ctx.smapOwner.Get()
+		smap        = psi.Sowner().Get()
 		query       = r.URL.Query()
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
@@ -341,7 +343,7 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 
 	query := make(url.Values)
 	query.Add(apc.QparamWhat, apc.WhatNodeStatsAndStatus)
-	responses := bcast(http.MethodGet, path, query, nil, ctx.smapOwner.Get())
+	responses := bcast(http.MethodGet, path, query, nil, psi.Sowner().Get())
 	for _, response := range responses {
 		if response.err != nil {
 			return "", response.err
@@ -364,7 +366,7 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 	//
 	// baseParams := &api.BaseParams{
 	// 	Client: http.DefaultClient,
-	// 	URL:    ctx.smap.Get().Primary.URL(cmn.NetIntraControl),
+	// 	URL:    g.smap.Get().Primary.URL(cmn.NetIntraControl),
 	// }
 	// msg := &apc.LsoMsg{Props: "size,status"}
 	// objList, err := api.ListObjects(baseParams, pars.Bucket, msg, 0)
@@ -505,8 +507,8 @@ func (m *Manager) startDSort() {
 	}
 
 	nlog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
-	path := apc.URLPathdSortAck.Join(m.ManagerUUID, m.ctx.node.ID())
-	bcast(http.MethodPut, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
+	path := apc.URLPathdSortAck.Join(m.ManagerUUID, g.t.SID())
+	bcast(http.MethodPut, path, nil, nil, g.t.Sowner().Get(), g.t.Snode())
 }
 
 func (m *Manager) errHandler(err error) {
@@ -526,7 +528,7 @@ func (m *Manager) errHandler(err error) {
 
 		nlog.Warningln("broadcasting abort to other targets")
 		path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
-		bcast(http.MethodDelete, path, nil, nil, ctx.smapOwner.Get(), ctx.node)
+		bcast(http.MethodDelete, path, nil, nil, g.t.Sowner().Get(), g.t.Snode())
 	}
 }
 
@@ -559,7 +561,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	var (
-		buf, slab   = mm.AllocSize(serializationBufSize)
+		buf, slab   = g.mm.AllocSize(serializationBufSize)
 		tmpMetadata = &CreationPhaseMetadata{}
 	)
 	defer slab.Free(buf)
@@ -630,7 +632,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	var (
-		buf, slab = mm.AllocSize(serializationBufSize)
+		buf, slab = g.mm.AllocSize(serializationBufSize)
 		records   = shard.NewRecords(int(d))
 	)
 	defer slab.Free(buf)
@@ -776,75 +778,8 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 //
-// common: PROXY and TARGET
+// http helpers
 //
-
-func bcast(method, path string, urlParams url.Values, body []byte, smap *meta.Smap, ignore ...*meta.Snode) []response {
-	var (
-		responses = make([]response, smap.CountActiveTs())
-		wg        = &sync.WaitGroup{}
-	)
-
-	call := func(idx int, node *meta.Snode) {
-		defer wg.Done()
-
-		reqArgs := cmn.HreqArgs{
-			Method: method,
-			Base:   node.URL(cmn.NetIntraControl),
-			Path:   path,
-			Query:  urlParams,
-			Body:   body,
-		}
-		req, err := reqArgs.Req()
-		if err != nil {
-			responses[idx] = response{
-				si:         node,
-				err:        err,
-				statusCode: http.StatusInternalServerError,
-			}
-			return
-		}
-
-		resp, err := ctx.client.Do(req) //nolint:bodyclose // Closed inside `cos.Close`.
-		if err != nil {
-			responses[idx] = response{
-				si:         node,
-				err:        err,
-				statusCode: http.StatusInternalServerError,
-			}
-			return
-		}
-		out, err := io.ReadAll(resp.Body)
-		cos.Close(resp.Body)
-
-		responses[idx] = response{
-			si:         node,
-			res:        out,
-			err:        err,
-			statusCode: resp.StatusCode,
-		}
-	}
-
-	idx := 0
-outer:
-	for _, node := range smap.Tmap {
-		if smap.InMaintOrDecomm(node) {
-			continue
-		}
-		for _, ignoreNode := range ignore {
-			if ignoreNode.Equals(node) {
-				continue outer
-			}
-		}
-
-		wg.Add(1)
-		go call(idx, node)
-		idx++
-	}
-	wg.Wait()
-
-	return responses[:idx]
-}
 
 func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bool {
 	if r.Method != expected {

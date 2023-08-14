@@ -1364,7 +1364,6 @@ func TestDsortAbort(t *testing.T) {
 			err = api.AbortDSort(df.baseParams, df.managerUUID)
 			tassert.CheckFatal(t, err)
 
-			tlog.Logln("waiting for dsort to finish")
 			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 

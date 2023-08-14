@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
@@ -51,26 +52,11 @@ const (
 	serializationBufSize = 10 * cos.MiB
 )
 
-var (
-	ctx dsortContext
-	mm  *memsys.MMSA
-)
-
-// interface guard
-var (
-	_ meta.Slistener = (*Manager)(nil)
-	_ cos.Packer     = (*buildingShardInfo)(nil)
-	_ cos.Unpacker   = (*buildingShardInfo)(nil)
-)
-
 type (
-	dsortContext struct {
-		smapOwner meta.Sowner
-		bmdOwner  meta.Bowner
-		t         cluster.Target // Set only on target.
-		stats     stats.Tracker
-		node      *meta.Snode
-		client    *http.Client // Client for broadcast.
+	global struct {
+		t      cluster.Target
+		tstats stats.Tracker
+		mm     *memsys.MMSA
 	}
 
 	buildingShardInfo struct {
@@ -92,40 +78,33 @@ type (
 
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
 	Manager struct {
-		// Fields with json tags are the only fields which are persisted
-		// into the disk once the dsort finishes.
-		ManagerUUID string   `json:"manager_uuid"`
-		Metrics     *Metrics `json:"metrics"`
-
-		mg *ManagerGroup // parent
-
-		mu   sync.Mutex
-		ctx  dsortContext
-		smap *meta.Smap
-
-		recm *shard.RecordManager
-		ec   shard.Creator
-
+		// tagged fields are the only fields persisted once dsort finishes
+		ManagerUUID        string        `json:"manager_uuid"`
+		Metrics            *Metrics      `json:"metrics"`
+		mg                 *ManagerGroup // parent
+		mu                 sync.Mutex
+		smap               *meta.Smap
+		recm               *shard.RecordManager
+		ec                 shard.Creator
 		startShardCreation chan struct{}
 		pars               *parsedReqSpec
-
-		client      *http.Client // Client for sending records metadata
-		compression struct {
+		client             *http.Client // Client for sending records metadata
+		compression        struct {
 			totalShardSize     atomic.Int64
 			totalExtractedSize atomic.Int64
 		}
 		received struct {
-			count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
+			count atomic.Int32 // Number of FileMeta slices received, defining what step in the sort target is in.
 			ch    chan int32
 		}
-		refCount        atomic.Int64 // Reference counter used to determine if we can do cleanup.
-		inFlight        atomic.Int64 // Reference counter that counts number of in-flight stream requests.
+		refCount        atomic.Int64 // Refcount to cleanup.
+		inFlight        atomic.Int64 // Refcount in-flight stream requests
 		state           progressState
 		extractionPhase struct {
 			adjuster *concAdjuster
 		}
 		streams struct {
-			shards *bundle.Streams // streams for pushing streams to other targets if the fqn is non-local
+			shards *bundle.Streams
 		}
 		creationPhase struct {
 			metadata CreationPhaseMetadata
@@ -136,33 +115,46 @@ type (
 		}
 		dsorter        dsorter
 		dsorterStarted sync.WaitGroup
-		callTimeout    time.Duration // max time to wait for other node to respond
+		callTimeout    time.Duration // max time to wait for another node to respond
 		config         *cmn.Config
 	}
 )
 
-func RegisterNode(smapOwner meta.Sowner, bmdOwner meta.Bowner, snode *meta.Snode, t cluster.Target, stats stats.Tracker) {
-	ctx.smapOwner = smapOwner
-	ctx.bmdOwner = bmdOwner
-	ctx.node = snode
-	ctx.t = t
-	ctx.stats = stats
-	debug.Assert(mm == nil)
+var g global
 
+// interface guard
+var (
+	_ meta.Slistener = (*Manager)(nil)
+	_ cos.Packer     = (*buildingShardInfo)(nil)
+	_ cos.Unpacker   = (*buildingShardInfo)(nil)
+)
+
+func Pinit(si cluster.Node) {
+	psi = si
+	newClient()
+}
+
+func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
+	Managers = NewManagerGroup(db, false)
+
+	debug.Assert(g.mm == nil) // only once
+	g.mm = t.PageMM()
+	g.t = t
+	g.tstats = stats
+
+	fs.CSM.Reg(ct.DSortFileType, &ct.DSortFile{})
+	fs.CSM.Reg(ct.DSortWorkfileType, &ct.DSortFile{})
+
+	newClient()
+}
+
+func newClient() {
 	config := cmn.GCO.Get()
-	ctx.client = cmn.NewClient(cmn.TransportArgs{
+	bcastClient = cmn.NewClient(cmn.TransportArgs{
 		Timeout:    config.Timeout.MaxHostBusy.D(),
 		UseHTTPS:   config.Net.HTTP.UseHTTPS,
 		SkipVerify: config.Net.HTTP.SkipVerify,
 	})
-
-	if ctx.node.IsTarget() {
-		mm = t.PageMM()
-		err := fs.CSM.Reg(ct.DSortFileType, &ct.DSortFile{})
-		debug.AssertNoErr(err)
-		err = fs.CSM.Reg(ct.DSortWorkfileType, &ct.DSortFile{})
-		debug.AssertNoErr(err)
-	}
 }
 
 /////////////
@@ -176,8 +168,7 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(pars *parsedReqSpec) error {
-	m.ctx = ctx
-	m.smap = m.ctx.smapOwner.Get()
+	m.smap = g.t.Sowner().Get()
 
 	targetCount := m.smap.CountActiveTs()
 
@@ -185,7 +176,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	m.Metrics = newMetrics(pars.Description, pars.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
 
-	m.ctx.smapOwner.Listeners().Reg(m)
+	g.t.Sowner().Listeners().Reg(m)
 
 	if err := m.setDSorter(); err != nil {
 		return err
@@ -249,9 +240,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	return nil
 }
 
-// TODO: Currently we create streams for each dsort job but maybe we should
-// create streams once and have them available for all the dsort jobs so they
-// would share the resource rather than competing for it.
+// TODO -- FIXME: create on demand and reuse streams across jobs
+// (in re: global rebalance and EC)
 func (m *Manager) initStreams() error {
 	config := cmn.GCO.Get()
 
@@ -267,14 +257,14 @@ func (m *Manager) initStreams() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        mm,
+			MMSA:        g.mm,
 		},
 	}
 	if err := transport.HandleObjStream(trname, m.recvShard); err != nil {
 		return errors.WithStack(err)
 	}
 	client := transport.NewIntraDataClient()
-	m.streams.shards = bundle.New(m.ctx.smapOwner, m.ctx.node, client, shardsSbArgs)
+	m.streams.shards = bundle.New(g.t.Sowner(), g.t.Snode(), client, shardsSbArgs)
 	return nil
 }
 
@@ -323,10 +313,10 @@ func (m *Manager) cleanup() {
 	m.ec = nil
 	m.client = nil
 
-	m.ctx.smapOwner.Listeners().Unreg(m)
+	g.t.Sowner().Listeners().Unreg(m)
 
 	if !m.aborted() {
-		m.updateFinishedAck(m.ctx.node.ID())
+		m.updateFinishedAck(g.t.SID())
 	}
 }
 
@@ -403,7 +393,7 @@ func (m *Manager) abort(errs ...error) {
 		m.Metrics.unlock()
 	}
 
-	nlog.Infof("%s: %s aborted", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s aborted", g.t, m.ManagerUUID)
 	m.setAbortedTo(true)
 	inProgress := m.inProgress()
 	m.unlock()
@@ -463,18 +453,18 @@ func (m *Manager) setRW() (err error) {
 		return errors.WithStack(err)
 	}
 
-	m.ec = newExtractCreator(m.ctx.t, m.pars.InputExtension)
+	m.ec = newExtractCreator(g.t, m.pars.InputExtension)
 	if m.ec == nil {
 		debug.Assert(m.pars.InputExtension == "", m.pars.InputExtension)
 		// NOTE: [feature] allow non-specified extension; assign default extract-creator;
 		// handle all shards we encounter - all supported formats
-		m.ec = shard.NewTarRW(m.ctx.t)
+		m.ec = shard.NewTarRW(g.t)
 	}
 	if m.pars.DryRun {
 		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
 		m.ec = shard.NopRW(m.ec)
 	}
-	m.recm = shard.NewRecordManager(m.ctx.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
+	m.recm = shard.NewRecordManager(g.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
 	return nil
 }
 
@@ -673,7 +663,7 @@ func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error
 		params.Cksum = nil
 		params.Atime = started
 	}
-	erp := m.ctx.t.PutObject(lom, params)
+	erp := g.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		m.abort(err)
@@ -729,7 +719,7 @@ func (m *Manager) doWithAbort(reqArgs *cmn.HreqArgs) error {
 }
 
 func (m *Manager) ListenSmapChanged() {
-	newSmap := m.ctx.smapOwner.Get()
+	newSmap := g.t.Sowner().Get()
 	if newSmap.Version <= m.smap.Version {
 		return
 	}

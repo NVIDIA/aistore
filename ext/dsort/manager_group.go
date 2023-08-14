@@ -33,10 +33,6 @@ type ManagerGroup struct {
 	db       kvdb.Driver
 }
 
-func InitManagers(db kvdb.Driver) {
-	Managers = NewManagerGroup(db, false)
-}
-
 // NewManagerGroup returns new, initialized manager group.
 func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
 	mg := &ManagerGroup{

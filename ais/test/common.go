@@ -1032,10 +1032,10 @@ func initFS() {
 	config.Backend = cfg.Backend
 	cmn.GCO.CommitUpdate(config)
 
-	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
-	_ = fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	_ = fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
+	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {

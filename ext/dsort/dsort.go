@@ -72,7 +72,7 @@ var js = jsoniter.ConfigFastest
 
 func (m *Manager) finish() {
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("%s: %s finished", m.ctx.t, m.ManagerUUID)
+		nlog.Infof("%s: %s finished", g.t, m.ManagerUUID)
 	}
 	m.lock()
 	m.setInProgressTo(false)
@@ -92,7 +92,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	// Phase 1.
-	nlog.Infof("%s: %s started extraction stage", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started extraction stage", g.t, m.ManagerUUID)
 	if err := m.extractLocalShards(); err != nil {
 		return err
 	}
@@ -100,12 +100,12 @@ func (m *Manager) start() (err error) {
 	s := binary.BigEndian.Uint64(m.pars.TargetOrderSalt)
 	targetOrder := randomTargetOrder(s, m.smap.Tmap)
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", m.ctx.t, m.ManagerUUID,
+		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", g.t, m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
 
 	// Phase 2.
-	nlog.Infof("%s: %s started sort stage", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started sort stage", g.t, m.ManagerUUID)
 	curTargetIsFinal, err := m.participateInRecordDistribution(targetOrder)
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func (m *Manager) start() (err error) {
 
 		shardSize := int64(float64(m.pars.OutputShardSize) / ratio)
 
-		nlog.Infof("%s: %s started phase 3 distribution", m.ctx.t, m.ManagerUUID)
+		nlog.Infof("%s: %s started phase 3 distribution", g.t, m.ManagerUUID)
 		if err := m.phase3(shardSize); err != nil {
 			return err
 		}
@@ -139,12 +139,12 @@ func (m *Manager) start() (err error) {
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
-	nlog.Infof("%s: %s started creation stage", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started creation stage", g.t, m.ManagerUUID)
 	if err := m.dsorter.createShardsLocally(); err != nil {
 		return err
 	}
 
-	nlog.Infof("%s: %s finished successfully", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s finished successfully", g.t, m.ManagerUUID)
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (m *Manager) startDSorter() error {
 	if err := m.initStreams(); err != nil {
 		return err
 	}
-	nlog.Infof("%s: %s starting with dsorter: %q", m.ctx.t, m.ManagerUUID, m.dsorter.name())
+	nlog.Infof("%s: %s starting with dsorter: %q", g.t, m.ManagerUUID, m.dsorter.name())
 	return m.dsorter.start()
 }
 
@@ -281,7 +281,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 				// TODO: params.Xact - in part, to count PUTs and bytes in a generic fashion
 				// (vs metrics.ShardCreationStats.updateThroughput - see below)
 			}
-			err = m.ctx.t.PutObject(lom, params)
+			err = g.t.PutObject(lom, params)
 			cluster.FreePutObjParams(params)
 			if err == nil {
 				n = lom.SizeBytes()
@@ -296,7 +296,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	ec := m.ec
 	if m.pars.InputExtension != m.pars.OutputExtension {
 		// NOTE: resharding into a different format
-		ec = newExtractCreator(m.ctx.t, m.pars.OutputExtension)
+		ec = newExtractCreator(g.t, m.pars.OutputExtension)
 	}
 
 	_, err = ec.Create(s, w, m.dsorter)
@@ -334,7 +334,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
-	if si.ID() != m.ctx.node.ID() && !m.pars.DryRun {
+	if si.ID() != g.t.SID() && !m.pars.DryRun {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
@@ -380,7 +380,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 exit:
 	metrics.mu.Lock()
 	metrics.CreatedCnt++
-	if si.ID() != m.ctx.node.ID() {
+	if si.ID() != g.t.SID() {
 		metrics.MovedShardCnt++
 	}
 	if m.Metrics.extended {
@@ -434,7 +434,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 		}
 
 		for i, d = range targetOrder {
-			if d != dummyTarget && d.ID() == m.ctx.node.ID() {
+			if d != dummyTarget && d.ID() == g.t.SID() {
 				break
 			}
 		}
@@ -449,7 +449,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 			)
 			group.Go(func() error {
 				var (
-					buf, slab = mm.AllocSize(serializationBufSize)
+					buf, slab = g.mm.AllocSize(serializationBufSize)
 					msgpw     = msgp.NewWriterBuf(w, buf)
 				)
 				defer slab.Free(buf)
@@ -610,7 +610,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 		return nil, err
 	}
 	// is intra-call
-	tsi := m.ctx.t.Snode()
+	tsi := g.t.Snode()
 	req.Header.Set(apc.HdrCallerID, tsi.ID())
 	req.Header.Set(apc.HdrCallerName, tsi.String())
 
@@ -746,7 +746,7 @@ func (m *Manager) phase3(maxSize int64) error {
 	}
 
 	bck := meta.CloneBck(&m.pars.OutputBck)
-	if err := bck.Init(m.ctx.bmdOwner); err != nil {
+	if err := bck.Init(g.t.Bowner()); err != nil {
 		return err
 	}
 	for _, s := range shards {
@@ -790,7 +790,7 @@ func (m *Manager) phase3(maxSize int64) error {
 	for err := range errCh {
 		return errors.Errorf("error while sending shards: %v", err)
 	}
-	nlog.Infof("%s: %s finished sending all shards", m.ctx.t, m.ManagerUUID)
+	nlog.Infof("%s: %s finished sending all shards", g.t, m.ManagerUUID)
 	return nil
 }
 
@@ -801,7 +801,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 	)
 	group.Go(func() error {
 		var (
-			buf, slab = mm.AllocSize(serializationBufSize)
+			buf, slab = g.mm.AllocSize(serializationBufSize)
 			msgpw     = msgp.NewWriterBuf(w, buf)
 			md        = &CreationPhaseMetadata{Shards: s, SendOrder: order}
 		)
@@ -873,7 +873,7 @@ func (es *extractShard) do() (err error) {
 		if errV == nil {
 			if !archive.EqExt(ext, m.pars.InputExtension) {
 				if m.config.FastV(4, cos.SmoduleDsort) {
-					nlog.Infof("%s: %s skipping %s: %q vs %q", m.ctx.t, m.ManagerUUID,
+					nlog.Infof("%s: %s skipping %s: %q vs %q", g.t, m.ManagerUUID,
 						es.name, ext, m.pars.InputExtension)
 				}
 				return
@@ -919,7 +919,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 			return nil // skip
 		}
 		// NOTE: extract-creator for _this_ shard (compare with createShard above)
-		ec = newExtractCreator(m.ctx.t, ext)
+		ec = newExtractCreator(g.t, ext)
 	}
 
 	phaseInfo := &m.extractionPhase

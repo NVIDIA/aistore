@@ -70,8 +70,8 @@ var _ = Describe("LOM", func() {
 		_, _ = fs.Add(mpath, "daeID")
 	}
 
-	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
+	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(

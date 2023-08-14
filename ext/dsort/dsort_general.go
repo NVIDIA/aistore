@@ -154,15 +154,15 @@ func (ds *dsorterGeneral) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        mm,
+			MMSA:        g.mm,
 		},
 	}
 	if err := transport.HandleObjStream(trname, ds.recvResp); err != nil {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.request = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, reqSbArgs)
-	ds.streams.response = bundle.New(ds.m.ctx.smapOwner, ds.m.ctx.node, client, respSbArgs)
+	ds.streams.request = bundle.New(g.t.Sowner(), g.t.Snode(), client, reqSbArgs)
+	ds.streams.response = bundle.New(g.t.Sowner(), g.t.Snode(), client, respSbArgs)
 
 	// start watching memory
 	return ds.mw.watch()
@@ -264,7 +264,7 @@ func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.Record
 	if ds.m.aborted() {
 		return 0, newDSortAbortedError(ds.m.ManagerUUID)
 	}
-	if rec.DaemonID != ds.m.ctx.node.ID() {
+	if rec.DaemonID != g.t.SID() {
 		return ds.loadRemote(w, rec, obj)
 	}
 	return ds.loadLocal(w, obj)
@@ -278,7 +278,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 	)
 
 	if storeType != shard.SGLStoreType { // SGL does not need buffer as it is buffer itself
-		buf, slab = mm.AllocSize(obj.Size)
+		buf, slab = g.mm.AllocSize(obj.Size)
 	}
 
 	defer func() {
@@ -379,7 +379,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 			metrics.RequestStats.updateTime(delta)
 			metrics.mu.Unlock()
 
-			ds.m.ctx.stats.AddMany(
+			g.tstats.AddMany(
 				cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
 				cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
 			)
@@ -422,7 +422,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		metrics.ResponseStats.updateTime(delta)
 		metrics.mu.Unlock()
 
-		ds.m.ctx.stats.AddMany(
+		g.tstats.AddMany(
 			cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
 			cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
 		)
@@ -440,7 +440,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 			err = cmn.NewErrAborted("wait for remote content", "", nil)
 		case timed:
 			err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
-				ds.m.ctx.node.ID(), daemonID)
+				g.t.SID(), daemonID)
 		default:
 			debug.Assert(false, "pulled but not stopped or timed?")
 		}
@@ -601,7 +601,7 @@ func (ds *dsorterGeneral) recvResp(hdr transport.ObjHdr, object io.Reader, err e
 		beforeSend = mono.NanoTime()
 	}
 
-	buf, slab := mm.AllocSize(hdr.ObjAttrs.Size)
+	buf, slab := g.mm.AllocSize(hdr.ObjAttrs.Size)
 	writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 	writer.wg.Done()
 	slab.Free(buf)

@@ -267,8 +267,8 @@ func TestParseFQN(t *testing.T) {
 					tassert.CheckFatal(t, err)
 				}
 			}
-			fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-			fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+			fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
+			fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 
 			parsedFQN, err := fs.ParseFQN(tt.fqn)
 			if (err != nil) != tt.wantErr {
@@ -360,8 +360,8 @@ func TestMakeAndParseFQN(t *testing.T) {
 			_, err := fs.Add(tt.mpath, "daeID")
 			tassert.CheckFatal(t, err)
 
-			fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-			fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+			fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
+			fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 
 			mpaths := fs.GetAvail()
 			fqn := mpaths[tt.mpath].MakePathFQN(&tt.bck, tt.contentType, tt.objName)

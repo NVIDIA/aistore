@@ -302,12 +302,8 @@ func (t *target) Run() error {
 	}
 
 	// register object type and workfile type
-	if err := fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
-		cos.ExitLog(err)
-	}
-	if err := fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
-		cos.ExitLog(err)
-	}
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
+	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
 
 	// Init meta-owners and load local instances
 	if prev := t.owner.bmd.init(); prev {
@@ -372,8 +368,7 @@ func (t *target) Run() error {
 		go t.goreslver(marked.Interrupted)
 	}
 
-	dsort.InitManagers(db)
-	dsort.RegisterNode(t.owner.smap, t.owner.bmd, t.si, t, t.statsT)
+	dsort.Tinit(t, t.statsT, db)
 
 	err = t.htrun.run()
 

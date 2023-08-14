@@ -43,8 +43,8 @@ var _ = Describe("Mirror", func() {
 	fs.TestDisableValidation()
 	_, _ = fs.Add(mpath, "daeID")
 	_, _ = fs.Add(mpath2, "daeID")
-	_ = fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	_ = fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
+	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 
 	var (
 		props = &cmn.BucketProps{

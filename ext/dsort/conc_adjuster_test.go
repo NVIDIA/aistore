@@ -18,6 +18,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	testingConfigDir = "/tmp/ais_tests"
+)
+
 func calcSemaLimit(acquire, release func()) int {
 	var i atomic.Int32
 	wg := &sync.WaitGroup{}

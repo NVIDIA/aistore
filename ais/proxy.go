@@ -245,7 +245,8 @@ func (p *proxy) Run() error {
 		nlog.Infof("%s: [%s net] listening on: %s", p, cmn.NetIntraData, p.si.DataNet.URL)
 	}
 
-	dsort.RegisterNode(p.owner.smap, p.owner.bmd, p.si, nil, p.statsT)
+	dsort.Pinit(p)
+
 	return p.htrun.run()
 }
 

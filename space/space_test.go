@@ -381,8 +381,8 @@ func createAndAddMountpath(path string) {
 	fs.TestNew(nil)
 	fs.Add(path, "daeID")
 
-	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{})
-	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{})
+	fs.CSM.Reg(fs.ObjectType, &fs.ObjectContentResolver{}, true)
+	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 }
 
 func getRandomFileName(fileCounter int) string {
