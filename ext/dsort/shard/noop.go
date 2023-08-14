@@ -13,20 +13,22 @@ import (
 )
 
 // interface guard
-var _ Creator = (*nopRW)(nil)
+var _ RW = (*nopRW)(nil)
 
 type nopRW struct {
-	internal Creator
+	internal RW
 }
 
-func NopRW(internal Creator) Creator {
-	return &nopRW{internal: internal}
-}
+func NopRW(internal RW) RW { return &nopRW{internal: internal} }
+
+func (n *nopRW) IsCompressed() bool   { return n.internal.IsCompressed() }
+func (n *nopRW) SupportsOffset() bool { return n.internal.SupportsOffset() }
+func (n *nopRW) MetadataSize() int64  { return n.internal.MetadataSize() }
 
 // Extract reads the tarball f and extracts its metadata.
-func (t *nopRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64,
+func (n *nopRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64,
 	extractedCount int, err error) {
-	return t.internal.Extract(lom, r, extractor, toDisk)
+	return n.internal.Extract(lom, r, extractor, toDisk)
 }
 
 // Create creates a new shard locally based on the Shard.
@@ -43,6 +45,3 @@ func (*nopRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64
 	}
 	return written, nil
 }
-
-func (*nopRW) SupportsOffset() bool  { return true }
-func (t *nopRW) MetadataSize() int64 { return t.internal.MetadataSize() }

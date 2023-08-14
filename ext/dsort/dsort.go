@@ -115,7 +115,7 @@ func (m *Manager) start() (err error) {
 	if curTargetIsFinal {
 		// assuming uniform distribution estimate avg. output shard size
 		ratio := m.compressionRatio()
-		debug.Assertf(archive.IsCompressed(m.pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
+		debug.Assertf(shard.IsCompressed(m.pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
 			ratio, m.pars.InputExtension)
 
 		shardSize := int64(float64(m.pars.OutputShardSize) / ratio)
@@ -293,13 +293,18 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 		wg.Done()
 	}()
 
-	ec := m.ec
-	if m.pars.InputExtension != m.pars.OutputExtension {
-		// NOTE: resharding into a different format
-		ec = newExtractCreator(g.t, m.pars.OutputExtension)
+	// may reshard into a different format
+	shardRW := m.shardRW
+	//
+	// TODO -- FIXME: compare with extractShard._do()
+	//
+	if !m.pars.DryRun && m.pars.OutputExtension != m.pars.InputExtension {
+		debug.Assert(m.pars.OutputExtension != "")
+		shardRW = shard.RWs[m.pars.OutputExtension]
+		debug.Assert(shardRW != nil, m.pars.OutputExtension)
 	}
 
-	_, err = ec.Create(s, w, m.dsorter)
+	_, err = shardRW.Create(s, w, m.dsorter)
 	w.CloseWithError(err)
 	if err != nil {
 		r.CloseWithError(err)
@@ -682,7 +687,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 		}
 
 		shards := shardsBuilder[shardNameFmt]
-		recordSize := r.TotalSize() + m.ec.MetadataSize()*int64(len(r.Objects))
+		recordSize := r.TotalSize() + m.shardRW.MetadataSize()*int64(len(r.Objects))
 		shardCount := len(shards)
 		if shardCount == 0 || shards[shardCount-1].Size > maxSize {
 			shard := &shard.Shard{
@@ -896,7 +901,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	var (
 		m                        = es.m
 		estimateTotalRecordsSize uint64
-		warnPossibleOOM          bool
+		warnOOM                  bool
 	)
 	if err := lom.InitBck(&m.pars.InputBck); err != nil {
 		return err
@@ -912,14 +917,15 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		return err
 	}
 
-	ec := m.ec
-	if m.pars.InputExtension == "" {
+	shardRW := m.shardRW
+	if shardRW == nil {
+		debug.Assert(!m.pars.DryRun)
 		ext, err := archive.Mime("", lom.FQN)
 		if err != nil {
 			return nil // skip
 		}
-		// NOTE: extract-creator for _this_ shard (compare with createShard above)
-		ec = newExtractCreator(g.t, ext)
+		shardRW = shard.RWs[ext]
+		debug.Assert(shardRW != nil, ext)
 	}
 
 	phaseInfo := &m.extractionPhase
@@ -949,7 +955,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 
 	beforeExtraction := mono.NanoTime()
 
-	extractedSize, extractedCount, err := ec.Extract(lom, fh, m.recm, toDisk)
+	extractedSize, extractedCount, err := shardRW.Extract(lom, fh, m.recm, toDisk)
 	cos.Close(fh)
 
 	dur := mono.Since(beforeExtraction)
@@ -980,7 +986,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		recordSize := int(m.recm.Records.RecordMemorySize())
 		estimateTotalRecordsSize = uint64(metrics.TotalCnt * int64(extractedCount*recordSize))
 		if estimateTotalRecordsSize > m.freeMemory() {
-			warnPossibleOOM = true
+			warnOOM = true
 		}
 	}
 	metrics.ExtractedSize += extractedSize
@@ -994,7 +1000,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 	metrics.mu.Unlock()
 
-	if warnPossibleOOM {
+	if warnOOM {
 		msg := fmt.Sprintf("(estimated) total size of records (%d) will possibly exceed available memory (%s) during sorting phase",
 			estimateTotalRecordsSize, m.pars.MaxMemUsage)
 		return m.react(cmn.WarnReaction, msg)

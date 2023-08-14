@@ -18,22 +18,23 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 )
 
-type targzRW struct {
-	t   cluster.Target
+type tgzRW struct {
 	ext string
 }
 
 // interface guard
-var _ Creator = (*targzRW)(nil)
+var _ RW = (*tgzRW)(nil)
 
-func NewTargzRW(t cluster.Target, ext string) Creator {
-	return &targzRW{t: t, ext: ext}
-}
+func NewTargzRW(ext string) RW { return &tgzRW{ext: ext} }
+
+func (*tgzRW) IsCompressed() bool   { return true }
+func (*tgzRW) SupportsOffset() bool { return true }
+func (*tgzRW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding
 
 // Extract reads the tarball f and extracts its metadata.
 // Writes work tar
-func (t *targzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
-	ar, err := archive.NewReader(t.ext, r)
+func (trw *tgzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(trw.ext, r)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -43,9 +44,9 @@ func (t *targzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 		return 0, 0, err
 	}
 
-	c := &rcbCtx{parent: t, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)
@@ -61,13 +62,13 @@ func (t *targzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 
 // Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (t *targzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
+func (*tgzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
 		gzw, _    = gzip.NewWriterLevel(tarball, gzip.BestSpeed)
 		tw        = tar.NewWriter(gzw)
-		rdReader  = newTarRecordDataReader(t.t)
+		rdReader  = newTarRecordDataReader()
 	)
 
 	defer func() {
@@ -88,11 +89,9 @@ func (t *targzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wri
 					}
 					needFlush = false
 				}
-
 				if n, err = loader.Load(gzw, rec, obj); err != nil {
 					return written + n, err
 				}
-
 				// pad to 512 bytes
 				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
 				if diff > 0 {
@@ -108,7 +107,6 @@ func (t *targzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wri
 					return written + n, err
 				}
 				written += n
-
 				needFlush = true
 			default:
 				debug.Assert(false, obj.StoreType)
@@ -117,9 +115,5 @@ func (t *targzRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wri
 			written += n
 		}
 	}
-
 	return written, nil
 }
-
-func (*targzRW) SupportsOffset() bool { return true }
-func (*targzRW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding

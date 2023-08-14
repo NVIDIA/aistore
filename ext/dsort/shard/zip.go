@@ -19,7 +19,6 @@ import (
 
 type (
 	zipRW struct {
-		t   cluster.Target
 		ext string
 	}
 
@@ -44,15 +43,63 @@ type (
 )
 
 // interface guard
-var _ Creator = (*zipRW)(nil)
+var _ RW = (*zipRW)(nil)
 
-func NewZipRW(t cluster.Target) Creator {
-	return &zipRW{t: t, ext: archive.ExtZip}
+///////////
+// zipRW //
+///////////
+
+func NewZipRW() RW { return &zipRW{ext: archive.ExtZip} }
+
+func (*zipRW) IsCompressed() bool   { return true }
+func (*zipRW) SupportsOffset() bool { return false }
+func (*zipRW) MetadataSize() int64  { return 0 } // zip does not have header size
+
+// Extract reads the tarball f and extracts its metadata.
+func (zrw *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(zrw.ext, r, lom.SizeBytes())
+	if err != nil {
+		return 0, 0, err
+	}
+	c := &rcbCtx{parent: zrw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
+	c.buf = buf
+
+	_, err = ar.Range("", c.xzip)
+
+	slab.Free(buf)
+	return c.extractedSize, c.extractedCount, err
 }
 
-func newZipRecordDataReader(t cluster.Target) *zipRecordDataReader {
+// Create creates a new shard locally based on the Shard.
+// Note that the order of closing must be trw, gzw, then finally tarball.
+func (*zipRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64, err error) {
+	var n int64
+	zw := zip.NewWriter(w)
+	defer cos.Close(zw)
+
+	rdReader := newZipRecordDataReader()
+	for _, rec := range s.Records.All() {
+		for _, obj := range rec.Objects {
+			rdReader.reinit(zw, obj.Size, obj.MetadataSize)
+			if n, err = loader.Load(rdReader, rec, obj); err != nil {
+				return written + n, err
+			}
+
+			written += n
+		}
+	}
+	rdReader.free()
+	return written, nil
+}
+
+/////////////////////////
+// zipRecordDataReader //
+/////////////////////////
+
+func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = t.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = T.ByteMM().Alloc()
 	return rd
 }
 
@@ -105,44 +152,3 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 	rd.written += int64(n)
 	return n + int(remainingMetadataSize), err
 }
-
-// Extract reads the tarball f and extracts its metadata.
-func (z *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
-	ar, err := archive.NewReader(z.ext, r, lom.SizeBytes())
-	if err != nil {
-		return 0, 0, err
-	}
-	c := &rcbCtx{parent: z, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := z.t.PageMM().AllocSize(lom.SizeBytes())
-	c.buf = buf
-
-	_, err = ar.Range("", c.xzip)
-
-	slab.Free(buf)
-	return c.extractedSize, c.extractedCount, err
-}
-
-// Create creates a new shard locally based on the Shard.
-// Note that the order of closing must be trw, gzw, then finally tarball.
-func (z *zipRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64, err error) {
-	var n int64
-	zw := zip.NewWriter(w)
-	defer cos.Close(zw)
-
-	rdReader := newZipRecordDataReader(z.t)
-	for _, rec := range s.Records.All() {
-		for _, obj := range rec.Objects {
-			rdReader.reinit(zw, obj.Size, obj.MetadataSize)
-			if n, err = loader.Load(rdReader, rec, obj); err != nil {
-				return written + n, err
-			}
-
-			written += n
-		}
-	}
-	rdReader.free()
-	return written, nil
-}
-
-func (*zipRW) SupportsOffset() bool { return false }
-func (*zipRW) MetadataSize() int64  { return 0 } // zip does not have header size

@@ -19,7 +19,7 @@ import (
 // `archive.Reader` rcb context and callback; uses `extractor` to extract
 type rcbCtx struct {
 	extractor      RecordExtractor
-	parent         Creator
+	parent         RW
 	tw             *tar.Writer
 	shardName      string
 	buf            []byte

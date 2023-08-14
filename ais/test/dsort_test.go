@@ -366,7 +366,7 @@ outer:
 		_, err := api.GetObject(baseParams, bucket, shardName, &getArgs)
 		if err != nil {
 			herr, ok := err.(*cmn.ErrHTTP)
-			if ok && herr.Status == http.StatusNotFound && archive.IsCompressed(df.inputExt) && i > 0 {
+			if ok && herr.Status == http.StatusNotFound && shard.IsCompressed(df.inputExt) && i > 0 {
 				// check for NotFound a few more, and break; see also 'skipped == 0' check below
 				switch skipped {
 				case 0:
@@ -475,7 +475,7 @@ outer:
 		}
 	}
 
-	if archive.IsCompressed(df.inputExt) {
+	if shard.IsCompressed(df.inputExt) {
 		tlog.Logf("%s: computed output shard count (%d) vs resulting compressed (%d)\n",
 			df.job(), df.outputShardCnt, realOutputShardCnt)
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -85,7 +84,7 @@ type (
 		mu                 sync.Mutex
 		smap               *meta.Smap
 		recm               *shard.RecordManager
-		ec                 shard.Creator
+		shardRW            shard.RW
 		startShardCreation chan struct{}
 		pars               *parsedReqSpec
 		client             *http.Client // Client for sending records metadata
@@ -142,6 +141,8 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	g.t = t
 	g.tstats = stats
 
+	shard.T = t
+
 	fs.CSM.Reg(ct.DSortFileType, &ct.DSortFile{})
 	fs.CSM.Reg(ct.DSortWorkfileType, &ct.DSortFile{})
 
@@ -186,7 +187,6 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 		return err
 	}
 
-	// Set extract creator depending on extension provided by the user
 	if err := m.setRW(); err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (m *Manager) cleanup() {
 
 	debug.Assertf(!m.inProgress(), "%s: was still in progress", m.ManagerUUID)
 
-	m.ec = nil
+	m.shardRW = nil
 	m.client = nil
 
 	g.t.Sowner().Listeners().Unreg(m)
@@ -453,33 +453,18 @@ func (m *Manager) setRW() (err error) {
 		return errors.WithStack(err)
 	}
 
-	m.ec = newExtractCreator(g.t, m.pars.InputExtension)
-	if m.ec == nil {
+	m.shardRW = shard.RWs[m.pars.InputExtension]
+	if m.shardRW == nil {
+		debug.Assert(!m.pars.DryRun, "dry-run in combination with _any_ shard extension is not supported")
 		debug.Assert(m.pars.InputExtension == "", m.pars.InputExtension)
-		// NOTE: [feature] allow non-specified extension; assign default extract-creator;
-		// handle all shards we encounter - all supported formats
-		m.ec = shard.NewTarRW(g.t)
+		// TODO -- FIXME: niy
 	}
 	if m.pars.DryRun {
-		debug.Assert(m.ec != nil, "dry-run in combination with _any_ shard extension is not supported yet")
-		m.ec = shard.NopRW(m.ec)
+		m.shardRW = shard.NopRW(m.shardRW)
 	}
-	m.recm = shard.NewRecordManager(g.t, m.pars.InputBck, m.ec, ke, m.onDupRecs)
-	return nil
-}
 
-func newExtractCreator(t cluster.Target, ext string) (ec shard.Creator) {
-	switch ext {
-	case archive.ExtTar:
-		ec = shard.NewTarRW(t)
-	case archive.ExtTarGz, archive.ExtTgz:
-		ec = shard.NewTargzRW(t, ext)
-	case archive.ExtZip:
-		ec = shard.NewZipRW(t)
-	case archive.ExtTarLz4:
-		ec = shard.NewTarlz4RW(t)
-	}
-	return
+	m.recm = shard.NewRecordManager(m.pars.InputBck, m.shardRW, ke, m.onDupRecs)
+	return nil
 }
 
 // updateFinishedAck marks daemonID as finished. If all daemons ack then the

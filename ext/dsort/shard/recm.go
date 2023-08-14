@@ -54,27 +54,16 @@ type (
 		Load(w io.Writer, rec *Record, obj *RecordObj) (int64, error)
 	}
 
-	// Creator is interface which describes set of functions which each
-	// shard creator should implement.
-	Creator interface {
-		Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
-		Create(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
-		SupportsOffset() bool
-		MetadataSize() int64
-	}
-
 	RecordExtractor interface {
 		RecordWithBuffer(args extractRecordArgs) (int64, error)
 	}
 
 	RecordManager struct {
-		Records *Records
-
-		t                   cluster.Target
+		Records             *Records
 		bck                 cmn.Bck
 		onDuplicatedRecords func(string) error
 
-		extractCreator  Creator
+		extractCreator  RW
 		keyExtractor    KeyExtractor
 		contents        *sync.Map
 		extractionPaths *sync.Map // Keys correspond to all paths to record contents on disk.
@@ -86,11 +75,10 @@ type (
 	}
 )
 
-func NewRecordManager(t cluster.Target, bck cmn.Bck, extractCreator Creator,
+func NewRecordManager(bck cmn.Bck, extractCreator RW,
 	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
 	return &RecordManager{
 		Records:             NewRecords(1000),
-		t:                   t,
 		bck:                 bck,
 		onDuplicatedRecords: onDuplicatedRecords,
 		extractCreator:      extractCreator,
@@ -130,7 +118,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 		storeType = SGLStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := recm.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := T.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
 			sgl.Free()
@@ -192,7 +180,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 	recm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: recm.t.SID(),
+		DaemonID: T.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -368,7 +356,7 @@ func (recm *RecordManager) Cleanup() {
 
 	// NOTE: forcefully free all MMSA memory to the OS
 	// TODO: another reason to use a separate MMSA for extractions
-	recm.t.PageMM().FreeSpec(memsys.FreeSpec{
+	T.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

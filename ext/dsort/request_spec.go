@@ -184,7 +184,7 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 		}
 	}
 	if rs.OutputExtension == "" {
-		pars.OutputExtension = pars.InputExtension
+		pars.OutputExtension = pars.InputExtension // default
 	} else {
 		pars.OutputExtension, err = archive.Mime(rs.OutputExtension, "")
 		if err != nil {

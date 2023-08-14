@@ -20,7 +20,6 @@ import (
 
 type (
 	tarRW struct {
-		t   cluster.Target
 		ext string
 	}
 
@@ -41,16 +40,16 @@ var (
 	padBuf [archive.TarBlockSize]byte
 
 	// interface guard
-	_ Creator = (*tarRW)(nil)
+	_ RW = (*tarRW)(nil)
 )
 
-func NewTarRW(t cluster.Target) Creator {
-	return &tarRW{t: t, ext: archive.ExtTar}
-}
+/////////////////////////
+// tarRecordDataReader //
+/////////////////////////
 
-func newTarRecordDataReader(t cluster.Target) *tarRecordDataReader {
+func newTarRecordDataReader() *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
-	rd.metadataBuf, rd.slab = t.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = T.ByteMM().Alloc()
 	return rd
 }
 
@@ -98,14 +97,23 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 	return n + int(remainingMetadataSize), err
 }
 
-// Extract reads the tarball f and extracts its metadata.
-func (t *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
-	ar, err := archive.NewReader(t.ext, r)
+///////////
+// tarRW //
+///////////
+
+func NewTarRW() RW { return &tarRW{ext: archive.ExtTar} }
+
+func (*tarRW) IsCompressed() bool   { return false }
+func (*tarRW) SupportsOffset() bool { return true }
+func (*tarRW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding
+
+func (trw *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(trw.ext, r)
 	if err != nil {
 		return 0, 0, err
 	}
-	c := &rcbCtx{parent: t, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
+	c := &rcbCtx{parent: trw, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)
@@ -114,16 +122,14 @@ func (t *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordEx
 	return c.extractedSize, c.extractedCount, err
 }
 
-// Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (t *tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
+func (*tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
 		tw        = tar.NewWriter(tarball)
-		rdReader  = newTarRecordDataReader(t.t)
+		rdReader  = newTarRecordDataReader()
 	)
-
 	defer func() {
 		rdReader.free()
 		cos.Close(tw)
@@ -141,11 +147,9 @@ func (t *tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (writt
 					}
 					needFlush = false
 				}
-
 				if n, err = loader.Load(tarball, rec, obj); err != nil {
 					return written + n, err
 				}
-
 				// pad to 512 bytes
 				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
 				if diff > 0 {
@@ -174,14 +178,11 @@ func (t *tarRW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (writt
 	return written, nil
 }
 
-func (*tarRW) SupportsOffset() bool { return true }
-func (*tarRW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding
-
 // NOTE: Mostly taken from `tar.formatPAXRecord`.
 func estimateXHeaderSize(paxRecords map[string]string) int64 {
+	const padding = 3 // Extra padding for ' ', '=', and '\n'
 	totalSize := 0
 	for k, v := range paxRecords {
-		const padding = 3 // Extra padding for ' ', '=', and '\n'
 		size := len(k) + len(v) + padding
 		size += len(strconv.Itoa(size))
 		record := strconv.Itoa(size) + " " + k + "=" + v + "\n"
@@ -190,7 +191,6 @@ func estimateXHeaderSize(paxRecords map[string]string) int64 {
 		if len(record) != size {
 			record = strconv.Itoa(len(record)) + " " + k + "=" + v + "\n"
 		}
-
 		totalSize += len(record)
 	}
 	return int64(totalSize)

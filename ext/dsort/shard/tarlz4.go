@@ -18,21 +18,22 @@ import (
 	"github.com/pierrec/lz4/v3"
 )
 
-type tarlz4RW struct {
-	t   cluster.Target
+type tlz4RW struct {
 	ext string
 }
 
 // interface guard
-var _ Creator = (*tarlz4RW)(nil)
+var _ RW = (*tlz4RW)(nil)
 
-func NewTarlz4RW(t cluster.Target) Creator {
-	return &tarlz4RW{t: t, ext: archive.ExtTarLz4}
-}
+func NewTarlz4RW() RW { return &tlz4RW{ext: archive.ExtTarLz4} }
+
+func (*tlz4RW) IsCompressed() bool   { return true }
+func (*tlz4RW) SupportsOffset() bool { return true }
+func (*tlz4RW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding
 
 // Extract  the tarball f and extracts its metadata.
-func (t *tarlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
-	ar, err := archive.NewReader(t.ext, r)
+func (trw *tlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+	ar, err := archive.NewReader(trw.ext, r)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -42,9 +43,9 @@ func (t *tarlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Recor
 		return 0, 0, err
 	}
 
-	c := &rcbCtx{parent: t, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
+	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := t.t.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)
@@ -62,13 +63,13 @@ func (t *tarlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Recor
 
 // Create creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, lzw, then finally tarball.
-func (t *tarlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
+func (*tlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (written int64, err error) {
 	var (
 		n         int64
 		needFlush bool
 		lzw       = lz4.NewWriter(tarball)
 		tw        = tar.NewWriter(lzw)
-		rdReader  = newTarRecordDataReader(t.t)
+		rdReader  = newTarRecordDataReader()
 	)
 
 	defer func() {
@@ -89,11 +90,9 @@ func (t *tarlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wr
 					}
 					needFlush = false
 				}
-
 				if n, err = loader.Load(lzw, rec, obj); err != nil {
 					return written + n, err
 				}
-
 				// pad to 512 bytes
 				diff := cos.CeilAlignInt64(n, archive.TarBlockSize) - n
 				if diff > 0 {
@@ -109,7 +108,6 @@ func (t *tarlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wr
 					return written + n, err
 				}
 				written += n
-
 				needFlush = true
 			default:
 				debug.Assert(false, obj.StoreType)
@@ -118,9 +116,5 @@ func (t *tarlz4RW) Create(s *Shard, tarball io.Writer, loader ContentLoader) (wr
 			written += n
 		}
 	}
-
 	return written, nil
 }
-
-func (*tarlz4RW) SupportsOffset() bool { return true }
-func (*tarlz4RW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding

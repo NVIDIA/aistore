@@ -146,7 +146,7 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 			}
 
 			storeType := shard.DiskStoreType
-			if mw.m.ec.SupportsOffset() {
+			if mw.m.shardRW.SupportsOffset() {
 				storeType = shard.OffsetStoreType
 			}
 			mw.m.recm.RecordContents().Range(func(key, value any) bool {
