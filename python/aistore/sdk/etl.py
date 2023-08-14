@@ -69,7 +69,7 @@ class Etl:
         timeout: str = DEFAULT_ETL_TIMEOUT,
     ) -> str:
         """
-        Initializes ETL based on Kubernetes pod spec template. Returns etl_name.
+        Initializes ETL based on Kubernetes pod spec template.
 
         Args:
             template (str): Kubernetes pod spec template
@@ -109,7 +109,7 @@ class Etl:
         transform_url: bool = False,
     ) -> str:
         """
-        Initializes ETL based on the provided source code. Returns etl_name.
+        Initializes ETL based on the provided source code.
 
         Args:
             transform (Callable): Transform function of the ETL
