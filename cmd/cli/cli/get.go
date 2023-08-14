@@ -67,12 +67,11 @@ func getHandler(c *cli.Context) error {
 		archpath = parseStrFlag(c, archpathGetFlag)
 	}
 	if actionIsHandler(c.Command.Action, getArchHandler) {
-		if flagIsSet(c, extractFlag) {
-			return fmt.Errorf("'ais archive get': flag %s is redundant (implied)", qflprn(extractFlag))
-		}
-		extract = true
+		extract = true // extractFlag is implied unless:
 
-		if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
+		if archpath != "" {
+			extract = false
+		} else if oname, fname := splitObjnameShardBoundary(objName); fname != "" {
 			objName = oname
 			archpath = fname
 			extract = false
