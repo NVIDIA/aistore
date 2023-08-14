@@ -657,52 +657,6 @@ func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error
 	return nil
 }
 
-// doWithAbort sends requests through client. If manager aborts during the call
-// request is canceled.
-func (m *Manager) doWithAbort(reqArgs *cmn.HreqArgs) error {
-	req, _, cancel, err := reqArgs.ReqWithCancel()
-	if err != nil {
-		return err
-	}
-
-	// Start request
-	doneCh := make(chan struct{}, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		defer func() {
-			doneCh <- struct{}{}
-		}()
-		resp, err := m.client.Do(req) //nolint:bodyclose // cos.Close below
-		if err != nil {
-			errCh <- err
-			return
-		}
-		defer cos.Close(resp.Body)
-
-		if resp.StatusCode >= http.StatusBadRequest {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				errCh <- err
-			} else {
-				errCh <- errors.New(string(b))
-			}
-			return
-		}
-	}()
-
-	// Wait for abort or request to finish
-	select {
-	case <-m.listenAborted():
-		cancel()
-		<-doneCh
-		return newDSortAbortedError(m.ManagerUUID)
-	case <-doneCh:
-		break
-	}
-	close(errCh)
-	return errors.WithStack(<-errCh)
-}
-
 func (m *Manager) ListenSmapChanged() {
 	newSmap := g.t.Sowner().Get()
 	if newSmap.Version <= m.smap.Version {

@@ -98,7 +98,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	s := binary.BigEndian.Uint64(m.pars.TargetOrderSalt)
-	targetOrder := randomTargetOrder(s, m.smap.Tmap)
+	targetOrder := _torder(s, m.smap.Tmap)
 	if m.config.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", g.t, m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
@@ -146,6 +146,29 @@ func (m *Manager) start() (err error) {
 
 	nlog.Infof("%s: %s finished successfully", g.t, m.ManagerUUID)
 	return nil
+}
+
+// returns a slice of targets in a pseudorandom order
+func _torder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
+	var (
+		targets = make(map[uint64]*meta.Snode, len(tmap))
+		keys    = make([]uint64, 0, len(tmap))
+	)
+	for i, d := range tmap {
+		if d.InMaintOrDecomm() {
+			continue
+		}
+		c := xxhash.ChecksumString64S(i, salt)
+		targets[c] = d
+		keys = append(keys, c)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	t := make(meta.Nodes, len(keys))
+	for i, k := range keys {
+		t[i] = targets[k]
+	}
+	return t
 }
 
 func (m *Manager) startDSorter() error {
@@ -461,12 +484,12 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 
 				if err := m.recm.Records.EncodeMsg(msgpw); err != nil {
 					w.CloseWithError(err)
-					return errors.Errorf("failed to marshal, err: %v", err)
+					return errors.Errorf("failed to marshal msgp: %v", err)
 				}
 				err := msgpw.Flush()
 				w.CloseWithError(err)
 				if err != nil {
-					return errors.Errorf("failed to marshal into JSON, err: %v", err)
+					return errors.Errorf("failed to flush msgp: %v", err)
 				}
 				return nil
 			})
@@ -485,13 +508,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 					Query:  query,
 					BodyR:  r,
 				}
-				err := m.doWithAbort(reqArgs)
+				err := m._do(reqArgs, sendTo, "send sorted records")
 				r.CloseWithError(err)
-				if err != nil {
-					return errors.Errorf("failed to send SortedRecords to next target (%s): %v",
-						sendTo.ID(), err)
-				}
-				return nil
+				return err
 			})
 			if err := group.Wait(); err != nil {
 				return false, err
@@ -793,7 +812,7 @@ func (m *Manager) phase3(maxSize int64) error {
 	close(errCh)
 
 	for err := range errCh {
-		return errors.Errorf("error while sending shards: %v", err)
+		return err
 	}
 	nlog.Infof("%s: %s finished sending all shards", g.t, m.ManagerUUID)
 	return nil
@@ -827,7 +846,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 			Query:  query,
 			BodyR:  r,
 		}
-		err := m.doWithAbort(reqArgs)
+		err := m._do(reqArgs, si, "distribute shards")
 		r.CloseWithError(err)
 		return err
 	})
@@ -838,25 +857,27 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 	wg.Done()
 }
 
-// randomTargetOrder returns a meta.Snode slice for targets in a pseudorandom order.
-func randomTargetOrder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
-	targets := make(map[uint64]*meta.Snode, len(tmap))
-	keys := make([]uint64, 0, len(tmap))
-	for i, d := range tmap {
-		if d.InMaintOrDecomm() {
-			continue
+func (m *Manager) _do(reqArgs *cmn.HreqArgs, tsi *meta.Snode, act string) error {
+	req, errV := reqArgs.Req()
+	if errV != nil {
+		return errV
+	}
+	resp, err := m.client.Do(req) //nolint:bodyclose // cos.Close below
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		var b []byte
+		b, err = io.ReadAll(resp.Body)
+		if err == nil {
+			err = fmt.Errorf("%s: %s failed to %s: %s", g.t, m.ManagerUUID, act, strings.TrimSuffix(string(b), "\n"))
+		} else {
+			err = fmt.Errorf("%s: %s failed to %s: got %v(%d) from %s", g.t, m.ManagerUUID, act, err,
+				resp.StatusCode, tsi.StringEx())
 		}
-		c := xxhash.ChecksumString64S(i, salt)
-		targets[c] = d
-		keys = append(keys, c)
 	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
-
-	t := make(meta.Nodes, len(keys))
-	for i, k := range keys {
-		t[i] = targets[k]
-	}
-	return t
+	cos.Close(resp.Body)
+	return err
 }
 
 //////////////////
