@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	idleRadius  = 2 * time.Second          // poll for relative quiescence
-	idleDefault = time.Minute + idleRadius // hk => idle tick
+	idleDefault = time.Minute // hk -> idle tick
 )
 
 type (
@@ -132,20 +131,9 @@ func (r *DemandBase) Abort(err error) (ok bool) {
 
 // private: on-demand quiescence
 
-func (r *DemandBase) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
-	if n := r.Pending(); n != 0 {
-		debug.Assertf(r.Pending() > 0, "%s %d", r, n)
-		return cluster.QuiActiveRet
-	}
-	return cluster.QuiInactiveCB
-}
-
 func (r *DemandBase) likelyIdle() bool {
 	r.mu.RLock()
 	last := r.idle.last
 	r.mu.RUnlock()
-	if mono.Since(last) < 2*idleRadius {
-		return false
-	}
-	return r.Quiesce(idleRadius/2, r.quicb) == cluster.Quiescent
+	return mono.Since(last) >= cos.MaxDuration(cmn.Timeout.MaxKeepalive(), 2*time.Second)
 }

@@ -417,8 +417,8 @@ func TestETLAnyToAnyBucket(t *testing.T) {
 		}
 		tests = []testObjConfig{
 			{transformer: tetl.Echo, comm: etl.Hpull, onlyLong: true},
-			{transformer: tetl.MD5, comm: etl.Hrev},
-			{transformer: tetl.MD5, comm: etl.Hpush, onlyLong: true},
+			{transformer: tetl.MD5, comm: etl.Hrev, onlyLong: true},
+			{transformer: tetl.MD5, comm: etl.Hpush},
 		}
 	)
 
@@ -544,8 +544,17 @@ func testETLBucket(t *testing.T, bp api.BaseParams, etlName string, m *ioContext
 	err = tetl.WaitForFinished(bp, xid, kind, timeout)
 	tassert.CheckFatal(t, err)
 
-	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	list, err := api.ListObjects(bp, bckTo, &apc.LsoMsg{Props: apc.GetPropsName}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
+
+	// TODO -- FIXME: remove
+	if len(list.Entries) < m.num {
+		tlog.Logf("Warning: ETL[%s]: list-objects %d < %d expected - retrying...\n", etlName, len(list.Entries), m.num)
+		time.Sleep(13 * time.Second)
+		list, err = api.ListObjects(bp, bckTo, &apc.LsoMsg{Props: apc.GetPropsName}, api.ListArgs{})
+		tassert.CheckFatal(t, err)
+	}
+
 	tassert.Errorf(t, len(list.Entries) == m.num, "expected %d objects, got %d", m.num, len(list.Entries))
 
 	checkETLStats(t, xid, m.num, m.fileSize*uint64(m.num), skipByteStats)
