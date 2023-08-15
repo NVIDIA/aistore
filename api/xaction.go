@@ -5,7 +5,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -263,9 +262,7 @@ func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, boo
 		begin           = mono.NanoTime()
 		total, maxSleep = _times(args)
 		sleep           = xact.MinPollTime
-		ctx, cancel     = context.WithTimeout(context.Background(), total)
 	)
-	defer cancel()
 	for {
 		var done bool
 		if fn == nil {
@@ -289,14 +286,11 @@ func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, boo
 			return
 		}
 		time.Sleep(sleep)
-		elapsed = mono.Since(begin)
 		sleep = cos.MinDuration(maxSleep, sleep+sleep/2)
 
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			break
+		if elapsed = mono.Since(begin); elapsed >= total {
+			err = fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
+			return
 		}
 	}
 }
