@@ -163,13 +163,14 @@ func readProxyID(config *cmn.Config) (id string) {
 	return
 }
 
-func (p *proxy) pready(smap *smapX) error {
+func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebalance */) error {
 	const msg = "%s primary: not ready yet "
 	debug.Assert(smap == nil || smap.IsPrimary(p.si))
+
 	if !p.ClusterStarted() {
 		return fmt.Errorf(msg+"(cluster is starting up)", p)
 	}
-	if p.owner.rmd.starting.Load() {
+	if withRR && p.owner.rmd.starting.Load() {
 		return fmt.Errorf(msg+"(finalizing global rebalancing state)", p)
 	}
 	return nil
@@ -962,7 +963,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	// primary
 	if smap.isPrimary(p.si) {
 		if prr {
-			if err := p.pready(smap); err != nil {
+			if err := p.pready(smap, true); err != nil {
 				if cmn.FastV(5, cos.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {

@@ -890,15 +890,20 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg.Action != apc.ActSendOwnershipTbl {
-		// must be primary
+		// must be primary to execute all the rest actions
 		if p.forwardCP(w, r, msg, "") {
 			return
 		}
-		if err := p.pready(nil); err != nil {
+
+		// not just 'cluster-started' - must be ready to rebalance as well
+		// with two distinct exceptions
+		withRR := (msg.Action != apc.ActShutdownCluster && msg.Action != apc.ActXactStop)
+		if err := p.pready(nil, withRR); err != nil {
 			p.writeErr(w, r, err, http.StatusServiceUnavailable)
 			return
 		}
 	}
+
 	switch msg.Action {
 	case apc.ActSetConfig:
 		toUpdate := &cmn.ConfigToUpdate{}
@@ -1478,17 +1483,19 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 	if p.forwardCP(w, r, &apc.ActMsg{Action: action}, "") {
 		return
 	}
-	if action != apc.ActAttachRemAis && action != apc.ActDetachRemAis {
-		if err := p.pready(nil); err != nil {
+	switch action {
+	case apc.Proxy:
+		if err := p.pready(nil, true); err != nil {
 			p.writeErr(w, r, err, http.StatusServiceUnavailable)
 			return
 		}
-	}
-	switch action {
-	case apc.Proxy:
 		// cluster-wide: designate a new primary proxy administratively
 		p.cluSetPrimary(w, r)
 	case apc.ActSetConfig: // set-config via query parameters and "?n1=v1&n2=v2..."
+		if err := p.pready(nil, true); err != nil {
+			p.writeErr(w, r, err, http.StatusServiceUnavailable)
+			return
+		}
 		var (
 			query    = r.URL.Query()
 			toUpdate = &cmn.ConfigToUpdate{}
@@ -1799,10 +1806,13 @@ func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
 		p.writeErrStatusf(w, r, http.StatusServiceUnavailable, "%s is not ready yet (starting up)", p)
 		return
 	}
-	if err := p.pready(smap); err != nil {
+
+	// primary (and cluster) to start and finalize rebalancing status _prior_ to removing invidual nodes
+	if err := p.pready(smap, true); err != nil {
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
+
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
@@ -1944,7 +1954,7 @@ func (p *proxy) canRebalance() (err error) {
 	// NOTE: cluster startup handles rebalance elsewhere (see p.resumeReb), and so
 	// all rebalance-triggering events (shutdown, decommission, maintenance, etc.)
 	// are not permitted and will fail during startup.
-	if err = p.pready(smap); err != nil {
+	if err = p.pready(smap, true); err != nil {
 		return
 	}
 	if !cmn.GCO.Get().Rebalance.Enabled {
