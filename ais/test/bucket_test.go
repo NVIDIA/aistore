@@ -3033,7 +3033,7 @@ func TestAllChecksums(t *testing.T) {
 		}
 		tag := cksumType + "/EC"
 		t.Run(tag, func(t *testing.T) {
-			tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
+			tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 4})
 
 			started := time.Now()
 			testWarmValidation(t, cksumType, false, true)

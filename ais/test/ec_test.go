@@ -2165,7 +2165,10 @@ func ecOnlyRebalance(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // Simple test to check if EC correctly finds all the objects and its slices
 // that will be used by rebalance
 func TestECBucketEncode(t *testing.T) {
-	const parityCnt = 2
+	const (
+		parityCnt = 2
+		dataCnt   = 1
+	)
 	var (
 		proxyURL = tools.RandomProxyURL()
 		m        = ioContext{
@@ -2178,8 +2181,9 @@ func TestECBucketEncode(t *testing.T) {
 	m.initAndSaveState(true /*cleanup*/)
 	baseParams := tools.BaseAPIParams(proxyURL)
 
-	if m.smap.CountActiveTs() < parityCnt+1 {
-		t.Skipf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
+	if nt := m.smap.CountActiveTs(); nt < parityCnt+dataCnt+1 {
+		t.Skipf("%s: not enough targets (%d): (d=%d, p=%d) requires at least %d",
+			t.Name(), nt, dataCnt, parityCnt, parityCnt+dataCnt+1)
 	}
 
 	initMountpaths(t, proxyURL)
