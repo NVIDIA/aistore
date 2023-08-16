@@ -28,8 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
-// TODO: unify and refactor (lru, cleanup-store)
-
 type (
 	IniCln struct {
 		T       cluster.Target

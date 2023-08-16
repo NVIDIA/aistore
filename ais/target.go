@@ -1378,7 +1378,7 @@ func (t *target) fsErr(err error, filepath string) {
 	}
 	if cos.IsErrOOS(err) {
 		cs := t.OOS(nil)
-		nlog.Errorf("%s: %s", t, cs.String())
+		nlog.Errorf("%s: fsErr %s", t, cs.String())
 		return
 	}
 	nlog.Errorf("%s: waking up FSHC to check %q for err %v", t, filepath, err)

@@ -153,7 +153,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if cmn.IsErrCapacityExceeded(err) {
+	if cmn.IsErrCapExceeded(err) {
 		cs := t.OOS(nil)
 		t.writeErrStatusf(w, r, http.StatusInsufficientStorage, "%s: %v", cs.String(), err)
 	} else {

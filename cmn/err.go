@@ -90,10 +90,11 @@ type (
 	ErrInvalidBackendProvider struct {
 		bck Bck
 	}
-	ErrCapacityExceeded struct {
+	ErrCapExceeded struct {
 		totalBytes     uint64
 		totalBytesUsed uint64
 		highWM         int64
+		cleanupWM      int64
 		usedPct        int32
 		oos            bool
 	}
@@ -379,31 +380,38 @@ func NewObjectAccessDenied(object, oper string, aattrs apc.AccessAttrs) *ErrObje
 	return &ErrObjectAccessDenied{errAccessDenied{object, oper, aattrs}}
 }
 
-// ErrCapacityExceeded
+// ErrCapExceeded
 
-func NewErrCapacityExceeded(highWM int64, totalBytesUsed, totalBytes uint64, usedPct int32, oos bool) *ErrCapacityExceeded {
-	return &ErrCapacityExceeded{
-		highWM:         highWM,
-		usedPct:        usedPct,
+func NewErrCapExceeded(totalBytesUsed, totalBytes uint64, highWM, cleanupWM int64, usedPct int32, oos bool) *ErrCapExceeded {
+	return &ErrCapExceeded{
 		totalBytes:     totalBytes, // avail + used
 		totalBytesUsed: totalBytesUsed,
+		highWM:         highWM,
+		cleanupWM:      cleanupWM,
+		usedPct:        usedPct,
 		oos:            oos,
 	}
 }
 
-func (e *ErrCapacityExceeded) Error() string {
+func (e *ErrCapExceeded) Error() string {
 	suffix := fmt.Sprintf("total used %s out of %s", cos.ToSizeIEC(int64(e.totalBytesUsed), 2),
 		cos.ToSizeIEC(int64(e.totalBytes), 2))
 	if e.oos {
 		return fmt.Sprintf("out of space: used %d%% of total capacity on at least one of the mountpaths (%s)",
 			e.usedPct, suffix)
 	}
+	if e.highWM == 0 {
+		debug.Assert(e.cleanupWM > 0)
+		return fmt.Sprintf("low on free space: used capacity %d%% exceeded cleanup watermark(%d%%) (%s)",
+			e.usedPct, e.cleanupWM, suffix)
+	}
+	debug.Assert(e.highWM > 0)
 	return fmt.Sprintf("low on free space: used capacity %d%% exceeded high watermark(%d%%) (%s)",
 		e.usedPct, e.highWM, suffix)
 }
 
-func IsErrCapacityExceeded(err error) bool {
-	_, ok := err.(*ErrCapacityExceeded)
+func IsErrCapExceeded(err error) bool {
+	_, ok := err.(*ErrCapExceeded)
 	return ok
 }
 

@@ -1,13 +1,12 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package hk
 
 import (
 	"container/heap"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,18 +27,15 @@ const (
 )
 
 type (
-	Action interface {
-		fmt.Stringer
-		Housekeep() time.Duration
-	}
+	hkcb    func() time.Duration
 	request struct {
-		f               CleanupFunc
+		f               hkcb
 		name            string
 		initialInterval time.Duration
 		registering     bool
 	}
 	timedAction struct {
-		f          CleanupFunc
+		f          hkcb
 		name       string
 		updateTime int64
 	}
@@ -54,8 +50,6 @@ type (
 		stopping *atomic.Bool
 		running  atomic.Bool
 	}
-
-	CleanupFunc = func() time.Duration
 )
 
 var DefaultHK *housekeeper
@@ -116,7 +110,7 @@ func WaitStarted() {
 	}
 }
 
-func Reg(name string, f CleanupFunc, interval time.Duration) {
+func Reg(name string, f hkcb, interval time.Duration) {
 	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
 		registering:     true,
@@ -143,10 +137,10 @@ func (hk *housekeeper) terminate() {
 
 func (hk *housekeeper) Run() (err error) {
 	signal.Notify(hk.sigCh,
-		syscall.SIGHUP,  // kill -SIGHUP XXXX
-		syscall.SIGINT,  // kill -SIGINT XXXX or Ctrl+c
-		syscall.SIGTERM, // kill -SIGTERM XXXX
-		syscall.SIGQUIT, // kill -SIGQUIT XXXX
+		syscall.SIGHUP,  // kill -SIGHUP
+		syscall.SIGINT,  // kill -SIGINT (Ctrl-C)
+		syscall.SIGTERM, // kill -SIGTERM
+		syscall.SIGQUIT, // kill -SIGQUIT
 	)
 	hk.timer = time.NewTimer(time.Hour)
 	hk.running.Store(true)
@@ -164,14 +158,23 @@ func (hk *housekeeper) _run() error {
 			if hk.actions.Len() == 0 {
 				break
 			}
-			// Run callback and update the item in the heap.
-			item := hk.actions.Peek()
-			interval := item.f()
+			// run the callback and update heap
+			var (
+				item     = hk.actions.Peek()
+				started  = mono.NanoTime()
+				interval = item.f()
+			)
 			if interval == UnregInterval {
 				heap.Remove(hk.actions, 0)
 			} else {
-				item.updateTime = mono.NanoTime() + interval.Nanoseconds()
+				now := mono.NanoTime()
+				item.updateTime = now + interval.Nanoseconds()
 				heap.Fix(hk.actions, 0)
+				// system under extreme pressure or
+				// an illegal lock/sleep type contention inside the callback
+				if d := time.Duration(now - started); d > time.Second {
+					nlog.Warningln("hk call(", item.name, ") duration exceeds 1s:", d.String())
+				}
 			}
 			hk.updateTimer()
 		case req := <-hk.workCh:

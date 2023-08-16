@@ -289,9 +289,14 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	// 3. capacity
 	cs, updated, errfs := fs.CapPeriodic(now, config, &r.TargetCDF)
 	if updated {
-		if cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
+		if cs.Err == nil && cs.PctMax > int32(config.Space.CleanupWM) {
+			debug.Assert(!cs.OOS)
+			cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, cs.OOS)
+		}
+		if cs.Err != nil {
 			r.t.OOS(&cs)
 		}
+
 		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
 			ln := cos.MustMarshalToString(fsCapacity)
 			r.lines = append(r.lines, mpath+": "+ln)
@@ -311,10 +316,11 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 6. running xactions
+	verbose := config.FastV(4, cos.SmoduleStats)
 	if !idle {
 		var (
 			ln     string
-			rs, is = r.t.GetAllRunning("", true /*separate idle*/)
+			rs, is = r.t.GetAllRunning("", verbose /*separate idle*/)
 		)
 		if len(rs) > 0 {
 			ln = "running: " + strings.Join(rs, " ")

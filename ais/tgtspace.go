@@ -6,12 +6,15 @@ package ais
 
 import (
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -21,25 +24,42 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+const (
+	// note that an API call (e.g. CLI) will go through anyway
+	minAutoDetectInterval = 10 * time.Minute
+)
+
+var (
+	lastTrigOOS atomic.Int64
+)
+
 // triggers by an out-of-space condition or a suspicion of thereof
 func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
-	var err error
 	if csRefreshed != nil {
 		cs = *csRefreshed
 	} else {
+		var err error
 		cs, err = fs.CapRefresh(nil, nil)
 		if err != nil {
-			nlog.Errorf("%s: %v", t, err)
+			nlog.Errorf("%s failed to update capacity stats: %v", t, err)
 			return
 		}
 	}
-	if cs.Err != nil {
-		nlog.Warningf("%s: %s", t, cs.String())
+	if cs.Err == nil {
+		return // unlikely; nothing to do
 	}
-	// run serially, cleanup first and LRU iff out-of-space persists
+	if prev := lastTrigOOS.Load(); mono.Since(prev) < minAutoDetectInterval {
+		nlog.Warningf("%s: _not_ running store cleanup: (%v, %v), %s", t, prev, minAutoDetectInterval, cs.String())
+		return
+	}
+
+	nlog.Warningln(t.String(), "running store cleanup:", cs.String())
+	// run serially, cleanup first and LRU second, iff out-of-space persists
 	go func() {
 		cs := t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
+		lastTrigOOS.Store(mono.NanoTime())
 		if cs.Err != nil {
+			nlog.Warningln(t.String(), "still OOS, running LRU eviction now...", cs.String())
 			t.runLRU("" /*uuid*/, nil /*wg*/, false)
 		}
 	}()

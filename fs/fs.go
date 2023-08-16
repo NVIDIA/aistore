@@ -1127,7 +1127,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 	cs.PctAvg /= int32(len(availablePaths))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
-		cs.Err = cmn.NewErrCapacityExceeded(high, cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, cs.PctMax, cs.OOS)
+		cs.Err = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, high, 0 /*cleanup wm*/, cs.PctMax, cs.OOS)
 		errmsg = cs.Err.Error()
 	}
 	if tcdf != nil {

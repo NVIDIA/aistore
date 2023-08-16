@@ -240,7 +240,7 @@ func (poi *putOI) finalize() (errCode int, err error) {
 	if !poi.skipEC {
 		if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
 			err = ecErr
-			if cmn.IsErrCapacityExceeded(err) {
+			if cmn.IsErrCapExceeded(err) {
 				errCode = http.StatusInsufficientStorage
 			}
 			return
@@ -762,7 +762,7 @@ gfn:
 		err = cmn.NewErrFailedTo(tname, "load EC-recovered", goi.lom, ecErr)
 	} else if ecErr != ec.ErrorECDisabled {
 		err = cmn.NewErrFailedTo(tname, "EC-recover", goi.lom, ecErr)
-		if cmn.IsErrCapacityExceeded(ecErr) {
+		if cmn.IsErrCapExceeded(ecErr) {
 			errCode = http.StatusInsufficientStorage
 		}
 		return
@@ -1581,7 +1581,7 @@ func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format) (size int64, err erro
 
 func (*putA2I) reterr(err error) (int, error) {
 	errCode := http.StatusInternalServerError
-	if cmn.IsErrCapacityExceeded(err) {
+	if cmn.IsErrCapExceeded(err) {
 		errCode = http.StatusInsufficientStorage
 	}
 	return errCode, err
