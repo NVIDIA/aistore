@@ -238,7 +238,7 @@ metadata:
   annotations:
     # Values it can take ["hpull://","hrev://","hpush://"]
     communication_type: "{communication_type}"
-    wait_timeout: 5m
+    wait_timeout: 10m
 spec:
   containers:
     - name: server
