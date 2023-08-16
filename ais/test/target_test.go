@@ -37,7 +37,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 
 	url := smap.Tmap[sid].URL(cmn.NetPublic)
 	baseParams := tools.BaseAPIParams(url)
-	reader := readers.NewBytesReader(objDummyData)
+	reader := readers.NewBytes(objDummyData)
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,

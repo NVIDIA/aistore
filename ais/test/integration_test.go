@@ -1240,7 +1240,7 @@ func TestAtimeLocalGet(t *testing.T) {
 		proxyURL      = tools.RandomProxyURL(t)
 		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("file content"))
+		objectContent = readers.NewBytes([]byte("file content"))
 	)
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -1267,7 +1267,7 @@ func TestAtimeColdGet(t *testing.T) {
 		proxyURL      = tools.RandomProxyURL(t)
 		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("dummy content"))
+		objectContent = readers.NewBytes([]byte("dummy content"))
 	)
 
 	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
@@ -1323,7 +1323,7 @@ func TestAtimePrefetch(t *testing.T) {
 				BaseParams: baseParams,
 				Bck:        bck,
 				ObjName:    object,
-				Reader:     readers.NewBytesReader([]byte("dummy content")),
+				Reader:     readers.NewBytes([]byte("dummy content")),
 			})
 			if err == nil {
 				nameCh <- object
@@ -1379,7 +1379,7 @@ func TestAtimeLocalPut(t *testing.T) {
 		proxyURL      = tools.RandomProxyURL(t)
 		baseParams    = tools.BaseAPIParams(proxyURL)
 		objectName    = t.Name()
-		objectContent = readers.NewBytesReader([]byte("dummy content"))
+		objectContent = readers.NewBytes([]byte("dummy content"))
 	)
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)

@@ -354,7 +354,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 						args.CksumType = cos.ChecksumNone
 					}
 
-					reader, err := readers.NewRandReader(int64(size), args.CksumType)
+					reader, err := readers.NewRand(int64(size), args.CksumType)
 					cos.AssertNoErr(err)
 
 					// We could PUT while creating files, but that makes it

@@ -85,7 +85,7 @@ func TestETLMultiObj(t *testing.T) {
 
 		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck)
 		for i := 0; i < objCnt; i++ {
-			r, _ := readers.NewRandReader(objSize, cksumType)
+			r, _ := readers.NewRand(objSize, cksumType)
 			_, err := api.PutObject(api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        m.bck,

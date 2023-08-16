@@ -781,7 +781,7 @@ func TestDeleteList(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < objCnt; i++ {
-			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
+			r, err := readers.NewRand(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
 			keyname := fmt.Sprintf("%s%d", prefix, i)
@@ -897,7 +897,7 @@ func TestDeleteRange(t *testing.T) {
 
 		// 1. Put files to delete
 		for i := 0; i < objCnt; i++ {
-			r, err := readers.NewRandReader(fileSize, bck.Props.Cksum.Type)
+			r, err := readers.NewRand(fileSize, bck.Props.Cksum.Type)
 			tassert.CheckFatal(t, err)
 
 			wg.Add(1)
@@ -989,7 +989,7 @@ func TestStressDeleteRange(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		size := rand.Int63n(cos.KiB*128) + cos.KiB/3
 		tassert.CheckFatal(t, err)
-		reader, err := readers.NewRandReader(size, cksumType)
+		reader, err := readers.NewRand(size, cksumType)
 		tassert.CheckFatal(t, err)
 
 		wg.Add(1)

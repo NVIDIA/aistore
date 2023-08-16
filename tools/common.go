@@ -129,7 +129,7 @@ func isCloudBucket(tb testing.TB, proxyURL string, bck cmn.Bck) bool {
 }
 
 func PutObjRR(bp api.BaseParams, bck cmn.Bck, objName string, objSize int64, cksumType string) error {
-	reader, err := readers.NewRandReader(objSize, cksumType)
+	reader, err := readers.NewRand(objSize, cksumType)
 	if err != nil {
 		return err
 	}

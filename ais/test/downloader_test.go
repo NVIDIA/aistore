@@ -503,7 +503,7 @@ func TestDownloadRemote(t *testing.T) {
 
 			expectedObjs := make([]string, 0, fileCnt)
 			for i := 0; i < fileCnt; i++ {
-				reader, err := readers.NewRandReader(256, cos.ChecksumNone)
+				reader, err := readers.NewRand(256, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 
 				objName := fmt.Sprintf("%s%0*d%s", prefix, 5, i, suffix)
@@ -921,7 +921,7 @@ func TestDownloadOverrideObject(t *testing.T) {
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
-	r, _ := readers.NewRandReader(10, p.Cksum.Type)
+	r, _ := readers.NewRand(10, p.Cksum.Type)
 	_, err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
@@ -968,7 +968,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
 	// Update the file
-	r, _ := readers.NewRandReader(newSize, p.Cksum.Type)
+	r, _ := readers.NewRand(newSize, p.Cksum.Type)
 	_, err := api.PutObject(api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,

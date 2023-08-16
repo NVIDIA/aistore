@@ -283,8 +283,8 @@ func parseCmdLine() (params, error) {
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
-	f.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
-		fmt.Sprintf("Type of reader: %s(default) | %s | %s | %s", readers.ReaderTypeSG, readers.ReaderTypeFile, readers.ReaderTypeRand, readers.ReaderTypeTar))
+	f.StringVar(&p.readerType, "readertype", readers.TypeSG,
+		fmt.Sprintf("Type of reader: %s(default) | %s | %s | %s", readers.TypeSG, readers.TypeFile, readers.TypeRand, readers.TypeTar))
 	f.StringVar(&p.loaderID, "loaderid", "0", "ID to identify a loader among multiple concurrent instances")
 	f.StringVar(&p.statsdIP, "statsdip", "localhost", "StatsD IP address or hostname")
 	f.StringVar(&p.tokenFile, "tokenfile", "", "authentication token (FQN)") // see also: AIS_AUTHN_TOKEN_FILE
@@ -720,7 +720,7 @@ func Start(version, buildtime string) (err error) {
 		runParams.duration.Val = time.Duration(math.MaxInt64)
 	}
 
-	if runParams.readerType == readers.ReaderTypeFile {
+	if runParams.readerType == readers.TypeFile {
 		if err := cos.CreateDir(runParams.tmpDir + "/" + myName); err != nil {
 			return fmt.Errorf("failed to create local test directory %q, err = %s", runParams.tmpDir, err.Error())
 		}
@@ -1204,7 +1204,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		}
 	}
 
-	if runParams.readerType == readers.ReaderTypeFile {
+	if runParams.readerType == readers.TypeFile {
 		for _, obj := range objs {
 			if err := os.Remove(runParams.tmpDir + "/" + obj); err != nil {
 				fmt.Println("delete local file err ", err)

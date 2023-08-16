@@ -133,7 +133,7 @@ func createTestFile(filePath, objName string, size int64) {
 	err := cos.CreateDir(filePath)
 	Expect(err).ShouldNot(HaveOccurred())
 
-	r, err := readers.NewFileReader(filePath, objName, size, cos.ChecksumNone)
+	r, err := readers.NewRandFile(filePath, objName, size, cos.ChecksumNone)
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }

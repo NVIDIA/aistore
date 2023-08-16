@@ -317,7 +317,7 @@ func (df *dsortFramework) createInputShards() {
 			}
 			tassert.CheckFatal(df.m.t, err)
 
-			reader, err := readers.NewFileReaderFromFile(tarName, cos.ChecksumNone)
+			reader, err := readers.NewExistingFile(tarName, cos.ChecksumNone)
 			tassert.CheckFatal(df.m.t, err)
 
 			objName := filepath.Base(tarName)
@@ -1966,7 +1966,7 @@ func TestDsortOrderFile(t *testing.T) {
 				BaseParams: baseParams,
 				Bck:        m.bck,
 				ObjName:    orderFileName,
-				Reader:     readers.NewBytesReader(buffer.Bytes()),
+				Reader:     readers.NewBytes(buffer.Bytes()),
 			}
 			_, err = api.PutObject(args)
 			tassert.CheckFatal(t, err)
@@ -2074,7 +2074,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 				BaseParams: baseParams,
 				Bck:        m.bck,
 				ObjName:    orderFileName,
-				Reader:     readers.NewBytesReader(jsonBytes),
+				Reader:     readers.NewBytes(jsonBytes),
 			}
 			_, err = api.PutObject(args)
 			tassert.CheckFatal(t, err)

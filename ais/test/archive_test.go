@@ -95,9 +95,12 @@ func TestGetFromArch(t *testing.T) {
 		if testing.Short() {
 			numArchived = 10
 		}
-		var sparsePrint atomic.Int64
+		var (
+			sparsePrint           atomic.Int64
+			corruptAutoDetectOnce atomic.Int64
+		)
 		for _, test := range subtests {
-			tname := fmt.Sprintf("%s/nested=%t/auto=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
+			tname := fmt.Sprintf("%s/nested=%t/detect=%t/mime=%t", test.ext, test.nested, test.autodetect, test.mime)
 			for _, tf := range []tar.Format{tar.FormatUnknown, tar.FormatGNU, tar.FormatPAX} {
 				tarFormat := tf
 				t.Run(path.Join(tname, "format-"+tarFormat.String()), func(t *testing.T) {
@@ -130,18 +133,29 @@ func TestGetFromArch(t *testing.T) {
 						randomNames, // pregenerated filenames
 					)
 					tassert.CheckFatal(t, err)
-					defer os.Remove(archName)
 
 					objname := filepath.Base(archName)
 					if test.autodetect {
 						objname = objname[0 : len(objname)-len(test.ext)]
 					}
-					reader, err := readers.NewFileReaderFromFile(archName, cos.ChecksumNone)
+
+					var (
+						reader    readers.Reader
+						corrupted bool
+					)
+					if test.autodetect && corruptAutoDetectOnce.Inc() == 1 {
+						corrupted = true
+						tlog.Logf("============== damaging %s - overwriting w/ random data\n", archName)
+						reader, err = readers.NewRandFile(filepath.Dir(archName),
+							filepath.Base(archName), 1024, cos.ChecksumNone)
+					} else {
+						reader, err = readers.NewExistingFile(archName, cos.ChecksumNone)
+					}
 					tassert.CheckFatal(t, err)
+					defer os.Remove(archName)
 
 					tools.Put(m.proxyURL, m.bck, objname, reader, errCh)
 					tassert.SelectErr(t, errCh, "put", true)
-					defer tools.Del(m.proxyURL, m.bck, objname, nil, nil, true)
 
 					for _, randomName := range randomNames {
 						var mime string
@@ -158,6 +172,10 @@ func TestGetFromArch(t *testing.T) {
 						if sparsePrint.Inc()%13 == 0 {
 							tlog.Logf("%s?%s=%s(%dB)\n", m.bck.Cname(objname), apc.QparamArchpath,
 								randomName, oah.Size())
+						}
+						if corrupted {
+							tassert.Errorf(t, err != nil, "expecting error reading corrupted arch %q", archName)
+							break
 						}
 						tassert.CheckFatal(t, err)
 					}
@@ -543,7 +561,7 @@ func TestAppendToArch(t *testing.T) {
 					}()
 				} else {
 					for j := 0; j < numAdd; j++ {
-						reader, _ := readers.NewRandReader(fileSize, cos.ChecksumNone)
+						reader, _ := readers.NewRand(fileSize, cos.ChecksumNone)
 						putArgs := api.PutArgs{
 							BaseParams: baseParams,
 							Bck:        bckTo,

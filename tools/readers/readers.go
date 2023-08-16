@@ -24,26 +24,22 @@ import (
 )
 
 const (
-	// ReaderTypeFile defines the name for file reader
-	ReaderTypeFile = "file"
-	// ReaderTypeSG defines the name for sg reader
-	ReaderTypeSG = "sg"
-	// ReaderTypeRand defines the name for rand reader
-	ReaderTypeRand = "rand"
-	// ReaderTypeTar defines the name for random TAR reader
-	ReaderTypeTar = "tar"
+	// TypeFile defines the name for file reader
+	TypeFile = "file"
+	// TypeSG defines the name for sg reader
+	TypeSG = "sg"
+	// TypeRand defines the name for rand reader
+	TypeRand = "rand"
+	// TypeTar defines the name for random TAR reader
+	TypeTar = "tar"
 )
 
-// Reader is the interface a client works with to read in data and send to a HTTP server
 type (
 	Reader interface {
 		cos.ReadOpenCloser
 		io.Seeker
 		Cksum() *cos.Cksum
 	}
-
-	// randReader implements Reader.
-	// It doesn't use a file or allocated memory as data backing.
 	randReader struct {
 		seed   int64
 		rnd    *rand.Rand
@@ -51,14 +47,37 @@ type (
 		offset int64
 		cksum  *cos.Cksum
 	}
-
-	// tarReader generates TAR (uncompressed) files as a io.Reader.
-	// Content of files are random.
-	// It uses bytes.Buffer to write bytes to memory, it doesn't use sgl.
 	tarReader struct {
 		b []byte
 		bytes.Reader
 		cksum *cos.Cksum
+	}
+	rrLimited struct {
+		random *rand.Rand
+		size   int64
+		off    int64
+	}
+	fileReader struct {
+		*os.File
+		filePath string // Example: "/dir/ais/"
+		name     string // Example: "smoke/bGzhWKWoxHDSePnELftx"
+		cksum    *cos.Cksum
+	}
+	sgReader struct {
+		memsys.Reader
+		cksum *cos.Cksum
+	}
+	bytesReader struct {
+		*bytes.Buffer
+		buf []byte
+	}
+
+	// (aisloader only)
+	Params struct {
+		Type       string      // file | sg | inmem | rand
+		SGL        *memsys.SGL // When Type == sg
+		Path, Name string      // When Type == file; path and name of file to be created (if not already existing)
+		Size       int64
 	}
 )
 
@@ -66,9 +85,37 @@ type (
 var (
 	_ Reader = (*randReader)(nil)
 	_ Reader = (*tarReader)(nil)
+	_ Reader = (*fileReader)(nil)
+	_ Reader = (*sgReader)(nil)
 )
 
-// Read implements the Reader interface.
+////////////////
+// randReader //
+////////////////
+
+func NewRand(size int64, cksumType string) (Reader, error) {
+	var (
+		cksum *cos.Cksum
+		seed  = mono.NanoTime()
+	)
+	rand1 := rand.New(rand.NewSource(seed))
+	if cksumType != cos.ChecksumNone {
+		rr := &rrLimited{rand1, size, 0}
+		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, cksumType)
+		if err != nil {
+			return nil, err
+		}
+		cksum = cksumHash.Clone()
+	}
+	rand1dup := rand.New(rand.NewSource(seed))
+	return &randReader{
+		seed:  seed,
+		rnd:   rand1dup,
+		size:  size,
+		cksum: cksum,
+	}, nil
+}
+
 func (r *randReader) Read(buf []byte) (int, error) {
 	available := r.size - r.offset
 	if available == 0 {
@@ -144,36 +191,6 @@ func (r *randReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
-// NewRandReader returns a new randReader
-func NewRandReader(size int64, cksumType string) (Reader, error) {
-	var (
-		cksum *cos.Cksum
-		seed  = mono.NanoTime()
-	)
-	rand1 := rand.New(rand.NewSource(seed))
-	if cksumType != cos.ChecksumNone {
-		rr := &rrLimited{rand1, size, 0}
-		_, cksumHash, err := cos.CopyAndChecksum(io.Discard, rr, nil, cksumType)
-		if err != nil {
-			return nil, err
-		}
-		cksum = cksumHash.Clone()
-	}
-	rand1dup := rand.New(rand.NewSource(seed))
-	return &randReader{
-		seed:  seed,
-		rnd:   rand1dup,
-		size:  size,
-		cksum: cksum,
-	}, nil
-}
-
-type rrLimited struct {
-	random *rand.Rand
-	size   int64
-	off    int64
-}
-
 func (rr *rrLimited) Read(p []byte) (n int, err error) {
 	rem := int(cos.MinI64(rr.size-rr.off, int64(len(p))))
 	n, _ = rr.random.Read(p[:rem]) // never fails
@@ -184,33 +201,13 @@ func (rr *rrLimited) Read(p []byte) (n int, err error) {
 	return
 }
 
-type fileReader struct {
-	*os.File
-	filePath string // Example: "/dir/ais/"
-	name     string // Example: "smoke/bGzhWKWoxHDSePnELftx"
-	cksum    *cos.Cksum
-}
+////////////////
+// fileReader //
+////////////////
 
-// interface guard
-var _ Reader = (*fileReader)(nil)
-
-// Open implements the Reader interface.
-func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
-	cksumType := cos.ChecksumNone
-	if r.cksum != nil {
-		cksumType = r.cksum.Type()
-	}
-	return NewFileReader(r.filePath, r.name, -1, cksumType)
-}
-
-// XXHash implements the Reader interface.
-func (r *fileReader) Cksum() *cos.Cksum {
-	return r.cksum
-}
-
-// NewFileReader creates/opens the file, populates it with random data, and returns a new fileReader
+// creates/opens the file, populates it with random data, and returns a new fileReader
 // NOTE: Caller is responsible for closing.
-func NewFileReader(filepath, name string, size int64, cksumType string) (Reader, error) {
+func NewRandFile(filepath, name string, size int64, cksumType string) (Reader, error) {
 	var (
 		cksum     *cos.Cksum
 		cksumHash *cos.CksumHash
@@ -244,28 +241,30 @@ func NewFileReader(filepath, name string, size int64, cksumType string) (Reader,
 	return &fileReader{f, filepath, name, cksum}, nil
 }
 
-// NewFileReaderFromFile opens an existing file, reads it to compute checksum,
-// and returns a new reader.
+// NewExistingFile opens an existing file, reads it to compute checksum, and returns a new reader.
 // NOTE: Caller responsible for closing.
-func NewFileReaderFromFile(fn, cksumType string) (Reader, error) {
-	return NewFileReader(fn, "", -1, cksumType)
+func NewExistingFile(fn, cksumType string) (Reader, error) {
+	return NewRandFile(fn, "", -1, cksumType)
 }
 
-type sgReader struct {
-	memsys.Reader
-	cksum *cos.Cksum
+func (r *fileReader) Open() (cos.ReadOpenCloser, error) {
+	cksumType := cos.ChecksumNone
+	if r.cksum != nil {
+		cksumType = r.cksum.Type()
+	}
+	return NewRandFile(r.filePath, r.name, -1, cksumType)
 }
-
-// interface guard
-var _ Reader = (*sgReader)(nil)
 
 // XXHash implements the Reader interface.
-func (r *sgReader) Cksum() *cos.Cksum {
+func (r *fileReader) Cksum() *cos.Cksum {
 	return r.cksum
 }
 
-// NewSGReader returns a new sgReader
-func NewSGReader(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
+//////////////
+// sgReader //
+//////////////
+
+func NewSG(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) {
 	var cksum *cos.Cksum
 	if size > 0 {
 		cksumHash, err := copyRandWithHash(sgl, size, cksumType, cos.NowRand())
@@ -281,49 +280,73 @@ func NewSGReader(sgl *memsys.SGL, size int64, cksumType string) (Reader, error) 
 	return &sgReader{*r, cksum}, nil
 }
 
-type bytesReader struct {
-	*bytes.Buffer
-	buf []byte
+func (r *sgReader) Cksum() *cos.Cksum {
+	return r.cksum
 }
 
-// Open implements the Reader interface.
+/////////////////
+// bytesReader //
+/////////////////
+
+func NewBytes(buf []byte) Reader                    { return &bytesReader{bytes.NewBuffer(buf), buf} }
+func (*bytesReader) Close() error                   { return nil }
+func (*bytesReader) Cksum() *cos.Cksum              { return nil }
+func (*bytesReader) Seek(int64, int) (int64, error) { return 0, nil }
+
 func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 	return &bytesReader{bytes.NewBuffer(r.buf), r.buf}, nil
 }
 
-// Close implements the Reader interface.
-func (*bytesReader) Close() error { return nil }
+///////////////
+// tarReader //
+///////////////
 
-func (*bytesReader) Cksum() *cos.Cksum { return nil }
-
-func (*bytesReader) Seek(int64, int) (int64, error) {
-	return 0, nil
+func newTarReader(size int64, cksumType string) (r Reader, err error) {
+	var (
+		singleFileSize = cos.MinI64(size, int64(cos.KiB))
+		buff           = bytes.NewBuffer(nil)
+	)
+	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
+		int(singleFileSize), shard.ContentKeyInt, ".cls", true)
+	if err != nil {
+		return nil, err
+	}
+	cksum, err := cos.ChecksumBytes(buff.Bytes(), cksumType)
+	if err != nil {
+		return nil, err
+	}
+	return &tarReader{
+		b:      buff.Bytes(),
+		Reader: *bytes.NewReader(buff.Bytes()),
+		cksum:  cksum,
+	}, err
 }
 
-// NewBytesReader returns a new bytesReader
-func NewBytesReader(buf []byte) Reader {
-	return &bytesReader{bytes.NewBuffer(buf), buf}
+func (*tarReader) Close() error        { return nil }
+func (r *tarReader) Cksum() *cos.Cksum { return r.cksum }
+
+func (r *tarReader) Open() (cos.ReadOpenCloser, error) {
+	return &tarReader{
+		Reader: *bytes.NewReader(r.b),
+		cksum:  r.cksum,
+		b:      r.b,
+	}, nil
 }
 
-// ParamReader is used to pass in parameters when creating a new reader
-type ParamReader struct {
-	Type       string      // file | sg | inmem | rand
-	SGL        *memsys.SGL // When Type == sg
-	Path, Name string      // When Type == file; path and name of file to be created (if not already existing)
-	Size       int64
-}
+//
+// for convenience
+//
 
-// NewReader returns a data reader; type of reader returned is based on the parameters provided
-func NewReader(p ParamReader, cksumType string) (Reader, error) {
+func New(p Params, cksumType string) (Reader, error) {
 	switch p.Type {
-	case ReaderTypeSG:
+	case TypeSG:
 		debug.Assert(p.SGL != nil)
-		return NewSGReader(p.SGL, p.Size, cksumType)
-	case ReaderTypeRand:
-		return NewRandReader(p.Size, cksumType)
-	case ReaderTypeFile:
-		return NewFileReader(p.Path, p.Name, p.Size, cksumType)
-	case ReaderTypeTar:
+		return NewSG(p.SGL, p.Size, cksumType)
+	case TypeRand:
+		return NewRand(p.Size, cksumType)
+	case TypeFile:
+		return NewRandFile(p.Path, p.Name, p.Size, cksumType)
+	case TypeTar:
 		return newTarReader(p.Size, cksumType)
 	default:
 		return nil, fmt.Errorf("unknown memory type for creating inmem reader")
@@ -362,41 +385,4 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 		cksum.Finalize()
 	}
 	return cksum, nil
-}
-
-// To implement Reader
-func (*tarReader) Close() error { return nil }
-
-// To implement Reader
-func (r *tarReader) Open() (cos.ReadOpenCloser, error) {
-	return &tarReader{
-		Reader: *bytes.NewReader(r.b),
-		cksum:  r.cksum,
-		b:      r.b,
-	}, nil
-}
-
-func (r *tarReader) Cksum() *cos.Cksum {
-	return r.cksum
-}
-
-func newTarReader(size int64, cksumType string) (r Reader, err error) {
-	var (
-		singleFileSize = cos.MinI64(size, int64(cos.KiB))
-		buff           = bytes.NewBuffer(nil)
-	)
-	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
-		int(singleFileSize), shard.ContentKeyInt, ".cls", true)
-	if err != nil {
-		return nil, err
-	}
-	cksum, err := cos.ChecksumBytes(buff.Bytes(), cksumType)
-	if err != nil {
-		return nil, err
-	}
-	return &tarReader{
-		b:      buff.Bytes(),
-		Reader: *bytes.NewReader(buff.Bytes()),
-		cksum:  cksum,
-	}, err
 }

@@ -153,7 +153,7 @@ func testETLObject(t *testing.T, etlName, inPath, outPath string, fTransform tra
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	tlog.Logln("PUT object")
-	reader, err := readers.NewFileReaderFromFile(inputFilePath, cos.ChecksumNone)
+	reader, err := readers.NewExistingFile(inputFilePath, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 	tools.PutObject(t, bck, objName, reader)
 
@@ -183,7 +183,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 
 	objName := fmt.Sprintf("%s-%s-object", etlName, trand.String(5))
 	tlog.Logln("PUT object")
-	reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
+	reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.PutObject(api.PutArgs{
@@ -370,7 +370,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 
 	tlog.Logln("PUT object")
 	objName := trand.String(10)
-	reader, err := readers.NewRandReader(cos.MiB, cos.ChecksumMD5)
+	reader, err := readers.NewRand(cos.MiB, cos.ChecksumMD5)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.PutObject(api.PutArgs{

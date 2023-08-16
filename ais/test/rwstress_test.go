@@ -67,7 +67,7 @@ func parallelOpLoop(bck cmn.Bck, cksumType string,
 }
 
 func opPut(objName, cksumType string, bck cmn.Bck) opRes {
-	r, err := readers.NewRandReader(fileSize, cksumType)
+	r, err := readers.NewRand(fileSize, cksumType)
 	if err != nil {
 		return opRes{http.MethodPut, err}
 	}

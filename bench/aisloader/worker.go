@@ -20,12 +20,12 @@ import (
 
 func doPut(wo *workOrder) {
 	var sgl *memsys.SGL
-	if runParams.readerType == readers.ReaderTypeSG {
+	if runParams.readerType == readers.TypeSG {
 		sgl = gmm.NewSGL(wo.size)
 		wo.sgl = sgl
 	}
 
-	r, err := readers.NewReader(readers.ParamReader{
+	r, err := readers.New(readers.Params{
 		Type: runParams.readerType,
 		SGL:  sgl,
 		Path: runParams.tmpDir,
@@ -33,7 +33,7 @@ func doPut(wo *workOrder) {
 		Size: wo.size,
 	}, wo.cksumType)
 
-	if runParams.readerType == readers.ReaderTypeFile {
+	if runParams.readerType == readers.TypeFile {
 		defer os.Remove(path.Join(runParams.tmpDir, wo.objName))
 	}
 

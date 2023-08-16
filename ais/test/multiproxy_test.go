@@ -688,7 +688,7 @@ func concurrentPutGetDel(t *testing.T) {
 func proxyPutGetDelete(count int, proxyURL string, bck cmn.Bck, cksumType string) error {
 	baseParams := tools.BaseAPIParams(proxyURL)
 	for i := 0; i < count; i++ {
-		reader, err := readers.NewRandReader(fileSize, cksumType)
+		reader, err := readers.NewRand(fileSize, cksumType)
 		if err != nil {
 			return fmt.Errorf("error creating reader: %v", err)
 		}
@@ -756,7 +756,7 @@ loop:
 		default:
 		}
 
-		reader, err := readers.NewRandReader(fileSize, cksumType)
+		reader, err := readers.NewRand(fileSize, cksumType)
 		if err != nil {
 			errCh <- err
 			continue

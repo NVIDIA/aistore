@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -126,7 +128,14 @@ func MimeFile(file *os.File, smm *memsys.MMSA, mime, archname string) (m string,
 	)
 	m, n, err = _detect(file, archname, buf)
 	if n > 0 {
-		_, err = file.Seek(0, io.SeekStart)
+		_, errV := file.Seek(0, io.SeekStart)
+		debug.AssertNoErr(errV)
+		if err == nil {
+			err = errV
+		}
+		if err == nil {
+			nlog.Infoln("archname", archname, "is in fact", m, "(via magic sign)")
+		}
 	}
 	slab.Free(buf)
 	return
@@ -166,11 +175,10 @@ func _detect(file *os.File, archname string, buf []byte) (m string, n int, err e
 	}
 	for _, magic := range allMagics {
 		if n > magic.offset && bytes.HasPrefix(buf[magic.offset:], magic.sig) {
-			m = magic.mime
-			return // ok
+			return magic.mime, n, nil
 		}
 	}
-	err = fmt.Errorf("failed to detect file signature in %q", archname)
+	err = fmt.Errorf("failed to detect supported file signatures in %q", archname)
 	return
 }
 

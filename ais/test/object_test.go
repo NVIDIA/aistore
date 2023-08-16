@@ -90,7 +90,7 @@ func TestObjectInvalidName(t *testing.T) {
 		t.Run(test.op, func(t *testing.T) {
 			switch test.op {
 			case putOP:
-				reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
+				reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
 				_, err = api.PutObject(api.PutArgs{
 					BaseParams: baseParams,
@@ -136,7 +136,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				bck.Name = cliBck.Name
 			}
 
-			reader, err := readers.NewRandReader(cos.KiB, cos.ChecksumNone)
+			reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
 			tassert.CheckFatal(t, err)
 
 			defer api.DeleteObject(baseParams, bck, object)
@@ -320,14 +320,14 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		ObjName:    fileName1,
-		Reader:     readers.NewBytesReader(dataLocal),
+		Reader:     readers.NewBytes(dataLocal),
 	}
 
 	putArgsRemote := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckRemote,
 		ObjName:    fileName1,
-		Reader:     readers.NewBytesReader(dataRemote),
+		Reader:     readers.NewBytes(dataRemote),
 	}
 
 	// PUT/GET/DEL Without ais bucket
@@ -482,7 +482,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckLocal,
 		ObjName:    fileName,
-		Reader:     readers.NewBytesReader(dataLocal),
+		Reader:     readers.NewBytes(dataLocal),
 	}
 	_, err := api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
@@ -495,7 +495,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		BaseParams: baseParams,
 		Bck:        bckRemote,
 		ObjName:    fileName,
-		Reader:     readers.NewBytesReader(dataRemote),
+		Reader:     readers.NewBytes(dataRemote),
 	}
 	_, err = api.PutObject(putArgs)
 	tassert.CheckFatal(t, err)
@@ -1377,7 +1377,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bckLocal,
-		Reader:     readers.NewBytesReader(objData),
+		Reader:     readers.NewBytes(objData),
 	}
 	for _, cksumType := range cos.SupportedChecksums() {
 		if cksumType == cos.ChecksumNone {
@@ -1440,7 +1440,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					)
 				}
 				for _, objName := range objList {
-					r, _ := readers.NewRandReader(objSize, cksumType)
+					r, _ := readers.NewRand(objSize, cksumType)
 					_, err := api.PutObject(api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),

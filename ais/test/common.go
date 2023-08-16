@@ -292,7 +292,7 @@ func (m *ioContext) _remoteFill(objCnt int, evict, override bool) {
 	tassert.CheckFatal(m.t, err)
 
 	for i := 0; i < objCnt; i++ {
-		r, err := readers.NewRandReader(int64(m.fileSize), p.Cksum.Type)
+		r, err := readers.NewRand(int64(m.fileSize), p.Cksum.Type)
 		tassert.CheckFatal(m.t, err)
 
 		var objName string
@@ -875,7 +875,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.
-		r, err := readers.NewRandReader(fileSize, cksumType)
+		r, err := readers.NewRand(fileSize, cksumType)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -891,7 +891,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string, bck cmn.Bck, cksumType str
 	for _, fName := range extraNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// NOTE: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader.
-		r, err := readers.NewRandReader(fileSize, cksumType)
+		r, err := readers.NewRand(fileSize, cksumType)
 		if err != nil {
 			t.Fatal(err)
 		}
