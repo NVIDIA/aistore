@@ -89,10 +89,13 @@ type (
 		Resilver   bool // moves data between mountpaths
 		MassiveBck bool // massive data copying (transforming, encoding) operation on a bucket
 
-		// xaction has an intermediate `idle` state whereby it becomes `idle` in-between
-		// requests - typically, for up to a few dozen seconds prior to finishing
-		// (see also: xact/demand.go)
+		// xaction has an intermediate `idle` state whereby it "idles" between requests
+		// (see related: xact/demand.go)
 		Idles bool
+
+		// xaction returns extended xaction-specific stats
+		// (see related: `Snap.Ext` in cluster/xaction.go)
+		ExtendedStats bool
 	}
 )
 
@@ -130,18 +133,52 @@ var Table = map[string]Descriptor{
 
 	// on-demand EC and n-way replication
 	// (non-startable, triggered by PUT => erasure-coded or mirrored bucket)
-	apc.ActECGet:     {Scope: ScopeB, Startable: false, Idles: true},
-	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true},
+	apc.ActECGet:     {Scope: ScopeB, Startable: false, Idles: true, ExtendedStats: true},
+	apc.ActECPut:     {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true, ExtendedStats: true},
 	apc.ActECRespond: {Scope: ScopeB, Startable: false, Idles: true},
 	apc.ActPutCopies: {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true},
 
-	// on-demand multi-object
-	apc.ActArchive:     {Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
-	apc.ActCopyObjects: {DisplayName: "copy-objects", Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
-	apc.ActETLObjects:  {DisplayName: "etl-objects", Scope: ScopeB, Startable: false, RefreshCap: true, Idles: true},
+	//
+	// on-demand multi-object (TODO: consider MassiveBck: true)
+	//
+	apc.ActArchive: {Scope: ScopeB, Access: apc.AccessRW, Startable: false, RefreshCap: true, Idles: true},
+	apc.ActCopyObjects: {
+		DisplayName: "copy-objects",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW, // TODO -- FIXME: apc.AceCreateBucket but only if
+		Startable:   false,
+		RefreshCap:  true,
+		Idles:       true,
+	},
+	apc.ActETLObjects: {
+		DisplayName: "etl-objects",
+		Scope:       ScopeB,
+		Access:      apc.AccessRW, // ditto
+		Startable:   false,
+		RefreshCap:  true,
+		Idles:       true,
+	},
+
+	// in its own class
+	apc.ActDsort: {
+		DisplayName:   "dsort",
+		Scope:         ScopeB,
+		Access:        apc.AccessRW,
+		Startable:     false,
+		RefreshCap:    true,
+		Mountpath:     true,
+		MassiveBck:    true,
+		ExtendedStats: true,
+	},
 
 	// multi-object
-	apc.ActPromote: {DisplayName: "promote-files", Scope: ScopeB, Access: apc.AcePromote, Startable: false, RefreshCap: true},
+	apc.ActPromote: {
+		DisplayName: "promote-files",
+		Scope:       ScopeB,
+		Access:      apc.AcePromote,
+		Startable:   false,
+		RefreshCap:  true,
+	},
 	apc.ActEvictObjects: {
 		DisplayName: "evict-objects",
 		Scope:       ScopeB,
@@ -202,8 +239,8 @@ var Table = map[string]Descriptor{
 	apc.ActCopyBck: {
 		DisplayName: "copy-bucket",
 		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   false, // ditto
+		Access:      apc.AccessRW, // TODO -- FIXME: apc.AceCreateBucket but only if destination doesn't exist
+		Startable:   false,        // ditto
 		Metasync:    true,
 		Owned:       false,
 		RefreshCap:  true,
@@ -213,8 +250,8 @@ var Table = map[string]Descriptor{
 	apc.ActETLBck: {
 		DisplayName: "etl-bucket",
 		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   false, // ditto
+		Access:      apc.AccessRW, // ditto
+		Startable:   false,        // ditto
 		Metasync:    true,
 		Owned:       false,
 		RefreshCap:  true,

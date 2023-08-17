@@ -124,15 +124,14 @@ func (p *proxy) httpdlpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, error) {
+	config := cmn.GCO.Get()
 	if msg.ID != "" && method == http.MethodGet && msg.OnlyActive {
 		nl := p.notifs.entry(msg.ID)
 		if nl != nil {
-			return p.dlstatus(nl)
+			return p.dlstatus(nl, config)
 		}
 	}
-
 	var (
-		config      = cmn.GCO.Get()
 		body        = cos.MustMarshal(msg)
 		args        = allocBcArgs()
 		xid         = cos.GenUUID()
@@ -221,9 +220,9 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 	}
 }
 
-func (p *proxy) dlstatus(nl nl.Listener) ([]byte, int, error) {
+func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) ([]byte, int, error) {
 	// bcast
-	p.notifs.bcastGetStats(nl, cmn.GCO.Get().Periodic.NotifTime.D())
+	p.notifs.bcastGetStats(nl, config.Periodic.NotifTime.D())
 	stats := nl.NodeStats()
 
 	var resp *dload.StatusResp
@@ -248,24 +247,28 @@ func (p *proxy) dlstatus(nl nl.Listener) ([]byte, int, error) {
 }
 
 func (p *proxy) dlstart(r *http.Request, xid, jobID string, body []byte) (errCode int, err error) {
-	query := make(url.Values, 2)
+	var (
+		config = cmn.GCO.Get()
+		query  = make(url.Values, 2)
+		args   = allocBcArgs()
+	)
 	query.Set(apc.QparamUUID, xid)
 	query.Set(apc.QparamJobID, jobID)
-	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: r.URL.Path, Body: body, Query: query}
-	config := cmn.GCO.Get()
 	args.timeout = config.Timeout.MaxHostBusy.D()
+
 	results := p.bcastGroup(args)
-	defer freeBcastRes(results)
 	freeBcArgs(args)
+
+	errCode = http.StatusOK
 	for _, res := range results {
-		if res.err == nil {
-			continue
+		if res.err != nil {
+			errCode, err = res.status, res.err
+			break
 		}
-		errCode, err = res.status, res.err
-		return
 	}
-	return http.StatusOK, nil
+	freeBcastRes(results)
+	return
 }
 
 func (p *proxy) validateDownload(w http.ResponseWriter, r *http.Request, body []byte) (dlb dload.Body, dlBase dload.Base, ok bool) {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,14 +30,15 @@ import (
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/pkg/errors"
 )
 
 const (
 	// Stream names
-	recvReqStreamNameFmt  = DSortName + "-%s-recv_req"
-	recvRespStreamNameFmt = DSortName + "-%s-recv_resp"
-	shardStreamNameFmt    = DSortName + "-%s-shard"
+	recvReqStreamNameFmt  = apc.ActDsort + "-%s-recv_req"
+	recvRespStreamNameFmt = apc.ActDsort + "-%s-recv_resp"
+	shardStreamNameFmt    = apc.ActDsort + "-%s-shard"
 )
 
 // State of the cleans - see `cleanup` and `finalCleanup`
@@ -116,6 +118,7 @@ type (
 		dsorterStarted sync.WaitGroup
 		callTimeout    time.Duration // max time to wait for another node to respond
 		config         *cmn.Config
+		xctn           *xaction
 	}
 )
 
@@ -126,6 +129,7 @@ var (
 	_ meta.Slistener = (*Manager)(nil)
 	_ cos.Packer     = (*buildingShardInfo)(nil)
 	_ cos.Unpacker   = (*buildingShardInfo)(nil)
+	_ cluster.Xact   = (*xaction)(nil)
 )
 
 func Pinit(si cluster.Node) {
@@ -135,6 +139,8 @@ func Pinit(si cluster.Node) {
 
 func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	Managers = NewManagerGroup(db, false)
+
+	xreg.RegBckXact(&xfactory{})
 
 	debug.Assert(g.mm == nil) // only once
 	g.mm = t.PageMM()
@@ -194,6 +200,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	// NOTE: Total size of the records metadata can sometimes be large
 	// and so this is why we need such a long timeout.
 	m.config = cmn.GCO.Get()
+
+	// TODO -- FIXME: must be a single instance (similar to streams)
 	m.client = cmn.NewClient(cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,

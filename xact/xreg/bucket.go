@@ -21,17 +21,18 @@ type (
 		Msg     *apc.TCBMsg
 		Phase   string
 	}
-
 	TCObjsArgs struct {
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
 		DP      cluster.DP
 	}
-
+	DsortArgs struct {
+		BckFrom *meta.Bck
+		BckTo   *meta.Bck
+	}
 	ECEncodeArgs struct {
 		Phase string
 	}
-
 	BckRenameArgs struct {
 		T       cluster.TargetExt
 		BckFrom *meta.Bck
@@ -39,7 +40,6 @@ type (
 		RebID   string
 		Phase   string
 	}
-
 	MNCArgs struct {
 		Tag    string
 		Copies int
@@ -129,6 +129,15 @@ func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewR
 		custom.BckFrom,
 		Args{T: t, Custom: custom, UUID: uuid},
 		custom.BckFrom, custom.BckTo, // (ditto)
+	)
+}
+
+func RenewDsort(id string, custom *DsortArgs) RenewRes {
+	return RenewBucketXact(
+		apc.ActDsort,
+		custom.BckFrom,
+		Args{Custom: custom, UUID: id},
+		custom.BckFrom, custom.BckTo,
 	)
 }
 

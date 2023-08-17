@@ -167,8 +167,14 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 					value = cos.ToSizeIEC(i, 2)
 				}
 			}
-			if value == "" {
-				value = fmt.Sprintf("%v", v)
+			if value == "" { // not ".size"
+				if mapVal, ok := v.(map[string]any); ok {
+					vv, err := jsonMarshalIndent(mapVal)
+					debug.AssertNoErr(err)
+					value = string(vv)
+				} else {
+					value = fmt.Sprintf("%v", v)
+				}
 			}
 			props = append(props, nvpair{Name: k, Value: value})
 		}

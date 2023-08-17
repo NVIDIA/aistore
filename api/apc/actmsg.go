@@ -14,38 +14,50 @@ import (
 // ActMsg.Action
 // includes Xaction.Kind == ActMsg.Action (when the action is asynchronous)
 const (
-	ActCreateBck      = "create-bck"  // NOTE: compare w/ ActAddRemoteBck below
-	ActDestroyBck     = "destroy-bck" // destroy bucket data and metadata
-	ActSummaryBck     = "summary-bck"
-	ActCopyBck        = "copy-bck"
-	ActDownload       = "download"
-	ActECEncode       = "ec-encode" // erasure code a bucket
-	ActECGet          = "ec-get"    // erasure decode objects
-	ActECPut          = "ec-put"    // erasure encode objects
-	ActECRespond      = "ec-resp"   // respond to other targets' EC requests
-	ActETLInline      = "etl-inline"
-	ActETLBck         = "etl-bck"
-	ActElection       = "election"
+	ActCreateBck   = "create-bck"  // NOTE: compare w/ ActAddRemoteBck below
+	ActDestroyBck  = "destroy-bck" // destroy bucket data and metadata
+	ActSetBprops   = "set-bprops"
+	ActResetBprops = "reset-bprops"
+
+	ActSummaryBck = "summary-bck"
+
+	ActECEncode  = "ec-encode" // erasure code a bucket
+	ActECGet     = "ec-get"    // erasure decode objects
+	ActECPut     = "ec-put"    // erasure encode objects
+	ActECRespond = "ec-resp"   // respond to other targets' EC requests
+
+	ActCopyBck = "copy-bck"
+	ActETLBck  = "etl-bck"
+
+	ActETLInline = "etl-inline"
+
+	ActDsort    = "dsort"
+	ActDownload = "download"
+
+	ActMakeNCopies = "make-n-copies"
+	ActPutCopies   = "put-copies"
+
+	ActRebalance = "rebalance"
+	ActMoveBck   = "move-bck"
+
+	ActResilver = "resilver"
+
+	ActElection = "election"
+
+	ActLRU          = "lru"
+	ActStoreCleanup = "cleanup-store"
+
 	ActEvictRemoteBck = "evict-remote-bck" // evict remote bucket's data
 	ActInvalListCache = "inval-listobj-cache"
-	ActLRU            = "lru"
 	ActList           = "list"
 	ActLoadLomCache   = "load-lom-cache"
-	ActMakeNCopies    = "make-n-copies"
-	ActMoveBck        = "move-bck"
 	ActNewPrimary     = "new-primary"
 	ActPromote        = "promote"
-	ActPutCopies      = "put-copies"
-	ActRebalance      = "rebalance"
 	ActRenameObject   = "rename-obj"
-	ActResetStats     = "reset-stats"
-	ActResetBprops    = "reset-bprops"
-	ActResetConfig    = "reset-config"
-	ActResilver       = "resilver"
-	ActResyncBprops   = "resync-bprops"
-	ActSetBprops      = "set-bprops"
-	ActSetConfig      = "set-config"
-	ActStoreCleanup   = "cleanup-store"
+
+	ActResetStats  = "reset-stats"
+	ActResetConfig = "reset-config"
+	ActSetConfig   = "set-config"
 
 	ActShutdownCluster = "shutdown" // see also: ActShutdownNode
 

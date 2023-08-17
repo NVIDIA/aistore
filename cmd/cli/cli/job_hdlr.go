@@ -1192,7 +1192,7 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 	daemonID = c.Args().Get(shift + 2)
 
 	// validate and reassign
-	if name != "" && name != dsort.DSortName {
+	if name != "" && name != apc.ActDsort {
 		if xactKind, _ := xact.GetKindName(name); xactKind == "" {
 			daemonID = xid
 			xid = name

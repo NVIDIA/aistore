@@ -40,8 +40,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const DSortName = "dsort"
-
 const PrefixJobID = "srt-"
 
 type (

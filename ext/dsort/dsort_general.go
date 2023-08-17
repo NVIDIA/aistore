@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -470,7 +471,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	transport.FreeRecv(objReader)
 	req := remoteRequest{}
 	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "recv request", cos.BHead(hdr.Opaque), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "recv request", cos.BHead(hdr.Opaque), err)
 		ds.m.abort(err)
 		return err
 	}

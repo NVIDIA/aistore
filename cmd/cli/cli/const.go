@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/ext/dload"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/urfave/cli"
 )
 
@@ -90,13 +89,12 @@ const (
 	commandPrefetch = "prefetch" // apc.ActPrefetchObjects
 
 	cmdDownload    = apc.ActDownload
+	cmdDsort       = apc.ActDsort
 	cmdRebalance   = apc.ActRebalance
 	cmdLRU         = apc.ActLRU
 	cmdStgCleanup  = "cleanup" // display name for apc.ActStoreCleanup
 	cmdStgValidate = "validate"
 	cmdSummary     = "summary" // ditto apc.ActSummaryBck
-
-	cmdDsort = dsort.DSortName
 
 	cmdCluster    = commandCluster
 	cmdNode       = "node"
@@ -456,10 +454,15 @@ var (
 	noHeaderFlag = cli.BoolFlag{Name: "no-headers,H", Usage: "display tables without headers"}
 	noFooterFlag = cli.BoolFlag{Name: "no-footers", Usage: "display tables without footers"}
 
-	progressFlag   = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
-	dryRunFlag     = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
-	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose"}
-	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose"}
+	progressFlag = cli.BoolFlag{Name: "progress", Usage: "show progress bar(s) and progress of execution in real time"}
+	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
+
+	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose output"}
+	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose output"}
+	verboseJobFlag = cli.BoolFlag{
+		Name:  verboseFlag.Name,
+		Usage: "show extended statistics",
+	}
 
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
 

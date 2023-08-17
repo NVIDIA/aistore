@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -40,7 +41,7 @@ func NewManagerGroup(db kvdb.Driver, skipHk bool) *ManagerGroup {
 		db:       db,
 	}
 	if !skipHk {
-		hk.Reg(DSortName+hk.NameSuffix, mg.housekeep, hk.DayInterval)
+		hk.Reg(apc.ActDsort+hk.NameSuffix, mg.housekeep, hk.DayInterval)
 	}
 	return mg
 }
@@ -140,7 +141,7 @@ func (mg *ManagerGroup) Remove(managerUUID string) error {
 	defer mg.mtx.Unlock()
 
 	if manager, ok := mg.managers[managerUUID]; ok && !manager.Metrics.Archived.Load() {
-		return errors.Errorf("%s process %s still in progress and cannot be removed", DSortName, managerUUID)
+		return errors.Errorf("%s process %s still in progress and cannot be removed", apc.ActDsort, managerUUID)
 	} else if ok {
 		delete(mg.managers, managerUUID)
 	}

@@ -507,7 +507,7 @@ func runningJobCompletions(c *cli.Context) {
 	case 0: // 1. NAME
 		if flagIsSet(c, allJobsFlag) {
 			names := xact.ListDisplayNames(false /*only-startable*/)
-			names = append(names, dsort.DSortName)
+			names = append(names, apc.ActDsort)
 			sort.Strings(names)
 			fmt.Println(strings.Join(names, " "))
 			return

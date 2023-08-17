@@ -82,7 +82,7 @@ type (
 
 var dsortStartCmd = cli.Command{
 	Name: cmdDsort,
-	Usage: "start " + dsort.DSortName + " job\n" +
+	Usage: "start " + apc.ActDsort + " job\n" +
 		indent1 + "Required parameters:\n" +
 		indent1 + "\t- input_bck: source bucket (used as both source and destination if the latter is not specified)\n" +
 		indent1 + "\t- input_format: see docs and examples below\n" +
@@ -293,7 +293,7 @@ func setupBucket(c *cli.Context, bck cmn.Bck) error {
 
 func (d dsortResult) String() string {
 	if d.aborted {
-		return dsort.DSortName + " job was aborted"
+		return apc.ActDsort + " job was aborted"
 	}
 
 	var sb strings.Builder

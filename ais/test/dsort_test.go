@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	dsortDescAllPrefix = dsort.DSortName + "-test-integration"
+	dsortDescAllPrefix = apc.ActDsort + "-test-integration"
 
 	scopeConfig = "config"
 	scopeSpec   = "spec"
@@ -503,10 +503,10 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 	case cmn.IgnoreReaction:
 		for target, metrics := range allMetrics {
 			if len(metrics.Warnings) != 0 {
-				df.m.t.Errorf("%s: target %q has %s warnings: %s", df.job(), target, dsort.DSortName, metrics.Warnings)
+				df.m.t.Errorf("%s: target %q has %s warnings: %s", df.job(), target, apc.ActDsort, metrics.Warnings)
 			}
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, dsort.DSortName, metrics.Errors)
+				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, apc.ActDsort, metrics.Errors)
 			}
 		}
 	case cmn.WarnReaction:
@@ -515,7 +515,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 			totalWarnings += len(metrics.Warnings)
 
 			if len(metrics.Errors) != 0 {
-				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, dsort.DSortName, metrics.Errors)
+				df.m.t.Errorf("%s: target %q has %s errors: %s", df.job(), target, apc.ActDsort, metrics.Errors)
 			}
 		}
 
@@ -526,7 +526,7 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 		totalErrors := 0
 		for target, metrics := range allMetrics {
 			if !metrics.Aborted.Load() {
-				df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), dsort.DSortName, target)
+				df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), apc.ActDsort, target)
 			}
 			totalErrors += len(metrics.Errors)
 		}
@@ -580,9 +580,9 @@ func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metri
 	}
 	for target, metrics := range allMetrics {
 		if expectAbort && !metrics.Aborted.Load() {
-			df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), dsort.DSortName, target)
+			df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), apc.ActDsort, target)
 		} else if !expectAbort && metrics.Aborted.Load() {
-			df.m.t.Errorf("%s: %s was aborted by target: %s", df.job(), dsort.DSortName, target)
+			df.m.t.Errorf("%s: %s was aborted by target: %s", df.job(), apc.ActDsort, target)
 		}
 	}
 	return allMetrics
@@ -1307,7 +1307,7 @@ func TestDsortContent(t *testing.T) {
 					aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 					tassert.CheckFatal(t, err)
 					if entry.missingKeys && !aborted {
-						t.Errorf("%s was not aborted", dsort.DSortName)
+						t.Errorf("%s was not aborted", apc.ActDsort)
 					}
 
 					tlog.Logf("%s: checking metrics\n", df.job())
@@ -1320,7 +1320,7 @@ func TestDsortContent(t *testing.T) {
 
 					for target, metrics := range allMetrics {
 						if entry.missingKeys && !metrics.Aborted.Load() {
-							t.Errorf("%s was not aborted by target: %s", target, dsort.DSortName)
+							t.Errorf("%s was not aborted by target: %s", target, apc.ActDsort)
 						}
 					}
 
@@ -1456,7 +1456,7 @@ func TestDsortKillTargetDuringPhases(t *testing.T) {
 			aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckError(t, err)
 			if !aborted {
-				t.Errorf("%s was not aborted", dsort.DSortName)
+				t.Errorf("%s was not aborted", apc.ActDsort)
 			}
 
 			tlog.Logf("%s: checking metrics\n", df.job())
@@ -1469,7 +1469,7 @@ func TestDsortKillTargetDuringPhases(t *testing.T) {
 
 			for target, metrics := range allMetrics {
 				if !metrics.Aborted.Load() {
-					t.Errorf("%s was not aborted by target: %s", dsort.DSortName, target)
+					t.Errorf("%s was not aborted by target: %s", apc.ActDsort, target)
 				}
 			}
 
@@ -1623,7 +1623,7 @@ func TestDsortAddTarget(t *testing.T) {
 			aborted, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
 			tassert.CheckFatal(t, err)
 			if !aborted {
-				t.Errorf("%s was not aborted", dsort.DSortName)
+				t.Errorf("%s was not aborted", apc.ActDsort)
 			}
 
 			tlog.Logf("%s: checking metrics\n", df.job())
@@ -1631,7 +1631,7 @@ func TestDsortAddTarget(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			if len(allMetrics) != m.originalTargetCount-1 {
 				t.Errorf("number of metrics %d is different than number of targets when %s started %d",
-					len(allMetrics), dsort.DSortName, m.originalTargetCount-1)
+					len(allMetrics), apc.ActDsort, m.originalTargetCount-1)
 			}
 		},
 	)

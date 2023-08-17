@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -213,7 +214,7 @@ func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s job %q not found", DSortName, managerUUID)
+		msg := fmt.Sprintf("%s job %q not found", apc.ActDsort, managerUUID)
 		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -255,7 +256,7 @@ func PabortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := cos.NewErrNotFound("%s job %q", DSortName, managerUUID)
+		err := cos.NewErrNotFound("%s job %q", apc.ActDsort, managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -297,7 +298,7 @@ func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if !metrics.Archived.Load() {
 			cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process %s still in progress and cannot be removed",
-				DSortName, managerUUID))
+				apc.ActDsort, managerUUID))
 			return
 		}
 		seenOne = true
@@ -458,7 +459,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = js.Unmarshal(b, &pars); err != nil {
-		err := fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "parsedReqSpec", cos.BHead(b), err)
+		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "parsedReqSpec", cos.BHead(b), err)
 		cmn.WriteErr(w, r, err)
 		return
 	}
@@ -471,6 +472,16 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = m.init(pars); err != nil {
 		cmn.WriteErr(w, r, err)
+	} else {
+		// setup xaction
+		debug.Assert(!pars.OutputBck.IsEmpty())
+		custom := &xreg.DsortArgs{BckFrom: meta.CloneBck(&pars.InputBck), BckTo: meta.CloneBck(&pars.OutputBck)}
+		rns := xreg.RenewDsort(managerUUID, custom)
+		debug.AssertNoErr(rns.Err)
+		xctn := rns.Entry.Get()
+		debug.Assert(xctn.ID() == managerUUID, xctn.ID()+" vs "+managerUUID)
+
+		m.xctn = xctn.(*xaction)
 	}
 	m.unlock()
 }
@@ -552,11 +563,11 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if !m.inProgress() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.ActDsort))
 		return
 	}
 	if m.aborted() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.ActDsort))
 		return
 	}
 
@@ -567,13 +578,13 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	defer slab.Free(buf)
 
 	if err := tmpMetadata.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "creation phase metadata", "-", err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "creation phase metadata", "-", err)
 		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
 	if !m.inProgress() || m.aborted() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", DSortName))
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process", apc.ActDsort))
 		return
 	}
 
@@ -600,11 +611,11 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !m.inProgress() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", DSortName))
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("no %s process in progress", apc.ActDsort))
 		return
 	}
 	if m.aborted() {
-		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", DSortName))
+		cmn.WriteErrMsg(w, r, fmt.Sprintf("%s process was aborted", apc.ActDsort))
 		return
 	}
 
@@ -638,7 +649,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	defer slab.Free(buf)
 
 	if err := records.DecodeMsg(msgp.NewReaderBuf(r.Body, buf)); err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, DSortName, "records", "-", err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "records", "-", err)
 		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
@@ -675,12 +686,12 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if m.Metrics.Archived.Load() {
-		s := fmt.Sprintf("invalid request: %s job %q has already finished", DSortName, managerUUID)
+		s := fmt.Sprintf("invalid request: %s job %q has already finished", apc.ActDsort, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	m.abort(fmt.Errorf("%s has been aborted via API (remotely)", DSortName))
+	m.abort(fmt.Errorf("%s has been aborted via API (remotely)", apc.ActDsort))
 }
 
 func tremoveHandler(w http.ResponseWriter, r *http.Request) {
