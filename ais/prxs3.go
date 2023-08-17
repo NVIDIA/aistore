@@ -23,6 +23,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// TODO -- FIXME: `checkAccess` permissions (see ais/proxy.go)
+
 var (
 	errS3Req = errors.New("invalid s3 request")
 	errS3Obj = errors.New("missing or empty object name")
@@ -249,8 +251,7 @@ func (p *proxy) delMultipleObjs(w http.ResponseWriter, r *http.Request, bucket s
 	}
 	msg.Value = lrMsg
 
-	// Marshal+Unmashal to new struct:
-	// hack to convince `p.listrange` treat `listMsg` as `map[string]interface`
+	// marshal+unmarshal to convince `p.listrange` to treat `listMsg` as `map[string]interface`
 	var (
 		msg2  apc.ActMsg
 		bt    = cos.MustMarshal(&msg)

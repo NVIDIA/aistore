@@ -285,6 +285,10 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 		bck = backend
 	}
 	if bck.IsAIS() {
+		if err = args.p.access(args.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
+			errCode = aceErrToCode(err)
+			return
+		}
 		nlog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
 		goto creadd
 	}

@@ -1133,6 +1133,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
+		if err := p.checkAccess(w, r, nil, apc.AceMoveBucket); err != nil {
+			return
+		}
 		nlog.Infof("%s bucket %s => %s", msg.Action, bckFrom, bckTo)
 		if xid, err = p.renameBucket(bckFrom, bckTo, msg); err != nil {
 			p.writeErr(w, r, err)
@@ -1177,6 +1180,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 		if errCode == http.StatusNotFound {
 			if p.forwardCP(w, r, msg, bucket) { // to create
+				return
+			}
+			if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 				return
 			}
 			nlog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
@@ -1237,6 +1243,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 			if errCode == http.StatusNotFound {
 				if p.forwardCP(w, r, msg, bucket) { // to create
+					return
+				}
+				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 					return
 				}
 				nlog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
@@ -2897,6 +2906,9 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errCode == http.StatusNotFound {
+				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
+					return
+				}
 				naction := "dsort-create-output-bck"
 				warnfmt := "%s: %screate 'output_bck' %s with the 'input_bck' (%s) props"
 				if p.forwardCP(w, r, nil /*msg*/, naction, body /*orig body*/) { // to create

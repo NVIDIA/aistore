@@ -145,7 +145,7 @@ var Table = map[string]Descriptor{
 	apc.ActCopyObjects: {
 		DisplayName: "copy-objects",
 		Scope:       ScopeB,
-		Access:      apc.AccessRW, // TODO -- FIXME: apc.AceCreateBucket but only if
+		Access:      apc.AccessRW, // apc.AceCreateBucket is checked as well but only if ais://dst doesn't exist
 		Startable:   false,
 		RefreshCap:  true,
 		Idles:       true,
@@ -239,7 +239,7 @@ var Table = map[string]Descriptor{
 	apc.ActCopyBck: {
 		DisplayName: "copy-bucket",
 		Scope:       ScopeB,
-		Access:      apc.AccessRW, // TODO -- FIXME: apc.AceCreateBucket but only if destination doesn't exist
+		Access:      apc.AccessRW, // apc.AceCreateBucket ditto
 		Startable:   false,        // ditto
 		Metasync:    true,
 		Owned:       false,
