@@ -15,7 +15,7 @@ type (
 	}
 	NamedVal64 struct {
 		Name       string
-		NameSuffix string // forces immediate send when non-empty (see NOTE below)
+		NameSuffix string // forces immediate send when non-empty
 		Value      int64
 	}
 )

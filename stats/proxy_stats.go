@@ -47,7 +47,7 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.statsRunner.daemon = p
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
-	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
+	r.statsRunner.workCh = make(chan cos.NamedVal64, 512)
 
 	r.core.initMetricClient(p.Snode(), &r.statsRunner)
 

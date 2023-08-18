@@ -79,30 +79,7 @@ const (
 	Uptime = "up.ns.time"
 )
 
-// interface guard
-var (
-	_ Tracker = (*Prunner)(nil)
-	_ Tracker = (*Trunner)(nil)
-)
-
-// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
-
-var ignoreIdle = []string{"kalive", Uptime, "disk."}
-
-func ignore(s string) bool {
-	for _, p := range ignoreIdle {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
-}
-
-//
-// private types
-//
-
+// interfaces
 type (
 	metric = statsd.Metric // type alias
 
@@ -118,6 +95,34 @@ type (
 	}
 )
 
+// primitives: values and maps
+type (
+	// Stats are tracked via a map of stats names (key) to statsValue (values).
+	// There are two main types of stats: counter and latency declared
+	// using the the kind field. Only latency stats have numSamples used to compute latency.
+	statsValue struct {
+		kind  string // enum { KindCounter, ..., KindSpecial }
+		label struct {
+			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
+			stsd string // StatsD label
+			prom string // Prometheus label
+		}
+		Value      int64 `json:"v,string"`
+		numSamples int64 // (log + StatsD) only
+		cumulative int64
+		mu         sync.RWMutex
+	}
+	copyValue struct {
+		Value int64 `json:"v,string"`
+	}
+
+	// maps
+	statsTracker map[string]*statsValue
+	copyTracker  map[string]copyValue // NOTE: values aggregated and computed every (log) statsTime
+	promDesc     map[string]*prometheus.Desc
+)
+
+// main types
 type (
 	coreStats struct {
 		Tracker   statsTracker
@@ -140,40 +145,30 @@ type (
 		name      string      // this stats-runner's name
 		prev      string      // prev ctracker.write
 		next      int64       // mono.NanoTime()
+		chanFull  atomic.Int64
 		startedUp atomic.Bool
 	}
-
-	//
-	// values
-	//
-
-	// Stats are tracked via a map of stats names (key) to statsValue (values).
-	// There are two main types of stats: counter and latency declared
-	// using the the kind field. Only latency stats have numSamples used to compute latency.
-	statsValue struct {
-		kind  string // enum { KindCounter, ..., KindSpecial }
-		label struct {
-			comm string // common part of the metric label (as in: <prefix> . comm . <suffix>)
-			stsd string // StatsD label
-			prom string // Prometheus label
-		}
-		Value      int64 `json:"v,string"`
-		numSamples int64 // (log + StatsD) only
-		cumulative int64
-		mu         sync.RWMutex
-	}
-	copyValue struct {
-		Value int64 `json:"v,string"`
-	}
-
-	//
-	// maps
-	//
-
-	statsTracker map[string]*statsValue
-	copyTracker  map[string]copyValue // NOTE: values aggregated and computed every (log) statsTime
-	promDesc     map[string]*prometheus.Desc
 )
+
+// interface guard
+var (
+	_ Tracker = (*Prunner)(nil)
+	_ Tracker = (*Trunner)(nil)
+)
+
+// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+
+var ignoreIdle = []string{"kalive", Uptime, "disk."}
+
+func ignore(s string) bool {
+	for _, p := range ignoreIdle {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
 
 ///////////////
 // coreStats //
@@ -624,9 +619,6 @@ func (ctracker copyTracker) write(sgl *memsys.SGL, sorted []string, target, idle
 
 // NOTE: naming; compare with coreStats.initProm()
 func (tracker statsTracker) reg(node *meta.Snode, name, kind string) {
-	debug.Assert(kind == KindCounter || kind == KindSize || kind == KindGauge || kind == KindLatency ||
-		kind == KindThroughput || kind == KindComputedThroughput || kind == KindSpecial)
-
 	v := &statsValue{kind: kind}
 	// in StatsD metrics ":" delineates the name and the value - replace with underscore
 	switch kind {
@@ -652,6 +644,7 @@ func (tracker statsTracker) reg(node *meta.Snode, name, kind string) {
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		v.label.stsd = fmt.Sprintf("%s.%s.%s.%s", "ais"+node.Type(), node.ID(), v.label.comm, "mbps")
 	default:
+		debug.Assert(kind == KindGauge || kind == KindSpecial)
 		v.label.comm = name
 		v.label.comm = strings.ReplaceAll(v.label.comm, ":", "_")
 		if name == Uptime {
@@ -728,16 +721,36 @@ func (r *statsRunner) GetMetricNames() cos.StrKVs {
 //
 
 func (r *statsRunner) Add(name string, val int64) {
-	r.workCh <- cos.NamedVal64{Name: name, Value: val}
+	r.post(cos.NamedVal64{Name: name, Value: val})
 }
 
 func (r *statsRunner) Inc(name string) {
-	r.workCh <- cos.NamedVal64{Name: name, Value: 1}
+	r.post(cos.NamedVal64{Name: name, Value: 1})
+}
+
+func (r *statsRunner) IncErr(metric string) {
+	if IsErrMetric(metric) {
+		r.post(cos.NamedVal64{Name: metric, Value: 1})
+	} else { // e.g. "err." + GetCount
+		r.post(cos.NamedVal64{Name: errPrefix + metric, Value: 1})
+	}
 }
 
 func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
 	for _, nv := range nvs {
-		r.workCh <- nv
+		r.post(nv)
+	}
+}
+
+func (r *statsRunner) post(nv cos.NamedVal64) {
+	select {
+	case r.workCh <- nv:
+	default:
+		// TODO: GetCount and friends must be handled differently but for now,
+		// let's see the first few names (and the rest of it only in verbose mode)
+		if cnt := r.chanFull.Inc(); cnt < 5 || (cnt%100 == 99 && cmn.FastV(4, cos.SmoduleStats)) {
+			nlog.ErrorDepth(1, "stats channel full:", nv.Name)
+		}
 	}
 }
 
@@ -1005,13 +1018,5 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 	}
 	if verbose {
 		nlog.Infoln(prefix + ": done")
-	}
-}
-
-func (r *statsRunner) IncErr(metric string) {
-	if IsErrMetric(metric) {
-		r.workCh <- cos.NamedVal64{Name: metric, Value: 1}
-	} else { // e.g. "err." + GetCount
-		r.workCh <- cos.NamedVal64{Name: errPrefix + metric, Value: 1}
 	}
 }

@@ -129,7 +129,7 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.statsRunner.daemon = t
 
 	r.statsRunner.stopCh = make(chan struct{}, 4)
-	r.statsRunner.workCh = make(chan cos.NamedVal64, 256)
+	r.statsRunner.workCh = make(chan cos.NamedVal64, 512)
 
 	r.core.initMetricClient(t.Snode(), &r.statsRunner)
 
@@ -155,7 +155,7 @@ func (r *Trunner) InitCDF() error {
 }
 
 // register target-specific metrics in addition to those that must be
-// already added via regCommonMetrics()
+// already added via regCommon()
 func (r *Trunner) reg(name, kind string) { r.core.Tracker.reg(r.t.Snode(), name, kind) }
 
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
