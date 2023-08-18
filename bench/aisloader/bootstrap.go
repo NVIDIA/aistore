@@ -393,7 +393,7 @@ func parseCmdLine() (params, error) {
 
 	// Sanity check
 	if p.maxSize < p.minSize {
-		return params{}, fmt.Errorf("invalid option: min and max size (%d, %d)", p.minSize, p.maxSize)
+		return params{}, fmt.Errorf("invalid option: min and max size (%d, %d), respectively", p.minSize, p.maxSize)
 	}
 
 	if p.putPct < 0 || p.putPct > 100 {
@@ -848,7 +848,6 @@ func Start(version, buildtime string) (err error) {
 			break
 		}
 	}
-
 	if err != nil {
 		goto Done
 	}
@@ -887,7 +886,7 @@ MainLoop:
 				intervalStats = newStats(time.Now())
 			}
 			if err := postNewWorkOrder(); err != nil {
-				_, _ = fmt.Fprint(os.Stderr, err.Error())
+				fmt.Fprintln(os.Stderr, err.Error())
 				break MainLoop
 			}
 		case <-statsTicker.C:
@@ -947,7 +946,7 @@ func newPutWorkOrder() (*workOrder, error) {
 	}
 	size := runParams.minSize
 	if runParams.maxSize != runParams.minSize {
-		size = rnd.Int63n(runParams.maxSize-runParams.minSize) + runParams.minSize
+		size = rnd.Int63n(runParams.maxSize+1-runParams.minSize) + runParams.minSize
 	}
 	putPending++
 	return &workOrder{
@@ -1016,22 +1015,30 @@ func newGetConfigWorkOrder() *workOrder {
 }
 
 func postNewWorkOrder() (err error) {
-	if runParams.getConfig {
-		workOrders <- newGetConfigWorkOrder()
-		return
-	}
-
 	var wo *workOrder
-	if rnd.Intn(99) < runParams.putPct {
-		if wo, err = newPutWorkOrder(); err != nil {
-			return err
+	switch {
+	case runParams.getConfig:
+		wo = newGetConfigWorkOrder()
+	case runParams.putPct == 100:
+		wo, err = newPutWorkOrder()
+	case runParams.putPct == 0:
+		wo, err = newGetWorkOrder()
+	default:
+		var put bool
+		if runParams.putPct == 50 {
+			put = mono.NanoTime()&1 == 1
+		} else {
+			put = runParams.putPct > rnd.Intn(99)
 		}
-	} else {
-		if wo, err = newGetWorkOrder(); err != nil {
-			return err
+		if put {
+			wo, err = newPutWorkOrder()
+		} else {
+			wo, err = newGetWorkOrder()
 		}
 	}
-	workOrders <- wo
+	if err == nil {
+		workOrders <- wo
+	}
 	return
 }
 
