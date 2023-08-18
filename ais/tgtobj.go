@@ -979,9 +979,9 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 	}
 	// stats
 	goi.t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
 		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.latency)},
-		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 	)
 	if goi.verchanged {
 		goi.t.statsT.AddMany(

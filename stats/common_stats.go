@@ -135,17 +135,25 @@ type (
 
 	// implements Tracker, inherited by Prunner and Trunner
 	statsRunner struct {
-		daemon    runnerHost
-		stopCh    chan struct{}
-		workCh    chan cos.NamedVal64
-		ticker    *time.Ticker
-		core      *coreStats
-		ctracker  copyTracker // to avoid making it at runtime
-		sorted    []string    // sorted names
-		name      string      // this stats-runner's name
-		prev      string      // prev ctracker.write
-		next      int64       // mono.NanoTime()
-		chanFull  atomic.Int64
+		daemon   runnerHost
+		stopCh   chan struct{}
+		workCh   chan cos.NamedVal64
+		ticker   *time.Ticker
+		core     *coreStats
+		ctracker copyTracker // to avoid making it at runtime
+		sorted   []string    // sorted names
+		name     string      // this stats-runner's name
+		prev     string      // prev ctracker.write
+		next     int64       // mono.NanoTime()
+		chanFull atomic.Int64
+		// assorted fast-path counters
+		fast struct {
+			getCnt int64 // GetCount
+			getBps int64 // GetThroughput
+			putCnt int64 // PutCount
+			putBps int64 // PutThroughput
+			delCnt int64 // DeleteCount
+		}
 		startedUp atomic.Bool
 	}
 )
@@ -706,6 +714,11 @@ func (r *statsRunner) GetStats() *Node {
 
 func (r *statsRunner) ResetStats(errorsOnly bool) {
 	r.core.reset(errorsOnly)
+	ratomic.StoreInt64(&r.fast.getCnt, 0)
+	ratomic.StoreInt64(&r.fast.getBps, 0)
+	ratomic.StoreInt64(&r.fast.putCnt, 0)
+	ratomic.StoreInt64(&r.fast.putBps, 0)
+	ratomic.StoreInt64(&r.fast.delCnt, 0)
 }
 
 func (r *statsRunner) GetMetricNames() cos.StrKVs {
@@ -743,11 +756,27 @@ func (r *statsRunner) AddMany(nvs ...cos.NamedVal64) {
 }
 
 func (r *statsRunner) post(nv cos.NamedVal64) {
+	switch nv.Name {
+	case GetCount:
+		ratomic.AddInt64(&r.fast.getCnt, nv.Value)
+		return
+	case GetThroughput:
+		ratomic.AddInt64(&r.fast.getBps, nv.Value)
+		return
+	case PutCount:
+		ratomic.AddInt64(&r.fast.putCnt, nv.Value)
+		return
+	case PutThroughput:
+		ratomic.AddInt64(&r.fast.putBps, nv.Value)
+		return
+	case DeleteCount:
+		ratomic.AddInt64(&r.fast.delCnt, nv.Value)
+		return
+	}
+	// otherwise, regular update path
 	select {
 	case r.workCh <- nv:
 	default:
-		// TODO: GetCount and friends must be handled differently but for now,
-		// let's see the first few names (and the rest of it only in verbose mode)
 		if cnt := r.chanFull.Inc(); cnt < 5 || (cnt%100 == 99 && cmn.FastV(4, cos.SmoduleStats)) {
 			nlog.ErrorDepth(1, "stats channel full:", nv.Name)
 		}
@@ -882,8 +911,10 @@ waitStartup:
 		case nv, ok := <-r.workCh:
 			if ok {
 				logger.doAdd(nv)
+				r._fast(logger)
 			}
 		case <-r.ticker.C:
+			r._fast(logger)
 			now := mono.NanoTime()
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
@@ -913,6 +944,25 @@ waitStartup:
 			r.ticker.Stop()
 			return nil
 		}
+	}
+}
+
+// apply fast-path counters
+func (r *statsRunner) _fast(logger statsLogger) {
+	if v := ratomic.SwapInt64(&r.fast.getCnt, 0); v > 0 {
+		logger.doAdd(cos.NamedVal64{Name: GetCount, Value: v})
+	}
+	if v := ratomic.SwapInt64(&r.fast.getBps, 0); v > 0 {
+		logger.doAdd(cos.NamedVal64{Name: GetThroughput, Value: v})
+	}
+	if v := ratomic.SwapInt64(&r.fast.putCnt, 0); v > 0 {
+		logger.doAdd(cos.NamedVal64{Name: PutCount, Value: v})
+	}
+	if v := ratomic.SwapInt64(&r.fast.putBps, 0); v > 0 {
+		logger.doAdd(cos.NamedVal64{Name: PutThroughput, Value: v})
+	}
+	if v := ratomic.SwapInt64(&r.fast.delCnt, 0); v > 0 {
+		logger.doAdd(cos.NamedVal64{Name: DeleteCount, Value: v})
 	}
 }
 

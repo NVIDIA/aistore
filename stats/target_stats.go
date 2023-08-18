@@ -241,6 +241,7 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 }
 
 func (r *Trunner) GetStats() (ds *Node) {
+	r._fast(r)
 	ds = r.statsRunner.GetStats()
 	ds.TargetCDF = r.TargetCDF
 	return
