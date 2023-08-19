@@ -82,11 +82,6 @@ func (r *Prunner) log(now int64, uptime time.Duration, _ *cmn.Config) {
 	}
 }
 
-func (r *Prunner) doAdd(nv cos.NamedVal64) {
-	s := r.core
-	s.doAdd(nv.Name, nv.NameSuffix, nv.Value)
-}
-
 func (r *Prunner) statsTime(newval time.Duration) {
 	r.core.statsTime = newval
 }

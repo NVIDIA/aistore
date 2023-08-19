@@ -241,7 +241,6 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 }
 
 func (r *Trunner) GetStats() (ds *Node) {
-	r._fast(r)
 	ds = r.statsRunner.GetStats()
 	ds.TargetCDF = r.TargetCDF
 	return
@@ -372,17 +371,6 @@ func (r *Trunner) logDiskStats() {
 		buf = append(buf, "%"...)
 		r.lines = append(r.lines, *(*string)(unsafe.Pointer(&buf)))
 	}
-}
-
-func (r *Trunner) doAdd(nv cos.NamedVal64) {
-	var (
-		s     = r.core
-		name  = nv.Name
-		value = nv.Value
-	)
-	_, ok := s.Tracker[name]
-	debug.Assertf(ok, "invalid stats name: %q", name)
-	s.doAdd(name, nv.NameSuffix, value)
 }
 
 func (r *Trunner) statsTime(newval time.Duration) {

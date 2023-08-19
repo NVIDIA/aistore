@@ -86,7 +86,6 @@ type (
 	// implemented by the stats runners
 	statsLogger interface {
 		log(now int64, uptime time.Duration, config *cmn.Config)
-		doAdd(nv cos.NamedVal64)
 		statsTime(newval time.Duration)
 		standingBy() bool
 	}
@@ -344,31 +343,31 @@ func (s *coreStats) get(name string) (val int64) {
 }
 
 // NOTE naming convention: ".n" for the count and ".ns" for duration (nanoseconds)
-func (s *coreStats) doAdd(name, nameSuffix string, val int64) {
-	v, ok := s.Tracker[name]
-	debug.Assertf(ok, "invalid metric name %q", name)
+func (s *coreStats) update(nv cos.NamedVal64) {
+	v, ok := s.Tracker[nv.Name]
+	debug.Assertf(ok, "invalid metric name %q", nv.Name)
 	switch v.kind {
 	case KindLatency:
 		v.mu.Lock()
 		v.numSamples++
-		v.cumulative += val
-		v.Value += val
+		v.cumulative += nv.Value
+		v.Value += nv.Value
 		v.mu.Unlock()
 	case KindThroughput:
 		v.mu.Lock()
-		v.cumulative += val
-		v.Value += val
+		v.cumulative += nv.Value
+		v.Value += nv.Value
 		v.mu.Unlock()
 	case KindCounter, KindSize:
 		// NOTE: not locking (KindCounter isn't compound, making an exception to speed-up)
-		ratomic.AddInt64(&v.Value, val)
+		ratomic.AddInt64(&v.Value, nv.Value)
 
 		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
 		// - suffix is an arbitrary string that can be defined at runtime;
 		// - e.g. usage: per-mountpath error counters.
-		if !s.isPrometheus() && nameSuffix != "" {
-			s.statsdC.Send(v.label.comm+"."+nameSuffix,
-				1, metric{Type: statsd.Counter, Name: "count", Value: val})
+		if !s.isPrometheus() && nv.NameSuffix != "" {
+			s.statsdC.Send(v.label.comm+"."+nv.NameSuffix,
+				1, metric{Type: statsd.Counter, Name: "count", Value: nv.Value})
 		}
 	default:
 		debug.Assert(false, v.kind)
@@ -707,18 +706,15 @@ var (
 )
 
 func (r *statsRunner) GetStats() *Node {
+	r._fast()
 	ctracker := make(copyTracker, 48)
 	r.core.copyCumulative(ctracker)
 	return &Node{Tracker: ctracker}
 }
 
 func (r *statsRunner) ResetStats(errorsOnly bool) {
+	r._fast()
 	r.core.reset(errorsOnly)
-	ratomic.StoreInt64(&r.fast.getCnt, 0)
-	ratomic.StoreInt64(&r.fast.getBps, 0)
-	ratomic.StoreInt64(&r.fast.putCnt, 0)
-	ratomic.StoreInt64(&r.fast.putBps, 0)
-	ratomic.StoreInt64(&r.fast.delCnt, 0)
 }
 
 func (r *statsRunner) GetMetricNames() cos.StrKVs {
@@ -795,6 +791,7 @@ func (r *statsRunner) Collect(ch chan<- prometheus.Metric) {
 	if !r.StartedUp() {
 		return
 	}
+	r._fast()
 	r.core.promRLock()
 	for name, v := range r.core.Tracker {
 		var (
@@ -910,11 +907,11 @@ waitStartup:
 		select {
 		case nv, ok := <-r.workCh:
 			if ok {
-				logger.doAdd(nv)
-				r._fast(logger)
+				r.core.update(nv)
+				r._fast()
 			}
 		case <-r.ticker.C:
-			r._fast(logger)
+			r._fast()
 			now := mono.NanoTime()
 			config = cmn.GCO.Get()
 			logger.log(now, time.Duration(now-startTime) /*uptime*/, config)
@@ -948,21 +945,21 @@ waitStartup:
 }
 
 // apply fast-path counters
-func (r *statsRunner) _fast(logger statsLogger) {
+func (r *statsRunner) _fast() {
 	if v := ratomic.SwapInt64(&r.fast.getCnt, 0); v > 0 {
-		logger.doAdd(cos.NamedVal64{Name: GetCount, Value: v})
+		r.core.update(cos.NamedVal64{Name: GetCount, Value: v})
 	}
 	if v := ratomic.SwapInt64(&r.fast.getBps, 0); v > 0 {
-		logger.doAdd(cos.NamedVal64{Name: GetThroughput, Value: v})
+		r.core.update(cos.NamedVal64{Name: GetThroughput, Value: v})
 	}
 	if v := ratomic.SwapInt64(&r.fast.putCnt, 0); v > 0 {
-		logger.doAdd(cos.NamedVal64{Name: PutCount, Value: v})
+		r.core.update(cos.NamedVal64{Name: PutCount, Value: v})
 	}
 	if v := ratomic.SwapInt64(&r.fast.putBps, 0); v > 0 {
-		logger.doAdd(cos.NamedVal64{Name: PutThroughput, Value: v})
+		r.core.update(cos.NamedVal64{Name: PutThroughput, Value: v})
 	}
 	if v := ratomic.SwapInt64(&r.fast.delCnt, 0); v > 0 {
-		logger.doAdd(cos.NamedVal64{Name: DeleteCount, Value: v})
+		r.core.update(cos.NamedVal64{Name: DeleteCount, Value: v})
 	}
 }
 
