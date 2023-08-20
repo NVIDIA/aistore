@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
@@ -69,7 +68,6 @@ type (
 		archive    archiveQuery    // archive query
 		ranges     byteRanges      // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 		atime      int64           // access time
-		latency    int64           // get vnanoseconds
 		isGFN      bool            // is GFN
 		chunked    bool            // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked   bool            // internal
@@ -85,7 +83,7 @@ type (
 	}
 	// (see also putA2I)
 	apndOI struct {
-		started time.Time     // started time of receiving - used to calculate the recv duration
+		started int64         // started time of receiving - used to calculate the recv duration
 		r       io.ReadCloser // reader with the content of the object.
 		t       *target       // this
 		lom     *cluster.LOM  // append to
@@ -119,7 +117,7 @@ type (
 		lom      *cluster.LOM  // resulting shard
 		filename string        // fqn inside
 		mime     string        // format
-		started  time.Time     // time of receiving
+		started  int64         // time of receiving
 		size     int64         // aka Content-Length
 		put      bool          // overwrite
 	}
@@ -177,18 +175,22 @@ func (poi *putOI) putObject() (errCode int, err error) {
 	if errCode, err = poi.finalize(); err != nil {
 		goto rerr
 	}
+	//
 	// stats
+	//
 	if !poi.t2t {
 		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
 		// same-checksum-skip-writing, on the other
 		if poi.owt == cmn.OwtPut && poi.restful {
 			debug.Assert(cos.IsValidAtime(poi.atime), poi.atime)
-			now := time.Now().UnixNano()
 			poi.t.statsT.AddMany(
 				cos.NamedVal64{Name: stats.PutCount, Value: 1},
 				cos.NamedVal64{Name: stats.PutThroughput, Value: poi.lom.SizeBytes()},
-				cos.NamedVal64{Name: stats.PutLatency, Value: now - poi.atime},
 			)
+			if sparseVerbStats(poi.atime) {
+				// see also: sparseRedirStats
+				poi.t.statsT.Add(stats.PutLatency, time.Now().UnixNano()-poi.atime)
+			}
 			// via /s3 (TODO: revisit)
 			if poi.resphdr != nil {
 				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr)
@@ -977,12 +979,17 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 	if goi.isGFN {
 		goi.t.reb.FilterAdd([]byte(goi.lom.Uname()))
 	}
+	//
 	// stats
+	//
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
-		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.latency)},
 	)
+	if sparseVerbStats(goi.atime) {
+		// see also: sparseRedirStats
+		goi.t.statsT.Add(stats.GetLatency, time.Now().UnixNano()-goi.atime)
+	}
 	if goi.verchanged {
 		goi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},
@@ -1105,10 +1112,10 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		return
 	}
 
-	delta := time.Since(a.started)
+	delta := time.Now().UnixNano() - a.started
 	a.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
-		cos.NamedVal64{Name: stats.AppendLatency, Value: int64(delta)},
+		cos.NamedVal64{Name: stats.AppendLatency, Value: delta},
 	)
 	if cmn.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("APPEND %s: %s", a.lom, delta)
@@ -1519,7 +1526,7 @@ cpap: // copy + append
 		return http.StatusInternalServerError, err
 	}
 	// currently, arch writers only use size and time but it may change
-	oah := cos.SimpleOAH{Size: a.size, Atime: a.started.UnixNano()}
+	oah := cos.SimpleOAH{Size: a.size, Atime: a.started}
 	if a.put {
 		// when append becomes PUT (TODO: checksum type)
 		cksum.Init(cos.ChecksumXXHash)
@@ -1563,7 +1570,7 @@ func (a *putA2I) fast(rwfh *os.File, tarFormat tar.Format) (size int64, err erro
 			Typeflag: tar.TypeReg,
 			Name:     a.filename,
 			Size:     a.size,
-			ModTime:  a.started,
+			ModTime:  time.Unix(0, a.started),
 			Mode:     int64(cos.PermRWRR),
 			Format:   tarFormat,
 		}
@@ -1599,7 +1606,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 	}
 	a.lom.SetSize(size)
 	a.lom.SetCksum(cksum)
-	a.lom.SetAtimeUnix(a.started.UnixNano())
+	a.lom.SetAtimeUnix(a.started)
 	if err := a.lom.Persist(); err != nil {
 		return err
 	}

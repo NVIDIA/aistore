@@ -84,6 +84,9 @@ var (
 func (*target) Name() string           { return apc.Target }          // as cos.Runner
 func (*target) rebMarked() xact.Marked { return xreg.GetRebMarked() } // as htext
 
+func sparseVerbStats(tm int64) bool  { return tm&7 == 1 }
+func sparseRedirStats(tm int64) bool { return tm&3 == 2 }
+
 //
 // target
 //
@@ -644,18 +647,15 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			filename = rel
 		}
 	}
-	// GET latency and access time
-	tm := mono.NanoTime()
-	atime := time.Now().UnixNano()
-	if dpq.ptime != "" && tm&0x5 == 5 {
-		if redelta := ptLatency(atime, dpq.ptime); redelta != 0 {
-			t.statsT.Add(stats.GetRedirLatency, redelta)
-		}
-	}
+	// GET context
 	goi := allocGOI()
 	{
-		goi.atime = atime
-		goi.latency = tm // assigned upon transmitting resp.
+		goi.atime = time.Now().UnixNano()
+		if dpq.ptime != "" && sparseRedirStats(goi.atime) {
+			if d := ptLatency(goi.atime, dpq.ptime); d > 0 {
+				t.statsT.Add(stats.GetRedirLatency, d)
+			}
+		}
 		goi.t = t
 		goi.lom = lom
 		goi.w = w
@@ -688,16 +688,12 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *cluster.LOM) {
 	var (
 		config  = cmn.GCO.Get()
-		started = time.Now()
+		started = time.Now().UnixNano()
 		t2tput  = isT2TPut(r.Header)
 	)
-	if apireq.dpq.ptime == "" {
-		if !t2tput {
-			t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
-			return
-		}
-	} else if redelta := ptLatency(started.UnixNano(), apireq.dpq.ptime); redelta != 0 {
-		t.statsT.Add(stats.PutRedirLatency, redelta)
+	if apireq.dpq.ptime == "" && !t2tput {
+		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
+		return
 	}
 	if cs := fs.Cap(); cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 		cs = t.OOS(nil)
@@ -761,7 +757,12 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	default:
 		poi := allocPOI()
 		{
-			poi.atime = started.UnixNano()
+			poi.atime = started
+			if apireq.dpq.ptime != "" && sparseRedirStats(poi.atime) {
+				if d := ptLatency(poi.atime, apireq.dpq.ptime); d > 0 {
+					t.statsT.Add(stats.PutRedirLatency, d)
+				}
+			}
 			poi.t = t
 			poi.lom = lom
 			poi.config = config
@@ -1148,7 +1149,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 	return
 }
 
-func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (string, int, error) {
+func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started int64, dpq *dpq) (string, int, error) {
 	var (
 		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
 		cksumType     = r.Header.Get(apc.HdrObjCksumType)
@@ -1183,7 +1184,7 @@ func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started time.Time,
 }
 
 // called under lock
-func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started time.Time, dpq *dpq) (int, error) {
+func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started int64, dpq *dpq) (int, error) {
 	var (
 		mime     = dpq.archmime // apc.QparamArchmime
 		filename = dpq.archpath // apc.QparamArchpath

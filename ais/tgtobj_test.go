@@ -165,7 +165,7 @@ func BenchmarkObjAppend(b *testing.B) {
 				b.StopTimer()
 				r, _ := readers.NewRand(bench.fileSize, cos.ChecksumNone)
 				aoi := &apndOI{
-					started: time.Now(),
+					started: time.Now().UnixNano(),
 					t:       t,
 					lom:     lom,
 					r:       r,
