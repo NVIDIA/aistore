@@ -76,7 +76,7 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
 
 	tstats := g.t.statsT.(*stats.Trunner)
 	for _, disk := range mi.Disks {
-		tstats.RegDiskMetrics(disk)
+		tstats.RegDiskMetrics(g.t.si, disk)
 	}
 }
 

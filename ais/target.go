@@ -187,7 +187,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(t)
 
 	ts := stats.NewTrunner(t) // iostat below
-	startedUp := ts.Init(t)
+	startedUp := ts.Init(t)   // reg common metrics (and target-only - via RegMetrics/regDiskMetrics below)
 	daemon.rg.add(ts)
 	t.statsT = ts // stats tracker
 
@@ -266,10 +266,10 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 	return
 }
 
-func regDiskMetrics(tstats *stats.Trunner, mpi fs.MPI) {
+func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {
 	for _, mi := range mpi {
 		for _, disk := range mi.Disks {
-			tstats.RegDiskMetrics(disk)
+			tstats.RegDiskMetrics(node, disk)
 		}
 	}
 }
@@ -290,8 +290,8 @@ func (t *target) Run() error {
 	if len(availablePaths) == 0 {
 		cos.ExitLog(cmn.ErrNoMountpaths)
 	}
-	regDiskMetrics(tstats, availablePaths)
-	regDiskMetrics(tstats, disabledPaths)
+	regDiskMetrics(t.si, tstats, availablePaths)
+	regDiskMetrics(t.si, tstats, disabledPaths)
 	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
 
 	fatalErr, writeErr := t.checkRestarted()

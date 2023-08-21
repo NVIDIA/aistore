@@ -87,19 +87,21 @@ const (
 
 type (
 	Trunner struct {
-		t           cluster.NodeMemCap
-		TargetCDF   fs.TargetCDF `json:"cdf"`
-		disk        ios.AllDiskStats
-		xln         string
-		statsRunner // the base (compare w/ Prunner)
-		lines       []string
-		mem         sys.MemStat
-		standby     bool
+		t         cluster.NodeMemCap
+		TargetCDF fs.TargetCDF `json:"cdf"`
+		disk      ios.AllDiskStats
+		xln       string
+		runner    // the base (compare w/ Prunner)
+		lines     []string
+		mem       sys.MemStat
+		standby   bool
 	}
 )
 
 const (
 	minLogDiskUtil = 10 // skip logging idle disks
+
+	numTargetStats = 48 // approx. initial
 )
 
 /////////////
@@ -111,30 +113,35 @@ var _ cos.Runner = (*Trunner)(nil)
 
 func NewTrunner(t cluster.NodeMemCap) *Trunner { return &Trunner{t: t} }
 
-func (r *Trunner) Run() error     { return r.runcommon(r) }
+func (r *Trunner) Run() error     { return r._run(r /*as statsLogger*/) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
 
 func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.core = &coreStats{}
-	r.core.init(t.Snode(), 48) // register common (target's own stats are reg()-ed elsewhere)
 
-	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
+	r.core.init(numTargetStats)
+	r.runner.fast.n = make(map[string]*int64, 16)
+	r.runner.fast.v = make([]int64, 0, 16)
+
+	r.regCommon(t.Snode())
+
+	r.ctracker = make(copyTracker, numTargetStats) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
 	r.disk = make(ios.AllDiskStats, 16)
 
 	config := cmn.GCO.Get()
 	r.core.statsTime = config.Periodic.StatsTime.D()
 
-	r.statsRunner.name = "targetstats"
-	r.statsRunner.daemon = t
+	r.runner.name = "targetstats"
+	r.runner.daemon = t
 
-	r.statsRunner.stopCh = make(chan struct{}, 4)
-	r.statsRunner.workCh = make(chan cos.NamedVal64, 512)
+	r.runner.stopCh = make(chan struct{}, 4)
+	r.runner.workCh = make(chan cos.NamedVal64, workChanCapacity)
 
-	r.core.initMetricClient(t.Snode(), &r.statsRunner)
+	r.core.initMetricClient(t.Snode(), &r.runner)
 
-	r.sorted = make([]string, 0, 48)
-	return &r.statsRunner.startedUp
+	r.sorted = make([]string, 0, numTargetStats)
+	return &r.runner.startedUp
 }
 
 func (r *Trunner) InitCDF() error {
@@ -154,10 +161,6 @@ func (r *Trunner) InitCDF() error {
 	return nil
 }
 
-// register target-specific metrics in addition to those that must be
-// already added via regCommon()
-func (r *Trunner) reg(name, kind string) { r.core.Tracker.reg(r.t.Snode(), name, kind) }
-
 func nameRbps(disk string) string { return "disk." + disk + ".read.bps" }
 func nameRavg(disk string) string { return "disk." + disk + ".avg.rsize" }
 func nameWbps(disk string) string { return "disk." + disk + ".write.bps" }
@@ -172,76 +175,77 @@ func isDiskUtilMetric(name string) bool {
 	return isDiskMetric(name) && strings.HasSuffix(name, ".util")
 }
 
-func (r *Trunner) RegDiskMetrics(disk string) {
-	s, n := r.core.Tracker, nameRbps(disk)
-	if _, ok := s[n]; ok { // must be config.TestingEnv()
-		return
-	}
-	r.reg(n, KindComputedThroughput)
-	r.reg(nameWbps(disk), KindComputedThroughput)
-
-	r.reg(nameRavg(disk), KindGauge)
-	r.reg(nameWavg(disk), KindGauge)
-	r.reg(nameUtil(disk), KindGauge)
-}
-
+// target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(node *meta.Snode) {
-	r.reg(GetColdCount, KindCounter)
-	r.reg(GetColdSize, KindSize)
+	r.reg(node, GetColdCount, KindCounter, true /* fast */)
+	r.reg(node, GetColdSize, KindSize, true)
 
-	r.reg(LruEvictCount, KindCounter)
-	r.reg(LruEvictSize, KindSize)
+	r.reg(node, LruEvictCount, KindCounter)
+	r.reg(node, LruEvictSize, KindSize)
 
-	r.reg(CleanupStoreCount, KindCounter)
-	r.reg(CleanupStoreSize, KindSize)
+	r.reg(node, CleanupStoreCount, KindCounter)
+	r.reg(node, CleanupStoreSize, KindSize)
 
-	r.reg(VerChangeCount, KindCounter)
-	r.reg(VerChangeSize, KindSize)
+	r.reg(node, VerChangeCount, KindCounter)
+	r.reg(node, VerChangeSize, KindSize)
 
-	r.reg(PutLatency, KindLatency)
-	r.reg(AppendLatency, KindLatency)
-	r.reg(GetRedirLatency, KindLatency)
-	r.reg(PutRedirLatency, KindLatency)
+	r.reg(node, PutLatency, KindLatency)
+	r.reg(node, AppendLatency, KindLatency)
+	r.reg(node, GetRedirLatency, KindLatency)
+	r.reg(node, PutRedirLatency, KindLatency)
 
 	// bps
-	r.reg(GetThroughput, KindThroughput)
-	r.reg(PutThroughput, KindThroughput)
+	r.reg(node, GetThroughput, KindThroughput, true)
+	r.reg(node, PutThroughput, KindThroughput, true)
 
-	r.reg(GetSize, KindSize)
-	r.reg(PutSize, KindSize)
+	r.reg(node, GetSize, KindSize, true)
+	r.reg(node, PutSize, KindSize, true)
 
 	// errors
-	r.reg(ErrCksumCount, KindCounter)
-	r.reg(ErrCksumSize, KindSize)
+	r.reg(node, ErrCksumCount, KindCounter)
+	r.reg(node, ErrCksumSize, KindSize)
 
-	r.reg(ErrMetadataCount, KindCounter)
-	r.reg(ErrIOCount, KindCounter)
+	r.reg(node, ErrMetadataCount, KindCounter)
+	r.reg(node, ErrIOCount, KindCounter)
 
 	// streams
-	r.reg(StreamsOutObjCount, KindCounter)
-	r.reg(StreamsOutObjSize, KindSize)
-	r.reg(StreamsInObjCount, KindCounter)
-	r.reg(StreamsInObjSize, KindSize)
+	r.reg(node, StreamsOutObjCount, KindCounter, true)
+	r.reg(node, StreamsOutObjSize, KindSize, true)
+	r.reg(node, StreamsInObjCount, KindCounter, true)
+	r.reg(node, StreamsInObjSize, KindSize, true)
 
 	// special
-	r.reg(RestartCount, KindCounter)
+	r.reg(node, RestartCount, KindCounter)
 
 	// download
-	r.reg(DownloadSize, KindSize)
-	r.reg(DownloadLatency, KindLatency)
+	r.reg(node, DownloadSize, KindSize)
+	r.reg(node, DownloadLatency, KindLatency)
 
 	// dsort
-	r.reg(DSortCreationReqCount, KindCounter)
-	r.reg(DSortCreationReqLatency, KindLatency)
-	r.reg(DSortCreationRespCount, KindCounter)
-	r.reg(DSortCreationRespLatency, KindLatency)
+	r.reg(node, DSortCreationReqCount, KindCounter)
+	r.reg(node, DSortCreationReqLatency, KindLatency)
+	r.reg(node, DSortCreationRespCount, KindCounter)
+	r.reg(node, DSortCreationRespLatency, KindLatency)
 
 	// Prometheus
 	r.core.initProm(node)
 }
 
+func (r *Trunner) RegDiskMetrics(node *meta.Snode, disk string) {
+	s, n := r.core.Tracker, nameRbps(disk)
+	if _, ok := s[n]; ok { // must be config.TestingEnv()
+		return
+	}
+	r.reg(node, n, KindComputedThroughput)
+	r.reg(node, nameWbps(disk), KindComputedThroughput)
+
+	r.reg(node, nameRavg(disk), KindGauge)
+	r.reg(node, nameWavg(disk), KindGauge)
+	r.reg(node, nameUtil(disk), KindGauge)
+}
+
 func (r *Trunner) GetStats() (ds *Node) {
-	ds = r.statsRunner.GetStats()
+	ds = r.runner.GetStats()
 	ds.TargetCDF = r.TargetCDF
 	return
 }
