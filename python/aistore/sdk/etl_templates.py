@@ -231,13 +231,15 @@ spec:
 # https://github.com/NVIDIA/ais-etl/blob/master/transformers/torchvision_preprocess/README.md.
 # pylint: disable=unused-variable
 TORCHVISION_TRANSFORMER = """
+# https://github.com/NVIDIA/ais-etl/blob/master/transformers/keras_transformer/README.md
 apiVersion: v1
 kind: Pod
 metadata:
   name: transformer-torchvision
   annotations:
-    # Values it can take ["hpull://","hrev://","hpush://"]
-    communication_type: "{communication_type}"
+    # Values `communication_type` can take are ["hpull://", "hrev://", "hpush://", "io://"].
+    # Visit https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#communication-mechanisms 
+    communication_type: "{communication_type}://"
     wait_timeout: 10m
 spec:
   containers:
@@ -246,11 +248,11 @@ spec:
       imagePullPolicy: Always
       ports:
         - name: default
-          containerPort: 80
-      command: ['/code/server.py', '--listen', '0.0.0.0', '--port', '80']
+          containerPort: 8000
+      command:  ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
       env:
         - name: FORMAT
-        # Expected Values - PNG, JPEG, etc.
+        # expected values - PNG, JPEG, etc
           value: "{format}"
         - name: TRANSFORM
           value: '{transform}'
