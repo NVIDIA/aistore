@@ -36,6 +36,10 @@ func (ctx *unitsCtx) durMilli(dur cos.Duration) string {
 	return fmtMilli(dur, ctx.units)
 }
 
+func (ctx *unitsCtx) durHuman(dur time.Duration) string {
+	return fmtDuration(dur.Nanoseconds(), ctx.units)
+}
+
 func FuncMapUnits(units string) (m template.FuncMap) {
 	ctx := &unitsCtx{units}
 	m = make(template.FuncMap, 4)
@@ -43,6 +47,7 @@ func FuncMapUnits(units string) (m template.FuncMap) {
 	m["FormatBytesUns"] = ctx.sizeUns
 	m["FormatMAM"] = ctx.sizeMam
 	m["FormatMilli"] = ctx.durMilli
+	m["FormatDuration"] = ctx.durHuman
 	return
 }
 

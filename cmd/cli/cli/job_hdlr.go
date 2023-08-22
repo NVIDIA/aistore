@@ -1055,13 +1055,13 @@ func waitDsortHandler(c *cli.Context, id string) error {
 		}
 		finished := true
 		for _, targetMetrics := range resp {
-			if targetMetrics.Aborted.Load() {
+			if targetMetrics.Metrics.Aborted.Load() {
 				if total > wasFast {
 					fmt.Fprintln(c.App.Writer)
 				}
 				return fmt.Errorf("%s was aborted", qn)
 			}
-			finished = finished && targetMetrics.Creation.Finished
+			finished = finished && targetMetrics.Metrics.Creation.Finished
 		}
 		if finished {
 			break

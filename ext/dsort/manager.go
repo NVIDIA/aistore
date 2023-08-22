@@ -80,15 +80,16 @@ type (
 	// Manager maintains all the state required for a single run of a distributed archive file shuffle.
 	Manager struct {
 		// tagged fields are the only fields persisted once dsort finishes
-		ManagerUUID        string        `json:"manager_uuid"`
-		Metrics            *Metrics      `json:"metrics"`
+		ManagerUUID string         `json:"manager_uuid"`
+		Metrics     *Metrics       `json:"metrics"`
+		Pars        *parsedReqSpec `json:"pars"`
+
 		mg                 *ManagerGroup // parent
 		mu                 sync.Mutex
 		smap               *meta.Smap
 		recm               *shard.RecordManager
 		shardRW            shard.RW
 		startShardCreation chan struct{}
-		pars               *parsedReqSpec
 		client             *http.Client // Client for sending records metadata
 		compression        struct {
 			totalShardSize     atomic.Int64
@@ -140,7 +141,7 @@ func Pinit(si cluster.Node) {
 func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	Managers = NewManagerGroup(db, false)
 
-	xreg.RegBckXact(&xfactory{})
+	xreg.RegBckXact(&factory{})
 
 	debug.Assert(g.mm == nil) // only once
 	g.mm = t.PageMM()
@@ -179,7 +180,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 
 	targetCount := m.smap.CountActiveTs()
 
-	m.pars = pars
+	m.Pars = pars
 	m.Metrics = newMetrics(pars.Description, pars.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
 
@@ -325,11 +326,12 @@ func (m *Manager) cleanup() {
 
 	if !m.aborted() {
 		m.updateFinishedAck(g.t.SID())
+		m.xctn.Finish()
 	}
 }
 
-// finalCleanup is invoked only when all the target confirmed finishing the
-// dsort operations. To ensure that finalCleanup is not invoked before regular
+// finalCleanup is invoked only when all targets confirm finishing.
+// To ensure that finalCleanup is not invoked before regular
 // cleanup is finished, we also ack ourselves.
 //
 // finalCleanup can be invoked only after cleanup and this is ensured by
@@ -337,9 +339,11 @@ func (m *Manager) cleanup() {
 // on which finalCleanup will sleep if needed. Note that it is hard (or even
 // impossible) to ensure that cleanup and finalCleanup will be invoked in order
 // without having ordering mechanism since cleanup and finalCleanup are invoked
-// in goroutines (there is possibility that finalCleanup would start before
+// in goroutines (there is a possibility that finalCleanup would start before
 // cleanup) - this cannot happen with current ordering mechanism.
 func (m *Manager) finalCleanup() {
+	nlog.Infof("%s: [dsort] %s started final cleanup", g.t, m.ManagerUUID)
+
 	m.lock()
 	for m.state.cleaned != initiallyCleanedState {
 		if m.state.cleaned == finallyCleanedState {
@@ -352,7 +356,6 @@ func (m *Manager) finalCleanup() {
 		}
 	}
 
-	nlog.Infof("[dsort] %s started final cleanup", m.ManagerUUID)
 	now := time.Now()
 
 	if err := m.cleanupStreams(); err != nil {
@@ -383,7 +386,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	nlog.Infof("[dsort] %s finished final cleanup in %v", m.ManagerUUID, time.Since(now))
+	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", g.t, m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -396,15 +399,18 @@ func (m *Manager) abort(errs ...error) {
 	if len(errs) > 0 {
 		m.Metrics.lock()
 		for _, err := range errs {
+			m.xctn.AddErr(err)
 			m.Metrics.Errors = append(m.Metrics.Errors, err.Error())
 		}
 		m.Metrics.unlock()
 	}
 
-	nlog.Infof("%s: %s aborted", g.t, m.ManagerUUID)
 	m.setAbortedTo(true)
+	m.xctn.Abort(m.xctn.Err())
 	inProgress := m.inProgress()
 	m.unlock()
+
+	nlog.Infof("%s: [dsort] %s aborted", g.t, m.ManagerUUID)
 
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
@@ -430,13 +436,13 @@ func (m *Manager) abort(errs ...error) {
 
 // setDSorter sets what type of dsorter implementation should be used
 func (m *Manager) setDSorter() (err error) {
-	switch m.pars.DSorterType {
+	switch m.Pars.DSorterType {
 	case DSorterGeneralType:
 		m.dsorter, err = newDSorterGeneral(m)
 	case DSorterMemType:
 		m.dsorter = newDSorterMem(m)
 	default:
-		debug.Assertf(false, "dsorter type is invalid: %q", m.pars.DSorterType)
+		debug.Assertf(false, "dsorter type is invalid: %q", m.Pars.DSorterType)
 	}
 	m.dsorterStarted.Add(1)
 	return
@@ -444,14 +450,14 @@ func (m *Manager) setDSorter() (err error) {
 
 func (m *Manager) markStarted()               { m.dsorterStarted.Done() }
 func (m *Manager) waitToStart()               { m.dsorterStarted.Wait() }
-func (m *Manager) onDupRecs(msg string) error { return m.react(m.pars.DuplicatedRecords, msg) }
+func (m *Manager) onDupRecs(msg string) error { return m.react(m.Pars.DuplicatedRecords, msg) }
 
 // setRW sets what type of file extraction and creation is used based on the RequestSpec.
 func (m *Manager) setRW() (err error) {
 	var ke shard.KeyExtractor
-	switch m.pars.Algorithm.Kind {
+	switch m.Pars.Algorithm.Kind {
 	case Content:
-		ke, err = shard.NewContentKeyExtractor(m.pars.Algorithm.ContentKeyType, m.pars.Algorithm.Ext)
+		ke, err = shard.NewContentKeyExtractor(m.Pars.Algorithm.ContentKeyType, m.Pars.Algorithm.Ext)
 	case MD5:
 		ke, err = shard.NewMD5KeyExtractor()
 	default:
@@ -461,17 +467,17 @@ func (m *Manager) setRW() (err error) {
 		return errors.WithStack(err)
 	}
 
-	m.shardRW = shard.RWs[m.pars.InputExtension]
+	m.shardRW = shard.RWs[m.Pars.InputExtension]
 	if m.shardRW == nil {
-		debug.Assert(!m.pars.DryRun, "dry-run in combination with _any_ shard extension is not supported")
-		debug.Assert(m.pars.InputExtension == "", m.pars.InputExtension)
+		debug.Assert(!m.Pars.DryRun, "dry-run in combination with _any_ shard extension is not supported")
+		debug.Assert(m.Pars.InputExtension == "", m.Pars.InputExtension)
 		// TODO -- FIXME: niy
 	}
-	if m.pars.DryRun {
+	if m.Pars.DryRun {
 		m.shardRW = shard.NopRW(m.shardRW)
 	}
 
-	m.recm = shard.NewRecordManager(m.pars.InputBck, m.shardRW, ke, m.onDupRecs)
+	m.recm = shard.NewRecordManager(m.Pars.InputBck, m.shardRW, ke, m.onDupRecs)
 	return nil
 }
 
@@ -686,7 +692,7 @@ func (m *Manager) freeMemory() uint64 {
 	if err := mem.Get(); err != nil {
 		return 0
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(m.pars.MaxMemUsage, &mem)
+	maxMemoryToUse := calcMaxMemoryUsage(m.Pars.MaxMemUsage, &mem)
 	return maxMemoryToUse - mem.ActualUsed
 }
 

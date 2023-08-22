@@ -429,20 +429,21 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err er
 	bp := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(DsortFinishTimeout)
 	for time.Now().Before(deadline) {
-		allMetrics, err := api.MetricsDSort(bp, managerUUID)
+		all, err := api.MetricsDSort(bp, managerUUID)
 		if err != nil {
 			return false, err
 		}
 
 		allAborted := true
 		allFinished := true
-		for _, metrics := range allMetrics {
-			allAborted = allAborted && metrics.Aborted.Load()
+		for _, jmetrics := range all {
+			m := jmetrics.Metrics
+			allAborted = allAborted && m.Aborted.Load()
 			allFinished = allFinished &&
-				!metrics.Aborted.Load() &&
-				metrics.Extraction.Finished &&
-				metrics.Sorting.Finished &&
-				metrics.Creation.Finished
+				!m.Aborted.Load() &&
+				m.Extraction.Finished &&
+				m.Sorting.Finished &&
+				m.Creation.Finished
 		}
 		if allAborted {
 			return true, nil

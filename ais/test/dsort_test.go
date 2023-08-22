@@ -492,16 +492,17 @@ func canonicalName(recordName string) string {
 
 func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsCnt int) {
 	tlog.Logf("%s: checking metrics and \"reaction\"\n", df.job())
-	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+	all, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
-	if len(allMetrics) != df.m.originalTargetCount {
+	if len(all) != df.m.originalTargetCount {
 		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d", df.job(),
-			len(allMetrics), df.m.originalTargetCount)
+			len(all), df.m.originalTargetCount)
 	}
 
 	switch reaction {
 	case cmn.IgnoreReaction:
-		for target, metrics := range allMetrics {
+		for target, jmetrics := range all {
+			metrics := jmetrics.Metrics
 			if len(metrics.Warnings) != 0 {
 				df.m.t.Errorf("%s: target %q has %s warnings: %s", df.job(), target, apc.ActDsort, metrics.Warnings)
 			}
@@ -511,7 +512,8 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 		}
 	case cmn.WarnReaction:
 		totalWarnings := 0
-		for target, metrics := range allMetrics {
+		for target, jmetrics := range all {
+			metrics := jmetrics.Metrics
 			totalWarnings += len(metrics.Warnings)
 
 			if len(metrics.Errors) != 0 {
@@ -524,7 +526,8 @@ func (df *dsortFramework) checkReactionResult(reaction string, expectedProblemsC
 		}
 	case cmn.AbortReaction:
 		totalErrors := 0
-		for target, metrics := range allMetrics {
+		for target, jmetrics := range all {
+			metrics := jmetrics.Metrics
 			if !metrics.Aborted.Load() {
 				df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), apc.ActDsort, target)
 			}
@@ -570,22 +573,23 @@ func (df *dsortFramework) getRecordNames(bck cmn.Bck) []shardRecords {
 	return allShardRecords
 }
 
-func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.Metrics {
+func (df *dsortFramework) checkMetrics(expectAbort bool) map[string]*dsort.JobInfo {
 	tlog.Logf("%s: checking metrics\n", df.job())
-	allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+	all, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 	tassert.CheckFatal(df.m.t, err)
-	if len(allMetrics) != df.m.originalTargetCount {
+	if len(all) != df.m.originalTargetCount {
 		df.m.t.Errorf("%s: number of metrics %d is not same as number of targets %d",
-			df.job(), len(allMetrics), df.m.originalTargetCount)
+			df.job(), len(all), df.m.originalTargetCount)
 	}
-	for target, metrics := range allMetrics {
-		if expectAbort && !metrics.Aborted.Load() {
+	for target, jmetrics := range all {
+		m := jmetrics.Metrics
+		if expectAbort && !m.Aborted.Load() {
 			df.m.t.Errorf("%s: %s was not aborted by target: %s", df.job(), apc.ActDsort, target)
-		} else if !expectAbort && metrics.Aborted.Load() {
+		} else if !expectAbort && m.Aborted.Load() {
 			df.m.t.Errorf("%s: %s was aborted by target: %s", df.job(), apc.ActDsort, target)
 		}
 	}
-	return allMetrics
+	return all
 }
 
 // helper for dispatching i-th dsort job
@@ -618,7 +622,7 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 	tlog.Logf("waiting for %s phase...\n", phaseName)
 	baseParams := tools.BaseAPIParams(proxyURL)
 	for {
-		allMetrics, err := api.MetricsDSort(baseParams, managerUUID)
+		all, err := api.MetricsDSort(baseParams, managerUUID)
 		if err != nil { // in case of error call callback anyway
 			t.Error(err)
 			callback()
@@ -626,7 +630,8 @@ func waitForDSortPhase(t *testing.T, proxyURL, managerUUID, phaseName string, ca
 		}
 
 		phase := true
-		for _, metrics := range allMetrics {
+		for _, jmetrics := range all {
+			metrics := jmetrics.Metrics
 			switch phaseName {
 			case dsort.ExtractionPhase:
 				phase = phase && (metrics.Extraction.Running || metrics.Extraction.Finished)
@@ -972,8 +977,9 @@ func TestDsortDisk(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			tlog.Logf("%s: finished\n", df.job())
 
-			allMetrics := df.checkMetrics(false /* expectAbort */)
-			for target, metrics := range allMetrics {
+			all := df.checkMetrics(false /* expectAbort */)
+			for target, jmetrics := range all {
+				metrics := jmetrics.Metrics
 				if metrics.Extraction.ExtractedToDiskCnt == 0 && metrics.Extraction.ExtractedCnt > 0 {
 					t.Errorf("target %s did not extract any files do disk", target)
 				}
@@ -1068,12 +1074,13 @@ func TestDsortMemDisk(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%s: finished\n", df.job())
 
-	allMetrics := df.checkMetrics(false /* expectAbort */)
+	all := df.checkMetrics(false /* expectAbort */)
 	var (
 		extractedToDisk int64
 		extractedTotal  int64
 	)
-	for _, metrics := range allMetrics {
+	for _, jmetrics := range all {
+		metrics := jmetrics.Metrics
 		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
 		extractedTotal += metrics.Extraction.ExtractedCnt
 	}
@@ -1140,12 +1147,13 @@ func minMemCompression(t *testing.T, ext, maxMem string) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("%s: finished\n", df.job())
 
-	allMetrics := df.checkMetrics(false /*expectAbort*/)
+	all := df.checkMetrics(false /*expectAbort*/)
 	var (
 		extractedToDisk int64
 		extractedTotal  int64
 	)
-	for _, metrics := range allMetrics {
+	for _, jmetrics := range all {
+		metrics := jmetrics.Metrics
 		extractedToDisk += metrics.Extraction.ExtractedToDiskCnt
 		extractedTotal += metrics.Extraction.ExtractedCnt
 	}
@@ -1311,14 +1319,15 @@ func TestDsortContent(t *testing.T) {
 					}
 
 					tlog.Logf("%s: checking metrics\n", df.job())
-					allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+					all, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 					tassert.CheckFatal(t, err)
-					if len(allMetrics) != m.originalTargetCount {
+					if len(all) != m.originalTargetCount {
 						t.Errorf("number of metrics %d is not same as the number of targets %d",
-							len(allMetrics), m.originalTargetCount)
+							len(all), m.originalTargetCount)
 					}
 
-					for target, metrics := range allMetrics {
+					for target, jmetrics := range all {
+						metrics := jmetrics.Metrics
 						if entry.missingKeys && !metrics.Aborted.Load() {
 							t.Errorf("%s was not aborted by target: %s", target, apc.ActDsort)
 						}
@@ -1460,14 +1469,15 @@ func TestDsortKillTargetDuringPhases(t *testing.T) {
 			}
 
 			tlog.Logf("%s: checking metrics\n", df.job())
-			allMetrics, err := api.MetricsDSort(df.baseParams, df.managerUUID)
+			all, err := api.MetricsDSort(df.baseParams, df.managerUUID)
 			tassert.CheckError(t, err)
-			if len(allMetrics) == m.originalTargetCount {
+			if len(all) == m.originalTargetCount {
 				t.Errorf("number of metrics %d is same as number of original targets %d",
-					len(allMetrics), m.originalTargetCount)
+					len(all), m.originalTargetCount)
 			}
 
-			for target, metrics := range allMetrics {
+			for target, jmetrics := range all {
+				metrics := jmetrics.Metrics
 				if !metrics.Aborted.Load() {
 					t.Errorf("%s was not aborted by target: %s", apc.ActDsort, target)
 				}

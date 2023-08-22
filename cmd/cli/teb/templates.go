@@ -111,17 +111,25 @@ const (
 	DownloadListNoHdrTmpl = "{{ range $key, $value := . }}" + downloadListBody + "{{end}}"
 	DownloadListTmpl      = downloadListHdr + DownloadListNoHdrTmpl
 
-	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t DESCRIPTION\n"
+	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t SRC BUCKET\t DST BUCKET\t SRC SHARDS\n"
 	dsortListBody = "{{$value.ID}}\t " +
-		"{{if $value.Aborted}}Aborted" +
-		"{{else if $value.Archived}}Finished" +
-		"{{else}}Running" +
-		"{{end}}\t " +
+		"{{FormatDsortStatus $value}}\t " +
 		"{{FormatStart $value.StartedTime $value.FinishTime}}\t " +
 		"{{FormatEnd $value.StartedTime $value.FinishTime}}\t " +
-		"{{$value.Description}}\n"
+		"{{FormatBckName $value.SrcBck}}\t " +
+		"{{FormatBckName $value.DstBck}}\t " +
+		"{{if (eq $value.Objs 0) }}-{{else}}{{$value.Objs}}{{end}}\n"
 	DSortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
 	DSortListTmpl      = dsortListHdr + DSortListNoHdrTmpl
+
+	DSortListVerboseTmpl = dsortListHdr +
+		"{{ range $value := . }}" + dsortListBody +
+		indent1 + "Total Extracted Bytes:\t{{if (eq $value.Bytes 0) }}-{{else}}{{FormatBytesSig $value.Bytes 2}}{{end}}\n" +
+		indent1 + "Extraction Time:\t{{if (eq $value.ExtractedDuration 0) }}-{{else}}{{FormatDuration $value.ExtractedDuration}}{{end}}\n" +
+		indent1 + "Sorting Time:\t{{if (eq $value.SortingDuration 0) }}-{{else}}{{FormatDuration $value.SortingDuration}}{{end}}\n" +
+		indent1 + "Creation Time:\t{{if (eq $value.CreationDuration 0) }}-{{else}}{{FormatDuration $value.CreationDuration}}{{end}}\n" +
+		indent1 + "Description:\t{{$value.Metrics.Description}}\n" +
+		"{{end}}"
 
 	transformListHdr  = "ETL NAME\t XACTION\t OBJECTS\n"
 	transformListBody = "{{$value.Name}}\t {{$value.XactID}}\t " +
@@ -395,8 +403,10 @@ var (
 		"FormatBytesUns":    func(size uint64, digits int) string { return FmtSize(int64(size), cos.UnitsIEC, digits) },
 		"FormatMAM":         func(u int64) string { return fmt.Sprintf("%-10s", FmtSize(u, cos.UnitsIEC, 2)) },
 		"FormatMilli":       func(dur cos.Duration) string { return fmtMilli(dur, cos.UnitsIEC) },
+		"FormatDuration":    FormatDuration,
 		"FormatStart":       func(s, e time.Time) string { res, _ := FmtStartEnd(s, e); return res },
 		"FormatEnd":         func(s, e time.Time) string { _, res := FmtStartEnd(s, e); return res },
+		"FormatDsortStatus": dsortJobInfoStatus,
 		"FormatObjStatus":   fmtObjStatus,
 		"FormatObjCustom":   fmtObjCustom,
 		"FormatObjIsCached": fmtObjIsCached,

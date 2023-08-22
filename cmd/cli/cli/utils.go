@@ -447,7 +447,7 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) 
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		switch {
-		case verbose():
+		case configuredVerbosity():
 			herr.Message = herr.StringEx()
 			err = errors.New(herr.Message)
 		case herr.Status == http.StatusNotFound:

@@ -244,7 +244,7 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncluding
 			return nil
 		}
 		if bckFrom.IsRemote() && !allIncludingRemote {
-			hint := "(hint: use option %s to " + text1 + " remote objects from the backend store)\n"
+			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
 			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
 			actionNote(c, note)
 			return nil

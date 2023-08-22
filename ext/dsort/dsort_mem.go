@@ -188,11 +188,11 @@ func (ds *dsorterMem) init() error {
 	ds.creationPhase.requestedShards = make(chan string, 10000)
 
 	ds.creationPhase.adjuster.read = newConcAdjuster(
-		ds.m.pars.CreateConcMaxLimit,
+		ds.m.Pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/
 	)
 	ds.creationPhase.adjuster.write = newConcAdjuster(
-		ds.m.pars.CreateConcMaxLimit,
+		ds.m.Pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/
 	)
 	return nil
@@ -211,7 +211,7 @@ func (ds *dsorterMem) start() error {
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
-		Multiplier: ds.m.pars.SbundleMult,
+		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -222,7 +222,7 @@ func (ds *dsorterMem) start() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
 	respSbArgs := bundle.Args{
-		Multiplier: ds.m.pars.SbundleMult,
+		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -343,7 +343,7 @@ func (ds *dsorterMem) createShardsLocally() error {
 	if err := mem.Get(); err != nil {
 		return err
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(ds.m.pars.MaxMemUsage, &mem)
+	maxMemoryToUse := calcMaxMemoryUsage(ds.m.Pars.MaxMemUsage, &mem)
 	sa := newInmemShardAllocator(maxMemoryToUse - mem.ActualUsed)
 
 	// read
@@ -453,7 +453,7 @@ func (ds *dsorterMem) sendRecordObj(rec *shard.Record, obj *shard.RecordObj, toN
 		beforeSend int64
 	)
 	fullContentPath := ds.m.recm.FullContentPath(obj)
-	ct, err := cluster.NewCTFromBO(&ds.m.pars.OutputBck, fullContentPath, nil)
+	ct, err := cluster.NewCTFromBO(&ds.m.Pars.OutputBck, fullContentPath, nil)
 	if err != nil {
 		return
 	}
@@ -496,7 +496,7 @@ func (ds *dsorterMem) sendRecordObj(rec *shard.Record, obj *shard.RecordObj, toN
 		return
 	}
 
-	if ds.m.pars.DryRun {
+	if ds.m.Pars.DryRun {
 		lr := cos.NopReader(obj.MetadataSize + obj.Size)
 		r := cos.NopOpener(io.NopCloser(lr))
 		hdr.ObjAttrs.Size = obj.MetadataSize + obj.Size
@@ -639,7 +639,7 @@ func (es *dsmExtractShard) do() error {
 	ds, shard := es.ds, es.shard
 	defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
-	bck := meta.NewBck(ds.m.pars.OutputBck.Name, ds.m.pars.OutputBck.Provider, cmn.NsGlobal)
+	bck := meta.NewBck(ds.m.Pars.OutputBck.Name, ds.m.Pars.OutputBck.Provider, cmn.NsGlobal)
 	if err := bck.Init(g.t.Bowner()); err != nil {
 		return err
 	}

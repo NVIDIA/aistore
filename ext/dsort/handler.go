@@ -152,19 +152,19 @@ func plistHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	}
 	responses := bcast(http.MethodGet, path, query, nil, psi.Sowner().Get())
 
-	resultList := make([]*JobInfo, 0)
+	resultList := make([]*JobInfo, 0, 4)
 	for _, r := range responses {
 		if r.err != nil {
 			nlog.Errorln(r.err)
 			continue
 		}
 
-		var newMetrics []*JobInfo
-		err := jsoniter.Unmarshal(r.res, &newMetrics)
+		var targetMetrics []*JobInfo
+		err := jsoniter.Unmarshal(r.res, &targetMetrics)
 		debug.AssertNoErr(err)
 
-		for _, job := range newMetrics {
-			found := false
+		for _, job := range targetMetrics {
+			var found bool
 			for _, oldMetric := range resultList {
 				if oldMetric.ID == job.ID {
 					oldMetric.Aggregate(job)
@@ -177,19 +177,15 @@ func plistHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 			}
 		}
 	}
-	body := cos.MustMarshal(resultList)
-	if _, err := w.Write(body); err != nil {
-		nlog.Errorln(err)
-		// When we fail write we cannot call InvalidHandler since it will be
-		// double header write.
-	}
+
+	w.Write(cos.MustMarshal(resultList))
 }
 
 // GET /v1/sort?id=...
 func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	var (
 		smap        = psi.Sowner().Get()
-		allMetrics  = make(map[string]*Metrics, smap.CountActiveTs())
+		all         = make(map[string]*JobInfo, smap.CountActiveTs())
 		managerUUID = query.Get(apc.QparamUUID)
 		path        = apc.URLPathdSortMetrics.Join(managerUUID)
 		responses   = bcast(http.MethodGet, path, nil, nil, smap)
@@ -205,26 +201,20 @@ func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 			cmn.WriteErr(w, r, resp.err, resp.statusCode)
 			return
 		}
-		metrics := &Metrics{}
-		if err := js.Unmarshal(resp.res, &metrics); err != nil {
+		j := &JobInfo{}
+		if err := js.Unmarshal(resp.res, j); err != nil {
 			cmn.WriteErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		allMetrics[resp.si.ID()] = metrics
+		all[resp.si.ID()] = j
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s job %q not found", apc.ActDsort, managerUUID)
+		msg := fmt.Sprintf("%s: [dsort] %s does not exist", g.t, managerUUID)
 		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
-
-	body, err := js.Marshal(allMetrics)
-	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusInternalServerError)
-		return
-	}
-	w.Write(body)
+	w.Write(cos.MustMarshal(all))
 }
 
 // DELETE /v1/sort/abort
@@ -728,13 +718,7 @@ func tlistHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body := cos.MustMarshal(Managers.List(regex, onlyActive))
-	if _, err := w.Write(body); err != nil {
-		nlog.Errorln(err)
-		// When we fail write we cannot call InvalidHandler since it will be
-		// double header write.
-		return
-	}
+	w.Write(cos.MustMarshal(Managers.List(regex, onlyActive)))
 }
 
 // /v1/sort/metrics.
@@ -751,19 +735,19 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	m, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
 	if !exists {
-		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s does not exist", g.t, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 
+	m.Metrics.lock()
 	m.Metrics.update()
-	body := m.Metrics.Marshal()
-	if _, err := w.Write(body); err != nil {
-		nlog.Errorln(err)
-		// When we fail write we cannot call InvalidHandler since it will be
-		// double header write.
-		return
-	}
+	j := m.Metrics.ToJobInfo(m.ManagerUUID, m.Pars)
+	j.Metrics = m.Metrics
+	body := cos.MustMarshal(j)
+	m.Metrics.unlock()
+
+	w.Write(body)
 }
 
 // /v1/sort/finished-ack.

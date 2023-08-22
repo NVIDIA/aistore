@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
 // low-level formatting routines and misc.
@@ -196,6 +197,19 @@ func fmtNameArch(val string, flags uint16) string {
 		return val
 	}
 	return "    " + val
+}
+
+func dsortJobInfoStatus(j *dsort.JobInfo) string {
+	switch {
+	case j.Aborted:
+		return "Aborted"
+	case j.Archived:
+		return "Archived"
+	case j.FinishTime.IsZero():
+		return "Running"
+	default:
+		return "Finished"
+	}
 }
 
 //

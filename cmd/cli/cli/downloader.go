@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
@@ -350,12 +352,32 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 		return true
 	})
 
-	hideHeader := flagIsSet(c, noHeaderFlag)
-	opts := teb.Jopts(flagIsSet(c, jsonFlag))
-	if hideHeader {
-		return l, teb.Print(list, teb.DownloadListNoHdrTmpl, opts)
+	var (
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
+		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: flagIsSet(c, jsonFlag)}
+		verbose     = flagIsSet(c, verboseJobFlag)
+	)
+	debug.AssertNoErr(errU)
+
+	if !verbose {
+		if hideHeader {
+			return l, teb.Print(list, teb.DownloadListNoHdrTmpl, opts)
+		}
+		return l, teb.Print(list, teb.DownloadListTmpl, opts)
 	}
-	return l, teb.Print(list, teb.DownloadListTmpl, opts)
+	// verbose - one at a time
+	for _, j := range list {
+		if err := teb.Print(dload.JobInfos{j}, teb.DownloadListTmpl, opts); err != nil {
+			return l, err
+		}
+		xargs := xact.ArgsMsg{ID: j.XactID, Kind: apc.ActDownload}
+		if _, err := xactList(c, xargs, false /*caption*/); err != nil {
+			return l, err
+		}
+		fmt.Fprintln(c.App.Writer)
+	}
+	return l, nil
 }
 
 func downloadJobStatus(c *cli.Context, id string) error {
@@ -379,7 +401,7 @@ func downloadJobStatus(c *cli.Context, id string) error {
 	}
 
 	// without progress bar
-	printDownloadStatus(c, resp, flagIsSet(c, verboseFlag))
+	printDownloadStatus(c, resp, flagIsSet(c, verboseJobFlag))
 	return nil
 }
 

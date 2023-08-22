@@ -22,7 +22,9 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -181,7 +183,6 @@ func startDsortHandler(c *cli.Context) (err error) {
 		spec.OutputBck = dstbck
 	}
 
-	// print resulting spec TODO -- FIXME
 	if flagIsSet(c, verboseFlag) {
 		flat, config := _flattenSpec(&spec)
 		err = teb.Print(flat, teb.FlatTmpl)
@@ -343,28 +344,28 @@ func (b *dsortPB) run() (dsortResult, error) {
 	for !finished {
 		time.Sleep(b.refreshTime)
 
-		metrics, err := api.MetricsDSort(b.apiBP, b.id)
+		jmetrics, err := api.MetricsDSort(b.apiBP, b.id)
 		if err != nil {
 			b.cleanBars()
 			return dsortResult{}, V(err)
 		}
 
-		var targetMetrics *dsort.Metrics
-		for _, targetMetrics = range metrics {
+		var targetMetrics *dsort.JobInfo
+		for _, targetMetrics = range jmetrics {
 			break
 		}
 
-		if targetMetrics.Aborted.Load() {
+		if targetMetrics.Metrics.Aborted.Load() {
 			b.aborted = true
 			break
 		}
 
 		b.warnings, b.errors = make([]string, 0), make([]string, 0)
-		for _, targetMetrics := range metrics {
-			b.warnings = append(b.warnings, targetMetrics.Warnings...)
-			b.errors = append(b.errors, targetMetrics.Errors...)
+		for _, targetMetrics := range jmetrics {
+			b.warnings = append(b.warnings, targetMetrics.Metrics.Warnings...)
+			b.errors = append(b.errors, targetMetrics.Metrics.Errors...)
 		}
-		finished = b.updateBars(metrics)
+		finished = b.updateBars(jmetrics)
 	}
 
 	b.cleanBars()
@@ -380,26 +381,26 @@ func (b *dsortPB) start() (bool, error) {
 	return finished, nil
 }
 
-func (b *dsortPB) updateBars(metrics map[string]*dsort.Metrics) bool {
+func (b *dsortPB) updateBars(jmetrics map[string]*dsort.JobInfo) bool {
 	var (
-		targetMetrics *dsort.Metrics
+		targetMetrics *dsort.JobInfo
 		finished      = true
 		phases        = newPhases()
 	)
 
-	for _, targetMetrics = range metrics {
-		phases[dsort.ExtractionPhase].progress += targetMetrics.Extraction.ExtractedCnt
+	for _, targetMetrics = range jmetrics {
+		phases[dsort.ExtractionPhase].progress += targetMetrics.Metrics.Extraction.ExtractedCnt
 
-		phases[dsort.SortingPhase].progress = cos.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Sorting.RecvStats.Count)
+		phases[dsort.SortingPhase].progress = cos.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Metrics.Sorting.RecvStats.Count)
 
-		phases[dsort.CreationPhase].progress += targetMetrics.Creation.CreatedCnt
-		phases[dsort.CreationPhase].total += targetMetrics.Creation.ToCreate
+		phases[dsort.CreationPhase].progress += targetMetrics.Metrics.Creation.CreatedCnt
+		phases[dsort.CreationPhase].total += targetMetrics.Metrics.Creation.ToCreate
 
-		finished = finished && targetMetrics.Creation.Finished
+		finished = finished && targetMetrics.Metrics.Creation.Finished
 	}
 
-	phases[dsort.ExtractionPhase].total = targetMetrics.Extraction.TotalCnt
-	phases[dsort.SortingPhase].total = int64(math.Log2(float64(len(metrics))))
+	phases[dsort.ExtractionPhase].total = targetMetrics.Metrics.Extraction.TotalCnt
+	phases[dsort.SortingPhase].total = int64(math.Log2(float64(len(jmetrics))))
 
 	// Create progress bars if necessary and/or update them.
 	for _, phaseName := range phasesOrdered {
@@ -434,7 +435,7 @@ func (b *dsortPB) updateBars(metrics map[string]*dsort.Metrics) bool {
 		barPhase.total = phase.total
 	}
 
-	b.dur = targetMetrics.Creation.End.Sub(targetMetrics.Extraction.Start)
+	b.dur = targetMetrics.Metrics.Creation.End.Sub(targetMetrics.Metrics.Extraction.Start)
 	return finished
 }
 
@@ -475,7 +476,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 			}
 		}
 		// Filter metrics only for requested targets.
-		filterMap := map[string]*dsort.Metrics{}
+		filterMap := map[string]*dsort.JobInfo{}
 		for _, daemonID := range daemonIds {
 			filterMap[daemonID] = resp[daemonID]
 		}
@@ -485,8 +486,8 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 	// compute `aborted` and `finished`
 	finished = true
 	for _, targetMetrics := range resp {
-		aborted = aborted || targetMetrics.Aborted.Load()
-		finished = finished && targetMetrics.Creation.Finished
+		aborted = aborted || targetMetrics.Metrics.Aborted.Load()
+		finished = finished && targetMetrics.Metrics.Creation.Finished
 	}
 	// NOTE: because of the still-open issue we are using Go-standard json, not jsoniter
 	// https://github.com/json-iterator/go/issues/331
@@ -498,7 +499,7 @@ func printMetrics(w io.Writer, jobID string, daemonIds []string) (aborted, finis
 	return
 }
 
-func printCondensedStats(w io.Writer, id string, errhint bool) error {
+func printCondensedStats(w io.Writer, id, units string, errhint bool) error {
 	var (
 		elapsedTime       time.Duration
 		extractionTime    time.Duration
@@ -510,8 +511,25 @@ func printCondensedStats(w io.Writer, id string, errhint bool) error {
 	if err != nil {
 		return V(err)
 	}
+
+	// aggregate
+	var jobInfo dsort.JobInfo
+	for _, job := range resp {
+		if jobInfo.ID == "" {
+			jobInfo = *job
+			continue
+		}
+		jobInfo.Aggregate(job)
+	}
+	opts := teb.Opts{AltMap: teb.FuncMapUnits(units)}
+	err = teb.Print([]*dsort.JobInfo{&jobInfo}, teb.DSortListTmpl, opts)
+	if err != nil {
+		return err
+	}
+
 	finished = true
-	for _, tm := range resp {
+	for _, jmetrics := range resp {
+		tm := jmetrics.Metrics
 		aborted = aborted || tm.Aborted.Load()
 		finished = finished && tm.Creation.Finished
 
@@ -581,21 +599,46 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 		return list[i].StartedTime.Before(list[j].StartedTime)
 	})
 
-	hideHeader := flagIsSet(c, noHeaderFlag)
-	if hideHeader {
-		return teb.Print(list, teb.DSortListNoHdrTmpl, teb.Jopts(usejs))
-	}
+	var (
+		hideHeader  = flagIsSet(c, noHeaderFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
+		opts        = teb.Opts{AltMap: teb.FuncMapUnits(units), UseJSON: usejs}
+		verbose     = flagIsSet(c, verboseJobFlag)
+	)
+	debug.AssertNoErr(errU)
 
-	return teb.Print(list, teb.DSortListTmpl, teb.Jopts(usejs))
+	if !verbose {
+		if hideHeader {
+			return teb.Print(list, teb.DSortListNoHdrTmpl, opts)
+		}
+		return teb.Print(list, teb.DSortListTmpl, opts)
+	}
+	// verbose - one at a time, each with header and an extra
+	for _, j := range list {
+		if err := teb.Print([]*dsort.JobInfo{j}, teb.DSortListVerboseTmpl, opts); err != nil {
+			return err
+		}
+		// super-verbose
+		if configuredVerbosity() {
+			xargs := xact.ArgsMsg{ID: j.ID, Kind: apc.ActDsort}
+			if _, err := xactList(c, xargs, false /*caption*/); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintln(c.App.Writer)
+	}
+	return nil
 }
 
 func dsortJobStatus(c *cli.Context, id string) error {
 	var (
-		verbose = flagIsSet(c, verboseFlag)
-		refresh = flagIsSet(c, refreshFlag)
-		logging = flagIsSet(c, dsortLogFlag)
-		usejs   = flagIsSet(c, jsonFlag)
+		verbose     = flagIsSet(c, verboseJobFlag)
+		refresh     = flagIsSet(c, refreshFlag)
+		logging     = flagIsSet(c, dsortLogFlag)
+		usejs       = flagIsSet(c, jsonFlag)
+		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
+	debug.AssertNoErr(errU)
 
 	// Show progress bar.
 	if !verbose && refresh && !logging {
@@ -613,7 +656,7 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	if !refresh && !logging {
 		if usejs || verbose {
 			var daemonIds []string
-			if c.NArg() == 2 {
+			if false { // TODO: revisit
 				daemonIds = append(daemonIds, c.Args().Get(1))
 			}
 			if _, _, err := printMetrics(c.App.Writer, id, daemonIds); err != nil {
@@ -621,9 +664,9 @@ func dsortJobStatus(c *cli.Context, id string) error {
 			}
 
 			fmt.Fprintf(c.App.Writer, "\n")
-			return printCondensedStats(c.App.Writer, id, false)
+			return printCondensedStats(c.App.Writer, id, units, false)
 		}
-		return printCondensedStats(c.App.Writer, id, true)
+		return printCondensedStats(c.App.Writer, id, units, true)
 	}
 
 	// Show metrics once in a while.
@@ -657,5 +700,5 @@ func dsortJobStatus(c *cli.Context, id string) error {
 	}
 
 	fmt.Fprintln(c.App.Writer)
-	return printCondensedStats(c.App.Writer, id, false)
+	return printCondensedStats(c.App.Writer, id, units, false)
 }

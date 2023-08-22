@@ -203,7 +203,6 @@ func showJobsHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	if name == cmdRebalance {
 		return showRebalanceHandler(c)
 	}
@@ -269,7 +268,7 @@ func jobCptn(c *cli.Context, name string, onlyActive bool, xid string, byTarget 
 			extended = dtor.ExtendedStats
 		}
 		if extended {
-			tip = fmt.Sprintf(" (hint: use %s to include extended stats)", qflprn(verboseJobFlag))
+			tip = fmt.Sprintf(" (tip: use %s to include extended stats)", qflprn(verboseJobFlag))
 		}
 	}
 	if xid != "" {
@@ -293,11 +292,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 	case commandETL:
 		return showETLs(c, xid, caption)
 	case cmdDsort:
-		l, err := showDsorts(c, xid, caption)
-		if l == 0 || err != nil || !flagIsSet(c, verboseJobFlag) {
-			return l, err
-		}
-		fallthrough
+		return showDsorts(c, xid, caption)
 	default:
 		var (
 			// finished or not, always try to show when xid provided
@@ -352,7 +347,6 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 		return l, dsortJobsList(c, list, usejs)
 	}
 
-	// ID-ed dsort
 	return 1, dsortJobStatus(c, id)
 }
 
@@ -697,7 +691,7 @@ func showClusterConfig(c *cli.Context, section string) error {
 	flat := flattenJSON(cluConfig, section)
 	err = teb.Print(flat, teb.FlatTmpl)
 	if err == nil && section == "" {
-		msg := fmt.Sprintf("(Hint: use '[SECTION] %s' to show config section(s), see %s for details)",
+		msg := fmt.Sprintf("(Tip: use '[SECTION] %s' to show config section(s), see %s for details)",
 			flprn(jsonFlag), qflprn(cli.HelpFlag))
 		actionDone(c, msg)
 	}
@@ -809,7 +803,7 @@ func showNodeConfig(c *cli.Context) error {
 	err = teb.Print(data, teb.DaemonConfigTmpl, teb.Jopts(usejs))
 
 	if err == nil && section == "" {
-		msg := fmt.Sprintf("(Hint: to show specific section(s), use 'inherited [SECTION]' or 'all [SECTION]' with or without %s)",
+		msg := fmt.Sprintf("(Tip: to show specific section(s), use 'inherited [SECTION]' or 'all [SECTION]' with or without %s)",
 			flprn(jsonFlag))
 		actionDone(c, msg)
 	}

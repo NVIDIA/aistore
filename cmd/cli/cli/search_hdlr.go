@@ -169,7 +169,7 @@ func searchCmdHdlr(c *cli.Context) (err error) {
 		err = teb.Print(commands, teb.SearchTmpl)
 	}
 	if err == nil && !flagIsSet(c, regexFlag) {
-		msg := fmt.Sprintf("\n(Hint: use %s to include more results, e.g.: '%s %s %s %s')",
+		msg := fmt.Sprintf("\n(Tip: use %s to include more results, e.g.: '%s %s %s %s')",
 			qflprn(regexFlag), cliName, commandSearch, flprn(regexFlag), c.Args().Get(0))
 		actionDone(c, msg)
 	}

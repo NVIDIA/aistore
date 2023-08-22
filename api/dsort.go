@@ -40,19 +40,6 @@ func AbortDSort(bp BaseParams, managerUUID string) error {
 	return err
 }
 
-func MetricsDSort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.Metrics, err error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathdSort.S
-		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
-	}
-	_, err = reqParams.DoReqAny(&metrics)
-	FreeRp(reqParams)
-	return metrics, err
-}
-
 func RemoveDSort(bp BaseParams, managerUUID string) error {
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
@@ -82,4 +69,17 @@ func ListDSort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.
 	_, err = reqParams.DoReqAny(&jobInfos)
 	FreeRp(reqParams)
 	return
+}
+
+func MetricsDSort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.JobInfo, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathdSort.S
+		reqParams.Query = url.Values{apc.QparamUUID: []string{managerUUID}}
+	}
+	_, err = reqParams.DoReqAny(&metrics)
+	FreeRp(reqParams)
+	return metrics, err
 }

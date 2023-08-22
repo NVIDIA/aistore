@@ -269,7 +269,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		}
 		var hint string
 		if apc.IsFltPresent(fltPresence) && bck.IsRemote() {
-			hint = fmt.Sprintf(" (hint: try %s option)", qflprn(objNotCachedPropsFlag))
+			hint = fmt.Sprintf(" (tip: try %s option)", qflprn(objNotCachedPropsFlag))
 		}
 		return fmt.Errorf("%q not found in %s%s", objName, bck.Cname(""), hint)
 	}

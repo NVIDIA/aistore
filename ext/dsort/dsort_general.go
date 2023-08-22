@@ -85,7 +85,7 @@ func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
 	if err := mem.Get(); err != nil {
 		return nil, err
 	}
-	maxMemoryToUse := calcMaxMemoryUsage(m.pars.MaxMemUsage, &mem)
+	maxMemoryToUse := calcMaxMemoryUsage(m.Pars.MaxMemUsage, &mem)
 	ds := &dsorterGeneral{
 		m:  m,
 		mw: newMemoryWatcher(m, maxMemoryToUse),
@@ -118,7 +118,7 @@ func (*dsorterGeneral) name() string { return DSorterGeneralType }
 
 func (ds *dsorterGeneral) init() error {
 	ds.creationPhase.adjuster = newConcAdjuster(
-		ds.m.pars.CreateConcMaxLimit,
+		ds.m.Pars.CreateConcMaxLimit,
 		1, /*goroutineLimitCoef*/
 	)
 	return nil
@@ -148,7 +148,7 @@ func (ds *dsorterGeneral) start() error {
 
 	trname = fmt.Sprintf(recvRespStreamNameFmt, ds.m.ManagerUUID)
 	respSbArgs := bundle.Args{
-		Multiplier: ds.m.pars.SbundleMult,
+		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
@@ -291,7 +291,7 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 
 	fullContentPath := ds.m.recm.FullContentPath(obj)
 
-	if ds.m.pars.DryRun {
+	if ds.m.Pars.DryRun {
 		r := cos.NopReader(obj.MetadataSize + obj.Size)
 		written, err = io.CopyBuffer(w, r, buf)
 		return
@@ -503,7 +503,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 
 	fullContentPath := ds.m.recm.FullContentPath(req.RecordObj)
 
-	if ds.m.pars.DryRun {
+	if ds.m.Pars.DryRun {
 		lr := cos.NopReader(req.RecordObj.MetadataSize + req.RecordObj.Size)
 		r := cos.NopOpener(io.NopCloser(lr))
 		o.Hdr.ObjAttrs.Size = req.RecordObj.MetadataSize + req.RecordObj.Size

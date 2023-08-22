@@ -437,7 +437,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	if extract {
 		mime, err = doExtract(objName, outFile, objLen)
 		if err != nil {
-			if verbose() {
+			if configuredVerbosity() {
 				return fmt.Errorf("failed to extract %s (from local %q): %v", bck.Cname(objName), outFile, err)
 			}
 			return fmt.Errorf("failed to extract %s: %v", bck.Cname(objName), err)

@@ -70,13 +70,14 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 
 	jobsInfos := make([]JobInfo, 0, len(mg.managers))
 	for _, v := range mg.managers {
-		if descRegex == nil || descRegex.MatchString(v.Metrics.Description) {
-			job := v.Metrics.ToJobInfo(v.ManagerUUID)
-			if onlyActive && job.IsFinished() {
-				continue
-			}
-			jobsInfos = append(jobsInfos, job)
+		if descRegex != nil && !descRegex.MatchString(v.Metrics.Description) {
+			continue
 		}
+		job := v.Metrics.ToJobInfo(v.ManagerUUID, v.Pars)
+		if onlyActive && job.IsFinished() {
+			continue
+		}
+		jobsInfos = append(jobsInfos, job)
 	}
 
 	// Always check persistent db
@@ -94,7 +95,7 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 			continue
 		}
 		if descRegex == nil || descRegex.MatchString(m.Metrics.Description) {
-			job := m.Metrics.ToJobInfo(m.ManagerUUID)
+			job := m.Metrics.ToJobInfo(m.ManagerUUID, m.Pars)
 			if onlyActive && job.IsFinished() {
 				continue
 			}
