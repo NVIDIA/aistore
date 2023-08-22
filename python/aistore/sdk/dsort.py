@@ -12,7 +12,7 @@ from aistore.sdk.const import (
     DSORT_ABORT,
     DSORT_UUID,
 )
-from aistore.sdk.dsort_types import DsortMetrics
+from aistore.sdk.dsort_types import JobInfo
 from aistore.sdk.errors import Timeout
 from aistore.sdk.utils import validate_file, probing_frequency
 
@@ -56,17 +56,17 @@ class Dsort:
             HTTP_METHOD_DELETE, path=f"{URL_PATH_DSORT}/{DSORT_ABORT}", params=qparam
         )
 
-    def metrics(self) -> Dict[str, DsortMetrics]:
+    def get_job_info(self) -> Dict[str, JobInfo]:
         """
-        Get metrics for a dsort job
+        Get info for a dsort job
         Returns:
-            Dictionary of metrics for jobs associated with this dsort job
+            Dictionary of job info for all jobs associated with this dsort
         """
         qparam = {DSORT_UUID: [self._dsort_id]}
         return self._client.request_deserialize(
             HTTP_METHOD_GET,
             path=URL_PATH_DSORT,
-            res_model=Dict[str, DsortMetrics],
+            res_model=Dict[str, JobInfo],
             params=qparam,
         )
 
@@ -97,12 +97,12 @@ class Dsort:
             if passed > timeout:
                 raise Timeout("dsort job to finish")
             finished = True
-            for metric in self.metrics().values():
-                if metric.aborted:
+            for job_info in self.get_job_info().values():
+                if job_info.metrics.aborted:
                     logger.info("DSort job '%s' aborted", self._dsort_id)
                     return
                 # Shard creation is the last phase, so check if it's finished
-                finished = metric.shard_creation.finished and finished
+                finished = job_info.metrics.shard_creation.finished and finished
             if finished:
                 logger.info("DSort job '%s' finished", self._dsort_id)
                 return

@@ -132,7 +132,6 @@ class TestDsortOps(unittest.TestCase):
         )
         dsort.abort()
         dsort.wait(timeout=TEST_TIMEOUT)
-        metrics = dsort.metrics()
-        for metric in metrics.values():
-            self.assertTrue(metric.aborted)
-            self.assertEqual(1, len(metric.errors))
+        for job_info in dsort.get_job_info().values():
+            self.assertTrue(job_info.metrics.aborted)
+            self.assertEqual(1, len(job_info.metrics.errors))

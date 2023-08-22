@@ -1,8 +1,13 @@
 from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from aistore.sdk.types import BucketModel
+
 
 # See ext/dsort/metric.go for cluster-side type definitions
+
+# pylint: disable=too-few-public-methods
 
 
 class TimeStats(BaseModel):
@@ -99,3 +104,27 @@ class DsortMetrics(BaseModel):
     warnings: List[str] = None
     errors: List[str] = None
     extended: bool = None
+
+
+class JobInfo(BaseModel):
+    """
+    Info about a dsort Job, including metrics
+    """
+
+    id: str
+    src_bck: BucketModel = Field(alias="src-bck")
+    dst_bck: BucketModel = Field(alias="dst-bck")
+    started_time: str = None
+    finish_time: str = None
+    extracted_duration: str = Field(alias="started_meta_sorting", default=None)
+    sorting_duration: str = Field(alias="started_shard_creation", default=None)
+    creation_duration: str = Field(alias="finished_shard_creation", default=None)
+    objects: int = Field(alias="loc-objs")
+    bytes: int = Field(alias="loc-bytes")
+    metrics: DsortMetrics = Field(alias="Metrics")
+    aborted: bool
+    archived: bool
+
+    # pylint: disable=missing-class-docstring
+    class Config:
+        allow_population_by_field_name = True

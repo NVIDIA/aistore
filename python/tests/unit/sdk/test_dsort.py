@@ -11,7 +11,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_GET,
 )
 from aistore.sdk.dsort import Dsort
-from aistore.sdk.dsort_types import DsortMetrics
+from aistore.sdk.dsort_types import DsortMetrics, JobInfo
 from aistore.sdk.errors import Timeout
 from aistore.sdk.utils import probing_frequency
 
@@ -21,6 +21,15 @@ class TestDsort(unittest.TestCase):
         self.mock_client = Mock()
         self.dsort_id = "123"
         self.dsort = Dsort(client=self.mock_client, dsort_id=self.dsort_id)
+
+    @staticmethod
+    def _get_mock_job_info(finished, aborted=False):
+        mock_metrics = Mock(DsortMetrics)
+        mock_metrics.aborted = aborted
+        mock_metrics.shard_creation = Mock(finished=finished)
+        mock_job_info = Mock(JobInfo)
+        mock_job_info.metrics = mock_metrics
+        return mock_job_info
 
     def test_properties(self):
         self.assertEqual(self.dsort_id, self.dsort.dsort_id)
@@ -52,24 +61,24 @@ class TestDsort(unittest.TestCase):
             params={DSORT_UUID: [self.dsort_id]},
         )
 
-    def test_metrics(self):
-        metrics = {"id_1": Mock(DsortMetrics)}
-        self.mock_client.request_deserialize.return_value = metrics
-        res = self.dsort.metrics()
-        self.assertEqual(metrics, res)
+    def test_get_job_info(self):
+        mock_job_info = {"id_1": Mock(JobInfo)}
+        self.mock_client.request_deserialize.return_value = mock_job_info
+        res = self.dsort.get_job_info()
+        self.assertEqual(mock_job_info, res)
         self.mock_client.request_deserialize.assert_called_with(
             HTTP_METHOD_GET,
             path=URL_PATH_DSORT,
-            res_model=Dict[str, DsortMetrics],
+            res_model=Dict[str, JobInfo],
             params={DSORT_UUID: [self.dsort_id]},
         )
 
     @patch("aistore.sdk.dsort.time.sleep")
-    @patch("aistore.sdk.dsort.Dsort.metrics")
-    def test_wait_default_timeout(self, mock_metrics, mock_sleep):
+    @patch("aistore.sdk.dsort.Dsort.get_job_info")
+    def test_wait_default_timeout(self, mock_get_job_info, mock_sleep):
         timeout = 300
         frequency = probing_frequency(timeout)
-        expected_metrics_calls = [
+        expected_job_info_calls = [
             call(),
             call(),
             call(),
@@ -77,41 +86,40 @@ class TestDsort(unittest.TestCase):
         expected_sleep_calls = [call(frequency), call(frequency)]
         self._wait_test_helper(
             self.dsort,
-            mock_metrics,
+            mock_get_job_info,
             mock_sleep,
-            expected_metrics_calls,
+            expected_job_info_calls,
             expected_sleep_calls,
         )
 
     @patch("aistore.sdk.dsort.time.sleep")
-    @patch("aistore.sdk.dsort.Dsort.metrics")
-    def test_wait(self, mock_status, mock_sleep):
+    @patch("aistore.sdk.dsort.Dsort.get_job_info")
+    def test_wait(self, mock_get_job_info, mock_sleep):
         timeout = 20
         frequency = probing_frequency(timeout)
-        expected_metrics_calls = [call(), call(), call()]
+        expected_job_info_calls = [call(), call(), call()]
         expected_sleep_calls = [call(frequency), call(frequency)]
         self._wait_test_helper(
             self.dsort,
-            mock_status,
+            mock_get_job_info,
             mock_sleep,
-            expected_metrics_calls,
+            expected_job_info_calls,
             expected_sleep_calls,
             timeout=timeout,
         )
 
     @patch("aistore.sdk.dsort.time.sleep")
-    @patch("aistore.sdk.dsort.Dsort.metrics")
+    @patch("aistore.sdk.dsort.Dsort.get_job_info")
     # pylint: disable=unused-argument
-    def test_wait_timeout(self, mock_metrics, mock_sleep):
-        mock_metric = Mock(DsortMetrics)
-        mock_metric.aborted = False
-        mock_metric.shard_creation = Mock(finished=False)
-        mock_metrics.return_value = {"key": mock_metric}
+    def test_wait_timeout(self, mock_get_job_info, mock_sleep):
+        mock_get_job_info.return_value = {
+            "key": self._get_mock_job_info(finished=False, aborted=False)
+        }
         self.assertRaises(Timeout, self.dsort.wait)
 
     @patch("aistore.sdk.dsort.time.sleep")
-    @patch("aistore.sdk.dsort.Dsort.metrics")
-    def test_wait_aborted(self, mock_metrics, mock_sleep):
+    @patch("aistore.sdk.dsort.Dsort.get_job_info")
+    def test_wait_aborted(self, mock_get_job_info, mock_sleep):
         timeout = 300
         frequency = probing_frequency(timeout)
         expected_metrics_calls = [
@@ -119,21 +127,15 @@ class TestDsort(unittest.TestCase):
             call(),
         ]
         expected_sleep_calls = [call(frequency)]
-        unfinished_metric = Mock(DsortMetrics)
-        unfinished_metric.aborted = False
-        unfinished_metric.shard_creation = Mock(finished=False)
-        aborted_metric = Mock(DsortMetrics)
-        aborted_metric.aborted = True
-        aborted_metric.shard_creation = Mock(finished=False)
-        mock_metrics.side_effect = [
-            {"key": unfinished_metric},
-            {"key": aborted_metric},
-            {"key": unfinished_metric},
+        mock_get_job_info.side_effect = [
+            {"key": self._get_mock_job_info(finished=False)},
+            {"key": self._get_mock_job_info(finished=False, aborted=True)},
+            {"key": self._get_mock_job_info(finished=False)},
         ]
 
         self._wait_exec_assert(
             self.dsort,
-            mock_metrics,
+            mock_get_job_info,
             mock_sleep,
             expected_metrics_calls,
             expected_sleep_calls,
@@ -143,28 +145,22 @@ class TestDsort(unittest.TestCase):
     def _wait_test_helper(
         self,
         dsort,
-        mock_metrics,
+        mock_get_job_info,
         mock_sleep,
-        expected_metrics_calls,
+        expected_job_info_calls,
         expected_sleep_calls,
         **kwargs,
     ):
-        unfinished_metric = Mock(DsortMetrics)
-        unfinished_metric.aborted = False
-        unfinished_metric.shard_creation = Mock(finished=False)
-        finished_metric = Mock(DsortMetrics)
-        finished_metric.aborted = False
-        finished_metric.shard_creation = Mock(finished=True)
-        mock_metrics.side_effect = [
-            {"key": unfinished_metric},
-            {"key": unfinished_metric},
-            {"key": finished_metric},
+        mock_get_job_info.side_effect = [
+            {"job_id": self._get_mock_job_info(finished=False)},
+            {"job_id": self._get_mock_job_info(finished=False)},
+            {"job_id": self._get_mock_job_info(finished=True)},
         ]
         self._wait_exec_assert(
             dsort,
-            mock_metrics,
+            mock_get_job_info,
             mock_sleep,
-            expected_metrics_calls,
+            expected_job_info_calls,
             expected_sleep_calls,
             **kwargs,
         )
@@ -172,15 +168,15 @@ class TestDsort(unittest.TestCase):
     def _wait_exec_assert(
         self,
         dsort,
-        mock_metrics,
+        mock_get_job_info,
         mock_sleep,
-        expected_metrics_calls,
+        expected_job_info_calls,
         expected_sleep_calls,
         **kwargs,
     ):
         dsort.wait(**kwargs)
 
-        mock_metrics.assert_has_calls(expected_metrics_calls)
+        mock_get_job_info.assert_has_calls(expected_job_info_calls)
         mock_sleep.assert_has_calls(expected_sleep_calls)
-        self.assertEqual(len(expected_metrics_calls), mock_metrics.call_count)
+        self.assertEqual(len(expected_job_info_calls), mock_get_job_info.call_count)
         self.assertEqual(len(expected_sleep_calls), mock_sleep.call_count)
