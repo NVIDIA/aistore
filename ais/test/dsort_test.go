@@ -34,6 +34,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -1346,37 +1347,47 @@ func TestDsortAbort(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
 		func(dsorterType string, t *testing.T) {
-			var (
-				err error
-				m   = &ioContext{
-					t: t,
-				}
-				df = &dsortFramework{
-					m:             m,
-					dsorterType:   dsorterType,
-					shardCnt:      500,
-					filesPerShard: 10,
-				}
-			)
+			for _, asXaction := range []bool{false, true} {
+				test := dsorterType + "/" + fmt.Sprintf("as-xaction=%t", asXaction)
+				t.Run(test, func(t *testing.T) {
+					var (
+						err error
+						m   = &ioContext{
+							t: t,
+						}
+						df = &dsortFramework{
+							m:             m,
+							dsorterType:   dsorterType,
+							shardCnt:      500,
+							filesPerShard: 10,
+						}
+					)
 
-			m.initAndSaveState(true /*cleanup*/)
-			m.expectTargets(3)
-			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+					m.initAndSaveState(true /*cleanup*/)
+					m.expectTargets(3)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, false /*cleanup*/)
 
-			df.init()
-			df.createInputShards()
+					df.init()
+					df.createInputShards()
 
-			tlog.Logf("starting dsort: %d/%d\n", df.shardCnt, df.filesPerShard)
-			df.start()
+					tlog.Logf("starting dsort: %d/%d\n", df.shardCnt, df.filesPerShard)
+					df.start()
 
-			tlog.Logf("aborting dsort[%s]\n", df.managerUUID)
-			err = api.AbortDSort(df.baseParams, df.managerUUID)
-			tassert.CheckFatal(t, err)
+					if asXaction {
+						tlog.Logf("aborting dsort[%s] via api.AbortXaction\n", df.managerUUID)
+						err = api.AbortXaction(df.baseParams, xact.ArgsMsg{ID: df.managerUUID})
+					} else {
+						tlog.Logf("aborting dsort[%s] via api.AbortDSort\n", df.managerUUID)
+						err = api.AbortDSort(df.baseParams, df.managerUUID)
+					}
+					tassert.CheckFatal(t, err)
 
-			_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckFatal(t, err)
+					_, err = tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
 
-			df.checkMetrics(true /* expectAbort */)
+					df.checkMetrics(true /* expectAbort */)
+				})
+			}
 		},
 	)
 }
@@ -1387,39 +1398,50 @@ func TestDsortAbortDuringPhases(t *testing.T) {
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, phases: dsortPhases},
 		func(dsorterType, phase string, t *testing.T) {
-			var (
-				m = &ioContext{
-					t: t,
-				}
-				df = &dsortFramework{
-					m:             m,
-					dsorterType:   dsorterType,
-					shardCnt:      500,
-					filesPerShard: 200,
-				}
-			)
+			for _, asXaction := range []bool{false, true} {
+				test := dsorterType + "/" + fmt.Sprintf("as-xaction=%t", asXaction)
+				t.Run(test, func(t *testing.T) {
+					var (
+						m = &ioContext{
+							t: t,
+						}
+						df = &dsortFramework{
+							m:             m,
+							dsorterType:   dsorterType,
+							shardCnt:      500,
+							filesPerShard: 200,
+						}
+					)
 
-			m.initAndSaveState(true /*cleanup*/)
-			m.expectTargets(3)
+					m.initAndSaveState(true /*cleanup*/)
+					m.expectTargets(3)
 
-			tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, false /*cleanup*/)
 
-			df.init()
-			df.createInputShards()
+					df.init()
+					df.createInputShards()
 
-			tlog.Logf("starting dsort (abort on: %s)...\n", phase)
-			df.start()
+					tlog.Logf("starting dsort (abort on: %s)...\n", phase)
+					df.start()
 
-			waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
-				tlog.Logf("aborting dsort[%s]\n", df.managerUUID)
-				err := api.AbortDSort(df.baseParams, df.managerUUID)
-				tassert.CheckFatal(t, err)
-			})
+					waitForDSortPhase(t, m.proxyURL, df.managerUUID, phase, func() {
+						var err error
+						if asXaction {
+							tlog.Logf("aborting dsort[%s] via api.AbortXaction\n", df.managerUUID)
+							err = api.AbortXaction(df.baseParams, xact.ArgsMsg{ID: df.managerUUID})
+						} else {
+							tlog.Logf("aborting dsort[%s] via api.AbortDSort\n", df.managerUUID)
+							err = api.AbortDSort(df.baseParams, df.managerUUID)
+						}
+						tassert.CheckFatal(t, err)
+					})
 
-			_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
-			tassert.CheckFatal(t, err)
+					_, err := tools.WaitForDSortToFinish(m.proxyURL, df.managerUUID)
+					tassert.CheckFatal(t, err)
 
-			df.checkMetrics(true /* expectAbort */)
+					df.checkMetrics(true /* expectAbort */)
+				})
+			}
 		},
 	)
 }

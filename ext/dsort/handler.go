@@ -491,7 +491,7 @@ func tstartHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID)
+	m, exists := Managers.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -524,7 +524,7 @@ func (m *Manager) errHandler(err error) {
 		if isReportableError(err) {
 			m.abort(err)
 		} else {
-			m.abort()
+			m.abort(nil)
 		}
 
 		nlog.Warningln("broadcasting abort to other targets")
@@ -545,7 +545,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	managerUUID := apiItems[0]
-	m, exists := managers.Get(managerUUID)
+	m, exists := managers.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -594,7 +594,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	managerUUID := apiItems[0]
-	m, exists := managers.Get(managerUUID)
+	m, exists := managers.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -669,19 +669,20 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
+	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
-		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s does not exist", g.t, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 	if m.Metrics.Archived.Load() {
-		s := fmt.Sprintf("invalid request: %s job %q has already finished", apc.ActDsort, managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s is already archived", g.t, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	m.abort(fmt.Errorf("%s has been aborted via API (remotely)", apc.ActDsort))
+	err = fmt.Errorf("%s: [dsort] %s aborted", g.t, managerUUID)
+	m.abort(err)
 }
 
 func tremoveHandler(w http.ResponseWriter, r *http.Request) {
@@ -733,7 +734,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID := apiItems[0]
-	m, exists := Managers.Get(managerUUID, true /*allowPersisted*/)
+	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("%s: [dsort] %s does not exist", g.t, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
@@ -762,7 +763,7 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	managerUUID, daemonID := apiItems[0], apiItems[1]
-	m, exists := Managers.Get(managerUUID)
+	m, exists := Managers.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)

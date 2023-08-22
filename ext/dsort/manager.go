@@ -389,24 +389,24 @@ func (m *Manager) finalCleanup() {
 	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", g.t, m.ManagerUUID, time.Since(now))
 }
 
-// abort stops currently running sort job and frees associated resources.
-func (m *Manager) abort(errs ...error) {
+// stop this job and free associated resources
+func (m *Manager) abort(err error) {
+	if m.aborted() { // do not abort if already aborted
+		return
+	}
+	// serialize
 	m.lock()
 	if m.aborted() { // do not abort if already aborted
 		m.unlock()
 		return
 	}
-	if len(errs) > 0 {
+	if err != nil {
 		m.Metrics.lock()
-		for _, err := range errs {
-			m.xctn.AddErr(err)
-			m.Metrics.Errors = append(m.Metrics.Errors, err.Error())
-		}
+		m.Metrics.Errors = append(m.Metrics.Errors, err.Error())
 		m.Metrics.unlock()
 	}
-
 	m.setAbortedTo(true)
-	m.xctn.Abort(m.xctn.Err())
+	m.xctn.Base.Abort(err) // notice Base, compare w/ xaction.Abort (xact.go)
 	inProgress := m.inProgress()
 	m.unlock()
 

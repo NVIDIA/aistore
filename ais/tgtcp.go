@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -1167,8 +1166,7 @@ func (t *target) termKaliveX(action string) {
 	t.keepalive.ctrl(kaSuspendMsg)
 
 	err := fmt.Errorf("%s: term-kalive by %q", t, action)
-	dsort.Managers.AbortAll(err) // all dsort jobs
-	xreg.AbortAll(err)           // all xactions
+	xreg.AbortAll(err) // all xactions
 }
 
 func (t *target) shutdown(action string) {

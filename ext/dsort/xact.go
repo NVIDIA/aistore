@@ -46,7 +46,6 @@ func (p *factory) Start() error {
 func (*factory) Kind() string        { return apc.ActDsort }
 func (p *factory) Get() cluster.Xact { return p.xctn }
 
-// TODO -- FIXME: compare w/ tcb/tco
 func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
@@ -57,25 +56,42 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func (*xaction) Run(*sync.WaitGroup) { debug.Assert(false) }
 
+// NOTE: two ways to abort:
+// - Manager.abort(errs ...error) legacy, and
+// - xaction.Abort, to implement the corresponding interface and uniformly support `api.AbortXaction`
+func (r *xaction) Abort(err error) (ok bool) {
+	m, exists := Managers.Get(r.ID(), false /*incl. archived*/)
+	if !exists {
+		return
+	}
+	if aborted := m.aborted(); !aborted {
+		m.abort(err)
+		ok = m.aborted()
+	}
+	return
+}
+
 func (r *xaction) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}
 	r.ToSnap(snap)
 
-	m, exists := Managers.Get(r.ID(), true /*allowPersisted*/)
-	if exists {
-		m.Metrics.lock()
-		m.Metrics.update()
-		m.Metrics.unlock()
-
-		snap.Ext = m.Metrics
-
-		j := m.Metrics.ToJobInfo(r.ID(), m.Pars)
-		snap.StartTime = j.StartedTime
-		snap.StartTime = j.StartedTime
-		snap.EndTime = j.FinishTime
-		snap.SrcBck = j.SrcBck
-		snap.DstBck = j.DstBck
-		snap.AbortedX = j.Aborted
+	m, exists := Managers.Get(r.ID(), true /*incl. archived*/)
+	if !exists {
+		return
 	}
+	m.Metrics.lock()
+	m.Metrics.update()
+	m.Metrics.unlock()
+
+	snap.Ext = m.Metrics
+
+	j := m.Metrics.ToJobInfo(r.ID(), m.Pars)
+	snap.StartTime = j.StartedTime
+	snap.StartTime = j.StartedTime
+	snap.EndTime = j.FinishTime
+	snap.SrcBck = j.SrcBck
+	snap.DstBck = j.DstBck
+	snap.AbortedX = j.Aborted
+
 	return
 }

@@ -113,17 +113,12 @@ func (mg *ManagerGroup) List(descRegex *regexp.Regexp, onlyActive bool) []JobInf
 // exist and user requested persisted lookup, it looks for it in persistent
 // storage and returns it if found. Returns false if does not exist, true
 // otherwise.
-func (mg *ManagerGroup) Get(managerUUID string, ap ...bool) (*Manager, bool) {
-	var allowPersisted bool
-
+func (mg *ManagerGroup) Get(managerUUID string, inclArchived bool) (*Manager, bool) {
 	mg.mtx.Lock()
 	defer mg.mtx.Unlock()
-	if len(ap) > 0 {
-		allowPersisted = ap[0]
-	}
 
 	manager, exists := mg.managers[managerUUID]
-	if !exists && allowPersisted {
+	if !exists && inclArchived {
 		key := path.Join(managersKey, managerUUID)
 		if err := mg.db.Get(dsortCollection, key, &manager); err != nil {
 			if !cos.IsErrNotFound(err) {
