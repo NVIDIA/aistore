@@ -228,13 +228,6 @@ func (b *etlBootstrapper) _updPodCommand() {
 	b.pod.Spec.Containers[0].Command = []string{"sh", "-c", "/server"}
 }
 
-func validateCommType(commType string) error {
-	if commType != "" && !cos.StringInSlice(commType, commTypes) {
-		return fmt.Errorf("unknown communication type: %q", commType)
-	}
-	return nil
-}
-
 // Sets pods node affinity, so pod will be scheduled on the same node as a target creating it.
 func (b *etlBootstrapper) _setAffinity() error {
 	if b.pod.Spec.Affinity == nil {

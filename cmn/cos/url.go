@@ -73,7 +73,7 @@ func ReparseQuery(r *http.Request) {
 // Returned path is prefixed with a slash.
 func JoinWords(w string, words ...string) (path string) {
 	path = w
-	if path[:1] != "/" {
+	if path[0] != '/' {
 		path = "/" + path
 	}
 	for _, s := range words {
@@ -84,8 +84,8 @@ func JoinWords(w string, words ...string) (path string) {
 
 // JoinPath joins two path elements that may (or may not) be prefixed/suffixed with a slash.
 func JoinPath(url, path string) string {
-	suffix := url[len(url)-1:] == "/"
-	prefix := path[:1] == "/"
+	suffix := url[len(url)-1] == '/'
+	prefix := path[0] == '/'
 	if suffix && prefix {
 		return url + path[1:]
 	}

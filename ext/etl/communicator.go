@@ -216,7 +216,14 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Dura
 	return
 }
 
-func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
+func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, err error) {
+	var (
+		body   io.ReadCloser
+		cancel func()
+		req    *http.Request
+		resp   *http.Response
+		u      string
+	)
 	if err := pc.boot.xctn.AbortErr(); err != nil {
 		return nil, err
 	}
@@ -225,42 +232,52 @@ func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSi
 	}
 	size := lom.SizeBytes()
 
-	// `fh` is closed by Do(req).
-	fh, err := cos.NewFileHandle(lom.FQN)
-	if err != nil {
-		return nil, err
+	switch pc.boot.msg.ArgTypeX {
+	case ArgTypeDefault, ArgTypeURL:
+		// to remove the following assert (and the corresponding limitation):
+		// - container must be ready to receive complete bucket name including namespace
+		// - see `bck.AddToQuery` and api/bucket.go for numerous examples
+		debug.Assertf(lom.Bck().Ns.IsGlobal(), lom.Bck().Cname("")+" - bucket with namespace")
+		u = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
+
+		fh, err := cos.NewFileHandle(lom.FQN)
+		if err != nil {
+			return nil, err
+		}
+		body = fh
+	case ArgTypeFQN:
+		body = http.NoBody
+		u = cos.JoinPath(pc.boot.uri, url.PathEscape(lom.FQN)) // compare w/ rc.redirectURL()
+	default:
+		cos.Assert(false) // is validated at construction time
 	}
-
-	var (
-		cancel func()
-		req    *http.Request
-		resp   *http.Response
-		url    = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
-	)
-
-	debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Ns.String()) // the url (above) simplifies out bucket's namespace
-
-	// TODO -- FIXME: switch(ArgType)
 
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPut, url, fh)
+		req, err = http.NewRequestWithContext(ctx, http.MethodPut, u, body)
 	} else {
-		req, err = http.NewRequest(http.MethodPut, url, fh)
+		req, err = http.NewRequest(http.MethodPut, u, body)
 	}
 	if err != nil {
-		cos.Close(fh)
+		cos.Close(body)
 		goto finish
 	}
+
 	if len(pc.command) != 0 {
+		// HpushStdin case
 		q := req.URL.Query()
 		q["command"] = []string{"bash", "-c", strings.Join(pc.command, " ")}
 		req.URL.RawQuery = q.Encode()
 	}
 	req.ContentLength = size
 	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
+
+	//
+	// Do it
+	//
 	resp, err = pc.boot.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+
 finish:
 	if err != nil {
 		if cancel != nil {
@@ -296,7 +313,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 
 	size := r.Size()
 	if size < 0 {
-		size = memsys.DefaultBufSize // TODO: track the average
+		size = memsys.DefaultBufSize // TODO: track an average
 	}
 	buf, slab := pc.boot.t.PageMM().AllocSize(size)
 	_, err = io.CopyBuffer(w, r, buf)
@@ -309,10 +326,10 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := cluster.AllocLOM(objName)
 	r, err = pc.doRequest(bck, lom, timeout)
-	cluster.FreeLOM(lom)
 	if err == nil && pc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
+	cluster.FreeLOM(lom)
 	return
 }
 
@@ -325,31 +342,51 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 		return err
 	}
 
-	size, err := lomLoad(bck, objName)
+	lom := cluster.AllocLOM(objName)
+	size, err := lomLoad(lom, bck)
 	if err != nil {
+		cluster.FreeLOM(lom)
 		return err
 	}
-	rc.boot.xctn.OutObjsAdd(1, size)
-
-	// is there a way to determine `rc.stats.outBytes`?
-	redirectURL := cos.JoinPath(rc.boot.uri, transformerPath(bck, objName))
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-	if rc.boot.config.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpull, bck.Cname(objName))
+	if size > 0 {
+		rc.boot.xctn.OutObjsAdd(1, size)
 	}
+
+	http.Redirect(w, r, rc.redirectURL(lom), http.StatusTemporaryRedirect)
+
+	if rc.boot.config.FastV(5, cos.SmoduleETL) {
+		nlog.Infoln(Hpull, lom.Cname())
+	}
+	cluster.FreeLOM(lom)
 	return nil
 }
 
+func (rc *redirectComm) redirectURL(lom *cluster.LOM) string {
+	switch rc.boot.msg.ArgTypeX {
+	case ArgTypeDefault, ArgTypeURL:
+		return cos.JoinPath(rc.boot.uri, transformerPath(lom.Bck(), lom.ObjName))
+	case ArgTypeFQN:
+		return cos.JoinPath(rc.boot.uri, url.PathEscape(lom.FQN))
+	}
+	cos.Assert(false) // is validated at construction time
+	return ""
+}
+
 func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	size, errV := lomLoad(bck, objName)
+	lom := cluster.AllocLOM(objName)
+	size, errV := lomLoad(lom, bck)
 	if errV != nil {
+		cluster.FreeLOM(lom)
 		return nil, errV
 	}
-	etlURL := cos.JoinPath(rc.boot.uri, transformerPath(bck, objName))
+
+	etlURL := rc.redirectURL(lom)
 	r, err := rc.getWithTimeout(etlURL, size, timeout)
+
 	if rc.boot.config.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hpull, bck.Cname(objName), err)
+		nlog.Infoln(Hpull, lom.Cname(), err)
 	}
+	cluster.FreeLOM(lom)
 	return r, err
 }
 
@@ -358,30 +395,39 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 //////////////////
 
 func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
-	size, err := lomLoad(bck, objName)
+	lom := cluster.AllocLOM(objName)
+	size, err := lomLoad(lom, bck)
 	if err != nil {
+		cluster.FreeLOM(lom)
 		return err
 	}
-	rp.boot.xctn.OutObjsAdd(1, size)
-
-	// is there a way to determine `rc.stats.outBytes`?
+	if size > 0 {
+		rp.boot.xctn.OutObjsAdd(1, size)
+	}
 	path := transformerPath(bck, objName)
+	cluster.FreeLOM(lom)
+
 	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
 	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
 	rp.rp.ServeHTTP(w, r)
+
 	return nil
 }
 
 func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	size, errV := lomLoad(bck, objName)
+	lom := cluster.AllocLOM(objName)
+	size, errV := lomLoad(lom, bck)
 	if errV != nil {
+		cluster.FreeLOM(lom)
 		return nil, errV
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(bck, objName))
 	r, err := rp.getWithTimeout(etlURL, size, timeout)
+
 	if rp.boot.config.FastV(5, cos.SmoduleETL) {
-		nlog.Infoln(Hrev, bck.Cname(objName), err)
+		nlog.Infoln(Hrev, lom.Cname(), err)
 	}
+	cluster.FreeLOM(lom)
 	return r, err
 }
 
@@ -413,22 +459,24 @@ func pruneQuery(rawQuery string) string {
 	return vals.Encode()
 }
 
-// TODO: Consider encoding bucket and object name without the necessity to escape.
+// TODO -- FIXME: unify the way we encode bucket/object:
+// - url.PathEscape(uname) - see below - versus
+// - Bck().Name + "/" + lom.ObjName - see pushComm above - versus
+// - bck.AddToQuery() elsewhere
 func transformerPath(bck *meta.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func lomLoad(bck *meta.Bck, objName string) (int64, error) {
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
-	if err := lom.InitBck(bck.Bucket()); err != nil {
-		return 0, err
+func lomLoad(lom *cluster.LOM, bck *meta.Bck) (size int64, err error) {
+	if err = lom.InitBck(bck.Bucket()); err != nil {
+		return
 	}
-	if err := lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
+	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) && bck.IsRemote() {
-			return 0, nil
+			err = nil // NOTE: size == 0
 		}
-		return 0, err
+	} else {
+		size = lom.SizeBytes()
 	}
-	return lom.SizeBytes(), nil
+	return
 }

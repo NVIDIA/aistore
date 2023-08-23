@@ -176,8 +176,10 @@ func (m *InitMsgBase) validate(detail string) error {
 	if err := k8s.ValidateEtlName(m.IDX); err != nil {
 		return fmt.Errorf("%v [%s]", err, detail)
 	}
+
 	errCtx := &cmn.ETLErrCtx{ETLName: m.Name()}
-	if err := validateCommType(m.CommType()); err != nil {
+	if m.CommTypeX != "" && !cos.StringInSlice(m.CommTypeX, commTypes) {
+		err := fmt.Errorf("unknown comm-type %q", m.CommTypeX)
 		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
 	}
 
@@ -185,8 +187,17 @@ func (m *InitMsgBase) validate(detail string) error {
 		err := fmt.Errorf("unsupported arg-type %q", m.ArgTypeX)
 		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
 	}
+
+	//
+	// not-implemented-yet type limitations:
+	//
 	if m.ArgTypeX == ArgTypeURL && m.CommTypeX != Hpull {
 		err := fmt.Errorf("arg-type %q requires comm-type %q (%q is not supported yet)", m.ArgTypeX, Hpull, m.CommTypeX)
+		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+	}
+	if m.ArgTypeX == ArgTypeFQN && !(m.CommTypeX == Hpull || m.CommTypeX == Hpush) {
+		err := fmt.Errorf("arg-type %q requires comm-type (%q or %q) - %q is not supported yet",
+			m.ArgTypeX, Hpull, Hpush, m.CommTypeX)
 		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
 	}
 
