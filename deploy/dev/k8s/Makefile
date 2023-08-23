@@ -1,15 +1,15 @@
-#
 # Usage:
-# $ CPU=8 MEMORY=16000 make -e try
-#
+# $ make try CPU=8 MEMORY=16000
+# $ make dev CPU=12 MEMORY=24000
 
-CPU=4
-MEMORY=7000
-MODE="debug"
+# Defaults
+CPU ?= 4
+MEMORY ?= 7000
+MODE ?= "debug"
 REGISTRY_URL ?= docker.io
 LOCAL_REGISTRY_URL ?= localhost:5000
-DOCKER_IMAGE=aistorage/aisnode-minikube
-IMAGE_TAG=latest
+DOCKER_IMAGE = aistorage/aisnode-minikube
+IMAGE_TAG = latest
 
 # Run AIStore cluster consisting of 1 proxy/gateway and 1 target
 # Note that minikube must be already running
@@ -23,30 +23,30 @@ try: stop
 	@ minikube start --driver=docker
 	@ ./minimal.sh
 
-# Gives you the ability to configure everything
-dev:
+# Configure and deploy everything
+dev: 
 	@ set -e
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_minikube.sh && \
 	  ./utils/deploy_ais.sh
 
-# This will skip the minikube and Docker registry deployment
+# Redeploy AIStore without minikube and Docker registry deployment
 redeploy-ais:
 	@ ./utils/disable_vpn.sh && \
 	  ./utils/deploy_ais.sh
 
 # Set up minikube and deploy a minimal cluster with the new aisnode container including local changes
 minimal-local: 
-	export USE_LOCAL_REGISTRY=true && \
+	@ export USE_LOCAL_REGISTRY=true && \
 	  export DEPLOY_METRICS=false && \
 	  ./utils/deploy_minikube.sh
-	make redeploy-local
+	@ make redeploy-local
 
 # Rebuild the local container and restart the minimal cluster without restarting minikube
 redeploy-local:
-	export REGISTRY_URL=${LOCAL_REGISTRY_URL} && \
-	./utils/build_aisnode.sh && \
-	./minimal.sh
+	@ export REGISTRY_URL=${LOCAL_REGISTRY_URL} && \
+	  ./utils/build_aisnode.sh && \
+	  ./minimal.sh
 
 # Stops AIS running on minikube
 stop-ais:
