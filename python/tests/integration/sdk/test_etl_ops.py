@@ -286,7 +286,7 @@ class TestETLOps(unittest.TestCase):
 
         url_etl = self.client.etl("etl-hpull-url")
         url_etl.init_code(
-            transform=url_transform, transform_url=True, communication_type="hpull"
+            transform=url_transform, arg_type="url", communication_type="hpull"
         )
         res = self.bucket.object(self.obj_name).get(etl_name=url_etl.name).read_all()
         result_url = res.decode("utf-8")

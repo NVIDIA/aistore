@@ -304,7 +304,7 @@ class InitCodeETLArgs(InitETLArgs):
     functions: Dict[str, str]
     code: str
     chunk_size: int = None
-    transform_url: bool = False
+    arg_type: str = ""
 
     def as_dict(self):
         dict_rep = {
@@ -315,7 +315,7 @@ class InitCodeETLArgs(InitETLArgs):
             "funcs": self.functions,
             "code": self.code,
             "dependencies": self.dependencies,
-            "transform_url": self.transform_url,
+            "argument": self.arg_type,
         }
         if self.chunk_size:
             dict_rep["chunk_size"] = self.chunk_size
