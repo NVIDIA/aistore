@@ -191,8 +191,6 @@ func InitCode(t cluster.Target, msg *InitCodeMsg, xid string) error {
 }
 
 // generate (from => to) replacements
-//
-//nolint:gocritic // appendCombine vs readability
 func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 	var (
 		chunk string
@@ -200,27 +198,19 @@ func fromToPairs(msg *InitCodeMsg) (ftp []string) {
 		name  = msg.IDX
 	)
 	ftp = make([]string, 0, 16)
-	ftp = append(ftp, "<NAME>", name)
-	ftp = append(ftp, "<COMM_TYPE>", msg.CommTypeX)
+	ftp = append(ftp, "<NAME>", name, "<COMM_TYPE>", msg.CommTypeX, "<ARG_TYPE>", msg.ArgTypeX)
 
-	// chunk == 0 means no chunks (and no streaming) - in other words,
-	// reading the entire payload in memory, and then transforming in one shot
+	// chunk == 0 means no chunks (and no streaming) - ie.,
+	// reading the entire payload in memory and then transforming in one shot
 	if msg.ChunkSize > 0 {
 		chunk = "\"" + strconv.FormatInt(msg.ChunkSize, 10) + "\""
 	}
 	ftp = append(ftp, "<CHUNK_SIZE>", chunk)
 
-	if msg.CommTypeX == Hpull && msg.TransformURL {
-		ftp = append(ftp, "<ARG_TYPE>", "url")
-	}
-
 	if msg.Flags > 0 {
 		flags = "\"" + strconv.FormatInt(msg.Flags, 10) + "\""
 	}
-	ftp = append(ftp, "<FLAGS>", flags)
-
-	// functions
-	ftp = append(ftp, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
+	ftp = append(ftp, "<FLAGS>", flags, "<FUNC_TRANSFORM>", msg.Funcs.Transform)
 
 	switch msg.CommTypeX {
 	case Hpush, Hpull, Hrev:
@@ -299,14 +289,11 @@ func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts, confi
 	boot.setupXaction(xid)
 
 	// finally, add Communicator to the runtime registry
-	c := makeCommunicator(commArgs{
-		listener: newAborter(t, msg.IDX),
-		boot:     boot,
-	})
-	if err = reg.add(msg.IDX, c); err != nil {
+	comm := newCommunicator(newAborter(t, msg.IDX), boot)
+	if err = reg.add(msg.IDX, comm); err != nil {
 		return
 	}
-	t.Sowner().Listeners().Reg(c)
+	t.Sowner().Listeners().Reg(comm)
 	return
 }
 

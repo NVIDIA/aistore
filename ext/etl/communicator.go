@@ -41,8 +41,6 @@ type (
 		PodName() string
 		SvcName() string
 
-		CommType() string
-
 		String() string
 
 		// InlineTransform uses one of the two ETL container endpoints:
@@ -60,35 +58,20 @@ type (
 		CommStats
 	}
 
-	commArgs struct {
+	baseComm struct {
 		listener meta.Slistener
 		boot     *etlBootstrapper
 	}
-
-	baseComm struct {
-		meta.Slistener
-		t        cluster.Target
-		xctn     cluster.Xact
-		config   *cmn.Config
-		name     string
-		podName  string
-		commType string
-	}
-
 	pushComm struct {
 		baseComm
-		mem     *memsys.MMSA
-		uri     string
 		command []string
 	}
 	redirectComm struct {
 		baseComm
-		uri string
 	}
 	revProxyComm struct {
 		baseComm
-		rp  *httputil.ReverseProxy
-		uri string
+		rp *httputil.ReverseProxy
 	}
 
 	// TODO: Generalize and move to `cos` package
@@ -111,31 +94,26 @@ var (
 // baseComm //
 //////////////
 
-func makeCommunicator(args commArgs) Communicator {
-	baseComm := baseComm{
-		Slistener: args.listener,
-		t:         args.boot.t,
-		xctn:      args.boot.xctn,
-		config:    args.boot.config,
-		name:      args.boot.originalPodName,
-		podName:   args.boot.pod.Name,
-	}
-
-	switch args.boot.msg.CommTypeX {
-	case Hpush:
-		baseComm.commType = Hpush
-		return &pushComm{
-			baseComm: baseComm,
-			mem:      args.boot.t.PageMM(),
-			uri:      args.boot.uri,
+func newCommunicator(listener meta.Slistener, boot *etlBootstrapper) Communicator {
+	switch boot.msg.CommTypeX {
+	case Hpush, HpushStdin:
+		pc := &pushComm{}
+		pc.listener, pc.boot = listener, boot
+		if boot.msg.CommTypeX == HpushStdin { // io://
+			pc.command = boot.originalCommand
 		}
+		return pc
 	case Hpull:
-		baseComm.commType = Hpull
-		return &redirectComm{baseComm: baseComm, uri: args.boot.uri}
+		rc := &redirectComm{}
+		rc.listener, rc.boot = listener, boot
+		return rc
 	case Hrev:
-		transformerURL, err := url.Parse(args.boot.uri)
+		rp := &revProxyComm{}
+		rp.listener, rp.boot = listener, boot
+
+		transformerURL, err := url.Parse(boot.uri)
 		debug.AssertNoErr(err)
-		rp := &httputil.ReverseProxy{
+		revProxy := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
 				// Replacing the `req.URL` host with ETL container host
 				req.URL.Scheme = transformerURL.Scheme
@@ -147,40 +125,33 @@ func makeCommunicator(args commArgs) Communicator {
 				}
 			},
 		}
-		baseComm.commType = Hrev
-		return &revProxyComm{baseComm: baseComm, rp: rp, uri: args.boot.uri}
-	case HpushStdin:
-		baseComm.commType = HpushStdin
-		return &pushComm{
-			baseComm: baseComm,
-			mem:      args.boot.t.PageMM(),
-			uri:      args.boot.uri,
-			command:  args.boot.originalCommand,
-		}
-	default:
-		debug.Assert(false, args.boot.msg.CommTypeX)
+		rp.rp = revProxy
+		return rp
 	}
+
+	debug.Assert(false, "unknown comm-type '"+boot.msg.CommTypeX+"'")
 	return nil
 }
 
-func (c *baseComm) Name() string     { return c.name }
-func (c *baseComm) PodName() string  { return c.podName }
-func (c *baseComm) SvcName() string  { return c.podName /*pod name is same as service name*/ }
-func (c *baseComm) CommType() string { return c.commType }
+func (c *baseComm) Name() string    { return c.boot.originalPodName }
+func (c *baseComm) PodName() string { return c.boot.pod.Name }
+func (c *baseComm) SvcName() string { return c.boot.pod.Name /*same as pod name*/ }
+
+func (c *baseComm) ListenSmapChanged() { c.listener.ListenSmapChanged() }
 
 func (c *baseComm) String() string {
-	return fmt.Sprintf("%s[%s]-%s", c.name, c.xctn.ID(), c.commType)
+	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommTypeX)
 }
 
-func (c *baseComm) Xact() cluster.Xact { return c.xctn }
-func (c *baseComm) ObjCount() int64    { return c.xctn.Objs() }
-func (c *baseComm) InBytes() int64     { return c.xctn.InBytes() }
-func (c *baseComm) OutBytes() int64    { return c.xctn.OutBytes() }
+func (c *baseComm) Xact() cluster.Xact { return c.boot.xctn }
+func (c *baseComm) ObjCount() int64    { return c.boot.xctn.Objs() }
+func (c *baseComm) InBytes() int64     { return c.boot.xctn.InBytes() }
+func (c *baseComm) OutBytes() int64    { return c.boot.xctn.OutBytes() }
 
-func (c *baseComm) Stop() { c.xctn.Finish() }
+func (c *baseComm) Stop() { c.boot.xctn.Finish() }
 
 func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	if err := c.xctn.AbortErr(); err != nil {
+	if err := c.boot.xctn.AbortErr(); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +168,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
 	}
 	if err == nil {
-		resp, err = c.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+		resp, err = c.boot.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	}
 	if err != nil {
 		if cancel != nil {
@@ -209,44 +180,46 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(n int, err error) { c.xctn.InObjsAdd(0, int64(n)) },
+		ReadCb: func(n int, err error) { c.boot.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			c.xctn.InObjsAdd(1, 0)
-			c.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
+			c.boot.xctn.InObjsAdd(1, 0)
+			c.boot.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}), nil
 }
 
 //////////////
-// pushComm //
+// pushComm: implements (Hpush | HpushStdin)
 //////////////
 
 func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
-	r, err = pc.tryDoRequest(lom, timeout)
+
+	lom.Lock(false)
+	r, err = pc.do(lom, timeout)
+	lom.Unlock(false)
+
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
-		_, err = pc.t.GetCold(context.Background(), lom, cmn.OwtGetLock)
+		_, err = pc.boot.t.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
 		}
-		r, err = pc.tryDoRequest(lom, timeout)
+		lom.Lock(false)
+		r, err = pc.do(lom, timeout)
+		lom.Unlock(false)
 	}
 	return
 }
 
-func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	if err := pc.xctn.AbortErr(); err != nil {
+func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (cos.ReadCloseSizer, error) {
+	if err := pc.boot.xctn.AbortErr(); err != nil {
 		return nil, err
 	}
-
-	lom.Lock(false)
-	defer lom.Unlock(false)
-
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return nil, err
 	}
@@ -259,11 +232,16 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 	}
 
 	var (
+		cancel func()
 		req    *http.Request
 		resp   *http.Response
-		cancel func()
-		url    = pc.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
+		url    = pc.boot.uri + "/" + lom.Bck().Name + "/" + lom.ObjName
 	)
+
+	debug.Assert(lom.Bck().Ns.IsGlobal(), lom.Bck().Ns.String()) // the url (above) simplifies out bucket's namespace
+
+	// TODO -- FIXME: switch(ArgType)
+
 	if timeout != 0 {
 		var ctx context.Context
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
@@ -282,7 +260,7 @@ func (pc *pushComm) tryDoRequest(lom *cluster.LOM, timeout time.Duration) (cos.R
 	}
 	req.ContentLength = size
 	req.Header.Set(cos.HdrContentType, cos.ContentBinary)
-	resp, err = pc.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+	resp, err = pc.boot.t.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 finish:
 	if err != nil {
 		if cancel != nil {
@@ -294,13 +272,13 @@ finish:
 	return cos.NewReaderWithArgs(cos.ReaderArgs{
 		R:      resp.Body,
 		Size:   resp.ContentLength,
-		ReadCb: func(n int, err error) { pc.xctn.InObjsAdd(0, int64(n)) },
+		ReadCb: func(n int, err error) { pc.boot.xctn.InObjsAdd(0, int64(n)) },
 		DeferCb: func() {
 			if cancel != nil {
 				cancel()
 			}
-			pc.xctn.InObjsAdd(1, 0)
-			pc.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
+			pc.boot.xctn.InObjsAdd(1, 0)
+			pc.boot.xctn.OutObjsAdd(1, size) // see also: `coi.objsAdd`
 		},
 	}), nil
 }
@@ -312,18 +290,19 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 	if err != nil {
 		return err
 	}
-	if pc.config.FastV(5, cos.SmoduleETL) {
+	if pc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
-	defer r.Close()
 
 	size := r.Size()
 	if size < 0 {
 		size = memsys.DefaultBufSize // TODO: track the average
 	}
-	buf, slab := pc.mem.AllocSize(size)
+	buf, slab := pc.boot.t.PageMM().AllocSize(size)
 	_, err = io.CopyBuffer(w, r, buf)
+
 	slab.Free(buf)
+	r.Close()
 	return err
 }
 
@@ -331,18 +310,18 @@ func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time
 	lom := cluster.AllocLOM(objName)
 	r, err = pc.doRequest(bck, lom, timeout)
 	cluster.FreeLOM(lom)
-	if err == nil && pc.config.FastV(5, cos.SmoduleETL) {
+	if err == nil && pc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 	return
 }
 
 //////////////////
-// redirectComm //
+// redirectComm: implements Hpull
 //////////////////
 
 func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
-	if err := rc.xctn.AbortErr(); err != nil {
+	if err := rc.boot.xctn.AbortErr(); err != nil {
 		return err
 	}
 
@@ -350,12 +329,12 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	rc.xctn.OutObjsAdd(1, size)
+	rc.boot.xctn.OutObjsAdd(1, size)
 
 	// is there a way to determine `rc.stats.outBytes`?
-	redirectURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
+	redirectURL := cos.JoinPath(rc.boot.uri, transformerPath(bck, objName))
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
-	if rc.config.FastV(5, cos.SmoduleETL) {
+	if rc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, bck.Cname(objName))
 	}
 	return nil
@@ -366,16 +345,16 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	if errV != nil {
 		return nil, errV
 	}
-	etlURL := cos.JoinPath(rc.uri, transformerPath(bck, objName))
+	etlURL := cos.JoinPath(rc.boot.uri, transformerPath(bck, objName))
 	r, err := rc.getWithTimeout(etlURL, size, timeout)
-	if rc.config.FastV(5, cos.SmoduleETL) {
+	if rc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, bck.Cname(objName), err)
 	}
 	return r, err
 }
 
 //////////////////
-// revProxyComm //
+// revProxyComm: implements Hrev
 //////////////////
 
 func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
@@ -383,7 +362,7 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if err != nil {
 		return err
 	}
-	rp.xctn.OutObjsAdd(1, size)
+	rp.boot.xctn.OutObjsAdd(1, size)
 
 	// is there a way to determine `rc.stats.outBytes`?
 	path := transformerPath(bck, objName)
@@ -398,9 +377,9 @@ func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	if errV != nil {
 		return nil, errV
 	}
-	etlURL := cos.JoinPath(rp.uri, transformerPath(bck, objName))
+	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(bck, objName))
 	r, err := rp.getWithTimeout(etlURL, size, timeout)
-	if rp.config.FastV(5, cos.SmoduleETL) {
+	if rp.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, bck.Cname(objName), err)
 	}
 	return r, err

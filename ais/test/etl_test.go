@@ -807,9 +807,10 @@ func TestETLHealth(t *testing.T) {
 		time.Sleep(10 * time.Second)
 	}
 
+	// TODO -- FIXME: see health handlers returning "OK" - revisit
 	for _, msg := range healths {
-		tassert.Errorf(t, msg.Status == etl.HealthStatusRunning, "Expected pod at %s to be %q, got %q",
-			meta.Tname(msg.TargetID), etl.HealthStatusRunning, msg.Status)
+		tassert.Errorf(t, msg.Status == "Running", "Expected pod at %s to be running, got %q",
+			meta.Tname(msg.TargetID), msg.Status)
 	}
 }
 

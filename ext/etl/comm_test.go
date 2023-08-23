@@ -111,19 +111,19 @@ var _ = Describe("CommunicatorTest", func() {
 			pod.SetName("somename")
 
 			xctn := mock.NewXact(apc.ActETLInline)
-			comm = makeCommunicator(commArgs{
-				boot: &etlBootstrapper{
-					t: tMock,
-					msg: InitSpecMsg{
-						InitMsgBase: InitMsgBase{
-							CommTypeX: commType,
-						},
+			boot := &etlBootstrapper{
+				t: tMock,
+				msg: InitSpecMsg{
+					InitMsgBase: InitMsgBase{
+						CommTypeX: commType,
 					},
-					pod:  pod,
-					uri:  transformerServer.URL,
-					xctn: xctn,
 				},
-			})
+				pod:  pod,
+				uri:  transformerServer.URL,
+				xctn: xctn,
+			}
+			comm = newCommunicator(nil, boot)
+
 			resp, err := http.Get(proxyServer.URL)
 			Expect(err).NotTo(HaveOccurred())
 			defer resp.Body.Close()

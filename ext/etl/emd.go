@@ -84,7 +84,7 @@ func (e *MD) MarshalJSON() ([]byte, error) {
 		Ext:     e.Ext,
 	}
 	for k, v := range e.ETLs {
-		jsonMD.ETLs[k] = jsonETL{v.Type(), cos.MustMarshal(v)}
+		jsonMD.ETLs[k] = jsonETL{v.MsgType(), cos.MustMarshal(v)}
 	}
 	return jsoniter.Marshal(jsonMD)
 }
