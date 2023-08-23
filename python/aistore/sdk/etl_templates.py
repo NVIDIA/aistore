@@ -231,7 +231,6 @@ spec:
 # https://github.com/NVIDIA/ais-etl/blob/master/transformers/torchvision_preprocess/README.md.
 # pylint: disable=unused-variable
 TORCHVISION_TRANSFORMER = """
-# https://github.com/NVIDIA/ais-etl/blob/master/transformers/keras_transformer/README.md
 apiVersion: v1
 kind: Pod
 metadata:
