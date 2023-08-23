@@ -164,6 +164,14 @@ test:short:python-etl:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
       - $CI_MERGE_REQUEST_LABELS !~ /.*python.*/
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - api_failure
+      - stuck_or_timeout_failure
+      - runner_system_failure
+      - job_execution_timeout
 
 # Runs cluster with 1 proxy and 1 target (with 6 mountpaths).
 test:short:minimal:
