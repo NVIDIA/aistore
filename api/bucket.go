@@ -170,9 +170,13 @@ func hdr2msg(bck cmn.Bck, err error) error {
 //   - cmn.BucketPropsToUpdate (cmn/api.go)
 //
 // Bucket properties can be also changed at any time via SetBucketProps (above).
-func CreateBucket(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) error {
+func CreateBucket(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate, dontHeadRemote ...bool) error {
 	if err := bck.Validate(); err != nil {
 		return err
+	}
+	q := make(url.Values, 4)
+	if len(dontHeadRemote) > 0 && dontHeadRemote[0] {
+		q.Set(apc.QparamDontHeadRemote, "true")
 	}
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
@@ -181,7 +185,7 @@ func CreateBucket(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) er
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActCreateBck, Value: props})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.AddToQuery(nil)
+		reqParams.Query = bck.AddToQuery(q)
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)

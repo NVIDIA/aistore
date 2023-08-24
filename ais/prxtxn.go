@@ -154,8 +154,6 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Header) error {
 	var (
 		bprops  *cmn.BucketProps
-		nlp     = newBckNLP(bck)
-		bmd     = p.owner.bmd.get()
 		backend = bck.Backend()
 	)
 	if bck.Props != nil {
@@ -181,6 +179,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		if bprops == nil {
 			bprops = defaultBckProps(bckPropsArgs{bck: bck})
 		}
+		bmd := p.owner.bmd.get()
 		cloudProps, present := bmd.Get(backend)
 		debug.Assert(present)
 		bprops.Versioning.Enabled = cloudProps.Versioning.Enabled // always takes precedence
@@ -197,6 +196,14 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 		}
 	}
 
+	return p._createBucketWithProps(msg, bck, bprops)
+}
+
+func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *cmn.BucketProps) error {
+	var (
+		nlp = newBckNLP(bck)
+		bmd = p.owner.bmd.get()
+	)
 	if bprops == nil { // inherit (all) cluster defaults
 		bprops = defaultBckProps(bckPropsArgs{bck: bck})
 	}

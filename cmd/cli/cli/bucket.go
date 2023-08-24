@@ -23,8 +23,8 @@ import (
 )
 
 // Creates new ais bucket
-func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (err error) {
-	if err = api.CreateBucket(apiBP, bck, props); err != nil {
+func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate, dontHeadRemote bool) (err error) {
+	if err = api.CreateBucket(apiBP, bck, props, dontHeadRemote); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			if herr.Status == http.StatusConflict {
 				desc := fmt.Sprintf("Bucket %q already exists", bck)

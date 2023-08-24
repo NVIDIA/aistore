@@ -35,6 +35,7 @@ var (
 			ignoreErrorFlag,
 			bucketPropsFlag,
 			forceFlag,
+			addRemoteBucketWithNoLookupFlag,
 		},
 		commandRemove: {
 			ignoreErrorFlag,
@@ -241,8 +242,9 @@ func createBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	dontHeadRemote := flagIsSet(c, addRemoteBucketWithNoLookupFlag)
 	for _, bck := range buckets {
-		if err := createBucket(c, bck, props); err != nil {
+		if err := createBucket(c, bck, props, dontHeadRemote); err != nil {
 			return err
 		}
 	}

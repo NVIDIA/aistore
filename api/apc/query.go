@@ -36,6 +36,16 @@ const (
 	// This query parameter can be used to override the default behavior.
 	QparamDontAddRemote = "dont_add_remote_bck_md"
 
+	// Add remote bucket to BMD _unconditionally_ and without executing HEAD request
+	// (to check access and load the bucket's properties)
+	// NOTE: usage is limited to setting up bucket properties with alternative
+	// profile and/or endpoint
+	// See also:
+	// - `LsDontHeadRemote`
+	// - docs/bucket.md
+	// - docs/cli/aws_profile_endpoint.md
+	QparamDontHeadRemote = "dont_head_remote_bck"
+
 	// When evicting, keep remote bucket in BMD (i.e., evict data only)
 	QparamKeepRemote = "keep_bck_md"
 

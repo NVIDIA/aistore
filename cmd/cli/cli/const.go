@@ -476,6 +476,12 @@ var (
 		Usage: "bucket properties, e.g. --props=\"mirror.enabled=true mirror.copies=4 checksum.type=md5\"",
 	}
 
+	addRemoteBucketWithNoLookupFlag = cli.BoolFlag{
+		Name: "skip-lookup",
+		Usage: "add Cloud bucket to aistore _unconditionally_ skipping check for accessibility\n" +
+			indent4 + "\t(note: usage must be limited to setting up bucket properties with alternative profile and/or endpoint)",
+	}
+
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
@@ -827,7 +833,7 @@ var (
 	}
 	noRebalanceFlag = cli.BoolFlag{
 		Name:  "no-rebalance",
-		Usage: "do _not_ run global rebalance after putting node in maintenance (advanced usage only!)",
+		Usage: "do _not_ run global rebalance after putting node in maintenance (caution: advanced usage only!)",
 	}
 	noResilverFlag = cli.BoolFlag{
 		Name:  "no-resilver",

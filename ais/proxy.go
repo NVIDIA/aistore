@@ -1344,8 +1344,29 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 			errors.New("property 'extra.hdfs.ref_directory' must be specified when creating HDFS bucket"))
 		return
 	}
-	// remote: check existence and get (cloud) props
+
 	if bck.IsRemote() {
+		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
+		// with alternative access profile and/or endpoint
+		if cos.IsParseBool(query.Get(apc.QparamDontHeadRemote)) {
+			if !bck.IsCloud() {
+				p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))
+				return
+			}
+			msg.Action = apc.ActAddRemoteBck // NOTE: substituting action in the message
+
+			// NOTE: inherit cluster defaults
+			config := cmn.GCO.Get()
+			bprops := bck.Bucket().DefaultProps(&config.ClusterConfig)
+			bprops.SetProvider(bck.Provider)
+
+			if err := p._createBucketWithProps(msg, bck, bprops); err != nil {
+				p.writeErr(w, r, err, crerrStatus(err))
+			}
+			return
+		}
+
+		// remote: check existence and get (cloud) props
 		rhdr, statusCode, err := p.headRemoteBck(bck.RemoteBck(), nil)
 		if err != nil {
 			if bck.IsCloud() {
@@ -1358,8 +1379,7 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 			return
 		}
 		remoteHdr = rhdr
-		// NOTE: substituting action in the message
-		msg.Action = apc.ActAddRemoteBck
+		msg.Action = apc.ActAddRemoteBck // ditto
 	}
 	// props-to-update at creation time
 	if msg.Value != nil {
