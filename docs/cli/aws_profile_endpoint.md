@@ -7,12 +7,15 @@ redirect_from:
  - /docs/cli/aws_profile_endpoint.md/
 ---
 
-AIStore supports AWS-specific configuration on a per s3 bucket basis. Any bucket that is backed up by an AWS S3 bucket (**) can be configured to use alternative:
+AIStore supports vendor-specific configuration on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
 
 * named AWS profiles (with alternative credentials and/or region)
-* alternative s3 endpoints
+* s3 endpoints
 
-(**) Terminology-wise, "s3 bucket" is a shortcut phrase indicating a bucket in an AIS cluster that either (A) has the same name (e.g. `s3://abc`) or (B) a differently named AIS bucket that has `backend_bck` property that specifies the s3 bucket in question.
+(**) Terminology-wise, when we say "s3 bucket" or "google cloud bucket" we in fact reference a bucket in an AIS cluster that is either:
+
+* (A) denoted with the respective `s3:` or `gs:` protocol schema, or
+* (B) is a differently named AIS (that is, `ais://`) bucket that has its `backend_bck` property referencing the s3 (or google cloud) bucket in question.
 
 For supported backends (that include, but are not limited, to AWS S3), see also:
 

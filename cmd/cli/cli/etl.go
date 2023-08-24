@@ -255,7 +255,9 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
-	msg.TransformURL = flagIsSet(c, transformURLFlag)
+	if flagIsSet(c, transformURLFlag) {
+		msg.ArgTypeX = etl.ArgTypeURL
+	}
 
 	if flagIsSet(c, chunkSizeFlag) {
 		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)

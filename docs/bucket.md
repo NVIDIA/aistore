@@ -55,6 +55,20 @@ In addition, AIS supports multiple storage **backends** including itself:
 
 ![Supported Backends](images/supported-backends.png)
 
+But there's more.
+
+AIStore supports vendor-specific configuration on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
+
+* named AWS profiles (with alternative credentials and/or region)
+* s3 endpoints
+
+(**) Terminology-wise, when we say "s3 bucket" or "google cloud bucket" we in fact reference a bucket in an AIS cluster that is either:
+
+* (A) denoted with the respective `s3:` or `gs:` protocol schema, or
+* (B) is a differently named AIS (that is, `ais://`) bucket that has its `backend_bck` property referencing the s3 (or google cloud) bucket in question.
+
+> For examples and **usage**, grep docs for `backend_bck` or see [AWS profiles and alternative s3 endpoints](/docs/cli/aws_profile_endpoint.md).
+
 All the [supported storage services](storage_svcs.md) equally apply to all storage backends with only a few exceptions. The following table summarizes them.
 
 | Kind | Description | Supported Storage Services |

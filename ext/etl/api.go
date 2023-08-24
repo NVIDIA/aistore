@@ -136,8 +136,6 @@ var (
 	_ InitMsg = (*InitSpecMsg)(nil)
 )
 
-// TransformURL bool   `json:"transform_url"` TODO -- FIXME
-
 func (m InitMsgBase) CommType() string { return m.CommTypeX }
 func (m InitMsgBase) ArgType() string  { return m.ArgTypeX }
 func (m InitMsgBase) Name() string     { return m.IDX }

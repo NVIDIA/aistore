@@ -1363,9 +1363,9 @@ func TestDsortAbort(t *testing.T) {
 						}
 					)
 
-					m.initAndSaveState(true /*cleanup*/)
+					m.initAndSaveState(false /*cleanup*/)
 					m.expectTargets(3)
-					tools.CreateBucket(t, m.proxyURL, m.bck, nil, false /*cleanup*/)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
@@ -1416,7 +1416,7 @@ func TestDsortAbortDuringPhases(t *testing.T) {
 					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
 
-					tools.CreateBucket(t, m.proxyURL, m.bck, nil, false /*cleanup*/)
+					tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 					df.init()
 					df.createInputShards()
