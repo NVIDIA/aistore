@@ -1,6 +1,5 @@
 ## Table of Contents
 - [Executables](#executables)
-- [Experimental](#experimental)
 - [Installing from GitHub](#installing-from-github)
 - [Installing from source](#installing-from-source)
 
@@ -17,17 +16,9 @@
 
 **NOTE**: installed CLI executable is named `ais`.
 
-## Experimental
-
-| Directory | Binary name | Description  | README |
-|---|---|---|---|
-| `cmd/aisfs` | `aisfs` | FUSE client for mounting a single bucket from AIStore | [aisfs](/docs/aisfs.md) |
-
-**NOTE:** `aisfs` is no longer actively supported and may be removed in the future.
-
 ## Installing from GitHub
 
-Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) process or sequence. 
+Generally, AIStore (cluster) requires at least some sort of [deployment](/deploy#contents) process or sequence.
 
 Standalone binaries, on the other hand, can be [built](Makefile) from source or installed directly from the latest or previous GitHub releases.
 

@@ -123,7 +123,7 @@ if [[ ${deployment} == "local" || ${deployment} == "all" ]]; then
 	  make deploy "RUN_ARGS=${RUN_ARGS}"
 fi
 
-make -j8 authn aisloader aisfs cli 1>/dev/null # Build binaries in parallel
+make -j8 authn aisloader cli 1>/dev/null # Build binaries in parallel
 
 if [[ ${deployment} == "remote" || ${deployment} == "all" ]]; then
   if [[ ${deployment} == "all" ]]; then

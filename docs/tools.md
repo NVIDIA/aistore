@@ -9,7 +9,6 @@ redirect_from:
 
 ## Table of Contents
 - [Executables](#executables)
-- [Experimental](#experimental)
 - [Installing from GitHub](#installing-from-github)
 - [Installing from source](#installing-from-source)
 
@@ -18,21 +17,14 @@ redirect_from:
 | Directory | Binary name | Description  | README |
 |---|---|---|---|
 | `cmd/cli` | `ais` | AIS command line management utility | [CLI](/docs/cli.md) |
-| `cmd/aisloader` | `aisloader` | AIS integrated load generator | [aisloader](/docs/aisloader.md) |
+| `cmd/aisloader` and `bench/tools/aisloader` | `aisloader` | AIS Load generator, a powerful benchmark utility | [aisloader](/docs/aisloader.md) |
+| `bench/tools/aisloader-composer` | `aisloader-composer` | Scripts and ansible playbooks to benchmark an AIS cluster using multiple hosts running [aisloader](/bench/tools/aisloader), controlled by [ansible](https://github.com/ansible/ansible)  | [aisloader-composer](/bench/tools/aisloader-composer)    |
 | `cmd/aisnode` | `aisnode` | AIS node (gateway or target) binary | |
 | `cmd/aisnodeprofile` | `aisnode` | ... with profiling enabled | |
 | `cmd/authn` | `authn` | Standalone server providing token-based secure access to AIS clusters | [AuthN](/docs/authn.md) |
 | `cmd/xmeta` | `xmeta` | Low-level tool to format (or extract in plain text) assorted AIS metadata and control structures | [xmeta](/cmd/xmeta/README.md) |
 
 **NOTE**: installed CLI executable is named `ais`.
-
-## Experimental
-
-| Directory | Binary name | Description  | README |
-|---|---|---|---|
-| `cmd/aisfs` | `aisfs` | FUSE client for mounting a single bucket from AIStore | [aisfs](/docs/aisfs.md) |
-
-**NOTE:** `aisfs` is no longer actively supported and may be removed in the future.
 
 ## Installing from GitHub
 

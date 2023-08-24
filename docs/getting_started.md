@@ -372,8 +372,9 @@ $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go tes
 
 As noted, the project utilizes GNU `make` to build and run things both locally and remotely (e.g., when deploying AIStore via [Kubernetes](/deploy/dev/k8s/Dockerfile). As the very first step, run `make help` for help on:
 
-* **building** AIS binary (called `aisnode`) deployable as both a storage target **or** a proxy/gateway;
-* **building** [CLI](/docs/cli.md), [aisfs](/docs/aisfs.md), and benchmark binaries;
+* **building** AIS node binary (called `aisnode`) deployable as both storage target **or** an ais gateway (most of the time referred to as "proxy");
+* **building** [CLI](/docs/cli.md)
+* **building** [benchmark tools](/bench/tools/README.md).
 
 In particular, the `make` provides a growing number of developer-friendly commands to:
 

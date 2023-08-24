@@ -7,7 +7,7 @@ ENV HADOOP_VERSION="3.3.2"
 
 RUN apt-get update -yq
 RUN apt-get --no-install-recommends -y install lsb-release sudo default-jre default-jdk
-RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof fuse coreutils
+RUN apt-get --no-install-recommends -y install curl git sysstat attr build-essential lsof coreutils
 RUN apt-get --no-install-recommends -y install openjdk-8-jdk ssh openssh-server
 
 # Install Go.

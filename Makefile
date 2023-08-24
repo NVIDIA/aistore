@@ -93,9 +93,9 @@ term-reset = $(shell { tput sgr0 || tput me; } 2>/dev/null)
 $(call make-lazy,cyan)
 $(call make-lazy,term-reset)
 
-.PHONY: all node cli cli-autocompletions aisfs authn aisloader xmeta
+.PHONY: all node cli cli-autocompletions authn aisloader xmeta
 
-all: node cli aisfs authn aisloader ## Build all main binaries
+all: node cli authn aisloader ## Build all main binaries
 
 node: ## Build 'aisnode' binary
 	@echo "Building aisnode $(VERSION) [build tags:$(BUILD_TAGS)]"
@@ -143,12 +143,6 @@ else
 endif
 	@echo "done."
 
-## Build 'aisfs' binary (experimental)
-aisfs:
-	@echo -n "Building aisfs..."
-	@cd $(BUILD_DIR)/aisfs && go build -o $(BUILD_DEST)/aisfs $(BUILD_FLAGS) $(LDFLAGS) *.go
-	@echo "   done."
-
 #
 # local deployment (intended for developers)
 #
@@ -185,13 +179,12 @@ clean: ## Remove all AIS related files and binaries
 	@echo "done."
 
 #
-# go modules
+# modules
 #
 .PHONY: mod-all mod-clean mod-tidy
 
 mod-all: mod-clean mod-tidy
 	@echo "CLI ..." && cd cmd/cli && $(MAKE) mod-tidy
-	@echo "aisfs ..." && cd cmd/aisfs && $(MAKE) mod-tidy
 
 # cleanup go-mod cache
 mod-clean:

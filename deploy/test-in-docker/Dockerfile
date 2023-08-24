@@ -16,8 +16,7 @@ RUN apt-get clean && apt-get update &&\
 	iproute2 \
 	build-essential \
 	lsof \
-	iputils-ping \
-	fuse &&\
+	iputils-ping &&\
   apt-get -y clean all
 
 RUN pip3 install awscli s3cmd

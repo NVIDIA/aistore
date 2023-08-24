@@ -23,7 +23,7 @@ pushd $AISTORE_PATH > /dev/null
 (echo -e "4\n4\n3\n${CLD_PROVIDER}" | make deploy) && sleep 5
 
 # test
-make aisfs cli
+make aisloader cli
 BUCKET=${BUCKET} make test-long
 EXIT_CODE=$?
 popd > /dev/null

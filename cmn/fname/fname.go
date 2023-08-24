@@ -11,7 +11,6 @@ const (
 	HomeAIS        = "ais"     // join(cos.HomeDir(), HomeConfigsDir, HomeAisDir)
 	HomeCLI        = "cli"     // ditto
 	HomeAuthN      = "authn"
-	HomeAisFS      = "aisfs"
 )
 
 const (

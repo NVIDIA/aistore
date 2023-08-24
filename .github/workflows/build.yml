@@ -38,6 +38,5 @@ jobs:
         TAGS="nethttp" make node # Build with net/http transport support (fasthttp is used by default).
         TAGS="s3rproxy" make node # Build with reverse proxy support (redirect is used by default).
         make authn
-        make aisfs
         make cli
         make aisloader
