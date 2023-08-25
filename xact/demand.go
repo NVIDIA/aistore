@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	idleDefault = time.Minute // hk -> idle tick
+	IdleDefault = time.Minute // hk -> idle tick
 )
 
 type (
@@ -58,7 +58,7 @@ func (r *DemandBase) IsIdle() bool {
 
 func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idle time.Duration) {
 	r.hkName = kind + "/" + uuid
-	r.idle.d = idleDefault
+	r.idle.d = IdleDefault
 	if idle > 0 {
 		r.idle.d = idle
 	}

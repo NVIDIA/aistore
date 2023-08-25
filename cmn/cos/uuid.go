@@ -6,6 +6,7 @@ package cos
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/teris-io/shortid"
@@ -69,6 +70,20 @@ func ValidateNiceID(id string, minlen int, tag string) (err error) {
 		err = fmt.Errorf("%s %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", tag, id)
 	}
 	return
+}
+
+// BeUID
+func GenBeUID(div, val, slt int64) string {
+	rem := val % div
+	if rem > div>>1+div>>2 {
+		rem -= div
+	}
+	seed := val - rem + slt
+	if seed < 0 {
+		seed = val - rem - slt
+	}
+	rnd := rand.New(rand.NewSource(seed))
+	return RandStringWithSrc(rnd, lenShortID)
 }
 
 //

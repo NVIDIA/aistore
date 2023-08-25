@@ -5,9 +5,9 @@
 package mirror
 
 import (
-	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -57,14 +58,39 @@ func (*putFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *putFactory) Start() error {
-	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	lom, t := p.lom, p.T
+	slab, err := t.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	debug.AssertNoErr(err)
-	xctn, err := runXactPut(p.lom, slab, p.T)
-	if err != nil {
+
+	bck, mirror := lom.Bck(), lom.MirrorConf()
+	if !mirror.Enabled {
+		return fmt.Errorf("%s: mirroring disabled, nothing to do", bck)
+	}
+	if err = fs.ValidateNCopies(t.String(), int(mirror.Copies)); err != nil {
 		nlog.Errorln(err)
 		return err
 	}
-	p.xctn = xctn
+	r := &XactPut{mirror: *mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
+
+	// target-local best-effort to generate global UUID
+	div := int64(xact.IdleDefault)
+	now := time.Now().UnixNano()
+	slt := xxhash.ChecksumString64S(bck.MakeUname(""), 3421170679 /*m.b per xkind*/)
+	uid := cos.GenBeUID(div, now, int64(slt))
+	if xctn, err := xreg.GetXact(uid); err != nil /*unlikely*/ || xctn != nil /* idling away? */ {
+		uid = cos.GenUUID()
+	}
+
+	r.DemandBase.Init(uid, apc.ActPutCopies, bck, xact.IdleDefault)
+	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
+		Callback:  r.do,
+		Slab:      slab,
+		QueueSize: mirror.Burst,
+	})
+	p.xctn = r
+
+	// Run
+	go r.Run(nil)
 	return nil
 }
 
@@ -74,29 +100,6 @@ func (p *putFactory) Get() cluster.Xact { return p.xctn }
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
 	return xreg.WprUse, nil
-}
-
-// main
-func runXactPut(lom *cluster.LOM, slab *memsys.Slab, t cluster.Target) (r *XactPut, err error) {
-	mirror := *lom.MirrorConf()
-	if !mirror.Enabled {
-		return nil, errors.New("mirroring disabled, nothing to do")
-	}
-	tname := t.String()
-	if err = fs.ValidateNCopies(tname, int(mirror.Copies)); err != nil {
-		return
-	}
-	bck := lom.Bck()
-	r = &XactPut{mirror: mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
-	r.DemandBase.Init(cos.GenUUID(), apc.ActPutCopies, bck, 0 /*use default*/)
-	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
-		Callback:  r.do,
-		Slab:      slab,
-		QueueSize: mirror.Burst,
-	})
-	// Run
-	go r.Run(nil)
-	return
 }
 
 /////////////
