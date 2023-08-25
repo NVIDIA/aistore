@@ -50,6 +50,31 @@ spec:
           port: default
 """
 
+# Returns "Hello World!" on any request.
+# pylint: disable=unused-variable
+GO_HELLO_WORLD = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hello-world-go-transformer
+  annotations:
+    communication_type: "{communication_type}://"
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/transformer_hello_world_go:latest
+      imagePullPolicy: Always
+      ports:
+        - name: default
+          containerPort: 80
+      command: ['./echo', '-l', '0.0.0.0', '-p', '80']
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+"""
+
 # Returns the original data, with an MD5 sum in the response headers.
 # pylint: disable=unused-variable
 GO_ECHO = """
