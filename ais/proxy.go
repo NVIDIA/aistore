@@ -88,7 +88,7 @@ type (
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
-		inPrimaryTransition atomic.Bool
+		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
 	}
 )
 
@@ -636,15 +636,15 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	tsi, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infoln("GET " + bck.Cname(objName) + " => " + tsi.String())
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
@@ -686,36 +686,44 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	bckArgs.bck, bckArgs.dpq = apireq.bck, apireq.dpq
 	bck, err := bckArgs.initAndTry()
 	freeInitBckArgs(bckArgs)
-
-	objName := apireq.items[1]
 	if err != nil {
 		return
 	}
 
 	// 3. redirect
 	var (
-		si      *meta.Snode
+		tsi     *meta.Snode
 		smap    = p.owner.smap.get()
 		started = time.Now()
+		objName = apireq.items[1]
 	)
 	if nodeID == "" {
-		si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+		tsi, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
 	} else {
-		si = smap.GetTarget(nodeID)
-		if si == nil {
+		if tsi = smap.GetTarget(nodeID); tsi == nil {
 			err = &errNodeNotFound{"PUT failure", nodeID, p.si, smap}
 			p.writeErr(w, r, err)
 			return
 		}
 	}
+
+	// verbose
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s %s => %s (append: %v)", r.Method, bck.Cname(objName), si.StringEx(), appendTyProvided)
+		verb, s := "PUT", ""
+		if appendTyProvided {
+			verb = "APPEND"
+		}
+		if bck.Props.Mirror.Enabled {
+			s = " (put-mirror)"
+		}
+		nlog.Infof("%s %s => %s%s", verb, bck.Cname(objName), tsi, s)
 	}
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	// 4. stats
@@ -741,15 +749,15 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	tsi, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
 	}
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
+		nlog.Infoln("DELETE " + bck.Cname(objName) + " => " + tsi.String())
 	}
-	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
+	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	p.statsT.Inc(stats.DeleteCount)
@@ -1893,7 +1901,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		}
 		return true
 	}
-	if p.inPrimaryTransition.Load() {
+	if p.settingNewPrimary.Load() {
 		p.writeErrStatusf(w, r, http.StatusServiceUnavailable,
 			"%s is in transition, cannot process the request", p.si)
 		return true

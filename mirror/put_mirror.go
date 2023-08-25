@@ -8,13 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -23,11 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-)
-
-// sparse logging
-const (
-	logPending = 256
 )
 
 type (
@@ -44,7 +37,6 @@ type (
 		workCh  chan cluster.LIF
 		// init
 		mirror cmn.MirrorConf
-		total  atomic.Int64
 		config *cmn.Config
 	}
 )
@@ -127,7 +119,7 @@ func (r *XactPut) do(lom *cluster.LOM, buf []byte) {
 	} else {
 		r.ObjsAdd(1, size)
 	}
-	r.DecPending() // to support action renewal on-demand
+	r.DecPending() // (see IncPending below)
 	cluster.FreeLOM(lom)
 }
 
@@ -153,31 +145,15 @@ loop:
 	r.Finish()
 }
 
-// main method: replicate onto a given (and different) mountpath
+// main method
 func (r *XactPut) Repl(lom *cluster.LOM) {
 	debug.Assert(!r.Finished(), r.String())
-	total := r.total.Inc()
 
-	pending, max := int(r.Pending()), r.mirror.Burst
-	if pending > 1 && pending >= max && (total%logPending) == 0 {
-		nlog.Warningf("%s: pending=%d exceeded %d=burst (total=%d)", r, pending, max, total)
-	}
-	r.IncPending() // ref-count via base to support on-demand action
-
-	if ok := r.workers.Do(lom); !ok {
-		err := fmt.Errorf("%s: failed to post %s work", r, lom)
-		debug.AssertNoErr(err)
-		return
-	}
-
-	// [throttle]
-	// a bit of back-pressure when approaching the fixed boundary
-	if pending > 1 && max > 10 {
-		// increase the chances for the burst of PUTs to subside
-		// but only to a point
-		if pending > max/2 && pending < max-max/8 {
-			time.Sleep(mpather.ThrottleAvgDur)
-		}
+	// ref-count on-demand, decrement via worker.Callback = r.do
+	r.IncPending()
+	if err := r.workers.PostLIF(lom, r.String()); err != nil {
+		r.DecPending()
+		r.Abort(fmt.Errorf("%s: %v", r, err))
 	}
 }
 

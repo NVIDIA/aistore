@@ -32,7 +32,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -1232,34 +1231,6 @@ func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started int64, d
 			lom.Cname(), cos.HdrContentLength)
 	}
 	return a.do()
-}
-
-func (t *target) putMirror(lom *cluster.LOM) {
-	mconfig := lom.MirrorConf()
-	if !mconfig.Enabled {
-		return
-	}
-	if mpathCnt := fs.NumAvail(); mpathCnt < int(mconfig.Copies) {
-		t.statsT.IncErr(stats.ErrPutMirrorCount)
-		nanotim := mono.NanoTime()
-		if nanotim&0x7 == 7 {
-			if mpathCnt == 0 {
-				nlog.Errorf("%s: %v", t, cmn.ErrNoMountpaths)
-			} else {
-				nlog.Errorf(fmtErrInsuffMpaths2, t, mpathCnt, lom, mconfig.Copies)
-			}
-		}
-		return
-	}
-	rns := xreg.RenewPutMirror(t, lom)
-	if rns.Err != nil {
-		nlog.Errorf("%s: %s %v", t, lom, rns.Err)
-		debug.AssertNoErr(rns.Err)
-		return
-	}
-	xctn := rns.Entry.Get()
-	xputlrep := xctn.(*mirror.XactPut)
-	xputlrep.Repl(lom)
 }
 
 func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error) {

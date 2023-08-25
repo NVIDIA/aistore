@@ -351,7 +351,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	apiOp = apiItems[0]
 	// Ignore keepalive beat if the primary is in transition.
-	if p.inPrimaryTransition.Load() && apiOp == apc.Keepalive {
+	if p.settingNewPrimary.Load() && apiOp == apc.Keepalive {
 		return
 	}
 	if p.forwardCP(w, r, nil, "httpclupost") {
@@ -1693,9 +1693,11 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, nil, "designate new primary proxy '"+npid+"'") {
 		return
 	}
+
+	// am current primary - validating
 	smap := p.owner.smap.get()
-	psi := smap.GetProxy(npid)
-	if psi == nil {
+	npsi := smap.GetProxy(npid)
+	if npsi == nil {
 		p.writeErrf(w, r, "new primary proxy %s is not present in the %s", npid, smap.StringEx())
 		return
 	}
@@ -1704,20 +1706,30 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		nlog.Warningf("Request to set primary to %s(self) - nothing to do", npid)
 		return
 	}
-	if smap.InMaintOrDecomm(psi) {
+	if smap.InMaintOrDecomm(npsi) {
 		var err error
-		if smap.InMaint(psi) {
-			err = fmt.Errorf("%s cannot become the new primary as it's currently under maintenance", psi)
+		if smap.InMaint(npsi) {
+			err = fmt.Errorf("%s cannot become the new primary as it's currently under maintenance", npsi)
 		} else {
-			err = fmt.Errorf("%s cannot become the new primary as it's currently being decommissioned", psi)
+			err = fmt.Errorf("%s cannot become the new primary as it's currently being decommissioned", npsi)
 		}
 		debug.AssertNoErr(err)
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
 
+	// executing
+	if p.settingNewPrimary.CAS(false, true) {
+		p._setPrimary(w, r, npsi)
+		p.settingNewPrimary.Store(false)
+	}
+}
+
+func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.Snode) {
+	//
 	// (I.1) Prepare phase - inform other nodes.
-	urlPath := apc.URLPathDaeProxy.Join(npid)
+	//
+	urlPath := apc.URLPathDaeProxy.Join(npsi.ID())
 	q := url.Values{}
 	q.Set(apc.QparamPrepare, "true")
 	args := allocBcArgs()
@@ -1737,25 +1749,26 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, npid)
+		err := res.errorf("node %s failed to set primary %s in the prepare phase", res.si, npsi.StringEx())
 		p.writeErr(w, r, err)
 		freeBcastRes(results)
 		return
 	}
 	freeBcastRes(results)
 
+	//
 	// (I.2) Prepare phase - local changes.
-	p.inPrimaryTransition.Store(true)
-	defer p.inPrimaryTransition.Store(false)
-
-	err = p.owner.smap.modify(&smapModifier{pre: func(_ *smapModifier, clone *smapX) error {
-		clone.Primary = psi
+	//
+	err := p.owner.smap.modify(&smapModifier{pre: func(_ *smapModifier, clone *smapX) error {
+		clone.Primary = npsi
 		p.metasyncer.becomeNonPrimary()
 		return nil
 	}})
 	debug.AssertNoErr(err)
 
+	//
 	// (II) Commit phase.
+	//
 	q.Set(apc.QparamPrepare, "false")
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
@@ -1766,11 +1779,11 @@ func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
 		if res.err == nil {
 			continue
 		}
-		if res.si.ID() == npid {
-			cos.ExitLogf("commit phase failure: new primary %q returned %v", npid, res.err)
+		if res.si.ID() == npsi.ID() {
+			cos.ExitLogf("commit phase failure: new primary %s returned %v", npsi.StringEx(), res.err)
 		} else {
-			nlog.Errorf("Commit phase failure: %s returned err %v when setting primary = %s",
-				res.si.ID(), res.err, npid)
+			nlog.Errorf("Commit phase failure: %s returned %v when setting primary = %s",
+				res.si.ID(), res.err, npsi.StringEx())
 		}
 	}
 	freeBcastRes(results)

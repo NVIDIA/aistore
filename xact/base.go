@@ -106,19 +106,21 @@ func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
 
 func (xctn *Base) IsAborted() bool { return xctn.abort.done.Load() }
 
-// NOTE: polls for `wait` time
 func (xctn *Base) AbortErr() (err error) {
-	const wait = time.Second
 	if !xctn.IsAborted() {
 		return
 	}
+	// (is aborted)
+	// normally, is expected to return `abort.err` without any sleep
+	// but may also poll up to 4 times for 1s total
+	const wait = time.Second
 	sleep := cos.ProbingFrequency(wait)
 	for elapsed := time.Duration(0); elapsed < wait; elapsed += sleep {
 		xctn.abort.mu.RLock()
 		err = xctn.abort.err
 		xctn.abort.mu.RUnlock()
 		if err != nil {
-			break
+			return
 		}
 		time.Sleep(sleep)
 	}
