@@ -509,9 +509,19 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 		origKV = bckPropList(currProps, true)
 		newKV  = bckPropList(newProps, true)
 	)
-	for idx, prop := range newKV {
-		if origKV[idx].Value != prop.Value {
-			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", prop.Name, prop.Value, origKV[idx].Value)
+	for _, np := range newKV {
+		var found bool
+		for _, op := range origKV {
+			if np.Name != op.Name {
+				continue
+			}
+			found = true
+			if np.Value != op.Value {
+				fmt.Fprintf(c.App.Writer, "%q set to: %q (was: %q)\n", np.Name, np.Value, op.Value)
+			}
+		}
+		if !found && np.Value != "" {
+			fmt.Fprintf(c.App.Writer, "%q set to: %q (was: n/a)\n", np.Name, np.Value)
 		}
 	}
 }

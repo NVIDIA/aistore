@@ -1348,6 +1348,11 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	if bck.IsRemote() {
 		// (feature) add Cloud bucket to BMD, to further set its `Props.Extra`
 		// with alternative access profile and/or endpoint
+		// TODO:
+		// change bucket props - and the BMD meta-version - to have Flags int64 for
+		// the bits that'll include "renamed" (instead of the current `Props.Renamed`)
+		// and "added-with-no-head"; use the latter to synchronize Cloud props once
+		// connected
 		if cos.IsParseBool(query.Get(apc.QparamDontHeadRemote)) {
 			if !bck.IsCloud() {
 				p.writeErr(w, r, cmn.NewErrUnsupp("skip lookup for the", bck.Provider+":// bucket"))

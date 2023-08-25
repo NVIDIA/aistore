@@ -478,8 +478,8 @@ var (
 
 	addRemoteBucketWithNoLookupFlag = cli.BoolFlag{
 		Name: "skip-lookup",
-		Usage: "add Cloud bucket to aistore _unconditionally_ skipping check for accessibility\n" +
-			indent4 + "\t(note: usage must be limited to setting up bucket properties with alternative profile and/or endpoint)",
+		Usage: "add Cloud bucket to aistore without checking the bucket's accessibility and getting its Cloud properties\n" +
+			indent4 + "\t(usage must be limited to setting up bucket's aistore properties with alternative profile and/or endpoint)",
 	}
 
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
