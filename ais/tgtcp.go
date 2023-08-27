@@ -68,6 +68,11 @@ func (t *target) recvCluMetaBytes(action string, body []byte, caller string) err
 	if err := jsoniter.Unmarshal(body, &cm); err != nil {
 		return fmt.Errorf(cmn.FmtErrUnmarshal, t, "clumeta", cos.BHead(body), err)
 	}
+
+	debug.Assert(cm.PrimeTime != 0, t.String()) // expecting
+	xreg.PrimeTime.Store(cm.PrimeTime)
+	xreg.MyTime.Store(time.Now().UnixNano())
+
 	msg := t.newAmsgStr(action, cm.BMD)
 
 	// Config

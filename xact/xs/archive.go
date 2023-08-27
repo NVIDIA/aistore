@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/OneOfOne/xxhash"
 )
 
 // TODO (feature): one source multiple destinations (buckets)
@@ -80,11 +81,26 @@ func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *archFactory) Start() error {
+	//
+	// target-local generation of a global UUID
+	//
+	div := int64(xact.IdleDefault)
+	bckTo, ok := p.Args.Custom.(*meta.Bck)
+	debug.Assertf(ok, "%+v", bckTo)
+	if !ok || bckTo.IsEmpty() {
+		bckTo = &meta.Bck{Name: "any"} // local usage to gen uuid, see r.bckTo below
+	}
+	slt := xxhash.ChecksumString64S(p.Bck.MakeUname("")+"|"+bckTo.MakeUname(""), 8214808651 /*m.b per xkind*/)
+	p.Args.UUID = xreg.GenBeUID(div, int64(slt))
+
+	//
+	// new x-archive
+	//
 	workCh := make(chan *cmn.ArchiveBckMsg, maxNumInParallel)
 	r := &XactArch{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, workCh: workCh}
 	r.pending.m = make(map[string]*archwi, maxNumInParallel)
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), apc.ActArchive, p.Bck /*from*/, 0 /*use default*/)
+	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, apc.ActArchive, p.Bck /*from*/, xact.IdleDefault)
 
 	bmd := p.Args.T.Bowner().Get()
 	trname := fmt.Sprintf("arch-%s%s-%s-%d", p.Bck.Provider, p.Bck.Ns, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
@@ -163,7 +179,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 		}
 	}
 
-	// most of the time there'll be a single dst bucket for the lifetime
+	// most of the time there'll be a single destination bucket for the lifetime
 	if r.bckTo == nil {
 		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
 			r.bckTo = meta.CloneBck(&wi.msg.ToBck)

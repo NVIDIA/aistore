@@ -287,6 +287,10 @@ func (p *proxy) recvCluMeta(cm *cluMeta, action, caller string) error {
 		msg  = p.newAmsgStr(action, cm.BMD)
 		errs []error
 	)
+	if cm.PrimeTime != 0 {
+		xreg.PrimeTime.Store(cm.PrimeTime)
+		xreg.MyTime.Store(time.Now().UnixNano())
+	}
 	// Config
 	debug.Assert(cm.Config != nil)
 	if err := p.receiveConfig(cm.Config, msg, nil, caller); err != nil {
@@ -2759,7 +2763,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	force := cos.IsParseBool(query.Get(apc.QparamForce))
 
-	// forceful primary change
+	// force primary change
 	if force && apiItems[0] == apc.Proxy {
 		if smap := p.owner.smap.get(); !smap.isPrimary(p.si) {
 			p.writeErr(w, r, newErrNotPrimary(p.si, smap))

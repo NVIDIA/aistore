@@ -641,14 +641,13 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		}
 		// begin
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
-		rns := xreg.RenewTCObjs(t, c.uuid, c.msg.Action /*kind*/, custom)
+		rns := xreg.RenewTCObjs(t, c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
 			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
-		debug.Assert((!rns.IsRunning() && xid == c.uuid) || (rns.IsRunning() && xid == rns.UUID))
 
 		xtco := xctn.(*xs.XactTCObjs)
 		msg.TxnUUID = c.uuid
@@ -789,14 +788,13 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 			return xid, cs.Err
 		}
 
-		rns := xreg.RenewPutArchive(c.uuid, t, bckFrom, bckTo)
+		rns := xreg.RenewPutArchive(t, bckFrom, bckTo)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xid, rns.Err
 		}
 		xctn := rns.Entry.Get()
 		xid = xctn.ID()
-		debug.Assert((!rns.IsRunning() && xid == c.uuid) || (rns.IsRunning() && xid == rns.UUID))
 
 		xarch := xctn.(*xs.XactArch)
 		// finalize the message and begin local transaction

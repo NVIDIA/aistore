@@ -2444,8 +2444,8 @@ func TestCopyBucket(t *testing.T) {
 				panic(bckTest)
 			}
 
-			xactIDs := make([]string, len(dstms))
-			for idx, dstm := range dstms {
+			xactIDs := make([]string, 0, len(dstms))
+			for _, dstm := range dstms {
 				var (
 					uuid string
 					err  error
@@ -2457,7 +2457,15 @@ func TestCopyBucket(t *testing.T) {
 				} else {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg)
 				}
-				xactIDs[idx] = uuid
+				if uuids := strings.Split(uuid, ","); len(uuids) > 1 {
+					for _, u := range uuids {
+						tassert.Fatalf(t, xact.IsValidUUID(u), "invalid UUID %q", u)
+					}
+					xactIDs = append(xactIDs, uuids...)
+				} else {
+					tassert.Fatalf(t, xact.IsValidUUID(uuid), "invalid UUID %q", uuid)
+					xactIDs = append(xactIDs, uuid)
+				}
 				tassert.CheckFatal(t, err)
 			}
 
@@ -2526,6 +2534,7 @@ func TestCopyBucket(t *testing.T) {
 				if test.dstRemote {
 					msg.Flags = apc.LsObjCached
 				}
+
 				dstBckList, err := api.ListObjects(baseParams, dstm.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				if len(dstBckList.Entries) != expectedObjCount {

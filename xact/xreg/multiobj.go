@@ -10,13 +10,8 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 )
 
-func RenewPutArchive(uuid string, t cluster.Target, bckFrom, bckTo *meta.Bck) RenewRes {
-	return RenewBucketXact(
-		apc.ActArchive,
-		bckFrom,
-		Args{T: t, UUID: uuid},
-		bckFrom, bckTo,
-	)
+func RenewPutArchive(t cluster.Target, bckFrom, bckTo *meta.Bck) RenewRes {
+	return RenewBucketXact(apc.ActArchive, bckFrom, Args{T: t, Custom: bckTo}, bckFrom, bckTo)
 }
 
 func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *meta.Bck, msg *apc.ListRange) RenewRes {
@@ -25,4 +20,9 @@ func RenewEvictDelete(uuid string, t cluster.Target, kind string, bck *meta.Bck,
 
 func RenewPrefetch(uuid string, t cluster.Target, bck *meta.Bck, msg *apc.ListRange) RenewRes {
 	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{T: t, UUID: uuid, Custom: msg})
+}
+
+// kind: (apc.ActCopyObjects | apc.ActETLObjects)
+func RenewTCObjs(t cluster.Target, kind string, custom *TCObjsArgs) RenewRes {
+	return RenewBucketXact(kind, custom.BckFrom, Args{T: t, Custom: custom}, custom.BckFrom, custom.BckTo)
 }

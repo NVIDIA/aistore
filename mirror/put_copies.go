@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
@@ -72,16 +73,14 @@ func (p *putFactory) Start() error {
 	}
 	r := &XactPut{mirror: *mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
 
-	// target-local best-effort to generate global UUID
+	//
+	// target-local generation of a global UUID
+	//
 	div := int64(xact.IdleDefault)
-	now := time.Now().UnixNano()
 	slt := xxhash.ChecksumString64S(bck.MakeUname(""), 3421170679 /*m.b per xkind*/)
-	uid := cos.GenBeUID(div, now, int64(slt))
-	if xctn, err := xreg.GetXact(uid); err != nil /*unlikely*/ || xctn != nil /* idling away? */ {
-		uid = cos.GenUUID()
-	}
+	r.DemandBase.Init(xreg.GenBeUID(div, int64(slt)), apc.ActPutCopies, bck, xact.IdleDefault)
 
-	r.DemandBase.Init(uid, apc.ActPutCopies, bck, xact.IdleDefault)
+	// joggers
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
 		Callback:  r.do,
 		Slab:      slab,
@@ -89,7 +88,7 @@ func (p *putFactory) Start() error {
 	})
 	p.xctn = r
 
-	// Run
+	// run
 	go r.Run(nil)
 	return nil
 }
@@ -137,6 +136,7 @@ loop:
 	for {
 		select {
 		case <-r.IdleTimer():
+			r.waitPending()
 			break loop
 		case <-r.ChanAbort():
 			break loop
@@ -157,6 +157,29 @@ func (r *XactPut) Repl(lom *cluster.LOM) {
 	if err := r.workers.PostLIF(lom, r.String()); err != nil {
 		r.DecPending()
 		r.Abort(fmt.Errorf("%s: %v", r, err))
+	}
+}
+
+func (r *XactPut) waitPending() {
+	const minsleep, longtime = 4 * time.Second, 30 * time.Second
+	var (
+		started     int64
+		cnt, iniCnt int
+		sleep       = cos.MaxDuration(cmn.Timeout.MaxKeepalive(), minsleep)
+	)
+	if cnt = len(r.workCh); cnt == 0 {
+		return
+	}
+	started, iniCnt = mono.NanoTime(), cnt
+	// keep sleeping until the very end
+	for cnt > 0 {
+		r.IncPending()
+		time.Sleep(sleep)
+		r.DecPending()
+		cnt = len(r.workCh)
+	}
+	if d := mono.Since(started); d > longtime {
+		nlog.Infof("%s: took a while to finish %d pending copies: %v", r, iniCnt, d)
 	}
 }
 

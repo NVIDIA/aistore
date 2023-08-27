@@ -6,18 +6,18 @@ package cos
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/teris-io/shortid"
 )
+
+const LenShortID = 9 // UUID length, as per https://github.com/teris-io/shortid#id-length
 
 const (
 	// Alphabet for generating UUIDs similar to the shortid.DEFAULT_ABC
 	// NOTE: len(uuidABC) > 0x3f - see GenTie()
 	uuidABC = "-5nZJDft6LuzsjGNpPwY7rQa39vehq4i1cV2FROo8yHSlC0BUEdWbIxMmTgKXAk_"
 
-	lenShortID   = 9  // UUID length, as per https://github.com/teris-io/shortid#id-length
 	lenDaemonID  = 8  // via cryptographic rand
 	lenTooLongID = 32 // suspiciously long
 )
@@ -40,6 +40,7 @@ func InitShortID(seed uint64) {
 // UUID
 //
 
+// compare with xreg.GenBeUID
 func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
@@ -56,7 +57,7 @@ func GenUUID() (uuid string) {
 }
 
 func IsValidUUID(uuid string) bool {
-	return len(uuid) >= lenShortID && IsAlphaNice(uuid)
+	return len(uuid) >= LenShortID && IsAlphaNice(uuid)
 }
 
 func ValidateNiceID(id string, minlen int, tag string) (err error) {
@@ -70,20 +71,6 @@ func ValidateNiceID(id string, minlen int, tag string) (err error) {
 		err = fmt.Errorf("%s %q is invalid: must start with a letter and can only contain [A-Za-z0-9-_]", tag, id)
 	}
 	return
-}
-
-// BeUID
-func GenBeUID(div, val, slt int64) string {
-	rem := val % div
-	if rem > div>>1+div>>2 {
-		rem -= div
-	}
-	seed := val - rem + slt
-	if seed < 0 {
-		seed = val - rem - slt
-	}
-	rnd := rand.New(rand.NewSource(seed))
-	return RandStringWithSrc(rnd, lenShortID)
 }
 
 //

@@ -1735,7 +1735,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
 
-	cluMeta, errM := p.cluMeta(cmetaFillOpt{skipSmap: true})
+	cluMeta, errM := p.cluMeta(cmetaFillOpt{skipSmap: true, skipPrimeTime: true})
 	if errM != nil {
 		p.writeErr(w, r, errM)
 		return

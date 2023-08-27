@@ -123,15 +123,6 @@ func RenewTCB(t cluster.Target, uuid, kind string, custom *TCBArgs) RenewRes {
 	)
 }
 
-func RenewTCObjs(t cluster.Target, uuid, kind string, custom *TCObjsArgs) RenewRes {
-	return RenewBucketXact(
-		kind,
-		custom.BckFrom,
-		Args{T: t, Custom: custom, UUID: uuid},
-		custom.BckFrom, custom.BckTo, // (ditto)
-	)
-}
-
 func RenewDsort(id string, custom *DsortArgs) RenewRes {
 	return RenewBucketXact(
 		apc.ActDsort,

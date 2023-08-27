@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -66,13 +67,28 @@ func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 }
 
 func (p *tcoFactory) Start() error {
-	var sizePDU int32
+	//
+	// target-local generation of a global UUID
+	//
+	div := int64(xact.IdleDefault)
+	sed := uint64(3282306647)
+	if p.kind == apc.ActETLObjects {
+		sed = 5058223172
+	}
+	slt := xxhash.ChecksumString64S(p.args.BckFrom.MakeUname("")+"|"+p.args.BckTo.MakeUname(""), sed)
+	p.Args.UUID = xreg.GenBeUID(div, int64(slt))
+
+	// new x-tco
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
 	r := &XactTCObjs{streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()}, args: p.args, workCh: workCh}
 	r.pending.m = make(map[string]*tcowi, maxNumInParallel)
 	p.xctn = r
-	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, 0 /*use default*/)
+	r.DemandBase.Init(p.UUID(), p.Kind(), p.Bck, xact.IdleDefault)
+
+	var sizePDU int32
 	if p.kind == apc.ActETLObjects {
+		// unlike apc.ActCopyObjects (where we know the size)
+		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
 	}
 	trname := "tco-" + p.UUID()

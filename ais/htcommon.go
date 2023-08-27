@@ -50,10 +50,10 @@ const (
 	fmtOutside          = "%s is present (vs requested 'flt-outside'(%d))"
 )
 
-// intra-cluster JSON control
+// intra-cluster control messages
 type (
 	// cluster-wide control information - replicated, versioned, and synchronized
-	// usages: primary election, join-cluster
+	// usage: elect new primary, join cluster, ...
 	cluMeta struct {
 		Smap           *smapX        `json:"smap"`
 		BMD            *bucketMD     `json:"bmd"`
@@ -61,6 +61,7 @@ type (
 		EtlMD          *etlMD        `json:"etlMD"`
 		Config         *globalConfig `json:"config"`
 		SI             *meta.Snode   `json:"si"`
+		PrimeTime      int64         `json:"prime_time"`
 		VoteInProgress bool          `json:"voting"`
 		// target only
 		RebInterrupted bool `json:"reb_interrupted"`
@@ -189,6 +190,7 @@ type (
 		skipConfig    bool
 		skipEtlMD     bool
 		fillRebMarker bool
+		skipPrimeTime bool
 	}
 
 	getMaxCii struct {

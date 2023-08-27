@@ -135,8 +135,9 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		}
 	}
 	// don't send Smap when it is undergoing changes (and is about to get metasync-ed)
+	smap := h.owner.smap.get()
 	if !opts.skipSmap {
-		cm.Smap = h.owner.smap.get()
+		cm.Smap = smap
 	}
 	if !opts.skipBMD {
 		cm.BMD = h.owner.bmd.get()
@@ -150,6 +151,9 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 	if h.si.IsTarget() && opts.fillRebMarker {
 		rebMarked := opts.htext.rebMarked()
 		cm.RebInterrupted, cm.Restarted = rebMarked.Interrupted, rebMarked.Restarted
+	}
+	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
+		cm.PrimeTime = time.Now().UnixNano()
 	}
 	return cm, nil
 }
@@ -1048,7 +1052,7 @@ func (h *htrun) httpdaeget(w http.ResponseWriter, r *http.Request, query url.Val
 		body = h.owner.bmd.get()
 	case apc.WhatSmapVote:
 		var err error
-		body, err = h.cluMeta(cmetaFillOpt{htext: htext})
+		body, err = h.cluMeta(cmetaFillOpt{htext: htext, skipPrimeTime: true})
 		if err != nil {
 			nlog.Errorf("failed to fetch cluster config, err: %v", err)
 		}
@@ -1794,6 +1798,7 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 			skipConfig:    keepalive,
 			skipEtlMD:     keepalive,
 			fillRebMarker: !keepalive,
+			skipPrimeTime: true,
 		}
 	)
 	cm, err := h.cluMeta(opts)
