@@ -22,11 +22,7 @@ var (
 // "best-effort ID" - to independently and locally generate globally unique xaction ID
 func GenBEID(div uint64, tag string) (beid string) {
 	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
-	if div&1 == 0 {
-		div++
-	}
-	rem := now % div
-	val := now - rem
+	val := now / div
 	val ^= xxhash.ChecksumString64S(tag, val)
 
 	beid = cos.GenBEID(val)

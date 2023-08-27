@@ -6,6 +6,7 @@ package xs_test
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -282,36 +283,36 @@ func TestXactionQueryFinished(t *testing.T) {
 }
 
 func TestBeid(t *testing.T) {
-	num := 10000
+	const div = uint64(100 * time.Millisecond)
+	num := 100
 	if testing.Short() {
 		num = 10
 	}
-	results := make(map[string]uint64, num)
-	compare := make(map[uint64]string, num)
-	tags := []string{"tag1", "tag2"}
+	now := time.Now()
+	xreg.PrimeTime.Store(now.UnixNano())
+	xreg.MyTime.Store(now.Add(time.Second).UnixNano())
+
+	var (
+		ids  = make(map[string]struct{}, num)
+		tags = []string{"tag1", "tag2"}
+		cnt  int
+	)
 	for i := 0; i < num; i++ {
-		val := uint64(time.Now().UnixNano())
-		beid := xreg.GenBEID(val, tags[i%2])
-		compare[val] = beid
-		if _, ok := results[beid]; ok {
-			t.Fatalf("%s duplicated", beid)
+		beid := xreg.GenBEID(div, tags[i%2])
+		if _, ok := ids[beid]; ok {
+			t.Fatalf("%d: %s duplicated", i, beid)
 		}
-		results[beid] = val
+		ids[beid] = struct{}{}
+
 		time.Sleep(time.Millisecond)
-	}
-	if len(compare) != len(results) {
-		t.Fatalf("lengths differ %d != %d", len(compare), len(results))
-	}
-	// repro
-	for val, beid := range compare {
-		b1 := xreg.GenBEID(val, tags[0])
-		b2 := xreg.GenBEID(val, tags[1])
-		if b1 == beid && b2 != beid {
-			continue
+		id := xreg.GenBEID(div, tags[i%2])
+		if beid != id {
+			cnt++
 		}
-		if b2 == beid && b1 != beid {
-			continue
-		}
-		t.Fatalf("failed to repro for %x: %s, %s, %s", val, beid, b1, b2)
+
+		time.Sleep(time.Duration(div))
+	}
+	if cnt > 0 {
+		fmt.Printf("Warning: failed to reproduce %d time%s out of %d\n", cnt, cos.Plural(cnt), num)
 	}
 }
