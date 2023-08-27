@@ -400,7 +400,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
+			Expect(err).To(Equal(cos.ErrQuantityUsage))
 		})
 
 		It("should fail due to invalid mem usage percent specified", func() {
@@ -415,7 +415,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cos.ErrInvalidQuantityPercent))
+			Expect(err).To(Equal(cos.ErrQuantityPercent))
 		})
 
 		It("should fail due to invalid mem usage bytes specified", func() {
@@ -430,7 +430,7 @@ var _ = Describe("RequestSpec", func() {
 			}
 			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())
-			Expect(err).To(Equal(cos.ErrInvalidQuantityUsage))
+			Expect(err).To(Equal(cos.ErrQuantityUsage))
 		})
 
 		It("should fail due to invalid extract concurrency specified", func() {

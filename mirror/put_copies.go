@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -76,9 +75,8 @@ func (p *putFactory) Start() error {
 	//
 	// target-local generation of a global UUID
 	//
-	div := int64(xact.IdleDefault)
-	slt := xxhash.ChecksumString64S(bck.MakeUname(""), 3421170679 /*m.b per xkind*/)
-	r.DemandBase.Init(xreg.GenBeUID(div, int64(slt)), apc.ActPutCopies, bck, xact.IdleDefault)
+	div := uint64(xact.IdleDefault)
+	r.DemandBase.Init(xreg.GenBEID(div, p.Kind()+"|"+bck.MakeUname("")), p.Kind(), bck, xact.IdleDefault)
 
 	// joggers
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{

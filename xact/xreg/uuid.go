@@ -5,11 +5,11 @@
 package xreg
 
 import (
-	"math/rand"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/OneOfOne/xxhash"
 )
 
 var (
@@ -19,20 +19,21 @@ var (
 
 // see related: cmn/cos/uuid.go
 
-func GenBeUID(div, slt int64) (buid string) {
-	now := time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load()
-	rem := now % div
-
-	seed := now - rem + slt
-	if seed < 0 {
-		seed = now - rem - slt
+// "best-effort ID" - to independently and locally generate globally unique xaction ID
+func GenBEID(div uint64, tag string) (beid string) {
+	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
+	if div%2 == 0 {
+		div++
 	}
-	rnd := rand.New(rand.NewSource(seed))
-	buid = cos.RandStringWithSrc(rnd, cos.LenShortID)
+	rem := now % div
+	val := now - rem
+	val ^= xxhash.ChecksumString64S(tag, val)
 
-	if xctn, err := GetXact(buid); err != nil /*unlikely*/ || xctn != nil /*idling away*/ {
-		// fallback
-		buid = cos.GenUUID()
+	beid = cos.GenBEID(val)
+
+	if xctn, err := GetXact(beid); err != nil /*unlikely*/ || xctn != nil {
+		// idling away? fallback to common default
+		beid = cos.GenUUID()
 	}
 	return
 }

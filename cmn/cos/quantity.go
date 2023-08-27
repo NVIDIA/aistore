@@ -5,7 +5,6 @@
 package cos
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,13 +23,6 @@ type (
 	}
 )
 
-var (
-	ErrInvalidQuantityUsage       = errors.New("invalid quantity, format should be '81%' or '1GB'")
-	errInvalidQuantityNonNegative = errors.New("quantity should not be negative")
-	ErrInvalidQuantityPercent     = errors.New("percent must be in the range (0, 100)")
-	ErrInvalidQuantityBytes       = errors.New("value (bytes) must be non-negative")
-)
-
 ///////////////////
 // ParseQuantity //
 ///////////////////
@@ -45,27 +37,27 @@ func ParseQuantity(quantity string) (ParsedQuantity, error) {
 
 	parsedQ := ParsedQuantity{}
 	if value, err := strconv.Atoi(number); err != nil {
-		return parsedQ, ErrInvalidQuantityUsage
+		return parsedQ, ErrQuantityUsage
 	} else if value < 0 {
-		return parsedQ, errInvalidQuantityNonNegative
+		return parsedQ, errQuantityNonNegative
 	} else {
 		parsedQ.Value = uint64(value)
 	}
 
 	if len(quantity) <= idx {
-		return parsedQ, ErrInvalidQuantityUsage
+		return parsedQ, ErrQuantityUsage
 	}
 
 	suffix := quantity[idx:]
 	if suffix == "%" {
 		parsedQ.Type = QuantityPercent
 		if parsedQ.Value == 0 || parsedQ.Value >= 100 {
-			return parsedQ, ErrInvalidQuantityPercent
+			return parsedQ, ErrQuantityPercent
 		}
 	} else if value, err := ParseSize(quantity, UnitsIEC); err != nil {
 		return parsedQ, err
 	} else if value < 0 {
-		return parsedQ, ErrInvalidQuantityBytes
+		return parsedQ, ErrQuantityBytes
 	} else {
 		parsedQ.Type = QuantityBytes
 		parsedQ.Value = uint64(value)

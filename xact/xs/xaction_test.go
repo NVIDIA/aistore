@@ -280,3 +280,38 @@ func TestXactionQueryFinished(t *testing.T) {
 		f(t, test)
 	}
 }
+
+func TestBeid(t *testing.T) {
+	num := 10000
+	if testing.Short() {
+		num = 10
+	}
+	results := make(map[string]uint64, num)
+	compare := make(map[uint64]string, num)
+	tags := []string{"tag1", "tag2"}
+	for i := 0; i < num; i++ {
+		val := uint64(time.Now().UnixNano())
+		beid := xreg.GenBEID(val, tags[i%2])
+		compare[val] = beid
+		if _, ok := results[beid]; ok {
+			t.Fatalf("%s duplicated", beid)
+		}
+		results[beid] = val
+		time.Sleep(time.Millisecond)
+	}
+	if len(compare) != len(results) {
+		t.Fatalf("lengths differ %d != %d", len(compare), len(results))
+	}
+	// repro
+	for val, beid := range compare {
+		b1 := xreg.GenBEID(val, tags[0])
+		b2 := xreg.GenBEID(val, tags[1])
+		if b1 == beid && b2 != beid {
+			continue
+		}
+		if b2 == beid && b1 != beid {
+			continue
+		}
+		t.Fatalf("failed to repro for %x: %s, %s, %s", val, beid, b1, b2)
+	}
+}

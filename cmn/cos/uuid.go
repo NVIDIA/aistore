@@ -11,7 +11,7 @@ import (
 	"github.com/teris-io/shortid"
 )
 
-const LenShortID = 9 // UUID length, as per https://github.com/teris-io/shortid#id-length
+const lenShortID = 9 // UUID length, as per https://github.com/teris-io/shortid#id-length
 
 const (
 	// Alphabet for generating UUIDs similar to the shortid.DEFAULT_ABC
@@ -40,7 +40,7 @@ func InitShortID(seed uint64) {
 // UUID
 //
 
-// compare with xreg.GenBeUID
+// compare with xreg.GenBEID
 func GenUUID() (uuid string) {
 	var h, t string
 	uuid = sid.MustGenerate()
@@ -56,8 +56,23 @@ func GenUUID() (uuid string) {
 	return h + uuid + t
 }
 
+// "best-effort ID" - to independently and locally generate globally unique ID
+// called by xreg.GenBEID
+func GenBEID(val uint64) string {
+	b := make([]byte, lenShortID)
+	for i := 0; i < lenShortID; i++ {
+		if idx := int(val & letterIdxMask); idx < LenRunes {
+			b[i] = LetterRunes[idx]
+		} else {
+			b[i] = LetterRunes[idx-LenRunes]
+		}
+		val >>= letterIdxBits
+	}
+	return UnsafeS(b)
+}
+
 func IsValidUUID(uuid string) bool {
-	return len(uuid) >= LenShortID && IsAlphaNice(uuid)
+	return len(uuid) >= lenShortID && IsAlphaNice(uuid)
 }
 
 func ValidateNiceID(id string, minlen int, tag string) (err error) {

@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
-	"github.com/OneOfOne/xxhash"
 )
 
 type (
@@ -70,13 +69,8 @@ func (p *tcoFactory) Start() error {
 	//
 	// target-local generation of a global UUID
 	//
-	div := int64(xact.IdleDefault)
-	sed := uint64(3282306647)
-	if p.kind == apc.ActETLObjects {
-		sed = 5058223172
-	}
-	slt := xxhash.ChecksumString64S(p.args.BckFrom.MakeUname("")+"|"+p.args.BckTo.MakeUname(""), sed)
-	p.Args.UUID = xreg.GenBeUID(div, int64(slt))
+	div := uint64(xact.IdleDefault)
+	p.Args.UUID = xreg.GenBEID(div, p.kind+"|"+p.args.BckFrom.MakeUname("")+"|"+p.args.BckTo.MakeUname(""))
 
 	// new x-tco
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
