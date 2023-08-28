@@ -26,7 +26,8 @@ and [so on](/docs/cli.md).
   - [Multiple Disk Setup](#multiple-disk-setup)
   - [Backend Provider Setup](#backend-provider-setup)
   - [Cloud Deployment](#cloud-deployment)
-- [How to Rebuild](#how-to-rebuild)
+- [Rebuilding](#rebuilding)
+- [Shutting down](#shutting-down)
 
 ## Prerequisites
 
@@ -117,6 +118,8 @@ Summary:
  Primary Proxy: proxy-0934deff64b7
  Smap Version:  3
 ```
+
+> **IMPORTANT**: `docker stop` may not be the right way to stop `cluster-minimal` instance - section [Shutting down](#shutting-down) below will explain why.
 
 ### <ins>Multiple Disk Setup
 
@@ -235,7 +238,7 @@ AIS_ENDPOINT="http://<ec2-host-name>:51080" ais show cluster
 
 For more information on deployment performance, please refer [here](./ec2-standalone-benchmark.md).
 
-## How to Rebuild
+## Rebuilding
 
 The provided [Makefile](Makefile) and [Dockerfile](Dockerfile) are the bare minimum "stripped-down" versions that you may find insufficient one way or another.
 
@@ -289,3 +292,19 @@ and, generally, start using `cluster-minimal` to transparently work with those (
 > For obvious reasons, makes sense to carefully consider implications before sharing (pushing, uploading) the image that contains any sort of secrets.
 
 > In the `make -e` command, optionally specify `IMAGE_TAG` to differentiate your custom-built image from the default.
+
+## Shutting down
+
+Storage cluster are usually quite persistent: they may store all sorts of state information on disk and, upon restart, check the latter for consistency. Which is why, notwithstanding that `cluster-minimal` runs in a single docker container, it is important to shut it down properly:
+
+```console
+$ AIS_ENDPOINT=http://localhost:51080 ais cluster shutdown
+```
+
+Or, if you don't envision using this (or any other AIS cluster) any longer, _decommission_ it as follows (but first, check `--help` for details):
+
+```console
+$ AIS_ENDPOINT=http://localhost:51080 ais cluster decommission
+```
+
+In a sense, `cluster-minimal` is no different from a large bare-metal cluster deployed for production - the same rules apply.
