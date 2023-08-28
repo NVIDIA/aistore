@@ -67,6 +67,7 @@ class Etl:
         template: str,
         communication_type: str = DEFAULT_ETL_COMM,
         timeout: str = DEFAULT_ETL_TIMEOUT,
+        arg_type: str = "",
     ) -> str:
         """
         Initializes ETL based on Kubernetes pod spec template.
@@ -92,6 +93,7 @@ class Etl:
             etl_name=self._name,
             communication_type=communication_type,
             timeout=timeout,
+            arg_type=arg_type,
         ).as_dict()
 
         return self._client.request(HTTP_METHOD_PUT, path=URL_PATH_ETL, json=value).text

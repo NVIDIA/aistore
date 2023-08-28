@@ -276,6 +276,7 @@ class InitETLArgs(BaseModel):
     etl_name: str
     communication_type: str
     timeout: str
+    arg_type: str = ""
 
 
 class InitSpecETLArgs(InitETLArgs):
@@ -291,6 +292,7 @@ class InitSpecETLArgs(InitETLArgs):
             "timeout": self.timeout,
             "communication": f"{self.communication_type}://",
             "spec": self.spec,
+            "argument": self.arg_type,
         }
 
 
@@ -304,7 +306,6 @@ class InitCodeETLArgs(InitETLArgs):
     functions: Dict[str, str]
     code: str
     chunk_size: int = None
-    arg_type: str = ""
 
     def as_dict(self):
         dict_rep = {
