@@ -213,28 +213,35 @@ func NewRandFile(filepath, name string, size int64, cksumType string) (Reader, e
 		cksumHash *cos.CksumHash
 		fn        = path.Join(filepath, name)
 		f, err    = os.OpenFile(fn, os.O_RDWR|os.O_CREATE, cos.PermRWR)
+		exists    bool
 	)
 	if err != nil {
 		return nil, err
 	}
 	if size == -1 {
-		// Assuming that the file already exists and contains data.
+		// checksum existing file
+		exists = true
 		if cksumType != cos.ChecksumNone {
 			debug.Assert(cksumType != "")
 			_, cksumHash, err = cos.CopyAndChecksum(io.Discard, f, nil, cksumType)
 		}
 	} else {
-		// Populate the file with random data.
+		// Write random file
 		cksumHash, err = copyRandWithHash(f, size, cksumType, cos.NowRand())
 	}
+	if err == nil {
+		_, err = f.Seek(0, io.SeekStart)
+	}
+
 	if err != nil {
+		// cleanup and ret
 		f.Close()
+		if !exists {
+			os.Remove(fn)
+		}
 		return nil, err
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		f.Close()
-		return nil, err
-	}
+
 	if cksumType != cos.ChecksumNone {
 		cksum = cksumHash.Clone()
 	}

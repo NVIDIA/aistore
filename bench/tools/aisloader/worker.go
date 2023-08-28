@@ -8,23 +8,27 @@
 package aisloader
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
 
 func doPut(wo *workOrder) {
-	var sgl *memsys.SGL
+	var (
+		sgl *memsys.SGL
+		url = wo.proxyURL
+	)
 	if runParams.readerType == readers.TypeSG {
 		sgl = gmm.NewSGL(wo.size)
 		wo.sgl = sgl
 	}
-
 	r, err := readers.New(readers.Params{
 		Type: runParams.readerType,
 		SGL:  sgl,
@@ -33,27 +37,46 @@ func doPut(wo *workOrder) {
 		Size: wo.size,
 	}, wo.cksumType)
 
-	if runParams.readerType == readers.TypeFile {
-		defer os.Remove(path.Join(runParams.tmpDir, wo.objName))
-	}
-
 	if err != nil {
 		wo.err = err
 		return
 	}
+	if runParams.randomProxy {
+		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
+		if err != nil {
+			fmt.Printf("PUT(wo): %v\n", err)
+			os.Exit(1)
+		}
+		url = psi.URL(cmn.NetPublic)
+	}
 	if !traceHTTPSig.Load() {
-		wo.err = put(wo.proxyURL, wo.bck, wo.objName, r.Cksum(), r)
+		wo.err = put(url, wo.bck, wo.objName, r.Cksum(), r)
 	} else {
-		wo.latencies, wo.err = putWithTrace(wo.proxyURL, wo.bck, wo.objName, r.Cksum(), r)
+		wo.latencies, wo.err = putWithTrace(url, wo.bck, wo.objName, r.Cksum(), r)
+	}
+	if runParams.readerType == readers.TypeFile {
+		r.Close()
+		os.Remove(path.Join(runParams.tmpDir, wo.objName))
 	}
 }
 
 func doGet(wo *workOrder) {
+	var (
+		url = wo.proxyURL
+	)
+	if runParams.randomProxy {
+		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
+		if err != nil {
+			fmt.Printf("GET(wo): %v\n", err)
+			os.Exit(1)
+		}
+		url = psi.URL(cmn.NetPublic)
+	}
 	if !traceHTTPSig.Load() {
-		wo.size, wo.err = getDiscard(wo.proxyURL, wo.bck,
+		wo.size, wo.err = getDiscard(url, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	} else {
-		wo.size, wo.latencies, wo.err = getTraceDiscard(wo.proxyURL, wo.bck,
+		wo.size, wo.latencies, wo.err = getTraceDiscard(url, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	}
 }

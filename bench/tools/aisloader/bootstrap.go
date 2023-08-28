@@ -59,6 +59,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -124,7 +125,8 @@ type (
 
 		duration DurationExt // stop after the run for at least that much
 
-		bp api.BaseParams
+		bp   api.BaseParams
+		smap *meta.Smap
 
 		bck    cmn.Bck
 		bProps cmn.BucketProps
@@ -153,6 +155,7 @@ type (
 		statsdProbe   bool
 		getLoaderID   bool
 		randomObjName bool
+		randomProxy   bool
 		uniqueGETs    bool
 		verifyHash    bool // verify xxhash during get
 		getConfig     bool // true: load control plane (read proxy config)
@@ -281,6 +284,7 @@ func parseCmdLine() (params, error) {
 	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (mandatory: must be specified)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
+
 	f.StringVar(&p.minSizeStr, "minsize", "", "Minimum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.maxSizeStr, "maxsize", "", "Maximum object size (with or without multiplicative suffix K, MB, GiB, etc.)")
 	f.StringVar(&p.readerType, "readertype", readers.TypeSG,
@@ -310,6 +314,8 @@ func parseCmdLine() (params, error) {
 		"Size (in bits) of the generated aisloader identifier. Cannot be used together with loadernum")
 	f.BoolVar(&p.randomObjName, "randomname", true,
 		"true: generate object names of 32 random characters. This option is ignored when loadernum is defined")
+	f.BoolVar(&p.randomProxy, "randomproxy", false,
+		"true: select random gateway (\"proxy\") to execute I/O request")
 	f.StringVar(&p.subDir, "subdir", "", "Virtual destination directory for all aisloader-generated objects")
 	f.Uint64Var(&p.putShards, "putshards", 0, "Spread generated objects over this many subdirectories (max 100k)")
 	f.BoolVar(&p.uniqueGETs, "uniquegets", true,
@@ -571,6 +577,7 @@ func parseCmdLine() (params, error) {
 		return params{}, fmt.Errorf("unknown scheme %q", scheme)
 	}
 
+	// TODO: validate against cluster map (see api.GetClusterMap below)
 	p.proxyURL = scheme + "://" + address
 
 	transportArgs.UseHTTPS = scheme == "https"
@@ -726,6 +733,13 @@ func Start(version, buildtime string) (err error) {
 		}
 	}
 
+	// usage is currently limited to randomizing proxies (to access cluster)
+	if runParams.randomProxy {
+		runParams.smap, err = api.GetClusterMap(runParams.bp)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster map: %v", err)
+		}
+	}
 	loggedUserToken = authn.LoadToken(runParams.tokenFile)
 	runParams.bp.Token = loggedUserToken
 	runParams.bp.UA = ua

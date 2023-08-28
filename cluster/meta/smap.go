@@ -427,12 +427,15 @@ func (m *Smap) GetActiveNode(sid string) (si *Snode) {
 
 // (random active)
 func (m *Smap) GetRandTarget() (tsi *Snode, err error) {
+	var cnt int
 	for _, tsi = range m.Tmap {
 		if !tsi.InMaintOrDecomm() {
 			return
 		}
+		cnt++
 	}
-	return nil, cmn.NewErrNoNodes(apc.Target, len(m.Tmap))
+	err = fmt.Errorf("GetRandTarget failure: %s, in maintenance >= %d", m.StringEx(), cnt)
+	return
 }
 
 func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
@@ -446,8 +449,8 @@ func (m *Smap) GetRandProxy(excludePrimary bool) (si *Snode, err error) {
 			return psi, nil
 		}
 	}
-	return nil, fmt.Errorf("failed to find a random proxy (num=%d, in-maintenance=%d, exclude-primary=%t)",
-		len(m.Pmap), cnt, excludePrimary)
+	err = fmt.Errorf("GetRandProxy failure: %s, in maintenance >= %d, excl-primary %t", m.StringEx(), cnt, excludePrimary)
+	return
 }
 
 // whether IP is in use by a different node
