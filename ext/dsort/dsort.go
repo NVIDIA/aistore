@@ -113,13 +113,17 @@ func (m *Manager) start() (err error) {
 	if curTargetIsFinal {
 		// assuming uniform distribution estimate avg. output shard size
 		ratio := m.compressionRatio()
+		if m.config.FastV(4, cos.SmoduleDsort) {
+			nlog.Infof("%s [dsort] %s phase3: ratio=%f", g.t, m.ManagerUUID, ratio)
+		}
 		debug.Assertf(shard.IsCompressed(m.Pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
 			ratio, m.Pars.InputExtension)
 
 		shardSize := int64(float64(m.Pars.OutputShardSize) / ratio)
-
-		nlog.Infof("%s: %s started phase 3 distribution", g.t, m.ManagerUUID)
+		nlog.Infof("%s: [dsort] %s started phase 3: ratio=%f, shard size (%d, %d)",
+			g.t, m.ManagerUUID, shardSize, m.Pars.OutputShardSize)
 		if err := m.phase3(shardSize); err != nil {
+			nlog.Errorf("%s: [dsort] %s phase3 err: %v", g.t, m.ManagerUUID, err)
 			return err
 		}
 	}
@@ -810,9 +814,10 @@ func (m *Manager) phase3(maxSize int64) error {
 	close(errCh)
 
 	for err := range errCh {
+		nlog.Errorf("%s: [dsort] %s err while sending shards: %v", g.t, m.ManagerUUID, err)
 		return err
 	}
-	nlog.Infof("%s: %s finished sending all shards", g.t, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s finished sending shards", g.t, m.ManagerUUID)
 	return nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -344,20 +345,14 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 
 func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	var (
-		cbErr      error
 		beforeRecv int64
-		beforeSend int64
-
-		daemonID = rec.DaemonID
-		twg      = cos.NewTimeoutGroup()
-		writer   = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
-		metrics  = ds.m.Metrics.Creation
-
-		toNode = ds.m.smap.GetTarget(daemonID)
+		daemonID   = rec.DaemonID
+		writer     = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
+		metrics    = ds.m.Metrics.Creation
+		toNode     = ds.m.smap.GetTarget(daemonID)
 	)
-
 	if toNode == nil {
-		return 0, errors.Errorf("tried to send request to node %q which is not present in the smap", daemonID)
+		return 0, errors.Errorf("cannot send request to node %q - not present in %s", daemonID, ds.m.smap)
 	}
 
 	req := remoteRequest{
@@ -367,38 +362,10 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	opaque := cos.MustMarshal(req)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{Opaque: opaque}
-	if ds.m.Metrics.extended {
-		beforeSend = mono.NanoTime()
-	}
-	o.Callback = func(hdr transport.ObjHdr, r io.ReadCloser, _ any, err error) {
-		if err != nil {
-			cbErr = err
-		}
-		if ds.m.Metrics.extended {
-			delta := mono.Since(beforeSend)
-			metrics.mu.Lock()
-			metrics.RequestStats.updateTime(delta)
-			metrics.mu.Unlock()
+	o.Callback, o.CmplArg = ds.sentCallback, &req
 
-			g.tstats.AddMany(
-				cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
-				cos.NamedVal64{Name: stats.DSortCreationReqLatency, Value: int64(delta)},
-			)
-		}
-		twg.Done()
-	}
-
-	twg.Add(1)
 	if err := ds.streams.request.Send(o, nil, toNode); err != nil {
 		return 0, errors.WithStack(err)
-	}
-
-	// Send should be synchronous to make sure that 'wait timeout' is
-	// calculated only for the receive side.
-	twg.Wait()
-
-	if cbErr != nil {
-		return 0, errors.WithStack(cbErr)
 	}
 
 	if ds.m.Metrics.extended {
@@ -412,7 +379,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	var pulled bool
 	timed, stopped := writer.wg.WaitTimeoutWithStop(ds.m.callTimeout, ds.m.listenAborted())
 	if timed || stopped {
-		// In case of time out or abort we need to pull the writer to
+		// In case of timeout or abort we need to pull the writer to
 		// avoid concurrent Close and Write on `writer.w`.
 		pulled = ds.pullStreamWriter(rec.MakeUniqueName(obj)) != nil
 	}
@@ -452,6 +419,19 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		writer.wg.Wait()
 	}
 	return writer.n, writer.err
+}
+
+func (ds *dsorterGeneral) sentCallback(_ transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+	if err != nil {
+		req := arg.(*remoteRequest)
+		nlog.Errorf("%s: [dsort] %s failed to send record name=%q: %v", g.t, ds.m.ManagerUUID, req.Record.Name, err)
+		return
+	}
+	if ds.m.Metrics.extended {
+		g.tstats.AddMany(
+			cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
+		)
+	}
 }
 
 func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.Obj) {
