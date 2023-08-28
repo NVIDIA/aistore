@@ -295,7 +295,7 @@ and, generally, start using `cluster-minimal` to transparently work with those (
 
 ## Shutting down
 
-Storage cluster are usually quite persistent: they may store all sorts of state information on disk and, upon restart, check the latter for consistency. Which is why, notwithstanding that `cluster-minimal` runs in a single docker container, it is important to shut it down properly:
+Storage clusters are usually quite persistent: they may store all sorts of state information on disk and, upon restart, check the latter for consistency. Which is why, notwithstanding that `cluster-minimal` runs in a single docker container, it is important to shut it down properly:
 
 ```console
 $ AIS_ENDPOINT=http://localhost:51080 ais cluster shutdown

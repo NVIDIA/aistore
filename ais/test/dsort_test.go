@@ -1392,14 +1392,13 @@ func TestDsortAbort(t *testing.T) {
 	)
 }
 
-// TODO -- FIXME: pass asXaction = true
 func TestDsortAbortDuringPhases(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	runDSortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, phases: dsortPhases},
 		func(dsorterType, phase string, t *testing.T) {
-			for _, asXaction := range []bool{false} {
+			for _, asXaction := range []bool{false, true} {
 				test := dsorterType + "/" + fmt.Sprintf("as-xaction=%t", asXaction)
 				t.Run(test, func(t *testing.T) {
 					var (
@@ -1413,6 +1412,10 @@ func TestDsortAbortDuringPhases(t *testing.T) {
 							filesPerShard: 200,
 						}
 					)
+
+					if phase == dsort.SortingPhase && asXaction {
+						t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: remove
+					}
 
 					m.initAndSaveState(true /*cleanup*/)
 					m.expectTargets(3)
