@@ -813,17 +813,26 @@ var (
 		Required: true,
 	}
 	commTypeFlag = cli.StringFlag{
-		Name:  "comm-type",
-		Usage: "communication type which should be used when running the provided code (defaults to hpush)",
+		Name: "comm-type",
+		Usage: "communication type to be used when running custom transformation:\n" +
+			indent4 + "\t - hpush:// - POST request with object, gets transformed bytes by ETL container as response (default, can be omitted)\n" +
+			indent4 + "\t - hpull:// - HTTP redirect for GET request through ETL container, which GETs from target, transforms, and responds\n" +
+			indent4 + "\t - hrev:// - reverse proxy for GET request to ETL container, which GETs from target, transforms, and responds\n" +
+			indent4 + "\t - io:// - sends data via standard input, receives transformed data on standard output\n" +
+			indent4 + "\t - More info on: https://aiatscale.org/docs/etl#communication-mechanisms\n",
 	}
-	transformURLFlag = cli.BoolFlag{
-		Name:  "transform-url",
-		Usage: "rather than contents (bytes), pass the URL of the objects to be transformed to the user-defined transform function (note: usage is limited to '--comm-type=hpull' only)",
-	}
+
 	funcTransformFlag = cli.StringFlag{
 		Name:  "transform",
 		Value: "transform", // NOTE: default name of the transform() function
 		Usage: "receives and _transforms_ the payload",
+	}
+	argTypeFlag = cli.StringFlag{
+		Name: "arg-type",
+		Usage: "Specifies the type of object specification used between the aistore and ETL container:\n" +
+			indent4 + "\t - \"\" (Empty String): Pass the object as bytes (default, can be omitted)\n" +
+			indent4 + "\t - url - Pass the URL of the objects to be transformed to the user-defined transform function (this option is limited to '--comm-type=hpull')\n" +
+			indent4 + "\t - fqn - Pass the fully-qualified name (path) of the locally stored object within aistore (requires trusted ETL container, might not be always available)",
 	}
 
 	// Node

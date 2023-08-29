@@ -254,6 +254,7 @@ class ETLDetails(BaseModel):
     dependencies: Optional[str]
     runtime: Optional[str]  # see ext/etl/runtime/all.go
     chunk_size: int = 0
+    argument: str = ""
 
     @validator("code")
     def set_code(cls, code):  # pylint: disable=no-self-argument

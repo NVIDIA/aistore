@@ -31,18 +31,18 @@ var (
 			depsFileFlag,
 			runtimeFlag,
 			commTypeFlag,
-			transformURLFlag,
 			funcTransformFlag,
+			argTypeFlag,
 			chunkSizeFlag,
-			unitsFlag,
 			waitPodReadyTimeoutFlag,
 			etlNameFlag,
 		},
 		cmdSpec: {
 			fromFileFlag,
 			commTypeFlag,
-			etlNameFlag,
+			argTypeFlag,
 			waitPodReadyTimeoutFlag,
+			etlNameFlag,
 		},
 		cmdStop: {
 			allRunningJobsFlag,
@@ -204,6 +204,7 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 	{
 		msg.IDX = parseStrFlag(c, etlNameFlag)
 		msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 		msg.Spec = spec
 	}
 	if err = msg.Validate(); err != nil {
@@ -254,10 +255,9 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	}
 
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
+
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
-	if flagIsSet(c, transformURLFlag) {
-		msg.ArgTypeX = etl.ArgTypeURL
-	}
+	msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 
 	if flagIsSet(c, chunkSizeFlag) {
 		msg.ChunkSize, err = parseSizeFlag(c, chunkSizeFlag)

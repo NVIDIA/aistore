@@ -42,12 +42,14 @@ Technically, the service supports running user-provided ETL containers **and** c
   - [`hpush://` communication](#hpush-communication)
   - [`io://` communication](#io-communication)
   - [Runtimes](#runtimes)
+  - [Argument Types](#argument-types)
 - [*init spec* request](#init-spec-request)
     - [Requirements](#requirements)
     - [Specification YAML](#specification-yaml)
     - [Required or additional fields](#required-or-additional-fields)
     - [Forbidden fields](#forbidden-fields)
     - [Communication Mechanisms](#communication-mechanisms)
+    - [Argument Types](#argument-types-1)
 - [Transforming objects](#transforming-objects)
 - [API Reference](#api-reference)
 - [ETL name specifications](#etl-name-specifications)
@@ -244,6 +246,16 @@ Currently, the following runtimes are supported:
 More *runtimes* will be added in the future, with plans to support the most popular ETL toolchains.
 Still, since the number of supported  *runtimes* will always remain somewhat limited, there's always the second way: build your ETL container and deploy it via [*init spec* request](#init-spec-request).
 
+### Argument Types
+
+The AIStore `etl init code` provides two `arg_type` parameter options for specifying the type of object specification between the AIStore and ETL container. These options are utilized as follows:
+
+| Parameter Value | Description |
+|-----------------|-------------|
+| "" (Empty String) | This serves as the default option, allowing the object to be passed as bytes. When initializing ETLs, the `arg_type` parameter can be entirely omitted, and it will automatically default to passing the object as bytes to the transformation function. |
+| "url" | When set to "url," this option allows the passing of the URL of the objects to be transformed to the user-defined transform function. It's important to note that this option is limited to '--comm-type=hpull'. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
+
+
 ## *init spec* request
 
 *Init spec* request covers all, even the most sophisticated, cases of ETL initialization.
@@ -304,6 +316,16 @@ Users  can choose and specify (via YAML spec) any of the following:
 
 > ETL container will have `AIS_TARGET_URL` environment variable set to the URL of its corresponding target.
 > To make a request for a given object it is required to add `<bucket-name>/<object-name>` to `AIS_TARGET_URL`, eg. `requests.get(env("AIS_TARGET_URL") + "/" + bucket_name + "/" + object_name)`.
+
+#### Argument Types
+
+The AIStore `etl init spec` provides three `arg_type` parameter options for specifying the type of object specification between the AIStore and ETL container. These options are utilized as follows:
+
+| Parameter Value | Description |
+|-----------------|-------------|
+| "" (Empty String) | This serves as the default option, allowing the object to be passed as bytes. When initializing ETLs, the `arg_type` parameter can be entirely omitted, and it will automatically default to passing the object as bytes to the transformation function. |
+| "url" | Pass the URL of the objects to be transformed to the user-defined transform function. It's important to note that this option is limited to '--comm-type=hpull'. In this scenario, the user is responsible for implementing the logic to fetch objects from the buckets based on the URL of the object received as a parameter. |
+| "fqn" | Pass a fully-qualified name (FQN) of the locally stored object. User is responsible for opening, reading, transforming, and closing the corresponding file. |
 
 ## Transforming objects
 

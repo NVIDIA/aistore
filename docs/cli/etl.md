@@ -29,9 +29,9 @@ For background on AIS-ETL, getting-started steps, working examples, and tutorial
 
 ## Init ETL with spec
 
-`ais etl init spec --from-file=SPEC_FILE --name=UNIQUE_ID [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]` or `ais start etl init`
+`ais etl init spec --from-file=SPEC_FILE --name=ETL_NAME [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT] [--arg-type=ARGUMENT_TYPE]` or `ais start etl init`
 
-Init ETL with Pod YAML specification file. The `--name` CLI flag is used as a unique ID for ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
+Init ETL with Pod YAML specification file. The `--name` parameter is used to assign a user defined unique name to the ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
 ### Example
 
@@ -57,11 +57,11 @@ transformer-md5
 
 ## Init ETL with code
 
-`ais etl init code --name=UNIQUE_ID --from-file=CODE_FILE --runtime=RUNTIME [--chunk-size=NUM_OF_BYTES] [--transform=TRANSFORM_FUNC] [--before=BEFORE_FUNC] [--after=AFTER_FUNC] [--deps-file=DEPS_FILE] [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT]`
+`ais etl init code --name=ETL_NAME --from-file=CODE_FILE --runtime=RUNTIME [--chunk-size=NUM_OF_BYTES] [--transform=TRANSFORM_FUNC] [--before=BEFORE_FUNC] [--after=AFTER_FUNC] [--deps-file=DEPS_FILE] [--comm-type=COMMUNICATION_TYPE] [--wait-timeout=TIMEOUT] [--arg-type=ARGUMENT_TYPE]`
 
 Initializes ETL from provided `CODE_FILE` that contains a transformation function named `transform(input_bytes)` or `transform(input_bytes, context)`, an optional function executed prior to the transform function named `before(context)` which is supposed to initialize all the variables needed for the `transform(input_bytes, context)` and optional post transform function named `after(context)` which consolidates the results and returns to the user the transformed `output_bytes`.
 
-The `--name` parameter is used to assign a user defined unique ID (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
+The `--name` parameter is used to assign a user defined unique name to the ETL (ref: [here](/docs/etl.md#etl-name-specifications) for information on valid ETL name).
 
 Based on the communication type used, there are mutiple ways you can initialize the `transform(input_bytes, context)`, `before(context)` and `after(context)` functions. Check [ETL Init Code Docs](docs/etl.md#init-code-request) for more info.
 
