@@ -60,6 +60,12 @@ type (
 		Multiplier   int              // so-many TCP connections per Rx endpoint, with round-robin
 		ManualResync bool             // auto-resync by default
 	}
+
+	ErrDestinationMissing struct {
+		streamStr string
+		tname     string
+		smapStr   string
+	}
 )
 
 // interface guard
@@ -182,7 +188,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 			if _, ok := streams[di.ID()]; ok {
 				continue
 			}
-			err = cos.NewErrNotFound("destination mismatch: stream (%s) => %s", sb, di)
+			err = &ErrDestinationMissing{sb.String(), di.StringEx(), sb.smap.String()}
 			_doCmpl(obj, roc, err) // ditto
 			return
 		}
@@ -359,7 +365,7 @@ func (sb *Streams) Resync() {
 		}
 		// not connecting to the peer that's in maintenance and already rebalanced-out
 		if si.InMaintPostReb() {
-			nlog.Infof("%s => %s[-/%#b] - skipping", sb, si.StringEx(), si.Flags)
+			nlog.Infof("%s => %s[-/%#b] per %s - skipping", sb, si.StringEx(), si.Flags, smap)
 			continue
 		}
 
@@ -413,4 +419,17 @@ func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
 		}
 	}
 	return
+}
+
+///////////////////////////
+// ErrDestinationMissing //
+///////////////////////////
+
+func (e *ErrDestinationMissing) Error() string {
+	return fmt.Sprintf("destination missing: stream (%s) => %s, %s", e.streamStr, e.tname, e.smapStr)
+}
+
+func IsErrDestinationMissing(e error) bool {
+	_, ok := e.(*ErrDestinationMissing)
+	return ok
 }

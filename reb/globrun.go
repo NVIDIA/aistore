@@ -402,6 +402,14 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	reb.setXact(xreb)
 	reb.rebID.Store(rargs.id)
 
+	// check Smap _prior_ to opening streams
+	smap := reb.t.Sowner().Get()
+	if smap.Version != rargs.smap.Version {
+		debug.Assert(smap.Version > rargs.smap.Version)
+		nlog.Errorf("Warning %s: %s post-init version change %s => %s", reb.t, xreb, rargs.smap, smap)
+		// TODO: handle an unlikely corner case keeping in mind that not every change warants a different rebalance
+	}
+
 	// 3. init streams and data structures
 	if haveStreams {
 		reb.beginStreams(rargs.config)
@@ -731,7 +739,7 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 	if rj.xreb.IsAborted() {
 		nlog.Infof("aborting traversal")
 	} else {
-		nlog.Errorf("%s: failed to traverse, err: %v", rj.m.t, err)
+		nlog.Errorf("%s: %s failed to traverse: %v", rj.m.t, rj.xreb.Name(), err)
 	}
 	return true
 }
@@ -739,16 +747,20 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 // send completion
 func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	rj.m.inQueue.Dec()
-	if err != nil {
-		if cmn.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
-			lom, ok := arg.(*cluster.LOM)
-			debug.Assert(ok)
-			nlog.Errorf("%s: failed to send %s: %v", rj.m.t.Snode(), lom, err)
-		}
+	if err == nil {
+		rj.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
 		return
 	}
-	xreb := rj.xreb
-	xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions
+	// log err
+	if cmn.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
+		if bundle.IsErrDestinationMissing(err) {
+			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.smap)
+		} else {
+			lom, ok := arg.(*cluster.LOM)
+			debug.Assert(ok)
+			nlog.Errorf("%s: %s failed to send %s: %v", rj.m.t, rj.xreb.Name(), lom, err)
+		}
+	}
 }
 
 func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
@@ -800,12 +812,14 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
 	if err != nil {
 		return err
 	}
+
 	// transmit (unlock via transport completion => roc.Close)
 	rj.m.addLomAck(lom)
 	if err := rj.doSend(lom, tsi, roc); err != nil {
 		rj.m.delLomAck(lom, 0, false /*free LOM*/)
 		return err
 	}
+
 	return nil
 }
 
