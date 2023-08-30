@@ -16,6 +16,3 @@ minikube addons enable metrics-server
 
 # Mount binding /tmp to a persistent path
 (minikube ssh -- 'sudo mount --bind /var/lib/minikube/ais /tmp')
-
-# Create directory for ais-fs
-(minikube ssh -- 'sudo mkdir -p /tmp/ais-k8s')

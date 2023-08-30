@@ -21,6 +21,10 @@ export TARGET_CNT=1
 export POD_NAME="ais-proxy-0"
 export PORT=$PRIMARY_PORT
 export AIS_IS_PRIMARY=true
+export INSTANCE=0
+
+export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"
+(minikube ssh "sudo mkdir -p ${AIS_LOG_DIR}")
 
 ([[ $(kubectl get pods | grep -c "${POD_NAME}") -gt 0 ]] && kubectl delete pods ${POD_NAME}) || true
 envsubst < kube_templates/aisproxy_deployment.yml | kubectl apply -f -
@@ -35,8 +39,10 @@ export PORT=9090
 export PORT_INTRA_CONTROL=9080
 export PORT_INTRA_DATA=10080
 export TARGET_POS_NUM=1
+export INSTANCE=1
 
-(minikube ssh "sudo mkdir -p /tmp/${TARGET_POS_NUM}")
+export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"
+(minikube ssh "sudo mkdir -p ${AIS_LOG_DIR}")
 
 # Delete and apply target deployment
 ([[ $(kubectl get pods | grep -c "${POD_NAME}") -gt 0 ]] && kubectl delete pods ${POD_NAME}) || true

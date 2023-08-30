@@ -50,6 +50,8 @@ spec:
         export AIS_LOCAL_CONF_FILE=/etc/ais/ais_local.json &&
         export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+        export INSTANCE=${INSTANCE} &&
+        export AIS_LOG_DIR=${AIS_LOG_DIR} &&
         source /etc/ais/aisnode_config.sh &&
         aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=proxy -ntargets=${TARGET_CNT};
   volumes:

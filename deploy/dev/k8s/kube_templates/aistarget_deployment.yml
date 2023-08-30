@@ -37,10 +37,10 @@ spec:
     volumeMounts:
      - name: aws-credentials
        mountPath: /root/.aws/
-     - name: ais-fs
+     - name: ais-persistent-fs
        mountPath: /usr/nvidia/data
-     - name: ais-log
-       mountPath: /tmp/
+     - name: ais-fs
+       mountPath: /tmp/ais
     ports:
       - containerPort: ${PORT}
         protocol: TCP
@@ -59,6 +59,8 @@ spec:
         export AIS_LOCAL_CONF_FILE=/etc/ais/ais_local.json &&
         export STATSD_CONF_FILE="/etc/ais/statsd.conf" &&
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
+        export INSTANCE=${INSTANCE} &&
+        export AIS_LOG_DIR=${AIS_LOG_DIR} &&
         source /etc/ais/aisnode_config.sh &&
         aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=target;
   volumes:
@@ -66,11 +68,11 @@ spec:
       secret:
         secretName: aws-credentials
         optional: true
+    - name: ais-persistent-fs
+      hostPath:
+        path: /tmp/ais
+        type: Directory
     - name: ais-fs
       hostPath:
-        path: /tmp/ais-k8s
-        type: Directory
-    - name: ais-log
-      hostPath:
-        path: /tmp/${TARGET_POS_NUM}
+        path: /tmp/ais
         type: Directory

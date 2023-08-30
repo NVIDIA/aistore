@@ -36,6 +36,7 @@ export AIS_PRIMARY_URL=$HOST_URL
 export HOSTNAME_LIST="$(minikube ip)"
 export AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}
 export TARGET_CNT=${TARGET_CNT}
+INSTANCE=0
 
 # Deploying kubernetes cluster
 echo "Starting kubernetes deployment..."
@@ -49,8 +50,13 @@ for i in $(seq 0 $((PROXY_CNT-1))); do
   else
     export AIS_IS_PRIMARY=false
   fi
+  
+  export INSTANCE=${INSTANCE}
+  export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"
+  (minikube ssh "sudo mkdir -p ${AIS_LOG_DIR}")
   ([[ $(kubectl get pods | grep -c "${POD_NAME}") -gt 0 ]] && kubectl delete pods ${POD_NAME}) || true
   envsubst < kube_templates/aisproxy_deployment.yml | kubectl apply -f -
+  INSTANCE=$((INSTANCE+1))
 done
 
 echo "Waiting for the primary proxy to be ready..."
@@ -64,11 +70,14 @@ for i in $(seq 0 $((TARGET_CNT-1))); do
   export PORT_INTRA_CONTROL=$((9080+i))
   export PORT_INTRA_DATA=$((10080+i))
   export TARGET_POS_NUM=$i
-  # Prepare directory for target's hostpath
-  (minikube ssh "sudo mkdir -p /tmp/${TARGET_POS_NUM}")
 
+  export INSTANCE=${INSTANCE}
+  export AIS_LOG_DIR="/tmp/ais/${INSTANCE}/log"
+  (minikube ssh "sudo mkdir -p ${AIS_LOG_DIR}")
+  
   ([[ $(kubectl get pods | grep -c "${POD_NAME}") -gt 0 ]] && kubectl delete pods ${POD_NAME}) || true
   envsubst < kube_templates/aistarget_deployment.yml | kubectl create -f -
+  INSTANCE=$((INSTANCE+1))
 done
 
 echo "Waiting for the targets to be ready..."
