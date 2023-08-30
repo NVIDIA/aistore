@@ -16,7 +16,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -139,8 +138,6 @@ type (
 		err  error
 		what string
 		ctx  string
-		//
-		timestamp time.Time
 	}
 	ErrInitBackend struct {
 		Provider string
@@ -534,11 +531,11 @@ func NewErrAborted(what, ctx string, err error) *ErrAborted {
 		return e
 	}
 	_clean(err)
-	return &ErrAborted{what: what, ctx: ctx, err: err, timestamp: time.Now()}
+	return &ErrAborted{what: what, ctx: ctx, err: err}
 }
 
 func (e *ErrAborted) Error() (s string) {
-	s = fmt.Sprintf("%s aborted at %s", e.what, cos.FormatTime(e.timestamp, cos.StampMicro))
+	s = fmt.Sprintf("%s aborted", e.what)
 	if e.err != nil {
 		s = fmt.Sprintf("%s, err: %v", s, e.err)
 	}

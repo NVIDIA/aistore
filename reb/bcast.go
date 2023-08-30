@@ -201,7 +201,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	}
 	if err != nil {
 		ctx := fmt.Sprintf("health(%s) failure: %v(%d)", tname, err, code)
-		err = cmn.NewErrAborted(ctx, "", err)
+		err = cmn.NewErrAborted(xreb.Name(), ctx, err)
 		reb.abortAndBroadcast(err)
 		return
 	}
@@ -214,8 +214,8 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	}
 	// enforce global transaction ID
 	if status.RebID > reb.rebID.Load() {
-		ctx := fmt.Sprintf("%s runs newer g%d", tname, status.RebID)
-		err := cmn.NewErrAborted(ctx, "", nil)
+		err := fmt.Errorf("%s runs newer g%d", tname, status.RebID)
+		err = cmn.NewErrAborted(xreb.Name(), "", err)
 		reb.abortAndBroadcast(err)
 		return
 	}
@@ -230,8 +230,8 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	// Remote target has aborted its running rebalance with the same ID.
 	// Do not call `reb.abortAndBroadcast()` - no need.
 	if status.RebID == reb.RebID() && status.Aborted {
-		ctx := fmt.Sprintf("%s aborted g%d", tname, status.RebID)
-		err := cmn.NewErrAborted(ctx, "", nil)
+		err := fmt.Errorf("status 'aborted' from %s", tname)
+		err = cmn.NewErrAborted(xreb.Name(), "", err)
 		if xreb.Abort(err) {
 			nlog.Warningf("%s: %v", logHdr, err)
 		}
