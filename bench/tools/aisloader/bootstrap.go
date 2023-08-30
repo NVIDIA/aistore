@@ -203,6 +203,7 @@ var (
 
 	flagUsage   bool
 	flagVersion bool
+	flagQuiet   bool
 
 	etlInitSpec *etl.InitSpecMsg
 	etlName     string
@@ -220,8 +221,10 @@ var (
 
 	ip          string
 	port        string
-	aisEndpoint string
 	envEndpoint string
+
+	s3Endpoint string
+	s3Profile  string
 
 	loggedUserToken string
 )
@@ -247,6 +250,11 @@ func (wo *workOrder) String() string {
 		wo.bck, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
 }
 
+func isDirectS3() bool {
+	debug.Assert(flag.Parsed())
+	return s3Endpoint != ""
+}
+
 func loaderMaskFromTotalLoaders(totalLoaders uint64) uint {
 	// take first bigger power of 2, then take first bigger or equal number
 	// divisible by 4. This makes loaderID more visible in hex object name
@@ -263,6 +271,7 @@ func parseCmdLine() (params, error) {
 
 	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
+	f.BoolVar(&flagQuiet, "quiet", false, "Do not print command line arguments and default defaults")
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
@@ -270,6 +279,12 @@ func parseCmdLine() (params, error) {
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
+
+	//
+	// s3 direct (NOTE: with no aistore in-between)
+	//
+	f.StringVar(&s3Endpoint, "s3endpoint", "", "S3 endpoint to read/write s3 bucket directly (with no aistore)")
+	f.StringVar(&s3Profile, "s3profile", "", "S3 config profile other then default (i.e., [default])")
 
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -404,6 +419,9 @@ func parseCmdLine() (params, error) {
 
 	if p.putPct < 0 || p.putPct > 100 {
 		return params{}, fmt.Errorf("invalid option: PUT percent %d", p.putPct)
+	}
+	if p.putPct > 0 && isDirectS3() {
+		return params{}, errors.New("direct PUT => s3:// is not supported yet (can list and GET though)")
 	}
 
 	if p.statsShowInterval < 0 {
@@ -561,33 +579,35 @@ func parseCmdLine() (params, error) {
 		}
 	}
 
-	aisEndpoint = "http://" + ip + ":" + port
-	envEndpoint = os.Getenv(env.AIS.Endpoint)
-	if envEndpoint != "" {
-		aisEndpoint = envEndpoint
+	if !isDirectS3() {
+		aisEndpoint := "http://" + ip + ":" + port
+		envEndpoint = os.Getenv(env.AIS.Endpoint)
+		if envEndpoint != "" {
+			aisEndpoint = envEndpoint
+		}
+
+		traceHTTPSig.Store(p.traceHTTP)
+
+		scheme, address := cmn.ParseURLScheme(aisEndpoint)
+		if scheme == "" {
+			scheme = "http"
+		}
+		if scheme != "http" && scheme != "https" {
+			return params{}, fmt.Errorf("unknown scheme %q", scheme)
+		}
+
+		// TODO: validate against cluster map (see api.GetClusterMap below)
+		p.proxyURL = scheme + "://" + address
+		transportArgs.UseHTTPS = scheme == "https"
 	}
 
-	traceHTTPSig.Store(p.traceHTTP)
-
-	scheme, address := cmn.ParseURLScheme(aisEndpoint)
-	if scheme == "" {
-		scheme = "http"
-	}
-	if scheme != "http" && scheme != "https" {
-		return params{}, fmt.Errorf("unknown scheme %q", scheme)
-	}
-
-	// TODO: validate against cluster map (see api.GetClusterMap below)
-	p.proxyURL = scheme + "://" + address
-
-	transportArgs.UseHTTPS = scheme == "https"
 	httpClient = cmn.NewClient(transportArgs)
 
 	// NOTE: auth token is assigned below when we execute the very first API call
 	p.bp = api.BaseParams{Client: httpClient, URL: p.proxyURL}
 
-	// Don't print arguments when just getting loaderID
-	if !p.getLoaderID {
+	if !flagQuiet && !p.getLoaderID {
+		// print arguments
 		printArguments(f)
 	}
 	return p, nil
@@ -632,20 +652,39 @@ func (s *sts) aggregate(other sts) {
 }
 
 func setupBucket(runParams *params) error {
-	if runParams.bck.Provider != apc.AIS || runParams.getConfig {
+	if runParams.getConfig {
 		return nil
 	}
+	if strings.Contains(runParams.bck.Name, apc.BckProviderSeparator) {
+		bck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{})
+		if err != nil {
+			return err
+		}
+		if objName != "" {
+			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
+				runParams.bck, bck, objName)
+		}
+		if runParams.bck.Provider != apc.AIS /*cmdline default*/ && runParams.bck.Provider != bck.Provider {
+			return fmt.Errorf("redundant and different bucket provider: %q vs %q in %s",
+				runParams.bck.Provider, bck.Provider, bck)
+		}
+		runParams.bck = bck
+	}
+	if isDirectS3() && apc.ToScheme(runParams.bck.Provider) != apc.S3Scheme {
+		return fmt.Errorf("option --s3endpoint requires s3 bucket (have %s)", runParams.bck)
+	}
+	if runParams.bck.Provider != apc.AIS {
+		return nil
+	}
+
+	//
+	// ais:// or ais://@remais
+	//
 	if runParams.bck.Name == "" {
 		runParams.bck.Name = cos.CryptoRandS(8)
 		fmt.Printf("New bucket name %q\n", runParams.bck.Name)
-	} else if nbck, objName, err := cmn.ParseBckObjectURI(runParams.bck.Name, cmn.ParseURIOpts{}); err == nil {
-		if objName != "" {
-			return fmt.Errorf("expecting bucket name or a bucket URI with no object name in it: %s => [%v, %s]",
-				runParams.bck, nbck, objName)
-		}
-		runParams.bck = nbck
 	}
-	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltExists)
+	exists, err := api.QueryBuckets(runParams.bp, cmn.QueryBcks(runParams.bck), apc.FltPresent)
 	if err != nil {
 		return fmt.Errorf("%s not found: %v", runParams.bck, err)
 	}
@@ -748,7 +787,7 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	if !runParams.getConfig {
-		if err := bootstrap(); err != nil {
+		if err := listObjects(); err != nil {
 			return err
 		}
 
@@ -1234,9 +1273,16 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 }
 
-// bootstrap bootstraps existing objects in the bucket.
-func bootstrap() error {
-	names, err := listObjectNames(runParams.bp, runParams.bck, "")
+func listObjects() error {
+	var (
+		names []string
+		err   error
+	)
+	if isDirectS3() {
+		names, err = s3ListObjects()
+	} else {
+		names, err = listObjectNames(runParams.bp, runParams.bck, "")
+	}
 	if err != nil {
 		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
 			runParams.bck, runParams.proxyURL, err)

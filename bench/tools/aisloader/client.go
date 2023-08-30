@@ -11,12 +11,16 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"path"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 const longListTime = 10 * time.Second
@@ -250,6 +254,17 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 		hdr   http.Header
 		query = url.Values{}
 	)
+	// reasd directly from s3
+	if isDirectS3() {
+		reqArgs := cmn.HreqArgs{
+			Method: http.MethodGet,
+			Base:   s3Endpoint,
+			Path:   path.Join(bck.Name, objName),
+			Header: hdr,
+		}
+		return reqArgs.Req()
+	}
+
 	query = bck.AddToQuery(query)
 	if etlName != "" {
 		query.Add(apc.QparamUUID, etlName)
@@ -396,6 +411,33 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 		objs = append(objs, obj.Name)
 	}
 	return objs, nil
+}
+
+func s3ListObjects() ([]string, error) {
+	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
+	config.WithEndpoint(s3Endpoint)
+	opts := session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config:            config,
+		Profile:           s3Profile,
+	}
+	sess := session.Must(session.NewSessionWithOptions(opts))
+	// config.Region = aws.String("us-east-1") // NOTE: may be needed
+
+	svc := s3.New(sess)
+
+	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
+	params.MaxKeys = aws.Int64(10_000_000) // NOTE: read all
+
+	resp, err := svc.ListObjectsV2(params)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(resp.Contents))
+	for _, object := range resp.Contents {
+		names = append(names, *object.Key)
+	}
+	return names, nil
 }
 
 func readDiscard(r *http.Response, tag, cksumType string) (int64, string, error) {
