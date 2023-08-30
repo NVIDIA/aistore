@@ -159,7 +159,18 @@ func TestMaintenanceMD(t *testing.T) {
 
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(),
 		smap.CountTargets()-1)
-	tassert.CheckFatal(t, err)
+	if err == tools.ErrTimedOutStabilize {
+		tlog.Logf("Retrying - checking with primary %s ...\n", smap.Primary.StringEx())
+		proxyURL = smap.Primary.URL(cmn.NetPublic)
+		_, err = tools.WaitForClusterState(proxyURL, "target decommissioned", smap.Version, smap.CountActivePs(),
+			smap.CountTargets()-1)
+	}
+	if err != nil {
+		// fail the test but first, try to recover cluster membership
+		_ = tools.RestoreNode(cmd, false, "target")
+		time.Sleep(10 * time.Second)
+		tassert.CheckFatal(t, err)
+	}
 
 	vmdTargets := countVMDTargets(allTgtsMpaths)
 	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
@@ -217,7 +228,19 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	tassert.CheckError(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target decommissioned",
 		smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
-	tassert.CheckFatal(t, err)
+
+	if err == tools.ErrTimedOutStabilize {
+		tlog.Logf("Retrying - checking with primary %s ...\n", smap.Primary.StringEx())
+		proxyURL = smap.Primary.URL(cmn.NetPublic)
+		_, err = tools.WaitForClusterState(proxyURL, "target decommissioned",
+			smap.Version, origActiveProxyCount, origTargetCount-1, dcmTarget.ID())
+	}
+	if err != nil {
+		// fail the test but first, try to recover cluster membership
+		_ = tools.RestoreNode(cmd, false, "target")
+		time.Sleep(10 * time.Second)
+		tassert.CheckFatal(t, err)
+	}
 
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 	msgList := &apc.LsoMsg{Prefix: objPath}

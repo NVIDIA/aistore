@@ -68,27 +68,28 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		ver    = rargs.smap.Version
 		sleep  = cmn.Timeout.CplaneOperation()
 		logHdr = reb.logHdr(rargs.id, rargs.smap)
+		tname  = tsi.StringEx()
 	)
 	for i := 0; i < 4; i++ {
 		_, code, err := reb.t.Health(tsi, cmn.Timeout.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
-				nlog.Infof("%s: %s is online", logHdr, tsi.StringEx())
+				nlog.Infof("%s: %s is online", logHdr, tname)
 			}
 			return true
 		}
 		if !cos.IsUnreachable(err, code) {
-			nlog.Errorf("%s: health(%s) returned err %v(%d) - aborting", logHdr, tsi.StringEx(), err, code)
+			nlog.Errorf("%s: health(%s) returned %v(%d) - aborting", logHdr, tname, err, code)
 			return
 		}
-		nlog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tsi.StringEx(), err, code)
+		nlog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tname, err, code)
 		time.Sleep(sleep)
 		nver := reb.t.Sowner().Get().Version
 		if nver > ver {
 			return
 		}
 	}
-	nlog.Errorf("%s: timed out waiting for %s", logHdr, tsi.StringEx())
+	nlog.Errorf("%s: timed out waiting for %s", logHdr, tname)
 	return
 }
 
@@ -184,6 +185,7 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		logHdr     = reb.logHdr(rargs.id, rargs.smap)
 		query      = url.Values{apc.QparamRebStatus: []string{"true"}}
 		xreb       = reb.xctn()
+		tname      = tsi.StringEx()
 	)
 	if xreb == nil || xreb.IsAborted() {
 		return
@@ -198,22 +200,22 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		body, code, err = reb.t.Health(tsi, apc.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
-		detail := fmt.Sprintf("health(%s) returned err %v(%d)", tsi.StringEx(), err, code)
-		err = cmn.NewErrAborted(logHdr, detail, err)
+		ctx := fmt.Sprintf("health(%s) failure: %v(%d)", tname, err, code)
+		err = cmn.NewErrAborted(ctx, "", err)
 		reb.abortAndBroadcast(err)
 		return
 	}
 	status = &Status{}
 	err = jsoniter.Unmarshal(body, status)
 	if err != nil {
-		err = fmt.Errorf(cmn.FmtErrUnmarshal, logHdr, "reb status from "+tsi.StringEx(), cos.BHead(body), err)
+		err = fmt.Errorf(cmn.FmtErrUnmarshal, logHdr, "reb status from "+tname, cos.BHead(body), err)
 		reb.abortAndBroadcast(err)
 		return
 	}
 	// enforce global transaction ID
 	if status.RebID > reb.rebID.Load() {
-		detail := fmt.Sprintf("%s runs newer (g%d) global rebalance", tsi.StringEx(), status.RebID)
-		err := cmn.NewErrAborted(logHdr, detail, nil)
+		ctx := fmt.Sprintf("%s runs newer g%d", tname, status.RebID)
+		err := cmn.NewErrAborted(ctx, "", nil)
 		reb.abortAndBroadcast(err)
 		return
 	}
@@ -222,16 +224,16 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 	}
 	// let the target to catch-up
 	if status.RebID < reb.RebID() {
-		nlog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tsi.StringEx(), status.RebID)
+		nlog.Warningf("%s: %s runs older (g%d) global rebalance - keep waiting...", logHdr, tname, status.RebID)
 		return
 	}
 	// Remote target has aborted its running rebalance with the same ID.
 	// Do not call `reb.abortAndBroadcast()` - no need.
 	if status.RebID == reb.RebID() && status.Aborted {
-		detail := fmt.Sprintf("%s aborted %s[g%d] - aborting %s as well", tsi, apc.ActRebalance, status.RebID, xreb)
-		err := cmn.NewErrAborted(logHdr, detail, nil)
+		ctx := fmt.Sprintf("%s aborted g%d", tname, status.RebID)
+		err := cmn.NewErrAborted(ctx, "", nil)
 		if xreb.Abort(err) {
-			nlog.Warningln(err)
+			nlog.Warningf("%s: %v", logHdr, err)
 		}
 		return
 	}
@@ -239,6 +241,6 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		ok = true
 		return
 	}
-	nlog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tsi.StringEx(), stages[status.Stage], stages[desiredStage])
+	nlog.Infof("%s: %s[%s] not yet at the right stage %s", logHdr, tname, stages[status.Stage], stages[desiredStage])
 	return
 }

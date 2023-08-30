@@ -48,6 +48,8 @@ type (
 	}
 )
 
+var ErrTimedOutStabilize = errors.New("timed out waiting for the cluster to stabilize")
+
 func (n nodesCnt) satisfied(actual int) bool {
 	if n == 0 {
 		return true
@@ -259,7 +261,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		time.Sleep(cos.MinDuration(time.Second*time.Duration(iter), maxSleep))
 	}
 
-	return nil, errors.New("timed out waiting for the cluster to stabilize")
+	return nil, ErrTimedOutStabilize
 }
 
 func pidFromURL(smap *meta.Smap, proxyURL string) string {

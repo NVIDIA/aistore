@@ -1295,7 +1295,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		return
 	}
 
-	nlog.Infof("%s: %s(%s) %v", p, msg.Action, si.StringEx(), opts)
+	nlog.Infof("%s: %s(%s) opts=%v", p, msg.Action, si.StringEx(), opts)
 
 	switch {
 	case si.IsProxy():
@@ -1320,6 +1320,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 	default: // target
 		reb := !opts.SkipRebalance && cmn.GCO.Get().Rebalance.Enabled && !inMaint
+		nlog.Infof("%s: %s reb=%t", p, msg.Action, reb)
 		if reb {
 			if err := p.canRebalance(); err != nil {
 				p.writeErr(w, r, err)
@@ -1442,6 +1443,9 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
+
+	nlog.Infof("%s: %s(%s) opts=%v", p, msg.Action, si.StringEx(), opts)
+
 	if !smap.InMaint(si) {
 		p.writeErrf(w, r, "node %s is not in maintenance mode - nothing to do", si.StringEx())
 		return
@@ -1627,10 +1631,10 @@ func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, er
 }
 
 func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID string, err error) {
-	nlog.Infof("%s mcast-stopm: %s, %s", p, msg, opts.DaemonID)
+	nlog.Infof("%s mcast-stopm: %s, %s, skip-reb=%t", p, msg, opts.DaemonID, opts.SkipRebalance)
 	ctx := &smapModifier{
 		pre:     p._stopMaintPre,
-		post:    p._newRMD,
+		post:    p._stopMaintRMD,
 		final:   p._syncFinal,
 		sid:     opts.DaemonID,
 		skipReb: opts.SkipRebalance,
@@ -1662,12 +1666,18 @@ func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-func (p *proxy) _newRMD(ctx *smapModifier, clone *smapX) {
-	// e.g., taking node out of maintenance w/ no rebalance
+func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 	if ctx.skipReb {
+		nlog.Infoln("ctx.skip-reb", ctx.skipReb)
 		return
 	}
-	if !mustRebalance(ctx, clone) {
+	if !cmn.GCO.Get().Rebalance.Enabled {
+		return
+	}
+	if daemon.stopping.Load() {
+		return
+	}
+	if clone.CountActiveTs() < 2 {
 		return
 	}
 	rmdCtx := &rmdModifier{

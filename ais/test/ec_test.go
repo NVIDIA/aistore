@@ -2091,6 +2091,9 @@ func TestECMountpaths(t *testing.T) {
 			ecMountpaths(t, o, proxyURL, bck)
 		})
 	}
+
+	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
+	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), reqArgs)
 }
 
 // The test only checks that the number of object after rebalance equals
