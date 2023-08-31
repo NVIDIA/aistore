@@ -419,7 +419,6 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 		cloudBck              = lom.Bck().RemoteBck()
 		md                    = make(map[string]*string, 2)
 	)
-	defer cos.Close(r)
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
 	if err != nil && superVerbose {
@@ -438,6 +437,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 	})
 	if err != nil {
 		errCode, err = awsErrorToAISError(err, cloudBck)
+		cos.Close(r)
 		return
 	}
 	// compare with setCustomS3() above
@@ -455,6 +455,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 	if superVerbose {
 		nlog.Infof("[put_object] %s", lom)
 	}
+	cos.Close(r)
 	return
 }
 

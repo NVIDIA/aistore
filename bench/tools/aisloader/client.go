@@ -18,9 +18,11 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 const longListTime = 10 * time.Second
@@ -170,7 +172,20 @@ func (putter *tracePutter) do(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 	return req.WithContext(httptrace.WithClientTrace(req.Context(), putter.tctx.trace)), nil
 }
 
-func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (err error) {
+// a bare-minimum (e.g. not passing checksum or any other metadata)
+func s3put(bck cmn.Bck, objName string, reader cos.ReadOpenCloser) (err error) {
+	uploader := s3manager.NewUploaderWithClient(s3svc)
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+		Body:   reader,
+	})
+	erc := reader.Close()
+	debug.AssertNoErr(erc)
+	return
+}
+
+func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (err error) {
 	var (
 		baseParams = api.BaseParams{
 			Client: httpClient,
@@ -182,7 +197,7 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 		args = api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
-			ObjName:    object,
+			ObjName:    objName,
 			Cksum:      cksum,
 			Reader:     reader,
 			SkipVC:     true,
@@ -193,12 +208,12 @@ func put(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader c
 }
 
 // PUT with HTTP trace
-func putWithTrace(proxyURL string, bck cmn.Bck, object string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
+func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (httpLatencies, error) {
 	reqArgs := cmn.AllocHra()
 	{
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = proxyURL
-		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqArgs.Query = bck.AddToQuery(nil)
 		reqArgs.BodyR = reader
 	}
@@ -424,18 +439,49 @@ func s3ListObjects() ([]string, error) {
 	sess := session.Must(session.NewSessionWithOptions(opts))
 	// config.Region = aws.String("us-east-1") // NOTE: may be needed
 
-	svc := s3.New(sess)
+	s3svc = s3.New(sess)
 
+	// first page
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
-	params.MaxKeys = aws.Int64(10_000_000) // NOTE: read all
+	params.MaxKeys = aws.Int64(apc.DefaultPageSizeCloud)
 
-	resp, err := svc.ListObjectsV2(params)
+	resp, err := s3svc.ListObjectsV2(params)
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(resp.Contents))
+
+	var (
+		token string
+		l     = len(resp.Contents)
+	)
+	if resp.NextContinuationToken != nil {
+		token = *resp.NextContinuationToken
+	}
+	if token != "" {
+		l = 16 * apc.DefaultPageSizeCloud
+	}
+	names := make([]string, 0, l)
 	for _, object := range resp.Contents {
 		names = append(names, *object.Key)
+	}
+	if token == "" {
+		return names, nil
+	}
+
+	// get all the rest pages in one fell swoop
+	for token != "" {
+		params.ContinuationToken = &token
+		resp, err = s3svc.ListObjectsV2(params)
+		if err != nil {
+			return nil, err
+		}
+		for _, object := range resp.Contents {
+			names = append(names, *object.Key)
+		}
+		token = ""
+		if resp.NextContinuationToken != nil {
+			token = *resp.NextContinuationToken
+		}
 	}
 	return names, nil
 }

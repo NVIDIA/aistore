@@ -4,8 +4,19 @@
  */
 
 // AIS loader (aisloader) is a tool to measure storage performance. It's a load
-// generator that has been developed to benchmark and stress-test AIStore
-// but can be easily extended to benchmark any S3-compatible backend.
+// generator that can be used to benchmark and stress-test AIStore
+// or any S3-compatible backend.
+// In fact, aisloader can list, write, and read S3(*) buckets _directly_, which
+// makes it quite useful, convenient, and easy to use benchmark tool to compare
+// storage performance with aistore in front of S3 vs _without_.
+//
+// (*) aisloader can be further easily extended to work directly with any
+// Cloud storage including, but not limited to, aistore-supported GCP and Azure.
+//
+// In addition, `aisloader` generates synthetic workloads that mimic training and
+// inference workloads - the capability that allows to run benchmarks in isolation
+// avoiding compute-side bottlenecks and the associated complexity (to analyze those).
+//
 // For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.
 
 // Examples:
@@ -19,8 +30,9 @@
 //    aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais -cleanup=true
 // 4. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
 //    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G -cleanup=false
-// 5. PUT 2000 objects with names that look like hex({0..2000}{loaderid})
+// 5. PUT 2000 objects with names matching hex({0..2000}{loaderid}) template:
 //    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -cleanup=false
+// ====================
 // 6. Use random object names and loaderID for reporting stats
 //    aisloader -loaderid=10
 // 7. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
@@ -31,6 +43,12 @@
 //    aisloader -getloaderid (0x0)
 //    aisloader -loaderid=10 -getloaderid (0xa)
 //    aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
+// ====================
+// 10. Timed 100% GET from s3 bucket directly (NOTE: aistore is not being used here):
+//    aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
+// 11. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults
+//     (NOTE: aistore is not being used):
+// aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
 
 package aisloader
 
@@ -73,6 +91,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tetl"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/OneOfOne/xxhash"
+	"github.com/aws/aws-sdk-go/service/s3"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -223,6 +242,8 @@ var (
 	port        string
 	envEndpoint string
 
+	s3svc *s3.S3 // s3 client - see s3ListObjects
+
 	s3Endpoint string
 	s3Profile  string
 
@@ -271,12 +292,13 @@ func parseCmdLine() (params, error) {
 
 	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
-	f.BoolVar(&flagQuiet, "quiet", false, "Do not print command line arguments and default defaults")
+	f.BoolVar(&flagQuiet, "quiet", false, "When starting to run, do not print command line arguments, default settings, and usage examples")
 	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
+
 	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
@@ -284,7 +306,7 @@ func parseCmdLine() (params, error) {
 	// s3 direct (NOTE: with no aistore in-between)
 	//
 	f.StringVar(&s3Endpoint, "s3endpoint", "", "S3 endpoint to read/write s3 bucket directly (with no aistore)")
-	f.StringVar(&s3Profile, "s3profile", "", "S3 config profile other then default (i.e., [default])")
+	f.StringVar(&s3Profile, "s3profile", "", "Other then default S3 config profile referencing alternative credentials")
 
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
 		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
@@ -420,8 +442,24 @@ func parseCmdLine() (params, error) {
 	if p.putPct < 0 || p.putPct > 100 {
 		return params{}, fmt.Errorf("invalid option: PUT percent %d", p.putPct)
 	}
-	if p.putPct > 0 && isDirectS3() {
-		return params{}, errors.New("direct PUT => s3:// is not supported yet (can list and GET though)")
+
+	// direct s3 access vs other command line
+	if isDirectS3() {
+		if runParams.randomProxy {
+			return params{}, errors.New("command line options '-s3endpoint' and '-randomproxy' are mutually exclusive")
+		}
+		if ip != "" && ip != "localhost" && ip != "127.0.0.1" { // TODO: hardcoded default
+			return params{}, errors.New("command line options '-s3endpoint' and '-ip' are mutually exclusive")
+		}
+		if port != "" && port != "8080" { // TODO: ditto
+			return params{}, errors.New("command line options '-s3endpoint' and '-port' are mutually exclusive")
+		}
+		if p.traceHTTP {
+			return params{}, errors.New("direct S3 access via '-s3endpoint': HTTP tracing is not supported yet")
+		}
+		if p.cleanUp.IsSet {
+			return params{}, errors.New("direct S3 access via '-s3endpoint': '-cleanup' option is not supported yet")
+		}
 	}
 
 	if p.statsShowInterval < 0 {
@@ -772,7 +810,8 @@ func Start(version, buildtime string) (err error) {
 		}
 	}
 
-	// usage is currently limited to randomizing proxies (to access cluster)
+	// usage is currently limited to selecting a random proxy (gateway)
+	// to access aistore (done for every I/O request)
 	if runParams.randomProxy {
 		runParams.smap, err = api.GetClusterMap(runParams.bp)
 		if err != nil {

@@ -9,9 +9,13 @@ redirect_from:
 
 # AIS Loader
 
-AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore). The tool was written in such a way that it can be easily extended to benchmark any S3-compatible backend.
+AIS Loader ([`aisloader`](/bench/tools/aisloader)) is a tool to measure storage performance. It is a load generator that we constantly use to benchmark and stress-test [AIStore](https://github.com/NVIDIA/aistore) or any S3-compatible backend.
 
-In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable), and also avoid compute-side bottlenecks if there are any.
+In fact, aisloader can list, write, and read S3(**) buckets _directly_, which makes it quite useful, convenient, and easy to use benchmark to compare storage performance **with** aistore in front of S3 and **without**.
+
+> (**) `aisloader` can be further easily extended to work directly with any Cloud storage provider including, but not limited to, aistore-supported GCP and Azure.
+
+In addition, `aisloader` generates synthetic workloads that mimic training and inference workloads - the capability that allows to run benchmarks in isolation (which is often preferable) avoiding compute-side bottlenecks (if any) and associated complexity.
 
 There's a large set of command-line switches that allow to realize almost any conceivable workload, with basic permutations always including:
 
@@ -76,10 +80,13 @@ For the most recently updated command-line options and examples, please run `ais
 | -port | `int` | Port number for proxy server | `8080` |
 | -provider | `string` | ais - for AIS, cloud - for Cloud bucket; other supported values include "gcp" and "aws", for Amazon and Google clouds, respectively | `ais` |
 | -putshards | `int` | Spread generated objects over this many subdirectories (max 100k) | `0` |
+| -quiet | `bool` | When starting to run, do not print command line arguments, default settings, and usage examples | `false` |
 | -randomname | `bool` | true: generate object names of 32 random characters. This option is ignored when loadernum is defined | `true` |
 | -readertype | `string` | Type of reader: sg(default). Available: `sg`, `file`, `rand`, `tar` | `sg` |
 | -readlen | `string`, `int` | Read range length, can contain [multiplicative suffix](#bytes-multiplicative-suffix) | `""` |
 | -readoff | `string`, `int` | Read range offset (can contain multiplicative suffix K, MB, GiB, etc.) | `""` |
+| -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no aistore) | `""` |
+| -s3profile | `string` | Other then default S3 config profile referencing alternative credentials | `""` |
 | -seed | `int` | Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds) | `0` |
 | -stats-output | `string` | filename to log statistics (empty string translates as standard output (default) | `""` |
 | -statsdip | `string` | StatsD IP address or hostname | `localhost` |
@@ -351,6 +358,16 @@ For the most recently updated command-line options and examples, please run `ais
 
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
+    ```
+
+18. Timed 100% GET _directly_ from S3 bucket (notice '-s3endpoint' command line):
+    ```console
+    $ aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
+    ```
+
+19. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults. Similar to the previous example, aisloader goes directly to a given S3 endpoint ('-s3endpoint'), and aistore is not being used:
+    ```console
+     $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
     ```
 
 ## Collecting stats

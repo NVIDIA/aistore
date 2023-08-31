@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
@@ -42,6 +43,7 @@ func doPut(wo *workOrder) {
 		return
 	}
 	if runParams.randomProxy {
+		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
 			fmt.Printf("PUT(wo): %v\n", err)
@@ -50,8 +52,13 @@ func doPut(wo *workOrder) {
 		url = psi.URL(cmn.NetPublic)
 	}
 	if !traceHTTPSig.Load() {
-		wo.err = put(url, wo.bck, wo.objName, r.Cksum(), r)
+		if isDirectS3() {
+			wo.err = s3put(wo.bck, wo.objName, r)
+		} else {
+			wo.err = put(url, wo.bck, wo.objName, r.Cksum(), r)
+		}
 	} else {
+		debug.Assert(!isDirectS3())
 		wo.latencies, wo.err = putWithTrace(url, wo.bck, wo.objName, r.Cksum(), r)
 	}
 	if runParams.readerType == readers.TypeFile {
@@ -65,6 +72,7 @@ func doGet(wo *workOrder) {
 		url = wo.proxyURL
 	)
 	if runParams.randomProxy {
+		debug.Assert(!isDirectS3())
 		psi, err := runParams.smap.GetRandProxy(false /*excl. primary*/)
 		if err != nil {
 			fmt.Printf("GET(wo): %v\n", err)
@@ -76,6 +84,7 @@ func doGet(wo *workOrder) {
 		wo.size, wo.err = getDiscard(url, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	} else {
+		debug.Assert(!isDirectS3())
 		wo.size, wo.latencies, wo.err = getTraceDiscard(url, wo.bck,
 			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
 	}
