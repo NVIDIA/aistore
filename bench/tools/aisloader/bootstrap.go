@@ -45,10 +45,10 @@
 //    aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
 // ====================
 // 10. Timed 100% GET from s3 bucket directly (NOTE: aistore is not being used here):
-//    aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
+//    aisloader -bucket=s3://xyz -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
 // 11. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults
 //     (NOTE: aistore is not being used):
-// aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
+// aisloader -bucket=s3://xyz -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
 
 package aisloader
 
@@ -318,7 +318,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
 		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (mandatory: must be specified)")
+	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (must be specified for ais buckets)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 
@@ -391,8 +391,8 @@ func parseCmdLine() (params, error) {
 		fmt.Printf("version %s (build %s)\n", _version, _buildtime)
 		os.Exit(0)
 	}
-	if !p.cleanUp.IsSet && p.bck.Name != "" {
-		fmt.Println("\nNote: `-cleanup` is a mandatory (required) option defining whether to destroy bucket upon completion of the benchmark.")
+	if !p.cleanUp.IsSet && p.bck.Name != "" && !isDirectS3() {
+		fmt.Println("\nNote: `-cleanup` is a required option for ais:// buckets. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
 		fmt.Println("      The option must be specified in the command line.")
 		os.Exit(1)
 	}
