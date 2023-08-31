@@ -391,10 +391,16 @@ func parseCmdLine() (params, error) {
 		fmt.Printf("version %s (build %s)\n", _version, _buildtime)
 		os.Exit(0)
 	}
-	if !p.cleanUp.IsSet && p.bck.Name != "" && !isDirectS3() {
-		fmt.Println("\nNote: `-cleanup` is a required option for ais:// buckets. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
-		fmt.Println("      The option must be specified in the command line.")
-		os.Exit(1)
+
+	if p.bck.Name != "" {
+		if p.cleanUp.Val && isDirectS3() {
+			return params{}, errors.New("direct S3 access via '-s3endpoint': option '-cleanup' is not supported yet")
+		}
+		if !p.cleanUp.IsSet && !isDirectS3() {
+			fmt.Println("\nNote: `-cleanup` is a required option. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
+			fmt.Println("      The option must be specified in the command line.")
+			os.Exit(1)
+		}
 	}
 
 	if p.seed == 0 {
@@ -445,7 +451,7 @@ func parseCmdLine() (params, error) {
 
 	// direct s3 access vs other command line
 	if isDirectS3() {
-		if runParams.randomProxy {
+		if p.randomProxy {
 			return params{}, errors.New("command line options '-s3endpoint' and '-randomproxy' are mutually exclusive")
 		}
 		if ip != "" && ip != "localhost" && ip != "127.0.0.1" { // TODO: hardcoded default
@@ -457,8 +463,14 @@ func parseCmdLine() (params, error) {
 		if p.traceHTTP {
 			return params{}, errors.New("direct S3 access via '-s3endpoint': HTTP tracing is not supported yet")
 		}
-		if p.cleanUp.IsSet {
+		if p.cleanUp.Val {
 			return params{}, errors.New("direct S3 access via '-s3endpoint': '-cleanup' option is not supported yet")
+		}
+		if p.verifyHash {
+			return params{}, errors.New("direct S3 access via '-s3endpoint': '-verifyhash' option is not supported yet")
+		}
+		if p.readOffStr != "" || p.readLenStr != "" {
+			return params{}, errors.New("direct S3 access via '-s3endpoint': Read range is not supported yet")
 		}
 	}
 

@@ -81,8 +81,12 @@ func doGet(wo *workOrder) {
 		url = psi.URL(cmn.NetPublic)
 	}
 	if !traceHTTPSig.Load() {
-		wo.size, wo.err = getDiscard(url, wo.bck,
-			wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
+		if isDirectS3() {
+			wo.size, wo.err = s3getDiscard(wo.bck, wo.objName)
+		} else {
+			wo.size, wo.err = getDiscard(url, wo.bck,
+				wo.objName, runParams.verifyHash, runParams.readOff, runParams.readLen)
+		}
 	} else {
 		debug.Assert(!isDirectS3())
 		wo.size, wo.latencies, wo.err = getTraceDiscard(url, wo.bck,

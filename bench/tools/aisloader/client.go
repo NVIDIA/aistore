@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"path"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -269,17 +268,6 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 		hdr   http.Header
 		query = url.Values{}
 	)
-	// reasd directly from s3
-	if isDirectS3() {
-		reqArgs := cmn.HreqArgs{
-			Method: http.MethodGet,
-			Base:   s3Endpoint,
-			Path:   path.Join(bck.Name, objName),
-			Header: hdr,
-		}
-		return reqArgs.Req()
-	}
-
 	query = bck.AddToQuery(query)
 	if etlName != "" {
 		query.Add(apc.QparamUUID, etlName)
@@ -297,10 +285,35 @@ func prepareGetRequest(proxyURL string, bck cmn.Bck, objName string, offset, len
 	return reqArgs.Req()
 }
 
+func s3getDiscard(bck cmn.Bck, objName string) (int64, error) {
+	obj, err := s3svc.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(bck.Name),
+		Key:    aws.String(objName),
+	})
+	if err != nil {
+		if obj != nil && obj.Body != nil {
+			io.Copy(io.Discard, obj.Body)
+			obj.Body.Close()
+		}
+		return 0, err // detailed enough
+	}
+
+	var size, n int64
+	size = *obj.ContentLength
+	n, err = io.Copy(io.Discard, obj.Body)
+	obj.Body.Close()
+
+	if err != nil {
+		return n, fmt.Errorf("failed to GET %s/%s and discard it (%d, %d): %v", bck, objName, n, size, err)
+	}
+	if n != size {
+		err = fmt.Errorf("failed to GET %s/%s: wrong size (%d, %d)", bck, objName, n, size)
+	}
+	return size, err
+}
+
 // getDiscard sends a GET request and discards returned data.
 func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, error) {
-	var hdrCksumValue, hdrCksumType string
-
 	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
 	if err != nil {
 		return 0, err
@@ -309,14 +322,16 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
 
+	var hdrCksumValue, hdrCksumType string
 	if validate {
 		hdrCksumValue = resp.Header.Get(apc.HdrObjCksumVal)
 		hdrCksumType = resp.Header.Get(apc.HdrObjCksumType)
 	}
 	src := fmt.Sprintf("GET (object %s from bucket %s)", objName, bck)
 	n, cksumValue, err := readDiscard(resp, src, hdrCksumType)
+
+	resp.Body.Close()
 	if err != nil {
 		return 0, err
 	}
