@@ -52,7 +52,6 @@ type parsedReqSpec struct {
 	ExtractConcMaxLimit int                   `json:"extract_concurrency_max_limit"`
 	CreateConcMaxLimit  int                   `json:"create_concurrency_max_limit"`
 	SbundleMult         int                   `json:"bundle_multiplier"`
-	ExtendedMetrics     bool                  `json:"extended_metrics"`
 
 	// debug
 	DSorterType string `json:"dsorter_type"`
@@ -209,7 +208,6 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 
 	pars.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
 	pars.CreateConcMaxLimit = rs.CreateConcMaxLimit
-	pars.ExtendedMetrics = rs.ExtendedMetrics
 	pars.DSorterType = rs.DSorterType
 	pars.DryRun = rs.DryRun
 

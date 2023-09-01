@@ -36,8 +36,8 @@ const (
 )
 
 type (
-	// RecordObj describes single object of record. Objects inside single record
-	// differs by extension.
+	// RecordObj describes single object of record. Objects inside a single record
+	// have different extensions.
 	RecordObj struct {
 		// Can represent, one of the following:
 		//  * Shard name - in case offset is used.

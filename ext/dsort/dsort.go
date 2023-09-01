@@ -28,10 +28,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
@@ -287,7 +287,6 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	var (
 		wg   = &sync.WaitGroup{}
 		r, w = io.Pipe()
-		n    int64
 	)
 	wg.Add(1)
 	go func() {
@@ -308,11 +307,8 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 			}
 			err = g.t.PutObject(lom, params)
 			cluster.FreePutObjParams(params)
-			if err == nil {
-				n = lom.SizeBytes()
-			}
 		} else {
-			n, err = io.Copy(io.Discard, r)
+			_, err = io.Copy(io.Discard, r)
 		}
 		errCh <- err
 		wg.Done()
@@ -412,11 +408,6 @@ exit:
 	metrics.CreatedCnt++
 	if si.ID() != g.t.SID() {
 		metrics.MovedShardCnt++
-	}
-	if m.Metrics.extended {
-		dur := time.Since(beforeCreation)
-		metrics.ShardCreationStats.updateTime(dur)
-		metrics.ShardCreationStats.updateThroughput(n, dur)
 	}
 	metrics.mu.Unlock()
 
@@ -977,12 +968,8 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	expectedExtractedSize := uint64(float64(lom.SizeBytes()) / m.compressionRatio())
 	toDisk := m.dsorter.preShardExtraction(expectedExtractedSize)
 
-	beforeExtraction := mono.NanoTime()
-
 	extractedSize, extractedCount, err := shardRW.Extract(lom, fh, m.recm, toDisk)
 	cos.Close(fh)
-
-	dur := mono.Since(beforeExtraction)
 
 	m.addSizes(lom.SizeBytes(), extractedSize) // update compression rate
 
@@ -993,6 +980,13 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	if err != nil {
 		return errors.Errorf("failed to extract shard %s: %v", lom.Cname(), err)
 	}
+
+	if toDisk {
+		g.tstats.Add(stats.DSortExtractShardDskCnt, 1)
+	} else {
+		g.tstats.Add(stats.DSortExtractShardMemCnt, 1)
+	}
+	g.tstats.Add(stats.DSortExtractShardSize, extractedSize)
 
 	//
 	// update metrics, check OOM
@@ -1017,10 +1011,6 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	if toDisk {
 		metrics.ExtractedToDiskCnt++
 		metrics.ExtractedToDiskSize += extractedSize
-	}
-	if m.Metrics.extended {
-		metrics.ShardExtractionStats.updateTime(dur)
-		metrics.ShardExtractionStats.updateThroughput(extractedSize, dur)
 	}
 	metrics.mu.Unlock()
 

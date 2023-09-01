@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
@@ -113,7 +112,7 @@ type (
 		}
 		finishedAck struct {
 			mu sync.Mutex
-			m  map[string]struct{} // finished acks: daemonID -> ack
+			m  map[string]struct{} // finished acks: tid -> ack
 		}
 		dsorter        dsorter
 		dsorterStarted sync.WaitGroup
@@ -181,7 +180,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	targetCount := m.smap.CountActiveTs()
 
 	m.Pars = pars
-	m.Metrics = newMetrics(pars.Description, pars.ExtendedMetrics)
+	m.Metrics = newMetrics(pars.Description)
 	m.startShardCreation = make(chan struct{}, 1)
 
 	g.t.Sowner().Listeners().Reg(m)
@@ -481,11 +480,11 @@ func (m *Manager) setRW() (err error) {
 	return nil
 }
 
-// updateFinishedAck marks daemonID as finished. If all daemons ack then the
+// updateFinishedAck marks tid as finished. If all daemons ack then the
 // finalCleanup is dispatched in separate goroutine.
-func (m *Manager) updateFinishedAck(daemonID string) {
+func (m *Manager) updateFinishedAck(tid string) {
 	m.finishedAck.mu.Lock()
-	delete(m.finishedAck.m, daemonID)
+	delete(m.finishedAck.m, tid)
 	if len(m.finishedAck.m) == 0 {
 		go m.finalCleanup()
 	}
@@ -603,24 +602,6 @@ func (m *Manager) setAbortedTo(aborted bool) {
 	}
 	m.state.aborted.Store(aborted)
 	m.Metrics.setAbortedTo(aborted)
-}
-
-func (m *Manager) sentCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, err error) {
-	if m.Metrics.extended {
-		dur := mono.Since(x.(int64))
-		m.Metrics.Creation.mu.Lock()
-		m.Metrics.Creation.LocalSendStats.updateTime(dur)
-		m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-		m.Metrics.Creation.mu.Unlock()
-	}
-
-	if sgl, ok := rc.(*memsys.SGL); ok {
-		sgl.Free()
-	}
-	m.decrementRef(1)
-	if err != nil {
-		m.abort(err)
-	}
 }
 
 func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error) error {

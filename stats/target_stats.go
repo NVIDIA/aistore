@@ -69,9 +69,11 @@ const (
 
 	// DSort
 	DSortCreationReqCount    = "dsort.creation.req.n"
-	DSortCreationReqLatency  = "dsort.creation.req.ns"
 	DSortCreationRespCount   = "dsort.creation.resp.n"
 	DSortCreationRespLatency = "dsort.creation.resp.ns"
+	DSortExtractShardDskCnt  = "dsort.extract.shard.dsk.n"
+	DSortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
+	DSortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
 	// Downloader
 	DownloadSize = "dl.size"
@@ -222,10 +224,12 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, DownloadLatency, KindLatency)
 
 	// dsort
-	r.reg(node, DSortCreationReqCount, KindCounter)
-	r.reg(node, DSortCreationReqLatency, KindLatency)
-	r.reg(node, DSortCreationRespCount, KindCounter)
+	r.reg(node, DSortCreationReqCount, KindCounter, true)
+	r.reg(node, DSortCreationRespCount, KindCounter, true)
 	r.reg(node, DSortCreationRespLatency, KindLatency)
+	r.reg(node, DSortExtractShardDskCnt, KindCounter, true)
+	r.reg(node, DSortExtractShardMemCnt, KindCounter, true)
+	r.reg(node, DSortExtractShardSize, KindSize, true)
 
 	// Prometheus
 	r.core.initProm(node)

@@ -123,7 +123,6 @@ func (twg *TimeoutGroup) WaitTimeoutWithStop(timeout time.Duration, stop <-chan 
 	select {
 	case <-twg.fin:
 		twg.postedFin.Store(0)
-		timed, stopped = false, false
 	case <-t.C:
 		timed, stopped = true, false
 	case <-stop:

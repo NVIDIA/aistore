@@ -20,7 +20,7 @@ const (
 	CreationPhase   = "creation"
 )
 
-// low-level types
+// internals
 type (
 	// TimeStats contains statistics about time spent on specific task. It calculates
 	// min, max and avg times.
@@ -33,22 +33,6 @@ type (
 		MinMs int64 `json:"min_ms,string"`
 		MaxMs int64 `json:"max_ms,string"`
 		AvgMs int64 `json:"avg_ms,string"`
-	}
-
-	// ThroughputStats contains statistics about throughput of specific task.
-	ThroughputStats struct {
-		total int64
-		count int64
-
-		MinTp int64 `json:"min_throughput,string"`
-		MaxTp int64 `json:"max_throughput,string"`
-		AvgTp int64 `json:"avg_throughput,string"`
-	}
-
-	// DetailedStats contains time and throughput statistics .
-	DetailedStats struct {
-		*TimeStats
-		*ThroughputStats
 	}
 
 	// PhaseInfo contains general stats and state for given phase. It is base struct
@@ -71,7 +55,7 @@ type (
 	}
 )
 
-// medium-level types
+// phases
 type (
 	// LocalExtraction contains metrics for first phase of DSort.
 	LocalExtraction struct {
@@ -91,8 +75,6 @@ type (
 		ExtractedToDiskCnt int64 `json:"extracted_to_disk_count,string"`
 		// ExtractedToDiskSize - uncompressed size of shards extracted to disk.
 		ExtractedToDiskSize int64 `json:"extracted_to_disk_size,string"`
-		// ShardExtractionStats - time statistics.
-		ShardExtractionStats *DetailedStats `json:"single_shard_stats,omitempty"`
 	}
 
 	// MetaSorting contains metrics for second phase of DSort.
@@ -121,12 +103,6 @@ type (
 		RequestStats *TimeStats `json:"req_stats,omitempty"`
 		// ResponseStats - time statistics: responses to other targets.
 		ResponseStats *TimeStats `json:"resp_stats,omitempty"`
-		// LocalSendStats - time statistics: sending record content to other target.
-		LocalSendStats *DetailedStats `json:"local_send_stats,omitempty"`
-		// LocalRecvStats -  time statistics: receiving record content from other target.
-		LocalRecvStats *DetailedStats `json:"local_recv_stats,omitempty"`
-		// ShardCreationStats - time statistics: single shard creation.
-		ShardCreationStats *DetailedStats `json:"single_shard_stats,omitempty"`
 	}
 )
 
@@ -150,9 +126,6 @@ type (
 		Aborted atomic.Bool `json:"aborted,omitempty"`
 		// has been archived to persistent storage
 		Archived atomic.Bool `json:"archived,omitempty"`
-
-		// provide extended metrics (e.g. request/response times)
-		extended bool
 	}
 
 	// JobInfo is a struct that contains stats that represent the DSort run in a list
@@ -200,20 +173,10 @@ func (pi *PhaseInfo) finish() {
 /////////////
 
 // newMetrics creates new Metrics instance.
-func newMetrics(description string, extended bool) *Metrics {
+func newMetrics(description string) *Metrics {
 	extraction := &LocalExtraction{}
 	sorting := &MetaSorting{}
 	creation := &ShardCreation{}
-
-	if extended {
-		extraction.ShardExtractionStats = newDetailedStats()
-
-		creation.RequestStats = newTimeStats()
-		creation.ResponseStats = newTimeStats()
-		creation.LocalSendStats = newDetailedStats()
-		creation.LocalRecvStats = newDetailedStats()
-		creation.ShardCreationStats = newDetailedStats()
-	}
 
 	sorting.SentStats = newTimeStats()
 	sorting.RecvStats = newTimeStats()
@@ -223,7 +186,6 @@ func newMetrics(description string, extended bool) *Metrics {
 		Extraction:  extraction,
 		Sorting:     sorting,
 		Creation:    creation,
-		extended:    extended,
 	}
 }
 
@@ -342,27 +304,4 @@ func (ts *TimeStats) updateTime(newTime time.Duration) {
 	ts.MinMs = cos.MinI64(ts.MinMs, t)
 	ts.MaxMs = cos.MaxI64(ts.MaxMs, t)
 	ts.AvgMs = ts.Total / ts.Count
-}
-
-func newThroughputStats() *ThroughputStats {
-	return &ThroughputStats{
-		MinTp: math.MaxInt64,
-	}
-}
-
-func (tps *ThroughputStats) updateThroughput(size int64, dur time.Duration) {
-	throughput := int64(float64(size) / dur.Seconds())
-
-	tps.total += throughput
-	tps.count++
-	tps.MinTp = cos.MinI64(tps.MinTp, throughput)
-	tps.MaxTp = cos.MaxI64(tps.MaxTp, throughput)
-	tps.AvgTp = tps.total / tps.count
-}
-
-func newDetailedStats() *DetailedStats {
-	return &DetailedStats{
-		newTimeStats(),
-		newThroughputStats(),
-	}
 }

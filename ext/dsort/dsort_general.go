@@ -345,16 +345,13 @@ func (ds *dsorterGeneral) loadLocal(w io.Writer, obj *shard.RecordObj) (written 
 
 func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	var (
-		beforeRecv int64
-		daemonID   = rec.DaemonID
-		writer     = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
-		metrics    = ds.m.Metrics.Creation
-		toNode     = ds.m.smap.GetTarget(daemonID)
+		tid    = rec.DaemonID
+		tsi    = ds.m.smap.GetTarget(tid)
+		writer = ds.newStreamWriter(rec.MakeUniqueName(obj), w)
 	)
-	if toNode == nil {
-		return 0, errors.Errorf("cannot send request to node %q - not present in %s", daemonID, ds.m.smap)
+	if tsi == nil {
+		return 0, errors.Errorf("cannot send request to node %q - not present in %s", tid, ds.m.smap)
 	}
-
 	req := remoteRequest{
 		Record:    rec,
 		RecordObj: obj,
@@ -364,32 +361,26 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	o.Hdr = transport.ObjHdr{Opaque: opaque}
 	o.Callback, o.CmplArg = ds.sentCallback, &req
 
-	if err := ds.streams.request.Send(o, nil, toNode); err != nil {
+	if err := ds.streams.request.Send(o, nil, tsi); err != nil {
 		return 0, errors.WithStack(err)
 	}
 
-	if ds.m.Metrics.extended {
-		beforeRecv = mono.NanoTime()
-	}
-
-	// It may happen that the target we are trying to contact was
+	// May happen that the target we are trying to contact was
 	// aborted or for some reason is not responding. Thus we need to do
 	// some precaution and wait for the content only for limited time or
 	// until we receive abort signal.
-	var pulled bool
+	var (
+		beforeRecv = mono.NanoTime()
+		pulled     bool
+	)
 	timed, stopped := writer.wg.WaitTimeoutWithStop(ds.m.callTimeout, ds.m.listenAborted())
 	if timed || stopped {
 		// In case of timeout or abort we need to pull the writer to
 		// avoid concurrent Close and Write on `writer.w`.
 		pulled = ds.pullStreamWriter(rec.MakeUniqueName(obj)) != nil
-	}
-
-	if ds.m.Metrics.extended {
+	} else {
+		// stats
 		delta := mono.Since(beforeRecv)
-		metrics.mu.Lock()
-		metrics.ResponseStats.updateTime(delta)
-		metrics.mu.Unlock()
-
 		g.tstats.AddMany(
 			cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
 			cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
@@ -399,7 +390,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	// If we timed out or were stopped but failed to pull the
 	// writer then someone else should've done it and we barely
 	// missed. In this case we should wait for the job to finish
-	// (when stopped we should receive error anyway).
+	// (when stopped, we should receive an error anyway).
 
 	if pulled { // managed to pull the writer, can safely return error
 		var err error
@@ -407,8 +398,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		case stopped:
 			err = cmn.NewErrAborted("wait for remote content", "", nil)
 		case timed:
-			err = errors.Errorf("wait for remote content has timed out (%q was waiting for %q)",
-				g.t.SID(), daemonID)
+			err = errors.Errorf("wait for remote content timed out (%q was waiting for %q)", g.t.SID(), tid)
 		default:
 			debug.Assert(false, "pulled but not stopped or timed?")
 		}
@@ -418,20 +408,18 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	if timed || stopped {
 		writer.wg.Wait()
 	}
+
 	return writer.n, writer.err
 }
 
 func (ds *dsorterGeneral) sentCallback(_ transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
-	if err != nil {
-		req := arg.(*remoteRequest)
-		nlog.Errorf("%s: [dsort] %s failed to send record name=%q: %v", g.t, ds.m.ManagerUUID, req.Record.Name, err)
+	if err == nil {
+		g.tstats.Add(stats.DSortCreationReqCount, 1)
 		return
 	}
-	if ds.m.Metrics.extended {
-		g.tstats.AddMany(
-			cos.NamedVal64{Name: stats.DSortCreationReqCount, Value: 1},
-		)
-	}
+	req := arg.(*remoteRequest)
+	nlog.Errorf("%s: [dsort] %s failed to send remore-req %s: %v",
+		g.t, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
 }
 
 func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.Obj) {
@@ -471,15 +459,9 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 		return newDSortAbortedError(ds.m.ManagerUUID)
 	}
 
-	var (
-		beforeSend int64
-		o          = transport.AllocSend() // NOTE: Send(o, ...) must be called
-	)
-	if ds.m.Metrics.extended {
-		beforeSend = mono.NanoTime()
-	}
+	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: req.Record.MakeUniqueName(req.RecordObj)}
-	o.Callback, o.CmplArg = ds.responseCallback, beforeSend
+	o.Callback = ds.responseCallback
 
 	fullContentPath := ds.m.recm.FullContentPath(req.RecordObj)
 
@@ -528,20 +510,14 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	return nil
 }
 
-func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, x any, err error) {
-	if ds.m.Metrics.extended {
-		dur := mono.Since(x.(int64))
-		ds.m.Metrics.Creation.mu.Lock()
-		ds.m.Metrics.Creation.LocalSendStats.updateTime(dur)
-		ds.m.Metrics.Creation.LocalSendStats.updateThroughput(hdr.ObjAttrs.Size, dur)
-		ds.m.Metrics.Creation.mu.Unlock()
-	}
-
+func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, _ any, err error) {
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
 	ds.m.decrementRef(1)
 	if err != nil {
+		nlog.Errorf("%s: [dsort] %s failed to send rsp %s (size %d): %v - aborting...",
+			g.t, ds.m.ManagerUUID, hdr.ObjName, hdr.ObjAttrs.Size, err)
 		ds.m.abort(err)
 	}
 }
@@ -577,24 +553,11 @@ func (ds *dsorterGeneral) recvResp(hdr transport.ObjHdr, object io.Reader, err e
 		return nil
 	}
 
-	var beforeSend int64
-	if ds.m.Metrics.extended {
-		beforeSend = mono.NanoTime()
-	}
-
 	buf, slab := g.mm.AllocSize(hdr.ObjAttrs.Size)
 	writer.n, writer.err = io.CopyBuffer(writer.w, object, buf)
 	writer.wg.Done()
 	slab.Free(buf)
 
-	if ds.m.Metrics.extended {
-		metrics := ds.m.Metrics.Creation
-		dur := mono.Since(beforeSend)
-		metrics.mu.Lock()
-		metrics.LocalRecvStats.updateTime(dur)
-		metrics.LocalRecvStats.updateThroughput(writer.n, dur)
-		metrics.mu.Unlock()
-	}
 	return nil
 }
 

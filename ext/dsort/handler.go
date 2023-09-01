@@ -752,7 +752,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // /v1/sort/finished-ack.
-// A valid PUT to this endpoint acknowledges that daemonID has finished dsort operation.
+// A valid PUT to this endpoint acknowledges that tid has finished dsort operation.
 func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
@@ -762,7 +762,7 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	managerUUID, daemonID := apiItems[0], apiItems[1]
+	managerUUID, tid := apiItems[0], apiItems[1]
 	m, exists := Managers.Get(managerUUID, false /*incl. archived*/)
 	if !exists {
 		s := fmt.Sprintf("invalid request: job %q does not exist", managerUUID)
@@ -770,7 +770,7 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m.updateFinishedAck(daemonID)
+	m.updateFinishedAck(tid)
 }
 
 //
