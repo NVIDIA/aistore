@@ -18,13 +18,14 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
-const longListTime = 10 * time.Second
+const longListTime = 10 * time.Second // list-objects progress
 
 var (
 	// AisLoader, being a stress loading tool, should have different from
@@ -417,7 +418,7 @@ func getConfig(server string) (httpLatencies, error) {
 }
 
 func listObjCallback(ctx *api.ProgressContext) {
-	fmt.Printf("\rListing %d objects", ctx.Info().Count)
+	fmt.Printf("\rListing %s objects", formatBigNum(ctx.Info().Count))
 	// Final message moves output to new line, to keep output tidy
 	if ctx.IsFinished() {
 		fmt.Println()
@@ -460,6 +461,7 @@ func s3ListObjects() ([]string, error) {
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
 	params.MaxKeys = aws.Int64(apc.DefaultPageSizeCloud)
 
+	prev := mono.NanoTime()
 	resp, err := s3svc.ListObjectsV2(params)
 	if err != nil {
 		return nil, err
@@ -484,6 +486,7 @@ func s3ListObjects() ([]string, error) {
 	}
 
 	// get all the rest pages in one fell swoop
+	var eol bool
 	for token != "" {
 		params.ContinuationToken = &token
 		resp, err = s3svc.ListObjectsV2(params)
@@ -497,6 +500,15 @@ func s3ListObjects() ([]string, error) {
 		if resp.NextContinuationToken != nil {
 			token = *resp.NextContinuationToken
 		}
+		now := mono.NanoTime()
+		if time.Duration(now-prev) >= longListTime {
+			fmt.Printf("\rListing %s objects", formatBigNum(len(names)))
+			prev = now
+			eol = true
+		}
+	}
+	if eol {
+		fmt.Println()
 	}
 	return names, nil
 }

@@ -847,7 +847,7 @@ func Start(version, buildtime string) (err error) {
 			return errors.New("nothing to read, bucket is empty")
 		}
 
-		fmt.Printf("Found %d existing objects\n", objsLen)
+		fmt.Printf("Found %s existing object%s\n\n", formatBigNum(objsLen), cos.Plural(objsLen))
 	}
 
 	printRunParams(runParams)
