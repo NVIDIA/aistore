@@ -451,16 +451,30 @@ func (m *ioContext) del(opts ...int) {
 			defer wg.Done()
 			err := api.DeleteObject(baseParams, m.bck, obj.Name)
 			if err != nil {
+				e := strings.ToLower(err.Error())
 				switch {
 				case cmn.IsErrObjNought(err):
 					err = nil
-				case strings.Contains(err.Error(), "server closed idle connection"):
+				case strings.Contains(e, "server closed idle connection"):
 					// see (unexported) http.exportErrServerClosedIdle in the Go source
 					err = nil
-				case strings.Contains(err.Error(), "try again"):
+				case strings.Contains(e, "try again"):
 					// aws-error[InternalError: We encountered an internal error. Please try again.]
+					// retry once
 					time.Sleep(time.Second)
 					err = api.DeleteObject(baseParams, m.bck, obj.Name)
+				case m.bck.IsCloud() && apc.ToScheme(m.bck.Provider) == apc.GSScheme &&
+					strings.Contains(e, "gateway") && strings.Contains(e, "timeout"):
+					// e.g:. "googleapi: Error 504: , gatewayTimeout" (where the gateway is in fact LB)
+					// retry once
+					time.Sleep(2 * time.Second)
+					err = api.DeleteObject(baseParams, m.bck, obj.Name)
+					if err != nil {
+						if errCnt.Load() < 5 {
+							tlog.Logf("Warning: failed to cleanup %s: %v\n", m.bck.Cname(""), err)
+						}
+						err = nil
+					}
 				case cos.IsErrConnectionNotAvail(err):
 					errCnt.Add(maxErrCount / 10)
 				default:
