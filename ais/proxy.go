@@ -1546,11 +1546,17 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 	debug.Assert(lst != nil)
 
+	var ok bool
 	if strings.Contains(r.Header.Get(cos.HdrAccept), cos.ContentMsgPack) {
-		if !p.writeMsgPack(w, lst, lsotag) {
-			return
+		ok = p.writeMsgPack(w, lst, lsotag)
+	} else {
+		ok = p.writeJS(w, r, lst, lsotag)
+	}
+	if !ok {
+		// TODO -- FIXME: abort x-lso (e.g., `ls very-large-cloud-bucket` followed by Ctrl-C)
+		if false {
+			p._lstop(amsg, lst)
 		}
-	} else if !p.writeJS(w, r, lst, lsotag) {
 		return
 	}
 
@@ -1563,6 +1569,27 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 		cos.NamedVal64{Name: stats.ListCount, Value: 1},
 		cos.NamedVal64{Name: stats.ListLatency, Value: mono.SinceNano(beg)},
 	)
+}
+
+func (p *proxy) _lstop(amsg *apc.ActMsg, lst *cmn.LsoResult) {
+	body := cos.MustMarshal(apc.ActMsg{Action: apc.ActXactStop, Value: xact.ArgsMsg{ID: lst.UUID, Kind: amsg.Action}})
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
+	args.to = cluster.Targets
+	results := p.bcastGroup(args)
+	freeBcArgs(args)
+	ok := true
+	for _, res := range results {
+		if res.err != nil {
+			ok = false
+			nlog.Warningf("failed to stop %s[%s]: %v", amsg.Action, lst.UUID, res.toErr())
+			break
+		}
+	}
+	freeBcastRes(results)
+	if ok {
+		nlog.Infof("stopped %s[%s]", amsg.Action, lst.UUID)
+	}
 }
 
 // list-objects flow control helper

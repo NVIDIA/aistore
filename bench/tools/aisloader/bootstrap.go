@@ -318,7 +318,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local directory to store temporary files")
 	f.StringVar(&p.putSizeUpperBoundStr, "totalputsize", "0",
 		"Stop PUT workload once cumulative PUT size reaches or exceeds this value (can contain standard multiplicative suffix K, MB, GiB, etc.; 0 - unlimited")
-	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (must be specified for ais buckets)")
+	BoolExtVar(f, &p.cleanUp, "cleanup", "true: remove bucket upon benchmark termination (must be specified for aistore buckets)")
 	f.BoolVar(&p.verifyHash, "verifyhash", false,
 		"true: checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata")
 
@@ -398,7 +398,7 @@ func parseCmdLine() (params, error) {
 		}
 		if !p.cleanUp.IsSet && !isDirectS3() {
 			fmt.Println("\nNote: `-cleanup` is a required option. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
-			fmt.Println("      The option must be specified in the command line.")
+			fmt.Println("      The option must be specified in the command line, e.g.: `--cleanup=false`")
 			os.Exit(1)
 		}
 	}
@@ -847,7 +847,7 @@ func Start(version, buildtime string) (err error) {
 			return errors.New("nothing to read, bucket is empty")
 		}
 
-		fmt.Printf("Found %s existing object%s\n\n", formatBigNum(objsLen), cos.Plural(objsLen))
+		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
 	}
 
 	printRunParams(runParams)

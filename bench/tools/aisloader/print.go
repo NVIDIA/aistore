@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -346,24 +345,4 @@ func printRunParams(p params) {
 	cos.AssertNoErr(err)
 
 	fmt.Printf("Runtime configuration:\n%s\n\n", string(b))
-}
-
-func formatBigNum(n int) (s string) {
-	if n < 1000 {
-		return strconv.Itoa(n)
-	}
-	for n > 0 {
-		rem := n % 1000
-		n = (n - rem) / 1000
-		if s == "" {
-			s = fmt.Sprintf("%03d", rem)
-			continue
-		}
-		if n == 0 {
-			s = strconv.Itoa(rem) + "," + s
-		} else {
-			s = fmt.Sprintf("%03d", rem) + "," + s
-		}
-	}
-	return
 }

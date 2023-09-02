@@ -110,6 +110,8 @@ func WaitStarted() {
 	}
 }
 
+func IsReg(name string) bool { return DefaultHK.byName(name) != -1 } // see "duplicated" below
+
 func Reg(name string, f hkcb, interval time.Duration) {
 	debug.Assert(DefaultHK.stopping.Load() || DefaultHK.running.Load())
 	DefaultHK.workCh <- request{
@@ -181,9 +183,7 @@ func (hk *housekeeper) _run() error {
 			if req.registering {
 				// duplicate name
 				if hk.byName(req.name) != -1 {
-					nlog.Errorln(req.name + " is (still) registered - rescheduling...")
-					time.Sleep(time.Second)
-					hk.workCh <- req
+					nlog.Errorf("hk: duplicated name %q - not registering", req.name)
 					break
 				}
 				initialInterval := req.initialInterval

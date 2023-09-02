@@ -418,7 +418,7 @@ func getConfig(server string) (httpLatencies, error) {
 }
 
 func listObjCallback(ctx *api.ProgressContext) {
-	fmt.Printf("\rListing %s objects", formatBigNum(ctx.Info().Count))
+	fmt.Printf("\rListing %s objects", cos.FormatBigNum(ctx.Info().Count))
 	// Final message moves output to new line, to keep output tidy
 	if ctx.IsFinished() {
 		fmt.Println()
@@ -502,7 +502,7 @@ func s3ListObjects() ([]string, error) {
 		}
 		now := mono.NanoTime()
 		if time.Duration(now-prev) >= longListTime {
-			fmt.Printf("\rListing %s objects", formatBigNum(len(names)))
+			fmt.Printf("\rListing %s objects", cos.FormatBigNum(len(names)))
 			prev = now
 			eol = true
 		}

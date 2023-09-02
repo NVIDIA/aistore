@@ -198,7 +198,12 @@ func (r *LsoXact) lastmsg() {
 }
 
 // compare w/ streaming (TODO: unify)
-func (r *LsoXact) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, time.Second/2) }
+func (r *LsoXact) postponeUnregRx() {
+	if r.IsAborted() || r.ErrCnt() > 0 {
+		return
+	}
+	hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, time.Second/2)
+}
 
 func (r *LsoXact) fcleanup() (d time.Duration) {
 	d = hk.UnregInterval

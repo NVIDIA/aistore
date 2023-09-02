@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -73,6 +73,26 @@ func ConvertToString(value any) (valstr string, err error) {
 	default:
 		debug.FailTypeCast(value)
 		err = fmt.Errorf("failed to assert type: %v(%T)", value, value)
+	}
+	return
+}
+
+func FormatBigNum(n int) (s string) {
+	if n < 1000 {
+		return strconv.Itoa(n)
+	}
+	for n > 0 {
+		rem := n % 1000
+		n = (n - rem) / 1000
+		if s == "" {
+			s = fmt.Sprintf("%03d", rem)
+			continue
+		}
+		if n == 0 {
+			s = strconv.Itoa(rem) + "," + s
+		} else {
+			s = fmt.Sprintf("%03d", rem) + "," + s
+		}
 	}
 	return
 }

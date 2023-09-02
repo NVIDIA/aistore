@@ -6,6 +6,7 @@
 package stats
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -289,32 +289,32 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 				r.prev = line
 			}
 		}
-		if idle {
-			r.next = now + maxStatsLogInterval
-		}
 	}
 
 	// 3. capacity
-	cs, updated, errfs := fs.CapPeriodic(now, config, &r.TargetCDF)
-	if updated {
-		if cs.Err == nil && cs.PctMax > int32(config.Space.CleanupWM) {
-			debug.Assert(!cs.OOS)
-			cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, cs.OOS)
-		}
-		if cs.Err != nil {
-			r.t.OOS(&cs)
-		}
-
-		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
-			ln := cos.MustMarshalToString(fsCapacity)
-			r.lines = append(r.lines, mpath+": "+ln)
-		}
-	} else if errfs != nil {
+	cs, _, errfs := fs.CapPeriodic(now, config, &r.TargetCDF)
+	if errfs != nil {
 		nlog.Errorln(errfs)
 	}
+	if cs.Err == nil && cs.PctMax > int32(config.Space.CleanupWM) {
+		cs.Err = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, cs.OOS)
+	}
+	if cs.Err != nil {
+		r.t.OOS(&cs)
+	}
+	if now >= r.next || cs.Err != nil {
+		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
+			s := fmt.Sprintf("%s: used %d%%", mpath, fsCapacity.Capacity.PctUsed)
+			r.lines = append(r.lines, s)
+			if config.TestingEnv() {
+				// skipping likely identical
+				break
+			}
+		}
+	}
 
-	// 4. append disk stats to log
-	r.logDiskStats()
+	// 4. append disk stats to log subject to (idle) filtering
+	r.logDiskStats(now)
 
 	// 5. memory pressure
 	_ = r.mem.Get()
@@ -349,16 +349,21 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	for _, ln := range r.lines {
 		nlog.Infoln(ln)
 	}
+
+	if now > r.next {
+		r.next = now + maxStatsLogInterval
+	}
 }
 
 // log formatted disk stats:
 // [ disk: read throughput, average read size, write throughput, average write size, disk utilization ]
 // e.g.: [ sda: 94MiB/s, 68KiB, 25MiB/s, 21KiB, 82% ]
-func (r *Trunner) logDiskStats() {
+func (r *Trunner) logDiskStats(now int64) {
 	for disk, stats := range r.disk {
-		if stats.Util < minLogDiskUtil {
+		if stats.Util < minLogDiskUtil/2 || (stats.Util < minLogDiskUtil && now < r.next) {
 			continue
 		}
+
 		rbps := cos.ToSizeIEC(stats.RBps, 0)
 		wbps := cos.ToSizeIEC(stats.WBps, 0)
 		ravg := cos.ToSizeIEC(stats.Ravg, 0)

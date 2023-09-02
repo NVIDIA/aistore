@@ -375,7 +375,7 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter,
 	}
 	if len(matched) > 10 {
 		listed := fblue("Listed:")
-		fmt.Fprintln(c.App.Writer, listed, len(matched), "names")
+		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names")
 	}
 	if flagIsSet(c, showUnmatchedFlag) && len(other) > 0 {
 		unmatched := fcyan("\nNames that didn't match: ") + strconv.Itoa(len(other))

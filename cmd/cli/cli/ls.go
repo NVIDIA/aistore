@@ -336,20 +336,15 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		}
 	}
 
-	cb := func(ctx *api.ProgressContext) {
-		fmt.Fprintf(c.App.Writer, "\rListed %d objects (elapsed: %s)",
-			ctx.Info().Count, teb.FormatDuration(ctx.Elapsed()))
-		if ctx.IsFinished() {
-			fmt.Fprintln(c.App.Writer)
-		}
-	}
-
 	// list all pages up to a limit, show progress
-	callAfter := listObjectsWaitTime
+	var (
+		callAfter = listObjectsWaitTime
+		u         = &_listed{c: c, bck: &bck}
+	)
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
 	}
-	ctx := api.NewProgressContext(cb, callAfter)
+	ctx := api.NewProgressContext(u.cb, callAfter)
 	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit), Progress: ctx})
 	if err != nil {
 		return V(err)
@@ -474,4 +469,36 @@ func splitObjnameShardBoundary(fullName string) (objName, fileName string) {
 		break
 	}
 	return
+}
+
+/////////////
+// _listed //
+/////////////
+
+type _listed struct {
+	c   *cli.Context
+	bck *cmn.Bck
+	l   int
+}
+
+func (u *_listed) cb(ctx *api.ProgressContext) {
+	if !ctx.IsFinished() {
+		s := "Listed " + cos.FormatBigNum(ctx.Info().Count) + " objects"
+		if u.l == 0 {
+			u.l = len(s) + 3
+			if u.bck.IsRemote() && !flagIsSet(u.c, listObjCachedFlag) {
+				note := fmt.Sprintf("listing remote objects in %s may take a while (tip: use %s to speed up)\n",
+					u.bck.Cname(""), qflprn(listObjCachedFlag))
+				actionNote(u.c, note)
+			}
+		} else if len(s) > u.l {
+			u.l = len(s) + 2
+		}
+		s += strings.Repeat(" ", u.l-len(s))
+		fmt.Fprintf(u.c.App.Writer, "\r%s", s)
+	} else {
+		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n",
+			cos.FormatBigNum(ctx.Info().Count), teb.FormatDuration(ctx.Elapsed()))
+		time.Sleep(time.Second)
+	}
 }
