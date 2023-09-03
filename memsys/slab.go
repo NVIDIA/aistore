@@ -154,6 +154,7 @@ func (s *Slab) cleanup() (freed int64) {
 
 func (s *Slab) ringIdx() int { return int(s.bufSize/s.m.slabIncStep) - 1 }
 func (s *Slab) hitsInc()     { s.m.slabStats.hits[s.ringIdx()].Inc() }
+
 func (s *Slab) idleDur(statsSnapshot *Stats) (d time.Duration) {
 	idx := s.ringIdx()
 	d = statsSnapshot.Idle[idx]

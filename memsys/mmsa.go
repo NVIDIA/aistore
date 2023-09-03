@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -167,11 +166,10 @@ type (
 	// private
 	//
 	slabStats struct {
-		sync.RWMutex
 		hits   [NumStats]atomic.Uint64
 		prev   [NumStats]uint64
 		hinc   [NumStats]uint64
-		idleTs [NumStats]int64
+		idleTs [NumStats]atomic.Int64
 	}
 )
 

@@ -1,7 +1,7 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
@@ -24,8 +24,8 @@ const (
 
 // hk tunables (via config.Memsys section)
 var (
-	sizeToGC      int64 = cos.GiB + cos.GiB>>1 // run GC when sum(`freed`) > sizeToGC
-	memCheckAbove       = 90 * time.Second     // memory checking frequency when above low watermark
+	sizeToGC      = int64(cos.GiB + cos.GiB>>1) // run GC when sum(`freed`) > sizeToGC
+	memCheckAbove = 90 * time.Second            // memory checking frequency when above low watermark
 )
 
 // API: on-demand memory freeing to the user-provided specification
@@ -61,10 +61,10 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 	}
 }
 
+// copies part of the internal stats into user-visible Stats
 func (r *MMSA) GetStats() (stats *Stats) {
-	r.slabStats.RLock()
-	stats = r.snapStats()
-	r.slabStats.RUnlock()
+	stats = &Stats{}
+	r._snap(stats, mono.NanoTime())
 	return
 }
 
@@ -72,10 +72,9 @@ func (r *MMSA) GetStats() (stats *Stats) {
 // private
 //
 
-// hkcb is called periodically by the system's house-keeper (hk)
 func (r *MMSA) hkcb() time.Duration {
-	// 1. refresh stats and sort idle < busy
-	r.refreshStatsSortIdle()
+	// 1. refresh and clone stats
+	r.refreshStats()
 
 	// 2. update swapping state and compute mem-pressure ranking
 	err := r.mem.Get()
@@ -113,7 +112,10 @@ func (r *MMSA) hkcb() time.Duration {
 		depth = optDepth / 2
 	}
 
-	// 5. reduce
+	// 5.
+	// - sort (idle < less-idle < busy) taking into account durations and ring hits (in that order)
+	// - _reduce_
+	sort.Slice(r.sorted, r.idleLess)
 	var gced bool
 	for _, s := range r.sorted { // idle first
 		if idle := r.statsSnapshot.Idle[s.ringIdx()]; idle > freeIdleMinDur/2 {
@@ -146,27 +148,21 @@ func (r *MMSA) hkIval(pressure int) time.Duration {
 	}
 }
 
-// 1) refresh internal stats
-// 2) "snapshot" internal stats
-// 3) sort by idle < less idle < busy (taking into account idle duration and hits inc, in that order)
-func (r *MMSA) refreshStatsSortIdle() {
-	r.slabStats.Lock()
+// refresh and clone internal hits/idle stats
+func (r *MMSA) refreshStats() {
 	now := mono.NanoTime()
 	for i := 0; i < r.numSlabs; i++ {
 		hits, prev := r.slabStats.hits[i].Load(), r.slabStats.prev[i]
 		hinc := hits - prev
 		if hinc == 0 {
-			if r.slabStats.idleTs[i] == 0 {
-				r.slabStats.idleTs[i] = now
-			}
+			r.slabStats.idleTs[i].CAS(0, now)
 		} else {
-			r.slabStats.idleTs[i] = 0
+			r.slabStats.idleTs[i].Store(0)
 		}
 		r.slabStats.hinc[i], r.slabStats.prev[i] = hinc, hits
 	}
-	_ = r.snapStats(r.statsSnapshot /* to fill in */)
-	r.slabStats.Unlock()
-	sort.Slice(r.sorted, r.idleLess /* idle < busy */)
+
+	r._snap(r.statsSnapshot, now)
 }
 
 func (r *MMSA) idleLess(i, j int) bool {
@@ -180,7 +176,7 @@ func (r *MMSA) idleLess(i, j int) bool {
 		}
 		return true
 	}
-	if r.slabStats.idleTs[jj] != 0 {
+	if r.slabStats.idleTs[jj].Load() != 0 {
 		return false
 	}
 	return r.slabStats.hinc[ii] < r.slabStats.hinc[jj]
@@ -219,7 +215,7 @@ func (r *MMSA) freeIdle() (total int64) {
 func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
-		nlog.Errorf("Failed to load averages, err: %v", err) // (should never happen)
+		nlog.Errorf("Failed to load averages: %v", err) // (unlikely)
 		avg.One = 999
 	}
 	if avg.One > loadAvg /*idle*/ && !force { // NOTE
@@ -242,19 +238,12 @@ func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
 	return
 }
 
-// copies (under lock) part of the internal stats into user-visible Stats
-func (r *MMSA) snapStats(sts ...*Stats) (stats *Stats) {
-	if len(sts) > 0 {
-		stats = sts[0]
-	} else {
-		stats = &Stats{}
-	}
-	now := mono.NanoTime()
+func (r *MMSA) _snap(stats *Stats, now int64) {
 	for i := range r.rings {
 		stats.Hits[i] = r.slabStats.hits[i].Load()
-		if r.slabStats.idleTs[i] != 0 {
-			stats.Idle[i] = time.Duration(now - r.slabStats.idleTs[i])
+		stats.Idle[i] = 0
+		if since := r.slabStats.idleTs[i].Load(); since != 0 {
+			stats.Idle[i] = time.Duration(now - since)
 		}
 	}
-	return
 }

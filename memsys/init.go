@@ -51,7 +51,7 @@ func Init(gmmName, smmName string, config *cmn.Config) {
 	}
 
 	gmm.Init(0)
-	nlog.InfoDepth(1, gmm.Str(&gmm.mem), " started")
+	nlog.InfoDepth(1, gmm.Str(&gmm.mem))
 
 	// byte mmsa:
 	smm = &MMSA{Name: smmName + ".smm", defBufSize: DefaultSmallBufSize, slabIncStep: SmallSlabIncStep}
