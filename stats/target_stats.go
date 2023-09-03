@@ -122,8 +122,6 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.core = &coreStats{}
 
 	r.core.init(numTargetStats)
-	r.runner.fast.n = make(map[string]*int64, 16)
-	r.runner.fast.v = make([]int64, 0, 16)
 
 	r.regCommon(t.Snode())
 
@@ -138,7 +136,6 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.runner.daemon = t
 
 	r.runner.stopCh = make(chan struct{}, 4)
-	r.runner.workCh = make(chan cos.NamedVal64, workChanCapacity)
 
 	r.core.initMetricClient(t.Snode(), &r.runner)
 
@@ -179,8 +176,8 @@ func isDiskUtilMetric(name string) bool {
 
 // target-specific metrics, in addition to common and already added via regCommon()
 func (r *Trunner) RegMetrics(node *meta.Snode) {
-	r.reg(node, GetColdCount, KindCounter, true /* fast */)
-	r.reg(node, GetColdSize, KindSize, true)
+	r.reg(node, GetColdCount, KindCounter)
+	r.reg(node, GetColdSize, KindSize)
 
 	r.reg(node, LruEvictCount, KindCounter)
 	r.reg(node, LruEvictSize, KindSize)
@@ -197,11 +194,11 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, PutRedirLatency, KindLatency)
 
 	// bps
-	r.reg(node, GetThroughput, KindThroughput, true)
-	r.reg(node, PutThroughput, KindThroughput, true)
+	r.reg(node, GetThroughput, KindThroughput)
+	r.reg(node, PutThroughput, KindThroughput)
 
-	r.reg(node, GetSize, KindSize, true)
-	r.reg(node, PutSize, KindSize, true)
+	r.reg(node, GetSize, KindSize)
+	r.reg(node, PutSize, KindSize)
 
 	// errors
 	r.reg(node, ErrCksumCount, KindCounter)
@@ -211,10 +208,10 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, ErrIOCount, KindCounter)
 
 	// streams
-	r.reg(node, StreamsOutObjCount, KindCounter, true)
-	r.reg(node, StreamsOutObjSize, KindSize, true)
-	r.reg(node, StreamsInObjCount, KindCounter, true)
-	r.reg(node, StreamsInObjSize, KindSize, true)
+	r.reg(node, StreamsOutObjCount, KindCounter)
+	r.reg(node, StreamsOutObjSize, KindSize)
+	r.reg(node, StreamsInObjCount, KindCounter)
+	r.reg(node, StreamsInObjSize, KindSize)
 
 	// special
 	r.reg(node, RestartCount, KindCounter)
@@ -224,12 +221,12 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, DownloadLatency, KindLatency)
 
 	// dsort
-	r.reg(node, DSortCreationReqCount, KindCounter, true)
-	r.reg(node, DSortCreationRespCount, KindCounter, true)
+	r.reg(node, DSortCreationReqCount, KindCounter)
+	r.reg(node, DSortCreationRespCount, KindCounter)
 	r.reg(node, DSortCreationRespLatency, KindLatency)
-	r.reg(node, DSortExtractShardDskCnt, KindCounter, true)
-	r.reg(node, DSortExtractShardMemCnt, KindCounter, true)
-	r.reg(node, DSortExtractShardSize, KindSize, true)
+	r.reg(node, DSortExtractShardDskCnt, KindCounter)
+	r.reg(node, DSortExtractShardMemCnt, KindCounter)
+	r.reg(node, DSortExtractShardSize, KindSize)
 
 	// Prometheus
 	r.core.initProm(node)
@@ -314,6 +311,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 4. append disk stats to log subject to (idle) filtering
+	// see related: `ignoreIdle`
 	r.logDiskStats(now)
 
 	// 5. memory pressure

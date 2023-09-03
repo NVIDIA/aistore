@@ -43,8 +43,6 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.core = &coreStats{}
 
 	r.core.init(numProxyStats)
-	r.runner.fast.n = make(map[string]*int64, 8)
-	r.runner.fast.v = make([]int64, 0, 8)
 
 	r.regCommon(p.Snode()) // common metrics
 
@@ -55,7 +53,6 @@ func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
 	r.runner.daemon = p
 
 	r.runner.stopCh = make(chan struct{}, 4)
-	r.runner.workCh = make(chan cos.NamedVal64, workChanCapacity)
 
 	r.core.initMetricClient(p.Snode(), &r.runner)
 
