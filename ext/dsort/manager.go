@@ -371,6 +371,8 @@ func (m *Manager) finalCleanup() {
 	// The reason why this is not in regular cleanup is because we are only sure
 	// that this can be freed once we cleanup streams - streams are asynchronous
 	// and we may have race between in-flight request and cleanup.
+	// Also, NOTE:
+	// recm.Cleanup => gmm.freeMemToOS => cos.FreeMemToOS to forcefully free memory to the OS
 	m.recm.Cleanup()
 
 	m.creationPhase.metadata.SendOrder = nil

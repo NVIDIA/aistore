@@ -5,7 +5,6 @@
 package dsort
 
 import (
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -155,7 +154,7 @@ func (mw *memoryWatcher) watchExcess(memStat sys.MemStat) {
 				return memExcess > 0 // continue if we need more
 			})
 
-			debug.FreeOSMemory() // free with force
+			cos.FreeMemToOS(true /*force*/)
 		case <-mw.m.listenAborted():
 			return
 		case <-mw.excess.stopCh.Listen():

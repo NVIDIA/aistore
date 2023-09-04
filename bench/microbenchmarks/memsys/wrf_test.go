@@ -5,6 +5,7 @@
 package memsys_test
 
 import (
+	rdebug "runtime/debug"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -40,7 +41,7 @@ func wrf(b *testing.B, payloadSz int64) {
 	gmm := memsys.PageMM()
 
 	// 2. equalize initial conditions
-	cos.FreeMemToOS()
+	rdebug.FreeOSMemory()
 	buf := make([]byte, cos.KiB*128)
 	n, _ := cryptorand.Read(buf)
 	cos.Assert(n == cos.KiB*128)

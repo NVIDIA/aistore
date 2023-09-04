@@ -9,6 +9,7 @@ package memsys_test
 import (
 	"io"
 	"os"
+	rdebug "runtime/debug"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func benchAlloc(b *testing.B, objsiz, sbufSize int64) {
 	defer mem.Terminate(false)
 
 	// reset initial conditions & start b-timer
-	cos.FreeMemToOS()
+	rdebug.FreeOSMemory()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -117,7 +118,7 @@ func benchWrite(b *testing.B, objsiz, sbufSize int64) {
 	defer mem.Terminate(false)
 
 	// reset initial conditions & start b-timer
-	cos.FreeMemToOS()
+	rdebug.FreeOSMemory()
 	buf := make([]byte, cos.KiB*128)
 	b.ResetTimer()
 
@@ -170,7 +171,7 @@ func benchWRF(b *testing.B, objsiz, sbufSize int64) {
 	cha := make(chan *memsys.SGL, 1024*16)
 
 	// reset initial conditions
-	cos.FreeMemToOS()
+	rdebug.FreeOSMemory()
 	l := cos.KiB * 128
 	buf := make([]byte, l)
 
@@ -226,7 +227,7 @@ func benchFile(b *testing.B, sbufSize int64) {
 	defer mem.Terminate(false)
 
 	// reset initial conditions
-	cos.FreeMemToOS()
+	rdebug.FreeOSMemory()
 
 	file, err := os.CreateTemp("/tmp", "")
 	if err != nil {

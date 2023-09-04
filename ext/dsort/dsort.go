@@ -128,8 +128,6 @@ func (m *Manager) start() (err error) {
 		}
 	}
 
-	cos.FreeMemToOS()
-
 	// Wait for signal to start shard creations. This will happen when manager
 	// notice that the specification for shards to be created locally was received.
 	select {

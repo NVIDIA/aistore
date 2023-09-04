@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	rdebug "runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -1059,8 +1060,7 @@ func TestDsortMemDisk(t *testing.T) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	cos.FreeMemToOS()
-	time.Sleep(time.Second)
+	rdebug.FreeOSMemory()
 
 	// Get current memory
 	err := mem.Get()
@@ -1132,8 +1132,7 @@ func minMemCompression(t *testing.T, ext, maxMem string) {
 	df.createInputShards()
 
 	// Try to free all memory to get estimated actual used memory size
-	cos.FreeMemToOS()
-	time.Sleep(time.Second)
+	rdebug.FreeOSMemory()
 
 	// Get current memory
 	err := mem.Get()

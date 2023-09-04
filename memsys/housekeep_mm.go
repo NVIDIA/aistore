@@ -6,7 +6,6 @@
 package memsys
 
 import (
-	"runtime"
 	"sort"
 	"time"
 
@@ -57,7 +56,7 @@ func (r *MMSA) FreeSpec(spec FreeSpec) {
 		if spec.MinSize == 0 {
 			spec.MinSize = sizeToGC // using default
 		}
-		r.doGC(spec.MinSize, spec.ToOS /* force */)
+		r.freeMemToOS(spec.MinSize, spec.ToOS /* force */)
 	}
 }
 
@@ -87,7 +86,7 @@ func (r *MMSA) hkcb() time.Duration {
 		r.optDepth.Store(optDepth)
 		if freed := r.freeIdle(); freed > 0 {
 			r.toGC.Add(freed)
-			r.doGC(sizeToGC, false)
+			r.freeMemToOS(sizeToGC, false)
 		}
 		return r.hkIval(pressure)
 	}
@@ -116,24 +115,16 @@ func (r *MMSA) hkcb() time.Duration {
 	// - sort (idle < less-idle < busy) taking into account durations and ring hits (in that order)
 	// - _reduce_
 	sort.Slice(r.sorted, r.idleLess)
-	var gced bool
 	for _, s := range r.sorted { // idle first
 		if idle := r.statsSnapshot.Idle[s.ringIdx()]; idle > freeIdleMinDur/2 {
 			depth = minDepth
 		}
 		freed := s.reduce(depth)
-		if freed > 0 {
-			r.toGC.Add(freed)
-			if !gced {
-				gced = r.doGC(mingc, true)
-			}
-		}
+		r.toGC.Add(freed)
 	}
 
-	// 6. GC
-	if pressure >= PressureHigh {
-		r.doGC(mingc, true)
-	}
+	// 6. GC and free mem to OS
+	r.freeMemToOS(mingc, pressure >= PressureHigh /*force*/)
 	return r.hkIval(pressure)
 }
 
@@ -208,34 +199,28 @@ func (r *MMSA) freeIdle() (total int64) {
 	return
 }
 
-// The method is called:
-// 1) upon periodic freeing of idle slabs
-// 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
-// 3) on demand via MMSA.Free()
-func (r *MMSA) doGC(mingc int64, force bool) (gced bool) {
+// check "minimum" and "load" conditions and calls (expensive, serialized) goroutine
+func (r *MMSA) freeMemToOS(mingc int64, force bool) {
 	avg, err := sys.LoadAverage()
 	if err != nil {
 		nlog.Errorf("Failed to load averages: %v", err) // (unlikely)
 		avg.One = 999
 	}
-	if avg.One > loadAvg /*idle*/ && !force { // NOTE
-		return
-	}
 	togc := r.toGC.Load()
+
+	// too little to bother?
 	if togc < mingc {
 		return
 	}
-	sgc := cos.ToSizeIEC(togc, 1)
-	if force {
-		nlog.Warningf("%s: freeing %s to the OS (load %.2f)", r, sgc, avg.One)
-		cos.FreeMemToOS()
-	} else {
-		nlog.Warningf("%s: GC %s (load %.2f)", r, sgc, avg.One)
-		runtime.GC()
+	// too loaded w/ no urgency?
+	if avg.One > loadAvg /*idle*/ && !force {
+		return
 	}
-	gced = true
-	r.toGC.Store(0)
-	return
+
+	if started := cos.FreeMemToOS(force); started {
+		nlog.Infof("%s: free mem to OS: %s, load %.2f, force %t", r, cos.ToSizeIEC(togc, 1), avg.One, force)
+		r.toGC.Store(0)
+	}
 }
 
 func (r *MMSA) _snap(stats *Stats, now int64) {

@@ -215,7 +215,7 @@ func (recm *RecordManager) MergeEnqueuedRecords() {
 
 		recm.Records.merge(records)
 	}
-	cos.FreeMemToOS()
+	cos.FreeMemToOS(false /*force*/)
 }
 
 func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName string) (contentPath, fullContentPath string) {
@@ -354,8 +354,7 @@ func (recm *RecordManager) Cleanup() {
 	})
 	recm.contents = nil
 
-	// NOTE: forcefully free all MMSA memory to the OS
-	// TODO: another reason to use a separate MMSA for extractions
+	// NOTE: may call cos.FreeMemToOS
 	T.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
