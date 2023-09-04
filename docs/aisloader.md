@@ -197,24 +197,28 @@ Before starting a test, it is possible to set `mirror` or `EC` properties on a b
 To achieve that, use the option `-bprops`. For example:
 
 ```console
-$ aisloader -bucket=abc -pctput=0 -cleanup=false -duration 10s -bprops='{"mirror": {"copies": 2, "enabled": false, "util_thresh": 5}, "ec": {"enabled": false, "data_slices": 2, "parity_slices": 2}}'
+$ aisloader -bucket=ais://abc -pctput=0 -cleanup=false -duration 10s -bprops='{"mirror": {"copies": 2, "enabled": false}, "ec": {"enabled": false, "data_slices": 2, "parity_slices": 2}}'
 ```
 
 The above example shows the values that are globally default. You can omit the defaults and specify only those values that you'd want to change. For instance, to enable erasure coding on the bucket "abc":
 
 ```console
-$ aisloader -bucket=abc -duration 10s -bprops='{"ec": {"enabled": true}}'
+$ aisloader -bucket=ais://abc -duration 1h -bprops='{"ec": {"enabled": true}}' -cleanup=false
 ```
 
 This example sets the number of data and parity slices to 2 which, in turn, requires the cluster to have at least 5 target nodes: 2 for data slices, 2 for parity slices and one for the original object.
 
 > Once erasure coding is enabled, its properties `data_slices` and `parity_slices` cannot be changed on the fly.
 
+> Note that (n `data_slices`, m `parity_slices`) erasure coding requires at least (n + m + 1) target nodes in a cluster.
+
+> Even though erasure coding and/or mirroring can be enabled/disabled and otherwise reconfigured at any point in time, specifically for the purposes of running benchmarks it is generally recommended to do it once _prior_ to writing any data to the bucket in question.
+
 The following sequence populates a bucket configured for both local mirroring and erasure coding, and then reads from it for 1h:
 
 ```console
 # Fill bucket
-$ aisloader -bucket=abc -cleanup=false -pctput=100 -duration 100m -bprops='{"mirror": {"enabled": true}, "ec": {"enabled": true}}'
+$ aisloader -bucket=ais://abc -cleanup=false -pctput=100 -duration 100m -bprops='{"mirror": {"enabled": true}, "ec": {"enabled": true}}'
 
 # Read
 $ aisloader -bucket=abc -cleanup=false -pctput=0 -duration 1h

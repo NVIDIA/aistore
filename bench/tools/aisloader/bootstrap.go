@@ -373,7 +373,14 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.etlName, "etl", "", "name of an ETL applied to each object on GET request. One of '', 'tar2tf', 'md5', 'echo'")
 	f.StringVar(&p.etlSpecPath, "etl-spec", "", "path to an ETL spec to be applied to each object on GET request.")
 
+	// temp replace flags.Usage callback:
+	// too many flags with actual parsing error quickly disappearing from view
+	orig := f.Usage
+	f.Usage = func() {
+		fmt.Println("Run `aisloader` or `aisloader version`, or see 'docs/aisloader.md' for details and usage examples.")
+	}
 	f.Parse(os.Args[1:])
+	f.Usage = orig
 
 	if len(os.Args[1:]) == 0 {
 		printUsage(f)
@@ -383,11 +390,11 @@ func parseCmdLine() (params, error) {
 	os.Args = []string{os.Args[0]}
 	flag.Parse() // Called so that imported packages don't complain
 
-	if flagUsage || f.NArg() != 0 && f.Arg(0) == "usage" {
+	if flagUsage || (f.NArg() != 0 && f.Arg(0) == "usage") {
 		printUsage(f)
 		os.Exit(0)
 	}
-	if flagVersion || f.NArg() != 0 && f.Arg(0) == "version" {
+	if flagVersion || (f.NArg() != 0 && f.Arg(0) == "version") {
 		fmt.Printf("version %s (build %s)\n", _version, _buildtime)
 		os.Exit(0)
 	}
