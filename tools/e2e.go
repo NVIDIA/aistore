@@ -103,6 +103,12 @@ func isLineRegex(msg string) bool {
 	return len(msg) > 2 && msg[0] == '^' && msg[len(msg)-1] == '$'
 }
 
+func detectK8s() bool {
+	cmd := exec.Command("which", "kubectl")
+	err := cmd.Run()
+	return err == nil
+}
+
 func (f *E2EFramework) RunE2ETest(fileName string) {
 	var (
 		outs []string
@@ -213,6 +219,13 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 					continue
 				}
 				ginkgo.Skip("AuthN not enabled - skipping")
+				return
+			case "k8s":
+				// Skip running k8s (etl) tests if AIStore is not deployed in kubernetes
+				if detectK8s() {
+					continue
+				}
+				ginkgo.Skip("AIStore not running in K8s - skipping")
 				return
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
