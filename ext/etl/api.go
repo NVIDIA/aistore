@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	jsoniter "github.com/json-iterator/go"
@@ -196,6 +197,15 @@ func (m *InitMsgBase) validate(detail string) error {
 	if m.ArgTypeX == ArgTypeFQN && !(m.CommTypeX == Hpull || m.CommTypeX == Hpush) {
 		err := fmt.Errorf("arg-type %q requires comm-type (%q or %q) - %q is not supported yet",
 			m.ArgTypeX, Hpull, Hpush, m.CommTypeX)
+		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
+	}
+
+	//
+	// ArgTypeFQN ("fqn") can also be globally disallowed
+	//
+	if m.ArgTypeX == ArgTypeFQN && cmn.Features.IsSet(feat.DontAllowPassingFQNtoETL) {
+		err := fmt.Errorf("arg-type %q is not permitted by the configured feature flags (%s)",
+			m.ArgTypeX, cmn.Features.String())
 		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
 	}
 

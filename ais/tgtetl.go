@@ -240,9 +240,10 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 
 // GET /v1/etl/_objects/<secret>/<uname>
 // Handles GET requests from ETL containers (K8s Pods).
-// Validates the secret that was injected into a Pod during its initialization.
+// Validates the secret that was injected into a Pod during its initialization
+// (see boot.go `_setPodEnv`).
 //
-// NOTE: this is an internal URL with `_objects` in its path intended to avoid
+// NOTE: this is an internal URL with "_objects" in its path intended to avoid
 // conflicts with ETL name in `/v1/elts/<etl-name>/...`
 func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 	secret, bck, objName, err := etlParseObjectReq(w, r)

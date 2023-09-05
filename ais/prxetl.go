@@ -31,12 +31,20 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodPut:
+		// require Admin access (a no-op if AuthN is not used, here and elsewhere)
+		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+			return
+		}
 		p.handleETLPut(w, r)
 	case r.Method == http.MethodPost:
 		p.handleETLPost(w, r)
 	case r.Method == http.MethodGet:
 		p.handleETLGet(w, r)
 	case r.Method == http.MethodDelete:
+		// ditto
+		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+			return
+		}
 		p.handleETLDelete(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodPost)
@@ -78,17 +86,16 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/etl
 // Validate and start a new ETL instance:
-//  1. validate user-provided code/pod specification.
-//  2. broadcast `etl.InitMsg` to all targets.
-//  3. if any target fails to start ETL stop it on all (targets).
-//  4. otherwise:
-//     - add the new ETL instance (represented by the user-specified `etl.InitMsg`) to cluster MD
-//     - return ETL UUID to the user.
+//   - validate user-provided code/pod specification.
+//   - broadcast `etl.InitMsg` to all targets.
+//   - (as usual) if any target fails to start ETL stop it on all (targets).
+//     otherwise:
+//   - add the new ETL instance (represented by the user-specified `etl.InitMsg`) to cluster MD
+//   - return ETL UUID to the user.
 func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 	if _, err := p.parseURL(w, r, 0, false, apc.URLPathETL.L); err != nil {
 		return
 	}
-
 	if p.forwardCP(w, r, nil, "init ETL") {
 		return
 	}
@@ -128,7 +135,6 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
-//
 // start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	apiItems, err := p.parseURL(w, r, 2, true, apc.URLPathETL.L)

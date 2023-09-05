@@ -3022,7 +3022,7 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 	// with `/` root reserved for vanilla http locations via ht:// mechanism
 	config := cmn.GCO.Get()
 	cmn.Features = config.Features
-	if !cmn.Features.IsSet(feat.ProvideS3APIViaRoot) {
+	if !cmn.Features.IsSet(feat.ProvideS3APIviaRoot) {
 		p.htHandler(w, r)
 		return
 	}
