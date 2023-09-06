@@ -951,15 +951,22 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	p.uptime2hdr(w.Header())
 
-	query := r.URL.Query()
-	prr := cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))
+	var (
+		prr, getCii, askPrimary bool
+	)
+	if r.URL.RawQuery != "" {
+		query := r.URL.Query()
+		prr = cos.IsParseBool(query.Get(apc.QparamPrimaryReadyReb))
+		getCii = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+		askPrimary = cos.IsParseBool(query.Get(apc.QparamAskPrimary))
+	}
+
 	if !prr {
-		if responded := p.healthByExternalWD(w, r); responded {
+		if responded := p.externalWD(w, r); responded {
 			return
 		}
 	}
 	// piggy-backing cluster info on health
-	getCii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))
 	if getCii {
 		debug.Assert(!prr)
 		cii := &clusterInfo{}
@@ -993,7 +1000,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if prr || cos.IsParseBool(query.Get(apc.QparamAskPrimary)) {
+	if prr || askPrimary {
 		caller := r.Header.Get(apc.HdrCallerName)
 		p.writeErrf(w, r, "%s (non-primary): misdirected health-of-primary request from %s, %s",
 			p, caller, smap.StringEx())

@@ -435,10 +435,9 @@ type (
 		Enabled *bool   `json:"enabled,omitempty"`
 	}
 
-	// config for one keepalive tracker
-	// all type of trackers share the same struct, not all fields are used by all trackers
+	// keepalive tracker
 	KeepaliveTrackerConf struct {
-		Name     string       `json:"name"`     // "heartbeat", "average"
+		Name     string       `json:"name"`     // "heartbeat" (other enumerated values TBD)
 		Interval cos.Duration `json:"interval"` // keepalive interval
 		Factor   uint8        `json:"factor"`   // only average
 	}
@@ -1175,23 +1174,13 @@ func (c *WritePolicyConf) ValidateAsProps(...any) error { return c.Validate() }
 // KeepaliveConf //
 ///////////////////
 
-const (
-	KeepaliveHeartbeatType = "heartbeat"
-	KeepaliveAverageType   = "average"
-)
-
-func validKeepaliveType(t string) bool {
-	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
-}
-
 func (c *KeepaliveConf) Validate() (err error) {
-	if !validKeepaliveType(c.Proxy.Name) {
-		return fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
+	if c.Proxy.Name != "heartbeat" {
+		err = fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
+	} else if c.Target.Name != "heartbeat" {
+		err = fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
 	}
-	if !validKeepaliveType(c.Target.Name) {
-		return fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
-	}
-	return nil
+	return
 }
 
 func KeepaliveRetryDuration(cs ...*Config) time.Duration {

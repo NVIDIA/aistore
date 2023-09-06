@@ -57,7 +57,7 @@ type (
 	}
 	keepalive struct {
 		k            keepaliver
-		kt           KeepaliveTracker
+		kt           hbTracker
 		statsT       stats.Tracker
 		tt           *timeoutTracker
 		controlCh    chan controlSignal
@@ -82,15 +82,16 @@ type (
 		msg string
 	}
 
-	KeepaliveTracker interface {
-		// HeardFrom notifies tracker that the server identified by 'id' has responded;
-		// 'reset'=true when it is not a regular keepalive call (could be reconnect or re-register).
-		HeardFrom(id string, reset bool)
-		// TimedOut returns true if the 'id` server did not respond - an indication that the server
-		// could be down
-		TimedOut(id string) bool
+	hbTracker interface {
+		HeardFrom(id string, reset bool) // callback for 'id' to respond; 'reset' in special cases (reconnect/re-register)
+		TimedOut(id string) bool         // returns true if 'id` did not respond within expected interval
 
 		changed(factor uint8, interval time.Duration) bool
+	}
+	heartBeat struct {
+		last     map[string]int64
+		interval time.Duration // timeout
+		mtx      sync.RWMutex
 	}
 )
 
@@ -102,8 +103,7 @@ var (
 	_ keepaliver = (*talive)(nil)
 	_ keepaliver = (*palive)(nil)
 
-	_ KeepaliveTracker = (*HBTracker)(nil)
-	_ KeepaliveTracker = (*AvgTracker)(nil)
+	_ hbTracker = (*heartBeat)(nil)
 )
 
 ////////////
@@ -118,7 +118,7 @@ func newTalive(t *target, statsT stats.Tracker, startedUp *atomic.Bool) *talive 
 	tkr.keepalive.k = tkr
 	tkr.statsT = statsT
 	tkr.keepalive.startedUp = startedUp
-	tkr.kt = newKeepaliveTracker(&config.Keepalive.Target)
+	tkr.kt = newHB(config.Keepalive.Target.Interval.D())
 	tkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
 	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	tkr.interval = config.Keepalive.Target.Interval.D()
@@ -157,7 +157,7 @@ func newPalive(p *proxy, statsT stats.Tracker, startedUp *atomic.Bool) *palive {
 	pkr.keepalive.k = pkr
 	pkr.statsT = statsT
 	pkr.keepalive.startedUp = startedUp
-	pkr.kt = newKeepaliveTracker(&config.Keepalive.Proxy)
+	pkr.kt = newHB(config.Keepalive.Proxy.Interval.D())
 	pkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
 	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	pkr.interval = config.Keepalive.Proxy.Interval.D()
@@ -477,7 +477,7 @@ func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveT
 		return
 	}
 	k.interval = cfg.Interval.D()
-	k.kt = newKeepaliveTracker(cfg)
+	k.kt = newHB(cfg.Interval.D())
 }
 
 // is called by non-primary proxies and (all) targets to send keepalive req. to the primary
@@ -609,112 +609,29 @@ func (k *keepalive) ctrl(msg string) {
 func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 
 ///////////////
-// HBTracker //
+// heartBeat //
 ///////////////
 
-// HBTracker tracks the timestamp of the last time a message is received from a server.
-// Timeout: a message is not received within the `interval`.
-type HBTracker struct {
-	last     map[string]int64
-	interval time.Duration
-	mtx      sync.RWMutex
-}
-
-// NewKeepaliveTracker returns a keepalive tracker based on the parameters given.
-func newKeepaliveTracker(c *cmn.KeepaliveTrackerConf) KeepaliveTracker {
-	switch c.Name {
-	case cmn.KeepaliveHeartbeatType:
-		return newHBTracker(c.Interval.D())
-	case cmn.KeepaliveAverageType:
-		return newAvgTracker(c.Factor)
-	}
-	return nil
-}
-
-// newHBTracker returns a HBTracker.
-func newHBTracker(interval time.Duration) *HBTracker {
-	return &HBTracker{
+func newHB(interval time.Duration) *heartBeat {
+	return &heartBeat{
 		last:     make(map[string]int64),
 		interval: interval,
 	}
 }
 
-func (hb *HBTracker) HeardFrom(id string, _ bool) {
+func (hb *heartBeat) HeardFrom(id string, _ bool) {
 	hb.mtx.Lock()
 	hb.last[id] = mono.NanoTime()
 	hb.mtx.Unlock()
 }
 
-func (hb *HBTracker) TimedOut(id string) bool {
+func (hb *heartBeat) TimedOut(id string) bool {
 	hb.mtx.RLock()
 	t, ok := hb.last[id]
 	hb.mtx.RUnlock()
 	return !ok || mono.Since(t) > hb.interval
 }
 
-func (hb *HBTracker) changed(_ uint8, interval time.Duration) bool {
+func (hb *heartBeat) changed(_ uint8, interval time.Duration) bool {
 	return hb.interval != interval
-}
-
-////////////////
-// AvgTracker //
-////////////////
-
-// AvgTracker keeps track of the average latency of all messages.
-// Timeout: last received is more than the 'factor' of current average.
-type (
-	AvgTracker struct {
-		rec    map[string]avgTrackerRec
-		mtx    sync.RWMutex
-		factor uint8
-	}
-	avgTrackerRec struct {
-		count   int64
-		last    int64
-		totalMS int64 // in ms
-	}
-)
-
-func (rec *avgTrackerRec) avg() int64 {
-	return rec.totalMS / rec.count
-}
-
-// newAvgTracker returns an AvgTracker.
-func newAvgTracker(factor uint8) *AvgTracker {
-	return &AvgTracker{rec: make(map[string]avgTrackerRec), factor: factor}
-}
-
-// HeardFrom is called to indicate that a keepalive message (or equivalent) has been received.
-func (a *AvgTracker) HeardFrom(id string, reset bool) {
-	var rec avgTrackerRec
-	a.mtx.Lock()
-	defer a.mtx.Unlock()
-	rec, ok := a.rec[id]
-	if reset || !ok {
-		a.rec[id] = avgTrackerRec{count: 0, totalMS: 0, last: mono.NanoTime()}
-		return
-	}
-	t := mono.NanoTime()
-	delta := t - rec.last
-	rec.last = t
-	rec.count++
-	rec.totalMS += delta / int64(time.Millisecond)
-	a.rec[id] = rec
-}
-
-func (a *AvgTracker) TimedOut(id string) bool {
-	a.mtx.RLock()
-	rec, ok := a.rec[id]
-	a.mtx.RUnlock()
-	if !ok {
-		return true
-	}
-	if rec.count == 0 {
-		return false
-	}
-	return int64(mono.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
-}
-
-func (a *AvgTracker) changed(factor uint8, _ time.Duration) bool {
-	return a.factor != factor
 }

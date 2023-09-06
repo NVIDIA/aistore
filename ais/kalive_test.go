@@ -82,7 +82,7 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 }
 
 func TestHB(t *testing.T) {
-	hb := newHBTracker(time.Millisecond * 10)
+	hb := newHB(time.Millisecond * 10)
 
 	if !hb.TimedOut("unknown server") {
 		t.Fatal("None existing server should return timed out")

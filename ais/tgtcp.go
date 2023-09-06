@@ -1007,22 +1007,30 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 // GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
-		nlog.Warningf("[health] %s: standing by...", t)
+		if cmn.FastV(4, cos.SmoduleAIS) {
+			nlog.Warningf("[health] %s: standing by...", t)
+		}
 	} else if !t.NodeStarted() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
-	if responded := t.healthByExternalWD(w, r); responded {
+	if responded := t.externalWD(w, r); responded {
 		return
 	}
 
 	t.uptime2hdr(w.Header())
 
-	// cluster info piggy-back
-	query := r.URL.Query()
-	getCii := cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+	var (
+		getCii, getRebStatus bool
+	)
+	if r.URL.RawQuery != "" {
+		query := r.URL.Query()
+		getCii = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+		getRebStatus = cos.IsParseBool(query.Get(apc.QparamRebStatus))
+	}
+
+	// piggyback [cluster info]
 	if getCii {
-		debug.Assert(!query.Has(apc.QparamRebStatus))
 		cii := &clusterInfo{}
 		cii.fill(&t.htrun)
 		t.writeJSON(w, r, cii, "cluster-info")
@@ -1034,6 +1042,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
+
 	// return ok plus optional reb info
 	var (
 		err              error
@@ -1049,7 +1058,6 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("health-ping from (%s, %s) with %s Smap v%d", callerID, caller, s, callerSmapVer)
 		nlog.Warningf("%s[%s]: %v", t, smap.StringEx(), err)
 	}
-	getRebStatus := cos.IsParseBool(query.Get(apc.QparamRebStatus))
 	if getRebStatus {
 		status := &reb.Status{}
 		t.reb.RebStatus(status)

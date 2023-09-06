@@ -25,13 +25,13 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type dummyKT struct{}
+type nopHB struct{}
 
-func (*dummyKT) HeardFrom(string, bool)            {}
-func (*dummyKT) TimedOut(string) bool              { return false }
-func (*dummyKT) changed(uint8, time.Duration) bool { return false }
+func (*nopHB) HeardFrom(string, bool)            {}
+func (*nopHB) TimedOut(string) bool              { return false }
+func (*nopHB) changed(uint8, time.Duration) bool { return false }
 
-var _ KeepaliveTracker = (*dummyKT)(nil)
+var _ hbTracker = (*nopHB)(nil)
 
 var _ = Describe("Notifications xaction test", func() {
 	// NOTE: constants and functions declared inside 'Describe' to avoid cluttering of `ais` namespace.
@@ -71,7 +71,7 @@ var _ = Describe("Notifications xaction test", func() {
 			p.client.data = &http.Client{}
 			p.client.control = &http.Client{}
 			palive := newPalive(p, tracker, atomic.NewBool(true))
-			palive.keepalive.kt = &dummyKT{}
+			palive.keepalive.kt = &nopHB{}
 			p.keepalive = palive
 			return p
 		}

@@ -1945,7 +1945,8 @@ func (h *htrun) unregisterSelf(ignoreErr bool) (err error) {
 	return
 }
 
-func (h *htrun) healthByExternalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
+// via /health handler
+func (h *htrun) externalWD(w http.ResponseWriter, r *http.Request) (responded bool) {
 	callerID := r.Header.Get(apc.HdrCallerID)
 	caller := r.Header.Get(apc.HdrCallerName)
 	// external call
