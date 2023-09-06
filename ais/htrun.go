@@ -704,7 +704,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	}
 
 	if sid != unknownDaemonID {
-		h.keepalive.heardFrom(sid, false /* reset */)
+		h.keepalive.heardFrom(sid)
 	}
 	return
 }

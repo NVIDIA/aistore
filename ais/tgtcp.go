@@ -1070,7 +1070,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if smap.GetProxy(callerID) != nil {
-		t.keepalive.heardFrom(callerID, false)
+		t.keepalive.heardFrom(callerID)
 	}
 }
 

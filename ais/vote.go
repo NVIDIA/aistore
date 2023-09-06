@@ -640,7 +640,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	config := cmn.GCO.Get()
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
-	if !h.keepalive.isTimeToPing(currPrimaryID) {
+	if !h.keepalive.timeToPing(currPrimaryID) {
 		if config.FastV(4, cos.SmoduleAIS) {
 			nlog.Warningf("Primary %s is still alive", currPrimaryID)
 		}

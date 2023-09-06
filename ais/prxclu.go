@@ -639,7 +639,7 @@ func (p *proxy) kalive(nsi, osi *meta.Snode) bool {
 		return true // NOTE: update cluster map
 	}
 
-	p.keepalive.heardFrom(nsi.ID(), false /*reset*/)
+	p.keepalive.heardFrom(nsi.ID())
 	return false
 }
 

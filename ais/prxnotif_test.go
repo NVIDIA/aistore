@@ -27,9 +27,10 @@ import (
 
 type nopHB struct{}
 
-func (*nopHB) HeardFrom(string, bool)            {}
-func (*nopHB) TimedOut(string) bool              { return false }
-func (*nopHB) changed(uint8, time.Duration) bool { return false }
+func (*nopHB) HeardFrom(string)       {}
+func (*nopHB) TimedOut(string) bool   { return false }
+func (*nopHB) reg(string)             {}
+func (*nopHB) set(time.Duration) bool { return false }
 
 var _ hbTracker = (*nopHB)(nil)
 
@@ -71,7 +72,7 @@ var _ = Describe("Notifications xaction test", func() {
 			p.client.data = &http.Client{}
 			p.client.control = &http.Client{}
 			palive := newPalive(p, tracker, atomic.NewBool(true))
-			palive.keepalive.kt = &nopHB{}
+			palive.keepalive.hb = &nopHB{}
 			p.keepalive = palive
 			return p
 		}

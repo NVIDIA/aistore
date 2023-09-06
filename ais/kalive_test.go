@@ -16,10 +16,9 @@ const (
 
 func TestTimeoutStatsForDaemon(t *testing.T) {
 	k := &keepalive{
-		tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 		maxKeepalive: int64(maxKeepalive),
 	}
-	ts := k.timeoutStats(daemonID)
+	ts := k.tost(daemonID)
 	timeout := time.Duration(ts.timeout)
 	srtt := time.Duration(ts.srtt)
 	rttvar := time.Duration(ts.rttvar)
@@ -37,12 +36,11 @@ func TestTimeoutStatsForDaemon(t *testing.T) {
 func TestUpdateTimeoutForDaemon(t *testing.T) {
 	{
 		k := &keepalive{
-			tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 			maxKeepalive: int64(maxKeepalive),
 		}
-		initial := k.timeoutStats(daemonID)
+		initial := k.tost(daemonID)
 		nextRTT := time.Duration(initial.srtt * 3 / 4)
-		nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
+		nextTimeout := k.updTimeout(daemonID, nextRTT)
 		if nextTimeout <= nextRTT {
 			t.Errorf("updated timeout: %v should be greater than most recent RTT: %v", nextTimeout, nextRTT)
 		} else if nextTimeout > maxKeepalive {
@@ -52,12 +50,11 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	}
 	{
 		k := &keepalive{
-			tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 			maxKeepalive: int64(maxKeepalive),
 		}
-		initial := k.timeoutStats(daemonID)
+		initial := k.tost(daemonID)
 		nextRTT := time.Duration(initial.srtt + initial.srtt/10)
-		nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
+		nextTimeout := k.updTimeout(daemonID, nextRTT)
 		if nextTimeout != maxKeepalive {
 			t.Errorf("updated timeout: %v should be equal to the max keepalive timeout: %v",
 				nextTimeout, maxKeepalive)
@@ -65,13 +62,12 @@ func TestUpdateTimeoutForDaemon(t *testing.T) {
 	}
 	{
 		k := &keepalive{
-			tt:           &timeoutTracker{timeoutStats: make(map[string]*timeoutStats)},
 			maxKeepalive: int64(maxKeepalive),
 		}
 		for i := 0; i < 100; i++ {
-			initial := k.timeoutStats(daemonID)
+			initial := k.tost(daemonID)
 			nextRTT := time.Duration(initial.srtt / 4)
-			nextTimeout := k.updateTimeoutFor(daemonID, nextRTT)
+			nextTimeout := k.updTimeout(daemonID, nextRTT)
 			// Eventually, the `nextTimeout` must converge and stop at `maxKeepalive/2`.
 			if i > 25 && nextTimeout != maxKeepalive/2 {
 				t.Errorf("updated timeout: %v should be equal to the min keepalive timeout: %v",
@@ -89,7 +85,7 @@ func TestHB(t *testing.T) {
 	}
 
 	id1 := "1"
-	hb.HeardFrom(id1, false)
+	hb.HeardFrom(id1)
 	time.Sleep(time.Millisecond * 1)
 
 	if hb.TimedOut(id1) {
@@ -102,16 +98,16 @@ func TestHB(t *testing.T) {
 		t.Fatal("Expecting time out")
 	}
 
-	hb.HeardFrom(id1, false)
+	hb.HeardFrom(id1)
 	time.Sleep(time.Millisecond * 11)
-	hb.HeardFrom(id1, false)
+	hb.HeardFrom(id1)
 	if hb.TimedOut(id1) {
 		t.Fatal("Expecting no time out")
 	}
 
 	time.Sleep(time.Millisecond * 10)
 	id2 := "2"
-	hb.HeardFrom(id2, false)
+	hb.HeardFrom(id2)
 
 	if hb.TimedOut(id2) {
 		t.Fatal("Expecting no time out")

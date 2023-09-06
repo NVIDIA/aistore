@@ -38,9 +38,9 @@ type (
 	keepaliver interface {
 		sendKalive(*smapX, time.Duration) (string, int, error)
 		onerr(err error, status int)
-		heardFrom(sid string, reset bool)
+		heardFrom(sid string)
 		do() (stopped bool)
-		isTimeToPing(sid string) bool
+		timeToPing(sid string) bool
 		ctrl(msg string)
 		paused() bool
 		cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf
@@ -57,22 +57,18 @@ type (
 	}
 	keepalive struct {
 		k            keepaliver
-		kt           hbTracker
+		hb           hbTracker
 		statsT       stats.Tracker
-		tt           *timeoutTracker
+		tosts        sync.Map
 		controlCh    chan controlSignal
 		startedUp    *atomic.Bool
 		name         string
-		inProgress   atomic.Int64 // toggle used only by the primary
 		maxKeepalive int64
 		interval     time.Duration
+		inProgress   atomic.Bool
 		tickerPaused atomic.Bool
 	}
-	timeoutTracker struct {
-		timeoutStats map[string]*timeoutStats
-		mu           sync.Mutex
-	}
-	timeoutStats struct {
+	tost struct {
 		srtt    int64 // smoothed round-trip time in ns
 		rttvar  int64 // round-trip time variation in ns
 		timeout int64 // in ns
@@ -83,15 +79,15 @@ type (
 	}
 
 	hbTracker interface {
-		HeardFrom(id string, reset bool) // callback for 'id' to respond; 'reset' in special cases (reconnect/re-register)
-		TimedOut(id string) bool         // returns true if 'id` did not respond within expected interval
+		HeardFrom(id string)     // callback for 'id' to respond
+		TimedOut(id string) bool // returns true if 'id` did not respond within expected interval
 
-		changed(factor uint8, interval time.Duration) bool
+		reg(id string)
+		set(interval time.Duration) bool
 	}
 	heartBeat struct {
-		last     map[string]int64
+		last     sync.Map
 		interval time.Duration // timeout
-		mtx      sync.RWMutex
 	}
 )
 
@@ -118,12 +114,23 @@ func newTalive(t *target, statsT stats.Tracker, startedUp *atomic.Bool) *talive 
 	tkr.keepalive.k = tkr
 	tkr.statsT = statsT
 	tkr.keepalive.startedUp = startedUp
-	tkr.kt = newHB(config.Keepalive.Target.Interval.D())
-	tkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
+	tkr.hb = newHB(config.Keepalive.Target.Interval.D())
 	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	tkr.interval = config.Keepalive.Target.Interval.D()
 	tkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return tkr
+}
+
+func (tkr *talive) Run() error {
+	if stopped := tkr.wait(); stopped {
+		return nil
+	}
+
+	tkr.init(tkr.t.owner.smap.get(), tkr.t.SID())
+
+	nlog.Infof("Starting %s", tkr.Name())
+	tkr._run()
+	return nil
 }
 
 func (*talive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
@@ -157,12 +164,23 @@ func newPalive(p *proxy, statsT stats.Tracker, startedUp *atomic.Bool) *palive {
 	pkr.keepalive.k = pkr
 	pkr.statsT = statsT
 	pkr.keepalive.startedUp = startedUp
-	pkr.kt = newHB(config.Keepalive.Proxy.Interval.D())
-	pkr.tt = &timeoutTracker{timeoutStats: make(map[string]*timeoutStats, 8)}
+	pkr.hb = newHB(config.Keepalive.Proxy.Interval.D())
 	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	pkr.interval = config.Keepalive.Proxy.Interval.D()
 	pkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return pkr
+}
+
+func (pkr *palive) Run() error {
+	if stopped := pkr.wait(); stopped {
+		return nil
+	}
+
+	pkr.init(pkr.p.owner.smap.get(), pkr.p.SID())
+
+	nlog.Infof("Starting %s", pkr.Name())
+	pkr._run()
+	return nil
 }
 
 func (*palive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
@@ -189,9 +207,15 @@ func (pkr *palive) do() (stopped bool) {
 		return
 	}
 	if smap.isPrimary(pkr.p.si) {
-		return pkr.updateSmap()
+		if !pkr.inProgress.CAS(false, true) {
+			nlog.Infoln(pkr.p.String() + ": primary keepalive in progress")
+			return
+		}
+		stopped = pkr.updateSmap()
+		pkr.inProgress.Store(false)
+		return
 	}
-	if !pkr.isTimeToPing(smap.Primary.ID()) {
+	if !pkr.timeToPing(smap.Primary.ID()) {
 		return
 	}
 	if stopped = pkr.keepalive.do(smap, pkr.p.si); stopped {
@@ -203,29 +227,23 @@ func (pkr *palive) do() (stopped bool) {
 // updateSmap pings all nodes in parallel. Non-responding nodes get removed from the Smap and
 // the resulting map is then metasync-ed.
 func (pkr *palive) updateSmap() (stopped bool) {
-	if !pkr.inProgress.CAS(0, 1) {
-		nlog.Infof("%s: primary keepalive is in progress...", pkr.p)
-		return
-	}
-	defer pkr.inProgress.CAS(1, 0)
 	var (
-		p         = pkr.p
-		smap      = p.owner.smap.get()
-		daemonCnt = smap.Count()
+		p    = pkr.p
+		smap = p.owner.smap.get()
+		cnt  = smap.Count()
 	)
-	pkr.openCh(daemonCnt)
-	// limit parallelism, here and elsewhere
-	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), daemonCnt)
-	for _, daemons := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
-		for sid, si := range daemons {
+	pkr.openCh(cnt)
+	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), cnt) // limit parallelism
+	for _, nm := range []meta.NodeMap{smap.Tmap, smap.Pmap} {
+		for sid, si := range nm {
 			if sid == p.SID() {
 				continue
 			}
 			// skipping
-			if !pkr.isTimeToPing(sid) {
+			if !pkr.timeToPing(sid) {
 				continue
 			}
-			// NOTE in re maintenance-mode nodes:
+			// in re maintenance-mode nodes:
 			// for future activation, passively (ie, no keepalives) keeping them in the cluster map -
 			// use apc.ActRmNodeUnsafe to remove, if need be
 			if si.InMaintOrDecomm() {
@@ -272,12 +290,12 @@ func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX) {
 
 func (pkr *palive) _pingRetry(to *meta.Snode, smap *smapX) (ok, stopped bool) {
 	var (
-		timeout        = time.Duration(pkr.timeoutStats(to.ID()).timeout)
+		timeout        = time.Duration(pkr.tost(to.ID()).timeout)
 		t              = mono.NanoTime()
 		_, status, err = pkr.p.reqHealth(to, timeout, nil, smap)
 	)
 	delta := mono.Since(t)
-	pkr.updateTimeoutFor(to.ID(), delta)
+	pkr.updTimeout(to.ID(), delta)
 	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
 
 	if err == nil {
@@ -356,11 +374,11 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 
 func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool) {
 	var (
-		timeout = time.Duration(pkr.timeoutStats(si.ID()).timeout)
+		timeout = time.Duration(pkr.tost(si.ID()).timeout)
 		i       int
 	)
 	for {
-		if !pkr.isTimeToPing(si.ID()) {
+		if !pkr.timeToPing(si.ID()) {
 			return true, false
 		}
 		select {
@@ -368,7 +386,7 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 			now := mono.NanoTime()
 			smap := pkr.p.owner.smap.get()
 			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
-			timeout = pkr.updateTimeoutFor(si.ID(), mono.Since(now))
+			timeout = pkr.updTimeout(si.ID(), mono.Since(now))
 			if err == nil {
 				return true, false
 			}
@@ -397,24 +415,20 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 
 func (k *keepalive) Name() string { return k.name }
 
-func (k *keepalive) Run() error {
+// wait for stats-runner to set startedUp=true
+func (k *keepalive) wait() (stopped bool) {
 	var ticker *time.Ticker
 	if daemon.cli.target.standby {
 		ticker = time.NewTicker(waitStandby)
 	} else {
 		ticker = time.NewTicker(waitSelfJoin)
 	}
-	stopped := k.waitStatsRunner(ticker)
+	stopped = k._wait(ticker)
 	ticker.Stop()
-	if stopped {
-		return nil // exit
-	}
-	nlog.Infof("Starting %s", k.Name())
-	k._run()
-	return nil
+	return
 }
 
-func (k *keepalive) waitStatsRunner(ticker *time.Ticker) (stopped bool) {
+func (k *keepalive) _wait(ticker *time.Ticker) (stopped bool) {
 	for {
 		select {
 		case <-ticker.C:
@@ -427,6 +441,19 @@ func (k *keepalive) waitStatsRunner(ticker *time.Ticker) (stopped bool) {
 				return true
 			default:
 			}
+		}
+	}
+}
+
+// pre-populate hb
+func (k *keepalive) init(smap *smapX, self string) {
+	for _, nm := range []meta.NodeMap{smap.Pmap, smap.Tmap} {
+		for sid := range nm {
+			if sid == self {
+				continue
+			}
+			k.tosts.Store(sid, k.newTost())
+			k.hb.reg(sid)
 		}
 	}
 }
@@ -473,18 +500,16 @@ func (k *keepalive) _run() {
 
 func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveTrackerConf) {
 	k.maxKeepalive = int64(maxKeepalive)
-	if !k.kt.changed(cfg.Factor, cfg.Interval.D()) {
-		return
+	if k.hb.set(cfg.Interval.D()) {
+		k.interval = cfg.Interval.D()
 	}
-	k.interval = cfg.Interval.D()
-	k.kt = newHB(cfg.Interval.D())
 }
 
 // is called by non-primary proxies and (all) targets to send keepalive req. to the primary
 func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 	var (
 		pid     = smap.Primary.ID()
-		timeout = time.Duration(k.timeoutStats(pid).timeout)
+		timeout = time.Duration(k.tost(pid).timeout)
 		now     = mono.NanoTime()
 	)
 	cpid, status, err := k.k.sendKalive(smap, timeout)
@@ -520,7 +545,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 			if cos.IsRetriableConnErr(err) {
 				delta = time.Duration(k.maxKeepalive)
 			}
-			timeout = k.updateTimeoutFor(pid, delta)
+			timeout = k.updTimeout(pid, delta)
 			if err == nil {
 				nlog.Infof("%s: OK after %d attempt%s", si, i, cos.Plural(i))
 				return
@@ -546,17 +571,16 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 	}
 }
 
-// updateTimeoutForDaemon calculates the new timeout for the daemon with ID sid, updates it in
-// k.timeoutStats, and returns it. The algorithm is loosely based on TCP's RTO calculation,
-// as documented in RFC 6298.
-func (k *keepalive) updateTimeoutFor(sid string, d time.Duration) time.Duration {
+// update timeout for a node
+// the algorithm is based on TCP's RTO (RFC 6298)
+func (k *keepalive) updTimeout(sid string, d time.Duration) time.Duration {
 	const (
 		alpha = 125
 		beta  = 250
 		c     = 4
 	)
 	next := int64(d)
-	ts := k.timeoutStats(sid)
+	ts := k.tost(sid)
 	ts.rttvar = (1000-beta)*ts.rttvar + beta*(cos.AbsI64(ts.srtt-next))
 	ts.rttvar = cos.DivRound(ts.rttvar, 1000)
 	ts.srtt = (1000-alpha)*ts.srtt + alpha*next
@@ -566,19 +590,21 @@ func (k *keepalive) updateTimeoutFor(sid string, d time.Duration) time.Duration 
 	return time.Duration(ts.timeout)
 }
 
-// timeoutStats returns the timeoutStats corresponding to daemon ID sid.
-// If there is no entry in k.timeoutStats for sid, then the initial timeout will be set to
-// maxKeepaliveNS, with the other stats loosely based on RFC 6298.
-func (k *keepalive) timeoutStats(sid string) *timeoutStats {
-	k.tt.mu.Lock()
-	if ts := k.tt.timeoutStats[sid]; ts != nil {
-		k.tt.mu.Unlock()
-		return ts
+// returns timeout stats for a node; if there's no entry, initial timeout
+// is set to maxKeepalive with other counters loosely based on RFC 6298
+func (k *keepalive) tost(sid string) (ts *tost) {
+	val, ok := k.tosts.Load(sid)
+	if ok {
+		ts = val.(*tost) // almost always
+	} else {
+		ts = k.newTost()
+		k.tosts.Store(sid, ts)
 	}
-	ts := &timeoutStats{srtt: k.maxKeepalive, rttvar: k.maxKeepalive / 2, timeout: k.maxKeepalive}
-	k.tt.timeoutStats[sid] = ts
-	k.tt.mu.Unlock()
-	return ts
+	return
+}
+
+func (k *keepalive) newTost() *tost {
+	return &tost{srtt: k.maxKeepalive, rttvar: k.maxKeepalive / 2, timeout: k.maxKeepalive}
 }
 
 func (k *keepalive) onerr(err error, status int) {
@@ -587,12 +613,12 @@ func (k *keepalive) onerr(err error, status int) {
 	}
 }
 
-func (k *keepalive) heardFrom(sid string, reset bool) {
-	k.kt.HeardFrom(sid, reset)
+func (k *keepalive) heardFrom(sid string) {
+	k.hb.HeardFrom(sid)
 }
 
-func (k *keepalive) isTimeToPing(sid string) bool {
-	return k.kt.TimedOut(sid)
+func (k *keepalive) timeToPing(sid string) bool {
+	return k.hb.TimedOut(sid)
 }
 
 func (k *keepalive) Stop(err error) {
@@ -612,26 +638,37 @@ func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 // heartBeat //
 ///////////////
 
-func newHB(interval time.Duration) *heartBeat {
-	return &heartBeat{
-		last:     make(map[string]int64),
-		interval: interval,
-	}
-}
+func newHB(interval time.Duration) *heartBeat { return &heartBeat{interval: interval} }
 
-func (hb *heartBeat) HeardFrom(id string, _ bool) {
-	hb.mtx.Lock()
-	hb.last[id] = mono.NanoTime()
-	hb.mtx.Unlock()
+func (hb *heartBeat) HeardFrom(id string) {
+	var (
+		val   *int64
+		now   = mono.NanoTime()
+		v, ok = hb.last.Load(id)
+	)
+	if ok {
+		val = v.(*int64) // almost always
+	} else {
+		val = new(int64)
+		hb.last.Store(id, val)
+	}
+	*val = now // NOTE: not using ratomic.StoreInt64(val, now)
 }
 
 func (hb *heartBeat) TimedOut(id string) bool {
-	hb.mtx.RLock()
-	t, ok := hb.last[id]
-	hb.mtx.RUnlock()
-	return !ok || mono.Since(t) > hb.interval
+	v, ok := hb.last.Load(id)
+	if !ok {
+		return true
+	}
+	val := v.(*int64)
+	tim := *val
+	return mono.Since(tim) > hb.interval
 }
 
-func (hb *heartBeat) changed(_ uint8, interval time.Duration) bool {
-	return hb.interval != interval
+func (hb *heartBeat) reg(id string) { hb.last.Store(id, new(int64)) }
+
+func (hb *heartBeat) set(interval time.Duration) (changed bool) {
+	changed = hb.interval != interval
+	hb.interval = interval
+	return
 }
