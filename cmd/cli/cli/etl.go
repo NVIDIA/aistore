@@ -70,10 +70,10 @@ var (
 		Action: etlListHandler,
 		Subcommands: []cli.Command{
 			{
-				Name:      cmdSrc,
-				Usage:     "show ETL code/spec",
+				Name:      cmdDetails,
+				Usage:     "show ETL details",
 				ArgsUsage: etlNameArgument,
-				Action:    etlShowInitMsgHandler,
+				Action:    etlShowDetailsHandler,
 			},
 		},
 	}
@@ -305,7 +305,7 @@ func showETLs(c *cli.Context, etlName string, caption bool) (int, error) {
 		return etlList(c, caption)
 	}
 
-	return 1, etlPrintInitMsg(c, etlName) // TODO: extend to show Status and runtime stats
+	return 1, etlPrintDetails(c, etlName) // TODO: extend to show Status and runtime stats
 }
 
 func etlList(c *cli.Context, caption bool) (int, error) {
@@ -327,24 +327,34 @@ func etlList(c *cli.Context, caption bool) (int, error) {
 	return l, teb.Print(list, teb.TransformListTmpl)
 }
 
-func etlShowInitMsgHandler(c *cli.Context) error {
+func etlShowDetailsHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	id := c.Args().Get(0)
-	return etlPrintInitMsg(c, id)
+	return etlPrintDetails(c, id)
 }
 
-func etlPrintInitMsg(c *cli.Context, id string) error {
+func etlPrintDetails(c *cli.Context, id string) error {
 	msg, err := api.ETLGetInitMsg(apiBP, id)
 	if err != nil {
 		return V(err)
 	}
+
+	fmt.Fprintln(c.App.Writer, fblue("NAME: "), msg.Name())
+	fmt.Fprintln(c.App.Writer, fblue("COMMUNICATION TYPE: "), msg.CommType())
+	fmt.Fprintln(c.App.Writer, fblue("ARGUMENT TYPE: "), msg.ArgType())
+
 	if initMsg, ok := msg.(*etl.InitCodeMsg); ok {
+		fmt.Fprintln(c.App.Writer, fblue("RUNTIME: "), initMsg.Runtime)
+		fmt.Fprintln(c.App.Writer, fblue("CODE: "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Code))
+		fmt.Fprintln(c.App.Writer, fblue("DEPS: "), string(initMsg.Deps))
+		fmt.Fprintln(c.App.Writer, fblue("CHUNK SIZE: "), initMsg.ChunkSize)
 		return nil
 	}
 	if initMsg, ok := msg.(*etl.InitSpecMsg); ok {
+		fmt.Fprintln(c.App.Writer, fblue("SPEC: "))
 		fmt.Fprintln(c.App.Writer, string(initMsg.Spec))
 		return nil
 	}

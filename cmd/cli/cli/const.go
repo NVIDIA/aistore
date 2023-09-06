@@ -163,10 +163,10 @@ const (
 	cmdK8sCluster = commandCluster
 
 	// ETL subcommands
-	cmdInit = "init"
-	cmdSpec = "spec"
-	cmdCode = "code"
-	cmdSrc  = "source"
+	cmdInit    = "init"
+	cmdSpec    = "spec"
+	cmdCode    = "code"
+	cmdDetails = "details"
 
 	// config subcommands
 	cmdCLI        = "cli"

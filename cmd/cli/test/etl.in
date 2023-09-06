@@ -1,0 +1,14 @@
+// RUN k8s
+curl https://raw.githubusercontent.com/NVIDIA/ais-etl/master/transformers/hello_world/pod.yaml -o init_spec.yaml -s // IGNORE
+ais etl init spec --from-file="init_spec.yaml" --comm-type="hpush://" --name=$ETL_NAME // IGNORE
+rm -f init_spec.yaml // IGNORE
+
+echo "0123456789" > $OBJECT_1.txt
+ais bucket create ais://$BUCKET_1 | awk '{print $1 " " $2}'
+ais object put $OBJECT_1.txt ais://$BUCKET_1/object_1.txt
+rm -f $OBJECT_1.txt // IGNORE
+
+ais etl show details $ETL_NAME | grep "COMMUNICATION TYPE"
+ais etl show details $ETL_NAME | grep "ARGUMENT"
+ais etl object $ETL_NAME ais://$BUCKET_1/object_1.txt -
+ais etl stop $ETL_NAME
