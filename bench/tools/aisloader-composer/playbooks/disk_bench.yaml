@@ -1,4 +1,4 @@
-- hosts: "{{ target_hosts}}" 
+- hosts: target_hosts
   gather_facts: no
   tasks:
 

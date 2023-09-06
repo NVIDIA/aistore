@@ -1,0 +1,8 @@
+- name: Clear page cache on ais nodes
+  hosts: target_hosts
+  gather_facts: no
+  become: true
+
+  tasks:
+  - name: Flush dirty pages and clear PageCache, dentries and inodes
+    shell: sync; echo 3 > /proc/sys/vm/drop_caches
