@@ -68,6 +68,7 @@ type (
 		postCh    chan int64
 		wg        sync.WaitGroup
 		mu        sync.RWMutex
+		chanFull  atomic.Int64
 		running   atomic.Bool
 	}
 	smapModifier struct {
@@ -585,8 +586,8 @@ func (r *smapOwner) modify(ctx *smapModifier) error {
 
 func newSmapListeners() *sls {
 	sls := &sls{
-		listeners: make(map[string]meta.Slistener, 8),
-		postCh:    make(chan int64, 8),
+		listeners: make(map[string]meta.Slistener, 16),
+		postCh:    make(chan int64, 16),
 	}
 	return sls
 }
@@ -605,7 +606,7 @@ func (sls *sls) run() {
 		sls.mu.RLock()
 		for _, l := range sls.listeners {
 			// NOTE: Reg() or Unreg() from inside ListenSmapChanged() callback
-			//       may cause a trivial deadlock
+			// may cause a trivial deadlock
 			l.ListenSmapChanged()
 		}
 		sls.mu.RUnlock()
@@ -643,8 +644,15 @@ func (sls *sls) Unreg(sl meta.Slistener) {
 }
 
 func (sls *sls) notify(ver int64) {
-	cos.Assert(ver >= 0)
-	if sls.running.Load() {
-		sls.postCh <- ver
+	debug.Assert(ver >= 0)
+	if !sls.running.Load() {
+		return
+	}
+	select {
+	case sls.postCh <- ver:
+	default:
+		if cnt := sls.chanFull.Inc(); cnt < 5 || (cnt%100 == 99 && cmn.FastV(4, cos.SmoduleAIS)) {
+			nlog.ErrorDepth(1, "sls channel full: Smap v", ver)
+		}
 	}
 }
