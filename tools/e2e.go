@@ -1,6 +1,6 @@
 // Package tools provides common tools and utilities for all unit and integration tests
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tools
 
@@ -119,6 +119,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		target     = randomTarget()
 		mountpath  = randomMountpath(target)
 		backends   = retrieveBackendProviders()
+		etlName    = "etlname-" + strings.ToLower(trand.String(4))
 
 		inputFileName   = fileName + ".in"
 		outputFileName  = fileName + ".stdout"
@@ -140,6 +141,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		s = strings.ReplaceAll(s, "$DIR", f.Dir)
 		s = strings.ReplaceAll(s, "$RESULT", lastResult)
 		s = strings.ReplaceAll(s, "$BACKENDS", strings.Join(backends, ","))
+		s = strings.ReplaceAll(s, "$ETL_NAME", etlName)
 		for k, v := range f.Vars {
 			s = strings.ReplaceAll(s, "$"+k, v)
 		}
