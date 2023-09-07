@@ -27,10 +27,10 @@ import (
 
 type nopHB struct{}
 
-func (*nopHB) HeardFrom(string)       {}
-func (*nopHB) TimedOut(string) bool   { return false }
-func (*nopHB) reg(string)             {}
-func (*nopHB) set(time.Duration) bool { return false }
+func (*nopHB) HeardFrom(string, int64) {}
+func (*nopHB) TimedOut(string) bool    { return false }
+func (*nopHB) reg(string)              {}
+func (*nopHB) set(time.Duration) bool  { return false }
 
 var _ hbTracker = (*nopHB)(nil)
 

@@ -979,6 +979,12 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusServiceUnavailable)
 		return
 	}
+
+	callerID := r.Header.Get(apc.HdrCallerID)
+	if smap.GetProxy(callerID) != nil {
+		p.keepalive.heardFrom(callerID)
+	}
+
 	// primary
 	if smap.isPrimary(p.si) {
 		if prr {

@@ -39,7 +39,7 @@ type (
 		sendKalive(*smapX, time.Duration) (string, int, error)
 		onerr(err error, status int)
 		heardFrom(sid string)
-		do() (stopped bool)
+		do(config *cmn.Config) (stopped bool)
 		timeToPing(sid string) bool
 		ctrl(msg string)
 		paused() bool
@@ -79,8 +79,8 @@ type (
 	}
 
 	hbTracker interface {
-		HeardFrom(id string)     // callback for 'id' to respond
-		TimedOut(id string) bool // returns true if 'id` did not respond within expected interval
+		HeardFrom(id string, now int64) // callback for 'id' to respond
+		TimedOut(id string) bool        // returns true if 'id` did not respond within expected interval
 
 		reg(id string)
 		set(interval time.Duration) bool
@@ -141,12 +141,15 @@ func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration) (string, int, 
 	return tkr.t.sendKalive(smap, tkr.t, timeout)
 }
 
-func (tkr *talive) do() (stopped bool) {
+func (tkr *talive) do(config *cmn.Config) (stopped bool) {
 	smap := tkr.t.owner.smap.get()
 	if smap == nil || smap.validate() != nil {
 		return
 	}
-	if stopped = tkr.keepalive.do(smap, tkr.t.si); stopped {
+	if !tkr.timeToPing(smap.Primary.ID()) { // skip sending keepalive
+		return
+	}
+	if stopped = tkr.keepalive.do(smap, tkr.t.si, config); stopped {
 		tkr.t.onPrimaryDown(nil /*proxy*/, "")
 	}
 	return
@@ -201,7 +204,7 @@ func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration) (pid string, s
 	return pkr.p.htrun.sendKalive(smap, nil /*htext*/, timeout)
 }
 
-func (pkr *palive) do() (stopped bool) {
+func (pkr *palive) do(config *cmn.Config) (stopped bool) {
 	smap := pkr.p.owner.smap.get()
 	if smap == nil || smap.validate() != nil {
 		return
@@ -211,14 +214,14 @@ func (pkr *palive) do() (stopped bool) {
 			nlog.Infoln(pkr.p.String() + ": primary keepalive in progress")
 			return
 		}
-		stopped = pkr.updateSmap()
+		stopped = pkr.updateSmap(config)
 		pkr.inProgress.Store(false)
 		return
 	}
-	if !pkr.timeToPing(smap.Primary.ID()) {
+	if !pkr.timeToPing(smap.Primary.ID()) { // skip sending keepalive
 		return
 	}
-	if stopped = pkr.keepalive.do(smap, pkr.p.si); stopped {
+	if stopped = pkr.keepalive.do(smap, pkr.p.si, config); stopped {
 		pkr.p.onPrimaryDown(pkr.p /*self*/, "")
 	}
 	return
@@ -226,7 +229,7 @@ func (pkr *palive) do() (stopped bool) {
 
 // updateSmap pings all nodes in parallel. Non-responding nodes get removed from the Smap and
 // the resulting map is then metasync-ed.
-func (pkr *palive) updateSmap() (stopped bool) {
+func (pkr *palive) updateSmap(config *cmn.Config) (stopped bool) {
 	var (
 		p    = pkr.p
 		smap = p.owner.smap.get()
@@ -249,9 +252,18 @@ func (pkr *palive) updateSmap() (stopped bool) {
 			if si.InMaintOrDecomm() {
 				continue
 			}
-			// do keepalive
+
+			// direct call first
+			started := mono.NanoTime()
+			if _, _, err := pkr.p.reqHealth(si, config.Timeout.CplaneOperation.D(), nil, smap); err == nil {
+				now := mono.NanoTime()
+				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
+				pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
+				continue
+			}
+			// otherwise, go keepalive with retries
 			wg.Add(1)
-			go pkr.ping(si, wg, smap)
+			go pkr.ping(si, wg, smap, config)
 		}
 	}
 	wg.Wait()
@@ -274,37 +286,38 @@ func (pkr *palive) updateSmap() (stopped bool) {
 	return
 }
 
-func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX) {
-	defer wg.Done()
+func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Config) {
 	if len(pkr.stoppedCh) > 0 {
+		wg.Done()
 		return
 	}
-	ok, stopped := pkr._pingRetry(si, smap)
+	ok, stopped := pkr._pingRetry(si, smap, config)
 	if stopped {
 		pkr.stoppedCh <- struct{}{}
 	}
 	if !ok {
 		pkr.toRemoveCh <- si.ID()
 	}
+	wg.Done()
 }
 
-func (pkr *palive) _pingRetry(to *meta.Snode, smap *smapX) (ok, stopped bool) {
+func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (ok, stopped bool) {
 	var (
-		timeout        = time.Duration(pkr.tost(to.ID()).timeout)
-		t              = mono.NanoTime()
-		_, status, err = pkr.p.reqHealth(to, timeout, nil, smap)
+		timeout = time.Duration(pkr.tost(si.ID()).timeout)
+		started = mono.NanoTime()
 	)
-	delta := mono.Since(t)
-	pkr.updTimeout(to.ID(), delta)
-	pkr.statsT.Add(stats.KeepAliveLatency, int64(delta))
-
+	_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
 	if err == nil {
+		now := mono.NanoTime()
+		pkr.updTimeout(si.ID(), now-started)
+		pkr.statsT.Add(stats.KeepAliveLatency, now-started)
+		pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 		return true, false
 	}
 
-	nlog.Warningf("%s fails to respond: [%v(%d)] - retrying...", to.StringEx(), err, status)
-	ticker := time.NewTicker(cmn.KeepaliveRetryDuration())
-	ok, stopped = pkr.retry(to, ticker)
+	nlog.Warningf("node %s fails to respond: [%v(%d)] - retrying", si.StringEx(), err, status)
+	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
+	ok, stopped = pkr.retry(si, ticker)
 	ticker.Stop()
 
 	return ok, stopped
@@ -348,7 +361,7 @@ loop:
 				cnt++
 			} else {
 				metaction += unknownDaemonID
-				nlog.Warningf("%s not present in the %s (old %s)", sid, clone, ctx.smap)
+				nlog.Warningf("node %s not present in the %s (old %s)", sid, clone, ctx.smap)
 			}
 			metaction += ":" + sid + "] "
 
@@ -383,18 +396,25 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 		}
 		select {
 		case <-ticker.C:
-			now := mono.NanoTime()
-			smap := pkr.p.owner.smap.get()
+			if !pkr.timeToPing(si.ID()) {
+				return true, false // heard from the node, skipping health check
+			}
+			var (
+				started = mono.NanoTime()
+				smap    = pkr.p.owner.smap.get()
+			)
 			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
-			timeout = pkr.updTimeout(si.ID(), mono.Since(now))
 			if err == nil {
+				now := mono.NanoTime()
+				pkr.updTimeout(si.ID(), now-started)
+				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
+				pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 				return true, false
 			}
+
 			i++
 			if i == kaNumRetries {
-				sname := si.StringEx()
-				nlog.Warningf("Failed to keepalive %s after %d attempts - removing %s from the %s",
-					sname, i, sname, smap)
+				nlog.Warningf("Failed after %d attempts - removing %s from %s", i, si.StringEx(), smap)
 				return false, false
 			}
 			if cos.IsUnreachable(err, status) {
@@ -414,6 +434,10 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 ///////////////
 
 func (k *keepalive) Name() string { return k.name }
+
+func (k *keepalive) heardFrom(sid string) {
+	k.hb.HeardFrom(sid, 0 /*now*/)
+}
 
 // wait for stats-runner to set startedUp=true
 func (k *keepalive) wait() (stopped bool) {
@@ -468,8 +492,8 @@ func (k *keepalive) _run() {
 		select {
 		case <-ticker.C:
 			lastCheck = mono.NanoTime()
-			k.k.do()
 			config := cmn.GCO.Get()
+			k.k.do(config)
 			k.configUpdate(config.Timeout.MaxKeepalive.D(), k.k.cfg(config))
 		case sig := <-k.controlCh:
 			switch sig.msg {
@@ -485,10 +509,11 @@ func (k *keepalive) _run() {
 				ticker.Stop()
 				return
 			case kaErrorMsg:
-				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration() {
+				config := cmn.GCO.Get()
+				if mono.Since(lastCheck) >= cmn.KeepaliveRetryDuration(config) {
 					lastCheck = mono.NanoTime()
 					nlog.Infof("triggered by %v", sig.err)
-					if stopped := k.k.do(); stopped {
+					if stopped := k.k.do(config); stopped {
 						ticker.Stop()
 						return
 					}
@@ -505,16 +530,19 @@ func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveT
 	}
 }
 
-// is called by non-primary proxies and (all) targets to send keepalive req. to the primary
-func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
+// keepalive => primary
+// is called by non-primary proxies and all targets
+func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped bool) {
 	var (
 		pid     = smap.Primary.ID()
 		timeout = time.Duration(k.tost(pid).timeout)
-		now     = mono.NanoTime()
+		started = mono.NanoTime()
 	)
 	cpid, status, err := k.k.sendKalive(smap, timeout)
-	k.statsT.Add(stats.KeepAliveLatency, mono.SinceNano(now))
 	if err == nil {
+		now := mono.NanoTime()
+		k.statsT.Add(stats.KeepAliveLatency, now-started)
+		k.hb.HeardFrom(pid, now) // effectively, yes
 		return
 	}
 	if daemon.stopping.Load() {
@@ -523,35 +551,40 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
 	nlog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
 
+	//
+	// retry
+	//
 	var (
-		ticker = time.NewTicker(cmn.KeepaliveRetryDuration())
+		ticker = time.NewTicker(cmn.KeepaliveRetryDuration(config))
 		i      int
 	)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			// NOTE: suspecting primary down, not checking k.timeToPing(smap.Primary),
+			// and therefore not skipping keepalive req (compare with palive.retry)
 			i++
-			now = mono.NanoTime()
+			started := mono.NanoTime()
 			pid, status, err = k.k.sendKalive(nil, timeout)
 			if pid == si.ID() {
 				return // elected as primary
 			}
-			delta := mono.Since(now)
-			// In case the error is some kind of connection error, the round-trip
-			// could be much shorter than the specified `timeout`. In such case
-			// we want to report the worst-case scenario, otherwise we could possibly
-			// decrease next retransmission timeout (which doesn't make much sense).
-			if cos.IsRetriableConnErr(err) {
-				delta = time.Duration(k.maxKeepalive)
-			}
-			timeout = k.updTimeout(pid, delta)
 			if err == nil {
+				now := mono.NanoTime()
+				k.updTimeout(pid, now-started)
+				k.statsT.Add(stats.KeepAliveLatency, now-started)
+				k.hb.HeardFrom(pid, now) // effectively, yes
 				nlog.Infof("%s: OK after %d attempt%s", si, i, cos.Plural(i))
 				return
 			}
+			if cos.IsRetriableConnErr(err) {
+				// recompute timeout given the configured max, but only when _retriable_
+				timeout = k.updTimeout(pid, k.maxKeepalive)
+			}
+
 			if i == kaNumRetries {
-				nlog.Warningf("%s: failed to keepalive with %s after %d attempts", si, meta.Pname(pid), i)
+				nlog.Warningf("%s: failed %d attempts => %s (primary)", si, i, meta.Pname(pid))
 				return true
 			}
 			if cos.IsUnreachable(err, status) {
@@ -571,19 +604,17 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode) (stopped bool) {
 	}
 }
 
-// update timeout for a node
-// the algorithm is based on TCP's RTO (RFC 6298)
-func (k *keepalive) updTimeout(sid string, d time.Duration) time.Duration {
+// update timeout for a node (based on TCP RTO computation rfc6298)
+func (k *keepalive) updTimeout(sid string, d int64) time.Duration {
 	const (
 		alpha = 125
 		beta  = 250
 		c     = 4
 	)
-	next := int64(d)
 	ts := k.tost(sid)
-	ts.rttvar = (1000-beta)*ts.rttvar + beta*(cos.AbsI64(ts.srtt-next))
+	ts.rttvar = (1000-beta)*ts.rttvar + beta*(cos.AbsI64(ts.srtt-d))
 	ts.rttvar = cos.DivRound(ts.rttvar, 1000)
-	ts.srtt = (1000-alpha)*ts.srtt + alpha*next
+	ts.srtt = (1000-alpha)*ts.srtt + alpha*d
 	ts.srtt = cos.DivRound(ts.srtt, 1000)
 	ts.timeout = cos.MinI64(k.maxKeepalive, ts.srtt+c*ts.rttvar)
 	ts.timeout = cos.MaxI64(ts.timeout, k.maxKeepalive/2)
@@ -613,10 +644,6 @@ func (k *keepalive) onerr(err error, status int) {
 	}
 }
 
-func (k *keepalive) heardFrom(sid string) {
-	k.hb.HeardFrom(sid)
-}
-
 func (k *keepalive) timeToPing(sid string) bool {
 	return k.hb.TimedOut(sid)
 }
@@ -640,12 +667,14 @@ func (k *keepalive) paused() bool { return k.tickerPaused.Load() }
 
 func newHB(interval time.Duration) *heartBeat { return &heartBeat{interval: interval} }
 
-func (hb *heartBeat) HeardFrom(id string) {
+func (hb *heartBeat) HeardFrom(id string, now int64) {
 	var (
 		val   *int64
-		now   = mono.NanoTime()
 		v, ok = hb.last.Load(id)
 	)
+	if now == 0 {
+		now = mono.NanoTime()
+	}
 	if ok {
 		val = v.(*int64) // almost always
 	} else {

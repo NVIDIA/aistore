@@ -1179,18 +1179,15 @@ func (c *KeepaliveConf) Validate() (err error) {
 		err = fmt.Errorf("invalid keepalivetracker.proxy.name %s", c.Proxy.Name)
 	} else if c.Target.Name != "heartbeat" {
 		err = fmt.Errorf("invalid keepalivetracker.target.name %s", c.Target.Name)
+	} else if c.RetryFactor < 1 || c.RetryFactor > 10 {
+		err = fmt.Errorf("invalid keepalivetracker.retry_factor %d (expecting 1 thru 10)", c.RetryFactor)
 	}
 	return
 }
 
-func KeepaliveRetryDuration(cs ...*Config) time.Duration {
-	var c *Config
-	if len(cs) != 0 {
-		c = cs[0]
-	} else {
-		c = GCO.Get()
-	}
-	return c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
+func KeepaliveRetryDuration(c *Config) time.Duration {
+	d := c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
+	return cos.MinDuration(d, c.Timeout.MaxKeepalive.D()+time.Second/2)
 }
 
 /////////////
