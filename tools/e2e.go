@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/onsi/ginkgo"
@@ -101,12 +102,6 @@ func readContent(r io.Reader, ignoreEmpty bool) []string {
 
 func isLineRegex(msg string) bool {
 	return len(msg) > 2 && msg[0] == '^' && msg[len(msg)-1] == '$'
-}
-
-func detectK8s() bool {
-	cmd := exec.Command("which", "kubectl")
-	err := cmd.Run()
-	return err == nil
 }
 
 func (f *E2EFramework) RunE2ETest(fileName string) {
@@ -224,7 +219,7 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 				return
 			case "k8s":
 				// Skip running k8s (etl) tests if AIStore is not deployed in kubernetes
-				if detectK8s() {
+				if k8s.Detect() == nil {
 					continue
 				}
 				ginkgo.Skip("AIStore not running in K8s - skipping")
