@@ -1,0 +1,10 @@
+# Use this playbook to copy aws credentials to aisloader clients 
+# Modify vars/aws_config.yml to configure credentials
+
+- hosts: aisloader_hosts
+  vars_files:
+    - "vars/aws_config.yml"
+
+  gather_facts: false
+  roles:
+    - { role: aws_config }

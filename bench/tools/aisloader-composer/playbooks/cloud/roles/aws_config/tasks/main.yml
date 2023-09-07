@@ -1,0 +1,24 @@
+- name: Create .aws if it does not exist
+  file:
+    path: "{{ target_dir }}"
+    state: directory
+    mode: 0555
+
+- name: Copy aws config
+  template:
+    src: "config.j2"
+    dest: "{{ target_dir }}/config"
+    mode: 0555
+    lstrip_blocks: true
+  vars:
+    DEFAULT_AWS_REGION: "{{ default_aws_region }}"
+
+- name: Copy aws credentials
+  template:
+    src: "credentials.j2"
+    dest: "{{ target_dir }}/credentials"
+    mode: 0555
+    lstrip_blocks: true
+  vars:
+    DEFAULT_AWS_ACCESS_KEY: "{{ default_aws_api_key }}"
+    DEFAULT_AWS_SECRET_ACCESS_KEY: "{{ default_aws_api_secret_key }}"
