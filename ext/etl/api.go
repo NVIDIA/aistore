@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -25,6 +26,8 @@ const (
 	Spec = "spec"
 	Code = "code"
 )
+
+const DefaultTimeout = 30 * time.Second
 
 // enum communication types (`commTypes`)
 const (
@@ -213,6 +216,10 @@ func (m *InitMsgBase) validate(detail string) error {
 	if m.CommType() == "" {
 		cos.Infof("Warning: empty comm-type, defaulting to %q", Hpush)
 		m.CommTypeX = Hpush
+	}
+	// NOTE: default timeout
+	if m.Timeout == 0 {
+		m.Timeout = cos.Duration(DefaultTimeout)
 	}
 	return nil
 }

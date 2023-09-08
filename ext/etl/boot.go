@@ -5,6 +5,7 @@
 package etl
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -184,18 +185,24 @@ func (b *etlBootstrapper) createEntity(entity string) error {
 //
 // NOTE: currently, we do require readinessProbe config in the ETL spec.
 func (b *etlBootstrapper) waitPodReady() error {
-	client, err := k8s.GetClient()
+	var (
+		timeout     = b.msg.Timeout.D()
+		interval    = cos.ProbingFrequency(timeout)
+		client, err = k8s.GetClient()
+	)
 	if err != nil {
 		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
-
 	if b.config.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("waiting pod %q ready (%+v, %s) ...", b.pod.Name, b.msg.String(), b.errCtx)
+		nlog.Infof("waiting pod %q ready (%+v, %s) timeout=%v ival=%v", b.pod.Name, b.msg.String(), b.errCtx, timeout, interval)
 	}
-	err = wait.PollImmediate(time.Second, time.Duration(b.msg.Timeout), func() (ready bool, err error) {
-		ready, err = checkPodReady(client, b.pod.Name)
-		return ready, err
-	})
+	// wait
+	err = wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, /*immediate*/
+		func(context.Context) (ready bool, err error) {
+			return checkPodReady(client, b.pod.Name)
+		},
+	)
+
 	if err == nil {
 		return nil
 	}

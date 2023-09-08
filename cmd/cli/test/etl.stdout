@@ -2,6 +2,6 @@
 ^PUT.*=> ais://$BUCKET_1/object_1.txt$
 
 COMMUNICATION TYPE:  hpush://
-ARGUMENT TYPE: 
+ARGUMENT TYPE:
 Hello World!
 ^ETL\[etl.*\]stopped$

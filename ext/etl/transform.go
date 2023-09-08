@@ -5,11 +5,11 @@
 package etl
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -448,13 +448,18 @@ func deleteEntity(errCtx *cmn.ETLErrCtx, entityType, entityName string) error {
 		return cmn.NewErrETL(errCtx, err.Error())
 	}
 
-	err = wait.PollImmediate(time.Second, time.Minute, func() (done bool, err error) {
-		exists, err := client.CheckExists(entityType, entityName)
-		if err != nil {
-			return false, err
-		}
-		return !exists, nil
-	})
+	// wait
+	interval := cos.ProbingFrequency(DefaultTimeout)
+	err = wait.PollUntilContextTimeout(context.Background(), interval, DefaultTimeout, false, /*immediate*/
+		func(context.Context) (done bool, err error) {
+			var exists bool
+			exists, err = client.CheckExists(entityType, entityName)
+			if err == nil {
+				done = !exists
+			}
+			return
+		},
+	)
 	if err != nil {
 		return cmn.NewErrETL(errCtx, err.Error())
 	}
