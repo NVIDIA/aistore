@@ -59,19 +59,12 @@ type (
 		k            keepaliver
 		hb           hbTracker
 		statsT       stats.Tracker
-		tosts        sync.Map
 		controlCh    chan controlSignal
 		startedUp    *atomic.Bool
 		name         string
-		maxKeepalive int64
-		interval     time.Duration
+		interval     time.Duration // config.Keepalive.Target.Interval or config.Keepalive.Proxy.Interval (10s)
 		inProgress   atomic.Bool
 		tickerPaused atomic.Bool
-	}
-	tost struct {
-		srtt    int64 // smoothed round-trip time in ns
-		rttvar  int64 // round-trip time variation in ns
-		timeout int64 // in ns
 	}
 	controlSignal struct {
 		err error
@@ -80,7 +73,7 @@ type (
 
 	hbTracker interface {
 		HeardFrom(id string, now int64) // callback for 'id' to respond
-		TimedOut(id string) bool        // returns true if 'id` did not respond within expected interval
+		TimedOut(id string) bool        // true if 'id` didn't keepalive or called (via "heard") within the interval (above)
 
 		reg(id string)
 		set(interval time.Duration) bool
@@ -117,7 +110,6 @@ func newTalive(t *target, statsT stats.Tracker, startedUp *atomic.Bool) *talive 
 	tkr.hb = newHB(config.Keepalive.Target.Interval.D())
 	tkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	tkr.interval = config.Keepalive.Target.Interval.D()
-	tkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return tkr
 }
 
@@ -170,7 +162,6 @@ func newPalive(p *proxy, statsT stats.Tracker, startedUp *atomic.Bool) *palive {
 	pkr.hb = newHB(config.Keepalive.Proxy.Interval.D())
 	pkr.controlCh = make(chan controlSignal) // unbuffered on purpose
 	pkr.interval = config.Keepalive.Proxy.Interval.D()
-	pkr.maxKeepalive = int64(config.Timeout.MaxKeepalive)
 	return pkr
 }
 
@@ -303,21 +294,21 @@ func (pkr *palive) ping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Conf
 
 func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (ok, stopped bool) {
 	var (
-		timeout = time.Duration(pkr.tost(si.ID()).timeout)
+		timeout = config.Timeout.CplaneOperation.D()
 		started = mono.NanoTime()
 	)
 	_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
 	if err == nil {
 		now := mono.NanoTime()
-		pkr.updTimeout(si.ID(), now-started)
 		pkr.statsT.Add(stats.KeepAliveLatency, now-started)
 		pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 		return true, false
 	}
 
-	nlog.Warningf("node %s fails to respond: [%v(%d)] - retrying", si.StringEx(), err, status)
+	nlog.Warningf("node %s failed health ping [%v(%d)] - retry with max=%s", si.StringEx(), err, status,
+		config.Timeout.MaxKeepalive.String())
 	ticker := time.NewTicker(cmn.KeepaliveRetryDuration(config))
-	ok, stopped = pkr.retry(si, ticker)
+	ok, stopped = pkr.retry(si, ticker, config.Timeout.MaxKeepalive.D())
 	ticker.Stop()
 
 	return ok, stopped
@@ -385,11 +376,8 @@ func (pkr *palive) _final(ctx *smapModifier, clone *smapX) {
 	_ = pkr.p.metasyncer.sync(revsPair{clone, msg})
 }
 
-func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool) {
-	var (
-		timeout = time.Duration(pkr.tost(si.ID()).timeout)
-		i       int
-	)
+func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker, timeout time.Duration) (ok, stopped bool) {
+	var i int
 	for {
 		if !pkr.timeToPing(si.ID()) {
 			return true, false
@@ -406,7 +394,6 @@ func (pkr *palive) retry(si *meta.Snode, ticker *time.Ticker) (ok, stopped bool)
 			_, status, err := pkr.p.reqHealth(si, timeout, nil, smap)
 			if err == nil {
 				now := mono.NanoTime()
-				pkr.updTimeout(si.ID(), now-started)
 				pkr.statsT.Add(stats.KeepAliveLatency, now-started)
 				pkr.hb.HeardFrom(si.ID(), now) // effectively, yes
 				return true, false
@@ -476,7 +463,6 @@ func (k *keepalive) init(smap *smapX, self string) {
 			if sid == self {
 				continue
 			}
-			k.tosts.Store(sid, k.newTost())
 			k.hb.reg(sid)
 		}
 	}
@@ -494,7 +480,7 @@ func (k *keepalive) _run() {
 			lastCheck = mono.NanoTime()
 			config := cmn.GCO.Get()
 			k.k.do(config)
-			k.configUpdate(config.Timeout.MaxKeepalive.D(), k.k.cfg(config))
+			k.configUpdate(k.k.cfg(config))
 		case sig := <-k.controlCh:
 			switch sig.msg {
 			case kaResumeMsg:
@@ -523,8 +509,7 @@ func (k *keepalive) _run() {
 	}
 }
 
-func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveTrackerConf) {
-	k.maxKeepalive = int64(maxKeepalive)
+func (k *keepalive) configUpdate(cfg *cmn.KeepaliveTrackerConf) {
 	if k.hb.set(cfg.Interval.D()) {
 		k.interval = cfg.Interval.D()
 	}
@@ -535,7 +520,7 @@ func (k *keepalive) configUpdate(maxKeepalive time.Duration, cfg *cmn.KeepaliveT
 func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped bool) {
 	var (
 		pid     = smap.Primary.ID()
-		timeout = time.Duration(k.tost(pid).timeout)
+		timeout = config.Timeout.CplaneOperation.D()
 		started = mono.NanoTime()
 	)
 	cpid, status, err := k.k.sendKalive(smap, timeout)
@@ -572,16 +557,13 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			}
 			if err == nil {
 				now := mono.NanoTime()
-				k.updTimeout(pid, now-started)
 				k.statsT.Add(stats.KeepAliveLatency, now-started)
 				k.hb.HeardFrom(pid, now) // effectively, yes
 				nlog.Infof("%s: OK after %d attempt%s", si, i, cos.Plural(i))
 				return
 			}
-			if cos.IsRetriableConnErr(err) {
-				// recompute timeout given the configured max, but only when _retriable_
-				timeout = k.updTimeout(pid, k.maxKeepalive)
-			}
+			// repeat up to `kaNumRetries` with the max timeout
+			timeout = config.Timeout.MaxKeepalive.D()
 
 			if i == kaNumRetries {
 				nlog.Warningf("%s: failed %d attempts => %s (primary)", si, i, meta.Pname(pid))
@@ -602,40 +584,6 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			}
 		}
 	}
-}
-
-// update timeout for a node (based on TCP RTO computation rfc6298)
-func (k *keepalive) updTimeout(sid string, d int64) time.Duration {
-	const (
-		alpha = 125
-		beta  = 250
-		c     = 4
-	)
-	ts := k.tost(sid)
-	ts.rttvar = (1000-beta)*ts.rttvar + beta*(cos.AbsI64(ts.srtt-d))
-	ts.rttvar = cos.DivRound(ts.rttvar, 1000)
-	ts.srtt = (1000-alpha)*ts.srtt + alpha*d
-	ts.srtt = cos.DivRound(ts.srtt, 1000)
-	ts.timeout = cos.MinI64(k.maxKeepalive, ts.srtt+c*ts.rttvar)
-	ts.timeout = cos.MaxI64(ts.timeout, k.maxKeepalive/2)
-	return time.Duration(ts.timeout)
-}
-
-// returns timeout stats for a node; if there's no entry, initial timeout
-// is set to maxKeepalive with other counters loosely based on RFC 6298
-func (k *keepalive) tost(sid string) (ts *tost) {
-	val, ok := k.tosts.Load(sid)
-	if ok {
-		ts = val.(*tost) // almost always
-	} else {
-		ts = k.newTost()
-		k.tosts.Store(sid, ts)
-	}
-	return
-}
-
-func (k *keepalive) newTost() *tost {
-	return &tost{srtt: k.maxKeepalive, rttvar: k.maxKeepalive / 2, timeout: k.maxKeepalive}
 }
 
 func (k *keepalive) onerr(err error, status int) {

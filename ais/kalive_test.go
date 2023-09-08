@@ -9,74 +9,6 @@ import (
 	"time"
 )
 
-const (
-	daemonID     = "12345"
-	maxKeepalive = 4 * time.Second
-)
-
-func TestTimeoutStatsForDaemon(t *testing.T) {
-	k := &keepalive{
-		maxKeepalive: int64(maxKeepalive),
-	}
-	ts := k.tost(daemonID)
-	timeout := time.Duration(ts.timeout)
-	srtt := time.Duration(ts.srtt)
-	rttvar := time.Duration(ts.rttvar)
-	if timeout != maxKeepalive {
-		t.Errorf("initial timeout should be: %v, got: %v", maxKeepalive, timeout)
-	}
-	if srtt != maxKeepalive {
-		t.Errorf("initial srtt should be: %v, got: %v", maxKeepalive, srtt)
-	}
-	if rttvar != maxKeepalive/2 {
-		t.Errorf("initial rttvar should be: %v, got: %v", maxKeepalive/2, rttvar)
-	}
-}
-
-func TestUpdateTimeoutForDaemon(t *testing.T) {
-	{
-		k := &keepalive{
-			maxKeepalive: int64(maxKeepalive),
-		}
-		initial := k.tost(daemonID)
-		nextRTT := initial.srtt * 3 / 4
-		nextTimeout := k.updTimeout(daemonID, nextRTT)
-		if nextTimeout <= time.Duration(nextRTT) {
-			t.Errorf("updated timeout: %v should be greater than most recent RTT: %v", nextTimeout, nextRTT)
-		} else if nextTimeout > maxKeepalive {
-			t.Errorf("updated timeout: %v should be lesser than or equal to max keepalive time: %v",
-				nextTimeout, maxKeepalive)
-		}
-	}
-	{
-		k := &keepalive{
-			maxKeepalive: int64(maxKeepalive),
-		}
-		initial := k.tost(daemonID)
-		nextRTT := initial.srtt + initial.srtt/10
-		nextTimeout := k.updTimeout(daemonID, nextRTT)
-		if nextTimeout != maxKeepalive {
-			t.Errorf("updated timeout: %v should be equal to the max keepalive timeout: %v",
-				nextTimeout, maxKeepalive)
-		}
-	}
-	{
-		k := &keepalive{
-			maxKeepalive: int64(maxKeepalive),
-		}
-		for i := 0; i < 100; i++ {
-			initial := k.tost(daemonID)
-			nextRTT := initial.srtt / 4
-			nextTimeout := k.updTimeout(daemonID, nextRTT)
-			// Eventually, the `nextTimeout` must converge and stop at `maxKeepalive/2`.
-			if i > 25 && nextTimeout != maxKeepalive/2 {
-				t.Errorf("updated timeout: %v should be equal to the min keepalive timeout: %v",
-					nextTimeout, maxKeepalive/2)
-			}
-		}
-	}
-}
-
 func TestHB(t *testing.T) {
 	hb := newHB(time.Millisecond * 10)
 
@@ -89,20 +21,20 @@ func TestHB(t *testing.T) {
 	time.Sleep(time.Millisecond * 1)
 
 	if hb.TimedOut(id1) {
-		t.Fatal("Expecting no time out")
+		t.Fatal("Expecting no timeout")
 	}
 
 	time.Sleep(time.Millisecond * 10)
 
 	if !hb.TimedOut(id1) {
-		t.Fatal("Expecting time out")
+		t.Fatal("Expecting timeout")
 	}
 
 	hb.HeardFrom(id1, 0 /*now*/)
 	time.Sleep(time.Millisecond * 11)
 	hb.HeardFrom(id1, 0 /*now*/)
 	if hb.TimedOut(id1) {
-		t.Fatal("Expecting no time out")
+		t.Fatal("Expecting no timeout")
 	}
 
 	time.Sleep(time.Millisecond * 10)
@@ -110,10 +42,10 @@ func TestHB(t *testing.T) {
 	hb.HeardFrom(id2, 0 /*now*/)
 
 	if hb.TimedOut(id2) {
-		t.Fatal("Expecting no time out")
+		t.Fatal("Expecting no timeout")
 	}
 
 	if !hb.TimedOut(id1) {
-		t.Fatal("Expecting time out")
+		t.Fatal("Expecting timeout")
 	}
 }
