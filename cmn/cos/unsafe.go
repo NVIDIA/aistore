@@ -5,8 +5,6 @@
 package cos
 
 import (
-	"math"
-	"reflect"
 	"unsafe"
 )
 
@@ -27,6 +25,5 @@ func UnsafeS(b []byte) string {
 
 // cast string to immutable bytes
 func UnsafeB(s string) []byte {
-	res := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	return (*[math.MaxInt32]byte)(unsafe.Pointer(res.Data))[:len(s):len(s)]
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
