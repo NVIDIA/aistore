@@ -26,7 +26,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
   pip install awscli s3cmd
 
 # Setting ENV variables
-ENV GOLANG_VERSION 1.21
+ENV GOLANG_VERSION="1.21.1"
 
 # Reassign arguments to environment variables so run.sh can use them
 ENV GOPATH /go
@@ -35,7 +35,7 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
 # Installing go
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
-RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
+RUN curl -LO https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 

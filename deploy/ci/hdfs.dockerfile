@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:/usr/local/go/bin:${PATH}"
-ENV GOLANG_VERSION="1.21"
+ENV GOLANG_VERSION="1.21.1"
 ENV HADOOP_VERSION="3.3.2"
 
 RUN apt-get update -yq
@@ -12,7 +12,7 @@ RUN apt-get --no-install-recommends -y install openjdk-8-jdk ssh openssh-server
 
 # Install Go.
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
-RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
+RUN curl -LO https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   tar -C /usr/local -xzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 

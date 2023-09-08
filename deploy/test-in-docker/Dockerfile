@@ -21,7 +21,7 @@ RUN apt-get clean && apt-get update &&\
 
 RUN pip3 install awscli s3cmd
 
-ENV GOLANG_VERSION 1.21
+ENV GOLANG_VERSION="1.21.1"
 
 ENV GOPATH /go
 ENV GOBIN $GOPATH/bin
@@ -29,7 +29,7 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
 # Installing go
 RUN mkdir -p "$GOPATH/bin" && chmod -R 777 "$GOPATH"
-RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
+RUN curl -LO https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz > /dev/null 2>&1 &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
