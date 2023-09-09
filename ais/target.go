@@ -173,6 +173,11 @@ func (t *target) aisBackend() *backend.AISBackendProvider {
 
 func (t *target) init(config *cmn.Config) {
 	t.initNetworks()
+
+	// (a) get node ID from command-line or env var (see envDaemonID())
+	// (b) load existing node ID (replicated xattr at roots of respective mountpaths)
+	// (c) generate a new one (genDaemonID())
+	// - in that exact sequence
 	tid, generated := initTID(config)
 	if generated && len(config.FSP.Paths) > 0 {
 		// in an unlikely case of losing all mountpath-stored IDs but still having a volume

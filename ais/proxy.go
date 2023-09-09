@@ -109,6 +109,11 @@ func (p *proxy) initClusterCIDR() {
 
 func (p *proxy) init(config *cmn.Config) {
 	p.initNetworks()
+
+	// (a) get node ID from command-line or env var (see envDaemonID())
+	// (b) load existing ID from config file stored under local config `confdir` (compare w/ target)
+	// (c) generate a new one (genDaemonID())
+	// - in that sequence
 	p.si.Init(initPID(config), apc.Proxy)
 
 	memsys.Init(p.SID(), p.SID(), config)

@@ -360,13 +360,20 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.writeErrURL(w, r)
 		return
 	}
+	if p.settingNewPrimary.Load() {
+		// ignore of fail
+		if apiOp != apc.Keepalive {
+			var s string
+			if apiOp == apc.AdminJoin {
+				s = " (retry in a few seconds)"
+			}
+			p.writeErr(w, r, errors.New("setting new primary - transitioning"+s), http.StatusServiceUnavailable)
+		}
+		return
+	}
+
 	switch apiOp {
 	case apc.Keepalive:
-		// ignore when primary in transition
-		if p.settingNewPrimary.Load() {
-			return
-		}
-
 		// fast path(?)
 		if len(apiItems) > 1 {
 			p.fastKalive(w, r, smap, config, apiItems[1])
@@ -392,17 +399,13 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.writeErrf(w, r, "%s: failed to obtain node info from %s: %v", p.si, nsi.StringEx(), err)
 			return
 		}
-		// NOTE: ID _and_ 3-networks configuration is obtained from the node itself;
-		// as far as ID, `aisnode` either:
-		// (a) loads existing one,
-		// (b) gets it from command line or env (see `envDaemonID`), or
-		// (c) generates a new one (see `genDaemonID`)
-		// - in that exact sequence.
+		// NOTE: node ID and 3-networks configuration is obtained from the node itself
 		*nsi = *si
 	case apc.SelfJoin: // auto-join at node startup
 		if cmn.ReadJSON(w, r, &regReq) != nil {
 			return
 		}
+		// NOTE: ditto
 		nsi = regReq.SI
 		if !p.ClusterStarted() {
 			p.reg.mu.Lock()
@@ -410,7 +413,6 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.reg.mu.Unlock()
 		}
 	default:
-		debug.Assert(false, apiOp) // must be one of the (3) above
 		p.writeErrURL(w, r)
 		return
 	}
@@ -556,7 +558,7 @@ func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, 
 		cfg := config.Keepalive
 		min := cos.MaxDuration(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
 		if fast = p.keepalive.cluUptime(now) > min; fast {
-			p.readyToFastKalive.Store(true)
+			p.readyToFastKalive.Store(true) // not resetting upon a change of primary
 		}
 	}
 	if fast {
