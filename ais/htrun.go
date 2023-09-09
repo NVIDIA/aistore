@@ -35,7 +35,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -46,7 +45,7 @@ const ciePrefix = "cluster integrity error cie#"
 
 // extra or extended state - currently, target only
 type htext interface {
-	rebMarked() xact.Marked
+	interruptedRestarted() (bool, bool)
 }
 
 type htrun struct {
@@ -149,8 +148,7 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		cm.EtlMD = h.owner.etl.get()
 	}
 	if h.si.IsTarget() && opts.fillRebMarker {
-		rebMarked := opts.htext.rebMarked()
-		cm.RebInterrupted, cm.Restarted = rebMarked.Interrupted, rebMarked.Restarted
+		cm.RebInterrupted, cm.Restarted = opts.htext.interruptedRestarted()
 	}
 	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
 		cm.PrimeTime = time.Now().UnixNano()
@@ -1828,13 +1826,32 @@ func (h *htrun) regTo(url string, psi *meta.Snode, tout time.Duration, q url.Val
 	return res
 }
 
-func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid string, status int, err error) {
+func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration, fast bool) (pid string, status int, err error) {
 	if daemon.stopping.Load() {
-		err = fmt.Errorf("%s is stopping", h)
+		err = errors.New(h.String() + " is stopping")
 		return
 	}
 	primaryURL, psi := h.getPrimaryURLAndSI(smap)
 	pid = psi.ID()
+
+	if fast {
+		// fast path
+		debug.Assert(h.ClusterStarted())
+		path := apc.URLPathCluKalive.Join(h.SID())
+		cargs := allocCargs()
+		{
+			cargs.si = psi
+			cargs.req = cmn.HreqArgs{Method: http.MethodPost, Base: primaryURL, Path: path}
+			cargs.timeout = timeout
+		}
+		res := h.call(cargs, smap)
+		freeCargs(cargs)
+		err = res.err
+		freeCR(res)
+		return
+	}
+
+	// slow path
 	res := h.regTo(primaryURL, psi, timeout, nil, htext, true /*keepalive*/)
 	if res.err != nil {
 		if strings.Contains(res.err.Error(), ciePrefix) {
@@ -1844,7 +1861,6 @@ func (h *htrun) sendKalive(smap *smapX, htext htext, timeout time.Duration) (pid
 		freeCR(res)
 		return
 	}
-	debug.Assert(len(res.bytes) == 0)
 	freeCR(res)
 	return
 }

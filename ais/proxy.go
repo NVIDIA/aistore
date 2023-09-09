@@ -89,6 +89,7 @@ type (
 			in  atomic.Bool
 		}
 		settingNewPrimary atomic.Bool // primary executing "set new primary" request (state)
+		readyToFastKalive atomic.Bool // primary can accept fast keepalives
 	}
 )
 
@@ -3127,10 +3128,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 		retries = 1
 	} else {
 		maxsleep := newConfig.Timeout.MaxKeepalive.D()
-		clutime := mono.Since(p.startup.cluster.Load())
-		if clutime < maxsleep {
-			sleep = 4 * maxsleep
-		} else if clutime < newConfig.Timeout.Startup.D() {
+		if uptime := p.keepalive.cluUptime(mono.NanoTime()); uptime < maxsleep {
 			sleep = 2 * maxsleep
 		}
 	}

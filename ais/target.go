@@ -46,7 +46,6 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/volume"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -80,8 +79,14 @@ var (
 	_ htext      = (*target)(nil)
 )
 
-func (*target) Name() string           { return apc.Target }          // as cos.Runner
-func (*target) rebMarked() xact.Marked { return xreg.GetRebMarked() } // as htext
+func (*target) Name() string { return apc.Target } // as cos.Runner
+
+// as htext
+func (*target) interruptedRestarted() (interrupted, restarted bool) {
+	interrupted = fs.MarkerExists(fname.RebalanceMarker)
+	restarted = fs.MarkerExists(fname.NodeRestartedPrev)
+	return
+}
 
 func sparseVerbStats(tm int64) bool  { return tm&7 == 1 }
 func sparseRedirStats(tm int64) bool { return tm&3 == 2 }

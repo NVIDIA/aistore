@@ -352,7 +352,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 		err := res.unwrap()
 		// failing to sync - not retrying, ignoring
 		if res.si.InMaintOrDecomm() {
-			nlog.Infof("%s: %s %s (maintenance %#b): %v(%d)", y.p, failsync, sname, res.si.Flags, err, res.status)
+			nlog.Infof("%s: %s %s (flags %s): %v(%d)", y.p, failsync, sname, res.si.Fl2S(), err, res.status)
 			continue
 		}
 		// - retrying, counting

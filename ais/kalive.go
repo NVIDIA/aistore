@@ -36,14 +36,14 @@ const (
 
 type (
 	keepaliver interface {
-		sendKalive(*smapX, time.Duration) (string, int, error)
-		onerr(err error, status int)
+		sendKalive(*smapX, time.Duration, bool) (string, int, error)
 		heardFrom(sid string)
 		do(config *cmn.Config) (stopped bool)
 		timeToPing(sid string) bool
 		ctrl(msg string)
 		paused() bool
 		cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf
+		cluUptime(int64) time.Duration
 	}
 	talive struct {
 		t *target
@@ -129,8 +129,19 @@ func (*talive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Target
 }
 
-func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration) (string, int, error) {
-	return tkr.t.sendKalive(smap, tkr.t, timeout)
+func (tkr *talive) cluUptime(now int64) (elapsed time.Duration) {
+	if at := tkr.t.startup.cluster.Load(); at > 0 {
+		elapsed = time.Duration(now - at)
+	}
+	return
+}
+
+func (tkr *talive) sendKalive(smap *smapX, timeout time.Duration, fast bool) (string, int, error) {
+	if fast {
+		interrupted, restarted := tkr.t.interruptedRestarted()
+		fast = !interrupted && !restarted
+	}
+	return tkr.t.sendKalive(smap, tkr.t, timeout, fast)
 }
 
 func (tkr *talive) do(config *cmn.Config) (stopped bool) {
@@ -181,18 +192,16 @@ func (*palive) cfg(config *cmn.Config) *cmn.KeepaliveTrackerConf {
 	return &config.Keepalive.Proxy
 }
 
-func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration) (pid string, status int, err error) {
-	if smap == nil {
-		smap = pkr.p.owner.smap.get()
-		if smap == nil {
-			return
-		}
+func (pkr *palive) cluUptime(now int64) (elapsed time.Duration) {
+	if at := pkr.p.startup.cluster.Load(); at > 0 {
+		elapsed = time.Duration(now - at)
 	}
-	pid = smap.Primary.ID()
-	if smap.isPrimary(pkr.p.si) && smap.version() > 0 {
-		return
-	}
-	return pkr.p.htrun.sendKalive(smap, nil /*htext*/, timeout)
+	return
+}
+
+func (pkr *palive) sendKalive(smap *smapX, timeout time.Duration, fast bool) (string, int, error) {
+	debug.Assert(!smap.isPrimary(pkr.p.si))
+	return pkr.p.htrun.sendKalive(smap, nil /*htext*/, timeout, fast)
 }
 
 func (pkr *palive) do(config *cmn.Config) (stopped bool) {
@@ -522,17 +531,20 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 		pid     = smap.Primary.ID()
 		timeout = config.Timeout.CplaneOperation.D()
 		started = mono.NanoTime()
+		fast    bool
 	)
-	cpid, status, err := k.k.sendKalive(smap, timeout)
+	if daemon.stopping.Load() {
+		return
+	}
+	fast = k.k.cluUptime(started) > cos.MaxDuration(k.interval<<2, config.Timeout.Startup.D()>>1)
+	cpid, status, err := k.k.sendKalive(smap, timeout, fast)
 	if err == nil {
 		now := mono.NanoTime()
 		k.statsT.Add(stats.KeepAliveLatency, now-started)
 		k.hb.HeardFrom(pid, now) // effectively, yes
 		return
 	}
-	if daemon.stopping.Load() {
-		return
-	}
+
 	debug.Assert(cpid == pid && cpid != si.ID(), pid+", "+cpid+", "+si.ID())
 	nlog.Warningf("%s => %s keepalive failed: %v(%d)", si, meta.Pname(pid), err, status)
 
@@ -551,7 +563,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 			// and therefore not skipping keepalive req (compare with palive.retry)
 			i++
 			started := mono.NanoTime()
-			pid, status, err = k.k.sendKalive(nil, timeout)
+			pid, status, err = k.k.sendKalive(nil, timeout, false)
 			if pid == si.ID() {
 				return // elected as primary
 			}
@@ -583,12 +595,6 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 				return true
 			}
 		}
-	}
-}
-
-func (k *keepalive) onerr(err error, status int) {
-	if cos.IsUnreachable(err, status) {
-		k.controlCh <- controlSignal{msg: kaErrorMsg, err: err}
 	}
 }
 

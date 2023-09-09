@@ -476,11 +476,15 @@ func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayloa
 		return
 	}
 
-	var ofl, nfl cos.BitFlags
+	var (
+		ofl, nfl cos.BitFlags
+		ofs, nfs string
+	)
 	r.mu.Lock()
 	smap := r.get()
 	if nsi := newSmap.GetNode(si.ID()); nsi != nil && si.Flags != nsi.Flags {
 		ofl, nfl = si.Flags, nsi.Flags
+		ofs, nfs = si.Fl2S(), nsi.Fl2S()
 		si.Flags = nsi.Flags
 	}
 	if smap != nil {
@@ -504,7 +508,7 @@ func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayloa
 
 	if err == nil {
 		if ofl != nfl {
-			nlog.Infof("%s flags: from %#b to %#b", si, ofl, nfl)
+			nlog.Infof("%s flags: from %s to %s", si, ofs, nfs)
 		}
 		cb(newSmap, smap, nfl, ofl)
 	}

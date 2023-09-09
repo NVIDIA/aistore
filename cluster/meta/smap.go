@@ -269,6 +269,26 @@ func (d *Snode) InMaintPostReb() bool {
 func (d *Snode) nonElectable() bool { return d.Flags.IsSet(SnodeNonElectable) }
 func (d *Snode) IsIC() bool         { return d.Flags.IsSet(SnodeIC) }
 
+func (d *Snode) Fl2S() string {
+	if d.Flags == 0 {
+		return "none"
+	}
+	var a = make([]string, 0, 2)
+	switch {
+	case d.Flags&SnodeNonElectable != 0:
+		a = append(a, "non-elect")
+	case d.Flags&SnodeIC != 0:
+		a = append(a, "ic")
+	case d.Flags&SnodeMaint != 0:
+		a = append(a, "maintenance-mode")
+	case d.Flags&SnodeDecomm != 0:
+		a = append(a, "decommission")
+	case d.Flags&SnodeMaintPostReb != 0:
+		a = append(a, "post-rebalance")
+	}
+	return strings.Join(a, ",")
+}
+
 /////////////
 // NetInfo //
 /////////////

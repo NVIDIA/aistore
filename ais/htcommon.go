@@ -269,6 +269,7 @@ var (
 	errRebalanceDisabled = errors.New("rebalance is disabled")
 	errForwarded         = errors.New("forwarded")
 	errSendingResp       = errors.New("err-sending-resp")
+	errFastKalive        = errors.New("cannot fast-keepalive")
 )
 
 // BMD uuid errs

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -339,31 +340,48 @@ func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceRe
 
 // POST /v1/cluster - handles joins and keepalives
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
-	var (
-		regReq cluMeta
-		nsi    *meta.Snode
-		apiOp  string // one of: admin-join, self-join, keepalive
-		action string // msg.Action, one: apc.ActSelfJoinProxy, ...
-	)
-	apiItems, err := p.parseURL(w, r, 1, false, apc.URLPathClu.L)
+	apiItems, err := p.parseURL(w, r, 1, true, apc.URLPathClu.L)
 	if err != nil {
-		return
-	}
-	apiOp = apiItems[0]
-	// Ignore keepalive beat if the primary is in transition.
-	if p.settingNewPrimary.Load() && apiOp == apc.Keepalive {
 		return
 	}
 	if p.forwardCP(w, r, nil, "httpclupost") {
 		return
 	}
-	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+
+	var (
+		nsi    *meta.Snode
+		action string
+		regReq cluMeta
+		smap   = p.owner.smap.get()
+		config = cmn.GCO.Get()
+		apiOp  = apiItems[0]
+	)
+	if len(apiItems) > 1 && apiOp != apc.Keepalive {
+		p.writeErrURL(w, r)
 		return
 	}
-
-	// unmarshal and validate
 	switch apiOp {
+	case apc.Keepalive:
+		// ignore when primary in transition
+		if p.settingNewPrimary.Load() {
+			return
+		}
+
+		// fast path(?)
+		if len(apiItems) > 1 {
+			p.fastKalive(w, r, smap, config, apiItems[1])
+			return
+		}
+
+		// slow path
+		if cmn.ReadJSON(w, r, &regReq) != nil {
+			return
+		}
+		nsi = regReq.SI
 	case apc.AdminJoin: // administrative join
+		if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
+			return
+		}
 		if cmn.ReadJSON(w, r, &regReq.SI) != nil {
 			return
 		}
@@ -391,11 +409,6 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.reg.pool = append(p.reg.pool, regReq)
 			p.reg.mu.Unlock()
 		}
-	case apc.Keepalive: // keep-alive
-		if cmn.ReadJSON(w, r, &regReq) != nil {
-			return
-		}
-		nsi = regReq.SI
 	default:
 		debug.Assert(false, apiOp) // must be one of the (3) above
 		p.writeErrURL(w, r)
@@ -447,7 +460,6 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// node flags
-	smap := p.owner.smap.get()
 	if osi := smap.GetNode(nsi.ID()); osi != nil {
 		nsi.Flags = osi.Flags
 	}
@@ -478,14 +490,15 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !cmn.GCO.Get().Rebalance.Enabled {
+	if !config.Rebalance.Enabled {
 		regReq.RebInterrupted, regReq.Restarted = false, false
 	}
 	if nsi.IsTarget() && (regReq.RebInterrupted || regReq.Restarted) {
 		if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); !a || b {
 			// handle via rmd.starting + resumeReb
 			if p.owner.rmd.interrupted.CAS(false, true) {
-				nlog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(), regReq.RebInterrupted, regReq.Restarted)
+				nlog.Warningf("%s: will resume rebalance %s(%t, %t)", p, nsi.StringEx(),
+					regReq.RebInterrupted, regReq.Restarted)
 			}
 		}
 	}
@@ -536,6 +549,31 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 	go p.mcastJoined(nsi, msg, nsi.Flags, &regReq)
 }
 
+func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, config *cmn.Config, sid string) {
+	fast := p.readyToFastKalive.Load()
+	if !fast {
+		now := mono.NanoTime()
+		cfg := config.Keepalive
+		min := cos.MaxDuration(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
+		if fast = p.keepalive.cluUptime(now) > min; fast {
+			p.readyToFastKalive.Store(true)
+		}
+	}
+	if fast {
+		var (
+			callerID   = r.Header.Get(apc.HdrCallerID)
+			callerSver = r.Header.Get(apc.HdrCallerSmapVersion)
+		)
+		if callerID == sid && callerSver != "" && callerSver == smap.vstr {
+			if si := smap.GetNode(sid); si != nil {
+				p.keepalive.heardFrom(sid)
+				return
+			}
+		}
+	}
+	p.writeErr(w, r, errFastKalive, 0, Silent)
+}
+
 // when joining manually: update the node with cluster meta that does not include Smap
 // (the later gets finalized and metasync-ed upon success)
 func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (int, error) {
@@ -568,7 +606,8 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (
 }
 
 // executes under lock
-func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta, msg *apc.ActMsg) (upd bool, err error) {
+func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags cos.BitFlags, regReq *cluMeta,
+	msg *apc.ActMsg) (upd bool, err error) {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		err = newErrNotPrimary(p.si, smap, "cannot "+apiOp+" "+nsi.StringEx())
@@ -1378,7 +1417,8 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, si *meta.Snode, reb, maintPostReb bo
 			[]string{apc.ActDecommissionNode, apc.ActStartMaintenance, apc.ActShutdownNode})
 		return
 	}
-	nlog.Infof("%s mcast-maint: %s, %s reb=(%t, %t)", p, msg, si.StringEx(), reb, maintPostReb)
+	var dummy = meta.Snode{Flags: flags}
+	nlog.Infof("%s mcast-maint: %s, %s reb=(%t, %t), nflags=%s", p, msg, si.StringEx(), reb, maintPostReb, dummy.Fl2S())
 	ctx = &smapModifier{
 		pre:     p._markMaint,
 		post:    p._rebPostRm, // (rmdCtx.rmNode => p.rmNodeFinal when all done)

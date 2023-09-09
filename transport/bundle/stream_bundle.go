@@ -365,7 +365,7 @@ func (sb *Streams) Resync() {
 		}
 		// not connecting to the peer that's in maintenance and already rebalanced-out
 		if si.InMaintPostReb() {
-			nlog.Infof("%s => %s[-/%#b] per %s - skipping", sb, si.StringEx(), si.Flags, smap)
+			nlog.Infof("%s => %s[-/%s] per %s - skipping", sb, si.StringEx(), si.Fl2S(), smap)
 			continue
 		}
 
