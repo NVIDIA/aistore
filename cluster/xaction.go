@@ -103,6 +103,11 @@ type (
 		AbortedX bool  `json:"aborted"`
 		IdleX    bool  `json:"is_idle"`
 	}
+	AllRunningInOut struct {
+		Kind    string
+		Running []string
+		Idle    []string // NOTE: returning only when not nil
+	}
 )
 
 //////////

@@ -32,8 +32,8 @@ func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 
-func (*target) GetAllRunning(xactKind string, separateIdle bool) (running, idle []string) {
-	return xreg.GetAllRunning(xactKind, separateIdle)
+func (*target) GetAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+	xreg.GetAllRunning(inout, periodic)
 }
 
 func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values) ([]byte, int, error) {

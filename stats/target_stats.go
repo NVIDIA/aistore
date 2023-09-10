@@ -96,6 +96,7 @@ type (
 		runner    // the base (compare w/ Prunner)
 		lines     []string
 		mem       sys.MemStat
+		xallRun   cluster.AllRunningInOut
 		standby   bool
 	}
 )
@@ -140,6 +141,10 @@ func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
 	r.core.initMetricClient(t.Snode(), &r.runner)
 
 	r.sorted = make([]string, 0, numTargetStats)
+
+	r.xallRun.Running = make([]string, 16)
+	r.xallRun.Idle = make([]string, 16)
+
 	return &r.runner.startedUp
 }
 
@@ -324,18 +329,24 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	// 6. running xactions
 	verbose := config.FastV(4, cos.SmoduleStats)
 	if !idle {
-		var (
-			ln     string
-			rs, is = r.t.GetAllRunning("", verbose /*separate idle*/)
-		)
-		if len(rs) > 0 {
-			ln = "running: " + strings.Join(rs, " ")
-			if len(is) > 0 {
-				ln += "; "
-			}
+		var ln string
+		r.xallRun.Running = r.xallRun.Running[:0]
+		r.xallRun.Idle = r.xallRun.Idle[:0]
+		orig := r.xallRun.Idle
+		if !verbose {
+			r.xallRun.Idle = nil
 		}
-		if len(is) > 0 {
-			ln += "idle: " + strings.Join(is, " ")
+		r.t.GetAllRunning(&r.xallRun, true /*periodic*/)
+		if !verbose {
+			r.xallRun.Idle = orig
+		}
+		if len(r.xallRun.Running) > 0 {
+			ln = "running: " + strings.Join(r.xallRun.Running, " ")
+			if len(r.xallRun.Idle) > 0 {
+				ln += ";  idle: " + strings.Join(r.xallRun.Idle, " ")
+			}
+		} else if len(r.xallRun.Idle) > 0 {
+			ln += "idle: " + strings.Join(r.xallRun.Idle, " ")
 		}
 		if ln != "" && ln != r.xln {
 			r.lines = append(r.lines, ln)

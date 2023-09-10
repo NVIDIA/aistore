@@ -87,9 +87,10 @@ type (
 	}
 
 	entries struct {
-		active []Renewable // running entries - finished entries are gradually removed
-		all    []Renewable
-		mtx    sync.RWMutex
+		active   []Renewable // running entries - finished entries are gradually removed
+		roActive []Renewable // read-only copy
+		all      []Renewable
+		mtx      sync.RWMutex
 	}
 	// All entries in the registry. The entries are periodically cleaned up
 	// to make sure that we don't keep old entries forever.
@@ -120,8 +121,9 @@ func TestReset() { dreg = newRegistry() } // tests only
 func newRegistry() (r *registry) {
 	return &registry{
 		entries: entries{
-			all:    make([]Renewable, 0, initialCap),
-			active: make([]Renewable, 0, 32),
+			all:      make([]Renewable, 0, initialCap),
+			active:   make([]Renewable, 0, 32),
+			roActive: make([]Renewable, 0, 64),
 		},
 		bckXacts:    make(map[string]Renewable, 32),
 		nonbckXacts: make(map[string]Renewable, 32),
@@ -157,17 +159,28 @@ outer:
 	return
 }
 
-func GetAllRunning(kind string, separateIdle bool) ([]string, []string) {
-	return dreg.entries.getAllRunning(kind, separateIdle)
+func GetAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+	dreg.entries.getAllRunning(inout, periodic)
 }
 
-func (e *entries) getAllRunning(kind string, separateIdle bool) (running, idle []string) {
-	for _, entry := range e.active {
+func (e *entries) getAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+	var roActive []Renewable
+	if periodic {
+		roActive = e.roActive
+		roActive = roActive[:len(e.active)]
+	} else {
+		roActive = make([]Renewable, len(e.active))
+	}
+	e.mtx.RLock()
+	copy(roActive, e.active)
+	e.mtx.RUnlock()
+
+	for _, entry := range roActive {
 		var (
 			xctn = entry.Get()
 			k    = xctn.Kind()
 		)
-		if kind != "" && kind != k {
+		if inout.Kind != "" && inout.Kind != k {
 			continue
 		}
 		if !xctn.Running() {
@@ -177,20 +190,20 @@ func (e *entries) getAllRunning(kind string, separateIdle bool) (running, idle [
 			xqn    = k + xact.LeftID + xctn.ID() + xact.RightID // e.g. "make-n-copies[fGhuvvn7t]"
 			isIdle bool
 		)
-		if separateIdle {
+		if inout.Idle != nil {
 			if _, ok := xctn.(xact.Demand); ok {
 				isIdle = xctn.Snap().IsIdle()
 			}
 		}
 		if isIdle {
-			idle = append(idle, xqn)
+			inout.Idle = append(inout.Idle, xqn)
 		} else {
-			running = append(running, xqn)
+			inout.Running = append(inout.Running, xqn)
 		}
 	}
-	sort.Strings(running)
-	sort.Strings(idle)
-	return
+
+	sort.Strings(inout.Running)
+	sort.Strings(inout.Idle)
 }
 
 func GetRunning(flt Flt) Renewable { return dreg.getRunning(flt) }
@@ -638,6 +651,11 @@ func (e *entries) add(entry Renewable) {
 	e.active = append(e.active, entry)
 	e.all = append(e.all, entry)
 	e.mtx.Unlock()
+
+	// grow
+	if cap(e.roActive) < len(e.active) {
+		e.roActive = make([]Renewable, 0, len(e.active)+len(e.active)>>1)
+	}
 }
 
 //

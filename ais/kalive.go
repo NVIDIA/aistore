@@ -7,6 +7,7 @@ package ais
 import (
 	"fmt"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -635,7 +636,7 @@ func (hb *heartBeat) HeardFrom(id string, now int64) {
 		val = new(int64)
 		hb.last.Store(id, val)
 	}
-	*val = now // NOTE: not using ratomic.StoreInt64(val, now)
+	ratomic.StoreInt64(val, now)
 }
 
 func (hb *heartBeat) TimedOut(id string) bool {
@@ -644,7 +645,8 @@ func (hb *heartBeat) TimedOut(id string) bool {
 		return true
 	}
 	val := v.(*int64)
-	tim := *val
+	tim := ratomic.LoadInt64(val)
+
 	return mono.Since(tim) > hb.interval
 }
 

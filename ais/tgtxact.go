@@ -55,12 +55,16 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	}
 	debug.Assert(xactMsg.Kind == "" || xact.IsValidKind(xactMsg.Kind), xactMsg.Kind)
 
-	// TODO: always return both running & idle, propagate the (api) change throughout
+	//
+	// TODO: add user option to return idle xactions (separately)
+	//
 	if what == apc.WhatAllRunningXacts {
-		out, _ := xreg.GetAllRunning(xactMsg.Kind, false /*separate idle*/)
-		t.writeJSON(w, r, out, what)
+		var inout = cluster.AllRunningInOut{Kind: xactMsg.Kind}
+		xreg.GetAllRunning(&inout, false /*periodic*/)
+		t.writeJSON(w, r, inout.Running, what)
 		return
 	}
+
 	if what != apc.WhatQueryXactStats {
 		t.writeErrf(w, r, fmtUnknownQue, what)
 		return

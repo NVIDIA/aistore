@@ -34,8 +34,8 @@ type (
 		// Space
 		OOS(*fs.CapStatus) fs.CapStatus
 
-		// Running now
-		GetAllRunning(xactKind string, separateIdle bool) (running, idle []string)
+		// xactions (jobs) now
+		GetAllRunning(inout *AllRunningInOut, periodic bool)
 	}
 
 	// a node that can also write objects
