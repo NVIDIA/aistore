@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -207,7 +208,13 @@ func etlInitSpecHandler(c *cli.Context) (err error) {
 		msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 		msg.Spec = spec
 	}
+	if !strings.HasSuffix(msg.CommTypeX, etl.CommTypeSeparator) {
+		msg.CommTypeX += etl.CommTypeSeparator
+	}
 	if err = msg.Validate(); err != nil {
+		if e, ok := err.(*cmn.ErrETL); ok {
+			err = errors.New(e.Reason)
+		}
 		return err
 	}
 
@@ -257,6 +264,9 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 	msg.Runtime = parseStrFlag(c, runtimeFlag)
 
 	msg.CommTypeX = parseStrFlag(c, commTypeFlag)
+	if !strings.HasSuffix(msg.CommTypeX, etl.CommTypeSeparator) {
+		msg.CommTypeX += etl.CommTypeSeparator
+	}
 	msg.ArgTypeX = parseStrFlag(c, argTypeFlag)
 
 	if flagIsSet(c, chunkSizeFlag) {
@@ -266,16 +276,6 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 		}
 	}
 
-	if msg.CommTypeX != "" {
-		// Missing `/` at the end, eg. `hpush:/` (should be `hpush://`)
-		if strings.HasSuffix(msg.CommTypeX, ":/") {
-			msg.CommTypeX += "/"
-		}
-		// Missing `://` at the end, eg. `hpush` (should be `hpush://`)
-		if !strings.HasSuffix(msg.CommTypeX, "://") {
-			msg.CommTypeX += "://"
-		}
-	}
 	msg.Timeout = cos.Duration(parseDurationFlag(c, waitPodReadyTimeoutFlag))
 
 	// funcs
@@ -283,6 +283,9 @@ func etlInitCodeHandler(c *cli.Context) (err error) {
 
 	// validate
 	if err := msg.Validate(); err != nil {
+		if e, ok := err.(*cmn.ErrETL); ok {
+			err = errors.New(e.Reason)
+		}
 		return err
 	}
 

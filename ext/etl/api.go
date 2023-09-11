@@ -27,7 +27,10 @@ const (
 	Code = "code"
 )
 
-const DefaultTimeout = 30 * time.Second
+// consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
+const CommTypeSeparator = "://"
+
+const DefaultTimeout = 45 * time.Second
 
 // enum communication types (`commTypes`)
 const (

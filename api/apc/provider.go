@@ -22,8 +22,10 @@ const (
 	NsUUIDPrefix = '@' // BEWARE: used by on-disk layout
 	NsNamePrefix = '#' // BEWARE: used by on-disk layout
 
+	// consistent with rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
 	BckProviderSeparator = "://"
-	BckObjnameSeparator  = "/"
+
+	BckObjnameSeparator = "/"
 
 	// scheme://
 	DefaultScheme = "https"

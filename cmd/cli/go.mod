@@ -4,11 +4,11 @@ go 1.21
 
 // direct
 require (
-	github.com/NVIDIA/aistore v1.3.20-0.20230908002525-1c044ecdbdda
+	github.com/NVIDIA/aistore v1.3.20-0.20230911201904-ad8499303db6
 	github.com/fatih/color v1.15.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.27.6
+	github.com/onsi/gomega v1.27.10
 	github.com/urfave/cli v1.22.14
 	github.com/vbauerster/mpb/v4 v4.12.2
 	golang.org/x/sync v0.3.0

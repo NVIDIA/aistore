@@ -814,12 +814,14 @@ var (
 	}
 	commTypeFlag = cli.StringFlag{
 		Name: "comm-type",
-		Usage: "communication type to be used when running custom transformation:\n" +
-			indent4 + "\t - hpush:// - POST request with object, gets transformed bytes by ETL container as response (default, can be omitted)\n" +
-			indent4 + "\t - hpull:// - HTTP redirect for GET request through ETL container, which GETs from target, transforms, and responds\n" +
-			indent4 + "\t - hrev:// - reverse proxy for GET request to ETL container, which GETs from target, transforms, and responds\n" +
-			indent4 + "\t - io:// - sends data via standard input, receives transformed data on standard output\n" +
-			indent4 + "\t - More info on: https://aiatscale.org/docs/etl#communication-mechanisms\n",
+		Usage: "enumerated communication type used between aistore cluster and ETL containers that run custom transformations:\n" +
+			indent4 + "\t - 'hpush' or 'hpush://' - ETL container provides HTTP PUT handler that'll be invoked upon every request to transform\n" +
+			indent4 + "\t -  '' - same as 'hpush://' (default, can be omitted)\n" +
+			indent4 + "\t - 'hpull' or 'hpull://' - same, but ETL container is expected to provide HTTP GET endpoint\n" +
+			indent4 + "\t - 'hrev' or 'hrev://' - same, but aistore nodes will reverse-proxy requests to their respective ETL containers)\n" +
+			indent4 + "\t - 'io' or 'io://' - for each request an aistore node will: run ETL container locally, write data\n" +
+			indent4 + "\t   to its standard input and then read transformed data from the standard output\n" +
+			indent4 + "\t For more defails, see https://aiatscale.org/docs/etl#communication-mechanisms\n",
 	}
 
 	funcTransformFlag = cli.StringFlag{
@@ -829,10 +831,10 @@ var (
 	}
 	argTypeFlag = cli.StringFlag{
 		Name: "arg-type",
-		Usage: "Specifies the type of object specification used between the aistore and ETL container:\n" +
-			indent4 + "\t - \"\" (Empty String): Pass the object as bytes (default, can be omitted)\n" +
-			indent4 + "\t - url - Pass the URL of the objects to be transformed to the user-defined transform function (this option is limited to '--comm-type=hpull')\n" +
-			indent4 + "\t - fqn - Pass the fully-qualified name (path) of the locally stored object within aistore (requires trusted ETL container, might not be always available)",
+		Usage: "Specifies _how_ an object to transform gets passed from aistore to ETL container:\n" +
+			indent4 + "\t - \"\" - The default option (that can be omitted), whereby ETL container receives an entire payload (bytes) to transform\n" +
+			indent4 + "\t - url - URL that points towards the data to transform (the support is currently limited to '--comm-type=hpull')\n" +
+			indent4 + "\t - fqn - Fully-qualified name (FQN) of a locally stored object (requires trusted ETL container, might not be always available)",
 	}
 
 	// Node
