@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -72,6 +71,13 @@ type (
 		regstate     regstate
 	}
 )
+
+type redial struct {
+	t         *target
+	dialTout  time.Duration
+	totalTout time.Duration
+	inUse     string
+}
 
 // interface guard
 var (
@@ -303,7 +309,7 @@ func (t *target) Run() error {
 	regDiskMetrics(t.si, tstats, disabledPaths)
 	t.statsT.RegMetrics(t.si) // + Prometheus, if configured
 
-	fatalErr, writeErr := t.checkRestarted()
+	fatalErr, writeErr := t.checkRestarted(config)
 	if fatalErr != nil {
 		cos.ExitLog(fatalErr)
 	}
@@ -478,17 +484,13 @@ func (t *target) initRecvHandlers() {
 	t.regNetHandlers(networkHandlers)
 }
 
-func (t *target) checkRestarted() (fatalErr, writeErr error) {
+func (t *target) checkRestarted(config *cmn.Config) (fatalErr, writeErr error) {
 	if fs.MarkerExists(fname.NodeRestartedMarker) {
-		// NOTE the risk: duplicate aisnode run - which'll fail shortly with "bind:
-		// address already in use" but not before triggering (`NodeRestartedPrev` => GFN)
-		// sequence and stealing nlog symlinks - that's why we go extra length
-		if _lsof(t.si.PubNet.TCPEndpoint()) {
-			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)",
-				t, t.si.PubNet.TCPEndpoint())
+		red := redial{t: t, dialTout: config.Timeout.CplaneOperation.D(), totalTout: config.Timeout.MaxKeepalive.D()}
+		if red.acked() {
+			fatalErr = fmt.Errorf("%s: %q is in use (duplicate or overlapping run?)", t, red.inUse)
 			return
 		}
-
 		t.statsT.Inc(stats.RestartCount)
 		fs.PersistMarker(fname.NodeRestartedPrev)
 	}
@@ -496,12 +498,45 @@ func (t *target) checkRestarted() (fatalErr, writeErr error) {
 	return
 }
 
-// only when restarted marker exists
-func _lsof(addr string) bool {
-	arg := []string{"-sTCP:LISTEN", "-i", "tcp@" + addr}
-	cmd := exec.Command("lsof", arg...)
-	_, err := cmd.CombinedOutput()
-	return err == nil // detected dup
+// NOTE in re 'node-restarted' scenario: the risk of "overlapping" aisnode run -
+// which'll fail shortly with "bind: address already in use" but not before
+// triggering (`NodeRestartedPrev` => GFN) sequence and stealing nlog symlinks
+// - this risk exists, and that's why we go extra length
+func (red *redial) acked() bool {
+	var (
+		err   error
+		tsi   = red.t.si
+		sleep = cos.ProbingFrequency(red.totalTout)
+		addrs = []string{tsi.PubNet.TCPEndpoint()}
+		once  bool
+	)
+	if ep := red.t.si.DataNet.TCPEndpoint(); ep != addrs[0] {
+		addrs = append(addrs, ep)
+	} else if ep := red.t.si.ControlNet.TCPEndpoint(); ep != addrs[0] {
+		addrs = append(addrs, ep)
+	}
+	for _, addr := range addrs {
+		for elapsed := time.Duration(0); elapsed < red.totalTout; elapsed += sleep {
+			_, err = net.DialTimeout("tcp4", addr, cos.MaxDuration(2*time.Second, red.dialTout))
+			if err != nil {
+				break
+			}
+			once = true
+			time.Sleep(sleep)
+			// could be shutting down
+		}
+		if !once {
+			return false
+		}
+		if err == nil {
+			if red.inUse == "" {
+				red.inUse = addr
+			}
+			return true
+		}
+		time.Sleep(sleep)
+	}
+	return false // got tcp synack at least once but not (getting it) any longer
 }
 
 //

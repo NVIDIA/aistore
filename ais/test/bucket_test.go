@@ -2560,6 +2560,15 @@ func TestCopyBucket(t *testing.T) {
 					}
 				}
 			}
+
+			if test.evictRemoteSrc { // TODO -- FIXME: ditto
+				for _, uuid := range xactIDs {
+					tlog.Logf("TODO -- FIXME: stopping (idle) prev. test %s[%s]\n", apc.ActCopyObjects, uuid)
+					err = api.AbortXaction(baseParams, xact.ArgsMsg{ID: uuid, Kind: apc.ActCopyObjects})
+					tassert.CheckError(t, err)
+				}
+				time.Sleep(40 * time.Second)
+			}
 		})
 	}
 }

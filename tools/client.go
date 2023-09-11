@@ -52,7 +52,8 @@ const (
 	EvictPrefetchTimeout = 2 * time.Minute
 	BucketCleanupTimeout = time.Minute
 
-	xactPollSleep = time.Second
+	xactPollSleep     = time.Second
+	controlPlaneSleep = 2 * time.Second
 )
 
 type Ctx struct {
@@ -524,7 +525,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 		// NOTE in re nat == 1: single remaining target vs. graceful shutdown and such
 		s := "No targets"
 		tlog.Logf("%s, %s - cannot rebalance\n", s, smap)
-		_waitResil(t, bp, 2*time.Second)
+		_waitResil(t, bp, controlPlaneSleep)
 		return
 	}
 

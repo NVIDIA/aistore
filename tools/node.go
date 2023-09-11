@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,8 +34,7 @@ import (
 )
 
 const (
-	nodeRetryInterval = 2 * time.Second // interval to check for node health
-	maxNodeRetry      = 10              // max retries to get health
+	maxNodeRetry = 10 // max retries to get health
 )
 
 const resilverTimeout = time.Minute
@@ -55,6 +55,24 @@ func (n nodesCnt) satisfied(actual int) bool {
 		return true
 	}
 	return int(n) == actual
+}
+
+// as the name implies
+func WaitNodePubAddrNotInUse(si *meta.Snode, timeout time.Duration) error {
+	var (
+		addr     = si.PubNet.TCPEndpoint()
+		interval = controlPlaneSleep
+	)
+	tlog.Logf("Waiting for %s to shutdown (and stop listening)\n", si.StringEx())
+	time.Sleep(interval) // not immediate
+	for elapsed := time.Duration(0); elapsed < timeout; elapsed += interval {
+		if _, err := net.DialTimeout("tcp4", addr, interval); err != nil {
+			time.Sleep(interval)
+			return nil
+		}
+		time.Sleep(interval)
+	}
+	return errors.New("timeout")
 }
 
 // Add an alive node that is not in SMap to the cluster.
@@ -281,9 +299,9 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {
 	args := xact.ArgsMsg{Kind: apc.ActResilver, Timeout: resilverTimeout}
 	if target != nil {
 		args.DaemonID = target.ID()
-		time.Sleep(2 * time.Second)
+		time.Sleep(controlPlaneSleep)
 	} else {
-		time.Sleep(4 * time.Second)
+		time.Sleep(2 * controlPlaneSleep)
 	}
 	allFinished := func(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
 		tid, xsnap, err := snaps.RunningTarget("")
@@ -608,7 +626,7 @@ retry:
 		node := smap.GetNode(cmd.Node.ID())
 		if node == nil && !retried {
 			tlog.Logf("Warning: %s %s not found in %s - retrying...", cmd.Node.Type(), cmd.Node.ID(), smap.StringEx())
-			time.Sleep(4 * time.Second)
+			time.Sleep(2 * controlPlaneSleep)
 			smap = GetClusterMap(t, proxyURL)
 			// alternatively, could simply compare versions
 			retried = true
@@ -676,7 +694,7 @@ retry:
 	if node != nil {
 		return smap, WaitNodeReady(node.URL(cmn.NetPublic))
 	}
-	time.Sleep(nodeRetryInterval)
+	time.Sleep(controlPlaneSleep)
 	i++
 	if i > maxNodeRetry {
 		return nil, fmt.Errorf("max retry (%d) exceeded - node not in smap", maxNodeRetry)
@@ -689,7 +707,7 @@ func WaitNodeReady(url string, opts ...*WaitRetryOpts) (err error) {
 	var (
 		bp            = BaseAPIParams(url)
 		retries       = maxNodeRetry
-		retryInterval = nodeRetryInterval
+		retryInterval = controlPlaneSleep
 		i             int
 	)
 	if len(opts) > 0 && opts[0] != nil {

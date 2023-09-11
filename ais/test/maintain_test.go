@@ -176,7 +176,10 @@ func TestMaintenanceMD(t *testing.T) {
 	tassert.Errorf(t, vmdTargets == smap.CountTargets()-1, "expected VMD to be found on %d targets, got %d.",
 		smap.CountTargets()-1, vmdTargets)
 
-	time.Sleep(time.Second)
+	// restarting before the daemon fully terminates may result in "bind: address already in use"
+	err = tools.WaitNodePubAddrNotInUse(dcmTarget, time.Minute)
+	tassert.CheckFatal(t, err)
+
 	err = tools.RestoreNode(cmd, false, "target")
 	tassert.CheckFatal(t, err)
 	_, err = tools.WaitForClusterState(proxyURL, "target joined back", smap.Version, smap.CountActivePs(),
@@ -250,9 +253,9 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		t.Errorf("Wrong number of objects: have %d, expected %d", len(lst.Entries), objCount)
 	}
 
-	// restarting too early may result in "bind: address already in use "
-	// TODO: instead of sleep introduce and use "WaitForNodeToTerminateAndExit"
-	time.Sleep(20 * time.Second)
+	// restarting before the daemon fully terminates may result in "bind: address already in use"
+	err = tools.WaitNodePubAddrNotInUse(dcmTarget, time.Minute)
+	tassert.CheckFatal(t, err)
 
 	smap = tools.GetClusterMap(t, proxyURL)
 	err = tools.RestoreNode(cmd, false, "target")
