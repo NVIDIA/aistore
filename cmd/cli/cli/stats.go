@@ -78,7 +78,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatus
 	debug.Assert(len(mmc) > 2)
 	ok := checkVersionWarn(c, apc.Target, mmc, tstatusMap)
 	if ok && pstatusMap != nil {
-		_ = checkVersionWarn(c, apc.Target, mmc, pstatusMap)
+		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)
 	}
 	return
 }
@@ -96,6 +96,13 @@ func isRebalancing(tstatusMap teb.StstMap) bool {
 
 func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstMap) bool {
 	expected := mmc[0] + versionSepa + mmc[1]
+	minc, err := strconv.Atoi(mmc[1])
+	if err != nil {
+		warn := fmt.Sprintf("unexpected aistore version format: %v", mmc)
+		fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
+		debug.Assert(false)
+		return false
+	}
 	for _, ds := range stmap {
 		mmx := strings.Split(ds.Version, versionSepa)
 		if len(mmx) < 3 {
@@ -104,38 +111,62 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 		}
 		// major
 		if mmc[0] != mmx[0] {
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, true)
+			// count more of the same
+			var cnt int
+			for _, ds2 := range stmap {
+				if ds.Node.Snode.ID() != ds2.Node.Snode.ID() {
+					mmx2 := strings.Split(ds2.Version, versionSepa)
+					if mmc[0] != mmx2[0] {
+						cnt++
+					}
+				}
+			}
+			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, true)
 			return false
 		}
 		// minor
-		minc, err := strconv.Atoi(mmc[1])
-		debug.AssertNoErr(err)
 		minx, err := strconv.Atoi(mmx[1])
 		debug.AssertNoErr(err)
 		if minc != minx {
 			incompat := minc-minx > 1 || minc-minx < -1
-			verWarn(c, ds.Node.Snode, role, ds.Version, expected, incompat)
+			// ditto
+			var cnt int
+			for _, ds2 := range stmap {
+				if ds.Node.Snode.ID() != ds2.Node.Snode.ID() {
+					mmx2 := strings.Split(ds2.Version, versionSepa)
+					minx2, _ := strconv.Atoi(mmx2[1])
+					if minc != minx2 {
+						cnt++
+					}
+				}
+			}
+			verWarn(c, ds.Node.Snode, role, ds.Version, expected, cnt, incompat)
 			return false
 		}
 	}
 	return true
 }
 
-func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, incompat bool) {
+func verWarn(c *cli.Context, snode *meta.Snode, role, version, expected string, cnt int, incompat bool) {
 	var (
-		sname, warn string
+		sname, warn, s1, s2 string
 	)
 	if role == apc.Proxy {
 		sname = meta.Pname(snode.ID())
 	} else {
 		sname = meta.Tname(snode.ID())
 	}
+	s2 = "s"
+	if cnt > 0 {
+		s2 = ""
+		s1 = fmt.Sprintf(" and %d other node%s", cnt, cos.Plural(cnt))
+	}
 	if incompat {
-		warn = fmt.Sprintf("node %s runs software version %s which is not compatible with the CLI (expecting v%s)",
-			sname, version, expected)
+		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which is not compatible with the CLI (expecting v%s)",
+			sname, s1, s2, version, expected)
 	} else {
-		warn = fmt.Sprintf("node %s runs software version %s which _may_ not be fully compatible with the CLI (expecting v%s)",
-			sname, version, expected)
+		warn = fmt.Sprintf("node %s%s run%s aistore software version %s, which may not be fully compatible with the CLI (expecting v%s)",
+			sname, s1, s2, version, expected)
 	}
 	actionWarn(c, warn+"\n")
 }
