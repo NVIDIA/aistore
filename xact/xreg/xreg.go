@@ -480,12 +480,11 @@ func (r *registry) renew(entry Renewable, bck *meta.Bck, buckets ...*meta.Bck) (
 }
 
 func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
-	bck := flt.Bck
 	// first, try to reuse under rlock
 	r.renewMtx.RLock()
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		xprev := prevEntry.Get()
-		if usePrev(xprev, entry, bck) {
+		if usePrev(xprev, entry, flt) {
 			r.renewMtx.RUnlock()
 			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
 		}
@@ -505,37 +504,49 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 
 	// second
 	r.renewMtx.Lock()
-	rns = r.renewLocked(entry, flt, bck)
+	rns = r.renewLocked(entry, flt)
 	r.renewMtx.Unlock()
 	return
 }
 
 // reusing current (aka "previous") xaction: default policies
-func usePrev(xprev cluster.Xact, nentry Renewable, bck *meta.Bck) (use bool) {
+func usePrev(xprev cluster.Xact, nentry Renewable, flt Flt) bool {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
 	pdtor, ndtor := xact.Table[pkind], xact.Table[nkind]
 	debug.Assert(pdtor.Scope == ndtor.Scope)
+
 	// same ID
 	if xprev.ID() != "" && xprev.ID() == nentry.UUID() {
-		use = true
-		return
+		return true // yes, use prev
 	}
+	if _, ok := xprev.(xact.Demand); !ok {
+		return false // upon return call xaction-specific WhenPrevIsRunning()
+	}
+	//
 	// on-demand
-	if _, ok := xprev.(xact.Demand); ok {
-		if pdtor.Scope != xact.ScopeB {
-			use = true
-			return
-		}
-		debug.Assert(!bck.IsEmpty())
-		use = bck.Equal(xprev.Bck(), true, true)
-		return
+	//
+	if pdtor.Scope != xact.ScopeB {
+		return true
 	}
-	// otherwise, consult with the impl via WhenPrevIsRunning()
-	return
+	bck := flt.Bck
+	debug.Assert(!bck.IsEmpty())
+	if !bck.Equal(xprev.Bck(), true, true) {
+		return false
+	}
+	// on-demand (from-bucket, to-bucket)
+	from, to := xprev.FromTo()
+	if len(flt.Buckets) == 2 && from != nil && to != nil {
+		for _, bck := range flt.Buckets {
+			if !bck.Equal(from, true, true) && !bck.Equal(to, true, true) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
-func (r *registry) renewLocked(entry Renewable, flt Flt, bck *meta.Bck) (rns RenewRes) {
+func (r *registry) renewLocked(entry Renewable, flt Flt) (rns RenewRes) {
 	var (
 		xprev cluster.Xact
 		wpr   WPR
@@ -543,7 +554,7 @@ func (r *registry) renewLocked(entry Renewable, flt Flt, bck *meta.Bck) (rns Ren
 	)
 	if prevEntry := r.getRunning(flt); prevEntry != nil {
 		xprev = prevEntry.Get()
-		if usePrev(xprev, entry, bck) {
+		if usePrev(xprev, entry, flt) {
 			return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
 		}
 		wpr, err = entry.WhenPrevIsRunning(prevEntry)

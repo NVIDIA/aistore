@@ -21,14 +21,28 @@ var (
 
 // "best-effort ID" - to independently and locally generate globally unique xaction ID
 func GenBEID(div uint64, tag string) (beid string) {
+	// primary's "now"
 	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
-	val := now / div
-	val ^= xxhash.ChecksumString64S(tag, val)
 
+	// compute
+	val := now / div
+	org := val
+	val ^= xxhash.ChecksumString64S(tag, val)
 	beid = cos.GenBEID(val)
 
-	if xctn, err := GetXact(beid); err != nil /*unlikely*/ || xctn != nil {
-		// idling away? fallback to common default
+	// check vs registry
+	xctn, err := GetXact(beid)
+	if err != nil { // (unlikely)
+		return cos.GenUUID()
+	}
+	if xctn == nil {
+		return
+	}
+
+	// idling away - try again but only once
+	val ^= org
+	beid = cos.GenBEID(val)
+	if xctn, err = GetXact(beid); err != nil || xctn != nil {
 		beid = cos.GenUUID()
 	}
 	return

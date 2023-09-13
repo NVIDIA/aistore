@@ -2077,6 +2077,8 @@ func ptLatency(tts int64, ptime string) (delta int64) {
 	if err != nil {
 		return
 	}
+	xreg.PrimeTime.Store(pts)
+	xreg.MyTime.Store(tts)
 	delta = tts - pts
 	if delta < 0 && -delta < int64(clusterClockDrift) {
 		delta = 0
