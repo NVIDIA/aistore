@@ -1926,7 +1926,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 			[]string{apc.ActShutdownNode, apc.ActStartMaintenance, apc.ActDecommissionNode, apc.ActRmNodeUnsafe})
 	}
 
-	nlog.Infof("%s: %s %s", p, msg.Action, sname)
+	nlog.InfoDepth(1, p.String()+":", msg.Action, sname)
 	res := p.call(cargs, smap)
 	err = res.unwrap()
 	freeCargs(cargs)

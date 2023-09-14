@@ -486,8 +486,12 @@ func (n *notifs) ListenSmapChanged() {
 		return
 	}
 	now := time.Now().UnixNano()
+
+	//
+	// TODO -- FIXME revisit in re: maintenance & decommission w/ rebalancing
+	//
 	for uuid, nl := range remnl {
-		s := fmt.Sprintf("%s: stop waiting for %s", n.p.si, nl)
+		s := "notifs.ListenSmapChanged: stop waiting for " + nl.String()
 		sid := remid[uuid]
 		err := &errNodeNotFound{s, sid, n.p.si, smap}
 		nl.Lock()

@@ -1356,7 +1356,7 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num
 	if checkAll || (c.cnt < maxVerConfirmations && smap.CountActiveTs() > 0) {
 		h._bch(&c, smap, apc.Target)
 	}
-	nlog.Infof("%s: %s", h.si, c.maxCii.String())
+	nlog.Infoln(h.String()+":", c.maxCii.String())
 	return c.maxCii, c.cnt
 }
 
@@ -1750,7 +1750,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 			}
 			res = h.regTo(candidateURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 			if res.err == nil {
-				nlog.Infof("%s: primary responded Ok via %s", h.si, candidateURL)
+				nlog.Infoln(h.String()+": primary responded Ok via", candidateURL)
 				return // ok
 			}
 			resPrev = res
@@ -1779,7 +1779,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	}
 	res = h.regTo(primaryURL, nil, apc.DefaultTimeout, query, htext, false /*keepalive*/)
 	if res.err == nil {
-		nlog.Infof("%s: joined cluster via %s", h.si, primaryURL)
+		nlog.Infoln(h.String()+": joined cluster via", primaryURL)
 	}
 	return
 }

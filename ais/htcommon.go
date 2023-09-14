@@ -169,7 +169,7 @@ type (
 		timeout           time.Duration  // call timeout
 		to                int            // (all targets, all proxies, all nodes) enum
 		nodeCount         int            // m.b. greater or equal destination count
-		ignoreMaintenance bool           // do not skip nodes under maintenance
+		ignoreMaintenance bool           // do not skip nodes in maintenance mode
 		async             bool           // ignore results
 	}
 

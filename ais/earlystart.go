@@ -50,7 +50,7 @@ func (p *proxy) bootstrap() {
 	if !reliable {
 		smap = nil
 	} else {
-		nlog.Infof("%s: loaded %s", p.si.StringEx(), smap.StringEx())
+		nlog.Infoln(p.si.StringEx()+": loaded", smap.StringEx())
 	}
 
 	// 2. make the preliminary/primary decision
@@ -79,13 +79,13 @@ func (p *proxy) bootstrap() {
 
 	// 4.1: start as primary
 	if primary {
-		nlog.Infof("%s: assuming primary role for now, starting up...", p.si.StringEx())
+		nlog.Infoln(p.si.StringEx() + ": assuming primary role for now, starting up")
 		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets)
 		return
 	}
 
 	// 4.2: otherwise, join as non-primary
-	nlog.Infof("%s: starting up as non-primary", p.si.StringEx())
+	nlog.Infoln(p.si.StringEx() + ": starting up as non-primary")
 	err := p.secondaryStartup(smap, primaryURL)
 	if err != nil {
 		if reliable {
@@ -266,7 +266,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 			smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
 		wg.Wait()
 	} else {
-		nlog.Infof("%s: no registrations yet", p.si.StringEx())
+		nlog.Infoln(p.si.StringEx() + ": no registrations yet")
 		if loadedSmap != nil {
 			nlog.Infof("%s: keep going w/ local %s", p.si.StringEx(), loadedSmap.StringEx())
 			p.owner.smap.mu.Lock()
@@ -559,7 +559,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 	}
 
 	if svm.Smap == nil || svm.Smap.version() == 0 {
-		nlog.Infof("%s: no max-ver Smaps", p.si.StringEx())
+		nlog.Infoln(p.si.StringEx() + ": no max-ver Smaps")
 		return
 	}
 	nlog.Infof("%s: local %s max-ver %s", p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())

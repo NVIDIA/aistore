@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -182,35 +184,60 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 // deactivate or remove node from the cluster (as per msg.Action)
 // called when rebalance is done
 func (m *rmdModifier) postRm(nl nl.Listener) {
-	m.log(nl)
 	var (
-		si    = m.smapCtx.smap.GetNode(m.smapCtx.sid)
-		sname = si.StringEx()
+		p     = m.p
+		tsi   = m.smapCtx.smap.GetNode(m.smapCtx.sid)
+		sname = tsi.StringEx()
+		xname = "rebalance[" + nl.UUID() + "]"
+		smap  = p.owner.smap.get()
+		warn  = "remove " + sname + " from the current " + smap.StringEx()
 	)
-	debug.Assert(si.IsTarget(), sname)
+	debug.Assert(nl.UUID() == m.rebID && tsi.IsTarget())
 
-	if nl.ErrCnt() > 0 {
-		// NOTE: the point of no return - keep rebalancing until success ============
-		p := m.p
-		cur := m.cur
-		if _, err := p.owner.rmd.modify(m); err != nil {
-			debug.AssertNoErr(err) // unlikely
-			return
+	if nl.ErrCnt() == 0 {
+		nlog.Infoln("post-rebalance commit: ", warn)
+		if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
+			nlog.Errorln(err)
 		}
-		if cur.Version == m.prev.Version { // old "cur" is the new "prev"
-			nlog.Warningf("%s [repeat]: new rebalance ID=%s (to remove/deactivate %s)", m.p, m.rebID, sname)
-			m.listen(m.postRm)
-			_ = p.metasyncer.sync(revsPair{m.cur, p.newAmsg(m.smapCtx.msg, nil)})
-			return
-		}
-		// otherwise, proceed to remove
-		nlog.Errorf("%s failed %s - proceeding anyway...", m.p, m.rebID)
+		return
 	}
 
-	nlog.Infof("%s: rm-node-final %s, %s", m.p, m.rebID, sname)
-	if _, err := m.p.rmNodeFinal(m.smapCtx.msg, si, m.smapCtx); err != nil {
+	m.log(nl)
+	nlerr := nl.Err()
+
+	// TODO -- FIXME: revisit
+	if strings.Contains(nlerr.Error(), "ListenSmapChanged") {
+		nlog.Errorln("waiting some more...")
+		time.Sleep(2 * cmn.Timeout.MaxKeepalive())
+		rmd := p.owner.rmd.get()
+		if m.cur.Version == rmd.Version {
+			nlog.Errorln("proceeding to", warn)
+			if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
+				nlog.Errorln(err)
+			}
+		}
+		return
+	}
+
+	rmd := p.owner.rmd.get()
+	if nlerr == cmn.ErrXactRenewAbort || nlerr.Error() == cmn.ErrXactRenewAbort.Error() || m.cur.Version < rmd.Version {
+		nlog.Errorf("Warning: %s (%s) got renewed (interrupted) - will not %s (%s)", xname, m.smapCtx.smap, warn, rmd)
+		return
+	}
+	if m.smapCtx.msg.Action != apc.ActRmNodeUnsafe && m.smapCtx.msg.Action != apc.ActDecommissionNode {
+		nlog.Errorf("operation %q => %s (%s) failed - will not %s", m.smapCtx.msg.Action, xname, m.smapCtx.smap, warn)
+		return
+	}
+
+	// go ahead to decommission anyway
+	nlog.Errorf("given %q operation and despite [%v] - proceeding to %s", m.smapCtx.msg.Action, nlerr, warn)
+	if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
 		nlog.Errorln(err)
 	}
+
+	//
+	// TODO: bcast targets to re-rebalance for the same `m.rebID` iff there isn't a new one that's running or about to run
+	//
 }
 
 func (m *rmdModifier) log(nl nl.Listener) {
@@ -222,11 +249,11 @@ func (m *rmdModifier) log(nl nl.Listener) {
 	)
 	switch {
 	case err == nil && !abrt:
-		nlog.Infoln(name, "done")
+		nlog.InfoDepth(1, name, "done")
 	case abrt:
 		debug.Assert(err != nil, nl.String()+" - aborted w/ no errors")
-		nlog.Errorf("%s aborted: %v", name, err)
+		nlog.ErrorDepth(1, err)
 	default:
-		nlog.Errorf("%s failed: %v", name, err)
+		nlog.ErrorDepth(1, name, "failed: ", err)
 	}
 }

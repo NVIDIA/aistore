@@ -88,9 +88,9 @@ func TestMaintenanceListObjects(t *testing.T) {
 		origEntries[en.Name] = en
 	}
 
-	// 2. Put a random target under maintenance
+	// 2. Put a random target in maintenance mode
 	tsi, _ := m.smap.GetRandTarget()
-	tlog.Logf("Put target %s under maintenance\n", tsi.StringEx())
+	tlog.Logf("Put target %s in maintenance mode\n", tsi.StringEx())
 	actVal := &apc.ActValRmNode{DaemonID: tsi.ID(), SkipRebalance: false}
 	rebID, err := api.StartMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
@@ -109,10 +109,8 @@ func TestMaintenanceListObjects(t *testing.T) {
 		m.smap.Version, m.smap.CountActivePs(), m.smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
-	// Wait for reb to complete
-	args := xact.ArgsMsg{ID: rebID, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
-	tassert.CheckFatal(t, err)
+	time.Sleep(8 * time.Second)
+	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	// 3. Check if we can list all the objects
 	lst, err = api.ListObjects(baseParams, bck, msg, api.ListArgs{})
@@ -245,7 +243,9 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
+	time.Sleep(8 * time.Second)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
+
 	msgList := &apc.LsoMsg{Prefix: objPath}
 	lst, err := api.ListObjects(baseParams, bck, msgList, api.ListArgs{})
 	tassert.CheckError(t, err)
@@ -340,7 +340,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 			tassert.CheckError(t, err)
 			_, err = tools.WaitForClusterState(
 				proxyURL,
-				"target joined",
+				"target joined (2nd attempt)",
 				m.smap.Version, origProxyCnt, origTargetCount,
 			)
 			tassert.CheckFatal(t, err)
@@ -363,13 +363,13 @@ func TestMaintenanceRebalance(t *testing.T) {
 
 	rebID, err = api.StopMaintenance(baseParams, actVal)
 	tassert.CheckFatal(t, err)
-	restored = true
 	smap, err = tools.WaitForClusterState(
 		proxyURL,
 		"target joined",
 		m.smap.Version, origProxyCnt, origTargetCount,
 	)
 	tassert.CheckFatal(t, err)
+	restored = true
 	m.smap = smap
 
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
