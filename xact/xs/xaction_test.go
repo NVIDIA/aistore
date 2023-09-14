@@ -298,14 +298,14 @@ func TestBeid(t *testing.T) {
 		cnt  int
 	)
 	for i := 0; i < num; i++ {
-		beid := xreg.GenBEID(div, tags[i%2])
+		beid, _, _ := xreg.GenBEID(div, tags[i%2])
 		if _, ok := ids[beid]; ok {
 			t.Fatalf("%d: %s duplicated", i, beid)
 		}
 		ids[beid] = struct{}{}
 
 		time.Sleep(time.Millisecond)
-		id := xreg.GenBEID(div, tags[i%2])
+		id, _, _ := xreg.GenBEID(div, tags[i%2])
 		if beid != id {
 			cnt++
 		}

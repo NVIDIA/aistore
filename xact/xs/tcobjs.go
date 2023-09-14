@@ -65,12 +65,14 @@ func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 	return np
 }
 
-func (p *tcoFactory) Start() error {
+func (p *tcoFactory) Start() (err error) {
 	//
 	// target-local generation of a global UUID
 	//
-	div := uint64(xact.IdleDefault)
-	p.Args.UUID = xreg.GenBEID(div, p.kind+"|"+p.args.BckFrom.MakeUname("")+"|"+p.args.BckTo.MakeUname(""))
+	p.Args.UUID, err = p.genBEID(p.args.BckFrom, p.args.BckTo)
+	if err != nil {
+		return
+	}
 
 	// new x-tco
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)
@@ -85,15 +87,14 @@ func (p *tcoFactory) Start() error {
 		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
 	}
-	trname := "tco-" + p.UUID()
-	if err := p.newDM(trname, r.recv, sizePDU); err != nil {
-		return err
+	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, sizePDU); err != nil {
+		return
 	}
 	p.dm.SetXact(r)
 	p.dm.Open()
 
 	xact.GoRunW(r)
-	return nil
+	return
 }
 
 ////////////////

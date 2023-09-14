@@ -76,7 +76,12 @@ func (p *putFactory) Start() error {
 	// target-local generation of a global UUID
 	//
 	div := uint64(xact.IdleDefault)
-	r.DemandBase.Init(xreg.GenBEID(div, p.Kind()+"|"+bck.MakeUname("")), p.Kind(), bck, xact.IdleDefault)
+	beid, _, _ := xreg.GenBEID(div, p.Kind()+"|"+bck.MakeUname(""))
+	if beid == "" {
+		// is Ok (compare with x-archive, x-tco)
+		beid = cos.GenUUID()
+	}
+	r.DemandBase.Init(beid, p.Kind(), bck, xact.IdleDefault)
 
 	// joggers
 	r.workers = mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{

@@ -79,18 +79,19 @@ func (*archFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *archFactory) Start() error {
+func (p *archFactory) Start() (err error) {
 	//
 	// target-local generation of a global UUID
 	//
-	div := uint64(xact.IdleDefault)
 	bckTo, ok := p.Args.Custom.(*meta.Bck)
 	debug.Assertf(ok, "%+v", bckTo)
 	if !ok || bckTo.IsEmpty() {
 		bckTo = &meta.Bck{Name: "any"} // local usage to gen uuid, see r.bckTo below
 	}
-	p.Args.UUID = xreg.GenBEID(div, p.kind+"|"+p.Bck.MakeUname("")+"|"+bckTo.MakeUname(""))
-
+	p.Args.UUID, err = p.genBEID(p.Bck, bckTo)
+	if err != nil {
+		return
+	}
 	//
 	// new x-archive
 	//
@@ -100,16 +101,14 @@ func (p *archFactory) Start() error {
 	p.xctn = r
 	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, p.kind, p.Bck /*from*/, xact.IdleDefault)
 
-	bmd := p.Args.T.Bowner().Get()
-	trname := fmt.Sprintf("arch-%s%s-%s-%d", p.Bck.Provider, p.Bck.Ns, p.Bck.Name, bmd.Version) // NOTE: (bmd.Version)
-	if err := p.newDM(trname, r.recv, 0 /*pdu*/); err != nil {
-		return err
+	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, 0 /*pdu*/); err != nil {
+		return
 	}
 	r.p.dm.SetXact(r)
 	r.p.dm.Open()
 
 	xact.GoRunW(r)
-	return nil
+	return
 }
 
 //////////////

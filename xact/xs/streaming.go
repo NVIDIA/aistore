@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
@@ -67,11 +69,32 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
 }
 
-// NOTE:
-// - transport endpoint `trname` identifies the flow and must be identical across all participating targets
-// TODO: transport (below, via bundle.Extra) can be extended with:
+// NOTE: transport endpoint (aka "trname") identifies the flow and MUST be identical
+// across all participating targets. The mechanism involves generating so-called "best-effort UUID"
+// independently on (by) all targets and using the latter as both xaction ID and receive endpoint (trname)
+// for target=>target streams.
+
+func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
+	var (
+		div = uint64(xact.IdleDefault)
+		bmd = p.Args.T.Bowner().Get()
+		tag = p.kind + "|" + fromBck.MakeUname("") + "|" + toBck.MakeUname("") + "|" + strconv.FormatInt(bmd.Version, 10)
+	)
+	beid, prev, err := xreg.GenBEID(div, tag)
+	if beid != "" {
+		debug.Assert(err == nil && prev == nil)
+		return beid, nil
+	}
+	if prev != nil {
+		err = fmt.Errorf("node %s is currently busy (running %s), please try again in one minute", p.Args.T, prev.Name())
+	}
+	return "", err
+}
+
+// transport (below, via bundle.Extra) can be extended with:
 // - Compression: config.X.Compression
 // - Multiplier:  config.X.SbundleMult (currently, always 1)
+
 func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32) (err error) {
 	dmxtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
 
