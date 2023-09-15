@@ -435,13 +435,14 @@ func (m *ioContext) del(opts ...int) {
 	if toRemoveCnt >= 0 {
 		toRemove = toRemove[:toRemoveCnt]
 	}
-	if len(toRemove) == 0 {
+	l := len(toRemove)
+	if l == 0 {
 		return
 	}
-	tlog.Logf("deleting %d object%s from %s\n", len(toRemove), cos.Plural(len(toRemove)), m.bck.Cname(""))
+	tlog.Logf("deleting %d object%s from %s\n", l, cos.Plural(l), m.bck.Cname(""))
 	var (
 		errCnt atomic.Int64
-		wg     = cos.NewLimitedWaitGroup(16, 0)
+		wg     = cos.NewLimitedWaitGroup(16, l)
 	)
 	for _, obj := range toRemove {
 		if errCnt.Load() > maxDelObjErrCount {
@@ -451,7 +452,7 @@ func (m *ioContext) del(opts ...int) {
 		wg.Add(1)
 		go func(obj *cmn.LsoEntry) {
 			m._delOne(baseParams, obj, &errCnt)
-			defer wg.Done()
+			wg.Done()
 		}(obj)
 	}
 	wg.Wait()

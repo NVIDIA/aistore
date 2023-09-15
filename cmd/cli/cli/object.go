@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -19,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -355,35 +357,67 @@ func propVal(op *cmn.ObjectProps, name string) (v string) {
 }
 
 func rmRfAllObjects(c *cli.Context, bck cmn.Bck) error {
-	var (
-		l, cnt       int
-		objList, err = api.ListObjects(apiBP, bck, nil, api.ListArgs{})
-	)
+	objList, err := api.ListObjects(apiBP, bck, nil, api.ListArgs{})
 	if err != nil {
 		return err
 	}
-	if l = len(objList.Entries); l == 0 {
-		fmt.Fprintln(c.App.Writer, "The bucket is empty, nothing to do.")
+	l := len(objList.Entries)
+	if l == 0 {
+		fmt.Fprintln(c.App.Writer, bck.Cname(""), "is empty, nothing to do.")
 		return nil
 	}
+
+	var (
+		errCh    = make(chan error, 1)
+		cnt64    int64
+		errCnt64 int64
+		progress int64
+		period   int64 = 1000
+		wg             = cos.NewLimitedWaitGroup(sys.NumCPU(), l)
+		vrbs           = flagIsSet(c, verboseFlag)
+	)
+	if bck.IsCloud() {
+		period = 100
+	}
 	for _, entry := range objList.Entries {
-		if err := api.DeleteObject(apiBP, bck, entry.Name); err == nil {
-			cnt++
-			if flagIsSet(c, verboseFlag) {
-				fmt.Fprintf(c.App.Writer, "deleted %q\n", entry.Name)
+		wg.Add(1)
+		// delete one
+		go func(objName string) {
+			err := api.DeleteObject(apiBP, bck, objName)
+			if err != nil {
+				if ratomic.AddInt64(&errCnt64, 1) == 1 {
+					errCh <- err
+				}
+			} else {
+				n := ratomic.AddInt64(&cnt64, 1)
+				if vrbs {
+					fmt.Fprintf(c.App.Writer, "deleted %s\n", bck.Cname(objName))
+				} else if n > 1 && n%period == 0 {
+					fmt.Fprintf(c.App.Writer, "\r%s", cos.FormatBigNum(int(n)))
+					ratomic.AddInt64(&progress, 1)
+				}
 			}
-		}
+			wg.Done()
+		}(entry.Name)
 	}
+	wg.Wait()
+	close(errCh)
+
+	if ratomic.LoadInt64(&progress) > 0 {
+		fmt.Fprintln(c.App.Writer)
+	}
+	cnt := int(cnt64)
 	if cnt == l {
-		if flagIsSet(c, verboseFlag) {
-			fmt.Fprintln(c.App.Writer, "=====")
-			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.Cname(""))
-		} else {
-			fmt.Fprintf(c.App.Writer, "Deleted %d object%s from %s\n", cnt, cos.Plural(cnt), bck.Cname(""))
-		}
-	} else {
-		fmt.Fprintf(c.App.Writer, "Failed to delete %d object%s from %s: (%d total, %d deleted)\n",
-			l-cnt, cos.Plural(l-cnt), bck, l, cnt)
+		debug.Assert(errCnt64 == 0)
+		msg := fmt.Sprintf("Deleted %s object%s from %s\n", cos.FormatBigNum(cnt), cos.Plural(cnt), bck.Cname(""))
+		actionDone(c, msg)
+		return nil
 	}
-	return nil
+
+	debug.Assert(errCnt64 > 0)
+	firstErr := <-errCh
+	warn := fmt.Sprintf("failed to delete %d object%s from %s: (%d deleted, %d error%s)\n", l-cnt, cos.Plural(l-cnt),
+		bck, cnt, errCnt64, cos.Plural(int(errCnt64)))
+	actionWarn(c, warn)
+	return firstErr
 }

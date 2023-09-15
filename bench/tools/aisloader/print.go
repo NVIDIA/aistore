@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -311,6 +312,10 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 
 // printRunParams show run parameters in json format
 func printRunParams(p params) {
+	var d = p.duration.String()
+	if p.duration.Val == time.Duration(math.MaxInt64) {
+		d = "-"
+	}
 	b, err := jsoniter.MarshalIndent(struct {
 		Seed          int64  `json:"seed,string"`
 		URL           string `json:"proxy"`
@@ -332,7 +337,7 @@ func printRunParams(p params) {
 		Bucket:        p.bck.Name,
 		Provider:      p.bck.Provider,
 		Namespace:     p.bck.Ns.String(),
-		Duration:      p.duration.String(),
+		Duration:      d,
 		MaxPutBytes:   p.putSizeUpperBound,
 		PutPct:        p.putPct,
 		MinSize:       p.minSize,
