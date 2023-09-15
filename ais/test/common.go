@@ -375,8 +375,10 @@ func isContextDeadline(err error) bool {
 // bucket cleanup
 // is called in a variety of ways including (post-test) t.Cleanup => _cleanup()
 // and (pre-test) via deleteRemoteBckObjs
+
+const maxDelObjErrCount = 100
+
 func (m *ioContext) del(opts ...int) {
-	const maxErrCount = 100
 	var (
 		herr        *cmn.ErrHTTP
 		toRemoveCnt = -1 // remove all or opts[0]
@@ -436,55 +438,65 @@ func (m *ioContext) del(opts ...int) {
 	if len(toRemove) == 0 {
 		return
 	}
-	tlog.Logf("deleting %d objects...\n", len(toRemove))
+	tlog.Logf("deleting %d object%s from %s\n", len(toRemove), cos.Plural(len(toRemove)), m.bck.Cname(""))
 	var (
 		errCnt atomic.Int64
 		wg     = cos.NewLimitedWaitGroup(16, 0)
 	)
 	for _, obj := range toRemove {
-		if errCnt.Load() > maxErrCount {
+		if errCnt.Load() > maxDelObjErrCount {
 			tassert.CheckFatal(m.t, errors.New("too many errors"))
 			break
 		}
 		wg.Add(1)
 		go func(obj *cmn.LsoEntry) {
+			m._delOne(baseParams, obj, &errCnt)
 			defer wg.Done()
-			err := api.DeleteObject(baseParams, m.bck, obj.Name)
-			if err != nil {
-				e := strings.ToLower(err.Error())
-				switch {
-				case cmn.IsErrObjNought(err):
-					err = nil
-				case strings.Contains(e, "server closed idle connection"):
-					// see (unexported) http.exportErrServerClosedIdle in the Go source
-					err = nil
-				case strings.Contains(e, "try again"):
-					// aws-error[InternalError: We encountered an internal error. Please try again.]
-					// retry once
-					time.Sleep(time.Second)
-					err = api.DeleteObject(baseParams, m.bck, obj.Name)
-				case m.bck.IsCloud() && apc.ToScheme(m.bck.Provider) == apc.GSScheme &&
-					strings.Contains(e, "gateway") && strings.Contains(e, "timeout"):
-					// e.g:. "googleapi: Error 504: , gatewayTimeout" (where the gateway is in fact LB)
-					// retry once
-					time.Sleep(2 * time.Second)
-					err = api.DeleteObject(baseParams, m.bck, obj.Name)
-					if err != nil {
-						if errCnt.Load() < 5 {
-							tlog.Logf("Warning: failed to cleanup %s: %v\n", m.bck.Cname(""), err)
-						}
-						err = nil
-					}
-				case cos.IsErrConnectionNotAvail(err):
-					errCnt.Add(maxErrCount / 10)
-				default:
-					errCnt.Inc()
-				}
-			}
-			tassert.CheckError(m.t, err)
 		}(obj)
 	}
 	wg.Wait()
+}
+
+func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEntry, errCnt *atomic.Int64) {
+	err := api.DeleteObject(baseParams, m.bck, obj.Name)
+	if err == nil {
+		return
+	}
+	//
+	// excepting benign (TODO: rid of strings.Contains)
+	//
+	const sleepRetry = 2 * time.Second
+	e := strings.ToLower(err.Error())
+	switch {
+	case cmn.IsErrObjNought(err):
+		return
+	case strings.Contains(e, "server closed idle connection"):
+		return // see (unexported) http.exportErrServerClosedIdle in the Go source
+	case cos.IsErrConnectionNotAvail(err):
+		errCnt.Add(maxDelObjErrCount/10 - 1)
+	// retry
+	case m.bck.IsCloud() && (cos.IsErrConnectionReset(err) || strings.Contains(e, "reset by peer")):
+		time.Sleep(sleepRetry)
+		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+	case m.bck.IsCloud() && strings.Contains(e, "try again"):
+		// aws-error[InternalError: We encountered an internal error. Please try again.]
+		time.Sleep(sleepRetry)
+		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+	case m.bck.IsCloud() && apc.ToScheme(m.bck.Provider) == apc.GSScheme &&
+		strings.Contains(e, "gateway") && strings.Contains(e, "timeout"):
+		// e.g:. "googleapi: Error 504: , gatewayTimeout" (where the gateway is in fact LB)
+		time.Sleep(sleepRetry)
+		err = api.DeleteObject(baseParams, m.bck, obj.Name)
+	}
+
+	if err == nil || cmn.IsErrObjNought(err) {
+		return
+	}
+	errCnt.Inc()
+	if m.bck.IsCloud() && errCnt.Load() < 5 {
+		tlog.Logf("Warning: failed to cleanup %s: %v\n", m.bck.Cname(""), err)
+	}
+	tassert.CheckError(m.t, err)
 }
 
 func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate bool) {
