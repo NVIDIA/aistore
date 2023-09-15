@@ -715,7 +715,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		}
 	} else {
 		if tsi = smap.GetTarget(nodeID); tsi == nil {
-			err = &errNodeNotFound{"PUT failure", nodeID, p.si, smap}
+			err = &errNodeNotFound{"PUT failure:", nodeID, p.si, smap}
 			p.writeErr(w, r, err)
 			return
 		}
@@ -1623,7 +1623,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 	if lsmsg.SID != "" {
 		tsi = smap.GetTarget(lsmsg.SID)
 		if tsi == nil || tsi.InMaintOrDecomm() {
-			err = &errNodeNotFound{lsotag + " failure", lsmsg.SID, p.si, smap}
+			err = &errNodeNotFound{lsotag + " failure:", lsmsg.SID, p.si, smap}
 			nlog.Errorln(err)
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
@@ -1699,7 +1699,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 		if args.DaemonID != "" {
 			smap := p.owner.smap.get()
 			if tsi = smap.GetTarget(args.DaemonID); tsi == nil {
-				err := &errNodeNotFound{apc.ActPromote + " failure", args.DaemonID, p.si, smap}
+				err := &errNodeNotFound{apc.ActPromote + " failure:", args.DaemonID, p.si, smap}
 				p.writeErr(w, r, err)
 				return
 			}
@@ -2472,7 +2472,7 @@ func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
 	// after having lost all mountpaths.
 	nodeURL := r.Header.Get(apc.HdrNodeURL)
 	if nodeURL == "" {
-		err = &errNodeNotFound{"cannot rproxy", nodeID, p.si, smap}
+		err = &errNodeNotFound{"cannot rproxy to", nodeID, p.si, smap}
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}

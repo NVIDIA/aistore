@@ -487,18 +487,25 @@ func (n *notifs) ListenSmapChanged() {
 	}
 	now := time.Now().UnixNano()
 
-	//
-	// TODO -- FIXME revisit in re: maintenance & decommission w/ rebalancing
-	//
+repeat:
 	for uuid, nl := range remnl {
-		s := "notifs.ListenSmapChanged: stop waiting for " + nl.String()
 		sid := remid[uuid]
-		err := &errNodeNotFound{s, sid, n.p.si, smap}
+		if nl.Kind() == apc.ActRebalance && nl.Cause() != "" { // for the cause, see ais/rebmeta
+			nlog.Errorf("%s: %s is out, ignore 'smap-changed'", nl.String(), sid)
+			delete(remnl, uuid)
+			goto repeat
+		}
+		err := &errNodeNotFound{"abort " + nl.String() + " via 'smap-changed':", sid, n.p.si, smap}
 		nl.Lock()
 		nl.AddErr(err)
 		nl.SetAborted()
 		nl.Unlock()
 	}
+	if len(remnl) == 0 {
+		return
+	}
+
+	// cleanup and callback w/ nl.Err
 	n.fin.Lock()
 	for uuid, nl := range remnl {
 		debug.Assert(nl.UUID() == uuid)

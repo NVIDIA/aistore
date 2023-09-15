@@ -34,13 +34,18 @@ var (
 	_ nl.Listener   = (*NotifXactListener)(nil)
 )
 
-func NewXactNL(uuid, action string, smap *meta.Smap, srcs meta.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
+func NewXactNL(uuid, kind string, smap *meta.Smap, srcs meta.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
 	if srcs == nil {
 		srcs = smap.Tmap.ActiveMap()
 	}
 	return &NotifXactListener{
-		ListenerBase: *nl.NewNLB(uuid, action, smap, srcs, 0, bck...),
+		ListenerBase: *nl.NewNLB(uuid, kind, "", srcs, 0, bck...),
 	}
+}
+
+func (nxb *NotifXactListener) WithCause(cause string) *NotifXactListener {
+	nxb.Common.Cause = cause
+	return nxb
 }
 
 func (*NotifXactListener) UnmarshalStats(rawMsg []byte) (stats any, finished, aborted bool, err error) {

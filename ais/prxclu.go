@@ -1692,7 +1692,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, opts *apc.ActValRmNode) (rebID s
 }
 
 func (p *proxy) _stopMaintPre(ctx *smapModifier, clone *smapX) error {
-	const efmt = "cannot take %s out of maintenance"
+	const efmt = "cannot take %s out of maintenance:"
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf(efmt, ctx.sid))
 	}

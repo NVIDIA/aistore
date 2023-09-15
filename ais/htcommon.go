@@ -280,7 +280,7 @@ func (e *errBmdUUIDSplit) Error() string     { return e.detail }
 func (e *errPrxBmdUUIDDiffer) Error() string { return e.detail }
 func (e *errSmapUUIDDiffer) Error() string   { return e.detail }
 func (e *errNodeNotFound) Error() string {
-	return fmt.Sprintf("%s: %s node %s (not present in the %s)", e.si, e.msg, e.id, e.smap)
+	return fmt.Sprintf("%s: %s node %s not present in the %s", e.si, e.msg, e.id, e.smap)
 }
 
 /////////////////////

@@ -237,7 +237,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	if msg.SID != "" {
 		smap := t.owner.smap.get()
 		if smap.GetTarget(msg.SID) == nil {
-			err := &errNodeNotFound{"list-objects failure", msg.SID, t.si, smap}
+			err := &errNodeNotFound{"list-objects failure:", msg.SID, t.si, smap}
 			t.writeErr(w, r, err)
 			return
 		}

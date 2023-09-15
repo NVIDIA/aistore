@@ -34,9 +34,9 @@ var (
 	_ cluster.Notif = (*NotifDownload)(nil)
 )
 
-func NewDownloadNL(jobID, action string, smap *meta.Smap, progressInterval time.Duration) *NotifDownloadListerner {
+func NewDownloadNL(jobID, kind string, smap *meta.Smap, progressInterval time.Duration) *NotifDownloadListerner {
 	return &NotifDownloadListerner{
-		ListenerBase: *nl.NewNLB(jobID, action, smap, smap.Tmap.ActiveMap(), progressInterval),
+		ListenerBase: *nl.NewNLB(jobID, kind, "" /*causal action*/, smap.Tmap.ActiveMap(), progressInterval),
 	}
 }
 

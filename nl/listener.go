@@ -27,6 +27,7 @@ type Listener interface {
 	RUnlock()
 	Notifiers() meta.NodeMap
 	Kind() string
+	Cause() string
 	Bcks() []*cmn.Bck
 	AddErr(error)
 	Err() error
@@ -68,11 +69,11 @@ type (
 	ListenerBase struct {
 		mu     sync.RWMutex
 		Common struct {
-			UUID        string
-			Action      string // async operation kind (see cmn/api_const.go)
-			Owned       string // "": not owned | equalIC: IC | otherwise, pid + IC
-			SmapVersion int64  // smap version in which NL is added
-			Bck         []*cmn.Bck
+			UUID  string
+			Kind  string // async operation kind (see api/apc/actmsg.go)
+			Cause string // causal action (e.g. decommission => rebalance)
+			Owned string // "": not owned | equalIC: IC | otherwise, pid + IC
+			Bck   []*cmn.Bck
 		}
 		// construction
 		Srcs        meta.NodeMap     // all notifiers
@@ -103,7 +104,7 @@ type (
 // ListenerBase //
 //////////////////
 
-func NewNLB(uuid, action string, smap *meta.Smap, srcs meta.NodeMap, progress time.Duration, bck ...*cmn.Bck) *ListenerBase {
+func NewNLB(uuid, action, cause string, srcs meta.NodeMap, progress time.Duration, bck ...*cmn.Bck) *ListenerBase {
 	nlb := &ListenerBase{
 		Srcs:        srcs,
 		Stats:       NewNodeStats(len(srcs)),
@@ -111,8 +112,8 @@ func NewNLB(uuid, action string, smap *meta.Smap, srcs meta.NodeMap, progress ti
 		lastUpdated: make(map[string]int64, len(srcs)),
 	}
 	nlb.Common.UUID = uuid
-	nlb.Common.Action = action
-	nlb.Common.SmapVersion = smap.Version
+	nlb.Common.Kind = action
+	nlb.Common.Cause = cause
 	nlb.Common.Bck = bck
 	nlb.ActiveSrcs = srcs.ActiveMap()
 	return nlb
@@ -133,7 +134,8 @@ func (nlb *ListenerBase) ProgressInterval() time.Duration { return nlb.progress 
 func (nlb *ListenerBase) NodeStats() *NodeStats           { return nlb.Stats }
 func (nlb *ListenerBase) GetOwner() string                { return nlb.Common.Owned }
 func (nlb *ListenerBase) SetOwner(o string)               { nlb.Common.Owned = o }
-func (nlb *ListenerBase) Kind() string                    { return nlb.Common.Action }
+func (nlb *ListenerBase) Kind() string                    { return nlb.Common.Kind }
+func (nlb *ListenerBase) Cause() string                   { return nlb.Common.Cause }
 func (nlb *ListenerBase) Bcks() []*cmn.Bck                { return nlb.Common.Bck }
 func (nlb *ListenerBase) AddedTime() int64                { return nlb.addedTime.Load() }
 func (nlb *ListenerBase) SetAddedTime()                   { nlb.addedTime.Store(mono.NanoTime()) }
@@ -218,6 +220,9 @@ func (nlb *ListenerBase) String() string {
 		hdr      = fmt.Sprintf("nl-%s[%s]", nlb.Kind(), nlb.UUID())
 		finCount = nlb.FinCount()
 	)
+	if nlb.Cause() != "" {
+		hdr += "-caused-by-" + nlb.Cause()
+	}
 	if bcks := nlb.Bcks(); len(bcks) > 0 {
 		if len(bcks) == 1 {
 			hdr += "-" + bcks[0].String()

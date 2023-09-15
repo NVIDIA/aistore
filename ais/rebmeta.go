@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -171,6 +169,7 @@ func rmdSync(m *rmdModifier, clone *rebMD) {
 // see `receiveRMD` (upon termination, notify IC)
 func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	nl := xact.NewXactNL(m.rebID, apc.ActRebalance, &m.smapCtx.smap.Smap, nil)
+	nl = nl.WithCause(m.smapCtx.msg.Action)
 	nl.SetOwner(equalIC)
 
 	nl.F = m.log
@@ -204,20 +203,6 @@ func (m *rmdModifier) postRm(nl nl.Listener) {
 
 	m.log(nl)
 	nlerr := nl.Err()
-
-	// TODO -- FIXME: revisit
-	if strings.Contains(nlerr.Error(), "ListenSmapChanged") {
-		nlog.Errorln("waiting some more...")
-		time.Sleep(2 * cmn.Timeout.MaxKeepalive())
-		rmd := p.owner.rmd.get()
-		if m.cur.Version == rmd.Version {
-			nlog.Errorln("proceeding to", warn)
-			if _, err := p.rmNodeFinal(m.smapCtx.msg, tsi, m.smapCtx); err != nil {
-				nlog.Errorln(err)
-			}
-		}
-		return
-	}
 
 	rmd := p.owner.rmd.get()
 	if nlerr == cmn.ErrXactRenewAbort || nlerr.Error() == cmn.ErrXactRenewAbort.Error() || m.cur.Version < rmd.Version {

@@ -109,7 +109,6 @@ func TestMaintenanceListObjects(t *testing.T) {
 		m.smap.Version, m.smap.CountActivePs(), m.smap.CountActiveTs()-1)
 	tassert.CheckFatal(t, err)
 
-	time.Sleep(8 * time.Second)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	// 3. Check if we can list all the objects
@@ -243,7 +242,6 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	time.Sleep(8 * time.Second)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	msgList := &apc.LsoMsg{Prefix: objPath}
