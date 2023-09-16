@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -52,18 +52,6 @@ func insObjHeader(hbuf []byte, hdr *ObjHdr, usePDU bool) (off int) {
 	if usePDU {
 		word1 |= pduStreamFl
 	}
-	insUint64(0, hbuf, word1)
-	checksum := xoshiro256.Hash(word1)
-	insUint64(cos.SizeofI64, hbuf, checksum)
-	return
-}
-
-func insMsg(hbuf []byte, msg *Msg) (off int) {
-	off = sizeProtoHdr
-	off = insString(off, hbuf, msg.SID)
-	off = insUint16(off, hbuf, msg.Opcode)
-	off = insBytes(off, hbuf, msg.Body)
-	word1 := uint64(off-sizeProtoHdr) | msgFl
 	insUint64(0, hbuf, word1)
 	checksum := xoshiro256.Hash(word1)
 	insUint64(cos.SizeofI64, hbuf, checksum)

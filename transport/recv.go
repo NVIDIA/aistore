@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -49,7 +49,6 @@ type (
 	}
 	handler struct {
 		rxObj       RecvObj
-		rxMsg       RecvMsg
 		sessions    sync.Map
 		oldSessions sync.Map
 		hkName      string
@@ -189,20 +188,18 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 			mm.Free(it.hbuf)
 			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
 		}
+
 		_ = it.stats.Offset.Add(int64(hlen + sizeProtoHdr))
-		if flags&msgFl == 0 {
-			if flags&pduStreamFl != 0 {
-				if it.pdu == nil {
-					pbuf, _ := mm.AllocSize(maxSizePDU)
-					it.pdu = newRecvPDU(it.body, pbuf)
-				} else {
-					it.pdu.reset()
-				}
+		debug.Assert(flags&msgFl == 0) //  messaging: not used, removed
+		if flags&pduStreamFl != 0 {
+			if it.pdu == nil {
+				pbuf, _ := mm.AllocSize(maxSizePDU)
+				it.pdu = newRecvPDU(it.body, pbuf)
+			} else {
+				it.pdu.reset()
 			}
-			err = it.rxObj(loghdr, hlen)
-		} else {
-			err = it.rxMsg(loghdr, hlen)
 		}
+		err = it.rxObj(loghdr, hlen)
 	}
 	h := it.handler
 	h.oldSessions.Store(uid, mono.NanoTime())
@@ -241,18 +238,6 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 	return
 }
 
-func (it *iterator) rxMsg(loghdr string, hlen int) (err error) {
-	var msg Msg
-	h := it.handler
-	msg, err = it.nextMsg(loghdr, hlen)
-	if err == nil {
-		err = h.rxMsg(msg, nil)
-	} else if err != io.EOF {
-		err = h.rxMsg(Msg{}, err)
-	}
-	return
-}
-
 func eofOK(err error) error {
 	if err == io.EOF {
 		err = nil
@@ -261,7 +246,7 @@ func eofOK(err error) error {
 }
 
 // nextProtoHdr receives and handles 16 bytes of the protocol header (not to confuse with transport.Obj.Hdr)
-// returns hlen, which is header length - for transport.Obj, and message length - for transport.Msg
+// returns hlen, which is header length - for transport.Obj (and formerly, message length for transport.Msg)
 func (it *iterator) nextProtoHdr(loghdr string) (hlen int, flags uint64, err error) {
 	var n int
 	n, err = it.Read(it.hbuf[:sizeProtoHdr])
@@ -307,23 +292,6 @@ func (it *iterator) nextObj(loghdr string, hlen int) (obj *objReader, err error)
 	}
 	obj = allocRecv()
 	obj.body, obj.hdr, obj.loghdr = it.body, hdr, loghdr
-	return
-}
-
-func (it *iterator) nextMsg(loghdr string, hlen int) (msg Msg, err error) {
-	var n int
-	n, err = it.Read(it.hbuf[:hlen])
-	if n < hlen {
-		if err == nil {
-			err = fmt.Errorf("sbr5 %s: failed to receive msg (%d < %d)", loghdr, n, hlen)
-		}
-		return
-	}
-	debug.Assertf(n == hlen, "%d != %d", n, hlen)
-	msg = ExtMsg(it.hbuf, hlen)
-	if msg.isFin() {
-		err = io.EOF
-	}
 	return
 }
 

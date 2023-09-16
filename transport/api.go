@@ -1,7 +1,7 @@
 // Package transport provides streaming object-based transport over http for intra-cluster continuous
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -180,53 +180,12 @@ func (s *Stream) Fin() {
 	s.wg.Wait()
 }
 
-////////////////////
-// message stream //
-////////////////////
-
-func NewMsgStream(client Client, dstURL, dstID string) (s *MsgStream) {
-	extra := &Extra{Config: cmn.GCO.Get()}
-	s = &MsgStream{streamBase: *newBase(client, dstURL, dstID, extra)}
-	s.streamBase.streamer = s
-
-	burst := burst(extra.Config)      // num messages the caller can post without blocking
-	s.workCh = make(chan *Msg, burst) // Send Qeueue or SQ
-
-	s.wg.Add(1)
-	go s.sendLoop(dryrun())
-
-	gc.ctrlCh <- ctrl{&s.streamBase, true /* collect */}
-	return
-}
-
-func (s *MsgStream) Send(msg *Msg) (err error) {
-	debug.Assert(len(msg.Body) < len(s.maxhdr)-int(unsafe.Sizeof(Msg{})))
-	if err = s.startSend(msg); err != nil {
-		return
-	}
-	s.workCh <- msg
-	if verbose {
-		nlog.Infof("%s: send %s[sq=%d]", s, msg, len(s.workCh))
-	}
-	return
-}
-
-func (s *MsgStream) Fin() {
-	_ = s.Send(&Msg{Opcode: opcFin})
-	s.wg.Wait()
-}
-
 //////////////////////
 // receive-side API //
 //////////////////////
 
 func HandleObjStream(trname string, rxObj RecvObj) error {
 	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname)}
-	return h.handle()
-}
-
-func HandleMsgStream(trname string, rxMsg RecvMsg) error {
-	h := &handler{trname: trname, rxMsg: rxMsg, hkName: MsgURLPath(trname)}
 	return h.handle()
 }
 
@@ -248,7 +207,6 @@ func Unhandle(trname string) (err error) {
 ////////////////////
 
 func ObjURLPath(trname string) string { return _urlPath(apc.ObjStream, trname) }
-func MsgURLPath(trname string) string { return _urlPath(apc.MsgStream, trname) }
 
 func _urlPath(endp, trname string) string {
 	if trname == "" {

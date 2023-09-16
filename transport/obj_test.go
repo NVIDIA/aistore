@@ -67,7 +67,6 @@ func (*dummyStatsTracker) AddMany(...cos.NamedVal64) {}
 
 var (
 	objmux   *mux.ServeMux
-	msgmux   *mux.ServeMux
 	duration time.Duration // test duration
 )
 
@@ -95,11 +94,6 @@ func TestMain(t *testing.M) {
 	path := transport.ObjURLPath("")
 	objmux.HandleFunc(path, transport.RxAnyStream)
 	objmux.HandleFunc(path+"/", transport.RxAnyStream)
-
-	msgmux = mux.NewServeMux()
-	path = transport.MsgURLPath("")
-	msgmux.HandleFunc(path, transport.RxAnyStream)
-	msgmux.HandleFunc(path+"/", transport.RxAnyStream)
 
 	os.Exit(t.Run())
 }
