@@ -135,7 +135,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		numCompleted.Inc()
 	}
 
-	err := transport.HandleObjStream(trname, receive) // URL = /v1/transport/10G
+	err := transport.Handle(trname, receive) // URL = /v1/transport/10G
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 

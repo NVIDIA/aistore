@@ -268,7 +268,7 @@ func (m *Manager) initStreams() error {
 			MMSA:        g.mm,
 		},
 	}
-	if err := transport.HandleObjStream(trname, m.recvShard); err != nil {
+	if err := transport.Handle(trname, m.recvShard); err != nil {
 		return errors.WithStack(err)
 	}
 	client := transport.NewIntraDataClient()

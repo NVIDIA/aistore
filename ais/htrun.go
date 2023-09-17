@@ -1901,7 +1901,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 		}
 		if _, _, err := h.reqHealth(smap.Primary, healthTimeout, query /*ask primary*/, smap); err == nil {
 			// log
-			s := fmt.Sprintf("%s via primary health: cluster startup ok, %s", h.si, smap.StringEx())
+			s := fmt.Sprintf("%s via primary health: cluster startup Ok, %s", h.si, smap.StringEx())
 			if self := smap.GetNode(h.si.ID()); self == nil {
 				nlog.Warningln(s + "; NOTE: not present in the cluster map")
 			} else if self.Flags.IsSet(meta.SnodeMaint) {

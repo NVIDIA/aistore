@@ -346,7 +346,7 @@ func (s *Stream) inSend() bool { return s.sendoff.ins >= inHdr || s.sendoff.ins 
 func (s *Stream) dryrun() {
 	var (
 		body = io.NopCloser(s)
-		h    = &handler{trname: s.trname}
+		h    = &hdl{trname: s.trname}
 		it   = iterator{handler: h, body: body, hbuf: make([]byte, dfltMaxHdr)}
 	)
 	for {

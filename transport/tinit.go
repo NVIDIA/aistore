@@ -31,7 +31,7 @@ var (
 
 func init() {
 	nextSessionID.Store(100)
-	handlers = make(map[string]*handler, 32)
+	handlers = make(map[string]handler, 32)
 	mu = &sync.RWMutex{}
 }
 

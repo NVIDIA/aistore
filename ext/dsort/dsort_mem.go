@@ -216,7 +216,7 @@ func (ds *dsorterMem) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 	}
-	if err := transport.HandleObjStream(trname, ds.recvReq); err != nil {
+	if err := transport.Handle(trname, ds.recvReq); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -232,7 +232,7 @@ func (ds *dsorterMem) start() error {
 			MMSA:        g.mm,
 		},
 	}
-	if err := transport.HandleObjStream(trname, ds.recvResp); err != nil {
+	if err := transport.Handle(trname, ds.recvResp); err != nil {
 		return errors.WithStack(err)
 	}
 

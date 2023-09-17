@@ -50,7 +50,7 @@ func (p *proxy) bootstrap() {
 	if !reliable {
 		smap = nil
 	} else {
-		nlog.Infoln(p.si.StringEx()+": loaded", smap.StringEx())
+		nlog.Infoln(p.String()+": loaded", smap.StringEx())
 	}
 
 	// 2. make the preliminary/primary decision
@@ -79,25 +79,25 @@ func (p *proxy) bootstrap() {
 
 	// 4.1: start as primary
 	if primary {
-		nlog.Infoln(p.si.StringEx() + ": assuming primary role for now, starting up")
+		nlog.Infoln(p.String() + ": assuming primary role for now, starting up")
 		go p.primaryStartup(smap, config, daemon.cli.primary.ntargets)
 		return
 	}
 
 	// 4.2: otherwise, join as non-primary
-	nlog.Infoln(p.si.StringEx() + ": starting up as non-primary")
+	nlog.Infoln(p.String() + ": starting up as non-primary")
 	err := p.secondaryStartup(smap, primaryURL)
 	if err != nil {
 		if reliable {
 			svm := p.uncoverMeta(smap)
 			if svm.Smap != nil && svm.Smap.Primary != nil {
-				nlog.Infof("%s: second attempt  - joining via %s...", p.si.StringEx(), svm.Smap)
+				nlog.Infoln(p.String()+": second attempt - joining via", svm.Smap.String())
 				err = p.secondaryStartup(svm.Smap)
 			}
 		}
 	}
 	if err != nil {
-		cos.ExitLogf("%s (non-primary) failed to join: %v", p.si, err)
+		cos.ExitLog(p.String(), "(non-primary) failed to join:", err)
 	}
 }
 
@@ -123,7 +123,7 @@ func (p *proxy) determineRole(loadedSmap *smapX) (pid string, primary bool) {
 	if envP.pid != "" && envP.primary && p.SID() != envP.pid {
 		cos.ExitLogf("%s: invalid combination of %s=true & %s=%s", p, env.AIS.IsPrimary, env.AIS.PrimaryID, envP.pid)
 	}
-	nlog.Infof("%s: %sprimary-env=%+v", p.si.StringEx(), tag, envP)
+	nlog.Infof("%s: %sprimary-env=%+v", p, tag, envP)
 
 	if loadedSmap != nil && envP.pid != "" {
 		primary := loadedSmap.GetProxy(envP.pid)
@@ -158,12 +158,12 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 	if smap == nil {
 		smap = newSmap()
 	} else if smap.Primary.ID() == p.SID() {
-		nlog.Infof("%s: zeroing-out primary=self in %s", p.si.StringEx(), smap)
+		nlog.Infof("%s: zeroing-out primary=self in %s", p, smap)
 		smap.Primary = nil
 	}
 	p.owner.smap.put(smap)
 	if status, err := p.joinCluster(apc.ActSelfJoinProxy, primaryURLs...); err != nil {
-		nlog.Errorf("%s failed to join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
+		nlog.Errorf("%s failed to join cluster: %v(%d)", p, err, status)
 		return err
 	}
 
@@ -176,15 +176,16 @@ func (p *proxy) secondaryStartup(smap *smapX, primaryURLs ...string) error {
 			return
 		}
 		if cii != nil {
-			if status, err := p.joinCluster(apc.ActSelfJoinProxy, cii.Smap.Primary.CtrlURL, cii.Smap.Primary.PubURL); err != nil {
-				nlog.Errorf("%s failed to re-join cluster (status: %d, err: %v)", p.si.StringEx(), status, err)
+			primary := cii.Smap.Primary
+			if status, err := p.joinCluster(apc.ActSelfJoinProxy, primary.CtrlURL, primary.PubURL); err != nil {
+				nlog.Errorf("%s failed to rejoin cluster: %v(%d)", p, err, status)
 				return
 			}
 		}
 		p.markClusterStarted()
 	}()
 
-	nlog.Infof("%s: joined as non-primary, %s", p.si.StringEx(), smap.StringEx())
+	nlog.Infoln(p.String()+": joined as non-primary,", smap.StringEx())
 	return nil
 }
 
@@ -260,15 +261,14 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		wg := p.metasyncer.sync(revsPair{smap, msg}, revsPair{after.BMD, msg})
 
 		// before and after
-		nlog.Infof("%s: Smap(loaded %s, merged %s, added %d)", p.si.StringEx(), loadedSmap, before.Smap.StringEx(), added)
-		nlog.Infof("%s: %s, %s, %s, %s", p.si.StringEx(), before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
-		nlog.Infof("%s after regpool: %s, %s, %s, %s, %s", p.si.StringEx(),
-			smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
+		nlog.Infof("%s: loaded %s, merged %s, added %d", p, loadedSmap, before.Smap.StringEx(), added)
+		nlog.Infof("before: %s, %s, %s, %s", before.BMD.StringEx(), before.RMD, before.Config, before.EtlMD)
+		nlog.Infof("after: %s, %s, %s, %s, %s", smap.StringEx(), after.BMD.StringEx(), after.RMD, after.Config, after.EtlMD)
 		wg.Wait()
 	} else {
-		nlog.Infoln(p.si.StringEx() + ": no registrations yet")
+		nlog.Infoln(p.String() + ": no registrations yet")
 		if loadedSmap != nil {
-			nlog.Infof("%s: keep going w/ local %s", p.si.StringEx(), loadedSmap.StringEx())
+			nlog.Infoln(p.String()+": keep going w/ local", loadedSmap.StringEx())
 			p.owner.smap.mu.Lock()
 			smap = loadedSmap
 			p.owner.smap.put(smap)
@@ -284,7 +284,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	smap = p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
 		p.owner.smap.mu.Unlock()
-		nlog.Infof("%s: registering with primary %s", p.si.StringEx(), smap.Primary.StringEx())
+		nlog.Infoln(p.String()+": registering with primary", smap.Primary.StringEx())
 		if err := p.secondaryStartup(smap); err != nil {
 			cos.ExitLog(err)
 		}
@@ -294,7 +294,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	// 5:  persist and finalize w/ sync + BMD
 	if smap.UUID == "" {
 		if !daemon.cli.primary.skipStartup && smap.CountTargets() == 0 {
-			cos.ExitLogf("%s: cannot create cluster with no targets, %s", p, smap.StringEx())
+			cos.ExitLog(p.String(), "cannot create cluster with no targets,", smap.StringEx())
 		}
 		clone := smap.clone()
 		if uuid == "" {
@@ -317,7 +317,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		}
 	}
 	if err := p.owner.smap.persist(smap); err != nil {
-		cos.ExitLogf("%s (primary): %v", p.si, err)
+		cos.ExitLog(p.String(), "(primary):", err)
 	}
 	p.owner.smap.mu.Unlock()
 
@@ -358,7 +358,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 	wg := p.metasyncer.sync(pairs...)
 	wg.Wait()
 	p.markClusterStarted()
-	nlog.Infof("%s primary: cluster started up (%s, %s)", p.si.StringEx(), smap.StringEx(), bmd.StringEx())
+	nlog.Infoln(p.String(), "primary: cluster started up:", smap.StringEx(), bmd.StringEx())
 
 	if etlMD.Version > 0 {
 		_ = p.metasyncer.sync(revsPair{etlMD, aisMsg})
@@ -459,7 +459,7 @@ until:
 	p.owner.smap.mu.Unlock()
 
 	wg.Wait()
-	nlog.Errorf("Warning: resumed global rebalance[%s] (%s, %s)", ctx.rebID, smap.StringEx(), rmd.String())
+	nlog.Errorln("Warning: resumed global rebalance", ctx.rebID, smap.StringEx(), rmd.String())
 }
 
 // maxVerSmap != nil iff there's a primary change _and_ the cluster has moved on
@@ -502,14 +502,14 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 
 	targetCnt := p.owner.smap.get().CountTargets()
 	if definedTargetCnt {
-		s, pname := cos.Plural(ntargets), p.si.StringEx()
+		s := cos.Plural(ntargets)
 		if targetCnt >= ntargets {
-			nlog.Infof("%s: reached expected cluster of %d target%s (registered: %d)", pname, ntargets, s, targetCnt)
+			nlog.Infof("%s: reached expected membership of %d target%s (registered: %d)", p, ntargets, s, targetCnt)
 		} else {
-			nlog.Warningf("%s: timed out waiting for %d target%s (registered: %d)", pname, ntargets, s, targetCnt)
+			nlog.Warningf("%s: timed out waiting for %d target%s (registered: %d)", p, ntargets, s, targetCnt)
 		}
 	} else {
-		nlog.Infof("%s: registered %d new targets", p.si.StringEx(), targetCnt)
+		nlog.Infof("%s: registered %d new targets", p, targetCnt)
 	}
 	return
 }
@@ -522,7 +522,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 		p.owner.bmd.Lock()
 		bmd := p.owner.bmd.get()
 		if bmd == nil || bmd.version() < svm.BMD.version() {
-			nlog.Infof("%s: override local %s with %s", p.si.StringEx(), bmd, svm.BMD)
+			nlog.Infoln(p.String()+"override local", bmd.String(), "with", svm.BMD.String())
 			if err := p.owner.bmd.putPersist(svm.BMD, nil); err != nil {
 				cos.ExitLog(err)
 			}
@@ -533,7 +533,7 @@ func (p *proxy) discoverMeta(smap *smapX) {
 		p.owner.rmd.Lock()
 		rmd := p.owner.rmd.get()
 		if rmd == nil || rmd.version() < svm.RMD.version() {
-			nlog.Infof("%s: override local %s with %s", p.si.StringEx(), rmd, svm.RMD)
+			nlog.Infoln(p.String()+"override local", rmd.String(), "with", svm.RMD.String())
 			p.owner.rmd.put(svm.RMD)
 		}
 		p.owner.rmd.Unlock()
@@ -545,13 +545,13 @@ func (p *proxy) discoverMeta(smap *smapX) {
 		if config.Version < svm.Config.version() {
 			if !cos.IsValidUUID(svm.Config.UUID) {
 				debug.Assert(false, svm.Config.String())
-				cos.ExitLogf("%s: invalid config UUID: %s", p.si, svm.Config)
+				cos.ExitLogf("%s: invalid config UUID: %s", p, svm.Config)
 			}
 			if cos.IsValidUUID(config.UUID) && config.UUID != svm.Config.UUID {
 				nlog.Errorf("Warning: configs have different UUIDs: (%s, %s) vs %s - proceeding anyway",
-					p.si, config, svm.Config)
+					p, config, svm.Config)
 			} else {
-				nlog.Infof("%s: override local %s with %s", p.si.StringEx(), config, svm.Config)
+				nlog.Infoln(p.String(), "override local", config.String(), "with", svm.Config.String())
 			}
 			cmn.GCO.Update(&svm.Config.ClusterConfig)
 		}
@@ -559,14 +559,14 @@ func (p *proxy) discoverMeta(smap *smapX) {
 	}
 
 	if svm.Smap == nil || svm.Smap.version() == 0 {
-		nlog.Infoln(p.si.StringEx() + ": no max-ver Smaps")
+		nlog.Infoln(p.String() + ": no max-ver Smaps")
 		return
 	}
-	nlog.Infof("%s: local %s max-ver %s", p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
+	nlog.Infoln(p.String(), "local", smap.StringEx(), "max-ver", svm.Smap.StringEx())
 	smapUUID, sameUUID, sameVersion, eq := smap.Compare(&svm.Smap.Smap)
 	if !sameUUID {
 		// FATAL: cluster integrity error (cie)
-		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain uuid [%s %s] vs %s", ciError(10), p, smap.StringEx(), svm.Smap.StringEx())
 	}
 	if eq && sameVersion {
 		return
@@ -585,23 +585,22 @@ func (p *proxy) discoverMeta(smap *smapX) {
 				svm.Smap.Pmap[p.SID()] = p.si
 				goto merge
 			}
-			nlog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
+			nlog.Infof("%s: change-of-mind #2 %s <= max-ver %s", p, smap.StringEx(), svm.Smap.StringEx())
 			svm.Smap.Pmap[p.SID()] = p.si
 			p.owner.smap.put(svm.Smap)
 			return
 		}
 		// FATAL: cluster integrity error (cie)
-		cos.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20),
-			p.si.StringEx(), smap.StringEx(), svm.Smap.StringEx())
+		cos.ExitLogf("%s: split-brain local [%s %s] vs %s", ciError(20), p, smap.StringEx(), svm.Smap.StringEx())
 	}
 merge:
 	p.owner.smap.mu.Lock()
 	clone := p.owner.smap.get().clone()
 	if !eq {
-		nlog.Infof("%s: merge local %s <== %s", p.si.StringEx(), clone, svm.Smap)
+		nlog.Infof("%s: merge local %s <== %s", p, clone, svm.Smap)
 		_, err := svm.Smap.merge(clone, false /*err if detected (IP, port) duplicates*/)
 		if err != nil {
-			cos.ExitLogf("%s: %v vs %s", p.si, err, svm.Smap.StringEx())
+			cos.ExitLogf("%s: %v vs %s", p, err, svm.Smap.StringEx())
 		}
 	} else {
 		clone.UUID = smapUUID
@@ -609,7 +608,7 @@ merge:
 	clone.Version = cos.MaxI64(clone.version(), svm.Smap.version()) + 1
 	p.owner.smap.put(clone)
 	p.owner.smap.mu.Unlock()
-	nlog.Infof("%s: merged %s", p.si.StringEx(), clone.pp())
+	nlog.Infof("%s: merged %s", p, clone.pp())
 }
 
 func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
@@ -639,10 +638,10 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 	if !slowp {
 		return
 	}
-	nlog.Infof("%s: slow path...", p.si.StringEx())
+	nlog.Infoln(p.String(), "(primary) slow path...")
 	if svm.BMD, err = resolveUUIDBMD(bmds); err != nil {
 		if _, split := err.(*errBmdUUIDSplit); split {
-			cos.ExitLogf("%s (primary), err: %v", p.si, err) // cluster integrity error
+			cos.ExitLog(p.String(), "(primary), err:", err) // cluster integrity error
 		}
 		nlog.Errorln(err)
 	}
@@ -656,11 +655,11 @@ func (p *proxy) uncoverMeta(bcastSmap *smapX) (svm cluMeta) {
 		if suuid == "" {
 			suuid = smap.UUID
 			if suuid != "" {
-				nlog.Infof("%s: set Smap UUID = %s(%s)", p.si.StringEx(), si, suuid)
+				nlog.Infof("%s: set Smap UUID = %s(%s)", p, si, suuid)
 			}
 		} else if suuid != smap.UUID {
 			// FATAL: cluster integrity error (cie)
-			cos.ExitLogf("%s: split-brain [%s %s] vs [%s %s]", ciError(30), p.si, suuid, si, smap.UUID)
+			cos.ExitLogf("%s: split-brain [%s %s] vs [%s %s]", ciError(30), p, suuid, si, smap.UUID)
 		}
 	}
 	for _, smap := range smaps {
@@ -736,7 +735,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 			if svm.Smap.Primary != nil {
 				s = " of the current one " + svm.Smap.Primary.ID()
 			}
-			nlog.Warningf("%s: starting up as primary(?) during reelection%s", p.si.StringEx(), s)
+			nlog.Warningln(p.String(), "starting up as primary(?) during reelection"+s)
 			out.Smap, out.BMD, out.RMD = nil, nil, nil // zero-out as unusable
 			done = false
 			break
@@ -767,8 +766,8 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 	if svm.Smap != nil && !slowp {
 		if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
 			if svm.Smap.Primary.ID() != p.SID() {
-				nlog.Warningf("%s: primary change whereby local %s is older than max-ver %s",
-					p.si, smap.StringEx(), svm.Smap.StringEx())
+				nlog.Warningln(p.String(), "detected primary change, whereby local", smap.StringEx(),
+					"is older than max-ver", svm.Smap.StringEx())
 				return svm.Smap
 			}
 		}
@@ -789,7 +788,7 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 			if after.Smap != nil && after.Smap.version() > 0 {
 				if cos.IsValidUUID(after.Smap.UUID) && after.Smap.UUID != regReq.Smap.UUID {
 					cos.ExitLogf("%s: Smap UUIDs don't match: [%s %s] vs %s", ciError(10),
-						p.si, after.Smap.StringEx(), regReq.Smap.StringEx())
+						p, after.Smap.StringEx(), regReq.Smap.StringEx())
 				}
 			}
 			if after.Smap == nil || after.Smap.version() < regReq.Smap.version() {
@@ -846,11 +845,10 @@ func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 		}
 	}
 
-	// TODO: implement EtlMD
 ret:
 	if after.Smap.version() == 0 || !cos.IsValidUUID(after.Smap.UUID) {
 		after.Smap.UUID, after.Smap.CreationTime = newClusterUUID()
-		nlog.Infof("%s: new cluster [%s]", p.si.StringEx(), after.Smap.UUID)
+		nlog.Infoln(p.String(), "new cluster UUID:", after.Smap.UUID)
 		return after.Smap
 	}
 	if before.Smap == after.Smap {
@@ -860,14 +858,13 @@ ret:
 	debug.Assert(before.Smap.version() < after.Smap.version())
 	// not interfering with elections
 	if after.VoteInProgress {
-		nlog.Errorf("%s: primary differ: %s vs. newer %s (voting = YES)", p.si.StringEx(),
-			before.Smap.StringEx(), after.Smap.StringEx())
+		nlog.Errorln(p.String()+" primary differ:", before.Smap.StringEx(), "vs. newer", after.Smap.StringEx(), "(voting = YES)")
 		before.Smap.UUID, before.Smap.CreationTime = after.Smap.UUID, after.Smap.CreationTime
 		return before.Smap
 	}
 	// trusting & taking over (have joins)
 	var err error
-	nlog.Warningf("%s: primary differ: %s vs. newer %s - taking over as PRIMARY...", p.si.StringEx(),
+	nlog.Warningf("%s: primary differ: %s vs. newer %s - taking over as PRIMARY...", p,
 		before.Smap.StringEx(), after.Smap.StringEx())
 	clone := after.Smap.clone()
 	clone.Primary = p.si

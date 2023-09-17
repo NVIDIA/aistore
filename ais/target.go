@@ -111,9 +111,9 @@ func (t *target) initBackends() {
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisBackend.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
-			nlog.Errorf("%s: %v - proceeding to start anyway...", t, err)
+			nlog.Errorln(t.String()+":", err, "- proceeding to start anyway")
 		} else {
-			nlog.Infof("%s: remote-ais %v", t, aisConf)
+			nlog.Infoln(t.String()+": remote-ais", aisConf)
 		}
 	}
 
@@ -167,7 +167,7 @@ func (t *target) _initBuiltin() error {
 	case len(disabled) > 0:
 		nlog.Warningf("%s backends: enabled %v, disabled %v", t, enabled, disabled)
 	default:
-		nlog.Infof("%s backends: %v", t, enabled)
+		nlog.Infoln(t.String(), "backends:", enabled)
 	}
 	return nil
 }
@@ -334,21 +334,21 @@ func (t *target) Run() error {
 		smap = newSmap()
 		smap.Tmap[t.SID()] = t.si // add self to initial temp smap
 	} else {
-		nlog.Infof("%s: loaded %s", t.si.StringEx(), smap.StringEx())
+		nlog.Infoln(t.String()+": loaded", smap.StringEx())
 	}
 	t.owner.smap.put(smap)
 
 	if daemon.cli.target.standby {
 		tstats.Standby(true)
 		t.regstate.disabled.Store(true)
-		nlog.Warningf("%s not joining - standing by...", t)
+		nlog.Warningln(t.String(), "not joining - standing by")
 
 		// see endStartupStandby()
 	} else {
 		// discover primary and join cluster (compare with manual `apc.AdminJoin`)
 		if status, err := t.joinCluster(apc.ActSelfJoinTarget); err != nil {
-			nlog.Errorf("%s failed to join cluster (status: %d, err: %v)", t, status, err)
-			nlog.Errorf("%s is terminating", t)
+			nlog.Errorf("%s failed to join cluster: %v(%d)", t, err, status)
+			nlog.Errorln(t.String(), "terminating")
 			return err
 		}
 		t.markNodeStarted()
@@ -359,7 +359,7 @@ func (t *target) Run() error {
 
 	db, err := kvdb.NewBuntDB(filepath.Join(config.ConfigDir, dbName))
 	if err != nil {
-		nlog.Errorf("Failed to initialize DB: %v", err)
+		nlog.Errorln(t.String(), "failed to initialize kvdb:", err)
 		return err
 	}
 

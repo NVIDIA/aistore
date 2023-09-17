@@ -204,7 +204,7 @@ func Example_obj() {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 	trname := "dummy-obj"
-	err := transport.HandleObjStream(trname, receive)
+	err := transport.Handle(trname, receive)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -294,7 +294,7 @@ func Test_MultipleNetworks(t *testing.T) {
 		ts := httptest.NewServer(objmux)
 		defer ts.Close()
 		trname := "endpoint" + strconv.Itoa(idx)
-		err := transport.HandleObjStream(trname, recvFunc)
+		err := transport.Handle(trname, recvFunc)
 		tassert.CheckFatal(t, err)
 		defer transport.Unhandle(trname)
 
@@ -332,7 +332,7 @@ func Test_nSendCallback(t *testing.T) {
 
 	totalRecv, recvFunc := makeRecvFunc(t)
 	trname := "callback"
-	err := transport.HandleObjStream(trname, recvFunc)
+	err := transport.Handle(trname, recvFunc)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
@@ -408,7 +408,7 @@ func Test_ObjAttrs(t *testing.T) {
 		return nil
 	}
 	trname := "objattrs"
-	err := transport.HandleObjStream(trname, recvFunc)
+	err := transport.Handle(trname, recvFunc)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
@@ -465,7 +465,7 @@ func Test_CompressedOne(t *testing.T) {
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
-	err := transport.HandleObjStream(trname, receive10G)
+	err := transport.Handle(trname, receive10G, true /*with Rx stats*/)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 
@@ -492,7 +492,8 @@ func Test_CompressedOne(t *testing.T) {
 			var reader io.ReadCloser
 			if num%3 == 0 {
 				hdr.ObjAttrs.Size = int64(random.Intn(100) + 1)
-				reader = io.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size}) // fully random to hinder compression
+				// fully random to prevent compression
+				reader = io.NopCloser(&io.LimitedReader{R: random, N: hdr.ObjAttrs.Size})
 			} else {
 				hdr.ObjAttrs.Size = int64(random.Intn(cos.GiB) + 1)
 				reader = &randReader{buf: buf, hdr: hdr, clone: true}
@@ -585,7 +586,7 @@ func Test_CompletionCount(t *testing.T) {
 	defer ts.Close()
 
 	trname := "cmpl-cnt"
-	err := transport.HandleObjStream(trname, receive)
+	err := transport.Handle(trname, receive)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 	httpclient := transport.NewIntraDataClient()
@@ -637,7 +638,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
 	trname := fmt.Sprintf("rand-rx-%d", ii)
-	err := transport.HandleObjStream(trname, recvFunc)
+	err := transport.Handle(trname, recvFunc, true /* with Rx stats */)
 	tassert.CheckFatal(t, err)
 	defer transport.Unhandle(trname)
 

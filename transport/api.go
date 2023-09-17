@@ -184,9 +184,27 @@ func (s *Stream) Fin() {
 // receive-side API //
 //////////////////////
 
-func HandleObjStream(trname string, rxObj RecvObj) error {
-	h := &handler{trname: trname, rxObj: rxObj, hkName: ObjURLPath(trname)}
-	return h.handle()
+func Handle(trname string, rxObj RecvObj, withStats ...bool) error {
+	var h handler
+	if len(withStats) > 0 && withStats[0] {
+		hkName := ObjURLPath(trname)
+		hex := &hdlExtra{hdl: hdl{trname: trname, rxObj: rxObj}, hkName: hkName}
+		hk.Reg(hkName+hk.NameSuffix, hex.cleanup, sessionIsOld)
+		h = hex
+	} else {
+		h = &hdl{trname: trname, rxObj: rxObj}
+	}
+
+	// TODO -- FIXME: remove rlock here and elsewhere
+
+	mu.Lock()
+	if _, ok := handlers[trname]; ok {
+		mu.Unlock()
+		return &ErrDuplicateTrname{trname}
+	}
+	handlers[trname] = h
+	mu.Unlock()
+	return nil
 }
 
 func Unhandle(trname string) (err error) {
@@ -194,7 +212,7 @@ func Unhandle(trname string) (err error) {
 	if h, ok := handlers[trname]; ok {
 		delete(handlers, trname)
 		mu.Unlock()
-		hk.Unreg(h.hkName + hk.NameSuffix)
+		h.unreg()
 	} else {
 		mu.Unlock()
 		err = fmt.Errorf(cmn.FmtErrUnknown, "transport", "endpoint", trname)
@@ -230,7 +248,7 @@ func GetStats() (netstats map[string]EndpointStats, err error) {
 			eps[uid] = out
 			return true
 		}
-		h.sessions.Range(f)
+		h.rng(f)
 		netstats[trname] = eps
 	}
 	mu.Unlock()

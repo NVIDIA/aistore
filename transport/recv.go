@@ -33,11 +33,15 @@ const sessionIsOld = time.Hour
 
 // private types
 type (
+	rxStats interface {
+		addOff(int64)
+		incNum()
+	}
 	iterator struct {
 		body    io.Reader
-		handler *handler
+		handler handler
 		pdu     *rpdu
-		stats   *Stats
+		stats   rxStats
 		hbuf    []byte
 	}
 	objReader struct {
@@ -47,13 +51,24 @@ type (
 		hdr    ObjHdr
 		off    int64
 	}
-	handler struct {
-		rxObj       RecvObj
+
+	handler interface {
+		recv(hdr ObjHdr, objReader io.Reader, err error) error // RecvObj
+		stats(*http.Request, string) (rxStats, uint64, string)
+		unreg()
+		addOld(uint64)
+		rng(func(key, value any) bool)
+	}
+	hdl struct {
+		rxObj  RecvObj
+		trname string
+		now    int64
+	}
+	hdlExtra struct {
+		hdl
+		hkName      string
 		sessions    sync.Map
 		oldSessions sync.Map
-		hkName      string
-		trname      string
-		now         int64
 	}
 
 	ErrDuplicateTrname struct {
@@ -61,10 +76,17 @@ type (
 	}
 )
 
+// interface guard
 var (
-	nextSessionID atomic.Int64        // next unique session ID
-	handlers      map[string]*handler // by trname
-	mu            *sync.RWMutex       // ptotect handlers
+	_ handler = (*hdl)(nil)
+	_ handler = (*hdlExtra)(nil)
+)
+
+// global
+var (
+	nextSessionID atomic.Int64       // next unique session ID
+	handlers      map[string]handler // by trname
+	mu            *sync.RWMutex      // protect handlers
 )
 
 // main Rx objects
@@ -77,6 +99,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	mu.RLock()
 	h, ok := handlers[trname]
 	if !ok {
+		// TODO -- FIXME: differentiate unknown-new and unknown-old - the former can't be silenced
 		mu.RUnlock()
 		err := cos.NewErrNotFound("unknown transport endpoint %q", trname)
 		if verbose {
@@ -94,26 +117,13 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		reader = lz4Reader
 	}
 
-	// session
-	sessID, err := strconv.ParseInt(r.Header.Get(apc.HdrSessID), 10, 64)
-	if err != nil || sessID == 0 {
-		cmn.WriteErr(w, r, fmt.Errorf("%s[:%d]: invalid session ID, err %v", trname, sessID, err))
-		return
-	}
-	uid := uniqueID(r, sessID)
-	statsif, _ := h.sessions.LoadOrStore(uid, &Stats{})
-	xxh, _ := UID2SessID(uid)
-	loghdr := fmt.Sprintf("%s[%d:%d]", trname, xxh, sessID)
-	if verbose {
-		nlog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
-	}
-	stats := statsif.(*Stats)
-
-	// receive loop
 	mm := memsys.PageMM()
+	stats, uid, loghdr := h.stats(r, trname)
 	it := &iterator{handler: h, body: reader, stats: stats}
 	it.hbuf, _ = mm.AllocSize(dfltMaxHdr)
-	err = it.rxloop(uid, loghdr, mm)
+
+	// Rx loop
+	err := it.rxloop(uid, loghdr, mm)
 
 	// cleanup
 	if lz4Reader != nil {
@@ -134,25 +144,50 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 // Rx handler //
 ////////////////
 
-func (h *handler) handle() error {
-	mu.Lock()
-	if _, ok := handlers[h.trname]; ok {
-		mu.Unlock()
-		return &ErrDuplicateTrname{h.trname}
-	}
-	handlers[h.trname] = h
-	mu.Unlock()
-	hk.Reg(h.hkName+hk.NameSuffix, h.cleanup, sessionIsOld)
-	return nil
+// begin t2t session
+func (h *hdl) stats(r *http.Request, trname string) (rxStats, uint64, string) {
+	debug.Assertf(h.trname == trname, "%q vs %q", h.trname, trname)
+	sid := r.Header.Get(apc.HdrSessID)
+	loghdr := h.trname + "[" + r.RemoteAddr + ":" + sid + "]"
+	return nopRxStats{}, 0, loghdr
 }
 
-func (h *handler) cleanup() time.Duration {
+// ditto, with Rx stats
+func (h *hdlExtra) stats(r *http.Request, trname string) (rxStats, uint64, string) {
+	debug.Assertf(h.trname == trname, "%q vs %q", h.trname, trname)
+	sid := r.Header.Get(apc.HdrSessID)
+
+	sessID, err := strconv.ParseInt(sid, 10, 64)
+	if err != nil || sessID == 0 {
+		err = fmt.Errorf("%s[:%q]: invalid session ID, err %v", h.trname, sid, err)
+		cos.AssertNoErr(err)
+	}
+
+	// yet another id to index optional h.sessions & h.oldSessions sync.Maps
+	uid := uniqueID(r, sessID)
+	statsif, _ := h.sessions.LoadOrStore(uid, &Stats{})
+
+	xxh, _ := UID2SessID(uid)
+	loghdr := fmt.Sprintf("%s[%d:%d]", h.trname, xxh, sessID)
+	if verbose {
+		nlog.Infof("%s: start-of-stream from %s", loghdr, r.RemoteAddr)
+	}
+	return statsif.(rxStats), uid, loghdr
+}
+
+func (*hdl) unreg()        {}
+func (h *hdlExtra) unreg() { hk.Unreg(h.hkName + hk.NameSuffix) }
+
+func (*hdl) addOld(uint64)            {}
+func (h *hdlExtra) addOld(uid uint64) { h.oldSessions.Store(uid, mono.NanoTime()) }
+
+func (h *hdlExtra) cleanup() time.Duration {
 	h.now = mono.NanoTime()
 	h.oldSessions.Range(h.cl)
 	return sessionIsOld
 }
 
-func (h *handler) cl(key, value any) bool {
+func (h *hdlExtra) cl(key, value any) bool {
 	timeClosed := value.(int64)
 	if time.Duration(h.now-timeClosed) > sessionIsOld {
 		uid := key.(uint64)
@@ -161,6 +196,13 @@ func (h *handler) cl(key, value any) bool {
 	}
 	return true
 }
+
+func (h *hdl) recv(hdr ObjHdr, objReader io.Reader, err error) error {
+	return h.rxObj(hdr, objReader, err)
+}
+
+func (*hdl) rng(func(key, value any) bool)          {}
+func (h *hdlExtra) rng(f func(key, value any) bool) { h.sessions.Range(f) }
 
 //////////////////////////////////
 // next(obj, msg, pdu) iterator //
@@ -189,7 +231,7 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
 		}
 
-		_ = it.stats.Offset.Add(int64(hlen + sizeProtoHdr))
+		it.stats.addOff(int64(hlen + sizeProtoHdr))
 		debug.Assert(flags&msgFl == 0) //  messaging: not used, removed
 		if flags&pduStreamFl != 0 {
 			if it.pdu == nil {
@@ -201,8 +243,8 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 		}
 		err = it.rxObj(loghdr, hlen)
 	}
-	h := it.handler
-	h.oldSessions.Store(uid, mono.NanoTime())
+
+	it.handler.addOld(uid)
 	return
 }
 
@@ -216,12 +258,12 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		err = eofOK(err)
 		size, off := obj.hdr.ObjAttrs.Size, obj.off
-		if errCb := h.rxObj(obj.hdr, obj, err); errCb != nil {
+		if errCb := h.recv(obj.hdr, obj, err); errCb != nil {
 			err = errCb
 		}
 		// stats
 		if err == nil {
-			it.stats.Num.Inc()           // this stream stats
+			it.stats.incNum()            // this stream stats
 			statsTracker.Inc(InObjCount) // stats/target_stats.go
 			if size >= 0 {
 				statsTracker.Add(InObjSize, size)
@@ -231,7 +273,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 			}
 		}
 	} else if err != nil && err != io.EOF {
-		if errCb := h.rxObj(ObjHdr{}, nil, err); errCb != nil {
+		if errCb := h.recv(ObjHdr{}, nil, err); errCb != nil {
 			err = errCb
 		}
 	}

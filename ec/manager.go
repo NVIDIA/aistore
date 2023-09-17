@@ -81,10 +81,10 @@ func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {
 		return nil
 	}
-	if err := transport.HandleObjStream(ReqStreamName, ECM.recvRequest); err != nil {
+	if err := transport.Handle(ReqStreamName, ECM.recvRequest); err != nil {
 		return fmt.Errorf("failed to register recvRequest: %v", err)
 	}
-	if err := transport.HandleObjStream(RespStreamName, ECM.recvResponse); err != nil {
+	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
 	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ any, err error) {

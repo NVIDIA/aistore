@@ -113,11 +113,11 @@ func (dm *DataMover) GetXact() cluster.Xact     { return dm.xctn }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
-	if err = transport.HandleObjStream(dm.data.trname, dm.wrapRecvData); err != nil {
+	if err = transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
 		return
 	}
 	if dm.useACKs() {
-		err = transport.HandleObjStream(dm.ack.trname, dm.wrapRecvACK)
+		err = transport.Handle(dm.ack.trname, dm.wrapRecvACK)
 	}
 	dm.stage.regred.Store(true)
 	return

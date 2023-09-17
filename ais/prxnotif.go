@@ -491,7 +491,7 @@ repeat:
 	for uuid, nl := range remnl {
 		sid := remid[uuid]
 		if nl.Kind() == apc.ActRebalance && nl.Cause() != "" { // for the cause, see ais/rebmeta
-			nlog.Errorf("%s: %s is out, ignore 'smap-changed'", nl.String(), sid)
+			nlog.Infof("Warning: %s: %s is out, ignore 'smap-changed'", nl.String(), sid)
 			delete(remnl, uuid)
 			goto repeat
 		}
