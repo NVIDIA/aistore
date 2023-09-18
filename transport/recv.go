@@ -271,13 +271,13 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		// stats
 		if err == nil {
-			it.stats.incNum()            // this stream stats
-			statsTracker.Inc(InObjCount) // stats/target_stats.go
+			it.stats.incNum()              // this stream stats
+			g.statsTracker.Inc(InObjCount) // stats/target_stats.go
 			if size >= 0 {
-				statsTracker.Add(InObjSize, size)
+				g.statsTracker.Add(InObjSize, size)
 			} else {
 				debug.Assert(size == SizeUnknown)
-				statsTracker.Add(InObjSize, obj.off-off)
+				g.statsTracker.Add(InObjSize, obj.off-off)
 			}
 		}
 	} else if err != nil && err != io.EOF {

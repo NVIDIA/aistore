@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -41,7 +40,6 @@ type (
 		t           cluster.Node
 		xctn        cluster.Xact
 		config      *cmn.Config
-		mem         *memsys.MMSA
 		compression string // enum { apc.CompressNever, ... }
 		multiplier  int
 		owt         cmn.OWT
@@ -56,6 +54,7 @@ type (
 	// additional (and optional) params for new data mover
 	Extra struct {
 		RecvAck     transport.RecvObj
+		Config      *cmn.Config
 		Compression string
 		Multiplier  int
 		SizePDU     int32
@@ -72,7 +71,8 @@ var _ cluster.DataMover = (*DataMover)(nil)
 // For DMs that do not create new objects(e.g, rebalance), owt should
 // be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
-	dm := &DataMover{t: t, config: cmn.GCO.Get(), mem: t.PageMM()}
+	debug.Assert(extra.Config != nil)
+	dm := &DataMover{t: t, config: extra.Config}
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
@@ -130,7 +130,6 @@ func (dm *DataMover) Open() {
 		Extra: &transport.Extra{
 			Compression: dm.compression,
 			Config:      dm.config,
-			MMSA:        dm.mem,
 			SizePDU:     dm.sizePDU,
 			MaxHdrSize:  dm.maxHdrSize,
 		},

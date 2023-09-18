@@ -78,9 +78,9 @@ var _ meta.Slistener = (*Streams)(nil)
 func (sb *Streams) UsePDU() bool   { return sb.extra.UsePDU() }
 func (sb *Streams) Trname() string { return sb.trname }
 
-func New(sowner meta.Sowner, lsnode *meta.Snode, cl transport.Client, sbArgs Args) (sb *Streams) {
-	if sbArgs.Net == "" {
-		sbArgs.Net = cmn.NetIntraData
+func New(sowner meta.Sowner, lsnode *meta.Snode, cl transport.Client, args Args) (sb *Streams) {
+	if args.Net == "" {
+		args.Net = cmn.NetIntraData
 	}
 	listeners := sowner.Listeners()
 	sb = &Streams{
@@ -89,15 +89,14 @@ func New(sowner meta.Sowner, lsnode *meta.Snode, cl transport.Client, sbArgs Arg
 		smaplock:     &sync.Mutex{},
 		lsnode:       lsnode,
 		client:       cl,
-		network:      sbArgs.Net,
-		trname:       sbArgs.Trname,
-		rxNodeType:   sbArgs.Ntype,
-		multiplier:   sbArgs.Multiplier,
-		manualResync: sbArgs.ManualResync,
+		network:      args.Net,
+		trname:       args.Trname,
+		rxNodeType:   args.Ntype,
+		multiplier:   args.Multiplier,
+		manualResync: args.ManualResync,
 	}
-	if sbArgs.Extra != nil {
-		sb.extra = *sbArgs.Extra
-	}
+	debug.Assert(args.Extra != nil && args.Extra.Config != nil)
+	sb.extra = *args.Extra
 	if sb.multiplier == 0 {
 		sb.multiplier = 1
 	}

@@ -10,10 +10,8 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -29,9 +27,8 @@ type (
 	// WorkerGroup starts one worker per mountpath; each worker receives (*cluster.LOM) tasks
 	// and executes the specified callback.
 	WorkerGroup struct {
-		wg       *errgroup.Group
-		workers  map[string]*worker
-		chanFull atomic.Int64
+		wg      *errgroup.Group
+		workers map[string]*worker
 	}
 	worker struct {
 		opts   *WorkerGroupOpts
@@ -62,21 +59,18 @@ func (wg *WorkerGroup) Run() {
 	}
 }
 
-func (wg *WorkerGroup) PostLIF(lom *cluster.LOM, detail string) error {
-	worker, ok := wg.workers[lom.Mountpath().Path]
+func (wg *WorkerGroup) PostLIF(lom *cluster.LOM) (chanFull bool, err error) {
+	mi := lom.Mountpath()
+	worker, ok := wg.workers[mi.Path]
 	if !ok {
-		return fmt.Errorf("mountpath %s not found", lom.Mountpath())
+		return false, fmt.Errorf("post-lif: %s not found", mi)
 	}
-	select {
-	case worker.workCh <- lom.LIF():
-	default:
-		if cnt := wg.chanFull.Inc(); cnt < 5 || (cnt%100 == 99 && cmn.FastV(4, cos.SmoduleFS)) {
-			nlog.ErrorDepth(1, "work channel full:", detail, worker.opts.QueueSize)
-		}
-		runtime.Gosched()
-		worker.workCh <- lom.LIF() // now unconditionally
+	worker.workCh <- lom.LIF()
+	if l, c := len(worker.workCh), cap(worker.workCh); l > c/2 {
+		runtime.Gosched() // poor man's throttle
+		chanFull = l == c
 	}
-	return nil
+	return
 }
 
 // Stop aborts all the workers. It should be called after we are sure no more

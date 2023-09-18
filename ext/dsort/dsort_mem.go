@@ -215,6 +215,9 @@ func (ds *dsorterMem) start() error {
 		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
+		Extra: &transport.Extra{
+			Config: config,
+		},
 	}
 	if err := transport.Handle(trname, ds.recvReq); err != nil {
 		return errors.WithStack(err)
@@ -229,7 +232,6 @@ func (ds *dsorterMem) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        g.mm,
 		},
 	}
 	if err := transport.Handle(trname, ds.recvResp); err != nil {

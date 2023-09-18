@@ -42,7 +42,7 @@ func (*sowner) Listeners() meta.SmapListeners { return &listeners }
 func (*slisteners) Reg(meta.Slistener)   {}
 func (*slisteners) Unreg(meta.Slistener) {}
 
-func Test_Bundle(t *testing.T) {
+func TestBundle(t *testing.T) {
 	tests := []struct {
 		name string
 		nvs  cos.StrKVs
@@ -140,11 +140,12 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	defer transport.Unhandle(trname)
 
 	var (
+		config         = cmn.GCO.Get()
 		httpclient     = transport.NewIntraDataClient()
 		sowner         = &sowner{}
 		random         = newRand(mono.NanoTime())
 		wbuf, slab     = mmsa.Alloc()
-		extra          = &transport.Extra{Compression: nvs["compression"], MMSA: mmsa}
+		extra          = &transport.Extra{Compression: nvs["compression"]}
 		size, prevsize int64
 		multiplier     = int(random.Int63()%13) + 4
 		num            int
@@ -153,7 +154,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	if nvs["compression"] != apc.CompressNever {
 		v, _ := cos.ParseSize(nvs["block"], cos.UnitsIEC)
 		cos.Assert(v == cos.MiB*4 || v == cos.MiB || v == cos.KiB*256 || v == cos.KiB*64)
-		config := cmn.GCO.BeginUpdate()
+		config = cmn.GCO.BeginUpdate()
 		config.Transport.LZ4BlockMaxSize = cos.SizeIEC(v)
 		cmn.GCO.CommitUpdate(config)
 		if err := config.Transport.Validate(); err != nil {
@@ -163,6 +164,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	if _, usePDU = nvs["unsized"]; usePDU {
 		extra.SizePDU = memsys.DefaultBufSize
 	}
+	extra.Config = config
 	_, _ = random.Read(wbuf)
 	sb := bundle.New(sowner, &lsnode, httpclient,
 		bundle.Args{Net: network, Trname: trname, Multiplier: multiplier, Extra: extra})

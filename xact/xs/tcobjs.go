@@ -87,7 +87,7 @@ func (p *tcoFactory) Start() (err error) {
 		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
 	}
-	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, sizePDU); err != nil {
+	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, sizePDU); err != nil {
 		return
 	}
 	p.dm.SetXact(r)

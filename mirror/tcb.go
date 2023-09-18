@@ -98,6 +98,7 @@ func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 	const trname = "tcb"
 	dmExtra := bundle.Extra{
 		RecvAck:     nil, // no ACKs
+		Config:      config,
 		Compression: config.TCB.Compression,
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,

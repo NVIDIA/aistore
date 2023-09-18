@@ -138,10 +138,13 @@ func (ds *dsorterGeneral) start() error {
 
 	trname := fmt.Sprintf(recvReqStreamNameFmt, ds.m.ManagerUUID)
 	reqSbArgs := bundle.Args{
-		Multiplier: 20,
+		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        reqNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
+		Extra: &transport.Extra{
+			Config: config,
+		},
 	}
 	if err := transport.Handle(trname, ds.recvReq); err != nil {
 		return errors.WithStack(err)
@@ -156,7 +159,6 @@ func (ds *dsorterGeneral) start() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        g.mm,
 		},
 	}
 	if err := transport.Handle(trname, ds.recvResp); err != nil {

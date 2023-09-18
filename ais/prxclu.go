@@ -1098,7 +1098,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
 	// rebalance
 	if xargs.Kind == apc.ActRebalance {
-		p.rebalanceCluster(w, r)
+		p.rebalanceCluster(w, r, msg)
 		return
 	}
 
@@ -1179,7 +1179,7 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	freeBcastRes(results)
 }
 
-func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
+func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	// note operational priority over config-disabled `errRebalanceDisabled`
 	if err := p.canRebalance(); err != nil && err != errRebalanceDisabled {
 		p.writeErr(w, r, err)
@@ -1197,7 +1197,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request) {
 		pre:     rmdInc,
 		final:   rmdSync, // metasync new rmd instance
 		p:       p,
-		smapCtx: &smapModifier{smap: smap},
+		smapCtx: &smapModifier{smap: smap, msg: msg},
 	}
 	_, err := p.owner.rmd.modify(rmdCtx)
 	if err != nil {

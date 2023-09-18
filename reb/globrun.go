@@ -129,6 +129,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 	}
 	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,
+		Config:      config,
 		Compression: config.Rebalance.Compression,
 		Multiplier:  config.Rebalance.SbundleMult,
 	}
@@ -457,7 +458,7 @@ func (reb *Reb) beginStreams(config *cmn.Config) {
 		Net:        reb.dm.NetC(),
 		Trname:     trnamePsh,
 		Multiplier: config.Rebalance.SbundleMult,
-		Extra:      &transport.Extra{SenderID: xreb.ID()},
+		Extra:      &transport.Extra{SenderID: xreb.ID(), Config: config},
 	}
 	reb.pushes = bundle.New(reb.t.Sowner(), reb.t.Snode(), transport.NewIntraDataClient(), pushArgs)
 

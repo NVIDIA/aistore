@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/memsys"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -67,11 +66,10 @@ type (
 	}
 	streamBase struct {
 		streamer streamer
-		client   Client     // stream's http client
-		stopCh   cos.StopCh // stop/abort stream
-		lastCh   cos.StopCh // end-of-stream
-		pdu      *spdu      // PDU buffer
-		mm       *memsys.MMSA
+		client   Client        // stream's http client
+		stopCh   cos.StopCh    // stop/abort stream
+		lastCh   cos.StopCh    // end-of-stream
+		pdu      *spdu         // PDU buffer
 		postCh   chan struct{} // to indicate that workCh has work
 		trname   string        // http endpoint: (trname, dstURL, dstID)
 		dstURL   string
@@ -85,18 +83,19 @@ type (
 			mu     sync.Mutex
 			done   atomic.Bool
 		}
-		stats Stats // stream stats
+		stats Stats // stream stats (send side - compare with rxStats)
 		time  struct {
 			idleTeardown time.Duration // idle timeout
 			inSend       atomic.Bool   // true upon Send() or Read() - info for Collector to delay cleanup
 			ticks        int           // num 1s ticks until idle timeout
 			index        int           // heap stuff
 		}
-		wg      sync.WaitGroup
-		sessST  atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
-		sessID  int64        // stream session ID
-		Numcur  int64        // gets reset to zero upon each timeout
-		Sizecur int64        // ditto
+		wg       sync.WaitGroup
+		sessST   atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
+		sessID   int64        // stream session ID
+		numCur   int64        // gets reset to zero upon each timeout
+		sizeCur  int64        // ditto
+		chanFull atomic.Int64
 	}
 )
 
@@ -105,9 +104,11 @@ type (
 ////////////////
 
 func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) {
-	var sid string
-	u, err := url.Parse(dstURL)
-	cos.AssertNoErr(err)
+	var (
+		sid    string
+		u, err = url.Parse(dstURL)
+	)
+	debug.AssertNoErr(err)
 
 	s = &streamBase{client: client, dstURL: dstURL, dstID: dstID}
 
@@ -118,14 +119,9 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.stopCh.Init()
 	s.postCh = make(chan struct{}, 1)
 
-	s.mm = memsys.PageMM()
-
 	// default overrides
 	if extra.SenderID != "" {
 		sid = "-" + extra.SenderID
-	}
-	if extra.MMSA != nil {
-		s.mm = extra.MMSA
 	}
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
@@ -133,7 +129,7 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 			debug.Assert(false)
 			extra.SizePDU = maxSizePDU
 		}
-		buf, _ := s.mm.AllocSize(int64(extra.SizePDU))
+		buf, _ := g.mm.AllocSize(int64(extra.SizePDU))
 		s.pdu = newSendPDU(buf)
 	}
 	if extra.IdleTeardown > 0 {
@@ -150,9 +146,9 @@ func newBase(client Client, dstURL, dstID string, extra *Extra) (s *streamBase) 
 	s.lid = fmt.Sprintf("s-%s%s[%d]=>%s", s.trname, sid, s.sessID, dstID)
 
 	if extra.MaxHdrSize == 0 {
-		s.maxhdr, _ = s.mm.AllocSize(dfltMaxHdr)
+		s.maxhdr, _ = g.mm.AllocSize(dfltMaxHdr)
 	} else {
-		s.maxhdr, _ = s.mm.AllocSize(int64(extra.MaxHdrSize))
+		s.maxhdr, _ = g.mm.AllocSize(int64(extra.MaxHdrSize))
 		cos.AssertMsg(extra.MaxHdrSize <= 0xffff, "the field is uint16") // same comment in header.go
 	}
 	s.sessST.Store(inactive) // initiate HTTP session upon the first arrival
@@ -241,7 +237,7 @@ func (s *streamBase) deactivate() (n int, err error) {
 	err = io.EOF
 	if verbose {
 		num := s.stats.Num.Load()
-		nlog.Infof("%s: connection teardown (%d/%d)", s, s.Numcur, num)
+		nlog.Infof("%s: connection teardown (%d/%d)", s, s.numCur, num)
 	}
 	return
 }
@@ -291,6 +287,10 @@ func (s *streamBase) sendLoop(dryrun bool) {
 
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
+
+	if cnt := s.chanFull.Load(); cnt > 10 || (cnt > 0 && verbose) {
+		nlog.Errorln("work channel full", s.lid, cnt)
+	}
 }
 
 ///////////

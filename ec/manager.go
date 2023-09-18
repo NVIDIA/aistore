@@ -96,7 +96,7 @@ func (mgr *Manager) initECBundles() error {
 		client      = transport.NewIntraDataClient()
 		config      = cmn.GCO.Get()
 		compression = config.EC.Compression
-		extraReq    = transport.Extra{Callback: cbReq, Compression: compression}
+		extraReq    = transport.Extra{Callback: cbReq, Compression: compression, Config: config}
 	)
 	reqSbArgs := bundle.Args{
 		Multiplier: config.EC.SbundleMult,
@@ -108,7 +108,7 @@ func (mgr *Manager) initECBundles() error {
 		Multiplier: config.EC.SbundleMult,
 		Trname:     RespStreamName,
 		Net:        mgr.netResp,
-		Extra:      &transport.Extra{Compression: compression},
+		Extra:      &transport.Extra{Compression: compression, Config: config},
 	}
 
 	sowner := mgr.t.Sowner()

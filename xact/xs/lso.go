@@ -105,7 +105,7 @@ func (p *lsoFactory) Start() (err error) {
 
 	if r.listRemote() {
 		trname := "lso-" + p.UUID()
-		dmxtra := bundle.Extra{Multiplier: 1}
+		dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
 		p.dm, err = bundle.NewDataMover(p.Args.T, trname, r.recv, cmn.OwtPut, dmxtra)
 		if err != nil {
 			return

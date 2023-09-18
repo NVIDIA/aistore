@@ -95,7 +95,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"transport": {
 		"max_header":		4096,
-		"burst_buffer":		32,
+		"burst_buffer":		512,
 		"idle_teardown":	"${AIS_TRANSPORT_IDLE_TEARDOWN:-4s}",
 		"quiescent":		"${AIS_TRANSPORT_QUIESCENT:-10s}",
 		"lz4_block":		"${AIS_TRANSPORT_LZ4_BLOCK:-256kb}",

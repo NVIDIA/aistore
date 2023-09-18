@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -34,8 +35,9 @@ type (
 		// implements cluster.Xact interface
 		xact.DemandBase
 		// runtime
-		workers *mpather.WorkerGroup
-		workCh  chan cluster.LIF
+		workers  *mpather.WorkerGroup
+		workCh   chan cluster.LIF
+		chanFull atomic.Int64
 		// init
 		mirror cmn.MirrorConf
 		config *cmn.Config
@@ -157,9 +159,13 @@ func (r *XactPut) Repl(lom *cluster.LOM) {
 
 	// ref-count on-demand, decrement via worker.Callback = r.do
 	r.IncPending()
-	if err := r.workers.PostLIF(lom, r.String()); err != nil {
+	chanFull, err := r.workers.PostLIF(lom)
+	if err != nil {
 		r.DecPending()
 		r.Abort(fmt.Errorf("%s: %v", r, err))
+	}
+	if chanFull {
+		r.chanFull.Inc()
 	}
 }
 
@@ -195,6 +201,9 @@ func (r *XactPut) stop() (err error) {
 	if n > 0 {
 		r.SubPending(n)
 		err = fmt.Errorf("%s: dropped %d object%s", r, n, cos.Plural(n))
+	}
+	if cnt := r.chanFull.Load(); cnt > 10 || (cnt > 0 && r.config.FastV(5, cos.SmoduleMirror)) {
+		nlog.Errorln("work channel full (all mp workers)", r.String(), cnt)
 	}
 	return
 }

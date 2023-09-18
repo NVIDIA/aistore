@@ -8,7 +8,7 @@ package transport
 import (
 	"io"
 	"math"
-	"reflect"
+	"runtime"
 	"time"
 	"unsafe"
 
@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -50,7 +49,6 @@ type (
 	// advanced usage: additional stream control
 	Extra struct {
 		Callback     ObjSentCB     // typical usage: to free SGLs, close files, etc.
-		MMSA         *memsys.MMSA  // compression-related buffering
 		Config       *cmn.Config   // (to optimize-out GCO.Get())
 		Compression  string        // see CompressAlways, etc. enum
 		SenderID     string        // e.g., xaction ID (optional)
@@ -121,9 +119,9 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 	}
 	debug.Assert(s.usePDU() == extra.UsePDU())
 
-	burst := burst(extra.Config)      // num objects the caller can post without blocking
-	s.workCh = make(chan *Obj, burst) // Send Qeueue (SQ)
-	s.cmplCh = make(chan cmpl, burst) // Send Completion Queue (SCQ)
+	chsize := burst(extra.Config)      // num objects the caller can post without blocking
+	s.workCh = make(chan *Obj, chsize) // Send Qeueue (SQ)
+	s.cmplCh = make(chan cmpl, chsize) // Send Completion Queue (SCQ)
 
 	s.wg.Add(2)
 	go s.sendLoop(dryrun()) // handle SQ
@@ -154,25 +152,17 @@ func NewObjStream(client Client, dstURL, dstID string, extra *Extra) (s *Stream)
 //     stream(s).
 func (s *Stream) Send(obj *Obj) (err error) {
 	debug.Assertf(len(obj.Hdr.Opaque) < len(s.maxhdr)-sizeofh, "(%d, %d)", len(obj.Hdr.Opaque), len(s.maxhdr))
-
 	if err = s.startSend(obj); err != nil {
 		s.doCmpl(obj, err) // take a shortcut
 		return
 	}
 
-	// reader == nil iff is-header-only
-	debug.Func(func() {
-		if obj.Reader == nil {
-			debug.Assert(obj.IsHeaderOnly())
-		} else if obj.IsHeaderOnly() {
-			val := reflect.ValueOf(obj.Reader)
-			debug.Assert(val.IsNil(), obj.String())
-		}
-	})
-
 	s.workCh <- obj
-	if verbose {
-		nlog.Infof("%s: send %s[sq=%d]", s, obj, len(s.workCh))
+	if l, c := len(s.workCh), cap(s.workCh); l > c/2 {
+		runtime.Gosched() // poor man's throttle
+		if l == c {
+			s.chanFull.Inc()
+		}
 	}
 	return
 }
@@ -214,7 +204,7 @@ func _urlPath(endp, trname string) string {
 	return cos.JoinWords(apc.Version, endp, trname)
 }
 
-func GetRxStats() (netstats map[string]RxStats, err error) {
+func GetRxStats() (netstats map[string]RxStats) {
 	netstats = make(map[string]RxStats)
 	for i, hmap := range hmaps {
 		hmtxs[i].Lock()

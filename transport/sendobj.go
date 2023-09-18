@@ -88,14 +88,10 @@ func (s *Stream) initCompression(extra *Extra) {
 	s.lz4s.s = s
 	s.lz4s.blockMaxSize = int(extra.Config.Transport.LZ4BlockMaxSize)
 	s.lz4s.frameChecksum = extra.Config.Transport.LZ4FrameChecksum
-	mem := extra.MMSA
-	if mem == nil {
-		mem = memsys.PageMM()
-	}
 	if s.lz4s.blockMaxSize >= memsys.MaxPageSlabSize {
-		s.lz4s.sgl = mem.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
+		s.lz4s.sgl = g.mm.NewSGL(memsys.MaxPageSlabSize, memsys.MaxPageSlabSize)
 	} else {
-		s.lz4s.sgl = mem.NewSGL(cos.KiB*64, cos.KiB*64)
+		s.lz4s.sgl = g.mm.NewSGL(cos.KiB*64, cos.KiB*64)
 	}
 	s.lid = fmt.Sprintf("%s[%d[%s]]", s.trname, s.sessID, cos.ToSizeIEC(int64(s.lz4s.blockMaxSize), 0))
 }
@@ -161,7 +157,7 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 }
 
 func (s *Stream) doRequest() error {
-	s.Numcur, s.Sizecur = 0, 0
+	s.numCur, s.sizeCur = 0, 0
 	if !s.compressed() {
 		return s.do(s)
 	}
@@ -238,9 +234,8 @@ repeat:
 		s.sendoff.ins = inHdr
 		return s.sendHdr(b)
 	case <-s.stopCh.Listen():
-		num := s.stats.Num.Load()
 		if verbose {
-			nlog.Infof("%s: stopped (%d/%d)", s, s.Numcur, num)
+			nlog.Infof("%s: stopped (%d/%d)", s, s.numCur, s.stats.Num.Load())
 		}
 		err = io.EOF
 		return
@@ -257,7 +252,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	s.stats.Offset.Add(s.sendoff.off)
 	if verbose {
 		num := s.stats.Num.Load()
-		nlog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.Numcur, num)
+		nlog.Infof("%s: hlen=%d (%d/%d)", s, s.sendoff.off, s.numCur, num)
 	}
 	obj := &s.sendoff.obj
 	if s.usePDU() && !obj.IsHeaderOnly() {
@@ -312,7 +307,7 @@ func (s *Stream) eoObj(err error) {
 	if obj.IsUnsized() {
 		objSize = s.sendoff.off
 	}
-	s.Sizecur += s.sendoff.off
+	s.sizeCur += s.sendoff.off
 	s.stats.Offset.Add(s.sendoff.off)
 	if err != nil {
 		goto exit
@@ -323,14 +318,14 @@ func (s *Stream) eoObj(err error) {
 	}
 	// this stream stats
 	s.stats.Size.Add(objSize)
-	s.Numcur++
+	s.numCur++
 	s.stats.Num.Inc()
 	if verbose {
-		nlog.Infof("%s: sent %s (%d/%d)", s, obj, s.Numcur, s.stats.Num.Load())
+		nlog.Infof("%s: sent %s (%d/%d)", s, obj, s.numCur, s.stats.Num.Load())
 	}
 	// target stats
-	statsTracker.Inc(OutObjCount)
-	statsTracker.Add(OutObjSize, objSize)
+	g.statsTracker.Inc(OutObjCount)
+	g.statsTracker.Add(OutObjSize, objSize)
 exit:
 	if err != nil {
 		nlog.Errorln(err)
@@ -390,9 +385,9 @@ func (s *Stream) closeAndFree() {
 	close(s.workCh)
 	close(s.cmplCh)
 
-	s.mm.Free(s.maxhdr)
+	g.mm.Free(s.maxhdr)
 	if s.pdu != nil {
-		s.pdu.free(s.mm)
+		s.pdu.free(g.mm)
 	}
 }
 

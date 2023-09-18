@@ -101,7 +101,7 @@ func (p *archFactory) Start() (err error) {
 	p.xctn = r
 	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, p.kind, p.Bck /*from*/, xact.IdleDefault)
 
-	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, 0 /*pdu*/); err != nil {
+	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, 0 /*pdu*/); err != nil {
 		return
 	}
 	r.p.dm.SetXact(r)

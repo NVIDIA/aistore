@@ -7,7 +7,6 @@ package transport
 
 import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // cumulative transport counters (this target)
@@ -33,8 +32,6 @@ var (
 	_ rxStats = (*Stats)(nil)
 	_ rxStats = (*nopRxStats)(nil)
 )
-
-var statsTracker cos.StatsUpdater // in fact, stats.Trunner
 
 func (s *Stats) addOff(o int64) { s.Offset.Add(o) }
 func (s *Stats) incNum()        { s.Num.Inc() }

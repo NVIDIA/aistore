@@ -229,7 +229,7 @@ func TestOneStream(t *testing.T) {
 	defer ts.Close()
 
 	streamWriteUntil(t, 55, nil, ts, nil, nil, false /*compress*/, true /*PDU*/)
-	printNetworkStats(t)
+	printNetworkStats()
 }
 
 func TestMultiStream(t *testing.T) {
@@ -247,12 +247,11 @@ func TestMultiStream(t *testing.T) {
 		go streamWriteUntil(t, i, wg, ts, netstats, lock, false /*compress*/, false /*PDU*/)
 	}
 	wg.Wait()
-	compareNetworkStats(t, netstats)
+	compareNetworkStats(netstats)
 }
 
-func printNetworkStats(t *testing.T) {
-	netstats, err := transport.GetRxStats()
-	tassert.CheckFatal(t, err)
+func printNetworkStats() {
+	netstats := transport.GetRxStats()
 	for trname, eps := range netstats {
 		for uid, stats := range eps { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
@@ -262,9 +261,8 @@ func printNetworkStats(t *testing.T) {
 	}
 }
 
-func compareNetworkStats(t *testing.T, netstats1 map[string]transport.RxStats) {
-	netstats2, err := transport.GetRxStats()
-	tassert.CheckFatal(t, err)
+func compareNetworkStats(netstats1 map[string]transport.RxStats) {
+	netstats2 := transport.GetRxStats()
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
 		for uid, stats2 := range eps2 { // RxStats by session ID
@@ -516,7 +514,7 @@ func TestCompressedOne(t *testing.T) {
 	fmt.Printf("send$ %s: offset=%d, num=%d(%d/%d), compression-ratio=%.2f\n",
 		stream, stats.Offset.Load(), stats.Num.Load(), num, numhdr, stats.CompressionRatio())
 
-	printNetworkStats(t)
+	printNetworkStats()
 }
 
 func TestDryRun(t *testing.T) {

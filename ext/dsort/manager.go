@@ -264,7 +264,6 @@ func (m *Manager) initStreams() error {
 		Extra: &transport.Extra{
 			Compression: config.DSort.Compression,
 			Config:      config,
-			MMSA:        g.mm,
 		},
 	}
 	if err := transport.Handle(trname, m.recvShard); err != nil {
@@ -286,7 +285,7 @@ func (m *Manager) cleanupStreams() (err error) {
 	for _, streamBundle := range []*bundle.Streams{m.streams.shards} {
 		if streamBundle != nil {
 			// NOTE: We don't want stream to send a message at this point as the
-			//  receiver might have closed its corresponding stream.
+			// receiver might have closed its corresponding stream.
 			streamBundle.Close(false /*gracefully*/)
 		}
 	}

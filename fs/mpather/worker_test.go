@@ -47,7 +47,7 @@ func TestWorkerGroup(t *testing.T) {
 		err := lom.InitFQN(fqn, &out.Bck)
 		tassert.CheckError(t, err)
 
-		err = wg.PostLIF(lom, t.Name())
+		_, err = wg.PostLIF(lom)
 		tassert.CheckError(t, err)
 	}
 

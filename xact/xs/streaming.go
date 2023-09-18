@@ -95,9 +95,12 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 // - Compression: config.X.Compression
 // - Multiplier:  config.X.SbundleMult (currently, always 1)
 
-func (p *streamingF) newDM(trname string, recv transport.RecvObj, sizePDU int32) (err error) {
-	dmxtra := bundle.Extra{Multiplier: 1, SizePDU: sizePDU}
-
+func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, sizePDU int32) (err error) {
+	dmxtra := bundle.Extra{
+		Config:     config,
+		Multiplier: 1,
+		SizePDU:    sizePDU,
+	}
 	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmxtra)
 	if err != nil {
 		return
