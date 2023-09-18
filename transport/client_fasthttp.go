@@ -1,6 +1,6 @@
 //go:build !nethttp
 
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.

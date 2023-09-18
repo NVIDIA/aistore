@@ -1,4 +1,4 @@
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -223,7 +223,7 @@ func Example_obj() {
 }
 
 // test random streaming
-func Test_OneStream(t *testing.T) {
+func TestOneStream(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
@@ -232,7 +232,7 @@ func Test_OneStream(t *testing.T) {
 	printNetworkStats(t)
 }
 
-func Test_MultiStream(t *testing.T) {
+func TestMultiStream(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	tlog.Logf("Duration %v\n", duration)
@@ -240,7 +240,7 @@ func Test_MultiStream(t *testing.T) {
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
-	netstats := make(map[string]transport.EndpointStats)
+	netstats := make(map[string]transport.RxStats)
 	lock := &sync.Mutex{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
@@ -251,10 +251,10 @@ func Test_MultiStream(t *testing.T) {
 }
 
 func printNetworkStats(t *testing.T) {
-	netstats, err := transport.GetStats()
+	netstats, err := transport.GetRxStats()
 	tassert.CheckFatal(t, err)
 	for trname, eps := range netstats {
-		for uid, stats := range eps { // EndpointStats by session ID
+		for uid, stats := range eps { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
 			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n",
 				trname, xx, sessID, stats.Offset.Load(), stats.Num.Load())
@@ -262,12 +262,12 @@ func printNetworkStats(t *testing.T) {
 	}
 }
 
-func compareNetworkStats(t *testing.T, netstats1 map[string]transport.EndpointStats) {
-	netstats2, err := transport.GetStats()
+func compareNetworkStats(t *testing.T, netstats1 map[string]transport.RxStats) {
+	netstats2, err := transport.GetRxStats()
 	tassert.CheckFatal(t, err)
 	for trname, eps2 := range netstats2 {
 		eps1, ok := netstats1[trname]
-		for uid, stats2 := range eps2 { // EndpointStats by session ID
+		for uid, stats2 := range eps2 { // RxStats by session ID
 			xx, sessID := transport.UID2SessID(uid)
 			fmt.Printf("recv$ %s[%d:%d]: offset=%d, num=%d\n", trname, xx, sessID,
 				stats2.Offset.Load(), stats2.Num.Load())
@@ -286,7 +286,7 @@ func compareNetworkStats(t *testing.T, netstats1 map[string]transport.EndpointSt
 	}
 }
 
-func Test_MultipleNetworks(t *testing.T) {
+func TestMultipleNetworks(t *testing.T) {
 	totalRecv, recvFunc := makeRecvFunc(t)
 
 	streams := make([]*transport.Stream, 0, 10)
@@ -321,7 +321,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	}
 }
 
-func Test_nSendCallback(t *testing.T) {
+func TestSendCallback(t *testing.T) {
 	objectCnt := 10000
 	if testing.Short() {
 		objectCnt = 1000
@@ -366,7 +366,7 @@ func Test_nSendCallback(t *testing.T) {
 	}
 }
 
-func Test_ObjAttrs(t *testing.T) {
+func TestObjAttrs(t *testing.T) {
 	testAttrs := []cmn.ObjAttrs{
 		{
 			Size:  1024,
@@ -451,7 +451,7 @@ func receive10G(hdr transport.ObjHdr, objReader io.Reader, err error) error {
 	return nil
 }
 
-func Test_CompressedOne(t *testing.T) {
+func TestCompressedOne(t *testing.T) {
 	trname := "cmpr-one"
 	config := cmn.GCO.BeginUpdate()
 	config.Transport.LZ4BlockMaxSize = 256 * cos.KiB
@@ -519,7 +519,7 @@ func Test_CompressedOne(t *testing.T) {
 	printNetworkStats(t)
 }
 
-func Test_DryRun(t *testing.T) {
+func TestDryRun(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
@@ -564,7 +564,7 @@ func Test_DryRun(t *testing.T) {
 	fmt.Printf("[dry]: offset=%d, num=%d(%d)\n", stats.Offset.Load(), stats.Num.Load(), num)
 }
 
-func Test_CompletionCount(t *testing.T) {
+func TestCompletionCount(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
 	var (
 		numSent                   int64
@@ -632,7 +632,7 @@ func Test_CompletionCount(t *testing.T) {
 //
 
 func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server,
-	netstats map[string]transport.EndpointStats, lock sync.Locker, compress, usePDU bool) {
+	netstats map[string]transport.RxStats, lock sync.Locker, compress, usePDU bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -702,7 +702,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 			trname, sessID, stats.Offset.Load(), stats.Num.Load(), num, reason, termErr)
 	} else {
 		lock.Lock()
-		eps := make(transport.EndpointStats)
+		eps := make(transport.RxStats)
 		eps[uint64(sessID)] = &stats
 		netstats[trname] = eps
 		lock.Unlock()

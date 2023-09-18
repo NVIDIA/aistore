@@ -1,4 +1,4 @@
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -6,7 +6,6 @@
 package transport
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"reflect"
@@ -59,7 +58,10 @@ type (
 		SizePDU      int32         // NOTE: 0(zero): no PDUs; must be below maxSizePDU; unknown size _requires_ PDUs
 		MaxHdrSize   int32         // overrides `dfltMaxHdr` if specified
 	}
-	EndpointStats map[uint64]*Stats // all stats for a given (network, trname) endpoint indexed by session ID
+
+	// receive-side session stats indexed by session ID (see recv.go for "uid")
+	// optional, currently tests only
+	RxStats map[uint64]*Stats
 
 	// object header
 	ObjHdr struct {
@@ -194,31 +196,10 @@ func Handle(trname string, rxObj RecvObj, withStats ...bool) error {
 	} else {
 		h = &hdl{trname: trname, rxObj: rxObj}
 	}
-
-	// TODO -- FIXME: remove rlock here and elsewhere
-
-	mu.Lock()
-	if _, ok := handlers[trname]; ok {
-		mu.Unlock()
-		return &ErrDuplicateTrname{trname}
-	}
-	handlers[trname] = h
-	mu.Unlock()
-	return nil
+	return oput(trname, h)
 }
 
-func Unhandle(trname string) (err error) {
-	mu.Lock()
-	if h, ok := handlers[trname]; ok {
-		delete(handlers, trname)
-		mu.Unlock()
-		h.unreg()
-	} else {
-		mu.Unlock()
-		err = fmt.Errorf(cmn.FmtErrUnknown, "transport", "endpoint", trname)
-	}
-	return
-}
+func Unhandle(trname string) error { return odel(trname) }
 
 ////////////////////
 // stats and misc //
@@ -233,24 +214,16 @@ func _urlPath(endp, trname string) string {
 	return cos.JoinWords(apc.Version, endp, trname)
 }
 
-func GetStats() (netstats map[string]EndpointStats, err error) {
-	netstats = make(map[string]EndpointStats)
-	mu.Lock()
-	for trname, h := range handlers {
-		eps := make(EndpointStats)
-		f := func(key, value any) bool {
-			out := &Stats{}
-			uid := key.(uint64)
-			in := value.(*Stats)
-			out.Num.Store(in.Num.Load())
-			out.Offset.Store(in.Offset.Load())
-			out.Size.Store(in.Size.Load())
-			eps[uid] = out
-			return true
+func GetRxStats() (netstats map[string]RxStats, err error) {
+	netstats = make(map[string]RxStats)
+	for i, hmap := range hmaps {
+		hmtxs[i].Lock()
+		for trname, h := range hmap {
+			if s := h.getStats(); s != nil {
+				netstats[trname] = s
+			}
 		}
-		h.rng(f)
-		netstats[trname] = eps
+		hmtxs[i].Unlock()
 	}
-	mu.Unlock()
 	return
 }

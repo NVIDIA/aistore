@@ -1,4 +1,4 @@
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -9,7 +9,6 @@ import (
 	"container/heap"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -29,14 +28,14 @@ var (
 	verbose    bool
 )
 
-func init() {
-	nextSessionID.Store(100)
-	handlers = make(map[string]handler, 32)
-	mu = &sync.RWMutex{}
-}
-
 func Init(st cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 	verbose = config.FastV(5 /*super-verbose*/, cos.SmoduleTransport)
+
+	nextSessionID.Store(100)
+	for i := 0; i < numHmaps; i++ {
+		hmaps[i] = make(hmap, 4)
+	}
+
 	dfltMaxHdr = dfltSizeHeader
 	if config.Transport.MaxHeaderSize > 0 {
 		dfltMaxHdr = int64(config.Transport.MaxHeaderSize)

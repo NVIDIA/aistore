@@ -1,4 +1,4 @@
-// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
@@ -57,7 +57,7 @@ type (
 		stats(*http.Request, string) (rxStats, uint64, string)
 		unreg()
 		addOld(uint64)
-		rng(func(key, value any) bool)
+		getStats() RxStats
 	}
 	hdl struct {
 		rxObj  RecvObj
@@ -74,6 +74,9 @@ type (
 	ErrDuplicateTrname struct {
 		trname string
 	}
+	ErrUnknownTrname struct {
+		trname string
+	}
 )
 
 // interface guard
@@ -84,9 +87,7 @@ var (
 
 // global
 var (
-	nextSessionID atomic.Int64       // next unique session ID
-	handlers      map[string]handler // by trname
-	mu            *sync.RWMutex      // protect handlers
+	nextSessionID atomic.Int64 // next unique session ID
 )
 
 // main Rx objects
@@ -95,21 +96,8 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
 		trname    = path.Base(r.URL.Path)
+		mm        = memsys.PageMM()
 	)
-	mu.RLock()
-	h, ok := handlers[trname]
-	if !ok {
-		// TODO -- FIXME: differentiate unknown-new and unknown-old - the former can't be silenced
-		mu.RUnlock()
-		err := cos.NewErrNotFound("unknown transport endpoint %q", trname)
-		if verbose {
-			cmn.WriteErr(w, r, err, 0)
-		} else {
-			cmn.WriteErr(w, r, err, 0, 1 /*silent*/)
-		}
-		return
-	}
-	mu.RUnlock()
 	// compression
 	if compressionType := r.Header.Get(apc.HdrCompress); compressionType != "" {
 		debug.Assert(compressionType == apc.LZ4Compression)
@@ -117,13 +105,18 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		reader = lz4Reader
 	}
 
-	mm := memsys.PageMM()
+	// Rx handler
+	h, err := oget(trname)
+	if err != nil {
+		cmn.WriteErr(w, r, err, 0)
+		return
+	}
 	stats, uid, loghdr := h.stats(r, trname)
 	it := &iterator{handler: h, body: reader, stats: stats}
 	it.hbuf, _ = mm.AllocSize(dfltMaxHdr)
 
-	// Rx loop
-	err := it.rxloop(uid, loghdr, mm)
+	// receive loop
+	err = it.rxloop(uid, loghdr, mm)
 
 	// cleanup
 	if lz4Reader != nil {
@@ -201,8 +194,23 @@ func (h *hdl) recv(hdr ObjHdr, objReader io.Reader, err error) error {
 	return h.rxObj(hdr, objReader, err)
 }
 
-func (*hdl) rng(func(key, value any) bool)          {}
-func (h *hdlExtra) rng(f func(key, value any) bool) { h.sessions.Range(f) }
+func (*hdl) getStats() RxStats { return nil }
+
+func (h *hdlExtra) getStats() (s RxStats) {
+	s = make(RxStats, 4)
+	h.sessions.Range(s.f)
+	return
+}
+
+func (s RxStats) f(key, value any) bool {
+	out := &Stats{}
+	uid := key.(uint64)
+	in := value.(*Stats)
+	out.Num.Store(in.Num.Load())       // via rxStats.incNum
+	out.Offset.Store(in.Offset.Load()) // via rxStats.addOff
+	s[uid] = out
+	return true
+}
 
 //////////////////////////////////
 // next(obj, msg, pdu) iterator //
@@ -417,17 +425,21 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 	return
 }
 
-////////////////////////
-// ErrDuplicateTrname //
-////////////////////////
+//
+// transport err-s
+//
 
 func (e *ErrDuplicateTrname) Error() string {
-	return fmt.Sprintf("duplicate trname %q", e.trname)
+	return fmt.Sprintf("duplicate transport endpoint %q", e.trname)
 }
 
 func IsErrDuplicateTrname(e error) bool {
 	_, ok := e.(*ErrDuplicateTrname)
 	return ok
+}
+
+func (e *ErrUnknownTrname) Error() string {
+	return fmt.Sprintf("unknown transport endpoint %q", e.trname)
 }
 
 //

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
@@ -35,9 +34,9 @@ import (
 
 const (
 	// Stream names
-	recvReqStreamNameFmt  = apc.ActDsort + "-%s-recv_req"
-	recvRespStreamNameFmt = apc.ActDsort + "-%s-recv_resp"
-	shardStreamNameFmt    = apc.ActDsort + "-%s-shard"
+	recvReqStreamNameFmt  = "recv-%sq"
+	recvRespStreamNameFmt = "recv-%sp"
+	shardStreamNameFmt    = "shrd-%ss"
 )
 
 // State of the cleans - see `cleanup` and `finalCleanup`
