@@ -88,6 +88,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -s3endpoint | `string` | S3 endpoint to read/write S3 bucket directly (with no aistore) | `""` |
 | -s3profile | `string` | Other then default S3 config profile referencing alternative credentials | `""` |
 | -seed | `int` | Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds) | `0` |
+| -skiplist | `bool` | Whether to skip listing objects in a bucket before running PUT workload | `false` |
 | -stats-output | `string` | filename to log statistics (empty string translates as standard output (default) | `""` |
 | -statsdip | `string` | StatsD IP address or hostname | `localhost` |
 | -statsdport | `int` | StatsD UDP port | `8125` |
@@ -99,7 +100,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -tmpdir | `string` | Local directory to store temporary files | `/tmp/ais` |
 | -tokenfile | `string` | Authentication token (FQN) | `""`|
 | -totalputsize | `string`, `int` | Stop PUT workload once cumulative PUT size reaches or exceeds this value, can contain [multiplicative suffix](#bytes-multiplicative-suffix), 0 = no limit | `0` |
-| -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false`
+| -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
 | -uniquegets | `bool` | true: GET objects randomly and equally. Meaning, make sure *not* to GET some objects more frequently than the others | `true` |
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |

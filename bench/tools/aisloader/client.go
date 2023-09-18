@@ -444,7 +444,7 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 	return objs, nil
 }
 
-func s3ListObjects() ([]string, error) {
+func inits3Svc() {
 	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
 	config.WithEndpoint(s3Endpoint)
 	opts := session.Options{
@@ -456,7 +456,9 @@ func s3ListObjects() ([]string, error) {
 	// config.Region = aws.String("us-east-1") // NOTE: may be needed
 
 	s3svc = s3.New(sess)
+}
 
+func s3ListObjects() ([]string, error) {
 	// first page
 	params := &s3.ListObjectsV2Input{Bucket: aws.String(runParams.bck.Name)}
 	params.MaxKeys = aws.Int64(apc.DefaultPageSizeCloud)

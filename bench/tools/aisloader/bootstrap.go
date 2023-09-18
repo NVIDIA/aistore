@@ -176,6 +176,7 @@ type (
 		randomObjName bool
 		randomProxy   bool
 		uniqueGETs    bool
+		skipList      bool // true: skip listing objects before running PUT workload
 		verifyHash    bool // verify xxhash during get
 		getConfig     bool // true: load control plane (read proxy config)
 		jsonFormat    bool
@@ -339,6 +340,7 @@ func parseCmdLine() (params, error) {
 	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
 	f.UintVar(&p.numEpochs, "epochs", 0, "Number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
+	f.BoolVar(&p.skipList, "skiplist", false, "Whether to skip listing objects in a bucket before running PUT workload")
 
 	//
 	// object naming
@@ -454,6 +456,10 @@ func parseCmdLine() (params, error) {
 
 	if p.putPct < 0 || p.putPct > 100 {
 		return params{}, fmt.Errorf("invalid option: PUT percent %d", p.putPct)
+	}
+
+	if p.skipList && p.putPct != 100 {
+		return params{}, fmt.Errorf("invalid option: skiplist is only valid for 100%% PUT jobs, PUT percent is %d", p.putPct)
 	}
 
 	// direct s3 access vs other command line
@@ -844,7 +850,12 @@ func Start(version, buildtime string) (err error) {
 		return err
 	}
 
-	if !runParams.getConfig {
+	if isDirectS3() {
+		inits3Svc()
+	}
+
+	// Skip listing objects if we are only testing control plane ops or only doing puts
+	if !runParams.getConfig && !runParams.skipList {
 		if err := listObjects(); err != nil {
 			return err
 		}
@@ -855,6 +866,9 @@ func Start(version, buildtime string) (err error) {
 		}
 
 		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
+	} else {
+		bucketObjsNames = &namegetter.RandomNameGetter{}
+		bucketObjsNames.Init([]string{}, rnd)
 	}
 
 	printRunParams(runParams)
