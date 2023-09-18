@@ -1,3 +1,7 @@
 #!/bin/bash
 
-ansible-playbook -i inventory.yaml playbooks/aisloader_config.yaml --become -e "ansible_become_pass=y"
+source common.sh
+
+PLAYBOOK=playbooks/aisloader_config.yaml
+
+run_ansible_playbook "$PLAYBOOK"

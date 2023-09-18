@@ -24,22 +24,22 @@ aisloader_hosts:
 target_hosts:
   hosts:
     aistorecpu1000:
-      ansible_host: 10.52.160.25
+      ansible_host: 10.150.56.248
     aistorecpu1001:
-      ansible_host: 10.52.160.24
+      ansible_host: 10.150.56.245
     aistorecpu1002:
-      ansible_host: 10.52.160.23
+      ansible_host: 10.150.56.246
     aistorecpu1003:
-      ansible_host: 10.52.160.22
+      ansible_host: 10.150.56.247
     aistorecpu1004:
-      ansible_host: 10.52.160.21
+      ansible_host: 10.150.56.249
     aistorecpu1005:
-      ansible_host: 10.52.160.20
+      ansible_host: 10.150.56.254
     aistorecpu1006:
-      ansible_host: 10.52.160.87
+      ansible_host: 10.150.56.251
     aistorecpu1007:
-      ansible_host: 10.52.160.18
+      ansible_host: 10.150.56.250
     aistorecpu1008:
-      ansible_host: 10.52.160.16
+      ansible_host: 10.150.56.253
     aistorecpu1009:
-      ansible_host: 10.52.160.15
+      ansible_host: 10.150.56.252

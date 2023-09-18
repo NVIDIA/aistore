@@ -7,20 +7,18 @@ This directory contains scripts and ansible playbooks to benchmark an AIS cluste
 - python3 and pip3 available in your path
 - [ansible](https://github.com/ansible/ansible) installed: `python3 -m pip install --user ansible`
 - [aisloader](/docs/aisloader.md) installed on each of the hosts it will run on
-    - use `ansible` to copy the binary to each of the loader nodes, e.g.:
-```console
-ansible <name of loader hosts section in inventory> -m ansible.builtin.copy -a "src=/path/to/aisloader dest=/usr/local/bin/aisloader" -i inventory.yaml
-```
+  - Build the aisloader binary (`make aisloader` from the aistore source root) 
+  - Update the inventory file in `common.sh` and aisloader path in `setup_aisloader.sh` and run the script to copy the aisloader binary to each of the client nodes
 - network access to each of the `aisloader` hosts
 - network access from each of the `aisloader` hosts to any AIS proxy in the cluster
 - if [netdata](https://www.netdata.cloud/) is used, docker must be installed on each AIS target node. Use provided [install_docker.sh](install_docker.sh) script.
 
 ## Configuration
 
-1. Set up an ansible hosts configuration file (the current scripts all use [inventory.yaml](inventory.yaml)). This file must have a section `aisloader_hosts` and a section `target_hosts`.
+1. Set up an ansible hosts configuration file (the current scripts all use [inventory/inventory.yaml](inventory/inventory.yaml)). This file must have a section `aisloader_hosts` and a section `target_hosts`. Update the reference to this hosts file in [common.sh](common.sh).
 2. Set up stats monitoring
-  1. Modify [start_netdata.sh](start_netdata.sh) and [start_grafana.sh](start_grafana.sh) to set the machine that will host grafana and graphite.
-  2. Ensure docker is installed and accessible on each target machine. The provided `install_docker.sh` will do this automatically.
+  1. Modify the `GRAFANA_HOST` variable in [common.sh](common.sh) to set the machine that will host grafana and graphite.
+  2. Ensure docker is installed and accessible on each target host. The provided `install_docker.sh` will do this automatically.
   3. Run `deploy_grafana.sh` and `start_netdata.sh` to start the containers to collect and display aisloader and system statistics.
 3. Configure your benchmarks
   1. Modify the `run_playbook_*` scripts as needed to set object sizes, benchmark durations, bucket names, and graphite/grafana host.

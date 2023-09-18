@@ -1,1 +1,7 @@
-ansible-playbook -i inventory.yaml playbooks/install_docker.yaml --become -e "ansible_become_pass=y"
+#!/bin/bash
+
+source common.sh
+
+PLAYBOOK=playbooks/install_docker.yaml
+
+run_ansible_playbook "$PLAYBOOK" "$INVENTORY"

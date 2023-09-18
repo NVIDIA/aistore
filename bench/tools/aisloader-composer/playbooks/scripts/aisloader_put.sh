@@ -47,4 +47,4 @@ filename="bench-$each_size-put-"
 outfile="$outdir$filename$hostname.json"
 bucket="ais://bench_$each_size"
 
-aisloader -ip=${proxy_list[0]} -port=$ais_port -loaderid=$(hostname) -loaderidhashlen=8 -bucket=$bucket -cleanup=false -totalputsize=$total_size -minsize=$each_size -maxsize=$each_size -pctput=100 -json -stats-output $outfile --statsdip=$grafana_host -numworkers=$workers
+aisloader -ip=${proxy_list[0]} -port=$ais_port -randomproxy -loaderid=$(hostname) -loaderidhashlen=8 -bucket=$bucket -cleanup=false -totalputsize=$total_size -minsize=$each_size -maxsize=$each_size -pctput=100 -json -stats-output $outfile --statsdip=$grafana_host -numworkers=$workers
