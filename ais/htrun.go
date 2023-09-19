@@ -654,11 +654,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		return
 	}
 
-	req.Header.Set(apc.HdrCallerID, h.si.ID())
+	req.Header.Set(apc.HdrCallerID, h.SID())
 	req.Header.Set(apc.HdrCallerName, h.si.Name())
-	debug.Assert(smap != nil)
 	if smap.vstr != "" {
-		req.Header.Set(apc.HdrCallerSmapVersion, smap.vstr)
+		if smap.IsPrimary(h.si) {
+			req.Header.Set(apc.HdrCallerIsPrimary, "true")
+		}
+		req.Header.Set(apc.HdrCallerSmapVer, smap.vstr)
 	}
 	req.Header.Set(cos.HdrUserAgent, ua)
 
@@ -1647,7 +1649,8 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, payload msPayload) (err error)
 	if err = cmn.GCO.Update(&newConfig.ClusterConfig); err != nil {
 		return
 	}
-	// update assorted read-mostly knobs
+
+	// NOTE: update assorted read-mostly knobs
 	cmn.Features = newConfig.Features
 	cmn.Timeout.Set(&newConfig.ClusterConfig)
 	return
@@ -1997,7 +2000,7 @@ func (h *htrun) isIntraCall(hdr http.Header, fromPrimary bool) (err error) {
 		smap       = h.owner.smap.get()
 		callerID   = hdr.Get(apc.HdrCallerID)
 		callerName = hdr.Get(apc.HdrCallerName)
-		callerSver = hdr.Get(apc.HdrCallerSmapVersion)
+		callerSver = hdr.Get(apc.HdrCallerSmapVer)
 		callerVer  int64
 		erP        error
 	)
@@ -2072,16 +2075,19 @@ func isRedirect(q url.Values) (ptime string) {
 	return q.Get(apc.QparamUnixTime)
 }
 
-func ptLatency(tts int64, ptime string) (delta int64) {
+func ptLatency(tts int64, ptime, isPrimary string) (dur int64) {
 	pts, err := cos.S2UnixNano(ptime)
 	if err != nil {
+		debug.AssertNoErr(err)
 		return
 	}
-	xreg.PrimeTime.Store(pts)
-	xreg.MyTime.Store(tts)
-	delta = tts - pts
-	if delta < 0 && -delta < int64(clusterClockDrift) {
-		delta = 0
+	if ok, _ := cos.ParseBool(isPrimary); ok {
+		xreg.PrimeTime.Store(pts)
+		xreg.MyTime.Store(tts)
+	}
+	dur = tts - pts
+	if dur < 0 && -dur < int64(clusterClockDrift) {
+		dur = 0
 	}
 	return
 }

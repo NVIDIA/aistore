@@ -696,7 +696,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	{
 		goi.atime = time.Now().UnixNano()
 		if dpq.ptime != "" && sparseRedirStats(goi.atime) {
-			if d := ptLatency(goi.atime, dpq.ptime); d > 0 {
+			if d := ptLatency(goi.atime, dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
 				t.statsT.Add(stats.GetRedirLatency, d)
 			}
 		}
@@ -803,7 +803,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		{
 			poi.atime = started
 			if apireq.dpq.ptime != "" && sparseRedirStats(poi.atime) {
-				if d := ptLatency(poi.atime, apireq.dpq.ptime); d > 0 {
+				if d := ptLatency(poi.atime, apireq.dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
 					t.statsT.Add(stats.PutRedirLatency, d)
 				}
 			}

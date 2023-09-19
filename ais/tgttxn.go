@@ -1057,15 +1057,14 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 	}
 
 	// latency = (network) +- (clock drift)
-	if phase == apc.ActBegin || phase == apc.ActCommit {
+	if phase == apc.ActBegin {
 		if ptime := query.Get(apc.QparamUnixTime); ptime != "" {
-			if delta := ptLatency(time.Now().UnixNano(), ptime); delta != 0 {
-				bound := cmn.GCO.Get().Timeout.CplaneOperation / 2
-				if delta > int64(bound) || delta < -int64(bound) {
-					nlog.Errorf("%s: txn %s[%s] latency=%v(!), caller %s, phase=%s, bucket %q",
-						t.si, msg.Action, c.msg.UUID, time.Duration(delta),
-						c.callerName, phase, bucket)
-				}
+			now := time.Now().UnixNano()
+			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrCallerIsPrimary))
+			lim := int64(cmn.Timeout.CplaneOperation()) >> 1
+			if dur > lim || dur < -lim {
+				nlog.Errorf("Warning: clock drift %s <-> %s(self) = %v, txn %s[%s]",
+					c.callerName, t, time.Duration(dur), msg.Action, c.msg.UUID)
 			}
 		}
 	}

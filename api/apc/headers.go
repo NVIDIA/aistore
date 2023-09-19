@@ -73,10 +73,11 @@ const (
 
 // Internally used headers
 const (
-	HdrCallerID          = HeaderPrefix + "caller-id" // Marker of intra-cluster request.
-	HdrT2TPutterID       = HeaderPrefix + "putter-id" // DaemonID of the target that performs intra-cluster PUT
-	HdrCallerName        = HeaderPrefix + "caller-name"
-	HdrCallerSmapVersion = HeaderPrefix + "caller-smap-ver"
+	HdrCallerID        = HeaderPrefix + "caller-id" // Marker of intra-cluster request.
+	HdrT2TPutterID     = HeaderPrefix + "putter-id" // DaemonID of the target that performs intra-cluster PUT
+	HdrCallerName      = HeaderPrefix + "caller-name"
+	HdrCallerIsPrimary = HeaderPrefix + "caller-is-primary"
+	HdrCallerSmapVer   = HeaderPrefix + "caller-smap-ver"
 
 	HdrXactionID = HeaderPrefix + "xaction-id"
 

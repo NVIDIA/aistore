@@ -413,7 +413,7 @@ func (m *Smap) GetTarget(sid string) *Snode {
 }
 
 func (m *Smap) IsPrimary(si *Snode) bool {
-	return m.Primary.Equals(si)
+	return m.Primary != nil && m.Primary.ID() == si.ID()
 }
 
 func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {

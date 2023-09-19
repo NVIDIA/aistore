@@ -564,7 +564,7 @@ func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	if fast {
 		var (
 			callerID   = r.Header.Get(apc.HdrCallerID)
-			callerSver = r.Header.Get(apc.HdrCallerSmapVersion)
+			callerSver = r.Header.Get(apc.HdrCallerSmapVer)
 		)
 		if callerID == sid && callerSver != "" && callerSver == smap.vstr {
 			if si := smap.GetNode(sid); si != nil {

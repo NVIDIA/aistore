@@ -343,7 +343,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		var (
 			regMsg     = &xactRegMsg{}
 			tmap       meta.NodeMap
-			callerSver = r.Header.Get(apc.HdrCallerSmapVersion)
+			callerSver = r.Header.Get(apc.HdrCallerSmapVer)
 			err        error
 		)
 		if err = cos.MorphMarshal(msg.Value, regMsg); err != nil {

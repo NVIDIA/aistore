@@ -217,8 +217,8 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"` // readonly - change requires restart
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto (see `timeout struct` below)
+		CplaneOperation cos.Duration `json:"cplane_operation"` // read-mostly via global cmn.Timeout.CplaneOperation
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto, cmn.Timeout.MaxKeepalive - see below
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout

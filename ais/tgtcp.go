@@ -1048,7 +1048,7 @@ func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 		err              error
 		callerID         = r.Header.Get(apc.HdrCallerID)
 		caller           = r.Header.Get(apc.HdrCallerName)
-		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrCallerSmapVersion), 10, 64)
+		callerSmapVer, _ = strconv.ParseInt(r.Header.Get(apc.HdrCallerSmapVer), 10, 64)
 	)
 	if smap.version() != callerSmapVer {
 		s := "older"

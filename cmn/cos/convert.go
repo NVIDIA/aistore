@@ -27,10 +27,15 @@ func IsParseBool(s string) bool {
 //
 //	1, true, t -> true
 //	0, false, f -> false
-func ParseBool(s string) (value bool, err error) {
+func ParseBool(s string) (bool, error) {
+	// the two most common
 	if s == "" {
-		return
+		return false, nil
 	}
+	if s == "true" {
+		return true, nil
+	}
+	// add. options
 	s = strings.ToLower(s)
 	switch s {
 	case "y", "yes", "on":
@@ -38,6 +43,7 @@ func ParseBool(s string) (value bool, err error) {
 	case "n", "no", "off":
 		return false, nil
 	}
+	// gen. case
 	return strconv.ParseBool(s)
 }
 
