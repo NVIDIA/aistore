@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
@@ -28,7 +29,7 @@ const (
 	keepOldThreshold = 256 // keep so many
 
 	waitPrevAborted = 2 * time.Second
-	waitLimitedCoex = 5 * time.Second
+	waitLimitedCoex = 3 * time.Second
 )
 
 type WPR int
@@ -593,8 +594,11 @@ func (e *entries) findRunning(flt Flt) Renewable {
 // internal use, special case: Flt{Kind: kind}; NOTE: the caller must take rlock
 func (e *entries) findRunningKind(kind string) Renewable {
 	for _, entry := range e.active {
+		if entry.Kind() != kind {
+			continue
+		}
 		xctn := entry.Get()
-		if xctn.Kind() == kind && xctn.Running() {
+		if xctn.Running() {
 			return entry
 		}
 	}
@@ -669,20 +673,18 @@ func (e *entries) add(entry Renewable) {
 	}
 }
 
-//
 // LimitedCoexistence checks whether a given xaction that is about to start can, in fact, "coexist"
 // with those that are currently running. It's a piece of logic designed to centralize all decision-making
 // of that sort. Further comments below.
-//
 
 func LimitedCoexistence(tsi *meta.Snode, bck *meta.Bck, action string, otherBck ...*meta.Bck) (err error) {
+	if cmn.Features.IsSet(feat.IgnoreLimitedCoexistence) {
+		return
+	}
 	const sleep = time.Second
-	for i := time.Duration(0); i < waitLimitedCoex; i += sleep {
+	for i := time.Duration(0); i <= waitLimitedCoex; i += sleep {
 		if err = dreg.limco(tsi, bck, action, otherBck...); err == nil {
 			break
-		}
-		if action == apc.ActMoveBck {
-			return
 		}
 		time.Sleep(sleep)
 	}
@@ -712,14 +714,15 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 	}
 	var locked bool
 	for kind, d := range xact.Table {
-		// note that rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
+		// rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
+		// (by preempting)
 		conflict := (d.MassiveBck && admin) ||
 			(d.Rebalance && nd.MassiveBck) || (d.Resilver && nd.MassiveBck)
 		if !conflict {
 			continue
 		}
 
-		// the potential conflict becomes very real if the 'kind' is actually running
+		// potential conflict becomes very real if the 'kind' is actually running
 		if !locked {
 			r.entries.mtx.RLock()
 			locked = true

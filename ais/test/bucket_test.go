@@ -2136,6 +2136,10 @@ func TestRenameBucketTwice(t *testing.T) {
 	// Rename to first destination
 	tlog.Logf("rename %s => %s\n", srcBck, dstBck1)
 	xid, err := api.RenameBucket(baseParams, srcBck, dstBck1)
+	if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+		// can retry
+		xid, err = api.RenameBucket(baseParams, srcBck, dstBck1)
+	}
 	tassert.CheckFatal(t, err)
 
 	// Try to rename to first destination again - already in progress

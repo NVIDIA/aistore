@@ -70,13 +70,6 @@ type (
 		sessions    sync.Map
 		oldSessions sync.Map
 	}
-
-	ErrDuplicateTrname struct {
-		trname string
-	}
-	ErrUnknownTrname struct {
-		trname string
-	}
 )
 
 // interface guard
@@ -423,23 +416,6 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 		}
 	}
 	return
-}
-
-//
-// transport err-s
-//
-
-func (e *ErrDuplicateTrname) Error() string {
-	return fmt.Sprintf("duplicate transport endpoint %q", e.trname)
-}
-
-func IsErrDuplicateTrname(e error) bool {
-	_, ok := e.(*ErrDuplicateTrname)
-	return ok
-}
-
-func (e *ErrUnknownTrname) Error() string {
-	return fmt.Sprintf("unknown transport endpoint %q", e.trname)
 }
 
 //

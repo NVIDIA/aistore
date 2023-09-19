@@ -269,8 +269,7 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, new
 	if err == nil {
 		err = fs.ValidateNCopies(t.si.Name(), int(newCopies))
 	}
-	// NOTE: #791 "limited coexistence" here and elsewhere
-	// TODO: support "force" option to ignore "limited coexistence" conflicts (see t.tcb)
+	// (consider adding "force" option similar to CopyBckMsg.Force)
 	if err == nil {
 		err = xreg.LimitedCoexistence(t.si, bck, msg.Action)
 	}
