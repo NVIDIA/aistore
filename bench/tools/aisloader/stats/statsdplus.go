@@ -1,13 +1,12 @@
 // Package stats provides various structs for collecting stats
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/stats/statsd"
 )
 
@@ -81,8 +80,8 @@ func (ma *MetricAgg) Add(size int64, lat time.Duration) {
 	ma.cnt++
 	ma.latency += lat
 	ma.bytes += size
-	ma.minLatency = cos.MinDuration(ma.minLatency, lat)
-	ma.maxLatency = cos.MaxDuration(ma.maxLatency, lat)
+	ma.minLatency = min(ma.minLatency, lat)
+	ma.maxLatency = max(ma.maxLatency, lat)
 }
 
 func (ma *MetricAgg) AddPending(pending int64) {
@@ -131,8 +130,8 @@ func (mgs *MetricLatsAgg) Add(name string, lat time.Duration) {
 	} else {
 		val.cnt++
 		val.latency += lat
-		val.maxLatency = cos.MaxDuration(val.maxLatency, lat)
-		val.minLatency = cos.MinDuration(val.minLatency, lat)
+		val.maxLatency = max(val.maxLatency, lat)
+		val.minLatency = min(val.minLatency, lat)
 	}
 }
 
@@ -140,16 +139,16 @@ func (mcg *MetricConfigAgg) Add(lat, _, _ time.Duration) {
 	mcg.cnt++
 
 	mcg.latency += lat
-	mcg.minLatency = cos.MinDuration(mcg.minLatency, lat)
-	mcg.maxLatency = cos.MaxDuration(mcg.maxLatency, lat)
+	mcg.minLatency = min(mcg.minLatency, lat)
+	mcg.maxLatency = max(mcg.maxLatency, lat)
 
 	mcg.proxyLatency += lat
-	mcg.minProxyLatency = cos.MinDuration(mcg.minProxyLatency, lat)
-	mcg.maxProxyLatency = cos.MaxDuration(mcg.maxProxyLatency, lat)
+	mcg.minProxyLatency = min(mcg.minProxyLatency, lat)
+	mcg.maxProxyLatency = max(mcg.maxProxyLatency, lat)
 
 	mcg.proxyConnLatency += lat
-	mcg.minProxyConnLatency = cos.MinDuration(mcg.minProxyConnLatency, lat)
-	mcg.maxProxyConnLatency = cos.MaxDuration(mcg.maxProxyConnLatency, lat)
+	mcg.minProxyConnLatency = min(mcg.minProxyConnLatency, lat)
+	mcg.maxProxyConnLatency = max(mcg.maxProxyConnLatency, lat)
 }
 
 func (ma *MetricAgg) Send(c *statsd.Client, mType string, general []statsd.Metric, genAggCnt int64) {

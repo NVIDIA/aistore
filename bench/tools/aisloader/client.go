@@ -444,7 +444,7 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 	return objs, nil
 }
 
-func inits3Svc() {
+func initS3Svc() {
 	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
 	config.WithEndpoint(s3Endpoint)
 	opts := session.Options{

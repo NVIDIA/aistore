@@ -1,14 +1,12 @@
 // Package stats provides various structs for collecting stats
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
 import (
 	"math"
 	"time"
-
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // HTTPReq is used for keeping track of http requests stats including number of ops, latency, throughput, etc.
@@ -38,8 +36,8 @@ func (s *HTTPReq) Add(size int64, delta time.Duration) {
 	s.cnt++
 	s.bytes += size
 	s.latency += delta
-	s.minLatency = cos.MinDuration(s.minLatency, delta)
-	s.maxLatency = cos.MaxDuration(s.maxLatency, delta)
+	s.minLatency = min(s.minLatency, delta)
+	s.maxLatency = max(s.maxLatency, delta)
 }
 
 // AddErr increases the number of failed count by 1
@@ -106,6 +104,6 @@ func (s *HTTPReq) Aggregate(other HTTPReq) {
 	s.errs += other.errs
 	s.latency += other.latency
 
-	s.minLatency = cos.MinDuration(s.minLatency, other.minLatency)
-	s.maxLatency = cos.MaxDuration(s.maxLatency, other.maxLatency)
+	s.minLatency = min(s.minLatency, other.minLatency)
+	s.maxLatency = max(s.maxLatency, other.maxLatency)
 }

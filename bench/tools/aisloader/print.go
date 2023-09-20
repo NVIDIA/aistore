@@ -311,7 +311,7 @@ func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
 }
 
 // printRunParams show run parameters in json format
-func printRunParams(p params) {
+func printRunParams(p *params) {
 	var d = p.duration.String()
 	if p.duration.Val == time.Duration(math.MaxInt64) {
 		d = "-"

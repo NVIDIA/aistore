@@ -9,13 +9,16 @@ package aisloader
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -124,4 +127,102 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 		wo.end = time.Now()
 		results <- wo
 	}
+}
+
+///////////////
+// workOrder //
+///////////////
+
+func newPutWorkOrder() (*workOrder, error) {
+	objName, err := generatePutObjectName()
+	if err != nil {
+		return nil, err
+	}
+	size := runParams.minSize
+	if runParams.maxSize != runParams.minSize {
+		size = rnd.Int63n(runParams.maxSize+1-runParams.minSize) + runParams.minSize
+	}
+	putPending++
+	return &workOrder{
+		proxyURL:  runParams.proxyURL,
+		bck:       runParams.bck,
+		op:        opPut,
+		objName:   objName,
+		size:      size,
+		cksumType: runParams.cksumType,
+	}, nil
+}
+
+func generatePutObjectName() (string, error) {
+	cnt := objNameCnt.Inc()
+	if runParams.maxputs != 0 && cnt-1 == runParams.maxputs {
+		return "", fmt.Errorf("number of PUT objects reached maxputs limit (%d)", runParams.maxputs)
+	}
+
+	var (
+		comps [3]string
+		idx   = 0
+	)
+
+	if runParams.subDir != "" {
+		comps[idx] = runParams.subDir
+		idx++
+	}
+
+	if runParams.putShards != 0 {
+		comps[idx] = fmt.Sprintf("%05x", cnt%runParams.putShards)
+		idx++
+	}
+
+	if useRandomObjName {
+		comps[idx] = cos.RandStringWithSrc(rnd, randomObjNameLen)
+		idx++
+	} else {
+		objectNumber := (cnt - 1) << suffixIDMaskLen
+		objectNumber |= suffixID
+		comps[idx] = strconv.FormatUint(objectNumber, 16)
+		idx++
+	}
+
+	return path.Join(comps[0:idx]...), nil
+}
+
+func newGetWorkOrder() (*workOrder, error) {
+	if bucketObjsNames.Len() == 0 {
+		return nil, fmt.Errorf("no objects in bucket")
+	}
+
+	getPending++
+	return &workOrder{
+		proxyURL: runParams.proxyURL,
+		bck:      runParams.bck,
+		op:       opGet,
+		objName:  bucketObjsNames.ObjName(),
+	}, nil
+}
+
+func newGetConfigWorkOrder() *workOrder {
+	return &workOrder{
+		proxyURL: runParams.proxyURL,
+		op:       opConfig,
+	}
+}
+
+func (wo *workOrder) String() string {
+	var errstr, opName string
+	switch wo.op {
+	case opGet:
+		opName = http.MethodGet
+	case opPut:
+		opName = http.MethodPut
+	case opConfig:
+		opName = "CONFIG"
+	}
+
+	if wo.err != nil {
+		errstr = ", error: " + wo.err.Error()
+	}
+
+	return fmt.Sprintf("WO: %s/%s, start:%s end:%s, size: %d, type: %s%s",
+		wo.bck, wo.objName, wo.start.Format(time.StampMilli), wo.end.Format(time.StampMilli), wo.size, opName, errstr)
 }
