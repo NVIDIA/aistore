@@ -1030,29 +1030,10 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		if toUpdate.Net.HTTP.UseHTTPS != nil {
 			use := *toUpdate.Net.HTTP.UseHTTPS
 			if config.Net.HTTP.UseHTTPS != use {
-				//
-				// switch http => https or vice versa
-				//
 				if toUpdate.Proxy == nil {
 					toUpdate.Proxy = &cmn.ProxyConfToUpdate{}
 				}
-				toScheme, fromScheme := "http", "https"
-				if use {
-					toScheme, fromScheme = "https", "http"
-				}
-				if toUpdate.Proxy.PrimaryURL == nil {
-					s := strings.Replace(config.Proxy.PrimaryURL, fromScheme, toScheme, 1)
-					toUpdate.Proxy.PrimaryURL = api.String(s)
-				}
-				if toUpdate.Proxy.OriginalURL == nil {
-					s := strings.Replace(config.Proxy.OriginalURL, fromScheme, toScheme, 1)
-					toUpdate.Proxy.OriginalURL = api.String(s)
-				}
-				if toUpdate.Proxy.DiscoveryURL == nil {
-					s := strings.Replace(config.Proxy.DiscoveryURL, fromScheme, toScheme, 1)
-					toUpdate.Proxy.DiscoveryURL = api.String(s)
-				}
-				nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
+				switchHTTPS(toUpdate.Proxy, &config.Proxy, use)
 			}
 		}
 	}
@@ -1066,6 +1047,26 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 	if _, err := p.owner.config.modify(ctx); err != nil {
 		p.writeErr(w, r, err)
 	}
+}
+
+// switch http => https, or vice versa
+func switchHTTPS(toCfg *cmn.ProxyConfToUpdate, fromCfg *cmn.ProxyConf, use bool) {
+	toScheme, fromScheme := "http", "https"
+	if use {
+		toScheme, fromScheme = "https", "http"
+	}
+	f := func(to *string, from string) *string {
+		if to == nil && strings.HasPrefix(from, fromScheme) {
+			s := strings.Replace(from, fromScheme, toScheme, 1)
+			to = api.String(s)
+		}
+		return to
+	}
+	toCfg.PrimaryURL = f(toCfg.PrimaryURL, fromCfg.PrimaryURL)
+	toCfg.OriginalURL = f(toCfg.OriginalURL, fromCfg.OriginalURL)
+	toCfg.DiscoveryURL = f(toCfg.DiscoveryURL, fromCfg.DiscoveryURL)
+
+	nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
 }
 
 func whingeToUpdate(what, from, to string) {

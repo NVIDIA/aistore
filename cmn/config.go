@@ -1194,19 +1194,13 @@ func KeepaliveRetryDuration(c *Config) time.Duration {
 // NetConf //
 /////////////
 
-const (
-	tcpProto   = "tcp"
-	httpProto  = "http"
-	httpsProto = "https"
-)
-
 func (c *NetConf) Validate() (err error) {
-	if c.L4.Proto != tcpProto {
-		return fmt.Errorf("l4 proto %q is not recognized (expecting %s)", c.L4.Proto, tcpProto)
+	if c.L4.Proto != "tcp" {
+		return fmt.Errorf("l4 proto %q is not recognized (expecting %s)", c.L4.Proto, "tcp")
 	}
-	c.HTTP.Proto = httpProto // not validating: read-only, and can take only two values
+	c.HTTP.Proto = "http" // not validating: read-only, and can take only two values
 	if c.HTTP.UseHTTPS {
-		c.HTTP.Proto = httpsProto
+		c.HTTP.Proto = "https"
 	}
 	return nil
 }

@@ -26,8 +26,19 @@ $ AIS_ENDPOINT=https://localhost:8080 aisloader -bucket=ais://nnn -cleanup=false
 # step 7: optionally, reconfigure CLI to skip X.509 verification:
 $ ais config cli set cluster.skip_verify_crt true
 
-# step 8: and run CLI
+# step 8: run CLI
 $ AIS_ENDPOINT=https://127.0.0.1:8080 ais show cluster
+
+$ AIS_ENDPOINT=https://127.0.0.1:8080 ais archive gen-shards "ais://abc/shard-{001..999}.tar.lz4"
+Shards created: 999/999 [==============================================================] 100 %
+
+$ export AIS_ENDPOINT=https://localhost:8080
+
+$ ais ls ais://abc --summary
+NAME           PRESENT         OBJECTS         SIZE (apparent, objects, remote)        USAGE(%)
+ais://abc      yes             999 0           5.86MiB 5.20MiB 0B                      0%
+...
+...
 ```
 
 Goes without saying that `localhost` etc. are used here (and elsewhere) for purely illustrative purposes.

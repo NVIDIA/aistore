@@ -20,8 +20,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const httpProto = "http"
-
 type (
 	discoverServerHandler func(sv int64, lv int64) *httptest.Server
 

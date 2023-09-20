@@ -456,7 +456,7 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 		ch       = make(chan transportData, 2) // NOTE: Use 2 to avoid unbuffered channel, http handler can return.
 		id       = "p"
 		addrInfo = *meta.NewNetInfo(
-			httpProto,
+			"http",
 			"127.0.0.1",
 			"53538", // the lucky port
 		)

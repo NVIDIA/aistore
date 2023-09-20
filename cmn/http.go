@@ -64,16 +64,16 @@ type (
 )
 
 // PrependProtocol prepends protocol in URL in case it is missing.
-// By default it adds `http://` as prefix to the URL.
+// By default it adds `http://` to the URL.
 func PrependProtocol(url string, protocol ...string) string {
 	if url == "" || strings.Contains(url, "://") {
 		return url
 	}
-	proto := httpProto
+	proto := "http"
 	if len(protocol) == 1 {
 		proto = protocol[0]
 	}
-	return proto + "://" + url
+	return proto + "://" + url // rfc2396.txt
 }
 
 // (compare w/ htrange.contentRange)
