@@ -537,7 +537,7 @@ func (k *keepalive) do(smap *smapX, si *meta.Snode, config *cmn.Config) (stopped
 	if daemon.stopping.Load() {
 		return
 	}
-	fast = k.k.cluUptime(started) > cos.MaxDuration(k.interval<<2, config.Timeout.Startup.D()>>1)
+	fast = k.k.cluUptime(started) > max(k.interval<<2, config.Timeout.Startup.D()>>1)
 	cpid, status, err := k.k.sendKalive(smap, timeout, fast)
 	if err == nil {
 		now := mono.NanoTime()

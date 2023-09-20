@@ -102,7 +102,7 @@ func (r *MMSA) hkcb() time.Duration {
 		depth = minDepth
 		mingc = sizeToGC / 4
 	case PressureHigh:
-		tmp := cos.MaxI64(r.optDepth.Load()/2, optDepth/4)
+		tmp := max(r.optDepth.Load()/2, optDepth/4)
 		r.optDepth.Store(tmp)
 		depth = int(tmp)
 		mingc = sizeToGC / 2

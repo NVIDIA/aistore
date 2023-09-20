@@ -1,6 +1,6 @@
 // Package dsort provides APIs for distributed archive file shuffling.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -44,7 +44,7 @@ func calcSemaLimit(acquire, release func()) int {
 
 	res := int32(0)
 	for c := range ch {
-		res = cos.MaxI32(res, c)
+		res = max(res, c)
 	}
 
 	return int(res)

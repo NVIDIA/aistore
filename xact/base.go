@@ -204,8 +204,8 @@ func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 		case cluster.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
 			idle += sleep
 		case cluster.QuiActive:
-			idle = 0                              // reset
-			dur = cos.MinDuration(dur+sleep, 2*d) // bump up to 2x initial
+			idle = 0                  // reset
+			dur = min(dur+sleep, 2*d) // bump up to 2x initial
 		case cluster.QuiActiveRet:
 			return cluster.QuiActiveRet
 		case cluster.QuiDone:

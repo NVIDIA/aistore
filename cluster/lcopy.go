@@ -29,7 +29,7 @@ func (lom *LOM) whingeCopy() (yes bool) {
 }
 
 func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
-func (lom *LOM) NumCopies() int  { return cos.Max(len(lom.md.copies), 1) } // TODO: compare with `gotCopies` and unify
+func (lom *LOM) NumCopies() int  { return max(len(lom.md.copies), 1) } // TODO: compare with `gotCopies` and unify
 
 // GetCopies returns all copies (NOTE that copies include self)
 // NOTE: caller must take a lock

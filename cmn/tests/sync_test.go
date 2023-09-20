@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -174,7 +174,7 @@ func TestDynSemaphore(t *testing.T) {
 
 	res := int32(0)
 	for c := range ch {
-		res = cos.MaxI32(res, c)
+		res = max(res, c)
 	}
 
 	if int(res) != limit {

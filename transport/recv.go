@@ -229,7 +229,7 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 			// grow
 			nlog.Warningf("%s: header length %d exceeds the current buffer %d", loghdr, hlen, cap(it.hbuf))
 			mm.Free(it.hbuf)
-			it.hbuf, _ = mm.AllocSize(cos.MinI64(int64(hlen)<<1, maxSizeHeader))
+			it.hbuf, _ = mm.AllocSize(min(int64(hlen)<<1, maxSizeHeader))
 		}
 
 		it.stats.addOff(int64(hlen + sizeProtoHdr))

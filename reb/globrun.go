@@ -287,8 +287,8 @@ func (reb *Reb) acquire(rargs *rebArgs, logHdr string) (newerRMD, alreadyRunning
 	var (
 		total    time.Duration
 		sleep    = rargs.config.Timeout.CplaneOperation.D()
-		maxTotal = cos.MaxDuration(20*sleep, 10*time.Second) // time to abort prev. streams
-		maxwt    = cos.MaxDuration(rargs.config.Rebalance.DestRetryTime.D(), 2*maxTotal)
+		maxTotal = max(20*sleep, 10*time.Second) // time to abort prev. streams
+		maxwt    = max(rargs.config.Rebalance.DestRetryTime.D(), 2*maxTotal)
 		errcnt   int
 		acquired bool
 	)
@@ -534,7 +534,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 		xreb   = reb.xctn()
 	)
 	maxwt += time.Duration(int64(time.Minute) * int64(rargs.smap.CountTargets()/10))
-	maxwt = cos.MinDuration(maxwt, rargs.config.Rebalance.DestRetryTime.D()*2)
+	maxwt = min(maxwt, rargs.config.Rebalance.DestRetryTime.D()*2)
 	reb.changeStage(rebStageWaitAck)
 
 	for {

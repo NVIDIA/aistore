@@ -305,8 +305,8 @@ func (ios *ios) doRefresh(nowTs int64) *cache {
 		expireTime = int64(config.Disk.IostatTimeShort)
 	} else { // use the maximum utilization to determine expiration time
 		var (
-			lowm      = cos.MaxI64(config.Disk.DiskUtilLowWM, 1)
-			hiwm      = cos.MinI64(config.Disk.DiskUtilHighWM, 100)
+			lowm      = max(config.Disk.DiskUtilLowWM, 1)
+			hiwm      = min(config.Disk.DiskUtilHighWM, 100)
 			delta     = int64(config.Disk.IostatTimeLong - config.Disk.IostatTimeShort)
 			utilRatio = cos.RatioPct(hiwm, lowm, maxUtil)
 		)
@@ -422,7 +422,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 				break
 			}
 			ncache.mpathUtilRO.Set(mpath, u)
-			maxUtil = cos.MaxI64(maxUtil, u)
+			maxUtil = max(maxUtil, u)
 		}
 		return
 	}
@@ -436,7 +436,7 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		u := cos.DivRound(ncache.mpathUtil[mpath], num)
 		ncache.mpathUtil[mpath] = u
 		ncache.mpathUtilRO.Set(mpath, u)
-		maxUtil = cos.MaxI64(maxUtil, u)
+		maxUtil = max(maxUtil, u)
 	}
 	return
 }

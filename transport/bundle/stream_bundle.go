@@ -352,7 +352,7 @@ func (sb *Streams) Resync() {
 	obundle := sb.get()
 	l := len(added) - len(removed)
 	if obundle != nil {
-		l = cos.Max(len(obundle), len(obundle)+l)
+		l = max(len(obundle), len(obundle)+l)
 	}
 	nbundle := make(map[string]*robin, l)
 	for id, robin := range obundle {
@@ -400,7 +400,7 @@ func mdiff(oldMaps, newMaps []meta.NodeMap) (added, removed meta.NodeMap) {
 		for id, si := range mnew {
 			if _, ok := mold[id]; !ok {
 				if added == nil {
-					added = make(meta.NodeMap, cos.Max(len(mnew)-len(mold), 1))
+					added = make(meta.NodeMap, max(len(mnew)-len(mold), 1))
 				}
 				added[id] = si
 			}

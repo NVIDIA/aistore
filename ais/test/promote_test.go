@@ -119,7 +119,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 		}
 
 		// also, reducing the number of files to promote
-		test.num = cos.Min(test.num, 50)
+		test.num = min(test.num, 50)
 	}
 
 	var (
@@ -228,7 +228,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	}
 	tlog.Logln("Running test case _not_ to overwrite destination...")
 	l := len(list.Entries)
-	numDel := cos.Max(l/100, 2)
+	numDel := max(l/100, 2)
 	idx := rand.Intn(l)
 	if idx+numDel >= l {
 		if numDel >= l {

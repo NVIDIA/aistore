@@ -337,7 +337,7 @@ func (s *coreStats) update(nv cos.NamedVal64) {
 // log + StatsD (Prometheus is done separately via `Collect`)
 func (s *coreStats) copyT(out copyTracker, diskLowUtil ...int64) bool {
 	idle := true
-	intl := cos.MaxI64(int64(s.statsTime.Seconds()), 1)
+	intl := max(int64(s.statsTime.Seconds()), 1)
 	s.sgl.Reset()
 	for name, v := range s.Tracker {
 		switch v.kind {

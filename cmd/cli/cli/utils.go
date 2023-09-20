@@ -166,7 +166,7 @@ func _refreshRate(c *cli.Context) time.Duration {
 	refreshRate := refreshRateDefault
 	if flagIsSet(c, refreshFlag) {
 		duration := parseDurationFlag(c, refreshFlag)
-		refreshRate = cos.MaxDuration(duration, refreshRateMinDur)
+		refreshRate = max(duration, refreshRateMinDur)
 	}
 	return refreshRate // aka sleep
 }
@@ -478,7 +478,7 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 	}
 	minLen := math.MaxInt64
 	for _, a := range args {
-		minLen = cos.Min(minLen, len(a))
+		minLen = min(minLen, len(a))
 	}
 
 	i := 0

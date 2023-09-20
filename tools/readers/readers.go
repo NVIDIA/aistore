@@ -123,7 +123,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 	}
 
 	want := int64(len(buf))
-	n := cos.MinI64(want, available)
+	n := min(want, available)
 	actual, err := r.rnd.Read(buf[:n])
 	if err != nil {
 		return 0, nil
@@ -192,7 +192,7 @@ func (r *randReader) Cksum() *cos.Cksum {
 }
 
 func (rr *rrLimited) Read(p []byte) (n int, err error) {
-	rem := int(cos.MinI64(rr.size-rr.off, int64(len(p))))
+	rem := int(min(rr.size-rr.off, int64(len(p))))
 	n, _ = rr.random.Read(p[:rem]) // never fails
 	rr.off += int64(n)
 	if rem < len(p) {
@@ -310,10 +310,10 @@ func (r *bytesReader) Open() (cos.ReadOpenCloser, error) {
 
 func newTarReader(size int64, cksumType string) (r Reader, err error) {
 	var (
-		singleFileSize = cos.MinI64(size, int64(cos.KiB))
+		singleFileSize = min(size, int64(cos.KiB))
 		buff           = bytes.NewBuffer(nil)
 	)
-	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, cos.Max(int(size/singleFileSize), 1),
+	err = tarch.CreateArchCustomFilesToW(buff, tar.FormatUnknown, archive.ExtTar, max(int(size/singleFileSize), 1),
 		int(singleFileSize), shard.ContentKeyInt, ".cls", true)
 	if err != nil {
 		return nil, err
@@ -376,7 +376,7 @@ func copyRandWithHash(w io.Writer, size int64, cksumType string, rnd *rand.Rand)
 		cksum = cos.NewCksumHash(cksumType)
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
-		n := int(cos.MinI64(blkSize, rem))
+		n := int(min(blkSize, rem))
 		rnd.Read(buf[:n])
 		m, err := w.Write(buf[:n])
 		if err != nil {

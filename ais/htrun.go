@@ -1374,7 +1374,7 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 	if c.checkAll {
 		wg = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(nodemap))
 	} else {
-		count = cos.Min(meta.MaxBcastParallel(), maxVerConfirmations<<1)
+		count = min(meta.MaxBcastParallel(), maxVerConfirmations<<1)
 		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
 	}
 	for sid, si := range nodemap {
@@ -1741,7 +1741,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	for _, u := range contactURLs {
 		addCandidate(u)
 	}
-	sleep := cos.MaxDuration(2*time.Second, cmn.Timeout.MaxKeepalive())
+	sleep := max(2*time.Second, cmn.Timeout.MaxKeepalive())
 	for i := 0; i < 4; i++ {
 		for _, candidateURL := range candidates {
 			if daemon.stopping.Load() {
@@ -1887,7 +1887,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 		query                    = url.Values{apc.QparamAskPrimary: []string{"true"}}
 	)
 	for {
-		sleep = cos.MinDuration(cmn.Timeout.MaxKeepalive(), sleep+time.Second)
+		sleep = min(cmn.Timeout.MaxKeepalive(), sleep+time.Second)
 		time.Sleep(sleep)
 		total += sleep
 		rediscover += sleep

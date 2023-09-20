@@ -644,7 +644,7 @@ func TestLRU(t *testing.T) {
 		filesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.n")
 		bytesEvicted[k] = tools.GetNamedStatsVal(v, "lru.evict.size")
 		for _, c := range v.TargetCDF.Mountpaths {
-			usedPct = cos.MinI32(usedPct, c.PctUsed)
+			usedPct = min(usedPct, c.PctUsed)
 		}
 	}
 

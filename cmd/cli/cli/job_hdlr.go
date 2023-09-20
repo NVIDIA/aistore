@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -537,7 +536,7 @@ func actionDownloaded(c *cli.Context, cnt int) {
 func bgDownload(c *cli.Context, id string) (err error) {
 	var (
 		resp           *dload.StatusResp
-		startedTimeout = cos.MaxDuration(dloadStartedTime, refreshRateMinDur*2)
+		startedTimeout = max(dloadStartedTime, refreshRateMinDur*2)
 	)
 
 	// In a non-interactive mode, allow downloader to start before checking

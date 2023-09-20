@@ -1083,7 +1083,7 @@ func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BucketPropsToU
 	}
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
 		if nprops.Mirror.Copies == 1 {
-			nprops.Mirror.Copies = cos.MaxI64(cfg.Mirror.Copies, 2)
+			nprops.Mirror.Copies = max(cfg.Mirror.Copies, 2)
 		}
 	} else if nprops.Mirror.Copies == 1 {
 		nprops.Mirror.Enabled = false

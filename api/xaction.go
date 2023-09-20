@@ -286,7 +286,7 @@ func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, boo
 			return
 		}
 		time.Sleep(sleep)
-		sleep = cos.MinDuration(maxSleep, sleep+sleep/2)
+		sleep = min(maxSleep, sleep+sleep/2)
 
 		if elapsed = mono.Since(begin); elapsed >= total {
 			err = fmt.Errorf("api.wait: timed out (%v) waiting for %s", total, args.String())
@@ -303,5 +303,5 @@ func _times(args xact.ArgsMsg) (time.Duration, time.Duration) {
 	case args.Timeout < 0:
 		total = xact.DefWaitTimeLong
 	}
-	return total, cos.MinDuration(xact.MaxProbingFreq, cos.ProbingFrequency(total))
+	return total, min(xact.MaxProbingFreq, cos.ProbingFrequency(total))
 }

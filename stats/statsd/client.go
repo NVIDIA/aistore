@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
@@ -137,7 +136,7 @@ func (c *Client) Send(bucket string, aggCnt int64, metrics ...Metric) {
 		c.appendM(m, sgl, bucket, aggCnt)
 	}
 	l := sgl.Len()
-	msize = cos.MaxI64(msize, l)
+	msize = max(msize, l)
 	bytes := sgl.Bytes()
 	c.write(bytes, int(l))
 }

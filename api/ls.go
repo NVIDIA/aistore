@@ -204,7 +204,7 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult
 			lsmsg.ContinuationToken = ""
 			break
 		}
-		toRead = uint(cos.Max(int(toRead)-len(page.Entries), 0))
+		toRead = uint(max(int(toRead)-len(page.Entries), 0))
 		debug.Assert(cos.IsValidUUID(page.UUID))
 		lsmsg.UUID = page.UUID
 		lsmsg.ContinuationToken = page.ContinuationToken

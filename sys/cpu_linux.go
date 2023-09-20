@@ -1,6 +1,6 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package sys
 
@@ -61,7 +61,7 @@ func containerNumCPU() (int, error) {
 	}
 
 	approx := (quota + period - 1) / period
-	return int(cos.MaxU64(approx, 1)), nil
+	return int(max(approx, 1)), nil
 }
 
 // LoadAverage returns the system load average

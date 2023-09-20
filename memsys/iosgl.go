@@ -134,7 +134,7 @@ func (z *SGL) WriteTo(dst io.Writer) (n int64, err error) {
 		toWrite = z.woff
 	)
 	for _, buf := range z.sgl {
-		l := cos.MinI64(toWrite, int64(len(buf)))
+		l := min(toWrite, int64(len(buf)))
 		if l == 0 {
 			break
 		}
@@ -156,7 +156,7 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 	}
 	idx, off, poff := z.woff/z.slab.Size(), z.woff%z.slab.Size(), 0
 	for wlen > 0 {
-		size := cos.MinI64(z.slab.Size()-off, int64(wlen))
+		size := min(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
 		src := p[poff : poff+int(size)]
 		copy(buf[off:], src)
@@ -211,14 +211,14 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, roff int64, err error
 	var (
 		idx, off = int(roff / z.slab.Size()), roff % z.slab.Size()
 		buf      = z.sgl[idx]
-		size     = cos.MinI64(int64(len(b)), z.woff-roff)
+		size     = min(int64(len(b)), z.woff-roff)
 	)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = cos.MinI64(int64(len(b)-n), z.woff-roff)
+		size = min(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
 		roff += int64(n1)
 		n += n1

@@ -331,10 +331,10 @@ func (f *SectionHandle) Read(buf []byte) (n int, err error) {
 		if f.padding == 0 || n == len(buf) || (err != nil && err != io.EOF) {
 			return n, err
 		}
-		fromPad = MinI64(int64(len(buf)-n), f.padding)
+		fromPad = min(int64(len(buf)-n), f.padding)
 	} else {
 		// slice is already read, keep reading padding bytes
-		fromPad = MinI64(int64(len(buf)), f.padding-f.padOffset)
+		fromPad = min(int64(len(buf)), f.padding-f.padOffset)
 	}
 
 	// either buffer is full or end of padding is reached. Nothing to read

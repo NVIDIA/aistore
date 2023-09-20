@@ -605,7 +605,7 @@ retry:
 	}
 	if errors.Is(err, syscall.EADDRINUSE) && !retried {
 		nlog.Warningf("%q - shutting-down-and-restarting or else? will retry once...", err)
-		time.Sleep(cos.MaxDuration(5*time.Second, config.Timeout.MaxKeepalive.D()))
+		time.Sleep(max(5*time.Second, config.Timeout.MaxKeepalive.D()))
 		retried = true
 		goto retry
 	}

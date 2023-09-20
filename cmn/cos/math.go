@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -11,70 +11,6 @@ import (
 )
 
 type Bits uint8
-
-// MinU64 returns min value of a and b for uint64 types
-func MinU64(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// MaxU64 returns max value of a and b for uint64 types
-func MaxU64(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// MinI64 returns min value of a and b for int64 types
-func MinI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// MaxI64 returns max value of a and b for int64 types
-func MaxI64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// MinI32 returns min value of a and b for int32 types
-func MinI32(a, b int32) int32 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// MaxI32 returns max value of a and b for int32 types
-func MaxI32(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// MinDuration returns min value of a and b time.Duration types
-func MinDuration(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// MaxDuration returns min value of a and b time.Duration types
-func MaxDuration(a, b time.Duration) time.Duration {
-	if a >= b {
-		return a
-	}
-	return b
-}
 
 func MinTime(a, b time.Time) time.Time {
 	if a.Before(b) {
@@ -98,13 +34,6 @@ func Min(xs ...int) int {
 	return Min(xs[0], Min(xs[1:]...))
 }
 
-func MinUint(a, b uint) uint {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // Max returns max value from given ints.
 func Max(xs ...int) int {
 	debug.Assert(len(xs) > 0)
@@ -118,20 +47,6 @@ func Max(xs ...int) int {
 		return xs[1]
 	}
 	return Max(xs[0], Max(xs[1:]...))
-}
-
-func MaxUint(a, b uint) uint {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func MinF64(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func Abs(a int) int {

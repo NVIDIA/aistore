@@ -558,7 +558,7 @@ func (p *proxy) fastKalive(w http.ResponseWriter, r *http.Request, smap *smapX, 
 	if !fast {
 		now := mono.NanoTime()
 		cfg := config.Keepalive
-		min := cos.MaxDuration(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
+		min := max(cfg.Target.Interval.D(), cfg.Proxy.Interval.D()) << 1
 		if fast = p.keepalive.cluUptime(now) > min; fast {
 			p.readyToFastKalive.Store(true) // not resetting upon a change of primary
 		}

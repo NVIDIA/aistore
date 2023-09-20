@@ -393,7 +393,7 @@ func TestETLInlineMD5SingleObj(t *testing.T) {
 
 	exp, got := reader.Cksum().Val(), string(outObject.Bytes())
 	tassert.Errorf(t, exp == got, "expected transformed object to be md5 checksum %s, got %s", exp,
-		got[:cos.Min(len(got), 16)])
+		got[:min(len(got), 16)])
 }
 
 func TestETLAnyToAnyBucket(t *testing.T) {

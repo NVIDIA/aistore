@@ -699,7 +699,7 @@ func calcMaxMemoryUsage(maxUsage cos.ParsedQuantity, mem *sys.MemStat) uint64 {
 	case cos.QuantityPercent:
 		return maxUsage.Value * (mem.Total / 100)
 	case cos.QuantityBytes:
-		return cos.MinU64(maxUsage.Value, mem.Total)
+		return min(maxUsage.Value, mem.Total)
 	default:
 		debug.Assertf(false, "mem usage type (%s) is not recognized.. something went wrong", maxUsage.Type)
 		return 0

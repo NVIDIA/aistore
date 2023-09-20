@@ -60,7 +60,7 @@ retry:
 	if orig != "" && !retried {
 		runtime.Gosched()
 		nlog.Errorf("%s: checking on the x-%s[%s] status - retrying once...", p, apc.ActSummaryBck, msg.UUID)
-		time.Sleep(cos.MaxDuration(cmn.Timeout.CplaneOperation(), time.Second))
+		time.Sleep(max(cmn.Timeout.CplaneOperation(), time.Second))
 		retried = true
 		goto retry
 	}

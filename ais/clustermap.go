@@ -539,7 +539,7 @@ func (r *smapOwner) persist(newSmap *smapX) error {
 		wto = newSmap._sgl
 	} else {
 		sgl := newSmap._encode(r.immSize)
-		r.immSize = cos.MaxI64(r.immSize, sgl.Len())
+		r.immSize = max(r.immSize, sgl.Len())
 		defer sgl.Free()
 		wto = sgl
 	}
@@ -554,7 +554,7 @@ func (r *smapOwner) prepost(ctx *smapModifier) (clone *smapX, err error) {
 		return
 	}
 	clone._sgl = clone._encode(r.immSize)
-	r.immSize = cos.MaxI64(r.immSize, clone._sgl.Len())
+	r.immSize = max(r.immSize, clone._sgl.Len())
 	if err := r.persist(clone); err != nil {
 		clone._free()
 		return nil, cmn.NewErrFailedTo(nil, "persist", clone, err)

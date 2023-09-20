@@ -11,7 +11,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 const (
@@ -252,9 +251,9 @@ func (j *JobInfo) Aggregate(other *JobInfo) {
 	j.StartedTime = startTime(j.StartedTime, other.StartedTime)
 	j.FinishTime = stopTime(j.FinishTime, other.FinishTime)
 
-	j.ExtractedDuration = cos.MaxDuration(j.ExtractedDuration, other.ExtractedDuration)
-	j.SortingDuration = cos.MaxDuration(j.SortingDuration, other.SortingDuration)
-	j.CreationDuration = cos.MaxDuration(j.CreationDuration, other.CreationDuration)
+	j.ExtractedDuration = max(j.ExtractedDuration, other.ExtractedDuration)
+	j.SortingDuration = max(j.SortingDuration, other.SortingDuration)
+	j.CreationDuration = max(j.CreationDuration, other.CreationDuration)
 
 	j.Aborted = j.Aborted || other.Aborted
 	j.Archived = j.Archived && other.Archived
@@ -301,7 +300,7 @@ func (ts *TimeStats) updateTime(newTime time.Duration) {
 	t := newTime.Nanoseconds() / int64(time.Millisecond)
 	ts.Total += t
 	ts.Count++
-	ts.MinMs = cos.MinI64(ts.MinMs, t)
-	ts.MaxMs = cos.MaxI64(ts.MaxMs, t)
+	ts.MinMs = min(ts.MinMs, t)
+	ts.MaxMs = max(ts.MaxMs, t)
 	ts.AvgMs = ts.Total / ts.Count
 }

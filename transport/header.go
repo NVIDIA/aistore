@@ -252,7 +252,7 @@ func (msg *Msg) String() string {
 	if msg.isIdleTick() {
 		return "smsg-tick"
 	}
-	l := cos.Min(len(msg.Body), 16)
+	l := min(len(msg.Body), 16)
 	return fmt.Sprintf("smsg-[%s](len=%d)", msg.Body[:l], l)
 }
 

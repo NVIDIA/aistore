@@ -840,7 +840,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 		if rem == 0 {
 			return n, io.EOF
 		}
-		l64 := cos.MinI64(rem, int64(len(p)-n))
+		l64 := min(rem, int64(len(p)-n))
 		if l64 == 0 {
 			return
 		}

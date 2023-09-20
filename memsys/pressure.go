@@ -1,14 +1,13 @@
 // Package memsys provides memory management and slab/SGL allocation with io.Reader and io.Writer interfaces
 // on top of scatter-gather lists of reusable buffers.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package memsys
 
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -48,9 +47,9 @@ func (r *MMSA) updSwap(mem *sys.MemStat) {
 	var ncrit int32
 	swapping, crit := mem.SwapUsed > r.swap.size.Load(), r.swap.crit.Load()
 	if swapping {
-		ncrit = cos.MinI32(swappingMax, crit+1)
+		ncrit = min(swappingMax, crit+1)
 	} else {
-		ncrit = cos.MaxI32(0, crit-1)
+		ncrit = max(0, crit-1)
 	}
 	r.swap.crit.Store(ncrit)
 	r.swap.size.Store(mem.SwapUsed)

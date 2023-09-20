@@ -163,7 +163,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	versioning = bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 	if versioning {
-		msg.PageSize = cos.MinUint(versionedPageSize, msg.PageSize)
+		msg.PageSize = min(versionedPageSize, msg.PageSize)
 	}
 	params.MaxKeys = aws.Int64(int64(msg.PageSize))
 

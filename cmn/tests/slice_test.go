@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -42,7 +41,7 @@ func TestDiscardFirstEntries(t *testing.T) {
 		t.Logf("testcase %d/%d", len(tc.entries), tc.size)
 		original := append(cmn.LsoEntries(nil), tc.entries...)
 		entries := discardFirstEntries(tc.entries, tc.size)
-		expSize := cos.Max(0, len(original)-tc.size)
+		expSize := max(0, len(original)-tc.size)
 		tassert.Errorf(t, len(entries) == expSize, "incorrect size. expected %d; got %d", expSize, len(entries))
 		if len(entries) > 0 {
 			tassert.Errorf(t, entries[0] == original[tc.size],
@@ -59,7 +58,7 @@ func discardFirstEntries(entries cmn.LsoEntries, n int) cmn.LsoEntries {
 		return entries[:0]
 	}
 
-	toDiscard := cos.Min(len(entries), n)
+	toDiscard := min(len(entries), n)
 
 	copy(entries, entries[toDiscard:])
 	for i := len(entries) - toDiscard; i < len(entries); i++ {

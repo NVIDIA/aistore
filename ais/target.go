@@ -517,7 +517,7 @@ func (red *redial) acked() bool {
 	}
 	for _, addr := range addrs {
 		for elapsed := time.Duration(0); elapsed < red.totalTout; elapsed += sleep {
-			_, err = net.DialTimeout("tcp4", addr, cos.MaxDuration(2*time.Second, red.dialTout))
+			_, err = net.DialTimeout("tcp4", addr, max(2*time.Second, red.dialTout))
 			if err != nil {
 				break
 			}

@@ -74,7 +74,7 @@ func (c *lstcx) do() (string, error) {
 	if c.amsg.Action == apc.ActETLBck {
 		c.altmsg.Action = apc.ActETLObjects
 	}
-	cnt := cos.Min(len(names), 10)
+	cnt := min(len(names), 10)
 	nlog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
 
 	c.tcomsg.TxnUUID, err = p.tcobjs(c.bckFrom, c.bckTo, &c.altmsg, c.tcbmsg.DryRun)

@@ -1110,7 +1110,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 		}
 		cs.TotalUsed += c.Used
 		cs.TotalAvail += c.Avail
-		cs.PctMax = cos.MaxI32(cs.PctMax, c.PctUsed)
+		cs.PctMax = max(cs.PctMax, c.PctUsed)
 		cs.PctAvg += c.PctUsed
 		if tcdf == nil {
 			continue
@@ -1189,12 +1189,12 @@ func (cs *CapStatus) String() (str string) {
 func (cs *CapStatus) _next(config *cmn.Config) time.Duration {
 	var (
 		util = int64(cs.PctMax)
-		umin = cos.MinI64(config.Space.HighWM-10, config.Space.LowWM)
+		umin = min(config.Space.HighWM-10, config.Space.LowWM)
 		umax = config.Space.OOS
 		tmax = config.LRU.CapacityUpdTime.D()
 		tmin = config.Periodic.StatsTime.D()
 	)
-	umin = cos.MinI64(umin, config.Space.CleanupWM)
+	umin = min(umin, config.Space.CleanupWM)
 	if util <= umin {
 		return tmax
 	}

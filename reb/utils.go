@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -72,7 +72,7 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 		maxwt  = config.Rebalance.DestRetryTime.D()
 		curwt  time.Duration
 	)
-	maxwt = cos.MinDuration(maxwt, config.Timeout.SendFile.D()/3)
+	maxwt = min(maxwt, config.Timeout.SendFile.D()/3)
 	nlog.Warningf("%s: waiting to start...", reb.t)
 	time.Sleep(sleep)
 	for curwt < maxwt {

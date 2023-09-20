@@ -53,7 +53,7 @@ type (
 // NOTE: override `Base.IsIdle`
 func (r *DemandBase) IsIdle() bool {
 	last := r.idle.last.Load()
-	return last != 0 && mono.Since(last) >= cos.MaxDuration(cmn.Timeout.MaxKeepalive(), 2*time.Second)
+	return last != 0 && mono.Since(last) >= max(cmn.Timeout.MaxKeepalive(), 2*time.Second)
 }
 
 func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idle time.Duration) {

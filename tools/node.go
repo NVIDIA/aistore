@@ -276,7 +276,7 @@ func WaitForClusterState(proxyURL, reason string, origVer int64, pcnt, tcnt int,
 		if time.Now().After(deadline) {
 			break
 		}
-		time.Sleep(cos.MinDuration(time.Second*time.Duration(iter), maxSleep))
+		time.Sleep(min(time.Second*time.Duration(iter), maxSleep))
 	}
 
 	return nil, ErrTimedOutStabilize

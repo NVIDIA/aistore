@@ -137,7 +137,7 @@ func (co *configOwner) runPre(ctx *configModifier) (clone *globalConfig, err err
 	clone.Version++
 	clone.LastUpdated = time.Now().String()
 	clone._sgl = clone._encode(co.immSize)
-	co.immSize = cos.MaxI64(co.immSize, clone._sgl.Len())
+	co.immSize = max(co.immSize, clone._sgl.Len())
 	if err := co.persist(clone, nil); err != nil {
 		clone._sgl.Free()
 		clone._sgl = nil
@@ -166,7 +166,7 @@ func (co *configOwner) persist(clone *globalConfig, payload msPayload) error {
 		wto = clone._sgl
 	} else {
 		sgl := clone._encode(co.immSize)
-		co.immSize = cos.MaxI64(co.immSize, sgl.Len())
+		co.immSize = max(co.immSize, sgl.Len())
 		defer sgl.Free()
 		wto = sgl
 	}

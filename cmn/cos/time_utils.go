@@ -59,9 +59,9 @@ func IsTimeZero(t time.Time) bool        { return t.IsZero() || t.UTC().Unix() =
 
 // wait duration => probing frequency
 func ProbingFrequency(dur time.Duration) time.Duration {
-	sleep := MinDuration(dur>>3, time.Second)
-	sleep = MaxDuration(dur>>6, sleep)
-	return MaxDuration(sleep, 100*time.Millisecond)
+	sleep := min(dur>>3, time.Second)
+	sleep = max(dur>>6, sleep)
+	return max(sleep, 100*time.Millisecond)
 }
 
 // FormatMilli returns a duration formatted as milliseconds. For values bigger

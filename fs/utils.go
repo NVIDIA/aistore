@@ -52,7 +52,7 @@ func IsDirEmpty(dir string) (names []string, empty bool, err error) {
 			subDir := filepath.Join(dir, sub)
 			if finfo, erc := os.Stat(subDir); erc == nil {
 				if !finfo.IsDir() {
-					return names[:cos.Min(8, len(names))], false, nil
+					return names[:min(8, len(names))], false, nil
 				}
 				dirs = append(dirs, subDir)
 			}

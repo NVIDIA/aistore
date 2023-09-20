@@ -121,7 +121,7 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 			ordered: true,
 		}
 		bckTo     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		numToCopy = cos.Min(m.num/2, 13)
+		numToCopy = min(m.num/2, 13)
 		fmtRange  = "%s{%d..%d}"
 		// test randomization
 		maybe    = mono.NanoTime()&0x1 != 0

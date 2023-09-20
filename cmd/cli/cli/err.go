@@ -155,7 +155,7 @@ func didYouMeanMessage(c *cli.Context, cmd string, similar []string, closestComm
 		sbWriteFlags(c, sb)
 		sb.WriteString("'?")
 		sbWriteSearch(sb, cmd, true)
-	case distance < cos.Max(incorrectCmdDistance, len(cmd)/2):
+	case distance < max(incorrectCmdDistance, len(cmd)/2):
 		sb.WriteString(prefix)
 		sb.WriteString(c.App.Name) // ditto
 		sb.WriteString(" " + closestCommand)

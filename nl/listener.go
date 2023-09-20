@@ -1,6 +1,6 @@
 // Package notifications provides interfaces for AIStore notifications
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package nl
 
@@ -271,7 +271,7 @@ func (nsv StatusVec) String() (s string) {
 	for _, ns := range nsv {
 		s += ns.String() + ", "
 	}
-	return s[:cos.Max(0, len(s)-2)]
+	return s[:max(0, len(s)-2)]
 }
 
 ///////////////

@@ -10,7 +10,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 // TODO: consider a separate pool for ais
@@ -31,7 +30,7 @@ func allocLsoEntries() (entries cmn.LsoEntries) {
 
 func freeLsoEntries(entries cmn.LsoEntries) {
 	// gc
-	l := cos.Min(len(entries), maxEntries)
+	l := min(len(entries), maxEntries)
 	entries = entries[:cap(entries)]
 	for i := l; i < cap(entries); i++ {
 		entries[i] = nil

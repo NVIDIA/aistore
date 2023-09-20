@@ -684,7 +684,7 @@ func (payload msPayload) marshal(mm *memsys.MMSA) (sgl *memsys.SGL) {
 	sgl = mm.NewSGL(msimmSize)
 	err := jsp.Encode(sgl, payload, msjspOpts)
 	cos.AssertNoErr(err)
-	msimmSize = cos.MaxI64(msimmSize, sgl.Len())
+	msimmSize = max(msimmSize, sgl.Len())
 	return sgl
 }
 

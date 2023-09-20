@@ -127,7 +127,7 @@ func PersistOnMpaths(fname, backupName string, meta jsp.Opts, atMost int, b []by
 		}
 	}
 	debug.Func(func() {
-		expected := cos.Min(atMost, availCnt)
+		expected := min(atMost, availCnt)
 		debug.Assertf(cnt == expected, "expected %q to be persisted on %d mountpaths got %d instead",
 			fname, expected, cnt)
 	})

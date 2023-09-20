@@ -90,7 +90,7 @@ func (e *etlMD) marshal() []byte {
 	sgl := memsys.PageMM().NewSGL(etlMDImmSize)
 	err := jsp.Encode(sgl, e, jsp.CCSign(cmn.MetaverEtlMD))
 	debug.AssertNoErr(err)
-	etlMDImmSize = cos.MaxI64(etlMDImmSize, sgl.Len())
+	etlMDImmSize = max(etlMDImmSize, sgl.Len())
 	b := sgl.ReadAll() // TODO: optimize
 	sgl.Free()
 	return b

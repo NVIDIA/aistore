@@ -10,7 +10,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/pkg/errors"
 )
@@ -276,7 +275,7 @@ func (r *Records) RecordMemorySize() (size uint64) {
 		size += uint64(len(record.DaemonID))
 		size += uint64(len(record.Name))
 		size += uint64(unsafe.Sizeof(record.Key))
-		maxSize = cos.MaxU64(maxSize, size)
+		maxSize = max(maxSize, size)
 
 		// If there is record which has at least 1 record object we should get
 		// the estimate of it and return the size. Some records might not have

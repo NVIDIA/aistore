@@ -188,7 +188,7 @@ func showThroughputHandler(c *cli.Context) error {
 // update mapBegin <= (size/s)
 func _throughput(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) (idle bool) {
 	var (
-		seconds = cos.MaxI64(int64(elapsed.Seconds()), 1) // averaging per second
+		seconds = max(int64(elapsed.Seconds()), 1) // averaging per second
 		num     int
 	)
 	for tid, begin := range mapBegin {

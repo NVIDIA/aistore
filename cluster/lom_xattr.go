@@ -268,10 +268,10 @@ func _recomputeMdSize(size, mdSize int64) {
 	const grow = memsys.SmallSlabIncStep
 	var nsize int64
 	if size > mdSize {
-		nsize = cos.MinI64(size+grow, xattrMaxSize)
+		nsize = min(size+grow, xattrMaxSize)
 		maxLmeta.CAS(mdSize, nsize)
 	} else if mdSize == xattrMaxSize && size < xattrMaxSize-grow {
-		nsize = cos.MinI64(size+grow, (size+xattrMaxSize)/2)
+		nsize = min(size+grow, (size+xattrMaxSize)/2)
 		maxLmeta.CAS(mdSize, nsize)
 	}
 }

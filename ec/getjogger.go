@@ -606,7 +606,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 
 // Look for the first non-nil slice in the list starting from the index `start`.
 func getNextNonEmptySlice(slices []*slice, start int) (*slice, int) {
-	i := cos.Max(0, start)
+	i := max(0, start)
 	for i < len(slices) && slices[i] == nil {
 		i++
 	}

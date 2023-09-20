@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -60,7 +59,7 @@ func TestConcatObjLists(t *testing.T) {
 				lists = append(lists, list)
 				expectedObjCnt += len(list.Entries)
 			}
-			expectedObjCnt = cos.Min(expectedObjCnt, int(test.maxSize))
+			expectedObjCnt = min(expectedObjCnt, int(test.maxSize))
 
 			objs := cmn.ConcatLso(lists, test.maxSize)
 			tassert.Errorf(

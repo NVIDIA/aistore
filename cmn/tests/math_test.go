@@ -1,6 +1,6 @@
 // Package test provides tests for common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package tests
 
@@ -59,9 +59,9 @@ func TestFastLog2Ceil(t *testing.T) {
 func TestMinDuration(t *testing.T) {
 	baseTime := time.Minute
 
-	tassert.Fatalf(t, cos.MinDuration(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
-	tassert.Fatalf(t, cos.MinDuration(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
-	tassert.Fatalf(t, cos.MinDuration(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
+	tassert.Fatalf(t, min(baseTime, baseTime+time.Second) == baseTime, "expected %s to be smaller than %s", baseTime, baseTime+time.Second)
+	tassert.Fatalf(t, min(baseTime, baseTime-time.Second) == baseTime-time.Second, "expected %s to be smaller than %s", baseTime-time.Second, baseTime)
+	tassert.Fatalf(t, min(baseTime, baseTime) == baseTime, "expected %s to be the same as %s", baseTime, baseTime)
 }
 
 func TestCeilAlign(t *testing.T) {
@@ -71,7 +71,7 @@ func TestCeilAlign(t *testing.T) {
 }
 
 func TestMin(t *testing.T) {
-	tassert.Errorf(t, cos.Min(0, 1, 2, 3, 4, 5, 1) == 0, "expected 0 to be the smallest, got %d", cos.Min(0, 1, 2, 3, 4, 5, 1))
-	tassert.Errorf(t, cos.Min(10, 100, -2) == -2, "expected -2 to be the smallest, got %d", cos.Min(10, 100, -2))
-	tassert.Errorf(t, cos.Min(1, 0) == 0, "expected 0 to be the smallest, got %d", cos.Min(1, 0))
+	tassert.Errorf(t, min(0, 1, 2, 3, 4, 5, 1) == 0, "expected 0 to be the smallest, got %d", min(0, 1, 2, 3, 4, 5, 1))
+	tassert.Errorf(t, min(10, 100, -2) == -2, "expected -2 to be the smallest, got %d", min(10, 100, -2))
+	tassert.Errorf(t, min(1, 0) == 0, "expected 0 to be the smallest, got %d", min(1, 0))
 }

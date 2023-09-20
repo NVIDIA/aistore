@@ -361,7 +361,7 @@ func checksumDataSlices(ctx *encodeCtx, cksmReaders []io.Reader, cksumType strin
 func generateSlicesToMemory(ctx *encodeCtx) error {
 	var (
 		cksumType    = ctx.lom.CksumType()
-		initSize     = cos.MinI64(ctx.sliceSize, cos.MiB)
+		initSize     = min(ctx.sliceSize, cos.MiB)
 		sliceWriters = make([]io.Writer, ctx.paritySlices)
 	)
 	for i := 0; i < ctx.paritySlices; i++ {

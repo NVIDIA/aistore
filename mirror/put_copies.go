@@ -174,7 +174,7 @@ func (r *XactPut) waitPending() {
 	var (
 		started     int64
 		cnt, iniCnt int
-		sleep       = cos.MaxDuration(cmn.Timeout.MaxKeepalive(), minsleep)
+		sleep       = max(cmn.Timeout.MaxKeepalive(), minsleep)
 	)
 	if cnt = len(r.workCh); cnt == 0 {
 		return

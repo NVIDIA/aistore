@@ -12,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/hk"
@@ -141,7 +140,7 @@ func (qm *lsobjMem) housekeep() time.Duration {
 	num := qm.b.housekeep()
 	num += qm.c.housekeep()
 	if num == 0 {
-		qm.d = cos.MinDuration(qm.d+qmTimeHk, qmTimeHkMax)
+		qm.d = min(qm.d+qmTimeHk, qmTimeHkMax)
 	} else {
 		qm.d = qmTimeHk
 	}
@@ -331,7 +330,7 @@ func (ci *cacheInterval) get(token string, objCnt uint, params reqParams) (entri
 	}
 	entries = entries[start:]
 
-	end := cos.MinUint(uint(len(entries)), objCnt)
+	end := min(uint(len(entries)), objCnt)
 	if params.prefix != "" {
 		// Move `end-1` to last entry that starts with `params.prefix`.
 		for ; end > 0; end-- {

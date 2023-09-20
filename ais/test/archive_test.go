@@ -206,7 +206,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
 		numArchs   = 15
-		numInArch  = cos.Min(m.num/2, 7)
+		numInArch  = min(m.num/2, 7)
 		fmtRange   = "%s{%d..%d}"
 		subtests   = []struct {
 			ext            string // one of archive.FileExtensions (same as: supported arch formats)
@@ -294,7 +294,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 				m.num = numPuts >> 1
 			}
 			m.init(true /*cleanup*/)
-			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
+			m.fileSize = min(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 			if m.bck.IsRemote() {
 				defer m.del(-1)
@@ -452,7 +452,7 @@ func TestAppendToArch(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		numArchs   = m.num
 		numAdd     = m.num
-		numInArch  = cos.Min(m.num/2, 7)
+		numInArch  = min(m.num/2, 7)
 		objPattern = "test_lst_%04d%s"
 		archPath   = "extra/newfile%04d"
 		subtests   = []struct {
@@ -499,7 +499,7 @@ func TestAppendToArch(t *testing.T) {
 			tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 			tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
 			m.init(true /*cleanup*/)
-			m.fileSize = cos.MinU64(m.fileSize+m.fileSize/3, 32*cos.KiB)
+			m.fileSize = min(m.fileSize+m.fileSize/3, 32*cos.KiB)
 			m.puts()
 
 			if testing.Short() && test.ext != archive.ExtTar {

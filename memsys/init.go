@@ -155,7 +155,7 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = cos.MinU64(r.MinFree, x)
+			r.MinFree = min(r.MinFree, x)
 		}
 	}
 	if r.MinPctFree > 0 {
@@ -163,23 +163,23 @@ func (r *MMSA) Init(maxUse int64) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = cos.MinU64(r.MinFree, x)
+			r.MinFree = min(r.MinFree, x)
 		}
 	}
 	if maxUse > 0 {
-		r.MinFree = uint64(cos.MaxI64(int64(r.MinFree), int64(free)-maxUse))
+		r.MinFree = max(r.MinFree, free-uint64(maxUse))
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
 	}
 	r.lowWM = (r.MinFree+free)>>1 - (r.MinFree+free)>>4 // a quarter of
-	r.lowWM = cos.MaxU64(r.lowWM, r.MinFree+minMemFreeTests)
+	r.lowWM = max(r.lowWM, r.MinFree+minMemFreeTests)
 
 	// 3. validate min-free & low-wm
-	if free < cos.MinU64(r.MinFree*2, r.MinFree+minMemFree) {
+	if free < min(r.MinFree*2, r.MinFree+minMemFree) {
 		err = fmt.Errorf("insufficient free memory %s (see %s for guidance)", r.Str(&r.mem), readme)
 		cos.Errorf("%v", err)
-		r.lowWM = cos.MinU64(r.lowWM, r.MinFree+minMemFreeTests)
+		r.lowWM = min(r.lowWM, r.MinFree+minMemFreeTests)
 		r.info = ""
 	}
 

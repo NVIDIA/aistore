@@ -418,9 +418,9 @@ until:
 		if smap.version() != ver {
 			debug.Assert(smap.version() > ver)
 			elapsed = 0
-			nojoins = cos.MinDuration(nojoins+sleep, config.Timeout.Startup.D())
+			nojoins = min(nojoins+sleep, config.Timeout.Startup.D())
 			if p.owner.rmd.interrupted.Load() {
-				nojoins = cos.MaxDuration(nojoins+sleep, config.Timeout.MaxHostBusy.D())
+				nojoins = max(nojoins+sleep, config.Timeout.MaxHostBusy.D())
 			}
 			ver = smap.version()
 		}
@@ -605,7 +605,7 @@ merge:
 	} else {
 		clone.UUID = smapUUID
 	}
-	clone.Version = cos.MaxI64(clone.version(), svm.Smap.version()) + 1
+	clone.Version = max(clone.version(), svm.Smap.version()) + 1
 	p.owner.smap.put(clone)
 	p.owner.smap.mu.Unlock()
 	nlog.Infof("%s: merged %s", p, clone.pp())

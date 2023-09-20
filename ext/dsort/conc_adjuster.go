@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dsort
@@ -86,9 +86,9 @@ type (
 
 func calcMaxLimit() int {
 	availablePaths := fs.GetAvail()
-	maxLimitPerDisk := cos.Min(
+	maxLimitPerDisk := min(
 		maxConcFuncPerDiskLimit,
-		maxConcFuncPerDSortLimit/cos.Max(len(availablePaths), 1),
+		maxConcFuncPerDSortLimit/max(len(availablePaths), 1),
 	)
 	return maxLimitPerDisk
 }
@@ -109,7 +109,7 @@ func newConcAdjuster(maxLimit, goroutineLimitCoef int) (ca *concAdjuster) {
 	if maxLimit == 0 {
 		maxLimit = calcMaxLimit()
 	}
-	limit := cos.Min(defaultConcFuncLimit, maxLimit)
+	limit := min(defaultConcFuncLimit, maxLimit)
 	for _, mi := range availablePaths {
 		adjusters[mi.Path] = newMpathAdjuster(limit, maxLimit)
 	}
@@ -219,7 +219,7 @@ func (adjuster *mpathAdjuster) recalc(newUtil int64, config *cmn.Config) (prevLi
 		adjuster.curBatchSize *= 2 * batchIncRatio
 	}
 
-	adjuster.curBatchSize = cos.MinF64(adjuster.curBatchSize, maxBatchSize)
+	adjuster.curBatchSize = min(adjuster.curBatchSize, maxBatchSize)
 	if adjuster.limit < 1 {
 		adjuster.limit = 1
 	} else if adjuster.limit > adjuster.maxLimit {

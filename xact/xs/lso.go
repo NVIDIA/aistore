@@ -86,7 +86,7 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 		msg:        args.Custom.(*apc.LsoMsg),
 	}
 	debug.Assert(p.Bck.Props != nil && p.msg.PageSize > 0 &&
-		p.msg.PageSize < cos.MaxUint(100000, 10*apc.DefaultPageSizeAIS))
+		p.msg.PageSize < max(100000, 10*apc.DefaultPageSizeAIS))
 	return p
 }
 
@@ -363,7 +363,7 @@ ex:
 func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	var (
 		mm        = r.p.T.PageMM()
-		siz       = cos.MaxI64(r.lensgl, memsys.DefaultBufSize)
+		siz       = max(r.lensgl, memsys.DefaultBufSize)
 		buf, slab = mm.AllocSize(siz)
 		sgl       = mm.NewSGL(siz, slab.Size())
 		mw        = msgp.NewWriterBuf(sgl, buf)

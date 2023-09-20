@@ -330,7 +330,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	if args.WorkerCnt > 0 {
 		workerCnt = args.WorkerCnt
 	}
-	workerCnt = cos.Min(workerCnt, args.ObjCnt)
+	workerCnt = min(workerCnt, args.ObjCnt)
 
 	for i := 0; i < args.ObjCnt; i++ {
 		if args.Ordered {
@@ -381,7 +381,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 				}
 				return nil
 			}
-		}(i, cos.Min(i+chunkSize, len(objNames))))
+		}(i, min(i+chunkSize, len(objNames))))
 	}
 
 	err := group.Wait()
@@ -608,7 +608,7 @@ func WaitForRebalanceByID(t *testing.T, bp api.BaseParams, rebID string, timeout
 func _waitReToStart(bp api.BaseParams) {
 	var (
 		kinds   = []string{apc.ActRebalance, apc.ActResilver}
-		timeout = cos.MaxDuration(10*xactPollSleep, MaxCplaneTimeout)
+		timeout = max(10*xactPollSleep, MaxCplaneTimeout)
 		retries = int(timeout / xactPollSleep)
 		args    = xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true}
 	)

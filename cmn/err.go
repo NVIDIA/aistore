@@ -804,7 +804,7 @@ func TypeCodeHTTPErr(s string) (tcode string) {
 	if !strings.HasPrefix(s, "Err") {
 		return
 	}
-	for i := 3; i < cos.Min(maxTypeCodeLen, len(s)); i++ {
+	for i := 3; i < min(maxTypeCodeLen, len(s)); i++ {
 		c := s[i]
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
 			continue

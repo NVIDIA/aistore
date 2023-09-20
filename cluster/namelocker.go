@@ -161,7 +161,7 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 		if nlc.TryLock(uname, exclusive) {
 			return
 		}
-		sleep = cos.MinDuration(sleep*2, maxPollInterval)
+		sleep = min(sleep*2, maxPollInterval)
 	}
 }
 

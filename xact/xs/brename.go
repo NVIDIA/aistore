@@ -124,7 +124,7 @@ loop:
 			}
 		}
 		if total > bmvAvgWait {
-			sleep = cos.MinDuration(sleep+sleep/2, bmvMaxSleep)
+			sleep = min(sleep+sleep/2, bmvMaxSleep)
 		}
 	}
 	if total >= bmvMaxWait {

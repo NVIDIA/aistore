@@ -1187,7 +1187,7 @@ func (c *KeepaliveConf) Validate() (err error) {
 
 func KeepaliveRetryDuration(c *Config) time.Duration {
 	d := c.Timeout.CplaneOperation.D() * time.Duration(c.Keepalive.RetryFactor)
-	return cos.MinDuration(d, c.Timeout.MaxKeepalive.D()+time.Second/2)
+	return min(d, c.Timeout.MaxKeepalive.D()+time.Second/2)
 }
 
 /////////////

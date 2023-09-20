@@ -101,7 +101,7 @@ func ParseURL(unescapedPath string, itemsAfter int, splitAfter bool, items []str
 	if splitAfter {
 		split = strings.Split(escaped, "/")
 	} else {
-		split = strings.SplitN(escaped, "/", len(items)+cos.Max(1, itemsAfter))
+		split = strings.SplitN(escaped, "/", len(items)+max(1, itemsAfter))
 	}
 	apiItems := split[:0] // filtering without allocation
 	for _, item := range split {
@@ -226,9 +226,9 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 		}
 		if args.BackOff && iter > 1 {
 			if args.IsClient {
-				sleep = cos.MinDuration(sleep+(args.Sleep/2), 4*time.Second)
+				sleep = min(sleep+(args.Sleep/2), 4*time.Second)
 			} else {
-				sleep = cos.MinDuration(sleep+(args.Sleep/2), Timeout.MaxKeepalive())
+				sleep = min(sleep+(args.Sleep/2), Timeout.MaxKeepalive())
 			}
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {

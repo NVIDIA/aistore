@@ -391,7 +391,7 @@ func (b *dsortPB) updateBars(jmetrics map[string]*dsort.JobInfo) bool {
 	for _, targetMetrics = range jmetrics {
 		phases[dsort.ExtractionPhase].progress += targetMetrics.Metrics.Extraction.ExtractedCnt
 
-		phases[dsort.SortingPhase].progress = cos.MaxI64(phases[dsort.SortingPhase].progress, targetMetrics.Metrics.Sorting.RecvStats.Count)
+		phases[dsort.SortingPhase].progress = max(phases[dsort.SortingPhase].progress, targetMetrics.Metrics.Sorting.RecvStats.Count)
 
 		phases[dsort.CreationPhase].progress += targetMetrics.Metrics.Creation.CreatedCnt
 		phases[dsort.CreationPhase].total += targetMetrics.Metrics.Creation.ToCreate
@@ -533,23 +533,23 @@ func printCondensedStats(w io.Writer, id, units string, errhint bool) error {
 		aborted = aborted || tm.Aborted.Load()
 		finished = finished && tm.Creation.Finished
 
-		elapsedTime = cos.MaxDuration(elapsedTime, tm.ElapsedTime())
+		elapsedTime = max(elapsedTime, tm.ElapsedTime())
 		if tm.Extraction.Finished {
-			extractionTime = cos.MaxDuration(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
+			extractionTime = max(extractionTime, tm.Extraction.End.Sub(tm.Extraction.Start))
 		} else {
-			extractionTime = cos.MaxDuration(extractionTime, time.Since(tm.Extraction.Start))
+			extractionTime = max(extractionTime, time.Since(tm.Extraction.Start))
 		}
 
 		if tm.Sorting.Finished {
-			sortingTime = cos.MaxDuration(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
+			sortingTime = max(sortingTime, tm.Sorting.End.Sub(tm.Sorting.Start))
 		} else if tm.Sorting.Running {
-			sortingTime = cos.MaxDuration(sortingTime, time.Since(tm.Sorting.Start))
+			sortingTime = max(sortingTime, time.Since(tm.Sorting.Start))
 		}
 
 		if tm.Creation.Finished {
-			creationTime = cos.MaxDuration(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
+			creationTime = max(creationTime, tm.Creation.End.Sub(tm.Creation.Start))
 		} else if tm.Creation.Running {
-			creationTime = cos.MaxDuration(creationTime, time.Since(tm.Creation.Start))
+			creationTime = max(creationTime, time.Since(tm.Creation.Start))
 		}
 	}
 
