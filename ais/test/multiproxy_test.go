@@ -357,7 +357,7 @@ func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 		tools.CleanupNode(t, pid)
 	})
 
-	err = tools.WaitForNodeToTerminate(pid)
+	err = tools.WaitForPID(pid)
 	tassert.CheckFatal(t, err)
 }
 
@@ -400,7 +400,7 @@ func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 		tools.CleanupNode(t, pid)
 	})
 
-	err = tools.WaitForNodeToTerminate(pid)
+	err = tools.WaitForPID(pid)
 	tassert.CheckFatal(t, err)
 }
 

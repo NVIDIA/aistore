@@ -24,8 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-const nodeOffTimeout = 13 * time.Second
-
 func TestMaintenanceOnOff(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
 	proxyURL := tools.RandomProxyURL(t)
@@ -492,7 +490,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 	tassert.CheckFatal(t, err)
 
 	// 1. Shutdown a random node.
-	pid, cmd, rebID, err := tools.ShutdownNode(t, baseParams, node)
+	_, cmd, rebID, err := tools.ShutdownNode(t, baseParams, node)
 	tassert.CheckFatal(t, err)
 	if nodeType == apc.Target && origTargetCount > 1 {
 		time.Sleep(time.Second)
@@ -509,17 +507,16 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		}
 	}
 
-	// 2. Make sure the node has been shut down.
-	err = tools.WaitForNodeToTerminate(pid, nodeOffTimeout)
-	if err != nil {
-		tlog.Logf("Warning: WaitForNodeToTerminate returned: %v\n", err)
-	}
 	smap, err = tools.WaitForClusterState(proxyURL, "shutdown node",
 		smap.Version, origProxyCnt-pdc, origTargetCount-tdc, node.ID())
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, smap.GetNode(node.ID()) != nil, "node %s does not exist in %s after shutdown", node.ID(), smap)
 	tassert.Errorf(t, smap.GetNode(node.ID()).Flags.IsSet(meta.SnodeMaint),
 		"node should be in maintenance mode after shutdown")
+
+	// restarting before the daemon fully terminates may result in "bind: address already in use"
+	err = tools.WaitNodePubAddrNotInUse(node, time.Minute)
+	tassert.CheckFatal(t, err)
 
 	// 3. Start node again.
 	err = tools.RestoreNode(cmd, false, nodeType)
@@ -577,11 +574,15 @@ func TestShutdownListObjects(t *testing.T) {
 
 	// 2. Shut down a random target.
 	tsi, _ := m.smap.GetRandTarget()
-	pid, cmd, rebID, err := tools.ShutdownNode(t, baseParams, tsi)
+	_, cmd, rebID, err := tools.ShutdownNode(t, baseParams, tsi)
 	tassert.CheckFatal(t, err)
 
 	// Restore target after test is over.
 	t.Cleanup(func() {
+		// restarting before the daemon fully terminates may result in "bind: address already in use"
+		err = tools.WaitNodePubAddrNotInUse(tsi, time.Minute)
+		tassert.CheckFatal(t, err)
+
 		err = tools.RestoreNode(cmd, false, apc.Target)
 		tassert.CheckError(t, err)
 
@@ -615,10 +616,6 @@ func TestShutdownListObjects(t *testing.T) {
 		}
 	}
 
-	err = tools.WaitForNodeToTerminate(pid, nodeOffTimeout)
-	if err != nil {
-		tlog.Logf("Warning: WaitForNodeToTerminate returned: %v\n", err)
-	}
 	m.smap, err = tools.WaitForClusterState(proxyURL, "target shutdown", m.smap.Version, 0, origTargetCount-1, tsi.ID())
 	tassert.CheckFatal(t, err)
 

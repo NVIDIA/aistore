@@ -551,7 +551,7 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 	return pid, fields[0], fields[1:], nil
 }
 
-func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
+func WaitForPID(pid int) error {
 	const retryInterval = time.Second
 
 	process, err := os.FindProcess(pid)
@@ -567,9 +567,6 @@ func WaitForNodeToTerminate(pid int, timeout ...time.Duration) error {
 	tlog.Logf("Waiting for PID=%d to terminate\n", pid)
 
 	deadline := time.Minute / 2
-	if len(timeout) > 0 {
-		deadline = timeout[0]
-	}
 	ctx, cancel = context.WithTimeout(ctx, deadline)
 	defer cancel()
 
