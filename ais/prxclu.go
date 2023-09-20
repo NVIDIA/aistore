@@ -12,8 +12,10 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -1017,12 +1019,42 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 		toUpdate: toUpdate,
 		wait:     true,
 	}
-
 	// NOTE: critical cluster-wide config updates requiring restart (of the cluster)
 	if toUpdate.Net != nil && toUpdate.Net.HTTP != nil {
-		from, _ := jsoniter.Marshal(cmn.GCO.Get().Net.HTTP)
+		config := cmn.GCO.Get()
+		from, _ := jsoniter.Marshal(config.Net.HTTP)
 		to, _ := jsoniter.Marshal(toUpdate.Net.HTTP)
 		whingeToUpdate("net.http", string(from), string(to))
+
+		// complementary
+		if toUpdate.Net.HTTP.UseHTTPS != nil {
+			use := *toUpdate.Net.HTTP.UseHTTPS
+			if config.Net.HTTP.UseHTTPS != use {
+				//
+				// switch http => https or vice versa
+				//
+				if toUpdate.Proxy == nil {
+					toUpdate.Proxy = &cmn.ProxyConfToUpdate{}
+				}
+				toScheme, fromScheme := "http", "https"
+				if use {
+					toScheme, fromScheme = "https", "http"
+				}
+				if toUpdate.Proxy.PrimaryURL == nil {
+					s := strings.Replace(config.Proxy.PrimaryURL, fromScheme, toScheme, 1)
+					toUpdate.Proxy.PrimaryURL = api.String(s)
+				}
+				if toUpdate.Proxy.OriginalURL == nil {
+					s := strings.Replace(config.Proxy.OriginalURL, fromScheme, toScheme, 1)
+					toUpdate.Proxy.OriginalURL = api.String(s)
+				}
+				if toUpdate.Proxy.DiscoveryURL == nil {
+					s := strings.Replace(config.Proxy.DiscoveryURL, fromScheme, toScheme, 1)
+					toUpdate.Proxy.DiscoveryURL = api.String(s)
+				}
+				nlog.Errorln("Warning: _prior_ to restart make sure to remove all copies of cluster maps")
+			}
+		}
 	}
 	if toUpdate.Auth != nil {
 		from, _ := jsoniter.Marshal(cmn.GCO.Get().Auth)

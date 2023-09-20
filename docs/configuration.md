@@ -407,6 +407,11 @@ If extended attributes are disabled globally when deploying a cluster, node IDs 
 
 To switch from HTTP protocol to an encrypted HTTPS, configure `net.http.use_https`=`true` and modify `net.http.server_crt` and `net.http.server_key` values so they point to your OpenSSL certificate and key files respectively (see [AIStore configuration](/deploy/dev/local/aisnode_config.sh)).
 
+See also:
+
+* [HTTPS from scratch](/docs/getting_started.md)
+* [Switching an already deployed cluster between HTTP and HTTPS](/docs/switch_https.md)
+
 ## Filesystem Health Checker
 
 Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fshc" of the [configuration](/deploy/dev/local/aisnode_config.sh).

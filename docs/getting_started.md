@@ -73,7 +73,7 @@ The rest of this document is structured as follows:
   - [Manual deployment](#manual-deployment)
   - [Testing your cluster](#testing-your-cluster)
 - [Kubernetes Playground](#kubernetes-playground)
-- [HTTPS](#https)
+- [HTTPS from scratch](#https-from-scratch)
 - [Build, Make and Development Tools](#build-make-and-development-tools)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 
@@ -342,23 +342,25 @@ In our development and testing, we make use of [Minikube](https://kubernetes.io/
 
 * [AIStore on Minikube](/deploy/dev/k8s/README.md)
 
-## HTTPS
+## HTTPS from scratch
 
-In the end, all examples above run a bunch of local web servers that listen for plain HTTP requests. Following are quick steps for developers to engage HTTPS:
+In the end, all examples above run a bunch of local web servers that listen for plain HTTP requests. Following are quick steps for developers to engage HTTPS.
 
-1. Generate X.509 certificate:
+This is still a so-called _local playground_ type deployment _from scratch_, whereby we are not trying to switch an existing cluster from HTTP to HTTPS, or vice versa. All we do here is deploying a brand new HTTPS-based aistore.
+
+**1**. Generate X.509 certificate:
 
 ```console
 $ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 1080 -nodes -subj '/CN=localhost'
 ```
 
-2. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
+**2**. Deploy cluster (4 targets, 1 gateway, 6 mountpaths, Google Cloud):
 
 ```console
 $ AIS_USE_HTTPS=true AIS_SKIP_VERIFY_CRT=true make kill deploy <<< $'4\n1\n6\nn\ny\nn\nn\n0\n'
 ```
 
-3. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
+**3**. Run tests (both examples below list the names of buckets accessible for you in Google Cloud):
 
 ```console
 $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCPbucket go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
@@ -366,7 +368,24 @@ $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=gs://myGCP
 $ AIS_ENDPOINT=https://localhost:8080 AIS_SKIP_VERIFY_CRT=true BUCKET=tmp go test -v -p 1 -count 1 ./ais/test -run=ListBuckets
 ```
 
+**4**. To use CLI, try first any command with HTTPS-based cluster endpoint, for instance:
+
+```console
+$ AIS_ENDPOINT=https://127.0.0.1:8080 ais show cluster
+```
+
+But if it fails with "failed to verify certificate" message, perform a simple step to configufre CLI to skip HTTPS cert validation:
+
+```console
+$ ais config cli set cluster.skip_verify_crt true
+"cluster.skip_verify_crt" set to: "true" (was: "false")
+```
+
+And then try again.
+
 > Notice environment variables above: **AIS_USE_HTTPS**, **AIS_ENDPOINT**, and **AIS_SKIP_VERIFY_CRT**.
+
+> See also: [switching an already deployed cluster between HTTP and HTTPS](/docs/switch_https.md)
 
 ## Build, Make and Development Tools
 
