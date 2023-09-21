@@ -308,6 +308,7 @@ test:long:aisloader:
     TESTS_DIR: "ais/test"
   before_script:
     - kubectl delete pods,services -l nvidia.com/ais-etl-name # TODO: this can be removed once the lifecycle of transformers is implemented.
+  <<: *gather_logs_def
 
 .test_k8s_long_template: &test_k8s_long_def
   extends: .test_k8s_short_template
@@ -354,6 +355,7 @@ test:short:assorted:k8s:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --gcp
     - make test-run
     - status=$? make kill && exit $status
+  <<: *gather_logs_def
 
 test:long:k8s:
   stage: test-long
