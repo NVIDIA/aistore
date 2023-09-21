@@ -56,6 +56,8 @@ type (
 			wi     *walkInfo          // walking context and state
 			wg     sync.WaitGroup     // wait until this walk finishes
 			done   bool               // done walking (indication)
+			wor    bool               // wantOnlyRemote
+			this   bool               // r.msg.SID == r.p.T.SID(): true when this target does remote paging
 		}
 		streamingX
 		lensgl int64
@@ -67,7 +69,10 @@ type (
 	}
 )
 
-const pageChSize = 128
+const (
+	pageChSize     = 128
+	remtPageChSize = 16
+)
 
 var (
 	errStopped = errors.New("stopped")
@@ -95,15 +100,23 @@ func (p *lsoFactory) Start() (err error) {
 		streamingX: streamingX{p: &p.streamingF, config: cmn.GCO.Get()},
 		msg:        p.msg,
 		msgCh:      make(chan *apc.LsoMsg), // unbuffered
-		respCh:     make(chan *LsoRsp),     // ditto
-		remtCh:     make(chan *LsoRsp),     // ditto
+		respCh:     make(chan *LsoRsp),     // ditto: one caller-requested page at a time
 	}
 	r.lastPage = allocLsoEntries()
 	r.stopCh.Init()
+
 	// NOTE: idle timeout vs delayed next-page request
 	r.DemandBase.Init(p.UUID(), apc.ActList, p.Bck, r.config.Timeout.MaxHostBusy.D())
 
-	if r.listRemote() {
+	// NOTE: is set by the first message, never changes
+	r.walk.wor = r.msg.WantOnlyRemoteProps()
+	r.walk.this = r.msg.SID == r.p.T.SID()
+
+	// open streams iff:
+	if r.listRemote() && !r.walk.wor {
+		if !r.walk.this {
+			r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
+		}
 		trname := "lso-" + p.UUID()
 		dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
 		p.dm, err = bundle.NewDataMover(p.Args.T, trname, r.recv, cmn.OwtPut, dmxtra)
@@ -120,9 +133,8 @@ func (p *lsoFactory) Start() (err error) {
 		}
 		p.dm.SetXact(r)
 		p.dm.Open()
-
-		runtime.Gosched()
 	}
+
 	p.xctn = r
 	return nil
 }
@@ -131,10 +143,9 @@ func (p *lsoFactory) Start() (err error) {
 // LsoXact //
 /////////////
 
-func (r *LsoXact) Run(*sync.WaitGroup) {
-	if r.config.FastV(4, cos.SmoduleXs) {
-		nlog.Infoln(r.String())
-	}
+func (r *LsoXact) Run(wg *sync.WaitGroup) {
+	wg.Done()
+
 	if !r.listRemote() {
 		r.initWalk()
 	}
@@ -146,6 +157,10 @@ loop:
 			debug.Assert(r.msg.UUID == msg.UUID && r.msg.Prefix == msg.Prefix && r.msg.Flags == msg.Flags)
 			r.msg.ContinuationToken = msg.ContinuationToken
 			r.msg.PageSize = msg.PageSize
+
+			// cannot change
+			debug.Assert((r.msg.SID == r.p.T.SID()) == r.walk.this)
+			debug.Assert(r.walk.wor == r.msg.WantOnlyRemoteProps())
 
 			r.IncPending()
 			resp := r.doPage()
@@ -165,22 +180,40 @@ loop:
 }
 
 func (r *LsoXact) stop() {
+	r.stopCh.Close()
 	if r.listRemote() {
-		r.streamingX.fin(false /*postponeUnregRx below*/)
-		r.stopCh.Close()
+		if r.DemandBase.Finished() {
+			// must be aborted
+			if !r.walk.wor {
+				r.p.dm.CloseIf(r.Err())
+				r.p.dm.UnregRecv()
+			}
+		} else {
+			r.DemandBase.Stop()
+			r.Finish()
+			r.lastmsg()
+
+			if !r.walk.wor {
+				r.p.dm.Close(r.Err())
+
+				if r.walk.this {
+					debug.Assert(r.remtCh == nil)
+					close(r.msgCh)
+					r.p.dm.UnregRecv()
+				} else {
+					// postpone unreg
+					hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, r.config.Timeout.MaxKeepalive.D())
+				}
+			}
+		}
+	} else {
+		r.DemandBase.Stop()
+		r.walk.stopCh.Close()
+		r.walk.wg.Wait()
 		r.lastmsg()
-		r.postponeUnregRx()
-		goto ex
+		r.Finish()
 	}
 
-	r.DemandBase.Stop()
-	r.stopCh.Close()
-
-	r.walk.stopCh.Close()
-	r.walk.wg.Wait()
-	r.lastmsg()
-	r.Finish()
-ex:
 	if r.lastPage != nil {
 		freeLsoEntries(r.lastPage)
 		r.lastPage = nil
@@ -197,21 +230,16 @@ func (r *LsoXact) lastmsg() {
 	close(r.respCh)
 }
 
-// compare w/ streaming (TODO: unify)
-func (r *LsoXact) postponeUnregRx() {
-	if r.IsAborted() || r.ErrCnt() > 0 {
-		return
-	}
-	hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, time.Second/2)
-}
-
 func (r *LsoXact) fcleanup() (d time.Duration) {
-	d = hk.UnregInterval
-	if r.wiCnt.Load() > 0 {
+	if cnt := r.wiCnt.Load(); cnt > 0 {
 		d = time.Second
 	} else {
-		close(r.remtCh)
+		d = hk.UnregInterval
+		if r.remtCh != nil {
+			close(r.remtCh)
+		}
 		close(r.msgCh)
+		r.p.dm.UnregRecv()
 	}
 	return
 }
@@ -302,34 +330,33 @@ func (r *LsoXact) havePage(token string, cnt uint) bool {
 	return idx+cnt < uint(len(r.lastPage))
 }
 
-func (r *LsoXact) nextPageR() error {
+func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoResult
-		err  error
 		npg  = newNpgCtx(r.p.T, r.p.Bck, r.msg, r.LomAdd)
 		smap = r.p.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
-		err = fmt.Errorf("%s: lost, missing, or inactive t[%s], %s", r, r.msg.SID, smap)
+		err = fmt.Errorf("%s: the paging %s is down or inactive, %s", r, meta.Tname(r.msg.SID), smap)
 		goto ex
 	}
 	debug.Assert(tsi.IsTarget(), tsi.StringEx())
 
 	r.wiCnt.Inc()
-	if r.msg.SID == r.p.T.SID() {
-		wantOnlyRemote := r.msg.WantOnlyRemoteProps()
+	if r.walk.this {
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
-		if !wantOnlyRemote && smap.HasActiveTs(r.streamingX.p.Args.T.SID()) {
+		if !r.walk.wor && !r.IsAborted() {
 			if err == nil {
+				// bcast page
 				err = r.bcast(page)
 			} else {
 				r.sendTerm(r.msg.UUID, nil, err)
 			}
 		}
 	} else {
-		debug.Assert(!r.msg.WantOnlyRemoteProps())
+		debug.Assert(!r.msg.WantOnlyRemoteProps() && /*same*/ !r.walk.wor)
 		select {
 		case rsp := <-r.remtCh:
 			if rsp == nil {
@@ -357,7 +384,7 @@ ex:
 	freeLsoEntries(r.lastPage)
 	r.lastPage = page.Entries
 	r.nextToken = page.ContinuationToken
-	return nil
+	return
 }
 
 func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
@@ -591,7 +618,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
 	}
 	if err != nil && !cos.IsEOF(err) {
-		nlog.Errorln(err)
+		nlog.Errorln(r.p.T.String(), r.String(), len(r.remtCh), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 		return err
 	}

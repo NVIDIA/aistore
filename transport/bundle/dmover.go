@@ -65,11 +65,11 @@ type (
 // interface guard
 var _ cluster.DataMover = (*DataMover)(nil)
 
-// owt is mandatory DM property: a data mover passes the property to
-// `target.PutObject` to make to finalize an object properly after the object
-// is saved to local drives(e.g, PUT the object to the Cloud as well).
-// For DMs that do not create new objects(e.g, rebalance), owt should
+// In re `owt` (below): data mover passes it to the target's `PutObject`
+// to properly finalize received payload.
+// For DMs that do not create new objects (e.g, rebalance) `owt` should
 // be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
+
 func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
 	debug.Assert(extra.Config != nil)
 	dm := &DataMover{t: t, config: extra.Config}
@@ -191,7 +191,7 @@ func (dm *DataMover) Close(err error) {
 func (dm *DataMover) _close(err error) {
 	if err == nil && dm.xctn != nil {
 		if dm.xctn.IsAborted() {
-			err = cmn.NewErrAborted(dm.xctn.Name(), "dm-close", dm.xctn.AbortErr())
+			err = dm.xctn.AbortErr()
 		}
 	}
 	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
@@ -252,17 +252,17 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 	return cluster.QuiInactiveCB
 }
 
-func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, object io.Reader, err error) error {
+func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, reader io.Reader, err error) error {
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
 	// NOTE: in re (hdr.ObjAttrs.Size < 0) see transport.UsePDU()
 
 	dm.stage.laterx.Store(true)
-	return dm.data.recv(hdr, object, err)
+	return dm.data.recv(hdr, reader, err)
 }
 
-func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, object io.Reader, err error) error {
+func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, reader io.Reader, err error) error {
 	dm.stage.laterx.Store(true)
-	return dm.ack.recv(hdr, object, err)
+	return dm.ack.recv(hdr, reader, err)
 }

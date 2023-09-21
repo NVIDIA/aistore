@@ -35,7 +35,6 @@ import (
 
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
-	var bckName string
 	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
@@ -46,6 +45,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	t.ensureLatestBMD(msg, r)
 
+	var bckName string
 	if len(apiItems) > 0 {
 		bckName = apiItems[0]
 	}
@@ -259,8 +259,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	// run
 	xctn = rns.Entry.Get()
 	if !rns.IsRunning() {
-		go xctn.Run(nil)
-		runtime.Gosched()
+		xact.GoRunW(xctn)
 	}
 	xls := xctn.(*xs.LsoXact)
 

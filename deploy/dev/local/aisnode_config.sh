@@ -16,7 +16,7 @@ cat > $AIS_CONF_FILE <<EOL
 	"backend": {$(IFS=$','; echo "${backend_desc[*]}")},
 	"mirror": {
 		"copies":       2,
-		"burst_buffer": 512,
+		"burst_buffer": 128,
 		"enabled":      ${AIS_MIRROR_ENABLED:-false}
 	},
 	"ec": {

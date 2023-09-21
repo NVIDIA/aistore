@@ -91,6 +91,26 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		trname    = path.Base(r.URL.Path)
 		mm        = memsys.PageMM()
 	)
+	// Rx handler
+	h, err := oget(trname)
+	if err != nil {
+		//
+		//  Try reading `nextProtoHdr` containing transport.ObjHdr -
+		//  that's because low-level `Stream.Fin` (sending graceful `opcFin`)
+		//  could be the cause for `errUnknownTrname` and `errAlreadyClosedTrname`.
+		//  Secondly, `errAlreadyClosedTrname` is considered benign, attributed
+		//  to xaction abort and such - the fact that'd be difficult to confirm
+		//  at the lowest level (and with no handler and its rxObj cb).
+		//
+		if _, ok := err.(*errAlreadyClosedTrname); ok {
+			if verbose {
+				nlog.Errorln(err)
+			}
+		} else {
+			cmn.WriteErr(w, r, err, 0)
+		}
+		return
+	}
 	// compression
 	if compressionType := r.Header.Get(apc.HdrCompress); compressionType != "" {
 		debug.Assert(compressionType == apc.LZ4Compression)
@@ -98,12 +118,6 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		reader = lz4Reader
 	}
 
-	// Rx handler
-	h, err := oget(trname)
-	if err != nil {
-		cmn.WriteErr(w, r, err, 0)
-		return
-	}
 	stats, uid, loghdr := h.stats(r, trname)
 	it := &iterator{handler: h, body: reader, stats: stats}
 	it.hbuf, _ = mm.AllocSize(dfltMaxHdr)

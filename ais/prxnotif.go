@@ -379,9 +379,8 @@ func (n *notifs) housekeep() time.Duration {
 		n.bcastGetStats(nl, hk.PruneActiveIval)
 	}
 	// cleanup temp cloned notifs
-	for u := range tempn {
-		delete(tempn, u)
-	}
+	clear(tempn)
+
 	return hk.PruneActiveIval
 }
 
@@ -518,12 +517,12 @@ repeat:
 	}
 	n.nls.Unlock()
 
-	for uuid, nl := range remnl {
+	for _, nl := range remnl {
 		nl.Callback(nl, now)
-		// cleanup
-		delete(remnl, uuid)
-		delete(remid, uuid)
 	}
+	// cleanup
+	clear(remnl)
+	clear(remid)
 }
 
 func (n *notifs) MarshalJSON() (data []byte, err error) {

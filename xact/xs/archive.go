@@ -250,10 +250,10 @@ fin:
 
 	// [cleanup] close and rm unfinished archives (compare w/ finalize)
 	r.pending.Lock()
-	for uuid, wi := range r.pending.m {
+	for _, wi := range r.pending.m {
 		wi.cleanup()
-		delete(r.pending.m, uuid)
 	}
+	clear(r.pending.m)
 	r.pending.Unlock()
 }
 

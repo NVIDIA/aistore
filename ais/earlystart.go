@@ -690,12 +690,10 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	done = true
-	for k := range bmds {
-		delete(bmds, k)
-	}
-	for k := range smaps {
-		delete(smaps, k)
-	}
+
+	clear(bmds)
+	clear(smaps)
+
 	for _, res := range results {
 		if res.err != nil {
 			done = false

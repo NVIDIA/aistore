@@ -62,12 +62,12 @@ func oget(trname string) (h handler, err error) {
 	}
 
 	oldMtx.Lock()
-	err = ogetErr(trname)
+	err = _lookup(trname)
 	oldMtx.Unlock()
 	return
 }
 
-func ogetErr(trname string) error {
+func _lookup(trname string) error {
 	for j := 0; j < numOld; j++ {
 		if old[j] == trname {
 			return &errAlreadyClosedTrname{errTrname{trname}}

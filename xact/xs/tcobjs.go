@@ -178,9 +178,7 @@ fin:
 	if r.Err() != nil {
 		// cleanup: destroy destination iff it was created by this copy
 		r.pending.Lock()
-		for uuid := range r.pending.m {
-			delete(r.pending.m, uuid)
-		}
+		clear(r.pending.m)
 		r.pending.Unlock()
 	}
 }

@@ -64,8 +64,6 @@ func (ns *nodeStages) isInStageUnlocked(si *meta.Snode, stage uint32) bool {
 
 func (ns *nodeStages) cleanup() {
 	ns.mtx.Lock()
-	for k := range ns.targets {
-		delete(ns.targets, k)
-	}
+	clear(ns.targets)
 	ns.mtx.Unlock()
 }
