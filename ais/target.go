@@ -388,7 +388,7 @@ func (t *target) Run() error {
 
 	dsort.Tinit(t, t.statsT, db)
 
-	err = t.htrun.run()
+	err = t.htrun.run(config)
 
 	etl.StopAll(t)                             // stop all running ETLs if any
 	cos.Close(db)                              // close kv db

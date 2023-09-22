@@ -36,15 +36,20 @@ type (
 		postedFin atomic.Int32
 	}
 
-	// StopCh is specialized channel for stopping things.
+	// StopCh is a channel for stopping running things.
 	StopCh struct {
 		ch      chan struct{}
 		stopped atomic.Bool
 	}
 
-	// Semaphore implements sempahore which is just a nice wrapper on `chan struct{}`.
+	// Semaphore is a textbook _sempahore_ implemented as a wrapper on `chan struct{}`.
 	Semaphore struct {
 		s chan struct{}
+	}
+
+	// Thread-safe container for multiple returned errors
+	ErrCh struct {
+		ch chan error
 	}
 
 	// DynSemaphore implements sempahore which can change its size during usage.
@@ -186,6 +191,50 @@ func NewDynSemaphore(n int) *DynSemaphore {
 	sema := &DynSemaphore{size: n}
 	sema.c = sync.NewCond(&sema.mu)
 	return sema
+}
+
+///////////
+// ErrCh //
+///////////
+
+func NewErrCh(ll ...int) *ErrCh {
+	var size = 4 // default capacity
+	if len(ll) > 0 {
+		size = ll[0]
+	}
+	return &ErrCh{ch: make(chan error, size)}
+}
+
+func (ech *ErrCh) Add(err error) {
+	if err == nil {
+		return
+	}
+	select {
+	case ech.ch <- err:
+	default: // silent drop
+	}
+}
+
+func (ech *ErrCh) CloseAll() (errs []error) {
+	close(ech.ch)
+	l := len(ech.ch)
+	if l == 0 {
+		return
+	}
+	errs = make([]error, 0, l)
+	for err := range ech.ch {
+		errs = append(errs, err)
+	}
+	return
+}
+
+func (ech *ErrCh) CloseOne() (err error) {
+	close(ech.ch)
+	select {
+	case err = <-ech.ch:
+	default:
+	}
+	return
 }
 
 //////////////////

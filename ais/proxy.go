@@ -254,7 +254,7 @@ func (p *proxy) Run() error {
 
 	dsort.Pinit(p)
 
-	return p.htrun.run()
+	return p.htrun.run(config)
 }
 
 func (p *proxy) joinCluster(action string, primaryURLs ...string) (status int, err error) {

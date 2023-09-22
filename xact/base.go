@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -33,8 +34,7 @@ type (
 		eutime atomic.Int64
 		abort  struct {
 			ch   chan error
-			err  error
-			mu   sync.RWMutex
+			err  ratomic.Pointer[error]
 			done atomic.Bool
 		}
 		stats struct {
@@ -116,11 +116,9 @@ func (xctn *Base) AbortErr() (err error) {
 	const wait = time.Second
 	sleep := cos.ProbingFrequency(wait)
 	for elapsed := time.Duration(0); elapsed < wait; elapsed += sleep {
-		xctn.abort.mu.RLock()
-		err = xctn.abort.err
-		xctn.abort.mu.RUnlock()
-		if err != nil {
-			return
+		perr := xctn.abort.err.Load()
+		if perr != nil {
+			return *perr
 		}
 		time.Sleep(sleep)
 	}
@@ -150,12 +148,12 @@ func (xctn *Base) Abort(err error) (ok bool) {
 			err = errCause
 		}
 	}
-	xctn.abort.mu.Lock()
-	debug.Assert(xctn.abort.err == nil, xctn.String())
-	xctn.abort.err = err
+	perr := xctn.abort.err.Swap(&err)
+	debug.Assert(perr == nil, xctn.String())
+	debug.Assert(len(xctn.abort.ch) == 0, xctn.String()) // CAS above
+
 	xctn.abort.ch <- err
 	close(xctn.abort.ch)
-	xctn.abort.mu.Unlock()
 
 	if xctn.Kind() != apc.ActList {
 		nlog.Infof("%s aborted(%v)", xctn.Name(), err)
@@ -292,9 +290,9 @@ func (xctn *Base) Finish() {
 	}
 	xctn.eutime.Store(time.Now().UnixNano())
 	if aborted = xctn.IsAborted(); aborted {
-		xctn.abort.mu.RLock()
-		err = xctn.abort.err
-		xctn.abort.mu.RUnlock()
+		if perr := xctn.abort.err.Load(); perr != nil {
+			err = *perr
+		}
 	}
 	if xctn.ErrCnt() > 0 {
 		if err == nil {

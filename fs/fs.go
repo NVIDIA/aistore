@@ -53,13 +53,12 @@ type (
 		cos.FS             // underlying filesystem
 		Disks     []string // owned disks (ios.FsDisks map => slice)
 		bpc       struct {
-			m map[uint64]string
-			sync.RWMutex
+			m   map[uint64]string
+			mtx sync.Mutex
 		}
 		capacity   Capacity
 		flags      uint64 // bit flags (set/get atomic)
 		PathDigest uint64 // (HRW logic)
-		cmu        sync.RWMutex
 	}
 	MPI map[string]*Mountpath
 
@@ -250,9 +249,9 @@ func (mi *Mountpath) makePathBuf(bck *cmn.Bck, contentType string, extra int) (b
 		ctLen = 1 + 1 + contentTypeLen
 		if bck.Props != nil {
 			debug.Assert(bck.Props.BID != 0)
-			mi.bpc.RLock()
+			mi.bpc.mtx.Lock()
 			bdir, ok := mi.bpc.m[bck.Props.BID]
-			mi.bpc.RUnlock()
+			mi.bpc.mtx.Unlock()
 			if ok {
 				buf = make([]byte, 0, len(bdir)+ctLen+extra)
 				buf = append(buf, bdir...)
@@ -304,18 +303,17 @@ func (mi *Mountpath) MakePathBck(bck *cmn.Bck) string {
 
 	bid := bck.Props.BID
 	debug.Assert(bid != 0)
-	mi.bpc.RLock()
+	mi.bpc.mtx.Lock()
 	dir, ok := mi.bpc.m[bid]
-	mi.bpc.RUnlock()
 	if ok {
+		mi.bpc.mtx.Unlock()
 		return dir
 	}
 	buf := mi.makePathBuf(bck, "", 0)
 	dir = cos.UnsafeS(buf)
 
-	mi.bpc.Lock()
 	mi.bpc.m[bid] = dir
-	mi.bpc.Unlock()
+	mi.bpc.mtx.Unlock()
 	return dir
 }
 
@@ -334,12 +332,12 @@ func (mi *Mountpath) MakePathFQN(bck *cmn.Bck, contentType, objName string) stri
 }
 
 func (mi *Mountpath) makeDelPathBck(bck *cmn.Bck, bid uint64) string {
-	mi.bpc.Lock()
+	mi.bpc.mtx.Lock()
 	dir, ok := mi.bpc.m[bid]
 	if ok {
 		delete(mi.bpc.m, bid)
 	}
-	mi.bpc.Unlock()
+	mi.bpc.mtx.Unlock()
 	debug.Assert(!(ok && bid == 0))
 	if !ok {
 		dir = mi.MakePathBck(bck)
@@ -395,16 +393,13 @@ func (mi *Mountpath) _setDisks(fsdisks ios.FsDisks) {
 
 func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, err error) {
 	if !refresh {
-		mi.cmu.RLock()
-		c = mi.capacity
-		mi.cmu.RUnlock()
+		c.Used = ratomic.LoadUint64(&mi.capacity.Used)
+		c.Avail = ratomic.LoadUint64(&mi.capacity.Avail)
+		c.PctUsed = ratomic.LoadInt32(&mi.capacity.PctUsed)
 		return
 	}
-
-	mi.cmu.Lock()
 	statfs := &syscall.Statfs_t{}
 	if err = syscall.Statfs(mi.Path, statfs); err != nil {
-		mi.cmu.Unlock()
 		return
 	}
 	bused := statfs.Blocks - statfs.Bavail
@@ -413,11 +408,14 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 		fpct := math.Ceil(float64(bused) * 100 / float64(statfs.Blocks))
 		pct = uint64(fpct)
 	}
-	mi.capacity.Used = bused * uint64(statfs.Bsize)
-	mi.capacity.Avail = statfs.Bavail * uint64(statfs.Bsize)
-	mi.capacity.PctUsed = int32(pct)
-	c = mi.capacity
-	mi.cmu.Unlock()
+	u := bused * uint64(statfs.Bsize)
+	ratomic.StoreUint64(&mi.capacity.Used, u)
+	c.Used = u
+	a := statfs.Bavail * uint64(statfs.Bsize)
+	ratomic.StoreUint64(&mi.capacity.Avail, a)
+	c.Avail = a
+	ratomic.StoreInt32(&mi.capacity.PctUsed, int32(pct))
+	c.PctUsed = int32(pct)
 	return
 }
 

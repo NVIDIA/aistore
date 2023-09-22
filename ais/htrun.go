@@ -478,39 +478,19 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *htrun) run() error {
-	config := cmn.GCO.Get()
-
-	// A wrapper to log http.Server errors
-	logger := log.New(&nlogWriter{}, "net/http err: ", 0)
-	if config.HostNet.UseIntraControl || config.HostNet.UseIntraData {
-		var errCh chan error
-		if config.HostNet.UseIntraControl && config.HostNet.UseIntraData {
-			errCh = make(chan error, 3)
-		} else {
-			errCh = make(chan error, 2)
-		}
-		if config.HostNet.UseIntraControl {
-			go func() {
-				addr := h.si.ControlNet.TCPEndpoint()
-				errCh <- h.netServ.control.listen(addr, logger)
-			}()
-		}
-		if config.HostNet.UseIntraData {
-			go func() {
-				addr := h.si.DataNet.TCPEndpoint()
-				errCh <- h.netServ.data.listen(addr, logger)
-			}()
-		}
+func (h *htrun) run(config *cmn.Config) error {
+	logger := log.New(&nlogWriter{}, "net/http err: ", 0) // a wrapper to log http.Server errors
+	if config.HostNet.UseIntraControl {
 		go func() {
-			addr := h.pubListeningAddr(config)
-			errCh <- h.netServ.pub.listen(addr, logger)
+			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger)
 		}()
-		return <-errCh
 	}
-
-	addr := h.pubListeningAddr(config)
-	return h.netServ.pub.listen(addr, logger)
+	if config.HostNet.UseIntraData {
+		go func() {
+			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger)
+		}()
+	}
+	return h.netServ.pub.listen(h.pubListeningAddr(config), logger)
 }
 
 // testing environment excluding Kubernetes: listen on `host:port`

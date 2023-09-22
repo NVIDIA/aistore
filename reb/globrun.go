@@ -193,8 +193,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 
 	reb.regRecv()
 
-	// TODO -- FIXME: minimally, must be num(active) + num(maintenance-mode-rebalancing-out)
-	haveStreams := smap.CountTargets() > 1
+	haveStreams := smap.HasActiveTs(reb.t.SID())
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}

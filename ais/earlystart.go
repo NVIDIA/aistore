@@ -251,7 +251,9 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		before.Smap, before.BMD, before.RMD, before.EtlMD = clone, p.owner.bmd.get(), p.owner.rmd.get(), p.owner.etl.get()
 		before.Config, _ = p.owner.config.get()
 
+		p.reg.mu.RLock()
 		smap = p.regpoolMaxVer(&before, &after)
+		p.reg.mu.RUnlock()
 
 		uuid, created = smap.UUID, smap.CreationTime
 		p.owner.smap.put(smap)
@@ -776,9 +778,6 @@ func (p *proxy) bcastMaxVerBestEffort(smap *smapX) *smapX {
 
 func (p *proxy) regpoolMaxVer(before, after *cluMeta) (smap *smapX) {
 	*after = *before
-
-	p.reg.mu.RLock()
-	defer p.reg.mu.RUnlock()
 	if len(p.reg.pool) == 0 {
 		goto ret
 	}
