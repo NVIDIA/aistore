@@ -1,5 +1,7 @@
 #!/bin/bash
 
-INVENTORY="inventory.yaml"
+source common.sh
 
-ansible-playbook -i $INVENTORY playbooks/clear_cache.yaml -f 10 --become -e "ansible_become_pass=y"
+PLAYBOOK=playbooks/clear_cache.yaml
+
+run_ansible_playbook "$PLAYBOOK"

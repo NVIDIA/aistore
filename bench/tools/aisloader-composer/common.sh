@@ -3,6 +3,9 @@
 INVENTORY="inventory/inventory.yaml"
 GRAFANA_HOST="dgx5826"
 
+# Hide output for tasks we aren't executing
+export ANSIBLE_DISPLAY_SKIPPED_HOSTS=false
+
 run_ansible_playbook() {
     local playbook="$1"
     # Any extra variables to pass to the playbook

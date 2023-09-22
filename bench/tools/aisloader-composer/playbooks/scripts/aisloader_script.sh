@@ -14,6 +14,7 @@ ais_proxies=""
 ais_port=""
 grafana_host=""
 workers=""
+filelist=""
 
 for arg in "$@"; do
     case "$arg" in
@@ -47,22 +48,40 @@ for arg in "$@"; do
         --s3_endpoint=*)
             s3_endpoint="${arg#*=}"
             ;;
+        --filelist=*)
+            filelist="${arg#*=}"
+            ;;
         *)
             echo "Invalid argument: $arg"
             ;;
     esac
 done
 
-if [ "$bench_type" != "get" ] && [ "$bench_type" != "put" ]; then
-  echo "Error: Bench type must be 'get' or 'put'"
+if [[ "$bench_type" != *"get"* ]] && [[ "$bench_type" != *"put"* ]]; then
+  echo "Error: Bench type must contain 'get' or 'put'"
   exit 1
 fi
 
+# Parse provider and bucket name from the bucket arg
+delimiter="://"
+# Check if the input string contains the delimiter
+if [[ "$bucket" == *"$delimiter"* ]]; then
+    read -r provider bucket_name <<< "$(echo "$bucket" | awk -F "$delimiter" '{print $1 " " $2}')"
+else 
+    provider="ais"
+    bucket_name=$bucket
+fi
+
+echo "Running with provider $provider and bucket $bucket_name"
+
+filename="$bucket_name-$bench_type-"
+outfile="$outdir$filename$hostname.json"
+
 # Common aisloader args for all bench types
-bench_args=("-loaderid=$(hostname)" "-loaderidhashlen=8" "-bucket=$bucket" "-cleanup=false" "-json" "-statsdip=$grafana_host" "-numworkers=$workers")
+bench_args=("-loaderid=$(hostname)" "-loaderidhashlen=8" "-bucket=$bucket" "-cleanup=false" "-json" "-stats-output=$outfile" "-statsdip=$grafana_host" "-numworkers=$workers")
 
 # Args specific to PUT or GET workloads
-if [ "$bench_type" == "put" ]; then
+if [[ "$bench_type" == *"put"* ]]; then
     bench_args+=("-totalputsize=$total_size")
     bench_args+=("-minsize=$each_size")
     bench_args+=("-maxsize=$each_size")
@@ -71,28 +90,23 @@ if [ "$bench_type" == "put" ]; then
 else
     bench_args+=("-duration=$duration")
     bench_args+=("-pctput=0")
+    if [ -n "$filelist" ]; then
+        bench_args+=("-filelist=$filelist")
+    fi
 fi
 
 # Args specific to either cloud or AIS benchmarks
 if [ -n "$s3_endpoint" ]; then
     # Run the benchmark directly to the cloud bucket with the given name and s3endpoint
-    filename="$bucket-direct-$bench_type-"    
-    outfile="$outdir$filename$hostname.json"
-    echo "outfile: $outfile"
     bench_args+=("-s3endpoint=$s3_endpoint")
-    bench_args+=("-stats-output=$outfile")
-    bench_args+=("-provider=aws")
 else
     # Run the benchmark against the bucket in AIS
-    filename="$bucket-$bench_type-"
-    outfile="$outdir$filename$hostname.json"
     # Split comma-separated string list of proxies into an array
     IFS=',' read -ra proxy_list <<< "$ais_proxies"
 
     bench_args+=("-ip=${proxy_list[0]}")
     bench_args+=("-port=$ais_port")
     bench_args+=("-randomproxy") 
-    bench_args+=("-stats-output=$outfile")
 fi
 
 # Run the aisloader binary

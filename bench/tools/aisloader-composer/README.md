@@ -21,10 +21,12 @@ This directory contains scripts and ansible playbooks to benchmark an AIS cluste
   2. Ensure docker is installed and accessible on each target host. The provided `install_docker.sh` will do this automatically.
   3. Run `deploy_grafana.sh` and `start_netdata.sh` to start the containers to collect and display aisloader and system statistics.
 3. Configure your benchmarks
-  1. Modify the `run_playbook_*` scripts as needed to set object sizes, benchmark durations, bucket names, and graphite/grafana host.
+  1. Modify the `run_get_bench` and `run_put_bench` scripts as needed to set object sizes, benchmark durations, bucket names, and other options. These variables can also be set at runtime via the command line.
   2. Configure the number of worker threads each aisloader instance will use in [playbooks/vars/bench.yaml](/bench/tools/aisloader-composer/playbooks/vars/bench.yaml).
 4. Run `configure_aisloader.sh` to update the TCP settings on the aisloader hosts. This is necessary to enable a very large number of outbound connections (to the AIS cluster) without exhausting the number of local ports available. 
-5. To run individual benchmarks, use the `run_playbook_*` scripts; to run all benchmarks use [run_all.sh](run_all.sh).
+5. To run individual benchmarks, use the `run_get_bench` and `run_put_bench` scripts. For an example running multiple variations of benchmarks, see [run_all.sh](run_all.sh).
+6. The [parse_results](parse_results.py) Python script can be used to summarize the results exported to the `/output` directory.
+
 
 ### Optional
 
@@ -38,5 +40,6 @@ This directory contains scripts and ansible playbooks to benchmark an AIS cluste
  - The `get` benchmarks expect data to already exist in the clusters. Either populate the bucket or use the `put` benchmark first.
  - Note that individual `aisloader` hosts do not communicate with each other. Secondly, when running `put` workloads `aisloader` will create destination bucket _iff_ the latter does not exist. That's why it is recommended to create buckets _prior_ to writing (into those buckets) from multiple `aisloaders`.
  - None of the `aisloader` runs use the `cleanup` option. For all supported options, simply run `aisloader` or check [aisloader's readme](/docs/aisloader.md).
+ - To debug, add `-vvv` to the ansible-playbook command in [common.sh](common.sh) to get the full command that is run on each host.
  - [fio](https://github.com/axboe/fio) `rand_write` is destructive and cannot (shall not!) be used in combination with the `allow_mounted_write` option. The `rand_write` option is commented out in both the ansible playbook and the script.
    - see also: https://fio.readthedocs.io/en/latest/fio_doc.html#cmdoption-arg-allow-mounted-write

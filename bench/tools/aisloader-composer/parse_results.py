@@ -11,9 +11,9 @@ def load_hosts(hosts_file):
     return dgx_nodes.keys()
 
 
-def read_results(host_list, bench_type, bench_size):
-    directory = f"output/{bench_type}/{bench_size}"
-    base_name = f"bench-{bench_size}-{bench_type}-"
+def read_results(host_list, bench_type, bucket):
+    directory = f"output/{bench_type}/{bucket}"
+    base_name = f"{bucket}-{bench_type}-"
 
     host_results = {}
     # load all the output files
@@ -71,9 +71,9 @@ def get_natural_time(raw_time):
     return f"{raw_time:.2f} {units[unit_index]}"
 
 
-def pretty_print_res(bench_type, bench_size, res, total_drives):
+def pretty_print_res(bench_type, bucket, res, total_drives):
     lat_min, avg_lat, lat_max, total_tput = res
-    print(f"Benchmark results for type {bench_type} with size {bench_size}")
+    print(f"Benchmark results for benchmark type '{bench_type}' on bucket '{bucket}'")
     print("Latencies: ")
     print(
         f"min: {get_natural_time(lat_min)}, avg: {get_natural_time(avg_lat)}, max: {get_natural_time(lat_max)}"
@@ -86,24 +86,20 @@ def pretty_print_res(bench_type, bench_size, res, total_drives):
 
 def main(configs, args):
     for config in configs:
-        bench_type, bench_size = config
+        bench_type, bucket = config
         # load hosts from ansible yaml file
         host_list = load_hosts(args.host_file)
-        results = read_results(host_list, bench_type, bench_size)
+        results = read_results(host_list, bench_type, bucket)
         combined_results = combine_results(results, bench_type)
         pretty_print_res(
-            bench_type, bench_size, combined_results, total_drives=args.total_drives
+            bench_type, bucket, combined_results, total_drives=args.total_drives
         )
 
 
 if __name__ == "__main__":
     bench_runs = [
-        ("get", "100MB"),
-        ("put", "100MB"),
-        ("put", "10MB"),
-        ("get", "10MB"),
-        ("put", "1MB"),
-        ("get", "1MB"),
+        ("get", "bench_1MB"),
+        ("put", "bench_1MB"),
     ]
     import argparse
 
@@ -113,7 +109,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--host_file",
-        default="inventory.yaml",
+        default="inventory/inventory.yaml",
         help="Filename containing ansible hosts",
     )
     parser.add_argument(
