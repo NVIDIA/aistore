@@ -3,8 +3,6 @@
  * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
  */
 
-// worker routines
-
 package aisloader
 
 import (
@@ -16,13 +14,169 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
+
+const (
+	opPut = iota
+	opGet
+	opConfig
+)
+
+type (
+	workOrder struct {
+		op        int
+		proxyURL  string
+		bck       cmn.Bck
+		objName   string // In the format of 'virtual dir' + "/" + objName
+		size      int64
+		err       error
+		start     time.Time
+		end       time.Time
+		latencies httpLatencies
+		cksumType string
+		sgl       *memsys.SGL
+	}
+)
+
+func postNewWorkOrder() (err error) {
+	var wo *workOrder
+	switch {
+	case runParams.getConfig:
+		wo = newGetConfigWorkOrder()
+	case runParams.putPct == 100:
+		wo, err = newPutWorkOrder()
+	case runParams.putPct == 0:
+		wo, err = newGetWorkOrder()
+	default:
+		var put bool
+		if runParams.putPct == 50 {
+			put = mono.NanoTime()&1 == 1
+		} else {
+			put = runParams.putPct > rnd.Intn(99)
+		}
+		if put {
+			wo, err = newPutWorkOrder()
+		} else {
+			wo, err = newGetWorkOrder()
+		}
+	}
+	if err == nil {
+		workCh <- wo
+	}
+	return
+}
+
+func validateWorkOrder(wo *workOrder, delta time.Duration) error {
+	if wo.op == opGet || wo.op == opPut {
+		if delta == 0 {
+			return fmt.Errorf("%s has the same start time as end time", wo)
+		}
+	}
+	return nil
+}
+
+func completeWorkOrder(wo *workOrder, terminating bool) {
+	delta := timeDelta(wo.end, wo.start)
+
+	if wo.err == nil && traceHTTPSig.Load() {
+		var lat *stats.MetricLatsAgg
+		switch wo.op {
+		case opGet:
+			lat = &intervalStats.statsd.GetLat
+		case opPut:
+			lat = &intervalStats.statsd.PutLat
+		}
+		if lat != nil {
+			lat.Add("latency.proxyconn", wo.latencies.ProxyConn)
+			lat.Add("latency.proxy", wo.latencies.Proxy)
+			lat.Add("latency.targetconn", wo.latencies.TargetConn)
+			lat.Add("latency.target", wo.latencies.Target)
+			lat.Add("latency.posthttp", wo.latencies.PostHTTP)
+			lat.Add("latency.proxyheader", wo.latencies.ProxyWroteHeader)
+			lat.Add("latency.proxyrequest", wo.latencies.ProxyWroteRequest)
+			lat.Add("latency.targetheader", wo.latencies.TargetWroteHeader)
+			lat.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
+			lat.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
+			lat.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
+		}
+	}
+
+	if err := validateWorkOrder(wo, delta); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] %s", err.Error())
+		return
+	}
+
+	switch wo.op {
+	case opGet:
+		getPending--
+		intervalStats.statsd.Get.AddPending(getPending)
+		if wo.err == nil {
+			intervalStats.get.Add(wo.size, delta)
+			intervalStats.statsd.Get.Add(wo.size, delta)
+		} else {
+			fmt.Println("GET failed: ", wo.err)
+			intervalStats.statsd.Get.AddErr()
+			intervalStats.get.AddErr()
+		}
+	case opPut:
+		putPending--
+		intervalStats.statsd.Put.AddPending(putPending)
+		if wo.err == nil {
+			bucketObjsNames.AddObjName(wo.objName)
+			intervalStats.put.Add(wo.size, delta)
+			intervalStats.statsd.Put.Add(wo.size, delta)
+		} else {
+			fmt.Println("PUT failed: ", wo.err)
+			intervalStats.put.AddErr()
+			intervalStats.statsd.Put.AddErr()
+		}
+		if wo.sgl == nil || terminating {
+			return
+		}
+
+		now, l := time.Now(), len(wo2Free)
+		debug.Assert(!wo.end.IsZero())
+		// free previously executed PUT SGLs
+		for i := 0; i < l; i++ {
+			if terminating {
+				return
+			}
+			w := wo2Free[i]
+			// delaying freeing sgl for `wo2FreeDelay`
+			// (background at https://github.com/golang/go/issues/30597)
+			if now.Sub(w.end) < wo2FreeDelay {
+				break
+			}
+			if w.sgl != nil && !w.sgl.IsNil() {
+				w.sgl.Free()
+				copy(wo2Free[i:], wo2Free[i+1:])
+				i--
+				l--
+				wo2Free = wo2Free[:l]
+			}
+		}
+		// append to free later
+		wo2Free = append(wo2Free, wo)
+	case opConfig:
+		if wo.err == nil {
+			intervalStats.getConfig.Add(1, delta)
+			intervalStats.statsd.Config.Add(delta, wo.latencies.Proxy, wo.latencies.ProxyConn)
+		} else {
+			fmt.Println("GET config failed: ", wo.err)
+			intervalStats.getConfig.AddErr()
+		}
+	default:
+		debug.Assert(false) // Should never be here
+	}
+}
 
 func doPut(wo *workOrder) {
 	var (
@@ -134,7 +288,7 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 ///////////////
 
 func newPutWorkOrder() (*workOrder, error) {
-	objName, err := generatePutObjectName()
+	objName, err := _genObjName()
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +307,7 @@ func newPutWorkOrder() (*workOrder, error) {
 	}, nil
 }
 
-func generatePutObjectName() (string, error) {
+func _genObjName() (string, error) {
 	cnt := objNameCnt.Inc()
 	if runParams.maxputs != 0 && cnt-1 == runParams.maxputs {
 		return "", fmt.Errorf("number of PUT objects reached maxputs limit (%d)", runParams.maxputs)

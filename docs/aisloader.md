@@ -89,6 +89,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -s3profile | `string` | Other then default S3 config profile referencing alternative credentials | `""` |
 | -seed | `int` | Random seed to achieve deterministic reproducible results (0 - use current time in nanoseconds) | `0` |
 | -skiplist | `bool` | Whether to skip listing objects in a bucket before running PUT workload | `false` |
+| -filelist | `string` | Local or locally accessible text file file containing object names (for subsequent reading) | `""` |
 | -stats-output | `string` | filename to log statistics (empty string translates as standard output (default) | `""` |
 | -statsdip | `string` | StatsD IP address or hostname | `localhost` |
 | -statsdport | `int` | StatsD UDP port | `8125` |
@@ -236,7 +237,7 @@ Note that this is entirely optional, and therefore an input such as `300` will b
 
 For the most recently updated command-line options and examples, please run `aisloader` or `aisloader usage`.
 
-1. Create a 10-seconds load of 50% PUT and 50% GET requests:
+**1**. Create a 10-seconds load of 50% PUT and 50% GET requests:
 
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=50 -provider=ais
@@ -267,61 +268,61 @@ For the most recently updated command-line options and examples, please run `ais
     01:52:54 Clean up done
     ```
 
-2. Time-based 100% PUT into ais bucket. Upon exit the bucket is destroyed:
+**2**. Time-based 100% PUT into ais bucket. Upon exit the bucket is destroyed:
 
     ```console
     $ aisloader -bucket=nvais -duration 10s -cleanup=true -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
     ```
 
-3. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
+**3**. Timed (for 1h) 100% GET from a Cloud bucket, no cleanup:
 
     ```console
     $ aisloader -bucket=aws://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
     ```
 
-4. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
+**4**. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
 
     ```console
     $ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
     ```
 
-5. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
+**5**. PUT 1GB total into an ais bucket with cleanup disabled, object size = 1MB, duration unlimited:
 
     ```console
     $ aisloader -bucket=nvais -cleanup=false -totalputsize=1G -duration=0 -minsize=1MB -maxsize=1MB -numworkers=8 -pctput=100 -provider=ais
     ```
 
-6. 100% GET from an ais bucket:
+**6**. 100% GET from an ais bucket:
 
     ```console
     $ aisloader -bucket=nvais -duration 5s -numworkers=3 -pctput=0 -provider=ais -cleanup=false
     ```
 
-7. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
+**7**. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
 
     ```console
     $ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=false
     ```
 
-8. Use random object names and loaderID to report statistics:
+**8**. Use random object names and loaderID to report statistics:
 
     ```console
     $ aisloader -loaderid=10
     ```
 
-9. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
+**9**. PUT objects with random name generation being based on the specified loaderID and the total number of concurrent aisloaders:
 
     ```console
     $ aisloader -loaderid=10 -loadernum=20
     ```
 
-10. Same as above except that loaderID is computed by the aisloader as `hash(loaderstring) & 0xff`:
+**10**. Same as above except that loaderID is computed by the aisloader as `hash(loaderstring) & 0xff`:
 
     ```console
     $ aisloader -loaderid=loaderstring -loaderidhashlen=8
     ```
 
-11. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:
+**11**. Print loaderID and exit (all 3 examples below) with the resulting loaderID shown on the right:
 
     ```console
     $ aisloader -getloaderid (0x0)
@@ -329,50 +330,57 @@ For the most recently updated command-line options and examples, please run `ais
     $ aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
     ```
 
-12. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
+**12**. Destroy existing ais bucket. If the bucket is Cloud-based, delete all objects:
 
     ```console
     $ aisloader -bucket=nvais -duration 0s -totalputsize=0 -cleanup=true
     ```
 
-13. Generate load on a cluster listening on custom IP address and port:
+**13**. Generate load on a cluster listening on custom IP address and port:
 
     ```console
     $ aisloader -ip="example.com" -port=8080
     ```
 
-14. Generate load on a cluster listening on custom IP address and port from environment variable:
+**14**. Generate load on a cluster listening on custom IP address and port from environment variable:
 
     ```console
     $ AIS_ENDPOINT="examples.com:8080" aisloader
     ```
 
-15. Use HTTPS when connecting to a cluster:
+**15**. Use HTTPS when connecting to a cluster:
 
     ```console
     $ aisloader -ip="https://localhost" -port=8080
     ```
 
-16. PUT TAR files with random files inside into a cluster:
+**16**. PUT TAR files with random files inside into a cluster:
 
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar
     ```
 
-17. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
+**17**. Generate load on `tar2tf` ETL. New ETL is started and then stopped at the end. TAR files are PUT to the cluster. Only available when cluster is deployed on Kubernetes.
 
     ```console
     $ aisloader -bucket=my_ais_bucket -duration=10s -pctput=100 -provider=ais -readertype=tar -etl=tar2tf -cleanup=false
     ```
 
-18. Timed 100% GET _directly_ from S3 bucket (notice '-s3endpoint' command line):
+**18**. Timed 100% GET _directly_ from S3 bucket (notice '-s3endpoint' command line):
     ```console
     $ aisloader -bucket=s3://xyz -cleanup=false -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
     ```
 
-19. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults. Similar to the previous example, aisloader goes directly to a given S3 endpoint ('-s3endpoint'), and aistore is not being used:
+**19**. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults. Similar to the previous example, aisloader goes directly to a given S3 endpoint ('-s3endpoint'), and aistore is not being used:
     ```console
      $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
+    ```
+
+**20**.  Generate a list of object names (once), and then run aisloader without executing list-objects:
+
+    ```console
+    $ ais ls ais://nnn --props name -H > /tmp/a.txt
+    $ aisloader -bucket=ais://nnn -duration 1h -numworkers=30 -pctput=0 -filelist /tmp/a.txt -cleanup=false
     ```
 
 ## Collecting stats

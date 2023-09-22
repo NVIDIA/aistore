@@ -17,42 +17,13 @@
 // inference workloads - the capability that allows to run benchmarks in isolation
 // avoiding compute-side bottlenecks and the associated complexity (to analyze those).
 //
-// For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.
-
-// Examples:
-// 1. Destroy existing ais bucket:
-//    a) aisloader -bucket=ais://abc -duration 0s -totalputsize=0 -cleanup=true
-//    Delete all objects in a given AWS-based bucket:
-//    b) aisloader -bucket=aws://nvais -cleanup=true -duration 0s -totalputsize=0
-// 2. Timed (for 1h) 100% GET from a Cloud bucket (no cleanup):
-//    aisloader -bucket=aws://mybucket -duration 1h -numworkers=30 -pctput=0 -cleanup=false
-// 3. Time-based PUT into ais bucket, random objects names:
-//    aisloader -bucket=abc -duration 10s -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais -cleanup=true
-// 4. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
-//    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G -cleanup=false
-// 5. PUT 2000 objects with names matching hex({0..2000}{loaderid}) template:
-//    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -cleanup=false
-// ====================
-// 6. Use random object names and loaderID for reporting stats
-//    aisloader -loaderid=10
-// 7. PUT objects with names based on loaderID and total number of loaders; names: hex({0..}{loaderid})
-//    aisloader -loaderid=10 -loadernum=20
-// 8. PUT objects with names passed on hash of loaderID of length -loaderidhashlen; names: hex({0..}{hash(loaderid)})
-//    aisloader -loaderid=loaderstring -loaderidhashlen=8
-// 9. Does nothing but prints loaderID:
-//    aisloader -getloaderid (0x0)
-//    aisloader -loaderid=10 -getloaderid (0xa)
-//    aisloader -loaderid=loaderstring -loaderidhashlen=8 -getloaderid (0xdb)
-// ====================
-// 10. Timed 100% GET from s3 bucket directly (NOTE: aistore is not being used here):
-//    aisloader -bucket=s3://xyz -numworkers=8 -pctput=0 -duration=10m -s3endpoint=https://s3.amazonaws.com
-// 11. PUT approx. 8000 files into s3 bucket directly, skip printing usage and defaults
-//     (NOTE: aistore is not being used):
-// aisloader -bucket=s3://xyz -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
+// For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`,
+// or see examples.go.
 
 package aisloader
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -62,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -94,10 +66,6 @@ import (
 )
 
 const (
-	opPut = iota
-	opGet
-	opConfig
-
 	myName           = "loader"
 	randomObjNameLen = 32
 
@@ -108,20 +76,6 @@ const (
 )
 
 type (
-	workOrder struct {
-		op        int
-		proxyURL  string
-		bck       cmn.Bck
-		objName   string // In the format of 'virtual dir' + "/" + objName
-		size      int64
-		err       error
-		start     time.Time
-		end       time.Time
-		latencies httpLatencies
-		cksumType string
-		sgl       *memsys.SGL
-	}
-
 	params struct {
 		seed              int64 // random seed; UnixNano() if omitted
 		putSizeUpperBound int64
@@ -163,6 +117,7 @@ type (
 		readLenStr           string // read length
 		subDir               string
 		tokenFile            string
+		fileList             string // local file that contains object names (an alternative to running list-objects)
 
 		etlName     string // name of a ETL to apply to each object. Omitted when etlSpecPath specified.
 		etlSpecPath string // Path to a ETL spec to apply to each object.
@@ -174,7 +129,7 @@ type (
 		randomObjName bool
 		randomProxy   bool
 		uniqueGETs    bool
-		skipList      bool // true: skip listing objects before running PUT workload
+		skipList      bool // true: skip listing objects before running 100% PUT workload (see also fileList)
 		verifyHash    bool // verify xxhash during get
 		getConfig     bool // true: load control plane (read proxy config)
 		jsonFormat    bool
@@ -207,9 +162,6 @@ type (
 var (
 	runParams        *params
 	rnd              *rand.Rand
-	workOrders       chan *workOrder
-	workOrderResults chan *workOrder
-	wo2Free          []*workOrder
 	intervalStats    sts
 	accumulatedStats sts
 	bucketObjsNames  namegetter.ObjectNameGetter
@@ -247,6 +199,12 @@ var (
 	s3Profile  string
 
 	loggedUserToken string
+)
+
+var (
+	workCh  chan *workOrder
+	resCh   chan *workOrder
+	wo2Free []*workOrder
 )
 
 var _version, _buildtime string
@@ -389,12 +347,12 @@ func Start(version, buildtime string) (err error) {
 		}()
 	}
 
-	workOrders = make(chan *workOrder, runParams.numWorkers)
-	workOrderResults = make(chan *workOrder, runParams.numWorkers)
+	workCh = make(chan *workOrder, runParams.numWorkers)
+	resCh = make(chan *workOrder, runParams.numWorkers)
 	wg := &sync.WaitGroup{}
 	for i := 0; i < runParams.numWorkers; i++ {
 		wg.Add(1)
-		go worker(workOrders, workOrderResults, wg, &numGets)
+		go worker(workCh, resCh, wg, &numGets)
 	}
 	if runParams.putPct != 0 {
 		wo2Free = make([]*workOrder, 0, wo2FreeSize)
@@ -470,7 +428,7 @@ MainLoop:
 		select {
 		case <-timer.C:
 			break MainLoop
-		case wo := <-workOrderResults:
+		case wo := <-resCh:
 			completeWorkOrder(wo, false)
 			if runParams.statsShowInterval == 0 && runParams.putSizeUpperBound != 0 {
 				accumulatedStats.aggregate(intervalStats)
@@ -506,12 +464,12 @@ MainLoop:
 Done:
 	timer.Stop()
 	statsTicker.Stop()
-	close(workOrders)
+	close(workCh)
 	wg.Wait() // wait until all workers complete their work
 
 	// Process left over work orders
-	close(workOrderResults)
-	for wo := range workOrderResults {
+	close(resCh)
+	for wo := range resCh {
 		completeWorkOrder(wo, true)
 	}
 
@@ -576,7 +534,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.readLenStr, "readlen", "", "Read range length (can contain multiplicative suffix; 0 - GET full object)")
 	f.Uint64Var(&p.maxputs, "maxputs", 0, "Maximum number of objects to PUT")
 	f.UintVar(&p.numEpochs, "epochs", 0, "Number of \"epochs\" to run whereby each epoch entails full pass through the entire listed bucket")
-	f.BoolVar(&p.skipList, "skiplist", false, "Whether to skip listing objects in a bucket before running PUT workload")
+	f.BoolVar(&p.skipList, "skiplist", false, "Whether to skip listing objects in a bucket before running 100% PUT workload")
+	f.StringVar(&p.fileList, "filelist", "", "Local or locally accessible text file file containing object names (for subsequent reading)")
 
 	//
 	// object naming
@@ -697,8 +656,12 @@ func validateCmdLine(p *params) (err error) {
 		return fmt.Errorf("invalid option: PUT percent %d", p.putPct)
 	}
 
-	if p.skipList && p.putPct != 100 {
-		return errors.New("invalid option: '-skiplist' is only valid for 100%% PUT workloads")
+	if p.skipList {
+		if p.fileList != "" {
+			fmt.Printf("Warning: '-skiplist' is redundant (implied) when '-filelist' is specified")
+		} else if p.putPct != 100 {
+			return errors.New("invalid option: '-skiplist' is only valid for 100% PUT workloads")
+		}
 	}
 
 	// direct s3 access vs other command line
@@ -1048,138 +1011,6 @@ func sendStatsdStats(s *sts) {
 	s.statsd.SendAll(statsdC)
 }
 
-func postNewWorkOrder() (err error) {
-	var wo *workOrder
-	switch {
-	case runParams.getConfig:
-		wo = newGetConfigWorkOrder()
-	case runParams.putPct == 100:
-		wo, err = newPutWorkOrder()
-	case runParams.putPct == 0:
-		wo, err = newGetWorkOrder()
-	default:
-		var put bool
-		if runParams.putPct == 50 {
-			put = mono.NanoTime()&1 == 1
-		} else {
-			put = runParams.putPct > rnd.Intn(99)
-		}
-		if put {
-			wo, err = newPutWorkOrder()
-		} else {
-			wo, err = newGetWorkOrder()
-		}
-	}
-	if err == nil {
-		workOrders <- wo
-	}
-	return
-}
-
-func validateWorkOrder(wo *workOrder, delta time.Duration) error {
-	if wo.op == opGet || wo.op == opPut {
-		if delta == 0 {
-			return fmt.Errorf("%s has the same start time as end time", wo)
-		}
-	}
-	return nil
-}
-
-func completeWorkOrder(wo *workOrder, terminating bool) {
-	delta := timeDelta(wo.end, wo.start)
-
-	if wo.err == nil && traceHTTPSig.Load() {
-		var lat *stats.MetricLatsAgg
-		switch wo.op {
-		case opGet:
-			lat = &intervalStats.statsd.GetLat
-		case opPut:
-			lat = &intervalStats.statsd.PutLat
-		}
-		if lat != nil {
-			lat.Add("latency.proxyconn", wo.latencies.ProxyConn)
-			lat.Add("latency.proxy", wo.latencies.Proxy)
-			lat.Add("latency.targetconn", wo.latencies.TargetConn)
-			lat.Add("latency.target", wo.latencies.Target)
-			lat.Add("latency.posthttp", wo.latencies.PostHTTP)
-			lat.Add("latency.proxyheader", wo.latencies.ProxyWroteHeader)
-			lat.Add("latency.proxyrequest", wo.latencies.ProxyWroteRequest)
-			lat.Add("latency.targetheader", wo.latencies.TargetWroteHeader)
-			lat.Add("latency.proxyresponse", wo.latencies.ProxyFirstResponse)
-			lat.Add("latency.targetrequest", wo.latencies.TargetWroteRequest)
-			lat.Add("latency.targetresponse", wo.latencies.TargetFirstResponse)
-		}
-	}
-
-	if err := validateWorkOrder(wo, delta); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] %s", err.Error())
-		return
-	}
-
-	switch wo.op {
-	case opGet:
-		getPending--
-		intervalStats.statsd.Get.AddPending(getPending)
-		if wo.err == nil {
-			intervalStats.get.Add(wo.size, delta)
-			intervalStats.statsd.Get.Add(wo.size, delta)
-		} else {
-			fmt.Println("GET failed: ", wo.err)
-			intervalStats.statsd.Get.AddErr()
-			intervalStats.get.AddErr()
-		}
-	case opPut:
-		putPending--
-		intervalStats.statsd.Put.AddPending(putPending)
-		if wo.err == nil {
-			bucketObjsNames.AddObjName(wo.objName)
-			intervalStats.put.Add(wo.size, delta)
-			intervalStats.statsd.Put.Add(wo.size, delta)
-		} else {
-			fmt.Println("PUT failed: ", wo.err)
-			intervalStats.put.AddErr()
-			intervalStats.statsd.Put.AddErr()
-		}
-		if wo.sgl == nil || terminating {
-			return
-		}
-
-		now, l := time.Now(), len(wo2Free)
-		debug.Assert(!wo.end.IsZero())
-		// free previously executed PUT SGLs
-		for i := 0; i < l; i++ {
-			if terminating {
-				return
-			}
-			w := wo2Free[i]
-			// delaying freeing sgl for `wo2FreeDelay`
-			// (background at https://github.com/golang/go/issues/30597)
-			if now.Sub(w.end) < wo2FreeDelay {
-				break
-			}
-			if w.sgl != nil && !w.sgl.IsNil() {
-				w.sgl.Free()
-				copy(wo2Free[i:], wo2Free[i+1:])
-				i--
-				l--
-				wo2Free = wo2Free[:l]
-			}
-		}
-		// append to free later
-		wo2Free = append(wo2Free, wo)
-	case opConfig:
-		if wo.err == nil {
-			intervalStats.getConfig.Add(1, delta)
-			intervalStats.statsd.Config.Add(delta, wo.latencies.Proxy, wo.latencies.ProxyConn)
-		} else {
-			fmt.Println("GET config failed: ", wo.err)
-			intervalStats.getConfig.AddErr()
-		}
-	default:
-		debug.Assert(false) // Should never be here
-	}
-}
-
 func cleanup() {
 	stopping.Store(true)
 	time.Sleep(time.Second)
@@ -1217,8 +1048,8 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		return
 	}
 
-	// Only clean up the objects if it's not AIS bucket (the whole bucket is
-	// removed if it's AIS)
+	// Only delete objects if it's not an AIS bucket (because otherwise we just go ahead
+	// and remove the bucket itself)
 	if !runParams.bck.IsAIS() {
 		b := min(t, runParams.batchSize)
 		n := t / b
@@ -1254,32 +1085,40 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 	}
 }
 
+func objNamesFromFile() (names []string, err error) {
+	var fh *os.File
+	if fh, err = os.Open(runParams.fileList); err != nil {
+		return
+	}
+	names = make([]string, 0, 1024)
+	scanner := bufio.NewScanner(fh)
+	regex := regexp.MustCompile(`\s`)
+	for scanner.Scan() {
+		n := strings.TrimSpace(scanner.Text())
+		if strings.Contains(n, " ") || regex.MatchString(n) {
+			continue
+		}
+		names = append(names, n)
+	}
+	fh.Close()
+	return
+}
+
 func listObjects() error {
 	var (
 		names []string
 		err   error
 	)
-	if isDirectS3() {
+	switch {
+	case runParams.fileList != "":
+		names, err = objNamesFromFile()
+	case isDirectS3():
 		names, err = s3ListObjects()
-	} else {
-		names, err = listObjectNames(runParams.bp, runParams.bck, "")
+	default:
+		names, err = listObjectNames(runParams.bp, runParams.bck, runParams.subDir)
 	}
 	if err != nil {
-		fmt.Printf("Failed to list_objects %s, proxy %s, err: %v\n",
-			runParams.bck, runParams.proxyURL, err)
 		return err
-	}
-
-	if runParams.subDir != "" {
-		filteredNames := names[:0]
-
-		for _, name := range names {
-			if strings.HasPrefix(name, runParams.subDir) {
-				filteredNames = append(filteredNames, name)
-			}
-		}
-
-		names = filteredNames
 	}
 
 	if !runParams.uniqueGETs {

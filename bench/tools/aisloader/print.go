@@ -225,7 +225,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	pl := prettyLatency
 	pt := prettyTimestamp
 
-	workOrderResLen := int64(len(workOrderResults))
+	workOrderResLen := int64(len(resCh))
 	// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
 	errs := "-"
 	if t.put.TotalErrs() != 0 {
