@@ -502,14 +502,15 @@ func (p *proxy) acceptRegistrations(smap, loadedSmap *smapX, config *cmn.Config,
 
 	targetCnt := p.owner.smap.get().CountTargets()
 	if definedTargetCnt {
-		s := cos.Plural(ntargets)
+		s := "target" + cos.Plural(ntargets)
 		if targetCnt >= ntargets {
-			nlog.Infof("%s: reached expected membership of %d target%s (registered: %d)", p, ntargets, s, targetCnt)
+			nlog.Infof("%s: reached expected membership of %d %s (joined: %d)", p, ntargets, s, targetCnt)
 		} else {
-			nlog.Warningf("%s: timed out waiting for %d target%s (registered: %d)", p, ntargets, s, targetCnt)
+			nlog.Warningf("%s: timed out waiting for %d %s (joined: %d)", p, ntargets, s, targetCnt)
 		}
 	} else {
-		nlog.Infof("%s: registered %d new targets", p, targetCnt)
+		s := "target" + cos.Plural(targetCnt)
+		nlog.Infof("%s: joined %d new %s", p, targetCnt, s)
 	}
 	return
 }

@@ -32,9 +32,9 @@ func (reb *Reb) RebStatus(status *Status) {
 	status.RebID = reb.rebID.Load()
 	status.Quiescent = reb.isQuiescent()
 	status.SmapVersion = tsmap.Version
-	rsmap := (*meta.Smap)(reb.smap.Load())
-	if rsmap != nil {
-		status.RebVersion = rsmap.Version
+	smap := reb.smap.Load()
+	if smap != nil {
+		status.RebVersion = smap.Version
 	}
 	reb.mu.RUnlock()
 
@@ -59,15 +59,15 @@ func (reb *Reb) RebStatus(status *Status) {
 	}
 
 	// wack status
-	if rsmap == nil || status.Stage != rebStageWaitAck {
+	if smap == nil || status.Stage != rebStageWaitAck {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
-		nlog.Warningf("%s: Smap version %d != %d", reb.t, status.SmapVersion, status.RebVersion)
+		nlog.Warningf("%s: Smap v%d != %d", reb.t, status.SmapVersion, status.RebVersion)
 		return
 	}
 	reb.awaiting.mtx.Lock()
-	reb.wackStatus(status, rsmap)
+	reb.wackStatus(status, smap)
 	reb.awaiting.mtx.Unlock()
 }
 

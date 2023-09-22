@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -38,8 +38,10 @@ type Manager struct {
 	bundleEnabled atomic.Bool // to disable and enable on the fly
 	netReq        string      // network used to send object request
 	netResp       string      // network used to send/receive slices
-	reqBundle     atomic.Pointer
-	respBundle    atomic.Pointer
+
+	// streams
+	reqBundle  ratomic.Pointer[bundle.Streams]
+	respBundle ratomic.Pointer[bundle.Streams]
 }
 
 var (
@@ -69,13 +71,8 @@ func initManager(t cluster.Target) error {
 	return nil
 }
 
-func (mgr *Manager) req() *bundle.Streams {
-	return (*bundle.Streams)(mgr.reqBundle.Load())
-}
-
-func (mgr *Manager) resp() *bundle.Streams {
-	return (*bundle.Streams)(mgr.respBundle.Load())
-}
+func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
+func (mgr *Manager) resp() *bundle.Streams { return mgr.respBundle.Load() }
 
 func (mgr *Manager) initECBundles() error {
 	if !mgr.bundleEnabled.CAS(false, true) {
@@ -112,8 +109,8 @@ func (mgr *Manager) initECBundles() error {
 	}
 
 	sowner := mgr.t.Sowner()
-	mgr.reqBundle.Store(unsafe.Pointer(bundle.New(sowner, mgr.t.Snode(), client, reqSbArgs)))
-	mgr.respBundle.Store(unsafe.Pointer(bundle.New(sowner, mgr.t.Snode(), client, respSbArgs)))
+	mgr.reqBundle.Store(bundle.New(sowner, mgr.t.Snode(), client, reqSbArgs))
+	mgr.respBundle.Store(bundle.New(sowner, mgr.t.Snode(), client, respSbArgs))
 
 	mgr.smap = sowner.Get()
 	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTs()))

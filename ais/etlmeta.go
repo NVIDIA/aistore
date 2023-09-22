@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -10,10 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -55,8 +54,8 @@ type (
 	}
 
 	etlMDOwnerBase struct {
+		etlMD ratomic.Pointer[etlMD]
 		sync.Mutex
-		etlMD atomic.Pointer
 	}
 	etlMDOwnerPrx struct {
 		etlMDOwnerBase
@@ -119,13 +118,14 @@ func (e *etlMD) del(id string) (exists bool) {
 	return
 }
 
-//////////////////
+////////////////////
 // etlMDOwnerBase //
-//////////////////
+////////////////////
 
-func (eo *etlMDOwnerBase) Get() *etl.MD     { return &eo.get().MD }
-func (eo *etlMDOwnerBase) get() *etlMD      { return (*etlMD)(eo.etlMD.Load()) }
-func (eo *etlMDOwnerBase) put(etlMD *etlMD) { eo.etlMD.Store(unsafe.Pointer(etlMD)) }
+func (eo *etlMDOwnerBase) Get() *etl.MD { return &eo.get().MD }
+
+func (eo *etlMDOwnerBase) get() *etlMD      { return eo.etlMD.Load() }
+func (eo *etlMDOwnerBase) put(etlMD *etlMD) { eo.etlMD.Store(etlMD) }
 
 // write metasync-sent bytes directly (no json)
 func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool) {
@@ -145,9 +145,9 @@ func (*etlMDOwnerBase) persistBytes(payload msPayload, fpath string) (done bool)
 	return
 }
 
-/////////////////
+///////////////////
 // etlMDOwnerPrx //
-/////////////////
+///////////////////
 
 func newEtlMDOwnerPrx(config *cmn.Config) *etlMDOwnerPrx {
 	return &etlMDOwnerPrx{fpath: filepath.Join(config.ConfigDir, fname.Emd)}
@@ -200,9 +200,9 @@ func (eo *etlMDOwnerPrx) modify(ctx *etlMDModifier) (clone *etlMD, err error) {
 	return
 }
 
-/////////////////
+///////////////////
 // etlMDOwnerTgt //
-/////////////////
+///////////////////
 
 func newEtlMDOwnerTgt() *etlMDOwnerTgt {
 	return &etlMDOwnerTgt{}
@@ -214,12 +214,11 @@ func (eo *etlMDOwnerTgt) init() {
 		available = fs.GetAvail()
 	)
 	if etlMD = loadEtlMD(available, fname.Emd); etlMD != nil {
-		nlog.Infof("loaded %s", etlMD)
-		goto finalize
+		nlog.Infoln("loaded", etlMD.String())
+	} else {
+		etlMD = newEtlMD()
+		nlog.Infoln("initializing new", etlMD.String())
 	}
-	etlMD = newEtlMD()
-	nlog.Infof("initializing new %s", etlMD)
-finalize:
 	eo.put(etlMD)
 }
 
@@ -245,7 +244,7 @@ func (*etlMDOwnerTgt) persist(clone *etlMD, payload msPayload) (err error) {
 		return
 	}
 	if availCnt == 0 {
-		nlog.Errorf("Cannot store %s: %v", clone, cmn.ErrNoMountpaths)
+		nlog.Errorln("Cannot store", clone.String()+":", cmn.ErrNoMountpaths) // there's a bigger problem
 		return
 	}
 	err = fmt.Errorf("failed to store %s on any of the mountpaths (%d)", clone, availCnt)
@@ -297,7 +296,7 @@ func loadEtlMDFromMpath(mpath *fs.Mountpath, path string) (etlMD *etlMD) {
 	}
 	if !os.IsNotExist(err) {
 		// Should never be NotExist error as mpi should include only mpaths with relevant etlMDs stored.
-		nlog.Errorf("failed to load %s from %s, err: %v", etlMD, fpath, err)
+		nlog.Errorf("failed to load %s from %s: %v", etlMD, fpath, err)
 	}
 	return nil
 }

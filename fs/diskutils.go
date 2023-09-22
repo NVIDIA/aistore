@@ -8,10 +8,10 @@ import "github.com/NVIDIA/aistore/ios"
 
 func GetTotalDisksSize() (uint64, error) {
 	var (
-		totalSize      uint64
-		availablePaths = GetAvail()
+		totalSize uint64
+		avail     = GetAvail()
 	)
-	for mpath := range availablePaths {
+	for mpath := range avail {
 		numBlocks, _, blockSize, err := ios.GetFSStats(mpath)
 		if err != nil {
 			return 0, err

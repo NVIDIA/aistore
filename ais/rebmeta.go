@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -47,7 +47,7 @@ type (
 	// it keeps the Version of the latest rebalance.
 	rmdOwner struct {
 		sync.Mutex
-		rmd atomic.Pointer
+		rmd ratomic.Pointer[rebMD]
 		// global local atomic state
 		interrupted atomic.Bool // when joining target reports interrupted rebalance
 		starting    atomic.Bool // when starting up
@@ -121,8 +121,8 @@ func (r *rmdOwner) load() {
 	}
 }
 
-func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(unsafe.Pointer(rmd)) }
-func (r *rmdOwner) get() *rebMD    { return (*rebMD)(r.rmd.Load()) }
+func (r *rmdOwner) put(rmd *rebMD) { r.rmd.Store(rmd) }
+func (r *rmdOwner) get() *rebMD    { return r.rmd.Load() }
 
 func (r *rmdOwner) modify(ctx *rmdModifier) (clone *rebMD, err error) {
 	r.Lock()

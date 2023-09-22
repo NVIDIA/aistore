@@ -99,7 +99,7 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 	)
 	if xreb == nil {
 		if reb.stages.stage.Load() != rebStageInactive {
-			nlog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, (*meta.Smap)(rsmap)))
+			nlog.Errorf("%s: nil rebalancing xaction", reb.logHdr(rebID, rsmap))
 		}
 		return nil
 	}
@@ -115,18 +115,18 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 		if ntfn.stage == rebStageAbort {
 			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
 			nlog.Errorln(err)
-			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*meta.Smap)(rsmap)), err))
+			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, rsmap), err))
 		}
 		return nil
 	}
 	// other's old
 	if rebID > ntfn.rebID {
-		nlog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, (*meta.Smap)(rsmap)),
+		nlog.Warningf("%s: stage notification from %s(%s): %s", reb.logHdr(rebID, rsmap),
 			meta.Tname(ntfn.daemonID), otherStage, reb.warnID(ntfn.rebID, ntfn.daemonID))
 		return nil
 	}
 
-	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, (*meta.Smap)(rsmap)), err))
+	xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, rsmap), err))
 	return nil
 }
 

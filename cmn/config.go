@@ -1768,7 +1768,7 @@ func handleOverrideConfig(config *Config) error {
 	}
 
 	// update config with locally-stored 'OverrideConfigFname' and validate the result
-	GCO.PutOverrideConfig(overrideConfig)
+	GCO.PutOverride(overrideConfig)
 	if overrideConfig.FSP != nil {
 		config.LocalConfig.FSP = *overrideConfig.FSP // override local config's fspaths
 		overrideConfig.FSP = nil

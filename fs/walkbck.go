@@ -46,13 +46,13 @@ type (
 func WalkBck(opts *WalkBckOpts) error {
 	debug.Assert(opts.Mi == nil && opts.Sorted) // TODO: support `opts.Sorted == false`
 	var (
-		availablePaths = GetAvail()
-		l              = len(availablePaths)
-		joggers        = make([]*joggerBck, l)
-		group, ctx     = errgroup.WithContext(context.Background())
-		idx            int
+		avail      = GetAvail()
+		l          = len(avail)
+		joggers    = make([]*joggerBck, l)
+		group, ctx = errgroup.WithContext(context.Background())
+		idx        int
 	)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		workCh := make(chan *wbe, mpathQueueSize)
 		jg := &joggerBck{
 			workCh:   workCh,

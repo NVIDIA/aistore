@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -57,7 +57,7 @@ type (
 		meta.Smap
 	}
 	smapOwner struct {
-		smap    atomic.Pointer
+		smap    ratomic.Pointer[smapX]
 		sls     *sls
 		fpath   string
 		immSize int64
@@ -461,13 +461,11 @@ func (r *smapOwner) Listeners() meta.SmapListeners { return r.sls }
 func (r *smapOwner) put(smap *smapX) {
 	smap.InitDigests()
 	smap.vstr = strconv.FormatInt(smap.Version, 10)
-	r.smap.Store(unsafe.Pointer(smap))
+	r.smap.Store(smap)
 	r.sls.notify(smap.version())
 }
 
-func (r *smapOwner) get() (smap *smapX) {
-	return (*smapX)(r.smap.Load())
-}
+func (r *smapOwner) get() (smap *smapX) { return r.smap.Load() }
 
 func (r *smapOwner) synchronize(si *meta.Snode, newSmap *smapX, payload msPayload, cb smapUpdatedCB) (err error) {
 	if err = newSmap.validate(); err != nil {

@@ -1,45 +1,50 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
 import (
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
-
-type globalConfigOwner struct {
-	c        atomic.Pointer // pointer to `Config` (cluster + local + override config)
-	oc       atomic.Pointer // pointer to `ConfigToUpdate`, override configuration on node
-	confPath atomic.Pointer // pointer to initial global config path
-	mtx      sync.Mutex
-}
 
 // GCO (Global Config Owner) is responsible for updating and notifying
 // listeners about any changes in the config. Global Config is loaded
 // at startup and then can be accessed/updated by other services.
-var GCO *globalConfigOwner
 
-func (gco *globalConfigOwner) Get() *Config {
-	return (*Config)(gco.c.Load())
+type (
+	gco struct {
+		c        ratomic.Pointer[Config]         // (cluster + local + override config)
+		oc       ratomic.Pointer[ConfigToUpdate] // for a node to override inherited (global) configuration
+		confPath ratomic.Pointer[string]         // initial (plain-text) global config path
+		mtx      sync.Mutex                      // [BeginUpdate -- CommitUpdate]
+	}
+)
+
+var GCO *gco
+
+func init() {
+	GCO = &gco{}
+	GCO.c.Store(&Config{})
 }
 
-func (gco *globalConfigOwner) Put(config *Config) {
-	gco.c.Store(unsafe.Pointer(config))
-}
+/////////
+// gco //
+/////////
 
-func (gco *globalConfigOwner) GetOverrideConfig() *ConfigToUpdate {
-	return (*ConfigToUpdate)(gco.oc.Load())
-}
+func (gco *gco) Get() *Config       { return gco.c.Load() }
+func (gco *gco) Put(config *Config) { gco.c.Store(config) }
 
-func (gco *globalConfigOwner) MergeOverrideConfig(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
-	overrideConfig = gco.GetOverrideConfig()
+func (gco *gco) GetOverride() *ConfigToUpdate       { return gco.oc.Load() }
+func (gco *gco) PutOverride(config *ConfigToUpdate) { gco.oc.Store(config) }
+
+func (gco *gco) MergeOverride(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
+	overrideConfig = gco.GetOverride()
 	if overrideConfig == nil {
 		overrideConfig = toUpdate
 	} else {
@@ -48,8 +53,8 @@ func (gco *globalConfigOwner) MergeOverrideConfig(toUpdate *ConfigToUpdate) (ove
 	return
 }
 
-func (gco *globalConfigOwner) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
-	overrideConfig = gco.GetOverrideConfig()
+func (gco *gco) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrideConfig *ConfigToUpdate) {
+	overrideConfig = gco.GetOverride()
 	if overrideConfig == nil {
 		overrideConfig = toUpdate
 	} else {
@@ -58,15 +63,10 @@ func (gco *globalConfigOwner) SetLocalFSPaths(toUpdate *ConfigToUpdate) (overrid
 	return
 }
 
-func (gco *globalConfigOwner) PutOverrideConfig(config *ConfigToUpdate) {
-	gco.oc.Store(unsafe.Pointer(config))
-}
-
 // CopyStruct is a shallow copy, which is fine as FSPaths and BackendConf "exceptions"
 // are taken care of separately. When cloning, beware: config is a large structure.
-func (gco *globalConfigOwner) Clone() *Config {
+func (gco *gco) Clone() *Config {
 	config := &Config{}
-
 	cos.CopyStruct(config, gco.Get())
 	return config
 }
@@ -74,39 +74,34 @@ func (gco *globalConfigOwner) Clone() *Config {
 // When updating we need to make sure that the update is transaction and no
 // other update can happen when other transaction is in progress. Therefore,
 // we introduce locking mechanism which targets this problem.
-//
-// NOTE: BeginUpdate must be followed by CommitUpdate.
-// NOTE: `ais` package must use config-owner to modify config.
-func (gco *globalConfigOwner) BeginUpdate() *Config {
+// NOTE:
+// - BeginUpdate must be followed by CommitUpdate.
+// - `ais` package must use config-owner to modify config.
+func (gco *gco) BeginUpdate() *Config {
 	gco.mtx.Lock()
 	return gco.Clone()
 }
 
 // CommitUpdate finalizes config update and notifies listeners.
 // NOTE: `ais` package must use config-owner to modify config.
-func (gco *globalConfigOwner) CommitUpdate(config *Config) {
-	gco.c.Store(unsafe.Pointer(config))
+func (gco *gco) CommitUpdate(config *Config) {
+	gco.c.Store(config)
 	gco.mtx.Unlock()
 }
 
 // DiscardUpdate discards commit updates.
 // NOTE: `ais` package must use config-owner to modify config
-func (gco *globalConfigOwner) DiscardUpdate() {
+func (gco *gco) DiscardUpdate() {
 	gco.mtx.Unlock()
 }
 
-func (gco *globalConfigOwner) SetInitialGconfPath(path string) {
-	gco.confPath.Store(unsafe.Pointer(&path))
-}
+func (gco *gco) SetInitialGconfPath(path string) { gco.confPath.Store(&path) }
+func (gco *gco) GetInitialGconfPath() string     { return *gco.confPath.Load() }
 
-func (gco *globalConfigOwner) GetInitialGconfPath() (s string) {
-	return *(*string)(gco.confPath.Load())
-}
-
-func (gco *globalConfigOwner) Update(cluConfig *ClusterConfig) (err error) {
+func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
 	config := gco.Clone()
 	config.ClusterConfig = *cluConfig
-	override := gco.GetOverrideConfig()
+	override := gco.GetOverride()
 	if override != nil {
 		err = config.UpdateClusterConfig(override, apc.Daemon) // update and validate
 	} else {

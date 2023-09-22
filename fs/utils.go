@@ -78,8 +78,8 @@ func ValidateNCopies(tname string, copies int) (err error) {
 		return fmt.Errorf("%s: invalid num copies %d, must be in [1, %d] range",
 			tname, copies, maxNumCopies)
 	}
-	availablePaths := GetAvail()
-	if num := len(availablePaths); num < copies {
+	avail := GetAvail()
+	if num := len(avail); num < copies {
 		return fmt.Errorf("%s: number of copies (%d) exceeds the number of mountpaths (%d)",
 			tname, copies, num)
 	}

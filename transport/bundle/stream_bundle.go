@@ -8,7 +8,7 @@ package bundle
 import (
 	"fmt"
 	"sync"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -26,13 +26,23 @@ const (
 )
 
 type (
+	// multiple streams to the same destination with round-robin selection
+	stsdest []*transport.Stream
+	robin   struct {
+		stsdest stsdest
+		i       atomic.Int64
+	}
+	bundle map[string]*robin // stream "bundle" indexed by node ID
+)
+
+type (
 	Streams struct {
 		sowner       meta.Sowner
 		client       transport.Client
 		smap         *meta.Smap // current Smap
 		smaplock     *sync.Mutex
-		lsnode       *meta.Snode    // this node
-		streams      atomic.Pointer // points to the bundle (map below)
+		lsnode       *meta.Snode             // this node
+		streams      ratomic.Pointer[bundle] // stream bundle
 		trname       string
 		network      string
 		lid          string
@@ -42,15 +52,6 @@ type (
 		manualResync bool
 	}
 	Stats map[string]*transport.Stats // by DaemonID
-	//
-	// private types to support multiple streams to the same destination with round-robin selection
-	//
-	stsdest []*transport.Stream // STreams to the Same Destination (stsdest)
-	robin   struct {
-		stsdest stsdest
-		i       atomic.Int64
-	}
-	bundle map[string]*robin // stream "bundle" indexed by DaemonID
 
 	Args struct {
 		Extra        *transport.Extra // additional parameters
@@ -244,7 +245,7 @@ func (sb *Streams) GetStats() Stats {
 //
 
 func (sb *Streams) get() (bun bundle) {
-	optr := (*bundle)(sb.streams.Load())
+	optr := sb.streams.Load()
 	if optr != nil {
 		bun = *optr
 	}
@@ -354,7 +355,7 @@ func (sb *Streams) Resync() {
 	if obundle != nil {
 		l = max(len(obundle), len(obundle)+l)
 	}
-	nbundle := make(map[string]*robin, l)
+	nbundle := make(bundle, l)
 	for id, robin := range obundle {
 		nbundle[id] = robin
 	}
@@ -389,7 +390,7 @@ func (sb *Streams) Resync() {
 		}
 		delete(nbundle, id)
 	}
-	sb.streams.Store(unsafe.Pointer(&nbundle))
+	sb.streams.Store(&nbundle)
 	sb.smap = smap
 }
 

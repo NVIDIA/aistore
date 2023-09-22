@@ -129,12 +129,12 @@ func ParseFQN(fqn string) (parsed ParsedFQN, err error) {
 
 // FQN2Mpath matches FQN to mountpath and returns the mountpath and the relative path.
 func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
-	availablePaths := GetAvail()
-	if len(availablePaths) == 0 {
+	avail := GetAvail()
+	if len(avail) == 0 {
 		err = cmn.ErrNoMountpaths
 		return
 	}
-	for mpath, mi := range availablePaths {
+	for mpath, mi := range avail {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
 			found = mi
@@ -144,8 +144,8 @@ func FQN2Mpath(fqn string) (found *Mountpath, relativePath string, err error) {
 	}
 
 	// make an extra effort to lookup in disabled
-	_, disabledPaths := Get()
-	for mpath := range disabledPaths {
+	_, disabled := Get()
+	for mpath := range disabled {
 		l := len(mpath)
 		if len(fqn) > l && fqn[0:l] == mpath && fqn[l] == filepath.Separator {
 			err = cmn.NewErrMountpathNotFound("" /*mpath*/, fqn, true /*disabled*/)

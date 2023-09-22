@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	ratomic "sync/atomic"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -67,15 +67,15 @@ type (
 	MountedFS struct {
 		// Iostats for the available mountpaths
 		ios ios.IOS
+
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
 		// determining if there are any duplications of file system - we allow
 		// only one mountpath per file system.
 		fsIDs map[cos.FsID]string
-		// Available mountpaths - mountpaths which are used to store the data.
-		available atomic.Pointer
-		// Disabled mountpaths - mountpaths which for some reason did not pass
-		// the health check and cannot be used for a moment.
-		disabled atomic.Pointer
+
+		// mountpaths
+		available ratomic.Pointer[MPI]
+		disabled  ratomic.Pointer[MPI]
 
 		// capacity
 		cs        CapStatus
@@ -425,32 +425,32 @@ func (mi *Mountpath) getCapacity(config *cmn.Config, refresh bool) (c Capacity, 
 // mountpath add/enable helpers - always call under mfs lock
 //
 
-func (mi *Mountpath) AddEnabled(tid string, availablePaths MPI, config *cmn.Config) (err error) {
-	if err = mi._checkExists(availablePaths); err != nil {
+func (mi *Mountpath) AddEnabled(tid string, avail MPI, config *cmn.Config) (err error) {
+	if err = mi._checkExists(avail); err != nil {
 		return
 	}
-	if err = mi._addEnabled(tid, availablePaths, config); err == nil {
+	if err = mi._addEnabled(tid, avail, config); err == nil {
 		mfs.fsIDs[mi.FsID] = mi.Path
 	}
 	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 	return
 }
 
-func (mi *Mountpath) AddDisabled(disabledPaths MPI) {
+func (mi *Mountpath) AddDisabled(disabled MPI) {
 	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
-	disabledPaths[mi.Path] = mi
+	disabled[mi.Path] = mi
 	mfs.fsIDs[mi.FsID] = mi.Path
 }
 
 // TODO: extend `force=true` to disregard "filesystem sharing" (see AddMpath)
-func (mi *Mountpath) _checkExists(availablePaths MPI) (err error) {
-	if existingMi, exists := availablePaths[mi.Path]; exists {
+func (mi *Mountpath) _checkExists(avail MPI) (err error) {
+	if existingMi, exists := avail[mi.Path]; exists {
 		err = fmt.Errorf("failed adding %s: %s already exists", mi, existingMi)
 	} else if existingPath, exists := mfs.fsIDs[mi.FsID]; exists && !mfs.allowSharedDisksAndNoDisks {
 		err = fmt.Errorf("FSID %v: filesystem sharing is not allowed: %s vs %q", mi.FsID, mi, existingPath)
 	} else {
 		l := len(mi.Path)
-		for mpath := range availablePaths {
+		for mpath := range avail {
 			if err = cmn.IsNestedMpath(mi.Path, l, mpath); err != nil {
 				break
 			}
@@ -459,7 +459,7 @@ func (mi *Mountpath) _checkExists(availablePaths MPI) (err error) {
 	return
 }
 
-func (mi *Mountpath) _addEnabled(tid string, availablePaths MPI, config *cmn.Config) error {
+func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config) error {
 	disks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, config.TestingEnv())
 	if err != nil {
 		return err
@@ -471,21 +471,21 @@ func (mi *Mountpath) _addEnabled(tid string, availablePaths MPI, config *cmn.Con
 	}
 	mi._setDisks(disks)
 	_ = mi.String() // assign mi.info if not yet
-	availablePaths[mi.Path] = mi
+	avail[mi.Path] = mi
 	return nil
 }
 
 // under lock: clones and adds self to available
 func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error) {
 	debug.Assert(!mi.IsAnySet(FlagWaitingDD)) // m.b. new
-	availablePaths, disabledPaths := Get()
-	if _, ok := disabledPaths[mi.Path]; ok {
+	avail, disabled := Get()
+	if _, ok := disabled[mi.Path]; ok {
 		return fmt.Errorf("%s exists and is currently disabled (hint: did you want to enable it?)", mi)
 	}
 
 	// dd-transition
-	if ddmi, ok := availablePaths[mi.Path]; ok && ddmi.IsAnySet(FlagWaitingDD) {
-		availableCopy := _cloneOne(availablePaths)
+	if ddmi, ok := avail[mi.Path]; ok && ddmi.IsAnySet(FlagWaitingDD) {
+		availableCopy := _cloneOne(avail)
 		nlog.Warningf("%s (%s): interrupting dd-transition - adding&enabling", mi, ddmi)
 		availableCopy[mi.Path] = mi
 		putAvailMPI(availableCopy)
@@ -493,10 +493,10 @@ func (mi *Mountpath) _cloneAddEnabled(tid string, config *cmn.Config) (err error
 	}
 
 	// add new mp
-	if err = mi._checkExists(availablePaths); err != nil {
+	if err = mi._checkExists(avail); err != nil {
 		return
 	}
-	availableCopy := _cloneOne(availablePaths)
+	availableCopy := _cloneOne(avail)
 	if err = mi.AddEnabled(tid, availableCopy, config); err == nil {
 		putAvailMPI(availableCopy)
 	}
@@ -550,12 +550,12 @@ func TestDisableValidation() { mfs.allowSharedDisksAndNoDisks = true }
 
 // Returns number of available mountpaths
 func NumAvail() int {
-	availablePaths := (*MPI)(mfs.available.Load())
-	return len(*availablePaths)
+	avail := mfs.available.Load()
+	return len(*avail)
 }
 
-func putAvailMPI(available MPI) { mfs.available.Store(unsafe.Pointer(&available)) }
-func putDisabMPI(disabled MPI)  { mfs.disabled.Store(unsafe.Pointer(&disabled)) }
+func putAvailMPI(available MPI) { mfs.available.Store(&available) }
+func putDisabMPI(disabled MPI)  { mfs.disabled.Store(&disabled) }
 
 func PutMPI(available, disabled MPI) {
 	putAvailMPI(available)
@@ -563,20 +563,20 @@ func PutMPI(available, disabled MPI) {
 }
 
 func MountpathsToLists() (mpl *apc.MountpathList) {
-	availablePaths, disabledPaths := Get()
+	avail, disabled := Get()
 	mpl = &apc.MountpathList{
-		Available: make([]string, 0, len(availablePaths)),
+		Available: make([]string, 0, len(avail)),
 		WaitingDD: make([]string, 0),
-		Disabled:  make([]string, 0, len(disabledPaths)),
+		Disabled:  make([]string, 0, len(disabled)),
 	}
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		if mi.IsAnySet(FlagWaitingDD) {
 			mpl.WaitingDD = append(mpl.WaitingDD, mi.Path)
 		} else {
 			mpl.Available = append(mpl.Available, mi.Path)
 		}
 	}
-	for mpath := range disabledPaths {
+	for mpath := range disabled {
 		mpl.Disabled = append(mpl.Disabled, mpath)
 	}
 	sort.Strings(mpl.Available)
@@ -596,9 +596,9 @@ func _cloneOne(mpis MPI) (clone MPI) {
 
 // cloneMPI returns a shallow copy of the current (available, disabled) mountpaths
 func cloneMPI() (availableCopy, disabledCopy MPI) {
-	availablePaths, disabledPaths := Get()
-	availableCopy = _cloneOne(availablePaths)
-	disabledCopy = _cloneOne(disabledPaths)
+	avail, disabled := Get()
+	availableCopy = _cloneOne(avail)
+	disabledCopy = _cloneOne(disabled)
 	return availableCopy, disabledCopy
 }
 
@@ -615,7 +615,7 @@ func Add(mpath, tid string) (mi *Mountpath, err error) {
 	return
 }
 
-// Add adds new mountpath to the target's `availablePaths`
+// Add adds new mountpath to the target's `avail`
 // TODO: extend `force=true` to disregard "filesystem sharing"
 func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err error) {
 	debug.Assert(tid != "")
@@ -681,20 +681,20 @@ func EnableMpath(mpath, tid string, cb func()) (enabledMpath *Mountpath, err err
 }
 
 func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mountpath, err error) {
-	availablePaths, disabledPaths := Get()
-	mi, ok := availablePaths[cleanMpath]
+	avail, disabled := Get()
+	mi, ok := avail[cleanMpath]
 
 	// dd-transition
 	if ok {
 		debug.Assert(cleanMpath == mi.Path)
-		if _, ok = disabledPaths[cleanMpath]; ok {
-			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+		if _, ok = disabled[cleanMpath]; ok {
+			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, avail, disabled)
 			nlog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
 		}
 		if mi.IsAnySet(FlagWaitingDD) {
-			availableCopy := _cloneOne(availablePaths)
+			availableCopy := _cloneOne(avail)
 			mi, ok = availableCopy[cleanMpath]
 			debug.Assert(ok)
 			nlog.Warningf("%s: re-enabling during dd-transition", mi)
@@ -708,7 +708,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 	}
 
 	// re-enable
-	mi, ok = disabledPaths[cleanMpath]
+	mi, ok = disabled[cleanMpath]
 	if !ok {
 		err = cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		return
@@ -741,14 +741,14 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 	if err := removeXattr(cleanMpath, nodeXattrID); err != nil {
 		return nil, err
 	}
-	availablePaths, disabledPaths := Get()
-	mi, exists := availablePaths[cleanMpath]
+	avail, disabled := Get()
+	mi, exists := avail[cleanMpath]
 	if !exists {
-		if mi, exists = disabledPaths[cleanMpath]; !exists {
+		if mi, exists = disabled[cleanMpath]; !exists {
 			return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
 		}
 		debug.Assert(cleanMpath == mi.Path)
-		disabledCopy := _cloneOne(disabledPaths)
+		disabledCopy := _cloneOne(disabled)
 		delete(disabledCopy, cleanMpath)
 		delete(mfs.fsIDs, mi.FsID) // optional, benign
 		putDisabMPI(disabledCopy)
@@ -756,15 +756,15 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 	}
 	debug.Assert(cleanMpath == mi.Path)
 
-	if _, exists = disabledPaths[cleanMpath]; exists {
-		err := fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+	if _, exists = disabled[cleanMpath]; exists {
+		err := fmt.Errorf("FATAL: %s vs (%s, %s)", mi, avail, disabled)
 		nlog.Errorln(err)
 		debug.AssertNoErr(err)
 		return nil, err
 	}
 
 	config := cmn.GCO.Get()
-	availableCopy := _cloneOne(availablePaths)
+	availableCopy := _cloneOne(avail)
 	mfs.ios.RemoveMpath(cleanMpath, config.TestingEnv())
 	delete(availableCopy, cleanMpath)
 	delete(mfs.fsIDs, mi.FsID)
@@ -838,11 +838,11 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	availablePaths, disabledPaths := Get()
-	if mi, ok := availablePaths[cleanMpath]; ok {
+	avail, disabled := Get()
+	if mi, ok := avail[cleanMpath]; ok {
 		debug.Assert(cleanMpath == mi.Path)
-		if _, ok = disabledPaths[cleanMpath]; ok {
-			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, availablePaths, disabledPaths)
+		if _, ok = disabled[cleanMpath]; ok {
+			err = fmt.Errorf("FATAL: %s vs (%s, %s)", mi, avail, disabled)
 			nlog.Errorln(err)
 			debug.AssertNoErr(err)
 			return
@@ -868,7 +868,7 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		return mi, nil
 	}
 
-	if _, ok := disabledPaths[cleanMpath]; ok {
+	if _, ok := disabled[cleanMpath]; ok {
 		return nil, nil // nothing to do
 	}
 	return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
@@ -877,27 +877,27 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 // returns both available and disabled mountpaths (compare with GetAvail)
 func Get() (MPI, MPI) {
 	var (
-		availablePaths = (*MPI)(mfs.available.Load())
-		disabledPaths  = (*MPI)(mfs.disabled.Load())
+		avail    = mfs.available.Load()
+		disabled = mfs.disabled.Load()
 	)
-	debug.Assert(availablePaths != nil)
-	debug.Assert(disabledPaths != nil)
-	return *availablePaths, *disabledPaths
+	debug.Assert(avail != nil)
+	debug.Assert(disabled != nil)
+	return *avail, *disabled
 }
 
 func GetAvail() MPI {
-	availablePaths := (*MPI)(mfs.available.Load())
-	debug.Assert(availablePaths != nil)
-	return *availablePaths
+	avail := mfs.available.Load()
+	debug.Assert(avail != nil)
+	return *avail
 }
 
 func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 	var (
-		availablePaths   = GetAvail()
-		totalDirs        = len(availablePaths) * len(CSM.m)
+		avail            = GetAvail()
+		totalDirs        = len(avail) * len(CSM.m)
 		totalCreatedDirs int
 	)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		num, err := mi.createBckDirs(bck, nilbmd)
 		if err != nil {
 			errs = append(errs, err)
@@ -911,12 +911,12 @@ func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 
 func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 	var (
-		n              int
-		availablePaths = GetAvail()
-		count          = len(availablePaths)
-		now            time.Time
+		n     int
+		avail = GetAvail()
+		count = len(avail)
+		now   time.Time
 	)
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		// normally, unique bucket ID (aka BID) must be known
 		// - i.e., non-zero (and unique);
 		// zero ID indicates that either we are in the middle of bucket
@@ -951,9 +951,9 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 }
 
 func RenameBucketDirs(bidFrom uint64, bckFrom, bckTo *cmn.Bck) (err error) {
-	availablePaths := GetAvail()
-	renamed := make([]*Mountpath, 0, len(availablePaths))
-	for _, mi := range availablePaths {
+	avail := GetAvail()
+	renamed := make([]*Mountpath, 0, len(avail))
+	for _, mi := range avail {
 		fromPath := mi.makeDelPathBck(bckFrom, bidFrom)
 		toPath := mi.MakePathBck(bckTo)
 
@@ -1091,11 +1091,11 @@ func Cap() (cs CapStatus) {
 
 func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 	var (
-		errmsg         string
-		c              Capacity
-		availablePaths = GetAvail()
+		errmsg string
+		c      Capacity
+		avail  = GetAvail()
 	)
-	if len(availablePaths) == 0 {
+	if len(avail) == 0 {
 		err = cmn.ErrNoMountpaths
 		return
 	}
@@ -1103,7 +1103,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 		config = cmn.GCO.Get()
 	}
 	high, oos := config.Space.HighWM, config.Space.OOS
-	for path, mi := range availablePaths {
+	for path, mi := range avail {
 		if c, err = mi.getCapacity(config, true); err != nil {
 			nlog.Errorf("%s: %v", mi, err)
 			return
@@ -1124,7 +1124,7 @@ func CapRefresh(config *cmn.Config, tcdf *TargetCDF) (cs CapStatus, err error) {
 		cdf.Disks = mi.Disks
 		cdf.FS = mi.FS.String()
 	}
-	cs.PctAvg /= int32(len(availablePaths))
+	cs.PctAvg /= int32(len(avail))
 	cs.OOS = int64(cs.PctMax) > oos
 	if cs.OOS || int64(cs.PctMax) > high {
 		cs.Err = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, high, 0 /*cleanup wm*/, cs.PctMax, cs.OOS)

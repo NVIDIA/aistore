@@ -199,7 +199,7 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 		return
 	}
 
-	override := cmn.GCO.GetOverrideConfig()
+	override := cmn.GCO.GetOverride()
 	if override == nil {
 		override = toUpdate
 	} else {
@@ -214,7 +214,7 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 	}
 
 	cmn.GCO.Put(clone)
-	cmn.GCO.PutOverrideConfig(override)
+	cmn.GCO.PutOverride(override)
 	co.Unlock()
 	return
 }
@@ -233,7 +233,7 @@ func (co *configOwner) resetDaemonConfig() (err error) {
 		nlog.Infof("Warning: reset config %s: %v", oldConfig, err)
 		return err
 	}
-	cmn.GCO.PutOverrideConfig(nil)
+	cmn.GCO.PutOverride(nil)
 	err = cos.RemoveFile(filepath.Join(oldConfig.ConfigDir, fname.OverrideConfig))
 	if err != nil {
 		co.Unlock()

@@ -9,14 +9,12 @@ import (
 	"errors"
 	"path/filepath"
 	"sync"
-	gatomic "sync/atomic"
-	"unsafe"
+	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -39,7 +37,7 @@ type (
 	bsummXact struct {
 		t         cluster.Target
 		msg       *apc.BsummCtrlMsg
-		res       atomic.Pointer
+		res       ratomic.Pointer[taskState]
 		summaries cmn.AllBsummResults
 		xact.Base
 		totalDisksSize uint64
@@ -250,9 +248,9 @@ func addDU(dirPath string, psize, pecnt *uint64, wg cos.WG, withNonDirPrefix boo
 	sz, err := ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
 	if err != nil {
 		nlog.Errorln(err)
-		gatomic.AddUint64(pecnt, 1)
+		ratomic.AddUint64(pecnt, 1)
 	}
-	gatomic.AddUint64(psize, sz)
+	ratomic.AddUint64(psize, sz)
 	wg.Done()
 }
 
@@ -262,12 +260,12 @@ func (r *bsummXact) updRes(err error) {
 	if err == nil {
 		res.Result = r.summaries
 	}
-	r.res.Store(unsafe.Pointer(res))
+	r.res.Store(res)
 	r.Finish()
 }
 
 func (r *bsummXact) Result() (any, error) {
-	ts := (*taskState)(r.res.Load())
+	ts := r.res.Load()
 	if ts == nil {
 		return nil, errors.New("no result to load")
 	}

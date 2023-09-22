@@ -109,13 +109,13 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 func setAvailableMountPaths(t *testing.T, paths ...string) []string {
 	TestDisableValidation()
 
-	availablePaths := GetAvail()
-	oldPaths := make([]string, 0, len(availablePaths))
-	for _, mi := range availablePaths {
+	avail := GetAvail()
+	oldPaths := make([]string, 0, len(avail))
+	for _, mi := range avail {
 		oldPaths = append(oldPaths, mi.Path)
 	}
 
-	for _, mi := range availablePaths {
+	for _, mi := range avail {
 		_, err := Remove(mi.Path)
 		tassert.Errorf(t, err == nil, "%s (%v)", mi, err)
 		debug.AssertNoErr(err)

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -69,8 +69,8 @@ const fmtpend = "%s: newer rebalance[g%d] pending - not running"
 type (
 	Reb struct {
 		t         cluster.Target
-		smap      atomic.Pointer // new smap which will be soon live
-		xreb      atomic.Pointer // unsafe(*xact.Rebalance)
+		smap      ratomic.Pointer[meta.Smap] // next smap (new that'll become current after rebalance)
+		xreb      ratomic.Pointer[xs.Rebalance]
 		dm        *bundle.DataMover
 		pushes    *bundle.Streams // broadcast notifications
 		filterGFN *prob.Filter
@@ -183,7 +183,8 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	reb.mu.Unlock()
 
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
-	nlog.Infof("%s: initializing", logHdr)
+	nlog.Infoln(logHdr + ": initializing")
+
 	bmd := reb.t.Bowner().Get()
 	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed()}
 	if !reb.serialize(rargs, logHdr) {
@@ -191,6 +192,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	}
 
 	reb.regRecv()
+
 	// TODO -- FIXME: minimally, must be num(active) + num(maintenance-mode-rebalancing-out)
 	haveStreams := smap.CountTargets() > 1
 	if bmd.IsEmpty() {
@@ -246,18 +248,18 @@ func (reb *Reb) run(rargs *rebArgs) error {
 
 	// No EC-enabled buckets - run only regular rebalance
 	if !rargs.ecUsed {
-		nlog.Infof("starting global rebalance (g%d)", rargs.id)
+		nlog.Infof("starting g%d", rargs.id)
 		return reb.runNoEC(rargs)
 	}
 
 	// In all other cases run both rebalances simultaneously
 	group := &errgroup.Group{}
 	group.Go(func() error {
-		nlog.Infof("starting global rebalance (g%d)", rargs.id)
+		nlog.Infof("starting non-EC g%d", rargs.id)
 		return reb.runNoEC(rargs)
 	})
 	group.Go(func() error {
-		nlog.Infof("EC detected - starting EC rebalance (g%d)", rargs.id)
+		nlog.Infof("starting EC g%d", rargs.id)
 		return reb.runEC(rargs)
 	})
 	return group.Wait()
@@ -342,7 +344,7 @@ func (reb *Reb) _preempt(rargs *rebArgs, logHdr string, total, maxTotal time.Dur
 		var (
 			rebID   = reb.RebID()
 			rsmap   = reb.smap.Load()
-			rlogHdr = reb.logHdr(rebID, (*meta.Smap)(rsmap), true)
+			rlogHdr = reb.logHdr(rebID, rsmap, true)
 			xreb    = reb.xctn()
 			s       string
 		)
@@ -440,7 +442,7 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	}
 
 	// 5. ready - can receive objects
-	reb.smap.Store(unsafe.Pointer(rargs.smap))
+	reb.smap.Store(rargs.smap)
 	reb.stages.cleanup()
 
 	reb.mu.Unlock()

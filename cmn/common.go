@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -10,18 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const GitHubHome = "https://github.com/NVIDIA/aistore"
-
-func init() {
-	GCO = &globalConfigOwner{}
-	GCO.c.Store(unsafe.Pointer(&Config{}))
-}
 
 // WaitForFunc executes a function in goroutine and waits for it to finish.
 // If the function runs longer than `timeLong` WaitForFunc notifies a user

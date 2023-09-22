@@ -13,14 +13,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
@@ -66,7 +65,7 @@ type (
 		modify(*bmdModifier) (*bucketMD, error)
 	}
 	bmdOwnerBase struct {
-		bmd atomic.Pointer
+		bmd ratomic.Pointer[bucketMD]
 		sync.Mutex
 	}
 	bmdOwnerPrx struct {
@@ -256,11 +255,11 @@ func (m *bucketMD) _encode() (sgl *memsys.SGL) {
 //////////////////
 
 func (bo *bmdOwnerBase) Get() *meta.BMD       { return &bo.get().BMD }
-func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return (*bucketMD)(bo.bmd.Load()) }
+func (bo *bmdOwnerBase) get() (bmd *bucketMD) { return bo.bmd.Load() }
 
 func (bo *bmdOwnerBase) put(bmd *bucketMD) {
 	bmd.vstr = strconv.FormatInt(bmd.Version, 10)
-	bo.bmd.Store(unsafe.Pointer(bmd))
+	bo.bmd.Store(bmd)
 }
 
 // write metasync-sent bytes directly (no json)
