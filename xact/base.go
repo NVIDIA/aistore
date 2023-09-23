@@ -265,9 +265,9 @@ func (xctn *Base) onFinished(err error) {
 	}
 	xactRecord := Table[xctn.kind]
 	if xactRecord.RefreshCap {
-		if cs, _ := fs.CapRefresh(nil, nil); cs.Err != nil {
-			nlog.Errorln(cs.Err) // log warning
-		}
+		// currently, ignoring returned err-cap and not calling t.OOS()
+		// both (conditions) handled by periodic stats
+		fs.CapRefresh(nil /*config*/, nil /*tcdf*/)
 	}
 
 	IncFinished() // in re: HK cleanup long-time finished

@@ -159,11 +159,7 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	}
 
 	parent.cs.a = fs.Cap()
-	if parent.cs.a.Err != nil {
-		nlog.Warningf("%s started, %s", xcln, parent.cs.a.String())
-	} else {
-		nlog.Infof("%s started, %s", xcln, parent.cs.a.String())
-	}
+	nlog.Infoln(xcln.Name(), "started: ", xcln, parent.cs.a.String())
 	if ini.WG != nil {
 		ini.WG.Done()
 		ini.WG = nil
@@ -173,14 +169,14 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 	for _, j := range joggers {
 		j.stop()
 	}
-	parent.cs.c, _ = fs.CapRefresh(nil, nil)
-	if parent.cs.c.Err != nil {
-		xcln.AddErr(parent.cs.c.Err)
-		nlog.Warningf("%s finished, %s", xcln, parent.cs.c.String())
-	} else {
-		nlog.Infof("%s finished, %s", xcln, parent.cs.c.String())
-	}
+
+	var err, errCap error
+	parent.cs.c, err, errCap = fs.CapRefresh(config, nil /*tcdf*/)
+	xcln.AddErr(err)
+	xcln.AddErr(errCap)
 	xcln.Finish()
+	nlog.Infoln(xcln.Name(), "finished:", errCap)
+
 	return parent.cs.c
 }
 
@@ -195,7 +191,7 @@ func (p *clnP) rmMisplaced() bool {
 
 	// log
 	var warn, info string
-	if p.cs.a.Err != nil {
+	if p.cs.a.Err() != nil {
 		warn = fmt.Sprintf("%s: %s but not removing misplaced/obsolete copies: ", p.ini.Xaction, p.cs.a.String())
 	} else {
 		warn = fmt.Sprintf("%s: not removing misplaced/obsolete copies: ", p.ini.Xaction)
@@ -212,7 +208,7 @@ func (p *clnP) rmMisplaced() bool {
 	case l.Interrupted:
 		info = "resilver interrupted"
 	}
-	if p.cs.a.Err != nil {
+	if p.cs.a.Err() != nil {
 		nlog.Errorln(warn + info)
 	} else {
 		nlog.Warningln(warn + info)
@@ -334,15 +330,11 @@ func (j *clnJ) removeDeleted() (err error) {
 
 	// last rm-deleted done: refresh cap now
 	var errCap error
-	j.p.cs.b, errCap = fs.CapRefresh(nil, nil)
+	j.p.cs.b, err, errCap = fs.CapRefresh(j.config, nil /*tcdf*/)
 	if err != nil {
-		nlog.Errorf("%s: %v", j, errCap)
+		j.ini.Xaction.Abort(err)
 	} else {
-		if j.p.cs.b.Err != nil {
-			nlog.Warningf("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
-		} else {
-			nlog.Infof("%s post-rm('deleted'), %s", j.ini.Xaction, j.p.cs.b.String())
-		}
+		nlog.Infoln(j.ini.Xaction.Name(), "post-rm('deleted'):", errCap)
 	}
 	return
 }

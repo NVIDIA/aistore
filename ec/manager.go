@@ -276,8 +276,9 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
-	if cs := fs.Cap(); cs.Err != nil {
-		return cs.Err
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return err
 	}
 	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
 	targetCnt := mgr.targetCnt.Load()
@@ -317,9 +318,9 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
-
-	if cs := fs.Cap(); cs.Err != nil {
-		return cs.Err
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return err
 	}
 	targetCnt := mgr.targetCnt.Load()
 	// NOTE: Restore replica object is done with GFN, safe to always abort.

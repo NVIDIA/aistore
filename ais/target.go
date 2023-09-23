@@ -739,11 +739,12 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
 	}
-	if cs := fs.Cap(); cs.Err != nil || cs.PctMax > int32(config.Space.CleanupWM) {
+	cs := fs.Cap()
+	if errCap := cs.Err(); errCap != nil || cs.PctMax > int32(config.Space.CleanupWM) {
 		cs = t.OOS(nil)
-		if cs.OOS {
+		if cs.IsOOS() {
 			// fail this write
-			t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
+			t.writeErr(w, r, errCap, http.StatusInsufficientStorage)
 			return
 		}
 	}

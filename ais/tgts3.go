@@ -53,8 +53,9 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 // PUT /s3/<bucket-name>/<object-name>
 // [switch] mpt | put | copy
 func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, items []string) {
-	if cs := fs.Cap(); cs.OOS {
-		s3.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
+	cs := fs.Cap()
+	if cs.IsOOS() {
+		s3.WriteErr(w, r, cs.Err(), http.StatusInsufficientStorage)
 		return
 	}
 	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)

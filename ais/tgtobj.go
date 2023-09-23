@@ -516,8 +516,8 @@ do:
 			return
 		}
 		cs = fs.Cap()
-		if cs.OOS {
-			errCode, err = http.StatusInsufficientStorage, cs.Err
+		if cs.IsOOS() {
+			errCode, err = http.StatusInsufficientStorage, cs.Err()
 			return
 		}
 	}
@@ -584,8 +584,8 @@ do:
 		if cs.IsNil() {
 			cs = fs.Cap()
 		}
-		if cs.OOS {
-			errCode, err = http.StatusInsufficientStorage, cs.Err
+		if cs.IsOOS() {
+			errCode, err = http.StatusInsufficientStorage, cs.Err()
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.atime)

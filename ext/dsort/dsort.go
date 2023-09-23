@@ -275,9 +275,10 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	}
 	defer m.dsorter.postShardCreation(lom.Mountpath())
 
-	// TODO: check capacity *prior* to starting
-	if cs := fs.Cap(); cs.Err != nil {
-		return cs.Err
+	cs := fs.Cap()
+	if err = cs.Err(); err != nil {
+		m.abort(err)
+		return
 	}
 
 	beforeCreation := time.Now()
@@ -947,12 +948,12 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 		phaseInfo.adjuster.releaseSema(lom.Mountpath())
 		return newDSortAbortedError(m.ManagerUUID)
 	}
-	//
-	// FIXME: check capacity *prior* to starting
-	//
-	if cs := fs.Cap(); cs.Err != nil {
+
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
 		phaseInfo.adjuster.releaseSema(lom.Mountpath())
-		return cs.Err
+		m.abort(err)
+		return err
 	}
 
 	lom.Lock(false)

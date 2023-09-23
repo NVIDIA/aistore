@@ -39,8 +39,9 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		// disallow to run when above high wm (let alone OOS)
-		if cs := fs.Cap(); cs.Err != nil {
-			t.writeErr(w, r, cs.Err, http.StatusInsufficientStorage)
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			t.writeErr(w, r, err, http.StatusInsufficientStorage)
 			return
 		}
 		if _, err := t.parseURL(w, r, 0, false, apc.URLPathDownload.L); err != nil {

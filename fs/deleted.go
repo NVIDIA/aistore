@@ -79,8 +79,12 @@ func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 		}
 		return
 	}
-	cs := Cap()
-	if cs.Err != nil {
+
+	var (
+		cs          = Cap()
+		errCap, oos = cs.Err(), cs.IsOOS()
+	)
+	if errCap != nil {
 		goto rm // not moving - removing
 	}
 	base = filepath.Base(dir)
@@ -88,16 +92,18 @@ func (mi *Mountpath) MoveToDeleted(dir string) (err error) {
 	err = cos.CreateDir(tmpBase)
 	if err != nil {
 		if cos.IsErrOOS(err) {
-			cs.OOS = true
+			oos = true
 		}
 		goto rm
 	}
+
 	tmpDst = filepath.Join(tmpBase, strconv.FormatInt(mono.NanoTime(), 10))
 	if err = os.Rename(dir, tmpDst); err == nil {
-		return
+		return // ok
 	}
+
 	if cos.IsErrOOS(err) {
-		cs.OOS = true
+		oos = true
 	}
 rm:
 	// not placing in 'deleted' - removing right away
@@ -105,7 +111,7 @@ rm:
 	if err == nil {
 		err = errRm
 	}
-	if cs.OOS {
+	if oos {
 		nlog.Errorf("%s %s: OOS (%v)", mi, cs.String(), err)
 	}
 	return err

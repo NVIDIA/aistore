@@ -431,8 +431,9 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// disallow to run when above high wm (let alone OOS)
-	if cs := fs.Cap(); cs.Err != nil {
-		cmn.WriteErr(w, r, cs.Err, http.StatusInsufficientStorage)
+	cs := fs.Cap()
+	if errCap := cs.Err(); errCap != nil {
+		cmn.WriteErr(w, r, errCap, http.StatusInsufficientStorage)
 		return
 	}
 

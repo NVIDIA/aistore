@@ -279,7 +279,7 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, new
 	// don't allow increasing num-copies when used cap is above high wm (let alone OOS)
 	if bck.Props.Mirror.Copies < newCopies {
 		cs := fs.Cap()
-		err = cs.Err
+		err = cs.Err()
 	}
 	return
 }
@@ -372,18 +372,19 @@ func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.BucketP
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "new bucket props", cos.BHead(body), err)
 		return
 	}
+	err = cs.Err()
 	if nprops.Mirror.Enabled {
 		mpathCount := fs.NumAvail()
 		if int(nprops.Mirror.Copies) > mpathCount {
 			err = fmt.Errorf(fmtErrInsuffMpaths1, t, mpathCount, bck, nprops.Mirror.Copies)
 			return
 		}
-		if nprops.Mirror.Copies > bck.Props.Mirror.Copies && cs.Err != nil {
-			return nprops, cs.Err
+		if nprops.Mirror.Copies < bck.Props.Mirror.Copies {
+			err = nil
 		}
 	}
-	if nprops.EC.Enabled && !bck.Props.EC.Enabled {
-		err = cs.Err
+	if !nprops.EC.Enabled && bck.Props.EC.Enabled {
+		err = nil
 	}
 	return
 }
@@ -436,7 +437,7 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 			return "", rns.Err // must not happen at commit time
 		}
 		xctn := rns.Entry.Get()
-		err = fs.RenameBucketDirs(txnRenB.bckFrom.Props.BID, txnRenB.bckFrom.Bucket(), txnRenB.bckTo.Bucket())
+		err = fs.RenameBucketDirs(txnRenB.bckFrom.Bucket(), txnRenB.bckTo.Bucket())
 		if err != nil {
 			return "", err // ditto
 		}
@@ -453,8 +454,9 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 }
 
 func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error {
-	if cs := fs.Cap(); cs.Err != nil {
-		return cs.Err
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return err
 	}
 	if err := xreg.LimitedCoexistence(t.si, bckFrom, msg.Action, bckTo); err != nil {
 		return err
@@ -508,8 +510,9 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		if err := bckFrom.Validate(); err != nil {
 			return "", err
 		}
-		if cs := fs.Cap(); cs.Err != nil {
-			return "", cs.Err
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return "", err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
 			if !msg.Force {
@@ -628,8 +631,9 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 		if err := bckFrom.Validate(); err != nil {
 			return xid, err
 		}
-		if cs := fs.Cap(); cs.Err != nil {
-			return xid, cs.Err
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return xid, err
 		}
 		if err := xreg.LimitedCoexistence(t.si, bckFrom, c.msg.Action); err != nil {
 			return xid, err
@@ -744,8 +748,9 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 }
 
 func (t *target) validateECEncode(bck *meta.Bck, msg *aisMsg) error {
-	if cs := fs.Cap(); cs.Err != nil {
-		return cs.Err
+	cs := fs.Cap()
+	if err := cs.Err(); err != nil {
+		return err
 	}
 	return xreg.LimitedCoexistence(t.si, bck, msg.Action)
 }
@@ -783,8 +788,9 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 		}
 		archMsg.Mime = mime // set it for xarch
 
-		if cs := fs.Cap(); cs.Err != nil {
-			return xid, cs.Err
+		cs := fs.Cap()
+		if err := cs.Err(); err != nil {
+			return xid, err
 		}
 
 		rns := xreg.RenewPutArchive(t, bckFrom, bckTo)

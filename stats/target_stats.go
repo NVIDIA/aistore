@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
@@ -155,12 +156,12 @@ func (r *Trunner) InitCDF() error {
 		r.TargetCDF.Mountpaths[mpath] = &fs.CDF{}
 	}
 
-	cs, err := fs.CapRefresh(nil, &r.TargetCDF)
+	_, err, errCap := fs.CapRefresh(nil, &r.TargetCDF)
 	if err != nil {
 		return err
 	}
-	if cs.Err != nil {
-		nlog.Errorf("%s: %s", r.t, cs.String())
+	if errCap != nil {
+		nlog.Errorln(r.t.String()+":", errCap)
 	}
 	return nil
 }
@@ -294,17 +295,19 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 3. capacity
-	cs, _, errfs := fs.CapPeriodic(now, config, &r.TargetCDF)
-	if errfs != nil {
-		nlog.Errorln(errfs)
-	}
-	if cs.Err == nil && cs.PctMax > int32(config.Space.CleanupWM) {
-		cs.Err = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, cs.OOS)
-	}
-	if cs.Err != nil {
+	var (
+		cs, updated, err, errCap = fs.CapPeriodic(now, config, &r.TargetCDF)
+	)
+	if err != nil {
+		nlog.Errorln(err)
+	} else if errCap != nil {
+		r.t.OOS(&cs)
+	} else if updated && cs.PctMax > int32(config.Space.CleanupWM) {
+		debug.Assert(!cs.IsOOS(), cs.String())
+		errCap = cmn.NewErrCapExceeded(cs.TotalUsed, cs.TotalAvail+cs.TotalUsed, 0, config.Space.CleanupWM, cs.PctMax, false)
 		r.t.OOS(&cs)
 	}
-	if now >= r.next || cs.Err != nil {
+	if (updated && now >= r.next) || errCap != nil {
 		for mpath, fsCapacity := range r.TargetCDF.Mountpaths {
 			s := fmt.Sprintf("%s: used %d%%", mpath, fsCapacity.Capacity.PctUsed)
 			r.lines = append(r.lines, s)

@@ -36,17 +36,19 @@ var (
 
 // triggers by an out-of-space condition or a suspicion of thereof
 func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
+	var errCap error
 	if csRefreshed != nil {
 		cs = *csRefreshed
+		errCap = cs.Err()
 	} else {
 		var err error
-		cs, err = fs.CapRefresh(nil, nil)
+		cs, err, errCap = fs.CapRefresh(nil, nil)
 		if err != nil {
-			nlog.Errorf("%s failed to update capacity stats: %v", t, err)
+			nlog.Errorln(t.String(), "failed to update capacity stats:", err)
 			return
 		}
 	}
-	if cs.Err == nil {
+	if errCap == nil {
 		return // unlikely; nothing to do
 	}
 	if prev := lastTrigOOS.Load(); mono.Since(prev) < minAutoDetectInterval {
@@ -59,8 +61,8 @@ func (t *target) OOS(csRefreshed *fs.CapStatus) (cs fs.CapStatus) {
 	go func() {
 		cs := t.runStoreCleanup("" /*uuid*/, nil /*wg*/)
 		lastTrigOOS.Store(mono.NanoTime())
-		if cs.Err != nil {
-			nlog.Warningln(t.String(), "still OOS, running LRU eviction now...", cs.String())
+		if cs.Err() != nil {
+			nlog.Warningln(t.String(), "still out of space, running LRU eviction now:", cs.String())
 			t.runLRU("" /*uuid*/, nil /*wg*/, false)
 		}
 	}()

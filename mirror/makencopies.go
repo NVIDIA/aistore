@@ -120,30 +120,32 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		size, err = addCopies(lom, r.copies, buf)
 		lom.Unlock(true)
 	}
-	config := r.BckJog.Config
 	if err != nil {
 		if cmn.IsObjNotExist(err) {
 			return nil
 		}
 		if cos.IsErrOOS(err) {
-			err = cmn.NewErrAborted(r.Name(), "mnc", err)
-		} else if cs := fs.Cap(); cs.Err != nil {
-			err = cmn.NewErrAborted(r.Name(), "mnc, orig err: ["+err.Error()+"]", cs.Err)
-		}
-		r.AddErr(err)
-		if config.FastV(5, cos.SmoduleMirror) {
-			nlog.Infof("%s: Error %v (%s, %d, %d, %d)", r.Base.Name(), err, lom.Cname(), n, r.copies, size)
+			r.Abort(err)
+		} else {
+			cs := fs.Cap()
+			if errCap := cs.Err(); errCap != nil {
+				r.Abort(fmt.Errorf("errors: [%w] and [%w]", err, errCap))
+			} else {
+				r.AddErr(err)
+			}
 		}
 		return
 	}
 
+	config := r.BckJog.Config
 	if config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
 	}
 	r.ObjsAdd(1, size)
 	if cnt := r.Objs(); cnt%128 == 0 { // TODO: tuneup
-		if cs := fs.Cap(); cs.Err != nil {
-			err = cmn.NewErrAborted(r.Name(), "mnc", cs.Err)
+		cs := fs.Cap()
+		if errCap := cs.Err(); errCap != nil {
+			r.Abort(err)
 		}
 	}
 	return
