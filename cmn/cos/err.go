@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"sync"
+	ratomic "sync/atomic"
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -29,8 +30,8 @@ type (
 	}
 	Errs struct {
 		errs []error
-		mu   sync.RWMutex
-		cnt  int
+		cnt  int64
+		mu   sync.Mutex
 	}
 )
 
@@ -72,40 +73,45 @@ func (e *Errs) Add(err error) {
 			return
 		}
 	}
-	e.cnt++
 	if len(e.errs) < maxErrs {
 		e.errs = append(e.errs, err)
+		ratomic.StoreInt64(&e.cnt, int64(len(e.errs)))
 	}
 	e.mu.Unlock()
 }
 
-func (e *Errs) Cnt() (cnt int) {
-	e.mu.RLock()
-	cnt = e.cnt
-	e.mu.RUnlock()
-	return
-}
+func (e *Errs) Cnt() int { return int(ratomic.LoadInt64(&e.cnt)) }
 
 func (e *Errs) JoinErr() (cnt int, err error) {
-	e.mu.RLock()
-	err = errors.Join(e.errs...) // up to maxErrs
-	cnt = e.cnt
-	e.mu.RUnlock()
+	if cnt = e.Cnt(); cnt > 0 {
+		e.mu.Lock()
+		err = errors.Join(e.errs...) // up to maxErrs
+		e.mu.Unlock()
+	}
 	return
 }
 
 // Errs is an error
 func (e *Errs) Error() (s string) {
-	e.mu.RLock()
-	errs, cnt := e.errs, e.cnt
-	e.mu.RUnlock()
-	if cnt > 0 {
-		err := errs[0]
-		if cnt > 1 {
-			err = fmt.Errorf("%v (and %d more error%s)", err, cnt-1, Plural(cnt-1))
-		}
-		s = err.Error()
+	var (
+		err error
+		cnt = e.Cnt()
+	)
+	if cnt == 0 {
+		return
 	}
+	e.mu.Lock()
+	if cnt = len(e.errs); cnt > 0 {
+		err = e.errs[0]
+	}
+	e.mu.Unlock()
+	if err == nil {
+		return // unlikely
+	}
+	if cnt > 1 {
+		err = fmt.Errorf("%v (and %d more error%s)", err, cnt-1, Plural(cnt-1))
+	}
+	s = err.Error()
 	return
 }
 
