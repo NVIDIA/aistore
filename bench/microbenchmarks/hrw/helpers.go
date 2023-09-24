@@ -1,7 +1,7 @@
 // Package hrw provides a way to benchmark different HRW variants.
 // See /bench/hrw/README.md for more info.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package hrw
 
@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"strconv"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -63,7 +64,7 @@ func randNodeID(randGen *rand.Rand) string {
 		randIP += strconv.Itoa(randGen.Intn(255)) + "."
 	}
 	randIP += strconv.Itoa(randGen.Intn(255))
-	cksum := xxhash.ChecksumString32S(randIP, xxHashSeed)
+	cksum := xxhash.Checksum32S(cos.UnsafeB(randIP), xxHashSeed)
 	nodeID := strconv.Itoa(int(cksum & 0xfffff))
 	randPort := strconv.Itoa(randGen.Intn(65535))
 	return nodeID + "_" + randPort
@@ -75,7 +76,7 @@ func randNodeIDs(numNodes int, randGen *rand.Rand) []node {
 		id := randNodeID(randGen)
 		xhash := xxhash.NewS64(xxHashSeed)
 		xhash.WriteString(id)
-		seed := xxhash.ChecksumString64S(id, xxHashSeed)
+		seed := xxhash.Checksum64S(cos.UnsafeB(id), xxHashSeed)
 		nodes[i] = node{
 			id:          id,
 			idDigestInt: xorshift64(seed),

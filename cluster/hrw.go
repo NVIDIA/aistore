@@ -39,7 +39,7 @@ func HrwTargetAll(uname string, smap *meta.Smap) (si *meta.Snode, err error) {
 func _hrwTarget(uname string, smap *meta.Smap, skipMaint bool) (si *meta.Snode, err error) {
 	var (
 		max    uint64
-		digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
+		digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
 		if skipMaint && tsi.InMaintOrDecomm() {
@@ -68,7 +68,7 @@ func HrwTargetList(uname string, smap *meta.Smap, count int) (sis meta.Nodes, er
 		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, cnt, smap)
 		return
 	}
-	digest := xxhash.ChecksumString64S(uname, cos.MLCG32)
+	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
 	hlist := newHrwList(count)
 
 	for _, tsi := range smap.Tmap {
@@ -112,7 +112,7 @@ func HrwProxy(smap *meta.Smap, idToSkip string) (pi *meta.Snode, err error) {
 func HrwIC(smap *meta.Smap, uuid string) (pi *meta.Snode, err error) {
 	var (
 		max    uint64
-		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
+		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, psi := range smap.Pmap {
 		if psi.InMaintOrDecomm() || !psi.IsIC() {
@@ -135,7 +135,7 @@ func HrwIC(smap *meta.Smap, uuid string) (pi *meta.Snode, err error) {
 func HrwTargetTask(uuid string, smap *meta.Smap) (si *meta.Snode, err error) {
 	var (
 		max    uint64
-		digest = xxhash.ChecksumString64S(uuid, cos.MLCG32)
+		digest = xxhash.Checksum64S(cos.UnsafeB(uuid), cos.MLCG32)
 	)
 	for _, tsi := range smap.Tmap {
 		if tsi.InMaintOrDecomm() {
@@ -159,7 +159,7 @@ func HrwMpath(uname string) (mi *fs.Mountpath, digest uint64, err error) {
 		max   uint64
 		avail = fs.GetAvail()
 	)
-	digest = xxhash.ChecksumString64S(uname, cos.MLCG32)
+	digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
 	for _, mpathInfo := range avail {
 		if mpathInfo.IsAnySet(fs.FlagWaitingDD) {
 			continue

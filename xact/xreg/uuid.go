@@ -28,7 +28,7 @@ func GenBEID(div uint64, tag string) (beid string, xctn cluster.Xact, err error)
 	// compute
 	val := now / div
 	org := val
-	val ^= xxhash.ChecksumString64S(tag, val)
+	val ^= xxhash.Checksum64S(cos.UnsafeB(tag), val)
 	beid = cos.GenBEID(val)
 
 	// check vs registry

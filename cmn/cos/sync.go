@@ -15,7 +15,8 @@ import (
 
 const (
 	// Number of sync maps
-	MultiSyncMapCount = 0x40
+	MultiSyncMapCount = 0x40 // m.b. a power of two
+	MultiSyncMapMask  = MultiSyncMapCount - 1
 )
 
 type (

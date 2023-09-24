@@ -158,7 +158,7 @@ func _torder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
 		if d.InMaintOrDecomm() {
 			continue
 		}
-		c := xxhash.ChecksumString64S(i, salt)
+		c := xxhash.Checksum64S(cos.UnsafeB(i), salt)
 		targets[c] = d
 		keys = append(keys, c)
 	}

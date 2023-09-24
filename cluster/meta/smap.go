@@ -118,7 +118,7 @@ func (d *Snode) Digest() uint64 { return d.idDigest }
 
 func (d *Snode) setDigest() {
 	if d.idDigest == 0 {
-		d.idDigest = xxhash.ChecksumString64S(d.ID(), cos.MLCG32)
+		d.idDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
 	}
 }
 

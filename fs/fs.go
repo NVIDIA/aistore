@@ -118,7 +118,7 @@ func NewMountpath(mpath string) (mi *Mountpath, err error) {
 	mi = &Mountpath{
 		Path:       cleanMpath,
 		FS:         fsInfo,
-		PathDigest: xxhash.ChecksumString64S(cleanMpath, cos.MLCG32),
+		PathDigest: xxhash.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
 	}
 	return
 }
@@ -152,7 +152,7 @@ func (mi *Mountpath) String() string {
 
 func (mi *Mountpath) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) }
 
-func LcacheIdx(digest uint64) int { return int(digest & (cos.MultiSyncMapCount - 1)) }
+func LcacheIdx(digest uint64) int { return int(digest & cos.MultiSyncMapMask) }
 
 func (mi *Mountpath) EvictLomCache() {
 	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {

@@ -1000,8 +1000,8 @@ func setupBucket(runParams *params) error {
 }
 
 func getIDFromString(val string, hashLen uint) uint64 {
-	hash := xxhash.ChecksumString64S(val, cos.MLCG32)
-	// leave just right loaderIDHashLen bytes
+	hash := xxhash.Checksum64S(cos.UnsafeB(val), cos.MLCG32)
+	// keep just the loaderIDHashLen bytes
 	hash <<= 64 - hashLen
 	hash >>= 64 - hashLen
 	return hash

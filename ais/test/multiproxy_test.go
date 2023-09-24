@@ -1098,7 +1098,7 @@ func hrwProxyTest(smap *meta.Smap, idToSkip string) (pi string, err error) {
 			continue
 		}
 
-		cs := xxhash.ChecksumString64S(snode.ID(), cos.MLCG32)
+		cs := xxhash.Checksum64S(cos.UnsafeB(snode.ID()), cos.MLCG32)
 		if cs > max {
 			max = cs
 			pi = id

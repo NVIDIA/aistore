@@ -437,8 +437,8 @@ func (obj *objReader) readPDU(b []byte) (n int, err error) {
 //
 
 func uniqueID(r *http.Request, sessID int64) uint64 {
-	x := xxhash.ChecksumString64S(r.RemoteAddr, cos.MLCG32)
-	return (x&math.MaxUint32)<<32 | uint64(sessID)
+	hash := xxhash.Checksum64S(cos.UnsafeB(r.RemoteAddr), cos.MLCG32)
+	return (hash&math.MaxUint32)<<32 | uint64(sessID)
 }
 
 func UID2SessID(uid uint64) (xxh, sessID uint64) {

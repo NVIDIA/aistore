@@ -245,8 +245,8 @@ var _ NLP = (*nlp)(nil)
 func NewNLP(name string) NLP {
 	var (
 		nlp  = &nlp{uname: name}
-		hash = xxhash.ChecksumString64S(name, cos.MLCG32)
-		idx  = int(hash & (cos.MultiSyncMapCount - 1))
+		hash = xxhash.Checksum64S(cos.UnsafeB(name), cos.MLCG32)
+		idx  = int(hash & cos.MultiSyncMapMask)
 	)
 	nlp.nlc = &bckLocker[idx] // NOTE: bckLocker
 	return nlp
