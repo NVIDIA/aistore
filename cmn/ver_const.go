@@ -25,7 +25,7 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 
 const (
 	VersionAIStore = "3.20"
-	VersionCLI     = "1.6.5"
+	VersionCLI     = "1.6.7"
 	VersionLoader  = "1.8"
 	VersionAuthN   = "1.0"
 )

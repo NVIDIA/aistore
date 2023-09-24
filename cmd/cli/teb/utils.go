@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dsort"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 // low-level formatting routines and misc.
@@ -149,6 +150,27 @@ func fmtTargetsSumm(smap *meta.Smap) string {
 		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
 	}
 	return fmt.Sprintf("%d", cnt)
+}
+
+func fmtCapPctMAM(tcdf *fs.TargetCDF, list bool) string {
+	var (
+		a, b, c string
+		skipMin = " -    " // len(sepa) + len("min%,")
+		sepa    = "  "
+	)
+	// list vs table
+	if list {
+		a, b, c, sepa = "min=", "avg=", "max=", ","
+		skipMin = ""
+	}
+
+	// [backward compatibility]: PctMin was added in v3.21
+	// TODO: remove
+	if tcdf.PctAvg > 0 && tcdf.PctMin == 0 {
+		return fmt.Sprintf("%s%s%2d%%%s %s%2d%%", skipMin, b, tcdf.PctAvg, sepa, c, tcdf.PctMax)
+	}
+
+	return fmt.Sprintf("%s%2d%%%s %s%2d%%%s %s%2d%%", a, tcdf.PctMin, sepa, b, tcdf.PctAvg, sepa, c, tcdf.PctMax)
 }
 
 func fmtSmap(smap *meta.Smap) string {

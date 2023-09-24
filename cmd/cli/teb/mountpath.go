@@ -21,7 +21,7 @@ const (
 	colNumMpaths = "MOUNTPATHS"
 	colMountpath = "MOUNTPATH"
 
-	colUsedAvgMax = "USED(avg%, max%)"
+	colUsedAvgMax = "USED(min%, avg%, max%)"
 
 	colDisksFS = "Disks & File System"
 	colFS      = "File System"
@@ -157,7 +157,8 @@ func numMpathsRow(ds *stats.NodeStatus, c *PerfTabCtx, cols []*header, row []str
 		row = append(row, strconv.Itoa(len(tcdf.Mountpaths)))
 	}
 	if _idx(cols, colUsedAvgMax) >= 0 {
-		row = append(row, "     "+strconv.Itoa(int(tcdf.PctAvg))+"%   "+strconv.Itoa(int(tcdf.PctMax))+"%")
+		// len("USED(")
+		row = append(row, "     "+fmtCapPctMAM(&tcdf, false /*list*/))
 	}
 	if _idx(cols, colCapAvail) >= 0 {
 		avail := _sumupMpathsAvail(tcdf, ds.DeploymentType)

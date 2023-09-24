@@ -338,7 +338,7 @@ See '--help' and docs/cli for details.`
 		"\tNo mountpaths\n" +
 		"{{else}}" +
 		"{{if ne (len $p.Mpl.Available) 0}}" +
-		"\tUsed Capacity (all disks): avg {{$p.TargetCDF.PctAvg}}% max {{$p.TargetCDF.PctMax}}%\t " +
+		"\tUsed: {{FormatCapPctMAM $p.TargetCDF true}}\t " +
 		"{{if (IsEqS $p.TargetCDF.CsErr \"\")}}{{else}}{{$p.TargetCDF.CsErr}}{{end}}\n" +
 		"{{range $mp := $p.Mpl.Available }}" +
 		"\t\t{{ $mp }} " +
@@ -414,6 +414,7 @@ var (
 		"FormatSmap":        fmtSmap,
 		"FormatProxiesSumm": fmtProxiesSumm,
 		"FormatTargetsSumm": fmtTargetsSumm,
+		"FormatCapPctMAM":   fmtCapPctMAM,
 		"FormatFloat":       func(f float64) string { return fmt.Sprintf("%.2f", f) },
 		"FormatBool":        FmtBool,
 		"FormatBckName":     func(bck cmn.Bck) string { return bck.Cname("") },
