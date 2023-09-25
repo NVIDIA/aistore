@@ -10,6 +10,7 @@ bench_type=""
 each_size=""
 total_size=""
 duration=""
+epochs=0
 ais_proxies=""
 ais_port=""
 grafana_host=""
@@ -29,6 +30,9 @@ for arg in "$@"; do
             ;;
         --duration=*)
             duration="${arg#*=}"
+            ;;
+        --epochs=*)
+            epochs="${arg#*=}"
             ;;
         --each_size=*)
             each_size="${arg#*=}"
@@ -88,7 +92,12 @@ if [[ "$bench_type" == *"put"* ]]; then
     bench_args+=("-pctput=100")
     bench_args+=("-skiplist")
 else
-    bench_args+=("-duration=$duration")
+    if [ -n "$duration" ]; then
+        bench_args+=("-duration=$duration")
+    fi
+    if [ "$epochs" -ne 0 ]; then
+        bench_args+=("-epochs=$epochs")
+    fi
     bench_args+=("-pctput=0")
     if [ -n "$filelist" ]; then
         bench_args+=("-filelist=$filelist")
@@ -109,5 +118,6 @@ else
     bench_args+=("-randomproxy") 
 fi
 
+echo "\n Benchmark args: ${bench_args[@]} \n"
 # Run the aisloader binary
 aisloader "${bench_args[@]}"
