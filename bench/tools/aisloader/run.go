@@ -238,11 +238,11 @@ func Start(version, buildtime string) (err error) {
 		return nil
 	}
 
-	// If neither duration nor put upper bound is specified, it is a no op.
+	// If none of duration, epochs, or put upper bound is specified, it is a no op.
 	// Note that stoppable prevents being a no op
 	// This can be used as a cleanup only run (no put no get).
 	if runParams.duration.Val == 0 {
-		if runParams.putSizeUpperBound == 0 && !runParams.stoppable {
+		if runParams.putSizeUpperBound == 0 && runParams.numEpochs == 0 && !runParams.stoppable {
 			if runParams.cleanUp.Val {
 				cleanup()
 			}
@@ -504,7 +504,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&s3Profile, "s3profile", "", "Other then default S3 config profile referencing alternative credentials")
 
 	DurationExtVar(f, &p.duration, "duration", time.Minute,
-		"Benchmark duration (0 - run forever or until Ctrl-C). Note that if both duration and totalputsize are 0 (zeros), aisloader will have nothing to do.\n"+
+		"Benchmark duration (0 - run forever or until Ctrl-C). \n"+
 			"If not specified and totalputsize > 0, aisloader runs until totalputsize reached. Otherwise aisloader runs until first of duration and "+
 			"totalputsize reached")
 
@@ -638,9 +638,9 @@ func validateCmdLine(p *params) (err error) {
 	}
 
 	if !p.duration.IsSet {
-		if p.putSizeUpperBound != 0 {
-			// user specified putSizeUpperBound, but not duration, override default 1 minute
-			// and run aisloader until putSizeUpperBound is reached
+		if p.putSizeUpperBound != 0 || p.numEpochs != 0 {
+			// user specified putSizeUpperBound or numEpochs, but not duration, override default 1 minute
+			// and run aisloader until other threshold is reached
 			p.duration.Val = time.Duration(math.MaxInt64)
 		} else {
 			fmt.Printf("\nDuration not specified - running for %v\n\n", p.duration.Val)
