@@ -214,7 +214,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 		reqArgs.Method = http.MethodPut
 		reqArgs.Base = proxyURL
 		reqArgs.Path = apc.URLPathObjects.Join(bck.Name, objName)
-		reqArgs.Query = bck.AddToQuery(nil)
+		reqArgs.Query = bck.NewQuery()
 		reqArgs.BodyR = reader
 	}
 	putter := tracePutter{

@@ -29,6 +29,7 @@ type dpq struct {
 	dontAddRemote       string // QparamDontAddRemote
 	countRemoteObjs     string // QparamCountRemoteObjs
 	etlName             string // QparamETLName
+	silent              string // QparamSilent
 }
 
 var (
@@ -111,6 +112,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.countRemoteObjs = value
 		case apc.QparamETLName:
 			dpq.etlName = value
+		case apc.QparamSilent:
+			dpq.silent = value
 
 		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
 			// TODO: ignore for now

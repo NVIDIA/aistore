@@ -22,7 +22,7 @@ import (
 // See also: api.PutApndArch
 func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveBckMsg) (string, error) {
 	bp.Method = http.MethodPut
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	return dolr(bp, bckFrom, apc.ActArchive, msg, q)
 }
 
@@ -31,7 +31,7 @@ func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveBckMsg) (str
 
 func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -40,7 +40,7 @@ func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence
 
 func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
 	}
@@ -50,7 +50,7 @@ func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence 
 // DeleteList sends request to remove a list of objects from a bucket.
 func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{ObjNames: filesList}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
@@ -58,7 +58,7 @@ func DeleteList(bp BaseParams, bck cmn.Bck, filesList []string) (string, error) 
 // DeleteRange sends request to remove a range of objects from a bucket.
 func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActDeleteObjects, msg, q)
 }
@@ -66,7 +66,7 @@ func DeleteRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 // EvictList sends request to evict a list of objects from a remote bucket.
 func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{ObjNames: fileslist}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
@@ -74,7 +74,7 @@ func EvictList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 // EvictRange sends request to evict a range of objects from a remote bucket.
 func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodDelete
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActEvictObjects, msg, q)
 }
@@ -82,7 +82,7 @@ func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 // PrefetchList sends request to prefetch a list of objects from a remote bucket.
 func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
 	bp.Method = http.MethodPost
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{ObjNames: fileslist}
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }
@@ -90,7 +90,7 @@ func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error
 // PrefetchRange sends request to prefetch a range of objects from a remote bucket.
 func PrefetchRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 	bp.Method = http.MethodPost
-	q := bck.AddToQuery(nil)
+	q := bck.NewQuery()
 	msg := apc.ListRange{Template: rng}
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }

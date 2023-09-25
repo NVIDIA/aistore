@@ -34,7 +34,7 @@ func TestSmoke(t *testing.T) {
 				m.init(true /*cleanup*/)
 
 				m.puts()
-				m.gets()
+				m.gets(nil, false)
 				m.del()
 			})
 		}

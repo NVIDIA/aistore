@@ -500,15 +500,15 @@ func (m *ioContext) _delOne(baseParams api.BaseParams, obj *cmn.LsoEntry, errCnt
 	tassert.CheckError(m.t, err)
 }
 
-func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate bool) {
+func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, getArgs *api.GetArgs, validate bool) {
 	var (
 		err     error
 		objName = m.objNames[idx%len(m.objNames)]
 	)
 	if validate {
-		_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, nil)
+		_, err = api.GetObjectWithValidation(baseParams, m.bck, objName, getArgs)
 	} else {
-		_, err = api.GetObject(baseParams, m.bck, objName, nil)
+		_, err = api.GetObject(baseParams, m.bck, objName, getArgs)
 	}
 	if err != nil {
 		if m.getErrIsFatal {
@@ -528,25 +528,18 @@ func (m *ioContext) get(baseParams api.BaseParams, idx, totalGets int, validate 
 	}
 
 	// Tell other tasks they can begin to do work in parallel
-	if totalGets > 0 && idx == totalGets/2 { // only for `m.gets()`
+	if totalGets > 0 && idx == totalGets/2 { // only for `m.gets(nil, false)`
 		for i := 0; i < m.otherTasksToTrigger; i++ {
 			m.controlCh <- struct{}{}
 		}
 	}
 }
 
-func (m *ioContext) gets(withValidation ...bool) {
+func (m *ioContext) gets(getArgs *api.GetArgs, withValidation bool) {
 	var (
 		baseParams = tools.BaseAPIParams()
 		totalGets  = m.num * m.numGetsEachFile
-		wg         = cos.NewLimitedWaitGroup(50, 0)
-		validate   bool
 	)
-
-	if len(withValidation) > 0 {
-		validate = withValidation[0]
-	}
-
 	if !m.silent {
 		if m.numGetsEachFile == 1 {
 			tlog.Logf("GET %d objects from %s\n", m.num, m.bck)
@@ -554,12 +547,12 @@ func (m *ioContext) gets(withValidation ...bool) {
 			tlog.Logf("GET %d objects %d times from %s\n", m.num, m.numGetsEachFile, m.bck)
 		}
 	}
-
+	wg := cos.NewLimitedWaitGroup(20, 0)
 	for i := 0; i < totalGets; i++ {
 		wg.Add(1)
 		go func(idx int) {
-			defer wg.Done()
-			m.get(baseParams, idx, totalGets, validate)
+			m.get(baseParams, idx, totalGets, getArgs, withValidation)
+			wg.Done()
 		}(i)
 	}
 	wg.Wait()
@@ -569,7 +562,7 @@ func (m *ioContext) getsUntilStop() {
 	var (
 		idx        = 0
 		baseParams = tools.BaseAPIParams()
-		wg         = cos.NewLimitedWaitGroup(40, 0)
+		wg         = cos.NewLimitedWaitGroup(20, 0)
 	)
 	for {
 		select {
@@ -580,7 +573,7 @@ func (m *ioContext) getsUntilStop() {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
-				m.get(baseParams, idx, 0, false /*validate*/)
+				m.get(baseParams, idx, 0, nil /*api.GetArgs*/, false /*validate*/)
 			}(idx)
 			idx++
 			if idx%5000 == 0 {

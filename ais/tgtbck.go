@@ -293,7 +293,6 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *meta.Bck, msg *apc.BsummCtrlMsg) {
 	var (
 		taskAction = q.Get(apc.QparamTaskAction)
-		silent     = cos.IsParseBool(q.Get(apc.QparamSilent))
 	)
 	if taskAction == apc.TaskStart {
 		if action != apc.ActSummaryBck {
@@ -318,11 +317,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 	// never started
 	if xctn == nil {
 		err := cos.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
-		if silent {
-			t.writeErr(w, r, err, http.StatusNotFound, Silent)
-		} else {
-			t.writeErr(w, r, err, http.StatusNotFound)
-		}
+		t._erris(w, r, q.Get(apc.QparamSilent), err, http.StatusNotFound)
 		return
 	}
 
@@ -511,11 +506,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 				t.writeErr(w, r, err, code, Silent)
 			} else {
 				err = cmn.NewErrFailedTo(t, "HEAD remote bucket", apireq.bck, err, code)
-				if cos.IsParseBool(apireq.query.Get(apc.QparamSilent)) {
-					t.writeErr(w, r, err, code, Silent)
-				} else {
-					t.writeErr(w, r, err, code)
-				}
+				t._erris(w, r, apireq.query.Get(apc.QparamSilent), err, code)
 			}
 			return
 		}

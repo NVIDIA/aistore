@@ -478,7 +478,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = apc.URLPathBuckets.S
 		if r.URL.RawQuery == "" {
 			qbck := cmn.QueryBcks{Provider: provider}
-			query := qbck.AddToQuery(nil)
+			query := qbck.NewQuery()
 			r.URL.RawQuery = query.Encode()
 		} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 			r.URL.RawQuery += "&" + apc.QparamProvider + "=" + provider
@@ -509,7 +509,7 @@ func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.RawQuery == "" {
-		query := bck.AddToQuery(nil)
+		query := bck.NewQuery()
 		r.URL.RawQuery = query.Encode()
 	} else if !strings.Contains(r.URL.RawQuery, apc.QparamProvider) {
 		r.URL.RawQuery += "&" + apc.QparamProvider + "=" + bck.Provider
@@ -2235,7 +2235,7 @@ func (p *proxy) lsObjsA(bck *meta.Bck, lsmsg *apc.LsoMsg) (allEntries *cmn.LsoRe
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Query:  bck.AddToQuery(nil),
+		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(aisMsg),
 	}
 	args.timeout = apc.LongTimeout
@@ -2302,7 +2302,7 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
-		Query:  bck.AddToQuery(nil),
+		Query:  bck.NewQuery(),
 		Body:   cos.MustMarshal(aisMsg),
 	}
 

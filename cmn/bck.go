@@ -387,6 +387,17 @@ func (b *Bck) HasProvider() bool { return b.Provider != "" }
 // useful helpers
 //
 
+func (b *Bck) NewQuery() (q url.Values) {
+	q = make(url.Values)
+	if b.Provider != "" {
+		q.Set(apc.QparamProvider, b.Provider)
+	}
+	if !b.Ns.IsGlobal() {
+		q.Set(apc.QparamNamespace, b.Ns.Uname())
+	}
+	return
+}
+
 func (b *Bck) AddToQuery(query url.Values) url.Values {
 	if b.Provider != "" {
 		if query == nil {
@@ -452,6 +463,11 @@ func (qbck *QueryBcks) IsCloud() bool     { return apc.IsCloudProvider(qbck.Prov
 func (qbck *QueryBcks) DisplayProvider() string { b := (*Bck)(qbck); return b.DisplayProvider() }
 
 func (qbck *QueryBcks) IsEmpty() bool { b := (*Bck)(qbck); return b.IsEmpty() }
+
+func (qbck *QueryBcks) NewQuery() url.Values {
+	bck := (*Bck)(qbck)
+	return bck.NewQuery()
+}
 
 func (qbck *QueryBcks) AddToQuery(query url.Values) url.Values {
 	bck := (*Bck)(qbck)

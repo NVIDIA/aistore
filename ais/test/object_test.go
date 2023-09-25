@@ -640,7 +640,7 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 
 	start := time.Now()
-	m.gets(false /*withValidation*/)
+	m.gets(nil /*api.GetArgs*/, false /*withValidation*/)
 	tlog.Logf("GET %s without MD5 validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
@@ -655,7 +655,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	start = time.Now()
-	m.gets(true /*withValidation*/)
+	m.gets(nil /*api.GetArgs*/, true /*withValidation*/)
 	tlog.Logf("GET %s with MD5 validation:    %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 
@@ -1303,7 +1303,7 @@ func Test_checksum(t *testing.T) {
 	}
 
 	start := time.Now()
-	m.gets(false /*withValidate*/)
+	m.gets(nil /*api.GetArgs*/, false /*withValidate*/)
 	tlog.Logf("GET %s without any checksum validation: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 
 	m.evict()
@@ -1318,7 +1318,7 @@ func Test_checksum(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	start = time.Now()
-	m.gets(true /*withValidate*/)
+	m.gets(nil /*api.GetArgs*/, true /*withValidate*/)
 	tlog.Logf("GET %s and validate checksum: %v\n", cos.ToSizeIEC(totalSize, 0), time.Since(start))
 }
 

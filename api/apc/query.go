@@ -144,7 +144,7 @@ const (
 	QparamNonElectable     = "nel" // true: proxy is non-electable for the primary role
 	QparamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
 	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
-	QparamSilent           = "sln" // true: destination should not log errors (HEAD request)
+	QparamSilent           = "sln" // true: skip nlog.Error* (motivation: can be quite, multiple, and/or ignorable)
 	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	QparamTaskAction       = "tac" // "start", "status", "result"

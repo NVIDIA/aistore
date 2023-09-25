@@ -831,7 +831,7 @@ func (m *Manager) _dist(si *meta.Snode, s []*shard.Shard, order map[string]*shar
 		return err
 	})
 	group.Go(func() error {
-		query := m.Pars.InputBck.AddToQuery(nil)
+		query := m.Pars.InputBck.NewQuery()
 		reqArgs := &cmn.HreqArgs{
 			Method: http.MethodPost,
 			Base:   si.URL(cmn.NetIntraData),

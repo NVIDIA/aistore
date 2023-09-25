@@ -516,7 +516,7 @@ func TestStressCreateDestroyBucket(t *testing.T) {
 				if _, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{}); err != nil {
 					return err
 				}
-				m.gets()
+				m.gets(nil, false)
 				if err := api.DestroyBucket(baseParams, m.bck); err != nil {
 					return err
 				}
@@ -1825,7 +1825,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	baseParams := tools.BaseAPIParams(m.proxyURL)
@@ -1915,7 +1915,7 @@ func TestBucketReadOnly(t *testing.T) {
 	baseParams := tools.BaseAPIParams()
 
 	m.puts()
-	m.gets()
+	m.gets(nil, false)
 
 	p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
@@ -2042,7 +2042,7 @@ func TestRenameBucketNonEmpty(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Gets on renamed ais bucket
-	m.gets()
+	m.gets(nil, false)
 	m.ensureNoGetErrors()
 
 	tlog.Logln("checking bucket props...")
@@ -2817,7 +2817,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 	tassert.Errorf(t, len(list.Entries) == m.num, "expected %s to have %d, got %d", dst1, m.num, len(list.Entries))
 
 	m.bck = dst1
-	m.gets()
+	m.gets(nil, false)
 	m.ensureNoGetErrors()
 	m.bck = src
 }
@@ -3157,7 +3157,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 	} else {
 		tlog.Logf("Reading %q objects\n", m.bck)
 	}
-	m.gets()
+	m.gets(nil, false)
 
 	msg := &apc.LsoMsg{}
 	bckObjs, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
@@ -3169,7 +3169,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	if cksumType != cos.ChecksumNone {
 		tlog.Logf("Reading %d objects from %s with end-to-end %s validation\n", len(bckObjs.Entries), m.bck, cksumType)
-		wg := cos.NewLimitedWaitGroup(40, 0)
+		wg := cos.NewLimitedWaitGroup(20, 0)
 
 		for _, en := range bckObjs.Entries {
 			wg.Add(1)

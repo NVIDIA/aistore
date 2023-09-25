@@ -45,7 +45,7 @@ func patchBprops(bp BaseParams, bck cmn.Bck, body []byte) (xid string, err error
 		reqParams.Path = path
 		reqParams.Body = body
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.AddToQuery(nil)
+		reqParams.Query = bck.NewQuery()
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
@@ -201,7 +201,7 @@ func DestroyBucket(bp BaseParams, bck cmn.Bck) error {
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActDestroyBck})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.AddToQuery(nil)
+		reqParams.Query = bck.NewQuery()
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
@@ -232,7 +232,7 @@ func CopyBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.CopyBckMsg, fltP
 	if err = bckTo.Validate(); err != nil {
 		return
 	}
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))
@@ -258,7 +258,7 @@ func RenameBucket(bp BaseParams, bckFrom, bckTo cmn.Bck) (xid string, err error)
 		return
 	}
 	bp.Method = http.MethodPost
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	reqParams := AllocRp()
 	{
@@ -306,7 +306,7 @@ func MakeNCopies(bp BaseParams, bck cmn.Bck, copies int) (xid string, err error)
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActMakeNCopies, Value: copies})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.AddToQuery(nil)
+		reqParams.Query = bck.NewQuery()
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
@@ -330,7 +330,7 @@ func ECEncodeBucket(bp BaseParams, bck cmn.Bck, data, parity int) (xid string, e
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActECEncode, Value: ecConf})
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = bck.AddToQuery(nil)
+		reqParams.Query = bck.NewQuery()
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)

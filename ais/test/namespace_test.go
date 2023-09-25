@@ -266,8 +266,8 @@ func TestNamespace(t *testing.T) {
 			}
 			tassert.Errorf(t, bck1Found, "%s not found in %v summ", m1.bck, summaries)
 			tassert.Errorf(t, bck2Found, "%s not found in %v summ", m2.bck, summaries)
-			m1.gets()
-			m2.gets()
+			m1.gets(nil, false)
+			m2.gets(nil, false)
 
 			m1.ensureNoGetErrors()
 			m2.ensureNoGetErrors()
@@ -364,7 +364,7 @@ func TestRemoteWithSilentBucketDestroy(t *testing.T) {
 	}()
 
 	m.puts()
-	m.gets()
+	m.gets(nil, false)
 
 	err = api.DestroyBucket(remoteBP, cmn.Bck{Name: m.bck.Name})
 	tassert.CheckFatal(t, err)

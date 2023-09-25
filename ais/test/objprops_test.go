@@ -518,7 +518,7 @@ func TestObjProps(t *testing.T) {
 				})
 			} else {
 				m.puts()
-				m.gets() // set the access time
+				m.gets(nil, false) // set the access time
 			}
 
 			bckProps, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)

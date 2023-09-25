@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -325,38 +326,46 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 			fileSize: cos.KiB,
 		}
 		baseParams = tools.BaseAPIParams(proxyURL)
+
+		xid string
+		err error
 	)
 
 	m.init(true /*cleanup*/)
 	m.puts()
 
 	if rtd.rename {
-		// Rename bucket fails when rebalance or resilver is running.
-		// Ensure rebalance or resilver isn't running before performing a rename.
-		tools.WaitForRebalAndResil(t, baseParams)
-
-		_, err := api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+		xid, err = api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+		if err != nil && ensurePrevRebalanceIsFinished(baseParams, err) {
+			// can retry
+			xid, err = api.RenameBucket(baseParams, rtd.bck, rtd.renamedBck)
+		}
 		tassert.CheckFatal(t, err)
 
-		tlog.Logf("Renamed %s (obj_cnt: %d) => %s\n", rtd.bck, m.num, rtd.renamedBck)
+		tlog.Logf("Renamed %s => %s\n", rtd.bck, rtd.renamedBck)
 		if rtd.wait {
-			postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames)
+			postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames, xid)
 		}
 		m.bck = rtd.renamedBck
 	}
 
-	m.gets()
+	var getArgs *api.GetArgs
+	if !rtd.wait {
+		tlog.Logln("Warning: proceeding to GET while rebalance is running ('silence = true')")
+		getArgs = &api.GetArgs{Query: url.Values{apc.QparamSilent: []string{"true"}}}
+	}
+	m.gets(getArgs, false /*with validation*/)
 
 	if !rtd.rename || rtd.wait {
 		m.del()
 	} else {
-		postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames)
+		postRenameWaitAndCheck(t, baseParams, rtd, m.num, m.objNames, xid)
 		m.del()
 	}
 }
 
-func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string) {
-	xargs := xact.ArgsMsg{Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
+func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string, xid string) {
+	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, xargs)
 	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
@@ -367,7 +376,7 @@ func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regress
 		}
 		tassert.CheckFatal(t, err)
 	} else {
-		tlog.Logf("xaction (rename %s=>%s) done\n", rtd.bck, rtd.renamedBck)
+		tlog.Logf("rename-bucket[%s] %s => %s done\n", xid, rtd.bck, rtd.renamedBck)
 	}
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks{Provider: rtd.bck.Provider}, apc.FltPresent)
 	tassert.CheckFatal(t, err)

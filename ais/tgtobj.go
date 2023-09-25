@@ -782,7 +782,7 @@ gfn:
 }
 
 func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
-	query := lom.Bck().AddToQuery(nil)
+	query := lom.Bck().NewQuery()
 	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
 	{
@@ -1437,7 +1437,7 @@ func (coi *copyOI) dm(lom *cluster.LOM, sargs *sendArgs) error {
 func (coi *copyOI) put(sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
-		query = sargs.bckTo.AddToQuery(nil)
+		query = sargs.bckTo.NewQuery()
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
 	hdr.Set(apc.HdrT2TPutterID, coi.t.SID())

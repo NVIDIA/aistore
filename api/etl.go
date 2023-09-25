@@ -172,7 +172,7 @@ func ETLBucket(bp BaseParams, bckFrom, bckTo cmn.Bck, msg *apc.TCBMsg, fltPresen
 		return
 	}
 	bp.Method = http.MethodPost
-	q := bckFrom.AddToQuery(nil)
+	q := bckFrom.NewQuery()
 	_ = bckTo.AddUnameToQuery(q, apc.QparamBckTo)
 	if len(fltPresence) > 0 {
 		q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence[0]))

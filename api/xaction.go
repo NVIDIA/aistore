@@ -25,7 +25,7 @@ func StartXaction(bp BaseParams, args xact.ArgsMsg) (xid string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
-	q := args.Bck.AddToQuery(nil)
+	q := args.Bck.NewQuery()
 	if args.Force {
 		q.Set(apc.QparamForce, "true")
 	}
@@ -54,7 +54,7 @@ func AbortXaction(bp BaseParams, args xact.ArgsMsg) (err error) {
 		reqParams.Path = apc.URLPathClu.S
 		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = args.Bck.AddToQuery(nil)
+		reqParams.Query = args.Bck.NewQuery()
 	}
 	err = reqParams.DoRequest()
 	FreeRp(reqParams)

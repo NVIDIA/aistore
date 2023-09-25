@@ -674,7 +674,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			err = lom.InitBck(bck.Bucket())
 		}
 		if err != nil {
-			t.writeErr(w, r, err)
+			t._erris(w, r, dpq.silent, err, 0)
 			return lom
 		}
 	}
@@ -719,12 +719,21 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	if errCode, err := goi.getObject(); err != nil {
 		t.statsT.IncErr(stats.GetCount)
 		if err != errSendingResp {
-			t.writeErr(w, r, err, errCode)
+			t._erris(w, r, dpq.silent, err, errCode)
 		}
 	}
 	lom = goi.lom
 	freeGOI(goi)
 	return lom
+}
+
+// err in silence
+func (t *target) _erris(w http.ResponseWriter, r *http.Request, silent string /*apc.QparamSilent*/, err error, code int) {
+	if cos.IsParseBool(silent) {
+		t.writeErr(w, r, err, code, Silent)
+	} else {
+		t.writeErr(w, r, err, code)
+	}
 }
 
 // PUT /v1/objects/bucket-name/object-name; does:
@@ -913,13 +922,8 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 	lom := cluster.AllocLOM(objName)
 	errCode, err := t.objhead(w.Header(), query, bck, lom)
 	cluster.FreeLOM(lom)
-	if err == nil {
-		return
-	}
-	if cos.IsParseBool(query.Get(apc.QparamSilent)) {
-		t.writeErr(w, r, err, errCode, Silent)
-	} else {
-		t.writeErr(w, r, err, errCode)
+	if err != nil {
+		t._erris(w, r, query.Get(apc.QparamSilent), err, errCode)
 	}
 }
 

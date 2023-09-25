@@ -62,7 +62,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	go func() {
 		// without defer, if gets crashes Done is not called resulting in test hangs
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	time.Sleep(time.Second * 3) // give gets some room to breathe
@@ -127,7 +127,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 	go func() {
 		defer wg.Done()
@@ -193,7 +193,7 @@ func TestGetAndRestoreInParallel(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 	wg.Wait()
 
@@ -321,7 +321,7 @@ func TestAckRebalance(t *testing.T) {
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -376,7 +376,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	// and join 2 targets in parallel
@@ -480,7 +480,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	time.Sleep(sleep)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -520,7 +520,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
 	// Main check - try to read all objects.
-	m.gets()
+	m.gets(nil, false)
 
 	m.checkObjectDistribution(t)
 	m.waitAndCheckCluState()
@@ -587,7 +587,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	// Let's give gets some momentum
@@ -713,7 +713,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	rebID := m.stopMaintenance(target)
@@ -724,7 +724,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	wg.Wait()
 
 	// Get objects once again to check if they are still accessible after rebalance.
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -849,7 +849,7 @@ func TestMountpathDetachAll(t *testing.T) {
 
 	// random read/write
 	m.puts()
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, origMountpaths)
@@ -898,7 +898,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 
 	tools.WaitForResilvering(t, baseParams, target)
 
-	m.gets()
+	m.gets(nil, false)
 
 	// Remove new mountpath from target
 	tlog.Logf("detach %q from target %s\n", testMpath, target.StringEx())
@@ -974,7 +974,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 	tools.WaitForResilvering(t, baseParams, nil)
 
 	// Read after rebalance
-	m.gets()
+	m.gets(nil, false)
 
 	// Remove new mountpath from all targets
 	if docker.IsRunning() {
@@ -1098,7 +1098,7 @@ func TestMountpathDisableAll(t *testing.T) {
 
 	// Put and read random files
 	m.puts()
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.ensureNumMountpaths(target, origMountpaths)
@@ -1140,7 +1140,7 @@ func TestForwardCP(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 	go func() {
 		defer wg.Done()
@@ -1420,7 +1420,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	rebID := m.stopMaintenance(target)
 
 	m.puts()
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -1473,7 +1473,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 	baseParams := tools.BaseAPIParams(m.proxyURL)
 	tools.WaitForRebalanceByID(t, baseParams, rebID)
 
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNoGetErrors()
 	m.waitAndCheckCluState()
@@ -1518,7 +1518,7 @@ func TestRenewRebalance(t *testing.T) {
 	// Step 5: GET objects from the buket
 	go func() {
 		defer wg.Done()
-		m.gets()
+		m.gets(nil, false)
 	}()
 
 	// Step 6:
@@ -1594,7 +1594,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	tools.WaitForResilvering(t, baseParams, target)
 
 	// Step 5: GET objects from the bucket
-	m.gets()
+	m.gets(nil, false)
 
 	m.ensureNumCopies(baseParams, copies, true /*greaterOk*/)
 
@@ -1668,7 +1668,7 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	time.Sleep(time.Second) // pending writes
 
 	// GET
-	m.gets()
+	m.gets(nil, false)
 
 	// Reattach previously removed mountpaths
 	tlog.Logf("Reattach mountpaths at %s\n", target.StringEx())
@@ -1731,7 +1731,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 	tools.WaitForResilvering(t, baseParams, target)
 
 	// GET
-	m.gets()
+	m.gets(nil, false)
 
 	// Add previously disabled or detached mountpath
 	if action == apc.ActMountpathDisable {

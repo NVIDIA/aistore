@@ -1115,7 +1115,7 @@ func (t *target) enable() error {
 // checks with a given target to see if it has the object.
 // target acts as a client - compare with api.HeadObject
 func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
-	q := lom.Bck().AddToQuery(nil)
+	q := lom.Bck().NewQuery()
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
 	cargs := allocCargs()
@@ -1143,7 +1143,7 @@ func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok boo
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
 // NOTE: 1) apc.QparamCheckExistsAny to make an extra effort, 2) `ignoreMaintenance`
 func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *meta.Snode {
-	q := lom.Bck().AddToQuery(nil)
+	q := lom.Bck().NewQuery()
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresentCluster))

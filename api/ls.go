@@ -80,7 +80,7 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) 
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = qbck.AddToQuery(nil)
+		reqParams.Query = qbck.NewQuery()
 	}
 	// execute `apc.ActSummaryBck` and poll for results
 	if err := reqParams.waitBsumm(msg, &summaries); err != nil {
