@@ -43,11 +43,23 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+      command: ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+      # command: ["uvicorn", "main:app", "--reload"]
+      env:
+        - name: ARG_TYPE
+          value: "fqn"
       readinessProbe:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns "Hello World!" on any request.
@@ -73,6 +85,14 @@ spec:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns the original data, with an MD5 sum in the response headers.
@@ -99,6 +119,14 @@ spec:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns the original data, with an MD5 sum in the response headers.
@@ -120,11 +148,19 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
+      command: ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
       readinessProbe:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns the transformed TensorFlow compatible data for the input TAR files. For
@@ -189,6 +225,14 @@ spec:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # pylint: disable=unused-variable
@@ -208,7 +252,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command: ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
+      command: ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"] 
       env:
         - name: FORMAT
           value: "{format}"
@@ -218,6 +262,14 @@ spec:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns the FFMPEG decoded content. For more information on command options, visit
@@ -249,6 +301,14 @@ spec:
       httpGet:
         path: /health
         port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
 
 # Returns the transformed images using `Torchvision` pre-processing. For more
@@ -273,7 +333,7 @@ spec:
       ports:
         - name: default
           containerPort: 8000
-      command:  ["gunicorn", "main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+      command:  ["gunicorn", "main:app", "--workers", "20", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
       env:
         - name: FORMAT
         # expected values - PNG, JPEG, etc
@@ -284,4 +344,12 @@ spec:
         httpGet:
           path: /health
           port: default
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/
+        type: Directory
 """
