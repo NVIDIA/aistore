@@ -169,13 +169,13 @@ func (b *Bck) InitFast(bowner Bowner) (err error) {
 func (b *Bck) InitNoBackend(bowner Bowner) error { return b.init(bowner.Get()) }
 
 func (b *Bck) init(bmd *BMD) error {
-	if b.Provider == "" { // NOTE: ais:// is the default
+	switch {
+	case b.Provider == "": // ais: is the default
 		b.Provider = apc.AIS
 		bmd.initBckGlobalNs(b)
-	} else if apc.IsRemoteProvider(b.Provider) {
-		present := bmd.initBck(b)
-		debug.Assert(!b.IsHDFS() || !present || b.Props.Extra.HDFS.RefDirectory != "")
-	} else {
+	case apc.IsRemoteProvider(b.Provider):
+		bmd.initBck(b)
+	default:
 		b.Props, _ = bmd.Get(b)
 	}
 	if b.Props != nil {

@@ -42,9 +42,9 @@ func FreeLOM(lom *LOM) {
 	lomPool.Put(lom)
 }
 
-//////////////////////
+//
 // CopyObjectParams pool
-//////////////////////
+//
 
 func AllocCpObjParams() (a *CopyObjectParams) {
 	if v := cpObjPool.Get(); v != nil {
@@ -59,9 +59,9 @@ func FreeCpObjParams(a *CopyObjectParams) {
 	cpObjPool.Put(a)
 }
 
-//////////////////////
+//
 // PutObjectParams pool
-//////////////////////
+//
 
 func AllocPutObjParams() (a *PutObjectParams) {
 	if v := putObjPool.Get(); v != nil {

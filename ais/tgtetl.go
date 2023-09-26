@@ -229,10 +229,11 @@ func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, b
 	var b cmn.Bck
 	b, objName = cmn.ParseUname(uname)
 	if err = b.Validate(); err != nil {
+		err = fmt.Errorf("%v, uname=%q", err, uname)
 		return
 	}
 	if objName == "" {
-		err = fmt.Errorf("etl-parse-req: object name is missing (bucket %s)", b)
+		err = fmt.Errorf("object name is missing (bucket=%s, uname=%q)", b, uname)
 		return
 	}
 	bck = meta.CloneBck(&b)

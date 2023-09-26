@@ -132,12 +132,16 @@ func (m *BMD) IsECUsed() (yes bool) {
 
 // providerQuery == nil: all providers; nsQuery == nil: all namespaces
 func (m *BMD) Range(providerQuery *string, nsQuery *cmn.Ns, callback func(*Bck) bool) {
+	var qname string
+	if nsQuery != nil {
+		qname = nsQuery.Uname()
+	}
 	for provider, namespaces := range m.Providers {
 		if providerQuery != nil && provider != *providerQuery {
 			continue
 		}
 		for nsUname, buckets := range namespaces {
-			if nsQuery != nil && nsUname != nsQuery.Uname() {
+			if nsQuery != nil && nsUname != qname {
 				continue
 			}
 			for name, props := range buckets {
@@ -224,19 +228,18 @@ func (m *BMD) initBckGlobalNs(bck *Bck) bool {
 	return present
 }
 
-func (m *BMD) initBck(bck *Bck) bool {
+func (m *BMD) initBck(bck *Bck) {
 	namespaces, ok := m.Providers[bck.Provider]
 	if !ok {
-		return false
+		return
 	}
 	for nsUname, buckets := range namespaces {
 		if p, present := buckets[bck.Name]; present {
 			bck.Props = p
 			bck.Ns = cmn.ParseNsUname(nsUname)
-			return true
+			return
 		}
 	}
-	return false
 }
 
 func (m *BMD) getAllByName(bckName string) (all []Bck) {

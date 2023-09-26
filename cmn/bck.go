@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -140,16 +141,32 @@ func (n Ns) String() (res string) {
 	return
 }
 
+func (n Ns) Len() int {
+	if n.IsGlobal() {
+		return len(NsGlobalUname)
+	}
+	return 2 + len(n.UUID) + len(n.Name)
+}
+
 func (n Ns) Uname() string {
 	if n.IsGlobal() {
 		return NsGlobalUname
 	}
-	b := make([]byte, 0, 2+len(n.UUID)+len(n.Name))
-	b = append(b, apc.NsUUIDPrefix)
-	b = append(b, n.UUID...)
-	b = append(b, apc.NsNamePrefix)
-	b = append(b, n.Name...)
-	return string(b)
+	l := n.Len()
+	b := make([]byte, l)
+	n._copy(b, l)
+	return cos.UnsafeS(b)
+}
+
+func (n Ns) _copy(b []byte, l int) int {
+	b[0] = apc.NsUUIDPrefix
+	off := 1
+	off += copy(b[off:], cos.UnsafeB(n.UUID))
+	b[off] = apc.NsNamePrefix
+	off++
+	off += copy(b[off:], cos.UnsafeB(n.Name))
+	debug.Assert(off == l)
+	return off
 }
 
 func (n Ns) validate() error {
@@ -296,15 +313,6 @@ func (b *Bck) Cname(objname string) (s string) {
 	return s + string(filepath.Separator) + objname
 }
 
-// translation from s3: gs: scheme back to aws, gcp, etc.
-func (b *Bck) DisplayProvider() (p string) {
-	p = apc.DisplayProvider(b.Provider)
-	if b.IsRemoteAIS() {
-		p = "Remote " + p
-	}
-	return
-}
-
 func (b *Bck) IsEmpty() bool {
 	return b == nil || (b.Name == "" && b.Provider == "" && b.Ns == NsGlobal)
 }
@@ -312,13 +320,22 @@ func (b *Bck) IsEmpty() bool {
 // QueryBcks (see below) is a Bck that _can_ have an empty Name.
 func (b *Bck) IsQuery() bool { return b.Name == "" }
 
+func (b *Bck) LenUnameGlob(objName string) int {
+	return len(b.Provider) + 1 + len(NsGlobalUname) + 1 + len(b.Name) + 1 + len(objName) // compare with the below
+}
+
 // Bck => unique name (use ParseUname below to translate back)
 func (b *Bck) MakeUname(objName string) string {
 	var (
+		// TODO: non-global case can be optimized via b.Ns._copy(buf)
 		nsUname = b.Ns.Uname()
-		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName)
+		l       = len(b.Provider) + 1 + len(nsUname) + 1 + len(b.Name) + 1 + len(objName) // compare with the above
 		buf     = make([]byte, 0, l)
 	)
+	return b.ubuf(buf, nsUname, objName)
+}
+
+func (b *Bck) ubuf(buf []byte, nsUname, objName string) string {
 	buf = append(buf, b.Provider...)
 	buf = append(buf, filepath.Separator)
 	buf = append(buf, nsUname...)
@@ -459,8 +476,6 @@ func (qbck *QueryBcks) IsHDFS() bool      { b := (*Bck)(qbck); return b.IsHDFS()
 func (qbck *QueryBcks) IsHTTP() bool      { b := (*Bck)(qbck); return b.IsHTTP() }
 func (qbck *QueryBcks) IsRemoteAIS() bool { b := (*Bck)(qbck); return b.IsRemoteAIS() }
 func (qbck *QueryBcks) IsCloud() bool     { return apc.IsCloudProvider(qbck.Provider) }
-
-func (qbck *QueryBcks) DisplayProvider() string { b := (*Bck)(qbck); return b.DisplayProvider() }
 
 func (qbck *QueryBcks) IsEmpty() bool { b := (*Bck)(qbck); return b.IsEmpty() }
 
