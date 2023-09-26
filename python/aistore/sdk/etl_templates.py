@@ -47,7 +47,7 @@ spec:
       # command: ["uvicorn", "main:app", "--reload"]
       env:
         - name: ARG_TYPE
-          value: "fqn"
+          value: "{arg_type}"
       readinessProbe:
         httpGet:
           path: /health
