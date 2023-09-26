@@ -160,7 +160,7 @@ func rmAliasHandler(c *cli.Context) (err error) {
 		return missingArgumentsError(c, "alias")
 	}
 	if _, ok := cfg.Aliases[alias]; !ok {
-		return fmt.Errorf("alias %q does not exist", alias)
+		return &errDoesNotExist{what: "alias", name: alias}
 	}
 	delete(cfg.Aliases, alias)
 	return config.Save(cfg)

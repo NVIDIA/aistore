@@ -107,6 +107,7 @@ func getLogHandler(c *cli.Context) error {
 		return incorrectUsageMsg(c, errFmtExclusive, qflprn(allLogsFlag), qflprn(refreshFlag))
 	}
 	outFile := c.Args().Get(1)
+
 	if c.Args().Get(0) == clusterCompletion {
 		// b)
 		if flagIsSet(c, refreshFlag) {
@@ -118,6 +119,10 @@ func getLogHandler(c *cli.Context) error {
 		// a)
 		node, sname, errV := getNode(c, c.Args().Get(0))
 		if errV != nil {
+			if isErrDoesNotExist(errV) {
+				// with a hint
+				errV = fmt.Errorf("%v\n(Hint: did you mean 'ais log get %s %s'?)", errV, clusterCompletion, c.Args().Get(0))
+			}
 			return errV
 		}
 		err = _getAllNodeLogs(c, node, sev, outFile, sname)
@@ -214,6 +219,10 @@ func _currentLog(c *cli.Context) error {
 	}
 	node, sname, err := getNode(c, c.Args().Get(0))
 	if err != nil {
+		if isErrDoesNotExist(err) {
+			// with a hint
+			err = fmt.Errorf("%v\n(Hint: did you mean 'ais log get %s %s'?)", err, clusterCompletion, c.Args().Get(0))
+		}
 		return err
 	}
 	// destination

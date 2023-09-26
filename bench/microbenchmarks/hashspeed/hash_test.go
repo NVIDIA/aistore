@@ -8,7 +8,6 @@ import (
 	"hash"
 	"math/rand"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"unsafe"
 
@@ -141,15 +140,15 @@ func BenchmarkThroughput(b *testing.B) {
 }
 
 func throughput(b *testing.B, size int64, newHash func() (hash.Hash, error)) {
-	var iter uint64
 	b.SetBytes(size)
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {
+		var i int
 		for pb.Next() {
 			h, err := newHash()
 			assert(err == nil, "new")
-			i := atomic.AddUint64(&iter, 1) % uint64(cores)
+			i = (i + 1) % cores
 			l, err := h.Write(vec[i][:size])
 			assert(int64(l) == size && err == nil, "write")
 			h.Sum(nil)

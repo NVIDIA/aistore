@@ -1,7 +1,6 @@
 "ais://$BUCKET_1" created
 Bucket "ais://$BUCKET_1" already exists
 "ais://$BUCKET_1" destroyed
-Bucket "ais://$BUCKET_1" does not exist
 "ais://$BUCKET_1" created
 "ais://$BUCKET_1" destroyed
 "ais://$BUCKET_1" created

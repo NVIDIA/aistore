@@ -38,6 +38,11 @@ type (
 		baseErr        error
 		additionalInfo string
 	}
+	errDoesNotExist struct {
+		what   string
+		name   string
+		suffix string
+	}
 )
 
 //////////////
@@ -76,6 +81,19 @@ func newAdditionalInfoError(err error, info string) error {
 
 func (e *errAdditionalInfo) Error() string {
 	return fmt.Sprintf("%s.\n%s\n", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
+}
+
+/////////////////////
+// errDoesNotExist //
+/////////////////////
+
+func (e *errDoesNotExist) Error() string {
+	return fmt.Sprintf("%s %q does not exist%s", e.what, e.name, e.suffix)
+}
+
+func isErrDoesNotExist(err error) bool {
+	_, ok := err.(*errDoesNotExist)
+	return ok
 }
 
 //

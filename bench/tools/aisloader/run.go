@@ -269,7 +269,8 @@ func Start(version, buildtime string) (err error) {
 	loggedUserToken = authn.LoadToken(runParams.tokenFile)
 	runParams.bp.Token = loggedUserToken
 	runParams.bp.UA = ua
-	if err := setupBucket(runParams); err != nil {
+	var created bool
+	if err := setupBucket(runParams, &created); err != nil {
 		return err
 	}
 
@@ -277,15 +278,21 @@ func Start(version, buildtime string) (err error) {
 		initS3Svc()
 	}
 
-	// Skip listing objects if we are only testing control plane ops or only doing puts
-	if !runParams.getConfig && !runParams.skipList {
+	// list objects, or maybe not
+	if created {
+		if runParams.putPct < 100 {
+			return errors.New("new bucket, expecting 100% PUT")
+		}
+		bucketObjsNames = &namegetter.RandomNameGetter{}
+		bucketObjsNames.Init([]string{}, rnd)
+	} else if !runParams.getConfig && !runParams.skipList {
 		if err := listObjects(); err != nil {
 			return err
 		}
 
 		objsLen := bucketObjsNames.Len()
 		if runParams.putPct == 0 && objsLen == 0 {
-			return errors.New("nothing to read, bucket is empty")
+			return errors.New("nothing to read, the bucket is empty")
 		}
 
 		fmt.Printf("Found %s existing object%s\n\n", cos.FormatBigNum(objsLen), cos.Plural(objsLen))
@@ -922,7 +929,7 @@ func (s *sts) aggregate(other sts) {
 	s.getConfig.Aggregate(other.getConfig)
 }
 
-func setupBucket(runParams *params) error {
+func setupBucket(runParams *params, created *bool) error {
 	if runParams.getConfig {
 		return nil
 	}
@@ -963,6 +970,7 @@ func setupBucket(runParams *params) error {
 		if err := api.CreateBucket(runParams.bp, runParams.bck, nil); err != nil {
 			return fmt.Errorf("failed to create %s: %v", runParams.bck, err)
 		}
+		*created = true
 	}
 	if runParams.bPropsStr == "" {
 		return nil

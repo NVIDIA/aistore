@@ -15,11 +15,13 @@ import (
 
 const nlpTryDefault = time.Second // nlp.TryLock default duration
 
-// nameLocker is a 2-level structure utilized to lock objects of *any* kind
-// as long as object has a (string) name and an (int) digest.
-// In most cases, the digest will be some sort a hash of the name itself
-// (does not necessarily need to be cryptographic).
+// nameLocker is a 2-level structure utilized to lock objects of *any* kind,
+// as long as the object in question has a (string) name and an (int) digest.
+// Digest (plus a certain fixed mask) is used to select one of the specific `nlc` maps;
+// in most cases, digest will be some sort a hash of the name itself and does not
+// need to be cryptographic.
 // The lock can be exclusive (write) or shared (read).
+
 type (
 	nameLocker []nlc
 	nlc        struct {
@@ -84,7 +86,7 @@ func (li *lockInfo) notify() {
 		// has been upgraded - wake up all waiters
 		li.wcond.Broadcast()
 	} else {
-		// wake up only the "doer"
+		// wake up only the owner
 		li.wcond.Signal()
 	}
 }

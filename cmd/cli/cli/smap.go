@@ -69,7 +69,12 @@ func getNode(c *cli.Context, arg string) (node *meta.Snode, sname string, err er
 		sid = arg
 	}
 	if node = smap.GetNode(sid); node == nil {
-		return nil, "", fmt.Errorf("node %q does not exist ("+tabHelpOpt+", or see 'ais show cluster')", arg)
+		err = &errDoesNotExist{
+			what:   "node",
+			name:   arg,
+			suffix: " (" + tabHelpOpt + ", or see 'ais show cluster')",
+		}
+		return
 	}
 	sname = node.StringEx()
 	return

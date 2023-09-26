@@ -143,7 +143,7 @@ func lsFobj(c *cli.Context, path, trimPref, appendPref string, ndir *int, recurs
 		path = filepath.Dir(path)
 		finfo, err = os.Stat(path)
 		if err != nil {
-			return nil, fmt.Errorf("%q does not exist", path)
+			return nil, &errDoesNotExist{what: "path", name: path}
 		}
 		if !finfo.IsDir() {
 			return nil, fmt.Errorf("%q is not a directory", path)

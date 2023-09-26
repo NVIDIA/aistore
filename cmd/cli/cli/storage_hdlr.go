@@ -484,7 +484,7 @@ func mpathAction(c *cli.Context, action string) error {
 		if si == nil {
 			si = smap.GetProxy(nodeID)
 			if si == nil {
-				return fmt.Errorf("node %q does not exist", nodeID)
+				return &errDoesNotExist{what: "node", name: nodeID}
 			}
 			return fmt.Errorf("node %q is a proxy "+
 				"(hint: press <TAB-TAB> or run \"ais show cluster target\" to select a target)", nodeID)

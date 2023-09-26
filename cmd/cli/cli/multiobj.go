@@ -308,7 +308,8 @@ func multiobjArg(c *cli.Context, command string) error {
 			}
 			if err := api.EvictObject(apiBP, bck, objName); err != nil {
 				if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
-					err = fmt.Errorf("object %s does not exist (not \"cached\")", bck.Cname(objName))
+					err = &errDoesNotExist{what: "object", name: bck.Cname(objName),
+						suffix: " (not \"cached\")"}
 				}
 				return V(err)
 			}

@@ -425,7 +425,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	}
 	if err != nil {
 		if cmn.IsStatusNotFound(err) && archpath == "" {
-			err = fmt.Errorf("%q does not exist", bck.Cname(objName))
+			err = &errDoesNotExist{what: "object", name: bck.Cname(objName)}
 		}
 		return
 	}

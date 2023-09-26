@@ -451,7 +451,7 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) 
 			herr.Message = herr.StringEx()
 			err = errors.New(herr.Message)
 		case herr.Status == http.StatusNotFound:
-			err = fmt.Errorf("bucket %q does not exist", bck)
+			err = &errDoesNotExist{what: "bucket", name: bck.Cname("")}
 		case herr.Message != "":
 			err = errors.New(herr.Message)
 		default:
