@@ -18,7 +18,7 @@
       ansible.builtin.replace:
         path: exporting.conf
         regexp: '\bNETDATA_HOST\b'
-        replace: "{{ ansible_hostname }}"
+        replace: "{{ cluster_name }}-{{ ansible_hostname }}"
 
     - name: Ensure docker daemon is running
       service:
