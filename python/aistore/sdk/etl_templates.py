@@ -258,6 +258,8 @@ spec:
           value: "{format}"
         - name: TRANSFORM
           value: '{transform}'
+        - name: ARG_TYPE
+          value: "{arg_type}"
       readinessProbe:
         httpGet:
           path: /health
