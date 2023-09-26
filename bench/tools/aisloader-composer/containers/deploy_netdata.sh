@@ -2,7 +2,8 @@ docker stop netdata 2>/dev/null
 docker rm netdata 2>/dev/null
 
 docker run -d --name=netdata \
-  -p 19999:19999 \
+  --pid=host \
+  --network=host \
   -v $(pwd)/exporting.conf:/etc/netdata/exporting.conf \
   -v netdatalib:/var/lib/netdata \
   -v netdatacache:/var/cache/netdata \
@@ -11,7 +12,9 @@ docker run -d --name=netdata \
   -v /proc:/host/proc:ro \
   -v /sys:/host/sys:ro \
   -v /etc/os-release:/host/etc/os-release:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
   --restart unless-stopped \
   --cap-add SYS_PTRACE \
+  --cap-add SYS_ADMIN \
   --security-opt apparmor=unconfined \
   netdata/netdata

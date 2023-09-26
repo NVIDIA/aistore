@@ -15,7 +15,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "9.5.2"
+      "version": "10.2.0"
     },
     {
       "type": "datasource",
@@ -66,6 +66,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -79,6 +80,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -142,7 +144,7 @@
           },
           "refCount": 0,
           "refId": "A",
-          "target": "alias(averageSeries(netdata.aistorecpu*.disk_iotime.sd*.reads), 'Read IO time')"
+          "target": "alias(averageSeries(netdata.${ClusterPrefix}*.disk_iotime), 'Read IO time')"
         },
         {
           "datasource": {
@@ -152,7 +154,7 @@
           "hide": false,
           "refCount": 0,
           "refId": "B",
-          "target": "alias(absolute(averageSeries(netdata.aistorecpu*.disk_iotime.sd*.writes)), 'Write IO time')"
+          "target": "alias(absolute(averageSeries(netdata.${ClusterPrefix}*.disk_iotime.${StoragePrefix}*.writes)), 'Write IO time')"
         }
       ],
       "title": "Disk IO time",
@@ -170,6 +172,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -183,6 +186,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -242,7 +246,7 @@
             "uid": "${DS_GRAPHITE}"
           },
           "refId": "A",
-          "target": "alias(absolute(averageSeries(netdata.aistorecpu*.disk_qops.sd*.*)), 'Average Queued IO')"
+          "target": "alias(absolute(averageSeries(netdata.${ClusterPrefix}*.disk_qops.${StoragePrefix}*.operations)), 'Average Queued IO')"
         }
       ],
       "title": "Disk Queued Ops",
@@ -260,6 +264,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -273,6 +278,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -361,7 +367,7 @@
           },
           "refCount": 0,
           "refId": "A",
-          "target": "alias(averageSeries(netdata.aistorecpu*.disk_await.sd*.reads), 'Disk Read Await')"
+          "target": "alias(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.reads), 'Disk Read Await')"
         },
         {
           "datasource": {
@@ -371,7 +377,7 @@
           "hide": false,
           "refCount": 0,
           "refId": "B",
-          "target": "alias(absolute(averageSeries(netdata.aistorecpu*.disk_await.sd*.writes)), 'Disk Write Await')"
+          "target": "alias(absolute(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.writes)), 'Disk Write Await')"
         }
       ],
       "title": "Disk Await",
@@ -389,6 +395,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -402,6 +409,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -463,9 +471,10 @@
             "type": "graphite",
             "uid": "${DS_GRAPHITE}"
           },
+          "hide": false,
           "refId": "A",
-          "target": "averageSeries(alias(netdata.aistorecpu*.disk_*.sd*.utilization, 'Average Disk Utilization'))",
-          "textEditor": true
+          "target": "alias(averageSeries(netdata.${ClusterPrefix}*.disk_util.${StoragePrefix}*.utilization), 'Cluster Disk Utilization')",
+          "textEditor": false
         }
       ],
       "title": "Disk Utilization",
@@ -483,6 +492,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -496,6 +506,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -559,7 +570,7 @@
           },
           "refCount": 0,
           "refId": "Netdata Network Received",
-          "target": "alias(scale(sum(netdata.aistorecpu*.net.ens2.received), 125), 'Network Received')",
+          "target": "alias(scale(sum(netdata.${ClusterPrefix}*.net.$NetInterface.received), 125), 'Network Received')",
           "textEditor": false
         },
         {
@@ -570,7 +581,7 @@
           "hide": false,
           "refCount": 0,
           "refId": "Netdata Disk Writes",
-          "target": "alias(scale(absolute(sum(netdata.aistorecpu*.disk.sd*.writes)), 1024), 'Disk Writes')"
+          "target": "alias(scale(absolute(sum(netdata.${ClusterPrefix}*.disk.${StoragePrefix}*.writes)), 1024), 'Disk Writes')"
         },
         {
           "datasource": {
@@ -580,7 +591,8 @@
           "hide": false,
           "refCount": 0,
           "refId": "AISLoader PUT Throughput",
-          "target": "alias(sum(stats.gauges.aisloader.*.put.throughput), 'AISLoader PUT')"
+          "target": "alias(sum(stats.gauges.aisloader.${LoaderPrefix}*.put.throughput), 'AISLoader PUT')",
+          "textEditor": false
         }
       ],
       "title": "PUT Throughput Metrics",
@@ -598,6 +610,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -611,6 +624,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -674,7 +688,7 @@
           },
           "refCount": 0,
           "refId": "AISLoader GET Throughput",
-          "target": "alias(sum(stats.gauges.aisloader.*.get.throughput), 'AISLoader GET')",
+          "target": "alias(sum(stats.gauges.aisloader.${LoaderPrefix}*.get.throughput), 'AISLoader GET')",
           "textEditor": false
         },
         {
@@ -685,7 +699,7 @@
           "hide": false,
           "refCount": 0,
           "refId": "Netdata Network Sent",
-          "target": "alias(sum(scale(absolute(netdata.aistorecpu*.net.ens2.sent), 125)), 'Network Sent')",
+          "target": "alias(sum(scale(absolute(netdata.${ClusterPrefix}*.net.$NetInterface.sent), 125)), 'Network Sent')",
           "textEditor": false
         },
         {
@@ -696,7 +710,7 @@
           "hide": false,
           "refCount": 0,
           "refId": "Netdata Disk Read",
-          "target": "alias(sum(scale(absolute(netdata.aistorecpu*.disk.sd*.reads), 1024)), 'Disk Read')"
+          "target": "alias(sum(scale(absolute(netdata.${ClusterPrefix}*.disk.${StoragePrefix}*.reads), 1024)), 'Disk Read')"
         }
       ],
       "title": "GET Throughput Metrics",
@@ -713,6 +727,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -726,6 +741,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -789,9 +805,11 @@
             "type": "graphite",
             "uid": "${DS_GRAPHITE}"
           },
+          "hide": false,
           "refCount": 0,
           "refId": "A",
-          "target": "alias(stats.*.aisloader.aistoredgx5921-7d.get.latency.sum, 'GET Latency')"
+          "target": "alias(averageSeries(stats.*.aisloader.${LoaderPrefix}*.get.latency.mean), 'GET Latency')",
+          "textEditor": true
         },
         {
           "datasource": {
@@ -801,7 +819,8 @@
           "hide": false,
           "refCount": 0,
           "refId": "B",
-          "target": "alias(stats.*.aisloader.aistoredgx5921-7d.put.latency.sum, 'PUT Latency')"
+          "target": "alias(averageSeries(stats.*.aisloader.${LoaderPrefix}*.put.latency.mean), 'PUT Latency')",
+          "textEditor": false
         }
       ],
       "title": "Latency",
@@ -810,10 +829,128 @@
   ],
   "refresh": "",
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "ais-oke",
+          "value": "ais-oke"
+        },
+        "description": "The cluster prefix used when deploying netdata. Netdata metrics will have the form <cluster name>-<hostname>",
+        "hide": 0,
+        "includeAll": false,
+        "label": "",
+        "multi": false,
+        "name": "ClusterPrefix",
+        "options": [
+          {
+            "selected": false,
+            "text": "sjc4",
+            "value": "sjc4"
+          },
+          {
+            "selected": false,
+            "text": "sjc4-dev",
+            "value": "sjc4-dev"
+          },
+          {
+            "selected": false,
+            "text": "sjc11",
+            "value": "sjc11"
+          }
+        ],
+        "query": "sjc4,sjc4-dev,sjc11",
+        "queryValue": "ais-oke",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "nvme",
+          "value": "nvme"
+        },
+        "description": "Prefix for the storage to monitor for disk-related visualizations, e.g. to include \"sda, sdb\" or \"nvme0n1, nvme1n1\"",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "StoragePrefix",
+        "options": [
+          {
+            "selected": false,
+            "text": "sd",
+            "value": "sd"
+          },
+          {
+            "selected": true,
+            "text": "nvme",
+            "value": "nvme"
+          }
+        ],
+        "query": "sd,nvme",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "*",
+          "value": "*"
+        },
+        "description": "Network interface the hosts use for data",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "NetInterface",
+        "options": [
+          {
+            "selected": false,
+            "text": "ens4f0",
+            "value": "ens4f0"
+          },
+          {
+            "selected": false,
+            "text": "ens1",
+            "value": "ens1"
+          },
+          {
+            "selected": false,
+            "text": "ens2",
+            "value": "ens2"
+          }
+        ],
+        "query": "ens4f0,ens1,ens2",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "aisloader",
+          "value": "aisloader"
+        },
+        "description": "Prefix for the hosts used to run aisloader, used to access aisloader statistics.",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "LoaderPrefix",
+        "options": [
+          {
+            "selected": false,
+            "text": "aistoredgx",
+            "value": "aistoredgx"
+          }
+        ],
+        "query": "aistoredgx",
+        "queryValue": "aisloader",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
   },
   "time": {
     "from": "now-3h",
@@ -823,6 +960,6 @@
   "timezone": "",
   "title": "Performance",
   "uid": "b873080b-d5d2-4062-8e37-de182991c5f8",
-  "version": 1,
+  "version": 5,
   "weekStart": ""
 }
