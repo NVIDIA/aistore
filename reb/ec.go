@@ -311,7 +311,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	hrwTarget, err := cluster.HrwTarget(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get())
+	hrwTarget, err := cluster.HrwHash2T(ct.Digest(), reb.t.Sowner().Get(), true /*skip maint*/)
 	if err != nil || hrwTarget.ID() == reb.t.SID() {
 		return err
 	}

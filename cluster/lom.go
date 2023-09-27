@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -46,14 +46,14 @@ type (
 		bckID   uint64
 	}
 	LOM struct {
-		bck         meta.Bck
-		ObjName     string
-		mi          *fs.Mountpath
-		FQN         string
-		HrwFQN      string // (=> main replica)
-		info        string
-		md          lmeta  // on-disk metadata
-		mpathDigest uint64 // mountpath's digest
+		mi      *fs.Mountpath
+		bck     meta.Bck
+		ObjName string
+		FQN     string
+		HrwFQN  string // (=> main replica)
+		info    string
+		md      lmeta  // on-disk metadata
+		digest  uint64 // uname digest
 	}
 )
 
@@ -105,7 +105,8 @@ func (lom *LOM) Version(special ...bool) string {
 	return lom.md.Ver
 }
 
-func (lom *LOM) Uname() string { return lom.md.uname }
+func (lom *LOM) Uname() string  { return lom.md.uname }
+func (lom *LOM) Digest() uint64 { return lom.digest }
 
 func (lom *LOM) SetSize(size int64)    { lom.md.Size = size }
 func (lom *LOM) SetVersion(ver string) { lom.md.Ver = ver }
@@ -173,7 +174,7 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
 func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
-	tsi, err = HrwTarget(lom.Uname(), smap)
+	tsi, err = HrwHash2T(lom.digest, smap, true /*skip maint*/)
 	if err != nil {
 		return
 	}
@@ -395,8 +396,42 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
 	return
 }
 
+// permission to overwrite objects that were previously read from:
+// a) any remote backend that is currently not configured as the bucket's backend
+// b) HTPP ("ht://") since it's not writable
+func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
+	bck := lom.Bck()
+	// allowed
+	if bck.Props.Access.Has(apc.AceDisconnectedBackend) {
+		return
+	}
+	if !loaded {
+		// doesn't exist
+		if lom.Load(true /*cache it*/, false /*locked*/) != nil {
+			return
+		}
+	}
+	// not allowed & exists & no remote source
+	srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
+	if !hasSrc {
+		return
+	}
+	// case 1
+	if bck.IsAIS() {
+		goto rerr
+	}
+	// case 2
+	if b := bck.RemoteBck(); b != nil && b.Provider == srcProvider {
+		return
+	}
+rerr:
+	msg := fmt.Sprintf("%s(downoaded from %q)", lom, srcProvider)
+	err = cmn.NewObjectAccessDenied(msg, apc.AccessOp(apc.AceDisconnectedBackend), bck.Props.Access)
+	return
+}
+
 //
-// lom cache
+// lom cache -------------------------------------------------------------
 //
 
 // store new or refresh existing
@@ -434,7 +469,7 @@ func (lom *LOM) Uncache(delDirty bool) {
 	}
 }
 
-func (lom *LOM) CacheIdx() int     { return fs.LcacheIdx(lom.mpathDigest) }
+func (lom *LOM) CacheIdx() int     { return fs.LcacheIdx(lom.digest) } // (lif.CacheIdx())
 func (lom *LOM) lcache() *sync.Map { return lom.mi.LomCache(lom.CacheIdx()) }
 
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
@@ -480,34 +515,10 @@ func (lom *LOM) whingeSize(size int64) error {
 	return fmt.Errorf("errsize (%d != %d)", lom.md.Size, size)
 }
 
-func (lom *LOM) Remove(force ...bool) (err error) {
-	// making "rlock" exception to be able to (forcefully) remove corrupted obj in the GET path
-	debug.AssertFunc(func() bool {
-		rc, exclusive := lom.IsLocked()
-		return exclusive || (len(force) > 0 && force[0] && rc > 0)
-	})
-	lom.Uncache(true /*delDirty*/)
-	err = cos.RemoveFile(lom.FQN)
-	if os.IsNotExist(err) {
-		err = nil
-	}
-	for copyFQN := range lom.md.copies {
-		if erc := cos.RemoveFile(copyFQN); erc != nil && !os.IsNotExist(erc) {
-			err = erc
-		}
-	}
-	lom.md.bckID = 0
-	return
-}
-
-//
-// evict lom cache
-//
-
 func EvictLomCache(b *meta.Bck) {
 	var (
 		caches = lomCaches()
-		wg     = &sync.WaitGroup{}
+		wg     = cos.NewLimitedWaitGroup(sys.NumCPU(), len(caches))
 	)
 	for _, lcache := range caches {
 		wg.Add(1)
@@ -543,10 +554,10 @@ func lomCaches() []*sync.Map {
 }
 
 //
-// lock/unlock
+// lock/unlock ------------------------------------------
 //
 
-func (lom *LOM) getLocker() *nlc { return &lomLocker[lom.CacheIdx()] }
+func (lom *LOM) getLocker() *nlc { return &lomLocker[lom.CacheIdx()] } // (lif.getLocker())
 
 func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
 	nlc := lom.getLocker()
@@ -576,69 +587,4 @@ func (lom *LOM) DowngradeLock() {
 func (lom *LOM) Unlock(exclusive bool) {
 	nlc := lom.getLocker()
 	nlc.Unlock(lom.Uname(), exclusive)
-}
-
-// (compare with cos.CreateFile)
-func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
-	if err == nil || !os.IsNotExist(err) {
-		return
-	}
-	// slow path
-	bdir := lom.mi.MakePathBck(lom.Bucket())
-	if err = cos.Stat(bdir); err != nil {
-		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
-	}
-	fdir := filepath.Dir(fqn)
-	if err = cos.CreateDir(fdir); err != nil {
-		return
-	}
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
-	return
-}
-
-// (compare with cos.Rename)
-func (lom *LOM) RenameFrom(workfqn string) error {
-	bdir := lom.mi.MakePathBck(lom.Bucket())
-	if err := cos.Stat(bdir); err != nil {
-		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
-	}
-	if err := cos.Rename(workfqn, lom.FQN); err != nil {
-		return cmn.NewErrFailedTo(T, "finalize", lom, err)
-	}
-	return nil
-}
-
-// permission to overwrite objects that were previously read from:
-// a) any remote backend that is currently not configured as the bucket's backend
-// b) HTPP ("ht://") since it's not writable
-func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
-	bck := lom.Bck()
-	// allowed
-	if bck.Props.Access.Has(apc.AceDisconnectedBackend) {
-		return
-	}
-	if !loaded {
-		// doesn't exist
-		if lom.Load(true /*cache it*/, false /*locked*/) != nil {
-			return
-		}
-	}
-	// not allowed & exists & no remote source
-	srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
-	if !hasSrc {
-		return
-	}
-	// case 1
-	if bck.IsAIS() {
-		goto rerr
-	}
-	// case 2
-	if b := bck.RemoteBck(); b != nil && b.Provider == srcProvider {
-		return
-	}
-rerr:
-	msg := fmt.Sprintf("%s(downoaded from %q)", lom, srcProvider)
-	err = cmn.NewObjectAccessDenied(msg, apc.AccessOp(apc.AceDisconnectedBackend), bck.Props.Access)
-	return
 }

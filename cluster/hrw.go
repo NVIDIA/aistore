@@ -19,28 +19,13 @@ import (
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-// Utility struct to generate a list of the first `n` nodes sorted by their weights
-type hrwList struct {
-	hs  []uint64
-	sis meta.Nodes
-	n   int
+func HrwName2T(uname string, smap *meta.Smap, skipMaint bool) (*meta.Snode, error) {
+	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
+	return HrwHash2T(digest, smap, skipMaint)
 }
 
-func HrwTarget(uname string, smap *meta.Smap) (si *meta.Snode, err error) {
-	return _hrwTarget(uname, smap, true)
-}
-
-// Include targets in maintenance
-func HrwTargetAll(uname string, smap *meta.Smap) (si *meta.Snode, err error) {
-	return _hrwTarget(uname, smap, false)
-}
-
-// Returns a target with the highest HRW score
-func _hrwTarget(uname string, smap *meta.Smap, skipMaint bool) (si *meta.Snode, err error) {
-	var (
-		max    uint64
-		digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
-	)
+func HrwHash2T(digest uint64, smap *meta.Smap, skipMaint bool) (si *meta.Snode, err error) {
+	var max uint64
 	for _, tsi := range smap.Tmap {
 		if skipMaint && tsi.InMaintOrDecomm() {
 			continue
@@ -55,35 +40,6 @@ func _hrwTarget(uname string, smap *meta.Smap, skipMaint bool) (si *meta.Snode, 
 		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
 	}
 	return
-}
-
-// Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
-// returns resulting subset (aka slice) that has the requested length = count.
-// Returns error if the cluster does not have enough targets.
-// If count == length of Smap.Tmap, the function returns as many targets as possible.
-func HrwTargetList(uname string, smap *meta.Smap, count int) (sis meta.Nodes, err error) {
-	const fmterr = "%v: required %d, available %d, %s"
-	cnt := smap.CountTargets()
-	if cnt < count {
-		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, cnt, smap)
-		return
-	}
-	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
-	hlist := newHrwList(count)
-
-	for _, tsi := range smap.Tmap {
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
-		if tsi.InMaintOrDecomm() {
-			continue
-		}
-		hlist.add(cs, tsi)
-	}
-	sis = hlist.get()
-	if count != cnt && len(sis) < count {
-		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, len(sis), smap)
-		return nil, err
-	}
-	return sis, nil
 }
 
 func HrwProxy(smap *meta.Smap, idToSkip string) (pi *meta.Snode, err error) {
@@ -179,6 +135,42 @@ func HrwMpath(uname string) (mi *fs.Mountpath, digest uint64, err error) {
 /////////////
 // hrwList //
 /////////////
+
+type hrwList struct {
+	hs  []uint64
+	sis meta.Nodes
+	n   int
+}
+
+// Sorts all targets in a cluster by their respective HRW (weights) in a descending order;
+// returns resulting subset (aka slice) that has the requested length = count.
+// Returns error if the cluster does not have enough targets.
+// If count == length of Smap.Tmap, the function returns as many targets as possible.
+
+func HrwTargetList(uname string, smap *meta.Smap, count int) (sis meta.Nodes, err error) {
+	const fmterr = "%v: required %d, available %d, %s"
+	cnt := smap.CountTargets()
+	if cnt < count {
+		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, cnt, smap)
+		return
+	}
+	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
+	hlist := newHrwList(count)
+
+	for _, tsi := range smap.Tmap {
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		hlist.add(cs, tsi)
+	}
+	sis = hlist.get()
+	if count != cnt && len(sis) < count {
+		err = fmt.Errorf(fmterr, cmn.ErrNotEnoughTargets, count, len(sis), smap)
+		return nil, err
+	}
+	return sis, nil
+}
 
 func newHrwList(count int) *hrwList {
 	return &hrwList{hs: make([]uint64, 0, count), sis: make(meta.Nodes, 0, count), n: count}

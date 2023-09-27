@@ -96,7 +96,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (*cmn.LsoResult, error) {
 func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 	post := npg.wi.lomVisitedCb
 	for _, obj := range lst.Entries {
-		si, err := cluster.HrwTarget(npg.bck.MakeUname(obj.Name), npg.wi.smap)
+		si, err := cluster.HrwName2T(npg.bck.MakeUname(obj.Name), npg.wi.smap, true /*skip maint*/)
 		if err != nil {
 			return err
 		}

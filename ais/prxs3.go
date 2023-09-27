@@ -210,7 +210,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	}
 	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -391,7 +391,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	objName := strings.Trim(parts[1], "/")
-	si, err = cluster.HrwTarget(bckSrc.MakeUname(objName), &smap.Smap)
+	si, err = cluster.HrwName2T(bckSrc.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -426,7 +426,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []s
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err = cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -464,7 +464,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err = cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -481,7 +481,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string,
 func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.Bck, q url.Values) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() == 1 {
-		si, err := cluster.HrwTarget(bck.MakeUname(""), &smap.Smap)
+		si, err := cluster.HrwName2T(bck.MakeUname(""), &smap.Smap, true /*skip maint*/)
 		if err != nil {
 			s3.WriteErr(w, r, err, 0)
 			return
@@ -541,7 +541,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -574,7 +574,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string)
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err = cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

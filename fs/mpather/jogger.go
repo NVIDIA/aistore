@@ -313,8 +313,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		uname := ct.Bck().MakeUname(ct.ObjectName())
-		tsi, err := cluster.HrwTarget(uname, j.opts.T.Sowner().Get())
+		tsi, err := cluster.HrwHash2T(ct.Digest(), j.opts.T.Sowner().Get(), true /*skip maint*/)
 		if err != nil {
 			return err
 		}

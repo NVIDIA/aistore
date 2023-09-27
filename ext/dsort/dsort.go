@@ -350,7 +350,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 		return err
 	}
 
-	si, err := cluster.HrwTarget(lom.Uname(), m.smap)
+	si, err := cluster.HrwHash2T(lom.Digest(), m.smap, true /*skip maint*/)
 	if err != nil {
 		return err
 	}
@@ -766,7 +766,7 @@ func (m *Manager) phase3(maxSize int64) error {
 		return err
 	}
 	for _, s := range shards {
-		si, err := cluster.HrwTarget(bck.MakeUname(s.Name), m.smap)
+		si, err := cluster.HrwName2T(bck.MakeUname(s.Name), m.smap, true /*skip maint*/)
 		if err != nil {
 			return err
 		}

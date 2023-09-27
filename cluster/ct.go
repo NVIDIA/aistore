@@ -42,6 +42,7 @@ func (ct *CT) Bucket() *cmn.Bck         { return (*cmn.Bck)(ct.bck) }
 func (ct *CT) Mountpath() *fs.Mountpath { return ct.mi }
 func (ct *CT) SizeBytes() int64         { return ct.size }
 func (ct *CT) MtimeUnix() int64         { return ct.mtime }
+func (ct *CT) Digest() uint64           { return ct.digest }
 
 func (ct *CT) LoadFromFS() error {
 	st, err := os.Stat(ct.FQN())
@@ -133,7 +134,7 @@ func NewCTFromLOM(lom *LOM, ctType string) *CT {
 		contentType: ctType,
 		bck:         lom.Bck(),
 		mi:          lom.mi,
-		digest:      lom.mpathDigest,
+		digest:      lom.digest,
 	}
 }
 

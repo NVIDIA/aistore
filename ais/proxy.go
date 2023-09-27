@@ -646,7 +646,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	tsi, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	tsi, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -708,7 +708,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		objName = apireq.items[1]
 	)
 	if nodeID == "" {
-		tsi, err = cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+		tsi, err = cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -759,7 +759,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	tsi, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	tsi, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1890,7 +1890,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -1918,7 +1918,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -2359,7 +2359,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), &smap.Smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

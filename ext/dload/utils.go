@@ -47,7 +47,7 @@ func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta
 		if err != nil {
 			return
 		}
-		si, err = cluster.HrwTarget(bck.MakeUname(name), smap)
+		si, err = cluster.HrwName2T(bck.MakeUname(name), smap, true /*skip maint*/)
 		if err != nil {
 			return
 		}
@@ -85,7 +85,7 @@ func makeDlObj(smap *meta.Smap, sid string, bck *meta.Bck, objName, link string)
 		return dlObj{}, err
 	}
 
-	si, err := cluster.HrwTarget(bck.MakeUname(objName), smap)
+	si, err := cluster.HrwName2T(bck.MakeUname(objName), smap, true /*skip maint*/)
 	if err != nil {
 		return dlObj{}, err
 	}

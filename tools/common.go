@@ -35,12 +35,12 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 	newName := newNamePrefix
 
 	cbck := meta.CloneBck(&bck)
-	baseNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(baseName), smap)
-	newNameHrw, _ := cluster.HrwTarget(cbck.MakeUname(newName), smap)
+	baseNameHrw, _ := cluster.HrwName2T(cbck.MakeUname(baseName), smap, true /*skip maint*/)
+	newNameHrw, _ := cluster.HrwName2T(cbck.MakeUname(newName), smap, true /*skip maint*/)
 
 	for i := 0; baseNameHrw == newNameHrw; i++ {
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, _ = cluster.HrwTarget(cbck.MakeUname(newName), smap)
+		newNameHrw, _ = cluster.HrwName2T(cbck.MakeUname(newName), smap, true /*skip maint*/)
 	}
 	return newName
 }

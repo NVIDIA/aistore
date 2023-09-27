@@ -13,12 +13,12 @@ import (
 // LOM In Flight (LIF)
 type (
 	LIF struct {
-		Uname       string
-		BID         uint64
-		mpathDigest uint64
+		Uname  string
+		BID    uint64
+		digest uint64
 	}
 	lifUnlocker interface {
-		CacheIdx() int // TODO: lowercase
+		CacheIdx() int
 		getLocker() *nlc
 	}
 )
@@ -31,9 +31,9 @@ func (lom *LOM) LIF() (lif LIF) {
 	debug.Assert(lom.md.uname != "")
 	debug.Assert(lom.Bprops() != nil && lom.Bprops().BID != 0)
 	return LIF{
-		Uname:       lom.md.uname,
-		BID:         lom.Bprops().BID,
-		mpathDigest: lom.mpathDigest,
+		Uname:  lom.md.uname,
+		BID:    lom.Bprops().BID,
+		digest: lom.digest,
 	}
 }
 
@@ -56,7 +56,8 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 }
 
 // deferred unlocking
-func (lif *LIF) CacheIdx() int   { return fs.LcacheIdx(lif.mpathDigest) }
+
+func (lif *LIF) CacheIdx() int   { return fs.LcacheIdx(lif.digest) }
 func (lif *LIF) getLocker() *nlc { return &lomLocker[lif.CacheIdx()] }
 
 func (lif *LIF) Unlock(exclusive bool) {

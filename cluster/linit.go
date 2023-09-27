@@ -42,7 +42,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 	debug.Assert(parsedFQN.ContentType == fs.ObjectType)
 	lom.FQN = fqn
 	lom.mi = parsedFQN.Mountpath
-	lom.mpathDigest = parsedFQN.Digest
+	lom.digest = parsedFQN.Digest
 	lom.ObjName = parsedFQN.ObjName
 	lom.bck = *(*meta.Bck)(&parsedFQN.Bck)
 
@@ -70,7 +70,7 @@ func (lom *LOM) InitCT(ct *CT) {
 	lom.FQN = ct.fqn
 	lom.HrwFQN = ct.hrwFQN
 	lom.mi = ct.mi
-	lom.mpathDigest = ct.digest
+	lom.digest = ct.digest
 	lom.ObjName = ct.objName
 	lom.bck = *ct.bck
 	lom.md.uname = ct.Uname()
@@ -85,7 +85,7 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	lom.mi, lom.mpathDigest, err = HrwMpath(lom.md.uname)
+	lom.mi, lom.digest, err = HrwMpath(lom.md.uname)
 	if err != nil {
 		return
 	}
