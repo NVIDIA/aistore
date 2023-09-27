@@ -193,9 +193,10 @@ func (poi *putOI) putObject() (errCode int, err error) {
 				// see also: sparseRedirStats
 				poi.t.statsT.Add(stats.PutLatency, time.Now().UnixNano()-poi.atime)
 			}
-			// via /s3 (TODO: revisit)
+			// RESTful PUT response header
 			if poi.resphdr != nil {
 				cmn.ToHeader(poi.lom.ObjAttrs(), poi.resphdr)
+				poi.resphdr.Del(cos.HdrContentLength)
 			}
 		}
 	} else if poi.xctn != nil && poi.owt == cmn.OwtPromote {
