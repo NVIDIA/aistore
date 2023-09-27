@@ -1013,7 +1013,7 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 		}
 		// file share == true: promote only the part of the txnPrm.fqns that "lands" locally
 		if confirmedFshare {
-			si, err := cluster.HrwName2T(c.bck.MakeUname(objName), smap, true /*skip maint*/)
+			si, err := smap.HrwName2T(c.bck.MakeUname(objName), true /*skip maint*/)
 			if err != nil {
 				return err
 			}

@@ -703,7 +703,7 @@ func (goi *getOI) restoreFromAny(skipLomRestore bool) (doubleCheck bool, errCode
 		smap  = goi.t.owner.smap.get()
 		tname = goi.t.String()
 	)
-	tsi, err = cluster.HrwHash2T(goi.lom.Digest(), &smap.Smap, false /*skip maint*/) // NOTE: excepting on purpose
+	tsi, err = smap.HrwHash2T(goi.lom.Digest(), false /*skip maint - excepting on purpose*/)
 	if err != nil {
 		return
 	}
@@ -1176,7 +1176,7 @@ func (coi *copyOI) copyObject(lom *cluster.LOM, objNameTo string) (size int64, e
 	}
 
 	smap := coi.t.owner.smap.Get()
-	tsi, err := cluster.HrwName2T(coi.BckTo.MakeUname(objNameTo), smap, true /*skip maint*/)
+	tsi, err := smap.HrwName2T(coi.BckTo.MakeUname(objNameTo), true /*skip maint*/)
 	if err != nil {
 		return 0, err
 	}
@@ -1258,8 +1258,11 @@ func (coi *copyOI) copyObject(lom *cluster.LOM, objNameTo string) (size int64, e
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyOI) copyReader(lom *cluster.LOM, objNameTo string) (size int64, err error) {
-	var tsi *meta.Snode
-	tsi, err = cluster.HrwName2T(coi.BckTo.MakeUname(objNameTo), coi.t.owner.smap.Get(), true /*skip maint*/)
+	var (
+		tsi  *meta.Snode
+		smap = coi.t.owner.smap.Get()
+	)
+	tsi, err = smap.HrwName2T(coi.BckTo.MakeUname(objNameTo), true /*skip maint*/)
 	if err != nil {
 		return
 	}

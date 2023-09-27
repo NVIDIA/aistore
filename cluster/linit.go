@@ -85,7 +85,7 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
-	lom.mi, lom.digest, err = HrwMpath(lom.md.uname)
+	lom.mi, lom.digest, err = fs.Hrw(lom.md.uname)
 	if err != nil {
 		return
 	}

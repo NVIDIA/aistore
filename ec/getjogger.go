@@ -147,7 +147,8 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return err
 	}
-	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), ctx.meta.Parity+1)
+	smap := c.parent.smap.Get()
+	targets, err := smap.HrwTargetList(ctx.lom.Uname(), ctx.meta.Parity+1)
 	if err != nil {
 		return err
 	}
@@ -625,7 +626,8 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 		nodeToID[v] = k
 	}
 	// Generate the list of targets that should have a slice.
-	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), sliceCnt+1)
+	smap := c.parent.smap.Get()
+	targets, err := smap.HrwTargetList(ctx.lom.Uname(), sliceCnt+1)
 	if err != nil {
 		nlog.Warningln(err)
 		return nil, err

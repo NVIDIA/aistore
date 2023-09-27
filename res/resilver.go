@@ -170,7 +170,7 @@ func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 // destination files(on copy failure)
 func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
-	destMpath, _, err := cluster.HrwMpath(uname)
+	destMpath, _, err := fs.Hrw(uname)
 	if err != nil {
 		jg.xres.AddErr(err)
 		nlog.Warningln(err)

@@ -313,7 +313,8 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		tsi, err := cluster.HrwHash2T(ct.Digest(), j.opts.T.Sowner().Get(), true /*skip maint*/)
+		smap := j.opts.T.Sowner().Get()
+		tsi, err := smap.HrwHash2T(ct.Digest(), true /*skip maint*/)
 		if err != nil {
 			return err
 		}

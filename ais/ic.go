@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -99,7 +98,7 @@ begin:
 			}
 		}
 	} else {
-		hrwOwner, err := cluster.HrwIC(&smap.Smap, uuid)
+		hrwOwner, err := smap.HrwIC(uuid)
 		if err != nil {
 			ic.p.writeErr(w, r, err, http.StatusInternalServerError)
 			return true
@@ -127,7 +126,7 @@ outer:
 		psi = smap.GetProxy(owner)
 		if psi == nil || !smap.IsIC(psi) {
 			var err error
-			if psi, err = cluster.HrwIC(&smap.Smap, uuid); err != nil {
+			if psi, err = smap.HrwIC(uuid); err != nil {
 				ic.p.writeErr(w, r, err, http.StatusInternalServerError)
 				return true
 			}

@@ -174,7 +174,7 @@ func (lom *LOM) WritePolicy() (p apc.WritePolicy) {
 func (lom *LOM) loaded() bool { return lom.md.bckID != 0 }
 
 func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err error) {
-	tsi, err = HrwHash2T(lom.digest, smap, true /*skip maint*/)
+	tsi, err = smap.HrwHash2T(lom.digest, true /*skip maint*/)
 	if err != nil {
 		return
 	}

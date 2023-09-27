@@ -151,7 +151,7 @@ func (p *proxy) httpelect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	smap = p.owner.smap.get()
-	psi, err := cluster.HrwProxy(&smap.Smap, smap.Primary.ID())
+	psi, err := smap.HrwProxy(smap.Primary.ID())
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -438,7 +438,7 @@ func (h *htrun) onPrimaryDown(self *proxy, callerID string) {
 			return
 		}
 		// use HRW ordering
-		nextPrimaryProxy, err := cluster.HrwProxy(&clone.Smap, clone.Primary.ID())
+		nextPrimaryProxy, err := clone.HrwProxy(clone.Primary.ID())
 		if err != nil {
 			if !daemon.stopping.Load() {
 				nlog.Errorf("%s failed to execute HRW selection: %v", h, err)
@@ -650,7 +650,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// Second: Vote according to whether or not the candidate is the Highest Random Weight remaining
 	// in the Smap
 	smap := h.owner.smap.get()
-	nextPrimaryProxy, err := cluster.HrwProxy(&smap.Smap, currPrimaryID)
+	nextPrimaryProxy, err := smap.HrwProxy(currPrimaryID)
 	if err != nil {
 		return false, fmt.Errorf("error executing HRW: %v", err)
 	}

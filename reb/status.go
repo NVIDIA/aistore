@@ -7,7 +7,6 @@ package reb
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -95,7 +94,7 @@ func (reb *Reb) wackStatus(status *Status, rsmap *meta.Smap) {
 func _wackStatusLom(lomAcks *lomAcks, targets meta.Nodes, rsmap *meta.Smap) meta.Nodes {
 outer:
 	for _, lom := range lomAcks.q {
-		tsi, err := cluster.HrwHash2T(lom.Digest(), rsmap, true /*skip maint*/)
+		tsi, err := rsmap.HrwHash2T(lom.Digest(), true /*skip maint*/)
 		if err != nil {
 			continue
 		}

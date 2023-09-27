@@ -619,7 +619,8 @@ func (es *dsmExtractShard) do() error {
 	if err := bck.Init(g.t.Bowner()); err != nil {
 		return err
 	}
-	tsi, err := cluster.HrwName2T(bck.MakeUname(shard.Name), g.t.Sowner().Get(), true /*skip maint*/)
+	smap := g.t.Sowner().Get()
+	tsi, err := smap.HrwName2T(bck.MakeUname(shard.Name), true /*skip maint*/)
 	if err != nil {
 		return err
 	}

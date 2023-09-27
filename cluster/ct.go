@@ -112,7 +112,7 @@ func NewCTFromBO(bck *cmn.Bck, objName string, b meta.Bowner, ctType ...string) 
 		}
 	}
 	var digest uint64
-	ct.mi, digest, err = HrwMpath(ct.bck.MakeUname(objName))
+	ct.mi, digest, err = fs.Hrw(ct.bck.MakeUname(objName))
 	if err != nil {
 		return
 	}

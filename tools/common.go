@@ -17,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -35,12 +34,12 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 	newName := newNamePrefix
 
 	cbck := meta.CloneBck(&bck)
-	baseNameHrw, _ := cluster.HrwName2T(cbck.MakeUname(baseName), smap, true /*skip maint*/)
-	newNameHrw, _ := cluster.HrwName2T(cbck.MakeUname(newName), smap, true /*skip maint*/)
+	baseNameHrw, _ := smap.HrwName2T(cbck.MakeUname(baseName), true /*skip maint*/)
+	newNameHrw, _ := smap.HrwName2T(cbck.MakeUname(newName), true /*skip maint*/)
 
 	for i := 0; baseNameHrw == newNameHrw; i++ {
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, _ = cluster.HrwName2T(cbck.MakeUname(newName), smap, true /*skip maint*/)
+		newNameHrw, _ = smap.HrwName2T(cbck.MakeUname(newName), true /*skip maint*/)
 	}
 	return newName
 }

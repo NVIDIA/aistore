@@ -254,8 +254,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	if err != nil {
 		return err
 	}
-
-	targets, err := cluster.HrwTargetList(ctx.lom.Uname(), c.parent.smap.Get(), reqTargets)
+	targets, err := smap.HrwTargetList(ctx.lom.Uname(), reqTargets)
 	if err != nil {
 		return err
 	}

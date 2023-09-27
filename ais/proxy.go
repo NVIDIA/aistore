@@ -646,7 +646,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	tsi, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -708,7 +708,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		objName = apireq.items[1]
 	)
 	if nodeID == "" {
-		tsi, err = cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+		tsi, err = smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -759,7 +759,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	tsi, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1628,7 +1628,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 			if smap.CountActiveTs() == 1 {
 				// (walk an extra mile)
 				orig := err
-				tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap)
+				tsi, err = smap.HrwTargetTask(lsmsg.UUID)
 				if err == nil {
 					nlog.Warningf("ignoring [%v] - utilizing the last (or the only) active target %s", orig, tsi)
 					lsmsg.SID = tsi.ID()
@@ -1637,7 +1637,7 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		}
 		return
 	}
-	if tsi, err = cluster.HrwTargetTask(lsmsg.UUID, &smap.Smap); err == nil {
+	if tsi, err = smap.HrwTargetTask(lsmsg.UUID); err == nil {
 		lsmsg.SID = tsi.ID()
 	}
 	return
@@ -1890,7 +1890,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -1918,7 +1918,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -2359,7 +2359,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := cluster.HrwName2T(bck.MakeUname(objName), &smap.Smap, true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -3449,7 +3449,7 @@ func (p *proxy) Stop(err error) {
 	if isPrimary {
 		s += "(primary)"
 		if !isEnu || e.action != apc.ActShutdownCluster {
-			if npsi, err := cluster.HrwProxy(&smap.Smap, p.SID()); err == nil {
+			if npsi, err := smap.HrwProxy(p.SID()); err == nil {
 				p.notifyCandidate(npsi, smap)
 			}
 		}

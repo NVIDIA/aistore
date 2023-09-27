@@ -6,7 +6,6 @@ package ais
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -41,7 +40,7 @@ func (c *lstcx) do() (string, error) {
 		PageSize: 0, // i.e., backend.MaxPageSize()
 	}
 	c.lsmsg.SetFlag(apc.LsNameOnly)
-	tsi, err := cluster.HrwTargetTask(c.lsmsg.UUID, &smap.Smap)
+	tsi, err := smap.HrwTargetTask(c.lsmsg.UUID)
 	if err != nil {
 		return "", err
 	}

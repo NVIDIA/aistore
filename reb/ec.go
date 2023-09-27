@@ -207,8 +207,11 @@ func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
 // replica) but it also stores a slice of the object. So, the existing slice
 // goes to any other _free_ target.
 func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*meta.Snode, error) {
-	sliceCnt := md.Data + md.Parity + 2
-	hrwList, err := cluster.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), reb.t.Sowner().Get(), sliceCnt)
+	var (
+		sliceCnt     = md.Data + md.Parity + 2
+		smap         = reb.smap.Load()
+		hrwList, err = smap.HrwTargetList(ct.Bck().MakeUname(ct.ObjectName()), sliceCnt)
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +314,8 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
 		return nil
 	}
 
-	hrwTarget, err := cluster.HrwHash2T(ct.Digest(), reb.t.Sowner().Get(), true /*skip maint*/)
+	smap := reb.smap.Load()
+	hrwTarget, err := smap.HrwHash2T(ct.Digest(), true /*skip maint*/)
 	if err != nil || hrwTarget.ID() == reb.t.SID() {
 		return err
 	}

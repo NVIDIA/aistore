@@ -94,7 +94,9 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 		r.updRes(err)
 		return
 	}
-	if si, err = cluster.HrwTargetTask(r.msg.UUID, r.t.Sowner().Get()); err != nil {
+
+	smap := r.t.Sowner().Get()
+	if si, err = smap.HrwTargetTask(r.msg.UUID); err != nil {
 		r.updRes(err)
 		return
 	}

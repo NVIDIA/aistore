@@ -365,7 +365,7 @@ func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 		return true, err
 	}
 
-	mi, _, err := cluster.HrwMpath(bck.MakeUname(task.obj.objName))
+	mi, _, err := fs.Hrw(bck.MakeUname(task.obj.objName))
 	if err != nil {
 		return false, err
 	}

@@ -29,7 +29,7 @@ func HrwFQN(bck *cmn.Bck, contentType, objName string) (fqn string, digest uint6
 		mi    *fs.Mountpath
 		uname = bck.MakeUname(objName)
 	)
-	if mi, digest, err = HrwMpath(uname); err == nil {
+	if mi, digest, err = fs.Hrw(uname); err == nil {
 		fqn = mi.MakePathFQN(bck, contentType, objName)
 	}
 	return
