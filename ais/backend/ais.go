@@ -597,13 +597,14 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		return
 	}
 	unsetUUID(&remoteBck)
+	size := lom.SizeBytes(true) // _special_ as it's still a workfile at this point
 	args := api.PutArgs{
 		BaseParams: remAis.bp,
 		Bck:        remoteBck,
 		ObjName:    lom.ObjName,
 		Cksum:      lom.Checksum(),
 		Reader:     r.(cos.ReadOpenCloser),
-		Size:       uint64(lom.SizeBytes(true)), // _special_ as it's still a workfile at this point
+		Size:       uint64(size),
 	}
 	if oah, err = api.PutObject(args); err != nil {
 		errCode, err = extractErrCode(err, remAis.uuid)
@@ -612,6 +613,9 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 	// compare w/ lom.CopyAttrs
 	oa := lom.ObjAttrs()
 	*oa = oah.Attrs()
+
+	// NOTE: restore back into the lom as PUT response header does not contain "Content-Length" (cos.HdrContentLength)
+	oa.Size = size
 
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	return
