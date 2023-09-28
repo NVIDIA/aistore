@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -114,7 +115,7 @@ func (g *fsprungroup) doDD(action string, flags uint64, mpath string, dontResilv
 		return rmi, nil
 	}
 
-	rmi.EvictLomCache()
+	cluster.UncacheMountpath(rmi)
 
 	if noResil || dontResilver || !cmn.GCO.Get().Resilver.Enabled {
 		nlog.Infof("%s: %q %s: no resilvering (%t, %t, %t)", g.t, action, rmi,

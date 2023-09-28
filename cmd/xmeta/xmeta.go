@@ -1,7 +1,7 @@
 // Package xmeta provides low-level tools to format or extract
 // into plain text some of the AIS control structures.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -141,7 +141,7 @@ func main() {
 
 func detectFormat(in string) (f func() error, what string) {
 	if flags.format == "" {
-		return parse(in, flags.extract)
+		return parseDetect(in, flags.extract)
 	}
 	e, ok := m[flags.format]
 	if !ok {
@@ -159,7 +159,7 @@ func detectFormat(in string) (f func() error, what string) {
 	return
 }
 
-func parse(in string, extract bool) (f func() error, what string) {
+func parseDetect(in string, extract bool) (f func() error, what string) {
 	var all []string
 	for k, e := range m {
 		if !strings.Contains(in, k) {
@@ -174,7 +174,7 @@ func parse(in string, extract bool) (f func() error, what string) {
 		break
 	}
 	if what == "" {
-		fmt.Printf("Failed to parse %q for AIS metadata type, one of: %q\n", in, all)
+		fmt.Printf("Failed to auto-detect %q for AIS metadata type - one of %q\n(use '-f' option to specify)\n", in, all)
 		os.Exit(1)
 	}
 	return
@@ -256,9 +256,9 @@ func extractLOM() (err error) {
 	}
 	os.Setenv(cluster.DumpLomEnvVar, "1")
 	fs.TestNew(nil)
-	bmdMock := mock.NewBaseBownerMock()
-	t := &mock.TargetMock{BO: bmdMock}
-	cluster.Init(t)
+
+	_ = mock.NewTarget(mock.NewBaseBownerMock()) // => cluster.Tinit
+
 	lom := &cluster.LOM{FQN: flags.in}
 	err = lom.LoadMetaFromFS()
 	if err != nil {

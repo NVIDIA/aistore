@@ -58,7 +58,7 @@ func (lif *LIF) LOM() (lom *LOM, err error) {
 // deferred unlocking
 
 func (lif *LIF) CacheIdx() int   { return fs.LcacheIdx(lif.digest) }
-func (lif *LIF) getLocker() *nlc { return &lomLocker[lif.CacheIdx()] }
+func (lif *LIF) getLocker() *nlc { return &g.locker[lif.CacheIdx()] }
 
 func (lif *LIF) Unlock(exclusive bool) {
 	nlc := lif.getLocker()

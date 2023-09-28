@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
-	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -35,6 +35,13 @@ const (
 	fmtNestedErr      = "nested err: %v"
 	lomInitialVersion = "1"
 	lomDirtyMask      = uint64(1 << 63)
+)
+
+// lcache stats
+const (
+	LcacheCollisionCount = "lcache.collision.n"
+	LcacheEvictedCount   = "lcache.evicted.n"
+	LcacheFlushColdCount = "lcache.flush.cold.n"
 )
 
 type (
@@ -57,11 +64,20 @@ type (
 	}
 )
 
+type (
+	global struct {
+		statsTracker cos.StatsUpdater // (stats.Trunner)
+		t            Target
+		gmm, smm     *memsys.MMSA
+		maxLmeta     atomic.Int64
+		locker       nameLocker
+		lchk         lchk
+	}
+)
+
 var (
-	lomLocker nameLocker
-	bckLocker nameLocker
-	maxLmeta  atomic.Int64
-	T         TargetLoc
+	bckLocker nameLocker // proxy & target
+	g         global     // target only
 )
 
 // interface guard
@@ -71,14 +87,22 @@ var (
 	_ lifUnlocker = (*LOM)(nil)
 )
 
-func Init(t TargetLoc) {
+func Pinit() { bckLocker = newNameLocker() }
+
+func Tinit(t Target, st cos.StatsUpdater, runHK bool) {
 	bckLocker = newNameLocker()
-	if t == nil { // am proxy
-		return
+
+	g.maxLmeta.Store(xattrMaxSize)
+
+	g.locker = newNameLocker()
+	g.t = t
+	g.statsTracker = st
+	g.gmm = t.PageMM()
+	g.smm = t.ByteMM()
+
+	if runHK {
+		regLomCacheWithHK()
 	}
-	lomLocker = newNameLocker()
-	maxLmeta.Store(xattrMaxSize)
-	T = t
 }
 
 /////////
@@ -151,7 +175,7 @@ func (lom *LOM) ObjectName() string       { return lom.ObjName }
 func (lom *LOM) Bck() *meta.Bck           { return &lom.bck }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
-func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
+func (lom *LOM) Location() string         { return g.t.String() + apc.LocationPropSepa + lom.mi.String() }
 
 func ParseObjLoc(loc string) (tname, mpname string) {
 	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
@@ -178,7 +202,7 @@ func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err err
 	if err != nil {
 		return
 	}
-	local = tsi.ID() == T.SID()
+	local = tsi.ID() == g.t.SID()
 	return
 }
 
@@ -346,7 +370,7 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
 		lcache, lmd = lom.fromCache()
-		bmd         = T.Bowner().Get()
+		bmd         = g.t.Bowner().Get()
 	)
 	// fast path
 	if lmd != nil {
@@ -374,7 +398,7 @@ func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	}
 	if cacheit && lcache != nil {
 		md := lom.md
-		lcache.Store(lom.md.uname, &md)
+		lcache.Store(lom.digest, &md)
 	}
 	return
 }
@@ -446,15 +470,19 @@ func (lom *LOM) Recache() {
 		md.cpAtime(lmd)
 	}
 	md.bckID, lom.md.bckID = bid, bid
-	lcache.Store(lom.md.uname, &md)
+	lcache.Store(lom.digest, &md)
 }
 
 func (lom *LOM) Uncache(delDirty bool) {
 	if delDirty {
 		lcache := lom.lcache()
-		if md, ok := lcache.LoadAndDelete(lom.md.uname); ok {
+		if md, ok := lcache.LoadAndDelete(lom.digest); ok {
 			lmd := md.(*lmeta)
-			lom.md.cpAtime(lmd)
+			if lmd.uname != lom.md.uname {
+				g.statsTracker.Inc(LcacheCollisionCount) // target stats
+			} else {
+				lom.md.cpAtime(lmd)
+			}
 		}
 		return
 	}
@@ -474,8 +502,11 @@ func (lom *LOM) lcache() *sync.Map { return lom.mi.LomCache(lom.CacheIdx()) }
 
 func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	lcache = lom.lcache()
-	if md, ok := lcache.Load(lom.md.uname); ok {
+	if md, ok := lcache.Load(lom.digest); ok {
 		lmd = md.(*lmeta)
+		if lmd.uname != lom.md.uname {
+			g.statsTracker.Inc(LcacheCollisionCount) // target stats
+		}
 	}
 	return
 }
@@ -485,7 +516,7 @@ func (lom *LOM) FromFS() error {
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = os.NewSyscallError("stat", err)
-			T.FSHC(err, lom.FQN)
+			g.t.FSHC(err, lom.FQN)
 		}
 		return err
 	}
@@ -498,7 +529,7 @@ func (lom *LOM) FromFS() error {
 	}
 	if err != nil {
 		if !cmn.IsErrLmetaNotFound(err) {
-			T.FSHC(err, lom.FQN)
+			g.t.FSHC(err, lom.FQN)
 		}
 		return err
 	}
@@ -513,28 +544,6 @@ func (lom *LOM) FromFS() error {
 
 func (lom *LOM) whingeSize(size int64) error {
 	return fmt.Errorf("errsize (%d != %d)", lom.md.Size, size)
-}
-
-func EvictLomCache(b *meta.Bck) {
-	var (
-		caches = lomCaches()
-		wg     = cos.NewLimitedWaitGroup(sys.NumCPU(), len(caches))
-	)
-	for _, lcache := range caches {
-		wg.Add(1)
-		go func(cache *sync.Map) {
-			cache.Range(func(hkey, _ any) bool {
-				uname := hkey.(string)
-				bck, _ := cmn.ParseUname(uname)
-				if bck.Equal((*cmn.Bck)(b)) {
-					cache.Delete(hkey)
-				}
-				return true
-			})
-			wg.Done()
-		}(lcache)
-	}
-	wg.Wait()
 }
 
 func lomCaches() []*sync.Map {
@@ -557,7 +566,7 @@ func lomCaches() []*sync.Map {
 // lock/unlock ------------------------------------------
 //
 
-func (lom *LOM) getLocker() *nlc { return &lomLocker[lom.CacheIdx()] } // (lif.getLocker())
+func (lom *LOM) getLocker() *nlc { return &g.locker[lom.CacheIdx()] } // (lif.getLocker())
 
 func (lom *LOM) IsLocked() (int /*rc*/, bool /*exclusive*/) {
 	nlc := lom.getLocker()

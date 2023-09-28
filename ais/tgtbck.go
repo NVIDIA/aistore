@@ -372,6 +372,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			nlp.Lock()
 			defer nlp.Unlock()
 
+			cluster.UncacheBck(apireq.bck)
 			err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
 			if err != nil {
 				t.writeErr(w, r, err)

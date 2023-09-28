@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/sys"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -90,11 +89,6 @@ type (
 		Version      int64   `json:"version,string"`
 	}
 )
-
-// number of broadcasting goroutines <= cmn.NumCPU() * maxBcastMultiplier
-const maxBcastMultiplier = 2
-
-func MaxBcastParallel() int { return sys.NumCPU() * maxBcastMultiplier }
 
 ///////////
 // Snode //

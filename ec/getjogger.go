@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -817,7 +818,7 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
 		tmap     = c.parent.smap.Get().Tmap
-		wg       = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), 8)
+		wg       = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), 8)
 		mtx      = &sync.Mutex{}
 		gen      int64
 		mdExists bool

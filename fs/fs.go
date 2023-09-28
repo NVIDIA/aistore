@@ -154,30 +154,6 @@ func (mi *Mountpath) LomCache(idx int) *sync.Map { return mi.lomCaches.Get(idx) 
 
 func LcacheIdx(digest uint64) int { return int(digest & cos.MultiSyncMapMask) }
 
-func (mi *Mountpath) EvictLomCache() {
-	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
-		cache := mi.LomCache(idx)
-		cache.Range(func(key any, _ any) bool {
-			cache.Delete(key)
-			return true
-		})
-	}
-}
-
-func (mi *Mountpath) evictLomBucketCache(bck *cmn.Bck) {
-	for idx := 0; idx < cos.MultiSyncMapCount; idx++ {
-		cache := mi.LomCache(idx)
-		cache.Range(func(hkey any, _ any) bool {
-			uname := hkey.(string)
-			b, _ := cmn.ParseUname(uname)
-			if b.Equal(bck) {
-				cache.Delete(hkey)
-			}
-			return true
-		})
-	}
-}
-
 func (mi *Mountpath) IsIdle(config *cmn.Config) bool {
 	curr := mfs.ios.GetMpathUtil(mi.Path)
 	return curr >= 0 && curr < config.Disk.DiskUtilLowWM
@@ -866,6 +842,7 @@ func CreateBucket(bck *cmn.Bck, nilbmd bool) (errs []error) {
 	return
 }
 
+// NOTE: caller must make sure to evict LOM cache
 func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 	var (
 		n     int
@@ -892,7 +869,6 @@ func DestroyBucket(op string, bck *cmn.Bck, bid uint64) (err error) {
 			}
 		}
 
-		mi.evictLomBucketCache(bck)
 		dir := mi.makeDelPathBck(bck)
 		if errMv := mi.MoveToDeleted(dir); errMv != nil {
 			nlog.Errorf("%s %q: failed to rm dir %q: %v", op, bck, dir, errMv)

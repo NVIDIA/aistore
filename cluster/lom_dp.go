@@ -47,7 +47,7 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 		return &deferROC{fh, lom.LIF()}, nil
 	}
 	lom.Unlock(false)
-	return nil, cmn.NewErrFailedTo(T, "open", lom.FQN, err)
+	return nil, cmn.NewErrFailedTo(g.t, "open", lom.FQN, err)
 }
 
 // compare with etl/dp.go
@@ -61,7 +61,7 @@ func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 
 	defer lom.Unlock(false)
 	if !cmn.IsObjNotExist(loadErr) {
-		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "load", lom, loadErr)
+		return nil, nil, cmn.NewErrFailedTo(g.t.String()+ldpact, "load", lom, loadErr)
 	}
 	if !lom.Bck().IsRemote() {
 		return nil, nil, loadErr
@@ -76,7 +76,7 @@ func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(oah.SetSize))
-	reader, expCksum, _, err := T.Backend(lom.Bck()).GetObjReader(ctx, lom)
+	reader, expCksum, _, err := g.t.Backend(lom.Bck()).GetObjReader(ctx, lom)
 
 	if lom.Checksum() != nil {
 		oah.Cksum = lom.Checksum()

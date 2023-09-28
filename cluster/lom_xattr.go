@@ -117,9 +117,8 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 	var (
 		size      int64
 		read      []byte
-		mdSize    = maxLmeta.Load()
-		mm        = T.ByteMM()
-		buf, slab = mm.AllocSize(mdSize)
+		mdSize    = g.maxLmeta.Load()
+		buf, slab = g.smm.AllocSize(mdSize)
 	)
 	read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 	if err != nil {
@@ -129,7 +128,7 @@ func (lom *LOM) lmfs(populate bool) (md *lmeta, err error) {
 		}
 		debug.Assert(mdSize < xattrMaxSize)
 		// 2nd attempt: max-size
-		buf, slab = mm.AllocSize(xattrMaxSize)
+		buf, slab = g.smm.AllocSize(xattrMaxSize)
 		read, err = fs.GetXattrBuf(lom.FQN, XattrLOM, buf)
 		if err != nil {
 			slab.Free(buf)
@@ -166,15 +165,15 @@ func (lom *LOM) PersistMain() (err error) {
 		return
 	}
 	// write-immediate (default)
-	buf, mm := lom.marshal()
+	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache(true /*delDirty*/)
-		T.FSHC(err, lom.FQN)
+		g.t.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
 		lom.Recache()
 	}
-	mm.Free(buf)
+	g.smm.Free(buf)
 	return
 }
 
@@ -194,10 +193,10 @@ func (lom *LOM) Persist() (err error) {
 		return
 	}
 
-	buf, mm := lom.marshal()
+	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache(true /*delDirty*/)
-		T.FSHC(err, lom.FQN)
+		g.t.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
 		if lom.Bprops() != nil {
@@ -207,12 +206,12 @@ func (lom *LOM) Persist() (err error) {
 			lom.md.bckID = lom.Bprops().BID
 		}
 	}
-	mm.Free(buf)
+	g.smm.Free(buf)
 	return
 }
 
 func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
-	buf, mm := lom.marshal()
+	buf := lom.marshal()
 	// replicate across copies
 	for copyFQN = range lom.md.copies {
 		if copyFQN == lom.FQN {
@@ -222,7 +221,7 @@ func (lom *LOM) persistMdOnCopies() (copyFQN string, err error) {
 			break
 		}
 	}
-	mm.Free(buf)
+	g.smm.Free(buf)
 	return
 }
 
@@ -238,11 +237,11 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	if err := lom.syncMetaWithCopies(); err != nil {
 		return
 	}
-	buf, mm := lom.marshal()
+	buf := lom.marshal()
 	if err := fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		T.FSHC(err, lom.FQN)
+		g.t.FSHC(err, lom.FQN)
 	}
-	mm.Free(buf)
+	g.smm.Free(buf)
 }
 
 func (lom *LOM) flushAtime(atime time.Time) error {
@@ -254,10 +253,9 @@ func (lom *LOM) flushAtime(atime time.Time) error {
 	return os.Chtimes(lom.FQN, atime, mtime)
 }
 
-func (lom *LOM) marshal() (buf []byte, mm *memsys.MMSA) {
-	lmsize := maxLmeta.Load()
-	mm = T.ByteMM()
-	buf = lom.md.marshal(mm, lmsize)
+func (lom *LOM) marshal() (buf []byte) {
+	lmsize := g.maxLmeta.Load()
+	buf = lom.md.marshal(lmsize)
 	size := int64(len(buf))
 	debug.Assert(size <= xattrMaxSize)
 	_recomputeMdSize(size, lmsize)
@@ -269,10 +267,10 @@ func _recomputeMdSize(size, mdSize int64) {
 	var nsize int64
 	if size > mdSize {
 		nsize = min(size+grow, xattrMaxSize)
-		maxLmeta.CAS(mdSize, nsize)
+		g.maxLmeta.CAS(mdSize, nsize)
 	} else if mdSize == xattrMaxSize && size < xattrMaxSize-grow {
 		nsize = min(size+grow, (size+xattrMaxSize)/2)
-		maxLmeta.CAS(mdSize, nsize)
+		g.maxLmeta.CAS(mdSize, nsize)
 	}
 }
 
@@ -404,31 +402,31 @@ func (md *lmeta) unmarshal(buf []byte) error {
 	return nil
 }
 
-func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
+func (md *lmeta) marshal(mdSize int64) (buf []byte) {
 	var (
 		b8                    [cos.SizeofI64]byte
 		cksumType, cksumValue = md.Cksum.Get()
 	)
-	buf, _ = mm.AllocSize(mdSize)
+	buf, _ = g.smm.AllocSize(mdSize)
 	buf = buf[:prefLen] // hold it for md-xattr checksum (below)
 
 	// serialize
-	buf = _marshRecord(mm, buf, lomCksumType, cksumType, true)
-	buf = _marshRecord(mm, buf, lomCksumValue, cksumValue, true)
+	buf = _marshRecord(buf, lomCksumType, cksumType, true)
+	buf = _marshRecord(buf, lomCksumValue, cksumValue, true)
 	if md.Ver != "" {
-		buf = _marshRecord(mm, buf, lomObjVersion, md.Ver, true)
+		buf = _marshRecord(buf, lomObjVersion, md.Ver, true)
 	}
 	binary.BigEndian.PutUint64(b8[:], uint64(md.Size))
-	buf = _marshRecord(mm, buf, lomObjSize, string(b8[:]), false)
+	buf = _marshRecord(buf, lomObjSize, string(b8[:]), false)
 	if len(md.copies) > 0 {
-		buf = mm.Append(buf, recordSepa)
-		buf = _marshRecord(mm, buf, lomObjCopies, "", false)
-		buf = _marshCopies(mm, buf, md.copies)
+		buf = g.smm.Append(buf, recordSepa)
+		buf = _marshRecord(buf, lomObjCopies, "", false)
+		buf = _marshCopies(buf, md.copies)
 	}
 	if custom := md.GetCustomMD(); len(custom) > 0 {
-		buf = mm.Append(buf, recordSepa)
-		buf = _marshRecord(mm, buf, lomCustomMD, "", false)
-		buf = _marshCustomMD(mm, buf, custom)
+		buf = g.smm.Append(buf, recordSepa)
+		buf = _marshRecord(buf, lomCustomMD, "", false)
+		buf = _marshCustomMD(buf, custom)
 	}
 
 	// checksum, prepend, and return
@@ -439,18 +437,18 @@ func (md *lmeta) marshal(mm *memsys.MMSA, mdSize int64) (buf []byte) {
 	return
 }
 
-func _marshRecord(mm *memsys.MMSA, buf []byte, key int, value string, sepa bool) []byte {
+func _marshRecord(buf []byte, key int, value string, sepa bool) []byte {
 	var bkey [cos.SizeofI16]byte
 	binary.BigEndian.PutUint16(bkey[:], uint16(key))
-	buf = mm.Append(buf, string(bkey[:]))
-	buf = mm.Append(buf, value)
+	buf = g.smm.Append(buf, string(bkey[:]))
+	buf = g.smm.Append(buf, value)
 	if sepa {
-		buf = mm.Append(buf, recordSepa)
+		buf = g.smm.Append(buf, recordSepa)
 	}
 	return buf
 }
 
-func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
+func _marshCopies(buf []byte, copies fs.MPI) []byte {
 	var (
 		i   int
 		num = len(copies)
@@ -458,15 +456,15 @@ func _marshCopies(mm *memsys.MMSA, buf []byte, copies fs.MPI) []byte {
 	for copyFQN := range copies {
 		debug.Assert(copyFQN != "")
 		i++
-		buf = mm.Append(buf, copyFQN)
+		buf = g.smm.Append(buf, copyFQN)
 		if i < num {
-			buf = mm.Append(buf, copyFQNSepa)
+			buf = g.smm.Append(buf, copyFQNSepa)
 		}
 	}
 	return buf
 }
 
-func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.StrKVs) []byte {
+func _marshCustomMD(buf []byte, md cos.StrKVs) []byte {
 	var (
 		i   int
 		num = len(md)
@@ -474,11 +472,11 @@ func _marshCustomMD(mm *memsys.MMSA, buf []byte, md cos.StrKVs) []byte {
 	for k, v := range md {
 		debug.Assert(k != "")
 		i++
-		buf = mm.Append(buf, k)
-		buf = mm.Append(buf, customMDSepa)
-		buf = mm.Append(buf, v)
+		buf = g.smm.Append(buf, k)
+		buf = g.smm.Append(buf, customMDSepa)
+		buf = g.smm.Append(buf, v)
 		if i < num {
-			buf = mm.Append(buf, customMDSepa)
+			buf = g.smm.Append(buf, customMDSepa)
 		}
 	}
 	return buf

@@ -675,7 +675,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 		xreg.AbortAllBuckets(errV, rmbcks...)
 		go func(bcks ...*meta.Bck) {
 			for _, b := range bcks {
-				cluster.EvictLomCache(b)
+				cluster.UncacheBck(b)
 			}
 		}(rmbcks...)
 	}

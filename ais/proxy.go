@@ -192,7 +192,7 @@ func (p *proxy) Run() error {
 	p.owner.bmd.init() // initialize owner and load BMD
 	p.owner.etl.init() // initialize owner and load EtlMD
 
-	cluster.Init(nil /*cluster.Target*/)
+	cluster.Pinit()
 
 	p.statsT.RegMetrics(p.si) // reg target metrics to common; init Prometheus if used
 

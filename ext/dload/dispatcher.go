@@ -41,7 +41,17 @@ type (
 	startupSema struct {
 		started atomic.Bool
 	}
+
+	global struct {
+		t cluster.TargetLoc
+	}
 )
+
+var g global
+
+func Init(t cluster.TargetLoc) {
+	g.t = t
+}
 
 ////////////////
 // dispatcher //

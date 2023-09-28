@@ -58,7 +58,8 @@ const (
 	ErrCksumSize     = "err.cksum.size"
 	ErrMetadataCount = "err.md.n"
 	ErrIOCount       = "err.io.n"
-	// special
+
+	// target restarted (effectively, boolean)
 	RestartCount = "restart.n"
 
 	// KindLatency
@@ -86,6 +87,11 @@ const (
 	// same as above via `.cumulative`
 	GetSize = "get.size"
 	PutSize = "put.size"
+
+	// internal
+	LcacheCollisionCount = cluster.LcacheCollisionCount
+	LcacheEvictedCount   = cluster.LcacheEvictedCount
+	LcacheFlushColdCount = cluster.LcacheFlushColdCount
 )
 
 type (
@@ -219,7 +225,7 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, StreamsInObjCount, KindCounter)
 	r.reg(node, StreamsInObjSize, KindSize)
 
-	// special
+	// node restarted
 	r.reg(node, RestartCount, KindCounter)
 
 	// download
@@ -233,6 +239,11 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, DSortExtractShardDskCnt, KindCounter)
 	r.reg(node, DSortExtractShardMemCnt, KindCounter)
 	r.reg(node, DSortExtractShardSize, KindSize)
+
+	// internal
+	r.reg(node, LcacheCollisionCount, KindCounter)
+	r.reg(node, LcacheEvictedCount, KindCounter)
+	r.reg(node, LcacheFlushColdCount, KindCounter)
 
 	// Prometheus
 	r.core.initProm(node)

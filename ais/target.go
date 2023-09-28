@@ -296,11 +296,11 @@ func (t *target) Run() error {
 	config := cmn.GCO.Get()
 	t.htrun.init(config)
 
-	cluster.Init(t)
-	cluster.RegLomCacheWithHK(t)
+	tstats := t.statsT.(*stats.Trunner)
+
+	cluster.Tinit(t, tstats, true /*run hk*/)
 
 	// metrics, disks first
-	tstats := t.statsT.(*stats.Trunner)
 	availablePaths, disabledPaths := fs.Get()
 	if len(availablePaths) == 0 {
 		cos.ExitLog(cmn.ErrNoMountpaths)
@@ -387,6 +387,7 @@ func (t *target) Run() error {
 	}
 
 	dsort.Tinit(t, t.statsT, db)
+	dload.Init(t)
 
 	err = t.htrun.run(config)
 

@@ -57,7 +57,7 @@ func (lom *LOM) InitFQN(fqn string, expbck *cmn.Bck) (err error) {
 			return fmt.Errorf(fmtErrLinit, lom.FQN, "namespace", expbck.Ns, parsedFQN.Bck.Ns)
 		}
 	}
-	if err = lom.bck.InitFast(T.Bowner()); err != nil {
+	if err = lom.bck.InitFast(g.t.Bowner()); err != nil {
 		return
 	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
@@ -78,7 +78,7 @@ func (lom *LOM) InitCT(ct *CT) {
 
 func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 	lom.bck = *(*meta.Bck)(bck)
-	if err = lom.bck.InitFast(T.Bowner()); err != nil {
+	if err = lom.bck.InitFast(g.t.Bowner()); err != nil {
 		return
 	}
 	if err = cmn.ValidateObjname(lom.ObjName); err != nil {

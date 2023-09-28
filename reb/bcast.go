@@ -43,7 +43,7 @@ type (
 // main method
 func (reb *Reb) bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 	var cnt atomic.Int32
-	wg := cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(rargs.smap.Tmap))
+	wg := cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), len(rargs.smap.Tmap))
 	for _, tsi := range rargs.smap.Tmap {
 		if tsi.ID() == reb.t.SID() {
 			continue

@@ -790,7 +790,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), bargs.nodeCount)
+		wg      = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) == 0)
@@ -816,7 +816,7 @@ func (h *htrun) bcastNodes(bargs *bcastArgs) sliceResults {
 func (h *htrun) bcastSelected(bargs *bcastArgs) sliceResults {
 	var (
 		results bcastResults
-		wg      = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), bargs.nodeCount)
+		wg      = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), bargs.nodeCount)
 		f       = func(si *meta.Snode) { h._call(si, bargs, &results); wg.Done() }
 	)
 	debug.Assert(len(bargs.selected) > 0)
@@ -1352,9 +1352,9 @@ func (h *htrun) _bch(c *getMaxCii, smap *smapX, nodeTy string) {
 		nodemap = smap.Tmap
 	}
 	if c.checkAll {
-		wg = cos.NewLimitedWaitGroup(meta.MaxBcastParallel(), len(nodemap))
+		wg = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), len(nodemap))
 	} else {
-		count = min(meta.MaxBcastParallel(), maxVerConfirmations<<1)
+		count = min(cmn.MaxBcastParallel(), maxVerConfirmations<<1)
 		wg = cos.NewLimitedWaitGroup(count, len(nodemap) /*have*/)
 	}
 	for sid, si := range nodemap {

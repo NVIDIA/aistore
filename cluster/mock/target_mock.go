@@ -27,7 +27,7 @@ var _ cluster.Target = (*TargetMock)(nil)
 
 func NewTarget(bo meta.Bowner) *TargetMock {
 	t := &TargetMock{BO: bo}
-	cluster.Init(t)
+	cluster.Tinit(t, NewStatsTracker(), false)
 	return t
 }
 

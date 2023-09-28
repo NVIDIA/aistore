@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -318,3 +319,9 @@ func (u *HreqArgs) ReqWithTimeout(timeout time.Duration) (*http.Request, context
 	req = req.WithContext(ctx)
 	return req, ctx, cancel, nil
 }
+
+//
+// number of intra-cluster broadcasting goroutines
+//
+
+func MaxBcastParallel() int { return max(sys.NumCPU(), 4) }

@@ -160,7 +160,7 @@ func (lom *LOM) syncMetaWithCopies() (err error) {
 		}
 		lom.delCopyMd(copyFQN)
 		if err1 := cos.Stat(copyFQN); err1 != nil && !os.IsNotExist(err1) {
-			T.FSHC(err, copyFQN) // TODO: notify scrubber
+			g.t.FSHC(err, copyFQN) // TODO: notify scrubber
 		}
 	}
 	return
@@ -178,7 +178,7 @@ func (lom *LOM) RestoreToLocation() (exists bool) {
 	var (
 		saved          = lom.md.pushrt()
 		availablePaths = fs.GetAvail()
-		buf, slab      = T.PageMM().Alloc()
+		buf, slab      = g.gmm.Alloc()
 	)
 	for path, mi := range availablePaths {
 		if path == lom.mi.Path {
