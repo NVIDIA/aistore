@@ -397,7 +397,7 @@ var _ = Describe("LOM", func() {
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
-					lom.Uncache(false)
+					lom.UncacheUnless()
 
 					Expect(lom.Checksum()).ToNot(BeNil())
 					_, val := lom.Checksum().Get()
@@ -479,7 +479,7 @@ var _ = Describe("LOM", func() {
 					Expect(cksumType).To(BeEquivalentTo(cos.ChecksumNone))
 
 					Expect(lom.ValidateContentChecksum()).NotTo(HaveOccurred())
-					lom.Uncache(false)
+					lom.UncacheUnless()
 
 					Expect(lom.Checksum()).ToNot(BeNil())
 					_, cksumValue := lom.Checksum().Get()
@@ -639,7 +639,7 @@ var _ = Describe("LOM", func() {
 			lom.SetSize(int64(testFileSize))
 			lom.SetVersion(desiredVersion)
 			Expect(persist(lom)).NotTo(HaveOccurred())
-			lom.Uncache(false)
+			lom.UncacheUnless()
 			Expect(err).NotTo(HaveOccurred())
 			err = lom.Load(false, false)
 			Expect(err).NotTo(HaveOccurred())
@@ -663,13 +663,13 @@ var _ = Describe("LOM", func() {
 
 			hrwLom := &cluster.LOM{ObjName: lom.ObjName}
 			Expect(hrwLom.InitBck(bck.Bucket())).NotTo(HaveOccurred())
-			hrwLom.Uncache(false)
+			hrwLom.UncacheUnless()
 
 			// Reload copy, to make sure it is fresh
 			dst = NewBasicLom(dst.FQN)
 			Expect(dst.Load(false, true)).NotTo(HaveOccurred())
 			Expect(dst.ValidateContentChecksum()).NotTo(HaveOccurred())
-			hrwLom.Uncache(false)
+			hrwLom.UncacheUnless()
 			return
 		}
 
@@ -1053,7 +1053,7 @@ func filePut(fqn string, size int) *cluster.LOM {
 	lom.SetSize(int64(size))
 	lom.IncVersion()
 	Expect(persist(lom)).NotTo(HaveOccurred())
-	lom.Uncache(false)
+	lom.UncacheUnless()
 	return lom
 }
 

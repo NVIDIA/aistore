@@ -15,7 +15,7 @@ import (
 // is under lock
 func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 	// force reloading metadata
-	lom.Uncache(false /*delDirty*/)
+	lom.UncacheUnless()
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return 0, err
 	}
@@ -49,7 +49,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 // metadata only, md.copies in this case
 func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error) {
 	// Reload metadata, it is necessary to have it fresh.
-	lom.Uncache(false /*delDirty*/)
+	lom.UncacheUnless()
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		return 0, err
 	}

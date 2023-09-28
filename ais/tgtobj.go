@@ -239,7 +239,7 @@ func (poi *putOI) finalize() (errCode int, err error) {
 				nlog.Errorf(fmtNested, poi.t, err1, "remove", poi.workFQN, err2)
 			}
 		}
-		poi.lom.Uncache(true /*delDirty*/)
+		poi.lom.Uncache()
 		return
 	}
 	if !poi.skipEC {
@@ -555,7 +555,7 @@ do:
 		var equal bool
 		goi.lom.Unlock(false)
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
-			goi.lom.Uncache(true /*delDirty*/)
+			goi.lom.Uncache()
 			goi.unlocked = true
 			return
 		}
@@ -603,7 +603,7 @@ fin:
 	if err == nil {
 		return
 	}
-	goi.lom.Uncache(true /*delDirty*/)
+	goi.lom.Uncache()
 	if goi.retry {
 		goi.retry = false
 		if !retried {

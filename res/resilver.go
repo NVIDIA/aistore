@@ -281,15 +281,17 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	}
 	size = lom.SizeBytes()
 	// 2. fix hrw location; fail and subsequently abort if unsuccessful
-	var retries int
-	mi, isHrw := lom.ToMpath()
+	var (
+		retries   int
+		mi, isHrw = lom.ToMpath()
+	)
 	if mi == nil {
 		goto ret // nothing to do
 	}
 redo:
 	if isHrw {
 		// cannot have it associated with a non-hrw mp; TODO: !lom.WritePolicy().IsImmediate()
-		lom.Uncache(true)
+		lom.Uncache()
 
 		hlom, errHrw = jg.fixHrw(lom, mi, buf)
 		if errHrw != nil {

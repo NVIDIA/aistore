@@ -167,7 +167,7 @@ func (lom *LOM) PersistMain() (err error) {
 	// write-immediate (default)
 	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		lom.Uncache(true /*delDirty*/)
+		lom.Uncache()
 		g.t.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
@@ -195,7 +195,7 @@ func (lom *LOM) Persist() (err error) {
 
 	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		lom.Uncache(true /*delDirty*/)
+		lom.Uncache()
 		g.t.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
@@ -482,6 +482,7 @@ func _marshCustomMD(buf []byte, md cos.StrKVs) []byte {
 	return buf
 }
 
+// copy atime IFF valid and more recent
 func (md *lmeta) cpAtime(from *lmeta) {
 	if !cos.IsValidAtime(from.Atime) {
 		return

@@ -270,7 +270,7 @@ func (lom *LOM) ValidateMetaChecksum() error {
 	// different versions may have different checksums
 	if md.Ver == lom.md.Ver && !lom.EqCksum(md.Cksum) {
 		err = cos.NewErrDataCksum(lom.md.Cksum, md.Cksum, lom.String())
-		lom.Uncache(true /*delDirty*/)
+		lom.Uncache()
 	}
 	return err
 }
@@ -329,7 +329,7 @@ recomp:
 	}
 ex:
 	err = cos.NewErrDataCksum(&cksums.comp.Cksum, cksums.stor, lom.String())
-	lom.Uncache(true /*delDirty*/)
+	lom.Uncache()
 	return
 }
 
@@ -464,29 +464,38 @@ func (lom *LOM) Recache() {
 	md := lom.md
 	bid := lom.Bprops().BID
 	debug.Assert(bid != 0)
-
-	lcache, lmd := lom.fromCache()
-	if lmd != nil {
-		md.cpAtime(lmd)
-	}
 	md.bckID, lom.md.bckID = bid, bid
-	lcache.Store(lom.digest, &md)
-}
 
-func (lom *LOM) Uncache(delDirty bool) {
-	if delDirty {
-		lcache := lom.lcache()
-		if md, ok := lcache.LoadAndDelete(lom.digest); ok {
-			lmd := md.(*lmeta)
-			if lmd.uname != lom.md.uname {
-				g.statsTracker.Inc(LcacheCollisionCount) // target stats
-			} else {
-				lom.md.cpAtime(lmd)
-			}
-		}
+	lcache := lom.lcache()
+	val, ok := lcache.Swap(lom.digest, &md)
+	if !ok {
 		return
 	}
+	lmd := val.(*lmeta)
+	if lmd.uname != lom.md.uname {
+		g.statsTracker.Inc(LcacheCollisionCount) // target stats
+	} else {
+		// updating the value that's already in the map (race extremely unlikely, benign anyway)
+		md.cpAtime(lmd)
+	}
+}
 
+func (lom *LOM) Uncache() {
+	lcache := lom.lcache()
+	md, ok := lcache.LoadAndDelete(lom.digest)
+	if !ok {
+		return
+	}
+	lmd := md.(*lmeta)
+	if lmd.uname != lom.md.uname {
+		g.statsTracker.Inc(LcacheCollisionCount) // target stats
+	} else {
+		lom.md.cpAtime(lmd)
+	}
+}
+
+// remove from cache unless dirty
+func (lom *LOM) UncacheUnless() {
 	lcache, lmd := lom.fromCache()
 	if lmd == nil {
 		return

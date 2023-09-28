@@ -292,7 +292,7 @@ func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, reques
 		lom.SetVersion(sw.version)
 	}
 	lom.SetCksum(sw.cksum)
-	lom.Uncache(true)
+	lom.Uncache()
 	return sw.n, nil
 }
 

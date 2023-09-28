@@ -39,7 +39,7 @@ func (lom *LOM) Remove(force ...bool) (err error) {
 		rc, exclusive := lom.IsLocked()
 		return exclusive || (len(force) > 0 && force[0] && rc > 0)
 	})
-	lom.Uncache(true /*delDirty*/)
+	lom.Uncache()
 	err = cos.RemoveFile(lom.FQN)
 	if os.IsNotExist(err) {
 		err = nil

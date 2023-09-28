@@ -127,7 +127,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache(false)
+				hrwLom.UncacheUnless()
 
 				newLom := NewBasicLom(localFQN)
 				err = newLom.Load(false, true)
@@ -164,10 +164,10 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache(false)
+				hrwLom.UncacheUnless()
 
 				ver := lom.Version()
-				lom.Uncache(false)
+				lom.UncacheUnless()
 
 				newLom := NewBasicLom(cachedFQN)
 				err = newLom.Load(false, true)
@@ -206,9 +206,9 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache(false)
+				hrwLom.UncacheUnless()
 
-				lom.Uncache(false)
+				lom.UncacheUnless()
 				lom.Load(true, false)
 				Expect(lom.Version()).To(BeEquivalentTo("second_version"))
 				Expect(lom.GetCopies()).To(HaveLen(3))
@@ -246,7 +246,7 @@ var _ = Describe("LOM Xattributes", func() {
 
 				hrwLom := &cluster.LOM{ObjName: testObjectName}
 				Expect(hrwLom.InitBck(&localBck)).NotTo(HaveOccurred())
-				hrwLom.Uncache(false)
+				hrwLom.UncacheUnless()
 
 				newLom := NewBasicLom(localFQN)
 				err = newLom.Load(false, true)
