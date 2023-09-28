@@ -180,94 +180,18 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 		return !aborted
 	}
 
-	diffResolver := NewDiffResolver(nil)
-
-	diffResolver.Start()
+	diffResolver := NewDiffResolver(&defaultDiffResolverCtx{})
+	go diffResolver.Start()
 
 	// In case of `!job.Sync()` we don't want to traverse the whole bucket.
 	// We just want to download requested objects so we know exactly which
 	// objects must be checked (compared) and which not. Therefore, only traverse
 	// bucket when we need to sync the objects.
 	if job.Sync() {
-		go func() {
-			defer diffResolver.CloseSrc()
-			opts := &fs.WalkBckOpts{
-				WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Sorted: true},
-			}
-			opts.WalkOpts.Bck.Copy(job.Bck())
-			opts.Callback = func(fqn string, de fs.DirEntry) error {
-				if diffResolver.Stopped() {
-					return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
-				}
-				lom := &cluster.LOM{}
-				if err := lom.InitFQN(fqn, job.Bck()); err != nil {
-					return err
-				}
-				if !job.checkObj(lom.ObjName) {
-					return nil
-				}
-				diffResolver.PushSrc(lom)
-				return nil
-			}
-			err := fs.WalkBck(opts)
-			if err != nil && !cmn.IsErrAborted(err) {
-				diffResolver.Abort(err)
-			}
-		}()
+		go diffResolver.walk(job)
 	}
 
-	go func() {
-		defer func() {
-			diffResolver.CloseDst()
-			if !job.Sync() {
-				diffResolver.CloseSrc()
-			}
-		}()
-
-		for {
-			objs, ok, err := job.genNext()
-			if err != nil {
-				diffResolver.Abort(err)
-				return
-			}
-			if !ok || diffResolver.Stopped() {
-				return
-			}
-
-			for _, obj := range objs {
-				if d.checkAborted() {
-					err := cmn.NewErrAborted(job.String(), "", nil)
-					diffResolver.Abort(err)
-					return
-				} else if d.checkAbortedJob(job) {
-					diffResolver.Stop()
-					return
-				}
-
-				if !job.Sync() {
-					// When it is not a sync job, push LOM for a given object
-					// because we need to check if it exists.
-					lom := &cluster.LOM{ObjName: obj.objName}
-					if err := lom.InitBck(job.Bck()); err != nil {
-						diffResolver.Abort(err)
-						return
-					}
-					diffResolver.PushSrc(lom)
-				}
-
-				if obj.link != "" {
-					diffResolver.PushDst(&WebResource{
-						ObjName: obj.objName,
-						Link:    obj.link,
-					})
-				} else {
-					diffResolver.PushDst(&BackendResource{
-						ObjName: obj.objName,
-					})
-				}
-			}
-		}
-	}()
+	go diffResolver.push(job, d)
 
 	for {
 		result, err := diffResolver.Next()

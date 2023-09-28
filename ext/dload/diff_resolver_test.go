@@ -149,7 +149,7 @@ func TestDiffResolver(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &mockDiffResolverCtx{}
 			dr := dload.NewDiffResolver(ctx)
-			dr.Start()
+			go dr.Start()
 			for _, s := range test.src {
 				lom := &cluster.LOM{ObjName: s.name}
 				if s.remote {

@@ -43,6 +43,11 @@ const (
 	bmdReg   = "register"
 )
 
+type delb struct {
+	obck    *meta.Bck
+	present bool
+}
+
 func (t *target) joinCluster(action string, primaryURLs ...string) (status int, err error) {
 	res := t.join(nil, t, primaryURLs...)
 	defer freeCR(res)
@@ -636,24 +641,9 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 
 	// 3. delete, ignore errors
 	bmd.Range(nil, nil, func(obck *meta.Bck) bool {
-		var present bool
-		newBMD.Range(nil, nil, func(nbck *meta.Bck) bool {
-			if !obck.Equal(nbck, false /*ignore BID*/, false /* ignore backend */) {
-				return false
-			}
-			present = true
-			if obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
-				flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: nbck}
-				xreg.DoAbort(flt, errors.New("apply-bmd"))
-				// NOTE: apc.ActMakeNCopies takes care of itself
-			}
-			if obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
-				flt := xreg.Flt{Kind: apc.ActECEncode, Bck: nbck}
-				xreg.DoAbort(flt, errors.New("apply-bmd"))
-			}
-			return true
-		})
-		if !present {
+		f := &delb{obck: obck}
+		newBMD.Range(nil, nil, f.do)
+		if !f.present {
 			rmbcks = append(rmbcks, obck)
 			if errD := fs.DestroyBucket("recv-bmd-"+msg.Action, obck.Bucket(), obck.Props.BID); errD != nil {
 				destroyErrs = append(destroyErrs, errD)
@@ -666,6 +656,25 @@ func (t *target) _syncBMD(newBMD *bucketMD, msg *aisMsg, payload msPayload, psi 
 			t, newBMD, bmd, nilbmd, errors.Join(destroyErrs...))
 	}
 	return
+}
+
+func (f *delb) do(nbck *meta.Bck) bool {
+	if !f.obck.Equal(nbck, false /*ignore BID*/, false /* ignore backend */) {
+		return false // keep going
+	}
+	f.present = true
+
+	// assorted props changed?
+	if f.obck.Props.Mirror.Enabled && !nbck.Props.Mirror.Enabled {
+		flt := xreg.Flt{Kind: apc.ActPutCopies, Bck: nbck}
+		xreg.DoAbort(flt, errors.New("apply-bmd"))
+		// NOTE: apc.ActMakeNCopies takes care of itself
+	}
+	if f.obck.Props.EC.Enabled && !nbck.Props.EC.Enabled {
+		flt := xreg.Flt{Kind: apc.ActECEncode, Bck: nbck}
+		xreg.DoAbort(flt, errors.New("apply-bmd"))
+	}
+	return true // break
 }
 
 func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
