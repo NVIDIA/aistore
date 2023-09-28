@@ -12,6 +12,7 @@
   - [Deploy](#deploy-1)
   - [Local](#local)
   - [Stopping and cleanup](#stopping-and-cleanup-1)
+- [Enabling HTTPS in Minikube for AIStore Deployment](#enabling-https-in-minikube-for-aistore-deployment)
 - [Troubleshooting minikube](#troubleshooting-minikube)
 - [Demo](#demo)
 
@@ -85,6 +86,70 @@ To stop AIS nodes running inside of minikube, deleting all the pods and minikube
 
 ```console
 $ make stop
+```
+
+### Enabling HTTPS in Minikube for AIStore Deployment
+
+To enable HTTPS for your AIStore deployment in Minikube, follow these steps:
+#### For Minimal Deployment
+
+To set up a minimal AIStore deployment with HTTPS, run the following command:
+
+```bash
+$ HTTPS=true make try
+```
+
+#### For Development Deployment
+
+For a development deployment, follow these steps:
+
+1. Run the `make dev` command:
+
+```bash
+$ make dev
+```
+
+2. During the setup process, you will be prompted to enable HTTPS. Respond with "y" to activate HTTPS:
+
+```bash
+Enable HTTPS: (y/n)?
+y
+```
+
+With these steps, your Minikube-based AIStore deployment will be configured for secure HTTPS communication.
+
+#### Testing Considerations for HTTPS
+
+When working with HTTPS-enabled AIStore deployments, here are some important testing considerations:
+
+#### 1. AIStore CLI Configuration
+
+If you're using the AIStore CLI for testing, set the following environment variable to bypass certificate verification and connect to the AIStore cluster:
+
+```bash
+$ ais config cli set cluster.skip_verify_crt true
+```
+
+#### 2. Using `curl`
+
+When interacting with your AIStore cluster over HTTPS using `curl`, use the `-k` flag to skip certificate validation:
+
+```bash
+$ curl -k https://your-ais-cluster-url
+```
+
+#### 3. Exporting the Self-Signed Certificate
+
+If you prefer not to skip certificate validation when using `curl`, you can export the self-signed certificate for use:
+
+```bash
+$ kubectl get secret ais-tls-certs -o jsonpath='{.data.tls\.crt}' | base64 --decode > tls.crt
+```
+
+Now, you can use the exported `tls.crt` as a parameter when using `curl`, like this:
+
+```bash
+$ curl --cacert tls.crt https://your-ais-cluster-url
 ```
 
 ## Developing AIStore on minikube

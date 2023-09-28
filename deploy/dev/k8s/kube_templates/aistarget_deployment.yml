@@ -15,12 +15,14 @@ spec:
       httpGet:
         path: /v1/health?readiness
         port: ${PORT}
+        scheme: ${PROTOCOL}
       initialDelaySeconds: 20
       periodSeconds: 10
     readinessProbe:
       httpGet:
         path: /v1/health
         port: ${PORT}
+        scheme: ${PROTOCOL}
       initialDelaySeconds: 20
       failureThreshold: 5
       periodSeconds: 10
@@ -41,6 +43,8 @@ spec:
        mountPath: /usr/nvidia/data
      - name: ais-fs
        mountPath: /tmp/ais
+     - name: ais-tls-certs
+       mountPath: /var/certs
     ports:
       - containerPort: ${PORT}
         protocol: TCP
@@ -61,6 +65,10 @@ spec:
         export COLLECTD_CONF_FILE="/etc/ais/collectd.conf" &&
         export INSTANCE=${INSTANCE} &&
         export AIS_LOG_DIR=${AIS_LOG_DIR} &&
+        export AIS_USE_HTTPS=${AIS_USE_HTTPS} &&
+        export AIS_SKIP_VERIFY_CRT=${AIS_SKIP_VERIFY_CRT} &&
+        export AIS_SERVER_CRT=${AIS_SERVER_CRT} &&
+        export AIS_SERVER_KEY=${AIS_SERVER_KEY} &&
         source /etc/ais/aisnode_config.sh &&
         aisnode -config=/etc/ais/ais.json -local_config=/etc/ais/ais_local.json -role=target;
   volumes:
@@ -76,3 +84,7 @@ spec:
       hostPath:
         path: /tmp/ais
         type: Directory
+    - name: ais-tls-certs
+      secret:
+        secretName: ais-tls-certs
+        optional: true

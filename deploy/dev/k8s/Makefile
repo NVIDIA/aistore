@@ -1,6 +1,7 @@
 # Usage:
 # $ make try CPU=8 MEMORY=16000
 # $ make dev CPU=12 MEMORY=24000
+# $ HTTPS=true make try
 
 # Defaults
 CPU ?= 4
@@ -8,20 +9,21 @@ MEMORY ?= 7000
 MODE ?= "debug"
 REGISTRY_URL ?= docker.io
 LOCAL_REGISTRY_URL ?= localhost:5000
-DOCKER_IMAGE = aistorage/aisnode-minikube
-IMAGE_TAG = latest
+DOCKER_IMAGE ?= aistorage/aisnode-minikube
+IMAGE_TAG ?= latest
+HTTPS ?= false
 
 # Run AIStore cluster consisting of 1 proxy/gateway and 1 target
 # Note that minikube must be already running
 minimal:
-	@ ./minimal.sh
+	@ ./minimal.sh $(HTTPS)
 
 # Check if everything is installed correctly, start minikube and run minimal inside of it
 try: stop
 	@ minikube config set cpus $(CPU)
 	@ minikube config set memory $(MEMORY)
 	@ minikube start --driver=docker
-	@ ./minimal.sh
+	@ ./minimal.sh $(HTTPS)
 
 # Configure and deploy everything
 dev: 
@@ -46,7 +48,7 @@ minimal-local:
 redeploy-local:
 	@ export REGISTRY_URL=${LOCAL_REGISTRY_URL} && \
 	  ./utils/build_aisnode.sh && \
-	  ./minimal.sh
+	  ./minimal.sh $(HTTPS)
 
 # Stops AIS running on minikube
 stop-ais:

@@ -2,6 +2,8 @@
 
 set -e
 
+IMAGE_NAME=aistorage/aisnode-minikube
+
 source ../utils.sh
 
 echo "Enter number of storage targets:"
@@ -18,7 +20,7 @@ fi
 source utils/parse_fsparams.sh
 source utils/parse_cld.sh
 
-export DOCKER_IMAGE="aistorage/aisnode-minikube:latest"
+export DOCKER_IMAGE="${IMAGE_NAME}:latest"
 
 echo "Build and push to local registry: (y/n) ?"
 read -r build
@@ -30,13 +32,32 @@ fi
 
 
 PRIMARY_PORT=8080
-HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
 
-export AIS_PRIMARY_URL=$HOST_URL
 export HOSTNAME_LIST="$(minikube ip)"
 export AIS_BACKEND_PROVIDERS=${AIS_BACKEND_PROVIDERS}
 export TARGET_CNT=${TARGET_CNT}
 INSTANCE=0
+
+echo "Enable HTTPS: (y/n)?"
+read -r https
+if [[ "$https" == "y" ]]; then
+  source utils/create_certs.sh
+  export HOST_URL="https://$(minikube ip):${PRIMARY_PORT}"
+  export AIS_USE_HTTPS=true
+  export AIS_SKIP_VERIFY_CRT=true
+  export AIS_SERVER_CRT="/var/certs/tls.crt"
+  export AIS_SERVER_KEY="/var/certs/tls.key"
+  export PROTOCOL="HTTPS"
+else
+  export HOST_URL="http://$(minikube ip):${PRIMARY_PORT}"
+  export AIS_USE_HTTPS=false
+  export AIS_SKIP_VERIFY_CRT=false
+  export AIS_SERVER_CRT=""
+  export AIS_SERVER_KEY=""
+  export PROTOCOL="HTTP"
+fi
+
+export AIS_PRIMARY_URL=$HOST_URL
 
 # Deploying kubernetes cluster
 echo "Starting kubernetes deployment..."
@@ -90,7 +111,8 @@ echo "Done."
 echo ""
 (cd ../../../  && make cli)
 echo ""
-echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
-echo "export AIS_ENDPOINT=\"http://$(minikube ip):8080\""
 
-export AIS_ENDPOINT="http://$(minikube ip):8080"
+export AIS_ENDPOINT=$HOST_URL
+
+echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
+echo "export AIS_ENDPOINT=$HOST_URL"
