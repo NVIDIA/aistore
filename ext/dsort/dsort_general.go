@@ -41,7 +41,7 @@ import (
 // the creation phase super fast.
 
 const (
-	DSorterGeneralType = "dsort_general"
+	GeneralType = "dsort_general"
 )
 
 type (
@@ -81,7 +81,7 @@ type (
 // interface guard
 var _ dsorter = (*dsorterGeneral)(nil)
 
-func newDSorterGeneral(m *Manager) (*dsorterGeneral, error) {
+func newDsorterGeneral(m *Manager) (*dsorterGeneral, error) {
 	var mem sys.MemStat
 	if err := mem.Get(); err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (ds *dsorterGeneral) pullStreamWriter(objName string) *streamWriter {
 	return writer
 }
 
-func (*dsorterGeneral) name() string { return DSorterGeneralType }
+func (*dsorterGeneral) name() string { return GeneralType }
 
 func (ds *dsorterGeneral) init() error {
 	ds.creationPhase.adjuster = newConcAdjuster(
@@ -157,7 +157,7 @@ func (ds *dsorterGeneral) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{
-			Compression: config.DSort.Compression,
+			Compression: config.Dsort.Compression,
 			Config:      config,
 		},
 	}
@@ -384,8 +384,8 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		// stats
 		delta := mono.Since(beforeRecv)
 		g.tstats.AddMany(
-			cos.NamedVal64{Name: stats.DSortCreationRespCount, Value: 1},
-			cos.NamedVal64{Name: stats.DSortCreationRespLatency, Value: int64(delta)},
+			cos.NamedVal64{Name: stats.DsortCreationRespCount, Value: 1},
+			cos.NamedVal64{Name: stats.DsortCreationRespLatency, Value: int64(delta)},
 		)
 	}
 
@@ -416,7 +416,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 
 func (ds *dsorterGeneral) sentCallback(_ transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
-		g.tstats.Add(stats.DSortCreationReqCount, 1)
+		g.tstats.Add(stats.DsortCreationReqCount, 1)
 		return
 	}
 	req := arg.(*remoteRequest)

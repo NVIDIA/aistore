@@ -7,9 +7,9 @@ redirect_from:
  - /docs/dsort.md/
 ---
 
-DSort is extension for AIStore. It was designed to perform map-reduce like
+Dsort is extension for AIStore. It was designed to perform map-reduce like
 operations on terabytes and petabytes of AI datasets. As a part of the whole
-system, DSort is capable of taking advantage of objects stored on AIStore without
+system, Dsort is capable of taking advantage of objects stored on AIStore without
 much overhead.
 
 AI datasets are usually stored in tarballs, zip objects, msgpacks or tf-records.
@@ -64,7 +64,7 @@ Eg. if we have a tarball which contains files named: `file1.txt`, `file1.png`,
 operation. The first of them is **extraction**. In this phase, dSort is reading
 input shards and looks inside them to get to the objects and metadata. Objects
 and their metadata are then extracted to either disk or memory so that dSort
-won't need another pass of the whole data set again. This way DSort can create
+won't need another pass of the whole data set again. This way Dsort can create
 **Records** which are then used for the whole operation as the main source of
 information (like location of the objects, sizes, names etc.). Extraction phase
 is very critical because it does I/O operations. To make the following phases
@@ -118,7 +118,7 @@ There are many metrics (numbers and stats) recorded for each of the phases.
 
 ## Metrics
 
-DSort allows users to fetch the statistics of a given job (either
+Dsort allows users to fetch the statistics of a given job (either
 started/running or already finished). Each phase has different, specific metrics
 which can be monitored. Description of metrics returned for *single node*:
 
@@ -331,7 +331,7 @@ For example if some other program already allocated `90% * Y`GB memory (only `10
 
 #### `dsorter_mem_threshold`
 
-DSort has implemented for now 2 different types of so called "dsorter": `dsorter_mem` and `dsorter_general`.
+Dsort has implemented for now 2 different types of so called "dsorter": `dsorter_mem` and `dsorter_general`.
 These two implementations use memory, disks and network a little bit differently and are designated to different use cases.
 
 By default `dsorter_general` is used as it was implemented for all types of workloads.

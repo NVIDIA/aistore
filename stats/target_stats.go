@@ -69,13 +69,13 @@ const (
 	PutRedirLatency = "put.redir.ns"
 	DownloadLatency = "dl.ns"
 
-	// DSort
-	DSortCreationReqCount    = "dsort.creation.req.n"
-	DSortCreationRespCount   = "dsort.creation.resp.n"
-	DSortCreationRespLatency = "dsort.creation.resp.ns"
-	DSortExtractShardDskCnt  = "dsort.extract.shard.dsk.n"
-	DSortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
-	DSortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
+	// Dsort
+	DsortCreationReqCount    = "dsort.creation.req.n"
+	DsortCreationRespCount   = "dsort.creation.resp.n"
+	DsortCreationRespLatency = "dsort.creation.resp.ns"
+	DsortExtractShardDskCnt  = "dsort.extract.shard.dsk.n"
+	DsortExtractShardMemCnt  = "dsort.extract.shard.mem.n"
+	DsortExtractShardSize    = "dsort.extract.shard.size" // uncompressed
 
 	// Downloader
 	DownloadSize = "dl.size"
@@ -233,12 +233,12 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, DownloadLatency, KindLatency)
 
 	// dsort
-	r.reg(node, DSortCreationReqCount, KindCounter)
-	r.reg(node, DSortCreationRespCount, KindCounter)
-	r.reg(node, DSortCreationRespLatency, KindLatency)
-	r.reg(node, DSortExtractShardDskCnt, KindCounter)
-	r.reg(node, DSortExtractShardMemCnt, KindCounter)
-	r.reg(node, DSortExtractShardSize, KindSize)
+	r.reg(node, DsortCreationReqCount, KindCounter)
+	r.reg(node, DsortCreationRespCount, KindCounter)
+	r.reg(node, DsortCreationRespLatency, KindLatency)
+	r.reg(node, DsortExtractShardDskCnt, KindCounter)
+	r.reg(node, DsortExtractShardMemCnt, KindCounter)
+	r.reg(node, DsortExtractShardSize, KindSize)
 
 	// internal
 	r.reg(node, LcacheCollisionCount, KindCounter)

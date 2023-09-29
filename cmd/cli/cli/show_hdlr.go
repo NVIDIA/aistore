@@ -336,7 +336,7 @@ func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
 		onlyActive = !flagIsSet(c, allJobsFlag)
 	)
 	if id == "" {
-		list, err := api.ListDSort(apiBP, parseStrFlag(c, regexJobsFlag), onlyActive)
+		list, err := api.ListDsort(apiBP, parseStrFlag(c, regexJobsFlag), onlyActive)
 		l := len(list)
 		if err != nil || l == 0 {
 			return l, V(err)

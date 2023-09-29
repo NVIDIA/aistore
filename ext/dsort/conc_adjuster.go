@@ -43,7 +43,7 @@ const (
 	// system - eg. http handlers which are spawned in new goroutines.
 	maxConcFuncPerDiskLimit = 15
 	// Determines maximum concurrency limit per dsort per node.
-	maxConcFuncPerDSortLimit = 200
+	maxConcFuncPerDsortLimit = 200
 	// TODO: add global max concurrency limit - should be preserved between
 	//  all dSorts on single node.
 
@@ -88,7 +88,7 @@ func calcMaxLimit() int {
 	availablePaths := fs.GetAvail()
 	maxLimitPerDisk := min(
 		maxConcFuncPerDiskLimit,
-		maxConcFuncPerDSortLimit/max(len(availablePaths), 1),
+		maxConcFuncPerDsortLimit/max(len(availablePaths), 1),
 	)
 	return maxLimitPerDisk
 }

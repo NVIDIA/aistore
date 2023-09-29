@@ -341,7 +341,7 @@ Save newly fetched metrics of the dSort job with ID `5JjIuGemR` to `/tmp/dsort_r
 
 ```console
 $ ais show job dsort 5JjIuGemR --refresh 500ms --log "/tmp/dsort_run.txt"
-DSort job has finished successfully in 21.948806ms:
+Dsort job has finished successfully in 21.948806ms:
   Longest extraction:	1.49907ms
   Longest sorting:	8.288299ms
   Longest creation:	4.553µs

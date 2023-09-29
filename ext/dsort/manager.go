@@ -148,8 +148,8 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 
 	shard.T = t
 
-	fs.CSM.Reg(ct.DSortFileType, &ct.DSortFile{})
-	fs.CSM.Reg(ct.DSortWorkfileType, &ct.DSortFile{})
+	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
+	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
 
 	newClient()
 }
@@ -184,7 +184,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 
 	g.t.Sowner().Listeners().Reg(m)
 
-	if err := m.setDSorter(); err != nil {
+	if err := m.setDsorter(); err != nil {
 		return err
 	}
 
@@ -243,7 +243,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	m.setAbortedTo(false)
 	m.state.cleanWait = sync.NewCond(&m.mu)
 
-	m.callTimeout = m.config.DSort.CallTimeout.D()
+	m.callTimeout = m.config.Dsort.CallTimeout.D()
 	return nil
 }
 
@@ -257,12 +257,12 @@ func (m *Manager) initStreams() error {
 	respNetwork := cmn.NetIntraData
 	trname := fmt.Sprintf(shardStreamNameFmt, m.ManagerUUID)
 	shardsSbArgs := bundle.Args{
-		Multiplier: config.DSort.SbundleMult,
+		Multiplier: config.Dsort.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{
-			Compression: config.DSort.Compression,
+			Compression: config.Dsort.Compression,
 			Config:      config,
 		},
 	}
@@ -433,15 +433,15 @@ func (m *Manager) abort(err error) {
 	}()
 }
 
-// setDSorter sets what type of dsorter implementation should be used
-func (m *Manager) setDSorter() (err error) {
-	switch m.Pars.DSorterType {
-	case DSorterGeneralType:
-		m.dsorter, err = newDSorterGeneral(m)
-	case DSorterMemType:
-		m.dsorter = newDSorterMem(m)
+// setDsorter sets what type of dsorter implementation should be used
+func (m *Manager) setDsorter() (err error) {
+	switch m.Pars.DsorterType {
+	case GeneralType:
+		m.dsorter, err = newDsorterGeneral(m)
+	case MemType:
+		m.dsorter = newDsorterMem(m)
 	default:
-		debug.Assertf(false, "dsorter type is invalid: %q", m.Pars.DSorterType)
+		debug.Assertf(false, "dsorter type is invalid: %q", m.Pars.DsorterType)
 	}
 	m.dsorterStarted.Add(1)
 	return
@@ -550,13 +550,13 @@ func (m *Manager) inFlightDec()     { m.inFlight.Dec() }
 func (m *Manager) inProgress() bool { return m.state.inProgress.Load() }
 func (m *Manager) aborted() bool    { return m.state.aborted.Load() }
 
-// listenAborted returns channel which is closed when DSort job was aborted.
+// listenAborted returns channel which is closed when Dsort job was aborted.
 // This allows for the listen to be notified when job is aborted.
 func (m *Manager) listenAborted() chan struct{} {
 	return m.state.doneCh
 }
 
-// waitForFinish waits for DSort job to be finished. Note that aborted is also
+// waitForFinish waits for Dsort job to be finished. Note that aborted is also
 // 'finished'.
 func (m *Manager) waitForFinish() {
 	m.state.wg.Wait()

@@ -13,7 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 )
 
-func StartDSort(bp BaseParams, rs *dsort.RequestSpec) (id string, err error) {
+func StartDsort(bp BaseParams, rs *dsort.RequestSpec) (id string, err error) {
 	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -27,7 +27,7 @@ func StartDSort(bp BaseParams, rs *dsort.RequestSpec) (id string, err error) {
 	return
 }
 
-func AbortDSort(bp BaseParams, managerUUID string) error {
+func AbortDsort(bp BaseParams, managerUUID string) error {
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
@@ -40,7 +40,7 @@ func AbortDSort(bp BaseParams, managerUUID string) error {
 	return err
 }
 
-func RemoveDSort(bp BaseParams, managerUUID string) error {
+func RemoveDsort(bp BaseParams, managerUUID string) error {
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
@@ -53,7 +53,7 @@ func RemoveDSort(bp BaseParams, managerUUID string) error {
 	return err
 }
 
-func ListDSort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.JobInfo, err error) {
+func ListDsort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.JobInfo, err error) {
 	q := make(url.Values, 2)
 	q.Set(apc.QparamRegex, regex)
 	if onlyActive {
@@ -71,7 +71,7 @@ func ListDSort(bp BaseParams, regex string, onlyActive bool) (jobInfos []*dsort.
 	return
 }
 
-func MetricsDSort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.JobInfo, err error) {
+func MetricsDsort(bp BaseParams, managerUUID string) (metrics map[string]*dsort.JobInfo, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{

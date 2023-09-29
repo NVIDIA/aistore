@@ -119,10 +119,10 @@ const (
 		"{{FormatBckName $value.SrcBck}}\t " +
 		"{{FormatBckName $value.DstBck}}\t " +
 		"{{if (eq $value.Objs 0) }}-{{else}}{{$value.Objs}}{{end}}\n"
-	DSortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
-	DSortListTmpl      = dsortListHdr + DSortListNoHdrTmpl
+	DsortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
+	DsortListTmpl      = dsortListHdr + DsortListNoHdrTmpl
 
-	DSortListVerboseTmpl = dsortListHdr +
+	DsortListVerboseTmpl = dsortListHdr +
 		"{{ range $value := . }}" + dsortListBody +
 		indent1 + "Total Extracted Bytes:\t{{if (eq $value.Bytes 0) }}-{{else}}{{FormatBytesSig $value.Bytes 2}}{{end}}\n" +
 		indent1 + "Extraction Time:\t{{if (eq $value.ExtractedDuration 0) }}-{{else}}{{FormatDuration $value.ExtractedDuration}}{{end}}\n" +

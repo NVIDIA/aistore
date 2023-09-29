@@ -38,7 +38,7 @@ func (trw *tgzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 	if err != nil {
 		return 0, 0, err
 	}
-	workFQN := fs.CSM.Gen(lom, ct.DSortFileType, "") // tarFQN
+	workFQN := fs.CSM.Gen(lom, ct.DsortFileType, "") // tarFQN
 	wfh, err := cos.CreateFile(workFQN)
 	if err != nil {
 		return 0, 0, err

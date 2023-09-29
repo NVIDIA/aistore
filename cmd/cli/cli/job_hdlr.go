@@ -878,14 +878,14 @@ func stopDownloadHandler(c *cli.Context, id string) (err error) {
 }
 
 func stopDsortRegex(c *cli.Context, regex string) error {
-	dsortLst, err := api.ListDSort(apiBP, regex, true /*onlyActive*/)
+	dsortLst, err := api.ListDsort(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
 		return V(err)
 	}
 
 	var cnt int
 	for _, dsort := range dsortLst {
-		if err = api.AbortDSort(apiBP, dsort.ID); err == nil {
+		if err = api.AbortDsort(apiBP, dsort.ID); err == nil {
 			actionDone(c, fmt.Sprintf("Stopped dsort job %s", dsort.ID))
 			cnt++
 		} else {
@@ -902,7 +902,7 @@ func stopDsortRegex(c *cli.Context, regex string) error {
 }
 
 func stopDsortHandler(c *cli.Context, id string) (err error) {
-	if err = api.AbortDSort(apiBP, id); err != nil {
+	if err = api.AbortDsort(apiBP, id); err != nil {
 		return
 	}
 	actionDone(c, fmt.Sprintf("Stopped dsort job %s\n", id))
@@ -1030,7 +1030,7 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 func waitDsortHandler(c *cli.Context, id string) error {
 	refreshRate := _refreshRate(c)
 	if flagIsSet(c, progressFlag) {
-		dsortResult, err := newDSortPB(apiBP, id, refreshRate).run()
+		dsortResult, err := newDsortPB(apiBP, id, refreshRate).run()
 		if err != nil {
 			return err
 		}
@@ -1048,7 +1048,7 @@ func waitDsortHandler(c *cli.Context, id string) error {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	for {
-		resp, err := api.MetricsDSort(apiBP, id)
+		resp, err := api.MetricsDsort(apiBP, id)
 		if err != nil {
 			return V(err)
 		}
@@ -1143,7 +1143,7 @@ func removeDsortHandler(c *cli.Context) error {
 		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
 	}
 	id := c.Args().Get(0)
-	if err := api.RemoveDSort(apiBP, id); err != nil {
+	if err := api.RemoveDsort(apiBP, id); err != nil {
 		return V(err)
 	}
 
@@ -1152,7 +1152,7 @@ func removeDsortHandler(c *cli.Context) error {
 }
 
 func removeDsortRegex(c *cli.Context, regex string) error {
-	dsortLst, err := api.ListDSort(apiBP, regex, false /*onlyActive*/)
+	dsortLst, err := api.ListDsort(apiBP, regex, false /*onlyActive*/)
 	if err != nil {
 		return V(err)
 	}
@@ -1162,7 +1162,7 @@ func removeDsortRegex(c *cli.Context, regex string) error {
 		if dsort.IsRunning() {
 			continue
 		}
-		err = api.RemoveDSort(apiBP, dsort.ID)
+		err = api.RemoveDsort(apiBP, dsort.ID)
 		if err == nil {
 			actionDone(c, fmt.Sprintf("Removed dsort job %q", dsort.ID))
 			cnt++
@@ -1238,7 +1238,7 @@ func xid2Name(xid string) (name, otherID string) {
 			name = cmdDownload
 		}
 	case strings.HasPrefix(xid, dsort.PrefixJobID):
-		if _, err := api.MetricsDSort(apiBP, xid); err == nil {
+		if _, err := api.MetricsDsort(apiBP, xid); err == nil {
 			name = cmdDsort
 		}
 	// NOTE: not to confuse ETL xaction ID with its name (`etl-name`)

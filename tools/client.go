@@ -422,15 +422,15 @@ func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFo
 	return time.Time{}, ""
 }
 
-// WaitForDSortToFinish waits until all dSorts jobs finished without failure or
+// WaitForDsortToFinish waits until all dSorts jobs finished without failure or
 // all jobs abort.
-func WaitForDSortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
+func WaitForDsortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
 	tlog.Logf("waiting for dsort[%s]\n", managerUUID)
 
 	bp := BaseAPIParams(proxyURL)
 	deadline := time.Now().Add(DsortFinishTimeout)
 	for time.Now().Before(deadline) {
-		all, err := api.MetricsDSort(bp, managerUUID)
+		all, err := api.MetricsDsort(bp, managerUUID)
 		if err != nil {
 			return false, err
 		}

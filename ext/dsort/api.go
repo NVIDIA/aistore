@@ -75,8 +75,8 @@ type RequestSpec struct {
 	CreateConcMaxLimit int `json:"create_concurrency_max_limit" yaml:"create_concurrency_max_limit"`
 
 	// debug
-	DSorterType string `json:"dsorter_type"`
+	DsorterType string `json:"dsorter_type"`
 	DryRun      bool   `json:"dry_run"` // Default: false
 
-	Config cmn.DSortConf
+	Config cmn.DsortConf
 }

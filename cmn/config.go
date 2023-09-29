@@ -72,7 +72,7 @@ type (
 		Auth       AuthConf       `json:"auth"`
 		Keepalive  KeepaliveConf  `json:"keepalivetracker"`
 		Downloader DownloaderConf `json:"downloader"`
-		DSort      DSortConf      `json:"distributed_sort"`
+		Dsort      DsortConf      `json:"distributed_sort"`
 		Transport  TransportConf  `json:"transport"`
 		Memsys     MemsysConf     `json:"memsys"`
 
@@ -112,7 +112,7 @@ type (
 		Auth        *AuthConfToUpdate        `json:"auth,omitempty"`
 		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker,omitempty"`
 		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
-		DSort       *DSortConfToUpdate       `json:"distributed_sort,omitempty"`
+		Dsort       *DsortConfToUpdate       `json:"distributed_sort,omitempty"`
 		Transport   *TransportConfToUpdate   `json:"transport,omitempty"`
 		Memsys      *MemsysConfToUpdate      `json:"memsys,omitempty"`
 		TCB         *TCBConfToUpdate         `json:"tcb,omitempty"`
@@ -465,25 +465,25 @@ type (
 		Timeout *cos.Duration `json:"timeout,omitempty"`
 	}
 
-	DSortConf struct {
+	DsortConf struct {
 		DuplicatedRecords   string       `json:"duplicated_records"`
 		MissingShards       string       `json:"missing_shards"` // cmn.SupportedReactions enum
 		EKMMalformedLine    string       `json:"ekm_malformed_line"`
 		EKMMissingKey       string       `json:"ekm_missing_key"`
 		DefaultMaxMemUsage  string       `json:"default_max_mem_usage"`
 		CallTimeout         cos.Duration `json:"call_timeout"`
-		DSorterMemThreshold string       `json:"dsorter_mem_threshold"`
+		DsorterMemThreshold string       `json:"dsorter_mem_threshold"`
 		Compression         string       `json:"compression"`       // {CompressAlways,...} in api/apc/compression.go
 		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num to destination
 	}
-	DSortConfToUpdate struct {
+	DsortConfToUpdate struct {
 		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
 		MissingShards       *string       `json:"missing_shards,omitempty"`
 		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
 		EKMMissingKey       *string       `json:"ekm_missing_key,omitempty"`
 		DefaultMaxMemUsage  *string       `json:"default_max_mem_usage,omitempty"`
 		CallTimeout         *cos.Duration `json:"call_timeout,omitempty"`
-		DSorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
+		DsorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 		Compression         *string       `json:"compression,omitempty"`
 		SbundleMult         *int          `json:"bundle_multiplier,omitempty"`
 	}
@@ -612,7 +612,7 @@ var (
 	_ Validator = (*ResilverConf)(nil)
 	_ Validator = (*NetConf)(nil)
 	_ Validator = (*DownloaderConf)(nil)
-	_ Validator = (*DSortConf)(nil)
+	_ Validator = (*DsortConf)(nil)
 	_ Validator = (*TransportConf)(nil)
 	_ Validator = (*MemsysConf)(nil)
 	_ Validator = (*TCBConf)(nil)
@@ -1260,10 +1260,10 @@ func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 }
 
 ///////////////
-// DSortConf //
+// DsortConf //
 ///////////////
 
-func (c *DSortConf) Validate() (err error) {
+func (c *DsortConf) Validate() (err error) {
 	if c.SbundleMult < 0 || c.SbundleMult > 16 {
 		return fmt.Errorf("invalid distributed_sort.bundle_multiplier: %v (expected range [0, 16])", c.SbundleMult)
 	}
@@ -1274,7 +1274,7 @@ func (c *DSortConf) Validate() (err error) {
 	return c.ValidateWithOpts(false)
 }
 
-func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
+func (c *DsortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 	checkReaction := func(reaction string) bool {
 		return cos.StringInSlice(reaction, SupportedReactions) || (allowEmpty && reaction == "")
 	}
@@ -1301,9 +1301,9 @@ func (c *DSortConf) ValidateWithOpts(allowEmpty bool) (err error) {
 				c.DefaultMaxMemUsage, err)
 		}
 	}
-	if _, err := cos.ParseSize(c.DSorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DSorterMemThreshold != "") {
+	if _, err := cos.ParseSize(c.DsorterMemThreshold, cos.UnitsIEC); err != nil && (!allowEmpty || c.DsorterMemThreshold != "") {
 		return fmt.Errorf("invalid distributed_sort.dsorter_mem_threshold: %s (err: %s)",
-			c.DSorterMemThreshold, err)
+			c.DsorterMemThreshold, err)
 	}
 	return nil
 }

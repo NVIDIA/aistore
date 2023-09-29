@@ -54,10 +54,10 @@ type parsedReqSpec struct {
 	SbundleMult         int                   `json:"bundle_multiplier"`
 
 	// debug
-	DSorterType string `json:"dsorter_type"`
+	DsorterType string `json:"dsorter_type"`
 	DryRun      bool   `json:"dry_run"`
 
-	cmn.DSortConf
+	cmn.DsortConf
 }
 
 /////////////////
@@ -73,7 +73,7 @@ func (rs *RequestSpec) ParseCtx() (*ParsedReq, error) {
 
 func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 	var (
-		cfg  = cmn.GCO.Get().DSort
+		cfg  = cmn.GCO.Get().Dsort
 		pars = &parsedReqSpec{}
 	)
 
@@ -208,7 +208,7 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 
 	pars.ExtractConcMaxLimit = rs.ExtractConcMaxLimit
 	pars.CreateConcMaxLimit = rs.CreateConcMaxLimit
-	pars.DSorterType = rs.DSorterType
+	pars.DsorterType = rs.DsorterType
 	pars.DryRun = rs.DryRun
 
 	// `cfg` here contains inherited (aka global) part of the dsort config -
@@ -217,7 +217,7 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 	if err := rs.Config.ValidateWithOpts(true); err != nil {
 		return nil, err
 	}
-	pars.DSortConf = rs.Config
+	pars.DsortConf = rs.Config
 
 	pars.SbundleMult = rs.Config.SbundleMult
 	if pars.SbundleMult == 0 {
@@ -235,8 +235,8 @@ func (rs *RequestSpec) parse() (*parsedReqSpec, error) {
 	if pars.DuplicatedRecords == "" {
 		pars.DuplicatedRecords = cfg.DuplicatedRecords
 	}
-	if pars.DSorterMemThreshold == "" {
-		pars.DSorterMemThreshold = cfg.DSorterMemThreshold
+	if pars.DsorterMemThreshold == "" {
+		pars.DsorterMemThreshold = cfg.DsorterMemThreshold
 	}
 
 	return pars, nil

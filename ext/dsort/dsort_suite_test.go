@@ -16,7 +16,7 @@ func init() {
 	hk.TestInit()
 }
 
-func TestDSort(t *testing.T) {
+func TestDsort(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, t.Name())
 }

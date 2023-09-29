@@ -528,7 +528,7 @@ func runningJobCompletions(c *cli.Context) {
 			}
 		}
 		// NOTE: dsort is the only exception - not an xaction
-		list, err := api.ListDSort(apiBP, "", true /*onlyActive*/)
+		list, err := api.ListDsort(apiBP, "", true /*onlyActive*/)
 		if err != nil {
 			completionErr(c, err)
 			return
@@ -625,7 +625,7 @@ func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool, shift int)
 	if c.NArg() > shift {
 		return
 	}
-	list, _ := api.ListDSort(apiBP, "", false /*onlyActive*/)
+	list, _ := api.ListDsort(apiBP, "", false /*onlyActive*/)
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)

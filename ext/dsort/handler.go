@@ -54,7 +54,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 	// This would also be helpful for Downloader (in the middle of downloading
 	// large file the bucket can be easily deleted).
 
-	pars.DSorterType, err = dsorterType(pars)
+	pars.DsorterType, err = dsorterType(pars)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return
@@ -317,8 +317,8 @@ func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 
 // Determine dsorter type. We need to make this decision based on (e.g.) size targets' memory.
 func dsorterType(pars *parsedReqSpec) (string, error) {
-	if pars.DSorterType != "" {
-		return pars.DSorterType, nil // in case the dsorter type is already set, we need to respect it
+	if pars.DsorterType != "" {
+		return pars.DsorterType, nil // in case the dsorter type is already set, we need to respect it
 	}
 
 	// Get memory stats from targets
@@ -329,7 +329,7 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 		moreThanThreshold = true
 	)
 
-	dsorterMemThreshold, err := cos.ParseSize(pars.DSorterMemThreshold, cos.UnitsIEC)
+	dsorterMemThreshold, err := cos.ParseSize(pars.DsorterMemThreshold, cos.UnitsIEC)
 	debug.AssertNoErr(err)
 
 	query := make(url.Values)
@@ -375,18 +375,18 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 	// if totalBucketSize < totalAvailMemory {
 	// 	// "general type" is capable of extracting whole dataset into memory
 	// 	// In this case the creation phase is super fast.
-	// 	return DSorterGeneralType, nil
+	// 	return GeneralType, nil
 	// }
 
 	if moreThanThreshold {
 		// If there is enough memory to use "memory type", we should do that.
 		// It behaves better for cases when we have a lot of memory available.
-		return DSorterMemType, nil
+		return MemType, nil
 	}
 
 	// For all other cases we should use "general type", as we don't know
 	// exactly what to expect, so we should prepare for the worst.
-	return DSorterGeneralType, nil
+	return GeneralType, nil
 }
 
 ///////////////////
@@ -499,10 +499,10 @@ func tstartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go m.startDSort()
+	go m.startDsort()
 }
 
-func (m *Manager) startDSort() {
+func (m *Manager) startDsort() {
 	if err := m.start(); err != nil {
 		m.errHandler(err)
 		return

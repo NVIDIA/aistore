@@ -55,10 +55,10 @@ type (
 
 // phases
 type (
-	// LocalExtraction contains metrics for first phase of DSort.
+	// LocalExtraction contains metrics for first phase of Dsort.
 	LocalExtraction struct {
 		phaseBase
-		// TotalCnt is the number of shards DSort has to process in total.
+		// TotalCnt is the number of shards Dsort has to process in total.
 		TotalCnt int64 `json:"total_count,string"`
 		// ExtractedCnt is the cumulative number of extracted shards. In the
 		// end, this should be roughly equal to TotalCnt/#Targets.
@@ -75,7 +75,7 @@ type (
 		ExtractedToDiskSize int64 `json:"extracted_to_disk_size,string"`
 	}
 
-	// MetaSorting contains metrics for second phase of DSort.
+	// MetaSorting contains metrics for second phase of Dsort.
 	MetaSorting struct {
 		phaseBase
 		// SentStats - time statistics about records sent to another target
@@ -84,7 +84,7 @@ type (
 		RecvStats *TimeStats `json:"recv_stats,omitempty"`
 	}
 
-	// ShardCreation contains metrics for third and last phase of DSort.
+	// ShardCreation contains metrics for third and last phase of Dsort.
 	ShardCreation struct {
 		phaseBase
 		// ToCreate - number of shards that to be created in this phase.
@@ -106,7 +106,7 @@ type (
 
 // main stats-and-status types
 type (
-	// Metrics is general struct which contains all stats about DSort run.
+	// Metrics is general struct which contains all stats about Dsort run.
 	Metrics struct {
 		Extraction *LocalExtraction `json:"local_extraction,omitempty"`
 		Sorting    *MetaSorting     `json:"meta_sorting,omitempty"`
@@ -126,7 +126,7 @@ type (
 		Archived atomic.Bool `json:"archived,omitempty"`
 	}
 
-	// JobInfo is a struct that contains stats that represent the DSort run in a list
+	// JobInfo is a struct that contains stats that represent the Dsort run in a list
 	JobInfo struct {
 		ID                string        `json:"id"` // job ID == xact ID (aka managerUUID)
 		SrcBck            cmn.Bck       `json:"src-bck"`
@@ -182,7 +182,7 @@ func newMetrics(description string) *Metrics {
 	}
 }
 
-// setAbortedTo updates aborted state of DSort.
+// setAbortedTo updates aborted state of Dsort.
 func (m *Metrics) setAbortedTo(b bool) {
 	m.Aborted.Store(b)
 }

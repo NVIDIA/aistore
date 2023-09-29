@@ -122,7 +122,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	}
 	p := apc.DisplayProvider(qbck.Provider)
 	if qbck.IsRemoteAIS() {
-		p = qbck.DisplayProvider()
+		p = "Remote " + p
 	}
 	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========", p, cos.Plural(footer.nb), footer.nb, s)
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
@@ -201,7 +201,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	}
 	p := apc.DisplayProvider(qbck.Provider)
 	if qbck.IsRemoteAIS() {
-		p = qbck.DisplayProvider()
+		p = "Remote " + p
 	}
 	apparentSize := teb.FmtSize(int64(footer.size), units, 2)
 	if footer.pobj+footer.robj != 0 {

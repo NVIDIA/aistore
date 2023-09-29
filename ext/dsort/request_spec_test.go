@@ -23,7 +23,7 @@ var _ = Describe("RequestSpec", func() {
 		fs.TestNew(nil)
 
 		config := cmn.GCO.BeginUpdate()
-		config.DSort.DefaultMaxMemUsage = "90%"
+		config.Dsort.DefaultMaxMemUsage = "90%"
 		cmn.GCO.CommitUpdate(config)
 	})
 
@@ -237,8 +237,8 @@ var _ = Describe("RequestSpec", func() {
 
 		It("should parse spec and set the global config values or override them", func() {
 			cfg := cmn.GCO.BeginUpdate()
-			cfg.DSort.DSorterMemThreshold = "80%"
-			cfg.DSort.MissingShards = cmn.IgnoreReaction
+			cfg.Dsort.DsorterMemThreshold = "80%"
+			cfg.Dsort.MissingShards = cmn.IgnoreReaction
 			cmn.GCO.CommitUpdate(cfg)
 
 			rs := RequestSpec{
@@ -251,12 +251,12 @@ var _ = Describe("RequestSpec", func() {
 				ExtractConcMaxLimit: 0,
 				Algorithm:           Algorithm{Kind: None},
 
-				Config: cmn.DSortConf{
+				Config: cmn.DsortConf{
 					DuplicatedRecords:   cmn.AbortReaction,
 					MissingShards:       "", // should be set to default
 					EKMMalformedLine:    cmn.IgnoreReaction,
 					EKMMissingKey:       cmn.WarnReaction,
-					DSorterMemThreshold: "",
+					DsorterMemThreshold: "",
 				},
 			}
 			pars, err := rs.parse()
@@ -266,7 +266,7 @@ var _ = Describe("RequestSpec", func() {
 			Expect(pars.MissingShards).To(Equal(cmn.IgnoreReaction))
 			Expect(pars.EKMMalformedLine).To(Equal(cmn.IgnoreReaction))
 			Expect(pars.EKMMissingKey).To(Equal(cmn.WarnReaction))
-			Expect(pars.DSorterMemThreshold).To(Equal("80%"))
+			Expect(pars.DsorterMemThreshold).To(Equal("80%"))
 		})
 
 		It("should pass when output shard is zero and bash or @ template is used for output format", func() {
@@ -472,7 +472,7 @@ var _ = Describe("RequestSpec", func() {
 				OutputShardSize: "10KB",
 				MaxMemUsage:     "80%",
 				Algorithm:       Algorithm{Kind: None},
-				Config:          cmn.DSortConf{DuplicatedRecords: "something"},
+				Config:          cmn.DsortConf{DuplicatedRecords: "something"},
 			}
 			_, err := rs.parse()
 			Expect(err).Should(HaveOccurred())

@@ -85,7 +85,7 @@ func (m *Manager) finish() {
 func (m *Manager) start() (err error) {
 	defer m.finish()
 
-	if err := m.startDSorter(); err != nil {
+	if err := m.startDsorter(); err != nil {
 		return err
 	}
 
@@ -171,7 +171,7 @@ func _torder(salt uint64, tmap meta.NodeMap) []*meta.Snode {
 	return t
 }
 
-func (m *Manager) startDSorter() error {
+func (m *Manager) startDsorter() error {
 	defer m.markStarted()
 	if err := m.initStreams(); err != nil {
 		return err
@@ -748,7 +748,7 @@ func (m *Manager) phase3(maxSize int64) error {
 			continue
 		}
 		shardsToTarget[d] = nil
-		if m.dsorter.name() == DSorterMemType {
+		if m.dsorter.name() == MemType {
 			sendOrder[d.ID()] = make(map[string]*shard.Shard, 100)
 		}
 	}
@@ -772,7 +772,7 @@ func (m *Manager) phase3(maxSize int64) error {
 		}
 		shardsToTarget[si] = append(shardsToTarget[si], s)
 
-		if m.dsorter.name() == DSorterMemType {
+		if m.dsorter.name() == MemType {
 			singleSendOrder := make(map[string]*shard.Shard)
 			for _, record := range s.Records.All() {
 				shrd, ok := singleSendOrder[record.DaemonID]
@@ -981,11 +981,11 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 
 	if toDisk {
-		g.tstats.Add(stats.DSortExtractShardDskCnt, 1)
+		g.tstats.Add(stats.DsortExtractShardDskCnt, 1)
 	} else {
-		g.tstats.Add(stats.DSortExtractShardMemCnt, 1)
+		g.tstats.Add(stats.DsortExtractShardMemCnt, 1)
 	}
-	g.tstats.Add(stats.DSortExtractShardSize, extractedSize)
+	g.tstats.Add(stats.DsortExtractShardSize, extractedSize)
 
 	//
 	// update metrics, check OOM

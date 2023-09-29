@@ -11,23 +11,23 @@ import (
 // for common content types, see fs/content.go
 
 const (
-	DSortFileType     = "ds"
-	DSortWorkfileType = "dw"
+	DsortFileType     = "ds"
+	DsortWorkfileType = "dw"
 
 	WorkfileRecvShard   = "recv-shard"
 	WorkfileCreateShard = "create-shard"
 )
 
 // interface guard
-var _ fs.ContentResolver = (*DSortFile)(nil)
+var _ fs.ContentResolver = (*DsortFile)(nil)
 
-type DSortFile struct{}
+type DsortFile struct{}
 
-func (*DSortFile) PermToEvict() bool                  { return false }
-func (*DSortFile) PermToMove() bool                   { return false }
-func (*DSortFile) PermToProcess() bool                { return false }
-func (*DSortFile) GenUniqueFQN(base, _ string) string { return base }
+func (*DsortFile) PermToEvict() bool                  { return false }
+func (*DsortFile) PermToMove() bool                   { return false }
+func (*DsortFile) PermToProcess() bool                { return false }
+func (*DsortFile) GenUniqueFQN(base, _ string) string { return base }
 
-func (*DSortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+func (*DsortFile) ParseUniqueFQN(base string) (orig string, old, ok bool) {
 	return base, false, true
 }

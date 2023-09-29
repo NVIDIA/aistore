@@ -38,7 +38,7 @@ import (
 // incorrect order.
 
 const (
-	DSorterMemType = "dsort_mem"
+	MemType = "dsort_mem"
 )
 
 type (
@@ -175,13 +175,13 @@ func (c *rwConnector) connectWriter(key string, w io.Writer) (int64, error) {
 	return n, err
 }
 
-func newDSorterMem(m *Manager) *dsorterMem {
+func newDsorterMem(m *Manager) *dsorterMem {
 	return &dsorterMem{
 		m: m,
 	}
 }
 
-func (*dsorterMem) name() string { return DSorterMemType }
+func (*dsorterMem) name() string { return MemType }
 
 func (ds *dsorterMem) init() error {
 	ds.creationPhase.connector = newRWConnector(ds.m)
@@ -230,7 +230,7 @@ func (ds *dsorterMem) start() error {
 		Trname:     trname,
 		Ntype:      cluster.Targets,
 		Extra: &transport.Extra{
-			Compression: config.DSort.Compression,
+			Compression: config.Dsort.Compression,
 			Config:      config,
 		},
 	}
