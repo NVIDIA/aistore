@@ -134,7 +134,7 @@ func (m *Manager) start() (err error) {
 	case <-m.startShardCreation:
 		break
 	case <-m.listenAborted():
-		return newDSortAbortedError(m.ManagerUUID)
+		return m.newErrAborted()
 	}
 
 	// After each target participates in the cluster-wide record distribution,
@@ -219,7 +219,7 @@ outer:
 		select {
 		case <-m.listenAborted():
 			group.Wait()
-			return newDSortAbortedError(m.ManagerUUID)
+			return m.newErrAborted()
 		case <-ctx.Done():
 			break outer // context canceled: we have an error
 		default:
@@ -242,7 +242,7 @@ outer:
 		select {
 		case <-m.listenAborted():
 			group.Wait()
-			return newDSortAbortedError(m.ManagerUUID)
+			return m.newErrAborted()
 		case <-ctx.Done():
 			break outer // context canceled: we have an error
 		default:
@@ -267,7 +267,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	lom.SetAtimeUnix(time.Now().UnixNano())
 
 	if m.aborted() {
-		return newDSortAbortedError(m.ManagerUUID)
+		return m.newErrAborted()
 	}
 
 	if err := m.dsorter.preShardCreation(s.Name, lom.Mountpath()); err != nil {
@@ -338,7 +338,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 			w.CloseWithError(err)
 		}
 	case <-m.listenAborted():
-		err = newDSortAbortedError(m.ManagerUUID)
+		err = m.newErrAborted()
 		r.CloseWithError(err)
 		w.CloseWithError(err)
 	}
@@ -528,7 +528,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 			select {
 			case <-m.listenReceived():
 			case <-m.listenAborted():
-				err = newDSortAbortedError(m.ManagerUUID)
+				err = m.newErrAborted()
 				return
 			}
 		}
@@ -946,7 +946,7 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	phaseInfo.adjuster.acquireSema(lom.Mountpath())
 	if m.aborted() {
 		phaseInfo.adjuster.releaseSema(lom.Mountpath())
-		return newDSortAbortedError(m.ManagerUUID)
+		return m.newErrAborted()
 	}
 
 	cs := fs.Cap()

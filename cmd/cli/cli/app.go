@@ -83,7 +83,7 @@ var helpCommand = cli.Command{
 	},
 }
 
-func configuredVerbosity() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
+func cliConfVerbose() bool { return cfg.Verbose } // more warnings, errors with backtraces and details
 
 func helpCmdHandler(c *cli.Context) error {
 	args := c.Args()

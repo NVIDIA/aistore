@@ -19,11 +19,17 @@ func TestDistributedSortUsingScripts(t *testing.T) {
 	var (
 		src = cmn.Bck{Name: "src_" + trand.String(6), Provider: apc.AIS}
 		dst = cmn.Bck{Name: "dst_" + trand.String(6), Provider: apc.AIS}
-		cmd = exec.Command("./scripts/dsort-ex1.sh", "--srcbck", src.Cname(""), "--dstbck", dst.Cname(""))
 	)
-	out, err := cmd.CombinedOutput()
-	if len(out) > 0 {
-		tlog.Logln(string(out))
+	for _, spec := range []string{"dsort-spec1.json", "dsort-spec2.json", "dsort-spec3.json"} {
+		t.Run(spec, func(t *testing.T) {
+			cmd := exec.Command("./scripts/dsort-ex1.sh", "--srcbck", src.Cname(""), "--dstbck", dst.Cname(""))
+			cmd.Args = append(cmd.Args, "--spec", spec)
+
+			out, err := cmd.CombinedOutput()
+			if len(out) > 0 {
+				tlog.Logln(string(out))
+			}
+			tassert.CheckFatal(t, err)
+		})
 	}
-	tassert.CheckFatal(t, err)
 }

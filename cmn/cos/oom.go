@@ -43,7 +43,7 @@ func FreeMemToOS(force bool) bool {
 		return false
 	}
 	if ratomic.CompareAndSwapInt64(&runningOOM, 0, now) {
-		nlog.Errorln("not running - previously started goroutine is still active")
+		nlog.Infoln("not running - running now")
 		return false
 	}
 

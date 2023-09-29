@@ -34,7 +34,7 @@ func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate, d
 				}
 				return errors.New(desc)
 			}
-			if configuredVerbosity() {
+			if cliConfVerbose() {
 				herr.Message = herr.StringEx()
 			}
 			return fmt.Errorf("failed to create %q: %w", bck, herr)

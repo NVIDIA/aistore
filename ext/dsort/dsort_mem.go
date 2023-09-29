@@ -307,7 +307,7 @@ func (ds *dsorterMem) postShardCreation(mi *fs.Mountpath) {
 
 func (ds *dsorterMem) Load(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	if ds.m.aborted() {
-		return 0, newDSortAbortedError(ds.m.ManagerUUID)
+		return 0, ds.m.newErrAborted()
 	}
 	return ds.creationPhase.connector.connectWriter(rec.MakeUniqueName(obj), w)
 }
@@ -401,7 +401,7 @@ outer:
 		case <-ds.m.listenAborted():
 			stopCh.Close()
 			group.Wait()
-			errCh <- newDSortAbortedError(ds.m.ManagerUUID)
+			errCh <- ds.m.newErrAborted()
 			return
 		case <-ctx.Done(): // context was canceled, therefore we have an error
 			stopCh.Close()
@@ -425,7 +425,7 @@ outer:
 		case <-ds.m.listenAborted():
 			stopCh.Close()
 			group.Wait()
-			errCh <- newDSortAbortedError(ds.m.ManagerUUID)
+			errCh <- ds.m.newErrAborted()
 			return
 		case <-ctx.Done(): // context was canceled, therefore we have an error
 			stopCh.Close()
@@ -468,7 +468,7 @@ func (ds *dsorterMem) connectOrSend(rec *shard.Record, obj *shard.RecordObj, tsi
 		return err
 	}
 	if ds.m.aborted() {
-		return newDSortAbortedError(ds.m.ManagerUUID)
+		return ds.m.newErrAborted()
 	}
 
 	resp.hdr.Opaque = cos.MustMarshal(resp.rsp)
@@ -541,7 +541,7 @@ func (ds *dsorterMem) recvReq(hdr transport.ObjHdr, objReader io.Reader, err err
 	}
 
 	if ds.m.aborted() {
-		return newDSortAbortedError(ds.m.ManagerUUID)
+		return ds.m.newErrAborted()
 	}
 
 	ds.creationPhase.requestedShards <- req.shardName
@@ -567,7 +567,7 @@ func (ds *dsorterMem) recvResp(hdr transport.ObjHdr, object io.Reader, err error
 	}
 
 	if ds.m.aborted() {
-		return newDSortAbortedError(ds.m.ManagerUUID)
+		return ds.m.newErrAborted()
 	}
 
 	uname := req.Record.MakeUniqueName(req.RecordObj)

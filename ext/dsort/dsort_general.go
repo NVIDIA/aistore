@@ -240,7 +240,7 @@ outer:
 		select {
 		case <-ds.m.listenAborted():
 			_ = group.Wait()
-			return newDSortAbortedError(ds.m.ManagerUUID)
+			return ds.m.newErrAborted()
 		case <-ctx.Done():
 			break outer // context was canceled, therefore we have an error
 		default:
@@ -266,7 +266,7 @@ func (ds *dsorterGeneral) postShardCreation(mi *fs.Mountpath) {
 // loads content from disk or memory, local or remote
 func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.RecordObj) (int64, error) {
 	if ds.m.aborted() {
-		return 0, newDSortAbortedError(ds.m.ManagerUUID)
+		return 0, ds.m.newErrAborted()
 	}
 	if rec.DaemonID != g.t.SID() {
 		return ds.loadRemote(w, rec, obj)
@@ -458,7 +458,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	}
 
 	if ds.m.aborted() {
-		return newDSortAbortedError(ds.m.ManagerUUID)
+		return ds.m.newErrAborted()
 	}
 
 	o := transport.AllocSend()
@@ -541,7 +541,7 @@ func (ds *dsorterGeneral) recvResp(hdr transport.ObjHdr, object io.Reader, err e
 	}
 
 	if ds.m.aborted() {
-		return newDSortAbortedError(ds.m.ManagerUUID)
+		return ds.m.newErrAborted()
 	}
 
 	writer := ds.pullStreamWriter(hdr.ObjName)

@@ -14,6 +14,5 @@
   "description": "sort shards alphanumerically",
   "algorithm": {
     "kind": "alphanumeric"
-  },
-  "extended_metrics": true
+  }
 }

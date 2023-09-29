@@ -104,7 +104,7 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 	switch err := err.(type) {
 	case *cmn.ErrHTTP:
 		herr := cmn.Err2HTTPErr(err)
-		if configuredVerbosity() {
+		if cliConfVerbose() {
 			herr.Message = herr.StringEx()
 		}
 		msg = herr.Message
@@ -303,7 +303,7 @@ func completionErr(c *cli.Context, err error) {
 //
 
 func V(err error) error {
-	if err != nil && configuredVerbosity() {
+	if err != nil && cliConfVerbose() {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			herr.Message = herr.StringEx()
 			return herr

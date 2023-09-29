@@ -5,14 +5,16 @@
 
 SCRIPT_PATH="$(cd "$(dirname "$0")"; pwd -P)"
 
-## Command line options and their respective defaults
+## Command line options (and their respective defaults)
 srcbck="ais://src"
 dstbck="ais://dst"
+spec="dsort-spec1.json"
 
 while (( "$#" )); do
   case "${1}" in
     --srcbck) srcbck=$2; shift; shift;;
     --dstbck) dstbck=$2; shift; shift;;
+    --spec) spec=$2; shift; shift;;
     --nocleanup) nocleanup="true"; shift;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
@@ -32,7 +34,8 @@ exit 1
 
 ## run dsort and wait for the job to finish
 ## (see 'dsort-ex1-spec.json' in this directory)
-ais wait $(ais start dsort ${srcbck} ${dstbck} -f ${SCRIPT_PATH}/dsort-ex1-spec.json)
+echo "Using spec '$spec'"
+ais wait $(ais start dsort ${srcbck} ${dstbck} -f ${SCRIPT_PATH}/${spec})
 
 ## list new shards to confirm 5 new shards, each containing 10 original files
 ## (the same 50 total - see above)

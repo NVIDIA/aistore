@@ -611,7 +611,7 @@ func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error
 		return err
 	}
 	if m.aborted() {
-		return newDSortAbortedError(m.ManagerUUID)
+		return m.newErrAborted()
 	}
 	lom := cluster.AllocLOM(hdr.ObjName)
 	defer cluster.FreeLOM(lom)

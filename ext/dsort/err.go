@@ -1,10 +1,16 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
-import "github.com/pkg/errors"
+import (
+	"fmt"
+
+	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/pkg/errors"
+)
 
 const (
 	fmtErrInvalidAlg     = "invalid sorting algorithm (expecting one of: %+v)" // <--- supportedAlgorithms
@@ -20,3 +26,14 @@ var (
 	errMissingOutputSize = errors.New("output shard size must be set (cannot be 0 and cannot be omitted)")
 	errMissingSrcBucket  = errors.New("missing source bucket")
 )
+
+func (m *Manager) newErrAborted() error {
+	err := m.xctn.AbortErr()
+	return cmn.NewErrAborted(fmt.Sprintf("%s[%s]", apc.ActDsort, m.ManagerUUID), "", err)
+}
+
+// Returns if the error is not abort error - in other cases we need to report
+// the error to the user.
+func isReportableError(err error) bool {
+	return !cmn.IsErrAborted(err)
+}

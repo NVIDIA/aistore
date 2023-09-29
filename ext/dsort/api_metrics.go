@@ -34,9 +34,8 @@ type (
 		AvgMs int64 `json:"avg_ms,string"`
 	}
 
-	// PhaseInfo contains general stats and state for given phase. It is base struct
-	// which is extended by actual phases structs.
-	PhaseInfo struct {
+	// included by 3 actual phases below
+	phaseBase struct {
 		Start time.Time `json:"started_time"`
 		End   time.Time `json:"end_time"`
 		// Elapsed time (in seconds) from start to given point of time or end when
@@ -58,7 +57,7 @@ type (
 type (
 	// LocalExtraction contains metrics for first phase of DSort.
 	LocalExtraction struct {
-		PhaseInfo
+		phaseBase
 		// TotalCnt is the number of shards DSort has to process in total.
 		TotalCnt int64 `json:"total_count,string"`
 		// ExtractedCnt is the cumulative number of extracted shards. In the
@@ -78,7 +77,7 @@ type (
 
 	// MetaSorting contains metrics for second phase of DSort.
 	MetaSorting struct {
-		PhaseInfo
+		phaseBase
 		// SentStats - time statistics about records sent to another target
 		SentStats *TimeStats `json:"sent_stats,omitempty"`
 		// RecvStats - time statistics about records receivied from another target
@@ -87,7 +86,7 @@ type (
 
 	// ShardCreation contains metrics for third and last phase of DSort.
 	ShardCreation struct {
-		PhaseInfo
+		phaseBase
 		// ToCreate - number of shards that to be created in this phase.
 		ToCreate int64 `json:"to_create,string"`
 		// CreatedCnt the number of shards that have been so far created.
@@ -146,11 +145,11 @@ type (
 )
 
 ///////////////
-// PhaseInfo //
+// phaseBase //
 ///////////////
 
 // begin marks phase as in progress.
-func (pi *PhaseInfo) begin() {
+func (pi *phaseBase) begin() {
 	pi.mu.Lock()
 	pi.Running = true
 	pi.Start = time.Now()
@@ -158,7 +157,7 @@ func (pi *PhaseInfo) begin() {
 }
 
 // finish marks phase as finished.
-func (pi *PhaseInfo) finish() {
+func (pi *phaseBase) finish() {
 	pi.mu.Lock()
 	pi.Running = false
 	pi.Finished = true
@@ -171,20 +170,15 @@ func (pi *PhaseInfo) finish() {
 // Metrics //
 /////////////
 
-// newMetrics creates new Metrics instance.
 func newMetrics(description string) *Metrics {
-	extraction := &LocalExtraction{}
-	sorting := &MetaSorting{}
-	creation := &ShardCreation{}
-
-	sorting.SentStats = newTimeStats()
-	sorting.RecvStats = newTimeStats()
-
 	return &Metrics{
 		Description: description,
-		Extraction:  extraction,
-		Sorting:     sorting,
-		Creation:    creation,
+		Extraction:  &LocalExtraction{},
+		Sorting: &MetaSorting{
+			SentStats: newTimeStats(),
+			RecvStats: newTimeStats(),
+		},
+		Creation: &ShardCreation{},
 	}
 }
 

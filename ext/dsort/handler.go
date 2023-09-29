@@ -514,7 +514,7 @@ func (m *Manager) startDSort() {
 }
 
 func (m *Manager) errHandler(err error) {
-	nlog.Errorf("%+v", err)
+	nlog.Infoln(err)
 
 	// If we were aborted by some other process this means that we do not
 	// broadcast abort (we assume that daemon aborted us, aborted also others).

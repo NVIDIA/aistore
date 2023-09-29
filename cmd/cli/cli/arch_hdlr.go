@@ -111,7 +111,7 @@ var (
 			indent4 + "\t- '--progress' and '--refresh' to watch progress bar;\n" +
 			indent4 + "\t- '-v' to produce verbose output when getting multiple objects.\n" +
 			indent1 + "Examples:\n" +
-			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 /tmp/outi - extract entire shard to /tmp/out/trunk...\n" +
+			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 /tmp/out - extract entire shard to /tmp/out/trunk...\n" +
 			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4/file456 /tmp/out - extract one named file\n" +
 			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 --archpath file456 /tmp/out - same as above\n" +
 			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4/file456 /tmp/out/file456.new - same as above w/ rename",
