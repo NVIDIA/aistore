@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -52,11 +53,18 @@ type (
 		err        *txnError
 		callerName string
 	}
+	// two maps, two locks
 	transactions struct {
 		t          *target
-		m          map[string]txn    // by txn.uuid
-		rendezvous map[string]rndzvs // ditto
-		sync.RWMutex
+		m          map[string]txn // by txn.uuid
+		rendezvous struct {
+			m   map[string]rndzvs // ditto
+			mtx sync.Mutex
+		}
+		mtx sync.Mutex
+	}
+	txnError struct { // a wrapper which presence means: "done"
+		err error
 	}
 	txnBase struct { // generic base
 		phase struct {
@@ -64,7 +72,7 @@ type (
 			commit time.Time
 		}
 		xctn       cluster.Xact
-		err        *txnError
+		err        ratomic.Pointer[txnError]
 		action     string
 		callerName string
 		callerID   string
@@ -78,9 +86,7 @@ type (
 		nlps []cluster.NLP
 		txnBase
 	}
-	txnError struct {
-		err error
-	}
+
 	//
 	// concrete transaction types
 	//
@@ -150,21 +156,21 @@ var (
 func (txns *transactions) init(t *target) {
 	txns.t = t
 	txns.m = make(map[string]txn, 8)
-	txns.rendezvous = make(map[string]rndzvs, 8)
-	hk.Reg("cp-transactions"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
+	txns.rendezvous.m = make(map[string]rndzvs, 8)
+	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
 }
 
 func (txns *transactions) begin(txn txn) (err error) {
-	txns.Lock()
+	txns.mtx.Lock()
 	if x, ok := txns.m[txn.uuid()]; ok {
-		txns.Unlock()
+		txns.mtx.Unlock()
 		err = fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
 		debug.AssertNoErr(err)
 		return
 	}
 	txn.started(apc.ActBegin, time.Now())
 	txns.m[txn.uuid()] = txn
-	txns.Unlock()
+	txns.mtx.Unlock()
 
 	if cmn.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s begin: %s", txns.t, txn)
@@ -172,31 +178,39 @@ func (txns *transactions) begin(txn txn) (err error) {
 	return
 }
 
-func (txns *transactions) find(uuid, act string) (txn txn, err error) {
-	var ok bool
-	debug.Assert(act == "" /*simply find*/ || act == apc.ActAbort || act == apc.ActCommit)
-	txns.Lock()
-	if txn, ok = txns.m[uuid]; !ok {
-		goto rerr
-	} else if act != "" {
-		delete(txns.m, uuid)
-		delete(txns.rendezvous, uuid)
-		if act == apc.ActAbort {
-			txn.abort(errors.New("action: abort"))
-		} else {
-			txn.commit()
-		}
+func (txns *transactions) find(uuid, act string) (txn, error) {
+	txns.mtx.Lock()
+	txn, ok := txns.m[uuid]
+	if !ok {
+		// a. not found
+		txns.mtx.Unlock()
+		return nil, cos.NewErrNotFound("%s: txn %q", txns.t, uuid)
 	}
-	txns.Unlock()
 
-	if act != "" && cmn.FastV(4, cos.SmoduleAIS) {
+	if act == "" {
+		// b. just find & return
+		txns.mtx.Unlock()
+		return txn, nil
+	}
+
+	// or c. commit or abort
+	delete(txns.m, uuid)
+	txns.mtx.Unlock()
+
+	txns.rendezvous.mtx.Lock()
+	delete(txns.rendezvous.m, uuid)
+	txns.rendezvous.mtx.Unlock()
+
+	if act == apc.ActAbort {
+		txn.abort(errors.New("action: abort"))
+	} else {
+		txn.commit()
+	}
+
+	if cmn.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s %s: %s", txns.t, act, txn)
 	}
-	return
-rerr:
-	txns.Unlock()
-	err = cos.NewErrNotFound("%s: txn %q", txns.t.si, uuid)
-	return
+	return txn, nil
 }
 
 func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
@@ -204,22 +218,24 @@ func (txns *transactions) commitBefore(caller string, msg *aisMsg) error {
 		rndzvs rndzvs
 		ok     bool
 	)
-	txns.Lock()
-	if rndzvs, ok = txns.rendezvous[msg.UUID]; !ok {
+	txns.rendezvous.mtx.Lock()
+	if rndzvs, ok = txns.rendezvous.m[msg.UUID]; !ok {
 		rndzvs.callerName, rndzvs.timestamp = caller, mono.NanoTime()
-		txns.rendezvous[msg.UUID] = rndzvs
-		txns.Unlock()
+		txns.rendezvous.m[msg.UUID] = rndzvs
+		txns.rendezvous.mtx.Unlock()
 		return nil
 	}
-	txns.Unlock()
+	txns.rendezvous.mtx.Unlock()
 	return fmt.Errorf("rendezvous record %s:%d already exists", msg.UUID, rndzvs.timestamp)
 }
 
 func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, args ...any) (errDone error) {
-	var running bool
-	txns.Lock()
+	txns.mtx.Lock()
+	txn, ok := txns.m[msg.UUID]
+	txns.mtx.Unlock()
 
-	if txn, ok := txns.m[msg.UUID]; ok {
+	var running bool
+	if ok {
 		// Ignore downgrade error.
 		if isErrDowngrade(err) {
 			err = nil
@@ -231,43 +247,34 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 		}
 	}
 	if !running {
-		rndzvs, ok := txns.rendezvous[msg.UUID]
-		if !ok {
-			goto rerr
+		txns.rendezvous.mtx.Lock()
+		rndzvs, ok := txns.rendezvous.m[msg.UUID]
+		if !ok { // can't happen
+			txns.rendezvous.mtx.Unlock()
+			errDone = cos.NewErrNotFound("%s: rendezvous record %q (%v)", txns.t.si, msg.UUID, errDone)
+			return
 		}
 		rndzvs.err = &txnError{err: err}
-		txns.rendezvous[msg.UUID] = rndzvs
+		txns.rendezvous.m[msg.UUID] = rndzvs
+		txns.rendezvous.mtx.Unlock()
 	}
-	txns.Unlock()
-	return
-rerr:
-	txns.Unlock()
-	errDone = cos.NewErrNotFound("%s: rendezvous record %q", txns.t.si, msg.UUID) // can't happen
 	return
 }
 
 // given txn, wait for its completion, handle timeout, and ultimately remove
 func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
-	const sleep = 100 * time.Millisecond
-	var (
-		rsvpErr           error
-		done, found, rsvp bool
-	)
 	// timestamp
 	txn.started(apc.ActCommit, time.Now())
 
 	// RSVP
-	txns.RLock()
-	if rndzvs, ok := txns.rendezvous[txn.uuid()]; ok {
-		if rndzvs.err != nil {
-			rsvp, rsvpErr = true, rndzvs.err.err
-		}
+	txns.rendezvous.mtx.Lock()
+	rndzvs, ok := txns.rendezvous.m[txn.uuid()]
+	txns.rendezvous.mtx.Unlock()
+	if ok && rndzvs.err != nil {
+		txn.rsvp(rndzvs.err.err)
 	}
-	txns.RUnlock()
-	if rsvp {
-		txn.rsvp(rsvpErr)
-	}
-	// poll & check
+
+	// commit or abort, depending on returned err
 	defer func() {
 		act := apc.ActCommit
 		if err != nil {
@@ -275,7 +282,13 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		}
 		txns.find(txn.uuid(), act)
 	}()
-	for total := sleep; ; total += sleep {
+
+	// poll & check
+	var (
+		sleep       = 100 * time.Millisecond
+		done, found bool
+	)
+	for total := sleep; ; {
 		if done, err = txn.isDone(); done {
 			return
 		}
@@ -285,19 +298,26 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		}
 
 		time.Sleep(sleep)
+		total += sleep
+		// bump once
+		if total == sleep<<4 {
+			sleep *= 4
+		}
+
 		// must be ready for rendezvous
 		if !found {
-			txns.RLock()
-			_, found = txns.rendezvous[txn.uuid()]
-			txns.RUnlock()
+			txns.rendezvous.mtx.Lock()
+			_, found = txns.rendezvous.m[txn.uuid()]
+			txns.rendezvous.mtx.Unlock()
 		}
 		// two timeouts
 		if found {
+			// config.Timeout.MaxHostBusy (see p.prepTxnClient)
 			if timeoutHost != 0 && total > timeoutHost {
 				err = errors.New("timed out waiting for txn to complete")
 				break
 			}
-		} else if timeoutNetw != 0 && total > timeoutNetw {
+		} else if timeoutNetw != 0 && total > timeoutNetw { // 2 * config.Timeout.MaxKeepalive (see p.prepTxnClient)
 			err = errors.New("timed out waiting for commit message")
 			break
 		}
@@ -305,53 +325,71 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 	return
 }
 
-// GC orphaned transactions //
+// GC orphaned transactions
 func (txns *transactions) housekeep() (d time.Duration) {
 	var (
-		errs    []string
+		errs    []error
 		orphans []txn
 		config  = cmn.GCO.Get()
-		now     = time.Now()
 	)
 	d = gcTxnsInterval
-	txns.RLock()
+	txns.mtx.Lock()
 	l := len(txns.m)
-	if l > gcTxnsNumKeep*10 && l > 16 {
-		d = gcTxnsInterval / 10
-	}
-	for _, txn := range txns.m {
-		elapsed := now.Sub(txn.started(apc.ActBegin))
-		if commitTimestamp := txn.started(apc.ActCommit); !commitTimestamp.IsZero() {
-			elapsed = now.Sub(commitTimestamp)
-			if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy.D() {
-				errs = append(errs, fmt.Sprintf("GC %s: [commit - done] timeout", txn))
-				orphans = append(orphans, txn)
-			} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
-				errs = append(errs, fmt.Sprintf("GC %s: commit is taking too long...", txn))
-			}
-		} else {
-			if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
-				errs = append(errs, fmt.Sprintf("GC %s: [begin - start-commit] timeout", txn))
-				orphans = append(orphans, txn)
-			} else if elapsed >= TxnTimeoutMult*cmn.Timeout.MaxKeepalive() {
-				errs = append(errs, fmt.Sprintf("GC %s: commit message is taking too long...", txn))
-			}
-		}
-	}
-	txns.RUnlock()
-
-	if len(orphans) == 0 {
+	if l == 0 {
+		txns.mtx.Unlock()
 		return
 	}
-	txns.Lock()
-	for _, txn := range orphans {
-		txn.abort(errors.New("cleanup orphaned txn"))
-		delete(txns.m, txn.uuid())
-		delete(txns.rendezvous, txn.uuid())
+	if l > max(gcTxnsNumKeep*4, 16) {
+		d = gcTxnsInterval / 10
 	}
-	txns.Unlock()
-	for _, s := range errs {
-		nlog.Errorln(s)
+	now := time.Now()
+	for _, txn := range txns.m {
+		err, warn := checkTimeout(txn, now, config)
+		if err != nil {
+			errs = append(errs, err)
+			txn.abort(err)
+			delete(txns.m, txn.uuid())
+			orphans = append(orphans, txn)
+		} else if warn != nil {
+			errs = append(errs, warn)
+		}
+	}
+	txns.mtx.Unlock()
+
+	if len(orphans) > 0 || len(errs) > 0 {
+		go txns.cleanup(orphans, errs)
+	}
+	return
+}
+
+func (txns *transactions) cleanup(orphans []txn, errs []error) {
+	if len(orphans) > 0 {
+		txns.rendezvous.mtx.Lock()
+		for _, txn := range orphans {
+			delete(txns.rendezvous.m, txn.uuid())
+		}
+		txns.rendezvous.mtx.Unlock()
+	}
+	for _, e := range errs {
+		nlog.Errorln(e)
+	}
+}
+
+func checkTimeout(txn txn, now time.Time, config *cmn.Config) (err, warn error) {
+	elapsed := now.Sub(txn.started(apc.ActBegin))
+	if commitTimestamp := txn.started(apc.ActCommit); !commitTimestamp.IsZero() {
+		elapsed = now.Sub(commitTimestamp)
+		if elapsed > gcTxnsTimeotMult*config.Timeout.MaxHostBusy.D() {
+			err = fmt.Errorf("gc %s: [commit - done] timeout", txn)
+		} else if elapsed >= TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
+			err = fmt.Errorf("gc %s: commit is taking too long", txn)
+		}
+	} else {
+		if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
+			err = fmt.Errorf("gc %s: [begin - start-commit] timeout", txn)
+		} else if elapsed >= TxnTimeoutMult*cmn.Timeout.MaxKeepalive() {
+			warn = fmt.Errorf("gc %s: commit message is taking too long", txn)
+		}
 	}
 	return
 }
@@ -381,20 +419,14 @@ func (txn *txnBase) started(phase string, tm ...time.Time) (ts time.Time) {
 }
 
 func (txn *txnBase) isDone() (done bool, err error) {
-	txn.RLock()
-	if txn.err != nil {
-		err = txn.err.err
+	if txnErr := txn.err.Load(); txnErr != nil {
+		err = txnErr.err
 		done = true
 	}
-	txn.RUnlock()
 	return
 }
 
-func (txn *txnBase) rsvp(err error) {
-	txn.Lock()
-	txn.err = &txnError{err: err}
-	txn.Unlock()
-}
+func (txn *txnBase) rsvp(err error) { txn.err.Store(&txnError{err: err}) }
 
 func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
 	txn.uid = c.uuid
@@ -426,7 +458,7 @@ func (txn *txnBckBase) cleanup() {
 
 func (txn *txnBckBase) abort(err error) {
 	txn.cleanup()
-	nlog.Infof("%s aborted: %v", txn, err)
+	nlog.Infoln(txn.String(), "aborted:", err)
 }
 
 // NOTE: not keeping locks for the duration; see also: txnTCB
@@ -454,17 +486,15 @@ func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args .
 	if txn.callerName != caller || msg.UUID != txn.uuid() {
 		return
 	}
-	bmd, _ := args[0].(*bucketMD)
-	debug.Assert(bmd.version() >= txn.bmdVer)
-
 	found = true
-	txn.Lock()
-	defer txn.Unlock()
-	if txn.err != nil {
-		errDone = fmt.Errorf("%s: already done with err=%v", txn, txn.err.err)
-		return
+	debug.Func(func() {
+		bmd, _ := args[0].(*bucketMD)
+		debug.Assert(bmd.version() >= txn.bmdVer)
+	})
+	if txnErr := txn.err.Swap(&txnError{err: err}); txnErr != nil {
+		errDone = fmt.Errorf("%s: already done with err=%v (%v)", txn, txnErr.err, err)
+		txn.err.Store(txnErr)
 	}
-	txn.err = &txnError{err: err}
 	return
 }
 
