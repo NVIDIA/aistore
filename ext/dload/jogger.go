@@ -45,7 +45,6 @@ func newJogger(d *dispatcher, mpath string) (j *jogger) {
 }
 
 func (j *jogger) jog() {
-	nlog.Infof("[downloader] starting jogger for mpath %q", j.mpath)
 	for {
 		t := j.q.get()
 		if t == nil {

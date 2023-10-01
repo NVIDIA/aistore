@@ -97,26 +97,31 @@ func checkDownloadList(t *testing.T, expNumEntries ...int) {
 }
 
 func waitForDownload(t *testing.T, id string, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
+	var (
+		total time.Duration
+		sleep = cos.ProbingFrequency(timeout)
+		found bool
+	)
+	for total < timeout {
+		time.Sleep(sleep)
+		total += sleep
 
-	for {
-		if time.Now().After(deadline) {
-			t.Errorf("Timed out waiting %v for download %s.", timeout, id)
-			return
-		}
-
-		all := true
+		finished := true
 		if resp, err := api.DownloadStatus(tools.BaseAPIParams(), id, true); err == nil {
+			found = true
 			if !resp.JobFinished() {
-				all = false
+				finished = false
 			}
 		}
-
-		if all {
-			break
+		if finished && found {
+			return
 		}
-		time.Sleep(200 * time.Millisecond)
+		if total == 5*time.Second {
+			tlog.Logf("Still waiting for download %s (found=%t)...\n", id, found)
+			sleep *= 2
+		}
 	}
+	t.Errorf("Timed out waiting %v for download %s.", timeout, id)
 }
 
 func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []string) {
@@ -164,7 +169,7 @@ func downloadObjectRemote(t *testing.T, body dload.BackendBody, expectedFinished
 	id, err := api.DownloadWithParam(baseParams, dload.TypeBackend, body)
 	tassert.CheckFatal(t, err)
 
-	waitForDownload(t, id, 2*time.Minute)
+	waitForDownload(t, id, time.Minute)
 
 	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
@@ -663,7 +668,7 @@ func TestDownloadStatusError(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Wait to make sure both files were processed by downloader
-	waitForDownload(t, id, 15*time.Second)
+	waitForDownload(t, id, 30*time.Second)
 
 	resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
@@ -888,7 +893,7 @@ func TestDownloadMountpath(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tlog.Logf("Started download job %s, waiting for it to finish\n", id2)
 
-	waitForDownload(t, id2, 2*time.Minute)
+	waitForDownload(t, id2, time.Minute)
 	objs, err = tools.ListObjectNames(proxyURL, bck, "", 0, true /*cached*/)
 	tassert.CheckError(t, err)
 	tassert.Fatalf(t, len(objs) == objsCnt, "Expected %d objects to be present, got: %d", objsCnt, len(objs))

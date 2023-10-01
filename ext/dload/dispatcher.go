@@ -83,14 +83,15 @@ func (d *dispatcher) run() (err error) {
 	// allow other goroutines to run
 	d.startupSema.markStarted()
 
+	nlog.Infoln(d.xdl.Name(), "started, cnt:", len(availablePaths))
 mloop:
 	for {
 		select {
 		case <-d.xdl.IdleTimer():
-			nlog.Infof("%s timed out. Exiting...", d.xdl.Name())
+			nlog.Infoln(d.xdl.Name(), "idle timeout")
 			break mloop
 		case errCause := <-d.xdl.ChanAbort():
-			nlog.Infof("%s aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
+			nlog.Infoln(d.xdl.Name(), "aborted:", errCause)
 			break mloop
 		case <-ctx.Done():
 			break mloop
@@ -104,10 +105,10 @@ mloop:
 
 			select {
 			case <-d.xdl.IdleTimer():
-				nlog.Infof("%s has timed out. Exiting...", d.xdl.Name())
+				nlog.Infoln(d.xdl.Name(), "idle timeout")
 				break mloop
 			case errCause := <-d.xdl.ChanAbort():
-				nlog.Infof("%s has been aborted (cause %v). Exiting...", d.xdl.Name(), errCause)
+				nlog.Infoln(d.xdl.Name(), "aborted:", errCause)
 				break mloop
 			case <-ctx.Done():
 				break mloop

@@ -56,42 +56,51 @@ func (t *throttler) initThroughputThrottling(maxBytesPerMinute int) {
 	t.giveBackCh = make(chan int, 1)
 	t.ticker = time.NewTicker(time.Minute)
 	t.stopCh = cos.NewStopCh()
+
 	go func() {
-		defer func() {
+		t.do()
+		if t.ticker != nil {
 			t.ticker.Stop()
 			close(t.capacityCh)
-		}()
-		t.capacityCh <- t.maxBytesPerMinute
-
-		// LOOP-INVARIANT: `t.capacityCh` has 1 element and `t.giveBackCh` has 0 elements.
-		// LOOP-INVARIANT: `t.capacityCh` and `t.giveBackCh` can't have size > 0 at the same time.
-		// Readers start to compete for resources on `t.capacityCh`.
-		for {
-			select {
-			case <-t.stopCh.Listen():
-				return
-			case leftover := <-t.giveBackCh:
-				// Reader took value from `t.capacityCh` and put it to `t.giveBackCh`.
-				// `t.capacityCh` has 0 elements and `t.giveBackCh` has 0 elements
-				// (we've just read from `t.giveBackCh`).
-				if leftover > 0 {
-					select {
-					// By default put leftover to capacity channel.
-					case t.capacityCh <- leftover:
-						break
-					// But if time has passed, put a big chunk.
-					case <-t.ticker.C:
-						t.capacityCh <- t.maxBytesPerMinute
-					}
-				} else {
-					// Readers are faster than bandwidth, throttle here.
-					<-t.ticker.C
-					t.capacityCh <- t.maxBytesPerMinute
-				}
-				// Regardless of chosen if-branch we put 1 element to `t.capacityCh`.
-			}
 		}
 	}()
+}
+
+// LOOP-INVARIANT: `t.capacityCh` has 1 element and `t.giveBackCh` has 0 elements.
+// LOOP-INVARIANT: `t.capacityCh` and `t.giveBackCh` can't have size > 0 at the same time.
+// Readers start to compete for resources on `t.capacityCh`.
+func (t *throttler) do() {
+	t.capacityCh <- t.maxBytesPerMinute
+
+	for {
+		select {
+		case <-t.stopCh.Listen():
+			return
+		case leftover := <-t.giveBackCh:
+			// Reader took value from `t.capacityCh` and put it to `t.giveBackCh`.
+			// `t.capacityCh` has 0 elements and `t.giveBackCh` has 0 elements
+			// (we've just read from `t.giveBackCh`).
+			if leftover > 0 {
+				select {
+				// By default put leftover to capacity channel.
+				case t.capacityCh <- leftover:
+					break
+				// But if time has passed, put a big chunk.
+				case <-t.ticker.C:
+					t.capacityCh <- t.maxBytesPerMinute
+				}
+			} else {
+				// Readers are faster than bandwidth, throttle here.
+				select {
+				case <-t.ticker.C:
+					t.capacityCh <- t.maxBytesPerMinute
+				case <-t.stopCh.Listen():
+					return
+				}
+			}
+			// Regardless of chosen if-branch we put 1 element to `t.capacityCh`.
+		}
+	}
 }
 
 func (t *throttler) tryAcquire() <-chan struct{} {
@@ -122,6 +131,7 @@ func (t *throttler) wrapReader(ctx context.Context, r io.ReadCloser) io.ReadClos
 func (t *throttler) stop() {
 	if t.ticker != nil {
 		t.ticker.Stop()
+		t.ticker = nil
 	}
 	if t.stopCh != nil {
 		t.stopCh.Close()

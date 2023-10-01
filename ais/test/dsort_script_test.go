@@ -16,12 +16,12 @@ import (
 )
 
 func TestDistributedSortUsingScripts(t *testing.T) {
-	var (
-		src = cmn.Bck{Name: "src_" + trand.String(6), Provider: apc.AIS}
-		dst = cmn.Bck{Name: "dst_" + trand.String(6), Provider: apc.AIS}
-	)
 	for _, spec := range []string{"dsort-spec1.json", "dsort-spec2.json", "dsort-spec3.json"} {
 		t.Run(spec, func(t *testing.T) {
+			var (
+				src = cmn.Bck{Name: "src_" + trand.String(6), Provider: apc.AIS}
+				dst = cmn.Bck{Name: "dst_" + trand.String(6), Provider: apc.AIS}
+			)
 			cmd := exec.Command("./scripts/dsort-ex1.sh", "--srcbck", src.Cname(""), "--dstbck", dst.Cname(""))
 			cmd.Args = append(cmd.Args, "--spec", spec)
 

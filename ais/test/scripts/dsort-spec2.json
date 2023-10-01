@@ -9,9 +9,9 @@
   "input_format": {
     "template": "shard-{0..9}"
   },
-  "output_format": "new-shard-{0000..1000}.zip",
+  "output_format": "new-shard-{0000..1000}.tar.gz",
   "output_shard_size": "10KB",
-  "description": "shuffle shards, reformat tar => zip",
+  "description": "shuffle shards, reformat tar => tar.gz",
   "algorithm": {
     "kind": "shuffle"
   }
