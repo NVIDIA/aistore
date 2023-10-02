@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -86,7 +85,7 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 		return beid, nil
 	}
 	if prev != nil {
-		err = fmt.Errorf("node %s is currently busy (running %s), please try again in one minute", p.Args.T, prev.Name())
+		err = cmn.NewErrBusy("node", p.Args.T, "running "+prev.Name())
 	}
 	return "", err
 }

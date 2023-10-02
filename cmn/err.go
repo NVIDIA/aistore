@@ -70,7 +70,12 @@ type (
 	ErrRemoteBckNotFound   struct{ bck Bck }
 	ErrRemoteBucketOffline struct{ bck Bck }
 	ErrBckNotFound         struct{ bck Bck }
-	ErrBucketIsBusy        struct{ bck Bck }
+
+	ErrBusy struct {
+		what   string
+		name   fmt.Stringer
+		detail string
+	}
 
 	ErrFailedTo struct {
 		actor  any    // most of the time it's this (target|proxy) node but may also be some other "actor"
@@ -345,14 +350,18 @@ func (*ErrInvalidBackendProvider) Is(target error) bool {
 	return ok
 }
 
-// ErrBucketIsBusy
+// ErrBusy
 
-func NewErrBckIsBusy(bck *Bck) *ErrBucketIsBusy {
-	return &ErrBucketIsBusy{bck: *bck}
+func NewErrBusy(what string, name fmt.Stringer, detail string) *ErrBusy {
+	return &ErrBusy{what, name, detail}
 }
 
-func (e *ErrBucketIsBusy) Error() string {
-	return fmt.Sprintf("bucket %q is currently busy, please retry later", e.bck)
+func (e *ErrBusy) Error() string {
+	var s string
+	if e.detail != "" {
+		s = " (" + e.detail + ")"
+	}
+	return fmt.Sprintf("%s %q is currently busy%s, please try again in a few seconds or minutes", e.what, e.name, s)
 }
 
 // errAccessDenied & ErrBucketAccessDenied

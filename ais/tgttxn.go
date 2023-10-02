@@ -220,7 +220,7 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 		}
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
+			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
 		if err := t.transactions.begin(txn); err != nil {
@@ -303,7 +303,7 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 		}
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
+			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
 		txn := newTxnSetBucketProps(c, nprops)
 		if err := t.transactions.begin(txn); err != nil {
@@ -406,11 +406,11 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 		nlpFrom := newBckNLP(bckFrom)
 		nlpTo := newBckNLP(bckTo)
 		if !nlpFrom.TryLock(c.timeout.netw / 4) {
-			return "", cmn.NewErrBckIsBusy(bckFrom.Bucket())
+			return "", cmn.NewErrBusy("bucket", bckFrom, "")
 		}
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()
-			return "", cmn.NewErrBckIsBusy(bckTo.Bucket())
+			return "", cmn.NewErrBusy("bucket", bckTo, "")
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
 		if err := t.transactions.begin(txn); err != nil {
@@ -583,14 +583,14 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 		nlpFrom = nil
-		err = cmn.NewErrBckIsBusy(bckFrom.Bucket())
+		err = cmn.NewErrBusy("bucket", bckFrom, "")
 		return
 	}
 	if !msg.DryRun {
 		nlpTo = newBckNLP(bckTo)
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpTo = nil
-			err = cmn.NewErrBckIsBusy(bckTo.Bucket())
+			err = cmn.NewErrBusy("bucket", bckTo, "")
 			return
 		}
 	}
@@ -711,7 +711,7 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		nlp := newBckNLP(c.bck)
 
 		if !nlp.TryLock(c.timeout.netw / 4) {
-			return "", cmn.NewErrBckIsBusy(c.bck.Bucket())
+			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
 
 		txn := newTxnECEncode(c, c.bck)
@@ -861,7 +861,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 	case apc.ActBegin:
 		nlp := newBckNLP(c.bck)
 		if !nlp.TryLock(c.timeout.netw / 2) {
-			return cmn.NewErrBckIsBusy(c.bck.Bucket())
+			return cmn.NewErrBusy("bucket", c.bck, "")
 		}
 		txn := newTxnBckBase(c.bck)
 		txn.fillFromCtx(c)
