@@ -6,7 +6,6 @@ package ais
 
 import (
 	"context"
-	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -150,6 +148,7 @@ func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, 
 	return
 }
 
+// compare with goi.getCold
 func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
 	// 1. lock
 	switch owt {
@@ -166,48 +165,27 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 		} else {
 			lom.Lock(true)
 		}
-	case cmn.OwtGet:
-		for lom.UpgradeLock() {
-			// The action was performed by some other goroutine and we don't need
-			// to do it again. But we need to check on the object.
-			if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				nlog.Errorf("%s: %s load err: %v - retrying...", t, lom, err)
-				continue
-			}
-			return 0, nil
-		}
 	default:
-		debug.Assert(false)
+		// for cmn.OwtGet, see goi.getCold
+		debug.Assert(false, "owt", owt)
 		return
 	}
 
-	// 2. get from remote
+	// 2. get from the remote B
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom, owt); err != nil {
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		nlog.Errorf("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
+		nlog.Infof("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
 		return
 	}
 
-	// 3. unlock or downgrade
+	// 3. unlock
 	switch owt {
 	case cmn.OwtGetPrefetchLock:
 		// do nothing
 	case cmn.OwtGetTryLock, cmn.OwtGetLock:
 		lom.Unlock(true)
-	case cmn.OwtGet:
-		if err = lom.Load(true /*cache it*/, true /*locked*/); err == nil {
-			t.statsT.AddMany(
-				cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-				cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
-			)
-			lom.DowngradeLock()
-		} else {
-			errCode = http.StatusInternalServerError
-			lom.Unlock(true)
-			nlog.Errorf("%s: unexpected failure to load %s (%s): %v", t, lom.Cname(), owt, err)
-		}
 	}
 	return
 }

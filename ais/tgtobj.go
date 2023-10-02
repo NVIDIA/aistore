@@ -581,6 +581,8 @@ do:
 	}
 
 	// cold GET
+	// - upgrade rlock => wlock
+	// - call t.Backend.GetObj
 	if cold {
 		if cs.IsNil() {
 			cs = fs.Cap()
@@ -590,8 +592,7 @@ do:
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
-		// (will upgrade rlock => wlock)
-		if errCode, err = goi.t.GetCold(goi.ctx, goi.lom, cmn.OwtGet); err != nil {
+		if errCode, err = goi.getCold(); err != nil {
 			goi.unlocked = true
 			return
 		}
@@ -614,6 +615,79 @@ fin:
 		nlog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, errCode)
 	}
 	return
+}
+
+// compare with t.GetCold implementing the namesake cluster.Target i/f
+func (goi *getOI) getCold() (int, error) {
+	var (
+		t, lom = goi.t, goi.lom
+		config = cmn.GCO.Get()
+		now    int64
+	)
+	// 1. upgrade rlock => wlock, but NOTE:
+	// - done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
+	// - compare with `poi.fini` above
+	for lom.UpgradeLock() {
+		err := lom.Load(true /*cache it*/, true /*locked*/)
+		if err == nil {
+			// ok, nothing else to do
+			// (lock was upgraded by another goroutine that had also performed PUT on out behalf)
+			return 0, nil
+		}
+		switch {
+		case now == 0:
+			now = mono.NanoTime()
+			fallthrough
+		case mono.Since(now) < max(config.Timeout.CplaneOperation.D(), 2*time.Second):
+			nlog.Errorln(t.String()+": failed to load", lom.String(), err, "- retrying...")
+		default:
+			return http.StatusInternalServerError, cmn.NewErrBusy("object", lom, "")
+		}
+	}
+
+	// 2. coldGet per se
+	reader, cksumToUse, code, err := t.Backend(lom.Bck()).GetObjReader(goi.ctx, lom)
+	if err != nil {
+		lom.Unlock(true)
+		nlog.Infof("%s: failed to cold-GET(reader) %s: %v(%d)", t, lom.Cname(), err, code)
+		return code, err
+	}
+
+	// 3. put reader
+	poi := allocPOI()
+	{
+		poi.t = t
+		poi.lom = lom
+		poi.config = config
+		poi.r = reader
+		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
+		poi.atime = goi.atime
+		poi.owt = cmn.OwtGet
+		poi.cksumToUse = cksumToUse // expected checksum (to validate if the bucket's `validate_cold_get == true`)
+		// poi.skipEC remains false on purpose
+	}
+	code, err = poi.putObject()
+	freePOI(poi)
+
+	if err != nil {
+		lom.Unlock(true)
+		nlog.Infof("%s: failed to cold-GET(put) %s: %v(%d)", t, lom.Cname(), err, code)
+		return code, err
+	}
+
+	// 4, 5, 6: load, downgrade lock, inc stats
+	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
+		lom.Unlock(true)
+		err = fmt.Errorf("unexpected failure to load %s: %w", lom, err) // (unlikely)
+		nlog.Errorln(t.String(), err)
+		return http.StatusInternalServerError, err
+	}
+	lom.DowngradeLock()
+	t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
+	)
+	return 0, nil
 }
 
 // - validate checksums
@@ -1395,8 +1469,9 @@ func (coi *copyOI) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err er
 		sargs.reader = reader
 		sargs.objAttrs = lom
 	} else {
-		// 3. get a reader for this object - utilize backend's `GetObjReader`
-		// unless the object is present
+		// 3. get a reader for this object
+		// - iff the object is not present ("cached"):
+		// - call t.Backend.GetObjReader, a variation of "cold GET"
 		if sargs.reader, sargs.objAttrs, err = coi.DP.Reader(lom); err != nil {
 			return
 		}
