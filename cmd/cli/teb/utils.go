@@ -144,12 +144,25 @@ func fmtProxiesSumm(smap *meta.Smap) string {
 	return fmt.Sprintf("%d (%d unelectable)", cnt, smap.CountNonElectable())
 }
 
-func fmtTargetsSumm(smap *meta.Smap) string {
-	cnt, act := len(smap.Tmap), smap.CountActiveTs()
-	if cnt != act {
-		return fmt.Sprintf("%d (%d inactive)", cnt, cnt-act)
+func fmtTargetsSumm(smap *meta.Smap, numDisks int) string {
+	var (
+		cnt, act = len(smap.Tmap), smap.CountActiveTs()
+		s        string
+	)
+	if numDisks > 0 {
+		switch {
+		case act > 1 && numDisks > 1:
+			s = fmt.Sprintf(" (total disks: %d)", numDisks)
+		case numDisks > 1:
+			s = fmt.Sprintf(" (num disks: %d)", numDisks)
+		default:
+			s = " (one disk)"
+		}
 	}
-	return fmt.Sprintf("%d", cnt)
+	if cnt != act {
+		return fmt.Sprintf("%d (%d inactive)%s", cnt, cnt-act, s)
+	}
+	return fmt.Sprintf("%d%s", cnt, s)
 }
 
 func fmtCapPctMAM(tcdf *fs.TargetCDF, list bool) string {

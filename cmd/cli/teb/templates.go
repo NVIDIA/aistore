@@ -70,7 +70,7 @@ const (
 	indent1 = "   "
 
 	ClusterSummary = indent1 + "Proxies:\t{{FormatProxiesSumm .Smap}}\n" +
-		indent1 + "Targets:\t{{FormatTargetsSumm .Smap}}\n" +
+		indent1 + "Targets:\t{{FormatTargetsSumm .Smap .NumDisks}}\n" +
 		indent1 + "Cluster Map:\t{{FormatSmap .Smap}}\n" +
 		indent1 + "Deployment:\t{{ ( Deployments .Status) }}\n" +
 		indent1 + "Status:\t{{ ( OnlineStatus .Status) }}\n" +
@@ -384,6 +384,7 @@ type (
 		Smap      *meta.Smap           `json:"smap"`
 		CluConfig *cmn.ClusterConfig   `json:"config"`
 		Status    StatsAndStatusHelper `json:"status"`
+		NumDisks  int                  `json:"-"`
 	}
 	ListBucketsHelper struct {
 		Bck   cmn.Bck

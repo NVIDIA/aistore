@@ -207,11 +207,12 @@ func _inclStatus(st StstMap) bool {
 	return false
 }
 
+// compare with "total num disks" (daeclu.go)
 func _sumupMpathsAvail(cdf fs.TargetCDF, deploymentType string) (avail uint64) {
 	for _, c := range cdf.Mountpaths {
 		avail += c.Capacity.Avail
 		if deploymentType == apc.DeploymentDev {
-			return
+			return // simplifying HACK that'll be true most of the time
 		}
 	}
 	return
