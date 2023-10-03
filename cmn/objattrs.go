@@ -116,13 +116,13 @@ func (oa *ObjAttrs) DelCustomKeys(keys ...string) {
 }
 
 // clone OAH => ObjAttrs (see also lom.CopyAttrs)
-func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum ...bool) {
+func (oa *ObjAttrs) CopyFrom(oah cos.OAH, skipCksum bool) {
 	oa.Atime = oah.AtimeUnix()
 	oa.Size = oah.SizeBytes()
 	oa.Ver = oah.Version()
-	if len(skipCksum) == 0 || !skipCksum[0] {
-		debug.Assert(oah.Checksum() != nil)
-		oa.Cksum = oah.Checksum().Clone() // TODO: checksum by value (***)
+	if !skipCksum {
+		debug.Assert(oah.Checksum() != nil, oah.String())
+		oa.Cksum = oah.Checksum().Clone() // checksum by value (***)
 	}
 	for k, v := range oah.GetCustomMD() {
 		oa.SetCustomKey(k, v)

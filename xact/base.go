@@ -136,9 +136,9 @@ func (xctn *Base) AbortedAfter(d time.Duration) (err error) {
 	return
 }
 
-func (xctn *Base) Abort(err error) (ok bool) {
+func (xctn *Base) Abort(err error) bool {
 	if xctn.Finished() || !xctn.abort.done.CAS(false, true) {
-		return
+		return false
 	}
 
 	if err == nil {
@@ -156,7 +156,7 @@ func (xctn *Base) Abort(err error) (ok bool) {
 	close(xctn.abort.ch)
 
 	if xctn.Kind() != apc.ActList {
-		nlog.Infof("%s aborted(%v)", xctn.Name(), err)
+		nlog.InfoDepth(1, xctn.Name(), err)
 	}
 	return true
 }

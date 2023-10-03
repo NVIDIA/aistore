@@ -481,32 +481,45 @@ func (reb *Reb) endStreams(err error) {
 
 // when at least one bucket has EC enabled
 func (reb *Reb) runEC(rargs *rebArgs) error {
-	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
+	errCnt := reb.bcast(rargs, reb.rxReady) // ignore timeout
 	xreb := reb.xctn()
 	if err := xreb.AbortErr(); err != nil {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec-bcast", err)
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Infoln(logHdr, "abort ec rx-ready", err, "num-fail", errCnt)
+		return err
+	}
+	if errCnt > 0 {
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Errorln(logHdr, "ec rx-ready num-fail", errCnt) // unlikely
 	}
 
 	reb.runECjoggers()
 
 	if err := xreb.AbortErr(); err != nil {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-ec-joggers", err)
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Infoln(logHdr, "abort ec-joggers", err)
+		return err
 	}
 	nlog.Infof("[%s] RebalanceEC done", reb.t.SID())
 	return nil
 }
 
-// when no bucket has EC enabled
+// when not a single bucket has EC enabled
 func (reb *Reb) runNoEC(rargs *rebArgs) error {
-	ver := rargs.smap.Version
-	_ = reb.bcast(rargs, reb.rxReady) // NOTE: ignore timeout
-
+	errCnt := reb.bcast(rargs, reb.rxReady) // ignore timeout
 	xreb := reb.xctn()
 	if err := xreb.AbortErr(); err != nil {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-bcast", err)
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Infoln(logHdr, "abort rx-ready", err, "num-fail", errCnt)
+		return err
+	}
+	if errCnt > 0 {
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Errorln(logHdr, "rx-ready num-fail", errCnt) // unlikely
 	}
 
 	wg := &sync.WaitGroup{}
+	ver := rargs.smap.Version
 	for _, mi := range rargs.apaths {
 		rl := &rebJogger{
 			joggerBase: joggerBase{m: reb, xreb: reb.xctn(), wg: wg},
@@ -518,7 +531,9 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 	wg.Wait()
 
 	if err := xreb.AbortErr(); err != nil {
-		return cmn.NewErrAborted(xreb.Name(), "reb-run-joggers", err)
+		logHdr := reb.logHdr(rargs.id, rargs.smap)
+		nlog.Infoln(logHdr, "abort joggers", err)
+		return err
 	}
 	if rargs.config.FastV(4, cos.SmoduleReb) {
 		nlog.Infof("finished rebalance walk (g%d)", rargs.id)
@@ -740,9 +755,9 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 		return rj.xreb.IsAborted()
 	}
 	if rj.xreb.IsAborted() {
-		nlog.Infof("aborting traversal")
+		nlog.Infoln(rj.xreb.Name(), "aborting traversal")
 	} else {
-		nlog.Errorf("%s: %s failed to traverse: %v", rj.m.t, rj.xreb.Name(), err)
+		nlog.Errorln(rj.m.t.String(), rj.xreb.Name(), "failed to traverse", err)
 	}
 	return true
 }
@@ -766,22 +781,23 @@ func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg 
 	}
 }
 
-func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) (err error) {
+func (rj *rebJogger) visitObj(fqn string, de fs.DirEntry) error {
 	if err := rj.xreb.AbortErr(); err != nil {
-		return cmn.NewErrAborted(rj.xreb.Name(), "rj-walk", err)
+		nlog.Infoln(rj.xreb.Name(), "rj-walk-visit aborted", err)
+		return err
 	}
 	if de.IsDir() {
 		return nil
 	}
 	lom := cluster.AllocLOM(fqn)
-	err = rj._lwalk(lom, fqn)
+	err := rj._lwalk(lom, fqn)
 	if err != nil {
 		cluster.FreeLOM(lom)
 		if err == cmn.ErrSkip {
 			err = nil
 		}
 	}
-	return
+	return err
 }
 
 func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
@@ -811,8 +827,8 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
 		return cmn.ErrSkip
 	}
 	// prepare to send: rlock, load, new roc
-	roc, err := _getReader(lom)
-	if err != nil {
+	var roc cos.ReadOpenCloser
+	if roc, err = _getReader(lom); err != nil {
 		return err
 	}
 
@@ -844,6 +860,7 @@ func _getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 			return
 		}
 	}
+	debug.Assert(lom.Checksum() != nil, lom.String())
 	return lom.NewDeferROC()
 }
 
@@ -856,7 +873,7 @@ func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *meta.Snode, roc cos.ReadOpenC
 	o.Hdr.Bck.Copy(lom.Bucket())
 	o.Hdr.ObjName = lom.ObjName
 	o.Hdr.Opaque = opaque
-	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
+	o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	o.Callback, o.CmplArg = rj.objSentCallback, lom
 	rj.m.inQueue.Inc()
 	return rj.m.dm.Send(o, roc, tsi)

@@ -141,7 +141,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: meta.Size}}
 	o.Hdr.Bck.Copy(ct.Bck().Bucket())
 	if lom != nil {
-		o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
+		o.Hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 	}
 	if meta.SliceID != 0 {
 		o.Hdr.ObjAttrs.Size = ec.SliceSize(meta.Size, meta.Data)
@@ -283,11 +283,12 @@ func (reb *Reb) renameLocalCT(req *stageNtfn, ct *cluster.CT, md *ec.Metadata) (
 	return
 }
 
-func (reb *Reb) walkEC(fqn string, de fs.DirEntry) (err error) {
+func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	xreb := reb.xctn()
 	if err := xreb.AbortErr(); err != nil {
 		// notify `dir.Walk` to stop iterations
-		return cmn.NewErrAborted(xreb.Name(), "walk-ec", err)
+		nlog.Infoln(xreb.Name(), "walk-ec aborted", err)
+		return err
 	}
 
 	if de.IsDir() {

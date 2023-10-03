@@ -107,9 +107,12 @@ func (reb *Reb) changeStage(newStage uint32) {
 // Aborts global rebalance and notifies all other targets.
 // (compare with `Abort` above)
 func (reb *Reb) abortAndBroadcast(err error) {
-	if xreb := reb.xctn(); xreb == nil || !xreb.Abort(err) {
+	xreb := reb.xctn()
+	if xreb == nil || !xreb.Abort(err) {
 		return
 	}
+	nlog.InfoDepth(1, xreb.Name(), "abort-and-bcast", err)
+
 	var (
 		req = stageNtfn{
 			daemonID: reb.t.SID(),

@@ -237,8 +237,8 @@ func (m *rmdModifier) log(nl nl.Listener) {
 		nlog.InfoDepth(1, name, "done")
 	case abrt:
 		debug.Assert(err != nil, nl.String()+" - aborted w/ no errors")
-		nlog.ErrorDepth(1, err)
+		nlog.ErrorDepth(1, name, err)
 	default:
-		nlog.ErrorDepth(1, name, "failed: ", err)
+		nlog.ErrorDepth(1, name, "failed:", err)
 	}
 }

@@ -263,7 +263,7 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	{
 		hdr.Bck = wi.msg.ToBck
 		hdr.ObjName = lom.ObjName
-		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs())
+		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
 		hdr.Opaque = []byte(wi.msg.TxnUUID)
 	}
 	// o.Callback nil on purpose (lom is freed by the iterator)

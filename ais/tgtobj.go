@@ -1504,7 +1504,7 @@ func (coi *copyOI) dm(lom *cluster.LOM, sargs *sendArgs) error {
 	{
 		hdr.Bck.Copy(sargs.bckTo.Bucket())
 		hdr.ObjName = sargs.objNameTo
-		hdr.ObjAttrs.CopyFrom(oa)
+		hdr.ObjAttrs.CopyFrom(oa, false /*skip cksum*/)
 	}
 	o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		cluster.FreeLOM(lom)

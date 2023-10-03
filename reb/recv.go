@@ -114,7 +114,6 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 		reb.stages.setStage(ntfn.daemonID, ntfn.stage)
 		if ntfn.stage == rebStageAbort {
 			err := fmt.Errorf("abort stage notification from %s(%s)", meta.Tname(ntfn.daemonID), otherStage)
-			nlog.Errorln(err)
 			xreb.Abort(cmn.NewErrAborted(xreb.Name(), reb.logHdr(rebID, rsmap), err))
 		}
 		return nil

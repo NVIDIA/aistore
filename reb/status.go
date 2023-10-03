@@ -23,7 +23,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		marked = xreg.GetRebMarked()
 	)
 	status.Aborted = marked.Interrupted
-	status.Running = marked.Xact != nil
+	status.Running = marked.Xact != nil && marked.Xact.Running()
 
 	// rlock
 	reb.mu.RLock()
@@ -40,6 +40,8 @@ func (reb *Reb) RebStatus(status *Status) {
 	// xreb, ?running
 	xreb := reb.xctn()
 	if xreb != nil {
+		status.Aborted = xreb.IsAborted()
+		status.Running = xreb.Running()
 		xreb.ToStats(&status.Stats)
 		if status.Running {
 			if marked.Xact.ID() != xreb.ID() {
