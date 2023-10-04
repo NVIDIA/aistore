@@ -351,35 +351,31 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 // GET OBJECT //
 ////////////////
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
-	reader, cksumToUse, errCode, err := ap.GetObjReader(ctx, lom)
-	if err != nil {
-		return errCode, err
+func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+	res := ap.GetObjReader(ctx, lom)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
-		params.Reader = reader
+		params.Reader = res.R
 		params.OWT = owt
-		params.Cksum = cksumToUse
+		params.Cksum = res.ExpCksum
 		params.Atime = time.Now()
 	}
-	err = ap.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
+	err := ap.t.PutObject(lom, params)
 	if superVerbose {
-		nlog.Infof("[get_object] %s", lom)
+		nlog.Infoln("[get_object]", lom.String(), err)
 	}
-	return
+	return 0, err
 }
 
 ////////////////////
 // GET OBJ READER //
 ////////////////////
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (reader io.ReadCloser, expCksum *cos.Cksum,
-	errCode int, err error) {
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
@@ -389,24 +385,26 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	// Get checksum
 	respProps, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{}, defaultKeyOptions)
 	if err != nil {
-		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return nil, nil, status, err
+		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
+		return
 	}
 	if respProps.StatusCode() >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(apc.Azure, "get object props of", cloudBck.Name+"/"+lom.ObjName,
+		res.Err = cmn.NewErrFailedTo(apc.Azure, "get object props of", cloudBck.Name+"/"+lom.ObjName,
 			azureErrStatus(respProps.StatusCode()))
-		return nil, nil, respProps.StatusCode(), err
+		res.ErrCode = respProps.StatusCode()
+		return
 	}
 	// 0, 0 = read range: the whole object
 	resp, err := blobURL.Download(ctx, 0, 0, azblob.BlobAccessConditions{}, false, defaultKeyOptions)
 	if err != nil {
-		errCode, err = azureErrorToAISError(err, cloudBck, lom.ObjName)
-		return nil, nil, errCode, err
+		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
+		return
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		err := cmn.NewErrFailedTo(apc.Azure, "get object", cloudBck.Name+"/"+lom.ObjName,
+		res.Err = cmn.NewErrFailedTo(apc.Azure, "get object", cloudBck.Name+"/"+lom.ObjName,
 			azureErrStatus(respProps.StatusCode()))
-		return nil, nil, resp.StatusCode(), err
+		res.ErrCode = resp.StatusCode()
+		return
 	}
 
 	// custom metadata
@@ -417,13 +415,14 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 	}
 	if v, ok := h.EncodeCksum(respProps.ContentMD5()); ok {
 		lom.SetCustomKey(cmn.MD5ObjMD, v)
-		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
+		res.ExpCksum = cos.NewCksum(cos.ChecksumMD5, v)
 	}
 
-	setSize(ctx, resp.ContentLength())
+	res.Size = resp.ContentLength()
 
 	retryOpts := azblob.RetryReaderOptions{MaxRetryRequests: 3}
-	return wrapReader(ctx, resp.Body(retryOpts)), expCksum, 0, nil
+	res.R = resp.Body(retryOpts)
+	return
 }
 
 ////////////////

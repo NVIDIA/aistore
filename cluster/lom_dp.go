@@ -74,14 +74,13 @@ func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 		Cksum: cos.NoneCksum, // will likely reassign (below)
 		Atime: lom.AtimeUnix(),
 	}
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, cos.CtxSetSize, cos.SetSizeFunc(oah.SetSize))
-	reader, expCksum, _, err := g.t.Backend(lom.Bck()).GetObjReader(ctx, lom)
+	res := g.t.Backend(lom.Bck()).GetObjReader(context.Background(), lom)
 
 	if lom.Checksum() != nil {
 		oah.Cksum = lom.Checksum()
-	} else if expCksum != nil {
-		oah.Cksum = expCksum
+	} else if res.ExpCksum != nil {
+		oah.Cksum = res.ExpCksum
 	}
-	return cos.NopOpener(reader), oah, err
+	oah.Size = res.Size
+	return cos.NopOpener(res.R), oah, res.Err
 }

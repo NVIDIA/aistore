@@ -159,34 +159,34 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
-	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
-	if err != nil {
-		return errCode, err
+func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+	res := hp.GetObjReader(ctx, lom)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
-		params.Reader = reader
+		params.Reader = res.R
 		params.OWT = owt
 		params.Atime = time.Now()
 	}
-	err = hp.t.PutObject(lom, params)
+	res.Err = hp.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
-	if err != nil {
-		return
+	if res.Err != nil {
+		return 0, res.Err
 	}
 	if verbose {
 		nlog.Infof("[get_object] %s", lom)
 	}
-	return
+	return 0, nil
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expectedCksm *cos.Cksum,
-	errCode int, err error) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
-		h   = cmn.BackendHelpers.HTTP
-		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
+		resp *http.Response
+		h    = cmn.BackendHelpers.HTTP
+		bck  = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
 	)
 
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
@@ -196,12 +196,15 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 		nlog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
-	resp, err := hp.client(origURL).Get(origURL) //nolint:bodyclose // is closed by the caller
-	if err != nil {
-		return nil, nil, http.StatusInternalServerError, err
+	resp, res.Err = hp.client(origURL).Get(origURL) //nolint:bodyclose // is closed by the caller
+	if res.Err != nil {
+		res.ErrCode = http.StatusInternalServerError
+		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, resp.StatusCode, fmt.Errorf("error occurred: %v", resp.StatusCode)
+		res.ErrCode = resp.StatusCode
+		res.Err = fmt.Errorf("error occurred: %v", resp.StatusCode)
+		return
 	}
 
 	if verbose {
@@ -213,8 +216,9 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r i
 	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		lom.SetCustomKey(cmn.ETag, v)
 	}
-	setSize(ctx, resp.ContentLength)
-	return wrapReader(ctx, resp.Body), nil, 0, nil
+	res.Size = resp.ContentLength
+	res.R = resp.Body
+	return
 }
 
 func (*httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (int, error) {

@@ -232,42 +232,40 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 // GET OBJECT //
 ////////////////
 
-func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
-	reader, _, errCode, err := hp.GetObjReader(ctx, lom)
-	if err != nil {
-		return errCode, err
+func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+	res := hp.GetObjReader(ctx, lom)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
-		params.Reader = reader
+		params.Reader = res.R
 		params.OWT = owt
 		params.Atime = time.Now()
 	}
-	if err = hp.t.PutObject(lom, params); err != nil {
-		return
-	}
+	err := hp.t.PutObject(lom, params)
 	if verbose {
-		nlog.Infof("[get_object] %s", lom)
+		nlog.Infoln("[get_object]", lom.String(), err)
 	}
-	return
+	return 0, err
 }
 
 ////////////////////
 // GET OBJ READER //
 ////////////////////
 
-func (hp *hdfsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser,
-	expectedCksm *cos.Cksum, errCode int, err error) {
+func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
-		errCode, err = hdfsErrorToAISError(err)
+		res.ErrCode, res.Err = hdfsErrorToAISError(err)
 		return
 	}
 	lom.SetCustomKey(cmn.SourceObjMD, apc.HDFS)
-	setSize(ctx, fr.Stat().Size())
-	return wrapReader(ctx, fr), nil, 0, nil
+	res.Size = fr.Stat().Size()
+	res.R = fr
+	return
 }
 
 ////////////////

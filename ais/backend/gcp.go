@@ -291,48 +291,44 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 // GET OBJECT //
 ////////////////
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
-	reader, cksumToUse, errCode, err := gcpp.GetObjReader(ctx, lom)
-	if err != nil {
-		return errCode, err
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+	res := gcpp.GetObjReader(ctx, lom)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
-		params.Reader = reader
+		params.Reader = res.R
 		params.OWT = owt
-		params.Cksum = cksumToUse
+		params.Cksum = res.ExpCksum
 		params.Atime = time.Now()
 	}
-	err = gcpp.t.PutObject(lom, params)
-	if err != nil {
-		return
-	}
+	err := gcpp.t.PutObject(lom, params)
 	if superVerbose {
-		nlog.Infof("[get_object] %s", lom)
+		nlog.Infoln("[get_object]", lom.String(), err)
 	}
-	return
+	return 0, err
 }
 
 ///////////////////////
 // GET OBJECT READER //
 ///////////////////////
 
-func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
-	errCode int, err error) {
+func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)
 	)
-	attrs, err = o.Attrs(ctx)
-	if err != nil {
-		errCode, err = gcpErrorToAISError(err, cloudBck)
+	attrs, res.Err = o.Attrs(ctx)
+	if res.Err != nil {
+		res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
 		return
 	}
-	rc, err = o.NewReader(ctx)
-	if err != nil {
+	rc, res.Err = o.NewReader(ctx)
+	if res.Err != nil {
 		return
 	}
 
@@ -343,9 +339,9 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 			lom.SetCksum(cos.NewCksum(cksumType, cksumValue))
 		}
 	}
-	expCksum = setCustomGs(lom, attrs)
-	setSize(ctx, rc.Attrs.Size)
-	r = wrapReader(ctx, rc)
+	res.ExpCksum = setCustomGs(lom, attrs)
+	res.Size = rc.Attrs.Size
+	res.R = rc
 	return
 }
 

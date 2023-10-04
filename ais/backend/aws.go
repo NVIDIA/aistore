@@ -328,42 +328,36 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 // GET OBJECT //
 ////////////////
 
-func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
-	var (
-		r        io.ReadCloser
-		expCksum *cos.Cksum
-	)
-	r, expCksum, errCode, err = awsp.GetObjReader(ctx, lom)
-	if err != nil {
-		return
+func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+	res := awsp.GetObjReader(ctx, lom)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
-		params.Reader = r
+		params.Reader = res.R
 		params.OWT = owt
-		params.Cksum = expCksum
+		params.Cksum = res.ExpCksum
 		params.Atime = time.Now()
 	}
-	err = awsp.t.PutObject(lom, params)
+	err := awsp.t.PutObject(lom, params)
 	if superVerbose {
-		nlog.Infof("[get_object] %s: %v", lom, err)
+		nlog.Infoln("[get_object]", lom.String(), err)
 	}
-	return
+	return 0, err
 }
 
 ////////////////////
 // GET OBJ READER //
 ////////////////////
 
-func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum,
-	errCode int, err error) {
+func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
 		obj      *s3.GetObjectOutput
-		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()
 	)
-	svc, _, err = newClient(sessConf{bck: cloudBck}, "[get_object]")
+	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
 	if err != nil && superVerbose {
 		nlog.Warningln(err)
 	}
@@ -372,7 +366,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck)
+		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck)
 		return
 	}
 
@@ -384,10 +378,10 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (r io.Re
 		}
 	}
 
-	expCksum = getobjCustom(lom, obj)
-
-	setSize(ctx, *obj.ContentLength)
-	return wrapReader(ctx, obj.Body), expCksum, 0, nil
+	res.ExpCksum = getobjCustom(lom, obj)
+	res.R = obj.Body
+	res.Size = *obj.ContentLength
+	return
 }
 
 func getobjCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum) {

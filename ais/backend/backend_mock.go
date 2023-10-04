@@ -56,8 +56,8 @@ func (*mockBP) GetObj(_ ctx, lom *cluster.LOM, _ cmn.OWT) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObjReader(context.Context, *cluster.LOM) (io.ReadCloser, *cos.Cksum, int, error) {
-	return nil, nil, 0, nil
+func (*mockBP) GetObjReader(context.Context, *cluster.LOM) (res cluster.GetReaderResult) {
+	return
 }
 
 func (*mockBP) PutObj(_ io.ReadCloser, lom *cluster.LOM) (int, error) {

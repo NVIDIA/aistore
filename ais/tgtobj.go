@@ -170,16 +170,19 @@ func (poi *putOI) putObject() (errCode int, err error) {
 			return 0, nil
 		}
 	}
-	if err = poi.write(); err != nil {
-		errCode = http.StatusInternalServerError
+
+	buf, slab, lmfh, erw := poi.write()
+	poi._cleanup(buf, slab, lmfh, erw)
+	if erw != nil {
+		err, errCode = erw, http.StatusInternalServerError
 		goto rerr
 	}
+
 	if errCode, err = poi.finalize(); err != nil {
 		goto rerr
 	}
-	//
+
 	// stats
-	//
 	if !poi.t2t {
 		// NOTE: counting only user PUTs; ignoring EC and copies, on the one hand, and
 		// same-checksum-skip-writing, on the other
@@ -355,12 +358,9 @@ func (poi *putOI) putRemote() (errCode int, err error) {
 
 // LOM is updated at the end of this call with size and checksum.
 // `poi.r` (reader) is also closed upon exit.
-func (poi *putOI) write() (err error) {
+func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
 	var (
 		written int64
-		buf     []byte
-		slab    *memsys.Slab
-		lmfh    *os.File
 		writer  io.Writer
 		writers = make([]io.Writer, 0, 4)
 		cksums  = struct {
@@ -380,9 +380,7 @@ func (poi *putOI) write() (err error) {
 	} else {
 		buf, slab = poi.t.gmm.AllocSize(poi.size)
 	}
-	defer func() {
-		poi._cleanup(buf, slab, lmfh, err)
-	}()
+
 	// checksums
 	if ckconf.Type == cos.ChecksumNone {
 		poi.lom.SetCksum(cos.NoneCksum)
@@ -441,8 +439,10 @@ write:
 		err = lmfh.Sync() // compare w/ cos.FlushClose
 		debug.AssertNoErr(err)
 	}
+
 	cos.Close(lmfh)
 	lmfh = nil
+
 	poi.lom.SetSize(written) // TODO: compare with non-zero lom.SizeBytes() that may have been set via oa.FromHeader()
 	if cksums.store != nil {
 		if !cksums.finalized {
@@ -592,6 +592,7 @@ do:
 			return
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
+
 		if errCode, err = goi.getCold(); err != nil {
 			goi.unlocked = true
 			return
@@ -617,14 +618,14 @@ fin:
 	return
 }
 
-// compare with t.GetCold implementing the namesake cluster.Target i/f
+// compare with the target's GetCold() implementing namesake cluster.Target i/f
 func (goi *getOI) getCold() (int, error) {
 	var (
 		t, lom = goi.t, goi.lom
 		config = cmn.GCO.Get()
 		now    int64
 	)
-	// 1. upgrade rlock => wlock, but NOTE:
+	// 1. upgrade rlock => wlock
 	// - done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
 	// - compare with `poi.fini` above
 	for lom.UpgradeLock() {
@@ -646,11 +647,13 @@ func (goi *getOI) getCold() (int, error) {
 	}
 
 	// 2. coldGet per se
-	reader, cksumToUse, code, err := t.Backend(lom.Bck()).GetObjReader(goi.ctx, lom)
-	if err != nil {
+	res := t.Backend(lom.Bck()).GetObjReader(goi.ctx, lom)
+	if res.Err != nil {
 		lom.Unlock(true)
-		nlog.Infof("%s: failed to cold-GET(reader) %s: %v(%d)", t, lom.Cname(), err, code)
-		return code, err
+		if (res.ErrCode != http.StatusNotFound && !cmn.IsObjNotExist(res.Err)) || config.FastV(4, cos.SmoduleAIS) {
+			nlog.Infof("%s: failed to cold-GET(r) %s: %v(%d)", t, lom.Cname(), res.Err, res.ErrCode)
+		}
+		return res.ErrCode, res.Err
 	}
 
 	// 3. put reader
@@ -659,14 +662,14 @@ func (goi *getOI) getCold() (int, error) {
 		poi.t = t
 		poi.lom = lom
 		poi.config = config
-		poi.r = reader
+		poi.r = res.R
 		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
 		poi.atime = goi.atime
 		poi.owt = cmn.OwtGet
-		poi.cksumToUse = cksumToUse // expected checksum (to validate if the bucket's `validate_cold_get == true`)
+		poi.cksumToUse = res.ExpCksum // expected checksum (to validate if the bucket's `validate_cold_get == true`)
 		// poi.skipEC remains false on purpose
 	}
-	code, err = poi.putObject()
+	code, err := poi.putObject()
 	freePOI(poi)
 
 	if err != nil {
@@ -687,6 +690,7 @@ func (goi *getOI) getCold() (int, error) {
 		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
 	)
+	debug.Assertf(res.Size == lom.SizeBytes(), "%s: %d vs %d", lom, res.Size, lom.SizeBytes())
 	return 0, nil
 }
 

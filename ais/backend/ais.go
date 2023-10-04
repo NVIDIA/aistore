@@ -561,28 +561,28 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *cluster.LOM, owt cmn.OWT) (errCo
 	return extractErrCode(err, remAis.uuid)
 }
 
-func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (r io.ReadCloser, expCksum *cos.Cksum, errCode int, err error) {
+func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
 		remAis    *remAis
 		op        *cmn.ObjectProps
 		remoteBck = lom.Bck().Clone()
 	)
-	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
+	if remAis, res.Err = m.getRemAis(remoteBck.Ns.UUID); res.Err != nil {
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
-		errCode, err = extractErrCode(err, remAis.uuid)
+	if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); res.Err != nil {
+		res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 		return
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
-	expCksum = oa.Cksum
+	res.ExpCksum = oa.Cksum
 	lom.SetCksum(nil)
 	// reader
-	r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/)
-	errCode, err = extractErrCode(err, remAis.uuid)
+	res.R, res.Err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/)
+	res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 	return
 }
 
