@@ -245,7 +245,7 @@ func TestAppendObject(t *testing.T) {
 				objSize = len(content)
 			)
 			tools.CreateBucket(t, proxyURL, bck,
-				&cmn.BucketPropsToUpdate{Cksum: &cmn.CksumConfToUpdate{Type: api.String(cksumType)}},
+				&cmn.BucketPropsToUpdate{Cksum: &cmn.CksumConfToUpdate{Type: apc.String(cksumType)}},
 				true, /*cleanup*/
 			)
 
@@ -471,7 +471,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 
 	bucketPropsLocal := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			Type: api.String(cos.ChecksumNone),
+			Type: apc.String(cos.ChecksumNone),
 		},
 	}
 	bucketPropsRemote := &cmn.BucketPropsToUpdate{}
@@ -618,7 +618,7 @@ func Test_coldgetmd5(t *testing.T) {
 	t.Cleanup(func() {
 		propsToUpdate = &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+				ValidateColdGet: apc.Bool(p.Cksum.ValidateColdGet),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -632,7 +632,7 @@ func Test_coldgetmd5(t *testing.T) {
 	if p.Cksum.ValidateColdGet {
 		propsToUpdate = &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				ValidateColdGet: api.Bool(false),
+				ValidateColdGet: apc.Bool(false),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -648,7 +648,7 @@ func Test_coldgetmd5(t *testing.T) {
 	// Enable cold get validation.
 	propsToUpdate = &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			ValidateColdGet: api.Bool(true),
+			ValidateColdGet: apc.Bool(true),
 		},
 	}
 	_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -673,10 +673,10 @@ func TestHeadBucket(t *testing.T) {
 
 	bckPropsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			ValidateWarmGet: api.Bool(true),
+			ValidateWarmGet: apc.Bool(true),
 		},
 		LRU: &cmn.LRUConfToUpdate{
-			Enabled: api.Bool(true),
+			Enabled: apc.Bool(true),
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
@@ -699,11 +699,11 @@ func TestHeadRemoteBucket(t *testing.T) {
 
 	bckPropsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			ValidateWarmGet: api.Bool(true),
-			ValidateColdGet: api.Bool(true),
+			ValidateWarmGet: apc.Bool(true),
+			ValidateColdGet: apc.Bool(true),
 		},
 		LRU: &cmn.LRUConfToUpdate{
-			Enabled: api.Bool(true),
+			Enabled: apc.Bool(true),
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, bck, bckPropsToUpdate)
@@ -785,8 +785,8 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	t.Cleanup(func() {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type:            api.String(p.Cksum.Type),
-				ValidateWarmGet: api.Bool(p.Cksum.ValidateWarmGet),
+				Type:            apc.String(p.Cksum.Type),
+				ValidateWarmGet: apc.Bool(p.Cksum.ValidateWarmGet),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -801,7 +801,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	if !p.Cksum.ValidateWarmGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				ValidateWarmGet: api.Bool(true),
+				ValidateWarmGet: apc.Bool(true),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -836,7 +836,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 	if p.Cksum.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cos.ChecksumNone),
+				Type: apc.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -896,7 +896,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 	// Test property, mirror is disabled for cloud bucket that hasn't been accessed,
 	// even if system config says otherwise
 	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: api.Bool(true)},
+		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
 
@@ -991,7 +991,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	if !cksumConf.ValidateWarmGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				ValidateWarmGet: api.Bool(true),
+				ValidateWarmGet: apc.Bool(true),
 			},
 		}
 		_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1021,7 +1021,7 @@ func TestChecksumValidateOnWarmGetForBucket(t *testing.T) {
 	if cksumConf.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cos.ChecksumNone),
+				Type: apc.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1081,7 +1081,7 @@ func TestRangeRead(t *testing.T) {
 			tlog.Logln("Cleaning up...")
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
-					EnableReadRange: api.Bool(cksumProps.EnableReadRange),
+					EnableReadRange: apc.Bool(cksumProps.EnableReadRange),
 				},
 			}
 			_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1093,7 +1093,7 @@ func TestRangeRead(t *testing.T) {
 		if cksumProps.EnableReadRange {
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
-					EnableReadRange: api.Bool(false),
+					EnableReadRange: apc.Bool(false),
 				},
 			}
 			_, err := api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1106,7 +1106,7 @@ func TestRangeRead(t *testing.T) {
 		if !cksumProps.EnableReadRange {
 			propsToUpdate := &cmn.BucketPropsToUpdate{
 				Cksum: &cmn.CksumConfToUpdate{
-					EnableReadRange: api.Bool(true),
+					EnableReadRange: apc.Bool(true),
 				},
 			}
 			_, err := api.SetBucketProps(baseParams, bck.Clone(), propsToUpdate)
@@ -1269,8 +1269,8 @@ func Test_checksum(t *testing.T) {
 	t.Cleanup(func() {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type:            api.String(p.Cksum.Type),
-				ValidateColdGet: api.Bool(p.Cksum.ValidateColdGet),
+				Type:            apc.String(p.Cksum.Type),
+				ValidateColdGet: apc.Bool(p.Cksum.ValidateColdGet),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1284,7 +1284,7 @@ func Test_checksum(t *testing.T) {
 	if p.Cksum.Type != cos.ChecksumNone {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				Type: api.String(cos.ChecksumNone),
+				Type: apc.String(cos.ChecksumNone),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1295,7 +1295,7 @@ func Test_checksum(t *testing.T) {
 	if p.Cksum.ValidateColdGet {
 		propsToUpdate := &cmn.BucketPropsToUpdate{
 			Cksum: &cmn.CksumConfToUpdate{
-				ValidateColdGet: api.Bool(false),
+				ValidateColdGet: apc.Bool(false),
 			},
 		}
 		_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)
@@ -1310,8 +1310,8 @@ func Test_checksum(t *testing.T) {
 
 	propsToUpdate := &cmn.BucketPropsToUpdate{
 		Cksum: &cmn.CksumConfToUpdate{
-			Type:            api.String(cos.ChecksumXXHash),
-			ValidateColdGet: api.Bool(true),
+			Type:            apc.String(cos.ChecksumXXHash),
+			ValidateColdGet: apc.Bool(true),
 		},
 	}
 	_, err = api.SetBucketProps(baseParams, m.bck, propsToUpdate)

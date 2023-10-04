@@ -5,7 +5,6 @@
 package tests
 
 import (
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -105,16 +104,16 @@ var _ = Describe("IterFields", func() {
 			Entry("list BucketPropsToUpdate fields",
 				&cmn.BucketPropsToUpdate{
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ParitySlices: api.Int(1024),
+						Enabled:      apc.Bool(true),
+						ParitySlices: apc.Int(1024),
 					},
 					LRU: &cmn.LRUConfToUpdate{},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type: api.String(cos.ChecksumXXHash),
+						Type: apc.String(cos.ChecksumXXHash),
 					},
-					Access: api.AccessAttrs(1024),
+					Access: apc.AccAttrs(1024),
 					WritePolicy: &cmn.WritePolicyConfToUpdate{
-						MD: api.WritePolicy(apc.WriteDelayed),
+						MD: apc.WPolicy(apc.WriteDelayed),
 					},
 				},
 				map[string]any{
@@ -125,8 +124,8 @@ var _ = Describe("IterFields", func() {
 					"mirror.copies":       (*int64)(nil),
 					"mirror.burst_buffer": (*int)(nil),
 
-					"ec.enabled":           api.Bool(true),
-					"ec.parity_slices":     api.Int(1024),
+					"ec.enabled":           apc.Bool(true),
+					"ec.parity_slices":     apc.Int(1024),
 					"ec.data_slices":       (*int)(nil),
 					"ec.objsize_limit":     (*int64)(nil),
 					"ec.compression":       (*string)(nil),
@@ -136,7 +135,7 @@ var _ = Describe("IterFields", func() {
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
 
-					"checksum.type":              api.String(cos.ChecksumXXHash),
+					"checksum.type":              apc.String(cos.ChecksumXXHash),
 					"checksum.validate_warm_get": (*bool)(nil),
 					"checksum.validate_cold_get": (*bool)(nil),
 					"checksum.validate_obj_move": (*bool)(nil),
@@ -146,10 +145,10 @@ var _ = Describe("IterFields", func() {
 					"lru.dont_evict_time":   (*cos.Duration)(nil),
 					"lru.capacity_upd_time": (*cos.Duration)(nil),
 
-					"access": api.AccessAttrs(1024),
+					"access": apc.AccAttrs(1024),
 
 					"write_policy.data": (*apc.WritePolicy)(nil),
-					"write_policy.md":   api.WritePolicy(apc.WriteDelayed),
+					"write_policy.md":   apc.WPolicy(apc.WriteDelayed),
 
 					"extra.hdfs.ref_directory": (*string)(nil),
 					"extra.aws.cloud_region":   (*string)(nil),
@@ -258,7 +257,7 @@ var _ = Describe("IterFields", func() {
 			Entry("update some BucketPropsToUpdate",
 				&cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
-						ValidateWarmGet: api.Bool(true),
+						ValidateWarmGet: apc.Bool(true),
 					},
 				},
 				map[string]any{
@@ -280,26 +279,26 @@ var _ = Describe("IterFields", func() {
 				},
 				&cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
-						Enabled: api.Bool(false),
+						Enabled: apc.Bool(false),
 					},
 					Mirror: &cmn.MirrorConfToUpdate{
-						Enabled: api.Bool(true),
-						Copies:  api.Int64(120),
-						Burst:   api.Int(9560),
+						Enabled: apc.Bool(true),
+						Copies:  apc.Int64(120),
+						Burst:   apc.Int(9560),
 					},
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ParitySlices: api.Int(1024),
-						ObjSizeLimit: api.Int64(0),
-						Compression:  api.String(""),
+						Enabled:      apc.Bool(true),
+						ParitySlices: apc.Int(1024),
+						ObjSizeLimit: apc.Int64(0),
+						Compression:  apc.String(""),
 					},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type:            api.String(cos.ChecksumXXHash),
-						ValidateWarmGet: api.Bool(true),
+						Type:            apc.String(cos.ChecksumXXHash),
+						ValidateWarmGet: apc.Bool(true),
 					},
-					Access: api.AccessAttrs(12),
+					Access: apc.AccAttrs(12),
 					WritePolicy: &cmn.WritePolicyConfToUpdate{
-						MD: api.WritePolicy(apc.WriteNever),
+						MD: apc.WPolicy(apc.WriteNever),
 					},
 				},
 			),
@@ -330,59 +329,59 @@ var _ = Describe("IterFields", func() {
 			},
 			Entry("override configuration", &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(true),
-					Copies:  api.Int64(2),
+					Enabled: apc.Bool(true),
+					Copies:  apc.Int64(2),
 				},
 			}, &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(false),
+					Enabled: apc.Bool(false),
 				},
 			}, &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(false),
-					Copies:  api.Int64(2),
+					Enabled: apc.Bool(false),
+					Copies:  apc.Int64(2),
 				},
 			}),
 
 			Entry("add new fields", &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(true),
-					Copies:  api.Int64(2),
+					Enabled: apc.Bool(true),
+					Copies:  apc.Int64(2),
 				},
 			}, &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(false),
+					Enabled: apc.Bool(false),
 				},
 				EC: &cmn.ECConfToUpdate{
-					Enabled: api.Bool(true),
+					Enabled: apc.Bool(true),
 				},
 			}, &cmn.ConfigToUpdate{
 				Mirror: &cmn.MirrorConfToUpdate{
-					Enabled: api.Bool(false),
-					Copies:  api.Int64(2),
+					Enabled: apc.Bool(false),
+					Copies:  apc.Int64(2),
 				},
 				EC: &cmn.ECConfToUpdate{
-					Enabled: api.Bool(true),
+					Enabled: apc.Bool(true),
 				},
 			}),
 
 			Entry("nested fields", &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
 					HTTP: &cmn.HTTPConfToUpdate{
-						Certificate: api.String("secret"),
+						Certificate: apc.String("secret"),
 					},
 				},
 			}, &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
 					HTTP: &cmn.HTTPConfToUpdate{
-						UseHTTPS: api.Bool(true),
+						UseHTTPS: apc.Bool(true),
 					},
 				},
 			}, &cmn.ConfigToUpdate{
 				Net: &cmn.NetConfToUpdate{
 					HTTP: &cmn.HTTPConfToUpdate{
-						Certificate: api.String("secret"),
-						UseHTTPS:    api.Bool(true),
+						Certificate: apc.String("secret"),
+						UseHTTPS:    apc.Bool(true),
 					},
 				},
 			}),

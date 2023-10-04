@@ -984,18 +984,18 @@ func setupBucket(runParams *params, created *bool) error {
 	change := false
 	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
 		propsToUpdate.EC = &cmn.ECConfToUpdate{
-			Enabled:      api.Bool(runParams.bProps.EC.Enabled),
-			ObjSizeLimit: api.Int64(runParams.bProps.EC.ObjSizeLimit),
-			DataSlices:   api.Int(runParams.bProps.EC.DataSlices),
-			ParitySlices: api.Int(runParams.bProps.EC.ParitySlices),
+			Enabled:      apc.Bool(runParams.bProps.EC.Enabled),
+			ObjSizeLimit: apc.Int64(runParams.bProps.EC.ObjSizeLimit),
+			DataSlices:   apc.Int(runParams.bProps.EC.DataSlices),
+			ParitySlices: apc.Int(runParams.bProps.EC.ParitySlices),
 		}
 		change = true
 	}
 	if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
 		propsToUpdate.Mirror = &cmn.MirrorConfToUpdate{
-			Enabled: api.Bool(runParams.bProps.Mirror.Enabled),
-			Copies:  api.Int64(runParams.bProps.Mirror.Copies),
-			Burst:   api.Int(runParams.bProps.Mirror.Burst),
+			Enabled: apc.Bool(runParams.bProps.Mirror.Enabled),
+			Copies:  apc.Int64(runParams.bProps.Mirror.Copies),
+			Burst:   apc.Int(runParams.bProps.Mirror.Burst),
 		}
 		change = true
 	}

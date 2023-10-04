@@ -261,7 +261,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		selectedProps []string
 		fltPresence   = apc.FltPresentCluster
 	)
-	if flagIsSet(c, objNotCachedPropsFlag) {
+	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		fltPresence = apc.FltExists
 	}
 	objProps, err := api.HeadObject(apiBP, bck, objName, fltPresence)
@@ -271,7 +271,11 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		}
 		var hint string
 		if apc.IsFltPresent(fltPresence) && bck.IsRemote() {
-			hint = fmt.Sprintf(" (tip: try %s option)", qflprn(objNotCachedPropsFlag))
+			if actionIsHandler(c.Command.Action, listAnyHandler) {
+				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(allObjsOrBcksFlag))
+			} else {
+				hint = fmt.Sprintf(" (tip: try %s option)", qflprn(objNotCachedPropsFlag))
+			}
 		}
 		return fmt.Errorf("%q not found in %s%s", objName, bck.Cname(""), hint)
 	}

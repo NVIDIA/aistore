@@ -387,7 +387,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	errCode, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
-		r.ObjsAdd(1, lom.SizeBytes())
+		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
 	}
 	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {

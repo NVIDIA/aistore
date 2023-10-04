@@ -193,79 +193,99 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum) {
 //
 // Note that mismatch in any given checksum type immediately renders inequality and return
 // from the function.
-func (oa *ObjAttrs) Equal(rem cos.OAH) (equal bool) {
+func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	var (
-		count   int
-		sameVer bool
+		ver      string
+		md5      string
+		etag     string
+		cksumVal string
+		count    int
+		sameEtag bool
 	)
-	if oa.Size != 0 && rem.SizeBytes(true) != 0 && oa.Size != rem.SizeBytes(true) {
+	// size check
+	if remSize := rem.SizeBytes(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
 		return
 	}
+
 	// version check
-	var ver string
-	if oa.Ver != "" && rem.Version(true) != "" {
-		if oa.Ver != rem.Version(true) {
+	if remVer := rem.Version(true); oa.Ver != "" && remVer != "" {
+		if oa.Ver != remVer {
 			return
 		}
-		sameVer = true
 		ver = oa.Ver
+		count++
 	} else if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
 				return
 			}
-			sameVer = true
+			count++
 			ver = locMeta
 		}
 	}
-	// AIS checksum check
+
+	// checksum check
 	if rem.Checksum().Equal(oa.Cksum) {
+		cksumVal = oa.Cksum.Val()
 		count++
 	}
-	// MD5 check
-	var md5 string
-	if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok && remMeta != "" {
-		if locMeta, ok := oa.GetCustomKey(MD5ObjMD); ok {
-			if remMeta != locMeta {
-				return
-			}
-			md5 = locMeta
-			count++
-		}
-	}
-	// ETag check
+
+	// custom MD: ETag check
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
-		if locMeta, ok := oa.GetCustomKey(ETag); ok {
+		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
 			if remMeta != locMeta {
 				return
 			}
-			if md5 != locMeta && ver != locMeta { // against double-counting
+			etag = locMeta
+			if ver != locMeta && cksumVal != locMeta { // against double-counting
 				count++
+				sameEtag = true
 			}
 		}
 	}
-	// CRC check
+	// custom MD: CRC check
 	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok && remMeta != "" {
-		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok {
-			if remMeta != locMeta {
+		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok && locMeta != "" {
+			if remMeta != locMeta && cksumVal != locMeta { // (ditto)
 				return
 			}
 			count++
 		}
 	}
-	// NOTE: this is not good enough - need config knob (w/ default=false) to
-	//       explicitly allow the "source" to play such role.
-	if count == 1 {
-		if sameVer {
-			count++
-		}
-		// remote source check
-		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok {
-			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && remMeta == locMeta {
-				count++
+
+	// custom MD: MD5 check iff count < 2
+	// (ETag ambiguity, see: https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.htm)
+	if !sameEtag {
+		if remMeta, ok := rem.GetCustomKey(MD5ObjMD); ok && remMeta != "" {
+			if locMeta, ok := oa.GetCustomKey(MD5ObjMD); ok && locMeta != "" {
+				if remMeta != locMeta {
+					return
+				}
+				md5 = locMeta
+				if etag != md5 && cksumVal != md5 {
+					count++ //  (ditto)
+				}
 			}
 		}
 	}
-	equal = count >= 2
+
+	switch {
+	case count >= 2: // e.g., equal because they have the same (version & md5, where version != md5)
+		eq = true
+		return
+	case count == 0:
+		return
+	default:
+		// same version or ETag from the same (remote) backend
+		// (arguably, must be configurable)
+		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok && remMeta != "" {
+			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && locMeta != "" {
+				if ver != "" || etag != "" {
+					eq = true
+					return
+				}
+			}
+		}
+	}
 	return
 }

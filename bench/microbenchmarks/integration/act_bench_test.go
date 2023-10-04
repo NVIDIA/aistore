@@ -77,10 +77,10 @@ func BenchmarkECEncode(b *testing.B) {
 			b.Run(test.name, func(b *testing.B) {
 				bckProps := &cmn.BucketPropsToUpdate{
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ObjSizeLimit: api.Int64(ecObjLimit),
-						DataSlices:   api.Int(test.data),
-						ParitySlices: api.Int(test.parity),
+						Enabled:      apc.Bool(true),
+						ObjSizeLimit: apc.Int64(ecObjLimit),
+						DataSlices:   apc.Int(test.data),
+						ParitySlices: apc.Int(test.parity),
 					},
 				}
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)
@@ -128,10 +128,10 @@ func BenchmarkECRebalance(b *testing.B) {
 			b.Run("rebalance", func(b *testing.B) {
 				bckProps := &cmn.BucketPropsToUpdate{
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ObjSizeLimit: api.Int64(ecObjLimit),
-						DataSlices:   api.Int(test.data),
-						ParitySlices: api.Int(test.parity),
+						Enabled:      apc.Bool(true),
+						ObjSizeLimit: apc.Int64(ecObjLimit),
+						DataSlices:   apc.Int(test.data),
+						ParitySlices: apc.Int(test.parity),
 					},
 				}
 				_, err := api.SetBucketProps(baseParams, bck, bckProps)

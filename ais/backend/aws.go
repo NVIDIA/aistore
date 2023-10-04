@@ -98,7 +98,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 	)
 	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
 	if superVerbose {
-		nlog.Infof("[head_bucket] %s (%v)", cloudBck.Name, errC)
+		nlog.Infoln("[head_bucket]", cloudBck.Name, errC)
 	}
 	if region == "" {
 		// AWS bucket may not yet exist in the BMD -
@@ -170,7 +170,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
 		if verbose {
-			nlog.Infof("list_objects %s: %v", cloudBck.Name, err)
+			nlog.Infoln("list_objects", cloudBck.Name, err)
 		}
 		errCode, err = awsErrorToAISError(err, cloudBck)
 		return
@@ -203,7 +203,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	if len(lst.Entries) == 0 || !versioning {
 		if verbose {
-			nlog.Infof("[list_objects] count %d", len(lst.Entries))
+			nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries))
 		}
 		return
 	}
@@ -234,14 +234,14 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		}
 	}
 	if verbose {
-		nlog.Infof("[list_objects] count %d/%d", len(lst.Entries), num)
+		nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries), num)
 	}
 	return
 }
 
-//////////////////
-// LIST BUCKETS //
-//////////////////
+//
+// LIST BUCKETS
+//
 
 func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
@@ -258,7 +258,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
 		if verbose {
-			nlog.Infof("[bucket_names] %s: created %v", aws.StringValue(bck.Name), *bck.CreationDate)
+			nlog.Infoln("[bucket_names]", aws.StringValue(bck.Name), "created", *bck.CreationDate)
 		}
 		bcks[idx] = cmn.Bck{
 			Name:     aws.StringValue(bck.Name),
@@ -268,9 +268,9 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 	return
 }
 
-/////////////////
-// HEAD OBJECT //
-/////////////////
+//
+// HEAD OBJECT
+//
 
 func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
@@ -300,12 +300,25 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 	}
 	if v, ok := h.EncodeCksum(headOutput.ETag); ok {
 		oa.SetCustomKey(cmn.ETag, v)
-		// assuming SSE-S3 or plaintext encryption - see
-		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html
+		// assuming SSE-S3 or plaintext encryption
+		// from https://docs.aws.amazon.com/AmazonS3/latest/API/API_Object.html:
+		// - "The entity tag is a hash of the object. The ETag reflects changes only
+		//    to the contents of an object, not its metadata."
+		// - "The ETag may or may not be an MD5 digest of the object data. Whether or
+		//    not it is depends on how the object was created and how it is encrypted..."
 		if !strings.Contains(v, cmn.AwsMultipartDelim) {
 			oa.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
+
+	// AIS custom (see also: PutObject, GetObjReader)
+	md := headOutput.Metadata
+	if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {
+		if cksumValue, ok := md[cos.S3MetadataChecksumVal]; ok {
+			oa.SetCksum(*cksumType, *cksumValue)
+		}
+	}
+
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	if v := headOutput.ContentType; v != nil {
@@ -319,20 +332,22 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
 	if superVerbose {
-		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
+		nlog.Infoln("[head_object]", cloudBck.Cname(lom.ObjName))
 	}
 	return
 }
 
-////////////////
-// GET OBJECT //
-////////////////
+//
+// GET OBJECT
+//
 
 func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
 	res := awsp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
+	// neutralize GetObjReader setting prev. evicted remotely stored (in re: skip writing if cksum.Eq())
+	lom.SetCksum(nil)
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
@@ -347,10 +362,6 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	}
 	return 0, err
 }
-
-////////////////////
-// GET OBJ READER //
-////////////////////
 
 func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
@@ -372,37 +383,45 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res clu
 
 	// custom metadata
 	lom.SetCustomKey(cmn.SourceObjMD, apc.AWS)
-	if cksumType, ok := obj.Metadata[cos.S3MetadataChecksumType]; ok {
-		if cksumValue, ok := obj.Metadata[cos.S3MetadataChecksumVal]; ok {
-			lom.SetCksum(cos.NewCksum(*cksumType, *cksumValue))
+
+	res.ExpCksum = _getCustom(lom, obj)
+
+	md := obj.Metadata
+	if cksumType, ok := md[cos.S3MetadataChecksumType]; ok {
+		if cksumValue, ok := md[cos.S3MetadataChecksumVal]; ok {
+			cksum := cos.NewCksum(*cksumType, *cksumValue)
+			lom.SetCksum(cksum)
+			res.ExpCksum = cksum // precedence over md5 (<= ETag)
 		}
 	}
 
-	res.ExpCksum = getobjCustom(lom, obj)
 	res.R = obj.Body
 	res.Size = *obj.ContentLength
 	return
 }
 
-func getobjCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (expCksum *cos.Cksum) {
+func _getCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 	h := cmn.BackendHelpers.Amazon
 	if v, ok := h.EncodeVersion(obj.VersionId); ok {
 		lom.SetVersion(v)
 		lom.SetCustomKey(cmn.VersionObjMD, v)
 	}
 	// see ETag/MD5 NOTE above
-	if v, ok := h.EncodeCksum(obj.ETag); ok && !strings.Contains(v, cmn.AwsMultipartDelim) {
-		expCksum = cos.NewCksum(cos.ChecksumMD5, v)
-		lom.SetCustomKey(cmn.MD5ObjMD, v)
+	if v, ok := h.EncodeCksum(obj.ETag); ok {
+		lom.SetCustomKey(cmn.ETag, v)
+		if !strings.Contains(v, cmn.AwsMultipartDelim) {
+			md5 = cos.NewCksum(cos.ChecksumMD5, v)
+			lom.SetCustomKey(cmn.MD5ObjMD, v)
+		}
 	}
 	mtime := *(obj.LastModified)
 	lom.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	return
 }
 
-////////////////
-// PUT OBJECT //
-////////////////
+//
+// PUT OBJECT
+//
 
 func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	var (
@@ -447,15 +466,15 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 		}
 	}
 	if superVerbose {
-		nlog.Infof("[put_object] %s", lom)
+		nlog.Infoln("[put_object]", lom.String())
 	}
 	cos.Close(r)
 	return
 }
 
-///////////////////
-// DELETE OBJECT //
-///////////////////
+//
+// DELETE OBJECT
+//
 
 func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	var (
@@ -475,7 +494,7 @@ func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 		return
 	}
 	if superVerbose {
-		nlog.Infof("[delete_object] %s", lom)
+		nlog.Infoln("[delete_object]", lom.String())
 	}
 	return
 }
@@ -557,7 +576,10 @@ func _cid(profile, region, endpoint string) string {
 
 // Create session using default creds from ~/.aws/credentials and environment variables.
 func _session(endpoint, profile string) (*session.Session, *aws.Config) {
-	config := aws.Config{HTTPClient: cmn.NewClient(cmn.TransportArgs{})}
+	config := aws.Config{
+		HTTPClient:          cmn.NewClient(cmn.TransportArgs{}),
+		LowerCaseHeaderMaps: apc.Bool(true),
+	}
 	// `endpoint` is normally empty but could also be `Props.Extra.AWS.Endpoint` or `os.Getenv(awsEnvS3Endpoint)`
 	// (with bucket-specific `Props` taking precedence)
 	config.WithEndpoint(endpoint)

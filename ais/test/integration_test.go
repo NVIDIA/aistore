@@ -1573,8 +1573,8 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	// Step 2: Make the bucket redundant
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
-			Enabled: api.Bool(true),
-			Copies:  api.Int64(int64(copies)),
+			Enabled: apc.Bool(true),
+			Copies:  apc.Int64(int64(copies)),
 		},
 	})
 	if err != nil {
@@ -1635,8 +1635,8 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	// Make the bucket n-copy mirrored
 	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 		Mirror: &cmn.MirrorConfToUpdate{
-			Enabled: api.Bool(true),
-			Copies:  api.Int64(int64(mpathCount)),
+			Enabled: apc.Bool(true),
+			Copies:  apc.Int64(int64(mpathCount)),
 		},
 	})
 	if err != nil {

@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -1058,7 +1057,7 @@ func switchHTTPS(toCfg *cmn.ProxyConfToUpdate, fromCfg *cmn.ProxyConf, use bool)
 	f := func(to *string, from string) *string {
 		if to == nil && strings.HasPrefix(from, fromScheme) {
 			s := strings.Replace(from, fromScheme, toScheme, 1)
-			to = api.String(s)
+			to = apc.String(s)
 		}
 		return to
 	}

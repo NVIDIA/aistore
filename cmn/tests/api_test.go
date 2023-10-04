@@ -5,7 +5,6 @@
 package tests
 
 import (
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	. "github.com/onsi/ginkgo"
@@ -23,7 +22,7 @@ var _ = Describe("API", func() {
 			Entry("non-nested field",
 				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
-					Access: api.AccessAttrs(1024),
+					Access: apc.AccAttrs(1024),
 				},
 				cmn.BucketProps{
 					Access: 1024,
@@ -34,7 +33,7 @@ var _ = Describe("API", func() {
 					Provider: apc.AWS,
 				},
 				cmn.BucketPropsToUpdate{
-					Access: api.AccessAttrs(1024),
+					Access: apc.AccAttrs(1024),
 				},
 				cmn.BucketProps{
 					Provider: apc.AWS,
@@ -45,7 +44,7 @@ var _ = Describe("API", func() {
 				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
-						Type: api.String("value"),
+						Type: apc.String("value"),
 					},
 				},
 				cmn.BucketProps{
@@ -58,12 +57,12 @@ var _ = Describe("API", func() {
 				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
-						Type:            api.String("value"),
-						ValidateColdGet: api.Bool(true),
+						Type:            apc.String("value"),
+						ValidateColdGet: apc.Bool(true),
 					},
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ObjSizeLimit: api.Int64(1024),
+						Enabled:      apc.Bool(true),
+						ObjSizeLimit: apc.Int64(1024),
 					},
 				},
 				cmn.BucketProps{
@@ -97,13 +96,13 @@ var _ = Describe("API", func() {
 				},
 				cmn.BucketPropsToUpdate{
 					Cksum: &cmn.CksumConfToUpdate{
-						Type: api.String("value"),
+						Type: apc.String("value"),
 					},
 					Mirror: &cmn.MirrorConfToUpdate{
-						Enabled: api.Bool(true),
-						Copies:  api.Int64(3),
+						Enabled: apc.Bool(true),
+						Copies:  apc.Int64(3),
 					},
-					Access: api.AccessAttrs(10),
+					Access: apc.AccAttrs(10),
 				},
 				cmn.BucketProps{
 					Provider: apc.AWS,
@@ -126,31 +125,31 @@ var _ = Describe("API", func() {
 				cmn.BucketProps{},
 				cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
-						Enabled:         api.Bool(true),
-						ValidateWarmGet: api.Bool(true),
+						Enabled:         apc.Bool(true),
+						ValidateWarmGet: apc.Bool(true),
 					},
 					Cksum: &cmn.CksumConfToUpdate{
-						Type:            api.String("value"),
-						ValidateColdGet: api.Bool(true),
-						ValidateWarmGet: api.Bool(false),
-						ValidateObjMove: api.Bool(true),
-						EnableReadRange: api.Bool(false),
+						Type:            apc.String("value"),
+						ValidateColdGet: apc.Bool(true),
+						ValidateWarmGet: apc.Bool(false),
+						ValidateObjMove: apc.Bool(true),
+						EnableReadRange: apc.Bool(false),
 					},
 					Mirror: &cmn.MirrorConfToUpdate{
-						Copies:  api.Int64(10),
-						Burst:   api.Int(32),
-						Enabled: api.Bool(false),
+						Copies:  apc.Int64(10),
+						Burst:   apc.Int(32),
+						Enabled: apc.Bool(false),
 					},
 					EC: &cmn.ECConfToUpdate{
-						Enabled:      api.Bool(true),
-						ObjSizeLimit: api.Int64(1024),
-						DataSlices:   api.Int(1024),
-						ParitySlices: api.Int(1024),
-						Compression:  api.String("false"),
+						Enabled:      apc.Bool(true),
+						ObjSizeLimit: apc.Int64(1024),
+						DataSlices:   apc.Int(1024),
+						ParitySlices: apc.Int(1024),
+						Compression:  apc.String("false"),
 					},
-					Access: api.AccessAttrs(1024),
+					Access: apc.AccAttrs(1024),
 					WritePolicy: &cmn.WritePolicyConfToUpdate{
-						MD: api.WritePolicy(apc.WriteDelayed),
+						MD: apc.WPolicy(apc.WriteDelayed),
 					},
 				},
 				cmn.BucketProps{

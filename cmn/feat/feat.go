@@ -28,6 +28,7 @@ const (
 	LZ4FrameChecksum          // checksum lz4 frames (default: don't)
 	DontAllowPassingFQNtoETL  // do not allow passing fully-qualified name of a locally stored object to (local) ETL containers
 	IgnoreLimitedCoexistence  // run in presence of "limited coexistence" type conflicts (same as e.g. CopyBckMsg.Force but globally)
+	DontRmViaValidateWarmGET  // GET(obj) with version validation enabled shall not delete object if its remote source doesn't exist
 )
 
 var All = []string{
@@ -41,6 +42,7 @@ var All = []string{
 	"LZ4-Frame-Checksum",
 	"Dont-Allow-Passing-FQN-to-ETL",
 	"Ignore-LimitedCoexistence-Conflicts",
+	"Dont-Rm-via-Validate-Warm-GET",
 }
 
 func (f Flags) IsSet(flag Flags) bool { return cos.BitFlags(f).IsSet(cos.BitFlags(flag)) }

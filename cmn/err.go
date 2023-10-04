@@ -749,6 +749,7 @@ func IsErrObjNought(err error) bool {
 }
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
+// TODO: catch backend generated as well, e.g. "aws-error[NotFound: Not Found]"
 func isErrNotFoundExtended(err error) bool {
 	return cos.IsErrNotFound(err) ||
 		IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||

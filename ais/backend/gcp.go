@@ -277,6 +277,13 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	if v, ok := h.EncodeCksum(attrs.Etag); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}
+
+	if cksumType, ok := attrs.Metadata[gcpChecksumType]; ok {
+		if cksumValue, ok := attrs.Metadata[gcpChecksumVal]; ok {
+			oa.SetCksum(cksumType, cksumValue)
+		}
+	}
+
 	oa.SetCustomKey(cmn.LastModified, fmtTime(attrs.Updated))
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
@@ -296,6 +303,8 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
+	// neutralize GetObjReader setting prev. evicted remotely stored (in re: skip writing if cksum.Eq())
+	lom.SetCksum(nil)
 	params := cluster.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget

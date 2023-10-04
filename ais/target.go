@@ -1181,21 +1181,14 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 // supporting methods
 //
 
-// CheckRemoteVersion sets `vchanged` to true if object versions differ between
-// remote object and local cache.
-// NOTE: Should be called only if the local copy exists.
 func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
-		err = cmn.NewErrFailedTo(t, "head metadata of", lom, err)
-		return
+		err = cmn.NewErrFailedTo(t, "HEAD(object)", lom, err)
+	} else {
+		equal = lom.Equal(objAttrs)
 	}
-	if lom.Bck().IsHDFS() {
-		equal = true // no versioning in HDFS
-		return
-	}
-	equal = lom.Equal(objAttrs)
 	return
 }
 

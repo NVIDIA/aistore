@@ -555,8 +555,20 @@ do:
 		var equal bool
 		goi.lom.Unlock(false)
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
-			goi.lom.Uncache()
 			goi.unlocked = true
+			if errCode == http.StatusNotFound {
+				if cmn.Features.IsSet(feat.DontRmViaValidateWarmGET) {
+					goi.lom.Uncache()
+				} else {
+					errCodeDel, errDel := goi.t.DeleteObject(goi.lom, false /*evict*/)
+					if errDel != nil {
+						nlog.Errorln(goi.lom.String(), errDel)
+						errCode, err = errCodeDel, errDel
+					}
+				}
+			} else {
+				goi.lom.Uncache()
+			}
 			return
 		}
 		if !equal {
@@ -625,6 +637,9 @@ func (goi *getOI) getCold() (int, error) {
 		config = cmn.GCO.Get()
 		now    int64
 	)
+	// zero-out prev. version custom metadata, if any
+	lom.SetCustomMD(nil)
+
 	// 1. upgrade rlock => wlock
 	// - done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
 	// - compare with `poi.fini` above
@@ -655,6 +670,9 @@ func (goi *getOI) getCold() (int, error) {
 		}
 		return res.ErrCode, res.Err
 	}
+
+	// neutralize GetObjReader setting remotely stored (in re: skip writing if cksum.Eq())
+	lom.SetCksum(nil)
 
 	// 3. put reader
 	poi := allocPOI()
@@ -690,7 +708,8 @@ func (goi *getOI) getCold() (int, error) {
 		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
 	)
-	debug.Assertf(res.Size == lom.SizeBytes(), "%s: %d vs %d", lom, res.Size, lom.SizeBytes())
+	// NOTE: remais returns zero size
+	debug.Assertf(res.Size == lom.SizeBytes() || lom.Bck().IsRemoteAIS(), "%s: %d vs %d", lom, res.Size, lom.SizeBytes())
 	return 0, nil
 }
 

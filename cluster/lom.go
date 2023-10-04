@@ -112,7 +112,7 @@ func Tinit(t Target, st cos.StatsUpdater, runHK bool) {
 func (lom *LOM) ObjAttrs() *cmn.ObjAttrs { return &lom.md.ObjAttrs }
 
 // LOM == remote-object equality check
-func (lom *LOM) Equal(rem cos.OAH) (equal bool) { return lom.ObjAttrs().Equal(rem) }
+func (lom *LOM) Equal(rem cos.OAH) bool { return lom.ObjAttrs().Equal(rem) }
 
 func (lom *LOM) CopyAttrs(oah cos.OAH, skipCksum bool) {
 	lom.md.ObjAttrs.CopyFrom(oah, skipCksum)

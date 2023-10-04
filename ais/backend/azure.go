@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -238,7 +237,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		nlog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
-		marker.Val = api.String(msg.ContinuationToken)
+		marker.Val = apc.String(msg.ContinuationToken)
 	}
 
 	resp, err := cntURL.ListBlobsFlatSegment(azctx, marker, opts)

@@ -744,7 +744,7 @@ func TestPrefetchList(t *testing.T) {
 	m.puts()
 
 	// 2. Evict those objects from the cache and prefetch them
-	tlog.Logf("Evicting and Prefetching %d objects\n", len(m.objNames))
+	tlog.Logf("Evicting and prefetching %d objects\n", len(m.objNames))
 	xid, err := api.EvictList(baseParams, bck, m.objNames)
 	if err != nil {
 		t.Error(err)
@@ -771,6 +771,16 @@ func TestPrefetchList(t *testing.T) {
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(m.num) {
 		t.Errorf("did not prefetch all files: missing %d of %d", int64(m.num)-locObjs, m.num)
+	}
+
+	msg := &apc.LsoMsg{}
+	msg.SetFlag(apc.LsObjCached)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	if len(lst.Entries) != m.num {
+		t.Errorf("list-objects %s: expected %d, got %d", bck, m.num, len(lst.Entries))
+	} else {
+		tlog.Logf("list-objects %s: %d is correct\n", bck, len(m.objNames))
 	}
 }
 
@@ -843,6 +853,7 @@ func TestPrefetchRange(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.initAndSaveState(true /*cleanup*/)
+
 	m.expectTargets(2)
 	m.puts()
 	// 1. Parse arguments
@@ -862,8 +873,8 @@ func TestPrefetchRange(t *testing.T) {
 	}
 
 	// 3. Evict those objects from the cache, and then prefetch them
-	tlog.Logf("Evicting and Prefetching %d objects\n", len(files))
 	rng := fmt.Sprintf("%s%s", m.prefix, prefetchRange)
+	tlog.Logf("Evicting and prefetching %d objects (range: %s)\n", len(files), rng)
 	xid, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
@@ -883,6 +894,28 @@ func TestPrefetchRange(t *testing.T) {
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(len(files)) {
 		t.Errorf("did not prefetch all files: missing %d of %d", int64(len(files))-locObjs, len(files))
+	}
+
+	msg := &apc.LsoMsg{Prefix: m.prefix}
+	msg.SetFlag(apc.LsObjCached)
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	if len(lst.Entries) < len(files) {
+		t.Errorf("list-objects %s/%s: expected %d, got %d", bck, m.prefix, len(files), len(lst.Entries))
+	} else {
+		var count int
+		for _, e := range lst.Entries {
+			s := e.Name[len(m.prefix):] // "obj-"
+			idx, err := strconv.Atoi(s)
+			if err == nil && idx >= 1 && idx <= 150 {
+				count++
+			}
+		}
+		if count != len(files) {
+			t.Errorf("list-objects %s/%s: expected %d, got %d", bck, m.prefix, len(files), count)
+		} else {
+			tlog.Logf("list-objects %s/%s: %d is correct\n", bck, m.prefix, len(files))
+		}
 	}
 }
 

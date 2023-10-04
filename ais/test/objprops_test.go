@@ -495,7 +495,7 @@ func TestObjProps(t *testing.T) {
 
 			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 				Versioning: &cmn.VersionConfToUpdate{
-					Enabled: api.Bool(test.verEnabled),
+					Enabled: apc.Bool(test.verEnabled),
 				},
 			})
 			if test.bucketType == typeCloud && test.verEnabled != defaultBckProp.Versioning.Enabled {
@@ -513,7 +513,7 @@ func TestObjProps(t *testing.T) {
 				m.remotePuts(test.evict)
 				defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
 					Versioning: &cmn.VersionConfToUpdate{
-						Enabled: api.Bool(defaultBckProp.Versioning.Enabled),
+						Enabled: apc.Bool(defaultBckProp.Versioning.Enabled),
 					},
 				})
 			} else {
