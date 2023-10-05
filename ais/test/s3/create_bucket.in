@@ -1,4 +1,4 @@
 s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
-s3cmd ls --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" | grep "$BUCKET"
+s3cmd ls $PARAMS --host=$HOST --region us-west-1 --host-bucket="$HOST/%(bucket)" | grep "$BUCKET"
 s3cmd ls s3://$BUCKET --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
 s3cmd rb s3://$BUCKET --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"

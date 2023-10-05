@@ -525,11 +525,20 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs xact.Mul
 		if len(dts[0].XactSnaps) == 0 {
 			continue
 		}
-		props := flattenXactStats(di.XactSnaps[0], units)
-		_, name := xact.GetKindName(di.XactSnaps[0].Kind)
+		var (
+			props   = flattenXactStats(di.XactSnaps[0], units)
+			_, name = xact.GetKindName(di.XactSnaps[0].Kind)
+			err     error
+		)
 		debug.Assert(name != "", di.XactSnaps[0].Kind)
 		actionCptn(c, meta.Tname(di.DaemonID)+": ", fmt.Sprintf("%s[%s] stats", name, di.XactSnaps[0].ID))
-		if err := teb.Print(props, teb.PropsSimpleTmpl, teb.Jopts(usejs)); err != nil {
+
+		if hideHeader {
+			err = teb.Print(props, teb.PropValTmplNoHdr, teb.Jopts(usejs))
+		} else {
+			err = teb.Print(props, teb.PropValTmpl, teb.Jopts(usejs))
+		}
+		if err != nil {
 			return l, err
 		}
 	}

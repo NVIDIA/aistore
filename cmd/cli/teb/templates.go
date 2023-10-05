@@ -93,10 +93,9 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n{{end}}"
 
-	PropsSimpleTmpl = "PROPERTY\t VALUE\n" +
-		"{{range $p := . }}" +
-		"{{$p.Name}}\t {{$p.Value}}\n" +
-		"{{end}}"
+	propValTmplHdr   = "PROPERTY\t VALUE\n"
+	PropValTmpl      = propValTmplHdr + PropValTmplNoHdr
+	PropValTmplNoHdr = "{{range $p := . }}" + "{{$p.Name}}\t {{$p.Value}}\n" + "{{end}}"
 
 	//
 	// special xactions & dsort

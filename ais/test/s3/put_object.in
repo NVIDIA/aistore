@@ -1,11 +1,11 @@
 echo "0123456789" > $OBJECT.txt
-s3cmd --host=$HOST mb s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
+s3cmd mb s3://$BUCKET --host=$HOST $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
 ais bucket props set ais://$BUCKET checksum.type=md5
-s3cmd --host=$HOST put $OBJECT.txt s3://$BUCKET/$OBJECT $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
-s3cmd --host=$HOST ls s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" | wc -l
-s3cmd --host=$HOST get s3://$BUCKET$OBJECT $OBJECT_copy.txt $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd put $OBJECT.txt --host=$HOST s3://$BUCKET/$OBJECT $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
+s3cmd ls              --host=$HOST s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" | wc -l
+s3cmd get             --host=$HOST s3://$BUCKET$OBJECT $OBJECT_copy.txt $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)" // IGNORE
 cat $OBJECT_copy.txt
 rm $OBJECT.txt // IGNORE
 rm $OBJECT_copy.txt // IGNORE
-s3cmd --host=$HOST rm s3://$BUCKET$OBJECT $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"  // IGNORE
-s3cmd --host=$HOST rb s3://$BUCKET $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"
+s3cmd rm s3://$BUCKET$OBJECT  --host=$HOST   $PARAMS --region us-west-1 --host-bucket="$HOST/%(bucket)"  // IGNORE
+s3cmd rb s3://$BUCKET $PARAMS --host=$HOST   --region us-west-1 --host-bucket="$HOST/%(bucket)"

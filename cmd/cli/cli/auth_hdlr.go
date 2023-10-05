@@ -706,10 +706,14 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 		return err
 	}
 	usejs := flagIsSet(c, jsonFlag)
-	if usejs {
-		return teb.Print(conf, teb.PropsSimpleTmpl, teb.Jopts(usejs))
+	switch {
+	case usejs:
+		return teb.Print(conf, teb.PropValTmpl, teb.Jopts(usejs))
+	case flagIsSet(c, noHeaderFlag):
+		return teb.Print(list, teb.PropValTmplNoHdr)
+	default:
+		return teb.Print(list, teb.PropValTmpl)
 	}
-	return teb.Print(list, teb.PropsSimpleTmpl, teb.Jopts(usejs))
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {

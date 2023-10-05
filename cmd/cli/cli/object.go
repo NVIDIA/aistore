@@ -281,8 +281,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 	}
 
 	if flagIsSet(c, jsonFlag) {
-		opts := teb.Jopts(true)
-		return teb.Print(objProps, teb.PropsSimpleTmpl, opts)
+		return teb.Print(objProps, teb.PropValTmpl, teb.Jopts(true))
 	}
 	if flagIsSet(c, allPropsFlag) {
 		propsFlag = apc.GetPropsAll
@@ -318,7 +317,10 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 		return propNVs[i].Name < propNVs[j].Name
 	})
 
-	return teb.Print(propNVs, teb.PropsSimpleTmpl)
+	if flagIsSet(c, noHeaderFlag) {
+		return teb.Print(propNVs, teb.PropValTmplNoHdr)
+	}
+	return teb.Print(propNVs, teb.PropValTmpl)
 }
 
 func propVal(op *cmn.ObjectProps, name string) (v string) {

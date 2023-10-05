@@ -328,7 +328,10 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 		}
 	}
 
-	return teb.Print(propList, teb.PropsSimpleTmpl)
+	if flagIsSet(c, noHeaderFlag) {
+		return teb.Print(propList, teb.PropValTmplNoHdr)
+	}
+	return teb.Print(propList, teb.PropValTmpl)
 }
 
 // Configure bucket as n-way mirror
