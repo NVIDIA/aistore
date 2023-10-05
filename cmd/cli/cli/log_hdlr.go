@@ -120,13 +120,25 @@ func getLogHandler(c *cli.Context) error {
 		node, sname, errV := getNode(c, c.Args().Get(0))
 		if errV != nil {
 			if isErrDoesNotExist(errV) {
+				var hint string
+				// not a node but maybe OUT_DIR
+				if all {
+					finfo, errEx := os.Stat(c.Args().Get(0))
+					if errEx == nil && finfo.IsDir() {
+						err = _getAllClusterLogs(c, sev, outFile)
+						goto ret
+					}
+				}
+
 				// with a hint
-				errV = fmt.Errorf("%v\n(Hint: did you mean 'ais log get %s %s'?)", errV, clusterCompletion, c.Args().Get(0))
+				hint = fgreen("Hint:  ")
+				errV = fmt.Errorf("%v\n"+hint+"did you mean 'ais log get %s %s'?", errV, clusterCompletion, c.Args().Get(0))
 			}
 			return errV
 		}
 		err = _getAllNodeLogs(c, node, sev, outFile, sname)
 	}
+ret:
 	if err == nil {
 		actionDone(c, "Done")
 	}
