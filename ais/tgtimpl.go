@@ -75,7 +75,8 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 		poi.atime = params.Atime.UnixNano()
 		poi.xctn = params.Xact
 		poi.owt = params.OWT
-		poi.skipEC = params.SkipEncode
+		poi.skipEC = params.SkipEC
+		poi.coldGET = params.ColdGET
 	}
 	if poi.owt != cmn.OwtPut {
 		poi.cksumToUse = params.Cksum

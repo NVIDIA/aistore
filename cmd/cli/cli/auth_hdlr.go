@@ -357,7 +357,7 @@ func loginUserHandler(c *cli.Context) (err error) {
 		cluID    = parseStrFlag(c, clusterTokenFlag)
 	)
 	if flagIsSet(c, expireFlag) {
-		expireIn = api.Duration(parseDurationFlag(c, expireFlag))
+		expireIn = apc.Duration(parseDurationFlag(c, expireFlag))
 	}
 	if cluID != "" {
 		if _, err := authn.GetRegisteredClusters(authParams, authn.CluACL{ID: cluID}); err != nil {

@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -23,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -118,17 +116,17 @@ func (*gcpProvider) Provider() string { return apc.GCP }
 // https://cloud.google.com/storage/docs/json_api/v1/objects/list#parameters
 func (*gcpProvider) MaxPageSize() uint { return apc.DefaultPageSizeCloud }
 
-///////////////////
-// CREATE BUCKET //
-///////////////////
+//
+// CREATE BUCKET
+//
 
 func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 	return http.StatusNotImplemented, cmn.NewErrNotImpl("create", "gs:// bucket")
 }
 
-/////////////////
-// HEAD BUCKET //
-/////////////////
+//
+// HEAD BUCKET
+//
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	if superVerbose {
@@ -151,9 +149,9 @@ func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos
 	return
 }
 
-//////////////////
-// LIST OBJECTS //
-//////////////////
+//
+// LIST OBJECTS
+//
 
 func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (errCode int, err error) {
 	var (
@@ -210,9 +208,9 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	return
 }
 
-//////////////////
-// LIST BUCKETS //
-//////////////////
+//
+// LIST BUCKETS
+//
 
 func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	if gcpp.projectID == "" {
@@ -246,9 +244,9 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 	return
 }
 
-/////////////////
-// HEAD OBJECT //
-/////////////////
+//
+// HEAD OBJECT
+//
 
 func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
@@ -294,35 +292,22 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 	return
 }
 
-////////////////
-// GET OBJECT //
-////////////////
+//
+// GET OBJECT
+//
 
 func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
 	res := gcpp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	// neutralize GetObjReader setting prev. evicted remotely stored (in re: skip writing if cksum.Eq())
-	lom.SetCksum(nil)
-	params := cluster.AllocPutObjParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = res.R
-		params.OWT = owt
-		params.Cksum = res.ExpCksum
-		params.Atime = time.Now()
-	}
+	params := allocPutObjParams(res, owt)
 	err := gcpp.t.PutObject(lom, params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
 }
-
-///////////////////////
-// GET OBJECT READER //
-///////////////////////
 
 func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	var (
@@ -377,9 +362,9 @@ func setCustomGs(lom *cluster.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Ck
 	return
 }
 
-////////////////
-// PUT OBJECT //
-////////////////
+//
+// PUT OBJECT
+//
 
 func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	var (
@@ -416,9 +401,9 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int,
 	return
 }
 
-///////////////////
-// DELETE OBJECT //
-///////////////////
+//
+// DELETE OBJECT
+//
 
 func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	var (

@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -25,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -346,16 +344,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	// neutralize GetObjReader setting prev. evicted remotely stored (in re: skip writing if cksum.Eq())
-	lom.SetCksum(nil)
-	params := cluster.AllocPutObjParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = res.R
-		params.OWT = owt
-		params.Cksum = res.ExpCksum
-		params.Atime = time.Now()
-	}
+	params := allocPutObjParams(res, owt)
 	err := awsp.t.PutObject(lom, params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)

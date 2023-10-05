@@ -100,13 +100,14 @@ type (
 		OWT() cmn.OWT
 	}
 	PutObjectParams struct {
-		Reader     io.ReadCloser
-		Cksum      *cos.Cksum // checksum to check
-		Atime      time.Time
-		Xact       Xact
-		WorkTag    string // (=> work fqn)
-		OWT        cmn.OWT
-		SkipEncode bool // don't run erasure-code when finalizing
+		Reader  io.ReadCloser
+		Cksum   *cos.Cksum // checksum to check
+		Atime   time.Time
+		Xact    Xact
+		WorkTag string // (=> work fqn)
+		OWT     cmn.OWT
+		SkipEC  bool // don't erasure-code when finalizing
+		ColdGET bool // this PUT is in fact cold-GET
 	}
 	CopyObjectParams struct {
 		DM        DataMover

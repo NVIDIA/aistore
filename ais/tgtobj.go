@@ -60,6 +60,7 @@ type (
 		t2t        bool          // by another target
 		skipEC     bool          // do not erasure-encode when finalizing
 		skipVC     bool          // skip loading existing Version and skip comparing Checksums (skip VC)
+		coldGET    bool          // (one implication: proceed to write)
 	}
 
 	getOI struct {
@@ -161,7 +162,7 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error
 
 func (poi *putOI) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
-	if !poi.skipVC && !poi.cksumToUse.IsEmpty() {
+	if !poi.skipVC && !poi.coldGET && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
 			if poi.config.FastV(4, cos.SmoduleAIS) {
 				nlog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
@@ -224,6 +225,9 @@ func (poi *putOI) loghdr() string {
 	}
 	if poi.skipVC {
 		s += ", skip-vc"
+	}
+	if poi.coldGET {
+		s += ", cold-get"
 	}
 	if poi.t2t {
 		s += ", t2t"
@@ -671,9 +675,6 @@ func (goi *getOI) getCold() (int, error) {
 		return res.ErrCode, res.Err
 	}
 
-	// neutralize GetObjReader setting remotely stored (in re: skip writing if cksum.Eq())
-	lom.SetCksum(nil)
-
 	// 3. put reader
 	poi := allocPOI()
 	{
@@ -685,7 +686,7 @@ func (goi *getOI) getCold() (int, error) {
 		poi.atime = goi.atime
 		poi.owt = cmn.OwtGet
 		poi.cksumToUse = res.ExpCksum // expected checksum (to validate if the bucket's `validate_cold_get == true`)
-		// poi.skipEC remains false on purpose
+		poi.coldGET = true
 	}
 	code, err := poi.putObject()
 	freePOI(poi)

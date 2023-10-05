@@ -388,7 +388,7 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 	{
 		params.WorkTag = "ec"
 		params.Reader = readCloser
-		params.SkipEncode = true
+		params.SkipEC = true
 		params.Atime = time.Now()
 		params.Xact = xctn
 		// to avoid changing version; TODO: introduce cmn.OwtEC

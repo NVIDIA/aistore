@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -24,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
@@ -355,14 +353,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := cluster.AllocPutObjParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = res.R
-		params.OWT = owt
-		params.Cksum = res.ExpCksum
-		params.Atime = time.Now()
-	}
+	params := allocPutObjParams(res, owt)
 	err := ap.t.PutObject(lom, params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)

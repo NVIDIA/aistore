@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -23,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/colinmarc/hdfs/v2"
 )
 
@@ -73,9 +71,9 @@ func hdfsErrorToAISError(err error) (int, error) {
 func (*hdfsProvider) Provider() string  { return apc.HDFS }
 func (*hdfsProvider) MaxPageSize() uint { return 10000 }
 
-///////////////////
-// CREATE BUCKET //
-///////////////////
+//
+// CREATE BUCKET
+//
 
 func (hp *hdfsProvider) CreateBucket(bck *meta.Bck) (errCode int, err error) {
 	return hp.checkDirectoryExists(bck)
@@ -96,9 +94,9 @@ func (hp *hdfsProvider) checkDirectoryExists(bck *meta.Bck) (errCode int, err er
 	return 0, nil
 }
 
-/////////////////
-// HEAD BUCKET //
-/////////////////
+//
+// HEAD BUCKET
+//
 
 func (hp *hdfsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs,
 	errCode int, err error) {
@@ -112,9 +110,9 @@ func (hp *hdfsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs,
 	return
 }
 
-//////////////////
-// LIST OBJECTS //
-//////////////////
+//
+// LIST OBJECTS
+//
 
 func (hp *hdfsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoResult) (int, error) {
 	var (
@@ -197,18 +195,18 @@ func skipDir(fi os.FileInfo) error {
 	return nil
 }
 
-//////////////////
-// LIST BUCKETS //
-//////////////////
+//
+// LIST BUCKETS
+//
 
 func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, err error) {
 	debug.Assert(false)
 	return
 }
 
-/////////////////
-// HEAD OBJECT //
-/////////////////
+//
+// HEAD OBJECT
+//
 
 func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
@@ -228,32 +226,22 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 	return
 }
 
-////////////////
-// GET OBJECT //
-////////////////
+//
+// GET OBJECT
+//
 
 func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
 	res := hp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := cluster.AllocPutObjParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = res.R
-		params.OWT = owt
-		params.Atime = time.Now()
-	}
+	params := allocPutObjParams(res, owt)
 	err := hp.t.PutObject(lom, params)
 	if verbose {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
 }
-
-////////////////////
-// GET OBJ READER //
-////////////////////
 
 func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
@@ -268,9 +256,9 @@ func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (res c
 	return
 }
 
-////////////////
-// PUT OBJECT //
-////////////////
+//
+// PUT OBJECT
+//
 
 func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
@@ -314,9 +302,9 @@ finish:
 	return 0, nil
 }
 
-///////////////////
-// DELETE OBJECT //
-///////////////////
+//
+// DELETE OBJECT
+//
 
 func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)

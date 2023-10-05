@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -19,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs"
 )
 
 type (
@@ -164,13 +162,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := cluster.AllocPutObjParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = res.R
-		params.OWT = owt
-		params.Atime = time.Now()
-	}
+	params := allocPutObjParams(res, owt)
 	res.Err = hp.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if res.Err != nil {
