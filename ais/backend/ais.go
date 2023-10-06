@@ -526,7 +526,7 @@ func (m *AISBackendProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs,
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); err != nil {
+	if op, err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent, true /*silent*/); err != nil {
 		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}
@@ -571,7 +571,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (res cluster.
 		return
 	}
 	unsetUUID(&remoteBck)
-	if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent); res.Err != nil {
+	if op, res.Err = api.HeadObject(remAis.bp, remoteBck, lom.ObjName, apc.FltPresent, true /*silent*/); res.Err != nil {
 		res.ErrCode, res.Err = extractErrCode(res.Err, remAis.uuid)
 		return
 	}

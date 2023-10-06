@@ -535,7 +535,7 @@ func TestObjProps(t *testing.T) {
 					flt = apc.FltExistsOutside
 				}
 
-				props, err := api.HeadObject(baseParams, m.bck, objName, flt)
+				props, err := api.HeadObject(baseParams, m.bck, objName, flt, false /*silent*/)
 				if test.checkPresent {
 					if test.bucketType != typeLocal && test.evict {
 						tassert.Fatalf(t, err != nil,

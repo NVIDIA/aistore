@@ -2444,7 +2444,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 
 	for i := 0; i < o.objCount; i++ {
 		objName := ecTestDir + fmt.Sprintf(o.pattern, i)
-		props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent)
+		props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent, false /*silent*/)
 		if err != nil {
 			t.Errorf("HEAD for %s failed: %v", objName, err)
 		} else if props.EC.DataSlices == 0 || props.EC.ParitySlices == 0 {
@@ -2753,7 +2753,7 @@ func TestECGenerations(t *testing.T) {
 			currentTime := mono.NanoTime()
 			for i := 0; i < o.objCount; i++ {
 				objName := ecTestDir + fmt.Sprintf(o.pattern, i)
-				props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent)
+				props, err := api.HeadObject(baseParams, bck, objName, apc.FltPresent, false /*silent*/)
 				tassert.CheckError(t, err)
 				if err == nil && props.EC.Generation > lastWrite[i] && props.EC.Generation < currentTime {
 					t.Errorf("Object %s, generation %d expected between %d and %d",

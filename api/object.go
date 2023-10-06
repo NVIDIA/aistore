@@ -301,13 +301,14 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 }
 
 // HeadObject returns object properties; can be conventionally used to establish in-cluster presence.
-// `fltPresence` - as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
-func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int) (*cmn.ObjectProps, error) {
+// - fltPresence:  as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
+// - silent==true: not to log (not-found) error
+func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, silent bool) (*cmn.ObjectProps, error) {
 	bp.Method = http.MethodHead
 
 	q := bck.NewQuery()
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
-	if fltPresence == apc.FltPresentNoProps {
+	if silent {
 		q.Set(apc.QparamSilent, "true")
 	}
 
