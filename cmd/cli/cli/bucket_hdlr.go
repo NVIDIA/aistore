@@ -91,6 +91,7 @@ var (
 			listAnonymousFlag,
 			listArchFlag,
 			unitsFlag,
+			silentFlag,
 		},
 
 		cmdLRU: {

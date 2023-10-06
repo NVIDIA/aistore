@@ -1181,6 +1181,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 // supporting methods
 //
 
+// usage including: prefetch; validate-warm-get (this target)
 func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)

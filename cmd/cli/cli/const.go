@@ -358,7 +358,7 @@ var (
 
 	allColumnsFlag = cli.BoolFlag{
 		Name:  scopeAll,
-		Usage: "when printing tables, show all columns including those that have only zero values",
+		Usage: "all-columns flag: when printing tables, show all columns including those that have only zero values",
 	}
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
@@ -462,6 +462,10 @@ var (
 	verboseJobFlag = cli.BoolFlag{
 		Name:  verboseFlag.Name,
 		Usage: "show extended statistics",
+	}
+	silentFlag = cli.BoolFlag{
+		Name:  "silent",
+		Usage: "server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
 	}
 
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}

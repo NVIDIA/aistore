@@ -433,7 +433,10 @@ func showCfgCLI(c *cli.Context) (err error) {
 	sort.Slice(flat, func(i, j int) bool {
 		return flat[i].Name < flat[j].Name
 	})
-	return teb.Print(flat, teb.FlatTmpl)
+	if flagIsSet(c, noHeaderFlag) {
+		return teb.Print(flat, teb.PropValTmplNoHdr)
+	}
+	return teb.Print(flat, teb.PropValTmpl)
 }
 
 func setCfgCLI(c *cli.Context) (err error) {

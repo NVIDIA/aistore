@@ -81,7 +81,7 @@ func getNode(c *cli.Context, arg string) (node *meta.Snode, sname string, err er
 }
 
 // Gets Smap from a given node (`daemonID`) and displays it
-func smapFromNode(primarySmap *meta.Smap, sid string, usejs bool) error {
+func smapFromNode(c *cli.Context, primarySmap *meta.Smap, sid string, usejs bool) error {
 	var (
 		smap         = primarySmap
 		err          error
@@ -103,6 +103,9 @@ func smapFromNode(primarySmap *meta.Smap, sid string, usejs bool) error {
 	body := teb.SmapHelper{
 		Smap:         smap,
 		ExtendedURLs: extendedURLs,
+	}
+	if flagIsSet(c, noHeaderFlag) {
+		return teb.Print(body, teb.SmapTmplNoHdr, teb.Jopts(usejs))
 	}
 	return teb.Print(body, teb.SmapTmpl, teb.Jopts(usejs))
 }

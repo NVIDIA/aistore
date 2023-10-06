@@ -53,16 +53,22 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 			return nil, 0, err
 		}
 
-		// statically
-		cols = append(cols, &header{name: colTarget, hide: false})
-		// for subset of metrics selected by caller
+		// statically, once
+		if len(cols) == 0 {
+			cols = append(cols, &header{name: colTarget, hide: false})
+		}
+		// for the subset of caller selected metrics
+	outer:
 		for name := range ds.Tracker {
 			if _, ok := c.Metrics[name]; ok {
+				for _, col := range cols {
+					if col.name == name {
+						continue outer // already added
+					}
+				}
 				cols = append(cols, &header{name: name, hide: false})
 			}
 		}
-		// only once
-		break
 	}
 
 	// 2. exclude zero columns unless (--all) requested

@@ -185,7 +185,11 @@ func startDsortHandler(c *cli.Context) (err error) {
 
 	if flagIsSet(c, verboseFlag) {
 		flat, config := _flattenSpec(&spec)
-		err = teb.Print(flat, teb.FlatTmpl)
+		if flagIsSet(c, noHeaderFlag) {
+			err = teb.Print(flat, teb.PropValTmplNoHdr)
+		} else {
+			err = teb.Print(flat, teb.PropValTmpl)
+		}
 		if err != nil {
 			actionWarn(c, err.Error())
 		}
@@ -193,7 +197,11 @@ func startDsortHandler(c *cli.Context) (err error) {
 			fmt.Fprintln(c.App.Writer, "Config override:\t\t none")
 		} else {
 			fmt.Fprintln(c.App.Writer, "Config override:")
-			_ = teb.Print(config, teb.FlatTmpl)
+			if flagIsSet(c, noHeaderFlag) {
+				_ = teb.Print(config, teb.PropValTmplNoHdr)
+			} else {
+				_ = teb.Print(config, teb.PropValTmpl)
+			}
 		}
 		time.Sleep(time.Second / 2)
 		fmt.Fprintln(c.App.Writer)

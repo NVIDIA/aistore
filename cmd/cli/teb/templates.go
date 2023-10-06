@@ -50,14 +50,16 @@ const (
 	smapHdr = "NODE\t TYPE\t PUBLIC URL" +
 		"{{ if (eq $.ExtendedURLs true) }}\t INTRA CONTROL URL\t INTRA DATA URL{{end}}" +
 		"\n"
-	smapBody = "{{FormatDaemonID $value.ID $.Smap \"\"}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
+	smapNode = "{{FormatDaemonID $value.ID $.Smap \"\"}}\t {{$value.DaeType}}\t {{$value.PubNet.URL}}" +
 		"{{ if (eq $.ExtendedURLs true) }}\t {{$value.ControlNet.URL}}\t {{$value.DataNet.URL}}{{end}}" +
 		"\n"
 
-	SmapTmpl = smapHdr +
-		"{{ range $key, $value := .Smap.Pmap }}" + smapBody + "{{end}}\n" +
-		smapHdr +
-		"{{ range $key, $value := .Smap.Tmap }}" + smapBody + "{{end}}\n" +
+	SmapTmpl = smapHdr + "{{ range $key, $value := .Smap.Pmap }}" + smapNode + "{{end}}\n" +
+		smapHdr + smapBody
+
+	SmapTmplNoHdr = "{{ range $key, $value := .Smap.Pmap }}" + smapNode + "{{end}}\n" + smapBody
+
+	smapBody = "{{ range $key, $value := .Smap.Tmap }}" + smapNode + "{{end}}\n" +
 		"Non-Electable:\n" +
 		"{{ range $key, $si := .Smap.Pmap }} " +
 		"{{ $nonElect := $.Smap.NonElectable $si }}" +
@@ -79,11 +81,6 @@ const (
 		indent1 + "Version:\t{{ ( Versions .Status) }}\n" +
 		indent1 + "Build:\t{{ ( BuildTimes .Status) }}\n"
 
-	// any JSON struct (e.g. config)
-	FlatTmpl = "PROPERTY\t VALUE\n{{range $item := .}}" +
-		"{{ $item.Name }}\t {{ $item.Value }}\n" +
-		"{{end}}\n"
-
 	// Config
 	DaemonConfigTmpl = "{{ if .ClusterConfigDiff }}PROPERTY\t VALUE\t DEFAULT\n{{range $item := .ClusterConfigDiff }}" +
 		"{{ $item.Name }}\t {{ $item.Current }}\t {{ $item.Old }}\n" +
@@ -93,6 +90,7 @@ const (
 		"{{ $item.Name }}\t {{ $item.Value }}\n" +
 		"{{end}}\n{{end}}"
 
+	// generic prop/val (name/val, key/val)
 	propValTmplHdr   = "PROPERTY\t VALUE\n"
 	PropValTmpl      = propValTmplHdr + PropValTmplNoHdr
 	PropValTmplNoHdr = "{{range $p := . }}" + "{{$p.Name}}\t {{$p.Value}}\n" + "{{end}}"

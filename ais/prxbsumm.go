@@ -104,6 +104,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsum
 
 	// 3. check status
 	tsi, numDone, numAck, err := p.bsummCheckRes(msg.UUID, results)
+	freeBcastRes(results)
 	if err != nil {
 		return nil, tsi, 0, err
 	}
@@ -150,7 +151,6 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsum
 }
 
 func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *meta.Snode, numDone, numAck int, err error) {
-	defer freeBcastRes(results)
 	for _, res := range results {
 		if res.status == http.StatusNotFound {
 			tsi = res.si

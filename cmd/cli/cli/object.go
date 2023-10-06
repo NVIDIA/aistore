@@ -230,7 +230,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 }
 
 func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
-	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentNoProps)
+	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentNoProps, true)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
 			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
@@ -264,7 +264,7 @@ func showObjProps(c *cli.Context, bck cmn.Bck, objName string) error {
 	if flagIsSet(c, objNotCachedPropsFlag) || flagIsSet(c, allObjsOrBcksFlag) {
 		fltPresence = apc.FltExists
 	}
-	objProps, err := api.HeadObject(apiBP, bck, objName, fltPresence)
+	objProps, err := api.HeadObject(apiBP, bck, objName, fltPresence, flagIsSet(c, silentFlag))
 	if err != nil {
 		if !cmn.IsStatusNotFound(err) {
 			return err

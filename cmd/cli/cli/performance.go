@@ -138,7 +138,7 @@ func perfCptn(c *cli.Context, tab string) {
 	actionCptn(c, tab, s)
 }
 
-// show all non-zero counters _and_ sizes (unless `allColumnsFlag`)
+// show non-zero counters _and_ sizes (unless `allColumnsFlag`)
 func showCountersHandler(c *cli.Context) error {
 	metrics, err := getMetricNames(c)
 	if err != nil {

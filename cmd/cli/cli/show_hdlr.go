@@ -60,6 +60,7 @@ var (
 			objNotCachedPropsFlag,
 			noHeaderFlag,
 			jsonFlag,
+			silentFlag,
 		},
 		cmdCluster: append(
 			longRunFlags,
@@ -69,17 +70,21 @@ var (
 		cmdSmap: append(
 			longRunFlags,
 			jsonFlag,
+			noHeaderFlag,
 		),
 		cmdBMD: append(
 			longRunFlags,
 			jsonFlag,
+			noHeaderFlag,
 		),
 		cmdBucket: {
 			jsonFlag,
 			compactPropFlag,
+			noHeaderFlag,
 		},
 		cmdConfig: {
 			jsonFlag,
+			noHeaderFlag,
 		},
 		cmdShowRemoteAIS: {
 			noHeaderFlag,
@@ -174,7 +179,7 @@ var (
 		Usage:        "show CLI, cluster, or node configurations (nodes inherit cluster and have local)",
 		ArgsUsage:    showConfigArgument,
 		Flags:        showCmdsFlags[cmdConfig],
-		Action:       showConfigHandler,
+		Action:       showAnyConfigHandler,
 		BashComplete: showConfigCompletions,
 	}
 	showCmdRemoteAIS = cli.Command{
@@ -545,7 +550,7 @@ func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs xact.Mul
 	return l, nil
 }
 
-func showObjectHandler(c *cli.Context) (err error) {
+func showObjectHandler(c *cli.Context) error {
 	if c.NArg() < 1 {
 		return missingArgumentsError(c, "object name in the form "+objectArgument)
 	}
@@ -560,7 +565,7 @@ func showObjectHandler(c *cli.Context) (err error) {
 	return showObjProps(c, bck, object)
 }
 
-func showBckPropsHandler(c *cli.Context) (err error) {
+func showBckPropsHandler(c *cli.Context) error {
 	return showBucketProps(c)
 }
 
@@ -590,7 +595,7 @@ func showSmapHandler(c *cli.Context) error {
 	if err != nil {
 		return err // cannot happen
 	}
-	return smapFromNode(smap, sid, flagIsSet(c, jsonFlag))
+	return smapFromNode(c, smap, sid, flagIsSet(c, jsonFlag))
 }
 
 func showBMDHandler(c *cli.Context) error {
@@ -661,21 +666,21 @@ func showBMDHandler(c *cli.Context) error {
 	return nil
 }
 
-func showClusterConfigHandler(c *cli.Context) (err error) {
+func showClusterConfigHandler(c *cli.Context) error {
 	return showClusterConfig(c, c.Args().Get(0))
 }
 
-func showConfigHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
+func showAnyConfigHandler(c *cli.Context) error {
+	switch {
+	case c.NArg() == 0:
 		return incorrectUsageMsg(c, "missing arguments (hint: "+tabtab+")")
-	}
-	if c.Args().Get(0) == cmdCLI {
+	case c.Args().Get(0) == cmdCLI:
 		return showCfgCLI(c)
-	}
-	if c.Args().Get(0) == cmdCluster {
+	case c.Args().Get(0) == cmdCluster:
 		return showClusterConfig(c, c.Args().Get(1))
+	default:
+		return showNodeConfig(c)
 	}
-	return showNodeConfig(c)
 }
 
 func showClusterConfig(c *cli.Context, section string) error {
@@ -698,7 +703,11 @@ func showClusterConfig(c *cli.Context, section string) error {
 		return teb.Print(cluConfig, "", teb.Jopts(usejs))
 	}
 	flat := flattenJSON(cluConfig, section)
-	err = teb.Print(flat, teb.FlatTmpl)
+	if flagIsSet(c, noHeaderFlag) {
+		err = teb.Print(flat, teb.PropValTmplNoHdr)
+	} else {
+		err = teb.Print(flat, teb.PropValTmpl)
+	}
 	if err == nil && section == "" {
 		msg := fmt.Sprintf("(Tip: use '[SECTION] %s' to show config section(s), see %s for details)",
 			flprn(jsonFlag), qflprn(cli.HelpFlag))
@@ -866,7 +875,7 @@ func showRemoteAISHandler(c *cli.Context) error {
 			}
 			fmt.Fprintln(c.App.Writer)
 			actionCptn(c, ra.Alias+"["+ra.UUID+"]", " cluster map:")
-			err := smapFromNode(ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
+			err := smapFromNode(c, ra.Smap, "" /*daemonID*/, flagIsSet(c, jsonFlag))
 			if err != nil {
 				actionWarn(c, err.Error())
 			}

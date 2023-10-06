@@ -38,7 +38,7 @@ func catHandler(c *cli.Context) error {
 		return err
 	}
 	archpath := parseStrFlag(c, archpathGetFlag)
-	return getObject(c, bck, objName, archpath, fileStdIO, true /*silent*/, false /*extract*/)
+	return getObject(c, bck, objName, archpath, fileStdIO, true /*quiet*/, false /*extract*/)
 }
 
 func getHandler(c *cli.Context) error {
@@ -123,7 +123,7 @@ func getHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	return getObject(c, bck, objName, archpath, outFile, false /*silent*/, extract)
+	return getObject(c, bck, objName, archpath, outFile, false /*quiet*/, extract)
 }
 
 // GET multiple -- currently, only prefix (TODO: list/range)
@@ -188,7 +188,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	var (
 		discard, out string
 		verb         = "GET"
-		silent       = !flagIsSet(c, verboseFlag) // silent is non-verbose default
+		quiet        = !flagIsSet(c, verboseFlag) // quiet is non-verbose default
 		units, errU  = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -212,7 +212,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	cptn := fmt.Sprintf("%s%s %d object%s from %s%s (total size %s)",
 		verb, discard, l, cos.Plural(l), bck.Cname(""), out, teb.FmtSize(totalSize, units, 2))
 
-	if flagIsSet(c, yesFlag) && (l > 1 || silent) {
+	if flagIsSet(c, yesFlag) && (l > 1 || quiet) {
 		fmt.Fprintln(c.App.Writer, cptn)
 	} else if ok := confirm(c, cptn); !ok {
 		return nil
@@ -267,7 +267,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 			}
 		}
 		u.wg.Add(1)
-		go u.get(c, bck, entry, shardName, outFile, silent, extract)
+		go u.get(c, bck, entry, shardName, outFile, quiet, extract)
 	}
 	u.wg.Wait()
 
@@ -285,7 +285,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 // uctx - "get" extension
 //////////
 
-func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, silent, extract bool) {
+func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, outFile string, quiet, extract bool) {
 	var (
 		objName  = entry.Name
 		archpath string
@@ -302,7 +302,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 			}
 		}
 	}
-	err := getObject(c, bck, objName, archpath, outFile, silent, extract)
+	err := getObject(c, bck, objName, archpath, outFile, quiet, extract)
 	if err != nil {
 		u.errCount.Inc()
 	}
@@ -320,7 +320,7 @@ func (u *uctx) get(c *cli.Context, bck cmn.Bck, entry *cmn.LsoEntry, shardName, 
 }
 
 // get one (main function)
-func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, silent, extract bool) (err error) {
+func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, quiet, extract bool) (err error) {
 	var (
 		getArgs api.GetArgs
 		oah     api.ObjAttrs
@@ -390,7 +390,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 	hdr := cmn.MakeRangeHdr(offset, length)
 	if outFile == fileStdIO {
 		getArgs = api.GetArgs{Writer: os.Stdout, Header: hdr}
-		silent = true
+		quiet = true
 	} else {
 		var file *os.File
 		if file, err = os.Create(outFile); err != nil {
@@ -410,12 +410,17 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 		getArgs.Query = make(url.Values, 2)
 		getArgs.Query.Set(apc.QparamOrigURL, uri)
 	}
-	// TODO: validate
 	if archpath != "" {
 		if getArgs.Query == nil {
 			getArgs.Query = make(url.Values, 1)
 		}
 		getArgs.Query.Set(apc.QparamArchpath, archpath)
+	}
+	if flagIsSet(c, silentFlag) {
+		if getArgs.Query == nil {
+			getArgs.Query = make(url.Values, 1)
+		}
+		getArgs.Query.Set(apc.QparamSilent, "true")
 	}
 
 	if flagIsSet(c, cksumFlag) {
@@ -444,7 +449,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, s
 		}
 	}
 
-	if silent {
+	if quiet {
 		return
 	}
 
