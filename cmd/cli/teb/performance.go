@@ -71,8 +71,8 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 		}
 	}
 
-	// 2. exclude zero columns unless (--all) requested
-	if !c.AllCols {
+	// 2. exclude zero columns unless requested specific match or (--all)
+	if c.Regex == nil && !c.AllCols {
 		cols = _zerout(cols, st)
 	}
 
@@ -93,28 +93,34 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 	// 4. add STATUS column unless all nodes are online (`NodeOnline`)
 	cols = _addStatus(cols, st)
 
-	// 5. convert metric to column names
+	// 5. add regex-specified (ie, user-requested) metrics that are missing
+	// ------ api.GetStatsAndStatus() does not return zero counters -------
+	if c.Regex != nil {
+		cols = _addMissingMatchingMetrics(cols, c.Metrics, c.Regex)
+	}
+
+	// 6. convert metric to column names
 	printedColumns := _metricsToColNames(cols, c.Metrics, n2n)
 
-	// 6. regex to filter columns, if spec-ed
+	// 7. regex to filter columns, if spec-ed
 	if c.Regex != nil {
 		cols, printedColumns = _filter(cols, printedColumns, c.Regex)
 	}
 
-	// 7. apply color
+	// 8. apply color
 	for i := range cols {
 		if stats.IsErrMetric(cols[i].name) {
 			printedColumns[i].name = fred("\t%s", printedColumns[i].name)
 		}
 	}
 
-	// 8. sort targets by IDs
+	// 9. sort targets by IDs
 	tids := st.sortedSIDs()
 
-	// 9. construct an empty table
+	// 10. construct an empty table
 	table := newTable(printedColumns...)
 
-	// 10. finally, add rows
+	// 11. finally, add rows
 	for _, tid := range tids {
 		ds := st[tid]
 		if c.Sid != "" && c.Sid != tid {
@@ -239,63 +245,87 @@ func _addStatus(cols []*header, st StstMap) []*header {
 	return cols
 }
 
+func _addMissingMatchingMetrics(cols []*header, metrics cos.StrKVs, regex *regexp.Regexp) []*header {
+outer:
+	for name := range metrics {
+		for _, h := range cols {
+			if h.name == name {
+				continue outer // already added (non-zero via API call)
+			}
+		}
+
+		// regex matching (user-visible, "printed") column names
+		printedName := _metricToPrintedColName(name, cols, metrics, nil)
+		if !regex.MatchString(name) && !regex.MatchString(printedName) {
+			lower := strings.ToLower(printedName)
+			if !regex.MatchString(lower) {
+				continue
+			}
+		}
+
+		cols = append(cols, &header{name: name, hide: false})
+	}
+	return cols
+}
+
 // convert metric names to column names
 // NOTE hard-coded translation constants `.lst` => LIST, et al.
 // for naming conventions, see "naming" or "convention" under stats/*
 func _metricsToColNames(cols []*header, metrics, n2n cos.StrKVs) (printedColumns []*header) {
-	printedColumns = make([]*header, len(cols))
+	printedColumns = make([]*header, len(cols)) // one to one
 	for colIdx, h := range cols {
-		var (
-			name  string // resulting column name
-			kind  string
-			ok    bool
-			parts = strings.Split(h.name, ".")
-		)
+		var printedName string
 		if h.name == colTarget || h.name == colStatus {
-			name = h.name
-			goto add
+			printedName = h.name
+		} else {
+			printedName = _metricToPrintedColName(h.name, cols, metrics, n2n)
 		}
-		kind, ok = metrics[h.name]
-		debug.Assert(ok, h.name)
-		// first name
-		switch parts[0] {
-		case "lru":
-			copy(parts[0:], parts[1:])
-			parts = parts[:len(parts)-1]
-			name = strings.ToUpper(parts[0])
-		case "lst":
-			name = "LIST"
-		case "del":
-			name = "DELETE"
-		case "ren":
-			name = "RENAME"
-		case "ver":
-			name = "OBJ-VERSION"
-		default:
-			name = strings.ToUpper(parts[0])
-		}
-		// middle name (is every name in-between)
-		for j := 1; j < len(parts)-1; j++ {
-			name += "-" + strings.ToUpper(parts[j])
-		}
+		printedColumns[colIdx] = &header{name: printedName, hide: cols[colIdx].hide}
+	}
+	return
+}
 
-		// suffix
-		switch {
-		case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
-			name += "(bw)"
-		case kind == stats.KindLatency:
-			name += "(latency)"
-		case kind == stats.KindSize:
-			if n2n != nil && _present(cols, metrics, h.name, n2n) {
-				name += "(cumulative, average)"
-			} else {
-				name += "(size)"
-			}
-		}
-	add:
-		printedColumns[colIdx] = &header{name: name, hide: cols[colIdx].hide}
+func _metricToPrintedColName(mname string, cols []*header, metrics, n2n cos.StrKVs) (printedName string) {
+	kind, ok := metrics[mname]
+	debug.Assert(ok, mname)
+	parts := strings.Split(mname, ".")
+
+	// first name
+	switch parts[0] {
+	case "lru":
+		copy(parts[0:], parts[1:])
+		parts = parts[:len(parts)-1]
+		printedName = strings.ToUpper(parts[0])
+	case "lst":
+		printedName = "LIST"
+	case "del":
+		printedName = "DELETE"
+	case "ren":
+		printedName = "RENAME"
+	case "ver":
+		printedName = "VERSION"
+	default:
+		printedName = strings.ToUpper(parts[0])
 	}
 
+	// middle name (is every name in-between)
+	for j := 1; j < len(parts)-1; j++ {
+		printedName += "-" + strings.ToUpper(parts[j])
+	}
+
+	// suffix
+	switch {
+	case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
+		printedName += "(bw)"
+	case kind == stats.KindLatency:
+		printedName += "(latency)"
+	case kind == stats.KindSize:
+		if n2n != nil && _present(cols, metrics, mname, n2n) {
+			printedName += "(cumulative, average)"
+		} else {
+			printedName += "(size)"
+		}
+	}
 	return
 }
 
@@ -304,10 +334,13 @@ func _filter(cols, printedColumns []*header, regex *regexp.Regexp) ([]*header, [
 		if cols[i].name == colTarget || cols[i].name == colStatus { // aren't subject to filtering
 			continue
 		}
-		if regex.MatchString(cols[i].name) || regex.MatchString(printedColumns[i].name) {
-			continue
+
+		lower := strings.ToLower(printedColumns[i].name)
+		if regex.MatchString(cols[i].name) || regex.MatchString(printedColumns[i].name) || regex.MatchString(lower) {
+			continue // keep
 		}
-		// shift
+
+		// shift to filter out
 		copy(cols[i:], cols[i+1:])
 		cols = cols[:len(cols)-1]
 		copy(printedColumns[i:], printedColumns[i+1:])

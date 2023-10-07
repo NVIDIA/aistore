@@ -1,9 +1,15 @@
 #!/bin/bash
 
+## Prerequisites: #################################################################################
+# - s3 bucket
+# - s3cmd, $PATH-executable and configured to access the bucket out-of-band
+# - aistore cluster, also configured to access the same bucket
+#
 ## Example usage:
-## ./ais/test/scripts/get-validate.sh --bucket s3://abc
+## ./ais/test/scripts/get-validate.sh --bucket s3://abc                     ########################
 
 lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
+
 duis='Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Et harum quidem..'
 
 ## Command line options (and their respective defaults)
@@ -18,7 +24,6 @@ host="--host=s3.amazonaws.com"
 while (( "$#" )); do
   case "${1}" in
     --bucket) bucket=$2; shift; shift;;
-    --nocleanup) nocleanup="true"; shift;;
     *) echo "fatal: unknown argument '${1}'"; exit 1;;
   esac
 done
@@ -42,6 +47,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+echo -e
 ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
 echo -e
 

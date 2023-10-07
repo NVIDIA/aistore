@@ -353,8 +353,6 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		if num == 0 && tag == cmdShowCounters {
 			if regex == nil {
 				actionNote(c, "the cluster is completely idle: all collected counters have zero values\n")
-			} else {
-				actionNote(c, fmt.Sprintf("%q matching counters have zero values\n", regexStr))
 			}
 		}
 
