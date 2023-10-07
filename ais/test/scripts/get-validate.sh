@@ -23,66 +23,75 @@ while (( "$#" )); do
   esac
 done
 
-## set -x # uncomment for verbose output
+## uncomment for verbose output
+## set -x
 
 ## establish existence
 ais show bucket $bucket -c 1>/dev/null || exit $?
 
+## remember existing setting; disable if need be
+validate=$(ais bucket props show s3://ais-jm versioning.validate_warm_get -H | awk '{print $2}')
+[[ "$validate" == "false"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false
+
 cleanup() {
   rc=$?
   ais object rm "$bucket/lorem-duis" 1>/dev/null 2>&1
-  ais bucket evict $bucket 1>/dev/null 2>&1
+  [[ "$validate" == "true"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false 1>/dev/null 2>&1
   exit $rc
 }
 
 trap cleanup EXIT INT TERM
 
-echo "out-of-band PUT first version"
+ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
+echo -e
+
+echo "1. out-of-band PUT: first version"
 echo $lorem | s3cmd put - "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
-echo "cold GET and check"
+echo "2. cold GET, and check"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum1"  ]] || { echo "FAIL: $checksum != $sum1"; exit 1; }
 
-echo "out-of-band PUT 2nd version (overwrite)"
+echo "3. out-of-band PUT: 2nd version (overwrite)"
 echo $duis | s3cmd put - "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
-echo "warm GET and check (expecting the first version's checksum)"
+echo "4. warm GET and check (expecting the first version's checksum)"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" != "$sum2"  ]] || { echo "FAIL: $checksum == $sum2"; exit 1; }
 
-echo "update bucket props: set validate-warm-get = true"
+echo "5. update bucket props: set validate-warm-get = true"
 ais bucket props set $bucket versioning.validate_warm_get=true
 
-echo "query cold-get-count (statistics)"
-cnt1=$(ais show performance counters --all -H | awk '{sum+=$3;}END{print sum;}')
+echo "6. query cold-get count (statistics)"
+cnt1=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 
-echo "warm GET must trigger cold GET"
+echo "7. warm GET: detect version change and trigger cold GET"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-echo "cold-get-count must increment"
-cnt2=$(ais show performance counters --all -H | awk '{sum+=$3;}END{print sum;}')
+echo "8. cold-get counter must increment"
+cnt2=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt2 == $(($cnt1+1)) ]] || { echo "FAIL: $cnt2 != $(($cnt1+1))"; exit 1; }
 
-echo "2nd warm GET must remain \"warm\" and cold-get-count must _not_ increment"
+echo "9. 2nd warm GET must remain \"warm\" and cold-get-count must not increment"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-cnt3=$(ais show performance counters --all -H | awk '{sum+=$3;}END{print sum;}')
+cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt3 == $cnt2 ]] || { echo "FAIL: $cnt3 != $cnt2"; exit 1; }
 
-echo "DELETE out-of-band"
+echo "10. out-of-band DELETE"
 s3cmd del "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
-echo "warm GET must (silently) trigger deletion"
+echo "11. warm GET must (silently) trigger deletion"
 ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
 [[ $? != 0 ]] || { echo "FAIL: expecting GET error, got $?"; exit 1; }
 ais ls "$bucket/lorem-duis" --cached --silent -H 2>/dev/null
 [[ $? != 0 ]] || { echo "FAIL: expecting 'show object' error, got $?"; exit 1; }
 
-echo Done.
+echo -e
+ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
