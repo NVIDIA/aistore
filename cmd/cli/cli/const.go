@@ -356,10 +356,6 @@ var (
 	rmrfFlag            = cli.BoolFlag{Name: scopeAll, Usage: "remove all objects (use it with extreme caution!)"}
 	allLogsFlag         = cli.BoolFlag{Name: scopeAll, Usage: "download all logs"}
 
-	allColumnsFlag = cli.BoolFlag{
-		Name:  scopeAll,
-		Usage: "all-columns flag: when printing tables, show all columns including those that have only zero values",
-	}
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
 		Usage: "depending on the context:\n" +
@@ -442,8 +438,11 @@ var (
 			indent4 + "\tais ls ais://nnn --regex \"^A\"\t- match object names starting with letter A",
 	}
 	regexColsFlag = cli.StringFlag{
-		Name:  regexFlag.Name,
-		Usage: "regular expression to select table columns (case-insensitive), e.g.: --regex \"put|err\"",
+		Name: regexFlag.Name,
+		Usage: "regular expression select table columns (case-insensitive), e.g.:\n" +
+			indent4 + "\t --regex \"put|err\" - show PUT (count), PUT (total size), and all supported error counters;\n" +
+			indent4 + "\t --regex \"[a-z]\" - show all supported metrics, including those that have zero values across all nodes;\n" +
+			indent4 + "\t --regex \"(GET-COLD$|VERSION-CHANGE$)\" - show the number of cold GETs and object version changes (updates)",
 	}
 	regexJobsFlag = cli.StringFlag{
 		Name:  regexFlag.Name,

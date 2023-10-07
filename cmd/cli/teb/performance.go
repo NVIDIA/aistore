@@ -24,7 +24,6 @@ type PerfTabCtx struct {
 	Units     string           // IEC, SI, raw
 	Totals    map[string]int64 // metrics to sum up (name => sum(column)), where the name is IN and the sum is OUT
 	TotalsHdr string
-	AllCols   bool // show all-zero columns
 	AvgSize   bool // compute average size on the fly (and show it), e.g.: `get.size/get.n`
 	Idle      bool // currently idle
 }
@@ -72,7 +71,7 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 	}
 
 	// 2. exclude zero columns unless requested specific match or (--all)
-	if c.Regex == nil && !c.AllCols {
+	if c.Regex == nil {
 		cols = _zerout(cols, st)
 	}
 

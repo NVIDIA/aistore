@@ -7,7 +7,7 @@ redirect_from:
  - /docs/cli/storage.md/
 ---
 
-`ais storage` commands supports the following subcommands:
+`ais storage` command supports the following subcommands:
 
 ```console
 $ ais storage <TAB-TAB>

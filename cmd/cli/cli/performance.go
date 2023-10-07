@@ -38,7 +38,6 @@ var allPerfTabs bool
 var (
 	showPerfFlags = append(
 		longRunFlags,
-		allColumnsFlag,
 		noHeaderFlag,
 		regexColsFlag,
 		unitsFlag,
@@ -284,7 +283,6 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		regex       *regexp.Regexp
 		regexStr    = parseStrFlag(c, regexColsFlag)
 		hideHeader  = flagIsSet(c, noHeaderFlag)
-		allCols     = flagIsSet(c, allColumnsFlag)
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -340,8 +338,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 		setLongRunParams(c, lfooter)
 
-		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
-			AllCols: allCols, AvgSize: avgSize}
+		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units, AvgSize: avgSize}
 		table, num, err := teb.NewPerformanceTab(tstatusMap, &ctx)
 		if err != nil {
 			return err
@@ -408,8 +405,7 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		}
 
 		ctx := teb.PerfTabCtx{Smap: smap, Sid: tid, Metrics: metrics, Regex: regex, Units: units,
-			Totals: totals, TotalsHdr: totalsHdr,
-			AllCols: allCols, AvgSize: avgSize, Idle: idle}
+			Totals: totals, TotalsHdr: totalsHdr, AvgSize: avgSize, Idle: idle}
 		table, _, err := teb.NewPerformanceTab(mapBegin, &ctx)
 		if err != nil {
 			return err
