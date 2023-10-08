@@ -80,7 +80,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
-		DoLoad:   mpather.Load, // to support `NumCopies()` config
+		DoLoad:   mpather.LoadUnsafe,
 		Throttle: true,
 	}
 	mpopts.Bck.Copy(p.Bck.Bucket())
@@ -121,6 +121,7 @@ func (r *mncXact) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 		size, err = addCopies(lom, copies, buf)
 		lom.Unlock(true)
 	}
+
 	if err != nil {
 		if cmn.IsObjNotExist(err) {
 			return nil

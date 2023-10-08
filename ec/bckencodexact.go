@@ -98,7 +98,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		T:        r.t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,
-		DoLoad:   mpather.Load,
+		DoLoad:   mpather.LoadUnsafe,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
 	jg := mpather.NewJoggerGroup(opts)

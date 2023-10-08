@@ -214,8 +214,8 @@ func (r *XactPut) stop() {
 
 // Encode schedules FQN for erasure coding process
 func (r *XactPut) encode(req *request, lom *cluster.LOM) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
+	now := time.Now()
+	req.putTime, req.tm = now, now
 	if err := r.dispatchRequest(req, lom); err != nil {
 		nlog.Errorf("Failed to encode %s: %v", lom, err)
 		freeReq(req)
@@ -224,8 +224,8 @@ func (r *XactPut) encode(req *request, lom *cluster.LOM) {
 
 // Cleanup deletes all object slices or copies after the main object is removed
 func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
-	req.putTime = time.Now()
-	req.tm = time.Now()
+	now := time.Now()
+	req.putTime, req.tm = now, now
 
 	if err := r.dispatchRequest(req, lom); err != nil {
 		nlog.Errorf("Failed to cleanup %s: %v", lom, err)

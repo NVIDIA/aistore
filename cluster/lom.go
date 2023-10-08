@@ -365,8 +365,10 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 	return
 }
 
-//   - locked: is locked by the immediate caller (or otherwise is known to be locked);
-//     if false, try Rlock temporarily *if and only when* reading from FS
+// no lock is taken when locked by an immediate caller, or otherwise is known to be locked
+// otherwise, try Rlock temporarily _if and only when_ reading from fs
+//
+// (compare w/ LoadUnsafe() below)
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
 		lcache, lmd = lom.fromCache()
@@ -418,6 +420,34 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
 	}
 	err = cmn.NewErrObjDefunct(lom.String(), lom.md.bckID, lom.bck.Props.BID)
 	return
+}
+
+// usage: fast (and unsafe) loading object metadata except atime - no locks
+// compare with conventional Load() above
+func (lom *LOM) LoadUnsafe() (err error) {
+	var (
+		_, lmd = lom.fromCache()
+		bmd    = g.t.Bowner().Get()
+	)
+	// fast path
+	if lmd != nil {
+		lom.md = *lmd
+		err = lom._checkBucket(bmd)
+		return
+	}
+	// read and decode xattr; NOTE: fs.GetXattr* vs fs.SetXattr race possible and must be
+	// either a) handled or b) benign from the caller's perspective
+	if _, err = lom.lmfs(true); err != nil {
+		return
+	}
+	// check bucket
+	bid := lom.Bprops().BID
+	debug.Assert(bid != 0, lom.Cname())
+	if bid == 0 {
+		return
+	}
+	lom.md.bckID = bid
+	return lom._checkBucket(bmd)
 }
 
 // permission to overwrite objects that were previously read from:

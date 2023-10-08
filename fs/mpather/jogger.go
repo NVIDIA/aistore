@@ -32,9 +32,8 @@ type LoadType int
 
 const (
 	noLoad LoadType = iota
+	LoadUnsafe
 	Load
-	LoadRLock
-	LoadLock
 )
 
 const (
@@ -340,25 +339,24 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	return nil
 }
 
-func (j *jogger) visitObj(lom *cluster.LOM, buf []byte) error {
-	var locked bool
-	if j.opts.DoLoad > noLoad {
-		if j.opts.DoLoad == LoadRLock {
-			lom.Lock(false)
-			locked = true
-			defer lom.Unlock(false)
-		} else if j.opts.DoLoad == LoadLock {
-			lom.Lock(true)
-			locked = true
-			defer lom.Unlock(true)
-		}
-		if err := lom.Load(false /*cache it*/, locked); err != nil {
-			return err
-		}
-		if !j.opts.IncludeCopy && lom.IsCopy() {
-			return nil
-		}
+func (j *jogger) visitObj(lom *cluster.LOM, buf []byte) (err error) {
+	switch j.opts.DoLoad {
+	case noLoad:
+		goto visit
+	case LoadUnsafe:
+		err = lom.LoadUnsafe()
+	case Load:
+		err = lom.Load(false, false)
+	default:
+		debug.Assert(false, "invalid 'opts.DoLoad'", j.opts.DoLoad)
 	}
+	if err != nil {
+		return
+	}
+	if !j.opts.IncludeCopy && lom.IsCopy() {
+		return nil
+	}
+visit:
 	return j.opts.VisitObj(lom, buf)
 }
 
