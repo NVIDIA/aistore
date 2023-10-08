@@ -37,15 +37,12 @@ type (
 		args  *xreg.TCBArgs
 	}
 	XactTCB struct {
+		p      *tcbFactory
+		dm     *bundle.DataMover
+		rxlast atomic.Int64 // finishing
 		xact.BckJog
-		t    cluster.Target
-		dm   *bundle.DataMover
-		args xreg.TCBArgs
-		// starting up
-		wg sync.WaitGroup
-		// finishing
-		rxlast atomic.Int64
-		refc   atomic.Int32
+		wg   sync.WaitGroup // starting up
+		refc atomic.Int32   // finishing
 	}
 )
 
@@ -63,38 +60,37 @@ var (
 // tcbFactory //
 ////////////////
 
-func (e *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
+func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	custom := args.Custom.(*xreg.TCBArgs)
-	p := &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: e.kind, phase: custom.Phase, args: custom}
-	return p
+	return &tcbFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, phase: custom.Phase, args: custom}
 }
 
-func (e *tcbFactory) Start() error {
+func (p *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
-		slab, err = e.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+		slab, err = p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
 	debug.AssertNoErr(err)
-	e.xctn = newXactTCB(e, slab, config)
+	p.xctn = newTCB(p, slab, config)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
-	smap := e.T.Sowner().Get()
-	if err := e.xctn.InMaintOrDecomm(smap, e.T.Snode()); err != nil {
+	smap := p.T.Sowner().Get()
+	if err := p.xctn.InMaintOrDecomm(smap, p.T.Snode()); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()
-	e.xctn.refc.Store(int32(nat - 1))
-	e.xctn.wg.Add(1)
+	p.xctn.refc.Store(int32(nat - 1))
+	p.xctn.wg.Add(1)
 
 	var sizePDU int32
-	if e.kind == apc.ActETLBck {
+	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
-	err = e.newDM(config, e.UUID(), sizePDU)
+	err = p.newDM(config, p.UUID(), sizePDU)
 	return err
 }
 
-func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
+func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
 	const trname = "tcb"
 	dmExtra := bundle.Extra{
 		RecvAck:     nil, // no ACKs
@@ -103,30 +99,30 @@ func (e *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(e.T, trname+"-"+uuid, e.xctn.recv, cmn.OwtPut, dmExtra)
+	dm, err := bundle.NewDataMover(p.T, trname+"-"+uuid, p.xctn.recv, cmn.OwtPut, dmExtra)
 	if err != nil {
 		return err
 	}
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}
-	dm.SetXact(e.xctn)
-	e.xctn.dm = dm
+	dm.SetXact(p.xctn)
+	p.xctn.dm = dm
 	return nil
 }
 
-func (e *tcbFactory) Kind() string      { return e.kind }
-func (e *tcbFactory) Get() cluster.Xact { return e.xctn }
+func (p *tcbFactory) Kind() string      { return p.kind }
+func (p *tcbFactory) Get() cluster.Xact { return p.xctn }
 
-func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
+func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
-	if e.UUID() != prev.UUID() {
+	if p.UUID() != prev.UUID() {
 		err = cmn.NewErrXactUsePrev(prevEntry.Get().String())
 		return
 	}
-	bckEq := prev.args.BckFrom.Equal(e.args.BckFrom, true /*same BID*/, true /* same backend */)
+	bckEq := prev.args.BckFrom.Equal(p.args.BckFrom, true /*same BID*/, true /* same backend */)
 	debug.Assert(bckEq)
-	debug.Assert(prev.phase == apc.ActBegin && e.phase == apc.ActCommit)
+	debug.Assert(prev.phase == apc.ActBegin && p.phase == apc.ActCommit)
 	prev.args.Phase = apc.ActCommit // transition
 	wpr = xreg.WprUse
 	return
@@ -135,6 +131,9 @@ func (e *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 /////////////
 // XactTCB //
 /////////////
+
+// copies one bucket _into_ another with or without transformation.
+// args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort(err error) {
@@ -145,26 +144,24 @@ func (r *XactTCB) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-// XactTCB copies one bucket _into_ another with or without transformation.
-// args.DP.Reader() is the reader to receive transformed bytes; when nil we do a plain bucket copy.
-func newXactTCB(e *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
+func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 	var parallel int
-	r = &XactTCB{t: e.T, args: *e.args}
-	if e.kind == apc.ActETLBck {
+	r = &XactTCB{p: p}
+	if p.kind == apc.ActETLBck {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JgroupOpts{
-		T:        e.T,
+		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
-		Prefix:   e.args.Msg.Prefix,
+		Prefix:   p.args.Msg.Prefix,
 		Slab:     slab,
 		Parallel: parallel,
 		DoLoad:   mpather.Load,
 		Throttle: true, // NOTE: always trottling
 	}
-	mpopts.Bck.Copy(e.args.BckFrom.Bucket())
-	r.BckJog.Init(e.UUID(), e.kind, e.args.BckTo, mpopts, config)
+	mpopts.Bck.Copy(p.args.BckFrom.Bucket())
+	r.BckJog.Init(p.UUID(), p.kind, p.args.BckTo, mpopts, config)
 	return
 }
 
@@ -222,20 +219,23 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 }
 
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
-	objNameTo := r.args.Msg.ToName(lom.ObjName)
+	var (
+		args   = r.p.args // TCBArgs
+		toName = r.p.args.Msg.ToName(lom.ObjName)
+	)
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
-		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), r.args.BckTo.Cname(objNameTo))
+		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
 	params := cluster.AllocCpObjParams()
 	{
-		params.BckTo = r.args.BckTo
-		params.ObjNameTo = objNameTo
+		params.BckTo = args.BckTo
+		params.ObjNameTo = toName
 		params.Buf = buf
 		params.DM = r.dm
-		params.DP = r.args.DP
+		params.DP = args.DP
 		params.Xact = r
 	}
-	_, err = r.T.CopyObject(lom, params, r.args.Msg.DryRun)
+	_, err = r.p.T.CopyObject(lom, params, args.Msg.DryRun)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			// TODO: call r.Abort() instead
@@ -297,7 +297,7 @@ func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.
 	}
 	params.Atime = lom.Atime()
 
-	erp := r.t.PutObject(lom, params)
+	erp := r.p.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		r.AddErr(erp)
@@ -308,18 +308,18 @@ func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.
 	return nil
 }
 
-func (r *XactTCB) Args() *xreg.TCBArgs { return &r.args }
+func (r *XactTCB) Args() *xreg.TCBArgs { return r.p.args }
 
 func (r *XactTCB) String() string {
-	return fmt.Sprintf("%s <= %s", r.Base.String(), r.args.BckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.String(), r.p.args.BckFrom)
 }
 
 func (r *XactTCB) Name() string {
-	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.args.BckFrom)
+	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.p.args.BckFrom)
 }
 
 func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
-	return r.args.BckFrom, r.args.BckTo
+	return r.p.args.BckFrom, r.p.args.BckTo
 }
 
 func (r *XactTCB) Snap() (snap *cluster.Snap) {

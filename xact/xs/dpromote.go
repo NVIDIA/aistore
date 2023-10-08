@@ -31,9 +31,8 @@ type (
 		args *cluster.PromoteArgs
 	}
 	XactDirPromote struct {
-		args *cluster.PromoteArgs
+		p    *proFactory
 		smap *meta.Smap
-		dir  string
 		xact.BckJog
 		confirmedFshare bool // set separately in the commit phase prior to Run
 	}
@@ -56,7 +55,7 @@ func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *proFactory) Start() error {
-	xctn := &XactDirPromote{dir: p.args.SrcFQN, args: p.args}
+	xctn := &XactDirPromote{p: p}
 	xctn.BckJog.Init(p.Args.UUID /*global xID*/, apc.ActPromote, p.Bck, &mpather.JgroupOpts{T: p.T}, cmn.GCO.Get())
 	p.xctn = xctn
 	return nil
@@ -77,17 +76,19 @@ func (r *XactDirPromote) SetFshare(v bool) { r.confirmedFshare = v } // is calle
 
 func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	nlog.Infof("%s(%s)", r.Name(), r.dir)
 
-	r.smap = r.T.Sowner().Get()
+	dir := r.p.args.SrcFQN
+	nlog.Infof("%s(%s)", r.Name(), dir)
+
+	r.smap = r.p.T.Sowner().Get()
 	var (
 		err  error
-		opts = &fs.WalkOpts{Dir: r.dir, Callback: r.walk, Sorted: false}
+		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk, Sorted: false}
 	)
-	if r.args.Recursive {
+	if r.p.args.Recursive {
 		err = fs.Walk(opts) // godirwalk
 	} else {
-		err = fs.WalkDir(r.dir, r.walk) // Go filepath.WalkDir
+		err = fs.WalkDir(dir, r.walk) // Go filepath.WalkDir
 	}
 	r.AddErr(err)
 	r.Finish()
@@ -101,7 +102,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	bck := r.Bck()
 
 	// promote
-	objName, err := cmn.PromotedObjDstName(fqn, r.dir, r.args.ObjName)
+	args := r.p.args
+	objName, err := cmn.PromotedObjDstName(fqn, args.SrcFQN, args.ObjName)
 	if err != nil {
 		return err
 	}
@@ -111,7 +113,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != r.T.SID() {
+		if si.ID() != r.p.T.SID() {
 			return nil
 		}
 	}
@@ -121,18 +123,18 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		PromoteArgs: cluster.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,
-			OverwriteDst: r.args.OverwriteDst,
-			DeleteSrc:    r.args.DeleteSrc,
+			OverwriteDst: args.OverwriteDst,
+			DeleteSrc:    args.DeleteSrc,
 		},
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
-	_, err = r.T.Promote(params)
+	_, err = r.p.T.Promote(params)
 	if cmn.IsNotExist(err) {
 		err = nil
 	}
 	if r.BckJog.Config.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
-			r.args.OverwriteDst, r.args.DeleteSrc, r.confirmedFshare, err)
+			args.OverwriteDst, args.DeleteSrc, r.confirmedFshare, err)
 	}
 	return err
 }

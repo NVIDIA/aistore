@@ -25,22 +25,21 @@ import (
 type (
 	mncFactory struct {
 		xreg.RenewBase
-		xctn *xactMNC
+		xctn *mncXact
 		args xreg.MNCArgs
 	}
 
-	// xactMNC runs in a background, traverses all local mountpaths, and makes sure
+	// mncXact runs in a background, traverses all local mountpaths, and makes sure
 	// the bucket is N-way replicated (where N >= 1).
-	xactMNC struct {
+	mncXact struct {
+		p *mncFactory
 		xact.BckJog
-		tag    string
-		copies int
 	}
 )
 
 // interface guard
 var (
-	_ cluster.Xact   = (*xactMNC)(nil)
+	_ cluster.Xact   = (*mncXact)(nil)
 	_ xreg.Renewable = (*mncFactory)(nil)
 )
 
@@ -56,7 +55,7 @@ func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *mncFactory) Start() error {
 	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
-	p.xctn = newXactMNC(p.Bck, p, slab)
+	p.xctn = newMNC(p, slab)
 	return nil
 }
 
@@ -69,29 +68,30 @@ func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 }
 
 /////////////
-// xactMNC //
+// mncXact //
 /////////////
 
-func newXactMNC(bck *meta.Bck, p *mncFactory, slab *memsys.Slab) (r *xactMNC) {
-	r = &xactMNC{tag: p.args.Tag, copies: p.args.Copies}
-	debug.Assert(r.tag != "" && r.copies > 0)
+// NOTE: always throttling
+func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
+	debug.Assert(p.args.Tag != "" && p.args.Copies > 0)
+	r = &mncXact{p: p}
 	mpopts := &mpather.JgroupOpts{
 		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
 		DoLoad:   mpather.Load, // to support `NumCopies()` config
-		Throttle: true,         // NOTE: always throttling
+		Throttle: true,
 	}
-	mpopts.Bck.Copy(bck.Bucket())
-	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, bck, mpopts, cmn.GCO.Get())
+	mpopts.Bck.Copy(p.Bck.Bucket())
+	r.BckJog.Init(p.UUID(), apc.ActMakeNCopies, p.Bck, mpopts, cmn.GCO.Get())
 	return
 }
 
-func (r *xactMNC) Run(wg *sync.WaitGroup) {
+func (r *mncXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	tname := r.T.String()
-	if err := fs.ValidateNCopies(tname, r.copies); err != nil {
+	tname := r.p.T.String()
+	if err := fs.ValidateNCopies(tname, r.p.args.Copies); err != nil {
 		r.AddErr(err)
 		r.Finish()
 		return
@@ -103,21 +103,22 @@ func (r *xactMNC) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
+func (r *mncXact) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	var (
-		size int64
-		n    = lom.NumCopies()
+		size   int64
+		n      = lom.NumCopies()
+		copies = r.p.args.Copies
 	)
 	switch {
-	case n == r.copies:
+	case n == copies:
 		return nil
-	case n > r.copies:
+	case n > copies:
 		lom.Lock(true)
-		size, err = delCopies(lom, r.copies)
+		size, err = delCopies(lom, copies)
 		lom.Unlock(true)
 	default:
 		lom.Lock(true)
-		size, err = addCopies(lom, r.copies, buf)
+		size, err = addCopies(lom, copies, buf)
 		lom.Unlock(true)
 	}
 	if err != nil {
@@ -139,10 +140,10 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 
 	config := r.BckJog.Config
 	if config.FastV(5, cos.SmoduleMirror) {
-		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, r.copies, size)
+		nlog.Infof("%s: %s, copies %d=>%d, size=%d", r.Base.Name(), lom.Cname(), n, copies, size)
 	}
 	r.ObjsAdd(1, size)
-	if cnt := r.Objs(); cnt%128 == 0 { // TODO: tuneup
+	if cnt := r.Objs(); cnt%128 == 0 { // TODO: configurable
 		cs := fs.Cap()
 		if errCap := cs.Err(); errCap != nil {
 			r.Abort(err)
@@ -151,15 +152,15 @@ func (r *xactMNC) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	return
 }
 
-func (r *xactMNC) String() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.tag, r.copies)
+func (r *mncXact) String() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.p.args.Tag, r.p.args.Copies)
 }
 
-func (r *xactMNC) Name() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.tag, r.copies)
+func (r *mncXact) Name() string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.p.args.Tag, r.p.args.Copies)
 }
 
-func (r *xactMNC) Snap() (snap *cluster.Snap) {
+func (r *mncXact) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}
 	r.ToSnap(snap)
 
