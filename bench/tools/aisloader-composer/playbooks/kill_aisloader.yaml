@@ -3,5 +3,5 @@
   gather_facts: no
   tasks:
     - name: Kill aisloader processes
-      shell: pkill -f "aisloader*"
+      shell: kill -9 $(pgrep aisloader)
       ignore_errors: yes
