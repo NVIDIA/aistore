@@ -195,8 +195,10 @@ func (t *target) init(config *cmn.Config) {
 
 	memsys.Init(t.SID(), t.SID(), config)
 
+	// new fs, check and add mountpaths
 	newVol := volume.Init(t, config, daemon.cli.target.allowSharedDisksAndNoDisks,
 		daemon.cli.target.useLoopbackDevs, daemon.cli.target.startWithLostMountpath)
+	fs.ComputeDiskSize()
 
 	t.initHostIP()
 	daemon.rg.add(t)
@@ -219,7 +221,7 @@ func (t *target) init(config *cmn.Config) {
 	daemon.rg.add(fshc)
 	t.fshc = fshc
 
-	if err := ts.InitCDF(); err != nil { // goes after fs.New
+	if err := ts.InitCDF(); err != nil {
 		cos.ExitLog(err)
 	}
 	fs.Clblk()

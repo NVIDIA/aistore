@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	ratomic "sync/atomic"
 	"syscall"
@@ -75,6 +76,7 @@ type (
 		// capacity
 		cs        CapStatus
 		csExpires atomic.Int64
+		totalSize atomic.Uint64
 
 		mu sync.RWMutex
 
@@ -447,6 +449,16 @@ func (mi *Mountpath) ClearDD() {
 	cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 }
 
+func (mi *Mountpath) diskSize() (size uint64) {
+	numBlocks, _, blockSize, err := ios.GetFSStats(mi.Path)
+	if err != nil {
+		nlog.Errorln(mi.String(), "total disk size err:", err, strings.Repeat("<", 50))
+	} else {
+		size = numBlocks * uint64(blockSize)
+	}
+	return
+}
+
 //
 // MountedFS & MPI
 //
@@ -581,7 +593,7 @@ func AddMpath(mpath, tid string, cb func(), force bool) (mi *Mountpath, err erro
 	return
 }
 
-// (used only in tests - compare with EnableMpath below)
+// (unit tests only - compare with EnableMpath below)
 func Enable(mpath string) (enabledMpath *Mountpath, err error) {
 	var cleanMpath string
 	if cleanMpath, err = cmn.ValidateMpath(mpath); err != nil {
@@ -1014,6 +1026,20 @@ func (mpi MPI) toSlice() []string {
 //
 // capacity management
 //
+
+// total disk size
+func ComputeDiskSize() {
+	var (
+		totalSize uint64
+		avail     = GetAvail()
+	)
+	for _, mi := range avail {
+		totalSize += mi.diskSize()
+	}
+	mfs.totalSize.Store(totalSize)
+}
+
+func GetDiskSize() uint64 { return mfs.totalSize.Load() }
 
 func Cap() (cs CapStatus) {
 	// config

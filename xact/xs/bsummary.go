@@ -90,10 +90,7 @@ func (r *bsummXact) Run(rwg *sync.WaitGroup) {
 	} else {
 		nlog.Infof("%s - bucket(s) %s", r.Name(), r.Bck().Bucket())
 	}
-	if r.totalDisksSize, err = fs.GetTotalDisksSize(); err != nil {
-		r.updRes(err)
-		return
-	}
+	r.totalDisksSize = fs.GetDiskSize()
 
 	smap := r.t.Sowner().Get()
 	if si, err = smap.HrwTargetTask(r.msg.UUID); err != nil {

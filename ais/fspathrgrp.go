@@ -38,7 +38,7 @@ func (g *fsprungroup) init(t *target, newVol bool) {
 //
 
 // enableMpath enables mountpath and notifies necessary runners about the
-// change if mountpath actually was disabled.
+// change if mountpath actually was enabled.
 func (g *fsprungroup) enableMpath(mpath string) (enabledMi *fs.Mountpath, err error) {
 	enabledMi, err = fs.EnableMpath(mpath, g.t.SID(), g.redistributeMD)
 	if err != nil || enabledMi == nil {
