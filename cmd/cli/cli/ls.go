@@ -236,20 +236,34 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	}
 
 	// lsmsg
-	msg := &apc.LsoMsg{Prefix: prefix}
-	addCachedCol := bck.IsRemote()
+	var (
+		msg          = &apc.LsoMsg{Prefix: prefix}
+		addCachedCol bool
+	)
+	if bck.IsRemote() {
+		addCachedCol = true
+		msg.SetFlag(apc.LsBckPresent) // default
+	}
 	if flagIsSet(c, listObjCachedFlag) {
 		msg.SetFlag(apc.LsObjCached)
-		addCachedCol = false
+		addCachedCol = false // redundant
 	}
+
+	// NOTE: `--all` currently combines two separate meanings:
+	// - list missing obj-s (with existing copies)
+	// - list obj-s from a remote bucket outside cluster
+	if flagIsSet(c, allObjsOrBcksFlag) {
+		msg.SetFlag(apc.LsMissing)
+		msg.ClearFlag(apc.LsBckPresent)
+		debug.Assert(msg.IsFlagSet(apc.LsMissing)) // TODO -- FIXME: remove
+		debug.Assert(!msg.IsFlagSet(apc.LsBckPresent))
+	}
+
 	if flagIsSet(c, listAnonymousFlag) {
-		msg.SetFlag(apc.LsTryHeadRemote)
+		msg.SetFlag(apc.LsAnonymous)
 	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
-	}
-	if flagIsSet(c, allObjsOrBcksFlag) {
-		msg.SetFlag(apc.LsAll)
 	}
 
 	var (
@@ -300,7 +314,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		for {
 			objList, err := api.ListObjectsPage(apiBP, bck, msg)
 			if err != nil {
-				return V(err)
+				return lsoErr(msg, err)
 			}
 
 			// print exact number of objects if it is `limit`ed: in case of
@@ -347,9 +361,19 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	ctx := api.NewProgressContext(u.cb, callAfter)
 	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit), Progress: ctx})
 	if err != nil {
-		return V(err)
+		return lsoErr(msg, err)
 	}
 	return printObjProps(c, objList.Entries, lstFilter, msg.Props, addCachedCol)
+}
+
+func lsoErr(msg *apc.LsoMsg, err error) error {
+	if herr, ok := err.(*cmn.ErrHTTP); ok && msg.IsFlagSet(apc.LsBckPresent) {
+		if herr.TypeCode == "ErrRemoteBckNotFound" {
+			err = V(err)
+			return fmt.Errorf("%v\nTip: use %s option to list _all_ objects", V(err), qflprn(allObjsOrBcksFlag))
+		}
+	}
+	return V(err)
 }
 
 func _setPage(c *cli.Context, bck cmn.Bck) (pageSize, limit int, err error) {

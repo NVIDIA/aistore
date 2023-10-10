@@ -358,9 +358,9 @@ var (
 
 	allObjsOrBcksFlag = cli.BoolFlag{
 		Name: scopeAll,
-		Usage: "depending on the context:\n" +
-			indent4 + "\t- all objects in a given bucket, including misplaced and copies, or\n" +
-			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster",
+		Usage: "depending on the context, list:\n" +
+			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster\n" +
+			indent4 + "\t- all objects in a given accessible (visible) bucket, including remote objects and misplaced copies",
 	}
 	allBcksFlag = cli.BoolFlag{
 		Name:  scopeAll,

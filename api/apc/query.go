@@ -105,7 +105,7 @@ const (
 	FltPresent               // bucket: is present | object: present and properly located
 	FltPresentNoProps        // same as above but no need to return props/info
 	FltPresentCluster        // objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
-	FltExistsOutside         // not present - exists _outside_ cluster
+	FltExistsOutside         // not present - exists _outside_ cluster (NOTE: currently, only list-buckets)
 )
 
 func IsFltPresent(v int) bool {

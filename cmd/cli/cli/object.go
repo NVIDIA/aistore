@@ -78,7 +78,7 @@ func setCustomProps(c *cli.Context, bck cmn.Bck, objName string) (err error) {
 		for _, pair := range propArgs {
 			nv := strings.Split(pair, "=")
 			if len(nv) != 2 {
-				return fmt.Errorf("invalid custom property %q (Hint: use syntax key1=value1 key2=value2 ...)", nv)
+				return fmt.Errorf("invalid custom property %q (tip: use syntax key1=value1 key2=value2 ...)", nv)
 			}
 			nv[0] = strings.TrimSpace(nv[0])
 			nv[1] = strings.TrimSpace(nv[1])

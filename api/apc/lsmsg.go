@@ -21,44 +21,30 @@ const (
 	// See related Flt* enum
 	LsObjCached = 1 << iota
 
-	LsAll      // include misplaced objects and replicas
-	LsDeleted  // include obj-s marked for deletion (TODO)
-	LsArchDir  // expand archives as directories
+	LsMissing // include missing main obj (with copy existing)
+
+	LsDeleted // include obj-s marked for deletion (TODO: not implemented yet)
+
+	LsArchDir // expand archives as directories
+
 	LsNameOnly // return only object names and statuses (for faster listing)
 	LsNameSize // same as above plus size
 
-	// The following two flags have to do with listing objects in those remote
-	// buckets that we don't yet have in the cluster's BMD. As far as AIS is concerned,
-	// adding a (confirmed to exist) remote bucket (and its properties) to the metadata
-	// is equivalent to creating the bucket *on the fly*.
-	//
-	// For this, we need or, more exactly, we would like to execute HEAD request
-	// against the remote backend in question, in order to:
-	//    1) confirm the bucket's existence, and
-	//    2) obtain its properties (e.g., versioning - for Cloud backends)
-	//
-	// Note: this is done only once.
-	//
-	// There are scenarios and cases, however, when HEAD(remote bucket) when
-	// would rather be avoided or, alternatively, when an error it returns
-	// (if it returns one) can be disregarded.
+	// Background: as far as AIS is concerned, adding a (confirmed to exist)
+	// remote bucket (and its properties) to the cluster metadata is equivalent
+	// to creating the bucket on the fly.
 
-	// LsDontHeadRemote tells AIS _not_ to execute HEAD request on the remote bucket.
-	// The reasons may include cleanup/eviction of any kind, prior knowledge that the bucket
-	// must simply exist in AIS, and more.
-	// See also:
-	// * `cmn/feat/feat.go` source, and the (configurable) capability
-	//    to disable on-the-fly creation of remote buckets altogether.
-	LsDontHeadRemote
+	// same as fltPresence == apc.Present (see query.go)
+	LsBckPresent
 
-	// LsTryHeadRemote is introduced primarily to support GCP buckets with
+	// LsAnonymous is introduced primarily to support GCP buckets with
 	// ACL policies that allow public _anonymous_ access.
 	//
 	// It appears that sometimes those policies do honor HEAD(bucket),
 	// while other times they don't, failing the request with 401 or 403 status.
 	// See also:
 	// * at https://cloud.google.com/storage/docs/access-control/making-data-public
-	LsTryHeadRemote
+	LsAnonymous
 
 	// To list remote buckets that, if not be present in AIS, shall not be added to AIS
 	// (TODO: reserved for future use)
@@ -209,6 +195,7 @@ func (lsmsg *LsoMsg) PropsSet() (s cos.StrSet) {
 
 // LsoMsg flags enum: LsObjCached, ...
 func (lsmsg *LsoMsg) SetFlag(flag uint64)         { lsmsg.Flags |= flag }
+func (lsmsg *LsoMsg) ClearFlag(flag uint64)       { lsmsg.Flags &= ^flag }
 func (lsmsg *LsoMsg) IsFlagSet(flags uint64) bool { return lsmsg.Flags&flags == flags }
 
 func (lsmsg *LsoMsg) Clone() *LsoMsg {

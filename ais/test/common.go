@@ -406,7 +406,7 @@ func (m *ioContext) del(opts ...int) {
 	lsmsg := &apc.LsoMsg{
 		Prefix: m.prefix,
 		Props:  apc.GetPropsName,
-		Flags:  apc.LsDontHeadRemote, // don't lookup unless overridden via variadic (see below)
+		Flags:  apc.LsBckPresent, // don't lookup unless overridden by the variadic (below)
 	}
 	if len(opts) > 0 {
 		toRemoveCnt = opts[0]

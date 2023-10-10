@@ -264,7 +264,7 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 		return V(err)
 	}
 	bckSums := make([]*bucketHealth, 0)
-	msg := &apc.LsoMsg{Flags: apc.LsAll}
+	msg := &apc.LsoMsg{Flags: apc.LsMissing}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
 
 	for _, bck := range bcks {

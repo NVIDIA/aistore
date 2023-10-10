@@ -1534,7 +1534,7 @@ func (c *TimeoutConf) Validate() error {
 	return nil
 }
 
-// once upon startup
+// upon startup and via stats runner
 func (d *timeout) Set(cluconf *ClusterConfig) {
 	d.cplane = cluconf.Timeout.CplaneOperation.D()
 	d.keepalive = cluconf.Timeout.MaxKeepalive.D()

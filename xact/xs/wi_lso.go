@@ -158,7 +158,7 @@ func (wi *walkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
 		return wi.ls(lom, status), nil
 	}
 
-	if !wi.msg.IsFlagSet(apc.LsAll) {
+	if !wi.msg.IsFlagSet(apc.LsMissing) {
 		return nil, nil
 	}
 	if local {

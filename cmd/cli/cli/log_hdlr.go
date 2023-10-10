@@ -131,7 +131,7 @@ func getLogHandler(c *cli.Context) error {
 				}
 
 				// with a hint
-				hint = fgreen("Hint:  ")
+				hint = "Hint:  "
 				errV = fmt.Errorf("%v\n"+hint+"did you mean 'ais log get %s %s'?", errV, clusterCompletion, c.Args().Get(0))
 			}
 			return errV

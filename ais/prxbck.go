@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -219,11 +218,7 @@ func (args *bckInitArgs) initAndTry() (bck *meta.Bck, err error) {
 	case cmn.IsErrRemoteBckNotFound(err):
 		debug.Assert(bck.IsRemote())
 		// when remote-bucket lookup is not permitted
-		if cmn.Features.IsSet(feat.DontHeadRemote) || args.dontHeadRemote {
-			// - update global
-			// - if `feat.DontHeadRemote` is globally enabled you could still use
-			// `api.CreateBucket` to override (or disable it via `api.SetClusterConfig`)
-			cmn.Features = cmn.GCO.Get().Features
+		if args.dontHeadRemote {
 			args.p.writeErr(args.w, args.r, err, errCode, Silent)
 			return
 		}

@@ -19,7 +19,6 @@ const FeaturesPropName = "features"
 
 const (
 	EnforceIntraClusterAccess = Flags(1 << iota)
-	DontHeadRemote            // see also api/apc/lsmsg.go, and in particular `LsDontHeadRemote`
 	SkipVC                    // skip loading existing object's metadata, Version and Checksum (VC) in particular
 	DontAutoDetectFshare      // do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS
 	ProvideS3APIviaRoot       // handle s3 requests via `aistore-hostname/` (default: `aistore-hostname/s3`)

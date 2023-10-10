@@ -597,15 +597,16 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 	bckArgs.createAIS = false
 
-	// mutually exclusive
-	debug.Assert(!(lsmsg.IsFlagSet(apc.LsDontHeadRemote) && lsmsg.IsFlagSet(apc.LsTryHeadRemote)))
+	// TODO -- FIXME: NIY
+	debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "list-remote-bucket-without-adding-to-BMD: not implemented yet")
 
-	// TODO -- FIXME: the capability to list remote buckets without adding them to BMD
-	debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "not implemented yet")
-
-	if bckArgs.dontHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote); !bckArgs.dontHeadRemote {
-		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsTryHeadRemote)
+	if lsmsg.IsFlagSet(apc.LsBckPresent) {
+		bckArgs.dontHeadRemote = true
+		debug.Assert(!lsmsg.IsFlagSet(apc.LsAnonymous))
+	} else {
+		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsAnonymous)
 	}
+
 	if bck, err = bckArgs.initAndTry(); err == nil {
 		begin := mono.NanoTime()
 		p.listObjects(w, r, bck, msg /*amsg*/, &lsmsg, begin)
@@ -1223,13 +1224,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		if v := query.Get(apc.QparamFltPresence); v != "" {
 			fltPresence, _ = strconv.Atoi(v)
 		}
+		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
 		if !apc.IsFltPresent(fltPresence) && bck.IsRemote() && !bck.IsHTTP() {
-			if fltPresence == apc.FltExistsOutside {
-				// TODO: upon request
-				err = fmt.Errorf("(flt %d=\"outside\") not implemented yet", fltPresence)
-				p.writeErr(w, r, err, http.StatusNotImplemented)
-				return
-			}
 			lstcx := &lstcx{
 				p:       p,
 				bckFrom: bck,
@@ -1756,11 +1752,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// 1. bucket is present (and was present prior to this call), and we are done with it here
 	if bckArgs.isPresent {
-		if fltPresence == apc.FltExistsOutside {
-			err = fmt.Errorf(fmtOutside, bck.Cname(""), fltPresence)
-			p.writeErr(w, r, err)
-			return
-		}
+		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
 		if wantBckSummary {
 			// get runtime bucket info (aka /summary/):
 			// broadcast to all targets, collect, and summarize

@@ -300,7 +300,7 @@ func multiobjArg(c *cli.Context, command string) error {
 		case commandEvict:
 			if !bck.IsRemote() {
 				const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
-				return errors.New(msg + "\n(Hint: use 'ais object rm' command to delete)")
+				return errors.New(msg + "\n(Tip: use 'ais object rm' command to delete)")
 			}
 			if flagIsSet(c, dryRunFlag) {
 				fmt.Fprintf(c.App.Writer, "Evict: %s\n", bck.Cname(objName))
