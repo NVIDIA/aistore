@@ -5,7 +5,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -152,60 +151,6 @@ func getxst(out any, q url.Values, bp BaseParams, args xact.ArgsMsg) (err error)
 	_, err = reqParams.DoReqAny(out)
 	FreeRp(reqParams)
 	return
-}
-
-// Wait for bucket summary:
-//  1. The function sends the requests as is (lsmsg.UUID should be empty) to initiate
-//     asynchronous task. The destination returns ID of a newly created task
-//  2. Starts polling: request destination with received UUID in a loop while
-//     the destination returns StatusAccepted=task is still running
-//     Time between requests is dynamic: it starts at 200ms and increases
-//     by half after every "not-StatusOK" request. It is limited with 10 seconds
-//  3. Breaks loop on error
-//  4. If the destination returns status code StatusOK, it means the response
-//     contains the real data and the function returns the response to the caller
-func (reqParams *ReqParams) waitBsumm(msg *apc.BsummCtrlMsg, bsumm *cmn.AllBsummResults) error {
-	var (
-		uuid   string
-		sleep  = xact.MinPollTime
-		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
-		body   = cos.MustMarshal(actMsg)
-	)
-	if reqParams.Query == nil {
-		reqParams.Query = url.Values{}
-	}
-	reqParams.Body = body
-	status, err := reqParams.doReqStr(&uuid)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusAccepted {
-		if status == http.StatusOK {
-			return errors.New("expected 202 (\"accepted\") response, got 200 (\"ok\")")
-		}
-		return fmt.Errorf("invalid response code: %d", status)
-	}
-	if msg.UUID == "" {
-		msg.UUID = uuid
-		body = cos.MustMarshal(actMsg)
-	}
-
-	// Poll async task for http.StatusOK completion
-	for {
-		reqParams.Body = body
-		status, err = reqParams.DoReqAny(bsumm)
-		if err != nil {
-			return err
-		}
-		if status == http.StatusOK {
-			break
-		}
-		time.Sleep(sleep)
-		if sleep < xact.MaxProbingFreq {
-			sleep += sleep / 2
-		}
-	}
-	return err
 }
 
 //

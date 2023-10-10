@@ -7,15 +7,19 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -24,11 +28,23 @@ const (
 	msgpBufSize = 16 * cos.KiB
 )
 
-// additional and optional list-objets args (see also: GetArgs, PutArgs)
-type ListArgs struct {
-	Progress *ProgressContext // with a callback
-	Num      uint             // aka limit
-}
+type (
+	LsoCounter struct {
+		startTime int64 // time operation started
+		callAfter int64 // callback after
+		callback  LsoCB
+		count     int
+		done      bool
+	}
+	LsoCB func(*LsoCounter)
+
+	// additional and optional list-objects args (compare with: GetArgs, PutArgs)
+	ListArgs struct {
+		Callback  LsoCB
+		CallAfter time.Duration
+		Limit     uint
+	}
+)
 
 // ListBuckets returns buckets for provided query, where
 //   - `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
@@ -71,31 +87,84 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 	return len(bcks) > 0, err
 }
 
-// GetBucketSummary returns bucket summaries (capacity ulitization percentages, sizes, and
-// numbers of objects) for the specified bucket or buckets, as per `cmn.QueryBcks` query.
-// E.g., an empty bucket query corresponds to all buckets present in the cluster's metadata.
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsummResults, error) {
+// GetBucketSummary returns bucket capacity ulitization percentages, sizes (total and min/max/average),
+// and the numbers of objects, both _in_ the cluster and remote
+// GetBucketSummary supports a single specified bucket or multiple buckets, as per `cmn.QueryBcks` query.
+// (e.g., GetBucketSummary with an empty bucket query will return "summary" info for all buckets)
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) (res cmn.AllBsummResults, err error) {
 	if msg == nil {
-		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true} // NOTE the defaults
+		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
 	}
 	bp.Method = http.MethodGet
 
 	reqParams := AllocRp()
-	summaries := cmn.AllBsummResults{}
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = qbck.NewQuery()
 	}
-	// execute `apc.ActSummaryBck` and poll for results
-	if err := reqParams.waitBsumm(msg, &summaries); err != nil {
-		FreeRp(reqParams)
-		return nil, err
+	if err = _bsumm(reqParams, msg, &res); err == nil {
+		sort.Sort(res)
 	}
-	sort.Sort(summaries)
 	FreeRp(reqParams)
-	return summaries, nil
+	return
+}
+
+// Wait/poll bucket-summary:
+//  1. The function initiates `apc.ActSummaryBck` (msg.UUID == "").
+//     In response, aistore returns UUID of a newly created job.
+//  2. Starts polling: request destination with received UUID in a loop while
+//     the destination returns StatusAccepted=task is still running
+//     Time between requests is dynamic: it starts at 200ms and increases
+//     by half after every "not-StatusOK" request. It is limited with 10 seconds
+//  3. Returns on error
+//  4. If the destination returns status code StatusOK, it means the response
+//     contains the real data and the function returns the response to the caller
+func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults) error {
+	var (
+		uuid   string
+		sleep  = xact.MinPollTime
+		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+		body   = cos.MustMarshal(actMsg)
+	)
+	if reqParams.Query == nil {
+		reqParams.Query = url.Values{}
+	}
+	reqParams.Body = body
+	status, err := reqParams.doReqStr(&uuid)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusAccepted {
+		if status == http.StatusOK {
+			return errors.New("expected 202 (\"accepted\") response, got 200 (\"ok\")")
+		}
+		return fmt.Errorf("invalid response code: %d", status)
+	}
+	if msg.UUID == "" {
+		msg.UUID = uuid
+		body = cos.MustMarshal(actMsg)
+	}
+
+	// Poll async task for http.StatusOK completion
+	for {
+		reqParams.Body = body
+		status, err = reqParams.DoReqAny(res)
+		if err != nil {
+			return err
+		}
+		// TODO -- FIXME progress.callback(progress)
+
+		if status == http.StatusOK { // TODO -- FIXME
+			break
+		}
+		time.Sleep(sleep)
+		if sleep < xact.MaxProbingFreq {
+			sleep += sleep / 2
+		}
+	}
+	return err
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the
@@ -159,12 +228,16 @@ func ListObjects(bp BaseParams, bck cmn.Bck, lsmsg *apc.LsoMsg, args ListArgs) (
 // iteration for the reduced page.
 func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult, error) {
 	var (
+		ctx      *LsoCounter
 		lst      = &cmn.LsoResult{}
 		nextPage = &cmn.LsoResult{}
-		progress = args.Progress
-		toRead   = args.Num
-		listAll  = args.Num == 0
+		toRead   = args.Limit
+		listAll  = args.Limit == 0
 	)
+	if args.Callback != nil {
+		ctx = &LsoCounter{startTime: mono.NanoTime(), callback: args.Callback, count: -1}
+		ctx.callAfter = ctx.startTime + args.CallAfter.Nanoseconds()
+	}
 	for pageNum := 1; listAll || toRead > 0; pageNum++ {
 		if !listAll {
 			lsmsg.PageSize = toRead
@@ -199,12 +272,12 @@ func lso(reqParams *ReqParams, lsmsg *apc.LsoMsg, args ListArgs) (*cmn.LsoResult
 			lst.Entries = append(lst.Entries, page.Entries...)
 			lst.ContinuationToken = page.ContinuationToken
 		}
-		if progress != nil && progress.mustFire() {
-			progress.info.Count = len(lst.Entries)
+		if ctx != nil && ctx.mustCall() {
+			ctx.count = len(lst.Entries)
 			if page.ContinuationToken == "" {
-				progress.finish()
+				ctx.finish()
 			}
-			progress.callback(progress)
+			ctx.callback(ctx)
 		}
 		if page.ContinuationToken == "" { // listed all pages
 			lsmsg.ContinuationToken = ""
@@ -276,3 +349,16 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 	FreeRp(reqParams)
 	return err
 }
+
+func (ctx *LsoCounter) IsFinished() bool       { return ctx.done }
+func (ctx *LsoCounter) Elapsed() time.Duration { return mono.Since(ctx.startTime) }
+func (ctx *LsoCounter) Count() int             { return ctx.count }
+
+// private
+
+func (ctx *LsoCounter) mustCall() bool {
+	return ctx.callAfter == ctx.startTime /*immediate*/ ||
+		mono.NanoTime() >= ctx.callAfter
+}
+
+func (ctx *LsoCounter) finish() { ctx.done = true }

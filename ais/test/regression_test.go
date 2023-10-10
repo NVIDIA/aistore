@@ -76,7 +76,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 	m.puts()
 
 	msg := &apc.LsoMsg{Props: apc.GetPropsLocation}
-	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Num: uint(m.num)})
+	lst, err := api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Limit: uint(m.num)})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {
@@ -130,7 +130,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.Props = ""
-	lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Num: uint(m.num)})
+	lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{Limit: uint(m.num)})
 	tassert.CheckFatal(t, err)
 
 	if len(lst.Entries) != m.num {

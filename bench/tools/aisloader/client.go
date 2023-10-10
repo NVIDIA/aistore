@@ -417,9 +417,11 @@ func getConfig(server string) (httpLatencies, error) {
 	return l, err
 }
 
-func listObjCallback(ctx *api.ProgressContext) {
-	fmt.Printf("\rListing %s objects", cos.FormatBigNum(ctx.Info().Count))
-	// Final message moves output to new line, to keep output tidy
+func listObjCallback(ctx *api.LsoCounter) {
+	if ctx.Count() < 0 {
+		return
+	}
+	fmt.Printf("\rListing %s objects", cos.FormatBigNum(ctx.Count()))
 	if ctx.IsFinished() {
 		fmt.Println()
 	}
@@ -431,8 +433,8 @@ func listObjectNames(baseParams api.BaseParams, bck cmn.Bck, prefix string) ([]s
 	if bck.IsAIS() || bck.IsRemoteAIS() {
 		msg.PageSize = apc.DefaultPageSizeAIS
 	}
-	ctx := api.NewProgressContext(listObjCallback, longListTime)
-	objList, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{Progress: ctx})
+	args := api.ListArgs{Callback: listObjCallback, CallAfter: longListTime}
+	objList, err := api.ListObjects(baseParams, bck, msg, args)
 	if err != nil {
 		return nil, err
 	}

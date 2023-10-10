@@ -358,8 +358,8 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 	if flagIsSet(c, refreshFlag) {
 		callAfter = parseDurationFlag(c, refreshFlag)
 	}
-	ctx := api.NewProgressContext(u.cb, callAfter)
-	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit), Progress: ctx})
+	args := api.ListArgs{Callback: u.cb, CallAfter: callAfter, Limit: uint(limit)}
+	objList, err := api.ListObjects(apiBP, bck, msg, args)
 	if err != nil {
 		return lsoErr(msg, err)
 	}
@@ -505,9 +505,12 @@ type _listed struct {
 	l   int
 }
 
-func (u *_listed) cb(ctx *api.ProgressContext) {
+func (u *_listed) cb(ctx *api.LsoCounter) {
+	if ctx.Count() < 0 {
+		return
+	}
 	if !ctx.IsFinished() {
-		s := "Listed " + cos.FormatBigNum(ctx.Info().Count) + " objects"
+		s := "Listed " + cos.FormatBigNum(ctx.Count()) + " objects"
 		if u.l == 0 {
 			u.l = len(s) + 3
 			if u.bck.IsRemote() && !flagIsSet(u.c, listObjCachedFlag) {
@@ -521,8 +524,8 @@ func (u *_listed) cb(ctx *api.ProgressContext) {
 		s += strings.Repeat(" ", u.l-len(s))
 		fmt.Fprintf(u.c.App.Writer, "\r%s", s)
 	} else {
-		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n",
-			cos.FormatBigNum(ctx.Info().Count), teb.FormatDuration(ctx.Elapsed()))
+		elapsed := teb.FormatDuration(ctx.Elapsed())
+		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n", cos.FormatBigNum(ctx.Count()), elapsed)
 		time.Sleep(time.Second)
 	}
 }

@@ -160,7 +160,7 @@ func getMultiObj(c *cli.Context, bck cmn.Bck, archpath, outFile string, extract 
 	msg.PageSize = uint(pageSize)
 
 	// list-objects
-	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Num: uint(limit)})
+	objList, err := api.ListObjects(apiBP, bck, msg, api.ListArgs{Limit: uint(limit)})
 	if err != nil {
 		return V(err)
 	}

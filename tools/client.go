@@ -135,7 +135,7 @@ func ListObjectNames(proxyURL string, bck cmn.Bck, prefix string, objectCountLim
 	if cached {
 		msg.Flags = apc.LsObjCached
 	}
-	data, err := api.ListObjects(bp, bck, msg, api.ListArgs{Num: objectCountLimit})
+	data, err := api.ListObjects(bp, bck, msg, api.ListArgs{Limit: objectCountLimit})
 	if err != nil {
 		return nil, err
 	}

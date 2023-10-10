@@ -1451,7 +1451,7 @@ func TestListObjectsPrefix(t *testing.T) {
 						bck, msg.Prefix, msg.PageSize,
 					)
 
-					lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{Num: test.limit})
+					lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{Limit: test.limit})
 					tassert.CheckFatal(t, err)
 
 					tlog.Logf("list_objects output: %d objects\n", len(lst.Entries))
