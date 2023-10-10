@@ -4,7 +4,11 @@
  */
 package api
 
-import "time"
+import (
+	"time"
+
+	"github.com/NVIDIA/aistore/cmn/mono"
+)
 
 // "progress bar" control structures and context
 type (
@@ -15,8 +19,8 @@ type (
 		Total   int
 	}
 	ProgressContext struct {
-		startTime time.Time // time when operation started
-		callAfter time.Time // call the callback only after
+		startTime int64 // time operation started
+		callAfter int64 // callback after
 		callback  ProgressCallback
 		info      ProgressInfo
 	}
@@ -26,13 +30,16 @@ type (
 func NewProgressContext(cb ProgressCallback, after time.Duration) *ProgressContext {
 	ctx := &ProgressContext{
 		info:      ProgressInfo{Count: -1, Total: -1, Percent: -1.0},
-		startTime: time.Now(),
+		startTime: mono.NanoTime(),
 		callback:  cb,
 	}
-	if after != 0 {
-		ctx.callAfter = ctx.startTime.Add(after)
-	}
+	ctx.callAfter = ctx.startTime + after.Nanoseconds()
 	return ctx
+}
+
+func (ctx *ProgressContext) mustFire() bool {
+	return ctx.callAfter == ctx.startTime /*immediate*/ ||
+		mono.NanoTime() >= ctx.callAfter
 }
 
 func (ctx *ProgressContext) finish() {
@@ -48,12 +55,7 @@ func (ctx *ProgressContext) IsFinished() bool {
 }
 
 func (ctx *ProgressContext) Elapsed() time.Duration {
-	return time.Since(ctx.startTime)
-}
-
-func (ctx *ProgressContext) mustFire() bool {
-	return ctx.callAfter.IsZero() ||
-		ctx.callAfter.Before(time.Now())
+	return mono.Since(ctx.startTime)
 }
 
 func (ctx *ProgressContext) Info() ProgressInfo {

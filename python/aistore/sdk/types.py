@@ -175,7 +175,6 @@ class BsummCtrlMsg(BaseModel):
 
     uuid: str
     prefix: str
-    fast: bool
     cached: bool
     present: bool
 

@@ -17,12 +17,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// additional and optional list-objets args (see also: GetArgs, PutArgs)
-type ListArgs struct {
-	Progress *ProgressContext // with a callback
-	Num      uint             // aka limit
-}
-
 // SetBucketProps sets the properties of a bucket.
 // Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(bp BaseParams, bck cmn.Bck, props *cmn.BucketPropsToUpdate) (string, error) {

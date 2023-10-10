@@ -176,16 +176,14 @@ func (p *proxy) bsummCheckRes(uuid string, results sliceResults) (tsi *meta.Snod
 	return
 }
 
-// NOTE:
-// - unless `countRemoteObjs` executes the (cached-only, fast) version of the bucket summary
-// - always times out after waiting max-host-busy time
+// NOTE: either `countRemoteObjs` _or_ cached-only (fast) version of the bucket summary
 func (p *proxy) bsummDoWait(bck *meta.Bck, out *cmn.BsummResult, fltPresence int, countRemoteObjs bool) error {
 	var (
 		config = cmn.GCO.Get()
 		max    = config.Timeout.MaxHostBusy.D()
 		sleep  = cos.ProbingFrequency(max)
 		qbck   = (*cmn.QueryBcks)(bck)
-		msg    = &apc.BsummCtrlMsg{ObjCached: !countRemoteObjs, BckPresent: apc.IsFltPresent(fltPresence), Fast: true}
+		msg    = &apc.BsummCtrlMsg{ObjCached: !countRemoteObjs, BckPresent: apc.IsFltPresent(fltPresence)}
 	)
 	if _, _, _, err := p.bsummDo(qbck, msg); err != nil {
 		return err

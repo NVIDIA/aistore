@@ -9,7 +9,6 @@ type (
 	BsummCtrlMsg struct {
 		UUID       string `json:"uuid"`
 		Prefix     string `json:"prefix"`
-		Fast       bool   `json:"fast"`
 		ObjCached  bool   `json:"cached"`
 		BckPresent bool   `json:"present"`
 	}

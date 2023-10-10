@@ -155,7 +155,7 @@ func (r *bsummXact) _run(bck *meta.Bck, summ *cmn.BsummResult, msg *apc.BsummCtr
 	// 1. always estimate on-disk size (is fast)
 	var errCount uint64
 	summ.TotalSize.OnDisk, errCount = r.sizeOnDisk(bck, msg.Prefix)
-	if errCount != 0 && msg.Fast {
+	if errCount != 0 {
 		return
 	}
 

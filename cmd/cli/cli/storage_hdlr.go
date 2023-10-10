@@ -363,7 +363,6 @@ func summaryStorageHandler(c *cli.Context) error {
 
 // "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func (ctx *bsummCtx) slow() (res cmn.AllBsummResults, err error) {
-	ctx.msg.Fast = false
 	err = cmn.WaitForFunc(ctx.get, ctx.timeout)
 	res = ctx.res
 	return

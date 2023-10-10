@@ -459,6 +459,24 @@ func (mi *Mountpath) diskSize() (size uint64) {
 	return
 }
 
+// bucket and bucket+prefix on-disk sizing (uses 'du')
+func (mi *Mountpath) onDiskSize(bck *cmn.Bck, prefix string) (uint64, error) {
+	var (
+		dirPath          string
+		withNonDirPrefix bool
+	)
+	if prefix == "" {
+		dirPath = mi.MakePathBck(bck)
+	} else {
+		dirPath = filepath.Join(mi.MakePathCT(bck, ObjectType), prefix)
+		if cos.Stat(dirPath) != nil {
+			dirPath += "*"          // prefix is _not_ a directory
+			withNonDirPrefix = true // ok to fail matching
+		}
+	}
+	return ios.DirSizeOnDisk(dirPath, withNonDirPrefix)
+}
+
 //
 // MountedFS & MPI
 //
@@ -1024,7 +1042,7 @@ func (mpi MPI) toSlice() []string {
 }
 
 //
-// capacity management
+// capacity management/reporting
 //
 
 // total disk size
@@ -1040,6 +1058,24 @@ func ComputeDiskSize() {
 }
 
 func GetDiskSize() uint64 { return mfs.totalSize.Load() }
+
+// bucket and bucket+prefix on-disk sizing
+func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
+	avail := GetAvail()
+	for _, mi := range avail {
+		sz, err := mi.onDiskSize(bck, prefix)
+		if err != nil {
+			if cmn.FastV(4, cos.SmoduleFS) {
+				nlog.Warningln("failed to 'du':", err, "["+mi.String(), bck.String(), prefix+"]")
+			}
+			return 0
+		}
+		size += sz
+	}
+	return
+}
+
+// cap status: get, refresh, periodic
 
 func Cap() (cs CapStatus) {
 	// config

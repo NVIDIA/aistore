@@ -24,6 +24,12 @@ const (
 	msgpBufSize = 16 * cos.KiB
 )
 
+// additional and optional list-objets args (see also: GetArgs, PutArgs)
+type ListArgs struct {
+	Progress *ProgressContext // with a callback
+	Num      uint             // aka limit
+}
+
 // ListBuckets returns buckets for provided query, where
 //   - `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
 //   - ListBuckets utiizes `cmn.QueryBcks` - control structure that's practically identical to `cmn.Bck`,

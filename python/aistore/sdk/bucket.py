@@ -265,7 +265,6 @@ class Bucket(AISSource):
         self,
         uuid: str = "",
         prefix: str = "",
-        fast: bool = True,
         cached: bool = True,
         present: bool = True,
     ):
@@ -276,7 +275,6 @@ class Bucket(AISSource):
             uuid (str): Identifier for the bucket summary. Defaults to an empty string.
             prefix (str): Prefix for objects to be included in the bucket summary.
                           Defaults to an empty string (all objects).
-            fast (bool): If True, performs and returns a quick summary. Defaults to True.
             cached (bool): If True, summary entails cached entities. Defaults to True.
             present (bool): If True, summary entails present entities. Defaults to True.
 
@@ -289,7 +287,7 @@ class Bucket(AISSource):
             aistore.sdk.errors.AISError: All other types of errors with AIStore
         """
         bsumm_ctrl_msg = BsummCtrlMsg(
-            uuid=uuid, prefix=prefix, fast=fast, cached=cached, present=present
+            uuid=uuid, prefix=prefix, cached=cached, present=present
         )
 
         # Start the job and get the job ID

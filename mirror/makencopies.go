@@ -153,13 +153,12 @@ func (r *mncXact) visitObj(lom *cluster.LOM, buf []byte) (err error) {
 	return
 }
 
-func (r *mncXact) String() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.String(), r.p.args.Tag, r.p.args.Copies)
+func (r *mncXact) str(s string) string {
+	return fmt.Sprintf("%s tag=%s, copies=%d", s, r.p.args.Tag, r.p.args.Copies)
 }
 
-func (r *mncXact) Name() string {
-	return fmt.Sprintf("%s tag=%s, copies=%d", r.Base.Name(), r.p.args.Tag, r.p.args.Copies)
-}
+func (r *mncXact) String() string { return r.str(r.Base.String()) }
+func (r *mncXact) Name() string   { return r.str(r.Base.Name()) }
 
 func (r *mncXact) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}

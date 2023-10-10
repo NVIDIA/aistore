@@ -23,6 +23,7 @@ func Xreg() {
 	xreg.RegBckXact(&prfFactory{})
 
 	xreg.RegNonBckXact(&bsummFactory{})
+	// xreg.RegNonBckXact(&nsummFactory{}) // TODO -- FIXME: subst
 
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})

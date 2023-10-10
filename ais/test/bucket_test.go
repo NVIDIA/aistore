@@ -3235,7 +3235,6 @@ func TestBucketListAndSummary(t *testing.T) {
 		provider string
 		summary  bool
 		cached   bool
-		fast     bool // It makes sense only for summary
 	}
 
 	providers := []string{apc.AIS}
@@ -3247,20 +3246,17 @@ func TestBucketListAndSummary(t *testing.T) {
 	for _, provider := range providers {
 		for _, summary := range []bool{false, true} {
 			for _, cached := range []bool{false, true} {
-				for _, fast := range []bool{false, true} {
-					tests = append(tests, test{
-						provider: provider,
-						summary:  summary,
-						cached:   cached,
-						fast:     fast,
-					})
-				}
+				tests = append(tests, test{
+					provider: provider,
+					summary:  summary,
+					cached:   cached,
+				})
 			}
 		}
 	}
 
 	for _, test := range tests {
-		p := make([]string, 4)
+		p := make([]string, 3)
 		p[0] = test.provider
 		p[1] = "list"
 		if test.summary {
@@ -3269,10 +3265,6 @@ func TestBucketListAndSummary(t *testing.T) {
 		p[2] = "all"
 		if test.cached {
 			p[2] = "cached"
-		}
-		p[3] = "slow"
-		if test.fast {
-			p[3] = "fast"
 		}
 		t.Run(strings.Join(p, "/"), func(t *testing.T) {
 			var (
@@ -3300,7 +3292,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			} else if m.bck.IsRemote() {
 				m.bck = cliBck
 				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
-				tlog.Logf("remote %s - %s\n", m.bck.Cname(""), p[3])
+				tlog.Logf("remote %s\n", m.bck.Cname(""))
 				m.del(-1 /* delete all */)
 
 				m.num /= 10
@@ -3319,7 +3311,7 @@ func TestBucketListAndSummary(t *testing.T) {
 			tlog.Logln("checking objects...")
 
 			if test.summary {
-				msg := &apc.BsummCtrlMsg{ObjCached: test.cached, Fast: test.fast}
+				msg := &apc.BsummCtrlMsg{ObjCached: test.cached}
 				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg)
 				tassert.CheckFatal(t, err)
 
@@ -3331,12 +3323,9 @@ func TestBucketListAndSummary(t *testing.T) {
 				}
 
 				summary := summaries[0]
-				if !test.fast {
-					// TODO -- FIXME: add checks and rewrite
-					if summary.ObjCount.Remote+summary.ObjCount.Present != uint64(expectedFiles) {
-						t.Errorf("%s: number of objects in summary (%+v) differs from expected (%d)",
-							m.bck, summary.ObjCount, expectedFiles)
-					}
+				if summary.ObjCount.Remote+summary.ObjCount.Present != uint64(expectedFiles) {
+					t.Errorf("%s: number of objects in summary (%+v) differs from expected (%d)",
+						m.bck, summary.ObjCount, expectedFiles)
 				}
 			} else {
 				msg := &apc.LsoMsg{PageSize: uint(min(m.num/3, 256))} // mult. pages
