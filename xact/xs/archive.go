@@ -519,7 +519,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 }
 
 func (wi *archwi) quiesce() cluster.QuiRes {
-	timeout := cmn.Timeout.CplaneOperation()
+	timeout := cmn.Rom.CplaneOperation()
 	return wi.r.Quiesce(timeout, func(total time.Duration) cluster.QuiRes {
 		if wi.refc.Load() == 0 && wi.r.wiCnt.Load() == 1 /*the last wi (so far) about to `fini`*/ {
 			return cluster.QuiDone

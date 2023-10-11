@@ -67,7 +67,7 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 	}
 	var (
 		config = cmn.GCO.Get()
-		sleep  = cmn.Timeout.CplaneOperation()
+		sleep  = cmn.Rom.CplaneOperation()
 		maxwt  = config.Rebalance.DestRetryTime.D()
 		curwt  time.Duration
 	)

@@ -459,7 +459,7 @@ func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn
 		localConf.HostNet.PortIntraData = conf.HostNet.PortIntraData
 	}
 
-	localConfFile := filepath.Join(conf.ConfigDir, fname.PlaintextInitialConfig)
+	localConfFile := filepath.Join(conf.ConfigDir, fname.PlainLocalConfig)
 	err := jsp.SaveMeta(localConfFile, localConf, nil)
 	tassert.CheckFatal(t, err)
 

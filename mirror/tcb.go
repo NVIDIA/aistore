@@ -183,7 +183,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	o.Hdr.Opcode = OpcTxnDone
 	r.dm.Bcast(o, nil)
 
-	q := r.Quiesce(cmn.Timeout.CplaneOperation(), r.qcb)
+	q := r.Quiesce(cmn.Rom.CplaneOperation(), r.qcb)
 	if q == cluster.QuiTimeout {
 		r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
 	}
@@ -204,7 +204,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 
 	since := mono.Since(r.rxlast.Load())
 	if r.refc.Load() > 0 {
-		if since > cmn.Timeout.MaxKeepalive() {
+		if since > cmn.Rom.MaxKeepalive() {
 			// idle on the Rx side despite having some (refc > 0) senders
 			if tot > r.BckJog.Config.Timeout.SendFile.D() {
 				return cluster.QuiTimeout
@@ -212,7 +212,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 		}
 		return cluster.QuiActive
 	}
-	if since > cmn.Timeout.CplaneOperation() {
+	if since > cmn.Rom.CplaneOperation() {
 		return cluster.QuiDone
 	}
 	return cluster.QuiInactiveCB

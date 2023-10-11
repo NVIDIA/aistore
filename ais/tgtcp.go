@@ -795,7 +795,7 @@ func (t *target) getPrimaryBMD(renamed string) (bmd *bucketMD, err error) {
 		psi     = smap.Primary
 		path    = apc.URLPathDae.S
 		url     = psi.URL(cmn.NetIntraControl)
-		timeout = cmn.Timeout.CplaneOperation()
+		timeout = cmn.Rom.CplaneOperation()
 	)
 	if renamed != "" {
 		q.Set(whatRenamedLB, renamed)
@@ -1142,7 +1142,7 @@ func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok boo
 			Path:  apc.URLPathObjects.Join(lom.Bck().Name, lom.ObjName),
 			Query: q,
 		}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
 	res := t.call(cargs, smap)
 	ok = res.err == nil

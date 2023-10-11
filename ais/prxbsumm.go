@@ -60,7 +60,7 @@ retry:
 	if orig != "" && !retried {
 		runtime.Gosched()
 		nlog.Errorf("%s: checking on the x-%s[%s] status - retrying once...", p, apc.ActSummaryBck, msg.UUID)
-		time.Sleep(max(cmn.Timeout.CplaneOperation(), time.Second))
+		time.Sleep(max(cmn.Rom.CplaneOperation(), time.Second))
 		retried = true
 		goto retry
 	}
@@ -77,7 +77,6 @@ retry:
 func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsummResults, *meta.Snode, int, error) {
 	var (
 		q      = make(url.Values, 4)
-		config = cmn.GCO.Get()
 		smap   = p.owner.smap.get()
 		aisMsg = p.newAmsgActVal(apc.ActSummaryBck, msg)
 	)
@@ -145,7 +144,7 @@ func (p *proxy) bsummDo(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (cmn.AllBsum
 			summaries = summaries.Aggregate(summ)
 		}
 	}
-	summaries.Finalize(dsize, config.TestingEnv())
+	summaries.Finalize(dsize, cmn.Rom.TestingEnv())
 	freeBcastRes(results)
 	return summaries, nil, 0, nil
 }

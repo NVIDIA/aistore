@@ -2548,7 +2548,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		const max = 16
 		var (
 			smap  = p.owner.smap.get()
-			sleep = cmn.Timeout.CplaneOperation() / 2
+			sleep = cmn.Rom.CplaneOperation() / 2
 		)
 		for i := 0; smap.validate() != nil && i < max; i++ {
 			if !p.NodeStarted() {
@@ -3032,8 +3032,8 @@ func (p *proxy) rootHandler(w http.ResponseWriter, r *http.Request) {
 	// by default, s3 is serviced at `/s3`
 	// with `/` root reserved for vanilla http locations via ht:// mechanism
 	config := cmn.GCO.Get()
-	cmn.Features = config.Features
-	if !cmn.Features.IsSet(feat.ProvideS3APIviaRoot) {
+	cmn.Rom.Set(&config.ClusterConfig)
+	if !cmn.Rom.Features().IsSet(feat.ProvideS3APIviaRoot) {
 		p.htHandler(w, r)
 		return
 	}
@@ -3263,7 +3263,7 @@ func (p *proxy) getDaemonInfo(osi *meta.Snode) (si *meta.Snode, err error) {
 			Path:   apc.URLPathDae.S,
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatSnode}},
 		}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Rom.CplaneOperation()
 		cargs.cresv = cresND{} // -> meta.Snode
 	}
 	res := p.call(cargs, p.owner.smap.get())

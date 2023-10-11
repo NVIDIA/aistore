@@ -14,10 +14,13 @@ const (
 )
 
 const (
-	// aisnode config
-	PlaintextInitialConfig = "ais_local.json"
-	GlobalConfig           = ".ais.conf"
-	OverrideConfig         = ".ais.override_config"
+	// plain-text initial configs (NOTE: read-only, never change)
+	PlainGlobalConfig = "ais.json"
+	PlainLocalConfig  = "ais_local.json"
+
+	// versioned, replicated, and checksum-protected
+	GlobalConfig   = ".ais.conf"
+	OverrideConfig = ".ais.override_config"
 
 	// proxy aisnode ID
 	ProxyID = ".ais.proxy_id"

@@ -195,7 +195,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 		if args.IsClient {
 			args.Sleep = time.Second / 2
 		} else {
-			args.Sleep = Timeout.CplaneOperation() / 4
+			args.Sleep = Rom.CplaneOperation() / 4
 		}
 	}
 	if args.Caller != "" {
@@ -229,7 +229,7 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			if args.IsClient {
 				sleep = min(sleep+(args.Sleep/2), 4*time.Second)
 			} else {
-				sleep = min(sleep+(args.Sleep/2), Timeout.MaxKeepalive())
+				sleep = min(sleep+(args.Sleep/2), Rom.MaxKeepalive())
 			}
 		}
 		if hardErrCnt > args.HardErr || softErrCnt > args.SoftErr {

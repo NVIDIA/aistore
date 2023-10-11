@@ -209,9 +209,9 @@ func (m *InitMsgBase) validate(detail string) error {
 	//
 	// ArgTypeFQN ("fqn") can also be globally disallowed
 	//
-	if m.ArgTypeX == ArgTypeFQN && cmn.Features.IsSet(feat.DontAllowPassingFQNtoETL) {
+	if m.ArgTypeX == ArgTypeFQN && cmn.Rom.Features().IsSet(feat.DontAllowPassingFQNtoETL) {
 		err := fmt.Errorf("arg-type %q is not permitted by the configured feature flags (%s)",
-			m.ArgTypeX, cmn.Features.String())
+			m.ArgTypeX, cmn.Rom.Features().String())
 		return cmn.NewErrETL(errCtx, "%v [%s]", err, detail)
 	}
 

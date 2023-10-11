@@ -439,7 +439,7 @@ write:
 	}
 
 	// ok
-	if cmn.Features.IsSet(feat.FsyncPUT) {
+	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
 		err = lmfh.Sync() // compare w/ cos.FlushClose
 		debug.AssertNoErr(err)
 	}
@@ -561,7 +561,7 @@ do:
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
 			goi.unlocked = true
 			if errCode == http.StatusNotFound {
-				if cmn.Features.IsSet(feat.DontRmViaValidateWarmGET) {
+				if cmn.Rom.Features().IsSet(feat.DontRmViaValidateWarmGET) {
 					goi.lom.Uncache()
 				} else {
 					errCodeDel, errDel := goi.t.DeleteObject(goi.lom, false /*evict*/)

@@ -126,7 +126,7 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	// which is why we consider `not-found`, `already-finished`,
 	// and `unknown-notifier` benign non-error conditions
 	uuid = notifMsg.UUID
-	if !withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+	if !withRetry(cmn.Rom.CplaneOperation(), func() bool {
 		nl = n.entry(uuid)
 		return nl != nil
 	}) {
@@ -318,7 +318,7 @@ func (n *notifs) done(nl nl.Listener) {
 			args := allocBcArgs()
 			args.req = abortReq(nl)
 			args.network = cmn.NetIntraControl
-			args.timeout = cmn.Timeout.MaxKeepalive()
+			args.timeout = cmn.Rom.MaxKeepalive()
 			args.nodes = []meta.NodeMap{nl.Notifiers()}
 			args.nodeCount = len(args.nodes[0])
 			args.smap = smap

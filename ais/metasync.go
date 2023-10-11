@@ -334,7 +334,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.smap = smap
-	args.timeout = cmn.Timeout.MaxKeepalive() // making exception for this critical op
+	args.timeout = cmn.Rom.MaxKeepalive() // making exception for this critical op
 	args.to = to
 	args.ignoreMaintenance = true
 	results := y.p.bcastGroup(args)
@@ -376,7 +376,7 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 			}
 			break
 		}
-		time.Sleep(cmn.Timeout.CplaneOperation())
+		time.Sleep(cmn.Rom.CplaneOperation())
 		smap = y.p.owner.smap.get()
 		if !smap.isPrimary(y.p.si) {
 			y.becomeNonPrimary()
@@ -444,7 +444,7 @@ func (y *metasyncer) handleRefused(method, urlPath string, body io.Reader, refus
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
 	args.network = cmn.NetIntraControl
-	args.timeout = cmn.Timeout.MaxKeepalive()
+	args.timeout = cmn.Rom.MaxKeepalive()
 	args.nodes = []meta.NodeMap{refused}
 	args.nodeCount = len(refused)
 	args.smap = smap
@@ -551,7 +551,7 @@ func (y *metasyncer) handlePending() (failedCnt int) {
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, BodyR: body}
 	args.network = cmn.NetIntraControl
-	args.timeout = cmn.Timeout.MaxKeepalive()
+	args.timeout = cmn.Rom.MaxKeepalive()
 	args.nodes = []meta.NodeMap{pending}
 	args.nodeCount = len(pending)
 	args.smap = smap

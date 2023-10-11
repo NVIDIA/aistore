@@ -241,7 +241,7 @@ func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 			Path:   apc.URLPathDae.S,
 			Query:  q,
 		}
-		cargs.timeout = cmn.Timeout.MaxKeepalive()
+		cargs.timeout = cmn.Rom.MaxKeepalive()
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
@@ -315,7 +315,7 @@ func (p *proxy) _queryTs(w http.ResponseWriter, r *http.Request, query url.Value
 	}
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: r.Method, Path: apc.URLPathDae.S, Query: query, Body: body}
-	args.timeout = cmn.Timeout.MaxKeepalive()
+	args.timeout = cmn.Rom.MaxKeepalive()
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	return p._tresRaw(w, r, results)
@@ -590,7 +590,7 @@ func (p *proxy) adminJoinHandshake(smap *smapX, nsi *meta.Snode, apiOp string) (
 	{
 		cargs.si = nsi
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathDaeAdminJoin.S, Body: cos.MustMarshal(cm)}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
 	res := p.call(cargs, smap)
 	err = res.err
@@ -770,7 +770,7 @@ func (p *proxy) cleanupMark(ctx *smapModifier) {
 		msg     = apc.ActMsg{Action: apc.ActCleanupMarkers, Value: &val}
 		cargs   = allocCargs()
 		smap    = p.owner.smap.get()
-		timeout = cmn.Timeout.CplaneOperation()
+		timeout = cmn.Rom.CplaneOperation()
 		sleep   = timeout >> 1
 	)
 	{
@@ -1603,8 +1603,8 @@ func (p *proxy) attachDetachRemAis(w http.ResponseWriter, r *http.Request, actio
 		const fmerr = "(config-backends modifying) remote cluster: (%t, %s)"
 		var timeout time.Duration
 		for {
-			time.Sleep(cmn.Timeout.MaxKeepalive())
-			timeout += cmn.Timeout.MaxKeepalive()
+			time.Sleep(cmn.Rom.MaxKeepalive())
+			timeout += cmn.Rom.MaxKeepalive()
 			config := cmn.GCO.Get()
 			if p.ClusterStarted() {
 				break
@@ -1935,7 +1935,7 @@ func (p *proxy) rmNodeFinal(msg *apc.ActMsg, si *meta.Snode, ctx *smapModifier) 
 	var (
 		smap    = p.owner.smap.get()
 		node    = smap.GetNode(si.ID())
-		timeout = cmn.Timeout.CplaneOperation()
+		timeout = cmn.Rom.CplaneOperation()
 	)
 	if node == nil {
 		txt := "cannot \"" + msg.Action + "\""

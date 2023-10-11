@@ -137,7 +137,7 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 }
 
 func (b *etlBootstrapper) _dial(socketAddr string) error {
-	probeInterval := cmn.Timeout.MaxKeepalive()
+	probeInterval := cmn.Rom.MaxKeepalive()
 	err := cmn.NetworkCallWithRetry(&cmn.RetryArgs{
 		Call: func() (int, error) {
 			conn, err := net.DialTimeout("tcp", socketAddr, probeInterval)

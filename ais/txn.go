@@ -387,7 +387,7 @@ func checkTimeout(txn txn, now time.Time, config *cmn.Config) (err, warn error) 
 	} else {
 		if elapsed > TxnTimeoutMult*config.Timeout.MaxHostBusy.D() {
 			err = fmt.Errorf("gc %s: [begin - start-commit] timeout", txn)
-		} else if elapsed >= TxnTimeoutMult*cmn.Timeout.MaxKeepalive() {
+		} else if elapsed >= TxnTimeoutMult*cmn.Rom.MaxKeepalive() {
 			warn = fmt.Errorf("gc %s: commit message is taking too long", txn)
 		}
 	}

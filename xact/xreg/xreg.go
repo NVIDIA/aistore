@@ -678,7 +678,7 @@ func (e *entries) add(entry Renewable) {
 // of that sort. Further comments below.
 
 func LimitedCoexistence(tsi *meta.Snode, bck *meta.Bck, action string, otherBck ...*meta.Bck) (err error) {
-	if cmn.Features.IsSet(feat.IgnoreLimitedCoexistence) {
+	if cmn.Rom.Features().IsSet(feat.IgnoreLimitedCoexistence) {
 		return
 	}
 	const sleep = time.Second

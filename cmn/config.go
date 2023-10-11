@@ -217,8 +217,8 @@ type (
 
 	// maximum intra-cluster latencies (in the increasing order)
 	TimeoutConf struct {
-		CplaneOperation cos.Duration `json:"cplane_operation"` // read-mostly via global cmn.Timeout.CplaneOperation
-		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto, cmn.Timeout.MaxKeepalive - see below
+		CplaneOperation cos.Duration `json:"cplane_operation"` // read-mostly via global cmn.Rom.CplaneOperation
+		MaxKeepalive    cos.Duration `json:"max_keepalive"`    // ditto, cmn.Rom.MaxKeepalive - see below
 		MaxHostBusy     cos.Duration `json:"max_host_busy"`
 		Startup         cos.Duration `json:"startup_time"`
 		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout
@@ -551,21 +551,6 @@ type (
 	}
 )
 
-// read-mostly and most often used timeouts: assign at startup to reduce the number of GCO.Get() calls
-// updating is done on a best-effort basis (but always upon receiving/updating cluster config)
-type timeout struct {
-	cplane    time.Duration // Config.Timeout.CplaneOperation
-	keepalive time.Duration // ditto MaxKeepalive
-}
-
-var Timeout = &timeout{
-	cplane:    time.Second + time.Millisecond,
-	keepalive: 2*time.Second + time.Millisecond,
-}
-
-// read-mostly feature flags (ditto)
-var Features feat.Flags
-
 // assorted named fields that require (cluster | node) restart for changes to make an effect
 var ConfigRestartRequired = []string{"auth", "memsys", "net"}
 
@@ -684,6 +669,7 @@ func (c *Config) UpdateClusterConfig(updateConf *ConfigToUpdate, asType string) 
 // TestingEnv returns true if config is set to a development environment
 // where a single local filesystem is partitioned between all (locally running)
 // targets and is used for both local and Cloud buckets
+// See also: `rom.testingEnv`
 func (c *Config) TestingEnv() bool {
 	return c.LocalConfig.TestingEnv()
 }
@@ -1534,15 +1520,6 @@ func (c *TimeoutConf) Validate() error {
 	return nil
 }
 
-// upon startup and via stats runner
-func (d *timeout) Set(cluconf *ClusterConfig) {
-	d.cplane = cluconf.Timeout.CplaneOperation.D()
-	d.keepalive = cluconf.Timeout.MaxKeepalive.D()
-}
-
-func (d *timeout) CplaneOperation() time.Duration { debug.Assert(d.cplane > 0); return d.cplane }
-func (d *timeout) MaxKeepalive() time.Duration    { debug.Assert(d.keepalive > 0); return d.keepalive }
-
 ////////////////////
 // DownloaderConf //
 ////////////////////
@@ -1719,10 +1696,9 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
-	// readonly config which can be updated but
-	// for the change to take an effect the cluster (or the node) must be restarted
-	Features = config.Features
-	Timeout.Set(&config.ClusterConfig)
+	// initialize readonly config
+	Rom.Set(&config.ClusterConfig)
+	Rom.testingEnv = config.TestingEnv()
 
 	config.SetRole(daeRole)
 

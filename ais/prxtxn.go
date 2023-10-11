@@ -711,7 +711,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 			cmn.ErrNotEnoughTargets, dataSlices, paritySlices, bck, dataSlices+paritySlices+1, numTs, smap)
 		return
 	}
-	if !nlp.TryLock(cmn.Timeout.CplaneOperation() / 2) {
+	if !nlp.TryLock(cmn.Rom.CplaneOperation() / 2) {
 		err = cmn.NewErrBusy("bucket", bck, "")
 		return
 	}
@@ -824,7 +824,7 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 		config    = cmn.GCO.Get()
 	)
 	// NOTE: testing only: to avoid premature aborts when loopback devices get 100% utilized
-	//       (under heavy writing)
+	// (under heavy writing)
 	if config.TestingEnv() {
 		c.timeout.netw = config.Timeout.MaxHostBusy.D() + config.Timeout.MaxHostBusy.D()/2
 		c.timeout.host = c.timeout.netw

@@ -326,7 +326,7 @@ func (h *htrun) initNetworks() {
 		config           = cmn.GCO.Get()
 		port             = strconv.Itoa(config.HostNet.Port)
 		proto            = config.Net.HTTP.Proto
-		addrList, err    = getLocalIPv4List()
+		addrList, err    = getLocalIPv4List(config)
 	)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
@@ -610,7 +610,7 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
-			args.timeout = cmn.Timeout.CplaneOperation()
+			args.timeout = cmn.Rom.CplaneOperation()
 		}
 		req, _, cancel, res.err = args.req.ReqWithTimeout(args.timeout)
 		if res.err != nil {
@@ -732,7 +732,7 @@ func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
 	path := apc.URLPathNotifs.Join(upon)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: path, Body: cos.MustMarshal(&msg)}
 	args.network = cmn.NetIntraControl
-	args.timeout = cmn.Timeout.MaxKeepalive()
+	args.timeout = cmn.Rom.MaxKeepalive()
 	args.selected = nodes
 	args.nodeCount = len(nodes)
 	args.smap = smap
@@ -756,7 +756,7 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	}
 	debug.Assert(cmn.NetworkIsKnown(args.network))
 	if args.timeout == 0 {
-		args.timeout = cmn.Timeout.CplaneOperation()
+		args.timeout = cmn.Rom.CplaneOperation()
 		debug.Assert(args.timeout != 0)
 	}
 
@@ -840,7 +840,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	)
 	args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathIC.S, Body: cos.MustMarshal(msg)}
 	args.network = cmn.NetIntraControl
-	args.timeout = cmn.Timeout.MaxKeepalive()
+	args.timeout = cmn.Rom.MaxKeepalive()
 	for pid, psi := range smap.Pmap {
 		if pid == h.si.ID() || !smap.IsIC(psi) || smap.GetActiveNode(pid) == nil {
 			continue
@@ -1329,7 +1329,7 @@ func (h *htrun) bcastHealth(smap *smapX, checkAll bool) (*clusterInfo, int /*num
 		h:        h,
 		maxCii:   &clusterInfo{},
 		query:    url.Values{apc.QparamClusterInfo: []string{"true"}},
-		timeout:  cmn.Timeout.CplaneOperation(),
+		timeout:  cmn.Rom.CplaneOperation(),
 		checkAll: checkAll,
 	}
 	c.maxCii.fillSmap(smap)
@@ -1630,9 +1630,8 @@ func (h *htrun) _recvCfg(newConfig *globalConfig, payload msPayload) (err error)
 		return
 	}
 
-	// NOTE: update assorted read-mostly knobs
-	cmn.Features = newConfig.Features
-	cmn.Timeout.Set(&newConfig.ClusterConfig)
+	// update assorted read-mostly knobs
+	cmn.Rom.Set(&newConfig.ClusterConfig)
 	return
 }
 
@@ -1721,7 +1720,7 @@ func (h *htrun) join(query url.Values, htext htext, contactURLs ...string) (res 
 	for _, u := range contactURLs {
 		addCandidate(u)
 	}
-	sleep := max(2*time.Second, cmn.Timeout.MaxKeepalive())
+	sleep := max(2*time.Second, cmn.Rom.MaxKeepalive())
 	for i := 0; i < 4; i++ {
 		for _, candidateURL := range candidates {
 			if daemon.stopping.Load() {
@@ -1867,7 +1866,7 @@ func (h *htrun) pollClusterStarted(config *cmn.Config, psi *meta.Snode) (maxCii 
 		query                    = url.Values{apc.QparamAskPrimary: []string{"true"}}
 	)
 	for {
-		sleep = min(cmn.Timeout.MaxKeepalive(), sleep+time.Second)
+		sleep = min(cmn.Rom.MaxKeepalive(), sleep+time.Second)
 		time.Sleep(sleep)
 		total += sleep
 		rediscover += sleep

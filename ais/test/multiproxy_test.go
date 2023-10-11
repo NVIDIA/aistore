@@ -185,7 +185,7 @@ killRestore:
 	tassert.CheckFatal(t, err)
 
 	// Update local config ports.
-	localConfPath := filepath.Join(cfg.ConfigDir, fname.PlaintextInitialConfig)
+	localConfPath := filepath.Join(cfg.ConfigDir, fname.PlainLocalConfig)
 	localConf := &cmn.LocalConfig{}
 	_, err = jsp.LoadMeta(localConfPath, localConf)
 	tassert.CheckFatal(t, err)

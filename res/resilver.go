@@ -336,7 +336,7 @@ redo:
 			}
 			copied = false
 			lom, hlom = orig, nil
-			time.Sleep(cmn.Timeout.CplaneOperation() / 2)
+			time.Sleep(cmn.Rom.CplaneOperation() / 2)
 			goto redo
 		}
 		err := lom.Copy(mi, buf)

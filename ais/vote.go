@@ -615,7 +615,7 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 		return
 	}
 	// retry
-	sleep := cmn.Timeout.CplaneOperation() / 2
+	sleep := cmn.Rom.CplaneOperation() / 2
 	for i := 0; i < maxRetryElectReq; i++ {
 		time.Sleep(sleep)
 		res = h.call(cargs, vr.Smap)

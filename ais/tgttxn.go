@@ -967,7 +967,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
-		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Features.IsSet(feat.DontAutoDetectFshare)
+		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
 	)
 	cb := func(fqn string, de fs.DirEntry) (err error) {
 		if de.IsDir() {
@@ -1067,7 +1067,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 		if ptime := query.Get(apc.QparamUnixTime); ptime != "" {
 			now := time.Now().UnixNano()
 			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrCallerIsPrimary))
-			lim := int64(cmn.Timeout.CplaneOperation()) >> 1
+			lim := int64(cmn.Rom.CplaneOperation()) >> 1
 			if dur > lim || dur < -lim {
 				nlog.Errorf("Warning: clock drift %s <-> %s(self) = %v, txn %s[%s]",
 					c.callerName, t, time.Duration(dur), msg.Action, c.msg.UUID)

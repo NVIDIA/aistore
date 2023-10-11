@@ -31,6 +31,8 @@ var GCO *gco
 func init() {
 	GCO = &gco{}
 	GCO.c.Store(&Config{})
+
+	Rom.init()
 }
 
 /////////

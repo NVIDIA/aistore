@@ -87,7 +87,7 @@ begin:
 			return true
 		}
 		if retry {
-			withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+			withRetry(cmn.Rom.CplaneOperation(), func() bool {
 				owner, exists = ic.p.notifs.getOwner(uuid)
 				return exists
 			})
@@ -235,7 +235,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	flt := nlFilter{ID: msg.ID, Kind: msg.Kind, Bck: bck, OnlyRunning: msg.OnlyRunning}
-	withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+	withRetry(cmn.Rom.CplaneOperation(), func() bool {
 		nl = ic.p.notifs.find(flt)
 		return nl != nil
 	})
@@ -313,7 +313,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !smap.IsIC(ic.p.si) {
-		if !withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+		if !withRetry(cmn.Rom.CplaneOperation(), func() bool {
 			smap = ic.p.owner.smap.get()
 			return smap.IsIC(ic.p.si)
 		}) {
@@ -350,7 +350,7 @@ func (ic *ic) handlePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		debug.Assert(len(regMsg.Srcs) != 0)
-		withRetry(cmn.Timeout.CplaneOperation(), func() bool {
+		withRetry(cmn.Rom.CplaneOperation(), func() bool {
 			smap = ic.p.owner.smap.get()
 			tmap, err = smap.NewTmap(regMsg.Srcs)
 			return err == nil && callerSver == smap.vstr
@@ -402,7 +402,7 @@ func (ic *ic) sendOwnershipTbl(si *meta.Snode, smap *smapX) error {
 	{
 		cargs.si = si
 		cargs.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathIC.S, Body: cos.MustMarshal(msg)}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Rom.CplaneOperation()
 	}
 	res := ic.p.call(cargs, smap)
 	freeCargs(cargs)
@@ -431,7 +431,7 @@ func (ic *ic) syncICBundle() error {
 			Path:   apc.URLPathIC.S,
 			Query:  url.Values{apc.QparamWhat: []string{apc.WhatICBundle}},
 		}
-		cargs.timeout = cmn.Timeout.CplaneOperation()
+		cargs.timeout = cmn.Rom.CplaneOperation()
 		cargs.cresv = cresIC{} // -> icBundle
 	}
 	res := ic.p.call(cargs, smap)

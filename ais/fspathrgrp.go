@@ -204,11 +204,10 @@ func (g *fsprungroup) postDD(rmi *fs.Mountpath, action string, xres *xs.Resilver
 // store updated fspaths locally as part of the 'OverrideConfigFname'
 // and commit new version of the config
 func fspathsConfigAddDel(mpath string, add bool) {
-	config := cmn.GCO.Get()
-	if config.TestingEnv() { // since testing fspaths are counted, not enumerated
+	if cmn.Rom.TestingEnv() { // since testing fspaths are counted, not enumerated
 		return
 	}
-	config = cmn.GCO.BeginUpdate()
+	config := cmn.GCO.BeginUpdate()
 	localConfig := &config.LocalConfig
 	if add {
 		localConfig.AddPath(mpath)

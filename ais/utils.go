@@ -50,7 +50,7 @@ type localIPv4Info struct {
 }
 
 // getLocalIPv4List returns a list of local unicast IPv4 with MTU
-func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
+func getLocalIPv4List(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 	addrlist = make([]*localIPv4Info, 0, 4)
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
@@ -64,7 +64,7 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 	}
 
 	var (
-		testingEnv  = cmn.GCO.Get().TestingEnv()
+		testingEnv  = config.TestingEnv()
 		k8sDetected = k8s.Detect() == nil
 	)
 	for _, addr := range addrs {

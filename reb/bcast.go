@@ -68,12 +68,12 @@ func (reb *Reb) bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		ver    = rargs.smap.Version
-		sleep  = cmn.Timeout.CplaneOperation()
+		sleep  = cmn.Rom.CplaneOperation()
 		logHdr = reb.logHdr(rargs.id, rargs.smap)
 		tname  = tsi.StringEx()
 	)
 	for i := 0; i < 4; i++ {
-		_, code, err := reb.t.Health(tsi, cmn.Timeout.MaxKeepalive(), nil)
+		_, code, err := reb.t.Health(tsi, cmn.Rom.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
 				nlog.Infof("%s: %s is online", logHdr, tname)
@@ -99,7 +99,7 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 	var (
 		curwt time.Duration
-		sleep = cmn.Timeout.CplaneOperation() * 2
+		sleep = cmn.Rom.CplaneOperation() * 2
 		maxwt = rargs.config.Rebalance.DestRetryTime.D() + rargs.config.Rebalance.DestRetryTime.D()/2
 		xreb  = reb.xctn()
 	)
