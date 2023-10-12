@@ -4,6 +4,12 @@ stages:
   - build
   - test-short
   - test-long
+  - security
+
+include:
+  - project: pstooling/gitlab-templates
+    ref: main
+    file: /templates/static-analysis/Checkmarx-main-csv.gitlab-ci.yml
 
 variables:
   MODE: debug # run tests with debug asserts
@@ -446,3 +452,9 @@ test:long:k8s:all:
       done
     - make kill && exit $result
   <<: *k8s_long_exit_def
+
+checkmarx-scan-csv:
+  stage: security
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+      allow_failure: true
