@@ -24,6 +24,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// walk all or selected buckets, one at a time
+
 const (
 	throttleNumObjects = 16 // unit of self-throttling
 )
@@ -91,39 +93,33 @@ type (
 	}
 )
 
-func NewJoggerGroup(opts *JgroupOpts, selectedMpaths ...string) *Jgroup {
+func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, mpath string) *Jgroup {
 	var (
 		joggers             map[string]*jogger
 		available, disabled = fs.Get()
 		wg, ctx             = errgroup.WithContext(context.Background())
-		l                   = len(selectedMpaths)
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
-	if l == 0 {
+	if mpath == "" {
 		joggers = make(map[string]*jogger, len(available))
+		for _, mi := range available {
+			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
+		}
 	} else {
-		joggers = make(map[string]*jogger, l)
-	}
-	for _, mi := range available {
-		if l == 0 {
-			joggers[mi.Path] = newJogger(ctx, opts, mi)
-			continue
-		}
-		for _, mpath := range selectedMpaths {
-			if mi, ok := available[mpath]; ok {
-				joggers[mi.Path] = newJogger(ctx, opts, mi)
-			}
+		joggers = make(map[string]*jogger, 1)
+		if mi, ok := available[mpath]; ok {
+			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
 		}
 	}
+
 	jg := &Jgroup{wg: wg, joggers: joggers}
 	jg.finishedCh.Init()
 	opts.onFinish = jg.markFinished
 
-	// NOTE: this jogger group is a no-op
+	// this jogger group is a no-op (unlikely)
 	if len(joggers) == 0 {
-		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%v",
-			cmn.ErrNoMountpaths, available, disabled, selectedMpaths)
+		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%q", cmn.ErrNoMountpaths, available, disabled, mpath)
 		jg.finishedCh.Close()
 	}
 	return jg
@@ -154,7 +150,7 @@ func (jg *Jgroup) markFinished() {
 	}
 }
 
-func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath) (j *jogger) {
+func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *cmn.Config) (j *jogger) {
 	var syncGroup *joggerSyncGroup
 	if opts.Parallel > 1 {
 		var (
@@ -176,7 +172,7 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath) (j *jogg
 		ctx:       ctx,
 		opts:      opts,
 		mi:        mi,
-		config:    cmn.GCO.Get(),
+		config:    config,
 		syncGroup: syncGroup,
 	}
 	if opts.Prefix != "" {
@@ -210,16 +206,29 @@ func (j *jogger) run() error {
 		aborted bool
 		err     error
 	)
-	// walk all buckets, one at a time
-	if j.opts.Bck.IsEmpty() {
-		bmd := j.opts.T.Bowner().Get()
-		bmd.Range(nil, nil, func(bck *meta.Bck) bool {
+
+	// walk all or selected in-BMD ("present") buckets, one at a time
+	if j.opts.Bck.IsQuery() {
+		var (
+			bmd      = j.opts.T.Bowner().Get()
+			qbck     = cmn.QueryBcks(j.opts.Bck)
+			provider *string
+			ns       *cmn.Ns
+		)
+		if qbck.Provider != "" {
+			provider = &qbck.Provider
+		}
+		if !qbck.Ns.IsGlobal() {
+			ns = &qbck.Ns
+		}
+		bmd.Range(provider, ns, func(bck *meta.Bck) bool {
 			aborted, err = j.runBck(bck.Bucket())
 			return err != nil || aborted
 		})
 		return err
 	}
-	// walk the specified bucket
+
+	// alternatively, walk one bucket
 	_, err = j.runBck(&j.opts.Bck)
 	return err
 }

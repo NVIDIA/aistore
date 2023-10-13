@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
@@ -101,7 +102,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 		DoLoad:   mpather.LoadUnsafe,
 	}
 	opts.Bck.Copy(r.bck.Bucket())
-	jg := mpather.NewJoggerGroup(opts)
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 	jg.Run()
 
 	select {

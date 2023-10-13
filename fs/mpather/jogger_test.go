@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
@@ -38,7 +39,7 @@ func TestJoggerGroup(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -47,8 +48,8 @@ func TestJoggerGroup(t *testing.T) {
 			counter.Inc()
 			return nil
 		},
-	})
-
+	}
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -109,7 +110,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 	for _, baseJgOpts.Parallel = range parallelOptions {
 		t.Run(fmt.Sprintf("TestJoggerGroupParallel/%d", baseJgOpts.Parallel), func(t *testing.T) {
 			counter = atomic.NewInt32(0)
-			jg := mpather.NewJoggerGroup(baseJgOpts)
+			jg := mpather.NewJoggerGroup(baseJgOpts, cmn.GCO.Get(), "")
 			jg.Run()
 			<-jg.ListenFinished()
 
@@ -139,7 +140,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -150,7 +151,8 @@ func TestJoggerGroupLoad(t *testing.T) {
 			return nil
 		},
 		DoLoad: mpather.Load,
-	})
+	}
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 
 	jg.Run()
 	<-jg.ListenFinished()
@@ -178,7 +180,7 @@ func TestJoggerGroupError(t *testing.T) {
 	)
 	defer os.RemoveAll(out.Dir)
 
-	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -186,8 +188,8 @@ func TestJoggerGroupError(t *testing.T) {
 			counter.Inc()
 			return fmt.Errorf("oops")
 		},
-	})
-
+	}
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -226,7 +228,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		counters[failOnMpath.Path] = atomic.NewInt32(0)
 	}
 
-	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
@@ -240,8 +242,8 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 			}
 			return nil
 		},
-	})
-
+	}
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 	jg.Run()
 	<-jg.ListenFinished()
 
@@ -249,9 +251,11 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 		// Expected at least one object to be skipped at each mountpath, when error occurred at 20% of objects jogged.
 		visitCount := counter.Load()
 		if mpath == failOnMpath.Path {
-			tassert.Fatalf(t, visitCount == failAt, "jogger on fail mpath %q expected to visit %d: visited %d", mpath, failAt, visitCount)
+			tassert.Fatalf(t, visitCount == failAt, "jogger on fail mpath %q expected to visit %d: visited %d",
+				mpath, failAt, visitCount)
 		}
-		tassert.Errorf(t, int(visitCount) <= out.MpathObjectsCnt[mpath], "jogger on mpath %q expected to visit at most %d, visited %d",
+		tassert.Errorf(t, int(visitCount) <= out.MpathObjectsCnt[mpath],
+			"jogger on mpath %q expected to visit at most %d, visited %d",
 			mpath, out.MpathObjectsCnt[mpath], counter.Load())
 	}
 
@@ -280,7 +284,7 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	for _, ct := range cts {
 		counters[ct] = atomic.NewInt32(0)
 	}
-	jg := mpather.NewJoggerGroup(&mpather.JgroupOpts{
+	opts := &mpather.JgroupOpts{
 		T:   out.T,
 		Bck: out.Bck,
 		CTs: cts,
@@ -294,8 +298,8 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 			counters[ct.ContentType()].Inc()
 			return nil
 		},
-	})
-
+	}
+	jg := mpather.NewJoggerGroup(opts, cmn.GCO.Get(), "")
 	jg.Run()
 	<-jg.ListenFinished()
 
