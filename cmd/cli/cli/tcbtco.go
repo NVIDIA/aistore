@@ -235,20 +235,18 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncluding
 	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
 		return err
 	}
-	empty, err := isBucketEmpty(bckFrom)
+	empty, err := isBucketEmpty(bckFrom, !bckFrom.IsRemote() || !allIncludingRemote /*cached*/)
 	debug.AssertNoErr(err)
 	if empty {
-		if bckFrom.IsAIS() {
-			note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
-			actionNote(c, note)
-			return nil
-		}
 		if bckFrom.IsRemote() && !allIncludingRemote {
 			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
 			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
 			actionNote(c, note)
 			return nil
 		}
+		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
+		actionNote(c, note)
+		return nil
 	}
 	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {

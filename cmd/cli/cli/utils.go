@@ -591,9 +591,11 @@ func confirm(c *cli.Context, prompt string, warning ...string) (ok bool) {
 }
 
 // (not to confuse with bck.IsEmpty())
-func isBucketEmpty(bck cmn.Bck) (bool, error) {
+func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 	msg := &apc.LsoMsg{}
-	msg.SetFlag(apc.LsObjCached)
+	if cached {
+		msg.SetFlag(apc.LsObjCached)
+	}
 	msg.SetFlag(apc.LsNameOnly)
 	objList, err := api.ListObjectsPage(apiBP, bck, msg)
 	if err != nil {
