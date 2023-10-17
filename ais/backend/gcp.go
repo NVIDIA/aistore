@@ -179,14 +179,19 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	lst.ContinuationToken = nextPageToken
 
-	l := len(objs)
+	var (
+		custom = cos.StrKVs{}
+		l      = len(objs)
+	)
 	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
-	var custom = cos.StrKVs{}
 	for i, attrs := range objs {
 		entry := lst.Entries[i]
 		entry.Name, entry.Size = attrs.Name, attrs.Size
+		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
+			continue
+		}
 		if v, ok := h.EncodeCksum(attrs.MD5); ok {
 			entry.Checksum = v
 		}

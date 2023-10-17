@@ -41,7 +41,7 @@ func fmtObjStatus(obj *cmn.LsoEntry) string {
 }
 
 func fmtObjIsCached(obj *cmn.LsoEntry) string {
-	return FmtBool(obj.CheckExists())
+	return FmtBool(obj.IsPresent())
 }
 
 // FmtBool returns "yes" if true, else "no"

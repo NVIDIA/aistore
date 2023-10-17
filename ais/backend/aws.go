@@ -174,15 +174,20 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		return
 	}
 
-	l := len(resp.Contents)
+	var (
+		custom = cos.StrKVs{}
+		l      = len(resp.Contents)
+	)
 	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
-	var custom = cos.StrKVs{}
 	for i, key := range resp.Contents {
 		entry := lst.Entries[i]
 		entry.Name = *key.Key
 		entry.Size = *key.Size
+		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
+			continue
+		}
 		if v, ok := h.EncodeCksum(key.ETag); ok {
 			entry.Checksum = v
 		}

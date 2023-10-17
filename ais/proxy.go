@@ -1502,9 +1502,14 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	case lsmsg.Props == "":
 		lsmsg.AddProps(apc.GetPropsMinimal...)
 		lsmsg.SetFlag(apc.LsNameSize)
-	case lsmsg.WantOnlyName():
+	case lsmsg.Props == apc.GetPropsName:
 		lsmsg.SetFlag(apc.LsNameOnly)
+	case !lsmsg.IsFlagSet(apc.LsNameOnly):
+		if strings.IndexByte(lsmsg.Props, apc.LsPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, apc.GetPropsName) {
+			lsmsg.SetFlag(apc.LsNameSize)
+		}
 	}
+
 	// ht:// backend doesn't have `ListObjects`; can only locally list archived content
 	if bck.IsHTTP() || lsmsg.IsFlagSet(apc.LsArchDir) {
 		lsmsg.SetFlag(apc.LsObjCached)

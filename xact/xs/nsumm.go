@@ -288,6 +288,7 @@ func (r *XactNsumm) visitObj(lom *cluster.LOM, _ []byte) error {
 
 func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
+	lsmsg.SetFlag(apc.LsNameSize)
 	for !r.IsAborted() {
 		npg := newNpgCtx(r.p.T, bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()

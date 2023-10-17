@@ -249,15 +249,19 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	l := len(resp.Segment.BlobItems)
 	for i := len(lst.Entries); i < l; i++ {
-		lst.Entries = append(lst.Entries, &cmn.LsoEntry{})
+		lst.Entries = append(lst.Entries, &cmn.LsoEntry{}) // add missing empty
 	}
 	for idx := range resp.Segment.BlobItems {
 		var (
 			blob  = &resp.Segment.BlobItems[idx]
 			entry = lst.Entries[idx]
 		)
+		entry.Name = blob.Name
 		if blob.Properties.ContentLength != nil {
 			entry.Size = *blob.Properties.ContentLength
+		}
+		if msg.IsFlagSet(apc.LsNameOnly) || msg.IsFlagSet(apc.LsNameSize) {
+			continue
 		}
 		// NOTE: here and elsewhere (below), use Etag as the version
 		if v, ok := h.EncodeVersion(string(blob.Properties.Etag)); ok {
@@ -273,7 +277,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		lst.ContinuationToken = *resp.NextMarker.Val
 	}
 	if verbose {
-		nlog.Infof("[list_bucket] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
+		nlog.Infof("[list_objects] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
 	}
 	return
 }

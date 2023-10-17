@@ -27,12 +27,13 @@ const (
 
 	LsArchDir // expand archives as directories
 
-	LsNameOnly // return only object names and statuses (for faster listing)
-	LsNameSize // same as above plus size
+	LsNameOnly // return only object names and, spearately, statuses
+	LsNameSize // same as above and size (minor speedup)
 
-	// Background: as far as AIS is concerned, adding a (confirmed to exist)
+	// Background: ============================================================
+	// as far as AIS is concerned, adding a (confirmed to exist)
 	// remote bucket (and its properties) to the cluster metadata is equivalent
-	// to creating the bucket on the fly.
+	// to creating the bucket on the fly. =====================================
 
 	// same as fltPresence == apc.Present (see query.go)
 	LsBckPresent
@@ -157,14 +158,6 @@ func (lsmsg *LsoMsg) WantOnlyRemoteProps() bool {
 		}
 	}
 	return true
-}
-
-// NOTE: internal usage
-func (lsmsg *LsoMsg) WantOnlyName() bool {
-	if lsmsg.IsFlagSet(LsNameOnly) || lsmsg.Props == GetPropsName {
-		return true
-	}
-	return strings.IndexByte(lsmsg.Props, LsPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, GetPropsName)
 }
 
 // WantProp returns true if msg request requires to return propName property.

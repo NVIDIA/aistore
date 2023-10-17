@@ -294,7 +294,7 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 			stats.ObjectCnt++
 			if !obj.IsStatusOK() {
 				stats.Misplaced++
-			} else if obj.CheckExists() && p.Mirror.Enabled && obj.Copies < copies {
+			} else if obj.IsPresent() && p.Mirror.Enabled && obj.Copies < copies {
 				stats.MissingCopies++
 			}
 		}
