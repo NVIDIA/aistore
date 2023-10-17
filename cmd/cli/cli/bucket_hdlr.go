@@ -146,8 +146,12 @@ var (
 		BashComplete: bucketCompletions(bcmplop{}),
 	}
 	bucketObjCmdEvict = cli.Command{
-		Name:         commandEvict,
-		Usage:        "evict all (default) or selected objects from remote bucket (to select, use '--list' or '--template')",
+		Name: commandEvict,
+		Usage: "evict one remote bucket, multiple buckets, or selected objects in a given remote bucket\n" +
+			indent1 + "(to select, use '--list' or '--template'), e.g.:\n" +
+			indent1 + "\t* gs://abc\t- evict entire bucket (all gs://abc objects in aistore);\n" +
+			indent1 + "\t* gs:\t- evict all GCP buckets;\n" +
+			indent1 + "\t* gs://abc --template images/\t- evict all objects from the virtual subdirectory called \"images\"",
 		ArgsUsage:    optionalObjectsArgument,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
@@ -367,9 +371,17 @@ func evictHandler(c *cli.Context) error {
 
 	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
-		uri := c.Args().Get(0)
-		bck, objName, err := parseBckObjURI(c, uri, true)
+		var (
+			opts = cmn.ParseURIOpts{IsQuery: true}
+			uri  = c.Args().Get(0)
+		)
+		uri = preparseBckObjURI(uri)
+		bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 		if err != nil {
+			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+				// slightly nicer
+				err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
+			}
 			return err
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {

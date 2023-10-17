@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -107,11 +108,40 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 }
 
 // Evict remote bucket
-func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
+func evictBucket(c *cli.Context, bck cmn.Bck) error {
 	if flagIsSet(c, dryRunFlag) {
 		fmt.Fprintf(c.App.Writer, "Evict: %q\n", bck.Cname(""))
-		return
+		return nil
 	}
+	if !bck.IsQuery() {
+		return _evictBck(c, bck)
+	}
+
+	// evict multiple
+	bmd, err := api.GetBMD(apiBP)
+	if err != nil {
+		return err
+	}
+	var (
+		provider *string
+		ns       *cmn.Ns
+		qbck     = cmn.QueryBcks(bck)
+	)
+	if qbck.Provider != "" {
+		provider = &qbck.Provider
+	}
+	if !qbck.Ns.IsGlobal() {
+		ns = &qbck.Ns
+	}
+	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
+		err = _evictBck(c, bck.Clone())
+		return err != nil
+	})
+
+	return err
+}
+
+func _evictBck(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = ensureHasProvider(bck); err != nil {
 		return
 	}

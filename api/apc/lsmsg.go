@@ -111,6 +111,8 @@ const (
 	GetPropsLocation = "location" // advanced usage
 )
 
+const GetPropsNameSize = GetPropsName + LsPropsSepa + GetPropsSize
+
 // NOTE: update when changing any of the above :NOTE
 var (
 	GetPropsMinimal      = []string{GetPropsName, GetPropsSize, GetPropsCached}

@@ -98,25 +98,35 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 		IncludeCopy: true,
 	}
 	if p.Bck.IsQuery() {
+		var single *meta.Bck
 		r.mapRes = make(map[uint64]*cmn.BsummResult, 8)
-		opts.Buckets = r.initResQbck()
+		opts.Buckets, single = r.initResQbck()
 
-		// inc num joggers to boost
-		if nb := len(opts.Buckets); nb > 1 {
+		nb := len(opts.Buckets)
+		switch nb {
+		case 0:
+			return r, fmt.Errorf("no %q matching buckets", p.Bck)
+		case 1:
+			// change of mind: single even though spec-ed as qbck
+			p.Bck = single
+			opts.Buckets = nil
+			goto single
+		default:
+			// inc num joggers to boost
 			nmps := fs.NumAvail()
 			if nmps == 0 {
-				return nil, cmn.ErrNoMountpaths
+				return r, cmn.ErrNoMountpaths
 			}
 			opts.PerBucket = nb*nmps <= sys.NumCPU()
+			goto ini
 		}
-	} else {
-		r.initRes(&r.oneRes, p.Bck)
-		r.single = true
-		opts.Bck = p.Bck.Clone()
 	}
-
+single:
+	r.initRes(&r.oneRes, p.Bck)
+	r.single = true
+	opts.Bck = p.Bck.Clone()
+ini:
 	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, opts, cmn.GCO.Get())
-
 	return r, nil
 }
 
@@ -162,13 +172,14 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 }
 
 // to add all `res` pointers up front
-func (r *XactNsumm) initResQbck() cmn.Bcks {
+func (r *XactNsumm) initResQbck() (cmn.Bcks, *meta.Bck) {
 	var (
 		bmd      = r.p.T.Bowner().Get()
 		qbck     = (*cmn.QueryBcks)(r.p.Bck)
 		provider *string
 		ns       *cmn.Ns
 		buckets  = make(cmn.Bcks, 0, 8) // => jogger opts
+		single   *meta.Bck
 	)
 	if r.listRemote {
 		r.buckets = make([]*meta.Bck, 0, 8)
@@ -189,9 +200,10 @@ func (r *XactNsumm) initResQbck() cmn.Bcks {
 		if r.listRemote {
 			r.buckets = append(r.buckets, bck)
 		}
+		single = bck
 		return false
 	})
-	return buckets
+	return buckets, single
 }
 
 func (r *XactNsumm) initRes(res *cmn.BsummResult, bck *meta.Bck) {

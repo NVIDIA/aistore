@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -25,16 +26,16 @@ import (
 )
 
 type bsummCtx struct {
-	c       *cli.Context
-	units   string
-	qbck    cmn.QueryBcks
-	timeout time.Duration
-	msg     apc.BsummCtrlMsg
-	args    api.BsummArgs
-	started int64
-	l       int
-	n       int
-	res     cmn.AllBsummResults
+	c              *cli.Context
+	units          string
+	qbck           cmn.QueryBcks
+	longWaitPrompt time.Duration
+	msg            apc.BsummCtrlMsg
+	args           api.BsummArgs
+	started        int64
+	l              int
+	n              int
+	res            cmn.AllBsummResults
 }
 
 var (
@@ -361,14 +362,11 @@ func summaryStorageHandler(c *cli.Context) error {
 
 func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks) *bsummCtx {
 	ctx := &bsummCtx{
-		c:       c,
-		units:   units,
-		qbck:    qbck,
-		started: mono.NanoTime(),
-		timeout: longClientTimeout,
-	}
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+		c:              c,
+		units:          units,
+		qbck:           qbck,
+		started:        mono.NanoTime(),
+		longWaitPrompt: longClientTimeout,
 	}
 	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
 	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
@@ -377,13 +375,18 @@ func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks) *bsummCtx
 	if flagIsSet(c, refreshFlag) {
 		ctx.args.CallAfter = parseDurationFlag(c, refreshFlag)
 		ctx.args.Callback = ctx.progress
+		ctx.longWaitPrompt = 0 // have refresh callback
 	}
 	return ctx
 }
 
 // "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func (ctx *bsummCtx) slow() (res cmn.AllBsummResults, err error) {
-	err = cmn.WaitForFunc(ctx.get, ctx.timeout)
+	if ctx.longWaitPrompt > 0 {
+		err = cmn.WaitForFunc(ctx.get, ctx.longWaitPrompt)
+	} else {
+		err = ctx.get()
+	}
 	res = ctx.res
 	return
 }
@@ -393,6 +396,7 @@ func (ctx *bsummCtx) get() (err error) {
 	return
 }
 
+// re-print line per bucket
 func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 	if done {
 		if ctx.n > 0 {
@@ -403,30 +407,55 @@ func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
 	if summaries == nil {
 		return
 	}
-	var remcnt, cnt, remsize, size uint64
-	for _, res := range *summaries {
-		size += res.TotalSize.PresentObjs
-		cnt += res.ObjCount.Present
-		remsize += res.TotalSize.RemoteObjs
-		remcnt += res.ObjCount.Remote
-	}
-	if remcnt == 0 && cnt == 0 {
+	results := *summaries
+	if len(results) == 0 {
 		return
 	}
 	ctx.n++
+
 	// format out
-	s := fmt.Sprintf("objects: (%s, %s)",
-		cos.FormatBigNum(int(cnt)), teb.FmtSize(int64(size), ctx.units, 2))
-	if remcnt > 0 {
-		s += fmt.Sprintf(", remote: (%s, %s)",
-			cos.FormatBigNum(int(remcnt)), teb.FmtSize(int64(remsize), ctx.units, 2))
+	elapsed := mono.SinceNano(ctx.started)
+	for i, res := range results {
+		s := res.Bck.Cname("") + ": "
+		if res.ObjCount.Present == 0 && res.ObjCount.Remote == 0 {
+			s += "is empty"
+			goto emit
+		}
+		if res.Bck.IsAIS() {
+			debug.Assert(res.ObjCount.Remote == 0 && res.ObjCount.Present != 0)
+			s += fmt.Sprintf("(%s, size=%s)", cos.FormatBigNum(int(res.ObjCount.Present)),
+				teb.FmtSize(int64(res.TotalSize.PresentObjs), ctx.units, 2))
+			goto emit
+		}
+
+		// cloud bucket
+		if res.ObjCount.Present == 0 {
+			s += "[cluster: none"
+		} else {
+			s += fmt.Sprintf("[cluster: (%s, size=%s)",
+				cos.FormatBigNum(int(res.ObjCount.Present)), teb.FmtSize(int64(res.TotalSize.PresentObjs), ctx.units, 2))
+		}
+		if res.ObjCount.Remote == 0 {
+			s += "]"
+		} else {
+			s += fmt.Sprintf(", remote: (%s, size=%s)]",
+				cos.FormatBigNum(int(res.ObjCount.Remote)), teb.FmtSize(int64(res.TotalSize.RemoteObjs), ctx.units, 2))
+		}
+		s += ", " + teb.FmtDuration(elapsed, ctx.units)
+
+	emit:
+		if ctx.l < len(s) {
+			ctx.l = len(s) + 4
+		}
+		s += strings.Repeat(" ", ctx.l-len(s))
+		fmt.Fprintf(ctx.c.App.Writer, "\r%s", s)
+
+		if len(results) > 1 {
+			if i < len(results)-1 {
+				time.Sleep(3 * time.Second)
+			}
+		}
 	}
-	s += ", elapsed: " + teb.FmtDuration(mono.SinceNano(ctx.started), ctx.units)
-	if ctx.l < len(s) {
-		ctx.l = len(s) + 4
-	}
-	s += strings.Repeat(" ", ctx.l-len(s))
-	fmt.Fprintf(ctx.c.App.Writer, "\r%s", s)
 }
 
 //

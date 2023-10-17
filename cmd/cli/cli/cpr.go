@@ -42,11 +42,8 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 	// 1. get from-bck summary
 	qbck := cmn.QueryBcks(bckFrom)
 	ctx := &bsummCtx{
-		qbck:    qbck,
-		timeout: longClientTimeout,
-	}
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+		qbck:           qbck,
+		longWaitPrompt: longClientTimeout,
 	}
 	ctx.msg.Prefix = msg.Prefix
 	ctx.msg.ObjCached = apc.IsFltPresent(fltPresence)

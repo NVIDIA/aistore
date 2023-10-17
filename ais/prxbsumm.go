@@ -20,11 +20,9 @@ import (
 // - bsummact  <= api.GetBucketSummary(query-bcks, ActMsg)
 // - bsummhead <= api.GetBucketInfo(bck, QparamBsummRemote)
 
-func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg, listRemote bool) {
+func (p *proxy) bsummact(w http.ResponseWriter, r *http.Request, qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) {
 	news := msg.UUID == ""
 	debug.Assert(msg.UUID == "" || cos.IsValidUUID(msg.UUID), msg.UUID)
-
-	_ = listRemote // TODO -- FIXME
 
 	// start new
 	if news {
@@ -141,14 +139,11 @@ func (p *proxy) bsummCollect(qbck *cmn.QueryBcks, msg *apc.BsummCtrlMsg) (_ cmn.
 }
 
 // fully reuse bsummact impl.
-func (p *proxy) bsummhead(bck *meta.Bck, msg *apc.BsummCtrlMsg, listRemote bool) (info *cmn.BsummResult, status int, err error) {
+func (p *proxy) bsummhead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.BsummResult, status int, err error) {
 	var (
 		summaries cmn.AllBsummResults
 		qbck      = (*cmn.QueryBcks)(bck) // adapt
 	)
-
-	_ = listRemote // TODO -- FIXME
-
 	if msg.UUID == "" {
 		err = p.bsummNew(qbck, msg)
 		status = http.StatusAccepted

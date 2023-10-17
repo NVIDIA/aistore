@@ -41,9 +41,9 @@ type (
 func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, lsb lsbCtx) (cnt int) {
 	if flagIsSet(c, bckSummaryFlag) {
 		args := api.BinfoArgs{
-			FltPresence: lsb.fltPresence,
+			FltPresence: lsb.fltPresence,     // all-buckets part in the `allObjsOrBcksFlag`
+			WithRemote:  lsb.countRemoteObjs, // all-objects part --/--
 			Summarize:   true,
-			WithRemote:  lsb.countRemoteObjs,
 		}
 		cnt = listBckTableWithSummary(c, qbck, bcks, args)
 	} else {
@@ -144,7 +144,9 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 	)
 	debug.Assert(args.Summarize)
 	args.CallAfter = ctx.args.CallAfter
-	args.Callback = ctx.args.Callback
+	args.Callback = ctx.args.Callback // reusing bsummCtx.progress()
+
+	// one at a time
 	for i, bck := range bcks {
 		if !qbck.Contains(&bck) {
 			continue
@@ -152,9 +154,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		ctx.qbck = cmn.QueryBcks(bck)
 		props, info, err := api.GetBucketInfo(apiBP, bck, args)
 		if err != nil {
-			err = V(err)
-			warn := fmt.Sprintf("%s: %v\n", bck.Cname(""), err)
-			actionWarn(c, warn)
+			actionWarn(c, fmt.Sprintf("%s: %v\n", bck.Cname(""), V(err)))
 			continue
 		}
 		footer.nb++
@@ -201,6 +201,9 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		return footer.nb
 	}
 
+	//
+	// totals
+	//
 	var s, foot string
 	if !apc.IsFltPresent(args.FltPresence) {
 		s = fmt.Sprintf(" (%d present)", footer.nbp)

@@ -555,10 +555,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 
 	// (I) summarize buckets
 	if msg.Action == apc.ActSummaryBck {
-		var (
-			summMsg    apc.BsummCtrlMsg
-			listRemote bool
-		)
+		var summMsg apc.BsummCtrlMsg
 		if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
@@ -571,11 +568,8 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 			if _, err := bckArgs.initAndTry(); err != nil {
 				return
 			}
-			listRemote = !summMsg.ObjCached && bck.IsCloud()
-		} else {
-			listRemote = !summMsg.ObjCached && apc.IsCloudProvider(qbck.Provider)
 		}
-		p.bsummact(w, r, qbck, &summMsg, listRemote)
+		p.bsummact(w, r, qbck, &summMsg)
 		return
 	}
 
@@ -1497,17 +1491,17 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 
 	// default props & flags => user-provided message
 	switch {
-	case lsmsg.Props == "" && lsmsg.IsFlagSet(apc.LsObjCached):
-		lsmsg.AddProps(apc.GetPropsDefaultAIS...)
 	case lsmsg.Props == "":
-		lsmsg.AddProps(apc.GetPropsMinimal...)
-		lsmsg.SetFlag(apc.LsNameSize)
-	case lsmsg.Props == apc.GetPropsName:
-		lsmsg.SetFlag(apc.LsNameOnly)
-	case !lsmsg.IsFlagSet(apc.LsNameOnly):
-		if strings.IndexByte(lsmsg.Props, apc.LsPropsSepa[0]) < 0 && strings.Contains(lsmsg.Props, apc.GetPropsName) {
+		if lsmsg.IsFlagSet(apc.LsObjCached) {
+			lsmsg.AddProps(apc.GetPropsDefaultAIS...)
+		} else {
+			lsmsg.AddProps(apc.GetPropsMinimal...)
 			lsmsg.SetFlag(apc.LsNameSize)
 		}
+	case lsmsg.Props == apc.GetPropsName:
+		lsmsg.SetFlag(apc.LsNameOnly)
+	case lsmsg.Props == apc.GetPropsNameSize:
+		lsmsg.SetFlag(apc.LsNameSize)
 	}
 
 	// ht:// backend doesn't have `ListObjects`; can only locally list archived content
@@ -1785,8 +1779,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if bckArgs.isPresent {
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
 		if dpq.bsummRemote != "" {
-			listRemote := !msg.ObjCached && bck.IsCloud()
-			info, status, err = p.bsummhead(bck, &msg, listRemote)
+			info, status, err = p.bsummhead(bck, &msg)
 			if err != nil {
 				p.writeErr(w, r, err)
 				return
@@ -1815,8 +1808,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	if dpq.bsummRemote != "" {
 		// summarizing freshly added remote
-		listRemote := !msg.ObjCached && bck.IsCloud()
-		info, status, err = p.bsummhead(bck, &msg, listRemote)
+		info, status, err = p.bsummhead(bck, &msg)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
