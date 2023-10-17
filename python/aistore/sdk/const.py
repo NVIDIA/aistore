@@ -22,6 +22,7 @@ AIS_CUSTOM_MD = "ais-custom-md"
 HEADER_PREFIX = "ais-"
 HEADER_BUCKET_PROPS = HEADER_PREFIX + "bucket-props"
 HEADER_BUCKET_SUMM = HEADER_PREFIX + "bucket-summ"
+HEADER_XACTION_ID = HEADER_PREFIX + "xaction-id"
 
 # URL Params
 # See api/apc/query.go
@@ -37,6 +38,7 @@ QPARAM_FORCE = "frc"
 QPARAM_PRIMARY_READY_REB = "prr"
 QPARAM_NAMESPACE = "namespace"
 DSORT_UUID = "uuid"
+QPARAM_UUID = "uuid"
 
 # URL Param values
 # See api/apc/query.go
@@ -105,3 +107,4 @@ UTF_ENCODING = "utf-8"
 STATUS_ACCEPTED = 202
 STATUS_OK = 200
 STATUS_BAD_REQUEST = 400
+STATUS_PARTIAL_CONTENT = 206

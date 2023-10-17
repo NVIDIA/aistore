@@ -6,6 +6,9 @@ if [ -z "$1" ]
     exit 1
 fi
 
+# install aistore python sdk from source
+pip install -e .
+
 cd ./pyaisloader
 make install
 export AIS_ENDPOINT="http://localhost:8080"

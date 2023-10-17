@@ -29,7 +29,6 @@ def bucket_size(bucket):
 
 def bucket_obj_count(bucket):
     _, bsumm = bucket.info()
-
     return int(bsumm["ObjCount"]["obj_count_present"]) + int(
         bsumm["ObjCount"]["obj_count_remote"]
     )

@@ -14,6 +14,5 @@ setup(
         "humanfriendly>=10.0",
         "pendulum>=2.1.2",
         "tabulate>=0.9.0",
-        "aistore>=1.3.0",
     ],
 )

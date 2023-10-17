@@ -26,6 +26,7 @@ from aistore.sdk.const import (
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
     HEADER_BUCKET_SUMM,
+    HEADER_XACTION_ID,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
@@ -38,9 +39,11 @@ from aistore.sdk.const import (
     QPARAM_KEEP_REMOTE,
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
+    QPARAM_UUID,
     URL_PATH_BUCKETS,
     STATUS_ACCEPTED,
     STATUS_OK,
+    STATUS_PARTIAL_CONTENT,
 )
 
 from aistore.sdk.errors import (
@@ -341,7 +344,6 @@ class Bucket(AISSource):
         Returns bucket summary and information/properties.
 
         Args:
-            bsumm_remote (bool): If True, returned bucket info will include remote objects as well
             flt_presence (int): Describes the presence of buckets and objects with respect to their existence
                                 or non-existence in the AIS cluster. Defaults to 0.
 
@@ -352,6 +354,7 @@ class Bucket(AISSource):
                                 3 - same as 2 but no need to return summary
                                 4 - objects: present anywhere/anyhow _in_ the cluster as: replica, ec-slices, misplaced
                                 5 - not present - exists _outside_ cluster
+            bsumm_remote (bool): If True, returned bucket info will include remote objects as well
 
         Raises:
             requests.ConnectionError: Connection error
@@ -367,10 +370,7 @@ class Bucket(AISSource):
 
         params = self.qparam.copy()
         params.update({QPARAM_FLT_PRESENCE: flt_presence})
-        if bsumm_remote:
-            params[QPARAM_BSUMM_REMOTE] = True
-        else:
-            params[QPARAM_BSUMM_REMOTE] = False
+        params[QPARAM_BSUMM_REMOTE] = bsumm_remote
 
         response = self.client.request(
             HTTP_METHOD_HEAD,
@@ -378,10 +378,45 @@ class Bucket(AISSource):
             params=params,
         )
 
-        bucket_props = json.loads(response.headers.get(HEADER_BUCKET_PROPS, "{}"))
-        bucket_summ = json.loads(response.headers.get(HEADER_BUCKET_SUMM, "{}"))
+        bucket_props = response.headers.get(HEADER_BUCKET_PROPS, "{}")
+        uuid = response.headers.get(HEADER_XACTION_ID, "").strip('"')
+        params[QPARAM_UUID] = uuid
 
-        return bucket_props, bucket_summ
+        # Initial response status code should be 202
+        if response.status_code != int(STATUS_ACCEPTED):
+            raise UnexpectedHTTPStatusCode([STATUS_ACCEPTED], response.status_code)
+
+        # Sleep and request frequency in sec (starts at 2 s)
+        sleep_time = 2
+        time.sleep(sleep_time)
+        i = 0
+
+        # Poll async task for http.StatusOK completion
+        while True:
+            response = self.client.request(
+                HTTP_METHOD_HEAD,
+                path=f"{URL_PATH_BUCKETS}/{self.name}",
+                params=params,
+            )
+
+            bucket_summ = response.headers.get(HEADER_BUCKET_SUMM, "")
+
+            if bucket_summ != "":
+                result = json.loads(bucket_summ)
+
+            # If task completed successfully, break the loop
+            if response.status_code == STATUS_OK:
+                break
+
+            time.sleep(sleep_time)
+            i += 1
+
+            if i == 8 and response.status_code != STATUS_PARTIAL_CONTENT:
+                sleep_time *= 2
+            elif i == 16 and response.status_code != STATUS_PARTIAL_CONTENT:
+                sleep_time *= 2
+
+        return bucket_props, result
 
     # pylint: disable=too-many-arguments
     def copy(

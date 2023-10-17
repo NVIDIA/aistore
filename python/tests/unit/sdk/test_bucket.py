@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     QPARAM_KEEP_REMOTE,
     QPARAM_BSUMM_REMOTE,
     QPARAM_FLT_PRESENCE,
+    QPARAM_UUID,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
     HTTP_METHOD_HEAD,
@@ -33,6 +34,7 @@ from aistore.sdk.const import (
     URL_PATH_BUCKETS,
     HEADER_ACCEPT,
     HEADER_BUCKET_PROPS,
+    HEADER_XACTION_ID,
     HEADER_BUCKET_SUMM,
     MSGPACK_CONTENT_TYPE,
     STATUS_ACCEPTED,
@@ -667,32 +669,52 @@ class TestBucket(unittest.TestCase):
         assert self.mock_client.request.call_count == 2
 
     def test_info(self):
-        # Mock response for request calls
-        response = Mock()
-        response.status_code = 200
-        response.headers = {
+        # Mock responses for request calls
+        response1 = Mock()
+        response1.status_code = STATUS_ACCEPTED
+        response1.headers = {
             HEADER_BUCKET_PROPS: '{"some": "props"}',
+            HEADER_XACTION_ID: "some-id",
+        }
+
+        response2 = Mock()
+        response2.status_code = STATUS_OK
+        response2.headers = {
             HEADER_BUCKET_SUMM: '{"some": "summary"}',
         }
 
-        self.mock_client.request.return_value = response
+        # Set the side_effect of the request method to return the two responses in sequence
+        self.mock_client.request.side_effect = [response1, response2]
 
         # Call the info method
         bucket_props, bucket_summ = self.ais_bck.info()
 
-        # Ensure the request was made correctly
-        self.mock_client.request.assert_called_once_with(
-            HTTP_METHOD_HEAD,
-            path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
-            params={
-                **self.ais_bck.qparam,
-                QPARAM_FLT_PRESENCE: 0,
-                QPARAM_BSUMM_REMOTE: True,
-            },
-        )
+        calls = [
+            call(
+                HTTP_METHOD_HEAD,
+                path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
+                params={
+                    **self.ais_bck.qparam,
+                    QPARAM_FLT_PRESENCE: 0,
+                    QPARAM_BSUMM_REMOTE: True,
+                    QPARAM_UUID: "some-id",
+                },
+            ),
+            call(
+                HTTP_METHOD_HEAD,
+                path=f"{URL_PATH_BUCKETS}/{self.ais_bck.name}",
+                params={
+                    **self.ais_bck.qparam,
+                    QPARAM_FLT_PRESENCE: 0,
+                    QPARAM_BSUMM_REMOTE: True,
+                    QPARAM_UUID: "some-id",
+                },
+            ),
+        ]
+        self.mock_client.request.assert_has_calls(calls)
 
         # Check the return values
-        self.assertEqual(bucket_props, {"some": "props"})
+        self.assertEqual(bucket_props, '{"some": "props"}')
         self.assertEqual(bucket_summ, {"some": "summary"})
 
         # Test with invalid flt_presence

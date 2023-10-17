@@ -42,5 +42,5 @@ jobs:
       - name: Run python tests
         run: |
           cd python
-          # make python_sdk_tests
+          make python_sdk_tests
           make python_botocore_tests
