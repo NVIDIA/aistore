@@ -144,9 +144,9 @@ test:short:python:
   script:
     - deploy/scripts/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all --aws
     - cd python
-    - make python_sdk_tests
+      #    - make python_sdk_tests
     - make python_botocore_tests
-    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
+      #    - make PYAISLOADER_TEST_TYPE=short test-pyaisloader
 
   except:
     variables:

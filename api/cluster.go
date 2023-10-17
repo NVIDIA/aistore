@@ -43,7 +43,7 @@ func Health(bp BaseParams, readyToRebalance ...bool) error {
 
 func HealthUptime(bp BaseParams, readyToRebalance ...bool) (string, string, error) {
 	reqParams := mkhealth(bp, readyToRebalance...)
-	hdr, err := reqParams.doReqHdr()
+	hdr, _, err := reqParams.doReqHdr()
 	if err != nil {
 		return "", "", err
 	}

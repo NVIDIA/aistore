@@ -30,7 +30,7 @@ type lstcx struct {
 func (c *lstcx) do() (string, error) {
 	var (
 		p    = c.p
-		smap = c.p.owner.smap.get()
+		smap = p.owner.smap.get()
 	)
 	// 1. lsmsg
 	c.lsmsg = apc.LsoMsg{
@@ -54,7 +54,8 @@ func (c *lstcx) do() (string, error) {
 		return "", err
 	}
 	if len(lst.Entries) == 0 {
-		nlog.Infof("%s: %s => %s: lso counts zero - nothing to do", c.amsg.Action, c.bckFrom, c.bckTo)
+		// TODO: return http status to indicate exactly that (#6393)
+		nlog.Infoln(c.amsg.Action, c.bckFrom.Cname(""), " to ", c.bckTo.Cname("")+": lso counts zero - nothing to do")
 		return c.lsmsg.UUID, nil
 	}
 

@@ -117,7 +117,7 @@ func MergeLso(lists []*LsoResult, maxSize uint) *LsoResult {
 				continue
 			}
 			// detect which list contains real information about the object
-			if !entry.CheckExists() && e.CheckExists() {
+			if !entry.IsPresent() && e.IsPresent() {
 				e.Version = cos.Either(e.Version, entry.Version)
 				lst[e.Name] = e
 			} else {

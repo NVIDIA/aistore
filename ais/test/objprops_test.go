@@ -73,7 +73,7 @@ func propsUpdateObjects(t *testing.T, proxyURL string, bck cmn.Bck, oldVersions 
 		}
 		newVersions[m.Name] = m.Version
 
-		if !m.CheckExists() && bck.IsRemote() {
+		if !m.IsPresent() && bck.IsRemote() {
 			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if !versionEnabled {
@@ -151,7 +151,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 		if !ok {
 			continue
 		}
-		tlog.Logf("%s [%d] - cached: [%v], atime [%v]\n", bck.Cname(m.Name), m.Flags, m.CheckExists(), m.Atime)
+		tlog.Logf("%s [%d] - cached: [%v], atime [%v]\n", bck.Cname(m.Name), m.Flags, m.IsPresent(), m.Atime)
 
 		// e.g. misplaced replica
 		if !m.IsStatusOK() {
@@ -162,7 +162,7 @@ func propsEvict(t *testing.T, proxyURL string, bck cmn.Bck, objMap map[string]st
 			if m.Atime != "" {
 				t.Errorf("Evicted %s still has atime %q", bck.Cname(m.Name), m.Atime)
 			}
-			if m.CheckExists() {
+			if m.IsPresent() {
 				t.Errorf("Evicted %s is still marked as _cached_", bck.Cname(m.Name))
 			}
 		}
@@ -196,7 +196,7 @@ func propsRecacheObjects(t *testing.T, proxyURL string, bck cmn.Bck, objs map[st
 		if version, ok = objs[m.Name]; !ok {
 			continue
 		}
-		if !m.CheckExists() {
+		if !m.IsPresent() {
 			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {
@@ -272,7 +272,7 @@ func propsRebalance(t *testing.T, proxyURL string, bck cmn.Bck, objects map[stri
 			continue
 		}
 		objFound++
-		if !m.CheckExists() && bck.IsRemote() {
+		if !m.IsPresent() && bck.IsRemote() {
 			t.Errorf("%s: not marked as cached one", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {
@@ -383,7 +383,7 @@ func propsVersion(t *testing.T, bck cmn.Bck, versionEnabled bool, cksumType stri
 	for _, m := range reslist.Entries {
 		tlog.Logf("%s initial version:\t%q\n", bck.Cname(m.Name), m.Version)
 
-		if !m.CheckExists() && bck.IsRemote() {
+		if !m.IsPresent() && bck.IsRemote() {
 			t.Errorf("%s: not marked as _cached_", bck.Cname(m.Name))
 		}
 		if m.Atime == "" {

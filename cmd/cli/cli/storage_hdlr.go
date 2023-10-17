@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
@@ -17,17 +18,23 @@ import (
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
 
 type bsummCtx struct {
+	c       *cli.Context
+	units   string
 	qbck    cmn.QueryBcks
 	timeout time.Duration
 	msg     apc.BsummCtrlMsg
-	// results
-	res cmn.AllBsummResults
+	args    api.BsummArgs
+	started int64
+	l       int
+	n       int
+	res     cmn.AllBsummResults
 }
 
 var (
@@ -327,7 +334,7 @@ func showDiskStats(c *cli.Context, tid string) error {
 
 func summaryStorageHandler(c *cli.Context) error {
 	uri := c.Args().Get(0)
-	queryBcks, err := parseQueryBckURI(c, uri)
+	qbck, err := parseQueryBckURI(c, uri)
 	if err != nil {
 		return err
 	}
@@ -335,16 +342,7 @@ func summaryStorageHandler(c *cli.Context) error {
 	if errU != nil {
 		return err
 	}
-	ctx := &bsummCtx{
-		qbck:    queryBcks,
-		timeout: longClientTimeout,
-	}
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
-	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
-	ctx.msg.BckPresent = !flagIsSet(c, allBcksFlag)
+	ctx := newBsummContext(c, units, qbck)
 
 	setLongRunParams(c)
 	summaries, err := ctx.slow()
@@ -361,6 +359,28 @@ func summaryStorageHandler(c *cli.Context) error {
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
+func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks) *bsummCtx {
+	ctx := &bsummCtx{
+		c:       c,
+		units:   units,
+		qbck:    qbck,
+		started: mono.NanoTime(),
+		timeout: longClientTimeout,
+	}
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		ctx.timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
+	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
+	ctx.msg.BckPresent = !flagIsSet(c, allBcksFlag)
+
+	if flagIsSet(c, refreshFlag) {
+		ctx.args.CallAfter = parseDurationFlag(c, refreshFlag)
+		ctx.args.Callback = ctx.progress
+	}
+	return ctx
+}
+
 // "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func (ctx *bsummCtx) slow() (res cmn.AllBsummResults, err error) {
 	err = cmn.WaitForFunc(ctx.get, ctx.timeout)
@@ -369,8 +389,44 @@ func (ctx *bsummCtx) slow() (res cmn.AllBsummResults, err error) {
 }
 
 func (ctx *bsummCtx) get() (err error) {
-	ctx.res, err = api.GetBucketSummary(apiBP, ctx.qbck, &ctx.msg)
+	ctx.res, err = api.GetBucketSummary(apiBP, ctx.qbck, &ctx.msg, ctx.args)
 	return
+}
+
+func (ctx *bsummCtx) progress(summaries *cmn.AllBsummResults, done bool) {
+	if done {
+		if ctx.n > 0 {
+			fmt.Fprintln(ctx.c.App.Writer)
+		}
+		return
+	}
+	if summaries == nil {
+		return
+	}
+	var remcnt, cnt, remsize, size uint64
+	for _, res := range *summaries {
+		size += res.TotalSize.PresentObjs
+		cnt += res.ObjCount.Present
+		remsize += res.TotalSize.RemoteObjs
+		remcnt += res.ObjCount.Remote
+	}
+	if remcnt == 0 && cnt == 0 {
+		return
+	}
+	ctx.n++
+	// format out
+	s := fmt.Sprintf("objects: (%s, %s)",
+		cos.FormatBigNum(int(cnt)), teb.FmtSize(int64(size), ctx.units, 2))
+	if remcnt > 0 {
+		s += fmt.Sprintf(", remote: (%s, %s)",
+			cos.FormatBigNum(int(remcnt)), teb.FmtSize(int64(remsize), ctx.units, 2))
+	}
+	s += ", elapsed: " + teb.FmtDuration(mono.SinceNano(ctx.started), ctx.units)
+	if ctx.l < len(s) {
+		ctx.l = len(s) + 4
+	}
+	s += strings.Repeat(" ", ctx.l-len(s))
+	fmt.Fprintf(ctx.c.App.Writer, "\r%s", s)
 }
 
 //

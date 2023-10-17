@@ -38,49 +38,40 @@ type (
 )
 
 // `ais ls`, `ais ls s3:` and similar
-func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, matches func(cmn.Bck) bool,
-	fltPresence int, countRemoteObjs bool) (cnt int) {
-	var (
-		filtered = make(cmn.Bcks, 0, len(bcks))
-		unique   = make(cos.StrSet, len(bcks))
-	)
-	for _, bck := range bcks {
-		if qbck.Contains(&bck) && matches(bck) {
-			uname := bck.MakeUname("")
-			if _, ok := unique[uname]; !ok {
-				filtered = append(filtered, bck)
-				unique[uname] = struct{}{}
-			}
-		}
-	}
-	if cnt = len(filtered); cnt == 0 {
-		return
-	}
+func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, lsb lsbCtx) (cnt int) {
 	if flagIsSet(c, bckSummaryFlag) {
-		listBckTableWithSummary(c, qbck, filtered, fltPresence, countRemoteObjs)
+		args := api.BinfoArgs{
+			FltPresence: lsb.fltPresence,
+			Summarize:   true,
+			WithRemote:  lsb.countRemoteObjs,
+		}
+		cnt = listBckTableWithSummary(c, qbck, bcks, args)
 	} else {
-		listBckTableNoSummary(c, qbck, filtered, fltPresence)
+		cnt = listBckTableNoSummary(c, qbck, bcks, lsb.fltPresence)
 	}
 	return
 }
 
-func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int) {
+func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fltPresence int) int {
 	var (
 		bmd        *meta.BMD
 		err        error
 		footer     lsbFooter
 		hideHeader = flagIsSet(c, noHeaderFlag)
 		hideFooter = flagIsSet(c, noFooterFlag)
-		data       = make([]teb.ListBucketsHelper, 0, len(filtered))
+		data       = make([]teb.ListBucketsHelper, 0, len(bcks))
 	)
 	if !apc.IsFltPresent(fltPresence) {
 		bmd, err = api.GetBMD(apiBP)
 		if err != nil {
 			fmt.Fprintln(c.App.ErrWriter, err)
-			return
+			return 0
 		}
 	}
-	for _, bck := range filtered {
+	for _, bck := range bcks {
+		if !qbck.Contains(&bck) {
+			continue
+		}
 		var (
 			info  cmn.BsummResult
 			props *cmn.BucketProps
@@ -99,7 +90,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 				bmd, err = api.GetBMD(apiBP)
 				if err != nil {
 					fmt.Fprintln(c.App.ErrWriter, err)
-					return
+					return 0
 				}
 			}
 			props, _ = bmd.Get(meta.CloneBck(&bck))
@@ -107,13 +98,16 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 		}
 		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: &info})
 	}
+	if footer.nb == 0 {
+		return 0
+	}
 	if hideHeader {
 		teb.Print(data, teb.ListBucketsBodyNoSummary)
 	} else {
 		teb.Print(data, teb.ListBucketsTmplNoSummary)
 	}
 	if hideFooter {
-		return
+		return footer.nb
 	}
 
 	var s string
@@ -126,15 +120,16 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bc
 	}
 	foot := fmt.Sprintf("Total: [%s bucket%s: %d%s] ========", p, cos.Plural(footer.nb), footer.nb, s)
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
+	return footer.nb
 }
 
-// (compare with `showBucketSummary` and `bsummSlow`)
-func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.Bck, fltPresence int, countRemoteObjs bool) {
+// compare with `showBucketSummary`
+func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, args api.BinfoArgs) int {
 	var (
 		footer      lsbFooter
 		hideHeader  = flagIsSet(c, noHeaderFlag)
 		hideFooter  = flagIsSet(c, noFooterFlag)
-		data        = make([]teb.ListBucketsHelper, 0, len(filtered))
+		data        = make([]teb.ListBucketsHelper, 0, len(bcks))
 		units, errU = parseUnitsFlag(c, unitsFlag)
 	)
 	if errU != nil {
@@ -142,12 +137,20 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		units = ""
 	}
 	var (
-		opts = teb.Opts{AltMap: teb.FuncMapUnits(units)}
-		prev = mono.NanoTime()
-		max  = listObjectsWaitTime
+		opts    = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+		maxwait = listObjectsWaitTime
+		ctx     = newBsummContext(c, units, qbck)
+		prev    = ctx.started
 	)
-	for i, bck := range filtered {
-		props, info, err := api.GetBucketInfo(apiBP, bck, fltPresence, countRemoteObjs)
+	debug.Assert(args.Summarize)
+	args.CallAfter = ctx.args.CallAfter
+	args.Callback = ctx.args.Callback
+	for i, bck := range bcks {
+		if !qbck.Contains(&bck) {
+			continue
+		}
+		ctx.qbck = cmn.QueryBcks(bck)
+		props, info, err := api.GetBucketInfo(apiBP, bck, args)
 		if err != nil {
 			err = V(err)
 			warn := fmt.Sprintf("%s: %v\n", bck.Cname(""), err)
@@ -168,7 +171,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: info})
 
 		now := mono.NanoTime()
-		if elapsed := time.Duration(now - prev); elapsed < max && i < len(filtered)-1 {
+		if elapsed := time.Duration(now - prev); elapsed < maxwait && i < len(bcks)-1 {
 			continue
 		}
 		// print
@@ -179,12 +182,15 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 		}
 		data = data[:0]
 		prev = now
-		if i < len(filtered)-1 {
+		if i < len(bcks)-1 {
 			fmt.Fprintln(c.App.Writer)
 		}
 	}
+	if footer.nb == 0 {
+		return 0
+	}
 
-	if footer.robj == 0 && apc.IsRemoteProvider(qbck.Provider) && !countRemoteObjs {
+	if footer.robj == 0 && apc.IsRemoteProvider(qbck.Provider) && !args.WithRemote {
 		fmt.Fprintln(c.App.Writer)
 		note := fmt.Sprintf("to count and size remote buckets and objects outside ais cluster, use %s switch, see %s for details",
 			qflprn(allObjsOrBcksFlag), qflprn(cli.HelpFlag))
@@ -192,11 +198,11 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 	}
 
 	if hideFooter || footer.nbp <= 1 {
-		return
+		return footer.nb
 	}
 
 	var s, foot string
-	if !apc.IsFltPresent(fltPresence) {
+	if !apc.IsFltPresent(args.FltPresence) {
 		s = fmt.Sprintf(" (%d present)", footer.nbp)
 	}
 	p := apc.DisplayProvider(qbck.Provider)
@@ -212,6 +218,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, filtered []cmn.
 			p, cos.Plural(footer.nb), footer.nb, s, apparentSize, footer.pct)
 	}
 	fmt.Fprintln(c.App.Writer, fcyan(foot))
+	return footer.nb
 }
 
 func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) error {

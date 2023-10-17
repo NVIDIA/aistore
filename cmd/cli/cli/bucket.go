@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -123,21 +122,10 @@ func evictBucket(c *cli.Context, bck cmn.Bck) (err error) {
 	return
 }
 
-func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int, countRemoteObjs bool) (err error) {
-	var (
-		regex  *regexp.Regexp
-		fmatch = func(_ cmn.Bck) bool { return true }
-	)
-	if regexStr := parseStrFlag(c, regexLsAnyFlag); regexStr != "" {
-		regex, err = regexp.Compile(regexStr)
-		if err != nil {
-			return
-		}
-		fmatch = func(bck cmn.Bck) bool { return regex.MatchString(bck.Name) }
-	}
-	bcks, errV := api.ListBuckets(apiBP, qbck, fltPresence)
-	if errV != nil {
-		return V(errV)
+func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {
+	bcks, err := api.ListBuckets(apiBP, qbck, lsb.fltPresence)
+	if err != nil {
+		return V(err)
 	}
 
 	// NOTE:
@@ -145,32 +133,58 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int, countRemot
 	// very obvious (albeit documented); thus, for the sake of usability making
 	// an exception - extending ais queries to include remote ais
 
-	if !qbck.IsRemoteAIS() && (qbck.Provider == apc.AIS || qbck.Provider == "") {
+	if lsb.all && qbck.Ns.IsGlobal() && (qbck.Provider == apc.AIS || qbck.Provider == "") {
 		if _, err := api.GetRemoteAIS(apiBP); err == nil {
 			qrais := qbck
 			qrais.Ns = cmn.NsAnyRemote
-			if brais, err := api.ListBuckets(apiBP, qrais, fltPresence); err == nil && len(brais) > 0 {
+			if brais, err := api.ListBuckets(apiBP, qrais, lsb.fltPresence); err == nil && len(brais) > 0 {
 				bcks = append(bcks, brais...)
 			}
 		}
 	}
 
-	if len(bcks) == 0 && apc.IsFltPresent(fltPresence) && !qbck.IsAIS() {
+	if len(bcks) == 0 && apc.IsFltPresent(lsb.fltPresence) && !qbck.IsAIS() {
 		const hint = "Use %s option to list _all_ buckets.\n"
 		if qbck.IsEmpty() {
 			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, qflprn(allObjsOrBcksFlag))
 		} else {
 			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, qflprn(allObjsOrBcksFlag))
 		}
-		return
+		return nil
 	}
+
+	var nbcks cmn.Bcks
+	if lsb.regex == nil {
+		nbcks = bcks
+	} else {
+		for _, bck := range bcks {
+			if lsb.regex.MatchString(bck.Name) {
+				nbcks = append(nbcks, bck)
+			}
+		}
+		if len(nbcks) == 0 {
+			l := len(bcks)
+			if l < 5 {
+				fmt.Fprintf(c.App.Writer, "listed %v buckets with none matching %q regex",
+					bcks, lsb.regexStr)
+			} else {
+				fmt.Fprintf(c.App.Writer, "listed %d buckets with none matching %q regex",
+					len(bcks), lsb.regexStr)
+			}
+			return nil
+		}
+	}
+
+	//
+	// by provider
+	//
 	var total int
 	for _, provider := range selectProvidersExclRais(bcks) {
 		qbck = cmn.QueryBcks{Provider: provider}
 		if provider == apc.AIS {
 			qbck.Ns = cmn.NsGlobal // "local" cluster
 		}
-		cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence, countRemoteObjs)
+		cnt := listBckTable(c, qbck, nbcks, lsb)
 		if cnt > 0 {
 			fmt.Fprintln(c.App.Writer)
 			total += cnt
@@ -178,11 +192,11 @@ func listBuckets(c *cli.Context, qbck cmn.QueryBcks, fltPresence int, countRemot
 	}
 	// finally, list remote ais buckets, if any
 	qbck = cmn.QueryBcks{Provider: apc.AIS, Ns: cmn.NsAnyRemote}
-	cnt := listBckTable(c, qbck, bcks, fmatch, fltPresence, countRemoteObjs)
+	cnt := listBckTable(c, qbck, nbcks, lsb)
 	if cnt > 0 || total == 0 {
 		fmt.Fprintln(c.App.Writer)
 	}
-	return
+	return nil
 }
 
 // If both backend_bck.name and backend_bck.provider are present, use them.

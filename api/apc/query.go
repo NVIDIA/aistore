@@ -49,18 +49,16 @@ const (
 	// When evicting, keep remote bucket in BMD (i.e., evict data only)
 	QparamKeepRemote = "keep_bck_md"
 
-	// When summarizing via a (blocking) api.GetBucketInfo call, provide remote stats as well
-	// NOTE: to be used with caution! depending on remote bucket size and network speed
-	//       the waiting time may be significant
-	QparamCountRemoteObjs = "count_remote_objs"
+	// (api.GetBucketInfo)
+	QparamBsummRemote = "bsumm_remote"
 
-	// NOTE: "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
+	// "presence" in a given cluster shall not be be confused with "existence" (possibly, remote).
 	// See also:
 	// - Flt* enum below
 	// - ListObjsMsg flags, docs/providers.md (for terminology)
 	QparamFltPresence = "presence"
 
-	// Object related query params.
+	// APPEND(object) operation - QparamAppendType enum below
 	QparamAppendType   = "append_type"
 	QparamAppendHandle = "append_handle"
 
@@ -122,13 +120,6 @@ const (
 	FlushOp  = "flush"
 )
 
-// QparamTaskAction enum.
-const (
-	TaskStart  = Start
-	TaskStatus = "status"
-	TaskResult = "result"
-)
-
 // health
 const (
 	QparamHealthReadiness = "readiness" // to be used by external watchdogs (e.g. K8s)
@@ -147,7 +138,6 @@ const (
 	QparamSilent           = "sln" // true: skip nlog.Error* (motivation: can be quite, multiple, and/or ignorable)
 	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
-	QparamTaskAction       = "tac" // "start", "status", "result"
 	QparamClusterInfo      = "cii" // true: /Health to return cluster info and status
 	QparamOWT              = "owt" // object write transaction enum { OwtPut, ..., OwtGet* }
 

@@ -8,6 +8,7 @@ package cli
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -527,6 +528,14 @@ func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
 	}
 }
 
+type lsbCtx struct {
+	regexStr        string
+	regex           *regexp.Regexp
+	fltPresence     int
+	countRemoteObjs bool
+	all             bool
+}
+
 func listAnyHandler(c *cli.Context) error {
 	var (
 		opts = cmn.ParseURIOpts{IsQuery: true}
@@ -558,21 +567,34 @@ func listAnyHandler(c *cli.Context) error {
 			}
 		}
 		return err
-	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list bucket(s)
-		var (
-			fltPresence     = apc.FltPresent
-			countRemoteObjs bool
-		)
-		if flagIsSet(c, allObjsOrBcksFlag) {
-			fltPresence = apc.FltExists
-			if flagIsSet(c, bckSummaryFlag) && bck.Provider != apc.AIS {
-				countRemoteObjs = true
-				const warn = "counting and sizing _non-present_ objects from remote Cloud buckets may take considerable time\n" +
-					"(hint: run 'ais storage summary' async job)\n"
+	case bck.Name == "" || flagIsSet(c, bckSummaryFlag): // list or summarize bucket(s)
+		var lsb lsbCtx
+		if lsb.regexStr = parseStrFlag(c, regexLsAnyFlag); lsb.regexStr != "" {
+			regex, err := regexp.Compile(lsb.regexStr)
+			if err != nil {
+				return err
+			}
+			lsb.regex = regex
+		}
+		lsb.all = flagIsSet(c, allObjsOrBcksFlag)
+		lsb.fltPresence = apc.FltPresent
+		if lsb.all {
+			lsb.fltPresence = apc.FltExists
+		}
+		if flagIsSet(c, bckSummaryFlag) {
+			if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
+				lsb.countRemoteObjs = true
+				const warn = "counting and sizing remote objects may take considerable time\n" +
+					"(tip: run 'ais storage summary' async job)\n"
 				actionWarn(c, warn)
 			}
+			if bck.Name != "" {
+				_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)
+				return nil
+			}
 		}
-		return listBuckets(c, cmn.QueryBcks(bck), fltPresence, countRemoteObjs)
+
+		return listOrSummBuckets(c, cmn.QueryBcks(bck), lsb)
 	default: // list objects
 		prefix := parseStrFlag(c, listObjPrefixFlag)
 		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested

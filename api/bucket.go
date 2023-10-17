@@ -9,12 +9,25 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
+)
+
+type (
+	BinfoArgs struct {
+		Callback    BsummCB
+		CallAfter   time.Duration
+		FltPresence int
+		Summarize   bool
+		WithRemote  bool
+	}
 )
 
 // SetBucketProps sets the properties of a bucket.
@@ -60,9 +73,10 @@ func patchBprops(bp BaseParams, bck cmn.Bck, body []byte) (xid string, err error
 // `dontAddRemote = true` prevents AIS from adding remote bucket to the cluster's metadata.
 func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketProps, err error) {
 	var (
-		hdr  http.Header
-		path = apc.URLPathBuckets.Join(bck.Name)
-		q    = make(url.Values, 4)
+		hdr    http.Header
+		path   = apc.URLPathBuckets.Join(bck.Name)
+		q      = make(url.Values, 4)
+		status int
 	)
 	if dontAddRemote {
 		q.Set(apc.QparamDontAddRemote, "true")
@@ -71,39 +85,37 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.BucketPr
 
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
-	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = path
 		reqParams.Query = q
 	}
-	if hdr, err = reqParams.doReqHdr(); err == nil {
+	if hdr, status, err = reqParams.doReqHdr(); err == nil {
 		p = &cmn.BucketProps{}
 		err = jsoniter.Unmarshal([]byte(hdr.Get(apc.HdrBucketProps)), p)
-		return
+	} else {
+		err = hdr2msg(bck, status, err)
 	}
-	err = hdr2msg(bck, err)
+	FreeRp(reqParams)
 	return
 }
 
 // Bucket information - a runtime addendum to `BucketProps`.
-//
-// `fltPresence` - as per QparamFltPresence enum (see api/apc/query.go)
-//
-// Unlike `cmn.BucketProps` properties (which are user configurable), bucket runtime info:
+// In addition to `cmn.BucketProps` properties (which are user configurable), bucket runtime info:
 // - includes usage, capacity, other statistics
 // - is obtained via GetBucketInfo() API
-// - delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
-//
-// NOTE:
-//   - the API utilizes HEAD method (compare with HeadBucket) and by default executes the (cached-only, fast)
-//     version of the bucket summary. To override, provide the last (optional) parameter.
-func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int, countRemoteObjs ...bool) (*cmn.BucketProps, *cmn.BsummResult, error) {
+// - and delivered via apc.HdrBucketInfo header (compare with GetBucketSummary)
+// The API uses http.MethodHead and can be considered an extension of HeadBucket (above)
+func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (*cmn.BucketProps, *cmn.BsummResult, error) {
 	q := make(url.Values, 4)
 	q = bck.AddToQuery(q)
-	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
-	if len(countRemoteObjs) > 0 && countRemoteObjs[0] {
-		q.Set(apc.QparamCountRemoteObjs, "true")
+	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
+	if args.Summarize {
+		if args.WithRemote {
+			q.Set(apc.QparamBsummRemote, "true")
+		} else {
+			q.Set(apc.QparamBsummRemote, "false")
+		}
 	}
 	bp.Method = http.MethodHead
 	reqParams := AllocRp()
@@ -112,17 +124,24 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, fltPresence int, countRemoteObjs 
 		reqParams.Path = apc.URLPathBuckets.Join(bck.Name)
 		reqParams.Query = q
 	}
-	p, info, err := _binfo(reqParams, bck)
+	p, info, err := _binfo(reqParams, bck, args)
 	FreeRp(reqParams)
 	return p, info, err
 }
 
-func _binfo(reqParams *ReqParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
-	var hdr http.Header
-	if hdr, err = reqParams.doReqHdr(); err != nil {
-		err = hdr2msg(bck, err)
+// compare w/ _bsumm
+func _binfo(reqParams *ReqParams, bck cmn.Bck, args BinfoArgs) (p *cmn.BucketProps, info *cmn.BsummResult, err error) {
+	var (
+		hdr          http.Header
+		status       int
+		start, after int64
+		sleep        = xact.MinPollTime
+	)
+	if hdr, status, err = reqParams.doReqHdr(); err != nil {
+		err = hdr2msg(bck, status, err)
 		return
 	}
+
 	hdrProps := hdr.Get(apc.HdrBucketProps)
 	if hdrProps != "" {
 		p = &cmn.BucketProps{}
@@ -130,21 +149,71 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck) (p *cmn.BucketProps, info *cmn.Bs
 			return
 		}
 	}
-	hdrSumm := hdr.Get(apc.HdrBucketSumm)
-	if hdrSumm != "" {
-		info = &cmn.BsummResult{}
-		err = jsoniter.Unmarshal([]byte(hdrSumm), info)
+
+	uuid := hdr.Get(apc.HdrXactionID)
+	if uuid == "" {
+		debug.Assert(status == http.StatusOK && !args.Summarize)
+		return
 	}
-	return
+
+	if status != http.StatusAccepted {
+		err = fmt.Errorf("invalid response code: expecting %d, got %d", http.StatusAccepted, status)
+		return
+	}
+	if args.Callback != nil {
+		start = mono.NanoTime()
+		after = start + args.CallAfter.Nanoseconds()
+	}
+
+	reqParams.Query.Set(apc.QparamUUID, uuid)
+
+	time.Sleep(sleep)
+	for i := 0; ; i++ {
+		if hdr, status, err = reqParams.doReqHdr(); err != nil {
+			err = hdr2msg(bck, status, err)
+			return
+		}
+
+		hdrSumm := hdr.Get(apc.HdrBucketSumm)
+		if hdrSumm != "" {
+			info = &cmn.BsummResult{}
+			err = jsoniter.Unmarshal([]byte(hdrSumm), info)
+		}
+		if err != nil {
+			return // unlikely
+		}
+		debug.Assertf(hdr.Get(apc.HdrXactionID) == uuid, "%q vs %q", hdr.Get(apc.HdrXactionID), uuid)
+
+		// callback w/ partial results
+		if args.Callback != nil && (status == http.StatusPartialContent || status == http.StatusOK) {
+			if after == start || mono.NanoTime() >= after {
+				res := cmn.AllBsummResults{info}
+				args.Callback(&res, status == http.StatusOK)
+			}
+		}
+		if status == http.StatusOK {
+			return
+		}
+
+		time.Sleep(sleep)
+		// inc. sleep time if there's nothing at all
+		if i == 8 && status != http.StatusPartialContent {
+			debug.Assert(status == http.StatusAccepted)
+			sleep *= 2
+		} else if i == 16 && status != http.StatusPartialContent {
+			sleep *= 2
+		}
+	}
 }
 
 // fill-in error message (HEAD response will never contain one)
-func hdr2msg(bck cmn.Bck, err error) error {
+func hdr2msg(bck cmn.Bck, status int, err error) error {
 	herr := cmn.Err2HTTPErr(err)
 	if herr == nil {
 		debug.FailTypeCast(err)
 		return err
 	}
+	debug.Assertf(herr.Status == status, "status %d vs %d", herr.Status, status) // TODO -- FIXME: test, refactor
 	switch herr.Status {
 	case http.StatusUnauthorized:
 		herr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)

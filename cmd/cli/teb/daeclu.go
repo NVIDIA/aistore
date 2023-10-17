@@ -104,7 +104,7 @@ func newTableProxies(ps StstMap, smap *meta.Smap, units string) *Table {
 			load = UnknownStatusVal
 		}
 		upns := ds.Tracker[stats.Uptime].Value
-		uptime := fmtDuration(upns, units)
+		uptime := FmtDuration(upns, units)
 		if upns == 0 {
 			uptime = unknownVal
 		}
@@ -175,7 +175,7 @@ func newTableTargets(ts StstMap, smap *meta.Smap, units string) *Table {
 		memUsed := fmt.Sprintf("%.2f%%", ds.MemCPUInfo.PctMemUsed)
 		memAvail := FmtSize(int64(ds.MemCPUInfo.MemAvail), units, 2)
 		upns := ds.Tracker[stats.Uptime].Value
-		uptime := fmtDuration(upns, units)
+		uptime := FmtDuration(upns, units)
 		if upns == 0 {
 			uptime = unknownVal
 		}

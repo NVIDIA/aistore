@@ -116,12 +116,12 @@ func (reqParams *ReqParams) DoRequest() error {
 }
 
 // same as above except that it also returns response header
-func (reqParams *ReqParams) doReqHdr() (http.Header, error) {
+func (reqParams *ReqParams) doReqHdr() (http.Header, int, error) {
 	resp, err := reqParams.do()
 	if err != nil {
-		return nil, err
+		return nil, resp.StatusCode, err
 	}
-	return resp.Header, reqParams.cdc(resp)
+	return resp.Header, resp.StatusCode, reqParams.cdc(resp)
 }
 
 // Makes request via do(), decodes `resp.Body` into the `out` structure,
@@ -240,12 +240,16 @@ func (reqParams *ReqParams) setRequestOptParams(req *http.Request) {
 // check, read, write, validate http.Response ----------------------------------------------
 //
 
+// decode response iff: err == nil AND status in (ok, partial-content)
 func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 	debug.Assert(out != nil)
-	if err = reqParams.checkResp(resp); err != nil || resp.StatusCode != http.StatusOK {
+	if err = reqParams.checkResp(resp); err != nil {
 		return
 	}
-	// decode response
+	if code := resp.StatusCode; code != http.StatusOK && code != http.StatusPartialContent {
+		return
+	}
+	// json or msgpack
 	if resp.Header.Get(cos.HdrContentType) == cos.ContentMsgPack {
 		debug.Assert(cap(reqParams.buf) > cos.KiB) // caller must allocate
 		r := msgp.NewReaderBuf(resp.Body, reqParams.buf)
@@ -254,7 +258,7 @@ func (reqParams *ReqParams) readAny(resp *http.Response, out any) (err error) {
 		err = jsoniter.NewDecoder(resp.Body).Decode(out)
 	}
 	if err != nil {
-		err = fmt.Errorf("failed to decode response: %v -> %T", err, out)
+		err = fmt.Errorf("unexpected: failed to decode response: %v -> %T", err, out)
 	}
 	return
 }

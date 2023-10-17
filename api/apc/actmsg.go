@@ -117,11 +117,13 @@ const (
 	ActTransient = "transient" // transient - in-memory only
 )
 
-// xaction begin-commit phases
+// xaction begin-commit phases and related control
 const (
 	ActBegin  = "begin"
 	ActCommit = "commit"
 	ActAbort  = "abort"
+
+	ActQuery = "query"
 )
 
 const (

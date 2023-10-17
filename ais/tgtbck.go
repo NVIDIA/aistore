@@ -7,7 +7,6 @@ package ais
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
@@ -45,20 +44,20 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	t.ensureLatestBMD(msg, r)
 
-	var bckName string
-	if len(apiItems) > 0 {
-		bckName = apiItems[0]
+	dpq := dpqAlloc()
+	defer dpqFree(dpq)
+	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
+		t.writeErr(w, r, err)
+		return
 	}
+
 	switch msg.Action {
 	case apc.ActList:
-		dpq := dpqAlloc()
-		if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
-			dpqFree(dpq)
-			t.writeErr(w, r, err)
-			return
+		var bckName string
+		if len(apiItems) > 0 {
+			bckName = apiItems[0]
 		}
 		qbck, err := newQbckFromQ(bckName, nil, dpq)
-		dpqFree(dpq)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
@@ -93,15 +92,28 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 			cos.NamedVal64{Name: stats.ListLatency, Value: delta},
 		)
 	case apc.ActSummaryBck:
-		var (
-			bsumMsg apc.BsummCtrlMsg
-			query   = r.URL.Query()
-		)
-		qbck, err := newQbckFromQ(bckName, query, nil)
+		var bucket, phase string // txn
+		if len(apiItems) == 0 {
+			t.writeErrURL(w, r)
+			return
+		}
+		if len(apiItems) == 1 {
+			phase = apiItems[0]
+		} else {
+			bucket, phase = apiItems[0], apiItems[1]
+		}
+		if phase != apc.ActBegin && phase != apc.ActQuery {
+			t.writeErrURL(w, r)
+			return
+		}
+
+		qbck, err := newQbckFromQ(bucket, nil, dpq)
 		if err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
+
+		var bsumMsg apc.BsummCtrlMsg
 		if err := cos.MorphMarshal(msg.Value, &bsumMsg); err != nil {
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
@@ -120,7 +132,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		t.bsumm(w, r, query, msg.Action, bck, &bsumMsg)
+		t.bsumm(w, r, phase, bck, &bsumMsg, dpq)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -214,7 +226,8 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 	return
 }
 
-// listObjects returns a list of objects in a bucket (with optional prefix).
+// returns `cmn.LsoResult` containing object names and (requested) props
+// control/scope - via `apc.LsoMsg`
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, actMsg *aisMsg) (ok bool) {
 	var msg *apc.LsoMsg
 	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
@@ -263,18 +276,8 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 	xls := xctn.(*xs.LsoXact)
 
-	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
-		var s string
-		if msg.ContinuationToken != "" {
-			s = " cont=" + msg.ContinuationToken
-		}
-		if msg.SID != "" {
-			s += " via t[" + msg.SID + "]"
-		}
-		nlog.Infoln(xls.Name() + s)
-	}
-
-	resp := xls.Do(msg) // NOTE: blocking request/response
+	// NOTE: blocking next-page request
+	resp := xls.Do(msg)
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false
@@ -290,15 +293,8 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	return t.writeMsgPack(w, resp.Lst, "list_objects")
 }
 
-func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, action string, bck *meta.Bck, msg *apc.BsummCtrlMsg) {
-	var (
-		taskAction = q.Get(apc.QparamTaskAction)
-	)
-	if taskAction == apc.TaskStart {
-		if action != apc.ActSummaryBck {
-			t.writeErrAct(w, r, action)
-			return
-		}
+func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
+	if phase == apc.ActBegin {
 		rns := xreg.RenewBckSummary(t, bck, msg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
@@ -308,7 +304,8 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 		return
 	}
 
-	xctn, err := xreg.GetXact(msg.UUID)
+	debug.Assert(phase == apc.ActQuery, phase)
+	xctn, err := xreg.GetXact(msg.UUID) // TODO -- FIXME: finished early, hk-removed
 	if err != nil {
 		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -317,17 +314,12 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 	// never started
 	if xctn == nil {
 		err := cos.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
-		t._erris(w, r, q.Get(apc.QparamSilent), err, http.StatusNotFound)
+		t._erris(w, r, dpq.silent, err, http.StatusNotFound)
 		return
 	}
 
-	// still running
-	if !xctn.Finished() {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	// finished
-	result, err := xctn.Result()
+	xsumm := xctn.(*xs.XactNsumm)
+	result, err := xsumm.Result()
 	if err != nil {
 		if cmn.IsErrBucketNought(err) {
 			t.writeErr(w, r, err, http.StatusGone)
@@ -336,10 +328,14 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, q url.Values, act
 		}
 		return
 	}
-	if taskAction == apc.TaskResult {
-		// return the final result only if it is requested explicitly
-		t.writeJSON(w, r, result, "bucket-summary")
+	if !xctn.Finished() {
+		if len(result) == 0 {
+			w.WriteHeader(http.StatusAccepted)
+		} else {
+			w.WriteHeader(http.StatusPartialContent)
+		}
 	}
+	t.writeJSON(w, r, result, xsumm.Name())
 }
 
 // DELETE { action } /v1/buckets/bucket-name

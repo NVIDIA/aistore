@@ -7,7 +7,6 @@ package cmn
 
 import (
 	"fmt"
-	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -285,13 +284,6 @@ type (
 // interface guard
 var _ sort.Interface = (*AllBsummResults)(nil)
 
-func NewBsummResult(bck *Bck, totalDisksSize uint64) (bs *BsummResult) {
-	bs = &BsummResult{Bck: *bck}
-	bs.TotalSize.Disks = totalDisksSize
-	bs.ObjSize.Min = math.MaxInt64
-	return
-}
-
 func (s AllBsummResults) Len() int           { return len(s) }
 func (s AllBsummResults) Less(i, j int) bool { return s[i].Bck.Less(&s[j].Bck) }
 func (s AllBsummResults) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
@@ -307,6 +299,7 @@ func (s AllBsummResults) Aggregate(from *BsummResult) AllBsummResults {
 	return s
 }
 
+// across targets
 func aggr(from, to *BsummResult) {
 	if from.ObjSize.Min < to.ObjSize.Min {
 		to.ObjSize.Min = from.ObjSize.Min
@@ -330,9 +323,6 @@ func (s AllBsummResults) Finalize(dsize map[string]uint64, testingEnv bool) {
 		}
 	}
 	for _, summ := range s {
-		if summ.ObjSize.Min == math.MaxInt64 {
-			summ.ObjSize.Min = 0 // alternatively, CLI to show `-`
-		}
 		if summ.ObjCount.Present > 0 {
 			summ.ObjSize.Avg = int64(cos.DivRoundU64(summ.TotalSize.PresentObjs, summ.ObjCount.Present))
 		}

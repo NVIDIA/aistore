@@ -484,9 +484,9 @@ func (qbck *QueryBcks) NewQuery() url.Values {
 	return bck.NewQuery()
 }
 
-func (qbck *QueryBcks) AddToQuery(query url.Values) url.Values {
+func (qbck *QueryBcks) AddToQuery(query url.Values) {
 	bck := (*Bck)(qbck)
-	return bck.AddToQuery(query)
+	_ = bck.AddToQuery(query)
 }
 
 func (qbck *QueryBcks) Validate() (err error) {

@@ -52,11 +52,13 @@ type (
 		VisitCT               func(ct *cluster.CT, buf []byte) error
 		Slab                  *memsys.Slab
 		Bck                   cmn.Bck
+		Buckets               cmn.Bcks
 		Prefix                string
 		CTs                   []string
 		DoLoad                LoadType // if specified, lom.Load(lock type)
 		Parallel              int      // num parallel calls
 		IncludeCopy           bool     // visit copies (aka replicas)
+		PerBucket             bool     // num joggers = (num mountpaths) x (num buckets)
 		SkipGloballyMisplaced bool     // skip globally misplaced
 		Throttle              bool     // true: pace itself depending on disk utilization
 	}
@@ -95,33 +97,49 @@ type (
 
 func NewJoggerGroup(opts *JgroupOpts, config *cmn.Config, mpath string) *Jgroup {
 	var (
-		joggers             map[string]*jogger
-		available, disabled = fs.Get()
-		wg, ctx             = errgroup.WithContext(context.Background())
+		joggers map[string]*jogger
+		avail   = fs.GetAvail()
+		wg, ctx = errgroup.WithContext(context.Background())
 	)
 	debug.Assert(!opts.IncludeCopy || (opts.IncludeCopy && opts.DoLoad > noLoad))
 
-	if mpath == "" {
-		joggers = make(map[string]*jogger, len(available))
-		for _, mi := range available {
+	jg := &Jgroup{wg: wg}
+	opts.onFinish = jg.markFinished
+
+	switch {
+	case mpath != "":
+		joggers = make(map[string]*jogger, 1)
+		if mi, ok := avail[mpath]; ok {
 			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
 		}
-	} else {
-		joggers = make(map[string]*jogger, 1)
-		if mi, ok := available[mpath]; ok {
+	case opts.PerBucket:
+		debug.Assert(len(opts.Buckets) > 1)
+		joggers = make(map[string]*jogger, len(avail)*len(opts.Buckets))
+		for _, bck := range opts.Buckets {
+			nopts := *opts
+			nopts.Buckets = nil
+			nopts.Bck = bck
+			uname := bck.MakeUname("")
+			for _, mi := range avail {
+				joggers[mi.Path+"|"+uname] = newJogger(ctx, &nopts, mi, config)
+			}
+		}
+	default:
+		joggers = make(map[string]*jogger, len(avail))
+		for _, mi := range avail {
 			joggers[mi.Path] = newJogger(ctx, opts, mi, config)
 		}
 	}
-
-	jg := &Jgroup{wg: wg, joggers: joggers}
-	jg.finishedCh.Init()
-	opts.onFinish = jg.markFinished
 
 	// this jogger group is a no-op (unlikely)
 	if len(joggers) == 0 {
-		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%q", cmn.ErrNoMountpaths, available, disabled, mpath)
-		jg.finishedCh.Close()
+		_, disabled := fs.Get()
+		nlog.Errorf("%v: avail=%v, disabled=%v, selected=%q", cmn.ErrNoMountpaths, avail, disabled, mpath)
 	}
+
+	jg.joggers = joggers
+	jg.finishedCh.Init()
+
 	return jg
 }
 
@@ -183,8 +201,7 @@ func newJogger(ctx context.Context, opts *JgroupOpts, mi *fs.Mountpath, config *
 	return
 }
 
-func (j *jogger) run() error {
-	defer j.opts.onFinish()
+func (j *jogger) run() (err error) {
 	if j.opts.Slab != nil {
 		if j.opts.Parallel <= 1 {
 			j.bufs = [][]byte{j.opts.Slab.Alloc()}
@@ -194,45 +211,70 @@ func (j *jogger) run() error {
 				j.bufs[i] = j.opts.Slab.Alloc()
 			}
 		}
-
-		defer func() {
-			for _, buf := range j.bufs {
-				j.opts.Slab.Free(buf)
-			}
-		}()
 	}
 
-	var (
-		aborted bool
-		err     error
-	)
-
-	// walk all or selected in-BMD ("present") buckets, one at a time
-	if j.opts.Bck.IsQuery() {
-		var (
-			bmd      = j.opts.T.Bowner().Get()
-			qbck     = cmn.QueryBcks(j.opts.Bck)
-			provider *string
-			ns       *cmn.Ns
-		)
-		if qbck.Provider != "" {
-			provider = &qbck.Provider
-		}
-		if !qbck.Ns.IsGlobal() {
-			ns = &qbck.Ns
-		}
-		bmd.Range(provider, ns, func(bck *meta.Bck) bool {
-			aborted, err = j.runBck(bck.Bucket())
-			return err != nil || aborted
-		})
-		return err
+	// 3 running options
+	switch {
+	case len(j.opts.Buckets) > 0:
+		debug.Assert(j.opts.Bck.IsEmpty())
+		err = j.runSelected()
+	case j.opts.Bck.IsQuery():
+		err = j.runQbck(cmn.QueryBcks(j.opts.Bck))
+	default:
+		_, err = j.runBck(&j.opts.Bck)
 	}
 
-	// alternatively, walk one bucket
-	_, err = j.runBck(&j.opts.Bck)
-	return err
+	// cleanup
+	if j.opts.Slab != nil {
+		for _, buf := range j.bufs {
+			j.opts.Slab.Free(buf)
+		}
+	}
+	j.opts.onFinish()
+	return
 }
 
+// run selected buckets, one at a time
+func (j *jogger) runSelected() error {
+	var errs cos.Errs
+	for _, bck := range j.opts.Buckets {
+		aborted, err := j.runBck(&bck)
+		if err != nil {
+			errs.Add(err)
+		}
+		if aborted {
+			return &errs
+		}
+	}
+	return nil
+}
+
+// run matching, one at a time
+func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
+	var (
+		bmd      = j.opts.T.Bowner().Get()
+		provider *string
+		ns       *cmn.Ns
+		errs     cos.Errs
+	)
+	if qbck.Provider != "" {
+		provider = &qbck.Provider
+	}
+	if !qbck.Ns.IsGlobal() {
+		ns = &qbck.Ns
+	}
+	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
+		aborted, errV := j.runBck(bck.Bucket())
+		if err != nil {
+			errs.Add(errV)
+			err = &errs
+		}
+		return aborted
+	})
+	return
+}
+
+// run single (see also: `PerBucket` above)
 func (j *jogger) runBck(bck *cmn.Bck) (aborted bool, err error) {
 	opts := &fs.WalkOpts{
 		Mi:       j.mi,

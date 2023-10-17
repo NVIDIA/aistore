@@ -319,7 +319,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, sile
 		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
 		reqParams.Query = q
 	}
-	hdr, err := reqParams.doReqHdr()
+	hdr, _, err := reqParams.doReqHdr()
 	if err != nil {
 		return nil, err
 	}

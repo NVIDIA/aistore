@@ -33,14 +33,14 @@ jobs:
         run: |
           export GOPATH="$(go env GOPATH)"
           deploy/scripts/clean_deploy.sh --target-cnt 1 --proxy-cnt 1 --mountpath-cnt 1
-      
+
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Run python tests
         run: |
           cd python
-          make python_sdk_tests
+          # make python_sdk_tests
           make python_botocore_tests

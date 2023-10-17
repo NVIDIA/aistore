@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -27,20 +28,25 @@ import (
 type (
 	nsummFactory struct {
 		xreg.RenewBase
-		xctn *nsummXact
+		xctn *XactNsumm
 		msg  *apc.BsummCtrlMsg
 	}
-	nsummXact struct {
-		p *nsummFactory
+	XactNsumm struct {
+		p             *nsummFactory
+		oneRes        cmn.BsummResult
+		mapRes        map[uint64]*cmn.BsummResult
+		buckets       []*meta.Bck
+		totalDiskSize uint64
 		xact.BckJog
-		res cmn.BsummResult
+		single     bool
+		listRemote bool
 	}
 )
 
 // interface guard
 var (
 	_ xreg.Renewable = (*nsummFactory)(nil)
-	_ cluster.Xact   = (*nsummXact)(nil)
+	_ cluster.Xact   = (*XactNsumm)(nil)
 )
 
 //////////////////
@@ -53,10 +59,10 @@ func (*nsummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (p *nsummFactory) Start() error {
-	p.xctn = newSumm(p)
+func (p *nsummFactory) Start() (err error) {
+	p.xctn, err = newSumm(p)
 	xact.GoRunW(p.xctn)
-	return nil
+	return
 }
 
 func (*nsummFactory) Kind() string        { return apc.ActSummaryBck }
@@ -66,93 +72,237 @@ func (*nsummFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
 }
 
-func newSumm(p *nsummFactory) (r *nsummXact) {
-	r = &nsummXact{p: p}
-	mpopts := &mpather.JgroupOpts{
-		T:        p.T,
-		CTs:      []string{fs.ObjectType},
-		Prefix:   p.msg.Prefix,
-		VisitObj: r.visitObj,
-		Slab:     nil, // TODO -- FIXME: check not needed
-		DoLoad:   mpather.LoadUnsafe,
-	}
-	mpopts.Bck.Copy(p.Bck.Bucket())
-	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, mpopts, cmn.GCO.Get())
+func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
+	r = &XactNsumm{p: p}
 
-	// TODO -- FIXME: temp limitations
-	if !p.msg.ObjCached || !p.msg.BckPresent {
-		nlog.Errorln(r.Name(), "niy", p.msg)
+	r.totalDiskSize = fs.GetDiskSize()
+
+	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
+	if listRemote {
+		var (
+			smap = p.T.Sowner().Get()
+			tsi  *meta.Snode
+		)
+		if tsi, err = smap.HrwTargetTask(p.UUID()); err != nil {
+			return
+		}
+		r.listRemote = listRemote && tsi.ID() == p.T.SID() // this target
 	}
-	return
+
+	opts := &mpather.JgroupOpts{
+		T:           p.T,
+		CTs:         []string{fs.ObjectType},
+		Prefix:      p.msg.Prefix,
+		VisitObj:    r.visitObj,
+		DoLoad:      mpather.LoadUnsafe,
+		IncludeCopy: true,
+	}
+	if p.Bck.IsQuery() {
+		r.mapRes = make(map[uint64]*cmn.BsummResult, 8)
+		opts.Buckets = r.initResQbck()
+
+		// inc num joggers to boost
+		if nb := len(opts.Buckets); nb > 1 {
+			nmps := fs.NumAvail()
+			if nmps == 0 {
+				return nil, cmn.ErrNoMountpaths
+			}
+			opts.PerBucket = nb*nmps <= sys.NumCPU()
+		}
+	} else {
+		r.initRes(&r.oneRes, p.Bck)
+		r.single = true
+		opts.Bck = p.Bck.Clone()
+	}
+
+	r.BckJog.Init(p.UUID(), p.Kind(), p.Bck, opts, cmn.GCO.Get())
+
+	return r, nil
 }
 
-func (r *nsummXact) Run(wg *sync.WaitGroup) {
-	debug.Assert(r.p.Bck != nil && !r.p.Bck.IsQuery()) // TODO -- FIXME: implement 1) all-buckets and 2) QueryBck
-	wg.Done()
-
+func (r *XactNsumm) Run(started *sync.WaitGroup) {
+	started.Done()
 	nlog.Infoln(r.Name(), r.p.Bck.Cname(""))
 
-	r.res.Bck = r.p.Bck.Clone()
-	r.res.TotalSize.Disks = fs.GetDiskSize()
-	r.res.ObjSize.Min = math.MaxInt64
-
-	// first, estimate on-disk size
-	r.res.TotalSize.OnDisk = fs.OnDiskSize(r.p.Bck.Bucket(), r.p.msg.Prefix)
-
-	// second, joggers to walk and visit
+	var wg cos.WG
+	if r.listRemote {
+		// _this_ target to list-and-summ remote pages, in parallel
+		if r.single {
+			wg = &sync.WaitGroup{}
+			wg.Add(1)
+			go func(wg cos.WG) {
+				r.runCloudBck(r.p.Bck, &r.oneRes)
+				wg.Done()
+			}(wg)
+		} else {
+			debug.Assert(len(r.buckets) > 1)
+			wg = cos.NewLimitedWaitGroup(sys.NumCPU(), len(r.buckets))
+			for _, bck := range r.buckets {
+				res, ok := r.mapRes[bck.Props.BID]
+				debug.Assert(ok, r.Name(), bck.Cname(""))
+				wg.Add(1)
+				go func(bck *meta.Bck, wg cos.WG) {
+					r.runCloudBck(bck, res)
+					wg.Done()
+				}(bck, wg)
+			}
+		}
+	}
 	r.BckJog.Run()
 
 	err := r.BckJog.Wait()
 	r.AddErr(err)
+
+	if wg != nil {
+		debug.Assert(r.listRemote)
+		wg.Wait()
+	}
+
 	r.Finish()
 }
 
-func (r *nsummXact) str(s string) string { return fmt.Sprintf("%s %+v", s, r.p.msg) }
-func (r *nsummXact) String() string      { return r.str(r.Base.String()) }
-func (r *nsummXact) Name() string        { return r.str(r.Base.Name()) }
+// to add all `res` pointers up front
+func (r *XactNsumm) initResQbck() cmn.Bcks {
+	var (
+		bmd      = r.p.T.Bowner().Get()
+		qbck     = (*cmn.QueryBcks)(r.p.Bck)
+		provider *string
+		ns       *cmn.Ns
+		buckets  = make(cmn.Bcks, 0, 8) // => jogger opts
+	)
+	if r.listRemote {
+		r.buckets = make([]*meta.Bck, 0, 8)
+	}
+	if qbck.Provider != "" {
+		provider = &qbck.Provider
+	}
+	if !qbck.Ns.IsGlobal() {
+		ns = &qbck.Ns
+	}
+	bmd.Range(provider, ns, func(bck *meta.Bck) bool {
+		res := &cmn.BsummResult{}
+		r.initRes(res, bck)
+		debug.Assert(bck.Props.BID != 0)
+		r.mapRes[bck.Props.BID] = res
+		buckets = append(buckets, res.Bck)
 
-func (r *nsummXact) Snap() (snap *cluster.Snap) {
+		if r.listRemote {
+			r.buckets = append(r.buckets, bck)
+		}
+		return false
+	})
+	return buckets
+}
+
+func (r *XactNsumm) initRes(res *cmn.BsummResult, bck *meta.Bck) {
+	debug.Assert(r.totalDiskSize > 0)
+	res.Bck = bck.Clone()
+	res.TotalSize.Disks = r.totalDiskSize
+	res.ObjSize.Min = math.MaxInt64
+	res.TotalSize.OnDisk = fs.OnDiskSize(bck.Bucket(), r.p.msg.Prefix)
+}
+
+func (r *XactNsumm) _str(s string) string { return fmt.Sprintf("%s %+v", s, r.p.msg) }
+func (r *XactNsumm) String() string       { return r._str(r.Base.String()) }
+func (r *XactNsumm) Name() string         { return r._str(r.Base.Name()) }
+
+func (r *XactNsumm) Snap() (snap *cluster.Snap) {
 	snap = &cluster.Snap{}
 	r.ToSnap(snap)
 	snap.IdleX = r.IsIdle()
 	return
 }
 
-func (r *nsummXact) Result() (any, error) {
-	res := r.res
-	res.ObjCount.Present = ratomic.LoadUint64(&r.res.ObjCount.Present)
-	res.TotalSize.PresentObjs = ratomic.LoadUint64(&r.res.TotalSize.PresentObjs)
-
-	res.ObjSize.Min = ratomic.LoadInt64(&r.res.ObjSize.Min)
-	if res.ObjSize.Min == math.MaxInt64 {
-		res.ObjSize.Min = 0
+func (r *XactNsumm) Result() (cmn.AllBsummResults, error) {
+	if r.single {
+		var res cmn.BsummResult
+		r.cloneRes(&res, &r.oneRes)
+		return cmn.AllBsummResults{&res}, r.Err()
 	}
-	res.ObjSize.Max = ratomic.LoadInt64(&r.res.ObjSize.Max)
 
-	// compute the current (maybe, running-and-changing) average and used %%
-	if res.ObjCount.Present > 0 {
-		res.ObjSize.Avg = int64(cos.DivRoundU64(res.TotalSize.PresentObjs, res.ObjCount.Present))
+	all := make(cmn.AllBsummResults, 0, len(r.mapRes))
+	for _, src := range r.mapRes {
+		var dst cmn.BsummResult
+		r.cloneRes(&dst, src)
+		all = append(all, &dst)
 	}
-	res.UsedPct = cos.DivRoundU64(res.TotalSize.OnDisk*100, r.res.TotalSize.Disks)
-
-	// TODO -- FIXME: single-bucket limitation, here and elsewhere
-	summaries := cmn.AllBsummResults{&res}
-
-	return summaries, r.Err()
+	return all, r.Err()
 }
 
-func (r *nsummXact) visitObj(lom *cluster.LOM, buf []byte) error {
-	debug.Assert(buf == nil) // TODO -- FIXME: remove
+func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
+	dst.Bck = src.Bck
+	dst.TotalSize.OnDisk = src.TotalSize.OnDisk
+
+	dst.ObjCount.Present = ratomic.LoadUint64(&src.ObjCount.Present)
+	dst.TotalSize.PresentObjs = ratomic.LoadUint64(&src.TotalSize.PresentObjs)
+
+	if r.listRemote {
+		dst.ObjCount.Remote = ratomic.LoadUint64(&src.ObjCount.Remote)
+		dst.TotalSize.RemoteObjs = ratomic.LoadUint64(&src.TotalSize.RemoteObjs)
+	}
+
+	dst.ObjSize.Min = ratomic.LoadInt64(&src.ObjSize.Min)
+	if dst.ObjSize.Min == math.MaxInt64 {
+		dst.ObjSize.Min = 0
+	}
+	dst.ObjSize.Max = ratomic.LoadInt64(&src.ObjSize.Max)
+
+	// compute the current (maybe, running-and-changing) average and used %%
+	if dst.ObjCount.Present > 0 {
+		dst.ObjSize.Avg = int64(cos.DivRoundU64(dst.TotalSize.PresentObjs, dst.ObjCount.Present))
+	}
+	debug.Assert(r.totalDiskSize == src.TotalSize.Disks)
+	dst.TotalSize.Disks = r.totalDiskSize
+	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.totalDiskSize)
+}
+
+func (r *XactNsumm) visitObj(lom *cluster.LOM, _ []byte) error {
+	var res *cmn.BsummResult
+	if r.single {
+		res = &r.oneRes
+	} else {
+		s, ok := r.mapRes[lom.Bprops().BID]
+		debug.Assert(ok, r.Name(), lom.Cname()) // j.opts.Buckets above
+		res = s
+	}
 	if !lom.IsCopy() {
-		ratomic.AddUint64(&r.res.ObjCount.Present, 1)
+		ratomic.AddUint64(&res.ObjCount.Present, 1)
 	}
 	size := lom.SizeBytes()
-	if cmin := ratomic.LoadInt64(&r.res.ObjSize.Min); cmin > size {
-		ratomic.CompareAndSwapInt64(&r.res.ObjSize.Min, cmin, size)
+	if cmin := ratomic.LoadInt64(&res.ObjSize.Min); cmin > size {
+		ratomic.CompareAndSwapInt64(&res.ObjSize.Min, cmin, size)
 	}
-	if cmax := ratomic.LoadInt64(&r.res.ObjSize.Max); cmax < size {
-		ratomic.CompareAndSwapInt64(&r.res.ObjSize.Min, cmax, size)
+	if cmax := ratomic.LoadInt64(&res.ObjSize.Max); cmax < size {
+		ratomic.CompareAndSwapInt64(&res.ObjSize.Max, cmax, size)
 	}
-	ratomic.AddUint64(&r.res.TotalSize.PresentObjs, uint64(size))
+	ratomic.AddUint64(&res.TotalSize.PresentObjs, uint64(size))
+
+	// generic stats (same as base.LomAdd())
+	r.ObjsAdd(1, size)
 	return nil
+}
+
+//
+// listRemote
+//
+
+func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
+	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
+	for !r.IsAborted() {
+		npg := newNpgCtx(r.p.T, bck, lsmsg, noopCb)
+		nentries := allocLsoEntries()
+		lst, err := npg.nextPageR(nentries)
+		if err != nil {
+			r.AddErr(err)
+			return
+		}
+		ratomic.AddUint64(&res.ObjCount.Remote, uint64(len(lst.Entries)))
+		for _, v := range lst.Entries {
+			ratomic.AddUint64(&res.TotalSize.RemoteObjs, uint64(v.Size))
+		}
+		freeLsoEntries(lst.Entries)
+		if lsmsg.ContinuationToken = lst.ContinuationToken; lsmsg.ContinuationToken == "" {
+			return
+		}
+	}
 }

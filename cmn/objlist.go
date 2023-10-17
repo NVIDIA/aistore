@@ -49,8 +49,8 @@ type (
 
 // NOTE: the terms "cached" and "present" are interchangeable
 // ("object is cached" == "is present" and vice versa)
-func (be *LsoEntry) CheckExists() bool { return be.Flags&apc.EntryIsCached != 0 }
-func (be *LsoEntry) SetPresent()       { be.Flags |= apc.EntryIsCached }
+func (be *LsoEntry) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
+func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
 
 func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
 func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }

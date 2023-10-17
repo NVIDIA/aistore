@@ -51,6 +51,8 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 	ctx.msg.Prefix = msg.Prefix
 	ctx.msg.ObjCached = apc.IsFltPresent(fltPresence)
 	ctx.msg.BckPresent = apc.IsFltPresent(fltPresence)
+
+	// TODO -- FIXME: revisit
 	summaries, err := ctx.slow()
 	if err != nil {
 		return err

@@ -16,7 +16,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -552,17 +551,41 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// b-summary
+	// switch (I) through (IV) --------------------------
+
+	// (I) summarize buckets
 	if msg.Action == apc.ActSummaryBck {
-		p.bucketSummary(w, r, qbck, msg, dpq)
+		var (
+			summMsg    apc.BsummCtrlMsg
+			listRemote bool
+		)
+		if err := cos.MorphMarshal(msg.Value, &summMsg); err != nil {
+			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
+			return
+		}
+		if qbck.IsBucket() {
+			bck := (*meta.Bck)(qbck)
+			bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceBckHEAD, bck: bck, dpq: dpq}
+			bckArgs.createAIS = false
+			bckArgs.dontHeadRemote = summMsg.BckPresent
+			if _, err := bckArgs.initAndTry(); err != nil {
+				return
+			}
+			listRemote = !summMsg.ObjCached && bck.IsCloud()
+		} else {
+			listRemote = !summMsg.ObjCached && apc.IsCloudProvider(qbck.Provider)
+		}
+		p.bsummact(w, r, qbck, &summMsg, listRemote)
 		return
 	}
-	// invalid action
+
+	// (II) invalid action
 	if msg.Action != apc.ActList {
 		p.writeErrAct(w, r, msg.Action)
 		return
 	}
-	// list buckets
+
+	// (III) list buckets
 	if msg.Value == nil {
 		if qbck.Name != "" && qbck.Name != msg.Name {
 			p.writeErrf(w, r, "bad list-buckets request: %q vs %q (%+v, %+v)", qbck.Name, msg.Name, qbck, msg)
@@ -578,7 +601,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		return
 	}
 
-	// list objects (NOTE -- TODO: currently, always forwarding)
+	// (IV) list objects (NOTE -- TODO: currently, always forwarding)
 	if !qbck.IsBucket() {
 		p.writeErrf(w, r, "bad list-objects request: %q is not a bucket (is a bucket query?)", qbck)
 		return
@@ -1225,7 +1248,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			fltPresence, _ = strconv.Atoi(v)
 		}
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
-		if !apc.IsFltPresent(fltPresence) && bck.IsRemote() && !bck.IsHTTP() {
+		if !apc.IsFltPresent(fltPresence) && bck.IsCloud() {
 			lstcx := &lstcx{
 				p:       p,
 				bckFrom: bck,
@@ -1467,7 +1490,7 @@ func crerrStatus(err error) (errCode int) {
 
 func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, amsg *apc.ActMsg, lsmsg *apc.LsoMsg, beg int64) {
 	smap := p.owner.smap.get()
-	if smap.CountActiveTs() < 1 {
+	if cnt := smap.CountActiveTs(); cnt < 1 {
 		p.writeErr(w, r, cmn.NewErrNoNodes(apc.Target, smap.CountTargets()))
 		return
 	}
@@ -1713,13 +1736,6 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiRequest) {
-	var (
-		info            *cmn.BsummResult
-		hdr             = w.Header()
-		fltPresence     int  // operate on present-only or otherwise (as per apc.Flt* enum)
-		wantBckSummary  bool // whether to include bucket summary in the response
-		countRemoteObjs bool // whether to count remote objects (NOTE: slow, use w/ caution)
-	)
 	err := p.parseReq(w, r, apireq)
 	if err != nil {
 		return
@@ -1727,22 +1743,32 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	bckArgs := bckInitArgs{p: p, w: w, r: r, bck: apireq.bck, perms: apc.AceBckHEAD, dpq: apireq.dpq, query: apireq.query}
 	bckArgs.dontAddRemote = cos.IsParseBool(apireq.dpq.dontAddRemote) // QparamDontAddRemote
 
-	// present-only [+ bucket summary]
-	if apireq.dpq.fltPresence != "" {
-		fltPresence, err = strconv.Atoi(apireq.dpq.fltPresence)
+	var (
+		info        *cmn.BsummResult
+		dpq         = apireq.dpq
+		msg         apc.BsummCtrlMsg
+		fltPresence int
+		status      int
+	)
+	if dpq.fltPresence != "" {
+		fltPresence, err = strconv.Atoi(dpq.fltPresence)
 		if err != nil {
 			p.writeErrf(w, r, "%s: parse 'flt-presence': %w", p, err)
+			return
 		}
-		if wantBckSummary = !apc.IsFltNoProps(fltPresence); wantBckSummary {
-			info = &cmn.BsummResult{}
-			if apireq.dpq.countRemoteObjs != "" {
-				countRemoteObjs = cos.IsParseBool(apireq.dpq.countRemoteObjs)
-			}
-		}
-		// bckArgs.dontHeadRemote == false will have an effect of adding an (existing)
-		// bucket to the cluster's BMD - right here and now, ie., on the fly.
 		bckArgs.dontHeadRemote = bckArgs.dontHeadRemote || apc.IsFltPresent(fltPresence)
 	}
+	if dpq.bsummRemote != "" { // QparamBsummRemote
+		// (+ bucket summary)
+		msg = apc.BsummCtrlMsg{
+			UUID:       dpq.uuid,
+			ObjCached:  !cos.IsParseBool(dpq.bsummRemote),
+			BckPresent: apc.IsFltPresent(fltPresence),
+		}
+	}
+
+	// bckArgs.dontHeadRemote == false will have an effect of adding an (existing)
+	// bucket to the cluster's BMD - right here and now, ie., on the fly.
 	bckArgs.createAIS = false
 
 	bck, err := bckArgs.initAndTry()
@@ -1753,16 +1779,18 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	// 1. bucket is present (and was present prior to this call), and we are done with it here
 	if bckArgs.isPresent {
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
-		if wantBckSummary {
-			// get runtime bucket info (aka /summary/):
-			// broadcast to all targets, collect, and summarize
-			if err := p.bsummDoWait(bck, info, fltPresence, countRemoteObjs); err != nil {
+		if dpq.bsummRemote != "" {
+			listRemote := !msg.ObjCached && bck.IsCloud()
+			info, status, err = p.bsummhead(bck, &msg, listRemote)
+			if err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
-			info.IsBckPresent = true
+			if info != nil {
+				info.IsBckPresent = true
+			}
 		}
-		toHdr(bck, hdr, info)
+		toHdr(w, bck, info, status, msg.UUID)
 		return
 	}
 
@@ -1772,7 +1800,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// [filtering] when the bucket that must be present is not
 	if apc.IsFltPresent(fltPresence) || bckArgs.dontAddRemote {
-		toHdr(bck, hdr, info)
+		toHdr(w, bck, nil, 0, "")
 		return
 	}
 
@@ -1780,24 +1808,34 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	bck.Props, bckArgs.isPresent = bmd.Get(bck)
 	debug.Assert(bckArgs.isPresent, bck.String())
 
-	if wantBckSummary {
-		// NOTE: summarizing freshly added remote
-		runtime.Gosched()
-		if err := p.bsummDoWait(bck, info, fltPresence, countRemoteObjs); err != nil {
+	if dpq.bsummRemote != "" {
+		// summarizing freshly added remote
+		listRemote := !msg.ObjCached && bck.IsCloud()
+		info, status, err = p.bsummhead(bck, &msg, listRemote)
+		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
-		info.IsBckPresent = true
+		if info != nil {
+			info.IsBckPresent = true
+		}
 	}
-	toHdr(bck, hdr, info)
+	toHdr(w, bck, info, status, msg.UUID)
 }
 
-func toHdr(bck *meta.Bck, hdr http.Header, info *cmn.BsummResult) {
+func toHdr(w http.ResponseWriter, bck *meta.Bck, info *cmn.BsummResult, status int, xid string) {
+	hdr := w.Header()
 	if bck.Props != nil {
 		hdr.Set(apc.HdrBucketProps, cos.MustMarshalToString(bck.Props))
 	}
 	if info != nil {
 		hdr.Set(apc.HdrBucketSumm, cos.MustMarshalToString(info))
+	}
+	if xid != "" {
+		hdr.Set(apc.HdrXactionID, xid)
+	}
+	if status > 0 {
+		w.WriteHeader(status)
 	}
 }
 
@@ -2286,9 +2324,8 @@ end:
 
 func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, wantOnlyRemote bool) (*cmn.LsoResult, error) {
 	var (
-		config     = cmn.GCO.Get()
-		reqTimeout = config.Client.ListObjTimeout.D()
-		aisMsg     = p.newAmsgActVal(apc.ActList, &lsmsg)
+		config = cmn.GCO.Get()
+		aisMsg = p.newAmsgActVal(apc.ActList, &lsmsg)
 	)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
@@ -2298,7 +2335,14 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 		Body:   cos.MustMarshal(aisMsg),
 	}
 
-	var results sliceResults
+	var (
+		// TODO: restructure as [apc.ActBegin --- apc.ActQuery]
+		// - return UUID via apc.ActBegin
+		// - the first and subsequent pages - via apc.ActQuery
+		reqTimeout = config.Client.ListObjTimeout.D()
+
+		results sliceResults
+	)
 	if wantOnlyRemote {
 		cargs := allocCargs()
 		{

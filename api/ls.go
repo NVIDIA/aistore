@@ -44,6 +44,12 @@ type (
 		CallAfter time.Duration
 		Limit     uint
 	}
+
+	BsummCB   func(*cmn.AllBsummResults, bool)
+	BsummArgs struct {
+		Callback  BsummCB
+		CallAfter time.Duration
+	}
 )
 
 // ListBuckets returns buckets for provided query, where
@@ -56,7 +62,7 @@ type (
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	q := make(url.Values, 4)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(fltPresence))
-	q = qbck.AddToQuery(q)
+	qbck.AddToQuery(q)
 
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -91,7 +97,7 @@ func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, err
 // and the numbers of objects, both _in_ the cluster and remote
 // GetBucketSummary supports a single specified bucket or multiple buckets, as per `cmn.QueryBcks` query.
 // (e.g., GetBucketSummary with an empty bucket query will return "summary" info for all buckets)
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) (res cmn.AllBsummResults, err error) {
+func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, args BsummArgs) (res cmn.AllBsummResults, err error) {
 	if msg == nil {
 		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
 	}
@@ -104,7 +110,7 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) 
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = qbck.NewQuery()
 	}
-	if err = _bsumm(reqParams, msg, &res); err == nil {
+	if err = _bsumm(reqParams, msg, &res, args); err == nil {
 		sort.Sort(res)
 	}
 	FreeRp(reqParams)
@@ -112,24 +118,22 @@ func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg) 
 }
 
 // Wait/poll bucket-summary:
-//  1. The function initiates `apc.ActSummaryBck` (msg.UUID == "").
-//     In response, aistore returns UUID of a newly created job.
-//  2. Starts polling: request destination with received UUID in a loop while
-//     the destination returns StatusAccepted=task is still running
-//     Time between requests is dynamic: it starts at 200ms and increases
-//     by half after every "not-StatusOK" request. It is limited with 10 seconds
-//  3. Returns on error
-//  4. If the destination returns status code StatusOK, it means the response
-//     contains the real data and the function returns the response to the caller
-func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults) error {
+// - initiate `apc.ActSummaryBck` (msg.UUID == "").
+// - poll for status != ok
+// - NOTE: no timeout
+// - handle status: ok, accepted, partial-content
+// compare w/ _bsumm
+func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults, args BsummArgs) error {
 	var (
-		uuid   string
-		sleep  = xact.MinPollTime
-		actMsg = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
-		body   = cos.MustMarshal(actMsg)
+		uuid         string
+		start, after int64
+		sleep        = xact.MinPollTime
+		actMsg       = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
+		body         = cos.MustMarshal(actMsg)
 	)
-	if reqParams.Query == nil {
-		reqParams.Query = url.Values{}
+	if args.Callback != nil {
+		start = mono.NanoTime()
+		after = start + args.CallAfter.Nanoseconds()
 	}
 	reqParams.Body = body
 	status, err := reqParams.doReqStr(&uuid)
@@ -137,34 +141,39 @@ func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResult
 		return err
 	}
 	if status != http.StatusAccepted {
-		if status == http.StatusOK {
-			return errors.New("expected 202 (\"accepted\") response, got 200 (\"ok\")")
-		}
-		return fmt.Errorf("invalid response code: %d", status)
+		return fmt.Errorf("invalid response code: expecting %d, got %d", http.StatusAccepted, status)
 	}
 	if msg.UUID == "" {
 		msg.UUID = uuid
 		body = cos.MustMarshal(actMsg)
 	}
 
-	// Poll async task for http.StatusOK completion
-	for {
+	time.Sleep(sleep)
+	for i := 0; ; i++ {
 		reqParams.Body = body
 		status, err = reqParams.DoReqAny(res)
 		if err != nil {
 			return err
 		}
-		// TODO -- FIXME progress.callback(progress)
-
-		if status == http.StatusOK { // TODO -- FIXME
-			break
+		// callback w/ partial results
+		if args.Callback != nil && (status == http.StatusPartialContent || status == http.StatusOK) {
+			if after == start || mono.NanoTime() >= after {
+				args.Callback(res, status == http.StatusOK)
+			}
 		}
+		if status == http.StatusOK {
+			return nil
+		}
+
 		time.Sleep(sleep)
-		if sleep < xact.MaxProbingFreq {
-			sleep += sleep / 2
+		// inc. sleep time if there's nothing at all
+		if i == 8 && status != http.StatusPartialContent {
+			debug.Assert(status == http.StatusAccepted)
+			sleep *= 2
+		} else if i == 16 && status != http.StatusPartialContent {
+			sleep *= 2
 		}
 	}
-	return err
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the
@@ -349,6 +358,10 @@ func ListObjectsInvalidateCache(bp BaseParams, bck cmn.Bck) error {
 	FreeRp(reqParams)
 	return err
 }
+
+////////////////
+// LsoCounter //
+////////////////
 
 func (ctx *LsoCounter) IsFinished() bool       { return ctx.done }
 func (ctx *LsoCounter) Elapsed() time.Duration { return mono.Since(ctx.startTime) }

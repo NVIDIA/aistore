@@ -201,13 +201,24 @@ func TestGetBucketInfo(t *testing.T) {
 		isPresent  bool
 	)
 	if bck.IsRemote() {
-		_, _, err := api.GetBucketInfo(baseParams, bck, apc.FltPresent)
+		_, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresent = err == nil
 	}
 	for _, fltPresence := range fltPresentEnum {
 		text := fltPresentText[fltPresence]
 		tlog.Logf("%q %s\n", text, strings.Repeat("-", 60-len(text)))
-		props, info, err := api.GetBucketInfo(baseParams, bck, fltPresence, bck.IsRemote() /*count remote obj-s*/)
+		args := api.BinfoArgs{
+			FltPresence: fltPresence,
+		}
+
+		if apc.IsFltNoProps(fltPresence) {
+			// (fast path)
+		} else {
+			args.Summarize = true
+			args.WithRemote = bck.IsRemote()
+		}
+
+		props, info, err := api.GetBucketInfo(baseParams, bck, args)
 		if err != nil {
 			if herr := cmn.Str2HTTPErr(err.Error()); herr != nil {
 				tlog.Logln(herr.TypeCode + ": " + herr.Message)
@@ -234,7 +245,7 @@ func TestGetBucketInfo(t *testing.T) {
 		tlog.Logln("")
 	}
 	if bck.IsRemote() {
-		_, _, err := api.GetBucketInfo(baseParams, bck, apc.FltPresent)
+		_, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresentEnd := err == nil
 		tassert.Errorf(t, isPresent == isPresentEnd, "presence in the beginning (%t) != (%t) at the end",
 			isPresent, isPresentEnd)
@@ -3312,7 +3323,7 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			if test.summary {
 				msg := &apc.BsummCtrlMsg{ObjCached: test.cached}
-				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg)
+				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg, api.BsummArgs{})
 				tassert.CheckFatal(t, err)
 
 				if len(summaries) == 0 {

@@ -23,7 +23,7 @@ from aistore.sdk.const import (
     QPARAM_NAMESPACE,
     QPARAM_PROVIDER,
     QPARAM_KEEP_REMOTE,
-    QPARAM_COUNT_REMOTE_OBJS,
+    QPARAM_BSUMM_REMOTE,
     QPARAM_FLT_PRESENCE,
     HTTP_METHOD_DELETE,
     HTTP_METHOD_GET,
@@ -687,7 +687,7 @@ class TestBucket(unittest.TestCase):
             params={
                 **self.ais_bck.qparam,
                 QPARAM_FLT_PRESENCE: 0,
-                QPARAM_COUNT_REMOTE_OBJS: True,
+                QPARAM_BSUMM_REMOTE: True,
             },
         )
 

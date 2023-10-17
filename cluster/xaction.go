@@ -38,7 +38,6 @@ type (
 		Finished() bool
 		Running() bool
 		Quiesce(time.Duration, QuiCB) QuiRes
-		Result() (any, error)
 
 		// abrt
 		IsAborted() bool

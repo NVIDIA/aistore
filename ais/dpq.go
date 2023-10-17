@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -27,7 +27,7 @@ type dpq struct {
 	owt                 string // object write transaction { OwtPut, ... }
 	fltPresence         string // QparamFltPresence
 	dontAddRemote       string // QparamDontAddRemote
-	countRemoteObjs     string // QparamCountRemoteObjs
+	bsummRemote         string // QparamBsummRemote
 	etlName             string // QparamETLName
 	silent              string // QparamSilent
 }
@@ -108,8 +108,8 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			dpq.fltPresence = value
 		case apc.QparamDontAddRemote:
 			dpq.dontAddRemote = value
-		case apc.QparamCountRemoteObjs:
-			dpq.countRemoteObjs = value
+		case apc.QparamBsummRemote:
+			dpq.bsummRemote = value
 		case apc.QparamETLName:
 			dpq.etlName = value
 		case apc.QparamSilent:

@@ -344,6 +344,8 @@ func (r *LsoXact) nextPageR() (err error) {
 	debug.Assert(tsi.IsTarget(), tsi.StringEx())
 
 	r.wiCnt.Inc()
+
+	// TODO -- FIXME: not counting/sizing (locally) present objects that are missing (deleted?) remotely
 	if r.walk.this {
 		nentries := allocLsoEntries()
 		page, err = npg.nextPageR(nentries)
@@ -371,6 +373,7 @@ func (r *LsoXact) nextPageR() (err error) {
 			err = ErrGone
 		}
 	}
+
 	r.wiCnt.Dec()
 ex:
 	if err != nil {

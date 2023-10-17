@@ -33,7 +33,7 @@ from aistore.sdk.const import (
     MSGPACK_CONTENT_TYPE,
     PROVIDER_AIS,
     QPARAM_BCK_TO,
-    QPARAM_COUNT_REMOTE_OBJS,
+    QPARAM_BSUMM_REMOTE,
     QPARAM_FLT_PRESENCE,
     QPARAM_KEEP_REMOTE,
     QPARAM_NAMESPACE,
@@ -336,12 +336,12 @@ class Bucket(AISSource):
 
         return json.loads(resp.content.decode("utf-8"))[0]
 
-    def info(self, flt_presence: int = 0, count_remote_objs: bool = True):
+    def info(self, flt_presence: int = 0, bsumm_remote: bool = True):
         """
         Returns bucket summary and information/properties.
 
         Args:
-            count_remote_objs (bool): If True, returned bucket info will entail remote objects as well
+            bsumm_remote (bool): If True, returned bucket info will include remote objects as well
             flt_presence (int): Describes the presence of buckets and objects with respect to their existence
                                 or non-existence in the AIS cluster. Defaults to 0.
 
@@ -367,8 +367,10 @@ class Bucket(AISSource):
 
         params = self.qparam.copy()
         params.update({QPARAM_FLT_PRESENCE: flt_presence})
-        if count_remote_objs:
-            params.update({QPARAM_COUNT_REMOTE_OBJS: count_remote_objs})
+        if bsumm_remote:
+            params[QPARAM_BSUMM_REMOTE] = True
+        else:
+            params[QPARAM_BSUMM_REMOTE] = False
 
         response = self.client.request(
             HTTP_METHOD_HEAD,

@@ -5,7 +5,6 @@
 package xact
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -314,10 +313,6 @@ func (xctn *Base) Finish() {
 	} else {
 		nlog.Warningf("%s finished w/err: %v", xctn, infoErr)
 	}
-}
-
-func (*Base) Result() (any, error) {
-	return nil, errors.New("getting result is not implemented")
 }
 
 // base stats: locally processed
