@@ -596,9 +596,15 @@ func listAnyHandler(c *cli.Context) error {
 		if flagIsSet(c, bckSummaryFlag) {
 			if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
 				lsb.countRemoteObjs = true
-				const warn = "counting and sizing remote objects may take considerable time\n" +
-					"(tip: run 'ais storage summary' async job)\n"
-				actionWarn(c, warn)
+				const (
+					warn1 = "counting and sizing remote objects may take considerable time\n"
+					warn2 = "(tip: run 'ais storage summary' or use '--regex' to refine selection)\n"
+				)
+				if lsb.regex == nil {
+					actionWarn(c, warn1+warn2)
+				} else {
+					actionWarn(c, warn1)
+				}
 			}
 			if bck.Name != "" {
 				_ = listBckTable(c, cmn.QueryBcks(bck), cmn.Bcks{bck}, lsb)

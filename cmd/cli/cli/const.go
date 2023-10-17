@@ -362,10 +362,6 @@ var (
 			indent4 + "\t- all buckets, including accessible (visible) remote buckets that are _not present_ in the cluster\n" +
 			indent4 + "\t- all objects in a given accessible (visible) bucket, including remote objects and misplaced copies",
 	}
-	allBcksFlag = cli.BoolFlag{
-		Name:  scopeAll,
-		Usage: "all buckets, including accessible remote buckets that are not present in the cluster",
-	}
 	copyAllObjsFlag = cli.BoolFlag{
 		Name:  scopeAll,
 		Usage: "copy all objects from a remote bucket including those that are not present (not \"cached\") in the cluster",

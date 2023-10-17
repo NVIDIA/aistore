@@ -61,7 +61,9 @@ func (*nsummFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *nsummFactory) Start() (err error) {
 	p.xctn, err = newSumm(p)
-	xact.GoRunW(p.xctn)
+	if err == nil {
+		xact.GoRunW(p.xctn)
+	}
 	return
 }
 
@@ -110,6 +112,7 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 			// change of mind: single even though spec-ed as qbck
 			p.Bck = single
 			opts.Buckets = nil
+			r.buckets = nil
 			goto single
 		default:
 			// inc num joggers to boost

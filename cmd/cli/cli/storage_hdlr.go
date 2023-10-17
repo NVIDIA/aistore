@@ -114,7 +114,6 @@ var (
 		longRunFlags,
 		bsummPrefixFlag,
 		listObjCachedFlag,
-		allBcksFlag,
 		unitsFlag,
 		verboseFlag,
 		waitJobXactFinishedFlag,
@@ -343,7 +342,8 @@ func summaryStorageHandler(c *cli.Context) error {
 	if errU != nil {
 		return err
 	}
-	ctx := newBsummContext(c, units, qbck)
+	// TODO: remote buckets not in BMD - see `listBckTableWithSummary`
+	ctx := newBsummContext(c, units, qbck, true /*bckPresent*/)
 
 	setLongRunParams(c)
 	summaries, err := ctx.slow()
@@ -360,7 +360,7 @@ func summaryStorageHandler(c *cli.Context) error {
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
-func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks) *bsummCtx {
+func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks, bckPresent bool) *bsummCtx {
 	ctx := &bsummCtx{
 		c:              c,
 		units:          units,
@@ -370,7 +370,7 @@ func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks) *bsummCtx
 	}
 	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
 	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
-	ctx.msg.BckPresent = !flagIsSet(c, allBcksFlag)
+	ctx.msg.BckPresent = bckPresent
 
 	if flagIsSet(c, refreshFlag) {
 		ctx.args.CallAfter = parseDurationFlag(c, refreshFlag)

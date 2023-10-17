@@ -137,10 +137,11 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		units = ""
 	}
 	var (
-		opts    = teb.Opts{AltMap: teb.FuncMapUnits(units)}
-		maxwait = listObjectsWaitTime
-		ctx     = newBsummContext(c, units, qbck)
-		prev    = ctx.started
+		opts       = teb.Opts{AltMap: teb.FuncMapUnits(units)}
+		maxwait    = listObjectsWaitTime
+		bckPresent = apc.IsFltPresent(args.FltPresence) // all-buckets part in the `allObjsOrBcksFlag`
+		ctx        = newBsummContext(c, units, qbck, bckPresent)
+		prev       = ctx.started
 	)
 	debug.Assert(args.Summarize)
 	args.CallAfter = ctx.args.CallAfter
