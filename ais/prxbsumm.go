@@ -145,8 +145,9 @@ func (p *proxy) bsummhead(bck *meta.Bck, msg *apc.BsummCtrlMsg) (info *cmn.Bsumm
 		qbck      = (*cmn.QueryBcks)(bck) // adapt
 	)
 	if msg.UUID == "" {
-		err = p.bsummNew(qbck, msg)
-		status = http.StatusAccepted
+		if err = p.bsummNew(qbck, msg); err == nil {
+			status = http.StatusAccepted
+		}
 		return
 	}
 	summaries, status, err = p.bsummCollect(qbck, msg)

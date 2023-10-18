@@ -1774,10 +1774,12 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if dpq.bsummRemote != "" { // QparamBsummRemote
 		// (+ bucket summary)
 		msg = apc.BsummCtrlMsg{
-			UUID:       dpq.uuid,
-			ObjCached:  !cos.IsParseBool(dpq.bsummRemote),
-			BckPresent: apc.IsFltPresent(fltPresence),
+			UUID:          dpq.uuid,
+			ObjCached:     !cos.IsParseBool(dpq.bsummRemote),
+			BckPresent:    apc.IsFltPresent(fltPresence),
+			DontAddRemote: cos.IsParseBool(dpq.dontAddRemote),
 		}
+		bckArgs.dontAddRemote = msg.DontAddRemote
 	}
 	bckArgs.createAIS = false
 
@@ -1788,7 +1790,9 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 
 	// 1. bucket is present (and was present prior to this call), and we are done with it here
 	if bckArgs.isPresent {
-		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
+		if fltPresence == apc.FltExistsOutside {
+			nlog.Warningf("bucket %s is present, flt %d=\"outside\" not implemented yet", bck.Cname(""), fltPresence)
+		}
 		if dpq.bsummRemote != "" {
 			info, status, err = p.bsummhead(bck, &msg)
 			if err != nil {
@@ -1808,17 +1812,22 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	debug.Assert(bckArgs.exists)
 
 	// [filtering] when the bucket that must be present is not
-	if apc.IsFltPresent(fltPresence) || bckArgs.dontAddRemote {
+	if apc.IsFltPresent(fltPresence) {
 		toHdr(w, bck, nil, 0, "")
 		return
 	}
 
-	bmd := p.owner.bmd.get()
-	bck.Props, bckArgs.isPresent = bmd.Get(bck)
-	debug.Assert(bckArgs.isPresent, bck.String())
+	var (
+		bprops *cmn.BucketProps
+		bmd    = p.owner.bmd.get()
+	)
+	bprops, bckArgs.isPresent = bmd.Get(bck)
+	if bprops != nil {
+		// just added via bckArgs.initAndTry() above, with dontAdd == false
+		bck.Props = bprops
+	} // otherwise, keep bck.Props as per (#18995)
 
 	if dpq.bsummRemote != "" {
-		// summarizing freshly added remote
 		info, status, err = p.bsummhead(bck, &msg)
 		if err != nil {
 			p.writeErr(w, r, err)

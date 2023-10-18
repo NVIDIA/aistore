@@ -71,11 +71,10 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
 				if cos.IsParseBool(dpq.dontAddRemote) {
-					// primary decided not to add it - proceed anyway
-					// (TODO: assert(wantOnlyRemote))
+					// don't add it - proceed anyway (TODO: assert(wantOnlyRemote) below)
 					err = nil
 				} else {
-					// fixup and retry
+					// in an inlikely case updated BMD's in flight
 					t.BMDVersionFixup(r)
 					err = bck.Init(t.owner.bmd)
 				}
@@ -128,8 +127,13 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		if qbck.IsBucket() {
 			if err := bck.Init(t.owner.bmd); err != nil {
 				if cmn.IsErrRemoteBckNotFound(err) {
-					t.BMDVersionFixup(r)
-					err = bck.Init(t.owner.bmd)
+					if bsumMsg.DontAddRemote || cos.IsParseBool(dpq.dontAddRemote) {
+						// don't add it - proceed anyway
+						err = nil
+					} else {
+						t.BMDVersionFixup(r)
+						err = bck.Init(t.owner.bmd)
+					}
 				}
 				if err != nil {
 					t.writeErr(w, r, err)

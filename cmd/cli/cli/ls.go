@@ -41,9 +41,10 @@ type (
 func listBckTable(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, lsb lsbCtx) (cnt int) {
 	if flagIsSet(c, bckSummaryFlag) {
 		args := api.BinfoArgs{
-			FltPresence: lsb.fltPresence,     // all-buckets part in the `allObjsOrBcksFlag`
-			WithRemote:  lsb.countRemoteObjs, // all-objects part --/--
-			Summarize:   true,
+			FltPresence:   lsb.fltPresence,     // all-buckets part in the `allObjsOrBcksFlag`
+			WithRemote:    lsb.countRemoteObjs, // all-objects part --/--
+			Summarize:     true,
+			DontAddRemote: flagIsSet(c, dontAddRemoteFlag),
 		}
 		cnt = listBckTableWithSummary(c, qbck, bcks, args)
 	} else {

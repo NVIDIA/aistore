@@ -1,4 +1,4 @@
-// Package api provides AIStore API over HTTP(S)
+// Package api provides Go based AIStore API/SDK over HTTP(S)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */

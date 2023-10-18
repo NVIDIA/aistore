@@ -177,12 +177,7 @@ func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {
 	}
 
 	if len(bcks) == 0 && apc.IsFltPresent(lsb.fltPresence) && !qbck.IsAIS() {
-		const hint = "Use %s option to list _all_ buckets.\n"
-		if qbck.IsEmpty() {
-			fmt.Fprintf(c.App.Writer, "No buckets in the cluster. "+hint, qflprn(allObjsOrBcksFlag))
-		} else {
-			fmt.Fprintf(c.App.Writer, "No %q matching buckets in the cluster. "+hint, qbck, qflprn(allObjsOrBcksFlag))
-		}
+		_lsTip(c, qbck)
 		return nil
 	}
 
@@ -230,6 +225,29 @@ func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {
 		fmt.Fprintln(c.App.Writer)
 	}
 	return nil
+}
+
+func _lsTip(c *cli.Context, qbck cmn.QueryBcks) {
+	const (
+		what1 = "No buckets in the cluster. "
+		what2 = "No %q buckets in the cluster. "
+
+		h1 = "Use %s option to list matching remote buckets, if any"
+		h4 = "\n(optionally, use %s as well _not_ to add them on the fly).\n"
+	)
+	if flagIsSet(c, bckSummaryFlag) {
+		if qbck.IsEmpty() {
+			fmt.Fprintf(c.App.Writer, what1+h1+h4, qflprn(allObjsOrBcksFlag), qflprn(dontAddRemoteFlag))
+		} else {
+			fmt.Fprintf(c.App.Writer, what2+h1+h4, qbck, qflprn(allObjsOrBcksFlag), qflprn(dontAddRemoteFlag))
+		}
+	} else {
+		if qbck.IsEmpty() {
+			fmt.Fprintf(c.App.Writer, what1+h1+".\n", qflprn(allObjsOrBcksFlag))
+		} else {
+			fmt.Fprintf(c.App.Writer, what2+h1+".\n", qbck, qflprn(allObjsOrBcksFlag))
+		}
+	}
 }
 
 // If both backend_bck.name and backend_bck.provider are present, use them.

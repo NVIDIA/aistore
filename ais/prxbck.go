@@ -321,12 +321,17 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 		if bck.IsRemoteAIS() {
 			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		} else {
-			// NOTE -- TODO (dilemma):
-			// The bucket has no local representation. The best we could do is - return its
-			// remote metadata _as is_ but there's no control structure other than (AIS-only)
-			// `BucketProps`.
-			// Therefore: return cluster defaults where the bucket's unique BID == 0
-			// (which means: not initialized and/or not present in BMD)
+			// Background (#18995):
+			//
+			// The bucket is not in the BMD - has no local representation. The best we could do
+			// is return remote metadata as is. But there's no control structure for that
+			// other than (AIS-only) `BucketProps`.
+			// Therefore: return the result of merging cluster defaults with the remote header
+			// resulting from the backend.Head(bucket) call and containing actual
+			// values (e.g. versioning).
+			// The returned bucket props will have its BID == 0 (zero), which also means:
+			// this bucket is not initialized and/or not present in BMD.
+
 			bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		}
 		return

@@ -1,4 +1,4 @@
-// Package api provides AIStore API over HTTP(S)
+// Package api provides Go based AIStore API/SDK over HTTP(S)
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -22,11 +22,12 @@ import (
 
 type (
 	BinfoArgs struct {
-		Callback    BsummCB
-		CallAfter   time.Duration
-		FltPresence int
-		Summarize   bool
-		WithRemote  bool
+		Callback      BsummCB
+		CallAfter     time.Duration
+		FltPresence   int
+		Summarize     bool
+		WithRemote    bool
+		DontAddRemote bool
 	}
 )
 
@@ -110,6 +111,9 @@ func GetBucketInfo(bp BaseParams, bck cmn.Bck, args BinfoArgs) (*cmn.BucketProps
 	q := make(url.Values, 4)
 	q = bck.AddToQuery(q)
 	q.Set(apc.QparamFltPresence, strconv.Itoa(args.FltPresence))
+	if args.DontAddRemote {
+		q.Set(apc.QparamDontAddRemote, "true")
+	}
 	if args.Summarize {
 		if args.WithRemote {
 			q.Set(apc.QparamBsummRemote, "true")

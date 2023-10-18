@@ -7,10 +7,11 @@ package apc
 type (
 	// to generate bucket summary (or summaries)
 	BsummCtrlMsg struct {
-		UUID       string `json:"uuid"`
-		Prefix     string `json:"prefix"`
-		ObjCached  bool   `json:"cached"`
-		BckPresent bool   `json:"present"`
+		UUID          string `json:"uuid"`
+		Prefix        string `json:"prefix"`
+		ObjCached     bool   `json:"cached"`
+		BckPresent    bool   `json:"present"`
+		DontAddRemote bool   `json:"dont_add_remote"`
 	}
 
 	// "summarized" result for a given bucket
