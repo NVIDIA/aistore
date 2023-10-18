@@ -853,7 +853,7 @@ func (t *target) beginRm(c *txnServerCtx) error {
 }
 
 //
-// destroy local bucket / evict cloud buket
+// destroy local bucket / evict cloud bucket
 //
 
 func (t *target) destroyBucket(c *txnServerCtx) error {

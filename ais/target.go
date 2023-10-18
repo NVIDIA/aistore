@@ -959,8 +959,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 			return
 		}
 	} else {
-		if !cmn.IsObjNotExist(err) {
-			errCode = http.StatusNotFound
+		if !cmn.IsErrObjNought(err) {
 			return
 		}
 		exists = false
