@@ -71,6 +71,7 @@ var (
 		"create": "bucket create",
 		"cp":     "bucket cp",
 		"rmb":    "bucket rm",
+		"evict":  "bucket evict",
 		// job
 		"start":    "job start",
 		"stop":     "job stop",

@@ -1509,12 +1509,13 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 	}
 
 	var (
-		nl                         nl.Listener
-		err                        error
-		tsi                        *meta.Snode
-		lst                        *cmn.LsoResult
-		newls                      bool
-		listRemote, wantOnlyRemote bool
+		nl             nl.Listener
+		err            error
+		tsi            *meta.Snode
+		lst            *cmn.LsoResult
+		newls          bool
+		listRemote     bool
+		wantOnlyRemote bool
 	)
 	if lsmsg.UUID == "" {
 		lsmsg.UUID = cos.GenUUID()
@@ -1635,9 +1636,16 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 		return
 	}
 	if bck.Props.BID == 0 {
-		// remote bucket outside cluster (not in BMD)
+		// remote bucket outside cluster (not in BMD) that hasn't been added ("on the fly") by the caller
+		// (lsmsg flag below)
 		debug.Assert(bck.IsRemote())
+		debug.Assert(lsmsg.IsFlagSet(apc.LsDontAddRemote))
 		wantOnlyRemote = true
+		if !lsmsg.WantOnlyRemoteProps() {
+			err = fmt.Errorf("cannot list remote not-in-cluster bucket %s for not-only-remote object properties: %q",
+				bck.Cname(""), lsmsg.Props)
+			return
+		}
 	} else {
 		// default
 		wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
@@ -2334,9 +2342,9 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 	}
 
 	var (
-		// TODO: restructure as [apc.ActBegin --- apc.ActQuery]
-		// - return UUID via apc.ActBegin
-		// - the first and subsequent pages - via apc.ActQuery
+		// TODO: consider restructuring as [apc.ActBegin --- apc.ActQuery] two-stage, where:
+		// - UUID gets returned via apc.ActBegin
+		// - while the first and subsequent pages - via apc.ActQuery
 		reqTimeout = config.Client.ListObjTimeout.D()
 
 		results sliceResults
@@ -2348,6 +2356,13 @@ func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta
 			cargs.req = args.req
 			cargs.timeout = reqTimeout
 			cargs.cresv = cresLso{} // -> cmn.LsoResult
+		}
+		// duplicate via query to have target ignoring an (early) failure to initialize bucket
+		if lsmsg.IsFlagSet(apc.LsDontHeadRemote) {
+			cargs.req.Query.Set(apc.QparamDontHeadRemote, "true")
+		}
+		if lsmsg.IsFlagSet(apc.LsDontAddRemote) {
+			cargs.req.Query.Set(apc.QparamDontAddRemote, "true")
 		}
 		res := p.call(cargs, smap)
 		freeCargs(cargs)

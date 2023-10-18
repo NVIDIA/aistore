@@ -29,11 +29,11 @@ import (
 )
 
 //
-// httpbck* handlers
+// httpbck* handlers: list buckets/objects, summary (ditto), delete(bucket), head(bucket)
 //
 
 // GET /v1/buckets[/bucket-name]
-func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
+func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathBuckets.L)
 	if err != nil {
 		return
@@ -44,8 +44,6 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	t.ensureLatestBMD(msg, r)
 
-	dpq := dpqAlloc()
-	defer dpqFree(dpq)
 	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -72,8 +70,15 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request) {
 		bck := meta.CloneBck((*cmn.Bck)(qbck))
 		if err := bck.Init(t.owner.bmd); err != nil {
 			if cmn.IsErrRemoteBckNotFound(err) {
-				t.BMDVersionFixup(r)
-				err = bck.Init(t.owner.bmd)
+				if cos.IsParseBool(dpq.dontAddRemote) {
+					// primary decided not to add it - proceed anyway
+					// (TODO: assert(wantOnlyRemote))
+					err = nil
+				} else {
+					// fixup and retry
+					t.BMDVersionFixup(r)
+					err = bck.Init(t.owner.bmd)
+				}
 			}
 			if err != nil {
 				t.statsT.IncErr(stats.ListCount)

@@ -158,7 +158,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		params.ContinuationToken = aws.String(msg.ContinuationToken)
 	}
 
-	versioning = bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
+	versioning = bck.Props != nil && bck.Props.Versioning.Enabled && msg.WantProp(apc.GetPropsVersion)
 	msg.PageSize = calcPageSize(msg.PageSize, awsp.MaxPageSize())
 	if versioning {
 		msg.PageSize = min(versionedPageSize, msg.PageSize)

@@ -51,13 +51,14 @@ type (
 		nextToken string           // next continuation token -> next pages
 		lastPage  cmn.LsoEntries   // last page (contents)
 		walk      struct {
-			pageCh chan *cmn.LsoEntry // channel to accumulate listed object entries
-			stopCh *cos.StopCh        // to abort bucket walk
-			wi     *walkInfo          // walking context and state
-			wg     sync.WaitGroup     // wait until this walk finishes
-			done   bool               // done walking (indication)
-			wor    bool               // wantOnlyRemote
-			this   bool               // r.msg.SID == r.p.T.SID(): true when this target does remote paging
+			pageCh       chan *cmn.LsoEntry // channel to accumulate listed object entries
+			stopCh       *cos.StopCh        // to abort bucket walk
+			wi           *walkInfo          // walking context and state
+			wg           sync.WaitGroup     // wait until this walk finishes
+			done         bool               // done walking (indication)
+			wor          bool               // wantOnlyRemote
+			dontPopulate bool               // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
+			this         bool               // r.msg.SID == r.p.T.SID(): true when this target does remote paging
 		}
 		streamingX
 		lensgl int64
@@ -111,6 +112,10 @@ func (p *lsoFactory) Start() (err error) {
 	// NOTE: is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps()
 	r.walk.this = r.msg.SID == r.p.T.SID()
+
+	// true iff the bucket was not added - not initialized
+	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
+	debug.Assert(!r.walk.dontPopulate || p.msg.IsFlagSet(apc.LsDontAddRemote))
 
 	// open streams iff:
 	if r.listRemote() && !r.walk.wor {
@@ -348,7 +353,7 @@ func (r *LsoXact) nextPageR() (err error) {
 	// TODO -- FIXME: not counting/sizing (locally) present objects that are missing (deleted?) remotely
 	if r.walk.this {
 		nentries := allocLsoEntries()
-		page, err = npg.nextPageR(nentries)
+		page, err = npg.nextPageR(nentries, !r.walk.dontPopulate)
 		if !r.walk.wor && !r.IsAborted() {
 			if err == nil {
 				// bcast page

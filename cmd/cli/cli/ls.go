@@ -268,7 +268,7 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		msg.ClearFlag(apc.LsBckPresent)
 	}
 	if flagIsSet(c, dontHeadRemoteFlag) {
-		msg.SetFlag(apc.LsAnonymous)
+		msg.SetFlag(apc.LsDontHeadRemote)
 	}
 	if flagIsSet(c, dontAddRemoteFlag) {
 		msg.SetFlag(apc.LsDontAddRemote)
@@ -295,7 +295,13 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		msg.SetFlag(apc.LsNameOnly)
 		msg.Props = apc.GetPropsName
 	} else if len(props) == 0 {
-		msg.AddProps(apc.GetPropsMinimal...)
+		if flagIsSet(c, dontAddRemoteFlag) {
+			msg.AddProps(apc.GetPropsName)
+			msg.AddProps(apc.GetPropsSize)
+			msg.SetFlag(apc.LsNameSize)
+		} else {
+			msg.AddProps(apc.GetPropsMinimal...)
+		}
 	} else {
 		if cos.StringInSlice(allPropsFlag.GetName(), props) {
 			msg.AddProps(apc.GetPropsAll...)

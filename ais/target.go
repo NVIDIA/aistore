@@ -569,7 +569,9 @@ func (t *target) errURL(w http.ResponseWriter, r *http.Request) {
 func (t *target) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		t.httpbckget(w, r)
+		dpq := dpqAlloc()
+		t.httpbckget(w, r, dpq)
+		dpqFree(dpq)
 	case http.MethodDelete:
 		apireq := apiReqAlloc(1, apc.URLPathBuckets.L, false)
 		t.httpbckdelete(w, r, apireq)

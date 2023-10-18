@@ -113,15 +113,18 @@ func evictBucket(c *cli.Context, bck cmn.Bck) error {
 		fmt.Fprintf(c.App.Writer, "Evict: %q\n", bck.Cname(""))
 		return nil
 	}
-	if !bck.IsQuery() {
-		return _evictBck(c, bck)
-	}
-
-	// evict multiple
 	bmd, err := api.GetBMD(apiBP)
 	if err != nil {
 		return err
 	}
+	if !bck.IsQuery() {
+		if _, present := bmd.Get((*meta.Bck)(&bck)); !present {
+			return fmt.Errorf("%s does not exist - nothing to do", bck)
+		}
+		return _evictBck(c, bck)
+	}
+
+	// evict multiple
 	var (
 		provider *string
 		ns       *cmn.Ns

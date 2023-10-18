@@ -26,6 +26,7 @@ type dpq struct {
 	appendTy, appendHdl string // APPEND { apc.AppendOp, ... }
 	owt                 string // object write transaction { OwtPut, ... }
 	fltPresence         string // QparamFltPresence
+	dontHeadRemote      string // QparamDontHeadRemote
 	dontAddRemote       string // QparamDontAddRemote
 	bsummRemote         string // QparamBsummRemote
 	etlName             string // QparamETLName
@@ -104,12 +105,16 @@ func (dpq *dpq) fromRawQ(rawQuery string) (err error) {
 			}
 		case apc.QparamOWT:
 			dpq.owt = value
+
 		case apc.QparamFltPresence:
 			dpq.fltPresence = value
+		case apc.QparamDontHeadRemote:
+			dpq.dontHeadRemote = value
 		case apc.QparamDontAddRemote:
 			dpq.dontAddRemote = value
 		case apc.QparamBsummRemote:
 			dpq.bsummRemote = value
+
 		case apc.QparamETLName:
 			dpq.etlName = value
 		case apc.QparamSilent:

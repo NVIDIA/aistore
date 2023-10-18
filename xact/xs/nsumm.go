@@ -307,7 +307,7 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	for !r.IsAborted() {
 		npg := newNpgCtx(r.p.T, bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()
-		lst, err := npg.nextPageR(nentries)
+		lst, err := npg.nextPageR(nentries, false /*load LOMs to include status and local MD*/)
 		if err != nil {
 			r.AddErr(err)
 			return

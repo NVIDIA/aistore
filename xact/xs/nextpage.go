@@ -79,7 +79,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 }
 
 // Returns the next page from the remote bucket's "list-objects" result set.
-func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (*cmn.LsoResult, error) {
+func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (*cmn.LsoResult, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst := &cmn.LsoResult{Entries: nentries}
 	_, err := npg.wi.t.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
@@ -89,7 +89,10 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries) (*cmn.LsoResult, error) {
 	}
 	debug.Assert(lst.UUID == "" || lst.UUID == npg.wi.msg.UUID)
 	lst.UUID = npg.wi.msg.UUID
-	err = npg.populate(lst)
+
+	if inclStatusLocalMD {
+		err = npg.populate(lst)
+	}
 	return lst, err
 }
 
