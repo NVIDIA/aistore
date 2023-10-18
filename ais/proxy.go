@@ -614,14 +614,12 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 	bckArgs.createAIS = false
 
-	// TODO -- FIXME: NIY
-	debug.Assert(!lsmsg.IsFlagSet(apc.LsDontAddRemote), "list-remote-bucket-without-adding-to-BMD: not implemented yet")
-
 	if lsmsg.IsFlagSet(apc.LsBckPresent) {
 		bckArgs.dontHeadRemote = true
-		debug.Assert(!lsmsg.IsFlagSet(apc.LsAnonymous))
+		bckArgs.dontAddRemote = true
 	} else {
-		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsAnonymous)
+		bckArgs.tryHeadRemote = lsmsg.IsFlagSet(apc.LsDontHeadRemote)
+		bckArgs.dontAddRemote = lsmsg.IsFlagSet(apc.LsDontAddRemote)
 	}
 
 	if bck, err = bckArgs.initAndTry(); err == nil {
@@ -1249,6 +1247,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				bckTo:   bckTo,
 				amsg:    msg,
 				tcbmsg:  tcbmsg,
+				config:  cmn.GCO.Get(),
 			}
 			xid, err = lstcx.do()
 		} else {
@@ -1568,7 +1567,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 			nlog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
 		}
 
-		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, wantOnlyRemote)
+		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, config, wantOnlyRemote)
 
 		// TODO: `status == http.StatusGone`: at this point we know that this
 		// remote bucket exists and is offline. We should somehow try to list
@@ -1635,7 +1634,14 @@ func (p *proxy) _lsofc(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX) (tsi *meta
 	if !listRemote {
 		return
 	}
-	wantOnlyRemote = lsmsg.WantOnlyRemoteProps() // system default unless set by user
+	if bck.Props.BID == 0 {
+		// remote bucket outside cluster (not in BMD)
+		debug.Assert(bck.IsRemote())
+		wantOnlyRemote = true
+	} else {
+		// default
+		wantOnlyRemote = lsmsg.WantOnlyRemoteProps()
+	}
 
 	// designate one target to carry-out backend.list-objects
 	if lsmsg.SID != "" {
@@ -1765,9 +1771,6 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 			BckPresent: apc.IsFltPresent(fltPresence),
 		}
 	}
-
-	// bckArgs.dontHeadRemote == false will have an effect of adding an (existing)
-	// bucket to the cluster's BMD - right here and now, ie., on the fly.
 	bckArgs.createAIS = false
 
 	bck, err := bckArgs.initAndTry()
@@ -2319,11 +2322,9 @@ end:
 	return allEntries, nil
 }
 
-func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, wantOnlyRemote bool) (*cmn.LsoResult, error) {
-	var (
-		config = cmn.GCO.Get()
-		aisMsg = p.newAmsgActVal(apc.ActList, &lsmsg)
-	)
+func (p *proxy) lsObjsR(bck *meta.Bck, lsmsg *apc.LsoMsg, smap *smapX, tsi *meta.Snode, config *cmn.Config,
+	wantOnlyRemote bool) (*cmn.LsoResult, error) {
+	aisMsg := p.newAmsgActVal(apc.ActList, &lsmsg)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{
 		Method: http.MethodGet,

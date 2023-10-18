@@ -228,7 +228,7 @@ func (args *bckInitArgs) initAndTry() (bck *meta.Bck, err error) {
 		return
 	}
 
-	// 3. create ais bucket _or_ lookup and, if confirmed, add remote bucket to the BMD
+	// 3. create ais bucket _or_ lookup and, *if* confirmed, add remote bucket to the BMD
 	// (see also: "on the fly")
 	bck, err = args.try()
 	return
@@ -315,17 +315,18 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 		}
 	}
 
-	// when explicitly asked _not_ to
+	// when explicitly asked _not to_
 	args.exists = true
 	if args.dontAddRemote {
 		if bck.IsRemoteAIS() {
 			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		} else {
 			// NOTE -- TODO (dilemma):
-			// The bucket has no local representation. The best would be to return its metadata _as is_
-			// but there's currently no control structure other than (AIS-only) `BucketProps`.
-			// Therefore: return cluster defaults + assorted `props.Extra` fields.
-			// See also: ais/backend for `HeadBucket`
+			// The bucket has no local representation. The best we could do is - return its
+			// remote metadata _as is_ but there's no control structure other than (AIS-only)
+			// `BucketProps`.
+			// Therefore: return cluster defaults where the bucket's unique BID == 0
+			// (which means: not initialized and/or not present in BMD)
 			bck.Props = defaultBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		}
 		return

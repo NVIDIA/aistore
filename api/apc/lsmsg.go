@@ -38,17 +38,21 @@ const (
 	// same as fltPresence == apc.Present (see query.go)
 	LsBckPresent
 
-	// LsAnonymous is introduced primarily to support GCP buckets with
+	// LsDontHeadRemote is introduced primarily to support GCP buckets with
 	// ACL policies that allow public _anonymous_ access.
 	//
 	// It appears that sometimes those policies do honor HEAD(bucket),
 	// while other times they don't, failing the request with 401 or 403 status.
 	// See also:
-	// * at https://cloud.google.com/storage/docs/access-control/making-data-public
-	LsAnonymous
+	// * https://cloud.google.com/storage/docs/access-control/making-data-public
+	// * cmd/cli/cli/const.go for `dontHeadRemoteFlag`
+	// * `QparamDontHeadRemote` (this package)
+	LsDontHeadRemote
 
-	// To list remote buckets that, if not be present in AIS, shall not be added to AIS
-	// (TODO: reserved for future use)
+	// To list remote buckets without adding them to aistore
+	// See also:
+	// * cmd/cli/cli/const.go for `dontAddRemoteFlag`
+	// * `QparamDontAddRemote` (this package)
 	LsDontAddRemote
 
 	// cache list-objects results and use this cache to speed-up

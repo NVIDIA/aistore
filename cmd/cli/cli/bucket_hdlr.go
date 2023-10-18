@@ -36,7 +36,7 @@ var (
 			ignoreErrorFlag,
 			bucketPropsFlag,
 			forceFlag,
-			addRemoteBucketWithNoLookupFlag,
+			dontHeadRemoteFlag,
 		},
 		commandRemove: {
 			ignoreErrorFlag,
@@ -89,7 +89,8 @@ var (
 			maxPagesFlag,
 			startAfterFlag,
 			bckSummaryFlag,
-			listAnonymousFlag,
+			dontHeadRemoteFlag,
+			dontAddRemoteFlag,
 			listArchFlag,
 			unitsFlag,
 			silentFlag,
@@ -248,7 +249,7 @@ func createBucketHandler(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	dontHeadRemote := flagIsSet(c, addRemoteBucketWithNoLookupFlag)
+	dontHeadRemote := flagIsSet(c, dontHeadRemoteFlag)
 	for _, bck := range buckets {
 		if err := createBucket(c, bck, props, dontHeadRemote); err != nil {
 			return err

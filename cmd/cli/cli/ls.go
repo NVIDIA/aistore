@@ -260,18 +260,18 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch bool) erro
 		addCachedCol = false // redundant
 	}
 
-	// NOTE: `--all` currently combines two separate meanings:
+	// NOTE: `--all` combines two separate meanings:
 	// - list missing obj-s (with existing copies)
 	// - list obj-s from a remote bucket outside cluster
 	if flagIsSet(c, allObjsOrBcksFlag) {
 		msg.SetFlag(apc.LsMissing)
 		msg.ClearFlag(apc.LsBckPresent)
-		debug.Assert(msg.IsFlagSet(apc.LsMissing)) // TODO -- FIXME: remove
-		debug.Assert(!msg.IsFlagSet(apc.LsBckPresent))
 	}
-
-	if flagIsSet(c, listAnonymousFlag) {
+	if flagIsSet(c, dontHeadRemoteFlag) {
 		msg.SetFlag(apc.LsAnonymous)
+	}
+	if flagIsSet(c, dontAddRemoteFlag) {
+		msg.SetFlag(apc.LsDontAddRemote)
 	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)

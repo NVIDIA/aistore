@@ -32,6 +32,7 @@ const (
 	SmoduleDsort
 	SmoduleDload
 	SmoduleETL
+	SmoduleS3
 
 	// NOTE: the last
 	_smoduleLast
@@ -39,10 +40,11 @@ const (
 
 const maxLevel = 5
 
-// NOTE: keep in-sync
+// NOTE: keep in-sync with the above
 var Smodules = []string{
 	"transport", "ais", "memsys", "cluster", "fs", "reb", "ec", "stats",
 	"ios", "xs", "backend", "space", "mirror", "dsort", "downloader", "etl",
+	"s3",
 }
 
 type LogLevel string

@@ -475,12 +475,6 @@ var (
 		Usage: "bucket properties, e.g. --props=\"mirror.enabled=true mirror.copies=4 checksum.type=md5\"",
 	}
 
-	addRemoteBucketWithNoLookupFlag = cli.BoolFlag{
-		Name: "skip-lookup",
-		Usage: "add Cloud bucket to aistore without checking the bucket's accessibility and getting its Cloud properties\n" +
-			indent4 + "\t(usage must be limited to setting up bucket's aistore properties with alternative profile and/or endpoint)",
-	}
-
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}
 
 	// units enum { unitsIEC, unitsSI, unitsRaw }
@@ -670,10 +664,21 @@ var (
 		Name:  "not-cached",
 		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
 	}
-	// to anonymously list public-access Cloud buckets
-	listAnonymousFlag = cli.BoolFlag{
-		Name:  "anonymous",
-		Usage: "list public-access Cloud buckets that may disallow certain operations (e.g., 'HEAD(bucket)')",
+
+	dontHeadRemoteFlag = cli.BoolFlag{
+		Name: "skip-lookup",
+		Usage: "do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:\n" +
+			indent4 + "\t 1) adding remote bucket to aistore without first checking the bucket's accessibility\n" +
+			indent4 + "\t    (e.g., to configure the bucket's aistore properties with alternative security profile and/or endpoint)\n" +
+			indent4 + "\t 2) listing public-access Cloud buckets where certain operations (e.g., 'HEAD(bucket)') may be disallowed",
+	}
+	dontAddRemoteFlag = cli.BoolFlag{
+		Name: "dont-add",
+		Usage: "list remote bucket without adding it to the cluster's metadata, e.g.:\n" +
+			indent1 + "\t  Let's say, s3://abc exists and is accessible but is not present in the cluster ('ais ls s3://abc' fails);\n" +
+			indent1 + "\t  then, if we force aistore to list remote buckets using '-all' switch (`ais ls s3://abc --all')\n" +
+			indent1 + "\t  the bucket will be added. In effect, it'll be created.\n" +
+			indent1 + "\t  To prevent this from happening, either use this '--dont-add' flag or 'ais evict' command later",
 	}
 
 	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}

@@ -20,6 +20,7 @@ type lstcx struct {
 	bckTo   *meta.Bck
 	amsg    *apc.ActMsg // orig
 	tcbmsg  *apc.TCBMsg
+	config  *cmn.Config
 	// work
 	tsi    *meta.Snode
 	lsmsg  apc.LsoMsg
@@ -49,7 +50,7 @@ func (c *lstcx) do() (string, error) {
 
 	// 2. ls 1st page
 	var lst *cmn.LsoResult
-	lst, err = p.lsObjsR(c.bckFrom, &c.lsmsg, smap, tsi /*designated target*/, true)
+	lst, err = p.lsObjsR(c.bckFrom, &c.lsmsg, smap, tsi /*designated target*/, c.config, true)
 	if err != nil {
 		return "", err
 	}
@@ -90,7 +91,7 @@ func (c *lstcx) pages(smap *smapX) {
 	p := c.p
 	for {
 		// next page
-		lst, err := p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, true)
+		lst, err := p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, c.config, true)
 		if err != nil {
 			nlog.Errorln(err)
 			return
