@@ -210,22 +210,30 @@ func _binfo(reqParams *ReqParams, bck cmn.Bck, args BinfoArgs) (p *cmn.BucketPro
 	}
 }
 
-// fill-in error message (HEAD response will never contain one)
+// fill-in herr message (HEAD response will never contain one)
 func hdr2msg(bck cmn.Bck, status int, err error) error {
-	herr := cmn.Err2HTTPErr(err)
-	if herr == nil {
+	herr, ok := err.(*cmn.ErrHTTP)
+	if !ok {
 		debug.FailTypeCast(err)
 		return err
 	}
-	debug.Assertf(herr.Status == status, "status %d vs %d", herr.Status, status) // TODO -- FIXME: test, refactor
-	switch herr.Status {
-	case http.StatusUnauthorized:
-		herr.Message = fmt.Sprintf("Bucket %q unauthorized access", bck)
-	case http.StatusForbidden:
-		herr.Message = fmt.Sprintf("Bucket %q access denied", bck)
-	case http.StatusGone:
-		herr.Message = fmt.Sprintf("Bucket %q has been removed from the backend", bck)
+	debug.Assert(herr.Status == status)
+
+	quoted := "\"" + bck.Cname("") + "\""
+	if !bck.IsQuery() && status == http.StatusNotFound {
+		herr.Message = "bucket " + quoted + " does not exist"
+		return herr
 	}
+	// common
+	herr.Message = "http error code '" + http.StatusText(status) + "'"
+	if status == http.StatusGone {
+		herr.Message += " (removed from the backend)"
+	}
+	herr.Message += ", bucket "
+	if bck.IsQuery() {
+		herr.Message += "query "
+	}
+	herr.Message += quoted
 	return herr
 }
 

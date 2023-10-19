@@ -314,7 +314,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 	}
 
 	debug.Assert(phase == apc.ActQuery, phase)
-	xctn, err := xreg.GetXact(msg.UUID) // TODO -- FIXME: finished early, hk-removed
+	xctn, err := xreg.GetXact(msg.UUID) // vs. hk.OldAgeX removal
 	if err != nil {
 		t.writeErr(w, r, err, http.StatusInternalServerError)
 		return

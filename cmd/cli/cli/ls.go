@@ -156,7 +156,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		ctx.qbck = cmn.QueryBcks(bck)
 		props, info, err := api.GetBucketInfo(apiBP, bck, args)
 		if err != nil {
-			actionWarn(c, fmt.Sprintf("%s: %v\n", bck.Cname(""), V(err)))
+			actionWarn(c, notV(err).Error())
 			continue
 		}
 		footer.nb++

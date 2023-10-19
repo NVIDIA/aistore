@@ -302,6 +302,14 @@ func completionErr(c *cli.Context, err error) {
 // ais errors -- formatting
 //
 
+func notV(err error) error {
+	if err != nil && !cliConfVerbose() {
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
+			return errors.New(herr.Message)
+		}
+	}
+	return err
+}
 func V(err error) error {
 	if err != nil && cliConfVerbose() {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
