@@ -542,7 +542,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	} else if msg, err = p.readActionMsg(w, r); err != nil {
 		return
 	}
-	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

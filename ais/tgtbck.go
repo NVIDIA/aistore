@@ -44,7 +44,7 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	}
 	t.ensureLatestBMD(msg, r)
 
-	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}

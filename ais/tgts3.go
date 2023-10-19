@@ -190,7 +190,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 
 	dpq := dpqAlloc()
 	defer dpqFree(dpq)
-	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
@@ -251,7 +251,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 	}
 
 	dpq := dpqAlloc()
-	if err := dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	if err := dpq.parse(r.URL.RawQuery); err != nil {
 		dpqFree(dpq)
 		s3.WriteErr(w, r, err, 0)
 		return

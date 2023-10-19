@@ -110,7 +110,7 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	bckName := apireq.items[apireq.bckIdx]
 	if apireq.dpq == nil {
 		apireq.query = r.URL.Query()
-	} else if err = apireq.dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	} else if err = apireq.dpq.parse(r.URL.RawQuery); err != nil {
 		return
 	}
 	apireq.bck, err = newBckFromQ(bckName, apireq.query, apireq.dpq)

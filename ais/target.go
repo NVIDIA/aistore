@@ -653,7 +653,7 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-	if err := apireq.dpq.fromRawQ(r.URL.RawQuery); err != nil {
+	if err := apireq.dpq.parse(r.URL.RawQuery); err != nil {
 		debug.AssertNoErr(err)
 		t.writeErr(w, r, err)
 		return
