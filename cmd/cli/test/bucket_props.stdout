@@ -9,6 +9,7 @@ checksum	 Type: xxhash | Validate: ColdGET
 ec		 Disabled
 lru		 Disabled
 mirror		 2 copies
+present	 	 yes
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: no
 Bucket props successfully reset to cluster defaults
@@ -22,6 +23,7 @@ checksum	 Type: xxhash | Validate: ColdGET
 ec		     Disabled
 lru		     Disabled
 mirror		 Disabled
+present	 	 yes
 provider	 ais
 versioning	 Enabled | Validate on WarmGET: yes
 PROPERTY		        VALUE

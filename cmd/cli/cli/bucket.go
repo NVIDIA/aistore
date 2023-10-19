@@ -313,7 +313,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return
 	}
-	if p, err = headBucket(bck, true /* don't add */); err != nil {
+	if p, err = headBucket(bck, !flagIsSet(c, addRemoteFlag) /* don't add */); err != nil {
 		return
 	}
 
@@ -346,10 +346,10 @@ func showBucketProps(c *cli.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	return HeadBckTable(c, p, defProps, section)
+	return headBckTable(c, p, defProps, section)
 }
 
-func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
+func headBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
 	var (
 		defList nvpairList
 		colored = !cfg.NoColor
@@ -375,19 +375,26 @@ func HeadBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section stri
 				if def.Name != p.Name {
 					continue
 				}
-				if def.Name == cmn.PropBucketCreated {
+				switch {
+				case def.Name == "present":
+					if p.Value == "yes" {
+						p.Value = fgreen(p.Value)
+					} else {
+						p.Value = fcyan(p.Value)
+					}
+				case def.Name == cmn.PropBucketCreated:
 					if p.Value != teb.NotSetVal {
 						created, err := cos.S2UnixNano(p.Value)
 						if err == nil {
 							p.Value = fmtBucketCreatedTime(created)
 						}
+						p.Value = fgreen(p.Value)
 					}
-					propList[idx] = p
-				}
-				if def.Value != p.Value {
+				case def.Value != p.Value:
 					p.Value = fcyan(p.Value)
-					propList[idx] = p
 				}
+
+				propList[idx] = p
 				break
 			}
 		}

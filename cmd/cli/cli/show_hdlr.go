@@ -81,6 +81,7 @@ var (
 			jsonFlag,
 			compactPropFlag,
 			noHeaderFlag,
+			addRemoteFlag,
 		},
 		cmdConfig: {
 			jsonFlag,

@@ -674,11 +674,19 @@ var (
 	}
 	dontAddRemoteFlag = cli.BoolFlag{
 		Name: "dont-add",
-		Usage: "list remote bucket without adding it to the cluster's metadata, e.g.:\n" +
-			indent1 + "\t  Let's say, s3://abc exists and is accessible but is not present in the cluster ('ais ls s3://abc' fails);\n" +
-			indent1 + "\t  then, if we force aistore to list remote buckets using '-all' switch (`ais ls s3://abc --all')\n" +
-			indent1 + "\t  the bucket will be added. In effect, it'll be created.\n" +
-			indent1 + "\t  To prevent this from happening, either use this '--dont-add' flag or 'ais evict' command later",
+		Usage: "list remote bucket without adding it to cluster's metadata\n" +
+			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
+			indent1 + "\t  - then, if we ask aistore to list remote buckets: `ais ls s3://abc --all'\n" +
+			indent1 + "\t    the bucket will be added (in effect, it'll be created);\n" +
+			indent1 + "\t  - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later",
+	}
+	addRemoteFlag = cli.BoolFlag{
+		Name: "add",
+		Usage: "add remote bucket to cluster's metadata\n" +
+			indent1 + "\t  - let's say, s3://abc is accessible but not present in the cluster (e.g., 'ais ls' returns error);\n" +
+			indent1 + "\t  - most of the time, there's no need to worry about it as aistore handles presence/non-presence\n" +
+			indent1 + "\t    transparently behind the scenes;\n" +
+			indent1 + "\t  - but if you'd want to explicltly add the bucket, you could also use '--add' option",
 	}
 
 	enableFlag  = cli.BoolFlag{Name: "enable", Usage: "enable"}

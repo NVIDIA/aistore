@@ -537,6 +537,13 @@ func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
 		debug.AssertNoErr(err)
 	}
 
+	// see also: listBucketsSummHdr & listBucketsSummNoHdr
+	if props.BID == 0 {
+		propList = append(propList, nvpair{Name: "present", Value: "no"})
+	} else {
+		propList = append(propList, nvpair{Name: "present", Value: "yes"})
+	}
+
 	sort.Slice(propList, func(i, j int) bool {
 		return propList[i].Name < propList[j].Name
 	})

@@ -444,7 +444,7 @@ func lruBucketHandler(c *cli.Context) error {
 	if flagIsSet(c, disableFlag) {
 		return toggleLRU(c, bck, p, false)
 	}
-	return HeadBckTable(c, p, defProps, "lru")
+	return headBckTable(c, p, defProps, "lru")
 }
 
 func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
