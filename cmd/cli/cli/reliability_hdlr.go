@@ -47,7 +47,7 @@ var (
 func setCopiesHandler(c *cli.Context) (err error) {
 	var (
 		bck cmn.Bck
-		p   *cmn.BucketProps
+		p   *cmn.Bprops
 	)
 	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return
@@ -72,7 +72,7 @@ func setCopiesHandler(c *cli.Context) (err error) {
 func ecEncodeHandler(c *cli.Context) (err error) {
 	var (
 		bck cmn.Bck
-		p   *cmn.BucketProps
+		p   *cmn.Bprops
 	)
 	if bck, err = parseBckURI(c, c.Args().Get(0), false); err != nil {
 		return

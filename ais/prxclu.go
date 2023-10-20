@@ -948,7 +948,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case apc.ActSetConfig:
-		toUpdate := &cmn.ConfigToUpdate{}
+		toUpdate := &cmn.ConfigToSet{}
 		if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
@@ -1010,7 +1010,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *apc.ActMsg) {
+func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
 	ctx := &configModifier{
 		pre:      _setConfPre,
 		final:    p._syncConfFinal,
@@ -1030,7 +1030,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 			use := *toUpdate.Net.HTTP.UseHTTPS
 			if config.Net.HTTP.UseHTTPS != use {
 				if toUpdate.Proxy == nil {
-					toUpdate.Proxy = &cmn.ProxyConfToUpdate{}
+					toUpdate.Proxy = &cmn.ProxyConfToSet{}
 				}
 				switchHTTPS(toUpdate.Proxy, &config.Proxy, use)
 			}
@@ -1049,7 +1049,7 @@ func (p *proxy) setCluCfgPersistent(w http.ResponseWriter, r *http.Request, toUp
 }
 
 // switch http => https, or vice versa
-func switchHTTPS(toCfg *cmn.ProxyConfToUpdate, fromCfg *cmn.ProxyConf, use bool) {
+func switchHTTPS(toCfg *cmn.ProxyConfToSet, fromCfg *cmn.ProxyConf, use bool) {
 	toScheme, fromScheme := "http", "https"
 	if use {
 		toScheme, fromScheme = "https", "http"
@@ -1087,7 +1087,7 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 	freeBcArgs(args)
 }
 
-func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToUpdate, msg *apc.ActMsg) {
+func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpdate *cmn.ConfigToSet, msg *apc.ActMsg) {
 	if err := p.owner.config.setDaemonConfig(toUpdate, true /* transient */); err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1576,7 +1576,7 @@ func (p *proxy) cluputQuery(w http.ResponseWriter, r *http.Request, action strin
 		}
 		var (
 			query    = r.URL.Query()
-			toUpdate = &cmn.ConfigToUpdate{}
+			toUpdate = &cmn.ConfigToSet{}
 			msg      = &apc.ActMsg{Action: action}
 		)
 		if err := toUpdate.FillFromQuery(query); err != nil {

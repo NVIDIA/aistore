@@ -91,34 +91,34 @@ type (
 		UUID        string `json:"uuid"`                  // UUID
 		Version     int64  `json:"config_version,string"` // version
 	}
-	ConfigToUpdate struct {
+	ConfigToSet struct {
 		// ClusterConfig
-		Backend     *BackendConf             `json:"backend,omitempty"`
-		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
-		EC          *ECConfToUpdate          `json:"ec,omitempty"`
-		Log         *LogConfToUpdate         `json:"log,omitempty"`
-		Periodic    *PeriodConfToUpdate      `json:"periodic,omitempty"`
-		Timeout     *TimeoutConfToUpdate     `json:"timeout,omitempty"`
-		Client      *ClientConfToUpdate      `json:"client,omitempty"`
-		Space       *SpaceConfToUpdate       `json:"space,omitempty"`
-		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
-		Disk        *DiskConfToUpdate        `json:"disk,omitempty"`
-		Rebalance   *RebalanceConfToUpdate   `json:"rebalance,omitempty"`
-		Resilver    *ResilverConfToUpdate    `json:"resilver,omitempty"`
-		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
-		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
-		Net         *NetConfToUpdate         `json:"net,omitempty"`
-		FSHC        *FSHCConfToUpdate        `json:"fshc,omitempty"`
-		Auth        *AuthConfToUpdate        `json:"auth,omitempty"`
-		Keepalive   *KeepaliveConfToUpdate   `json:"keepalivetracker,omitempty"`
-		Downloader  *DownloaderConfToUpdate  `json:"downloader,omitempty"`
-		Dsort       *DsortConfToUpdate       `json:"distributed_sort,omitempty"`
-		Transport   *TransportConfToUpdate   `json:"transport,omitempty"`
-		Memsys      *MemsysConfToUpdate      `json:"memsys,omitempty"`
-		TCB         *TCBConfToUpdate         `json:"tcb,omitempty"`
-		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
-		Proxy       *ProxyConfToUpdate       `json:"proxy,omitempty"`
-		Features    *feat.Flags              `json:"features,string,omitempty"`
+		Backend     *BackendConf          `json:"backend,omitempty"`
+		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
+		EC          *ECConfToSet          `json:"ec,omitempty"`
+		Log         *LogConfToSet         `json:"log,omitempty"`
+		Periodic    *PeriodConfToSet      `json:"periodic,omitempty"`
+		Timeout     *TimeoutConfToSet     `json:"timeout,omitempty"`
+		Client      *ClientConfToSet      `json:"client,omitempty"`
+		Space       *SpaceConfToSet       `json:"space,omitempty"`
+		LRU         *LRUConfToSet         `json:"lru,omitempty"`
+		Disk        *DiskConfToSet        `json:"disk,omitempty"`
+		Rebalance   *RebalanceConfToSet   `json:"rebalance,omitempty"`
+		Resilver    *ResilverConfToSet    `json:"resilver,omitempty"`
+		Cksum       *CksumConfToSet       `json:"checksum,omitempty"`
+		Versioning  *VersionConfToSet     `json:"versioning,omitempty"`
+		Net         *NetConfToSet         `json:"net,omitempty"`
+		FSHC        *FSHCConfToSet        `json:"fshc,omitempty"`
+		Auth        *AuthConfToSet        `json:"auth,omitempty"`
+		Keepalive   *KeepaliveConfToSet   `json:"keepalivetracker,omitempty"`
+		Downloader  *DownloaderConfToSet  `json:"downloader,omitempty"`
+		Dsort       *DsortConfToSet       `json:"distributed_sort,omitempty"`
+		Transport   *TransportConfToSet   `json:"transport,omitempty"`
+		Memsys      *MemsysConfToSet      `json:"memsys,omitempty"`
+		TCB         *TCBConfToSet         `json:"tcb,omitempty"`
+		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
+		Proxy       *ProxyConfToSet       `json:"proxy,omitempty"`
+		Features    *feat.Flags           `json:"features,string,omitempty"`
 
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
@@ -163,7 +163,7 @@ type (
 		Burst   int   `json:"burst_buffer"` // xaction channel (buffer) size
 		Enabled bool  `json:"enabled"`      // enabled (to generate copies)
 	}
-	MirrorConfToUpdate struct {
+	MirrorConfToSet struct {
 		Copies  *int64 `json:"copies,omitempty"`
 		Burst   *int   `json:"burst_buffer,omitempty"`
 		Enabled *bool  `json:"enabled,omitempty"`
@@ -178,7 +178,7 @@ type (
 		Enabled      bool   `json:"enabled"`           // EC is enabled
 		DiskOnly     bool   `json:"disk_only"`         // if true, EC does not use SGL - data goes directly to drives
 	}
-	ECConfToUpdate struct {
+	ECConfToSet struct {
 		ObjSizeLimit *int64  `json:"objsize_limit,omitempty"`
 		Compression  *string `json:"compression,omitempty"`
 		SbundleMult  *int    `json:"bundle_multiplier,omitempty"`
@@ -195,7 +195,7 @@ type (
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
 		StatsTime cos.Duration `json:"stats_time"` // log stats interval (must be a multiple of `PeriodConf.StatsTime`)
 	}
-	LogConfToUpdate struct {
+	LogConfToSet struct {
 		Level     *cos.LogLevel `json:"level,omitempty"`
 		MaxSize   *cos.SizeIEC  `json:"max_size,omitempty"`
 		MaxTotal  *cos.SizeIEC  `json:"max_total,omitempty"`
@@ -209,7 +209,7 @@ type (
 		RetrySyncTime cos.Duration `json:"retry_sync_time"` // metasync retry
 		NotifTime     cos.Duration `json:"notif_time"`      // (IC notifications)
 	}
-	PeriodConfToUpdate struct {
+	PeriodConfToSet struct {
 		StatsTime     *cos.Duration `json:"stats_time,omitempty"`
 		RetrySyncTime *cos.Duration `json:"retry_sync_time,omitempty"`
 		NotifTime     *cos.Duration `json:"notif_time,omitempty"`
@@ -224,7 +224,7 @@ type (
 		JoinAtStartup   cos.Duration `json:"join_startup_time"` // (join cluster at startup) timeout
 		SendFile        cos.Duration `json:"send_file_time"`
 	}
-	TimeoutConfToUpdate struct {
+	TimeoutConfToSet struct {
 		CplaneOperation *cos.Duration `json:"cplane_operation,omitempty"`
 		MaxKeepalive    *cos.Duration `json:"max_keepalive,omitempty"`
 		MaxHostBusy     *cos.Duration `json:"max_host_busy,omitempty"`
@@ -238,7 +238,7 @@ type (
 		TimeoutLong    cos.Duration `json:"client_long_timeout"`
 		ListObjTimeout cos.Duration `json:"list_timeout"`
 	}
-	ClientConfToUpdate struct {
+	ClientConfToSet struct {
 		Timeout        *cos.Duration `json:"client_timeout,omitempty"` // readonly as far as intra-cluster
 		TimeoutLong    *cos.Duration `json:"client_long_timeout,omitempty"`
 		ListObjTimeout *cos.Duration `json:"list_timeout,omitempty"`
@@ -250,7 +250,7 @@ type (
 		DiscoveryURL string `json:"discovery_url"`
 		NonElectable bool   `json:"non_electable"`
 	}
-	ProxyConfToUpdate struct {
+	ProxyConfToSet struct {
 		PrimaryURL   *string `json:"primary_url,omitempty"`
 		OriginalURL  *string `json:"original_url,omitempty"`
 		DiscoveryURL *string `json:"discovery_url,omitempty"`
@@ -275,7 +275,7 @@ type (
 		// failing them until its local used-cap gets back below HighWM (see above)
 		OOS int64 `json:"out_of_space"`
 	}
-	SpaceConfToUpdate struct {
+	SpaceConfToSet struct {
 		CleanupWM *int64 `json:"cleanupwm,omitempty"`
 		LowWM     *int64 `json:"lowwm,omitempty"`
 		HighWM    *int64 `json:"highwm,omitempty"`
@@ -293,7 +293,7 @@ type (
 		// Enabled: LRU will only run when set to true
 		Enabled bool `json:"enabled"`
 	}
-	LRUConfToUpdate struct {
+	LRUConfToSet struct {
 		DontEvictTime   *cos.Duration `json:"dont_evict_time,omitempty"`
 		CapacityUpdTime *cos.Duration `json:"capacity_upd_time,omitempty"`
 		Enabled         *bool         `json:"enabled,omitempty"`
@@ -306,7 +306,7 @@ type (
 		IostatTimeLong  cos.Duration `json:"iostat_time_long"`
 		IostatTimeShort cos.Duration `json:"iostat_time_short"`
 	}
-	DiskConfToUpdate struct {
+	DiskConfToSet struct {
 		DiskUtilLowWM   *int64        `json:"disk_util_low_wm,omitempty"`
 		DiskUtilHighWM  *int64        `json:"disk_util_high_wm,omitempty"`
 		DiskUtilMaxWM   *int64        `json:"disk_util_max_wm,omitempty"`
@@ -320,7 +320,7 @@ type (
 		SbundleMult   int          `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
 		Enabled       bool         `json:"enabled"`           // true=auto-rebalance | manual rebalancing
 	}
-	RebalanceConfToUpdate struct {
+	RebalanceConfToSet struct {
 		DestRetryTime *cos.Duration `json:"dest_retry_time,omitempty"`
 		Compression   *string       `json:"compression,omitempty"`
 		SbundleMult   *int          `json:"bundle_multiplier"`
@@ -330,7 +330,7 @@ type (
 	ResilverConf struct {
 		Enabled bool `json:"enabled"` // true=auto-resilver | manual resilvering
 	}
-	ResilverConfToUpdate struct {
+	ResilverConfToSet struct {
 		Enabled *bool `json:"enabled,omitempty"`
 	}
 
@@ -356,7 +356,7 @@ type (
 		// EnableReadRange: Return read range checksum otherwise return entire object checksum.
 		EnableReadRange bool `json:"enable_read_range"`
 	}
-	CksumConfToUpdate struct {
+	CksumConfToSet struct {
 		Type            *string `json:"type,omitempty"`
 		ValidateColdGet *bool   `json:"validate_cold_get,omitempty"`
 		ValidateWarmGet *bool   `json:"validate_warm_get,omitempty"`
@@ -371,7 +371,7 @@ type (
 		// Validate object version upon warm GET.
 		ValidateWarmGet bool `json:"validate_warm_get"`
 	}
-	VersionConfToUpdate struct {
+	VersionConfToSet struct {
 		Enabled         *bool `json:"enabled,omitempty"`
 		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
 	}
@@ -386,8 +386,8 @@ type (
 		L4   L4Conf   `json:"l4"`
 		HTTP HTTPConf `json:"http"`
 	}
-	NetConfToUpdate struct {
-		HTTP *HTTPConfToUpdate `json:"http,omitempty"`
+	NetConfToSet struct {
+		HTTP *HTTPConfToSet `json:"http,omitempty"`
 	}
 
 	L4Conf struct {
@@ -405,7 +405,7 @@ type (
 		SkipVerify      bool   `json:"skip_verify"`       // skip HTTPS cert verification (used with self-signed certs)
 		Chunked         bool   `json:"chunked_transfer"`  // NOTE: not used Feb 2023
 	}
-	HTTPConfToUpdate struct {
+	HTTPConfToSet struct {
 		Certificate     *string `json:"server_crt,omitempty"`
 		Key             *string `json:"server_key,omitempty"`
 		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
@@ -420,7 +420,7 @@ type (
 		ErrorLimit    int  `json:"error_limit"` // exceeding err limit causes disabling mountpath
 		Enabled       bool `json:"enabled"`
 	}
-	FSHCConfToUpdate struct {
+	FSHCConfToSet struct {
 		TestFileCount *int  `json:"test_files,omitempty"`
 		ErrorLimit    *int  `json:"error_limit,omitempty"`
 		Enabled       *bool `json:"enabled,omitempty"`
@@ -430,7 +430,7 @@ type (
 		Secret  string `json:"secret"`
 		Enabled bool   `json:"enabled"`
 	}
-	AuthConfToUpdate struct {
+	AuthConfToSet struct {
 		Secret  *string `json:"secret,omitempty"`
 		Enabled *bool   `json:"enabled,omitempty"`
 	}
@@ -441,7 +441,7 @@ type (
 		Interval cos.Duration `json:"interval"` // keepalive interval
 		Factor   uint8        `json:"factor"`   // only average
 	}
-	KeepaliveTrackerConfToUpdate struct {
+	KeepaliveTrackerConfToSet struct {
 		Interval *cos.Duration `json:"interval,omitempty"`
 		Name     *string       `json:"name,omitempty" list:"readonly"`
 		Factor   *uint8        `json:"factor,omitempty"`
@@ -452,16 +452,16 @@ type (
 		Target      KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
 		RetryFactor uint8                `json:"retry_factor"`
 	}
-	KeepaliveConfToUpdate struct {
-		Proxy       *KeepaliveTrackerConfToUpdate `json:"proxy,omitempty"`
-		Target      *KeepaliveTrackerConfToUpdate `json:"target,omitempty"`
-		RetryFactor *uint8                        `json:"retry_factor,omitempty"`
+	KeepaliveConfToSet struct {
+		Proxy       *KeepaliveTrackerConfToSet `json:"proxy,omitempty"`
+		Target      *KeepaliveTrackerConfToSet `json:"target,omitempty"`
+		RetryFactor *uint8                     `json:"retry_factor,omitempty"`
 	}
 
 	DownloaderConf struct {
 		Timeout cos.Duration `json:"timeout"`
 	}
-	DownloaderConfToUpdate struct {
+	DownloaderConfToSet struct {
 		Timeout *cos.Duration `json:"timeout,omitempty"`
 	}
 
@@ -476,7 +476,7 @@ type (
 		Compression         string       `json:"compression"`       // {CompressAlways,...} in api/apc/compression.go
 		SbundleMult         int          `json:"bundle_multiplier"` // stream-bundle multiplier: num to destination
 	}
-	DsortConfToUpdate struct {
+	DsortConfToSet struct {
 		DuplicatedRecords   *string       `json:"duplicated_records,omitempty"`
 		MissingShards       *string       `json:"missing_shards,omitempty"`
 		EKMMalformedLine    *string       `json:"ekm_malformed_line,omitempty"`
@@ -506,7 +506,7 @@ type (
 		LZ4BlockMaxSize  cos.SizeIEC `json:"lz4_block"`
 		LZ4FrameChecksum bool        `json:"lz4_frame_checksum"`
 	}
-	TransportConfToUpdate struct {
+	TransportConfToSet struct {
 		MaxHeaderSize    *int          `json:"max_header,omitempty" list:"readonly"`
 		Burst            *int          `json:"burst_buffer,omitempty" list:"readonly"`
 		IdleTeardown     *cos.Duration `json:"idle_teardown,omitempty"`
@@ -523,7 +523,7 @@ type (
 		MinPctTotal    int          `json:"min_pct_total"`
 		MinPctFree     int          `json:"min_pct_free"`
 	}
-	MemsysConfToUpdate struct {
+	MemsysConfToSet struct {
 		MinFree        *cos.SizeIEC  `json:"min_free,omitempty"`
 		DefaultBufSize *cos.SizeIEC  `json:"default_buf,omitempty"`
 		SizeToGC       *cos.SizeIEC  `json:"to_gc,omitempty"`
@@ -536,7 +536,7 @@ type (
 		Compression string `json:"compression"`       // enum { CompressAlways, ... } in api/apc/compression.go
 		SbundleMult int    `json:"bundle_multiplier"` // stream-bundle multiplier: num streams to destination
 	}
-	TCBConfToUpdate struct {
+	TCBConfToSet struct {
 		Compression *string `json:"compression,omitempty"`
 		SbundleMult *int    `json:"bundle_multiplier,omitempty"`
 	}
@@ -545,7 +545,7 @@ type (
 		Data apc.WritePolicy `json:"data"`
 		MD   apc.WritePolicy `json:"md"`
 	}
-	WritePolicyConfToUpdate struct {
+	WritePolicyConfToSet struct {
 		Data *apc.WritePolicy `json:"data,omitempty" list:"readonly"` // NOTE: NIY
 		MD   *apc.WritePolicy `json:"md,omitempty"`
 	}
@@ -570,14 +570,14 @@ var SupportedReactions = []string{IgnoreReaction, WarnReaction, AbortReaction}
 var (
 	_ jsp.Opts = (*ClusterConfig)(nil)
 	_ jsp.Opts = (*LocalConfig)(nil)
-	_ jsp.Opts = (*ConfigToUpdate)(nil)
+	_ jsp.Opts = (*ConfigToSet)(nil)
 )
 
 var configJspOpts = jsp.CCSign(MetaverConfig)
 
-func (*ClusterConfig) JspOpts() jsp.Options  { return configJspOpts }
-func (*LocalConfig) JspOpts() jsp.Options    { return jsp.Plain() }
-func (*ConfigToUpdate) JspOpts() jsp.Options { return configJspOpts }
+func (*ClusterConfig) JspOpts() jsp.Options { return configJspOpts }
+func (*LocalConfig) JspOpts() jsp.Options   { return jsp.Plain() }
+func (*ConfigToSet) JspOpts() jsp.Options   { return configJspOpts }
 
 // interface guard
 var (
@@ -658,7 +658,7 @@ func (c *Config) SetRole(role string) {
 	c.role = role
 }
 
-func (c *Config) UpdateClusterConfig(updateConf *ConfigToUpdate, asType string) (err error) {
+func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string) (err error) {
 	err = c.ClusterConfig.Apply(updateConf, asType)
 	if err != nil {
 		return
@@ -680,7 +680,7 @@ func (c *Config) FastV(verbosity, fl int) bool { return c.Log.Level.FastV(verbos
 // ClusterConfig //
 ///////////////////
 
-func (c *ClusterConfig) Apply(updateConf *ConfigToUpdate, asType string) error {
+func (c *ClusterConfig) Apply(updateConf *ConfigToSet, asType string) error {
 	return copyProps(updateConf, c, asType)
 }
 
@@ -1566,11 +1566,11 @@ func (c *ResilverConf) String() string {
 }
 
 ////////////////////
-// ConfigToUpdate //
+// ConfigToSet //
 ////////////////////
 
-// FillFromQuery populates ConfigToUpdate from URL query values
-func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
+// FillFromQuery populates ConfigToSet from URL query values
+func (ctu *ConfigToSet) FillFromQuery(query url.Values) error {
 	var anyExists bool
 	for key := range query {
 		if key == apc.ActTransient {
@@ -1589,12 +1589,12 @@ func (ctu *ConfigToUpdate) FillFromQuery(query url.Values) error {
 	return nil
 }
 
-func (ctu *ConfigToUpdate) Merge(update *ConfigToUpdate) {
+func (ctu *ConfigToSet) Merge(update *ConfigToSet) {
 	mergeProps(update, ctu)
 }
 
-// FillFromKVS populates `ConfigToUpdate` from key value pairs of the form `key=value`
-func (ctu *ConfigToUpdate) FillFromKVS(kvs []string) (err error) {
+// FillFromKVS populates `ConfigToSet` from key value pairs of the form `key=value`
+func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 	const format = "failed to parse `-config_custom` flag (invalid entry: %q)"
 	for _, kv := range kvs {
 		entry := strings.SplitN(kv, "=", 2)
@@ -1752,12 +1752,12 @@ func handleOverrideConfig(config *Config) error {
 	return config.UpdateClusterConfig(overrideConfig, apc.Daemon)
 }
 
-func SaveOverrideConfig(configDir string, toUpdate *ConfigToUpdate) error {
+func SaveOverrideConfig(configDir string, toUpdate *ConfigToSet) error {
 	return jsp.SaveMeta(path.Join(configDir, fname.OverrideConfig), toUpdate, nil)
 }
 
-func loadOverrideConfig(configDir string) (toUpdate *ConfigToUpdate, err error) {
-	toUpdate = &ConfigToUpdate{}
+func loadOverrideConfig(configDir string) (toUpdate *ConfigToSet, err error) {
+	toUpdate = &ConfigToSet{}
 	_, err = jsp.LoadMeta(path.Join(configDir, fname.OverrideConfig), toUpdate)
 	if os.IsNotExist(err) {
 		err = nil

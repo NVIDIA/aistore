@@ -47,7 +47,7 @@ var _ = Describe("Mirror", func() {
 	fs.CSM.Reg(fs.WorkfileType, &fs.WorkfileContentResolver{}, true)
 
 	var (
-		props = &cmn.BucketProps{
+		props = &cmn.Bprops{
 			Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
 			LRU:    cmn.LRUConf{Enabled: true},
 			Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},

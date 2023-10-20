@@ -384,9 +384,10 @@ type (
 		NumDisks  int                  `json:"-"`
 	}
 	ListBucketsHelper struct {
-		Bck   cmn.Bck
-		Props *cmn.BucketProps
-		Info  *cmn.BsummResult
+		XactID string
+		Bck    cmn.Bck
+		Props  *cmn.Bprops
+		Info   *cmn.BsummResult
 	}
 )
 

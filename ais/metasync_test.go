@@ -170,22 +170,22 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 
 func TestMetasyncDeepCopy(t *testing.T) {
 	bmd := newBucketMD()
-	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(meta.NewBck("bucket3", apc.AWS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket3", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(meta.NewBck("bucket4", apc.AWS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket4", apc.AWS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -631,12 +631,12 @@ func TestMetasyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket1", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
 	})
-	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.BucketProps{
+	bmd.add(meta.NewBck("bucket2", apc.AIS, cmn.NsGlobal), &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumXXHash,
 		},
@@ -656,7 +656,7 @@ func TestMetasyncData(t *testing.T) {
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
 	bmd = bmd.clone()
-	bprops := &cmn.BucketProps{
+	bprops := &cmn.Bprops{
 		Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash},
 		LRU:   cmn.GCO.Get().LRU,
 	}

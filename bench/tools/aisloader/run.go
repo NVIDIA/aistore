@@ -100,7 +100,7 @@ type (
 		smap *meta.Smap
 
 		bck    cmn.Bck
-		bProps cmn.BucketProps
+		bProps cmn.Bprops
 
 		loaderID             string // used with multiple loader instances generating objects in parallel
 		proxyURL             string
@@ -803,7 +803,7 @@ func validateCmdLine(p *params) (err error) {
 	}
 
 	if p.bPropsStr != "" {
-		var bprops cmn.BucketProps
+		var bprops cmn.Bprops
 		jsonStr := strings.TrimRight(p.bPropsStr, ",")
 		if !strings.HasPrefix(jsonStr, "{") {
 			jsonStr = "{" + strings.TrimRight(jsonStr, ",") + "}"
@@ -975,7 +975,7 @@ func setupBucket(runParams *params, created *bool) error {
 	if runParams.bPropsStr == "" {
 		return nil
 	}
-	propsToUpdate := cmn.BucketPropsToUpdate{}
+	propsToUpdate := cmn.BpropsToSet{}
 	// update bucket props if bPropsStr is set
 	oldProps, err := api.HeadBucket(runParams.bp, runParams.bck, true /* don't add */)
 	if err != nil {
@@ -983,7 +983,7 @@ func setupBucket(runParams *params, created *bool) error {
 	}
 	change := false
 	if runParams.bProps.EC.Enabled != oldProps.EC.Enabled {
-		propsToUpdate.EC = &cmn.ECConfToUpdate{
+		propsToUpdate.EC = &cmn.ECConfToSet{
 			Enabled:      apc.Bool(runParams.bProps.EC.Enabled),
 			ObjSizeLimit: apc.Int64(runParams.bProps.EC.ObjSizeLimit),
 			DataSlices:   apc.Int(runParams.bProps.EC.DataSlices),
@@ -992,7 +992,7 @@ func setupBucket(runParams *params, created *bool) error {
 		change = true
 	}
 	if runParams.bProps.Mirror.Enabled != oldProps.Mirror.Enabled {
-		propsToUpdate.Mirror = &cmn.MirrorConfToUpdate{
+		propsToUpdate.Mirror = &cmn.MirrorConfToSet{
 			Enabled: apc.Bool(runParams.bProps.Mirror.Enabled),
 			Copies:  apc.Int64(runParams.bProps.Mirror.Copies),
 			Burst:   apc.Int(runParams.bProps.Mirror.Burst),

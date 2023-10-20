@@ -94,6 +94,7 @@ var (
 			listArchFlag,
 			unitsFlag,
 			silentFlag,
+			dontWaitFlag,
 		},
 
 		cmdLRU: {
@@ -237,7 +238,7 @@ var (
 )
 
 func createBucketHandler(c *cli.Context) (err error) {
-	var props *cmn.BucketPropsToUpdate
+	var props *cmn.BpropsToSet
 	if flagIsSet(c, bucketPropsFlag) {
 		propSingleBck, err := parseBpropsFromContext(c)
 		if err != nil {
@@ -430,7 +431,7 @@ func lruBucketHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var p *cmn.BucketProps
+	var p *cmn.Bprops
 	if p, err = headBucket(bck, true /* don't add */); err != nil {
 		return err
 	}
@@ -447,7 +448,7 @@ func lruBucketHandler(c *cli.Context) error {
 	return headBckTable(c, p, defProps, "lru")
 }
 
-func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (err error) {
+func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.Bprops, toggle bool) (err error) {
 	const fmts = "Bucket %q: LRU is already %s, nothing to do\n"
 	if toggle && p.LRU.Enabled {
 		fmt.Fprintf(c.App.Writer, fmts, bck.Cname(""), "enabled")
@@ -457,7 +458,7 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 		fmt.Fprintf(c.App.Writer, fmts, bck.Cname(""), "disabled")
 		return
 	}
-	toggledProps, err := cmn.NewBucketPropsToUpdate(cos.StrKVs{"lru.enabled": strconv.FormatBool(toggle)})
+	toggledProps, err := cmn.NewBpropsToSet(cos.StrKVs{"lru.enabled": strconv.FormatBool(toggle)})
 	if err != nil {
 		return
 	}
@@ -465,7 +466,7 @@ func toggleLRU(c *cli.Context, bck cmn.Bck, p *cmn.BucketProps, toggle bool) (er
 }
 
 func setPropsHandler(c *cli.Context) (err error) {
-	var currProps *cmn.BucketProps
+	var currProps *cmn.Bprops
 	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
 		return err
@@ -490,7 +491,7 @@ func setPropsHandler(c *cli.Context) (err error) {
 	return updateBckProps(c, bck, currProps, newProps)
 }
 
-func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.BucketProps, updateProps *cmn.BucketPropsToUpdate) (err error) {
+func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.Bprops, updateProps *cmn.BpropsToSet) (err error) {
 	// Apply updated props and check for change
 	allNewProps := currProps.Clone()
 	allNewProps.Apply(updateProps)
@@ -520,7 +521,7 @@ func displayPropsEqMsg(c *cli.Context, bck cmn.Bck) {
 	fmt.Fprintf(c.App.Writer, "Bucket %q already has the same values of props, nothing to do\n", bck.Cname(""))
 }
 
-func showDiff(c *cli.Context, currProps, newProps *cmn.BucketProps) {
+func showDiff(c *cli.Context, currProps, newProps *cmn.Bprops) {
 	var (
 		origKV = bckPropList(currProps, true)
 		newKV  = bckPropList(newProps, true)

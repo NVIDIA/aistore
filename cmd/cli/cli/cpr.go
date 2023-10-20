@@ -42,15 +42,19 @@ func (cpr *cprCtx) copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, msg *apc.C
 	// 1. get from-bck summary
 	qbck := cmn.QueryBcks(bckFrom)
 	ctx := &bsummCtx{
-		qbck:           qbck,
-		longWaitPrompt: longClientTimeout,
+		qbck:         qbck,
+		longWaitTime: listObjectsWaitTime,
 	}
 	ctx.msg.Prefix = msg.Prefix
 	ctx.msg.ObjCached = apc.IsFltPresent(fltPresence)
 	ctx.msg.BckPresent = apc.IsFltPresent(fltPresence)
 
+	// compare w/ newBsummContext
+	ctx.args.DontWait = false
+	ctx.args.Callback = nil
+
 	// TODO -- FIXME: revisit
-	summaries, err := ctx.slow()
+	_ /*xid*/, summaries, err := ctx.slow()
 	if err != nil {
 		return err
 	}

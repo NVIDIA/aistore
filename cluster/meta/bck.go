@@ -16,7 +16,7 @@ import (
 
 type Bck cmn.Bck
 
-func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.BucketProps) *Bck {
+func NewBck(name, provider string, ns cmn.Ns, optProps ...*cmn.Bprops) *Bck {
 	var err error
 	provider, err = cmn.NormalizeProvider(provider)
 	debug.AssertNoErr(err)

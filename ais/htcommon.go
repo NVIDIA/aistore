@@ -838,7 +838,7 @@ func newBckFromQuname(query url.Values, required bool) (*meta.Bck, error) {
 	return meta.CloneBck(&bck), nil
 }
 
-func _reMirror(bprops, nprops *cmn.BucketProps) bool {
+func _reMirror(bprops, nprops *cmn.Bprops) bool {
 	if !bprops.Mirror.Enabled && nprops.Mirror.Enabled {
 		return true
 	}
@@ -848,7 +848,7 @@ func _reMirror(bprops, nprops *cmn.BucketProps) bool {
 	return false
 }
 
-func _reEC(bprops, nprops *cmn.BucketProps, bck *meta.Bck, smap *smapX) (targetCnt int, yes bool) {
+func _reEC(bprops, nprops *cmn.Bprops, bck *meta.Bck, smap *smapX) (targetCnt int, yes bool) {
 	if !nprops.EC.Enabled {
 		if bprops.EC.Enabled {
 			// abort running ec-encode xaction, if exists

@@ -42,7 +42,7 @@ var _ = Describe("CommunicatorTest", func() {
 		objName    = "commObj"
 		clusterBck = meta.NewBck(
 			bck.Name, bck.Provider, bck.Ns,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
 		bmdMock = mock.NewBaseBownerMock(clusterBck)
 	)

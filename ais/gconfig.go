@@ -40,7 +40,7 @@ type (
 		final func(ctx *configModifier, clone *globalConfig)
 
 		oldConfig *cmn.Config
-		toUpdate  *cmn.ConfigToUpdate
+		toUpdate  *cmn.ConfigToSet
 		msg       *apc.ActMsg
 		query     url.Values
 		hdr       http.Header
@@ -190,7 +190,7 @@ func (*configOwner) persistBytes(payload msPayload, globalFpath string) (done bo
 	return
 }
 
-func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient bool) (err error) {
+func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToSet, transient bool) (err error) {
 	co.Lock()
 	clone := cmn.GCO.Clone()
 	err = setConfigInMem(toUpdate, clone, apc.Daemon)
@@ -219,7 +219,7 @@ func (co *configOwner) setDaemonConfig(toUpdate *cmn.ConfigToUpdate, transient b
 	return
 }
 
-func setConfigInMem(toUpdate *cmn.ConfigToUpdate, config *cmn.Config, asType string) (err error) {
+func setConfigInMem(toUpdate *cmn.ConfigToSet, config *cmn.Config, asType string) (err error) {
 	err = config.UpdateClusterConfig(toUpdate, asType)
 	return
 }

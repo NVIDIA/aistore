@@ -16,7 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// BucketProps - manageable, user-configurable, and inheritable (from cluster config).
+// Bprops - manageable, user-configurable, and inheritable (from cluster config).
 // Includes per-bucket user-configurable checksum, version, LRU, erasure-coding, and more.
 //
 // At creation time, unless specified via api.CreateBucket, new bucket by default
@@ -38,7 +38,7 @@ const (
 )
 
 type (
-	BucketProps struct {
+	Bprops struct {
 		BackendBck  Bck             `json:"backend_bck,omitempty"` // makes remote bucket out of a given ais bucket
 		Extra       ExtraProps      `json:"extra,omitempty" list:"omitempty"`
 		WritePolicy WritePolicyConf `json:"write_policy"`
@@ -51,7 +51,7 @@ type (
 		Access      apc.AccessAttrs `json:"access,string"`                  // access permissions
 		BID         uint64          `json:"bid,string" list:"omit"`         // unique ID
 		Created     int64           `json:"created,string" list:"readonly"` // creation timestamp
-		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit" here and elsewhere)
+		Versioning  VersionConf     `json:"versioning"`                     // versioning (see "inherit")
 	}
 
 	ExtraProps struct {
@@ -59,10 +59,10 @@ type (
 		HTTP ExtraPropsHTTP `json:"http,omitempty" list:"omitempty"`
 		HDFS ExtraPropsHDFS `json:"hdfs,omitempty" list:"omitempty"`
 	}
-	ExtraToUpdate struct { // ref. bpropsFilterExtra
-		AWS  *ExtraPropsAWSToUpdate  `json:"aws"`
-		HTTP *ExtraPropsHTTPToUpdate `json:"http"`
-		HDFS *ExtraPropsHDFSToUpdate `json:"hdfs"`
+	ExtraToSet struct { // ref. bpropsFilterExtra
+		AWS  *ExtraPropsAWSToSet  `json:"aws"`
+		HTTP *ExtraPropsHTTPToSet `json:"http"`
+		HDFS *ExtraPropsHDFSToSet `json:"hdfs"`
 	}
 
 	ExtraPropsAWS struct {
@@ -79,7 +79,7 @@ type (
 		// or AWS_DEFAULT_PROFILE if the Shared Config is enabled)."
 		Profile string `json:"profile,omitempty"`
 	}
-	ExtraPropsAWSToUpdate struct {
+	ExtraPropsAWSToSet struct {
 		CloudRegion *string `json:"cloud_region"`
 		Endpoint    *string `json:"endpoint"`
 		Profile     *string `json:"profile"`
@@ -89,7 +89,7 @@ type (
 		// Original URL prior to hashing.
 		OrigURLBck string `json:"original_url,omitempty" list:"readonly"`
 	}
-	ExtraPropsHTTPToUpdate struct {
+	ExtraPropsHTTPToSet struct {
 		OrigURLBck *string `json:"original_url"`
 	}
 
@@ -97,49 +97,49 @@ type (
 		// Reference directory.
 		RefDirectory string `json:"ref_directory,omitempty"`
 	}
-	ExtraPropsHDFSToUpdate struct {
+	ExtraPropsHDFSToSet struct {
 		RefDirectory *string `json:"ref_directory"`
 	}
 
-	// Once validated, BucketPropsToUpdate are copied to BucketProps.
-	// The struct may have extra fields that do not exist in BucketProps.
+	// Once validated, BpropsToSet are copied to Bprops.
+	// The struct may have extra fields that do not exist in Bprops.
 	// Add tag 'copy:"skip"' to ignore those fields when copying values.
-	BucketPropsToUpdate struct {
-		BackendBck  *BackendBckToUpdate      `json:"backend_bck,omitempty"`
-		Versioning  *VersionConfToUpdate     `json:"versioning,omitempty"`
-		Cksum       *CksumConfToUpdate       `json:"checksum,omitempty"`
-		LRU         *LRUConfToUpdate         `json:"lru,omitempty"`
-		Mirror      *MirrorConfToUpdate      `json:"mirror,omitempty"`
-		EC          *ECConfToUpdate          `json:"ec,omitempty"`
-		Access      *apc.AccessAttrs         `json:"access,string,omitempty"`
-		WritePolicy *WritePolicyConfToUpdate `json:"write_policy,omitempty"`
-		Extra       *ExtraToUpdate           `json:"extra,omitempty"`
-		Force       bool                     `json:"force,omitempty" copy:"skip" list:"omit"`
+	BpropsToSet struct {
+		BackendBck  *BackendBckToSet      `json:"backend_bck,omitempty"`
+		Versioning  *VersionConfToSet     `json:"versioning,omitempty"`
+		Cksum       *CksumConfToSet       `json:"checksum,omitempty"`
+		LRU         *LRUConfToSet         `json:"lru,omitempty"`
+		Mirror      *MirrorConfToSet      `json:"mirror,omitempty"`
+		EC          *ECConfToSet          `json:"ec,omitempty"`
+		Access      *apc.AccessAttrs      `json:"access,string,omitempty"`
+		WritePolicy *WritePolicyConfToSet `json:"write_policy,omitempty"`
+		Extra       *ExtraToSet           `json:"extra,omitempty"`
+		Force       bool                  `json:"force,omitempty" copy:"skip" list:"omit"`
 	}
 
-	BackendBckToUpdate struct {
+	BackendBckToSet struct {
 		Name     *string `json:"name"`
 		Provider *string `json:"provider"`
 	}
 )
 
 /////////////////
-// BucketProps //
+// Bprops //
 /////////////////
 
 // By default, created buckets inherit their properties from the cluster (global) configuration.
 // Global configuration, in turn, is protected versioned, checksummed, and replicated across the entire cluster.
 //
-// * Bucket properties can be changed at any time via `api.SetBucketProps`.
+// * Bucket properties can be changed at any time via `api.SetBprops`.
 // * In addition, `api.CreateBucket` allows to specify (non-default) properties at bucket creation time.
 // * Inherited defaults include checksum, LRU, etc. configurations - see below.
 // * By default, LRU is disabled for AIS (`ais://`) buckets.
 //
 // See also:
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
-//   - BucketPropsToUpdate (above)
+//   - BpropsToSet (above)
 //   - ais.defaultBckProps()
-func (bck *Bck) DefaultProps(c *ClusterConfig) *BucketProps {
+func (bck *Bck) DefaultProps(c *ClusterConfig) *Bprops {
 	lru := c.LRU
 	if bck.IsAIS() {
 		lru.Enabled = false
@@ -155,7 +155,7 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *BucketProps {
 	if wp.Data.IsImmediate() {
 		wp.Data = apc.WriteImmediate
 	}
-	return &BucketProps{
+	return &Bprops{
 		Cksum:       cksum,
 		LRU:         lru,
 		Mirror:      c.Mirror,
@@ -166,18 +166,18 @@ func (bck *Bck) DefaultProps(c *ClusterConfig) *BucketProps {
 	}
 }
 
-func (bp *BucketProps) SetProvider(provider string) {
+func (bp *Bprops) SetProvider(provider string) {
 	debug.Assert(apc.IsProvider(provider))
 	bp.Provider = provider
 }
 
-func (bp *BucketProps) Clone() *BucketProps {
+func (bp *Bprops) Clone() *Bprops {
 	to := *bp
 	debug.Assert(bp.Equal(&to))
 	return &to
 }
 
-func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
+func (bp *Bprops) Equal(other *Bprops) (eq bool) {
 	src := *bp
 	src.BID = other.BID
 	src.Created = other.Created
@@ -185,7 +185,7 @@ func (bp *BucketProps) Equal(other *BucketProps) (eq bool) {
 	return
 }
 
-func (bp *BucketProps) Validate(targetCnt int) error {
+func (bp *Bprops) Validate(targetCnt int) error {
 	debug.Assert(apc.IsProvider(bp.Provider))
 	if !bp.BackendBck.IsEmpty() {
 		if bp.Provider != apc.AIS {
@@ -225,24 +225,24 @@ func (bp *BucketProps) Validate(targetCnt int) error {
 	return softErr
 }
 
-func (bp *BucketProps) Apply(propsToUpdate *BucketPropsToUpdate) {
-	err := copyProps(propsToUpdate, bp, apc.Daemon)
+func (bp *Bprops) Apply(propsToSet *BpropsToSet) {
+	err := copyProps(propsToSet, bp, apc.Daemon)
 	debug.AssertNoErr(err)
 }
 
 //
-// BucketPropsToUpdate
+// BpropsToSet
 //
 
-func NewBucketPropsToUpdate(nvs cos.StrKVs) (props *BucketPropsToUpdate, err error) {
-	props = &BucketPropsToUpdate{}
+func NewBpropsToSet(nvs cos.StrKVs) (props *BpropsToSet, err error) {
+	props = &BpropsToSet{}
 	for key, val := range nvs {
 		name, value := strings.ToLower(key), val
 
-		// HACK: Some of the fields are present in `BucketProps` and not in `BucketPropsToUpdate`.
+		// HACK: Some of the fields are present in `Bprops` and not in `BpropsToSet`.
 		// Thus, if user wants to change such field, `unknown field` will be returned.
-		// To make UX more friendly we attempt to set the value in an empty `BucketProps` first.
-		if err := UpdateFieldValue(&BucketProps{}, name, value); err != nil {
+		// To make UX more friendly we attempt to set the value in an empty `Bprops` first.
+		if err := UpdateFieldValue(&Bprops{}, name, value); err != nil {
 			return props, err
 		}
 

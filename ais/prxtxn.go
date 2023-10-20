@@ -153,7 +153,7 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
 // create-bucket: { check non-existence -- begin -- create locally -- metasync -- commit }
 func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Header) error {
 	var (
-		bprops  *cmn.BucketProps
+		bprops  *cmn.Bprops
 		backend = bck.Backend()
 	)
 	if bck.Props != nil {
@@ -199,7 +199,7 @@ func (p *proxy) createBucket(msg *apc.ActMsg, bck *meta.Bck, remoteHdr http.Head
 	return p._createBucketWithProps(msg, bck, bprops)
 }
 
-func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *cmn.BucketProps) error {
+func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *cmn.Bprops) error {
 	var (
 		nlp = newBckNLP(bck)
 		bmd = p.owner.bmd.get()
@@ -290,8 +290,8 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *meta.Bck) (xid string, err err
 
 	// 3. update BMD locally & metasync updated BMD
 	mirrorEnabled := copies > 1
-	updateProps := &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{
+	updateProps := &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{
 			Enabled: &mirrorEnabled,
 			Copies:  &copies,
 		},
@@ -334,8 +334,8 @@ func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
 	debug.Assert(present)
 	nprops := bprops.Clone()
 	nprops.Apply(ctx.propsToUpdate)
-	ctx.revertProps = &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{
+	ctx.revertProps = &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{
 			Copies:  &bprops.Mirror.Copies,
 			Enabled: &bprops.Mirror.Enabled,
 		},
@@ -345,7 +345,7 @@ func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
 }
 
 // set-bucket-props: { confirm existence -- begin -- apply props -- metasync -- commit }
-func (p *proxy) setBucketProps(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.BucketProps) (string /*xid*/, error) {
+func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (string /*xid*/, error) {
 	// 1. confirm existence
 	bprops, present := p.owner.bmd.get().Get(bck)
 	if !present {
@@ -670,14 +670,14 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (
 	return strings.Join(all, xact.UUIDSepa), nil
 }
 
-func parseECConf(value any) (*cmn.ECConfToUpdate, error) {
+func parseECConf(value any) (*cmn.ECConfToSet, error) {
 	switch v := value.(type) {
 	case string:
-		conf := &cmn.ECConfToUpdate{}
+		conf := &cmn.ECConfToSet{}
 		err := jsoniter.Unmarshal([]byte(v), conf)
 		return conf, err
 	case []byte:
-		conf := &cmn.ECConfToUpdate{}
+		conf := &cmn.ECConfToSet{}
 		err := jsoniter.Unmarshal(v, conf)
 		return conf, err
 	default:
@@ -746,7 +746,7 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 		wait:          waitmsync,
 		msg:           &c.msg.ActMsg,
 		txnID:         c.uuid,
-		propsToUpdate: &cmn.BucketPropsToUpdate{EC: ecConf},
+		propsToUpdate: &cmn.BpropsToSet{EC: ecConf},
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
@@ -1032,7 +1032,7 @@ func (p *proxy) undoCreateBucket(msg *apc.ActMsg, bck *meta.Bck) {
 }
 
 // rollback make-n-copies
-func (p *proxy) undoUpdateCopies(msg *apc.ActMsg, bck *meta.Bck, propsToUpdate *cmn.BucketPropsToUpdate) {
+func (p *proxy) undoUpdateCopies(msg *apc.ActMsg, bck *meta.Bck, propsToUpdate *cmn.BpropsToSet) {
 	ctx := &bmdModifier{
 		pre:           bmodUpdateProps,
 		final:         p.bmodSync,
@@ -1046,8 +1046,8 @@ func (p *proxy) undoUpdateCopies(msg *apc.ActMsg, bck *meta.Bck, propsToUpdate *
 }
 
 // Make and validate new bucket props.
-func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BucketPropsToUpdate,
-	creating ...bool) (nprops *cmn.BucketProps, err error) {
+func (p *proxy) makeNewBckProps(bck *meta.Bck, propsToUpdate *cmn.BpropsToSet,
+	creating ...bool) (nprops *cmn.Bprops, err error) {
 	var (
 		cfg    = cmn.GCO.Get()
 		bprops = bck.Props
@@ -1116,7 +1116,7 @@ func _versioning(v bool) string {
 	return "disabled"
 }
 
-func (p *proxy) initBackendProp(nprops *cmn.BucketProps) (err error) {
+func (p *proxy) initBackendProp(nprops *cmn.Bprops) (err error) {
 	if nprops.BackendBck.IsEmpty() {
 		return
 	}

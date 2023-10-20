@@ -633,8 +633,8 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 		return
 	}
 	enabled := vconf.Enabled()
-	propsToUpdate := cmn.BucketPropsToUpdate{
-		Versioning: &cmn.VersionConfToUpdate{Enabled: &enabled},
+	propsToUpdate := cmn.BpropsToSet{
+		Versioning: &cmn.VersionConfToSet{Enabled: &enabled},
 	}
 	// make and validate new props
 	nprops, err := p.makeNewBckProps(bck, &propsToUpdate)
@@ -642,7 +642,7 @@ func (p *proxy) putBckVersioningS3(w http.ResponseWriter, r *http.Request, bucke
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if _, err := p.setBucketProps(msg, bck, nprops); err != nil {
+	if _, err := p.setBprops(msg, bck, nprops); err != nil {
 		s3.WriteErr(w, r, err, 0)
 	}
 }

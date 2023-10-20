@@ -75,8 +75,8 @@ func BenchmarkECEncode(b *testing.B) {
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 			b.Run(test.name, func(b *testing.B) {
-				bckProps := &cmn.BucketPropsToUpdate{
-					EC: &cmn.ECConfToUpdate{
+				bckProps := &cmn.BpropsToSet{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ObjSizeLimit: apc.Int64(ecObjLimit),
 						DataSlices:   apc.Int(test.data),
@@ -126,8 +126,8 @@ func BenchmarkECRebalance(b *testing.B) {
 			fillBucket(b, proxyURL, bck, uint64(size), objCount)
 
 			b.Run("rebalance", func(b *testing.B) {
-				bckProps := &cmn.BucketPropsToUpdate{
-					EC: &cmn.ECConfToUpdate{
+				bckProps := &cmn.BpropsToSet{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ObjSizeLimit: apc.Int64(ecObjLimit),
 						DataSlices:   apc.Int(test.data),

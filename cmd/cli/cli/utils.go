@@ -315,7 +315,7 @@ func parseFeatureFlags(v string) (res feat.Flags, err error) {
 // TODO: support `allow` and `deny` verbs/operations on existing access permissions
 func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	props := make([]string, 0, 20)
-	err = cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
+	err = cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
 		props = append(props, tag)
 		return nil, false
 	})
@@ -372,7 +372,7 @@ func makeBckPropPairs(values []string) (nvs cos.StrKVs, err error) {
 	return
 }
 
-func parseBpropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err error) {
+func parseBpropsFromContext(c *cli.Context) (props *cmn.BpropsToSet, err error) {
 	propArgs := c.Args().Tail()
 
 	if c.Command.Name == commandCreate {
@@ -405,7 +405,7 @@ func parseBpropsFromContext(c *cli.Context) (props *cmn.BucketPropsToUpdate, err
 		return
 	}
 
-	props, err = cmn.NewBucketPropsToUpdate(nvs)
+	props, err = cmn.NewBpropsToSet(nvs)
 	return
 }
 
@@ -441,7 +441,7 @@ func bucketsFromArgsOrEnv(c *cli.Context) ([]cmn.Bck, error) {
 //
 // 3. On the client side, we currently resort to an intuitive convention
 // that all non-modifying operations (LIST, GET, HEAD) utilize `dontAddBckMD = true`.
-func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.BucketProps, err error) {
+func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 	if p, err = api.HeadBucket(apiBP, bck, dontAddBckMD); err == nil {
 		return
 	}
@@ -502,7 +502,7 @@ func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]strin
 	}
 }
 
-func bckPropList(props *cmn.BucketProps, verbose bool) (propList nvpairList) {
+func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 	if !verbose { // i.e., compact
 		propList = nvpairList{
 			{"created", fmtBucketCreatedTime(props.Created)},
@@ -759,7 +759,7 @@ done:
 
 // First, request cluster's config from the primary node that contains
 // default Cksum type. Second, generate default list of properties.
-func defaultBckProps(bck cmn.Bck) (*cmn.BucketProps, error) {
+func defaultBckProps(bck cmn.Bck) (*cmn.Bprops, error) {
 	cfg, err := api.GetClusterConfig(apiBP)
 	if err != nil {
 		return nil, V(err)

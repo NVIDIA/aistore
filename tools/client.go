@@ -188,7 +188,7 @@ func GetProxyReadiness(proxyURL string) error {
 	return api.GetProxyReadiness(BaseAPIParams(proxyURL))
 }
 
-func CreateBucket(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BucketPropsToUpdate, cleanup bool) {
+func CreateBucket(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BpropsToSet, cleanup bool) {
 	bp := BaseAPIParams(proxyURL)
 	err := api.CreateBucket(bp, bck, props)
 	tassert.CheckFatal(tb, err)
@@ -250,8 +250,8 @@ func SetBackendBck(t *testing.T, bp api.BaseParams, srcBck, dstBck cmn.Bck) {
 	p, err := api.HeadBucket(bp, dstBck, false /* don't add to cluster MD */)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.SetBucketProps(bp, srcBck, &cmn.BucketPropsToUpdate{
-		BackendBck: &cmn.BackendBckToUpdate{
+	_, err = api.SetBucketProps(bp, srcBck, &cmn.BpropsToSet{
+		BackendBck: &cmn.BackendBckToSet{
 			Name:     apc.String(dstBck.Name),
 			Provider: apc.String(p.Provider),
 		},
@@ -679,7 +679,7 @@ func SetClusterConfig(t *testing.T, nvs cos.StrKVs) {
 	tassert.CheckError(t, err)
 }
 
-func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToUpdate) {
+func SetClusterConfigUsingMsg(t *testing.T, toUpdate *cmn.ConfigToSet) {
 	proxyURL := GetPrimaryURL()
 	bp := BaseAPIParams(proxyURL)
 	err := api.SetClusterConfigUsingMsg(bp, toUpdate, false /*transient*/)

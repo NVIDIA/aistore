@@ -60,7 +60,7 @@ var _ = Describe("Bck", func() {
 	Describe("Equal", func() {
 		DescribeTable("should not be equal",
 			func(a, b *meta.Bck) {
-				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
+				a.Props, b.Props = &cmn.Bprops{}, &cmn.Bprops{}
 				Expect(a.Equal(b, true /*same BID*/, true /* same backend*/)).To(BeFalse())
 			},
 			Entry(
@@ -97,7 +97,7 @@ var _ = Describe("Bck", func() {
 
 		DescribeTable("should be equal",
 			func(a, b *meta.Bck) {
-				a.Props, b.Props = &cmn.BucketProps{}, &cmn.BucketProps{}
+				a.Props, b.Props = &cmn.Bprops{}, &cmn.Bprops{}
 				Expect(a.Equal(b, true /*same BID*/, true /* same backend */)).To(BeTrue())
 			},
 			Entry(

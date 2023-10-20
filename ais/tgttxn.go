@@ -96,7 +96,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 	case apc.ActMakeNCopies:
 		xid, err = t.makeNCopies(c)
 	case apc.ActSetBprops, apc.ActResetBprops:
-		xid, err = t.setBucketProps(c)
+		xid, err = t.setBprops(c)
 	case apc.ActMoveBck:
 		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
@@ -285,17 +285,17 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, new
 }
 
 //
-// setBucketProps
+// setBprops
 //
 
-func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
+func (t *target) setBprops(c *txnServerCtx) (string, error) {
 	if err := c.bck.Init(t.owner.bmd); err != nil {
 		return "", err
 	}
 	switch c.phase {
 	case apc.ActBegin:
 		var (
-			nprops *cmn.BucketProps
+			nprops *cmn.Bprops
 			err    error
 		)
 		if nprops, err = t.validateNprops(c.bck, c.msg); err != nil {
@@ -362,12 +362,12 @@ func (t *target) setBucketProps(c *txnServerCtx) (string, error) {
 	return "", nil
 }
 
-func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.BucketProps, err error) {
+func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.Bprops, err error) {
 	var (
 		body = cos.MustMarshal(msg.Value)
 		cs   = fs.Cap()
 	)
-	nprops = &cmn.BucketProps{}
+	nprops = &cmn.Bprops{}
 	if err = jsoniter.Unmarshal(body, nprops); err != nil {
 		err = fmt.Errorf(cmn.FmtErrUnmarshal, t, "new bucket props", cos.BHead(body), err)
 		return

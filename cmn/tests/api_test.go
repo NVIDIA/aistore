@@ -15,57 +15,57 @@ import (
 var _ = Describe("API", func() {
 	Describe("Apply", func() {
 		DescribeTable("should successfully apply all the props",
-			func(src cmn.BucketProps, props cmn.BucketPropsToUpdate, expect cmn.BucketProps) {
+			func(src cmn.Bprops, props cmn.BpropsToSet, expect cmn.Bprops) {
 				src.Apply(&props)
 				Expect(src).To(Equal(expect))
 			},
 			Entry("non-nested field",
-				cmn.BucketProps{},
-				cmn.BucketPropsToUpdate{
+				cmn.Bprops{},
+				cmn.BpropsToSet{
 					Access: apc.AccAttrs(1024),
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Access: 1024,
 				},
 			),
 			Entry("non-nested field and non-empty initial struct",
-				cmn.BucketProps{
+				cmn.Bprops{
 					Provider: apc.AWS,
 				},
-				cmn.BucketPropsToUpdate{
+				cmn.BpropsToSet{
 					Access: apc.AccAttrs(1024),
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Provider: apc.AWS,
 					Access:   1024,
 				},
 			),
 			Entry("nested field",
-				cmn.BucketProps{},
-				cmn.BucketPropsToUpdate{
-					Cksum: &cmn.CksumConfToUpdate{
+				cmn.Bprops{},
+				cmn.BpropsToSet{
+					Cksum: &cmn.CksumConfToSet{
 						Type: apc.String("value"),
 					},
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Cksum: cmn.CksumConf{
 						Type: "value",
 					},
 				},
 			),
 			Entry("multiple nested fields",
-				cmn.BucketProps{},
-				cmn.BucketPropsToUpdate{
-					Cksum: &cmn.CksumConfToUpdate{
+				cmn.Bprops{},
+				cmn.BpropsToSet{
+					Cksum: &cmn.CksumConfToSet{
 						Type:            apc.String("value"),
 						ValidateColdGet: apc.Bool(true),
 					},
-					EC: &cmn.ECConfToUpdate{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ObjSizeLimit: apc.Int64(1024),
 					},
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Cksum: cmn.CksumConf{
 						Type:            "value",
 						ValidateColdGet: true,
@@ -80,7 +80,7 @@ var _ = Describe("API", func() {
 				},
 			),
 			Entry("multiple nested fields and non-empty initial struct",
-				cmn.BucketProps{
+				cmn.Bprops{
 					Provider: apc.AWS,
 					Cksum: cmn.CksumConf{
 						ValidateColdGet: true,
@@ -94,17 +94,17 @@ var _ = Describe("API", func() {
 						Enabled: true,
 					},
 				},
-				cmn.BucketPropsToUpdate{
-					Cksum: &cmn.CksumConfToUpdate{
+				cmn.BpropsToSet{
+					Cksum: &cmn.CksumConfToSet{
 						Type: apc.String("value"),
 					},
-					Mirror: &cmn.MirrorConfToUpdate{
+					Mirror: &cmn.MirrorConfToSet{
 						Enabled: apc.Bool(true),
 						Copies:  apc.Int64(3),
 					},
 					Access: apc.AccAttrs(10),
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Provider: apc.AWS,
 					Cksum: cmn.CksumConf{
 						Type:            "value",
@@ -122,25 +122,25 @@ var _ = Describe("API", func() {
 				},
 			),
 			Entry("all fields",
-				cmn.BucketProps{},
-				cmn.BucketPropsToUpdate{
-					Versioning: &cmn.VersionConfToUpdate{
+				cmn.Bprops{},
+				cmn.BpropsToSet{
+					Versioning: &cmn.VersionConfToSet{
 						Enabled:         apc.Bool(true),
 						ValidateWarmGet: apc.Bool(true),
 					},
-					Cksum: &cmn.CksumConfToUpdate{
+					Cksum: &cmn.CksumConfToSet{
 						Type:            apc.String("value"),
 						ValidateColdGet: apc.Bool(true),
 						ValidateWarmGet: apc.Bool(false),
 						ValidateObjMove: apc.Bool(true),
 						EnableReadRange: apc.Bool(false),
 					},
-					Mirror: &cmn.MirrorConfToUpdate{
+					Mirror: &cmn.MirrorConfToSet{
 						Copies:  apc.Int64(10),
 						Burst:   apc.Int(32),
 						Enabled: apc.Bool(false),
 					},
-					EC: &cmn.ECConfToUpdate{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ObjSizeLimit: apc.Int64(1024),
 						DataSlices:   apc.Int(1024),
@@ -148,11 +148,11 @@ var _ = Describe("API", func() {
 						Compression:  apc.String("false"),
 					},
 					Access: apc.AccAttrs(1024),
-					WritePolicy: &cmn.WritePolicyConfToUpdate{
+					WritePolicy: &cmn.WritePolicyConfToSet{
 						MD: apc.WPolicy(apc.WriteDelayed),
 					},
 				},
-				cmn.BucketProps{
+				cmn.Bprops{
 					Versioning: cmn.VersionConf{
 						Enabled:         true,
 						ValidateWarmGet: true,

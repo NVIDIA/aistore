@@ -599,6 +599,11 @@ var (
 		Name:  "wait",
 		Usage: "wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)",
 	}
+	dontWaitFlag = cli.BoolFlag{
+		Name: "dont-wait",
+		Usage: "when _summarizing_ buckets do not wait for the respective job to finish -\n" +
+			indent4 + "\tuse the job's UUID to query the results interactively",
+	}
 
 	// multi-object / multi-file
 	listFlag = cli.StringFlag{

@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 
 	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
 	bmd := newBucketMD()
-	bmd.add(bck, &cmn.BucketProps{
+	bmd.add(bck, &cmn.Bprops{
 		Cksum: cmn.CksumConf{
 			Type: cos.ChecksumNone,
 		},

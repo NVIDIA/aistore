@@ -6,6 +6,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -75,7 +76,7 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 		}
 		var (
 			info  cmn.BsummResult
-			props *cmn.BucketProps
+			props *cmn.Bprops
 		)
 		if apc.IsFltPresent(fltPresence) {
 			info.IsBckPresent = true
@@ -141,7 +142,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		opts       = teb.Opts{AltMap: teb.FuncMapUnits(units)}
 		maxwait    = listObjectsWaitTime
 		bckPresent = apc.IsFltPresent(args.FltPresence) // all-buckets part in the `allObjsOrBcksFlag`
-		ctx        = newBsummContext(c, units, qbck, bckPresent)
+		dontWait   = flagIsSet(c, dontWaitFlag)
+		ctx        = newBsummContext(c, units, qbck, bckPresent, dontWait)
 		prev       = ctx.started
 	)
 	debug.Assert(args.Summarize)
@@ -154,10 +156,21 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 			continue
 		}
 		ctx.qbck = cmn.QueryBcks(bck)
-		props, info, err := api.GetBucketInfo(apiBP, bck, args)
+		xid, props, info, err := api.GetBucketInfo(apiBP, bck, args)
 		if err != nil {
+			var partial bool
+			if herr, ok := err.(*cmn.ErrHTTP); ok {
+				if herr.Status == http.StatusAccepted {
+					continue
+				}
+				partial = herr.Status == http.StatusPartialContent
+			}
 			actionWarn(c, notV(err).Error())
-			continue
+			if !partial {
+				continue
+			}
+			warn := fmt.Sprintf("%s[%s] %s - still running, showing partial results", cmdSummary, xid, bck.Cname(""))
+			actionWarn(c, warn)
 		}
 		footer.nb++
 		if info.IsBckPresent {
@@ -170,7 +183,7 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 		if bck.IsHTTP() {
 			bck.Name += " (URL: " + props.Extra.HTTP.OrigURLBck + ")"
 		}
-		data = append(data, teb.ListBucketsHelper{Bck: bck, Props: props, Info: info})
+		data = append(data, teb.ListBucketsHelper{XactID: xid, Bck: bck, Props: props, Info: info})
 
 		now := mono.NanoTime()
 		if elapsed := time.Duration(now - prev); elapsed < maxwait && i < len(bcks)-1 {

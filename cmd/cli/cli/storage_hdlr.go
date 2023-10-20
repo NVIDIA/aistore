@@ -7,6 +7,7 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -26,16 +27,20 @@ import (
 )
 
 type bsummCtx struct {
-	c              *cli.Context
-	units          string
-	qbck           cmn.QueryBcks
-	longWaitPrompt time.Duration
-	msg            apc.BsummCtrlMsg
-	args           api.BsummArgs
-	started        int64
-	l              int
-	n              int
-	res            cmn.AllBsummResults
+	c       *cli.Context
+	units   string
+	xid     string
+	qbck    cmn.QueryBcks
+	msg     apc.BsummCtrlMsg
+	args    api.BsummArgs
+	started int64
+	l       int
+	n       int
+	res     cmn.AllBsummResults
+	// waiting
+	longWaitTime   time.Duration
+	longWaitPrompt string
+	dontWait       bool
 }
 
 var (
@@ -116,7 +121,7 @@ var (
 		listObjCachedFlag,
 		unitsFlag,
 		verboseFlag,
-		waitJobXactFinishedFlag,
+		dontWaitFlag,
 		noHeaderFlag,
 	)
 	storageFlags = map[string][]cli.Flag{
@@ -334,19 +339,58 @@ func showDiskStats(c *cli.Context, tid string) error {
 
 func summaryStorageHandler(c *cli.Context) error {
 	uri := c.Args().Get(0)
-	qbck, err := parseQueryBckURI(c, uri)
-	if err != nil {
-		return err
+	qbck, errV := parseQueryBckURI(c, uri)
+	if errV != nil {
+		return errV
 	}
+
 	units, errU := parseUnitsFlag(c, unitsFlag)
 	if errU != nil {
-		return err
+		return errU
 	}
-	// TODO: remote buckets not in BMD - see `listBckTableWithSummary`
-	ctx := newBsummContext(c, units, qbck, true /*bckPresent*/)
+
+	// TODO: remote buckets not in BMD - see ais ls --summary and `listBckTableWithSummary`
+	dontWait := flagIsSet(c, dontWaitFlag)
+	ctx := newBsummContext(c, units, qbck, true /*bckPresent*/, dontWait)
 
 	setLongRunParams(c)
-	summaries, err := ctx.slow()
+
+	var news = true
+	if xid := c.Args().Get(1); xid != "" && cos.IsValidUUID(xid) {
+		ctx.msg.UUID = xid
+		news = false
+	}
+	xid, summaries, err := ctx.slow() // execute
+
+	f := func() string {
+		verb := "has started"
+		if !news {
+			verb = "is running"
+		}
+		return fmt.Sprintf("Job %s[%s] %s. To monitor, run 'ais storage summary %s %s %s' or 'ais show job %s';\n"+
+			"see %s for more options",
+			cmdSummary, xid, verb, uri, xid, flprn(dontWaitFlag), xid, qflprn(cli.HelpFlag))
+	}
+	if err == nil && dontWait && len(summaries) == 0 {
+		actionDone(c, f())
+		return nil
+	}
+
+	var status int
+	if err != nil {
+		if herr, ok := err.(*cmn.ErrHTTP); ok {
+			status = herr.Status
+		}
+		if dontWait && status == http.StatusAccepted {
+			actionDone(c, f())
+			return nil
+		}
+		if dontWait && status == http.StatusPartialContent {
+			msg := fmt.Sprintf("%s[%s] is still running - showing partial results:", cmdSummary, ctx.msg.UUID)
+			actionNote(c, msg)
+			err = nil
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -360,39 +404,47 @@ func summaryStorageHandler(c *cli.Context) error {
 	return teb.Print(summaries, teb.BucketsSummariesTmpl, opts)
 }
 
-func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks, bckPresent bool) *bsummCtx {
+func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks, bckPresent, dontWait bool) *bsummCtx {
 	ctx := &bsummCtx{
-		c:              c,
-		units:          units,
-		qbck:           qbck,
-		started:        mono.NanoTime(),
-		longWaitPrompt: longClientTimeout,
+		c:        c,
+		units:    units,
+		qbck:     qbck,
+		started:  mono.NanoTime(),
+		dontWait: dontWait,
 	}
 	ctx.msg.Prefix = parseStrFlag(c, bsummPrefixFlag)
 	ctx.msg.ObjCached = flagIsSet(c, listObjCachedFlag)
 	ctx.msg.BckPresent = bckPresent
 
+	ctx.args.DontWait = dontWait
+
 	if flagIsSet(c, refreshFlag) {
 		ctx.args.CallAfter = parseDurationFlag(c, refreshFlag)
 		ctx.args.Callback = ctx.progress
-		ctx.longWaitPrompt = 0 // have refresh callback
+		ctx.longWaitTime = 0 // have refresh callback
+	} else if !dontWait {
+		ctx.longWaitTime = listObjectsWaitTime
+		if ctx.msg.UUID != "" {
+			ctx.longWaitPrompt = "Please wait, the operation may take some time.\n" +
+				"To monitor, run 'ais storage summary " + ctx.msg.UUID // TODO -- FIXME
+		}
 	}
 	return ctx
 }
 
 // "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
-func (ctx *bsummCtx) slow() (res cmn.AllBsummResults, err error) {
-	if ctx.longWaitPrompt > 0 {
-		err = cmn.WaitForFunc(ctx.get, ctx.longWaitPrompt)
+func (ctx *bsummCtx) slow() (xid string, res cmn.AllBsummResults, err error) {
+	if ctx.longWaitTime > 0 {
+		err = cmn.WaitForFunc(ctx.get, ctx.longWaitTime, ctx.longWaitPrompt)
 	} else {
 		err = ctx.get()
 	}
-	res = ctx.res
+	xid, res = ctx.xid, ctx.res
 	return
 }
 
 func (ctx *bsummCtx) get() (err error) {
-	ctx.res, err = api.GetBucketSummary(apiBP, ctx.qbck, &ctx.msg, ctx.args)
+	ctx.xid, ctx.res, err = api.GetBucketSummary(apiBP, ctx.qbck, &ctx.msg, ctx.args)
 	return
 }
 

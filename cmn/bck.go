@@ -34,10 +34,10 @@ type (
 	}
 
 	Bck struct {
-		Props    *BucketProps `json:"-"`
-		Name     string       `json:"name" yaml:"name"`
-		Provider string       `json:"provider" yaml:"provider"` // NOTE: see api/apc/provider.go for supported enum
-		Ns       Ns           `json:"namespace" yaml:"namespace" list:"omitempty"`
+		Props    *Bprops `json:"-"`
+		Name     string  `json:"name" yaml:"name"`
+		Provider string  `json:"provider" yaml:"provider"` // NOTE: see api/apc/provider.go for supported enum
+		Ns       Ns      `json:"namespace" yaml:"namespace" list:"omitempty"`
 	}
 
 	// Represents the AIS bucket, object and URL associated with a HTTP resource

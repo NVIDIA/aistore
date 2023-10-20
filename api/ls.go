@@ -7,10 +7,8 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"time"
 
@@ -19,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/xact"
 )
 
 const (
@@ -43,12 +40,6 @@ type (
 		Callback  LsoCB
 		CallAfter time.Duration
 		Limit     uint
-	}
-
-	BsummCB   func(*cmn.AllBsummResults, bool)
-	BsummArgs struct {
-		Callback  BsummCB
-		CallAfter time.Duration
 	}
 )
 
@@ -91,89 +82,6 @@ func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, 
 func QueryBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (bool, error) {
 	bcks, err := ListBuckets(bp, qbck, fltPresence)
 	return len(bcks) > 0, err
-}
-
-// GetBucketSummary returns bucket capacity ulitization percentages, sizes (total and min/max/average),
-// and the numbers of objects, both _in_ the cluster and remote
-// GetBucketSummary supports a single specified bucket or multiple buckets, as per `cmn.QueryBcks` query.
-// (e.g., GetBucketSummary with an empty bucket query will return "summary" info for all buckets)
-func GetBucketSummary(bp BaseParams, qbck cmn.QueryBcks, msg *apc.BsummCtrlMsg, args BsummArgs) (res cmn.AllBsummResults, err error) {
-	if msg == nil {
-		msg = &apc.BsummCtrlMsg{ObjCached: true, BckPresent: true}
-	}
-	bp.Method = http.MethodGet
-
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathBuckets.Join(qbck.Name)
-		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = qbck.NewQuery()
-	}
-	if err = _bsumm(reqParams, msg, &res, args); err == nil {
-		sort.Sort(res)
-	}
-	FreeRp(reqParams)
-	return
-}
-
-// Wait/poll bucket-summary:
-// - initiate `apc.ActSummaryBck` (msg.UUID == "").
-// - poll for status != ok
-// - NOTE: no timeout
-// - handle status: ok, accepted, partial-content
-// compare w/ _bsumm
-func _bsumm(reqParams *ReqParams, msg *apc.BsummCtrlMsg, res *cmn.AllBsummResults, args BsummArgs) error {
-	var (
-		uuid         string
-		start, after int64
-		sleep        = xact.MinPollTime
-		actMsg       = apc.ActMsg{Action: apc.ActSummaryBck, Value: msg}
-		body         = cos.MustMarshal(actMsg)
-	)
-	if args.Callback != nil {
-		start = mono.NanoTime()
-		after = start + args.CallAfter.Nanoseconds()
-	}
-	reqParams.Body = body
-	status, err := reqParams.doReqStr(&uuid)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusAccepted {
-		return fmt.Errorf("invalid response code: expecting %d, got %d", http.StatusAccepted, status)
-	}
-	if msg.UUID == "" {
-		msg.UUID = uuid
-		body = cos.MustMarshal(actMsg)
-	}
-
-	time.Sleep(sleep)
-	for i := 0; ; i++ {
-		reqParams.Body = body
-		status, err = reqParams.DoReqAny(res)
-		if err != nil {
-			return err
-		}
-		// callback w/ partial results
-		if args.Callback != nil && (status == http.StatusPartialContent || status == http.StatusOK) {
-			if after == start || mono.NanoTime() >= after {
-				args.Callback(res, status == http.StatusOK)
-			}
-		}
-		if status == http.StatusOK {
-			return nil
-		}
-
-		time.Sleep(sleep)
-		// inc. sleep time if there's nothing at all
-		if i == 8 && status != http.StatusPartialContent {
-			debug.Assert(status == http.StatusAccepted)
-			sleep *= 2
-		} else if i == 16 && status != http.StatusPartialContent {
-			sleep *= 2
-		}
-	}
 }
 
 // ListObjects returns a list of objects in a bucket - a slice of structures in the

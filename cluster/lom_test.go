@@ -76,25 +76,25 @@ var _ = Describe("LOM", func() {
 	bmd := mock.NewBaseBownerMock(
 		meta.NewBck(
 			bucketLocalA, apc.AIS, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumNone}, BID: 1},
 		),
 		meta.NewBck(
 			bucketLocalB, apc.AIS, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, LRU: cmn.LRUConf{Enabled: true}, BID: 2},
 		),
 		meta.NewBck(
 			bucketLocalC, apc.AIS, cmn.NsGlobal,
-			&cmn.BucketProps{
+			&cmn.Bprops{
 				Cksum:  cmn.CksumConf{Type: cos.ChecksumXXHash},
 				LRU:    cmn.LRUConf{Enabled: true},
 				Mirror: cmn.MirrorConf{Enabled: true, Copies: 2},
 				BID:    3,
 			},
 		),
-		meta.NewBck(sameBucketName, apc.AIS, cmn.NsGlobal, &cmn.BucketProps{BID: 4}),
-		meta.NewBck(bucketCloudA, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 5}),
-		meta.NewBck(bucketCloudB, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 6}),
-		meta.NewBck(sameBucketName, apc.AWS, cmn.NsGlobal, &cmn.BucketProps{BID: 7}),
+		meta.NewBck(sameBucketName, apc.AIS, cmn.NsGlobal, &cmn.Bprops{BID: 4}),
+		meta.NewBck(bucketCloudA, apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 5}),
+		meta.NewBck(bucketCloudB, apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 6}),
+		meta.NewBck(sameBucketName, apc.AWS, cmn.NsGlobal, &cmn.Bprops{BID: 7}),
 	)
 
 	BeforeEach(func() {

@@ -225,7 +225,7 @@ func fspathsConfigAddDel(mpath string, add bool) {
 }
 
 func fspathsSave(config *cmn.Config) {
-	toUpdate := &cmn.ConfigToUpdate{FSP: &config.LocalConfig.FSP}
+	toUpdate := &cmn.ConfigToSet{FSP: &config.LocalConfig.FSP}
 	overrideConfig := cmn.GCO.SetLocalFSPaths(toUpdate)
 	if err := cmn.SaveOverrideConfig(config.ConfigDir, overrideConfig); err != nil {
 		debug.AssertNoErr(err)

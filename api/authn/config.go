@@ -45,9 +45,9 @@ type (
 		Default cos.Duration `json:"default_timeout"`
 	}
 	ConfigToUpdate struct {
-		Server *ServerConfToUpdate `json:"auth"`
+		Server *ServerConfToSet `json:"auth"`
 	}
-	ServerConfToUpdate struct {
+	ServerConfToSet struct {
 		Secret       *string `json:"secret"`
 		ExpirePeriod *string `json:"expiration_time"`
 	}

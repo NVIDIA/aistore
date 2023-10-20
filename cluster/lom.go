@@ -163,7 +163,7 @@ func AllocLomFromHdr(hdr *transport.ObjHdr) (lom *LOM, err error) {
 func (lom *LOM) ECEnabled() bool { return lom.Bprops().EC.Enabled }
 func (lom *LOM) IsHRW() bool     { return lom.HrwFQN == lom.FQN } // subj to resilvering
 
-func (lom *LOM) Bprops() *cmn.BucketProps { return lom.bck.Props }
+func (lom *LOM) Bprops() *cmn.Bprops { return lom.bck.Props }
 
 func (lom *LOM) MirrorConf() *cmn.MirrorConf  { return &lom.Bprops().Mirror }
 func (lom *LOM) CksumConf() *cmn.CksumConf    { return lom.bck.CksumConf() }

@@ -21,7 +21,7 @@ type (
 		Get() (bmd *BMD)
 	}
 
-	Buckets    map[string]*cmn.BucketProps
+	Buckets    map[string]*cmn.Bprops
 	Namespaces map[string]Buckets
 	Providers  map[string]Namespaces
 
@@ -59,7 +59,7 @@ func (m *BMD) StringEx() string {
 		m.Version, m.UUID, na, nc, nar, no)
 }
 
-func (m *BMD) Get(bck *Bck) (p *cmn.BucketProps, present bool) {
+func (m *BMD) Get(bck *Bck) (p *cmn.Bprops, present bool) {
 	buckets := m.getBuckets(bck)
 	if buckets != nil {
 		p, present = buckets[bck.Name]
@@ -79,7 +79,7 @@ func (m *BMD) Del(bck *Bck) (deleted bool) {
 	return true
 }
 
-func (m *BMD) Set(bck *Bck, p *cmn.BucketProps) {
+func (m *BMD) Set(bck *Bck, p *cmn.Bprops) {
 	buckets := m.getBuckets(bck)
 	buckets[bck.Name] = p
 }

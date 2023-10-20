@@ -230,16 +230,19 @@ func TestNamespace(t *testing.T) {
 			)
 
 			// Test bucket summary
-			var summaries cmn.AllBsummResults
+			var (
+				summaries cmn.AllBsummResults
+				xids      []string
+			)
 			for _, bck := range locBuckets {
-				summ, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(bck), nil /*bck present true*/, api.BsummArgs{})
+				xid, summ, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(bck),
+					nil /*bck present true*/, api.BsummArgs{})
 				tassert.CheckFatal(t, err)
 				summaries = append(summaries, summ[0])
+				xids = append(xids, xid)
 			}
-			tassert.Errorf(
-				t, len(summaries) == len(locBuckets),
-				"number of summaries (%d) should be %d", len(summaries), len(locBuckets),
-			)
+			tassert.Errorf(t, len(summaries) == len(locBuckets), "%s-%v: number of summaries (%d) should be %d",
+				apc.ActSummaryBck, xids, len(summaries), len(locBuckets))
 
 			bck1Found, bck2Found := false, false
 			for _, summary := range summaries {

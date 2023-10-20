@@ -82,9 +82,9 @@ type (
 		txnID string // transaction UUID
 		bcks  []*meta.Bck
 
-		propsToUpdate *cmn.BucketPropsToUpdate // update existing props
-		revertProps   *cmn.BucketPropsToUpdate // props to revert
-		setProps      *cmn.BucketProps         // new props to set
+		propsToUpdate *cmn.BpropsToSet // update existing props
+		revertProps   *cmn.BpropsToSet // props to revert
+		setProps      *cmn.Bprops      // new props to set
 
 		wait         bool
 		needReMirror bool
@@ -124,7 +124,7 @@ func newClusterUUID() (uuid, created string) {
 // bucketMD //
 //////////////
 
-func (m *bucketMD) add(bck *meta.Bck, p *cmn.BucketProps) bool {
+func (m *bucketMD) add(bck *meta.Bck, p *cmn.Bprops) bool {
 	debug.Assert(apc.IsProvider(bck.Provider))
 	if _, present := m.Get(bck); present {
 		return false
@@ -152,7 +152,7 @@ func (m *bucketMD) del(bck *meta.Bck) (deleted bool) {
 	return true
 }
 
-func (m *bucketMD) set(bck *meta.Bck, p *cmn.BucketProps) {
+func (m *bucketMD) set(bck *meta.Bck, p *cmn.Bprops) {
 	debug.Assert(apc.IsProvider(bck.Provider))
 	prevProps, present := m.Get(bck)
 	if !present {
@@ -187,7 +187,7 @@ func (m *bucketMD) clone() *bucketMD {
 		for ns, buckets := range namespaces {
 			dstBuckets := make(meta.Buckets, len(buckets))
 			for name, p := range buckets {
-				dstProps := &cmn.BucketProps{}
+				dstProps := &cmn.Bprops{}
 				*dstProps = *p
 				dstBuckets[name] = dstProps
 			}
@@ -478,9 +478,9 @@ type bckPropsArgs struct {
 	hdr http.Header // Header with remote bucket properties.
 }
 
-// Convert HEAD(bucket) response to cmn.BucketProps (compare with `defaultBckProps`)
-func remoteBckProps(args bckPropsArgs) (props *cmn.BucketProps, err error) {
-	props = &cmn.BucketProps{}
+// Convert HEAD(bucket) response to cmn.Bprops (compare with `defaultBckProps`)
+func remoteBckProps(args bckPropsArgs) (props *cmn.Bprops, err error) {
+	props = &cmn.Bprops{}
 	err = cmn.IterFields(props, func(tag string, field cmn.IterField) (error, bool) {
 		headerName := textproto.CanonicalMIMEHeaderKey(tag)
 		// skip the missing ones
@@ -497,9 +497,9 @@ func remoteBckProps(args bckPropsArgs) (props *cmn.BucketProps, err error) {
 // (compare with `remoteBckProps` above)
 // See also:
 //   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
-//   - cmn.BucketPropsToUpdate
+//   - cmn.BpropsToSet
 //   - cmn.Bck.DefaultProps
-func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
+func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {
 	config := cmn.GCO.Get()
 	props = args.bck.Bucket().DefaultProps(&config.ClusterConfig)
 	props.SetProvider(args.bck.Provider)
@@ -533,7 +533,7 @@ func defaultBckProps(args bckPropsArgs) (props *cmn.BucketProps) {
 	return
 }
 
-func mergeRemoteBckProps(props *cmn.BucketProps, header http.Header) *cmn.BucketProps {
+func mergeRemoteBckProps(props *cmn.Bprops, header http.Header) *cmn.Bprops {
 	debug.Assert(len(header) > 0)
 	switch props.Provider {
 	case apc.AWS:

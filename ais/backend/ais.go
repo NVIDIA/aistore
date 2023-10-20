@@ -395,7 +395,7 @@ func (*AISBackendProvider) CreateBucket(_ *meta.Bck) (errCode int, err error) {
 func (m *AISBackendProvider) HeadBucket(_ ctx, remoteBck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
 	var (
 		remAis      *remAis
-		p           *cmn.BucketProps
+		p           *cmn.Bprops
 		alias, uuid string
 	)
 	if remAis, alias, uuid, err = m.headRemAis(remoteBck.Ns.UUID); err != nil {

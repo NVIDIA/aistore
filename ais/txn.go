@@ -99,8 +99,8 @@ type (
 		newCopies int64
 	}
 	txnSetBucketProps struct {
-		bprops *cmn.BucketProps
-		nprops *cmn.BucketProps
+		bprops *cmn.Bprops
+		nprops *cmn.Bprops
 		txnBckBase
 	}
 	txnRenameBucket struct {
@@ -529,7 +529,7 @@ func (txn *txnMakeNCopies) String() string {
 // txnSetBucketProps //
 ///////////////////////
 
-func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.BucketProps) (txn *txnSetBucketProps) {
+func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.Bprops) (txn *txnSetBucketProps) {
 	cos.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{bprops: bprops, nprops: nprops}

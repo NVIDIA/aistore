@@ -201,13 +201,14 @@ func TestGetBucketInfo(t *testing.T) {
 		isPresent  bool
 	)
 	if bck.IsRemote() {
-		_, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
+		_, _, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresent = err == nil
 	}
 	for _, fltPresence := range fltPresentEnum {
 		text := fltPresentText[fltPresence]
 		tlog.Logf("%q %s\n", text, strings.Repeat("-", 60-len(text)))
 		args := api.BinfoArgs{
+			UUID:        "",
 			FltPresence: fltPresence,
 		}
 
@@ -218,7 +219,7 @@ func TestGetBucketInfo(t *testing.T) {
 			args.WithRemote = bck.IsRemote()
 		}
 
-		props, info, err := api.GetBucketInfo(baseParams, bck, args)
+		xid, props, info, err := api.GetBucketInfo(baseParams, bck, args)
 		if err != nil {
 			if herr := cmn.Str2HTTPErr(err.Error()); herr != nil {
 				tlog.Logln(herr.TypeCode + ": " + herr.Message)
@@ -236,7 +237,7 @@ func TestGetBucketInfo(t *testing.T) {
 			if info != nil {
 				is = fmt.Sprintf("bucket-summary %+v", info.BsummResult)
 			}
-			tlog.Logf("%s: %s\n", bck.Cname(""), is)
+			tlog.Logf("x-%s[%s] %s: %s\n", apc.ActSummaryBck, xid, bck.Cname(""), is)
 		}
 		if bck.IsRemote() && !isPresent {
 			// undo the side effect of calling api.GetBucketInfo
@@ -245,7 +246,7 @@ func TestGetBucketInfo(t *testing.T) {
 		tlog.Logln("")
 	}
 	if bck.IsRemote() {
-		_, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
+		_, _, _, err := api.GetBucketInfo(baseParams, bck, api.BinfoArgs{FltPresence: apc.FltPresent})
 		isPresentEnd := err == nil
 		tassert.Errorf(t, isPresent == isPresentEnd, "presence in the beginning (%t) != (%t) at the end",
 			isPresent, isPresentEnd)
@@ -288,15 +289,15 @@ func TestCreateWithBucketProps(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		bck        = cmn.Bck{Name: testBucketName, Provider: apc.AIS}
 	)
-	propsToSet := &cmn.BucketPropsToUpdate{
-		Cksum: &cmn.CksumConfToUpdate{
+	propsToSet := &cmn.BpropsToSet{
+		Cksum: &cmn.CksumConfToSet{
 			Type:            apc.String(cos.ChecksumMD5),
 			ValidateWarmGet: apc.Bool(true),
 			EnableReadRange: apc.Bool(true),
 			ValidateColdGet: apc.Bool(false),
 			ValidateObjMove: apc.Bool(true),
 		},
-		WritePolicy: &cmn.WritePolicyConfToUpdate{
+		WritePolicy: &cmn.WritePolicyConfToSet{
 			Data: apc.WPolicy(apc.WriteImmediate),
 			MD:   apc.WPolicy(apc.WriteNever),
 		},
@@ -319,9 +320,9 @@ func TestCreateRemoteBucket(t *testing.T) {
 
 	if bck.IsHDFS() {
 		hdfsBck := cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)}
-		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BucketPropsToUpdate{
-			Extra: &cmn.ExtraToUpdate{
-				HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: apc.String("/")},
+		err := api.CreateBucket(baseParams, hdfsBck, &cmn.BpropsToSet{
+			Extra: &cmn.ExtraToSet{
+				HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.String("/")},
 			},
 		})
 		tassert.CheckFatal(t, err)
@@ -331,15 +332,15 @@ func TestCreateRemoteBucket(t *testing.T) {
 		exists, _ := tools.BucketExists(nil, tools.GetPrimaryURL(), bck)
 		tests := []struct {
 			bck    cmn.Bck
-			props  *cmn.BucketPropsToUpdate
+			props  *cmn.BpropsToSet
 			exists bool
 		}{
 			{bck: bck, exists: exists},
 			{ // If cluster is not built with HDFS support, bucket creation should fail.
 				bck: cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)},
-				props: &cmn.BucketPropsToUpdate{
-					Extra: &cmn.ExtraToUpdate{
-						HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: apc.String("/")},
+				props: &cmn.BpropsToSet{
+					Extra: &cmn.ExtraToSet{
+						HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.String("/")},
 					},
 				},
 			},
@@ -439,9 +440,9 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 		tassert.Fatalf(t, l >= 2, "%s has %d mountpaths, need at least 2", target, l)
 	}
 	tlog.Logf("Create %s(mirrored, write-policy-md=%s)\n", m.bck, mdwrite)
-	propsToSet := &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(true)},
-		WritePolicy: &cmn.WritePolicyConfToUpdate{
+	propsToSet := &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(true)},
+		WritePolicy: &cmn.WritePolicyConfToSet{
 			Data: apc.WPolicy(apc.WriteImmediate),
 			MD:   apc.WPolicy(mdwrite),
 		},
@@ -553,13 +554,13 @@ func TestResetBucketProps(t *testing.T) {
 			Name:     testBucketName,
 			Provider: apc.AIS,
 		}
-		propsToUpdate = &cmn.BucketPropsToUpdate{
-			Cksum: &cmn.CksumConfToUpdate{
+		propsToSet = &cmn.BpropsToSet{
+			Cksum: &cmn.CksumConfToSet{
 				Type:            apc.String(cos.ChecksumNone),
 				ValidateWarmGet: apc.Bool(true),
 				EnableReadRange: apc.Bool(true),
 			},
-			EC: &cmn.ECConfToUpdate{
+			EC: &cmn.ECConfToSet{
 				Enabled:      apc.Bool(false),
 				DataSlices:   apc.Int(1),
 				ParitySlices: apc.Int(2),
@@ -567,7 +568,7 @@ func TestResetBucketProps(t *testing.T) {
 		}
 	)
 	tools.CheckSkip(t, tools.SkipTestArgs{
-		MinTargets: *propsToUpdate.EC.DataSlices + *propsToUpdate.EC.ParitySlices,
+		MinTargets: *propsToSet.EC.DataSlices + *propsToSet.EC.ParitySlices,
 	})
 
 	tools.SetClusterConfig(t, cos.StrKVs{"ec.enabled": "true"})
@@ -582,14 +583,14 @@ func TestResetBucketProps(t *testing.T) {
 	defaultProps, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.SetBucketProps(baseParams, bck, propsToUpdate)
+	_, err = api.SetBucketProps(baseParams, bck, propsToSet)
 	tassert.CheckFatal(t, err)
 
 	p, err := api.HeadBucket(baseParams, bck, true /* don't add */)
 	tassert.CheckFatal(t, err)
 
 	// check that bucket props do get set
-	validateBucketProps(t, propsToUpdate, p)
+	validateBucketProps(t, propsToSet, p)
 	_, err = api.ResetBucketProps(baseParams, bck)
 	tassert.CheckFatal(t, err)
 
@@ -612,12 +613,12 @@ func TestSetInvalidBucketProps(t *testing.T) {
 
 		tests = []struct {
 			name  string
-			props *cmn.BucketPropsToUpdate
+			props *cmn.BpropsToSet
 		}{
 			{
 				name: "humongous number of copies",
-				props: &cmn.BucketPropsToUpdate{
-					Mirror: &cmn.MirrorConfToUpdate{
+				props: &cmn.BpropsToSet{
+					Mirror: &cmn.MirrorConfToSet{
 						Enabled: apc.Bool(true),
 						Copies:  apc.Int64(120),
 					},
@@ -625,8 +626,8 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "too many copies",
-				props: &cmn.BucketPropsToUpdate{
-					Mirror: &cmn.MirrorConfToUpdate{
+				props: &cmn.BpropsToSet{
+					Mirror: &cmn.MirrorConfToSet{
 						Enabled: apc.Bool(true),
 						Copies:  apc.Int64(12),
 					},
@@ -634,8 +635,8 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "humongous number of slices",
-				props: &cmn.BucketPropsToUpdate{
-					EC: &cmn.ECConfToUpdate{
+				props: &cmn.BpropsToSet{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ParitySlices: apc.Int(120),
 					},
@@ -643,8 +644,8 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "too many slices",
-				props: &cmn.BucketPropsToUpdate{
-					EC: &cmn.ECConfToUpdate{
+				props: &cmn.BpropsToSet{
+					EC: &cmn.ECConfToSet{
 						Enabled:      apc.Bool(true),
 						ParitySlices: apc.Int(12),
 					},
@@ -652,9 +653,9 @@ func TestSetInvalidBucketProps(t *testing.T) {
 			},
 			{
 				name: "enable both ec and mirroring",
-				props: &cmn.BucketPropsToUpdate{
-					EC:     &cmn.ECConfToUpdate{Enabled: apc.Bool(true)},
-					Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(true)},
+				props: &cmn.BpropsToSet{
+					EC:     &cmn.ECConfToSet{Enabled: apc.Bool(true)},
+					Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(true)},
 				},
 			},
 		}
@@ -1603,8 +1604,8 @@ func TestBucketSingleProp(t *testing.T) {
 	tlog.Logf("Changing bucket %q properties...\n", m.bck)
 
 	// Enabling EC should set default value for number of slices if it is 0
-	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: apc.Bool(true)},
+	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{Enabled: apc.Bool(true)},
 	})
 	tassert.CheckError(t, err)
 	p, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
@@ -1620,14 +1621,14 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: apc.Bool(false)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{Enabled: apc.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Enabling mirroring should set default value for number of copies if it is 0
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(true)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(true)},
 	})
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
@@ -1640,14 +1641,14 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable mirroring first
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(false)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change a few more bucket properties
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{
 			DataSlices:   apc.Int(dataSlices),
 			ParitySlices: apc.Int(paritySlices),
 			ObjSizeLimit: apc.Int64(objLimit),
@@ -1656,8 +1657,8 @@ func TestBucketSingleProp(t *testing.T) {
 	tassert.CheckError(t, err)
 
 	// Enable EC again
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: apc.Bool(true)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{Enabled: apc.Bool(true)},
 	})
 	tassert.CheckError(t, err)
 	p, err = api.HeadBucket(baseParams, m.bck, true /* don't add */)
@@ -1673,14 +1674,14 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Need to disable EC first
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: apc.Bool(false)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{Enabled: apc.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 
 	// Change mirroring threshold
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Burst: apc.Int(burst)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Burst: apc.Int(burst)},
 	},
 	)
 	tassert.CheckError(t, err)
@@ -1691,8 +1692,8 @@ func TestBucketSingleProp(t *testing.T) {
 	}
 
 	// Disable mirroring
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(false)},
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(false)},
 	})
 	tassert.CheckError(t, err)
 }
@@ -1707,8 +1708,8 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 		Provider: cliBck.Provider,
 	}
 
-	_, err = api.SetBucketProps(baseParams, bck, &cmn.BucketPropsToUpdate{
-		EC: &cmn.ECConfToUpdate{Enabled: apc.Bool(true)},
+	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
+		EC: &cmn.ECConfToSet{Enabled: apc.Bool(true)},
 	})
 	if err == nil {
 		t.Fatalf("Expected SetBucketProps error, but got none.")
@@ -1723,7 +1724,7 @@ func TestSetBucketPropsOfNonexistentBucket(t *testing.T) {
 func TestSetAllBucketPropsOfNonexistentBucket(t *testing.T) {
 	var (
 		baseParams  = tools.BaseAPIParams()
-		bucketProps = &cmn.BucketPropsToUpdate{}
+		bucketProps = &cmn.BpropsToSet{}
 	)
 
 	bucket, err := tools.GenerateNonexistentBucketName(t.Name()+"Bucket", baseParams)
@@ -1812,8 +1813,8 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	{
 		baseParams := tools.BaseAPIParams()
-		xid, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-			Mirror: &cmn.MirrorConfToUpdate{
+		xid, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+			Mirror: &cmn.MirrorConfToSet{
 				Enabled: apc.Bool(true),
 			},
 		})
@@ -1885,12 +1886,12 @@ func TestRemoteBucketMirror(t *testing.T) {
 	m.remotePuts(true /*evict*/)
 
 	// enable mirror
-	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(true)},
+	_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(true)},
 	})
 	tassert.CheckFatal(t, err)
-	defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{Enabled: apc.Bool(false)},
+	defer api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{Enabled: apc.Bool(false)},
 	})
 
 	// list
@@ -1934,7 +1935,7 @@ func TestBucketReadOnly(t *testing.T) {
 	// make bucket read-only
 	// NOTE: must allow PATCH - otherwise api.SetBucketProps a few lines down below won't work
 	aattrs := apc.AccessRO | apc.AcePATCH
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: apc.AccAttrs(aattrs)})
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Access: apc.AccAttrs(aattrs)})
 	tassert.CheckFatal(t, err)
 
 	m.init(true /*cleanup*/)
@@ -1942,7 +1943,7 @@ func TestBucketReadOnly(t *testing.T) {
 	tassert.Fatalf(t, m.numPutErrs == m.num, "num failed PUTs %d, expecting %d", m.numPutErrs, m.num)
 
 	// restore write access
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{Access: apc.AccAttrs(p.Access)})
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{Access: apc.AccAttrs(p.Access)})
 	tassert.CheckFatal(t, err)
 
 	// write some more and destroy
@@ -2237,7 +2238,7 @@ func TestRenameBucketWithBackend(t *testing.T) {
 	)
 
 	tools.CreateBucket(t, proxyURL, bck,
-		&cmn.BucketPropsToUpdate{BackendBck: &cmn.BackendBckToUpdate{
+		&cmn.BpropsToSet{BackendBck: &cmn.BackendBckToSet{
 			Name:     apc.String(cliBck.Name),
 			Provider: apc.String(cliBck.Provider),
 		}}, true /*cleanup*/)
@@ -2949,8 +2950,8 @@ func TestBackendBucket(t *testing.T) {
 	tassert.Fatalf(t, len(remoteObjList.Entries) > 0, "empty object list")
 
 	// Connect backend bucket to a aisBck
-	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
-		BackendBck: &cmn.BackendBckToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BpropsToSet{
+		BackendBck: &cmn.BackendBckToSet{
 			Name:     apc.String(remoteBck.Name),
 			Provider: apc.String(remoteBck.Provider),
 		},
@@ -2995,8 +2996,8 @@ func TestBackendBucket(t *testing.T) {
 
 	// Disconnect backend bucket while denying (the default) apc.AceDisconnectedBackend permission
 	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
-	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BucketPropsToUpdate{
-		BackendBck: &cmn.BackendBckToUpdate{
+	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BpropsToSet{
+		BackendBck: &cmn.BackendBckToSet{
 			Name:     apc.String(""),
 			Provider: apc.String(""),
 		},
@@ -3093,12 +3094,12 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 
 	{
 		if mirrored {
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-				Cksum: &cmn.CksumConfToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
 					Type:            apc.String(cksumType),
 					ValidateWarmGet: apc.Bool(true),
 				},
-				Mirror: &cmn.MirrorConfToUpdate{
+				Mirror: &cmn.MirrorConfToSet{
 					Enabled: apc.Bool(true),
 					Copies:  apc.Int64(copyCnt),
 				},
@@ -3108,12 +3109,12 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			if m.smap.CountActiveTs() < parityCnt+1 {
 				t.Fatalf("Not enough targets to run %s test, must be at least %d", t.Name(), parityCnt+1)
 			}
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-				Cksum: &cmn.CksumConfToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
 					Type:            apc.String(cksumType),
 					ValidateWarmGet: apc.Bool(true),
 				},
-				EC: &cmn.ECConfToUpdate{
+				EC: &cmn.ECConfToSet{
 					Enabled:      apc.Bool(true),
 					ObjSizeLimit: apc.Int64(cos.GiB), // only slices
 					DataSlices:   apc.Int(1),
@@ -3122,8 +3123,8 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 			})
 			tassert.CheckFatal(t, err)
 		} else {
-			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-				Cksum: &cmn.CksumConfToUpdate{
+			_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+				Cksum: &cmn.CksumConfToSet{
 					Type:            apc.String(cksumType),
 					ValidateWarmGet: apc.Bool(true),
 				},
@@ -3323,20 +3324,20 @@ func TestBucketListAndSummary(t *testing.T) {
 
 			if test.summary {
 				msg := &apc.BsummCtrlMsg{ObjCached: test.cached}
-				summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg, api.BsummArgs{})
+				xid, summaries, err := api.GetBucketSummary(baseParams, cmn.QueryBcks(m.bck), msg, api.BsummArgs{})
 				tassert.CheckFatal(t, err)
 
 				if len(summaries) == 0 {
-					t.Fatalf("summary for bucket %q should exist", m.bck)
+					t.Fatalf("x-%s[%s] summary for bucket %q should exist", apc.ActSummaryBck, xid, m.bck)
 				}
 				if len(summaries) != 1 {
-					t.Fatalf("number of summaries (%d) is larger than 1", len(summaries))
+					t.Fatalf("x-%s[%s] number of summaries (%d) is larger than 1", apc.ActSummaryBck, xid, len(summaries))
 				}
 
 				summary := summaries[0]
 				if summary.ObjCount.Remote+summary.ObjCount.Present != uint64(expectedFiles) {
-					t.Errorf("%s: number of objects in summary (%+v) differs from expected (%d)",
-						m.bck, summary.ObjCount, expectedFiles)
+					t.Errorf("x-%s[%s] %s: number of objects in summary (%+v) differs from expected (%d)",
+						apc.ActSummaryBck, xid, m.bck, summary.ObjCount, expectedFiles)
 				}
 			} else {
 				msg := &apc.LsoMsg{PageSize: uint(min(m.num/3, 256))} // mult. pages

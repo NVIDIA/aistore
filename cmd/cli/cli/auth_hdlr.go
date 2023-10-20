@@ -717,7 +717,7 @@ func showAuthConfigHandler(c *cli.Context) (err error) {
 }
 
 func authNConfigFromArgs(c *cli.Context) (conf *authn.ConfigToUpdate, err error) {
-	conf = &authn.ConfigToUpdate{Server: &authn.ServerConfToUpdate{}}
+	conf = &authn.ConfigToUpdate{Server: &authn.ServerConfToSet{}}
 	items := c.Args()
 	for i := 0; i < len(items); {
 		name, value := items.Get(i), items.Get(i+1)

@@ -265,8 +265,8 @@ func SetClusterConfig(bp BaseParams, nvs cos.StrKVs, transient bool) error {
 }
 
 // SetClusterConfigUsingMsg sets the cluster-wide configuration
-// using the `cmn.ConfigToUpdate` parameter provided.
-func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToUpdate, transient bool) error {
+// using the `cmn.ConfigToSet` parameter provided.
+func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToSet, transient bool) error {
 	var (
 		q   url.Values
 		msg = apc.ActMsg{Action: apc.ActSetConfig, Value: configToUpdate}

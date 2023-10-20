@@ -75,7 +75,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		bmd    = mock.NewBaseBownerMock()
 		bck    = meta.NewBck(
 			"test", apc.GCP, cmn.NsGlobal,
-			&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
+			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
 		tMock = mock.NewTarget(bmd)
 	)

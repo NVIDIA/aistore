@@ -40,11 +40,11 @@ var _ = Describe("LOM Xattributes", func() {
 		bmdMock       = mock.NewBaseBownerMock(
 			meta.NewBck(
 				bucketLocal, apc.AIS, cmn.NsGlobal,
-				&cmn.BucketProps{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},
+				&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}, BID: 201},
 			),
 			meta.NewBck(
 				bucketCached, apc.AIS, cmn.NsGlobal,
-				&cmn.BucketProps{
+				&cmn.Bprops{
 					Cksum:       cmn.CksumConf{Type: cos.ChecksumXXHash},
 					WritePolicy: cmn.WritePolicyConf{Data: apc.WriteImmediate, MD: apc.WriteNever},
 					BID:         202,

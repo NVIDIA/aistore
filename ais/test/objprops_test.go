@@ -493,8 +493,8 @@ func TestObjProps(t *testing.T) {
 			defaultBckProp, err := api.HeadBucket(baseParams, m.bck, true /* don't add */)
 			tassert.CheckFatal(t, err)
 
-			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-				Versioning: &cmn.VersionConfToUpdate{
+			_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+				Versioning: &cmn.VersionConfToSet{
 					Enabled: apc.Bool(test.verEnabled),
 				},
 			})
@@ -511,8 +511,8 @@ func TestObjProps(t *testing.T) {
 			}
 			if test.bucketType == typeCloud || test.bucketType == typeRemoteAIS {
 				m.remotePuts(test.evict)
-				defer api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-					Versioning: &cmn.VersionConfToUpdate{
+				defer api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+					Versioning: &cmn.VersionConfToSet{
 						Enabled: apc.Bool(defaultBckProp.Versioning.Enabled),
 					},
 				})

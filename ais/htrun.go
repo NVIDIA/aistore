@@ -451,7 +451,7 @@ func (h *htrun) loadSmap() (smap *smapX, reliable bool) {
 func (h *htrun) setDaemonConfigMsg(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, query url.Values) {
 	var (
 		transient = cos.IsParseBool(query.Get(apc.ActTransient))
-		toUpdate  = &cmn.ConfigToUpdate{}
+		toUpdate  = &cmn.ConfigToSet{}
 	)
 	if err := cos.MorphMarshal(msg.Value, toUpdate); err != nil {
 		h.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, h, msg.Action, msg.Value, err)
@@ -466,7 +466,7 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 	var (
 		query     = r.URL.Query()
 		transient = cos.IsParseBool(query.Get(apc.ActTransient))
-		toUpdate  = &cmn.ConfigToUpdate{}
+		toUpdate  = &cmn.ConfigToSet{}
 	)
 	if err := toUpdate.FillFromQuery(query); err != nil {
 		h.writeErr(w, r, err)

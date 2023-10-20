@@ -23,7 +23,7 @@ import (
 )
 
 // Creates new ais bucket
-func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BucketPropsToUpdate, dontHeadRemote bool) (err error) {
+func createBucket(c *cli.Context, bck cmn.Bck, props *cmn.BpropsToSet, dontHeadRemote bool) (err error) {
 	if err = api.CreateBucket(apiBP, bck, props, dontHeadRemote); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok {
 			if herr.Status == http.StatusConflict {
@@ -301,7 +301,7 @@ validate:
 func showBucketProps(c *cli.Context) (err error) {
 	var (
 		bck cmn.Bck
-		p   *cmn.BucketProps
+		p   *cmn.Bprops
 	)
 
 	if c.NArg() > 2 {
@@ -349,7 +349,7 @@ func showBucketProps(c *cli.Context) (err error) {
 	return headBckTable(c, p, defProps, section)
 }
 
-func headBckTable(c *cli.Context, props, defProps *cmn.BucketProps, section string) error {
+func headBckTable(c *cli.Context, props, defProps *cmn.Bprops, section string) error {
 	var (
 		defList nvpairList
 		colored = !cfg.NoColor

@@ -258,7 +258,7 @@ func isFmtJSON(nvs cos.StrKVs) (val string, ans bool, err error) {
 
 // TODO: remove switch w/ assorted hardcoded sections - use reflection
 func setcfg(c *cli.Context, nvs cos.StrKVs) error {
-	toUpdate := &cmn.ConfigToUpdate{}
+	toUpdate := &cmn.ConfigToSet{}
 	for k, v := range nvs {
 		switch {
 		case k == "backend" || strings.HasPrefix(k, "backend."):

@@ -15,7 +15,7 @@ const (
 	HeaderPrefix = "ais-"
 
 	// Bucket props headers.
-	HdrBucketProps      = HeaderPrefix + "bucket-props"       // => cmn.BucketProps
+	HdrBucketProps      = HeaderPrefix + "bucket-props"       // => cmn.Bprops
 	HdrBucketSumm       = HeaderPrefix + "bucket-summ"        // => cmn.BsummResult (see also: QparamFltPresence)
 	HdrBucketVerEnabled = HeaderPrefix + "versioning-enabled" // Enable/disable object versioning in a bucket.
 	HdrBucketCreated    = HeaderPrefix + "created"            // Bucket creation time.

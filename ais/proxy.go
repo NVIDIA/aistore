@@ -1431,7 +1431,7 @@ func (p *proxy) _bcr(w http.ResponseWriter, r *http.Request, query url.Values, m
 	}
 	// props-to-update at creation time
 	if msg.Value != nil {
-		propsToUpdate := cmn.BucketPropsToUpdate{}
+		propsToUpdate := cmn.BpropsToSet{}
 		if err := cos.MorphMarshal(msg.Value, &propsToUpdate); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
@@ -1818,7 +1818,7 @@ func (p *proxy) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	var (
-		bprops *cmn.BucketProps
+		bprops *cmn.Bprops
 		bmd    = p.owner.bmd.get()
 	)
 	bprops, bckArgs.isPresent = bmd.Get(bck)
@@ -1861,9 +1861,9 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 	var (
 		err           error
 		msg           *apc.ActMsg
-		propsToUpdate cmn.BucketPropsToUpdate
+		propsToUpdate cmn.BpropsToSet
 		xid           string
-		nprops        *cmn.BucketProps // complete instance of bucket props with propsToUpdate changes
+		nprops        *cmn.Bprops // complete instance of bucket props with propsToUpdate changes
 	)
 	if err = p.parseReq(w, r, apireq); err != nil {
 		return
@@ -1912,7 +1912,7 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 			return
 		}
 	}
-	if xid, err = p.setBucketProps(msg, bck, nprops); err != nil {
+	if xid, err = p.setBprops(msg, bck, nprops); err != nil {
 		p.writeErr(w, r, err)
 		return
 	}

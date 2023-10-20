@@ -733,19 +733,19 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 func (m *ioContext) setNonDefaultBucketProps() {
 	baseParams := tools.BaseAPIParams()
 	copies := int64(rand.Intn(2))
-	props := &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{
+	props := &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{
 			Enabled: apc.Bool(copies > 0),
 			Copies:  apc.Int64(copies),
 		},
-		Cksum: &cmn.CksumConfToUpdate{
+		Cksum: &cmn.CksumConfToSet{
 			Type:            apc.String(cos.ChecksumSHA512),
 			EnableReadRange: apc.Bool(true),
 			ValidateWarmGet: apc.Bool(true),
 			ValidateColdGet: apc.Bool(false),
 		},
-		Extra: &cmn.ExtraToUpdate{
-			HDFS: &cmn.ExtraPropsHDFSToUpdate{RefDirectory: apc.String("/abc")},
+		Extra: &cmn.ExtraToSet{
+			HDFS: &cmn.ExtraPropsHDFSToSet{RefDirectory: apc.String("/abc")},
 		},
 	}
 	_, err := api.SetBucketProps(baseParams, m.bck, props)
@@ -758,7 +758,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		bck        cmn.Bck
 		backendBck cmn.Bck
 		skipArgs   tools.SkipTestArgs
-		props      *cmn.BucketPropsToUpdate
+		props      *cmn.BpropsToSet
 	}{
 		{
 			name: "local",
@@ -795,8 +795,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		{
 			name: "local_3_copies",
 			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
-			props: &cmn.BucketPropsToUpdate{
-				Mirror: &cmn.MirrorConfToUpdate{
+			props: &cmn.BpropsToSet{
+				Mirror: &cmn.MirrorConfToSet{
 					Enabled: apc.Bool(true),
 					Copies:  apc.Int64(3),
 				},
@@ -806,8 +806,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 		{
 			name: "local_ec_2_2",
 			bck:  cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
-			props: &cmn.BucketPropsToUpdate{
-				EC: &cmn.ECConfToUpdate{
+			props: &cmn.BpropsToSet{
+				EC: &cmn.ECConfToSet{
 					DataSlices:   apc.Int(2),
 					ParitySlices: apc.Int(2),
 					ObjSizeLimit: apc.Int64(0),

@@ -166,7 +166,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 	//   (once done, `ais config node ... inherited log` will show "3 (modules: ec,xs)")
 	if daemon.cli.confCustom != "" {
 		var (
-			toUpdate = &cmn.ConfigToUpdate{}
+			toUpdate = &cmn.ConfigToSet{}
 			kvs      = strings.Split(daemon.cli.confCustom, ",")
 		)
 		if err := toUpdate.FillFromKVS(kvs); err != nil {

@@ -320,7 +320,7 @@ func newTargetLRUMock() *mock.TargetMock {
 		bmdMock = mock.NewBaseBownerMock(
 			meta.NewBck(
 				bucketName, apc.AIS, cmn.NsGlobal,
-				&cmn.BucketProps{
+				&cmn.Bprops{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: true},
 					Access: apc.AccessAll,
@@ -329,7 +329,7 @@ func newTargetLRUMock() *mock.TargetMock {
 			),
 			meta.NewBck(
 				bucketNameAnother, apc.AIS, cmn.NsGlobal,
-				&cmn.BucketProps{
+				&cmn.Bprops{
 					Cksum:  cmn.CksumConf{Type: cos.ChecksumNone},
 					LRU:    cmn.LRUConf{Enabled: false},
 					Access: apc.AccessAll,

@@ -1571,8 +1571,8 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Step 2: Make the bucket redundant
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{
 			Enabled: apc.Bool(true),
 			Copies:  apc.Int64(int64(copies)),
 		},
@@ -1633,8 +1633,8 @@ func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 
 	// Make the bucket n-copy mirrored
-	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BucketPropsToUpdate{
-		Mirror: &cmn.MirrorConfToUpdate{
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{
+		Mirror: &cmn.MirrorConfToSet{
 			Enabled: apc.Bool(true),
 			Copies:  apc.Int64(int64(mpathCount)),
 		},

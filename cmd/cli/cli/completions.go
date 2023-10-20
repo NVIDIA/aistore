@@ -427,7 +427,7 @@ func manyBucketsCompletions(additionalCompletions []cli.BashCompleteFunc, firstB
 }
 
 func bpropCompletions(c *cli.Context) {
-	err := cmn.IterFields(&cmn.BucketPropsToUpdate{}, func(tag string, _ cmn.IterField) (error, bool) {
+	err := cmn.IterFields(&cmn.BpropsToSet{}, func(tag string, _ cmn.IterField) (error, bool) {
 		if !cos.AnyHasPrefixInSlice(tag, c.Args()) {
 			if bpropsFilterExtra(c, tag) {
 				fmt.Println(tag)
@@ -460,7 +460,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 		return
 	} else if c.NArg() == 1 {
 		var props []string
-		err := cmn.IterFields(cmn.BucketProps{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
+		err := cmn.IterFields(cmn.Bprops{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
 			section := strings.Split(uniqueTag, ".")[0]
 			props = append(props, section)
 			if flagIsSet(c, verboseFlag) {
@@ -726,7 +726,7 @@ func oneClusterCompletions(c *cli.Context) {
 
 func authNConfigPropList() []string {
 	propList := []string{}
-	emptyCfg := authn.ConfigToUpdate{Server: &authn.ServerConfToUpdate{}}
+	emptyCfg := authn.ConfigToUpdate{Server: &authn.ServerConfToSet{}}
 	cmn.IterFields(emptyCfg, func(tag string, field cmn.IterField) (error, bool) {
 		propList = append(propList, tag)
 		return nil, false
