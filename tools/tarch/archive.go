@@ -99,7 +99,7 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 	aw := archive.NewWriter(ext, w, nil, &archive.Opts{TarFormat: tarFormat})
 	defer aw.Fini()
 	for i := 0; i < fileCnt; i++ {
-		fileName := fmt.Sprintf("%d", rand.Int()) // generate random names
+		fileName := strconv.Itoa(rand.Int()) // generate random names
 		if err := addBufferToArch(aw, fileName+".txt", fileSize, nil); err != nil {
 			return err
 		}

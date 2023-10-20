@@ -7,10 +7,10 @@ package jsp_test
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -135,7 +135,7 @@ func TestDecodeAndEncodeFuzz(t *testing.T) {
 		err := jsp.Encode(b, x, opts)
 		tassert.CheckFatal(t, err)
 
-		_, err = jsp.Decode(b, &v, opts, fmt.Sprintf("%d", i))
+		_, err = jsp.Decode(b, &v, opts, strconv.Itoa(i))
 		tassert.CheckFatal(t, err)
 
 		tassert.Fatalf(t, x == v, "strings are not equal, (got: %+v, expected: %+v)", x, v)

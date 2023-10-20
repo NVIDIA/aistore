@@ -1,13 +1,13 @@
 // Package hk provides mechanism for registering cleanup
 // functions which are invoked at specified intervals.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package hk_test
 
 import (
-	"fmt"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -195,7 +195,7 @@ var _ = Describe("Housekeeper", func() {
 
 		for i := 0; i < actionCnt; i++ {
 			index := i
-			hk.Reg(fmt.Sprintf("%d", index), func() time.Duration {
+			hk.Reg(strconv.Itoa(index), func() time.Duration {
 				if fired[index] == -1 {
 					fired[index] = counter.Inc() - 1
 				}

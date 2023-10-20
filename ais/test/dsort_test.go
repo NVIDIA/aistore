@@ -1521,7 +1521,7 @@ func TestDsortManipulateMountpathDuringPhases(t *testing.T) {
 		t, dsortTestSpec{p: false, types: dsorterTypes, phases: dsortPhases},
 		func(dsorterType, phase string, t *testing.T) {
 			for _, adding := range []bool{false, true} {
-				t.Run(fmt.Sprintf("%v", adding), func(t *testing.T) {
+				t.Run(strconv.FormatBool(adding), func(t *testing.T) {
 					var (
 						m = &ioContext{
 							t: t,

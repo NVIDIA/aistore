@@ -267,8 +267,8 @@ func TestDefaultBucketProps(t *testing.T) {
 	})
 	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":       "false",
-		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
-		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
+		"ec.data_slices":   strconv.Itoa(globalConfig.EC.DataSlices),
+		"ec.parity_slices": strconv.Itoa(globalConfig.EC.ParitySlices),
 	})
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -574,8 +574,8 @@ func TestResetBucketProps(t *testing.T) {
 	tools.SetClusterConfig(t, cos.StrKVs{"ec.enabled": "true"})
 	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"ec.enabled":       "false",
-		"ec.data_slices":   fmt.Sprintf("%d", globalConfig.EC.DataSlices),
-		"ec.parity_slices": fmt.Sprintf("%d", globalConfig.EC.ParitySlices),
+		"ec.data_slices":   strconv.Itoa(globalConfig.EC.DataSlices),
+		"ec.parity_slices": strconv.Itoa(globalConfig.EC.ParitySlices),
 	})
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)

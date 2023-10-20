@@ -1,6 +1,6 @@
 // Package aisloader
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
 package aisloader
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func printUsage(f *flag.FlagSet) {
 // prettyNumber converts a number to format like 1,234,567
 func prettyNumber(n int64) string {
 	if n < 1000 {
-		return fmt.Sprintf("%d", n)
+		return strconv.FormatInt(n, 10)
 	}
 	return fmt.Sprintf("%s,%03d", prettyNumber(n/1000), n%1000)
 }

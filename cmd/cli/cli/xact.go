@@ -133,27 +133,27 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 		nvpair{Name: ".bck", Value: snap.Bck.String()},
 		nvpair{Name: ".start", Value: fmtTime(snap.StartTime)},
 		nvpair{Name: ".end", Value: fmtTime(snap.EndTime)},
-		nvpair{Name: ".aborted", Value: fmt.Sprintf("%t", snap.AbortedX)},
+		nvpair{Name: ".aborted", Value: strconv.FormatBool(snap.AbortedX)},
 		nvpair{Name: ".state", Value: teb.FmtXactStatus(snap)},
 	)
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
 		printtedVal := teb.FmtSize(snap.Stats.Bytes, units, 2)
 		props = append(props,
-			nvpair{Name: "loc.obj.n", Value: fmt.Sprintf("%d", snap.Stats.Objs)},
+			nvpair{Name: "loc.obj.n", Value: strconv.FormatInt(snap.Stats.Objs, 10)},
 			nvpair{Name: "loc.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.InObjs != 0 || snap.Stats.InBytes != 0 {
 		printtedVal := teb.FmtSize(snap.Stats.InBytes, units, 2)
 		props = append(props,
-			nvpair{Name: "in.obj.n", Value: fmt.Sprintf("%d", snap.Stats.InObjs)},
+			nvpair{Name: "in.obj.n", Value: strconv.FormatInt(snap.Stats.InObjs, 10)},
 			nvpair{Name: "in.obj.size", Value: printtedVal},
 		)
 	}
 	if snap.Stats.Objs != 0 || snap.Stats.Bytes != 0 {
 		printtedVal := teb.FmtSize(snap.Stats.OutBytes, units, 2)
 		props = append(props,
-			nvpair{Name: "out.obj.n", Value: fmt.Sprintf("%d", snap.Stats.OutObjs)},
+			nvpair{Name: "out.obj.n", Value: strconv.FormatInt(snap.Stats.OutObjs, 10)},
 			nvpair{Name: "out.obj.size", Value: printtedVal},
 		)
 	}

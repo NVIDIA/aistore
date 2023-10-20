@@ -107,7 +107,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		case stats.KindThroughput, stats.KindComputedThroughput:
 			return fmt.Sprintf("%dB/s", value)
 		default:
-			return fmt.Sprintf("%d", value)
+			return strconv.FormatInt(value, 10)
 		}
 	case "", cos.UnitsIEC:
 		switch kind {
@@ -116,7 +116,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		case stats.KindThroughput, stats.KindComputedThroughput:
 			return cos.ToSizeIEC(value, 2) + "/s"
 		default:
-			return fmt.Sprintf("%d", value)
+			return strconv.FormatInt(value, 10)
 		}
 	case cos.UnitsSI:
 		switch kind {
@@ -125,7 +125,7 @@ func FmtStatValue(name, kind string, value int64, units string) string {
 		case stats.KindThroughput, stats.KindComputedThroughput:
 			return toSizeSI(value, 2) + "/s"
 		default:
-			return fmt.Sprintf("%d", value)
+			return strconv.FormatInt(value, 10)
 		}
 	}
 	debug.Assert(false, units)

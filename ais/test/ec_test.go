@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -805,7 +806,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
 					tools.SetClusterConfig(t, cos.StrKVs{
-						"ec.disk_only": fmt.Sprintf("%t", useDisk),
+						"ec.disk_only": strconv.FormatBool(useDisk),
 					})
 					defer tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": "false",
@@ -887,7 +888,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 			t.Run(testName, func(t *testing.T) {
 				if useDisk {
 					tools.SetClusterConfig(t, cos.StrKVs{
-						"ec.disk_only": fmt.Sprintf("%t", useDisk),
+						"ec.disk_only": strconv.FormatBool(useDisk),
 					})
 					defer tools.SetClusterConfig(t, cos.StrKVs{
 						"ec.disk_only": "false",

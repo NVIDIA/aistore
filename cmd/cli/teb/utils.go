@@ -6,6 +6,7 @@ package teb
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,7 +65,7 @@ func FmtCopies(copies int) string {
 	if copies == 0 {
 		return unknownVal
 	}
-	return fmt.Sprint(copies)
+	return strconv.Itoa(copies)
 }
 
 // FmtEC formats EC data (DataSlices, ParitySlices, IsECCopy) into a
@@ -137,7 +138,7 @@ func fmtProxiesSumm(smap *meta.Smap) string {
 	une := smap.CountNonElectable()
 	if une == 0 {
 		if cnt == 1 {
-			return fmt.Sprintf("%d", cnt)
+			return strconv.Itoa(cnt)
 		}
 		return fmt.Sprintf("%d (all electable)", cnt)
 	}

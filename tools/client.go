@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"path"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -334,7 +335,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 
 	for i := 0; i < args.ObjCnt; i++ {
 		if args.Ordered {
-			objNames = append(objNames, path.Join(args.ObjPath, fmt.Sprintf("%d", i)))
+			objNames = append(objNames, path.Join(args.ObjPath, strconv.Itoa(i)))
 		} else {
 			objNames = append(objNames, path.Join(args.ObjPath, trand.String(16)))
 		}

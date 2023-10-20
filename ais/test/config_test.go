@@ -1,11 +1,10 @@
 // Package integration contains AIS integration tests.
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package integration
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -34,9 +33,9 @@ func TestConfig(t *testing.T) {
 		updTime          = time.Second * 20
 		configRegression = map[string]string{
 			"periodic.stats_time":   updTime.String(),
-			"space.cleanupwm":       fmt.Sprintf("%d", cleanupWM),
-			"space.lowwm":           fmt.Sprintf("%d", lowWM),
-			"space.highwm":          fmt.Sprintf("%d", highWM),
+			"space.cleanupwm":       strconv.Itoa(int(cleanupWM)),
+			"space.lowwm":           strconv.Itoa(int(lowWM)),
+			"space.highwm":          strconv.Itoa(int(highWM)),
 			"lru.enabled":           "true",
 			"lru.capacity_upd_time": updTime.String(),
 			"lru.dont_evict_time":   updTime.String(),
@@ -48,9 +47,9 @@ func TestConfig(t *testing.T) {
 	)
 	defer tools.SetClusterConfig(t, cos.StrKVs{
 		"periodic.stats_time":   oconfig.Periodic.StatsTime.String(),
-		"space.cleanupwm":       fmt.Sprintf("%d", oconfig.Space.CleanupWM),
-		"space.lowwm":           fmt.Sprintf("%d", oconfig.Space.LowWM),
-		"space.highwm":          fmt.Sprintf("%d", oconfig.Space.HighWM),
+		"space.cleanupwm":       strconv.Itoa(int(oconfig.Space.CleanupWM)),
+		"space.lowwm":           strconv.Itoa(int(oconfig.Space.LowWM)),
+		"space.highwm":          strconv.Itoa(int(oconfig.Space.HighWM)),
 		"lru.enabled":           strconv.FormatBool(oconfig.LRU.Enabled),
 		"lru.capacity_upd_time": oconfig.LRU.CapacityUpdTime.String(),
 		"lru.dont_evict_time":   oconfig.LRU.DontEvictTime.String(),
@@ -115,7 +114,7 @@ func TestConfig(t *testing.T) {
 		t.Errorf("lru.enabled was not set properly: %v, should be %v",
 			nlruconfig.Enabled, pt)
 	} else {
-		tools.SetClusterConfig(t, cos.StrKVs{"lru.enabled": fmt.Sprintf("%v", olruconfig.Enabled)})
+		tools.SetClusterConfig(t, cos.StrKVs{"lru.enabled": strconv.FormatBool(olruconfig.Enabled)})
 	}
 }
 
@@ -199,7 +198,8 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 
 	// Override cluster config on the selected proxy
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(),
+		cos.StrKVs{"disk.disk_util_low_wm": strconv.FormatInt(newLowWM, 10)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
@@ -223,7 +223,8 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 		errWMConfigNotExpected, newLowWM, daemonConfig.Disk.DiskUtilLowWM)
 
 	// Reset node config.
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", config.Disk.DiskUtilLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(),
+		cos.StrKVs{"disk.disk_util_low_wm": strconv.FormatInt(config.Disk.DiskUtilLowWM, 10)})
 	tassert.CheckFatal(t, err)
 }
 
@@ -306,7 +307,8 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 
 	// Override a cluster config on daemon
 	newLowWM := config.Disk.DiskUtilLowWM - 10
-	err = api.SetDaemonConfig(baseParams, proxy.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+	err = api.SetDaemonConfig(baseParams, proxy.ID(),
+		cos.StrKVs{"disk.disk_util_low_wm": strconv.FormatInt(newLowWM, 10)})
 	tassert.CheckFatal(t, err)
 
 	daemonConfig := tools.GetDaemonConfig(t, proxy)
@@ -338,7 +340,8 @@ func TestConfigOverrideAndResetCluster(t *testing.T) {
 	primary, err := tools.GetPrimaryProxy(proxyURL)
 	tassert.CheckFatal(t, err)
 	for _, node := range []*meta.Snode{primary, proxy} {
-		err = api.SetDaemonConfig(baseParams, node.ID(), cos.StrKVs{"disk.disk_util_low_wm": fmt.Sprintf("%d", newLowWM)})
+		err = api.SetDaemonConfig(baseParams, node.ID(),
+			cos.StrKVs{"disk.disk_util_low_wm": strconv.FormatInt(newLowWM, 10)})
 		tassert.CheckFatal(t, err)
 
 		daemonConfig = tools.GetDaemonConfig(t, node)

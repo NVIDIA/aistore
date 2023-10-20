@@ -8,6 +8,7 @@ package shard
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -57,7 +58,7 @@ func NewMD5KeyExtractor() (KeyExtractor, error) {
 }
 
 func (ke *md5KeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
-	s := fmt.Sprintf("%x", ke.h.Sum([]byte(ske.name)))
+	s := hex.EncodeToString(ke.h.Sum([]byte(ske.name)))
 	ke.h.Reset()
 	return s, nil
 }

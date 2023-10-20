@@ -1,6 +1,6 @@
 // Package main
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -32,7 +32,8 @@ type DiskStat struct {
 
 func timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
-	fmt.Println(strings.Join([]string{time.Now().Format(time.RFC3339Nano), name, fmt.Sprintf("%v", elapsed.Nanoseconds())}, ","))
+	fmt.Println(strings.Join([]string{time.Now().Format(time.RFC3339Nano), name,
+		strconv.FormatInt(elapsed.Nanoseconds(), 10)}, ","))
 }
 
 func GetDiskstats() (output map[string]DiskStat) {

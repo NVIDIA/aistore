@@ -5,7 +5,6 @@
 package integration
 
 import (
-	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -964,7 +963,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			allMps[target.ID()] = mpList
 
-			mountpath := filepath.Join(testMpath, fmt.Sprintf("%d", idx))
+			mountpath := filepath.Join(testMpath, strconv.Itoa(idx))
 			cos.CreateDir(mountpath)
 			err = api.AttachMountpath(baseParams, target, mountpath, true /*force*/)
 			tassert.CheckFatal(t, err)
@@ -987,7 +986,7 @@ func TestAttachDetachMountpathAllTargets(t *testing.T) {
 		}
 	} else {
 		for idx, target := range targets {
-			mountpath := filepath.Join(testMpath, fmt.Sprintf("%d", idx))
+			mountpath := filepath.Join(testMpath, strconv.Itoa(idx))
 			os.RemoveAll(mountpath)
 			if err := api.DetachMountpath(baseParams, target, mountpath, false /*dont-resil*/); err != nil {
 				t.Error(err.Error())

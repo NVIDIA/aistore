@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -28,22 +28,25 @@ type (
 ///////////////////
 
 func ParseQuantity(quantity string) (ParsedQuantity, error) {
+	var (
+		idx     int
+		number  string
+		parsedQ ParsedQuantity
+	)
 	quantity = strings.ReplaceAll(quantity, " ", "")
-	idx := 0
-	number := ""
 	for ; idx < len(quantity) && unicode.IsDigit(rune(quantity[idx])); idx++ {
 		number += string(quantity[idx])
 	}
 
-	parsedQ := ParsedQuantity{}
-	if value, err := strconv.Atoi(number); err != nil {
+	value, err := strconv.Atoi(number)
+	if err != nil {
 		return parsedQ, ErrQuantityUsage
-	} else if value < 0 {
+	}
+	if value < 0 {
 		return parsedQ, errQuantityNonNegative
-	} else {
-		parsedQ.Value = uint64(value)
 	}
 
+	parsedQ.Value = uint64(value)
 	if len(quantity) <= idx {
 		return parsedQ, ErrQuantityUsage
 	}

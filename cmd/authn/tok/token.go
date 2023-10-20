@@ -119,7 +119,7 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		return nil
 	}
 	if perms == 0 {
-		return errors.New("Empty permissions requested")
+		return errors.New("empty permissions requested")
 	}
 	cluPerms := perms & apc.AccessCluster
 	objPerms := perms &^ apc.AccessCluster
@@ -130,7 +130,7 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 			return ErrNoPermissions
 		}
 		if clusterID == "" {
-			return errors.New("Requested cluster permissions without cluster ID")
+			return errors.New("requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
 			return fmt.Errorf("%v: [cluster %s, %s, granted(%s)]", ErrNoPermissions, clusterID, tk, cluACL.Describe())
@@ -142,7 +142,7 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 
 	// Check only bucket specific permissions.
 	if bck == nil {
-		return errors.New("Requested bucket permissions without a bucket")
+		return errors.New("requested bucket permissions without a bucket")
 	}
 	bckACL, bckOk := tk.aclForBucket(clusterID, bck)
 	if bckOk {

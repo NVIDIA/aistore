@@ -5,6 +5,7 @@ linters:
     - revive
     - asciicheck
     - bodyclose
+    - dogsled
     - durationcheck
     - errcheck
     - exportloopref
@@ -12,6 +13,7 @@ linters:
     - gocritic
     - gofmt
     - goheader
+    - gochecksumtype
     - goimports
     - gomoddirectives
     - goprintffuncname
@@ -21,9 +23,12 @@ linters:
     - ineffassign
     - misspell
     - nolintlint
+    - perfsprint
     - prealloc
+    - protogetter
     - reassign
     - staticcheck
+    - testifylint
     - typecheck
     - unconvert
     - unparam
@@ -32,16 +37,23 @@ linters:
 
     # See: https://golangci-lint.run/usage/linters/
     #
-    # linters that could be only occasionally useful:
+    # linters that must be enabled when time permits:
+    # - dupl
+    #
+    # linters that's worth running from time to time:
+    # - gochecknoinits
+    # - goconst
+    # - gosec
     # - errchkjson
     # - nilnil
+    # - inamedparam
+    # - tagalign
     #
     # linters disabled because of generics:
     # - rowserrcheck
     # - sqlclosecheck
     #
     # linters that used to produce false positives:
-    # - goconst
     # - godot
     # - goerr113
     # - gosec
@@ -76,10 +88,10 @@ linters-settings:
       # name: import-shadowing
       # name: unhandled-error
       # name: line-length-limit
+      # name: dot-imports
       - name: blank-imports
       - name: context-as-argument
       - name: context-keys-type
-      - name: dot-imports
       - name: early-return
       - name: error-naming
       - name: error-strings
