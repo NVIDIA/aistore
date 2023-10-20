@@ -69,53 +69,9 @@ Further references:
 
 ## Show capacity usage
 
-`ais storage summary [BUCKET | PROVIDER]`
+For command line options and usage examples, please refer to:
 
-Show summary information on a per bucket basis. If `BUCKET` is specified in the command line, the output gets narrowed down to this specific bucket. The same goes for `PROVIDER` (e.g., `ais://`, `aws://`, `gs://`, etc.) - again, only if specified.
-
-> Bucket providers and supported remote backends are documented [here](/docs/providers.md).
-
-Depending on the command line options (listed below), per-bucket information includes total number of objects, size of the bucket in bytes or megabytes, and percentage of the total capacity used by the bucket.
-
-A recently added `--validate` option is intended to analyze integrity of the stored distributed content. The questions that we ask at validation time "cover" location of stored objects and their replicas, the number of replicas (and whether this number agrees with the bucket configuration), etc.
-
-In particular, location of each objects stored in the cluster must at any point in time correspond to the current cluster map and, within each storage target, to the target's *mountpaths* (disks).  A failure to abide by location rules is called "misplacement"; misplaced objects - if any - must be migrated to their proper locations via automated processes called `global rebalance` and `resilver`:
-
-* [global rebalance and reslver](/docs/rebalance.md)
-* [resilvering selected targets: advanced usage](/docs/resourcesvanced.md)
-
-When `--fast` option is used the summary will include (internal-usage) details such as temporary objects, copies, EC slices, metadata files, and more.
-
-### Options
-
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--fast` | `bool` | The option is designed primarily for internal usage. The output may not accurately reflect user-accessible content. | `false` |
-| `--validate` | `bool` | Check objects for errors: misplaced, insufficient number of copies etc | `false` |
-| `--cached` | `bool` | For buckets that have remote backend, list only objects stored in the cluster | `false` |
-| `--count` | `int` | Can be used in combination with `--refresh` option to limit the number of generated reports | `1` |
-| `--refresh` | `duration` | Refresh interval - time duration between reports. The usual unit suffixes are supported and include `m` (for minutes), `s` (seconds), `ms` (milliseconds) | ` ` |
-
-
-### Example
-
-Show summary for all buckets.
-
-```console
-$ ais storage summary
-NAME             OBJECTS         SIZE            USED %
-ais://bck        2               59.24KiB        0.00%
-```
-
-Show estimated summary.
-
-```console
-$ ais storage summary --fast
-NAME             EST. OBJECTS    EST. SIZE       EST. USED %
-ais://bck        4               224.00KiB       0.00%
-```
-
-The bucket `ais://bck` has mirroring enabled, so its number of objects doubles.
+* [bucket summary](/docs/cli/bucket.md#show-bucket-summary)
 
 ## Validate buckets
 

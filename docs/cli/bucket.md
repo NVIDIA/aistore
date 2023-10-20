@@ -685,6 +685,8 @@ To check the status, run: ais show job xaction copy-bck ais://bck2
 
 `ais storage summary [command options] PROVIDER:[//BUCKET_NAME] - show bucket sizes and the respective percentages of used capacity on a per-bucket basis
 
+`ais bucket summary` - same as above.
+
 ### Options
 
 ```console
@@ -697,19 +699,19 @@ USAGE:
 OPTIONS:
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
-   --count value     used together with '--refresh' to limit the number of generated reports (default: 0)
+   --count value     used together with '--refresh' to limit the number of generated reports, e.g.:
+                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
    --prefix value    for each bucket, select only those objects (names) that start with the specified prefix, e.g.:
                      '--prefix a/b/c' - sum-up sizes of the virtual directory a/b/c and objects from the virtual directory
                      a/b that have names (relative to this directory) starting with the letter c
    --cached          list only those objects from a remote bucket that are present ("cached")
-   --all             all buckets, including accessible remote buckets that are not present in the cluster
    --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
                      raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose
-   --timeout value   maximum time to wait for a job to finish; if omitted wait forever or Ctrl-C;
-                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --verbose, -v     verbose output
+   --dont-wait       when _summarizing_ buckets do not wait for the respective job to finish -
+                     use the job's UUID to query the results interactively
    --no-headers, -H  display tables without headers
    --help, -h        show help
 ```
@@ -753,17 +755,22 @@ ais://nnn        49873           200.00MiB       0%
 ```
 
 ```console
-# 3. summarize ais://abc to show min/avg/max object sizes and _apparent_ bucket sizes
-###
-###   Apparent bucket size is the sum(sizes of all objects in the bucket) - will
-###   always be smaller than the actual disk usage. The difference will be even more
-###   pronounced in presence of mirroring and/or erasure coding.
-###   E.g., in a mirrored bucket configured for 3 replicas, the sum of all object
-###   sizes will be more than 3 times smaller than the size on disk.
-###
-$ ais bucket summary ais://abc --fast=false
-NAME             OBJECTS         OBJECT SIZE (min, avg, max)             SIZE (sum object sizes)   USAGE(%)
-ais://abc        10902           1.07KiB    515.01KiB  1023.51KiB        5.35GiB                   1%
+# 3.  "summarize" all s3:// buckets; count both "cached" and remote objects:
+$ ais bucket summary s3: --all
+```
+
+```console
+# 4. same as above with progress updates every 3 seconds:
+$ ais bucket summary s3: --all --refresh 3
+```
+
+```console
+# 4. "summarize" a given gs:// bucket; start the job and exit without waiting for it to finish
+# (see prompt below):
+$ ais bucket summary gs://abc --all --dont-wait
+
+Job summary[wl-s5lIWA] has started. To monitor, run 'ais storage summary gs://abc wl-s5lIWA --dont-wait' or 'ais show job wl-s5lIWA;
+see '--help' for details'
 ```
 
 ## Start N-way Mirroring
