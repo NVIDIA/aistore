@@ -2,12 +2,13 @@
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
  */
-package cos
+package cos_test
 
 import (
 	"math"
 	"testing"
 
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -17,7 +18,7 @@ func TestFsIDMarshal(t *testing.T) {
 		t.Skipf("skipping %s in short mode", t.Name())
 	}
 	tests := []struct {
-		fsID FsID
+		fsID cos.FsID
 	}{
 		{fsID: [2]int32{24, 42}},
 
@@ -54,7 +55,7 @@ func TestFsIDMarshal(t *testing.T) {
 			b, err := jsoniter.Marshal(test.fsID)
 			tassert.Errorf(t, err == nil, "marshal failed on input: %s, err: %v", test.fsID, err)
 
-			var tmp FsID
+			var tmp cos.FsID
 			err = jsoniter.Unmarshal(b, &tmp)
 			tassert.Fatalf(t, err == nil, "unmarshal failed on input: %s, err: %v", test.fsID, err)
 

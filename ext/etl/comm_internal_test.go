@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -25,6 +26,14 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 )
+
+func TestETLTransform(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("skipping %s in short mode", t.Name())
+	}
+	RegisterFailHandler(Fail)
+	RunSpecs(t, t.Name())
+}
 
 var _ = Describe("CommunicatorTest", func() {
 	var (

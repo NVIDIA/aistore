@@ -29,6 +29,7 @@ linters:
     - reassign
     - staticcheck
     - testifylint
+    - testpackage
     - typecheck
     - unconvert
     - unparam
@@ -71,7 +72,6 @@ linters:
     # - nlreturn
     # - noctx
     # - predeclared
-    # - testpackage
     # - thelper
     # - tparallel
     # - wrapcheck

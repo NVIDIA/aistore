@@ -1,8 +1,8 @@
 // Package nstlvl is intended to measure impact (or lack of thereof) of POSIX directory nesting on random read performance.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package nstlvl
+package nstlvl_test
 
 import (
 	"flag"
@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/aistore/bench/microbenchmarks/nstlvl"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -133,7 +134,7 @@ func (bctx *benchContext) createFiles(lvl int) {
 	cos.AssertNoErr(err)
 	time.Sleep(time.Second)
 
-	dropCaches()
+	nstlvl.DropCaches()
 	runtime.GC()
 	time.Sleep(time.Second)
 }

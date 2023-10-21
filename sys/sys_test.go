@@ -1,8 +1,8 @@
 // Package sys provides methods to read system information
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package sys
+package sys_test
 
 // Do not import the main 'tools' package because of circular dependency
 // Use t.Logf or t.Errorf instead of tlog.Logf
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -25,13 +26,13 @@ func checkSkipOS(t *testing.T, os ...string) {
 
 func TestNumCPU(t *testing.T) {
 	checkSkipOS(t, "darwin")
-	if NumCPU() < 1 || NumCPU() > runtime.NumCPU() {
-		t.Errorf("Wrong number of CPUs %d (%d)", NumCPU(), runtime.NumCPU())
+	if sys.NumCPU() < 1 || sys.NumCPU() > runtime.NumCPU() {
+		t.Errorf("Wrong number of CPUs %d (%d)", sys.NumCPU(), runtime.NumCPU())
 	}
 }
 
 func TestLoadAvg(t *testing.T) {
-	la, err := LoadAverage()
+	la, err := sys.LoadAverage()
 	tassert.CheckFatal(t, err)
 	t.Logf("Load average: %.2f, %.2f, %.2f\n", la.One, la.Five, la.Fifteen)
 	tassert.Errorf(t, la.One > 0.0 && la.Five > 0.0 && la.Fifteen > 0.0,
@@ -42,14 +43,14 @@ func TestLimitMaxProc(t *testing.T) {
 	prev := runtime.GOMAXPROCS(0)
 	defer runtime.GOMAXPROCS(prev)
 
-	ncpu := NumCPU()
-	SetMaxProcs()
+	ncpu := sys.NumCPU()
+	sys.SetMaxProcs()
 	curr := runtime.GOMAXPROCS(0)
 	tassert.Errorf(t, ncpu == curr, "Failed to set GOMAXPROCS to %d, current value is %d", ncpu, curr)
 }
 
 func TestMemoryStats(t *testing.T) {
-	var mem MemStat
+	var mem sys.MemStat
 	err := mem.Get()
 	tassert.CheckFatal(t, err)
 
@@ -64,10 +65,8 @@ func TestMemoryStats(t *testing.T) {
 
 	checkSkipOS(t, "darwin")
 
-	var memHost, memCont MemStat
-	err = memHost.host()
-	tassert.CheckFatal(t, err)
-	err = memCont.container()
+	var memHost, memCont sys.MemStat
+	err = memHost.Get()
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, memHost.Total >= memCont.Total,
 		"Container's memory total is greater than the host one.\nOS: %+v\nContainer: %+v", memHost, memCont)
@@ -84,7 +83,7 @@ func TestProc(t *testing.T) {
 	checkSkipOS(t, "darwin")
 
 	pid := os.Getpid()
-	stats, err := ProcessStats(pid)
+	stats, err := sys.ProcessStats(pid)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, stats.Mem.Size > 0 && stats.Mem.Resident > 0 && stats.Mem.Share > 0,
 		"Failed to read memory stats: %+v", stats.Mem)
@@ -106,7 +105,7 @@ func TestProc(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	newStats, err := ProcessStats(pid)
+	newStats, err := sys.ProcessStats(pid)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, newStats.CPU.User > 0, "Failed to read CPU stats: %+v", newStats.CPU)
 	tassert.Errorf(t, newStats.CPU.User+newStats.CPU.System == newStats.CPU.Total,

@@ -1,8 +1,8 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package fs
+package fs_test
 
 import (
 	"os"
@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
@@ -18,35 +19,35 @@ import (
 // placed here because it requires fs to set up the testing environment
 
 func TestMountpathSearchValid(t *testing.T) {
-	TestNew(nil)
+	fs.TestNew(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t, mpath)
-	mi, err := Path2Mpath("/tmp/abc/test")
+	mi, err := fs.Path2Mpath("/tmp/abc/test")
 	tassert.Errorf(t, err == nil && mi.Path == mpath, "Actual: [%s]. Expected: [%s]", mi.Path, mpath)
 	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestMountpathSearchInvalid(t *testing.T) {
-	TestNew(nil)
+	fs.TestNew(nil)
 
 	mpath := "/tmp/abc"
 	createDirs(mpath)
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t, mpath)
-	mi, err := Path2Mpath("xabc")
+	mi, err := fs.Path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestMountpathSearchWhenNoAvailable(t *testing.T) {
-	TestNew(nil)
+	fs.TestNew(nil)
 	oldMPs := setAvailableMountPaths(t, "")
-	mi, err := Path2Mpath("xabc")
+	mi, err := fs.Path2Mpath("xabc")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "xabc", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
@@ -56,67 +57,67 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	config.TestFSP.Count = 2
 	cmn.GCO.CommitUpdate(config)
 
-	TestNew(nil)
+	fs.TestNew(nil)
 	dirs := []string{"/tmp/x/z/abc", "/tmp/x/zabc", "/tmp/x/y/abc", "/tmp/x/yabc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
 
 	oldMPs := setAvailableMountPaths(t, "/tmp/x/y", "/tmp/x/z")
 
-	mi, err := Path2Mpath("z/abc")
+	mi, err := fs.Path2Mpath("z/abc")
 	tassert.Errorf(t, err != nil && mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "z/abc", err)
 
-	mi, err = Path2Mpath("/tmp/../tmp/x/z/abc")
+	mi, err = fs.Path2Mpath("/tmp/../tmp/x/z/abc")
 	tassert.Errorf(t, err == nil && mi.Path == "/tmp/x/z", "Actual: [%s]. Expected: [%s] (%v)",
 		mi, "/tmp/x/z", err)
 
-	mi, err = Path2Mpath("/tmp/../tmp/x/y/abc")
+	mi, err = fs.Path2Mpath("/tmp/../tmp/x/y/abc")
 	tassert.Errorf(t, err == nil && mi.Path == "/tmp/x/y", "Actual: [%s]. Expected: [%s] (%v)",
 		mi, "/tmp/x/y", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestSimilarCases(t *testing.T) {
-	TestNew(nil)
+	fs.TestNew(nil)
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
 
 	oldMPs := setAvailableMountPaths(t, "/tmp/abc")
 
-	mi, err := Path2Mpath("/tmp/abc/q")
+	mi, err := fs.Path2Mpath("/tmp/abc/q")
 	mpath := mi.Path
 	tassert.Errorf(t, err == nil && mpath == "/tmp/abc", "Actual: [%s]. Expected: [%s] (%v)", mpath, "/tmp/abc", err)
 
-	mi, err = Path2Mpath("/abx")
+	mi, err = fs.Path2Mpath("/abx")
 	tassert.Errorf(t, mi == nil, "Expected a nil mountpath info for fqn %q (%v)", "/abx", err)
 	setAvailableMountPaths(t, oldMPs...)
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	TestNew(nil)
+	fs.TestNew(nil)
 	mpath := "/tmp/abc"
 	createDirs(mpath)
 	defer removeDirs(mpath)
 
 	oldMPs := setAvailableMountPaths(t)
 	// root is an invalid mountpath
-	_, err := Add("/", "daeID")
+	_, err := fs.Add("/", "daeID")
 	tassert.Errorf(t, err != nil, "Expected failure to add \"/\" mountpath")
 	setAvailableMountPaths(t, oldMPs...)
 }
 
 func setAvailableMountPaths(t *testing.T, paths ...string) []string {
-	TestDisableValidation()
+	fs.TestDisableValidation()
 
-	avail := GetAvail()
+	avail := fs.GetAvail()
 	oldPaths := make([]string, 0, len(avail))
 	for _, mi := range avail {
 		oldPaths = append(oldPaths, mi.Path)
 	}
 
 	for _, mi := range avail {
-		_, err := Remove(mi.Path)
+		_, err := fs.Remove(mi.Path)
 		tassert.Errorf(t, err == nil, "%s (%v)", mi, err)
 		debug.AssertNoErr(err)
 	}
@@ -125,7 +126,7 @@ func setAvailableMountPaths(t *testing.T, paths ...string) []string {
 		if path == "" {
 			continue
 		}
-		_, err := Add(path, "daeID")
+		_, err := fs.Add(path, "daeID")
 		if err != nil {
 			tassert.Errorf(t, err == nil, "%s (%v)", path, err)
 		}

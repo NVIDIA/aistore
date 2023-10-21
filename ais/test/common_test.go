@@ -1,8 +1,8 @@
-// Package integration contains AIS integration tests.
+// Package integration_test.
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package integration
+package integration_test
 
 import (
 	"context"
@@ -33,6 +33,8 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
 )
+
+// more tools
 
 const rebalanceObjectDistributionTestCoef = 0.3
 

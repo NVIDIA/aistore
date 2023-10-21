@@ -4,7 +4,7 @@
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 
-package cmn
+package cmn_test
 
 import (
 	"fmt"

@@ -3,9 +3,10 @@
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package shard
+package shard_test
 
 import (
+	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -15,11 +16,11 @@ var _ = Describe("Records", func() {
 
 	Context("insert", func() {
 		It("should insert record", func() {
-			records := NewRecords(0)
-			records.Insert(&Record{
+			records := shard.NewRecords(0)
+			records.Insert(&shard.Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*RecordObj{
+				Objects: []*shard.RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -27,10 +28,10 @@ var _ = Describe("Records", func() {
 					},
 				},
 			})
-			records.Insert(&Record{
+			records.Insert(&shard.Record{
 				Key:  "some_key1",
 				Name: "some_key1",
-				Objects: []*RecordObj{
+				Objects: []*shard.RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -43,11 +44,11 @@ var _ = Describe("Records", func() {
 		})
 
 		It("should insert record but merge it", func() {
-			records := NewRecords(0)
-			records.Insert(&Record{
+			records := shard.NewRecords(0)
+			records.Insert(&shard.Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*RecordObj{
+				Objects: []*shard.RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -71,10 +72,10 @@ var _ = Describe("Records", func() {
 			r := records.All()[0]
 			Expect(r.TotalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
 
-			records.Insert(&Record{
+			records.Insert(&shard.Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*RecordObj{
+				Objects: []*shard.RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,
@@ -100,11 +101,11 @@ var _ = Describe("Records", func() {
 		})
 
 		It("should delete record obj", func() {
-			records := NewRecords(0)
-			records.Insert(&Record{
+			records := shard.NewRecords(0)
+			records.Insert(&shard.Record{
 				Key:  "some_key",
 				Name: "some_key",
-				Objects: []*RecordObj{
+				Objects: []*shard.RecordObj{
 					{
 						MetadataSize: 10,
 						Size:         objectSize,

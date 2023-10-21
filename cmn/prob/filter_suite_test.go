@@ -1,8 +1,8 @@
 // Package prob implements fully features dynamic probabilistic filter.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package prob
+package prob_test
 
 import (
 	"testing"

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package test
+package test_test
 
 import (
 	"flag"

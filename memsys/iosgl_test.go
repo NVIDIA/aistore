@@ -2,9 +2,9 @@
 // with io.Reader and io.Writer interfaces on top of a scatter-gather lists
 // (of reusable buffers)
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package memsys
+package memsys_test
 
 import (
 	"bytes"
@@ -12,13 +12,14 @@ import (
 	"testing/iotest"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("SGL", func() {
-	mm := PageMM()
+	mm := memsys.PageMM()
 
 	randReader := func(size int64) ([]byte, io.Reader) {
 		buf := make([]byte, size)
@@ -69,7 +70,7 @@ var _ = Describe("SGL", func() {
 			size := int64(11*cos.MiB + 2*cos.KiB + 123)
 			buf, r := randReader(size)
 
-			sgl := mm.NewSGL(0, MaxPageSlabSize)
+			sgl := mm.NewSGL(0, memsys.MaxPageSlabSize)
 
 			n, err := sgl.ReadFrom(r)
 			Expect(err).ToNot(HaveOccurred())

@@ -1,8 +1,12 @@
 // Package xoshiro256 implements the xoshiro256** RNG
 // no-copyright
-package xoshiro256
+package xoshiro256_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/NVIDIA/aistore/cmn/xoshiro256"
+)
 
 func TestXoshiro256Hash(t *testing.T) {
 	tests := []struct {
@@ -14,7 +18,7 @@ func TestXoshiro256Hash(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if Hash(test.input) != test.expected {
+		if xoshiro256.Hash(test.input) != test.expected {
 			t.Errorf("wrong hash for %d, expected: %d", test.input, test.expected)
 		}
 	}

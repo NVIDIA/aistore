@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package tests
+package tests_test
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
