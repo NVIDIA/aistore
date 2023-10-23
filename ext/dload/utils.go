@@ -225,14 +225,17 @@ func parseGoogleCksumHeader(hdr []string) cos.StrKVs {
 	return cksums
 }
 
-func headLink(link string) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, link, http.NoBody)
-	if err != nil {
-		return nil, err
+func headLink(link string) (resp *http.Response, err error) {
+	var (
+		req         *http.Request
+		ctx, cancel = context.WithTimeout(context.Background(), headReqTimeout)
+	)
+	req, err = http.NewRequestWithContext(ctx, http.MethodHead, link, http.NoBody)
+	if err == nil {
+		resp, err = clientForURL(link).Do(req)
 	}
-	return clientForURL(link).Do(req)
+	cancel()
+	return
 }
 
 // Use all available metadata including {size, version, ETag, MD5, CRC}

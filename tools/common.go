@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -157,16 +156,6 @@ func PutRR(tb testing.TB, bp api.BaseParams, objSize int64, cksumType string,
 	}
 
 	return objNames
-}
-
-func NewClientWithProxy(proxyURL string) *http.Client {
-	transport := cmn.NewTransport(transportArgs)
-	prxURL, _ := url.Parse(proxyURL)
-	transport.Proxy = http.ProxyURL(prxURL)
-	return &http.Client{
-		Transport: transport,
-		Timeout:   transportArgs.Timeout,
-	}
 }
 
 func isClusterK8s() (isK8s bool, err error) {

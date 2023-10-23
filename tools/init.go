@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -104,6 +105,23 @@ func init() {
 	gctx = &Ctx{
 		Client: HTTPClient,
 		Log:    tlog.Logf,
+	}
+}
+
+func NewClientWithProxy(proxyURL string) *http.Client {
+	transport := cmn.NewTransport(transportArgs)
+	prxURL, err := url.Parse(proxyURL)
+	cos.AssertNoErr(err)
+	transport.Proxy = http.ProxyURL(prxURL)
+
+	if transportArgs.UseHTTPS {
+		tlsConfig, err := cmn.NewTLS(tlsArgs)
+		cos.AssertNoErr(err)
+		transport.TLSClientConfig = tlsConfig
+	}
+	return &http.Client{
+		Transport: transport,
+		Timeout:   transportArgs.Timeout,
 	}
 }
 

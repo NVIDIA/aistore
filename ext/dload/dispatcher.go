@@ -54,16 +54,17 @@ type (
 var g global
 
 func Init(t cluster.TargetLoc, db kvdb.Driver) {
+	httpClient = cmn.NewClient(cmn.TransportArgs{})
+	httpsClient = cmn.NewClientTLS(cmn.TransportArgs{UseHTTPS: true}, cmn.TLSArgs{SkipVerify: true})
+	if db == nil { // unit tests only
+		debug.Assert(t == nil)
+		return
+	}
+
 	g.t = t
 	g.dlStore = newInfoStore(db)
 	g.db = db
 	xreg.RegNonBckXact(&factory{})
-
-	httpClient = cmn.NewClient(cmn.TransportArgs{})
-	httpsClient = cmn.NewClientTLS(
-		cmn.TransportArgs{UseHTTPS: true},
-		cmn.TLSArgs{SkipVerify: true},
-	)
 }
 
 ////////////////

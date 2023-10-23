@@ -51,6 +51,7 @@ func TestCompareObject(t *testing.T) {
 			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
 	)
+	dload.Init(nil, nil) // initialize http clients
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.StrKVs{
