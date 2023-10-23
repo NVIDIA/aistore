@@ -32,21 +32,21 @@ type (
 var _ cluster.BackendProvider = (*httpProvider)(nil)
 
 func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
-	hp := &httpProvider{t: t}
-	hp.httpClient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-		UseHTTPS:        false,
-		SkipVerify:      config.Net.HTTP.SkipVerify,
-	})
-	hp.httpsClient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-		ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-		UseHTTPS:        true,
-		SkipVerify:      config.Net.HTTP.SkipVerify,
-	})
+	var (
+		hp    = &httpProvider{t: t}
+		cargs = cmn.TransportArgs{
+			Timeout:         config.Client.TimeoutLong.D(),
+			WriteBufferSize: config.Net.HTTP.WriteBufferSize,
+			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
+		}
+		sargs = cmn.TLSArgs{
+			SkipVerify: config.Net.HTTP.SkipVerify,
+		}
+	)
+	hp.httpClient = cmn.NewClient(cargs)
+
+	cargs.UseHTTPS = true
+	hp.httpsClient = cmn.NewClientTLS(cargs, sargs)
 	return hp
 }
 

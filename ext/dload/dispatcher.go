@@ -58,6 +58,12 @@ func Init(t cluster.TargetLoc, db kvdb.Driver) {
 	g.dlStore = newInfoStore(db)
 	g.db = db
 	xreg.RegNonBckXact(&factory{})
+
+	httpClient = cmn.NewClient(cmn.TransportArgs{})
+	httpsClient = cmn.NewClientTLS(
+		cmn.TransportArgs{UseHTTPS: true},
+		cmn.TLSArgs{SkipVerify: true},
+	)
 }
 
 ////////////////

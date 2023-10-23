@@ -7,6 +7,7 @@ package ec
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 	"time"
 
@@ -141,11 +142,15 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 }
 
 func (r *XactGet) newGetJogger(mpath string) *getJogger {
-	client := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    r.config.Client.Timeout.D(),
-		UseHTTPS:   r.config.Net.HTTP.UseHTTPS,
-		SkipVerify: r.config.Net.HTTP.SkipVerify,
-	})
+	var (
+		cargs  = cmn.TransportArgs{Timeout: r.config.Client.Timeout.D(), UseHTTPS: r.config.Net.HTTP.UseHTTPS}
+		client *http.Client
+	)
+	if r.config.Net.HTTP.UseHTTPS {
+		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: r.config.Net.HTTP.SkipVerify})
+	} else {
+		client = cmn.NewClient(cargs)
+	}
 	j := &getJogger{
 		parent: r,
 		mpath:  mpath,

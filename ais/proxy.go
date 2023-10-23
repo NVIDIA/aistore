@@ -2023,10 +2023,7 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 		cos.AssertNoErr(err)
 		config := cmn.GCO.Get()
 		primary.rp = httputil.NewSingleHostReverseProxy(uparsed)
-		primary.rp.Transport = cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS:   config.Net.HTTP.UseHTTPS,
-			SkipVerify: config.Net.HTTP.SkipVerify,
-		})
+		primary.rp.Transport = newRevProxyTransport(config)
 		primary.rp.ErrorHandler = p.rpErrHandler
 	}
 	primary.Unlock()
@@ -2049,6 +2046,18 @@ func (p *proxy) forwardCP(w http.ResponseWriter, r *http.Request, msg *apc.ActMs
 	}
 	primary.rp.ServeHTTP(w, r)
 	return true
+}
+
+func newRevProxyTransport(config *cmn.Config) *http.Transport {
+	var (
+		err       error
+		transport = cmn.NewTransport(cmn.TransportArgs{UseHTTPS: config.Net.HTTP.UseHTTPS})
+	)
+	if config.Net.HTTP.UseHTTPS {
+		transport.TLSClientConfig, err = cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		cos.AssertNoErr(err)
+	}
+	return transport
 }
 
 // Based on default error handler `defaultErrorHandler` in `httputil/reverseproxy.go`.
@@ -3388,13 +3397,9 @@ func (p *proxy) headRemoteBck(bck *cmn.Bck, q url.Values) (header http.Header, s
 //////////////////
 
 func (rp *reverseProxy) init() {
-	cfg := cmn.GCO.Get()
 	rp.cloud = &httputil.ReverseProxy{
-		Director: func(r *http.Request) {},
-		Transport: cmn.NewTransport(cmn.TransportArgs{
-			UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
-		}),
+		Director:  func(r *http.Request) {},
+		Transport: newRevProxyTransport(cmn.GCO.Get()),
 	}
 }
 
@@ -3407,12 +3412,8 @@ func (rp *reverseProxy) loadOrStore(uuid string, u *url.URL,
 			return shrp.rp
 		}
 	}
-	cfg := cmn.GCO.Get()
 	rproxy := httputil.NewSingleHostReverseProxy(u)
-	rproxy.Transport = cmn.NewTransport(cmn.TransportArgs{
-		UseHTTPS:   cfg.Net.HTTP.UseHTTPS,
-		SkipVerify: cfg.Net.HTTP.SkipVerify,
-	})
+	rproxy.Transport = newRevProxyTransport(cmn.GCO.Get())
 	rproxy.ErrorHandler = errHdlr
 	// NOTE: races are rare probably happen only when storing an entry for the first time or when URL changes.
 	// Also, races don't impact the correctness as we always have latest entry for `uuid`, `URL` pair (see: L3917).

@@ -155,12 +155,18 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 }
 
 func newClient() {
-	config := cmn.GCO.Get()
-	bcastClient = cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Timeout.MaxHostBusy.D(),
-		UseHTTPS:   config.Net.HTTP.UseHTTPS,
-		SkipVerify: config.Net.HTTP.SkipVerify,
-	})
+	var (
+		config = cmn.GCO.Get()
+		cargs  = cmn.TransportArgs{
+			Timeout:  config.Timeout.MaxHostBusy.D(),
+			UseHTTPS: config.Net.HTTP.UseHTTPS,
+		}
+	)
+	if config.Net.HTTP.UseHTTPS {
+		bcastClient = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+	} else {
+		bcastClient = cmn.NewClient(cargs)
+	}
 }
 
 /////////////
@@ -200,13 +206,16 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	// and so this is why we need such a long timeout.
 	m.config = cmn.GCO.Get()
 
-	// TODO -- FIXME: must be a single instance (similar to streams)
-	m.client = cmn.NewClient(cmn.TransportArgs{
+	cargs := cmn.TransportArgs{
 		DialTimeout: 5 * time.Minute,
 		Timeout:     30 * time.Minute,
 		UseHTTPS:    m.config.Net.HTTP.UseHTTPS,
-		SkipVerify:  m.config.Net.HTTP.SkipVerify,
-	})
+	}
+	if m.config.Net.HTTP.UseHTTPS {
+		m.client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: m.config.Net.HTTP.SkipVerify})
+	} else {
+		m.client = cmn.NewClient(cargs)
+	}
 
 	m.received.ch = make(chan int32, 10)
 

@@ -8,7 +8,6 @@
 package transport
 
 import (
-	"crypto/tls"
 	"io"
 	"net"
 	"net/http"
@@ -53,7 +52,9 @@ func NewIntraDataClient() Client {
 		WriteBufferSize: wbuf,
 	}
 	if config.Net.HTTP.UseHTTPS {
-		cl.TLSConfig = &tls.Config{InsecureSkipVerify: config.Net.HTTP.SkipVerify}
+		tlsConfig, err := cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		cos.AssertNoErr(err)
+		cl.TLSConfig = tlsConfig
 	}
 	return cl
 }

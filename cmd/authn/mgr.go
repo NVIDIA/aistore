@@ -44,21 +44,15 @@ var (
 )
 
 // If user DB exists, loads the data from the file and decrypts passwords
-func newMgr(driver kvdb.Driver) (*mgr, error) {
+func newMgr(driver kvdb.Driver) (m *mgr, err error) {
 	timeout := time.Duration(Conf.Timeout.Default)
-	clientHTTP := cmn.NewClient(cmn.TransportArgs{Timeout: timeout})
-	clientHTTPS := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    timeout,
-		UseHTTPS:   true,
-		SkipVerify: true,
-	})
-	mgr := &mgr{
-		clientHTTP:  clientHTTP,
-		clientHTTPS: clientHTTPS,
+	m = &mgr{
+		clientHTTP:  cmn.NewClient(cmn.TransportArgs{Timeout: timeout}),
+		clientHTTPS: cmn.NewClientTLS(cmn.TransportArgs{Timeout: timeout, UseHTTPS: true}, cmn.TLSArgs{SkipVerify: true}),
 		db:          driver,
 	}
-	err := initializeDB(driver)
-	return mgr, err
+	err = initializeDB(driver)
+	return
 }
 
 //

@@ -185,23 +185,18 @@ func (m *AISBackendProvider) GetInfoInternal() (res cluster.Remotes) {
 // TODO: ditto
 func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluster.Remotes) {
 	var (
-		cfg         = cmn.GCO.Get()
-		httpClient  = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
-		httpsClient = cmn.NewClient(cmn.TransportArgs{
-			Timeout:    cfg.Client.Timeout.D(),
-			UseHTTPS:   true,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
-		})
+		cfg              = cmn.GCO.Get()
+		cliPlain, cliTLS = remaisClients(&cfg.Client)
 	)
 	m.mu.RLock()
 	res.A = make([]*cluster.RemAis, 0, len(m.remote))
 	for uuid, remAis := range m.remote {
 		var (
 			out    = &cluster.RemAis{UUID: uuid, URL: remAis.url}
-			client = httpClient
+			client = cliPlain
 		)
 		if cos.IsHTTPS(remAis.url) {
-			client = httpsClient
+			client = cliTLS
 		}
 		for a, u := range m.alias {
 			if uuid == u {
@@ -238,25 +233,31 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 	return
 }
 
+// TODO: cmn.TLSArgs empty and hardcoded - m.b. defined by cmn.ClientConf or env
+func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) {
+	cargs := cmn.TransportArgs{Timeout: clientConf.Timeout.D()}
+	client = cmn.NewClient(cargs)
+
+	sargs := cmn.TLSArgs{SkipVerify: true}
+	cargs.UseHTTPS = true
+	clientTLS = cmn.NewClientTLS(cargs, sargs)
+	return
+}
+
 // A list of remote AIS URLs can contains both HTTP and HTTPS links at the
 // same time. So, the method must use both kind of clients and select the
 // correct one at the moment it sends a request. First successful request
 // saves the good client for the future usage.
 func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (offline bool, err error) {
 	var (
-		url           string
-		remSmap, smap *meta.Smap
-		httpClient    = cmn.NewClient(cmn.TransportArgs{Timeout: cfg.Client.Timeout.D()})
-		httpsClient   = cmn.NewClient(cmn.TransportArgs{
-			Timeout:    cfg.Client.Timeout.D(),
-			UseHTTPS:   true,
-			SkipVerify: cfg.Net.HTTP.SkipVerify,
-		})
+		url              string
+		remSmap, smap    *meta.Smap
+		cliPlain, cliTLS = remaisClients(&cfg.Client)
 	)
 	for _, u := range confURLs {
-		client := httpClient
+		client := cliPlain
 		if cos.IsHTTPS(u) {
-			client = httpsClient
+			client = cliTLS
 		}
 		if smap, err = api.GetClusterMap(api.BaseParams{Client: client, URL: u, UA: ua}); err != nil {
 			nlog.Warningf("remote cluster failing to reach %q via %s: %v", alias, u, err)
@@ -282,9 +283,9 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	}
 	r.smap, r.url = remSmap, url
 	if cos.IsHTTPS(url) {
-		r.bp = api.BaseParams{Client: httpsClient, URL: url, UA: ua}
+		r.bp = api.BaseParams{Client: cliTLS, URL: url, UA: ua}
 	} else {
-		r.bp = api.BaseParams{Client: httpClient, URL: url, UA: ua}
+		r.bp = api.BaseParams{Client: cliPlain, URL: url, UA: ua}
 	}
 	r.uuid = remSmap.UUID
 	return

@@ -30,7 +30,7 @@ func whichClient() string { return "net/http" }
 func NewIntraDataClient() (client *http.Client) {
 	config := cmn.GCO.Get()
 
-	// compare with ais/httpcommon.go
+	// compare with ais/hcommon.go
 	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
 	if wbuf == 0 {
 		wbuf = cmn.DefaultWriteBufferSize
@@ -42,13 +42,18 @@ func NewIntraDataClient() (client *http.Client) {
 	if tcpbuf == 0 {
 		tcpbuf = cmn.DefaultSendRecvBufferSize
 	}
-	return cmn.NewClient(cmn.TransportArgs{
+	cargs := cmn.TransportArgs{
 		SndRcvBufSize:   tcpbuf,
 		WriteBufferSize: wbuf,
 		ReadBufferSize:  rbuf,
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
-		SkipVerify:      config.Net.HTTP.SkipVerify,
-	})
+	}
+	if config.Net.HTTP.UseHTTPS {
+		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+	} else {
+		client = cmn.NewClient(cargs)
+	}
+	return
 }
 
 func (s *streamBase) do(body io.Reader) (err error) {

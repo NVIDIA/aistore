@@ -6,10 +6,7 @@
 package cmn
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -42,91 +39,6 @@ const (
 )
 
 var KnownNetworks = []string{NetPublic, NetIntraControl, NetIntraData}
-
-type (
-	// Options to create a transport for HTTP client
-	TransportArgs struct {
-		DialTimeout      time.Duration
-		Timeout          time.Duration
-		IdleConnTimeout  time.Duration
-		IdleConnsPerHost int
-		MaxIdleConns     int
-		SndRcvBufSize    int
-		WriteBufferSize  int
-		ReadBufferSize   int
-		UseHTTPS         bool
-		UseHTTPProxyEnv  bool
-		// For HTTPS mode only: if true, the client does not verify server's
-		// certificate. It is useful for clusters with self-signed certificates.
-		SkipVerify bool
-	}
-)
-
-func NewTransport(args TransportArgs) *http.Transport {
-	var (
-		dialTimeout      = args.DialTimeout
-		defaultTransport = http.DefaultTransport.(*http.Transport)
-	)
-
-	if dialTimeout == 0 {
-		dialTimeout = 30 * time.Second
-	}
-	dialer := &net.Dialer{
-		Timeout:   dialTimeout,
-		KeepAlive: 30 * time.Second,
-	}
-	// setsockopt when non-zero, otherwise use TCP defaults
-	if args.SndRcvBufSize > 0 {
-		dialer.Control = args.setSockOpt
-	}
-	transport := &http.Transport{
-		DialContext:           dialer.DialContext,
-		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		IdleConnTimeout:       args.IdleConnTimeout,
-		MaxIdleConnsPerHost:   args.IdleConnsPerHost,
-		MaxIdleConns:          args.MaxIdleConns,
-		WriteBufferSize:       args.WriteBufferSize,
-		ReadBufferSize:        args.ReadBufferSize,
-		DisableCompression:    true, // NOTE: hardcoded - never used
-	}
-
-	// apply global defaults
-	if transport.MaxIdleConnsPerHost == 0 {
-		transport.MaxIdleConnsPerHost = DefaultMaxIdleConnsPerHost
-	}
-	if transport.MaxIdleConns == 0 {
-		transport.MaxIdleConns = DefaultMaxIdleConns
-	}
-	if transport.IdleConnTimeout == 0 {
-		transport.IdleConnTimeout = DefaultIdleConnTimeout
-	}
-	if transport.WriteBufferSize == 0 {
-		transport.WriteBufferSize = DefaultWriteBufferSize
-	}
-	if transport.ReadBufferSize == 0 {
-		transport.ReadBufferSize = DefaultReadBufferSize
-	}
-
-	if args.UseHTTPS {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: args.SkipVerify}
-	}
-	if args.UseHTTPProxyEnv {
-		transport.Proxy = defaultTransport.Proxy
-	}
-	return transport
-}
-
-func NewClient(args TransportArgs) *http.Client {
-	transport := NewTransport(args)
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   args.Timeout,
-	}
-	return client
-}
-
-// misc helpers
 
 func NetworkIsKnown(net string) bool {
 	return net == NetPublic || net == NetIntraControl || net == NetIntraData

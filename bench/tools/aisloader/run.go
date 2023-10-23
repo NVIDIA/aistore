@@ -873,7 +873,11 @@ func validateCmdLine(p *params) (err error) {
 		transportArgs.UseHTTPS = scheme == "https"
 	}
 
-	httpClient = cmn.NewClient(transportArgs)
+	if transportArgs.UseHTTPS {
+		httpClient = cmn.NewClientTLS(transportArgs, tlsArgs)
+	} else {
+		httpClient = cmn.NewClient(transportArgs)
+	}
 
 	// NOTE: auth token is assigned below when we execute the very first API call
 	p.bp = api.BaseParams{Client: httpClient, URL: p.proxyURL}

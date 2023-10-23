@@ -121,8 +121,8 @@ const (
 // server's URL. Certification check is disabled always for now and
 // does not depend on cluster settings.
 var (
-	httpClient  = cmn.NewClient(cmn.TransportArgs{})
-	httpsClient = cmn.NewClient(cmn.TransportArgs{UseHTTPS: true, SkipVerify: true})
+	httpClient  *http.Client
+	httpsClient *http.Client
 )
 
 type (

@@ -71,6 +71,9 @@ var (
 		MaxIdleConns:     2000,
 		IdleConnsPerHost: 200,
 	}
+	tlsArgs = cmn.TLSArgs{
+		SkipVerify: true,
+	}
 	HTTPClient *http.Client
 
 	RemoteCluster struct {
@@ -83,15 +86,21 @@ var (
 	gctx *Ctx
 )
 
+// NOTE:
+// With no access to cluster configuration the tests
+// currently simply detect protocol type by the env.AIS.Endpoint (proxy's) URL.
+// Certificate check and other TLS is always disabled.
+
 func init() {
 	envURL := os.Getenv(env.AIS.Endpoint)
-	// Since tests do not have access to cluster configuration, the tests
-	// detect client type by the primary proxy URL passed by a user.
-	// Certificate check is always disabled.
 	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
-	transportArgs.SkipVerify = cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt))
-	HTTPClient = cmn.NewClient(transportArgs)
+	tlsArgs.SkipVerify = cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt))
 
+	if transportArgs.UseHTTPS {
+		HTTPClient = cmn.NewClientTLS(transportArgs, tlsArgs)
+	} else {
+		HTTPClient = cmn.NewClient(transportArgs)
+	}
 	gctx = &Ctx{
 		Client: HTTPClient,
 		Log:    tlog.Logf,

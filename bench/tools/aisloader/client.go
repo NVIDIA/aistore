@@ -28,12 +28,13 @@ import (
 const longListTime = 10 * time.Second // list-objects progress
 
 var (
-	// AisLoader, being a stress loading tool, should have different from
-	// AIS cluster timeouts. And if HTTPS is used, certificate check is
-	// always disable in AisLoader client.
+	// see related command-line: `transportArgs.Timeout` and UseHTTPS
 	transportArgs = cmn.TransportArgs{
 		UseHTTPProxyEnv: true,
-		SkipVerify:      true,
+	}
+	// TODO: add command-line to set/modify
+	tlsArgs = cmn.TLSArgs{
+		SkipVerify: true,
 	}
 	httpClient *http.Client
 )
@@ -246,9 +247,17 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 }
 
 func newTraceCtx() *traceCtx {
-	tctx := &traceCtx{}
+	var (
+		tctx      = &traceCtx{}
+		transport = cmn.NewTransport(transportArgs)
+		err       error
+	)
+	if transportArgs.UseHTTPS {
+		transport.TLSClientConfig, err = cmn.NewTLS(cmn.TLSArgs{SkipVerify: tlsArgs.SkipVerify})
+		cos.AssertNoErr(err)
+	}
 	tctx.tr = &traceableTransport{
-		transport: cmn.NewTransport(transportArgs),
+		transport: transport,
 		tsBegin:   time.Now(),
 	}
 	tctx.trace = &httptrace.ClientTrace{

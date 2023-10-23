@@ -260,32 +260,8 @@ func (h *htrun) registerIntraDataNetHandler(path string, handler func(http.Respo
 }
 
 func (h *htrun) init(config *cmn.Config) {
-	const (
-		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
-		defaultControlReadBufferSize  = 16 * cos.KiB
-	)
-	h.client.control = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.Timeout.D(),
-		WriteBufferSize: defaultControlWriteBufferSize,
-		ReadBufferSize:  defaultControlReadBufferSize,
-		UseHTTPS:        config.Net.HTTP.UseHTTPS,
-		SkipVerify:      config.Net.HTTP.SkipVerify,
-	})
-	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
-	// NOTE: when not configured use AIS defaults (to override the usual 4KB)
-	if wbuf == 0 {
-		wbuf = cmn.DefaultWriteBufferSize
-	}
-	if rbuf == 0 {
-		rbuf = cmn.DefaultReadBufferSize
-	}
-	h.client.data = cmn.NewClient(cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: wbuf,
-		ReadBufferSize:  rbuf,
-		UseHTTPS:        config.Net.HTTP.UseHTTPS,
-		SkipVerify:      config.Net.HTTP.SkipVerify,
-	})
+	h.initCtrlClient(config)
+	h.initDataClient(config)
 
 	tcpbuf := config.Net.L4.SndRcvBufSize
 	if h.si.IsProxy() {
@@ -315,6 +291,56 @@ func (h *htrun) init(config *cmn.Config) {
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
+}
+
+func (h *htrun) initCtrlClient(config *cmn.Config) {
+	const (
+		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
+		defaultControlReadBufferSize  = 16 * cos.KiB
+	)
+	var (
+		cargs = cmn.TransportArgs{
+			Timeout:         config.Client.Timeout.D(),
+			WriteBufferSize: defaultControlWriteBufferSize,
+			ReadBufferSize:  defaultControlReadBufferSize,
+			UseHTTPS:        config.Net.HTTP.UseHTTPS,
+		}
+		sargs = cmn.TLSArgs{
+			SkipVerify: config.Net.HTTP.SkipVerify,
+		}
+	)
+	if config.Net.HTTP.UseHTTPS {
+		h.client.control = cmn.NewClientTLS(cargs, sargs)
+	} else {
+		h.client.control = cmn.NewClient(cargs)
+	}
+}
+
+// wbuf/rbuf - when not configured use AIS defaults (to override the usual 4KB)
+func (h *htrun) initDataClient(config *cmn.Config) {
+	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
+	if wbuf == 0 {
+		wbuf = cmn.DefaultWriteBufferSize
+	}
+	if rbuf == 0 {
+		rbuf = cmn.DefaultReadBufferSize
+	}
+	var (
+		cargs = cmn.TransportArgs{
+			Timeout:         config.Client.TimeoutLong.D(),
+			WriteBufferSize: wbuf,
+			ReadBufferSize:  rbuf,
+			UseHTTPS:        config.Net.HTTP.UseHTTPS,
+		}
+		sargs = cmn.TLSArgs{
+			SkipVerify: config.Net.HTTP.SkipVerify,
+		}
+	)
+	if config.Net.HTTP.UseHTTPS {
+		h.client.data = cmn.NewClientTLS(cargs, sargs)
+	} else {
+		h.client.data = cmn.NewClient(cargs)
+	}
 }
 
 func (h *htrun) initNetworks() {

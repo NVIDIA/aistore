@@ -116,16 +116,20 @@ type (
 )
 
 func New(t cluster.Target, config *cmn.Config) *Reb {
-	ecClient := cmn.NewClient(cmn.TransportArgs{
-		Timeout:    config.Client.Timeout.D(),
-		UseHTTPS:   config.Net.HTTP.UseHTTPS,
-		SkipVerify: config.Net.HTTP.SkipVerify,
-	})
+	var (
+		cargs  = cmn.TransportArgs{Timeout: config.Client.Timeout.D(), UseHTTPS: config.Net.HTTP.UseHTTPS}
+		client *http.Client
+	)
+	if config.Net.HTTP.UseHTTPS {
+		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+	} else {
+		client = cmn.NewClient(cargs)
+	}
 	reb := &Reb{
 		t:         t,
 		filterGFN: prob.NewDefaultFilter(),
 		stages:    newNodeStages(),
-		ecClient:  ecClient,
+		ecClient:  client,
 	}
 	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,
