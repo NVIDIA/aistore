@@ -18,8 +18,10 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xact/xreg"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,14 +45,19 @@ type (
 	}
 
 	global struct {
-		t cluster.TargetLoc
+		t       cluster.TargetLoc
+		db      kvdb.Driver
+		dlStore *infoStore
 	}
 )
 
 var g global
 
-func Init(t cluster.TargetLoc) {
+func Init(t cluster.TargetLoc, db kvdb.Driver) {
 	g.t = t
+	g.dlStore = newInfoStore(db)
+	g.db = db
+	xreg.RegNonBckXact(&factory{})
 }
 
 ////////////////
@@ -58,7 +65,6 @@ func Init(t cluster.TargetLoc) {
 ////////////////
 
 func newDispatcher(xdl *Xact) *dispatcher {
-	initInfoStore(db) // initialize only once
 	return &dispatcher{
 		xdl:         xdl,
 		startupSema: startupSema{},
@@ -218,10 +224,10 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 				}
 			}
 
-			dlStore.incScheduled(job.ID())
+			g.dlStore.incScheduled(job.ID())
 
 			if result.Action == DiffResolverSkip {
-				dlStore.incSkipped(job.ID())
+				g.dlStore.incSkipped(job.ID())
 				continue
 			}
 
@@ -237,7 +243,7 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 				if _, err := d.xdl.t.EvictObject(result.Src); err != nil {
 					task.markFailed(err.Error())
 				} else {
-					dlStore.incFinished(job.ID())
+					g.dlStore.incFinished(job.ID())
 				}
 				continue
 			}
@@ -245,18 +251,18 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			ok, err := d.doSingle(task)
 			if err != nil {
 				nlog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
-				dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
+				g.dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
 				return ok
 			}
 			if !ok {
-				dlStore.setAborted(job.ID())
+				g.dlStore.setAborted(job.ID())
 				return false
 			}
 		case DiffResolverSend:
 			requiresSync := job.Sync()
 			debug.Assert(requiresSync)
 		case DiffResolverEOF:
-			dlStore.setAllDispatched(job.ID(), true)
+			g.dlStore.setAllDispatched(job.ID(), true)
 			return true
 		}
 	}
@@ -368,7 +374,7 @@ func (d *dispatcher) handleRemove(req *request) {
 		return
 	}
 
-	dlStore.delJob(req.id)
+	g.dlStore.delJob(req.id)
 	req.okRsp(nil)
 }
 
@@ -384,7 +390,7 @@ func (d *dispatcher) handleAbort(req *request) {
 		j.abortJob(req.id)
 	}
 
-	dlStore.setAborted(req.id)
+	g.dlStore.setAborted(req.id)
 	req.okRsp(nil)
 }
 
@@ -400,13 +406,13 @@ func (d *dispatcher) handleStatus(req *request) {
 
 	currentTasks := d.activeTasks(req.id)
 	if !req.onlyActive {
-		finishedTasks, err = dlStore.getTasks(req.id)
+		finishedTasks, err = g.dlStore.getTasks(req.id)
 		if err != nil {
 			req.errRsp(err, http.StatusInternalServerError)
 			return
 		}
 
-		dlErrors, err = dlStore.getErrors(req.id)
+		dlErrors, err = g.dlStore.getErrors(req.id)
 		if err != nil {
 			req.errRsp(err, http.StatusInternalServerError)
 			return

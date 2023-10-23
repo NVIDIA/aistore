@@ -94,7 +94,7 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 		return
 	}
 
-	dlStore.incFinished(task.jobID())
+	g.dlStore.incFinished(task.jobID())
 
 	task.xdl.statsT.AddMany(
 		cos.NamedVal64{Name: stats.DownloadSize, Value: task.currentSize.Load()},
@@ -251,12 +251,12 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
 	task.xdl.statsT.IncErr(stats.ErrDownloadCount)
-	dlStore.persistError(task.jobID(), task.obj.objName, statusMsg)
-	dlStore.incErrorCnt(task.jobID())
+	g.dlStore.persistError(task.jobID(), task.obj.objName, statusMsg)
+	g.dlStore.incErrorCnt(task.jobID())
 }
 
 func (task *singleTask) persist() {
-	_ = dlStore.persistTaskInfo(task.jobID(), task.ToTaskDlInfo())
+	_ = g.dlStore.persistTaskInfo(task.jobID(), task.ToTaskDlInfo())
 }
 
 func (task *singleTask) jobID() string { return task.job.ID() }

@@ -365,8 +365,6 @@ func (t *target) Run() error {
 		return err
 	}
 
-	dload.SetDB(db)
-
 	archive.Init(config.Features)
 
 	// transactions
@@ -389,7 +387,7 @@ func (t *target) Run() error {
 	}
 
 	dsort.Tinit(t, t.statsT, db)
-	dload.Init(t)
+	dload.Init(t, db)
 
 	err = t.htrun.run(config)
 

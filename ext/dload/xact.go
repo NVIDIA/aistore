@@ -172,10 +172,6 @@ var (
 	_ io.ReadCloser  = (*progressReader)(nil)
 )
 
-func Xreg() {
-	xreg.RegNonBckXact(&factory{})
-}
-
 /////////////
 // factory //
 /////////////
@@ -226,7 +222,7 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 	xld.IncPending()
 	defer xld.DecPending()
 
-	dljob := dlStore.setJob(job)
+	dljob := g.dlStore.setJob(job)
 
 	select {
 	case xld.dispatcher.workCh <- job:
@@ -266,7 +262,7 @@ func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int
 }
 
 func (xld *Xact) checkJob(req *request) (*dljob, error) {
-	dljob, err := dlStore.getJob(req.id)
+	dljob, err := g.dlStore.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
 		errV := cos.NewErrNotFound("%s: download job %q", xld.t, req.id)

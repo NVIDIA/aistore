@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
@@ -219,7 +218,6 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// reg more xaction factories
 	space.Xreg(config)
-	dload.Xreg()
 
 	t := newTarget(co)
 	t.init(config)

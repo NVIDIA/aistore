@@ -13,26 +13,11 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 )
 
-var (
-	// global downloader info store
-	db          kvdb.Driver
-	dlStore     *infoStore
-	dlStoreOnce sync.Once
-)
-
 // TODO: stored only in memory, should be persisted at some point (powercycle)
 type infoStore struct {
 	*downloaderDB
 	dljobs map[string]*dljob
 	sync.RWMutex
-}
-
-func SetDB(dbdrv kvdb.Driver) { db = dbdrv }
-
-func initInfoStore(db kvdb.Driver) {
-	dlStoreOnce.Do(func() {
-		dlStore = newInfoStore(db)
-	})
 }
 
 func newInfoStore(driver kvdb.Driver) *infoStore {
