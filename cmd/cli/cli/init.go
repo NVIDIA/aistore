@@ -36,20 +36,30 @@ func Init() (err error) {
 	// http transport and clients: the main one and auth, if enabled
 	//
 	clusterURL = _clusterURL(cfg)
-	defaultHTTPClient = cmn.NewClient(cmn.TransportArgs{
+
+	useHTTPS := cos.IsHTTPS(clusterURL)
+	skipVerify := cfg.Cluster.SkipVerifyCrt
+	if useHTTPS {
+		if s := os.Getenv(env.AIS.SkipVerifyCrt); s != "" {
+			skipVerify = cos.IsParseBool(s)
+		}
+	}
+
+	cargs := cmn.TransportArgs{
 		DialTimeout: cfg.Timeout.TCPTimeout,
 		Timeout:     cfg.Timeout.HTTPTimeout,
-		UseHTTPS:    cos.IsHTTPS(clusterURL),
-		SkipVerify:  cfg.Cluster.SkipVerifyCrt,
-	})
+		UseHTTPS:    useHTTPS,
+	}
+	if useHTTPS {
+		sargs := cmn.TLSArgs{SkipVerify: skipVerify}
+		defaultHTTPClient = cmn.NewClientTLS(cargs, sargs)
+	} else {
+		defaultHTTPClient = cmn.NewClient(cargs)
+	}
 
 	if authnURL := cliAuthnURL(cfg); authnURL != "" {
-		authnHTTPClient = cmn.NewClient(cmn.TransportArgs{
-			DialTimeout: cfg.Timeout.TCPTimeout,
-			Timeout:     cfg.Timeout.HTTPTimeout,
-			UseHTTPS:    cos.IsHTTPS(authnURL),
-			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
-		})
+		debug.Assert(useHTTPS == cos.IsHTTPS(authnURL))
+		authnHTTPClient = defaultHTTPClient
 		authParams = api.BaseParams{
 			Client: authnHTTPClient,
 			URL:    authnURL,

@@ -121,7 +121,7 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		client *http.Client
 	)
 	if config.Net.HTTP.UseHTTPS {
-		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
 	} else {
 		client = cmn.NewClient(cargs)
 	}

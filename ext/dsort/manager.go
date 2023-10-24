@@ -163,7 +163,7 @@ func newClient() {
 		}
 	)
 	if config.Net.HTTP.UseHTTPS {
-		bcastClient = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		bcastClient = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
 	} else {
 		bcastClient = cmn.NewClient(cargs)
 	}
@@ -212,7 +212,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 		UseHTTPS:    m.config.Net.HTTP.UseHTTPS,
 	}
 	if m.config.Net.HTTP.UseHTTPS {
-		m.client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: m.config.Net.HTTP.SkipVerify})
+		m.client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: m.config.Net.HTTP.SkipVerifyTLS})
 	} else {
 		m.client = cmn.NewClient(cargs)
 	}

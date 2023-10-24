@@ -11,6 +11,9 @@ var (
 		PrimaryID     string
 		SkipVerifyCrt string
 		UseHTTPS      string
+		DomainTLS     string
+		ClientCA      string
+		ClientAuthTLS string
 		NumTarget     string
 		NumProxy      string
 		K8sPod        string
@@ -20,6 +23,9 @@ var (
 		PrimaryID:     "AIS_PRIMARY_ID",
 		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
 		UseHTTPS:      "AIS_USE_HTTPS",
+		DomainTLS:     "AIS_DOMAIN_TLS",
+		ClientCA:      "AIS_CLIENT_CA_TLS",
+		ClientAuthTLS: "AIS_CLIENT_AUTH_TLS",
 
 		// Env variables used for tests or CI
 		NumTarget: "NUM_TARGET",

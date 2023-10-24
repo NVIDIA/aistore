@@ -1,7 +1,7 @@
 // Package jsp (JSON persistence) provides utilities to store and load arbitrary
 // JSON-encoded structures with optional checksumming and compression.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package jsp
 
@@ -10,6 +10,8 @@ type (
 		// when non-zero, formatting version of the structure that's being (de)serialized
 		// (not to confuse with the jsp encoding version - see above)
 		Metaver uint32
+		// warn and keep loading
+		OldMetaverOk uint32
 
 		Compress  bool // lz4 when [version == 1 || version == 2]
 		Checksum  bool // xxhash when [version == 1 || version == 2]

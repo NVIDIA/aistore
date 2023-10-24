@@ -306,7 +306,7 @@ func (h *htrun) initCtrlClient(config *cmn.Config) {
 			UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		}
 		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerify,
+			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
 		}
 	)
 	if config.Net.HTTP.UseHTTPS {
@@ -333,7 +333,7 @@ func (h *htrun) initDataClient(config *cmn.Config) {
 			UseHTTPS:        config.Net.HTTP.UseHTTPS,
 		}
 		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerify,
+			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
 		}
 	)
 	if config.Net.HTTP.UseHTTPS {

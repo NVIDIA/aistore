@@ -2054,7 +2054,7 @@ func newRevProxyTransport(config *cmn.Config) *http.Transport {
 		transport = cmn.NewTransport(cmn.TransportArgs{UseHTTPS: config.Net.HTTP.UseHTTPS})
 	)
 	if config.Net.HTTP.UseHTTPS {
-		transport.TLSClientConfig, err = cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		transport.TLSClientConfig, err = cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
 		cos.AssertNoErr(err)
 	}
 	return transport

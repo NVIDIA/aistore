@@ -147,7 +147,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 		client *http.Client
 	)
 	if r.config.Net.HTTP.UseHTTPS {
-		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: r.config.Net.HTTP.SkipVerify})
+		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: r.config.Net.HTTP.SkipVerifyTLS})
 	} else {
 		client = cmn.NewClient(cargs)
 	}

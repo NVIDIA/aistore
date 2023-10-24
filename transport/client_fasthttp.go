@@ -52,7 +52,7 @@ func NewIntraDataClient() Client {
 		WriteBufferSize: wbuf,
 	}
 	if config.Net.HTTP.UseHTTPS {
-		tlsConfig, err := cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerify})
+		tlsConfig, err := cmn.NewTLS(cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
 		cos.AssertNoErr(err)
 		cl.TLSConfig = tlsConfig
 	}

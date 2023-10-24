@@ -40,7 +40,7 @@ func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
 			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		}
 		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerify,
+			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
 		}
 	)
 	hp.httpClient = cmn.NewClient(cargs)

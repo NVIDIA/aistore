@@ -24,9 +24,9 @@ import "github.com/NVIDIA/aistore/cmn/jsp"
 //   `jsp` formats its *signature* and other implementation details.
 
 const (
-	VersionAIStore = "3.20"
-	VersionCLI     = "1.6.7"
-	VersionLoader  = "1.8"
+	VersionAIStore = "3.21.rc1"
+	VersionCLI     = "1.7"
+	VersionLoader  = "1.9"
 	VersionAuthN   = "1.0"
 )
 
@@ -39,7 +39,7 @@ const (
 
 	MetaverLOM = 1 // LOM
 
-	MetaverConfig      = 2 // Global Configuration (jsp)
+	MetaverConfig      = 3 // Global Configuration (jsp)
 	MetaverAuthNConfig = 1 // Authn config (jsp) // ditto
 	MetaverAuthTokens  = 1 // Authn tokens (jsp) // ditto
 

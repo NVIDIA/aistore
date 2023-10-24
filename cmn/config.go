@@ -397,22 +397,28 @@ type (
 
 	HTTPConf struct {
 		Proto           string `json:"-"`                 // http or https (set depending on `UseHTTPS`)
-		Certificate     string `json:"server_crt"`        // HTTPS: openssl certificate
-		Key             string `json:"server_key"`        // HTTPS: openssl key
+		Certificate     string `json:"server_crt"`        // HTTPS: X509 certificate
+		Key             string `json:"server_key"`        // HTTPS: X509 key
+		ServerNameTLS   string `json:"domain_tls"`        // #6410
+		ClientCA        string `json:"client_ca_tls"`     // #6410
+		ClientAuthTLS   int    `json:"client_auth_tls"`   // #6410
 		WriteBufferSize int    `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
 		ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
-		UseHTTPS        bool   `json:"use_https"`         // use HTTPS instead of HTTP
-		SkipVerify      bool   `json:"skip_verify"`       // skip HTTPS cert verification (used with self-signed certs)
-		Chunked         bool   `json:"chunked_transfer"`  // NOTE: not used Feb 2023
+		UseHTTPS        bool   `json:"use_https"`         // use HTTPS
+		SkipVerifyTLS   bool   `json:"skip_verify"`       // skip X509 cert verification (used with self-signed certs)
+		Chunked         bool   `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 	}
 	HTTPConfToSet struct {
 		Certificate     *string `json:"server_crt,omitempty"`
 		Key             *string `json:"server_key,omitempty"`
+		ServerNameTLS   *string `json:"domain_tls,omitempty"`
+		ClientCA        *string `json:"client_ca_tls,omitempty"`
 		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
 		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
+		ClientAuthTLS   *int    `json:"client_auth_tls,omitempty"`
 		UseHTTPS        *bool   `json:"use_https,omitempty"`
-		SkipVerify      *bool   `json:"skip_verify,omitempty"`
-		Chunked         *bool   `json:"chunked_transfer,omitempty"` // https://tools.ietf.org/html/rfc7230#page-36
+		SkipVerifyTLS   *bool   `json:"skip_verify,omitempty"`
+		Chunked         *bool   `json:"chunked_transfer,omitempty"`
 	}
 
 	FSHCConf struct {
@@ -573,11 +579,15 @@ var (
 	_ jsp.Opts = (*ConfigToSet)(nil)
 )
 
-var configJspOpts = jsp.CCSign(MetaverConfig)
+func _jspOpts() jsp.Options {
+	opts := jsp.CCSign(MetaverConfig)
+	opts.OldMetaverOk = 2
+	return opts
+}
 
-func (*ClusterConfig) JspOpts() jsp.Options { return configJspOpts }
 func (*LocalConfig) JspOpts() jsp.Options   { return jsp.Plain() }
-func (*ConfigToSet) JspOpts() jsp.Options   { return configJspOpts }
+func (*ClusterConfig) JspOpts() jsp.Options { return _jspOpts() }
+func (*ConfigToSet) JspOpts() jsp.Options   { return _jspOpts() }
 
 // interface guard
 var (

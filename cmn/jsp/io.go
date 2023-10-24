@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pierrec/lz4/v3"
@@ -116,9 +117,13 @@ func Decode(reader io.ReadCloser, v any, opts Options, tag string) (checksum *co
 		}
 		metaVer = binary.BigEndian.Uint32(prefix[cos.SizeofI64:])
 		if metaVer != opts.Metaver {
-			// NOTE: potential backward compatibility case for the caller
-			err = newErrVersion(tag, metaVer, opts.Metaver)
-			return
+			if opts.OldMetaverOk == 0 || metaVer > opts.Metaver || metaVer < opts.OldMetaverOk {
+				// not backward compatible
+				err = newErrVersion(tag, metaVer, opts.Metaver)
+				return
+			}
+			erw := newErrVersion(tag, metaVer, opts.Metaver, opts.OldMetaverOk)
+			nlog.Warningln(erw, "- proceeding anyway") // nlog depth 3
 		}
 		flags := binary.BigEndian.Uint32(prefix[cos.SizeofI64+cos.SizeofI32:])
 		opts.Compress = flags&(1<<0) != 0
