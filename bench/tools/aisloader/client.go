@@ -32,7 +32,10 @@ var (
 	transportArgs = cmn.TransportArgs{
 		UseHTTPProxyEnv: true,
 	}
-	// TODO: add command-line to set/modify
+	// NOTE: client X509 certificate and other `cmn.TLSArgs` variables can be provided via (os.Getenv) environment.
+	// See also:
+	// - docs/aisloader.md, section "Environment variables"
+	// - AIS_ENDPOINT and aisEndpoint
 	tlsArgs = cmn.TLSArgs{
 		SkipVerify: true,
 	}
@@ -253,7 +256,7 @@ func newTraceCtx() *traceCtx {
 		err       error
 	)
 	if transportArgs.UseHTTPS {
-		transport.TLSClientConfig, err = cmn.NewTLS(cmn.TLSArgs{SkipVerify: tlsArgs.SkipVerify})
+		transport.TLSClientConfig, err = cmn.NewTLS(tlsArgs)
 		cos.AssertNoErr(err)
 	}
 	tctx.tr = &traceableTransport{

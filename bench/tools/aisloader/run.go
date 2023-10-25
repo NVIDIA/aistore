@@ -852,9 +852,16 @@ func validateCmdLine(p *params) (err error) {
 	}
 
 	if !isDirectS3() {
+		// AIS endpoint: http://ip:port _or_ AIS_ENDPOINT env
 		aisEndpoint := "http://" + ip + ":" + port
+
+		// see also: tlsArgs
 		envEndpoint = os.Getenv(env.AIS.Endpoint)
 		if envEndpoint != "" {
+			if ip != "" {
+				return fmt.Errorf("'%s=%s' environment and '--ip=%s' command-line are mutually exclusive",
+					env.AIS.Endpoint, envEndpoint, ip)
+			}
 			aisEndpoint = envEndpoint
 		}
 
@@ -874,6 +881,8 @@ func validateCmdLine(p *params) (err error) {
 	}
 
 	if transportArgs.UseHTTPS {
+		// environment to override client config
+		cmn.EnvToTLS(&tlsArgs)
 		httpClient = cmn.NewClientTLS(transportArgs, tlsArgs)
 	} else {
 		httpClient = cmn.NewClient(transportArgs)

@@ -30,6 +30,7 @@ Detailed protocol-level tracing statistics are also available - see [HTTP tracin
 - [Setup](#Setup)
 - [Command line Options](#command-line-options)
     - [Often used options explanation](#often-used-options-explanation)
+- [Environment variables](#environment-variables)
 - [Examples](#examples)
 - [Collecting stats](#collecting-stats)
     - [Grafana](#grafana)
@@ -232,6 +233,22 @@ Parameters in `aisLoader` that represent the number of bytes can be specified wi
 For example: `8M` would specify 8 MiB.
 The following multiplicative suffixes are supported: 't' or 'T' - TiB 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB.
 Note that this is entirely optional, and therefore an input such as `300` will be interpreted as 300 Bytes.
+
+## Environment variables
+
+Note that AIS cluster endpoint can be defined in two ways:
+
+* as http://ip:port address whereby '--ip' and '--port' are command-line options
+* via `AIS_ENDPOINT` environment universally supported across all AIS clients.
+
+In addition, environment can be used to specify TLS (aka, HTTPS) configuration pertaining to client-side certificates.
+
+| var name | description |
+| -- | -- |
+| AIS_CRT             | X509 certificate |
+| AIS_CRT_KEY         | X509 certificate's private key |
+| AIS_CLIENT_CA       | Cerificate authority that authorized (ie., signed) the certificate |
+| AIS_SKIP_VERIFY_CRT | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
 
 ## Examples
 

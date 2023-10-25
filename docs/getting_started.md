@@ -422,7 +422,16 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 ## TLS: testing with self-signed certificates
 
-Here's a quick playground run. Notice that `server.conf` environment overrides aistore configuration which is also referenced inside the same `server.conf` file.
+Here's a list of related environment variables, and a quick playground run: 6 gateways, 6 targets.
+
+| var name | description |
+| -- | -- |
+| AIS_CRT             | X509 certificate |
+| AIS_CRT_KEY         | X509 certificate's private key |
+| AIS_CLIENT_CA       | Cerificate authority that authorized (ie., signed) the certificate |
+| AIS_SKIP_VERIFY_CRT | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+
+Notice that `server.conf` environment (below) overrides aistore configuration which is also referenced inside the same `server.conf` file.
 
 On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
 
