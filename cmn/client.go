@@ -7,12 +7,15 @@ package cmn
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 type (
@@ -31,7 +34,10 @@ type (
 		UseHTTPS bool
 	}
 	TLSArgs struct {
-		SkipVerify bool
+		ClientCA    string
+		Certificate string
+		Key         string
+		SkipVerify  bool
 	}
 )
 
@@ -88,23 +94,66 @@ func NewTransport(cargs TransportArgs) *http.Transport {
 	return transport
 }
 
-func NewTLS(sargs TLSArgs) (*tls.Config, error) {
-	return &tls.Config{InsecureSkipVerify: sargs.SkipVerify}, nil
+func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
+	var pool *x509.CertPool
+	if sargs.ClientCA != "" {
+		cert, err := os.ReadFile(sargs.ClientCA)
+		if err != nil {
+			return nil, err
+		}
+		pool = x509.NewCertPool()
+		if ok := pool.AppendCertsFromPEM(cert); !ok {
+			return nil, fmt.Errorf("client tls: failed to append CA certs from PEM: %q", sargs.ClientCA)
+		}
+	}
+	tlsConf = &tls.Config{RootCAs: pool, InsecureSkipVerify: sargs.SkipVerify}
+	if sargs.Certificate != "" {
+		cert, err := tls.LoadX509KeyPair(sargs.Certificate, sargs.Key)
+		if err != nil {
+			return nil, err
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+	}
+	return tlsConf, nil
 }
 
+// http client
 func NewClient(cargs TransportArgs) *http.Client {
-	cos.AssertMsg(!cargs.UseHTTPS, "NewClientTLS must be called instead")
+	cos.Assert(!cargs.UseHTTPS)
 	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
 }
 
+func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
+	return NewClientTLS(cargs, config.Net.HTTP.ToTLS())
+}
+
+// https client
 func NewClientTLS(cargs TransportArgs, sargs TLSArgs) *http.Client {
 	transport := NewTransport(cargs)
-	debug.Assert(cargs.UseHTTPS, "no need to call NewClientTLS when not using HTTPS")
+	cos.Assert(cargs.UseHTTPS)
 
 	// initialize TLS config and panic on err
 	tlsConfig, err := NewTLS(sargs)
-	cos.AssertNoErr(err)
+	if err != nil {
+		cos.ExitLog(err)
+	}
 	transport.TLSClientConfig = tlsConfig
 
 	return &http.Client{Transport: transport, Timeout: cargs.Timeout}
+}
+
+// see related: HTTPConf.ToTLS()
+func EnvToTLS(sargs *TLSArgs) {
+	if s := os.Getenv(env.AIS.Certificate); s != "" {
+		sargs.Certificate = s
+	}
+	if s := os.Getenv(env.AIS.CertKey); s != "" {
+		sargs.Key = s
+	}
+	if s := os.Getenv(env.AIS.ClientCA); s != "" {
+		sargs.ClientCA = s
+	}
+	if s := os.Getenv(env.AIS.SkipVerifyCrt); s != "" {
+		sargs.SkipVerify = cos.IsParseBool(s)
+	}
 }

@@ -95,9 +95,10 @@ var (
 func init() {
 	envURL := os.Getenv(env.AIS.Endpoint)
 	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
-	tlsArgs.SkipVerify = cos.IsParseBool(os.Getenv(env.AIS.SkipVerifyCrt))
 
 	if transportArgs.UseHTTPS {
+		// fill in from env
+		cmn.EnvToTLS(&tlsArgs)
 		HTTPClient = cmn.NewClientTLS(transportArgs, tlsArgs)
 	} else {
 		HTTPClient = cmn.NewClient(transportArgs)

@@ -6,6 +6,8 @@ package ais
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	rdebug "runtime/debug"
 	"strings"
 	"sync"
@@ -576,7 +579,7 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go transfer(clientConn, destConn)
 }
 
-func (server *netServer) listen(addr string, logger *log.Logger) (err error) {
+func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config) (err error) {
 	var (
 		httpHandler = server.muxers
 		config      = cmn.GCO.Get()
@@ -592,11 +595,12 @@ func (server *netServer) listen(addr string, logger *log.Logger) (err error) {
 	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport
 	}
+	server.s.TLSConfig = tlsConf
 	server.Unlock()
 retry:
 	if config.Net.HTTP.UseHTTPS {
 		tag = "HTTPS"
-		err = server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key)
+		err = server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.CertKey)
 	} else {
 		err = server.s.ListenAndServe()
 	}
@@ -610,6 +614,25 @@ retry:
 		goto retry
 	}
 	nlog.Errorf("%s terminated with error: %v", tag, err)
+	return
+}
+
+func newTLS(conf *cmn.HTTPConf) (tlsConf *tls.Config, err error) {
+	var (
+		pool       *x509.CertPool
+		caCert     []byte
+		clientAuth = tls.ClientAuthType(conf.ClientAuthTLS)
+	)
+	if clientAuth > tls.RequestClientCert {
+		if caCert, err = os.ReadFile(conf.ClientCA); err != nil {
+			return
+		}
+		pool = x509.NewCertPool()
+		if ok := pool.AppendCertsFromPEM(caCert); !ok {
+			return nil, fmt.Errorf("tls: failed to append CA certs from PEM: %q", conf.ClientCA)
+		}
+	}
+	tlsConf = &tls.Config{ServerName: conf.ServerNameTLS, ClientAuth: clientAuth, ClientCAs: pool}
 	return
 }
 

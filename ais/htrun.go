@@ -7,6 +7,7 @@ package ais
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -298,19 +299,14 @@ func (h *htrun) initCtrlClient(config *cmn.Config) {
 		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
 		defaultControlReadBufferSize  = 16 * cos.KiB
 	)
-	var (
-		cargs = cmn.TransportArgs{
-			Timeout:         config.Client.Timeout.D(),
-			WriteBufferSize: defaultControlWriteBufferSize,
-			ReadBufferSize:  defaultControlReadBufferSize,
-			UseHTTPS:        config.Net.HTTP.UseHTTPS,
-		}
-		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
-		}
-	)
+	cargs := cmn.TransportArgs{
+		Timeout:         config.Client.Timeout.D(),
+		WriteBufferSize: defaultControlWriteBufferSize,
+		ReadBufferSize:  defaultControlReadBufferSize,
+		UseHTTPS:        config.Net.HTTP.UseHTTPS,
+	}
 	if config.Net.HTTP.UseHTTPS {
-		h.client.control = cmn.NewClientTLS(cargs, sargs)
+		h.client.control = cmn.NewIntraClientTLS(cargs, config)
 	} else {
 		h.client.control = cmn.NewClient(cargs)
 	}
@@ -325,19 +321,14 @@ func (h *htrun) initDataClient(config *cmn.Config) {
 	if rbuf == 0 {
 		rbuf = cmn.DefaultReadBufferSize
 	}
-	var (
-		cargs = cmn.TransportArgs{
-			Timeout:         config.Client.TimeoutLong.D(),
-			WriteBufferSize: wbuf,
-			ReadBufferSize:  rbuf,
-			UseHTTPS:        config.Net.HTTP.UseHTTPS,
-		}
-		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
-		}
-	)
+	cargs := cmn.TransportArgs{
+		Timeout:         config.Client.TimeoutLong.D(),
+		WriteBufferSize: wbuf,
+		ReadBufferSize:  rbuf,
+		UseHTTPS:        config.Net.HTTP.UseHTTPS,
+	}
 	if config.Net.HTTP.UseHTTPS {
-		h.client.data = cmn.NewClientTLS(cargs, sargs)
+		h.client.data = cmn.NewIntraClientTLS(cargs, config)
 	} else {
 		h.client.data = cmn.NewClient(cargs)
 	}
@@ -505,18 +496,28 @@ func (h *htrun) setDaemonConfigQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *htrun) run(config *cmn.Config) error {
-	logger := log.New(&nlogWriter{}, "net/http err: ", 0) // a wrapper to log http.Server errors
+	var (
+		tlsConf *tls.Config
+		logger  = log.New(&nlogWriter{}, "net/http err: ", 0) // a wrapper to log http.Server errors
+	)
+	if config.Net.HTTP.UseHTTPS {
+		c, err := newTLS(&config.Net.HTTP)
+		if err != nil {
+			cos.ExitLog(err)
+		}
+		tlsConf = c
+	}
 	if config.HostNet.UseIntraControl {
 		go func() {
-			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger)
+			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf)
 		}()
 	}
 	if config.HostNet.UseIntraData {
 		go func() {
-			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger)
+			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf)
 		}()
 	}
-	return h.netServ.pub.listen(h.pubListeningAddr(config), logger)
+	return h.netServ.pub.listen(h.pubListeningAddr(config), logger, tlsConf)
 }
 
 // testing environment excluding Kubernetes: listen on `host:port`

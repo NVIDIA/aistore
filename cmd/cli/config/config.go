@@ -33,7 +33,11 @@ type (
 		URL               string `json:"url"`
 		DefaultAISHost    string `json:"default_ais_host"`
 		DefaultDockerHost string `json:"default_docker_host"`
-		SkipVerifyCrt     bool   `json:"skip_verify_crt"`
+		// TLS
+		Certificate   string `json:"client_crt"`     // X509 certificate
+		CertKey       string `json:"client_crt_key"` // X509 key
+		ClientCA      string `json:"client_ca_tls"`  // #6410
+		SkipVerifyCrt bool   `json:"skip_verify_crt"`
 	}
 	TimeoutConfig struct {
 		TCPTimeoutStr  string        `json:"tcp_timeout"`

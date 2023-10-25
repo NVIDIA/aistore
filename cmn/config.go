@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -398,26 +399,26 @@ type (
 	HTTPConf struct {
 		Proto           string `json:"-"`                 // http or https (set depending on `UseHTTPS`)
 		Certificate     string `json:"server_crt"`        // HTTPS: X509 certificate
-		Key             string `json:"server_key"`        // HTTPS: X509 key
+		CertKey         string `json:"server_key"`        // HTTPS: X509 key
 		ServerNameTLS   string `json:"domain_tls"`        // #6410
 		ClientCA        string `json:"client_ca_tls"`     // #6410
-		ClientAuthTLS   int    `json:"client_auth_tls"`   // #6410
+		ClientAuthTLS   int    `json:"client_auth_tls"`   // #6410 tls.ClientAuthType enum
 		WriteBufferSize int    `json:"write_buffer_size"` // http.Transport.WriteBufferSize; zero defaults to 4KB
 		ReadBufferSize  int    `json:"read_buffer_size"`  // http.Transport.ReadBufferSize; ditto
 		UseHTTPS        bool   `json:"use_https"`         // use HTTPS
-		SkipVerifyTLS   bool   `json:"skip_verify"`       // skip X509 cert verification (used with self-signed certs)
+		SkipVerifyCrt   bool   `json:"skip_verify"`       // skip X509 cert verification (used with self-signed certs)
 		Chunked         bool   `json:"chunked_transfer"`  // (https://tools.ietf.org/html/rfc7230#page-36; not used since 02/23)
 	}
 	HTTPConfToSet struct {
 		Certificate     *string `json:"server_crt,omitempty"`
-		Key             *string `json:"server_key,omitempty"`
+		CertKey         *string `json:"server_key,omitempty"`
 		ServerNameTLS   *string `json:"domain_tls,omitempty"`
 		ClientCA        *string `json:"client_ca_tls,omitempty"`
 		WriteBufferSize *int    `json:"write_buffer_size,omitempty" list:"readonly"`
 		ReadBufferSize  *int    `json:"read_buffer_size,omitempty" list:"readonly"`
 		ClientAuthTLS   *int    `json:"client_auth_tls,omitempty"`
 		UseHTTPS        *bool   `json:"use_https,omitempty"`
-		SkipVerifyTLS   *bool   `json:"skip_verify,omitempty"`
+		SkipVerifyCrt   *bool   `json:"skip_verify,omitempty"`
 		Chunked         *bool   `json:"chunked_transfer,omitempty"`
 	}
 
@@ -1198,7 +1199,21 @@ func (c *NetConf) Validate() (err error) {
 	if c.HTTP.UseHTTPS {
 		c.HTTP.Proto = "https"
 	}
+	if c.HTTP.ClientAuthTLS < int(tls.NoClientCert) || c.HTTP.ClientAuthTLS > int(tls.RequireAndVerifyClientCert) {
+		return fmt.Errorf("invalid client_auth_tls %d (expecting range [0 - %d])", c.HTTP.ClientAuthTLS,
+			tls.RequireAndVerifyClientCert)
+	}
 	return nil
+}
+
+// used intra-clients; see related: EnvToTLS()
+func (c *HTTPConf) ToTLS() TLSArgs {
+	return TLSArgs{
+		Certificate: c.Certificate,
+		Key:         c.CertKey,
+		ClientCA:    c.ClientCA,
+		SkipVerify:  c.SkipVerifyCrt,
+	}
 }
 
 ////////////////////

@@ -133,7 +133,7 @@ var (
 
 func Pinit(si cluster.Node) {
 	psi = si
-	newClient()
+	newBcastClient()
 }
 
 func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
@@ -151,10 +151,10 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
 
-	newClient()
+	newBcastClient()
 }
 
-func newClient() {
+func newBcastClient() {
 	var (
 		config = cmn.GCO.Get()
 		cargs  = cmn.TransportArgs{
@@ -163,7 +163,7 @@ func newClient() {
 		}
 	)
 	if config.Net.HTTP.UseHTTPS {
-		bcastClient = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
+		bcastClient = cmn.NewIntraClientTLS(cargs, config)
 	} else {
 		bcastClient = cmn.NewClient(cargs)
 	}
@@ -212,7 +212,7 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 		UseHTTPS:    m.config.Net.HTTP.UseHTTPS,
 	}
 	if m.config.Net.HTTP.UseHTTPS {
-		m.client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: m.config.Net.HTTP.SkipVerifyTLS})
+		m.client = cmn.NewIntraClientTLS(cargs, m.config)
 	} else {
 		m.client = cmn.NewClient(cargs)
 	}

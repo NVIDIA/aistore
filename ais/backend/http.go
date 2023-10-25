@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -40,7 +39,7 @@ func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
 			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
 		}
 		sargs = cmn.TLSArgs{
-			SkipVerify: config.Net.HTTP.SkipVerifyTLS,
+			SkipVerify: true, // TODO: may need more tls config to access remote URLs
 		}
 	)
 	hp.httpClient = cmn.NewClient(cargs)
@@ -51,7 +50,7 @@ func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
 }
 
 func (hp *httpProvider) client(u string) *http.Client {
-	if strings.HasPrefix(u, "https") {
+	if cos.IsHTTPS(u) {
 		return hp.httpsClient
 	}
 	return hp.httpClient

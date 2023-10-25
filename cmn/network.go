@@ -19,16 +19,13 @@ const (
 	NetIntraData    = "INTRA-DATA"
 )
 
-// NOTE: as of Go 1.16, http.DefaultTransport has the following defaults:
-//
-//       MaxIdleConns:          100,
-//       MaxIdleConnsPerHost :  2 (via DefaultMaxIdleConnsPerHost)
-//       IdleConnTimeout:       90 * time.Second,
-//       WriteBufferSize:       4KB
-//       ReadBufferSize:        4KB
-//
+// http.DefaultTransport has the following defaults:
+// - MaxIdleConns:          100,
+// - MaxIdleConnsPerHost :  2 (via DefaultMaxIdleConnsPerHost)
+// - IdleConnTimeout:       90 * time.Second,
+// - WriteBufferSize:       4KB
+// - ReadBufferSize:        4KB
 // Following are the constants we use by default:
-
 const (
 	DefaultMaxIdleConns        = 64
 	DefaultMaxIdleConnsPerHost = 16

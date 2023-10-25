@@ -49,7 +49,7 @@ func NewIntraDataClient() (client *http.Client) {
 		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 	}
 	if config.Net.HTTP.UseHTTPS {
-		client = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: config.Net.HTTP.SkipVerifyTLS})
+		client = cmn.NewClientTLS(cargs, config.Net.HTTP.ToTLS())
 	} else {
 		client = cmn.NewClient(cargs)
 	}

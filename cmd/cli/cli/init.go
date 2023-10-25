@@ -32,26 +32,28 @@ func Init() (err error) {
 	// auth
 	loggedUserToken = authn.LoadToken("")
 
-	//
-	// http transport and clients: the main one and auth, if enabled
-	//
+	// http clients: the main one and the auth, if enabled
 	clusterURL = _clusterURL(cfg)
 
-	useHTTPS := cos.IsHTTPS(clusterURL)
-	skipVerify := cfg.Cluster.SkipVerifyCrt
-	if useHTTPS {
-		if s := os.Getenv(env.AIS.SkipVerifyCrt); s != "" {
-			skipVerify = cos.IsParseBool(s)
+	var (
+		useHTTPS = cos.IsHTTPS(clusterURL)
+		cargs    = cmn.TransportArgs{
+			DialTimeout: cfg.Timeout.TCPTimeout,
+			Timeout:     cfg.Timeout.HTTPTimeout,
+			UseHTTPS:    useHTTPS,
 		}
-	}
-
-	cargs := cmn.TransportArgs{
-		DialTimeout: cfg.Timeout.TCPTimeout,
-		Timeout:     cfg.Timeout.HTTPTimeout,
-		UseHTTPS:    useHTTPS,
+		sargs = cmn.TLSArgs{
+			ClientCA:    cfg.Cluster.ClientCA,
+			Certificate: cfg.Cluster.Certificate,
+			Key:         cfg.Cluster.CertKey,
+			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
+		}
+	)
+	if useHTTPS {
+		// environment to override client config
+		cmn.EnvToTLS(&sargs)
 	}
 	if useHTTPS {
-		sargs := cmn.TLSArgs{SkipVerify: skipVerify}
 		defaultHTTPClient = cmn.NewClientTLS(cargs, sargs)
 	} else {
 		defaultHTTPClient = cmn.NewClient(cargs)
