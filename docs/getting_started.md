@@ -76,6 +76,7 @@ The rest of this document is structured as follows:
 - [HTTPS from scratch](#https-from-scratch)
 - [Build, Make and Development Tools](#build-make-and-development-tools)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
+- [TLS: testing with self-signed certificates](#tls-testing-with-self-signed-certificates)
 
 ## Local Playground
 
@@ -418,3 +419,19 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 > Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
+
+## TLS: testing with self-signed certificates
+
+Here's a quick playground run. Notice that `server.conf` environment overrides aistore configuration which is also referenced inside the same `server.conf` file.
+
+On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
+
+```console
+$ source ais/test/tls-env/server.conf
+$ source ais/test/tls-env/client.conf
+$ AIS_USE_HTTPS=true make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\nn\n'
+```
+
+Prerequisites:
+
+* `/tmp/tls` (or any other location of your choosing) must contain valid, possibly `openssl`-generated and self-signed, X509 certs for the CLI and aistore itself.
