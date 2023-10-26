@@ -21,18 +21,23 @@ var (
 		// K8s
 		K8sPod string
 	}{
+		// the way to designate primary when cluster's starting up
 		Endpoint:  "AIS_ENDPOINT",
 		IsPrimary: "AIS_IS_PRIMARY",
 		PrimaryID: "AIS_PRIMARY_ID",
-		UseHTTPS:  "AIS_USE_HTTPS",
+
+		// false: HTTP transport, with all the TLS config (below) ignored
+		// true:  HTTPS/TLS
+		UseHTTPS: "AIS_USE_HTTPS", // cluster config: "net.http.use_https"
 
 		// TLS: client side
-		Certificate:   "AIS_CRT",
-		CertKey:       "AIS_CRT_KEY",
-		ClientCA:      "AIS_CLIENT_CA",
-		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT",
+		Certificate: "AIS_CRT",
+		CertKey:     "AIS_CRT_KEY",
+		ClientCA:    "AIS_CLIENT_CA",
+		// TLS: common
+		SkipVerifyCrt: "AIS_SKIP_VERIFY_CRT", // cluster config: "net.http.skip_verify"
 
-		// Env variables used for tests or CI
+		// variables used in tests and CI
 		NumTarget: "NUM_TARGET",
 		NumProxy:  "NUM_PROXY",
 

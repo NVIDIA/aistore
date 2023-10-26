@@ -107,11 +107,6 @@ For the most recently updated command-line options and examples, please run `ais
 | -usage | `bool` | Show command-line options, usage, and examples | `false` |
 | -verifyhash | `bool` | checksum-validate GET: recompute object checksums and validate it against the one received with the GET metadata | `true` |
 
-### Options via environment variables
-
-| Environment Variable | Type | Description |
-| `AIS_ENDPOINT` | `string` | Address of a cluster which aisloader will generate load on. Overrides `ip` and `port` flags. |
-
 ### Often used options explanation
 
 #### Duration
@@ -236,19 +231,29 @@ Note that this is entirely optional, and therefore an input such as `300` will b
 
 ## Environment variables
 
-Note that AIS cluster endpoint can be defined in two ways:
+| Environment Variable | Type | Description |
+| -- | -- | -- |
+| `AIS_ENDPOINT` | `string` | Cluster's endpoint: http or https address of any aistore gateway in this cluster. Overrides `ip` and `port` flags. |
 
-* as http://ip:port address whereby '--ip' and '--port' are command-line options
-* via `AIS_ENDPOINT` environment universally supported across all AIS clients.
+To state the same slightly differently, cluster endpoint can be defined in two ways:
 
-In addition, environment can be used to specify TLS (aka, HTTPS) configuration pertaining to client-side certificates.
+* as (plain) http://ip:port address, whereby '--ip' and '--port' are command-line options.
+* via `AIS_ENDPOINT` environment universally supported across all AIS clients, e.g.:
+
+```console
+$ export AIS_ENDPOINT=https://10.07.56.68:51080
+```
+
+In addition, environment can be used to specify client-side TLS (aka, HTTPS) configuration:
 
 | var name | description |
 | -- | -- |
-| AIS_CRT             | X509 certificate |
-| AIS_CRT_KEY         | X509 certificate's private key |
-| AIS_CLIENT_CA       | Cerificate authority that authorized (ie., signed) the certificate |
-| AIS_SKIP_VERIFY_CRT | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+| `AIS_CRT`             | X509 certificate |
+| `AIS_CRT_KEY`         | X509 certificate's private key |
+| `AIS_CLIENT_CA`       | Certificate authority that authorized (signed) the certificate |
+| `AIS_SKIP_VERIFY_CRT` | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
+
+* See also: [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
 
 ## Examples
 

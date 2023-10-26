@@ -225,6 +225,10 @@ For developers, CLI `ais config cluster log.modules ec xs` (for instance) would 
 
 > To list all log modules, type `ais config cluster` or `ais config node` and press `<TAB-TAB>`.
 
+Finally, there's also HTTPS configuration (including **X509** certificates and options), and the corresponding [environment](#tls-testing-with-self-signed-certificates).
+
+For details, please see section [TLS: testing with self-signed certificates](#tls-testing-with-self-signed-certificates) below.
+
 ## Multiple deployment options
 
 All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder has a pair: {`Dockerfile`, `Makefile`}.
@@ -422,18 +426,7 @@ Further, given the container's cgroup/memory limitation, each AIS node adjusts t
 
 ## TLS: testing with self-signed certificates
 
-Here's a list of related environment variables, and a quick playground run: 6 gateways, 6 targets.
-
-| var name | description |
-| -- | -- |
-| AIS_CRT             | X509 certificate |
-| AIS_CRT_KEY         | X509 certificate's private key |
-| AIS_CLIENT_CA       | Cerificate authority that authorized (ie., signed) the certificate |
-| AIS_SKIP_VERIFY_CRT | true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) |
-
-Notice that `server.conf` environment (below) overrides aistore configuration which is also referenced inside the same `server.conf` file.
-
-On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
+Local playground run: 6 gateways, 6 targets:
 
 ```console
 $ source ais/test/tls-env/server.conf
@@ -441,6 +434,31 @@ $ source ais/test/tls-env/client.conf
 $ AIS_USE_HTTPS=true make kill cli deploy <<< $'6\n6\n4\ny\ny\nn\nn\n'
 ```
 
+Notice that when the cluster is first time deployed `server.conf` environment (above) overrides aistore cluster configuration.
+
+> Environment is ignored upon cluster restarts and upgrades.
+
+Here's a quick summary of the corresponding configuration variables (that are also referenced inside `ais/test/tls-env/server.conf`).
+
+| var name | description | the corresponding cluster configuration |
+| -- | -- | -- |
+| `AIS_USE_HTTPS`       | when false, we use plain HTTP with all the TLS config (below) simply **ignored** | "net.http.use_https" |
+| -- | -- | -- |
+| `AIS_SERVER_CRT`         | aistore cluster X509 certificate | "net.http.server_crt" |
+| `AIS_SERVER_KEY`         | certificate's private key | "net.http.server_key"|
+| `AIS_DOMAIN_TLS`         | domain, hostname, or Subject Alternative Name (SAN) registered with the certificate | "net.http.domain_tls"|
+| `AIS_CLIENT_CA_TLS`       | Certificate authority that authorized (signed) the certificate | "net.http.client_ca_tls" |
+| `AIS_CLIENT_AUTH_TLS`       | Client authentication during TLS handshake: a range from 0 (no authentication) to 4 (request and validate client's certificate) | "net.http.client_auth_tls" |
+| `AIS_SKIP_VERIFY_CRT` | when true: skip X509 cert verification (usually enabled to circumvent limitations of self-signed certs) | "net.http.skip_verify" |
+
+
+On the other hand, `ais/test/tls-env/client.conf` contains environment variables to override CLI config. The correspondence between environment and config names is easy to see as well.
+
 Prerequisites:
 
-* `/tmp/tls` (or any other location of your choosing) must contain valid, possibly `openssl`-generated and self-signed, X509 certs for the CLI and aistore itself.
+* `/tmp/tls` (or any other location of your choosing) must contain valid X509 certs for both the CLI (and aisloader, other clients), and aistore itself.
+* testing-wise,`openssl`-generated and self-signed X509 certs will be perfectly fine.
+
+See also:
+
+* [Client-side TLS environment](/docs/cli.md#environment-variables)
