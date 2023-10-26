@@ -116,12 +116,15 @@ func (reqParams *ReqParams) DoRequest() error {
 }
 
 // same as above except that it also returns response header
-func (reqParams *ReqParams) doReqHdr() (http.Header, int, error) {
+func (reqParams *ReqParams) doReqHdr() (_ http.Header, status int, _ error) {
 	resp, err := reqParams.do()
-	if err != nil {
-		return nil, resp.StatusCode, err
+	if err == nil {
+		return resp.Header, resp.StatusCode, reqParams.cdc(resp)
 	}
-	return resp.Header, resp.StatusCode, reqParams.cdc(resp)
+	if resp != nil {
+		status = resp.StatusCode
+	}
+	return nil, status, err
 }
 
 // Makes request via do(), decodes `resp.Body` into the `out` structure,

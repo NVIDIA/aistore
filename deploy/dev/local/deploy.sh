@@ -255,6 +255,9 @@ if command -v pgrep &> /dev/null; then
    run_count=$(pgrep -a aisnode | grep -c "${NEXT_TIER}")
    if [[ "${run_count}" -eq $((TARGET_CNT + PROXY_CNT)) ]]; then
       echo "${listening_on}"
+      if [[ -z $DEPLOY_AS_NEXT_TIER ]]; then
+         echo "Primary endpoint: ${AIS_PRIMARY_URL}"
+      fi
    fi
 else
    echo "Warning: pgrep not found"

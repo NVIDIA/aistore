@@ -9,6 +9,7 @@ package debug
 import (
 	"bytes"
 	"expvar"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/pprof"
@@ -55,8 +56,12 @@ func _panic(a ...any) {
 			fmt.Fprintf(buffer, "%s:%d", f, line)
 		}
 	}
-	nlog.Errorf("%s", buffer.Bytes())
-	nlog.Flush(true)
+	if flag.Parsed() {
+		nlog.Errorln(buffer.String())
+		nlog.Flush(true)
+	} else {
+		fmt.Fprintln(os.Stderr, buffer.String())
+	}
 	panic(msg)
 }
 

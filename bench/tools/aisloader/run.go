@@ -73,6 +73,9 @@ const (
 	wo2FreeDelay = 3*time.Second + time.Millisecond
 
 	ua = "aisloader"
+
+	defaultClusterIP   = "localhost"
+	defaultClusterIPv4 = "127.0.0.1"
 )
 
 type (
@@ -501,7 +504,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
 		"ais - for AIS bucket, \"aws\", \"azure\", \"gcp\", \"hdfs\"  for Azure, Amazon, Google, and HDFS clouds respectively")
 
-	f.StringVar(&ip, "ip", "localhost", "AIS proxy/gateway IP address or hostname")
+	f.StringVar(&ip, "ip", defaultClusterIP, "AIS proxy/gateway IP address or hostname")
 	f.StringVar(&port, "port", "8080", "AIS proxy/gateway port")
 
 	//
@@ -676,7 +679,7 @@ func validateCmdLine(p *params) (err error) {
 		if p.randomProxy {
 			return errors.New("command line options '-s3endpoint' and '-randomproxy' are mutually exclusive")
 		}
-		if ip != "" && ip != "localhost" && ip != "127.0.0.1" { // TODO: hardcoded default
+		if ip != "" && ip != defaultClusterIP && ip != defaultClusterIPv4 {
 			return errors.New("command line options '-s3endpoint' and '-ip' are mutually exclusive")
 		}
 		if port != "" && port != "8080" { // TODO: ditto
@@ -858,7 +861,7 @@ func validateCmdLine(p *params) (err error) {
 		// see also: tlsArgs
 		envEndpoint = os.Getenv(env.AIS.Endpoint)
 		if envEndpoint != "" {
-			if ip != "" {
+			if ip != "" && ip != defaultClusterIP && ip != defaultClusterIPv4 {
 				return fmt.Errorf("'%s=%s' environment and '--ip=%s' command-line are mutually exclusive",
 					env.AIS.Endpoint, envEndpoint, ip)
 			}

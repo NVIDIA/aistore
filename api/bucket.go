@@ -90,7 +90,6 @@ func HeadBucket(bp BaseParams, bck cmn.Bck, dontAddRemote bool) (p *cmn.Bprops, 
 func hdr2msg(bck cmn.Bck, status int, err error) error {
 	herr, ok := err.(*cmn.ErrHTTP)
 	if !ok {
-		debug.FailTypeCast(err)
 		return err
 	}
 	debug.Assert(herr.Status == status)

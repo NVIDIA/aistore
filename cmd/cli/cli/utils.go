@@ -458,7 +458,10 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck, herr.Message)
 		}
 	} else {
-		err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
+		msg := strings.ToLower(err.Error())
+		if !strings.HasPrefix(msg, "head \"http") && !strings.HasPrefix(msg, "head http") {
+			err = fmt.Errorf("failed to HEAD bucket %q: %v", bck, err)
+		}
 	}
 	return
 }
