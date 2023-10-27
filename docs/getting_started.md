@@ -22,12 +22,18 @@ For datasets, say, below 50TB a single host may suffice and should, therefore, b
 
 AIStore runs on commodity Linux machines with no special requirements whatsoever. It is expected that within a given cluster, all AIS [targets](/docs/overview.md#key-concepts-and-diagrams) are identical, hardware-wise.
 
-* [Linux](#Linux) (with `GCC`, `sysstat` and `attr` packages, and kernel 4.15+) or [macOS](#macOS)
-* [Go 1.20 or later](https://golang.org/dl/)
+* [Linux](#Linux) distribution with `GCC`, `sysstat`, `attr` and `util-linux` packages(**)
+* Linux kernel 5.15+
+* [Go 1.21 or later](https://golang.org/dl/)
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
 
-> See also: `CROSS_COMPILE` comment below.
+> (**) [Mac](#macOS) is supported as a 2nd _development_ option.
+
+See also:
+
+* Section [assorted command lines](#assorted-command-lines), and
+* `CROSS_COMPILE` comment below.
 
 ### Linux
 
@@ -51,8 +57,24 @@ $ getfattr -n user.bar foo
 
 ### macOS
 
-macOS/Darwin is also supported, albeit for development only.
-Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks) may be missing, which is why we **strongly** recommend Linux for production deployments.
+macOS/Darwin is also supported, albeit for **development only**. Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks):
+
+```console
+$ find . -name "*darwin*"
+./fs/fs_darwin.go
+./cmn/cos/err_darwin.go
+./sys/proc_darwin.go
+./sys/cpu_darwin.go
+./sys/mem_darwin.go
+./bench/microbenchmarks/nstlvl/drop_caches_darwin.go
+./ios/diskstats_darwin.go
+./ios/dutils_darwin.go
+./ios/fsutils_darwin.go
+```
+
+may be missing.
+
+Benchmarking and stress-testing is also being done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
 
 The rest of this document is structured as follows:
 
@@ -77,6 +99,7 @@ The rest of this document is structured as follows:
 - [Build, Make and Development Tools](#build-make-and-development-tools)
 - [Containerized Deployments: Host Resource Sharing](#containerized-deployments-host-resource-sharing)
 - [TLS: testing with self-signed certificates](#tls-testing-with-self-signed-certificates)
+- [Assorted command lines](#assorted-command-lines)
 
 ## Local Playground
 
@@ -462,3 +485,16 @@ Prerequisites:
 See also:
 
 * [Client-side TLS environment](/docs/cli.md#environment-variables)
+
+
+## Assorted command lines
+
+AIStore targets may execute (and parse the output of) the following 3 commands:
+
+```console
+$ du -bc
+$ lsblk -Jt
+$ df -PT    # e.g., `df -PT /tmp/foo`
+```
+
+**Tip**: prior to deploying AIS cluster the very first time, run these commands and check the output for "invalid option" (or lack of thereof). Also, make sure `getfattr` and `setfattr` are available and do work. That'd be a quick and simple way to ensure your Linux distribution readiness for deployment.

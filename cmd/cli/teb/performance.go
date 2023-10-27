@@ -141,9 +141,14 @@ func NewPerformanceTab(st StstMap, c *PerfTabCtx) (*Table, int /*numNZ non-zero 
 				continue
 			}
 
-			// format value
 			v, ok := ds.Tracker[h.name]
-			debug.Assert(ok, h.name)
+			if !ok {
+				// t[tid] doesn't have this metric (likely, zero value)
+				row = append(row, unknownVal)
+				continue
+			}
+
+			// format value
 			kind, ok := c.Metrics[h.name]
 			debug.Assert(ok, h.name)
 			printedValue := FmtStatValue(h.name, kind, v.Value, c.Units)
