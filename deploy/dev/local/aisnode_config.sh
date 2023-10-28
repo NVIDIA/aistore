@@ -88,7 +88,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"checksum": {
 		"type":			"xxhash",
-		"validate_cold_get":	true,
+		"validate_cold_get":	false,
 		"validate_warm_get":	false,
 		"validate_obj_move":	false,
 		"enable_read_range":	false

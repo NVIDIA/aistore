@@ -4,7 +4,7 @@
 Bucket props successfully updated.
 PROPERTY	     VALUE
 access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,DISCONNECTED-BACKEND,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
-checksum	 Type: xxhash | Validate: ColdGET
+^.*checksum	 Type: xxhash | Validate:.*$
 ^.*created.*$
 ec		 Disabled
 lru		 Disabled
@@ -18,7 +18,7 @@ Bucket props successfully reset to cluster defaults
 Bucket props successfully updated.
  PROPERTY	 VALUE
 access           GET,HEAD-OBJECT,PUT,APPEND,DELETE-OBJECT,MOVE-OBJECT,PROMOTE,DISCONNECTED-BACKEND,HEAD-BUCKET,LIST-OBJECTS,PATCH,SET-BUCKET-ACL,LIST-BUCKETS,SHOW-CLUSTER,CREATE-BUCKET,DESTROY-BUCKET,MOVE-BUCKET,ADMIN
-checksum	 Type: xxhash | Validate: ColdGET
+^.*checksum	 Type: xxhash | Validate:.*$
 ^.*created.*$
 ec		     Disabled
 lru		     Disabled

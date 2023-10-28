@@ -481,7 +481,9 @@ func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
 	case cmn.OwtMigrate, cmn.OwtPromote, cmn.OwtFinalize:
 		v = c.ValidateObjMove
-	case cmn.OwtPut, cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
+	case cmn.OwtPut:
+		v = true
+	case cmn.OwtGetTryLock, cmn.OwtGetLock, cmn.OwtGet:
 		v = c.ValidateColdGet
 	case cmn.OwtGetPrefetchLock:
 	default:

@@ -1363,20 +1363,49 @@ func corruptSingleBitInFile(t *testing.T, bck cmn.Bck, objName string) {
 
 func TestPutObjectWithChecksum(t *testing.T) {
 	var (
-		proxyURL   = tools.RandomProxyURL(t)
-		baseParams = tools.BaseAPIParams(proxyURL)
-		bckLocal   = cmn.Bck{
-			Name:     cliBck.Name,
-			Provider: apc.AIS,
-		}
+		proxyURL     = tools.RandomProxyURL(t)
+		baseParams   = tools.BaseAPIParams(proxyURL)
+		bck          = cliBck
 		basefileName = "mytestobj.txt"
 		objData      = []byte("I am object data")
 		badCksumVal  = "badchecksum"
 	)
-	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
+
+	if bck.IsAIS() {
+		tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	} else {
+		t.Cleanup(func() {
+			m := ioContext{
+				t:   t,
+				bck: bck,
+			}
+			m.del(-1 /*delete all*/, 0 /* lsmsg.Flags */)
+		})
+	}
+
+	bprops, err := api.HeadBucket(baseParams, bck, false /* don't add */)
+	tassert.CheckFatal(t, err)
+
+	// Enable Cold Get Validation
+	if !bprops.Cksum.ValidateColdGet {
+		propsToSet := &cmn.BpropsToSet{
+			Cksum: &cmn.CksumConfToSet{
+				ValidateColdGet: apc.Bool(true),
+			},
+		}
+		_, err = api.SetBucketProps(baseParams, bck, propsToSet)
+		tassert.CheckFatal(t, err)
+
+		t.Cleanup(func() {
+			propsToSet.Cksum.ValidateColdGet = apc.Bool(false)
+			_, err = api.SetBucketProps(baseParams, bck, propsToSet)
+			tassert.CheckError(t, err)
+		})
+	}
+
 	putArgs := api.PutArgs{
 		BaseParams: baseParams,
-		Bck:        bckLocal,
+		Bck:        bck,
 		Reader:     readers.NewBytes(objData),
 	}
 	for _, cksumType := range cos.SupportedChecksums() {
@@ -1395,7 +1424,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 			t.Errorf("Bad checksum provided by the user, Expected an error")
 		}
 
-		_, err = api.HeadObject(baseParams, bckLocal, fileName, apc.FltExists, false /*silent*/)
+		_, err = api.HeadObject(baseParams, bck, fileName, apc.FltExists, false /*silent*/)
 		if err == nil || !strings.Contains(err.Error(), strconv.Itoa(http.StatusNotFound)) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
@@ -1404,7 +1433,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		if err != nil {
 			t.Errorf("Correct checksum provided, Err encountered %v", err)
 		}
-		op, err := api.HeadObject(baseParams, bckLocal, fileName, apc.FltPresent, false /*silent*/)
+		op, err := api.HeadObject(baseParams, bck, fileName, apc.FltPresent, false /*silent*/)
 		if err != nil {
 			t.Errorf("Object %s does not exist despite correct checksum", fileName)
 		}
