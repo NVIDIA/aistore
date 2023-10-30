@@ -340,20 +340,20 @@ func Start(version, buildtime string) (err error) {
 	gmm.RegWithHK()
 
 	if etlInitSpec != nil {
-		fmt.Println(prettyTimestamp() + " Waiting for an ETL to start...")
+		fmt.Println(now(), "Starting ETL...")
 		etlName, err = api.ETLInit(runParams.bp, etlInitSpec)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ETL: %v", err)
 		}
-		fmt.Println(prettyTimestamp() + " ETL started")
+		fmt.Println(now(), etlName, "started")
 
 		defer func() {
-			fmt.Println(prettyTimestamp() + " Stopping the ETL...")
+			fmt.Println(now(), "Stopping ETL", etlName)
 			if err := api.ETLStop(runParams.bp, etlName); err != nil {
-				fmt.Printf("%s Failed to stop the ETL: %v\n", prettyTimestamp(), err)
+				fmt.Printf("%s Failed to stop ETL %s: %v\n", now(), etlName, err)
 				return
 			}
-			fmt.Println(prettyTimestamp() + " ETL stopped")
+			fmt.Println(now(), etlName, "stopped")
 		}()
 	}
 
@@ -1038,7 +1038,7 @@ func sendStatsdStats(s *sts) {
 func cleanup() {
 	stopping.Store(true)
 	time.Sleep(time.Second)
-	fmt.Println(prettyTimestamp() + " Cleaning up...")
+	fmt.Println(now() + " Cleaning up...")
 	if bucketObjsNames != nil {
 		// `bucketObjsNames` has been actually assigned to/initialized.
 		var (
@@ -1061,7 +1061,7 @@ func cleanup() {
 	if runParams.bck.IsAIS() {
 		api.DestroyBucket(runParams.bp, runParams.bck)
 	}
-	fmt.Println(prettyTimestamp() + " Done")
+	fmt.Println(now() + " Done")
 }
 
 func cleanupObjs(objs []string, wg *sync.WaitGroup) {

@@ -28,7 +28,7 @@ AIStore runs on commodity Linux machines with no special requirements whatsoever
 * Extended attributes (`xattrs` - see next section)
 * Optionally, Amazon (AWS), Google Cloud Platform (GCP), and/or Azure Cloud Storage accounts.
 
-> (**) [Mac](#macOS) is supported as a 2nd _development_ option.
+> (**) [Mac](#macOS) is also supported albeit in a limited (development only) way.
 
 See also:
 
@@ -57,22 +57,21 @@ $ getfattr -n user.bar foo
 
 ### macOS
 
-macOS/Darwin is also supported, albeit for **development only**. Certain capabilities related to querying the state and status of local hardware resources (memory, CPU, disks):
+For developers, there's also macOS aka Darwin option. Certain capabilities related to querrying the state and status of local hardware resources (memory, CPU, disks) may be missing. In fact, it is easy to review specifics with a quick check on the sources:
 
 ```console
 $ find . -name "*darwin*"
+
 ./fs/fs_darwin.go
 ./cmn/cos/err_darwin.go
 ./sys/proc_darwin.go
 ./sys/cpu_darwin.go
 ./sys/mem_darwin.go
-./bench/microbenchmarks/nstlvl/drop_caches_darwin.go
 ./ios/diskstats_darwin.go
 ./ios/dutils_darwin.go
 ./ios/fsutils_darwin.go
+...
 ```
-
-may be missing.
 
 Benchmarking and stress-testing is also being done on Linux only - another reason to consider Linux (and only Linux) for production deployments.
 
@@ -497,4 +496,6 @@ $ lsblk -Jt
 $ df -PT    # e.g., `df -PT /tmp/foo`
 ```
 
-**Tip**: prior to deploying AIS cluster the very first time, run these commands and check the output for "invalid option" (or lack of thereof). Also, make sure `getfattr` and `setfattr` are available and do work. That'd be a quick and simple way to ensure your Linux distribution readiness for deployment.
+**Tip**:
+
+> In fact, prior to deploying AIS cluster on a given Linux distribution the very first time, it'd make sense to maybe run the 3 commands and check output for "invalid option" or lack of thereof.

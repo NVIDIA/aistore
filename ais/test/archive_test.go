@@ -177,7 +177,12 @@ func TestGetFromArch(t *testing.T) {
 							tassert.Errorf(t, err != nil, "expecting error reading corrupted arch %q", archName)
 							break
 						}
-						tassert.CheckFatal(t, err)
+						if err != nil {
+							tlog.Logf("Error reading %s?%s=%s(%dB), where randomName=%q, objname=%q, mime=%q, archName=%q\n",
+								m.bck.Cname(objname), apc.QparamArchpath, randomName, oah.Size(),
+								randomName, objname, mime, archName)
+							tassert.CheckFatal(t, err)
+						}
 					}
 				})
 			}

@@ -131,7 +131,7 @@ func prettyLatency(min, avg, max int64) string {
 	return fmt.Sprintf("%-11s%-11s%-11s", prettyDuration(min), prettyDuration(avg), prettyDuration(max))
 }
 
-func prettyTimestamp() string {
+func now() string {
 	return time.Now().Format(cos.StampSec)
 }
 
@@ -224,7 +224,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	pb := prettyBytes
 	ps := prettySpeed
 	pl := prettyLatency
-	pt := prettyTimestamp
+	pt := now
 
 	workOrderResLen := int64(len(resCh))
 	// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
@@ -268,7 +268,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 	pb := prettyBytes
 	ps := prettySpeed
 	pl := prettyLatency
-	pt := prettyTimestamp
+	pt := now
 	preWriteStats(to, false)
 
 	sput := &t.put

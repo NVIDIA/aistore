@@ -668,8 +668,6 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 	cluster.FreeLOM(lom)
 }
 
-// getObject is main function to get the object. It doesn't check request origin,
-// so it must be done by the caller (if necessary).
 func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *cluster.LOM) *cluster.LOM {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
@@ -682,7 +680,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		}
 	}
 
-	debug.Assert(dpq.uuid == "", dpq.uuid)
+	debug.Assert(dpq.uuid == "", dpq.uuid+" vs "+dpq.etlName) // expecting etlName or none of the above
 	if dpq.etlName != "" {
 		t.doETL(w, r, dpq.etlName, bck, lom.ObjName)
 		return lom

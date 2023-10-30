@@ -28,11 +28,11 @@ func (lom *LOM) whingeCopy() (yes bool) {
 	return true
 }
 
-func (lom *LOM) HasCopies() bool { return lom.NumCopies() > 1 }
-func (lom *LOM) NumCopies() int  { return max(len(lom.md.copies), 1) } // TODO: compare with `gotCopies` and unify
+func (lom *LOM) HasCopies() bool { return len(lom.md.copies) > 1 }
+func (lom *LOM) NumCopies() int  { return max(len(lom.md.copies), 1) } // metadata-wise
 
-// GetCopies returns all copies (NOTE that copies include self)
-// NOTE: caller must take a lock
+// GetCopies returns all copies
+// NOTE: a) copies include lom.FQN aka "main repl.", and b) caller must take a lock
 func (lom *LOM) GetCopies() fs.MPI {
 	debug.AssertFunc(func() bool {
 		rc, exclusive := lom.IsLocked()

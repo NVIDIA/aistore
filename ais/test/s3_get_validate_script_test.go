@@ -20,10 +20,10 @@ func TestGetWarmValidateUsingScript(t *testing.T) {
 		CloudBck: true,
 		Bck:      cliBck,
 	})
-	// additional limitation
+	// note additional limitation
 	normp, _ := cmn.NormalizeProvider(cliBck.Provider)
 	if normp != apc.AWS {
-		t.Skipf("skipping %s - the test requires s3 bucket (see \"prerequisites\")", t.Name())
+		t.Skipf("skipping %s - the test uses s3cmd (command line tool) and requires s3 bucket (see \"prerequisites\")", t.Name())
 	}
 
 	cmd := exec.Command("./scripts/s3-get-validate.sh", "--bucket", cliBck.Cname(""))

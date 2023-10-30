@@ -20,7 +20,11 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	if err == nil || !os.IsNotExist(err) {
 		return
 	}
-	// slow path
+	return lom._cf(fqn, os.O_WRONLY)
+}
+
+// slow path
+func (lom *LOM) _cf(fqn string, mode int) (fh *os.File, err error) {
 	bdir := lom.mi.MakePathBck(lom.Bucket())
 	if err = cos.Stat(bdir); err != nil {
 		return nil, fmt.Errorf("%s (bdir %s): %w", lom, bdir, err)
@@ -29,8 +33,16 @@ func (lom *LOM) CreateFile(fqn string) (fh *os.File, err error) {
 	if err = cos.CreateDir(fdir); err != nil {
 		return
 	}
-	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, cos.PermRWR)
+	fh, err = os.OpenFile(fqn, os.O_CREATE|mode|os.O_TRUNC, cos.PermRWR)
 	return
+}
+
+func (lom *LOM) CreateFileRW(fqn string) (fh *os.File, err error) {
+	fh, err = os.OpenFile(fqn, os.O_CREATE|os.O_RDWR|os.O_TRUNC, cos.PermRWR)
+	if err == nil || !os.IsNotExist(err) {
+		return
+	}
+	return lom._cf(fqn, os.O_RDWR)
 }
 
 func (lom *LOM) Remove(force ...bool) (err error) {

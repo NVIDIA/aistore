@@ -598,10 +598,14 @@ do:
 		}
 	}
 
-	// cold GET
-	// - upgrade rlock => wlock
-	// - call t.Backend.GetObj
+	// cold GET: upgrade rlock => wlock, call t.Backend.GetObjReader
 	if cold {
+		var (
+			res       cluster.GetReaderResult
+			cksumConf = goi.lom.CksumConf()
+			loaded    bool
+			fast      bool
+		)
 		if cs.IsNil() {
 			cs = fs.Cap()
 		}
@@ -611,7 +615,45 @@ do:
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
 
-		if errCode, err = goi.getCold(); err != nil {
+		if loaded, err = goi.coldLock(); err != nil {
+			return
+		}
+		if loaded {
+			goto fin
+		}
+
+		// zero-out prev. version custom metadata, if any
+		goi.lom.SetCustomMD(nil)
+
+		// backend: read remote
+		res = goi.t.Backend(goi.lom.Bck()).GetObjReader(goi.ctx, goi.lom)
+		if res.Err != nil {
+			goi.lom.Unlock(true)
+			goi.unlocked = true
+			if res.ErrCode != http.StatusNotFound && !cmn.IsObjNotExist(res.Err) {
+				nlog.Infoln(ftcg+"(read)", goi.lom.Cname(), res.Err, res.ErrCode)
+			}
+			return res.ErrCode, res.Err
+		}
+		goi.t.statsT.AddMany(
+			cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+			cos.NamedVal64{Name: stats.GetColdSize, Value: res.Size},
+		)
+
+		// fast path limitations (TODO: reduce or remove completely)
+		fast = goi.archive.filename == "" &&
+			(cksumConf.Type == cos.ChecksumNone || (!cksumConf.ValidateColdGet && !cksumConf.EnableReadRange))
+
+		// fast path
+		if fast {
+			err = goi.coldSeek(&res)
+			goi.unlocked = true // always
+			return
+		}
+
+		// regular path
+		errCode, err = goi.coldDisk(&res)
+		if err != nil {
 			goi.unlocked = true
 			return
 		}
@@ -636,54 +678,46 @@ fin:
 	return
 }
 
-// compare with the target's GetCold() implementing namesake cluster.Target i/f
-func (goi *getOI) getCold() (int, error) {
+// upgrade rlock => wlock
+// done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
+func (goi *getOI) coldLock() (loaded bool, err error) {
 	var (
 		t, lom = goi.t, goi.lom
-		config = cmn.GCO.Get()
 		now    int64
 	)
-	// zero-out prev. version custom metadata, if any
-	lom.SetCustomMD(nil)
-
-	// 1. upgrade rlock => wlock
-	// - done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
-	// - compare with `poi.fini` above
+outer:
 	for lom.UpgradeLock() {
-		err := lom.Load(true /*cache it*/, true /*locked*/)
-		if err == nil {
-			// ok, nothing else to do
+		if erl := lom.Load(true /*cache it*/, true /*locked*/); erl == nil {
+			// nothing to do
 			// (lock was upgraded by another goroutine that had also performed PUT on out behalf)
-			return 0, nil
+			return true, nil
 		}
 		switch {
 		case now == 0:
 			now = mono.NanoTime()
 			fallthrough
-		case mono.Since(now) < max(config.Timeout.CplaneOperation.D(), 2*time.Second):
+		case mono.Since(now) < max(cmn.Rom.CplaneOperation(), 2*time.Second):
 			nlog.Errorln(t.String()+": failed to load", lom.String(), err, "- retrying...")
 		default:
-			return http.StatusInternalServerError, cmn.NewErrBusy("object", lom, "")
+			err = cmn.NewErrBusy("object", lom, "")
+			break outer
 		}
 	}
+	return
+}
 
-	// 2. coldGet per se
-	res := t.Backend(lom.Bck()).GetObjReader(goi.ctx, lom)
-	if res.Err != nil {
-		lom.Unlock(true)
-		if (res.ErrCode != http.StatusNotFound && !cmn.IsObjNotExist(res.Err)) || config.FastV(4, cos.SmoduleAIS) {
-			nlog.Infof("%s: failed to cold-GET(r) %s: %v(%d)", t, lom.Cname(), res.Err, res.ErrCode)
-		}
-		return res.ErrCode, res.Err
-	}
-
-	// 3. put reader
-	poi := allocPOI()
+// see also: t.GetCold() and goi.coldMem()
+func (goi *getOI) coldDisk(res *cluster.GetReaderResult) (int, error) {
+	var (
+		t, lom = goi.t, goi.lom
+		poi    = allocPOI()
+	)
 	{
 		poi.t = t
 		poi.lom = lom
-		poi.config = config
+		poi.config = cmn.GCO.Get()
 		poi.r = res.R
+		poi.size = res.Size
 		poi.workFQN = fs.CSM.Gen(lom, fs.WorkfileType, fs.WorkfileColdget)
 		poi.atime = goi.atime
 		poi.owt = cmn.OwtGet
@@ -695,22 +729,19 @@ func (goi *getOI) getCold() (int, error) {
 
 	if err != nil {
 		lom.Unlock(true)
-		nlog.Infof("%s: failed to cold-GET(put) %s: %v(%d)", t, lom.Cname(), err, code)
+		nlog.Infoln("failed to cold-GET(put)", lom.Cname(), err)
 		return code, err
 	}
 
-	// 4, 5, 6: load, downgrade lock, inc stats
+	// load, downgrade lock, inc stats
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		lom.Unlock(true)
 		err = fmt.Errorf("unexpected failure to load %s: %w", lom, err) // (unlikely)
-		nlog.Errorln(t.String(), err)
+		nlog.Errorln(err)
 		return http.StatusInternalServerError, err
 	}
 	lom.DowngradeLock()
-	t.statsT.AddMany(
-		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
-		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
-	)
+
 	// NOTE: remais returns zero size
 	debug.Assertf(res.Size == lom.SizeBytes() || lom.Bck().IsRemoteAIS(), "%s: %d vs %d", lom, res.Size, lom.SizeBytes())
 	return 0, nil
@@ -1085,6 +1116,11 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 	//
 	// stats
 	//
+	goi.stats(written)
+	return nil
+}
+
+func (goi *getOI) stats(written int64) {
 	goi.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.GetCount, Value: 1},
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},
@@ -1099,7 +1135,6 @@ func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string, coldGet bool) er
 			cos.NamedVal64{Name: stats.VerChangeSize, Value: goi.lom.SizeBytes()},
 		)
 	}
-	return nil
 }
 
 // parse & validate user-spec-ed goi.ranges, and set response header

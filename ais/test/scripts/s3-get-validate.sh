@@ -6,7 +6,7 @@
 # - aistore cluster, also configured to access the same bucket
 #
 ## Example usage:
-## ./ais/test/scripts/get-validate.sh --bucket s3://abc                     ########################
+## ./ais/test/scripts/s3-get-validate.sh --bucket s3://abc                 ########################
 
 lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
 
@@ -35,7 +35,7 @@ done
 ais show bucket $bucket -c 1>/dev/null || exit $?
 
 ## remember existing setting; disable if need be
-validate=$(ais bucket props show s3://ais-jm versioning.validate_warm_get -H | awk '{print $2}')
+validate=$(ais bucket props show ${bucket} versioning.validate_warm_get -H | awk '{print $2}')
 [[ "$validate" == "false"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false
 
 cleanup() {

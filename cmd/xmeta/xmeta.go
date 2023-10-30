@@ -254,6 +254,9 @@ func extractLOM() (err error) {
 			return
 		}
 	}
+	if flags.in == "" || flags.in == "." {
+		return errors.New("make sure to specify '-in=<fully qualified source filename>', run 'xmeta' for help and examples")
+	}
 	os.Setenv(cluster.DumpLomEnvVar, "1")
 	fs.TestNew(nil)
 
