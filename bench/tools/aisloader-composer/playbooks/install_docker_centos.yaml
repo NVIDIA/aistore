@@ -1,0 +1,45 @@
+---
+- name: Install Docker on target hosts
+  hosts: target_hosts
+  become: true
+  gather_facts: no
+
+  tasks:
+    - name: Install required system packages for Docker
+      dnf:
+        name: "{{ item }}"
+        state: latest
+      loop:
+        - python3-dnf
+        - device-mapper-persistent-data
+        - lvm2
+        - dnf-utils
+        - zip
+        - unzip
+
+    - name: Set up Docker repository
+      command: "dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo"
+
+    - name: Remove runc
+      command: "dnf remove -y runc"
+
+    - name: Install Docker with --nobest
+      dnf:
+        name: docker-ce
+        state: present
+        nobest: yes
+
+    - name: Enable Docker service
+      systemd:
+        name: docker
+        enabled: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+
+    # note: log out and log back in so that your group membership is re-evaluated  
+    - name: Run docker commands from non root
+      command: "sudo usermod -aG docker $USER"
+

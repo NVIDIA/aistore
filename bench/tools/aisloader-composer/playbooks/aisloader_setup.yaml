@@ -8,3 +8,7 @@
       ansible.builtin.copy:
         src: "{{ aisloader_path }}"
         dest: /usr/local/bin/aisloader
+    - name: Grant rwx permissions to /usr/local/bin/aisloader
+      ansible.builtin.file:
+        path: /usr/local/bin/aisloader
+        mode: 'a+rwx'

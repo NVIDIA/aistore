@@ -1,5 +1,5 @@
 #!/bin/bash
-hostname=$(hostname -a)
+hostname=$(hostname -s)
 
 outdir=/tmp/aisloader/
 sudo rm -rf $outdir

@@ -1,0 +1,46 @@
+# The hosts where the aisloader clients will run
+aisloader_hosts:
+  hosts:
+    aisloader00:
+      ansible_host: 10.51.140.15
+    aisloader01:
+      ansible_host: 10.51.140.23
+    aisloader02:
+      ansible_host: 10.51.140.16
+    aisloader03:
+      ansible_host: 10.51.140.28
+    aisloader04:
+      ansible_host: 10.51.140.17
+    aisloader05:
+      ansible_host: 10.51.140.8
+    aisloader06:
+      ansible_host: 10.51.140.6
+    aisloader07:
+      ansible_host: 10.51.140.10
+    aisloader08:
+      ansible_host: 10.51.140.20
+    aisloader09:
+      ansible_host: 10.51.140.24
+
+target_hosts:
+  hosts:
+    target0:
+      ansible_host: 10.51.140.26
+    target1:
+      ansible_host: 10.51.140.29
+    target2:
+      ansible_host: 10.51.140.12
+    target3:
+      ansible_host: 10.51.140.3
+    target4:
+      ansible_host: 10.51.140.4
+    target5:
+      ansible_host: 10.51.140.7
+    target6:
+      ansible_host: 10.51.140.2
+    target7:
+      ansible_host: 10.51.140.18
+    target8:
+      ansible_host: 10.51.140.30
+    target9:
+      ansible_host: 10.51.140.25

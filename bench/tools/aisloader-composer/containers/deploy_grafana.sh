@@ -3,8 +3,7 @@
 # Cleanup old containers (in case the script is reused) 
 docker stop graphite grafana 2>/dev/null
 docker rm graphite grafana 2>/dev/null
-docker network rm dashboard-bridge 2>/dev/null
-
+docker network ls --filter "name=dashboard-bridge" -q | xargs -r docker network rm
 docker network create dashboard-bridge
 
 # Graphite

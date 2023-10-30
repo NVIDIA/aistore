@@ -19,7 +19,7 @@ This directory contains scripts and ansible playbooks to benchmark an AIS cluste
 2. Set up stats monitoring
   1. Modify the `GRAFANA_HOST` variable in [common.sh](common.sh) to set the machine that will host grafana and graphite.
   2. Ensure docker is installed and accessible on each target host. The provided `install_docker.sh` will do this automatically.
-  3. Run `deploy_grafana.sh` and `start_netdata.sh` to start the containers to collect and display aisloader and system statistics.
+  3. Run `start_grafana.sh` and `start_netdata.sh` to start the containers to collect and display aisloader and system statistics.
 3. Configure your benchmarks
   1. Modify the `run_get_bench` and `run_put_bench` scripts as needed to set object sizes, benchmark durations, bucket names, and other options. These variables can also be set at runtime via the command line.
   2. Configure the number of worker threads each aisloader instance will use in [playbooks/vars/bench.yaml](/bench/tools/aisloader-composer/playbooks/vars/bench.yaml).
