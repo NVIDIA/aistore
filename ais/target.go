@@ -387,7 +387,7 @@ func (t *target) Run() error {
 	}
 
 	dsort.Tinit(t, t.statsT, db)
-	dload.Init(t, db)
+	dload.Init(t, t.statsT, db)
 
 	err = t.htrun.run(config)
 

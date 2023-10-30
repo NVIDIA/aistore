@@ -194,11 +194,11 @@ func (j *baseDlJob) throttler() *throttler { return &j.throt }
 
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
-	err := g.dlStore.markFinished(j.ID())
+	err := g.store.markFinished(j.ID())
 	if err != nil {
 		nlog.Errorf("%s: %v", j, err)
 	}
-	g.dlStore.flush(j.ID())
+	g.store.flush(j.ID())
 	nl.OnFinished(j.Notif(), err)
 }
 

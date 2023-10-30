@@ -107,6 +107,9 @@ func (b *Bck) String() string {
 
 func (b *Bck) Equal(other *Bck, sameID, sameBackend bool) bool {
 	left, right := (*cmn.Bck)(b), (*cmn.Bck)(other)
+	if left.IsEmpty() || right.IsEmpty() {
+		return false
+	}
 	if !left.Equal(right) {
 		return false
 	}

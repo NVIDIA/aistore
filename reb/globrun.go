@@ -5,6 +5,7 @@
 package reb
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -217,6 +218,9 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 		reb.xctn().Finish()
 		return
 	}
+
+	// abort all running `dtor.AbortRebRes` xactions (download, dsort, etl)
+	xreg.AbortByNewReb(errors.New("reason: starting " + reb.xctn().Name()))
 
 	// At this point, only one rebalance is running
 

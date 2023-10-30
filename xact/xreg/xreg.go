@@ -80,11 +80,12 @@ type (
 	}
 	// Selects subset of xactions to abort.
 	abortArgs struct {
-		bcks       []*meta.Bck // run on a slice of buckets
-		scope      []int       // one of { ScopeG, ScopeB, ... } enum
-		kind       string      // all of a kind
-		err        error       // original cause (or reason), e.g. cmn.ErrUserAbort
-		mountpaths bool        // mountpath xactions - see xact.Table
+		err error // original cause (or reason), e.g. cmn.ErrUserAbort
+		// criteria
+		bcks   []*meta.Bck // run on a slice of buckets
+		scope  []int       // one of { ScopeG, ScopeB, ... } enum
+		kind   string      // all of a kind
+		newreb bool        // (rebalance is starting) vs (dtor.AbortRebRes)
 	}
 
 	entries struct {
@@ -241,7 +242,7 @@ func AbortKind(err error, kind string) {
 	dreg.abort(abortArgs{kind: kind, err: err})
 }
 
-func AbortAllMountpathsXactions() { dreg.abort(abortArgs{mountpaths: true}) }
+func AbortByNewReb(err error) { dreg.abort(abortArgs{err: err, newreb: true}) }
 
 func DoAbort(flt Flt, err error) (bool /*aborted*/, error) {
 	if flt.ID != "" {
@@ -343,9 +344,11 @@ func (r *registry) abort(args abortArgs) {
 
 		var abort bool
 		switch {
-		case args.mountpaths:
+		case args.newreb:
 			debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
-			if xact.IsMountpath(xctn.Kind()) {
+			_, dtor, err := xact.GetDescriptor(xctn.Kind())
+			debug.AssertNoErr(err)
+			if dtor.AbortRebRes {
 				abort = true
 			}
 		case len(args.bcks) > 0:
@@ -702,7 +705,7 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 		admin bool             // admin-requested action that'd generate protential conflict
 	)
 	switch action {
-	case apc.ActStartMaintenance, apc.ActShutdownNode:
+	case apc.ActStartMaintenance, apc.ActStopMaintenance, apc.ActShutdownNode, apc.ActDecommissionNode:
 		nd = &xact.Descriptor{}
 		admin = true
 	default:
@@ -716,8 +719,8 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 	for kind, d := range xact.Table {
 		// rebalance-vs-rebalance and resilver-vs-resilver sort it out between themselves
 		// (by preempting)
-		conflict := (d.MassiveBck && admin) ||
-			(d.Rebalance && nd.MassiveBck) || (d.Resilver && nd.MassiveBck)
+		conflict := (d.ConflictRebRes && admin) ||
+			(d.Rebalance && nd.ConflictRebRes) || (d.Resilver && nd.ConflictRebRes)
 		if !conflict {
 			continue
 		}
@@ -742,7 +745,7 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 	}
 
 	// finally, bucket rename (apc.ActMoveBck) is a special case -
-	// incompatible with any MassiveBck type operation _on the same_ bucket
+	// incompatible with any ConflictRebRes type operation _on the same_ bucket
 	if action != apc.ActMoveBck {
 		return nil
 	}
@@ -754,7 +757,7 @@ func (r *registry) limco(tsi *meta.Snode, bck *meta.Bck, action string, otherBck
 		}
 		d, ok := xact.Table[xctn.Kind()]
 		debug.Assert(ok, xctn.Kind())
-		if !d.MassiveBck {
+		if !d.ConflictRebRes {
 			continue
 		}
 		from, to := xctn.FromTo()

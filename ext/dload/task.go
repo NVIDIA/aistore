@@ -94,9 +94,9 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 		return
 	}
 
-	g.dlStore.incFinished(task.jobID())
+	g.store.incFinished(task.jobID())
 
-	task.xdl.statsT.AddMany(
+	g.tstats.AddMany(
 		cos.NamedVal64{Name: stats.DownloadSize, Value: task.currentSize.Load()},
 		cos.NamedVal64{Name: stats.DownloadLatency, Value: int64(task.ended.Load().Sub(task.started.Load()))},
 	)
@@ -152,7 +152,7 @@ func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Re
 		params.Atime = task.started.Load()
 		params.Xact = task.xdl
 	}
-	erp := task.xdl.t.PutObject(lom, params)
+	erp := g.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		return true, erp
@@ -173,27 +173,25 @@ func (task *singleTask) downloadLocal(lom *cluster.LOM) (err error) {
 		if err == nil || fatal {
 			return err
 		}
+
+		// handle more
 		if errors.Is(err, context.Canceled) || errors.Is(err, errThrottlerStopped) {
-			// Download was canceled or stopped, so just return.
-			return err
+			return err // canceled or stopped, so just return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			nlog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying...",
-				task, i, retryCnt, timeout)
+			nlog.Warningf("%s [retries: %d/%d]: timeout (%v) - increasing and retrying", task, i, retryCnt, timeout)
 			timeout = time.Duration(float64(timeout) * reqTimeoutFactor)
 		} else if herr := cmn.Err2HTTPErr(err); herr != nil {
 			nlog.Warningf("%s [retries: %d/%d]: failed to perform request: %v (code: %d)", task, i, retryCnt, err, herr.Status)
 			if _, exists := terminalStatuses[herr.Status]; exists {
-				// Nothing we can do...
-				return err
+				return err // nothing we can do
 			}
-			// Otherwise retry...
-		} else if cos.IsRetriableConnErr(err) {
-			nlog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", task, i, retryCnt, err)
 		} else {
-			nlog.Warningf("%s [retries: %d/%d]: unexpected error (%v), retrying...", task, i, retryCnt, err)
+			if !cos.IsRetriableConnErr(err) {
+				return err // ditto
+			}
+			nlog.Warningf("%s [retries: %d/%d]: connection failed with (%v), retrying...", task, i, retryCnt, err)
 		}
-
 		task.reset()
 	}
 	return err
@@ -220,7 +218,7 @@ func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
 	task.getCtx = ctx
 
 	// Do final GET (prefetch) request.
-	_, err := task.xdl.t.GetCold(ctx, lom, cmn.OwtGetTryLock)
+	_, err := g.t.GetCold(ctx, lom, cmn.OwtGetTryLock)
 	return err
 }
 
@@ -250,13 +248,13 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	task.xdl.statsT.IncErr(stats.ErrDownloadCount)
-	g.dlStore.persistError(task.jobID(), task.obj.objName, statusMsg)
-	g.dlStore.incErrorCnt(task.jobID())
+	g.tstats.IncErr(stats.ErrDownloadCount)
+	g.store.persistError(task.jobID(), task.obj.objName, statusMsg)
+	g.store.incErrorCnt(task.jobID())
 }
 
 func (task *singleTask) persist() {
-	_ = g.dlStore.persistTaskInfo(task.jobID(), task.ToTaskDlInfo())
+	_ = g.store.persistTaskInfo(task.jobID(), task.ToTaskDlInfo())
 }
 
 func (task *singleTask) jobID() string { return task.job.ID() }

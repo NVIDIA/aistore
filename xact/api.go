@@ -85,9 +85,10 @@ type (
 		Mountpath   bool            // is a mountpath-traversing ("jogger") xaction
 
 		// see xreg for "limited coexistence"
-		Rebalance  bool // moves data between nodes
-		Resilver   bool // moves data between mountpaths
-		MassiveBck bool // massive data copying (transforming, encoding) operation on a bucket
+		Rebalance      bool // moves data between nodes
+		Resilver       bool // moves data between mountpaths
+		ConflictRebRes bool // conflicts with rebalance/resilver
+		AbortRebRes    bool // gets aborted upon rebalance/resilver - currently, all `ext`-ensions
 
 		// xaction has an intermediate `idle` state whereby it "idles" between requests
 		// (see related: xact/demand.go)
@@ -112,8 +113,8 @@ var Table = map[string]Descriptor{
 	// bucket-less xactions that will typically have a 'cluster' scope (with resilver being a notable exception)
 	apc.ActElection:  {DisplayName: "elect-primary", Scope: ScopeG, Startable: false},
 	apc.ActRebalance: {Scope: ScopeG, Startable: true, Metasync: true, Owned: false, Mountpath: true, Rebalance: true},
-	apc.ActDownload:  {Scope: ScopeG, Startable: false, Mountpath: true, Idles: true},
-	apc.ActETLInline: {Scope: ScopeG, Startable: false, Mountpath: false},
+
+	apc.ActETLInline: {Scope: ScopeG, Startable: false, Mountpath: false, AbortRebRes: true},
 
 	// (one bucket) | (all buckets)
 	apc.ActLRU:          {DisplayName: "lru-eviction", Scope: ScopeGB, Startable: true, Mountpath: true},
@@ -139,7 +140,7 @@ var Table = map[string]Descriptor{
 	apc.ActPutCopies: {Scope: ScopeB, Startable: false, Mountpath: true, RefreshCap: true, Idles: true},
 
 	//
-	// on-demand multi-object (TODO: consider MassiveBck: true)
+	// on-demand multi-object (consider setting ConflictRebRes = true)
 	//
 	apc.ActArchive: {Scope: ScopeB, Access: apc.AccessRW, Startable: false, RefreshCap: true, Idles: true},
 	apc.ActCopyObjects: {
@@ -157,18 +158,22 @@ var Table = map[string]Descriptor{
 		Startable:   false,
 		RefreshCap:  true,
 		Idles:       true,
+		AbortRebRes: true,
 	},
+
+	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Mountpath: true, Idles: true, AbortRebRes: true},
 
 	// in its own class
 	apc.ActDsort: {
-		DisplayName:   "dsort",
-		Scope:         ScopeB,
-		Access:        apc.AccessRW,
-		Startable:     false,
-		RefreshCap:    true,
-		Mountpath:     true,
-		MassiveBck:    true,
-		ExtendedStats: true,
+		DisplayName:    "dsort",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW,
+		Startable:      false,
+		RefreshCap:     true,
+		Mountpath:      true,
+		ConflictRebRes: true,
+		ExtendedStats:  true,
+		AbortRebRes:    true,
 	},
 
 	// multi-object
@@ -205,15 +210,15 @@ var Table = map[string]Descriptor{
 
 	// entire bucket (storage svcs)
 	apc.ActECEncode: {
-		DisplayName: "ec-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW,
-		Startable:   true,
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-		MassiveBck:  true,
+		DisplayName:    "ec-bucket",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW,
+		Startable:      true,
+		Metasync:       true,
+		Owned:          false,
+		RefreshCap:     true,
+		Mountpath:      true,
+		ConflictRebRes: true,
 	},
 	apc.ActMakeNCopies: {
 		DisplayName: "mirror",
@@ -226,26 +231,26 @@ var Table = map[string]Descriptor{
 		Mountpath:   true,
 	},
 	apc.ActMoveBck: {
-		DisplayName: "rename-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AceMoveBucket,
-		Startable:   false, // executing this one cannot be done via `api.StartXaction`
-		Metasync:    true,
-		Owned:       false,
-		Mountpath:   true,
-		Rebalance:   true,
-		MassiveBck:  true,
+		DisplayName:    "rename-bucket",
+		Scope:          ScopeB,
+		Access:         apc.AceMoveBucket,
+		Startable:      false, // executing this one cannot be done via `api.StartXaction`
+		Metasync:       true,
+		Owned:          false,
+		Mountpath:      true,
+		Rebalance:      true,
+		ConflictRebRes: true,
 	},
 	apc.ActCopyBck: {
-		DisplayName: "copy-bucket",
-		Scope:       ScopeB,
-		Access:      apc.AccessRW, // apc.AceCreateBucket ditto
-		Startable:   false,        // ditto
-		Metasync:    true,
-		Owned:       false,
-		RefreshCap:  true,
-		Mountpath:   true,
-		MassiveBck:  true,
+		DisplayName:    "copy-bucket",
+		Scope:          ScopeB,
+		Access:         apc.AccessRW, // apc.AceCreateBucket ditto
+		Startable:      false,        // ditto
+		Metasync:       true,
+		Owned:          false,
+		RefreshCap:     true,
+		Mountpath:      true,
+		ConflictRebRes: true,
 	},
 	apc.ActETLBck: {
 		DisplayName: "etl-bucket",
@@ -256,7 +261,7 @@ var Table = map[string]Descriptor{
 		Owned:       false,
 		RefreshCap:  true,
 		Mountpath:   true,
-		MassiveBck:  true,
+		AbortRebRes: true,
 	},
 
 	apc.ActList: {Scope: ScopeB, Access: apc.AceObjLIST, Startable: false, Metasync: false, Owned: true, Idles: true},

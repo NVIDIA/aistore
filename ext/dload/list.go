@@ -12,8 +12,8 @@ func ListJobs(regex *regexp.Regexp, onlyActive bool) (any, int, error) {
 		jobs    []*dljob
 		req     = &request{action: actList, regex: regex, onlyActive: onlyActive}
 	)
-	if g.dlStore != nil {
-		jobs = g.dlStore.getList(req)
+	if g.store != nil {
+		jobs = g.store.getList(req)
 	}
 	if len(jobs) == 0 {
 		req.okRsp(respMap)

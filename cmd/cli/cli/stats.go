@@ -105,8 +105,10 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 	}
 	for _, ds := range stmap {
 		mmx := strings.Split(ds.Version, versionSepa)
-		if len(mmx) < 3 {
-			debug.Assert(len(mmx) > 2)
+		if _, err := strconv.Atoi(mmx[0]); err != nil {
+			warn := fmt.Sprintf("%s: unexpected version format: %v", ds.Node.Snode.StringEx(), mmc)
+			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
+			debug.Assert(false)
 			continue
 		}
 		// major

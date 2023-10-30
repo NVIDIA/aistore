@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"golang.org/x/sync/errgroup"
 )
@@ -45,15 +46,16 @@ type (
 	}
 
 	global struct {
-		t       cluster.TargetLoc
-		db      kvdb.Driver
-		dlStore *infoStore
+		t      cluster.Target
+		db     kvdb.Driver
+		tstats stats.Tracker
+		store  *infoStore
 	}
 )
 
 var g global
 
-func Init(t cluster.TargetLoc, db kvdb.Driver) {
+func Init(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	httpClient = cmn.NewClient(cmn.TransportArgs{})
 	httpsClient = cmn.NewClientTLS(cmn.TransportArgs{UseHTTPS: true}, cmn.TLSArgs{SkipVerify: true})
 	if db == nil { // unit tests only
@@ -62,7 +64,8 @@ func Init(t cluster.TargetLoc, db kvdb.Driver) {
 	}
 
 	g.t = t
-	g.dlStore = newInfoStore(db)
+	g.tstats = stats
+	g.store = newInfoStore(db)
 	g.db = db
 	xreg.RegNonBckXact(&factory{})
 }
@@ -231,10 +234,10 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 				}
 			}
 
-			g.dlStore.incScheduled(job.ID())
+			g.store.incScheduled(job.ID())
 
 			if result.Action == DiffResolverSkip {
-				g.dlStore.incSkipped(job.ID())
+				g.store.incSkipped(job.ID())
 				continue
 			}
 
@@ -247,10 +250,10 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			if result.Action == DiffResolverDelete {
 				requiresSync := job.Sync()
 				debug.Assert(requiresSync)
-				if _, err := d.xdl.t.EvictObject(result.Src); err != nil {
+				if _, err := g.t.EvictObject(result.Src); err != nil {
 					task.markFailed(err.Error())
 				} else {
-					g.dlStore.incFinished(job.ID())
+					g.store.incFinished(job.ID())
 				}
 				continue
 			}
@@ -258,18 +261,18 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			ok, err := d.doSingle(task)
 			if err != nil {
 				nlog.Errorf("%s failed to download %s: %v", job, obj.objName, err)
-				g.dlStore.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
+				g.store.setAborted(job.ID()) // TODO -- FIXME: pass (report, handle) error, here and elsewhere
 				return ok
 			}
 			if !ok {
-				g.dlStore.setAborted(job.ID())
+				g.store.setAborted(job.ID())
 				return false
 			}
 		case DiffResolverSend:
 			requiresSync := job.Sync()
 			debug.Assert(requiresSync)
 		case DiffResolverEOF:
-			g.dlStore.setAllDispatched(job.ID(), true)
+			g.store.setAllDispatched(job.ID(), true)
 			return true
 		}
 	}
@@ -309,7 +312,7 @@ func (d *dispatcher) checkAborted() bool {
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 	bck := meta.CloneBck(task.job.Bck())
-	if err := bck.Init(d.xdl.t.Bowner()); err != nil {
+	if err := bck.Init(g.t.Bowner()); err != nil {
 		return true, err
 	}
 
@@ -368,36 +371,29 @@ func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error
 	return r.value, r.statusCode, r.err
 }
 
-func (d *dispatcher) handleRemove(req *request) {
-	dljob, err := d.xdl.checkJob(req)
+func (*dispatcher) handleRemove(req *request) {
+	dljob, err := g.store.checkExists(req)
 	if err != nil {
 		return
 	}
-
-	// There's a slight chance this doesn't happen if target rejoins after target checks for download not running
 	job := dljob.clone()
 	if job.JobRunning() {
-		req.errRsp(fmt.Errorf("download job %q is still running", dljob.id), http.StatusBadRequest)
+		req.errRsp(fmt.Errorf("job %q is still running", dljob.id), http.StatusBadRequest)
 		return
 	}
-
-	g.dlStore.delJob(req.id)
+	g.store.delJob(req.id)
 	req.okRsp(nil)
 }
 
 func (d *dispatcher) handleAbort(req *request) {
-	_, err := d.xdl.checkJob(req)
-	if err != nil {
+	if _, err := g.store.checkExists(req); err != nil {
 		return
 	}
-
 	d.jobAbortedCh(req.id).Close()
-
 	for _, j := range d.joggers {
 		j.abortJob(req.id)
 	}
-
-	g.dlStore.setAborted(req.id)
+	g.store.setAborted(req.id)
 	req.okRsp(nil)
 }
 
@@ -406,20 +402,20 @@ func (d *dispatcher) handleStatus(req *request) {
 		finishedTasks []TaskDlInfo
 		dlErrors      []TaskErrInfo
 	)
-	dljob, err := d.xdl.checkJob(req)
+	dljob, err := g.store.checkExists(req)
 	if err != nil {
 		return
 	}
 
 	currentTasks := d.activeTasks(req.id)
 	if !req.onlyActive {
-		finishedTasks, err = g.dlStore.getTasks(req.id)
+		finishedTasks, err = g.store.getTasks(req.id)
 		if err != nil {
 			req.errRsp(err, http.StatusInternalServerError)
 			return
 		}
 
-		dlErrors, err = g.dlStore.getErrors(req.id)
+		dlErrors, err = g.store.getErrors(req.id)
 		if err != nil {
 			req.errRsp(err, http.StatusInternalServerError)
 			return

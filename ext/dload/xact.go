@@ -5,7 +5,6 @@
 package dload
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -16,10 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -128,13 +124,12 @@ var (
 type (
 	factory struct {
 		xreg.RenewBase
-		xctn   *Xact
-		statsT stats.Tracker
+		xctn *Xact
+		bck  *meta.Bck
 	}
 	Xact struct {
 		xact.DemandBase
-		t          cluster.Target
-		statsT     stats.Tracker
+		p          *factory
 		dispatcher *dispatcher
 	}
 
@@ -177,11 +172,11 @@ var (
 /////////////
 
 func (*factory) New(args xreg.Args, _ *meta.Bck) xreg.Renewable {
-	return &factory{RenewBase: xreg.RenewBase{Args: args}, statsT: args.Custom.(stats.Tracker)}
+	return &factory{RenewBase: xreg.RenewBase{Args: args}, bck: args.Custom.(*meta.Bck)}
 }
 
 func (p *factory) Start() error {
-	xdl := newXact(p.T, p.statsT, p.Args.UUID)
+	xdl := newXact(p)
 	p.xctn = xdl
 	go xdl.Run(nil)
 	return nil
@@ -198,10 +193,10 @@ func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 // Xact //
 //////////
 
-func newXact(t cluster.Target, statsT stats.Tracker, xid string) (xld *Xact) {
-	xld = &Xact{t: t, statsT: statsT}
+func newXact(p *factory) (xld *Xact) {
+	xld = &Xact{p: p}
 	xld.dispatcher = newDispatcher(xld)
-	xld.DemandBase.Init(xid, apc.Download, nil /*bck*/, 0 /*use default*/)
+	xld.DemandBase.Init(p.UUID(), apc.Download, p.bck, 0 /*use default*/)
 	return
 }
 
@@ -222,7 +217,7 @@ func (xld *Xact) Download(job jobif) (resp any, statusCode int, err error) {
 	xld.IncPending()
 	defer xld.DecPending()
 
-	dljob := g.dlStore.setJob(job)
+	dljob := g.store.setJob(job)
 
 	select {
 	case xld.dispatcher.workCh <- job:
@@ -259,17 +254,6 @@ func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int
 	resp, statusCode, err = xld.dispatcher.adminReq(req)
 	xld.DecPending()
 	return
-}
-
-func (xld *Xact) checkJob(req *request) (*dljob, error) {
-	dljob, err := g.dlStore.getJob(req.id)
-	if err != nil {
-		debug.Assert(errors.Is(err, errJobNotFound))
-		errV := cos.NewErrNotFound("%s: download job %q", xld.t, req.id)
-		req.errRsp(errV, http.StatusNotFound)
-		return nil, errV
-	}
-	return dljob, nil
 }
 
 func (xld *Xact) Snap() (snap *cluster.Snap) {

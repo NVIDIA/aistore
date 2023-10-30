@@ -9,7 +9,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -45,8 +44,8 @@ func RenewStoreCleanup(id string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewDownloader(t cluster.Target, statsT stats.Tracker, xid string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xid, Custom: statsT}, nil)
+func RenewDownloader(t cluster.Target, xid string, bck *meta.Bck) RenewRes {
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xid, Custom: bck}, nil)
 	return dreg.renew(e, nil)
 }
 
