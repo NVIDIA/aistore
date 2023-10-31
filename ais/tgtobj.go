@@ -740,10 +740,8 @@ func (goi *getOI) coldDisk(res *cluster.GetReaderResult) (int, error) {
 		nlog.Errorln(err)
 		return http.StatusInternalServerError, err
 	}
-	lom.DowngradeLock()
 
-	// NOTE: remais returns zero size
-	debug.Assertf(res.Size == lom.SizeBytes() || lom.Bck().IsRemoteAIS(), "%s: %d vs %d", lom, res.Size, lom.SizeBytes())
+	lom.DowngradeLock()
 	return 0, nil
 }
 

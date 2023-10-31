@@ -13,9 +13,10 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 )
 
-func TestGetWarmValidateUsingScript(t *testing.T) {
+func TestGetWarmValidateS3UsingScript(t *testing.T) {
 	tools.CheckSkip(t, tools.SkipTestArgs{
 		CloudBck: true,
 		Bck:      cliBck,
@@ -27,6 +28,29 @@ func TestGetWarmValidateUsingScript(t *testing.T) {
 	}
 
 	cmd := exec.Command("./scripts/s3-get-validate.sh", "--bucket", cliBck.Cname(""))
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
+	tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+
+	bck := cliBck
+	if bck.IsRemoteAIS() {
+		tlog.Logf("using existing %s ...\n", bck.Cname(""))
+	} else {
+		bck = cmn.Bck{
+			Name:     trand.String(10),
+			Provider: apc.AIS,
+			Ns:       cmn.Ns{UUID: tools.RemoteCluster.Alias},
+		}
+		tlog.Logf("using temp bucket %s ...\n", bck.Cname(""))
+	}
+
+	cmd := exec.Command("./scripts/remais-get-validate.sh", "--bucket", bck.Cname(""))
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))

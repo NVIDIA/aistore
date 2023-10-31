@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -830,6 +831,13 @@ func showNodeConfig(c *cli.Context) error {
 }
 
 func showRemoteAISHandler(c *cli.Context) error {
+	const (
+		warnRemAisOffline = `remote ais cluster at %s is currently unreachable.
+Run 'ais config cluster backend.conf --json' - to show the respective configuration;
+    'ais config cluster backend.conf <new JSON formatted value>' - to reconfigure or remove.
+For details and usage examples, see: docs/cli/config.md`
+	)
+
 	all, err := api.GetRemoteAIS(apiBP)
 	if err != nil {
 		return V(err)
@@ -864,6 +872,12 @@ func showRemoteAISHandler(c *cli.Context) error {
 				teb.UnknownStatusVal, teb.UnknownStatusVal, teb.UnknownStatusVal, uptime)
 
 			warn := fmt.Sprintf(warnRemAisOffline, url)
+
+			if len(all.A) == 1 {
+				tw.Flush()
+				fmt.Fprintln(c.App.Writer)
+				return errors.New(warn)
+			}
 			actionWarn(c, warn+"\n")
 		}
 	}

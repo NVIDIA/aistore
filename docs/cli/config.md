@@ -61,6 +61,9 @@ $ ais config cluster checksum=md5
 # using JSON-formatted values, update backend configuration;
 # for supported backend providers, see docs/providers.md
 $ ais config cluster backend.conf='{"gcp":{}, "aws":{}}'
+
+# e.g., to remove all backends, run:
+# ais config cluster backend.conf='{}'
 ```
 
 > **Notice** single quotes above. Single or double quotes are required when the value contains spaces and/or wildcards. But single quotes, in particular, are strongly recommended when the value itself contains double quotes.

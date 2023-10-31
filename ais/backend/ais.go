@@ -578,6 +578,7 @@ func (m *AISBackendProvider) GetObjReader(_ ctx, lom *cluster.LOM) (res cluster.
 	}
 	oa := lom.ObjAttrs()
 	*oa = op.ObjAttrs
+	res.Size = oa.Size
 	oa.SetCustomKey(cmn.SourceObjMD, apc.AIS)
 	res.ExpCksum = oa.Cksum
 	lom.SetCksum(nil)
