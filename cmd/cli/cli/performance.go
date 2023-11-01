@@ -26,11 +26,12 @@ type (
 		metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, elapsed time.Duration) bool
 )
 
-// statically defined for `latency` tab (compare with counter and throughput tabs)
-var latabNames = []string{
-	stats.GetLatency, stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize,
-	stats.PutLatency, stats.PutSize, stats.PutCount,
-	stats.AppendLatency, stats.AppendCount}
+// _statically_ defined for `latency` table (compare with counter and throughput tabs)
+var selectedLatency = []string{
+	stats.GetLatency, stats.GetSize, stats.GetCount, stats.GetColdCount, stats.GetColdSize, stats.GetRedirLatency, stats.GetColdRwLatency,
+	stats.PutLatency, stats.PutSize, stats.PutCount, stats.PutRedirLatency,
+	stats.AppendLatency, stats.AppendCount,
+}
 
 // true when called by top-level handler
 var allPerfTabs bool
@@ -222,9 +223,10 @@ func showLatencyHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	selected := make(cos.StrKVs, len(latabNames))
+	// statically filter metrics (names)
+	selected := make(cos.StrKVs, len(selectedLatency))
 	for name, kind := range metrics {
-		if cos.StringInSlice(name, latabNames) {
+		if cos.StringInSlice(name, selectedLatency) {
 			selected[name] = kind
 		} else if stats.IsErrMetric(name) {
 			if strings.Contains(name, "get") || strings.Contains(name, "put") || strings.Contains(name, "append") {
@@ -253,9 +255,11 @@ func _latency(c *cli.Context, metrics cos.StrKVs, mapBegin, mapEnd teb.StstMap, 
 			vend := end.Tracker[name]
 			ncounter := name[:len(name)-1] // ".ns" => ".n"
 			switch name {
-			case stats.GetLatency:
+			case stats.GetLatency, stats.GetRedirLatency:
 				ncounter = stats.GetCount
-			case stats.PutLatency:
+			case stats.GetColdRwLatency:
+				ncounter = stats.GetColdCount
+			case stats.PutLatency, stats.PutRedirLatency:
 				ncounter = stats.PutCount
 			case stats.AppendLatency:
 				ncounter = stats.AppendCount
@@ -416,7 +420,6 @@ func showPerfTab(c *cli.Context, metrics cos.StrKVs, cb perfcb, tag string, tota
 		if err != nil || !refresh || allPerfTabs {
 			return err
 		}
-		printLongRunFooter(c.App.Writer, 36)
 	}
 	return nil
 }

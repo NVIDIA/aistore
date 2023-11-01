@@ -69,6 +69,10 @@ const (
 	PutRedirLatency = "put.redir.ns"
 	DownloadLatency = "dl.ns"
 
+	// (read remote, write local) latency (and note that cold-GET's "pure"
+	// transmit-response latency = GetLatency - GetColdRwLatency)
+	GetColdRwLatency = "get.cold.rw.ns"
+
 	// Dsort
 	DsortCreationReqCount    = "dsort.creation.req.n"
 	DsortCreationRespCount   = "dsort.creation.resp.n"
@@ -204,6 +208,7 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, AppendLatency, KindLatency)
 	r.reg(node, GetRedirLatency, KindLatency)
 	r.reg(node, PutRedirLatency, KindLatency)
+	r.reg(node, GetColdRwLatency, KindLatency)
 
 	// bps
 	r.reg(node, GetThroughput, KindThroughput)

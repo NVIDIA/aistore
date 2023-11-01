@@ -12,11 +12,14 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 )
 
 const ftcg = "failed to cold-GET"
@@ -57,13 +60,11 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 	cos.Close(res.R)
 
-	if err == nil && written != res.Size && res.Size > 0 {
-		err = fmt.Errorf("expected: %s size %d, got %d", lom.Cname(), res.Size, written) // (unlikely)
-	}
 	if err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")
 		return err
 	}
+	debug.Assertf(written == res.Size, "%s: expected size=%d, got %d", lom.Cname(), res.Size, written)
 
 	// fsync, if requested
 	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
@@ -72,6 +73,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 			return err
 		}
 	}
+	goi.t.statsT.Add(stats.GetColdRwLatency, mono.SinceNano(goi.ltime))
 
 	// persist lom (main repl)
 	lom.SetSize(written)
@@ -149,7 +151,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 	goi.lom.Unlock(true)
 
-	goi.stats(written)
+	goi.stats(written) // where `GetLatency` = `GetColdRwLatency` + (transmit)
 	return nil
 }
 

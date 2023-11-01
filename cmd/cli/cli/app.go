@@ -44,7 +44,7 @@ type (
 	}
 	longRun struct {
 		count            int
-		footer           int
+		lfooter          int
 		refreshRate      time.Duration
 		offset           int64
 		mapBegin, mapEnd teb.StstMap
@@ -134,7 +134,7 @@ func (a *acli) runForever(args []string) error {
 	rate := a.longRun.refreshRate
 	for {
 		time.Sleep(rate)
-		printLongRunFooter(a.outWriter, a.longRun.footer)
+		printLongRunFooter(a.outWriter, a.longRun.lfooter)
 		if err := a.runOnce(args); err != nil {
 			return err
 		}
@@ -327,9 +327,9 @@ func setLongRunParams(c *cli.Context, footer ...int) bool {
 	if params.isSet() {
 		return false
 	}
-	params.footer = 8
+	params.lfooter = 8
 	if len(footer) > 0 {
-		params.footer = footer[0]
+		params.lfooter = footer[0]
 	}
 	params.init(c, false)
 	return true

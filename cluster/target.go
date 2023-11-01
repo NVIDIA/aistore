@@ -107,7 +107,7 @@ type (
 		WorkTag string // (=> work fqn)
 		OWT     cmn.OWT
 		SkipEC  bool // don't erasure-code when finalizing
-		ColdGET bool // this PUT is in fact cold-GET
+		ColdGET bool // this PUT is in fact a cold-GET
 	}
 	CopyObjectParams struct {
 		DM        DataMover

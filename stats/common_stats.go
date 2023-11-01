@@ -58,7 +58,7 @@ const (
 	// all basic counters are accompanied by the corresponding (errPrefix + kind) error count:
 	// e.g.: "get.n" => "err.get.n", "put.n" => "err.put.n", etc.
 	// See also: `IncErr`, `regCommon`
-	GetCount    = "get.n"    // counts GET(object)
+	GetCount    = "get.n"    // GET(object) count = (cold + warm)
 	PutCount    = "put.n"    // ditto PUT
 	AppendCount = "append.n" // ditto etc.
 	DeleteCount = "del.n"    // ditto

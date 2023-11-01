@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dload"
@@ -93,9 +94,6 @@ func (*target) interruptedRestarted() (interrupted, restarted bool) {
 	restarted = fs.MarkerExists(fname.NodeRestartedPrev)
 	return
 }
-
-func sparseVerbStats(tm int64) bool  { return tm&7 == 1 }
-func sparseRedirStats(tm int64) bool { return tm&3 == 2 }
 
 //
 // target
@@ -696,7 +694,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 	goi := allocGOI()
 	{
 		goi.atime = time.Now().UnixNano()
-		if dpq.ptime != "" && sparseRedirStats(goi.atime) {
+		goi.ltime = mono.NanoTime()
+		if dpq.ptime != "" {
 			if d := ptLatency(goi.atime, dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
 				t.statsT.Add(stats.GetRedirLatency, d)
 			}
@@ -708,10 +707,10 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 		goi.ranges = byteRanges{Range: r.Header.Get(cos.HdrRange), Size: 0}
 		goi.archive = archiveQuery{
 			filename: filename,
-			mime:     dpq.archmime, // query.Get(apc.QparamArchmime)
+			mime:     dpq.archmime, // apc.QparamArchmime
 		}
 		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(apc.QparamIsGFNRequest)
-		// goi.chunked = cmn.GCO.Get().Net.HTTP.Chunked NOTE: disabled - no need
+		// goi.chunked = config.Net.HTTP.Chunked NOTE: disabled - no need
 	}
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
@@ -813,7 +812,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		poi := allocPOI()
 		{
 			poi.atime = started
-			if apireq.dpq.ptime != "" && sparseRedirStats(poi.atime) {
+			if apireq.dpq.ptime != "" {
 				if d := ptLatency(poi.atime, apireq.dpq.ptime, r.Header.Get(apc.HdrCallerIsPrimary)); d > 0 {
 					t.statsT.Add(stats.PutRedirLatency, d)
 				}

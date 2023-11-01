@@ -322,13 +322,15 @@ func _metricToPrintedColName(mname string, cols []*header, metrics, n2n cos.StrK
 	case kind == stats.KindThroughput || kind == stats.KindComputedThroughput:
 		printedName += "(bw)"
 	case kind == stats.KindLatency:
-		printedName += "(latency)"
+		printedName += "(t)"
 	case kind == stats.KindSize:
 		if n2n != nil && _present(cols, metrics, mname, n2n) {
-			printedName += "(cumulative, average)"
+			printedName += "(total/avg size)"
 		} else {
 			printedName += "(size)"
 		}
+	case kind == stats.KindCounter:
+		printedName += "(n)"
 	}
 	return
 }
