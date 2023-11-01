@@ -170,10 +170,13 @@ With a little effort, they all could be extracted and used outside.
   - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
 - Topics
   - [System files](/docs/sysfiles.md)
+  - [Switching cluster from HTTP to HTTPS, and back](/docs/switch_https.md)
+  - [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
   - [Feature flags](/docs/feature_flags.md)
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
+  - [Start/stop maintenance, shutdown, and related operations](/docs/lifecycle_node.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [AIS Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
