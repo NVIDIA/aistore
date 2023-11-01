@@ -33,7 +33,6 @@ const (
 
 var All = []string{
 	"Enforce-IntraCluster-Access",
-	"Do-not-HEAD-Remote-Bucket",
 	"Skip-Loading-VersionChecksum-MD",
 	"Do-not-Auto-Detect-FileShare",
 	"Provide-S3-API-via-Root",

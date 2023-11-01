@@ -14,6 +14,35 @@ $ ais performance <TAB-TAB>
 counters     throughput   latency      capacity     disk
 ```
 
+## `ais show performance latency`
+
+Example usage:
+
+```console
+$ ais show performance latency --refresh 10
+
+latency ------------------ 13:03:58.329680
+TARGET           GET-COLD(n)     GET-COLD-RW(t)  GET-COLD(total/avg size)       GET(n)  GET(t)  GET-REDIR(t)    GET(total/avg size)
+t[EkMt8081]      151             2.01s           145.00MiB  983.31KiB           154     2.13s   1.156551ms      154.00MiB  1.00MiB
+
+latency ------------------ 13:04:08.335764
+TARGET           GET-COLD(n)     GET-COLD-RW(t)  GET-COLD(total/avg size)       GET(n)  GET(t)  GET-REDIR(t)    GET(total/avg size)
+t[EkMt8081]      189             2.04s           181.00MiB  980.66KiB           190     1.86s   892.015µs       190.00MiB  1.00MiB
+```
+
+Notice naming conventions:
+
+* (n) - counter (total number of operations of a given kind)
+* (t) - time (latency of the operation)
+
+Other notable semantics includes:
+
+| metric | comment |
+| ------ | ------- |
+| `GET-COLD-RW(t)` | denotes (remote read, local write) latency, which is a _part_ of the total latency  _not_ including the time it takes to transmit requested payload to user |
+| `GET(t)` | GET latency (for cold GETs includes the above) |
+| `GET-REDIR(t)` | time that passes between ais gateway _redirecting_ GET operation to specific target, and this target _starting_ to handle the request |
+
 ## `ais show performance counters`
 
 ```console

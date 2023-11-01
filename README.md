@@ -154,6 +154,7 @@ With a little effort, they all could be extracted and used outside.
 - Configuration
   - [Configuration](/docs/configuration.md)
   - [CLI: `ais config`](/docs/cli/config.md)
+  - [Feature flags](/docs/feature_flags.md)
 - Observability
   - [Observability](/docs/metrics.md)
   - [Prometheus](/docs/prometheus.md)
@@ -169,6 +170,7 @@ With a little effort, they all could be extracted and used outside.
   - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
 - Topics
   - [System files](/docs/sysfiles.md)
+  - [Feature flags](/docs/feature_flags.md)
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
