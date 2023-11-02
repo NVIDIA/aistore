@@ -5,7 +5,6 @@
 package ais
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -26,9 +25,7 @@ const ftcg = "failed to cold-GET"
 
 func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	var (
-		cksum  *cos.CksumHash
 		t, lom = goi.t, goi.lom
-		ckconf = lom.CksumConf()
 		fqn    = lom.FQN
 		revert string
 	)
@@ -49,15 +46,11 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	// read remote, write local
 	var (
 		written   int64
-		buf, slab = t.gmm.AllocSize(res.Size)
+		buf, slab = t.gmm.AllocSize(min(res.Size, 64*cos.KiB))
+		cksum     = cos.NewCksumHash(lom.CksumConf().Type)
+		mw        = cos.NewWriterMulti(lmfh, cksum.H)
 	)
-	if ckconf.Type == cos.ChecksumNone {
-		written, err = io.CopyBuffer(lmfh, res.R, buf)
-	} else {
-		cksum = cos.NewCksumHash(ckconf.Type)
-		mw := cos.NewWriterMulti(lmfh, cksum.H)
-		written, err = io.CopyBuffer(mw, res.R, buf)
-	}
+	written, err = io.CopyBuffer(mw, res.R, buf)
 	cos.Close(res.R)
 
 	if err != nil {
@@ -66,7 +59,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 	debug.Assertf(written == res.Size, "%s: expected size=%d, got %d", lom.Cname(), res.Size, written)
 
-	// fsync, if requested
+	// fsync (flush), if requested
 	if cmn.Rom.Features().IsSet(feat.FsyncPUT) {
 		if err = lmfh.Sync(); err != nil {
 			goi._cleanup(revert, lmfh, buf, slab, err, "(fsync)")
@@ -75,7 +68,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 	goi.t.statsT.Add(stats.GetColdRwLatency, mono.SinceNano(goi.ltime))
 
-	// persist lom (main repl)
+	// persist lom (main repl.)
 	lom.SetSize(written)
 	if cksum != nil {
 		cksum.Finalize()
@@ -91,12 +84,11 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 		return err
 	}
 
-	// seek start and transmit
+	// fseek and r-range, if req
 	if _, err = lmfh.Seek(0, io.SeekStart); err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(seek)")
 		return err
 	}
-
 	var (
 		hrng   *htrange
 		size             = lom.SizeBytes()
@@ -122,13 +114,11 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 
 	w := cos.WriterOnly{Writer: io.Writer(goi.w)}
 	written, err = io.CopyBuffer(w, reader, buf)
-	if err != nil || written != size {
-		if err == nil {
-			err = fmt.Errorf("written %d != %d exp. size", written, size)
-		}
+	if err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(transmit)")
 		return errSendingResp
 	}
+	debug.Assertf(written == size, "written %d != %d exp. size", written, size)
 
 	slab.Free(buf)
 	cos.Close(lmfh)
@@ -146,8 +136,9 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 
 	// load; inc stats
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-		goi._cleanup("", nil, nil, nil, err, "(load)") // (unlikely)
-		return err
+		goi.lom.Unlock(true)
+		nlog.Errorln(ftcg+"(load)", lom, err) // (unlikely)
+		return errSendingResp
 	}
 	goi.lom.Unlock(true)
 

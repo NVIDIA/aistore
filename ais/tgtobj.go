@@ -1077,7 +1077,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 
 	hdr.Set(cos.HdrContentLength, strconv.FormatInt(size, 10))
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
-	buf, slab := goi.t.gmm.AllocSize(size)
+	buf, slab := goi.t.gmm.AllocSize(min(size, 64*cos.KiB))
 	err = goi.transmit(reader, buf, fqn)
 	slab.Free(buf)
 	return
