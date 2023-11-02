@@ -90,6 +90,8 @@ COMMANDS:
   - [Attach remote cluster](#attach-remote-cluster)
   - [Detach remote cluster](#detach-remote-cluster)
   - [Show remote clusters](#show-remote-clusters)
+- [Remove a node](#remove-a-node)
+- [Reset (ie., zero out) stats counters and other metrics](#reset-ie-zero-out-stats-counters-and-other-metrics)
 
 ## Cluster and Node status
 
@@ -552,4 +554,30 @@ $ ais cluster remote-detach alias111
 $ ais show remote-cluster
 UUID        URL                       Alias     Primary         Smap  Targets  Online
 <alias222>  <other.remote.ais:51080>            n/a             n/a   n/a      no
+```
+
+## Reset (ie., zero out) stats counters and other metrics
+
+`ais cluster reset-stats`
+
+### Example and usage
+
+```console
+$ ais cluster reset-stats --help
+NAME:
+   ais cluster reset-stats - reset cluster or node stats (all cumulative metrics or only errors)
+
+USAGE:
+   ais cluster reset-stats [command options] [NODE_ID]
+
+OPTIONS:
+   --errors-only  reset only error counters
+   --help, -h     show help
+```
+
+Let's go ahead and reset all error counters:
+
+```console
+$ ais cluster reset-stats --errors-only
+Cluster error metrics successfully reset
 ```

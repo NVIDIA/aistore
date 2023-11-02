@@ -14,7 +14,7 @@ AIStore tracks, logs, and reports a large and growing number of counters, latenc
 Viewership is equally supported via:
 
 1. System logs
-2. [CLI](/docs/cli.md) and, in particular, [`ais show cluster stats`](/docs/cli/cluster.md) command
+2. [CLI](/docs/cli.md) and, in particular, [`ais show performance`](/docs/cli/performance.md) command
 3. [Prometheus](/docs/prometheus.md)
 4. Any [StatsD](https://github.com/etsy/statsd) compliant [backend](https://github.com/statsd/statsd/blob/master/docs/backend.md#supported-backends) including Graphite/Grafana
 

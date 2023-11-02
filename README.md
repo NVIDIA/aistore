@@ -135,6 +135,7 @@ With a little effort, they all could be extracted and used outside.
   - [AIS Load Generator: integrated benchmark tool](/docs/aisloader.md)
   - [How to benchmark](/docs/howto_benchmark.md)
   - [Performance tuning and testing](/docs/performance.md)
+  - [Performance monitoring](/docs/cli/performance.md)
 - Buckets and Backend Providers
   - [Backend providers](/docs/providers.md)
   - [Buckets](/docs/bucket.md)
@@ -147,6 +148,7 @@ With a little effort, they all could be extracted and used outside.
 - Cluster Management
   - [Lifecycle management: maintenance mode, rebalance/rebuild, and more](/docs/lifecycle_node.md)
   - [CLI: `ais cluster` and subcommands](/docs/cli/show.md)
+  - [Start/stop maintenance mode, shutdown, decommission, and related operations](/docs/lifecycle_node.md)
   - [Joining AIS cluster](/docs/join_cluster.md)
   - [Leaving AIS cluster](/docs/leave_cluster.md)
   - [Global Rebalance](/docs/rebalance.md)
@@ -164,22 +166,22 @@ With a little effort, they all could be extracted and used outside.
   - [Docker](/docs/docker_main.md)
   - [Useful scripts](/docs/development.md)
   - Profiling, race-detecting, and more
-- Batch operations
+- Batch jobs
   - [Batch operations](/docs/batch.md)
   - [eXtended Actions (xactions)](/xact/README.md)
   - [CLI: `ais job`](/docs/cli/job.md) and [`ais show job`](/docs/cli/show.md)
-- Topics
+- Assorted Topics
   - [System files](/docs/sysfiles.md)
-  - [Switching cluster from HTTP to HTTPS, and back](/docs/switch_https.md)
+  - [Switching cluster between HTTP and HTTPS](/docs/switch_https.md)
   - [TLS: testing with self-signed certificates](/docs/getting_started.md#tls-testing-with-self-signed-certificates)
   - [Feature flags](/docs/feature_flags.md)
   - [`aisnode` command line](/docs/command_line.md)
   - [Traffic patterns](/docs/traffic_patterns.md)
   - [Highly available control plane](/docs/ha.md)
-  - [Start/stop maintenance, shutdown, and related operations](/docs/lifecycle_node.md)
+  - [Start/stop maintenance mode, shutdown, decommission, and related operations](/docs/lifecycle_node.md)
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
-  - [AIS Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
+  - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
 
 ## License
 
