@@ -86,16 +86,29 @@ func populateKeyMapInvIdx() {
 	}
 }
 
-func findCmdByKey(key string) (result cos.StrSet) {
-	result = make(cos.StrSet)
-	if resKeys, ok := keywordMap[key]; ok {
-		for _, resKey := range resKeys {
-			for _, idx := range invIndex[resKey] {
-				result.Add(cmdStrs[idx])
-			}
+func findCmdByKey(key string) cos.StrSet {
+	result := make(cos.StrSet)
+	_find(key, result)
+
+	// in addition:
+	for w := range keywordMap {
+		if strings.HasPrefix(w, key+"-") { // e.g., ("reset-stats", "reset")
+			_find(w, result)
 		}
 	}
-	return
+	return result
+}
+
+func _find(key string, result cos.StrSet) {
+	resKeys, ok := keywordMap[key]
+	if !ok {
+		return
+	}
+	for _, resKey := range resKeys {
+		for _, idx := range invIndex[resKey] {
+			result.Add(cmdStrs[idx])
+		}
+	}
 }
 
 // (compare w/ findCmdMultiKeyAlt)
@@ -168,8 +181,9 @@ func searchCmdHdlr(c *cli.Context) (err error) {
 	if len(commands) > 0 {
 		err = teb.Print(commands, teb.SearchTmpl)
 	}
-	if err == nil && !flagIsSet(c, regexFlag) {
-		msg := fmt.Sprintf("\n(Tip: use %s to include more results, e.g.: '%s %s %s %s')",
+	if len(commands) == 0 && err == nil && !flagIsSet(c, regexFlag) {
+		// tip
+		msg := fmt.Sprintf("No matches (use %s to include more results, e.g.: '%s %s %s %s')\n",
 			qflprn(regexFlag), cliName, commandSearch, flprn(regexFlag), c.Args().Get(0))
 		actionDone(c, msg)
 	}
