@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -33,33 +34,43 @@ const (
 )
 
 // Network access of handlers (Public, IntraControl, & IntraData)
-type netAccess int
+type (
+	netAccess int
 
-func (na netAccess) isSet(flag netAccess) bool {
-	return na&flag == flag
-}
+	// HTTP Range (aka Read Range)
+	htrange struct {
+		Start, Length int64
+	}
+	errRangeNoOverlap struct {
+		ranges []string // RFC 7233
+		size   int64    // [0, size)
+	}
+
+	// Local unicast IP info
+	localIPv4Info struct {
+		ipv4 string
+		mtu  int
+	}
+)
+
+func (na netAccess) isSet(flag netAccess) bool { return na&flag == flag }
 
 //
 // IPV4
 //
 
-// Local unicast IP info
-type localIPv4Info struct {
-	ipv4 string
-	mtu  int
-}
-
-// getLocalIPv4List returns a list of local unicast IPv4 with MTU
-func getLocalIPv4List(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
+// returns a list of local unicast (IPv4, MTU)
+func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 	addrlist = make([]*localIPv4Info, 0, 4)
+
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
-		err = fmt.Errorf("failed to get host unicast IPs, err: %w", e)
+		err = fmt.Errorf("failed to get host unicast IPs: %w", e)
 		return
 	}
 	iflist, e := net.Interfaces()
 	if e != nil {
-		err = fmt.Errorf("failed to get interface list: %w", e)
+		err = fmt.Errorf("failed to get network interfaces: %w", e)
 		return
 	}
 
@@ -98,50 +109,46 @@ func getLocalIPv4List(config *cmn.Config) (addrlist []*localIPv4Info, err error)
 			}
 		}
 	}
-
 	if len(addrlist) == 0 {
-		return addrlist, fmt.Errorf("the host does not have any IPv4 addresses")
+		return addrlist, errors.New("the host does not have any IPv4 addresses")
 	}
-
 	return addrlist, nil
 }
 
-// selectConfiguredHostname returns the first Hostname from a preconfigured Hostname list that
-// matches any local unicast IPv4
-func selectConfiguredHostname(addrlist []*localIPv4Info, configuredList []string) (hostname string, err error) {
-	nlog.Infof("Selecting one of the configured IPv4 addresses: %s...", configuredList)
+// given configured list of hostnames, return the first one matching local unicast IPv4
+func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
+	msg := fmt.Sprintf("select hostname given: local IPv4 %v, configured %v", locIPs, hostnames)
+	nlog.Infoln(msg)
 
-	var localList, ipv4 string
-	for i, host := range configuredList {
+	for i, host := range hostnames {
+		var ipv4 string
 		if net.ParseIP(host) != nil {
+			// parses as IP
 			ipv4 = strings.TrimSpace(host)
 		} else {
-			nlog.Warningf("failed to parse IP for hostname %q", host)
-			ip, err := resolveHostIPv4(host)
+			ip, err := _resolve(host)
 			if err != nil {
-				nlog.Errorf("failed to get IPv4 for host=%q; err %v", host, err)
+				nlog.Errorln("failed to resolve hostname(?)", host, "err:", err, "[idx:", i, len(hostnames))
 				continue
 			}
 			ipv4 = ip.String()
+			nlog.Infoln("resolved hostname", host, "to IP addr", ipv4)
 		}
-		for _, localaddr := range addrlist {
-			if i == 0 {
-				localList += " " + localaddr.ipv4
-			}
-			if localaddr.ipv4 == ipv4 {
-				nlog.Warningf("Selected IPv4 %s from the configuration file", ipv4)
+		for _, addr := range locIPs {
+			if addr.ipv4 == ipv4 {
+				nlog.Infoln("Selected hostname", host, "IP", ipv4)
 				return host, nil
 			}
 		}
 	}
 
-	nlog.Errorf("Configured Hostname does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s",
-		localList, configuredList)
-	return "", fmt.Errorf("configured Hostname does not match any local one")
+	err := errors.New("failed to " + msg)
+	nlog.Errorln(err)
+	return "", err
 }
 
-// detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a daemon to listen on it
-func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err error) {
+// _localIP takes a list of local IPv4s and returns the best fit for a daemon to listen on it
+func _localIP(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrList) == 0 {
 		return nil, fmt.Errorf("no addresses to choose from")
 	}
@@ -167,31 +174,28 @@ func detectLocalIPv4(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, 
 	return ip, nil
 }
 
-// getNetInfo returns an Hostname for proxy/target to listen on it.
-// 1. If there is an Hostname in config - it tries to use it
-// 2. If config does not contain Hostname - it chooses one of local IPv4s
+// getNetInfo returns hostname to listen on.
+// If config doesn't contain hostnames it chooses one of the local IPv4s
 func getNetInfo(config *cmn.Config, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo meta.NetInfo, err error) {
-	var ip net.IP
+	var (
+		ip   net.IP
+		host string
+	)
 	if configuredIPv4s == "" {
-		ip, err = detectLocalIPv4(config, addrList)
-		if err != nil {
-			return netInfo, err
+		if ip, err = _localIP(config, addrList); err == nil {
+			netInfo = *meta.NewNetInfo(proto, ip.String(), port)
 		}
-		netInfo = *meta.NewNetInfo(proto, ip.String(), port)
 		return
 	}
 
-	configuredList := strings.Split(configuredIPv4s, ",")
-	selHostname, err := selectConfiguredHostname(addrList, configuredList)
-	if err != nil {
-		return netInfo, err
+	lst := strings.Split(configuredIPv4s, ",")
+	if host, err = _selectHost(addrList, lst); err == nil {
+		netInfo = *meta.NewNetInfo(proto, host, port)
 	}
-
-	netInfo = *meta.NewNetInfo(proto, selHostname, port)
 	return
 }
 
-func resolveHostIPv4(hostName string) (net.IP, error) {
+func _resolve(hostName string) (net.IP, error) {
 	ips, err := net.LookupIP(hostName)
 	if err != nil {
 		return nil, err
@@ -204,24 +208,18 @@ func resolveHostIPv4(hostName string) (net.IP, error) {
 	return nil, fmt.Errorf("failed to find non-empty IPv4 in list %v (hostName=%q)", ips, hostName)
 }
 
-func validateHostname(hostname string) (err error) {
+func parseOrResolve(hostname string) (err error) {
 	if net.ParseIP(hostname) != nil {
+		// is a parse-able IP addr
 		return
 	}
-	_, err = resolveHostIPv4(hostname)
+	_, err = _resolve(hostname)
 	return
 }
 
-// HTTP Range (aka Read Range)
-type (
-	htrange struct {
-		Start, Length int64
-	}
-	errRangeNoOverlap struct {
-		ranges []string // RFC 7233
-		size   int64    // [0, size)
-	}
-)
+/////////////
+// htrange //
+/////////////
 
 func (r htrange) contentRange(size int64) string {
 	return fmt.Sprintf("%s%d-%d/%d", cos.HdrContentRangeValPrefix, r.Start, r.Start+r.Length-1, size)

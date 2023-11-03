@@ -343,13 +343,15 @@ func (h *htrun) initNetworks() {
 		config           = cmn.GCO.Get()
 		port             = strconv.Itoa(config.HostNet.Port)
 		proto            = config.Net.HTTP.Proto
-		addrList, err    = getLocalIPv4List(config)
+		addrList, err    = getLocalIPv4s(config)
 	)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
-	// NOTE in re K8S deployment:
-	// public hostname could be LoadBalancer external IP or a service DNS
+
+	// NOTE in re: K8S deployment
+	// public hostname could be load balancer's external IP or a service DNS
+
 	k8sDetected := k8s.Detect() == nil
 	if k8sDetected && config.HostNet.Hostname != "" {
 		nlog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
