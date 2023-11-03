@@ -114,7 +114,7 @@ func fcreate(tag string, t time.Time) (f *os.File, fname string, err error) {
 	if err != nil {
 		return
 	}
-	// re-slink
+	// re-symlink
 	symlink := filepath.Join(logDir, link)
 	os.Remove(symlink)
 	os.Symlink(name, symlink)

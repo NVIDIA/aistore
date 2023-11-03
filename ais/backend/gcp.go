@@ -69,15 +69,16 @@ func NewGCP(t cluster.TargetPut) (bp cluster.BackendProvider, err error) {
 		err = fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
 			projectIDEnvVar, credPathEnvVar, projectIDField)
 		return
-	} else if credProjectID != "" {
+	}
+	switch {
+	case credProjectID != "":
 		projectID = credProjectID
-		nlog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, credPathEnvVar)
-	} else if envProjectID != "" {
+		nlog.Infof("%s: %q (using %q env)", projectIDField, projectID, credPathEnvVar)
+	case envProjectID != "":
 		projectID = envProjectID
-		nlog.Infof("[cloud_gcp] %s: %q (using %q env variable)", projectIDField, projectID, projectIDEnvVar)
-	} else {
-		nlog.Warningf("[cloud_gcp] unable to determine %q (%q and %q env vars are empty) - using unauthenticated client",
-			projectIDField, projectIDEnvVar, credPathEnvVar)
+		nlog.Infof("%s: %q (using %q env)", projectIDField, projectID, projectIDEnvVar)
+	default:
+		nlog.Warningln("unauthenticated client")
 	}
 	gcpp := &gcpProvider{t: t, projectID: projectID}
 	bp = gcpp

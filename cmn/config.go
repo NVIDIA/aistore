@@ -194,7 +194,7 @@ type (
 		MaxSize   cos.SizeIEC  `json:"max_size"`   // exceeding this size triggers log rotation
 		MaxTotal  cos.SizeIEC  `json:"max_total"`  // (sum individual log sizes); exceeding this number triggers cleanup
 		FlushTime cos.Duration `json:"flush_time"` // log flush interval
-		StatsTime cos.Duration `json:"stats_time"` // log stats interval (must be a multiple of `PeriodConf.StatsTime`)
+		StatsTime cos.Duration `json:"stats_time"` // (not used)
 	}
 	LogConfToSet struct {
 		Level     *cos.LogLevel `json:"level,omitempty"`

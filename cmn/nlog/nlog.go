@@ -215,19 +215,23 @@ func (nlog *nlog) do(pw *fixed) {
 
 func (nlog *nlog) rotate(now time.Time) (err error) {
 	var (
-		s    = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-		snow = now.Format("2006/01/02 15:04:05")
+		line1 string
+		s     = fmt.Sprintf("host %s, %s for %s/%s\n", host, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		snow  = now.Format("2006/01/02 15:04:05")
 	)
 	if nlog.file, _, err = fcreate(sevText[nlog.sev], now); err != nil {
 		nlog.erred.Store(true)
 		return
 	}
+
 	nlog.written.Store(0)
 	nlog.erred.Store(false)
 	if title == "" {
-		_, err = nlog.file.WriteString("Started up at " + snow + ", " + s)
+		line1 = "Started up at " + snow + ", " + s
+		_, err = nlog.file.WriteString(line1)
 	} else {
-		nlog.file.WriteString("Rotated at " + snow + ", " + s)
+		line1 = "Rotated at " + snow + ", " + s
+		nlog.file.WriteString(line1)
 		_, err = nlog.file.WriteString(title)
 	}
 	return

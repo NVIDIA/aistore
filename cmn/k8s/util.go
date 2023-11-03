@@ -64,6 +64,8 @@ func initDetect() {
 		return
 	}
 	nodeName = pod.Spec.NodeName
+	nlog.Infoln("pod.Spec.NodeName", nodeName, "Volumes", pod.Spec.Volumes, "Spec.Hostname", pod.Spec.Hostname,
+		"Spec.HostNetwork", pod.Spec.HostNetwork)
 
 checkNode:
 	node, err := client.Node(nodeName)
@@ -73,7 +75,7 @@ checkNode:
 	}
 
 	NodeName = node.Name
-	nlog.Infof("Successfully got node name %q, assuming Kubernetes deployment", NodeName)
+	nlog.Infoln("Kubernetes Node.Name", NodeName, "Namespace", node.Namespace)
 }
 
 func Detect() error {
