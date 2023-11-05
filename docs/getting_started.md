@@ -114,9 +114,9 @@ To run AIStore from source, you'd typically need **Go**: compiler, linker, tools
 
 To install Go(lang) on Linux:
 
-* Download the latest `go1.20.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
+* Download the latest `go1.21.<x>.linux-amd64.tar.gz` from [Go downloads](https://golang.org/dl/)
 * Follow [installation instructions](https://go.dev/doc/install)
-* **Or** simply run: `tar -C /usr/local -xzf go1.20.<x>.linux-amd64.tar.gz` and add `/usr/local/go/bin` to $PATH
+* **Or** simply run: `tar -C /usr/local -xzf go1.21.<x>.linux-amd64.tar.gz` and add `/usr/local/go/bin` to $PATH
 
 Next, if not done yet, export the [`GOPATH`](https://go.dev/doc/gopath_code#GOPATH) environment variable.
 

@@ -36,7 +36,7 @@ The rest of this document is structured as follows:
 - [Other Services](#other-services)
 - [dSort](#dsort)
 - [CLI](#cli)
-- [AIS no-limitations principle](#ais-no-limitations-principle)
+- [_No limitations_ principle](#no-limitations-principle)
 
 ## Terminology
 
@@ -294,7 +294,7 @@ One salient feature of AIS CLI is its Bash style [auto-completions](/docs/cli.md
 
 AIS CLI is currently quickly developing. For more information, please see the project's own [README](/docs/cli.md).
 
-## AIS no-limitations principle
+## _No limitations_ principle
 
 There are **no** designed-in limitations on the:
 
