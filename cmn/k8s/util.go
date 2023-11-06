@@ -30,52 +30,57 @@ var (
 
 func initDetect() {
 	var (
-		pod *v1.Pod
-
+		pod      *v1.Pod
 		nodeName = os.Getenv(k8sNodeNameEnv)
 		podName  = os.Getenv(k8sPodNameEnv)
 	)
-
-	nlog.Infof(
-		"Verifying type of deployment (%s: %q, %s: %q)",
-		k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName,
-	)
-
 	client, err := GetClient()
 	if err != nil {
-		nlog.Infof("Couldn't initiate a K8s client, assuming non-Kubernetes deployment")
+		nlog.Infof("K8s client nil => non-Kubernetes deployment: (%s: %q, %s: %q)", k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName)
 		return
 	}
+	nlog.Infof("Checking (%s: %q, %s: %q)", k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName)
 
-	// If the `k8sNodeNameEnv` is set then we should just use it as we trust it
-	// more than anything else.
+	// if specified, `k8sNodeNameEnv` takes precedence: proceed directly to check
 	if nodeName != "" {
 		goto checkNode
 	}
-
 	if podName == "" {
-		nlog.Infof("%s environment not found, assuming non-Kubernetes deployment", k8sPodNameEnv)
+		nlog.Infoln("K8s environment (above) not set => non-Kubernetes deployment")
 		return
 	}
 
+	// check POD
 	pod, err = client.Pod(podName)
 	if err != nil {
-		nlog.Errorf("Failed to get pod %q, err: %v. Try setting %q env variable", podName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get K8s pod %q: %v (tip: try setting %q env variable)", podName, err, k8sNodeNameEnv)
 		return
 	}
 	nodeName = pod.Spec.NodeName
-	nlog.Infoln("pod.Spec.NodeName", nodeName, "Volumes", pod.Spec.Volumes, "Spec.Hostname", pod.Spec.Hostname,
-		"Spec.HostNetwork", pod.Spec.HostNetwork)
+	nlog.Infoln("pod.Spec: NodeName", nodeName, "Hostname", pod.Spec.Hostname, "HostNetwork", pod.Spec.HostNetwork)
 
-checkNode:
+checkNode: // always check Node
 	node, err := client.Node(nodeName)
 	if err != nil {
-		nlog.Errorf("Failed to get node %q, err: %v. Try setting %q env variable", nodeName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get K8s node %q: %v (tip: try setting %q env variable)", nodeName, err, k8sNodeNameEnv)
 		return
 	}
 
 	NodeName = node.Name
-	nlog.Infoln("Kubernetes Node.Name", NodeName, "Namespace", node.Namespace)
+	nlog.Infoln("K8s Node.Name:", NodeName, "Namespace:", node.Namespace)
+
+	_ppvols(pod.Spec.Volumes)
+}
+
+func _ppvols(volumes []v1.Volume) {
+	for i := range volumes {
+		name := "K8s Volume: " + volumes[i].Name
+		if claim := volumes[i].VolumeSource.PersistentVolumeClaim; claim != nil {
+			nlog.Infof("%s, %+v", name, claim)
+		} else {
+			nlog.Infoln(name)
+		}
+	}
 }
 
 func Detect() error {
