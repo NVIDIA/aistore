@@ -983,21 +983,21 @@ func isBrowser(userAgent string) bool {
 }
 
 func (h *htrun) logerr(tag string, v any, err error) {
-	const maxl = 32
+	const maxl = 48
+	var efmt, msg string
 	if daemon.stopping.Load() {
 		return
 	}
-
-	var s string
 	if v != nil {
-		s = fmt.Sprintf("[%+v", v)
-		if len(s) > maxl {
-			s = s[:maxl] + "...]"
+		efmt = fmt.Sprintf("message: {%+v", v)
+		if len(efmt) > maxl {
+			efmt = efmt[:maxl] + "...}"
 		} else {
-			s += "]"
+			efmt += "}"
 		}
 	}
-	msg := fmt.Sprintf("%s: failed to write bytes%s: %v (", s, tag, err)
+	efmt = tag + " response error: %v, " + efmt + " at "
+	msg = fmt.Sprintf(efmt, err)
 	for i := 1; i < 4; i++ {
 		_, file, line, ok := runtime.Caller(i)
 		if !ok {
@@ -1009,7 +1009,7 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		f := filepath.Base(file)
 		msg += fmt.Sprintf("%s:%d", f, line)
 	}
-	nlog.Errorln(msg + ")")
+	nlog.Errorln(msg)
 	h.statsT.IncErr(stats.ErrHTTPWriteCount)
 }
 
