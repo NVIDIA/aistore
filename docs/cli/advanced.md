@@ -30,6 +30,7 @@ COMMANDS:
    remove-from-smap  immediately remove node from cluster map (advanced usage - potential data loss!)
    random-node       print random node ID (by default, random target)
    random-mountpath  print a random mountpath from a given target
+   rotate-logs       rotate logs
 ```
 
 AIS CLI features a number of miscellaneous and advanced-usage commands.
@@ -98,4 +99,32 @@ PROXY            MEM USED %      MEM AVAIL       UPTIME
 BcnQp8083        0.16%           31.12GiB        8m
 NnPLp8082        0.16%           31.12GiB        8m
 MvwQp8080[P]     0.19%           31.12GiB        7m50s
+```
+
+
+## Rotate logs: individual nodes or entire cluster
+
+Usage: `ais advanced rotate-logs [NODE_ID]`
+
+Example:
+
+```console
+$ ais show log t[kOktEWrTg]
+
+Started up at 2023/11/07 18:06:22, host u2204, go1.21.1 for linux/amd64
+W 18:06:22.930488 config:1713 load initial global config "/root/.ais1/ais.json"
+...
+...
+```
+
+Now, let's go ahead and rotate:
+
+```console
+$ ais advanced rotate-logs t[kOktEWrTg]
+t[kOktEWrTg]: rotated logs
+
+$ ais show log t[kOktEWrTg]
+Rotated at 2023/11/07 18:07:31, host u2204, go1.21.1 for linux/amd64
+Node t[kOktEWrTg], Version 3.21.1.69a90d64b, build time 2023-11-07T18:06:19-0500, debug false, CPUs(16, runtime=16)
+...
 ```

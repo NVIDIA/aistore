@@ -118,6 +118,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 	case apc.ETLHealth:
 		t.healthETL(w, r, apiItems[0])
 	case apc.ETLMetrics:
+		k8s.InitMetricsClient()
 		t.metricsETL(w, r, apiItems[0])
 	default:
 		t.writeErrURL(w, r)

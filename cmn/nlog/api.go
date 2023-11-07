@@ -49,7 +49,7 @@ func Flush(action int) {
 		)
 
 		nlog.mw.Lock()
-		if nlog.file == nil || nlog.pw.length() == 0 {
+		if nlog.file == nil || (nlog.pw.length() == 0 && action != ActRotate) {
 			nlog.mw.Unlock()
 			continue
 		}

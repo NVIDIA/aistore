@@ -6,23 +6,17 @@ package k8s
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"strings"
-	"sync"
 
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	tcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	metrics "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 type (
@@ -37,7 +31,6 @@ type (
 		Node(name string) (*corev1.Node, error)
 		Logs(podName string) ([]byte, error)
 		Health(podName string) (string, error)
-		Metrics(podName string) (cpuCores float64, freeMem int64, err error)
 		CheckMetricsAvailability() error
 	}
 
@@ -48,19 +41,57 @@ type (
 		namespace string
 		err       error
 	}
-
-	metricsClient struct {
-		client *metrics.Clientset
-		err    error
-	}
 )
 
 var (
-	_clientOnce           sync.Once
-	_metricsClientOnce    sync.Once
-	_defaultK8sClient     *defaultClient
-	_defaultMetricsClient *metricsClient
+	_defaultK8sClient *defaultClient
 )
+
+func _initClient() {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		_defaultK8sClient = &defaultClient{err: err}
+		return
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		_defaultK8sClient = &defaultClient{err: err}
+		return
+	}
+	_defaultK8sClient = &defaultClient{
+		namespace: _namespace(),
+		client:    client,
+		config:    config,
+	}
+}
+
+// Retrieve pod namespace
+// See:
+//   - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
+//   - https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+//   - https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
+func _namespace() (namespace string) {
+	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
+		return
+	}
+	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
+		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
+			return
+		}
+	}
+	return "default"
+}
+
+func GetClient() (Client, error) {
+	if _defaultK8sClient.err != nil {
+		return nil, _defaultK8sClient.err
+	}
+	return _defaultK8sClient, nil
+}
+
+///////////////////
+// defaultClient //
+///////////////////
 
 func (c *defaultClient) pods() tcorev1.PodInterface {
 	return c.client.CoreV1().Pods(c.namespace)
@@ -91,7 +122,7 @@ func (c *defaultClient) Delete(entityType, entityName string) (err error) {
 	case Svc:
 		err = c.services().Delete(ctx, entityName, *metav1.NewDeleteOptions(0))
 	default:
-		debug.Assertf(false, "unknown entity type: %s", entityType)
+		debug.Assert(false, "unknown entity type", entityType)
 	}
 	return
 }
@@ -123,7 +154,7 @@ func (c *defaultClient) CheckExists(entityType, entityName string) (exists bool,
 			return false, nil
 		}
 	default:
-		debug.Assertf(false, "unknown entity type: %s", entityType)
+		debug.Assert(false, "unknown entity type", entityType)
 	}
 	return true, nil
 }
@@ -164,119 +195,4 @@ func (c *defaultClient) Health(podName string) (string, error) {
 		return "Error", err
 	}
 	return string(response.Status.Phase), nil
-}
-
-func (*defaultClient) Metrics(podName string) (cpuCores float64, freeMem int64, err error) {
-	var (
-		totalCPU, totalMem int64
-		fracCPU            float64
-	)
-
-	mc, err := getMetricsClient()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	msgetter := mc.MetricsV1beta1().PodMetricses(metav1.NamespaceDefault)
-	ms, err := msgetter.Get(context.Background(), podName, metav1.GetOptions{})
-	if err != nil {
-		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
-			err = cos.NewErrNotFound("metrics for pod %q", podName)
-		}
-		return 0, 0, err
-	}
-
-	for _, metric := range ms.Containers {
-		cpuNanoCores, ok := metric.Usage.Cpu().AsInt64()
-		if !ok {
-			cpuNanoCores = metric.Usage.Cpu().AsDec().UnscaledBig().Int64()
-		}
-		totalCPU += cpuNanoCores
-
-		memInt, ok := metric.Usage.Memory().AsInt64()
-		if !ok {
-			memInt = metric.Usage.Memory().AsDec().UnscaledBig().Int64()
-		}
-		totalMem += memInt
-	}
-
-	// Kubernetes reports CPU in nanocores.
-	// https://godoc.org/k8s.io/api/core/v1#ResourceName
-	fracCPU = float64(totalCPU) / float64(1_000_000_000)
-	return fracCPU, totalMem, nil
-}
-
-func GetClient() (Client, error) {
-	_clientOnce.Do(_initClient)
-	if _defaultK8sClient.err != nil {
-		return nil, _defaultK8sClient.err
-	}
-	return _defaultK8sClient, nil
-}
-
-func _initClient() {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		_defaultK8sClient = &defaultClient{err: err}
-		return
-	}
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		_defaultK8sClient = &defaultClient{err: err}
-		return
-	}
-	_defaultK8sClient = &defaultClient{
-		namespace: _namespace(),
-		client:    client,
-		config:    config,
-	}
-}
-
-func getMetricsClient() (*metrics.Clientset, error) {
-	_metricsClientOnce.Do(_initMetricsClient)
-
-	if _defaultMetricsClient.err != nil {
-		return nil, _defaultMetricsClient.err
-	}
-	cos.Assert(_defaultMetricsClient.client != nil)
-	return _defaultMetricsClient.client, nil
-}
-
-func _initMetricsClient() {
-	config, err := clientcmd.BuildConfigFromFlags("", "")
-	if err != nil {
-		_defaultMetricsClient = &metricsClient{
-			err: fmt.Errorf("failed to retrieve metrics client config; err: %v", err),
-		}
-		return
-	}
-
-	mc, err := metrics.NewForConfig(config)
-	if err != nil {
-		_defaultMetricsClient = &metricsClient{
-			err: fmt.Errorf("failed to create metrics client; err: %v", err),
-		}
-		return
-	}
-
-	_defaultMetricsClient = &metricsClient{
-		client: mc,
-	}
-}
-
-// Retrieve pod namespace
-// See:
-//   - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
-//   - https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-//   - https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
-func _namespace() (namespace string) {
-	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
-		return
-	}
-	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
-		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
-			return
-		}
-	}
-	return "default"
 }

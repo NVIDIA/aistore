@@ -33,6 +33,7 @@ func Init() {
 		nodeName = os.Getenv(k8sNodeNameEnv)
 		podName  = os.Getenv(k8sPodNameEnv)
 	)
+	_initClient()
 	client, err := GetClient()
 	if err != nil {
 		nlog.Infof("K8s client nil => non-Kubernetes deployment: (%s: %q, %s: %q)", k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName)

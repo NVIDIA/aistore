@@ -390,7 +390,7 @@ func PodMetrics(t cluster.Target, etlName string) (*CPUMemUsed, error) {
 	if err != nil {
 		return nil, err
 	}
-	cpuUsed, memUsed, err := client.Metrics(c.PodName())
+	cpuUsed, memUsed, err := k8s.Metrics(c.PodName())
 	if err == nil {
 		return &CPUMemUsed{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
