@@ -50,3 +50,10 @@ func (dbs dblockStat) WriteBytes() int64 { return dbs.writeBytes }
 func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
 func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }
 func (dbs dblockStat) ReadMs() int64     { return dbs.readMs }
+
+// NVMe multipathing - Linux only
+// * nvmeInN:     instance I namespace N
+// * nvmeIcCnN:   instance I controller C namespace N
+
+func icn(string, string) string           { return "" }
+func icnPath(string, string, string) bool { return false }

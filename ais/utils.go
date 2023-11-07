@@ -74,15 +74,11 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 		return
 	}
 
-	var (
-		testingEnv  = config.TestingEnv()
-		k8sDetected = k8s.Detect() == nil
-	)
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
 		if ipnet, ok := addr.(*net.IPNet); ok {
-			// Ignore loopback addresses in production env.
-			if ipnet.IP.IsLoopback() && (!testingEnv || k8sDetected) {
+			// production or K8s: skip loopbacks
+			if ipnet.IP.IsLoopback() && (!config.TestingEnv() || k8s.IsK8s()) {
 				continue
 			}
 			if ipnet.IP.To4() == nil {
@@ -312,12 +308,14 @@ func parseMultiRange(s string, size int64) (ranges []htrange, err error) {
 //
 
 func deploymentType() string {
-	if k8s.Detect() == nil {
+	switch {
+	case k8s.IsK8s():
 		return apc.DeploymentK8s
-	} else if cmn.GCO.Get().TestingEnv() {
+	case cmn.GCO.Get().TestingEnv():
 		return apc.DeploymentDev
+	default:
+		return runtime.GOOS
 	}
-	return runtime.GOOS
 }
 
 // for AIS metadata filenames (constants), see `cmn/fname` package

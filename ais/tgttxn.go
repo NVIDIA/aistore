@@ -487,8 +487,8 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error 
 }
 
 func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
-	if err := k8s.Detect(); err != nil {
-		return nil, err
+	if !k8s.IsK8s() {
+		return nil, k8s.ErrK8sRequired
 	}
 	if err := msg.Validate(true); err != nil {
 		return nil, err

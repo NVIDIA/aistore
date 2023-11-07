@@ -35,6 +35,8 @@ type dblockStat struct {
 	ioPending     int64 // 9 - # of I/Os currently in progress
 	ioMs          int64 // 10 - # of milliseconds spent doing I/Os
 	ioMsWeighted  int64 // 11 - weighted # of milliseconds spent doing I/Os
+	// 12 - 15: discard I/Os, discard merges, discard sectors, discard ticks
+	// 16, 17:  flash I/Os, flash ticks, as per https://github.com/sysstat/sysstat/blob/master/iostat.c
 }
 
 // interface guard
@@ -103,3 +105,70 @@ func (dbs dblockStat) WriteBytes() int64 { return dbs.writeSectors * sectorSize 
 func (dbs dblockStat) IOMs() int64       { return dbs.ioMs }
 func (dbs dblockStat) WriteMs() int64    { return dbs.writeMs }
 func (dbs dblockStat) ReadMs() int64     { return dbs.readMs }
+
+// NVMe multipathing
+// * nvmeInN:     instance I namespace N
+// * nvmeIcCnN:   instance I controller C namespace N
+
+// instance-controller-namespace (icn):
+// given "nvmeInN" return the corresponding multipath "nvmeIcCnN" (same instance, same namespace)
+func icn(disk, dir string) (cdisk string) {
+	if !strings.HasPrefix(disk, "nvme") {
+		return
+	}
+	a := regex.FindStringSubmatch(disk)
+	if len(a) < 3 {
+		return
+	}
+	dentries, err := os.ReadDir(dir)
+	if err != nil {
+		debug.Assert(err == nil, dir, err)
+		return
+	}
+	for _, d := range dentries {
+		name := d.Name()
+		if !strings.HasPrefix(name, "nvme") {
+			continue
+		}
+		b := cregex.FindStringSubmatch(name)
+		if len(b) < 4 {
+			continue
+		}
+		if a[1] == b[1] && a[2] == b[3] {
+			cdisk = name
+			break
+		}
+	}
+	return
+}
+
+func icnPath(dir, cdir, mountpath string) bool {
+	stats, ok := _read(dir)
+	cstats, cok := _read(cdir)
+	if !cok {
+		return false
+	}
+	if !ok {
+		return true
+	}
+	// first, an easy check
+	if stats.readComplete == 0 && stats.writeComplete == 0 && (cstats.readComplete > 0 || cstats.writeComplete > 0) {
+		return true
+	}
+
+	// write at the root of the mountpath and check whether (the alternative) stats incremented
+	fh, err := os.CreateTemp(mountpath, "")
+	if err != nil {
+		debug.Assert(err == nil, mountpath, err)
+		return false
+	}
+	fqn := fh.Name()
+	fh.Close()
+	err = os.Remove(fqn)
+	debug.AssertNoErr(err)
+
+	stats2, ok := _read(dir)
+	cstats2, cok := _read(cdir)
+	debug.Assert(ok && cok)
+	return stats.writeComplete == stats2.writeComplete && cstats.writeComplete < cstats2.writeComplete
+}

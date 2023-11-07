@@ -349,12 +349,11 @@ func (h *htrun) initNetworks() {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
 
-	// NOTE in re: K8S deployment
+	// NOTE in re: K8s deployment
 	// public hostname could be load balancer's external IP or a service DNS
 
-	k8sDetected := k8s.Detect() == nil
-	if k8sDetected && config.HostNet.Hostname != "" {
-		nlog.Infof("detected K8S deployment, skipping hostname validation for %q", config.HostNet.Hostname)
+	if k8s.IsK8s() && config.HostNet.Hostname != "" {
+		nlog.Infof("detected K8s deployment, skipping hostname validation for %q", config.HostNet.Hostname)
 		pubAddr = *meta.NewNetInfo(proto, config.HostNet.Hostname, port)
 	} else {
 		pubAddr, err = getNetInfo(config, addrList, proto, config.HostNet.Hostname, port)
@@ -525,11 +524,7 @@ func (h *htrun) run(config *cmn.Config) error {
 // testing environment excluding Kubernetes: listen on `host:port`
 // otherwise (including production):         listen on `*:port`
 func (h *htrun) pubListeningAddr(config *cmn.Config) string {
-	var (
-		testingEnv  = config.TestingEnv()
-		k8sDetected = k8s.Detect() == nil
-	)
-	if testingEnv && !k8sDetected {
+	if config.TestingEnv() && !k8s.IsK8s() {
 		return h.si.PubNet.TCPEndpoint()
 	}
 	return ":" + h.si.PubNet.Port

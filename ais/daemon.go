@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
@@ -201,6 +202,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	// reg xaction factories
 	xreg.Init()
 	xs.Xreg()
+
+	// K8s
+	k8s.Init()
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)

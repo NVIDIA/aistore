@@ -25,8 +25,8 @@ import (
 
 // [METHOD] /v1/etl
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
-	if err := k8s.Detect(); err != nil {
-		t.writeErr(w, r, err, 0, Silent)
+	if !k8s.IsK8s() {
+		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
 		return
 	}
 	switch {

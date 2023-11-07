@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -27,82 +28,12 @@ import (
 	"github.com/onsi/gomega"
 )
 
-type (
-	E2EFramework struct {
-		Dir  string
-		Vars map[string]string // Custom variables passed to input and output files.
-	}
-)
-
-func destroyMatchingBuckets(subName string) (err error) {
-	proxyURL := GetPrimaryURL()
-	bp := BaseAPIParams(proxyURL)
-
-	bcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
-	if err != nil {
-		return err
-	}
-
-	for _, bck := range bcks {
-		if !strings.Contains(bck.Name, subName) {
-			continue
-		}
-		if errD := api.DestroyBucket(bp, bck); errD != nil && err == nil {
-			err = errD
-		}
-	}
-
-	return err
+type E2EFramework struct {
+	Dir  string
+	Vars map[string]string // Custom variables passed to input and output files.
 }
 
-func randomTarget() *meta.Snode {
-	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	si, err := smap.GetRandTarget()
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	return si
-}
-
-func randomMountpath(target *meta.Snode) string {
-	mpaths, err := api.GetMountpaths(BaseAPIParams(proxyURLReadOnly), target)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	gomega.Expect(len(mpaths.Available)).NotTo(gomega.Equal(0))
-	return mpaths.Available[rand.Intn(len(mpaths.Available))]
-}
-
-func retrieveBackendProviders() []string {
-	target := randomTarget()
-	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
-	gomega.Expect(err).NotTo(gomega.HaveOccurred())
-	set := cos.NewStrSet()
-	for b := range config.Backend.Providers {
-		set.Set(b)
-	}
-	set.Set(apc.AIS)
-	backends := set.ToSlice()
-	sort.Strings(backends)
-	return backends
-}
-
-func readContent(r io.Reader, ignoreEmpty bool) []string {
-	var (
-		scanner = bufio.NewScanner(r)
-		lines   = make([]string, 0, 4)
-	)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" && ignoreEmpty {
-			continue
-		}
-		lines = append(lines, line)
-	}
-	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
-	return lines
-}
-
-func isLineRegex(msg string) bool {
-	return len(msg) > 2 && msg[0] == '^' && msg[len(msg)-1] == '$'
-}
+var onceK8s sync.Once
 
 func (f *E2EFramework) RunE2ETest(fileName string) {
 	var (
@@ -148,12 +79,12 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 			tlog.Logf("failed to remove buckets: %v", err)
 		}
 
-		f, err := os.Open(cleanupFileName)
+		fh, err := os.Open(cleanupFileName)
 		if err != nil {
 			return
 		}
-		defer f.Close()
-		for _, line := range readContent(f, true /*ignoreEmpty*/) {
+		defer fh.Close()
+		for _, line := range readContent(fh, true /*ignoreEmpty*/) {
 			scmd := substituteVariables(line)
 			_ = exec.Command("bash", "-c", scmd).Run()
 		}
@@ -218,11 +149,11 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 				ginkgo.Skip("AuthN not enabled - skipping")
 				return
 			case "k8s":
-				// Skip running k8s (etl) tests if AIStore is not deployed in kubernetes
-				if k8s.Detect() == nil {
+				onceK8s.Do(k8s.Init)
+				if k8s.IsK8s() {
 					continue
 				}
-				ginkgo.Skip("AIStore not running in K8s - skipping")
+				ginkgo.Skip("not running in K8s - skipping")
 				return
 			default:
 				cos.AssertMsg(false, "invalid run mode: "+comment)
@@ -298,4 +229,78 @@ func (f *E2EFramework) RunE2ETest(fileName string) {
 		gomega.Equal(len(outs)),
 		"more lines were produced than were in output file",
 	)
+}
+
+//
+// helper methods
+//
+
+func destroyMatchingBuckets(subName string) (err error) {
+	proxyURL := GetPrimaryURL()
+	bp := BaseAPIParams(proxyURL)
+
+	bcks, err := api.ListBuckets(bp, cmn.QueryBcks{Provider: apc.AIS}, apc.FltExists)
+	if err != nil {
+		return err
+	}
+
+	for _, bck := range bcks {
+		if !strings.Contains(bck.Name, subName) {
+			continue
+		}
+		if errD := api.DestroyBucket(bp, bck); errD != nil && err == nil {
+			err = errD
+		}
+	}
+
+	return err
+}
+
+func randomTarget() *meta.Snode {
+	smap, err := api.GetClusterMap(BaseAPIParams(proxyURLReadOnly))
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	si, err := smap.GetRandTarget()
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	return si
+}
+
+func randomMountpath(target *meta.Snode) string {
+	mpaths, err := api.GetMountpaths(BaseAPIParams(proxyURLReadOnly), target)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	gomega.Expect(len(mpaths.Available)).NotTo(gomega.Equal(0))
+	return mpaths.Available[rand.Intn(len(mpaths.Available))]
+}
+
+func retrieveBackendProviders() []string {
+	target := randomTarget()
+	config, err := api.GetDaemonConfig(BaseAPIParams(proxyURLReadOnly), target)
+	gomega.Expect(err).NotTo(gomega.HaveOccurred())
+	set := cos.NewStrSet()
+	for b := range config.Backend.Providers {
+		set.Set(b)
+	}
+	set.Set(apc.AIS)
+	backends := set.ToSlice()
+	sort.Strings(backends)
+	return backends
+}
+
+func readContent(r io.Reader, ignoreEmpty bool) []string {
+	var (
+		scanner = bufio.NewScanner(r)
+		lines   = make([]string, 0, 4)
+	)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" && ignoreEmpty {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	gomega.Expect(scanner.Err()).NotTo(gomega.HaveOccurred())
+	return lines
+}
+
+func isLineRegex(msg string) bool {
+	return len(msg) > 2 && msg[0] == '^' && msg[len(msg)-1] == '$'
 }

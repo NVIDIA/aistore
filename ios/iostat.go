@@ -7,6 +7,8 @@ package ios
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"sync"
 	ratomic "sync/atomic"
 	"time"
@@ -18,6 +20,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
+
+const statsdir = "/sys/class/block"
 
 // public
 type (
@@ -70,6 +74,10 @@ type (
 // interface guard
 var _ IOS = (*ios)(nil)
 
+var (
+	regex, cregex *regexp.Regexp
+)
+
 ///////////////
 // MpathUtil //
 ///////////////
@@ -107,6 +115,10 @@ func New(num int) IOS {
 	if res := lsblk("new-ios", true); res != nil {
 		ios.lsblk.Store(res)
 	}
+
+	regex = regexp.MustCompile(`nvme(\d+)n(\d+)`)
+	cregex = regexp.MustCompile(`nvme(\d+)c(\d+)n(\d+)`)
+
 	return ios
 }
 
@@ -174,9 +186,19 @@ func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error)
 		}
 		ios.disk2mpath[disk] = mpath
 	}
-	for disk := range ios.disk2mpath {
+	for disk, mountpath := range ios.disk2mpath {
 		if _, ok := ios.disk2sysfn[disk]; !ok {
-			ios.disk2sysfn[disk] = fmt.Sprintf("/sys/class/block/%v/stat", disk)
+			path := filepath.Join(statsdir, disk, "stat")
+			ios.disk2sysfn[disk] = path
+
+			// multipath NVMe: alternative block-stats location
+			if cdisk := icn(disk, statsdir); cdisk != "" {
+				cpath := filepath.Join(statsdir, cdisk, "stat")
+				if icnPath(ios.disk2sysfn[disk], cpath, mountpath) {
+					nlog.Infoln("alternative block-stats path:", disk, path, "=>", cdisk, cpath)
+					ios.disk2sysfn[disk] = cpath
+				}
+			}
 		}
 	}
 	if len(ios.disk2sysfn) != len(ios.disk2mpath) {

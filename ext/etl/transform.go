@@ -47,12 +47,12 @@ const (
 //
 // ETL:
 //     Refers to Extract-Transform-Load, which allows a user to do transformation
-//     of the objects. Transformation is defined by an ETL spec, which is a K8S
+//     of the objects. Transformation is defined by an ETL spec, which is a K8s
 //     yaml spec file. The operations of an ETL are executed on the ETL container.
 //
 // ETL container:
-//     The user's K8S pod which runs the container doing the transformation of
-//     the objects. It is initiated by a target and runs on the same K8S node
+//     The user's K8s pod which runs the container doing the transformation of
+//     the objects. It is initiated by a target and runs on the same K8s node
 //     running the target.
 //
 // On-the-fly transformation flow:
@@ -330,7 +330,7 @@ func Stop(t cluster.Target, id string, errCause error) error {
 
 // StopAll terminates all running ETLs.
 func StopAll(t cluster.Target) {
-	if k8s.Detect() != nil {
+	if !k8s.IsK8s() {
 		return
 	}
 	for _, e := range List() {
