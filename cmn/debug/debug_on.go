@@ -58,7 +58,7 @@ func _panic(a ...any) {
 	}
 	if flag.Parsed() {
 		nlog.Errorln(buffer.String())
-		nlog.Flush(true)
+		nlog.Flush(nlog.ActExit)
 	} else {
 		fmt.Fprintln(os.Stderr, buffer.String())
 	}

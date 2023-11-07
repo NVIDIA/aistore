@@ -55,9 +55,12 @@ const (
 	ActPromote        = "promote"
 	ActRenameObject   = "rename-obj"
 
+	// cp (reverse)
 	ActResetStats  = "reset-stats"
 	ActResetConfig = "reset-config"
 	ActSetConfig   = "set-config"
+
+	ActRotateLogs = "rotate-logs"
 
 	ActShutdownCluster = "shutdown" // see also: ActShutdownNode
 

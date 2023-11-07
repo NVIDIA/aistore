@@ -778,7 +778,7 @@ waitStartup:
 				deadline = time.Hour
 
 				nlog.Infoln(r.Name() + ": standing by...")
-				nlog.Flush()
+				nlog.Flush(nlog.ActNone)
 				continue
 			}
 			j += sleep
@@ -828,7 +828,7 @@ waitStartup:
 				flushTime = config.Log.FlushTime.D()
 			}
 			if nlog.Since() > flushTime || nlog.OOB() {
-				nlog.Flush()
+				nlog.Flush(nlog.ActNone)
 			}
 
 			now = mono.NanoTime()

@@ -2695,6 +2695,8 @@ func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if err := p.owner.config.resetDaemonConfig(); err != nil {
 			p.writeErr(w, r, err)
 		}
+	case apc.ActRotateLogs:
+		nlog.Flush(nlog.ActRotate)
 	case apc.ActResetStats:
 		errorsOnly := msg.Value.(bool)
 		p.statsT.ResetStats(errorsOnly)

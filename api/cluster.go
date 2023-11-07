@@ -183,19 +183,6 @@ func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 	return
 }
 
-func ResetClusterStats(bp BaseParams, errorsOnly bool) (err error) {
-	bp.Method = http.MethodPut
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetStats, Value: errorsOnly})
-	}
-	err = reqParams.DoRequest()
-	FreeRp(reqParams)
-	return
-}
-
 func GetRemoteAIS(bp BaseParams) (remais cluster.Remotes, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -288,14 +275,27 @@ func SetClusterConfigUsingMsg(bp BaseParams, configToUpdate *cmn.ConfigToSet, tr
 	return err
 }
 
-// ResetClusterConfig resets the configuration of all nodes to the cluster configuration
+// zero out: all metrics _or_ only error counters
+func ResetClusterStats(bp BaseParams, errorsOnly bool) (err error) {
+	return _putCluster(bp, apc.ActMsg{Action: apc.ActResetStats, Value: errorsOnly})
+}
+
+// all nodes: reset configuration to cluster defaults
 func ResetClusterConfig(bp BaseParams) error {
+	return _putCluster(bp, apc.ActMsg{Action: apc.ActResetConfig})
+}
+
+func RotateClusterLogs(bp BaseParams) error {
+	return _putCluster(bp, apc.ActMsg{Action: apc.ActRotateLogs})
+}
+
+func _putCluster(bp BaseParams, msg apc.ActMsg) error {
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
 		reqParams.Path = apc.URLPathClu.S
-		reqParams.Body = cos.MustMarshal(apc.ActMsg{Action: apc.ActResetConfig})
+		reqParams.Body = cos.MustMarshal(msg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 	}
 	err := reqParams.DoRequest()

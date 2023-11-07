@@ -39,7 +39,7 @@ func init() {
 func logFlush() {
 	for {
 		time.Sleep(time.Minute) // TODO: must be configurable
-		nlog.Flush()
+		nlog.Flush(nlog.ActNone)
 	}
 }
 
@@ -99,7 +99,7 @@ func main() {
 	srv := newServer(mgr)
 	err = srv.Run()
 
-	nlog.Flush(true)
+	nlog.Flush(nlog.ActExit)
 	cos.Close(mgr.db)
 	if err != nil {
 		cos.ExitLogf("Server failed: %v", err)

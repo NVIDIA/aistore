@@ -48,6 +48,7 @@ const (
 	cmdRmSmap        = "remove-from-smap"
 	cmdRandNode      = "random-node"
 	cmdRandMountpath = "random-mountpath"
+	cmdRotateLogs    = "rotate-logs"
 )
 
 // - 2nd level subcommands (mostly, verbs)

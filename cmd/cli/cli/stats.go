@@ -75,7 +75,7 @@ func fillNodeStatusMap(c *cli.Context, daeType string) (smap *meta.Smap, tstatus
 	wg.Wait()
 
 	mmc := strings.Split(cmn.VersionAIStore, versionSepa)
-	debug.Assert(len(mmc) > 2)
+	debug.Assert(len(mmc) > 1)
 	ok := checkVersionWarn(c, apc.Target, mmc, tstatusMap)
 	if ok && pstatusMap != nil {
 		_ = checkVersionWarn(c, apc.Proxy, mmc, pstatusMap)

@@ -50,6 +50,13 @@ var (
 				Action:       randMountpath,
 				BashComplete: suggestTargets,
 			},
+			{
+				Name:         cmdRotateLogs,
+				Usage:        "rotate logs",
+				ArgsUsage:    optionalNodeIDArgument,
+				Action:       rotateLogs,
+				BashComplete: suggestAllNodes,
+			},
 		},
 	}
 )
@@ -130,5 +137,27 @@ func randMountpath(c *cli.Context) error {
 		fmt.Fprintln(c.App.Writer, mpath)
 		break
 	}
+	return nil
+}
+
+func rotateLogs(c *cli.Context) error {
+	node, sname, err := arg0Node(c)
+	if err != nil {
+		return err
+	}
+	// 1. node
+	if node != nil {
+		if err := api.RotateLogs(apiBP, node.ID()); err != nil {
+			return V(err)
+		}
+		msg := fmt.Sprintf("%s: rotated logs", sname)
+		actionDone(c, msg)
+		return nil
+	}
+	// 2. or cluster
+	if err := api.RotateClusterLogs(apiBP); err != nil {
+		return V(err)
+	}
+	actionDone(c, "cluster: rotated all logs")
 	return nil
 }

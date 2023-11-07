@@ -12,9 +12,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 )
 
-var (
-	MaxSize int64 = 4 * 1024 * 1024
+const (
+	ActNone = iota
+	ActExit
+	ActRotate
 )
+
+var MaxSize int64 = 4 * 1024 * 1024 // usually, config.log.max_size
 
 func InitFlags(flset *flag.FlagSet) {
 	flset.BoolVar(&toStderr, "logtostderr", false, "log to standard error instead of files")
@@ -36,11 +40,8 @@ func SetTitle(s string)              { title = s }
 func InfoLogName() string { return sname() + ".INFO" }
 func ErrLogName() string  { return sname() + ".ERROR" }
 
-func Flush(exit ...bool) {
-	var (
-		ex  = len(exit) > 0 && exit[0]
-		now = mono.NanoTime()
-	)
+func Flush(action int) {
+	now := mono.NanoTime()
 	for _, sev := range []severity{sevInfo, sevErr} {
 		var (
 			nlog = nlogs[sev]
@@ -52,7 +53,7 @@ func Flush(exit ...bool) {
 			nlog.mw.Unlock()
 			continue
 		}
-		if ex || nlog.pw.avail() < maxLineSize || nlog.since(now) > 10*time.Second {
+		if action > ActNone || nlog.pw.avail() < maxLineSize || nlog.since(now) > 10*time.Second {
 			nlog.toFlush = append(nlog.toFlush, nlog.pw)
 			nlog.get()
 		}
@@ -62,7 +63,10 @@ func Flush(exit ...bool) {
 		if oob {
 			nlog.flush()
 		}
-		if ex {
+		if action == ActRotate {
+			nlog.rotate(time.Now())
+		}
+		if action == ActExit {
 			nlog.file.Sync()
 			nlog.file.Close()
 		}

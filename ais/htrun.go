@@ -887,8 +887,8 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 	freeBcArgs(args)
 }
 
-func (h *htrun) bcastReqGroup(w http.ResponseWriter, r *http.Request, args *bcastArgs, to int) {
-	args.to = to
+func (h *htrun) bcastAllNodes(w http.ResponseWriter, r *http.Request, args *bcastArgs) {
+	args.to = cluster.AllNodes
 	results := h.bcastGroup(args)
 	for _, res := range results {
 		if res.err != nil {

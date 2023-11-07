@@ -961,6 +961,8 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		}
 	case apc.ActResetConfig:
 		p.resetCluCfgPersistent(w, r, msg)
+	case apc.ActRotateLogs:
+		p.rotateLogs(w, r, msg)
 
 	case apc.ActShutdownCluster:
 		args := allocBcArgs()
@@ -997,7 +999,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 		p.statsT.ResetStats(errorsOnly)
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-		p.bcastReqGroup(w, r, args, cluster.AllNodes)
+		p.bcastAllNodes(w, r, args)
 		freeBcArgs(args)
 	case apc.ActXactStart:
 		p.xstart(w, r, msg)
@@ -1083,7 +1085,16 @@ func (p *proxy) resetCluCfgPersistent(w http.ResponseWriter, r *http.Request, ms
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
-	p.bcastReqGroup(w, r, args, cluster.AllNodes)
+	p.bcastAllNodes(w, r, args)
+	freeBcArgs(args)
+}
+
+func (p *proxy) rotateLogs(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
+	nlog.Flush(nlog.ActRotate)
+	body := cos.MustMarshal(msg)
+	args := allocBcArgs()
+	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: body}
+	p.bcastAllNodes(w, r, args)
 	freeBcArgs(args)
 }
 
@@ -1100,7 +1111,7 @@ func (p *proxy) setCluCfgTransient(w http.ResponseWriter, r *http.Request, toUpd
 		Body:   cos.MustMarshal(msg),
 		Query:  url.Values{apc.ActTransient: []string{"true"}},
 	}
-	p.bcastReqGroup(w, r, args, cluster.AllNodes)
+	p.bcastAllNodes(w, r, args)
 	freeBcArgs(args)
 }
 
