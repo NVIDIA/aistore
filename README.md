@@ -181,6 +181,7 @@ With a little effort, they all could be extracted and used outside.
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#bucket)
+  - [Validate Warm GET: a quick synopsys](/docs/validate_warm_get.md)
 
 ## License
 
