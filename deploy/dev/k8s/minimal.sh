@@ -79,10 +79,6 @@ kubectl get pods -o wide
 echo "Done."
 echo ""
 
-# Build the CLI in the appropriate directory
-(cd ../../../ && make cli)
-echo ""
-
 # Set AIS_ENDPOINT for use with the CLI
 export AIS_ENDPOINT=$HOST_URL
 echo "Set the \"AIS_ENDPOINT\" for use of CLI:"
