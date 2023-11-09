@@ -10,8 +10,6 @@ cp -fv $AIS_CONF_FILE /etc/ais || exit 1
 cp -fv $AIS_LOCAL_CONF_FILE /etc/ais || exit 1
 cp -fv $STATSD_CONF_FILE /opt/statsd/statsd.conf || exit 1
 
-node /opt/statsd/stats.js /opt/statsd/statsd.conf &
-
 #
 # Somewhere to dump anything of interest that will be picked up but the
 # gather_log.sh script.
