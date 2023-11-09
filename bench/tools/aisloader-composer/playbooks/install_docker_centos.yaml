@@ -1,8 +1,10 @@
----
 - name: Install Docker on target hosts
   hosts: target_hosts
   become: true
   gather_facts: no
+  vars: 
+    os_version: CentOS_8
+    crio_version: 1.28
 
   tasks:
     - name: Install required system packages for Docker
@@ -20,26 +22,20 @@
     - name: Set up Docker repository
       command: "dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo"
 
-    - name: Remove runc
-      command: "dnf remove -y runc"
+    - name: Set up repo for libcontainers
+      command: "curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable.repo https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/{{ os_version }}/devel:kubic:libcontainers:stable.repo"
+      
+    - name: Set up repo for cri-o
+      command: "curl -L -o /etc/yum.repos.d/devel:kubic:libcontainers:stable:cri-o:{{ crio_version }}.repo https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:{{ crio_version }}/{{ os_version }}/devel:kubic:libcontainers:stable:cri-o:{{ crio_version }}.repo"
 
-    - name: Install Docker with --nobest
-      dnf:
-        name: docker-ce
-        state: present
-        nobest: yes
+    - name: Install the latest runc, which will also remove incompatible cri-o
+      command: dnf install -y runc --allowerasing
 
-    - name: Enable Docker service
-      systemd:
-        name: docker
-        enabled: yes
+    - name: Install the newer cri-o 
+      command: yum install -y cri-o cri-tools
 
-    - name: Start Docker service
-      systemd:
-        name: docker
-        state: started
+    - name: Start cri-o service
+      command: systemctl enable --now crio
 
-    # note: log out and log back in so that your group membership is re-evaluated  
-    - name: Run docker commands from non root
-      command: "sudo usermod -aG docker $USER"
-
+    - name: Install Docker CE
+      command: dnf install -y docker-ce
