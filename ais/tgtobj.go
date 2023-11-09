@@ -637,8 +637,6 @@ do:
 			return res.ErrCode, res.Err
 		}
 		goi.cold = true
-		// inc immediately with rest of the goi.stats() at the end
-		goi.t.statsT.Inc(stats.GetColdCount)
 
 		// fast path limitations: read archived; compute more checksums (TODO: reduce)
 		fast = fast && goi.archive.filename == "" &&
@@ -657,6 +655,12 @@ do:
 			goi.unlocked = true
 			return
 		}
+		// with remaining stats via goi.stats()
+		goi.t.statsT.AddMany(
+			cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+			cos.NamedVal64{Name: stats.GetColdSize, Value: res.Size},
+			cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(goi.ltime)},
+		)
 	}
 
 	// read locally and stream back
@@ -1123,10 +1127,6 @@ func (goi *getOI) stats(written int64) {
 		cos.NamedVal64{Name: stats.GetThroughput, Value: written},                // vis-à-vis user (as written m.b. range)
 		cos.NamedVal64{Name: stats.GetLatency, Value: mono.SinceNano(goi.ltime)}, // see also: stats.GetColdRwLatency
 	)
-	if goi.cold {
-		// see also: stats.GetColdCount
-		goi.t.statsT.Add(stats.GetColdSize, goi.lom.SizeBytes())
-	}
 	if goi.verchanged {
 		goi.t.statsT.AddMany(
 			cos.NamedVal64{Name: stats.VerChangeCount, Value: 1},

@@ -66,7 +66,6 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 			return err
 		}
 	}
-	goi.t.statsT.Add(stats.GetColdRwLatency, mono.SinceNano(goi.ltime))
 
 	// persist lom (main repl.)
 	lom.SetSize(written)
@@ -83,6 +82,12 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(persist)")
 		return err
 	}
+	// with remaining stats via goi.stats()
+	goi.t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetColdSize, Value: res.Size},
+		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(goi.ltime)},
+	)
 
 	// fseek and r-range, if req
 	if _, err = lmfh.Seek(0, io.SeekStart); err != nil {
@@ -142,7 +147,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 	goi.lom.Unlock(true)
 
-	goi.stats(written) // where `GetLatency` = `GetColdRwLatency` + (transmit)
+	goi.stats(written)
 	return nil
 }
 

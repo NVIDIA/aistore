@@ -318,8 +318,8 @@ func (s *coreStats) update(nv cos.NamedVal64) {
 		ratomic.AddInt64(&v.numSamples, 1)
 		fallthrough
 	case KindThroughput:
-		ratomic.AddInt64(&v.cumulative, nv.Value)
 		ratomic.AddInt64(&v.Value, nv.Value)
+		ratomic.AddInt64(&v.cumulative, nv.Value)
 	case KindCounter, KindSize:
 		ratomic.AddInt64(&v.Value, nv.Value)
 		// - non-empty suffix forces an immediate Tx with no aggregation (see below);
