@@ -58,6 +58,7 @@ func Init() {
 	}
 	nodeName = pod.Spec.NodeName
 	nlog.Infoln("K8s spec: NodeName", nodeName, "Hostname", pod.Spec.Hostname, "HostNetwork", pod.Spec.HostNetwork)
+	_ppvols(pod.Spec.Volumes)
 
 checkNode: // always check Node
 	node, err := client.Node(nodeName)
@@ -68,8 +69,6 @@ checkNode: // always check Node
 
 	NodeName = node.Name
 	nlog.Infoln("K8s node: Name", NodeName, "Namespace", node.Namespace)
-
-	_ppvols(pod.Spec.Volumes)
 }
 
 func _ppvols(volumes []v1.Volume) {
