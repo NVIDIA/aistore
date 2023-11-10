@@ -29,14 +29,14 @@ const longListTime = 10 * time.Second // list-objects progress
 
 var (
 	// see related command-line: `transportArgs.Timeout` and UseHTTPS
-	transportArgs = cmn.TransportArgs{
+	cargs = cmn.TransportArgs{
 		UseHTTPProxyEnv: true,
 	}
 	// NOTE: client X509 certificate and other `cmn.TLSArgs` variables can be provided via (os.Getenv) environment.
 	// See also:
 	// - docs/aisloader.md, section "Environment variables"
 	// - AIS_ENDPOINT and aisEndpoint
-	tlsArgs = cmn.TLSArgs{
+	sargs = cmn.TLSArgs{
 		SkipVerify: true,
 	}
 )
@@ -251,11 +251,11 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 func newTraceCtx(proxyURL string) *traceCtx {
 	var (
 		tctx      = &traceCtx{}
-		transport = cmn.NewTransport(transportArgs)
+		transport = cmn.NewTransport(cargs)
 		err       error
 	)
 	if cos.IsHTTPS(proxyURL) {
-		transport.TLSClientConfig, err = cmn.NewTLS(tlsArgs)
+		transport.TLSClientConfig, err = cmn.NewTLS(sargs)
 		cos.AssertNoErr(err)
 	}
 	tctx.tr = &traceableTransport{

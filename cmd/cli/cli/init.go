@@ -36,11 +36,9 @@ func Init() (err error) {
 	clusterURL = _clusterURL(cfg)
 
 	var (
-		useHTTPS = cos.IsHTTPS(clusterURL)
-		cargs    = cmn.TransportArgs{
+		cargs = cmn.TransportArgs{
 			DialTimeout: cfg.Timeout.TCPTimeout,
 			Timeout:     cfg.Timeout.HTTPTimeout,
-			UseHTTPS:    useHTTPS,
 		}
 		sargs = cmn.TLSArgs{
 			ClientCA:    cfg.Cluster.ClientCA,
@@ -49,31 +47,33 @@ func Init() (err error) {
 			SkipVerify:  cfg.Cluster.SkipVerifyCrt,
 		}
 	)
-	if useHTTPS {
-		// environment to override client config
-		cmn.EnvToTLS(&sargs)
+
+	clientH = cmn.NewClient(cargs)
+	cmn.EnvToTLS(&sargs)
+	clientTLS = cmn.NewClientTLS(cargs, sargs)
+
+	apiBP = api.BaseParams{
+		URL:   clusterURL,
+		Token: loggedUserToken,
+		UA:    ua,
 	}
-	if useHTTPS {
-		defaultHTTPClient = cmn.NewClientTLS(cargs, sargs)
+	if cos.IsHTTPS(clusterURL) {
+		apiBP.Client = clientTLS
 	} else {
-		defaultHTTPClient = cmn.NewClient(cargs)
+		apiBP.Client = clientH
 	}
 
 	if authnURL := cliAuthnURL(cfg); authnURL != "" {
-		debug.Assert(useHTTPS == cos.IsHTTPS(authnURL))
-		authnHTTPClient = defaultHTTPClient
 		authParams = api.BaseParams{
-			Client: authnHTTPClient,
-			URL:    authnURL,
-			Token:  loggedUserToken,
-			UA:     ua,
+			URL:   authnURL,
+			Token: loggedUserToken,
+			UA:    ua,
 		}
-	}
-	apiBP = api.BaseParams{
-		Client: defaultHTTPClient,
-		URL:    clusterURL,
-		Token:  loggedUserToken,
-		UA:     ua,
+		if cos.IsHTTPS(authnURL) {
+			authParams.Client = clientTLS
+		} else {
+			authParams.Client = clientH
+		}
 	}
 	return
 }

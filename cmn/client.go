@@ -115,13 +115,13 @@ func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
 	return tlsConf, nil
 }
 
-// TODO -- FIXME
-func NewClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
+func NewDefaultClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
 	clientH = NewClient(TransportArgs{Timeout: timeout})
+	clientTLS = NewClientTLS(TransportArgs{Timeout: timeout}, TLSArgs{SkipVerify: true})
 	return
 }
 
-// http client
+// NOTE: `NewTransport` (below) fills-in certain defaults
 func NewClient(cargs TransportArgs) *http.Client {
 	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
 }
@@ -130,11 +130,11 @@ func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
 	return NewClientTLS(cargs, config.Net.HTTP.ToTLS())
 }
 
-// https client
+// https client (ditto)
 func NewClientTLS(cargs TransportArgs, sargs TLSArgs) *http.Client {
 	transport := NewTransport(cargs)
 
-	// initialize TLS config and panic on err
+	// initialize TLS config
 	tlsConfig, err := NewTLS(sargs)
 	if err != nil {
 		cos.ExitLog(err)

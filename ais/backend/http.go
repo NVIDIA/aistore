@@ -21,9 +21,9 @@ import (
 
 type (
 	httpProvider struct {
-		t         cluster.TargetPut
-		clientH   *http.Client
-		clientTLS *http.Client
+		t      cluster.TargetPut
+		cliH   *http.Client
+		cliTLS *http.Client
 	}
 )
 
@@ -31,27 +31,16 @@ type (
 var _ cluster.BackendProvider = (*httpProvider)(nil)
 
 func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
-	var (
-		hp    = &httpProvider{t: t}
-		cargs = cmn.TransportArgs{
-			Timeout:         config.Client.TimeoutLong.D(),
-			WriteBufferSize: config.Net.HTTP.WriteBufferSize,
-			ReadBufferSize:  config.Net.HTTP.ReadBufferSize,
-		}
-		sargs = cmn.TLSArgs{
-			SkipVerify: true, // TODO: may need more tls config to access remote URLs
-		}
-	)
-	hp.clientH = cmn.NewClient(cargs)
-	hp.clientTLS = cmn.NewClientTLS(cargs, sargs)
+	hp := &httpProvider{t: t}
+	hp.cliH, hp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
 	return hp
 }
 
 func (hp *httpProvider) client(u string) *http.Client {
 	if cos.IsHTTPS(u) {
-		return hp.clientTLS
+		return hp.cliTLS
 	}
-	return hp.clientH
+	return hp.cliH
 }
 
 func (*httpProvider) Provider() string  { return apc.HTTP }

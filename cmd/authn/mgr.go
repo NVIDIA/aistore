@@ -45,12 +45,10 @@ var (
 
 // If user DB exists, loads the data from the file and decrypts passwords
 func newMgr(driver kvdb.Driver) (m *mgr, err error) {
-	timeout := time.Duration(Conf.Timeout.Default)
 	m = &mgr{
-		clientH:   cmn.NewClient(cmn.TransportArgs{Timeout: timeout}),
-		clientTLS: cmn.NewClientTLS(cmn.TransportArgs{Timeout: timeout}, cmn.TLSArgs{SkipVerify: true}),
-		db:        driver,
+		db: driver,
 	}
+	m.clientH, m.clientTLS = cmn.NewDefaultClients(time.Duration(Conf.Timeout.Default))
 	err = initializeDB(driver)
 	return
 }

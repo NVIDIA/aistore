@@ -52,11 +52,10 @@ const (
 )
 
 var (
-	clusterURL        string
-	defaultHTTPClient *http.Client
-	authnHTTPClient   *http.Client
-	apiBP             api.BaseParams
-	authParams        api.BaseParams
+	clusterURL         string
+	clientH, clientTLS *http.Client
+	apiBP              api.BaseParams
+	authParams         api.BaseParams
 )
 
 type (

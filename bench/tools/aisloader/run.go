@@ -500,7 +500,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&flagUsage, "usage", false, "Show command-line options, usage, and examples")
 	f.BoolVar(&flagVersion, "version", false, "Show aisloader version")
 	f.BoolVar(&flagQuiet, "quiet", false, "When starting to run, do not print command line arguments, default settings, and usage examples")
-	f.DurationVar(&transportArgs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
+	f.DurationVar(&cargs.Timeout, "timeout", 10*time.Minute, "Client HTTP timeout - used in LIST/GET/PUT/DELETE")
 	f.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval in seconds to print performance counters; 0 - disabled")
 	f.StringVar(&p.bck.Name, "bucket", "", "Bucket name or bucket URI. If empty, a bucket with random name will be created")
 	f.StringVar(&p.bck.Provider, "provider", apc.AIS,
@@ -889,10 +889,10 @@ func _init(p *params) (err error) {
 	p.bp = api.BaseParams{URL: p.proxyURL}
 	if useHTTPS {
 		// environment to override client config
-		cmn.EnvToTLS(&tlsArgs)
-		p.bp.Client = cmn.NewClientTLS(transportArgs, tlsArgs)
+		cmn.EnvToTLS(&sargs)
+		p.bp.Client = cmn.NewClientTLS(cargs, sargs)
 	} else {
-		p.bp.Client = cmn.NewClient(transportArgs)
+		p.bp.Client = cmn.NewClient(cargs)
 	}
 
 	// NOTE: auth token is assigned below when we execute the very first API call

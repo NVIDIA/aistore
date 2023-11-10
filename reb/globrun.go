@@ -118,19 +118,17 @@ type (
 
 func New(t cluster.Target, config *cmn.Config) *Reb {
 	var (
-		client *http.Client
-		cargs  = cmn.TransportArgs{Timeout: config.Client.Timeout.D()}
+		reb = &Reb{
+			t:         t,
+			filterGFN: prob.NewDefaultFilter(),
+			stages:    newNodeStages(),
+		}
+		cargs = cmn.TransportArgs{Timeout: config.Client.Timeout.D()}
 	)
 	if config.Net.HTTP.UseHTTPS {
-		client = cmn.NewIntraClientTLS(cargs, config)
+		reb.ecClient = cmn.NewIntraClientTLS(cargs, config)
 	} else {
-		client = cmn.NewClient(cargs)
-	}
-	reb := &Reb{
-		t:         t,
-		filterGFN: prob.NewDefaultFilter(),
-		stages:    newNodeStages(),
-		ecClient:  client,
+		reb.ecClient = cmn.NewClient(cargs)
 	}
 	dmExtra := bundle.Extra{
 		RecvAck:     reb.recvAck,

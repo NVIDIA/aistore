@@ -850,10 +850,15 @@ For details and usage examples, see: docs/cli/config.md`
 	for _, ra := range all.A {
 		uptime := teb.UnknownStatusVal
 		bp := api.BaseParams{
-			Client: defaultHTTPClient,
-			URL:    ra.URL,
-			Token:  loggedUserToken,
-			UA:     ua,
+			URL:   ra.URL,
+			Token: loggedUserToken,
+			UA:    ua,
+		}
+		if cos.IsHTTPS(bp.URL) {
+			// NOTE: alternatively, cmn.NewClientTLS(..., TLSArgs{SkipVerify: true})
+			bp.Client = clientTLS
+		} else {
+			bp.Client = clientH
 		}
 		if clutime, _, err := api.HealthUptime(bp); err == nil {
 			ns, _ := strconv.ParseInt(clutime, 10, 64)

@@ -61,9 +61,8 @@ type (
 var g global
 
 func Init(t cluster.Target, stats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
-	cargs := cmn.TransportArgs{Timeout: clientConf.TimeoutLong.D()}
-	g.clientH = cmn.NewClient(cargs)
-	g.clientTLS = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: true})
+	g.clientH, g.clientTLS = cmn.NewDefaultClients(clientConf.TimeoutLong.D())
+
 	if db == nil { // unit tests only
 		debug.Assert(t == nil)
 		return

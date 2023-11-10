@@ -233,14 +233,8 @@ func (m *AISBackendProvider) GetInfo(clusterConf cmn.BackendConfAIS) (res cluste
 	return
 }
 
-// TODO: cmn.TLSArgs empty and hardcoded - m.b. defined by cmn.ClientConf or env
 func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) {
-	cargs := cmn.TransportArgs{Timeout: clientConf.Timeout.D()}
-	client = cmn.NewClient(cargs)
-
-	sargs := cmn.TLSArgs{SkipVerify: true}
-	clientTLS = cmn.NewClientTLS(cargs, sargs)
-	return
+	return cmn.NewDefaultClients(clientConf.Timeout.D())
 }
 
 // A list of remote AIS URLs can contains both HTTP and HTTPS links at the

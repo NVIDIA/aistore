@@ -218,7 +218,7 @@ var (
 // and augments API errors if needed.
 func wrapAuthN(f cli.ActionFunc) cli.ActionFunc {
 	return func(c *cli.Context) error {
-		if authnHTTPClient == nil {
+		if authParams.Client == nil {
 			return errors.New(env.AuthN.URL + " is not set")
 		}
 		err := f(c)
@@ -411,15 +411,18 @@ func addAuthClusterHandler(c *cli.Context) (err error) {
 		cluSpec.URLs = append(cluSpec.URLs, clusterURL)
 	} else {
 		bp := api.BaseParams{
-			Client: defaultHTTPClient,
-			URL:    cluSpec.URLs[0],
-			Token:  loggedUserToken,
-			UA:     ua,
+			URL:   cluSpec.URLs[0],
+			Token: loggedUserToken,
+			UA:    ua,
+		}
+		if cos.IsHTTPS(bp.URL) {
+			bp.Client = clientTLS
+		} else {
+			bp.Client = clientH
 		}
 		smap, err = api.GetClusterMap(bp)
 		if err != nil {
-			err = fmt.Errorf("failed to add cluster %q(%q, %s): %v",
-				cluSpec.ID, cluSpec.Alias, cluSpec.URLs[0], err)
+			err = fmt.Errorf("failed to add cluster %q(%q, %s): %v", cluSpec.ID, cluSpec.Alias, cluSpec.URLs[0], err)
 		}
 	}
 	if err != nil {
