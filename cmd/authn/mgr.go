@@ -24,9 +24,9 @@ import (
 )
 
 type mgr struct {
-	clientHTTP  *http.Client
-	clientHTTPS *http.Client
-	db          kvdb.Driver
+	clientH   *http.Client
+	clientTLS *http.Client
+	db        kvdb.Driver
 }
 
 var (
@@ -47,9 +47,9 @@ var (
 func newMgr(driver kvdb.Driver) (m *mgr, err error) {
 	timeout := time.Duration(Conf.Timeout.Default)
 	m = &mgr{
-		clientHTTP:  cmn.NewClient(cmn.TransportArgs{Timeout: timeout}),
-		clientHTTPS: cmn.NewClientTLS(cmn.TransportArgs{Timeout: timeout, UseHTTPS: true}, cmn.TLSArgs{SkipVerify: true}),
-		db:          driver,
+		clientH:   cmn.NewClient(cmn.TransportArgs{Timeout: timeout}),
+		clientTLS: cmn.NewClientTLS(cmn.TransportArgs{Timeout: timeout}, cmn.TLSArgs{SkipVerify: true}),
+		db:        driver,
 	}
 	err = initializeDB(driver)
 	return

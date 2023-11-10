@@ -303,7 +303,6 @@ func (h *htrun) initCtrlClient(config *cmn.Config) {
 		Timeout:         config.Client.Timeout.D(),
 		WriteBufferSize: defaultControlWriteBufferSize,
 		ReadBufferSize:  defaultControlReadBufferSize,
-		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		h.client.control = cmn.NewIntraClientTLS(cargs, config)
@@ -325,7 +324,6 @@ func (h *htrun) initDataClient(config *cmn.Config) {
 		Timeout:         config.Client.TimeoutLong.D(),
 		WriteBufferSize: wbuf,
 		ReadBufferSize:  rbuf,
-		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		h.client.data = cmn.NewIntraClientTLS(cargs, config)

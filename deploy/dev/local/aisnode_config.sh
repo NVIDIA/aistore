@@ -50,7 +50,7 @@ cat > $AIS_CONF_FILE <<EOL
 	},
 	"client": {
 		"client_timeout":      "10s",
-		"client_long_timeout": "30m",
+		"client_long_timeout": "10m",
 		"list_timeout":        "3m"
 	},
 	"proxy": {

@@ -30,8 +30,6 @@ type (
 		WriteBufferSize  int
 		ReadBufferSize   int
 		UseHTTPProxyEnv  bool
-		// when true, requires TLSArgs (below)
-		UseHTTPS bool
 	}
 	TLSArgs struct {
 		ClientCA    string
@@ -117,9 +115,14 @@ func NewTLS(sargs TLSArgs) (tlsConf *tls.Config, _ error) {
 	return tlsConf, nil
 }
 
+// TODO -- FIXME
+func NewClients(timeout time.Duration) (clientH, clientTLS *http.Client) {
+	clientH = NewClient(TransportArgs{Timeout: timeout})
+	return
+}
+
 // http client
 func NewClient(cargs TransportArgs) *http.Client {
-	cos.Assert(!cargs.UseHTTPS)
 	return &http.Client{Transport: NewTransport(cargs), Timeout: cargs.Timeout}
 }
 
@@ -130,7 +133,6 @@ func NewIntraClientTLS(cargs TransportArgs, config *Config) *http.Client {
 // https client
 func NewClientTLS(cargs TransportArgs, sargs TLSArgs) *http.Client {
 	transport := NewTransport(cargs)
-	cos.Assert(cargs.UseHTTPS)
 
 	// initialize TLS config and panic on err
 	tlsConfig, err := NewTLS(sargs)

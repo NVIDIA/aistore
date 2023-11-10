@@ -21,9 +21,9 @@ import (
 
 type (
 	httpProvider struct {
-		t           cluster.TargetPut
-		httpClient  *http.Client
-		httpsClient *http.Client
+		t         cluster.TargetPut
+		clientH   *http.Client
+		clientTLS *http.Client
 	}
 )
 
@@ -42,18 +42,16 @@ func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
 			SkipVerify: true, // TODO: may need more tls config to access remote URLs
 		}
 	)
-	hp.httpClient = cmn.NewClient(cargs)
-
-	cargs.UseHTTPS = true
-	hp.httpsClient = cmn.NewClientTLS(cargs, sargs)
+	hp.clientH = cmn.NewClient(cargs)
+	hp.clientTLS = cmn.NewClientTLS(cargs, sargs)
 	return hp
 }
 
 func (hp *httpProvider) client(u string) *http.Client {
 	if cos.IsHTTPS(u) {
-		return hp.httpsClient
+		return hp.clientTLS
 	}
-	return hp.httpClient
+	return hp.clientH
 }
 
 func (*httpProvider) Provider() string  { return apc.HTTP }

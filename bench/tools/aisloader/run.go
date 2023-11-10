@@ -216,15 +216,17 @@ var _version, _buildtime string
 func Start(version, buildtime string) (err error) {
 	_version, _buildtime = version, buildtime
 
+	// global and parsed/validated
+	runParams = &params{}
+
 	// discard flags of imported packages
 	// define and add aisloader's own flags
 	// parse flags
-	runParams = &params{}
 	f := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	addCmdLine(f, runParams)
 
 	// validate and finish initialization
-	if err = validateCmdLine(runParams); err != nil {
+	if err = _init(runParams); err != nil {
 		return err
 	}
 
@@ -607,8 +609,8 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	}
 }
 
-// validate and finish initialization
-func validateCmdLine(p *params) (err error) {
+// validate command line and finish initialization
+func _init(p *params) (err error) {
 	if p.bck.Name != "" {
 		if p.cleanUp.Val && isDirectS3() {
 			return errors.New("direct S3 access via '-s3endpoint': option '-cleanup' is not supported yet")
@@ -854,6 +856,7 @@ func validateCmdLine(p *params) (err error) {
 		}
 	}
 
+	var useHTTPS bool
 	if !isDirectS3() {
 		// AIS endpoint: http://ip:port _or_ AIS_ENDPOINT env
 		aisEndpoint := "http://" + ip + ":" + port
@@ -880,19 +883,19 @@ func validateCmdLine(p *params) (err error) {
 
 		// TODO: validate against cluster map (see api.GetClusterMap below)
 		p.proxyURL = scheme + "://" + address
-		transportArgs.UseHTTPS = scheme == "https"
+		useHTTPS = scheme == "https"
 	}
 
-	if transportArgs.UseHTTPS {
+	p.bp = api.BaseParams{URL: p.proxyURL}
+	if useHTTPS {
 		// environment to override client config
 		cmn.EnvToTLS(&tlsArgs)
-		httpClient = cmn.NewClientTLS(transportArgs, tlsArgs)
+		p.bp.Client = cmn.NewClientTLS(transportArgs, tlsArgs)
 	} else {
-		httpClient = cmn.NewClient(transportArgs)
+		p.bp.Client = cmn.NewClient(transportArgs)
 	}
 
 	// NOTE: auth token is assigned below when we execute the very first API call
-	p.bp = api.BaseParams{Client: httpClient, URL: p.proxyURL}
 	return nil
 }
 

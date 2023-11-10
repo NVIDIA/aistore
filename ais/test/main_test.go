@@ -7,6 +7,7 @@ package integration_test
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/tools/trand"
 )
@@ -139,4 +141,13 @@ func TestMain(m *testing.M) {
 fail:
 	tlog.Logln("FAIL: " + err.Error())
 	os.Exit(1)
+}
+
+func TestInvalidHTTPMethod(t *testing.T) {
+	bp := tools.BaseAPIParams()
+	proxyURL := tools.RandomProxyURL(t)
+
+	req, err := http.NewRequest("TEST", proxyURL, http.NoBody)
+	tassert.CheckFatal(t, err)
+	tassert.DoAndCheckResp(t, bp.Client, req, http.StatusBadRequest)
 }

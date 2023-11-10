@@ -57,11 +57,6 @@ const (
 	controlPlaneSleep = 2 * time.Second
 )
 
-type Ctx struct {
-	Client *http.Client
-	Log    func(format string, a ...any)
-}
-
 type PutObjectsArgs struct {
 	ProxyURL  string
 	Bck       cmn.Bck
@@ -286,7 +281,7 @@ func RmTargetSkipRebWait(t *testing.T, proxyURL string, smap *meta.Smap) (*meta.
 // Internal API to remove a node from Smap: use it to unregister MOCK targets/proxies.
 // Use `JoinCluster` to attach node back.
 func RemoveNodeUnsafe(proxyURL, sid string) error {
-	return _removeNodeFromSmap(gctx, proxyURL, sid, MaxCplaneTimeout)
+	return _removeNodeFromSmap(proxyURL, sid, MaxCplaneTimeout)
 }
 
 func WaitForObjectToBeDowloaded(bp api.BaseParams, bck cmn.Bck, objName string, timeout time.Duration) error {

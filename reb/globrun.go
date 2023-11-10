@@ -118,8 +118,8 @@ type (
 
 func New(t cluster.Target, config *cmn.Config) *Reb {
 	var (
-		cargs  = cmn.TransportArgs{Timeout: config.Client.Timeout.D(), UseHTTPS: config.Net.HTTP.UseHTTPS}
 		client *http.Client
+		cargs  = cmn.TransportArgs{Timeout: config.Client.Timeout.D()}
 	)
 	if config.Net.HTTP.UseHTTPS {
 		client = cmn.NewIntraClientTLS(cargs, config)

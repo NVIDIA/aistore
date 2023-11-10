@@ -53,6 +53,11 @@ const (
 	ClusterTypeK8s    ClusterType = "k8s"
 )
 
+type g struct {
+	Client *http.Client
+	Log    func(format string, a ...any)
+}
+
 var (
 	proxyURLReadOnly string       // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
 	pmapReadOnly     meta.NodeMap // initial proxy map - it is read-only variable
@@ -75,7 +80,6 @@ var (
 	tlsArgs = cmn.TLSArgs{
 		SkipVerify: true,
 	}
-	HTTPClient *http.Client
 
 	RemoteCluster struct {
 		UUID  string
@@ -84,7 +88,7 @@ var (
 	}
 	LoggedUserToken string
 
-	gctx *Ctx
+	gctx g
 )
 
 // NOTE:
@@ -93,29 +97,27 @@ var (
 // Certificate check and other TLS is always disabled.
 
 func init() {
-	envURL := os.Getenv(env.AIS.Endpoint)
-	transportArgs.UseHTTPS = cos.IsHTTPS(envURL)
+	gctx.Log = tlog.Logf
 
-	if transportArgs.UseHTTPS {
-		// fill in from env
+	if cos.IsHTTPS(os.Getenv(env.AIS.Endpoint)) {
+		// fill-in from env
 		cmn.EnvToTLS(&tlsArgs)
-		HTTPClient = cmn.NewClientTLS(transportArgs, tlsArgs)
+		gctx.Client = cmn.NewClientTLS(transportArgs, tlsArgs)
 	} else {
-		HTTPClient = cmn.NewClient(transportArgs)
-	}
-	gctx = &Ctx{
-		Client: HTTPClient,
-		Log:    tlog.Logf,
+		gctx.Client = cmn.NewClient(transportArgs)
 	}
 }
 
 func NewClientWithProxy(proxyURL string) *http.Client {
-	transport := cmn.NewTransport(transportArgs)
-	prxURL, err := url.Parse(proxyURL)
+	var (
+		transport      = cmn.NewTransport(transportArgs)
+		parsedURL, err = url.Parse(proxyURL)
+	)
 	cos.AssertNoErr(err)
-	transport.Proxy = http.ProxyURL(prxURL)
+	transport.Proxy = http.ProxyURL(parsedURL)
 
-	if transportArgs.UseHTTPS {
+	if parsedURL.Scheme == "https" {
+		cos.AssertMsg(cos.IsHTTPS(proxyURL), proxyURL)
 		tlsConfig, err := cmn.NewTLS(tlsArgs)
 		cos.AssertNoErr(err)
 		transport.TLSClientConfig = tlsConfig

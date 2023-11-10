@@ -239,7 +239,6 @@ func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) 
 	client = cmn.NewClient(cargs)
 
 	sargs := cmn.TLSArgs{SkipVerify: true}
-	cargs.UseHTTPS = true
 	clientTLS = cmn.NewClientTLS(cargs, sargs)
 	return
 }
@@ -250,12 +249,12 @@ func remaisClients(clientConf *cmn.ClientConf) (client, clientTLS *http.Client) 
 // saves the good client for the future usage.
 func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (offline bool, err error) {
 	var (
-		url              string
-		remSmap, smap    *meta.Smap
-		cliPlain, cliTLS = remaisClients(&cfg.Client)
+		url           string
+		remSmap, smap *meta.Smap
+		cliH, cliTLS  = remaisClients(&cfg.Client)
 	)
 	for _, u := range confURLs {
-		client := cliPlain
+		client := cliH
 		if cos.IsHTTPS(u) {
 			client = cliTLS
 		}
@@ -285,7 +284,7 @@ func (r *remAis) init(alias string, confURLs []string, cfg *cmn.ClusterConfig) (
 	if cos.IsHTTPS(url) {
 		r.bp = api.BaseParams{Client: cliTLS, URL: url, UA: ua}
 	} else {
-		r.bp = api.BaseParams{Client: cliPlain, URL: url, UA: ua}
+		r.bp = api.BaseParams{Client: cliH, URL: url, UA: ua}
 	}
 	r.uuid = remSmap.UUID
 	return

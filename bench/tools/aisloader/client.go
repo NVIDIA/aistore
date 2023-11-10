@@ -39,7 +39,6 @@ var (
 	tlsArgs = cmn.TLSArgs{
 		SkipVerify: true,
 	}
-	httpClient *http.Client
 )
 
 type (
@@ -192,7 +191,7 @@ func s3put(bck cmn.Bck, objName string, reader cos.ReadOpenCloser) (err error) {
 func put(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum, reader cos.ReadOpenCloser) (err error) {
 	var (
 		baseParams = api.BaseParams{
-			Client: httpClient,
+			Client: runParams.bp.Client,
 			URL:    proxyURL,
 			Method: http.MethodPut,
 			Token:  loggedUserToken,
@@ -222,7 +221,7 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 		reqArgs.BodyR = reader
 	}
 	putter := tracePutter{
-		tctx:   newTraceCtx(),
+		tctx:   newTraceCtx(proxyURL),
 		cksum:  cksum,
 		reader: reader,
 	}
@@ -249,13 +248,13 @@ func putWithTrace(proxyURL string, bck cmn.Bck, objName string, cksum *cos.Cksum
 	return l, nil
 }
 
-func newTraceCtx() *traceCtx {
+func newTraceCtx(proxyURL string) *traceCtx {
 	var (
 		tctx      = &traceCtx{}
 		transport = cmn.NewTransport(transportArgs)
 		err       error
 	)
-	if transportArgs.UseHTTPS {
+	if cos.IsHTTPS(proxyURL) {
 		transport.TLSClientConfig, err = cmn.NewTLS(tlsArgs)
 		cos.AssertNoErr(err)
 	}
@@ -331,7 +330,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 	if err != nil {
 		return 0, err
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := runParams.bp.Client.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -355,8 +354,7 @@ func getDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, off
 }
 
 // Same as above, but with HTTP trace.
-func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool,
-	offset, length int64) (int64, httpLatencies, error) {
+func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool, offset, length int64) (int64, httpLatencies, error) {
 	var hdrCksumValue, hdrCksumType string
 
 	req, err := prepareGetRequest(proxyURL, bck, objName, offset, length)
@@ -364,7 +362,7 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 		return 0, httpLatencies{}, err
 	}
 
-	tctx := newTraceCtx()
+	tctx := newTraceCtx(proxyURL)
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))
 
 	resp, err := tctx.tracedClient.Do(req)
@@ -406,10 +404,10 @@ func getTraceDiscard(proxyURL string, bck cmn.Bck, objName string, validate bool
 
 // getConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
-func getConfig(server string) (httpLatencies, error) {
-	tctx := newTraceCtx()
+func getConfig(proxyURL string) (httpLatencies, error) {
+	tctx := newTraceCtx(proxyURL)
 
-	url := server + apc.URLPathDae.S
+	url := proxyURL + apc.URLPathDae.S
 	req, _ := http.NewRequest(http.MethodGet, url, http.NoBody)
 	req.URL.RawQuery = api.GetWhatRawQuery(apc.WhatNodeConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), tctx.trace))

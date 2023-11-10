@@ -46,7 +46,6 @@ func NewIntraDataClient() (client *http.Client) {
 		SndRcvBufSize:   tcpbuf,
 		WriteBufferSize: wbuf,
 		ReadBufferSize:  rbuf,
-		UseHTTPS:        config.Net.HTTP.UseHTTPS,
 	}
 	if config.Net.HTTP.UseHTTPS {
 		client = cmn.NewClientTLS(cargs, config.Net.HTTP.ToTLS())

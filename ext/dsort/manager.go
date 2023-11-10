@@ -131,12 +131,12 @@ var (
 	_ cluster.Xact   = (*xaction)(nil)
 )
 
-func Pinit(si cluster.Node) {
+func Pinit(si cluster.Node, config *cmn.Config) {
 	psi = si
-	newBcastClient()
+	newBcastClient(config)
 }
 
-func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
+func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver, config *cmn.Config) {
 	Managers = NewManagerGroup(db, false)
 
 	xreg.RegBckXact(&factory{})
@@ -151,17 +151,11 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
 
-	newBcastClient()
+	newBcastClient(config)
 }
 
-func newBcastClient() {
-	var (
-		config = cmn.GCO.Get()
-		cargs  = cmn.TransportArgs{
-			Timeout:  config.Timeout.MaxHostBusy.D(),
-			UseHTTPS: config.Net.HTTP.UseHTTPS,
-		}
-	)
+func newBcastClient(config *cmn.Config) {
+	cargs := cmn.TransportArgs{Timeout: config.Timeout.MaxHostBusy.D()}
 	if config.Net.HTTP.UseHTTPS {
 		bcastClient = cmn.NewIntraClientTLS(cargs, config)
 	} else {
@@ -207,9 +201,8 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	m.config = cmn.GCO.Get()
 
 	cargs := cmn.TransportArgs{
-		DialTimeout: 5 * time.Minute,
-		Timeout:     30 * time.Minute,
-		UseHTTPS:    m.config.Net.HTTP.UseHTTPS,
+		DialTimeout: m.config.Client.Timeout.D(),
+		Timeout:     m.config.Client.TimeoutLong.D(),
 	}
 	if m.config.Net.HTTP.UseHTTPS {
 		m.client = cmn.NewIntraClientTLS(cargs, m.config)

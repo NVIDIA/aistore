@@ -50,14 +50,20 @@ type (
 		db     kvdb.Driver
 		tstats stats.Tracker
 		store  *infoStore
+
+		// Downloader selects one of the two clients (below) by the destination URL.
+		// Certification check is disabled for now and does not depend on cluster settings.
+		clientH   *http.Client
+		clientTLS *http.Client
 	}
 )
 
 var g global
 
-func Init(t cluster.Target, stats stats.Tracker, db kvdb.Driver) {
-	httpClient = cmn.NewClient(cmn.TransportArgs{})
-	httpsClient = cmn.NewClientTLS(cmn.TransportArgs{UseHTTPS: true}, cmn.TLSArgs{SkipVerify: true})
+func Init(t cluster.Target, stats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
+	cargs := cmn.TransportArgs{Timeout: clientConf.TimeoutLong.D()}
+	g.clientH = cmn.NewClient(cargs)
+	g.clientTLS = cmn.NewClientTLS(cargs, cmn.TLSArgs{SkipVerify: true})
 	if db == nil { // unit tests only
 		debug.Assert(t == nil)
 		return

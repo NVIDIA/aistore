@@ -29,9 +29,9 @@ var errInvalidTarget = errors.New("downloader: invalid target")
 
 func clientForURL(u string) *http.Client {
 	if cos.IsHTTPS(u) {
-		return httpsClient
+		return g.clientTLS
 	}
-	return httpClient
+	return g.clientH
 }
 
 func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {

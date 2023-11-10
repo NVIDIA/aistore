@@ -1,11 +1,12 @@
 // Package dloader_test is a unit test
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package dload_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
@@ -50,8 +51,12 @@ func TestCompareObject(t *testing.T) {
 		dst = &dload.DstElement{
 			Link: "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
 		}
+		clientConf cmn.ClientConf
 	)
-	dload.Init(nil, nil, nil) // initialize http clients
+	// initialize http clients
+	clientConf.Timeout = 5 * cos.Duration(time.Second)
+	clientConf.TimeoutLong = 15 * cos.Duration(time.Second)
+	dload.Init(nil, nil, nil, &clientConf)
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.StrKVs{

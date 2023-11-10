@@ -112,15 +112,6 @@ const (
 	actList   = "LIST"
 )
 
-// Downloader cannot use global HTTP client because it must work with
-// an arbitrary (HTTP) server. Downloader selects client by
-// server's URL. Certification check is disabled always for now and
-// does not depend on cluster settings.
-var (
-	httpClient  *http.Client
-	httpsClient *http.Client
-)
-
 type (
 	factory struct {
 		xreg.RenewBase

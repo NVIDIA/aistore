@@ -384,8 +384,8 @@ func (t *target) Run() error {
 		go t.goreslver(marked.Interrupted)
 	}
 
-	dsort.Tinit(t, t.statsT, db)
-	dload.Init(t, t.statsT, db)
+	dsort.Tinit(t, t.statsT, db, config)
+	dload.Init(t, t.statsT, db, &config.Client)
 
 	err = t.htrun.run(config)
 

@@ -110,10 +110,10 @@ func (m *mgr) call(method, proxyURL, path string, injson []byte, tag string) err
 		retries = retryCount
 		sleep   = retrySleep
 		url     = proxyURL + cos.JoinWords(apc.Version, path)
-		client  = m.clientHTTP
+		client  = m.clientH
 	)
 	if cos.IsHTTPS(proxyURL) {
-		client = m.clientHTTPS
+		client = m.clientTLS
 	}
 	// while cos.IsRetriableConnErr()
 	for i := 1; i <= retries; i++ {
