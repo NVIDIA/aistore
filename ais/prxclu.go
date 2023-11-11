@@ -341,7 +341,7 @@ func (p *proxy) _tresRaw(w http.ResponseWriter, r *http.Request, results sliceRe
 
 // POST /v1/cluster - handles joins and keepalives
 func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, true, apc.URLPathClu.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 1, true)
 	if err != nil {
 		return
 	}
@@ -904,7 +904,7 @@ func (p *proxy) _syncFinal(ctx *smapModifier, clone *smapX) {
 // - cluster-wide configuration
 // - cluster membership, xactions, rebalance, configuration
 func (p *proxy) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathClu.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathClu.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -1780,7 +1780,7 @@ func (p *proxy) _stopMaintRMD(ctx *smapModifier, clone *smapX) {
 }
 
 func (p *proxy) cluSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, false, apc.URLPathCluProxy.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathCluProxy.L, 1, false)
 	if err != nil {
 		return
 	}
@@ -1889,7 +1889,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 /////////////////////////////////////////
 
 func (p *proxy) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, false, apc.URLPathCluDaemon.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathCluDaemon.L, 1, false)
 	if err != nil {
 		return
 	}

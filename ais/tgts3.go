@@ -30,7 +30,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 	if config.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("s3Handler", t.String(), r.Method, r.URL)
 	}
-	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathS3.L)
+	apiItems, err := t.parseURL(w, r, apc.URLPathS3.L, 0, true)
 	if err != nil {
 		return
 	}

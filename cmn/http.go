@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -89,45 +88,43 @@ func MakeRangeHdr(start, length int64) (hdr http.Header) {
 
 // ParseURL splits URL path at "/" and matches resulting items against the specified, if any.
 // - splitAfter == true:  strings.Split() the entire path;
-// - splitAfter == false: strings.SplitN(len(items)+itemsAfter)
+// - splitAfter == false: strings.SplitN(len(itemsPresent)+itemsAfter)
 // Returns all items that follow the specified `items`.
-func ParseURL(unescapedPath string, itemsAfter int, splitAfter bool, items []string) ([]string, error) {
+func ParseURL(path string, itemsPresent []string, itemsAfter int, splitAfter bool) ([]string, error) {
 	var (
-		split   []string
-		escaped = html.EscapeString(unescapedPath)
+		split []string
+		l     = len(itemsPresent)
 	)
-	if len(escaped) > 0 && escaped[0] == '/' {
-		escaped = escaped[1:] // remove leading slash
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:] // remove leading slash
 	}
 	if splitAfter {
-		split = strings.Split(escaped, "/")
+		split = strings.Split(path, "/")
 	} else {
-		split = strings.SplitN(escaped, "/", len(items)+max(1, itemsAfter))
+		split = strings.SplitN(path, "/", l+max(1, itemsAfter))
 	}
+
 	apiItems := split[:0] // filtering without allocation
 	for _, item := range split {
 		if item != "" { // omit empty
 			apiItems = append(apiItems, item)
 		}
 	}
-	if len(apiItems) < len(items) {
-		return nil, fmt.Errorf("invalid URL path '%s': expected %d items, got %d",
-			unescapedPath, len(items), len(apiItems))
+	if len(apiItems) < l {
+		return nil, fmt.Errorf("invalid URL '%s': expected %d items, got %d", path, l, len(apiItems))
 	}
-	for idx, item := range items {
+	for idx, item := range itemsPresent {
 		if item != apiItems[idx] {
-			return nil, fmt.Errorf("invalid URL '%s': expected '%s', got '%s'",
-				unescapedPath, item, apiItems[idx])
+			return nil, fmt.Errorf("invalid URL '%s': expected '%s', got '%s'", path, item, apiItems[idx])
 		}
 	}
-	apiItems = apiItems[len(items):]
+
+	apiItems = apiItems[l:]
 	if len(apiItems) < itemsAfter {
-		return nil, fmt.Errorf("URL path '%s' is too short: expected %d items, got %d",
-			unescapedPath, itemsAfter+len(items), len(apiItems)+len(items))
+		return nil, fmt.Errorf("URL '%s' is too short: expected %d items, got %d", path, itemsAfter+l, len(apiItems)+l)
 	}
 	if len(apiItems) > itemsAfter && !splitAfter {
-		return nil, fmt.Errorf("URL path '%s' is too long: expected %d items, got %d",
-			unescapedPath, itemsAfter+len(items), len(apiItems)+len(items))
+		return nil, fmt.Errorf("URL '%s' is too long: expected %d items, got %d", path, itemsAfter+l, len(apiItems)+l)
 	}
 	return apiItems, nil
 }

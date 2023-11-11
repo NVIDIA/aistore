@@ -222,7 +222,7 @@ func PabortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, apc.URLPathdSortAbort.L)
+	_, err := parseURL(w, r, 0, apc.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
@@ -257,7 +257,7 @@ func PremoveHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	_, err := checkRESTItems(w, r, 0, apc.URLPathdSort.L)
+	_, err := parseURL(w, r, 0, apc.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -395,7 +395,7 @@ func dsorterType(pars *parsedReqSpec) (string, error) {
 
 // [METHOD] /v1/sort
 func TargetHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSort.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSort.L)
 	if err != nil {
 		return
 	}
@@ -437,7 +437,7 @@ func tinitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiItems, errV := checkRESTItems(w, r, 1, apc.URLPathdSortInit.L)
+	apiItems, errV := parseURL(w, r, 1, apc.URLPathdSortInit.L)
 	if errV != nil {
 		return
 	}
@@ -486,7 +486,7 @@ func tstartHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortStart.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortStart.L)
 	if err != nil {
 		return
 	}
@@ -541,7 +541,7 @@ func (managers *ManagerGroup) shardsHandler(w http.ResponseWriter, r *http.Reque
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortShards.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortShards.L)
 	if err != nil {
 		return
 	}
@@ -590,7 +590,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	if !checkHTTPMethod(w, r, http.MethodPost) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRecords.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortRecords.L)
 	if err != nil {
 		return
 	}
@@ -664,7 +664,7 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortAbort.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortAbort.L)
 	if err != nil {
 		return
 	}
@@ -690,7 +690,7 @@ func tremoveHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodDelete) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortRemove.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortRemove.L)
 	if err != nil {
 		return
 	}
@@ -729,7 +729,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodGet) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, apc.URLPathdSortMetrics.L)
+	apiItems, err := parseURL(w, r, 1, apc.URLPathdSortMetrics.L)
 	if err != nil {
 		return
 	}
@@ -758,7 +758,7 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 	if !checkHTTPMethod(w, r, http.MethodPut) {
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 2, apc.URLPathdSortAck.L)
+	apiItems, err := parseURL(w, r, 2, apc.URLPathdSortAck.L)
 	if err != nil {
 		return
 	}
@@ -780,15 +780,15 @@ func tfiniHandler(w http.ResponseWriter, r *http.Request) {
 
 func checkHTTPMethod(w http.ResponseWriter, r *http.Request, expected string) bool {
 	if r.Method != expected {
-		s := fmt.Sprintf("invalid method: %s to %s, should be %s", r.Method, r.URL.String(), expected)
+		s := fmt.Sprintf("invalid method '%s %s', expecting '%s'", r.Method, r.URL.String(), expected)
 		cmn.WriteErrMsg(w, r, s)
 		return false
 	}
 	return true
 }
 
-func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
-	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, true, items)
+func parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
+	items, err := cmn.ParseURL(r.URL.Path, items, itemsAfter, true)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return nil, err

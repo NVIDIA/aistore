@@ -103,7 +103,7 @@ func (h *htrun) smapUpdatedCB(_, _ *smapX, nfl, ofl cos.BitFlags) {
 
 func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequest) (err error) {
 	debug.Assert(len(apireq.prefix) != 0)
-	apireq.items, err = h.parseURL(w, r, apireq.after, false, apireq.prefix)
+	apireq.items, err = h.parseURL(w, r, apireq.prefix, apireq.after, false)
 	if err != nil {
 		return
 	}
@@ -902,14 +902,12 @@ func (h *htrun) bcastAllNodes(w http.ResponseWriter, r *http.Request, args *bcas
 //
 
 // remove validated fields and return the resulting slice
-func (h *htrun) parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int,
-	splitAfter bool, items []string) ([]string, error) {
-	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, splitAfter, items)
+func (h *htrun) parseURL(w http.ResponseWriter, r *http.Request, itemsPresent []string, itemsAfter int, splitAfter bool) ([]string, error) {
+	items, err := cmn.ParseURL(r.URL.Path, itemsPresent, itemsAfter, splitAfter)
 	if err != nil {
 		h.writeErr(w, r, err)
-		return nil, err
 	}
-	return items, nil
+	return items, err
 }
 
 func (h *htrun) writeMsgPack(w http.ResponseWriter, v msgp.Encodable, tag string) (ok bool) {

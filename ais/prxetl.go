@@ -53,7 +53,7 @@ func (p *proxy) etlHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/etl
 func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathETL.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -93,7 +93,7 @@ func (p *proxy) handleETLGet(w http.ResponseWriter, r *http.Request) {
 //   - add the new ETL instance (represented by the user-specified `etl.InitMsg`) to cluster MD
 //   - return ETL UUID to the user.
 func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.parseURL(w, r, 0, false, apc.URLPathETL.L); err != nil {
+	if _, err := p.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
 		return
 	}
 	if p.forwardCP(w, r, nil, "init ETL") {
@@ -137,7 +137,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 // POST /v1/etl/<etl-name>/stop (or) /v1/etl/<etl-name>/start
 // start/stop ETL pods
 func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 2, true, apc.URLPathETL.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 2, true)
 	if err != nil {
 		return
 	}
@@ -166,7 +166,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /v1/etl/<etl-name>
 func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, true, apc.URLPathETL.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathETL.L, 1, true)
 	if err != nil {
 		return
 	}

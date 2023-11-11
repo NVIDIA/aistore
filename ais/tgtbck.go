@@ -34,7 +34,7 @@ import (
 
 // GET /v1/buckets[/bucket-name]
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
-	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathBuckets.L)
+	apiItems, err := t.parseURL(w, r, apc.URLPathBuckets.L, 0, true)
 	if err != nil {
 		return
 	}

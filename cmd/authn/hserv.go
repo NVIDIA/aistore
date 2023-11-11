@@ -35,7 +35,7 @@ func newServer(mgr *mgr) *hserv {
 }
 
 func parseURL(w http.ResponseWriter, r *http.Request, itemsAfter int, items []string) ([]string, error) {
-	items, err := cmn.ParseURL(r.URL.Path, itemsAfter, true, items)
+	items, err := cmn.ParseURL(r.URL.Path, items, itemsAfter, true)
 	if err != nil {
 		cmn.WriteErr(w, r, err)
 		return nil, err

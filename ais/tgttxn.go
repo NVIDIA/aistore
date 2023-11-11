@@ -72,7 +72,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathTxn.L)
+	apiItems, err := t.parseURL(w, r, apc.URLPathTxn.L, 0, true)
 	if err != nil {
 		return
 	}

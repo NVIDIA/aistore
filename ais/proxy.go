@@ -440,7 +440,7 @@ func (p *proxy) objectHandler(w http.ResponseWriter, r *http.Request) {
 //	"v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request
 //	and response parameters and components.
 func (p *proxy) easyURLHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, true, nil)
+	apiItems, err := p.parseURL(w, r, nil, 1, true)
 	if err != nil {
 		return
 	}
@@ -512,7 +512,7 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		bckName string
 		qbck    *cmn.QueryBcks
 	)
-	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathBuckets.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -1026,7 +1026,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg           *apc.ActMsg
 		query         = r.URL.Query()
-		apiItems, err = p.parseURL(w, r, 1, true, apc.URLPathBuckets.L)
+		apiItems, err = p.parseURL(w, r, apc.URLPathBuckets.L, 1, true)
 	)
 	if err != nil {
 		return
@@ -1088,7 +1088,7 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 // POST { action } /v1/buckets[/bucket-name]
 func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	var msg *apc.ActMsg
-	apiItems, err := p.parseURL(w, r, 1, true, apc.URLPathBuckets.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathBuckets.L, 1, true)
 	if err != nil {
 		return
 	}
@@ -2280,7 +2280,7 @@ func (p *proxy) listrange(method, bucket string, msg *apc.ActMsg, query url.Valu
 }
 
 func (p *proxy) reverseHandler(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 1, false, apc.URLPathReverse.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathReverse.L, 1, false)
 	if err != nil {
 		return
 	}
@@ -2476,7 +2476,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -2578,7 +2578,7 @@ func (p *proxy) daePathAction(w http.ResponseWriter, r *http.Request, action str
 }
 
 func (p *proxy) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 0, true, apc.URLPathDae.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -2679,7 +2679,7 @@ func (p *proxy) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID str
 }
 
 func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := p.parseURL(w, r, 2, false, apc.URLPathDae.L)
+	apiItems, err := p.parseURL(w, r, apc.URLPathDae.L, 2, false)
 	if err != nil {
 		return
 	}
@@ -2829,7 +2829,7 @@ func (p *proxy) dsortHandler(w http.ResponseWriter, r *http.Request) {
 	if err := p.checkAccess(w, r, nil, apc.AceAdmin); err != nil {
 		return
 	}
-	apiItems, err := cmn.ParseURL(r.URL.Path, 0, true, apc.URLPathdSort.L)
+	apiItems, err := cmn.ParseURL(r.URL.Path, apc.URLPathdSort.L, 0, true)
 	if err != nil {
 		p.writeErrURL(w, r)
 		return

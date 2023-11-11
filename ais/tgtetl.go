@@ -52,7 +52,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err, http.StatusInsufficientStorage)
 		return
 	}
-	if _, err := t.parseURL(w, r, 0, false, apc.URLPathETL.L); err != nil {
+	if _, err := t.parseURL(w, r, apc.URLPathETL.L, 0, false); err != nil {
 		return
 	}
 
@@ -88,7 +88,7 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.parseURL(w, r, 0, true, apc.URLPathETL.L)
+	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 0, true)
 	if err != nil {
 		return
 	}
@@ -129,7 +129,7 @@ func (t *target) handleETLGet(w http.ResponseWriter, r *http.Request) {
 //
 // Handles starting/stopping ETL pods
 func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := t.parseURL(w, r, 2, true, apc.URLPathETL.L)
+	apiItems, err := t.parseURL(w, r, apc.URLPathETL.L, 2, true)
 	if err != nil {
 		return
 	}
@@ -216,7 +216,7 @@ func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName stri
 
 func etlParseObjectReq(_ http.ResponseWriter, r *http.Request) (secret string, bck *meta.Bck, objName string, err error) {
 	var items []string
-	items, err = cmn.ParseURL(r.URL.EscapedPath(), 2, false, apc.URLPathETLObject.L)
+	items, err = cmn.ParseURL(r.URL.EscapedPath(), apc.URLPathETLObject.L, 2, false)
 	if err != nil {
 		return
 	}

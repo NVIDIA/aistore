@@ -71,7 +71,7 @@ func TestMatchRESTItems(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		apiItems, err := cmn.ParseURL(test.path, test.itemsAfter, test.splitAfter, test.items)
+		apiItems, err := cmn.ParseURL(test.path, test.items, test.itemsAfter, test.splitAfter)
 		if err != nil && !test.expectedErr {
 			t.Fatalf("test: %s, err: %v", test.name, err)
 		} else if err == nil && test.expectedErr {

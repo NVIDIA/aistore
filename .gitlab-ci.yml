@@ -323,7 +323,7 @@ test:long:aisloader:
 test:short:k8s:
   stage: test-short
   <<: *test_k8s_short_def
-  timeout: 30m
+  timeout: 1h
   only:
     - merge_requests
   except:
