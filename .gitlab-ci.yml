@@ -76,14 +76,26 @@ variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
   <<: *gather_logs_def
 
+.test_short_skip_scheduled_template: &test_short_skip_scheduled_def
+  stage: test-short
+  tags:
+    - ais
+  timeout: 25m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+      when: manual
+      allow_failure: true
+  <<: *gather_logs_def
+
+
 .test_short_optional_template: &test_short_optional_def
   stage: test-short
   tags:
     - ais
   timeout: 25m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -96,6 +108,17 @@ variables:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+  <<: *gather_logs_def
+
+.test_long_skip_scheduled_template: &test_long_skip_scheduled_def
+  stage: test-long
+  tags:
+    - ais
+  timeout: 3h
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -201,6 +224,8 @@ test:short:s3-compat:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS !~ /.*s3-compat.*/
+      - $CI_PIPELINE_SOURCE == "schedule"
+
 
 test:short:authn:
   <<: *test_short_optional_def
@@ -232,7 +257,7 @@ test:short:https:
     - make test-short
 
 test:short:s3rproxy:
-  <<: *test_short_optional_def
+  <<: *test_short_skip_scheduled_def
   variables:
     BUCKET: "ais://ais-ci"
     TAGS: "s3rproxy"
@@ -242,7 +267,7 @@ test:short:s3rproxy:
     - make test-short
 
 test:long:
-  <<: *test_long_def
+  <<: *test_long_skip_scheduled_def
   variables:
     NUM_PROXY: 6
     BUCKET: "ais://ais-ci"
@@ -272,7 +297,7 @@ test:long:gcp:
 
 test:long:hdfs:
   image: aistorage/hdfs-ci
-  <<: *test_long_def
+  <<: *test_long_skip_scheduled_def
   variables:
     NUM_PROXY: 6
     BUCKET: "hdfs://ais-ci"
@@ -287,8 +312,6 @@ test:long:aisloader:
   tags:
     - ais
   timeout: 10m
-  only:
-    - schedules
   variables:
     AIS_ENDPOINT: "http://localhost:8080"
   script:
@@ -296,6 +319,11 @@ test:long:aisloader:
     - sleep 10 # make sure that cluster properly starts
     - FLAGS="--duration=5m" make test-aisloader
     - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+      when: manual
+      allow_failure: true
+
 
 #
 # Kubernetes stages
@@ -326,6 +354,7 @@ test:short:k8s:
   timeout: 1h
   only:
     - merge_requests
+    - schedules
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
@@ -345,8 +374,7 @@ test:short:assorted:k8s:
     - ais-k8s
   timeout: 30m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   variables:
@@ -386,9 +414,8 @@ test:long:k8s:single-target:
   <<: *test_k8s_long_def
   timeout: 3h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   script:
@@ -404,9 +431,8 @@ test:long:k8s:aisloader:
   <<: *test_k8s_long_def
   timeout: 15m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   script:
@@ -423,9 +449,8 @@ test:long:k8s:all:
     GOOGLE_APPLICATION_CREDENTIALS: "/tmp/gcs.json"
   timeout: 5h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
       when: manual
       allow_failure: true
   before_script:
