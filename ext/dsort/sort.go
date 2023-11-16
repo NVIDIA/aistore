@@ -45,12 +45,12 @@ func (s *alphaByKey) Less(i, j int) bool {
 	return less
 }
 
-// sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
+// sorts records by each Record.Key in the order determined by the `alg` algorithm.
 func sortRecords(r *shard.Records, alg *Algorithm) (err error) {
-	if alg.Kind == None {
+	switch alg.Kind {
+	case None:
 		return nil
-	}
-	if alg.Kind == Shuffle {
+	case Shuffle:
 		var (
 			rnd  *rand.Rand
 			seed = time.Now().Unix()
@@ -64,13 +64,10 @@ func sortRecords(r *shard.Records, alg *Algorithm) (err error) {
 			j := rnd.Intn(i + 1)
 			r.Swap(i, j)
 		}
-	} else {
-		keys := &alphaByKey{records: r, decreasing: alg.Decreasing, keyType: alg.ContentKeyType, err: nil}
+	default:
+		keys := &alphaByKey{records: r, decreasing: alg.Decreasing, keyType: alg.ContentKeyType}
 		sort.Sort(keys)
-		if keys.err != nil {
-			return keys.err
-		}
+		err = keys.err
 	}
-
-	return nil
+	return
 }
