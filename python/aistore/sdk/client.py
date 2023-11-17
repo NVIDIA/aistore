@@ -25,8 +25,8 @@ class Client:
         endpoint (str): AIStore endpoint
     """
 
-    def __init__(self, endpoint: str):
-        self._request_client = RequestClient(endpoint)
+    def __init__(self, endpoint: str, skip_verify: bool = False, ca_cert: str = None):
+        self._request_client = RequestClient(endpoint, skip_verify, ca_cert)
 
     def bucket(
         self, bck_name: str, provider: str = PROVIDER_AIS, namespace: Namespace = None

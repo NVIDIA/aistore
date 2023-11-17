@@ -82,7 +82,7 @@ class TestBucket(unittest.TestCase):
     def test_properties(self):
         self.assertEqual(self.mock_client, self.ais_bck.client)
         expected_ns = Namespace(uuid="ns-id", name="ns-name")
-        client = RequestClient("test client name")
+        client = RequestClient("test client name", skip_verify=False, ca_cert="")
         bck = Bucket(
             client=client,
             name=BCK_NAME,

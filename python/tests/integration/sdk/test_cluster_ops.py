@@ -15,18 +15,17 @@ from tests.utils import random_string
 class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.client = Client(CLUSTER_ENDPOINT)
+        self.cluster = self.client.cluster()
 
     def test_health_success(self):
-        self.assertEqual(Client(CLUSTER_ENDPOINT).cluster().is_aistore_running(), True)
+        self.assertTrue(self.cluster.is_ready())
 
     def test_health_failure(self):
-        # url not exisiting or URL down
-        self.assertEqual(
-            Client("http://localhost:1234").cluster().is_aistore_running(), False
-        )
+        # url not existing or URL down
+        self.assertFalse(Client("http://localhost:1234").cluster().is_ready())
 
     def test_cluster_map(self):
-        smap = self.client.cluster().get_info()
+        smap = self.cluster.get_info()
 
         self.assertIsNotNone(smap)
         self.assertIsNotNone(smap.proxy_si)
@@ -52,11 +51,11 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
         job_3_id = self.client.job(job_kind="cleanup").start()
 
         self._check_jobs_in_result(
-            [job_1_id, job_2_id], self.client.cluster().list_jobs_status()
+            [job_1_id, job_2_id], self.cluster.list_jobs_status()
         )
         self._check_jobs_in_result(
             [job_1_id, job_2_id],
-            self.client.cluster().list_jobs_status(job_kind=job_kind),
+            self.cluster.list_jobs_status(job_kind=job_kind),
             [job_3_id],
         )
 
@@ -75,10 +74,10 @@ class TestClusterOps(unittest.TestCase):  # pylint: disable=unused-variable
             self.assertIn(expected_res, self.client.cluster().list_running_jobs())
             self.assertIn(
                 expected_res,
-                self.client.cluster().list_running_jobs(job_kind=ACT_COPY_OBJECTS),
+                self.cluster.list_running_jobs(job_kind=ACT_COPY_OBJECTS),
             )
             self.assertNotIn(
-                expected_res, self.client.cluster().list_running_jobs(job_kind="lru")
+                expected_res, self.cluster.list_running_jobs(job_kind="lru")
             )
         finally:
             bck.delete()

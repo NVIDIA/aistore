@@ -3,6 +3,7 @@
 #
 
 import unittest
+from unittest.mock import patch
 
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
@@ -10,12 +11,25 @@ from aistore.sdk.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
+from tests.unit.sdk.test_utils import test_cases
 
 
 class TestClient(unittest.TestCase):  # pylint: disable=unused-variable
     def setUp(self) -> None:
         self.endpoint = "https://aistore-endpoint"
         self.client = Client(self.endpoint)
+
+    @patch("aistore.sdk.client.RequestClient")
+    def test_init_defaults(self, mock_request_client):
+        Client(self.endpoint)
+        mock_request_client.assert_called_with(self.endpoint, False, None)
+
+    @test_cases((True, None), (False, "ca_cert_location"))
+    @patch("aistore.sdk.client.RequestClient")
+    def test_init(self, test_case, mock_request_client):
+        skip_verify, ca_cert = test_case
+        Client(self.endpoint, skip_verify=skip_verify, ca_cert=ca_cert)
+        mock_request_client.assert_called_with(self.endpoint, skip_verify, ca_cert)
 
     def test_bucket(self):
         bck_name = "bucket_123"

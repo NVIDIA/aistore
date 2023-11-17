@@ -3,6 +3,8 @@
 #
 
 from __future__ import annotations  # pylint: disable=unused-variable
+
+import logging
 from typing import List, Optional
 
 from aistore.sdk.const import (
@@ -25,6 +27,8 @@ from aistore.sdk.const import (
 from aistore.sdk.types import BucketModel, JobStatus, JobQuery, ETLInfo
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import ActionMsg, Smap
+
+logger = logging.getLogger("cluster")
 
 
 # pylint: disable=unused-variable
@@ -61,6 +65,12 @@ class Cluster:
             res_model=Smap,
             params={QPARAM_WHAT: WHAT_SMAP},
         )
+
+    def get_primary_url(self) -> str:
+        """
+        Returns: URL of primary proxy
+        """
+        return self.get_info().proxy_si.public_net.direct_url
 
     def list_buckets(self, provider: str = PROVIDER_AIS):
         """
@@ -144,20 +154,23 @@ class Cluster:
             HTTP_METHOD_GET, path=URL_PATH_ETL, res_model=List[ETLInfo]
         )
 
-    def is_aistore_running(self) -> bool:
+    def is_ready(self) -> bool:
         """
         Checks if cluster is ready or still setting up.
 
         Returns:
             bool: True if cluster is ready, or false if cluster is still setting up
         """
-
         # compare with AIS Go API (api/cluster.go) for additional supported options
         params = {QPARAM_PRIMARY_READY_REB: "true"}
         try:
-            resp = self.client.request(
-                HTTP_METHOD_GET, path=URL_PATH_HEALTH, params=params
+            resp = self._client.request(
+                HTTP_METHOD_GET,
+                path=URL_PATH_HEALTH,
+                endpoint=self.get_primary_url(),
+                params=params,
             )
             return resp.ok
-        except Exception:
+        except Exception as err:
+            logger.debug(err)
             return False

@@ -2,7 +2,6 @@
 # Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
 #
 
-HEADERS_KW = "headers"
 # Standard Header Keys
 HEADER_ACCEPT = "Accept"
 HEADER_USER_AGENT = "User-Agent"
@@ -108,3 +107,6 @@ STATUS_ACCEPTED = 202
 STATUS_OK = 200
 STATUS_BAD_REQUEST = 400
 STATUS_PARTIAL_CONTENT = 206
+
+# Environment Variables
+AIS_SERVER_CRT = "AIS_SERVER_CRT"

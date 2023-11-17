@@ -1,6 +1,6 @@
 import unittest
 from typing import List, Optional
-from unittest.mock import Mock, create_autospec
+from unittest.mock import Mock
 
 from aistore.sdk.bucket import Bucket
 from aistore.sdk.cluster import Cluster
@@ -21,7 +21,18 @@ from aistore.sdk.const import (
     URL_PATH_ETL,
 )
 from aistore.sdk.request_client import RequestClient
-from aistore.sdk.types import Smap, ActionMsg, BucketModel, JobStatus, JobQuery, ETLInfo
+from aistore.sdk.types import (
+    Smap,
+    ActionMsg,
+    BucketModel,
+    JobStatus,
+    JobQuery,
+    ETLInfo,
+    Snode,
+    NetInfo,
+)
+
+from tests.unit.sdk.test_utils import test_cases
 
 
 class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
@@ -30,7 +41,7 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
         self.cluster = Cluster(self.mock_client)
 
     def test_get_info(self):
-        expected_result = create_autospec(Smap)
+        expected_result = Mock()
         self.mock_client.request_deserialize.return_value = expected_result
         result = self.cluster.get_info()
         self.assertEqual(result, expected_result)
@@ -65,22 +76,31 @@ class TestCluster(unittest.TestCase):  # pylint: disable=unused-variable
             params=expected_params,
         )
 
-    def test_is_aistore_running_exception(self):
+    def test_is_ready_exception(self):
         self.mock_client.request.side_effect = Exception
-        self.assertFalse(self.cluster.is_aistore_running())
+        self.assertFalse(self.cluster.is_ready())
 
-    def test_is_aistore_running(self):
+    @test_cases(True, False)
+    def test_is_ready(self, test_case):
         expected_params = {QPARAM_PRIMARY_READY_REB: "true"}
-        response = Mock()
-        response.ok = True
-        self.mock_client.request.return_value = response
-        self.assertTrue(self.cluster.is_aistore_running())
-        response.ok = False
-        self.mock_client.request.return_value = response
-        self.assertFalse(self.cluster.is_aistore_running())
+        primary_proxy_endpoint = "primary_proxy_url"
+
+        mock_response = Mock()
+        mock_response.ok = test_case
+        self.mock_client.request.return_value = mock_response
+        mock_smap = Mock(spec=Smap)
+        mock_snode = Mock(spec=Snode)
+        mock_netinfo = Mock(spec=NetInfo)
+        mock_netinfo.direct_url = primary_proxy_endpoint
+        mock_snode.public_net = mock_netinfo
+        mock_smap.proxy_si = mock_snode
+        self.mock_client.request_deserialize.return_value = mock_smap
+
+        self.assertEqual(test_case, self.cluster.is_ready())
         self.mock_client.request.assert_called_with(
             HTTP_METHOD_GET,
             path=URL_PATH_HEALTH,
+            endpoint=primary_proxy_endpoint,
             params=expected_params,
         )
 
