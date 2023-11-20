@@ -27,6 +27,7 @@ The rest of this document is structured as follows:
 - [Design Philosophy](#design-philosophy)
 - [Key Concepts and Diagrams](#key-concepts-and-diagrams)
 - [Traffic Patterns](#traffic-patterns)
+- [Read-after-write consistency](#read-after-write-consistency)
 - [Open Format](#open-format)
 - [Existing Datasets](#existing-datasets)
 - [Data Protection](#data-protection)
@@ -128,6 +129,35 @@ As far as the datapath is concerned, there are no extra hops in the line of comm
 > For detailed traffic patterns diagrams, please refer to [this readme](traffic_patterns.md).
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
+
+## Read-after-write consistency
+
+`PUT(object)` is a transaction. New object (or new version of the object) becomes visible/accessible only when aistore finishes writing the first replica and its metadata.
+
+For S3 or any other remote [backend](/docs/providers.md), the latter includes:
+
+* remote PUT via vendor's SDK library;
+* local write under a temp name;
+* getting successful remote response that carries remote metadata;
+* simultaneously, computing checksum (per bucket config);
+* optionally, checksum validation, if configured;
+* finally, writing combined object metadata, at which point the object becomes visible and accessible.
+
+But _not_ prior to that point!
+
+If configured, additional copies and EC slices are added asynchronously. E.g., given a bucket with 3-way replication you may already read the first replica when the other two (copies) are still pending.
+
+It is worth emphasizing that the same rules of data protection and consistency are universally enforced across the board for all _data writing_ scenarios, including (but not limited to):
+
+* RESTful PUT (above);
+* cold GET (as in: `ais get s3://abc/xyz /dev/null` when S3 has `abc/xyz` while aistore doesn't);
+* copy bucket; transform bucket;
+* multi-object copy; multi-object transform; multi-object archive;
+* prefetch remote bucket;
+* rename bucket;
+* promote NFS share
+
+and more.
 
 ## Open Format
 
