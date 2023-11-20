@@ -2,7 +2,7 @@
 aisloader_hosts:
   hosts:
     aisloader00:
-      ansible_host: 10.51.140.15
+      ansible_host: 10.51.140.21
     aisloader01:
       ansible_host: 10.51.140.23
     aisloader02:

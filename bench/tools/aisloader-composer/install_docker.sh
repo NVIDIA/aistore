@@ -6,5 +6,6 @@ source common.sh
 # or use playbooks/install_docker.yaml for those with Ubuntu-based distributions.
 
 PLAYBOOK=playbooks/install_docker.yaml
+HOST_GROUP=aisloader_hosts
 
-run_ansible_playbook "$PLAYBOOK" "$INVENTORY"
+run_ansible_playbook "$PLAYBOOK" "hosts=$HOST_GROUP"

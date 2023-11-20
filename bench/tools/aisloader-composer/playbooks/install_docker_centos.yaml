@@ -1,5 +1,5 @@
-- name: Install Docker on target hosts
-  hosts: target_hosts
+- name: Install Docker on defined hosts
+  hosts: "{{ hosts }}"
   become: true
   gather_facts: no
   vars: 
