@@ -21,12 +21,6 @@ const (
 	ContentKeyInt    = "int"
 	ContentKeyFloat  = "float"
 	ContentKeyString = "string"
-
-	fmtErrInvalidSortingKeyType = "invalid content sorting key %q (expecting one of: %+v)"
-)
-
-var (
-	contentKeyTypes = []string{ContentKeyInt, ContentKeyFloat, ContentKeyString}
 )
 
 type (
@@ -51,7 +45,15 @@ type (
 		ty  string // one of contentKeyTypes: {"int", "string", ... } - see above
 		ext string // file with this extension provides sorting key (of the type `ty`)
 	}
+
+	ErrSortingKeyType struct {
+		ty string
+	}
 )
+
+/////////////////////
+// md5KeyExtractor //
+/////////////////////
 
 func NewMD5KeyExtractor() (KeyExtractor, error) {
 	return &md5KeyExtractor{h: md5.New()}, nil
@@ -67,6 +69,10 @@ func (*md5KeyExtractor) PrepareExtractor(name string, r cos.ReadSizer, _ string)
 	return r, &SingleKeyExtractor{name: name}, false
 }
 
+//////////////////////
+// nameKeyExtractor //
+//////////////////////
+
 func NewNameKeyExtractor() (KeyExtractor, error) {
 	return &nameKeyExtractor{}, nil
 }
@@ -79,8 +85,12 @@ func (*nameKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) {
 	return ske.name, nil
 }
 
+/////////////////////////
+// contentKeyExtractor //
+/////////////////////////
+
 func NewContentKeyExtractor(ty, ext string) (KeyExtractor, error) {
-	if err := ValidateContentKeyT(ty); err != nil {
+	if err := ValidateContentKeyTy(ty); err != nil {
 		return nil, err
 	}
 	return &contentKeyExtractor{ty: ty, ext: ext}, nil
@@ -113,13 +123,19 @@ func (ke *contentKeyExtractor) ExtractKey(ske *SingleKeyExtractor) (any, error) 
 	case ContentKeyString:
 		return key, nil
 	default:
-		return nil, fmt.Errorf(fmtErrInvalidSortingKeyType, ke.ty, contentKeyTypes)
+		return nil, &ErrSortingKeyType{ke.ty}
 	}
 }
 
-func ValidateContentKeyT(ty string) error {
-	if !cos.StringInSlice(ty, contentKeyTypes) {
-		return fmt.Errorf(fmtErrInvalidSortingKeyType, ty, contentKeyTypes)
+func ValidateContentKeyTy(ty string) error {
+	switch ty {
+	case ContentKeyInt, ContentKeyFloat, ContentKeyString:
+		return nil
+	default:
+		return &ErrSortingKeyType{ty}
 	}
-	return nil
+}
+
+func (e *ErrSortingKeyType) Error() string {
+	return fmt.Sprintf("invalid content sorting key %q, expecting one of: 'int', 'float', 'string'", e.ty)
 }

@@ -23,8 +23,6 @@ type RW interface {
 }
 
 var (
-	T cluster.Target
-
 	RWs = map[string]RW{
 		archive.ExtTar:    &tarRW{archive.ExtTar},
 		archive.ExtTgz:    &tgzRW{archive.ExtTgz},

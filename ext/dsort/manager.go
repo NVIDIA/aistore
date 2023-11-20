@@ -146,7 +146,7 @@ func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver, config *cmn.Co
 	g.t = t
 	g.tstats = stats
 
-	shard.T = t
+	shard.Init(t)
 
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})

@@ -256,7 +256,7 @@ func parseAlgorithm(alg Algorithm) (*Algorithm, error) {
 		if alg.Ext == "" || alg.Ext[0] != '.' {
 			return nil, fmt.Errorf("%w %q", errAlgExt, alg.Ext)
 		}
-		if err := shard.ValidateContentKeyT(alg.ContentKeyType); err != nil {
+		if err := shard.ValidateContentKeyTy(alg.ContentKeyType); err != nil {
 			return nil, err
 		}
 	} else {

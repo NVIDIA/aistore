@@ -46,7 +46,7 @@ func (trw *tgzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := g.t.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

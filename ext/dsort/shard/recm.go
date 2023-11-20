@@ -118,7 +118,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 		storeType = SGLStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := T.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := g.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
 			sgl.Free()
@@ -180,7 +180,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 	recm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: T.SID(),
+		DaemonID: g.t.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -356,7 +356,7 @@ func (recm *RecordManager) Cleanup() {
 	recm.contents = nil
 
 	// NOTE: may call cos.FreeMemToOS
-	T.PageMM().FreeSpec(memsys.FreeSpec{
+	g.t.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

@@ -35,13 +35,8 @@ type (
 	}
 )
 
-var (
-	// Predefined padding buffer (zero-initialized).
-	padBuf [archive.TarBlockSize]byte
-
-	// interface guard
-	_ RW = (*tarRW)(nil)
-)
+// interface guard
+var _ RW = (*tarRW)(nil)
 
 /////////////////////////
 // tarRecordDataReader //
@@ -49,7 +44,7 @@ var (
 
 func newTarRecordDataReader() *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
-	rd.metadataBuf, rd.slab = T.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = g.t.ByteMM().Alloc()
 	return rd
 }
 
@@ -113,7 +108,7 @@ func (trw *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 		return 0, 0, err
 	}
 	c := &rcbCtx{parent: trw, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := g.t.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

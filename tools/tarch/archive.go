@@ -107,6 +107,9 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 		if !missingKeys || (missingKeys && rand.Intn(2) == 0) {
 			var buf []byte
 			// random content
+			if err := shard.ValidateContentKeyTy(customFileType); err != nil {
+				return err
+			}
 			switch customFileType {
 			case shard.ContentKeyInt:
 				buf = []byte(strconv.Itoa(rand.Int()))
@@ -115,7 +118,7 @@ func CreateArchCustomFilesToW(w io.Writer, tarFormat tar.Format, ext string, fil
 			case shard.ContentKeyFloat:
 				buf = []byte(fmt.Sprintf("%d.%d", rand.Int(), rand.Int()))
 			default:
-				return fmt.Errorf("invalid custom file type: %q", customFileType)
+				debug.Assert(false, customFileType) // validated above
 			}
 			if err := addBufferToArch(aw, fileName+customFileExt, len(buf), buf); err != nil {
 				return err

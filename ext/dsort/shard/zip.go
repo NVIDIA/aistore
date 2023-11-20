@@ -62,7 +62,7 @@ func (zrw *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 		return 0, 0, err
 	}
 	c := &rcbCtx{parent: zrw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := g.t.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xzip)
@@ -99,7 +99,7 @@ func (*zipRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64
 
 func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = T.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = g.t.ByteMM().Alloc()
 	return rd
 }
 
