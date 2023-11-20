@@ -1,7 +1,7 @@
 #!/bin/bash
 
-INVENTORY="inventory/inventory.yaml"
-GRAFANA_HOST="dgx5826"
+INVENTORY="inventory/oci.yaml"
+GRAFANA_HOST="aismonitor"
 
 # Hide output for tasks we aren't executing
 export ANSIBLE_DISPLAY_SKIPPED_HOSTS=false
