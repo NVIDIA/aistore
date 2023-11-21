@@ -600,13 +600,17 @@ func listAnyHandler(c *cli.Context) error {
 			if lsb.all && (bck.Provider != apc.AIS || !bck.Ns.IsGlobal()) {
 				lsb.countRemoteObjs = true
 				const (
-					warn1 = "counting and sizing remote objects may take considerable time\n"
-					warn2 = "(tip: run 'ais storage summary' or use '--regex' to refine selection)\n"
+					warn = "counting and sizing remote objects may take considerable time\n"
+					tip1 = "(tip: run 'ais storage summary' or use '--regex' to refine the selection)\n"
+					tip2 = "(tip: use '--refresh DURATION' to show progress, '--help' for details)\n"
 				)
-				if lsb.regex == nil {
-					actionWarn(c, warn1+warn2)
-				} else {
-					actionWarn(c, warn1)
+				switch {
+				case !flagIsSet(c, refreshFlag):
+					actionWarn(c, warn+tip2)
+				case lsb.regex == nil:
+					actionWarn(c, warn+tip1)
+				default:
+					actionWarn(c, warn)
 				}
 			}
 			if bck.Name != "" {
