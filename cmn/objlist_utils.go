@@ -13,14 +13,95 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
-func (entries LsoEntries) less(i, j int) bool {
-	if entries[i].Name == entries[j].Name {
-		return entries[i].Flags&apc.EntryStatusMask < entries[j].Flags&apc.EntryStatusMask
+var nilEntry LsoEntry
+
+////////////////
+// LsoEntries //
+////////////////
+
+func (entries LsoEntries) cmp(i, j int) bool { return entries[i].less(entries[j]) }
+
+func appSorted(entries LsoEntries, ne *LsoEntry) LsoEntries {
+	for i := range entries {
+		if ne.Name > entries[i].Name {
+			continue
+		}
+		// dedup
+		if ne.Name == entries[i].Name {
+			if ne.Status() < entries[i].Status() {
+				entries[i] = ne
+			}
+			return entries
+		}
+		// append or insert
+		if i == len(entries)-1 {
+			entries = append(entries, ne)
+			entries[i], entries[i+1] = entries[i+1], entries[i]
+			return entries
+		}
+		entries = append(entries, &nilEntry)
+		copy(entries[i+1:], entries[i:]) // shift right
+		entries[i] = ne
+		return entries
 	}
-	return entries[i].Name < entries[j].Name
+
+	entries = append(entries, ne)
+	return entries
 }
 
-func SortLso(entries LsoEntries) { sort.Slice(entries, entries.less) }
+//////////////
+// LsoEntry //
+//////////////
+
+// NOTE: the terms "cached" and "present" are interchangeable:
+// "object is cached" and "is present" is actually the same thing
+func (be *LsoEntry) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
+func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
+
+func (be *LsoEntry) IsStatusOK() bool   { return be.Status() == 0 }
+func (be *LsoEntry) Status() uint16     { return be.Flags & apc.EntryStatusMask }
+func (be *LsoEntry) IsInsideArch() bool { return be.Flags&apc.EntryInArch != 0 }
+func (be *LsoEntry) IsListedArch() bool { return be.Flags&apc.EntryIsArchive != 0 }
+func (be *LsoEntry) String() string     { return "{" + be.Name + "}" }
+
+func (be *LsoEntry) less(oe *LsoEntry) bool {
+	if be.Name == oe.Name {
+		return be.Status() < oe.Status()
+	}
+	return be.Name < oe.Name
+}
+
+func (be *LsoEntry) CopyWithProps(propsSet cos.StrSet) (ne *LsoEntry) {
+	ne = &LsoEntry{Name: be.Name}
+	if propsSet.Contains(apc.GetPropsSize) {
+		ne.Size = be.Size
+	}
+	if propsSet.Contains(apc.GetPropsChecksum) {
+		ne.Checksum = be.Checksum
+	}
+	if propsSet.Contains(apc.GetPropsAtime) {
+		ne.Atime = be.Atime
+	}
+	if propsSet.Contains(apc.GetPropsVersion) {
+		ne.Version = be.Version
+	}
+	if propsSet.Contains(apc.GetPropsLocation) {
+		ne.Location = be.Location
+	}
+	if propsSet.Contains(apc.GetPropsCustom) {
+		ne.Custom = be.Custom
+	}
+	if propsSet.Contains(apc.GetPropsCopies) {
+		ne.Copies = be.Copies
+	}
+	return
+}
+
+//
+// sorting and merging functions
+//
+
+func SortLso(entries LsoEntries) { sort.Slice(entries, entries.cmp) }
 
 func DedupLso(entries LsoEntries, maxSize int) []*LsoEntry {
 	var j int
@@ -47,19 +128,19 @@ func MergeLso(lists []*LsoResult, maxSize int) *LsoResult {
 		return &LsoResult{}
 	}
 	resList := lists[0]
-	continuationToken := resList.ContinuationToken
+	token := resList.ContinuationToken
 	if len(lists) == 1 {
 		SortLso(resList.Entries)
 		resList.Entries = DedupLso(resList.Entries, maxSize)
-		resList.ContinuationToken = continuationToken
+		resList.ContinuationToken = token
 		return resList
 	}
 
-	tmp := make(map[string]*LsoEntry, len(resList.Entries))
+	tmp := make(map[string]*LsoEntry, len(resList.Entries)*len(lists))
 	for _, l := range lists {
 		resList.Flags |= l.Flags
-		if continuationToken < l.ContinuationToken {
-			continuationToken = l.ContinuationToken
+		if token < l.ContinuationToken {
+			token = l.ContinuationToken
 		}
 		for _, e := range l.Entries {
 			entry, exists := tmp[e.Name]
@@ -78,15 +159,24 @@ func MergeLso(lists []*LsoResult, maxSize int) *LsoResult {
 		}
 	}
 
+	// grow cap
+	for cap(resList.Entries) < len(tmp) {
+		l := min(len(resList.Entries), len(tmp)-cap(resList.Entries))
+		resList.Entries = append(resList.Entries, resList.Entries[:l]...)
+	}
+
 	// cleanup and sort
+	clear(resList.Entries)
 	resList.Entries = resList.Entries[:0]
-	resList.ContinuationToken = continuationToken
+	resList.ContinuationToken = token
 
 	for _, entry := range tmp {
-		resList.Entries = append(resList.Entries, entry)
+		resList.Entries = appSorted(resList.Entries, entry)
 	}
-	SortLso(resList.Entries)
-	resList.Entries = DedupLso(resList.Entries, maxSize)
+	if maxSize > 0 && len(resList.Entries) > maxSize {
+		clear(resList.Entries[maxSize:])
+		resList.Entries = resList.Entries[:maxSize]
+	}
 
 	clear(tmp)
 	return resList
