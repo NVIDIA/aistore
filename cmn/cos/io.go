@@ -135,9 +135,11 @@ type (
 
 	WriterMulti struct{ writers []io.Writer }
 
-	// WriterOnly is helper struct to hide `io.ReaderFrom` implementation which
-	// can use some heuristics to improve performance but can result in not
-	// using `buffer` provided in `io.CopyBuffer`. See: https://golang.org/doc/go1.15#os.
+	// WriterOnly is a helper struct to hide `io.ReaderFrom` interface implementation
+	// As far as http.ResponseWriter (and its underlying tcp conn.), the following are tradeoffs:
+	// [-] sendfile (when sending), or
+	// [-] copy_file_range (when writing local files)
+	// [+] use (reusable) buffer, reduce code path, reduce locking
 	WriterOnly struct{ io.Writer }
 )
 
@@ -539,6 +541,42 @@ func SaveReader(fqn string, reader io.Reader, buf []byte, cksumType string, size
 		return
 	}
 	return
+}
+
+// a slightly modified excerpt from https://github.com/golang/go/blob/master/src/io/io.go#L407
+// - regular streaming copy with `io.WriteTo` and `io.ReaderFrom` not checked and not used
+// - buffer _must_ be provided
+// - see also: WriterOnly comment (above)
+func CopyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if ew != nil {
+				if nw > 0 && nw <= nr {
+					written += int64(nw)
+				}
+				err = ew
+				break
+			}
+			if nw < 0 || nw > nr {
+				err = errors.New("cos.CopyBuffer: invalid write")
+				break
+			}
+			written += int64(nw)
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
 }
 
 // Read only the first line of a file.

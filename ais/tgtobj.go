@@ -133,6 +133,7 @@ type (
 // PUT(object)
 //
 
+// poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (int, error) {
 	{
 		poi.r = r.Body
@@ -366,8 +367,6 @@ func (poi *putOI) putRemote() (errCode int, err error) {
 func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err error) {
 	var (
 		written int64
-		writer  io.Writer
-		writers = make([]io.Writer, 0, 4)
 		cksums  = struct {
 			store     *cos.CksumHash // store with LOM
 			expct     *cos.Cksum     // caller-provided (aka "end-to-end protection")
@@ -379,52 +378,45 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 	if lmfh, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-	writer = cos.WriterOnly{Writer: lmfh} // Hiding `ReadFrom` for `*os.File` introduced in Go1.15.
 	if poi.size == 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
 		buf, slab = poi.t.gmm.AllocSize(poi.size)
 	}
 
-	// checksums
-	if ckconf.Type == cos.ChecksumNone {
+	switch {
+	case ckconf.Type == cos.ChecksumNone:
 		poi.lom.SetCksum(cos.NoneCksum)
-		goto write
-	}
-	if !poi.cksumToUse.IsEmpty() && !poi.validateCksum(ckconf) {
+		// not using `ReadFrom` of the `*os.File` -
+		// ultimately, https://github.com/golang/go/blob/master/src/internal/poll/copy_file_range_linux.go#L100
+		written, err = cos.CopyBuffer(lmfh, poi.r, buf)
+	case !poi.cksumToUse.IsEmpty() && !poi.validateCksum(ckconf):
 		// if the corresponding validation is not configured/enabled we just go ahead
 		// and use the checksum that has arrived with the object
 		poi.lom.SetCksum(poi.cksumToUse)
-		goto write
-	}
-
-	// compute checksum and save it as part of the object metadata
-	// additional scenarios:
-	// - validate-cold-get + cksums.expct (validate against cloud checksum)
-	// - object migrated + `ckconf.ValidateObjMove`
-
-	cksums.store = cos.NewCksumHash(ckconf.Type) // always according to the bucket
-	writers = append(writers, cksums.store.H)
-	if !poi.skipVC && !poi.cksumToUse.IsEmpty() && poi.validateCksum(ckconf) {
-		cksums.expct = poi.cksumToUse
-		if poi.cksumToUse.Type() == cksums.store.Type() {
-			cksums.compt = cksums.store
-		} else {
-			// otherwise, compute separately
-			cksums.compt = cos.NewCksumHash(poi.cksumToUse.Type())
-			writers = append(writers, cksums.compt.H)
+		// (ditto)
+		written, err = cos.CopyBuffer(lmfh, poi.r, buf)
+	default:
+		writers := make([]io.Writer, 0, 3)
+		cksums.store = cos.NewCksumHash(ckconf.Type) // always according to the bucket
+		writers = append(writers, cksums.store.H)
+		if !poi.skipVC && !poi.cksumToUse.IsEmpty() && poi.validateCksum(ckconf) {
+			cksums.expct = poi.cksumToUse
+			if poi.cksumToUse.Type() == cksums.store.Type() {
+				cksums.compt = cksums.store
+			} else {
+				// otherwise, compute separately
+				cksums.compt = cos.NewCksumHash(poi.cksumToUse.Type())
+				writers = append(writers, cksums.compt.H)
+			}
 		}
-	}
-write:
-	if len(writers) == 0 {
-		written, err = io.CopyBuffer(writer, poi.r /*reader*/, buf)
-	} else {
-		writers = append(writers, writer)
-		written, err = io.CopyBuffer(cos.NewWriterMulti(writers...), poi.r /*reader*/, buf)
+		writers = append(writers, lmfh)
+		written, err = cos.CopyBuffer(cos.NewWriterMulti(writers...), poi.r, buf) // (ditto)
 	}
 	if err != nil {
 		return
 	}
+
 	// validate
 	if cksums.compt != nil {
 		cksums.finalized = cksums.compt == cksums.store
@@ -1088,10 +1080,7 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 }
 
 func (goi *getOI) transmit(r io.Reader, buf []byte, fqn string) error {
-	// NOTE: hide `ReadFrom` of the `http.ResponseWriter`
-	// (in re: sendfile; see also cos.WriterOnly comment)
-	w := cos.WriterOnly{Writer: io.Writer(goi.w)}
-	written, err := io.CopyBuffer(w, r, buf)
+	written, err := cos.CopyBuffer(goi.w, r, buf)
 	if err != nil {
 		if !cos.IsRetriableConnErr(err) {
 			goi.t.fsErr(err, fqn)
@@ -1205,7 +1194,7 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 		}
 
 		w := cos.NewWriterMulti(f, a.hdl.partialCksum.H)
-		_, err = io.CopyBuffer(w, a.r, buf)
+		_, err = cos.CopyBuffer(w, a.r, buf)
 
 		slab.Free(buf)
 		cos.Close(f)

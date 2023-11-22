@@ -922,7 +922,7 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 		t.owner.rmd.Unlock()
 	}
 	if errEtlMD == nil && newEtlMD != nil {
-		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, t._etlMDChange)
+		errEtlMD = t.receiveEtlMD(newEtlMD, msgEtlMD, payload, caller, t._stopETLs)
 	}
 	// 3. respond
 	if errConf == nil && errSmap == nil && errBMD == nil && errRMD == nil && errEtlMD == nil {
@@ -933,14 +933,14 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	t.writeErr(w, r, retErr, http.StatusConflict)
 }
 
-func (t *target) _etlMDChange(newEtlMD, oldEtlMD *etlMD, action string) {
-	for key := range oldEtlMD.ETLs {
-		if _, ok := newEtlMD.ETLs[key]; ok {
+func (t *target) _stopETLs(newEtlMD, oldEtlMD *etlMD) {
+	for id := range oldEtlMD.ETLs {
+		if _, ok := newEtlMD.ETLs[id]; ok {
 			continue
 		}
 		// TODO: stop only when running
-		nlog.Infoln("ETL MD change resulting from action: " + action)
-		etl.Stop(t, key, nil)
+		nlog.Infof("stopping (removed from md) etl[%s] (old md v%d, new v%d)", id, oldEtlMD.Version, newEtlMD.Version)
+		etl.Stop(t, id, nil)
 	}
 }
 

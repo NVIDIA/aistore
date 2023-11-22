@@ -50,7 +50,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 		cksum     = cos.NewCksumHash(lom.CksumConf().Type)
 		mw        = cos.NewWriterMulti(lmfh, cksum.H)
 	)
-	written, err = io.CopyBuffer(mw, res.R, buf)
+	written, err = cos.CopyBuffer(mw, res.R, buf)
 	cos.Close(res.R)
 
 	if err != nil {
@@ -117,8 +117,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	whdr.Set(cos.HdrContentType, cos.ContentBinary)
 	cmn.ToHeader(lom.ObjAttrs(), whdr)
 
-	w := cos.WriterOnly{Writer: io.Writer(goi.w)}
-	written, err = io.CopyBuffer(w, reader, buf)
+	written, err = cos.CopyBuffer(goi.w, reader, buf)
 	if err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(transmit)")
 		return errSendingResp
