@@ -8,4 +8,4 @@ source common.sh
 PLAYBOOK=playbooks/install_docker.yaml
 HOST_GROUP=aisloader_hosts
 
-run_ansible_playbook "$PLAYBOOK" "hosts=$HOST_GROUP"
+run_ansible_playbook "$PLAYBOOK" "docker_hosts=$HOST_GROUP"
