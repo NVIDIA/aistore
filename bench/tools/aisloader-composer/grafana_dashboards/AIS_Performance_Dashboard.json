@@ -15,7 +15,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "10.2.0"
+      "version": "10.2.1"
     },
     {
       "type": "datasource",
@@ -367,7 +367,8 @@
           },
           "refCount": 0,
           "refId": "A",
-          "target": "alias(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.reads), 'Disk Read Await')"
+          "target": "alias(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.reads), 'Disk Read Await')",
+          "textEditor": true
         },
         {
           "datasource": {
@@ -377,7 +378,8 @@
           "hide": false,
           "refCount": 0,
           "refId": "B",
-          "target": "alias(absolute(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.writes)), 'Disk Write Await')"
+          "target": "alias(absolute(averageSeries(netdata.${ClusterPrefix}*.disk_await.${StoragePrefix}*.writes)), 'Disk Write Await')",
+          "textEditor": true
         }
       ],
       "title": "Disk Await",
@@ -569,7 +571,7 @@
             "uid": "${DS_GRAPHITE}"
           },
           "refCount": 0,
-          "refId": "Netdata Network Received",
+          "refId": "Total Network Received",
           "target": "alias(scale(sum(netdata.${ClusterPrefix}*.net.$NetInterface.received), 125), 'Network Received')",
           "textEditor": false
         },
@@ -593,6 +595,16 @@
           "refId": "AISLoader PUT Throughput",
           "target": "alias(sum(stats.gauges.aisloader.${LoaderPrefix}*.put.throughput), 'AISLoader PUT')",
           "textEditor": false
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "${DS_GRAPHITE}"
+          },
+          "hide": false,
+          "refCount": 0,
+          "refId": "K8s Network Received",
+          "target": "alias(scale(absolute(sum(netdata.${ClusterPrefix}*.cgroup_k8s*.net_eth0.received)), 125), 'K8s Network Received')"
         }
       ],
       "title": "PUT Throughput Metrics",
@@ -698,7 +710,7 @@
           },
           "hide": false,
           "refCount": 0,
-          "refId": "Netdata Network Sent",
+          "refId": "Total Network Sent",
           "target": "alias(sum(scale(absolute(netdata.${ClusterPrefix}*.net.$NetInterface.sent), 125)), 'Network Sent')",
           "textEditor": false
         },
@@ -711,6 +723,16 @@
           "refCount": 0,
           "refId": "Netdata Disk Read",
           "target": "alias(sum(scale(absolute(netdata.${ClusterPrefix}*.disk.${StoragePrefix}*.reads), 1024)), 'Disk Read')"
+        },
+        {
+          "datasource": {
+            "type": "graphite",
+            "uid": "${DS_GRAPHITE}"
+          },
+          "hide": false,
+          "refCount": 0,
+          "refId": "K8s Network Sent",
+          "target": "alias(sum(scale(absolute(netdata.${ClusterPrefix}*.cgroup_k8s*.net_eth0.sent), 125)), 'K8s Network Sent')"
         }
       ],
       "title": "GET Throughput Metrics",
@@ -827,7 +849,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": false,
   "schemaVersion": 38,
   "tags": [],
   "templating": {
@@ -835,8 +857,8 @@
       {
         "current": {
           "selected": false,
-          "text": "ais-oke",
-          "value": "ais-oke"
+          "text": "ais",
+          "value": "ais"
         },
         "description": "The cluster prefix used when deploying netdata. Netdata metrics will have the form <cluster name>-<hostname>",
         "hide": 0,
@@ -862,7 +884,7 @@
           }
         ],
         "query": "sjc4,sjc4-dev,sjc11",
-        "queryValue": "ais-oke",
+        "queryValue": "ais",
         "skipUrlSync": false,
         "type": "custom"
       },
@@ -897,8 +919,8 @@
       {
         "current": {
           "selected": false,
-          "text": "*",
-          "value": "*"
+          "text": "ens300np0",
+          "value": "ens300np0"
         },
         "description": "Network interface the hosts use for data",
         "hide": 0,
@@ -923,7 +945,7 @@
           }
         ],
         "query": "ens4f0,ens1,ens2",
-        "queryValue": "",
+        "queryValue": "ens300np0",
         "skipUrlSync": false,
         "type": "custom"
       },
@@ -953,13 +975,13 @@
     ]
   },
   "time": {
-    "from": "now-3h",
-    "to": "now"
+    "from": "2023-11-22T22:01:30.723Z",
+    "to": "2023-11-22T22:07:29.441Z"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Performance",
   "uid": "b873080b-d5d2-4062-8e37-de182991c5f8",
-  "version": 5,
+  "version": 3,
   "weekStart": ""
 }
