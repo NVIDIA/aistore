@@ -336,7 +336,7 @@ Any reference to "Cloud buckets" refer to remote buckets that use a public cloud
 
 Public Google Storage supports limited access to its data.
 If AIS cluster is deployed with Google Cloud enabled (Google Storage is selected as 3rd party Backend provider when [deploying an AIS cluster](/docs/getting_started.md#local-playground)), it allows a few operations without providing credentials:
-HEAD a bucket, list bucket objects, GET an object, and HEAD an object.
+HEAD a bucket, list bucket's content, GET an object, and HEAD an object.
 The example shows accessing a private GCP bucket and a public GCP one without user authorization.
 
 ```console

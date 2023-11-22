@@ -4,11 +4,11 @@ go 1.21
 
 // direct
 require (
-	github.com/NVIDIA/aistore v1.3.22-0.20231110212920-ac5228dfd9f8
+	github.com/NVIDIA/aistore v1.3.22-0.20231122162013-28c7e4763451
 	github.com/fatih/color v1.16.0
 	github.com/json-iterator/go v1.1.12
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.28.0
+	github.com/onsi/gomega v1.30.0
 	github.com/urfave/cli v1.22.14
 	github.com/vbauerster/mpb/v4 v4.12.2
 	golang.org/x/sync v0.5.0
@@ -27,7 +27,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.20.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect

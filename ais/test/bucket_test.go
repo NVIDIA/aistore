@@ -783,7 +783,7 @@ func TestListObjectsGoBack(t *testing.T) {
 			expectedEntries = append(expectedEntries, objPage.Entries...)
 		}
 
-		tlog.Logln("list bucket in reverse order")
+		tlog.Logln("list bucket's content in reverse order")
 
 		for i := len(tokens) - 1; i >= 0; i-- {
 			msg.ContinuationToken = tokens[i]

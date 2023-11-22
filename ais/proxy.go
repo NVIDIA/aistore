@@ -2152,7 +2152,7 @@ end:
 	// directories. It is then possible that multiple targets return the same directory
 	// in their respective `cmn.LsoResult` responses - which is why:
 	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
-		allEntries.Entries, _ = cmn.DedupLso(allEntries.Entries, uint(len(entries)))
+		allEntries.Entries = cmn.DedupLso(allEntries.Entries, len(entries))
 	}
 	return allEntries, nil
 }

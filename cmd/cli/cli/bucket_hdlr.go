@@ -179,7 +179,7 @@ var (
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
-		Usage: "create/destroy buckets, list bucket contents, show existing buckets and their properties",
+		Usage: "create/destroy buckets, list bucket's content, show existing buckets and their properties",
 		Subcommands: []cli.Command{
 			bucketsObjectsCmdList,
 			bucketCmdSummary,

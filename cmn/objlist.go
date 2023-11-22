@@ -34,12 +34,14 @@ type (
 		Flags    uint16 `json:"flags,omitempty" msg:"f,omitempty"`       // enum { EntryIsCached, EntryIsDir, EntryInArch, ...}
 	}
 
+	LsoEntries []*LsoEntry
+
 	// LsoResult carries the results of `api.ListObjects`, `BackendProvider.ListObjects`, and friends
 	LsoResult struct {
-		UUID              string      `json:"uuid"`
-		ContinuationToken string      `json:"continuation_token"`
-		Entries           []*LsoEntry `json:"entries"`
-		Flags             uint32      `json:"flags"`
+		UUID              string     `json:"uuid"`
+		ContinuationToken string     `json:"continuation_token"`
+		Entries           LsoEntries `json:"entries"`
+		Flags             uint32     `json:"flags"`
 	}
 )
 
@@ -47,8 +49,8 @@ type (
 // LsoEntry //
 //////////////
 
-// NOTE: the terms "cached" and "present" are interchangeable
-// ("object is cached" == "is present" and vice versa)
+// NOTE: the terms "cached" and "present" are interchangeable:
+// "object is cached" and "is present" is actually the same thing
 func (be *LsoEntry) IsPresent() bool { return be.Flags&apc.EntryIsCached != 0 }
 func (be *LsoEntry) SetPresent()     { be.Flags |= apc.EntryIsCached }
 

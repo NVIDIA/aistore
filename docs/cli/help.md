@@ -77,7 +77,7 @@ DESCRIPTION:
    To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/install_from_binaries.sh
 
 COMMANDS:
-   bucket          create/destroy buckets, list bucket contents, show existing buckets and their properties
+   bucket          create/destroy buckets, list bucket's contents, show existing buckets and their properties
    object          put, get, list, rename, remove, and other operations on objects
    cluster         monitor and manage AIS cluster: add/remove nodes, change primary gateway, etc.
    config          configure AIS cluster and individual nodes (in the cluster); configure CLI (tool)

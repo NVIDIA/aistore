@@ -19,7 +19,7 @@ func TestConcatObjLists(t *testing.T) {
 	tests := []struct {
 		name      string
 		objCounts []int
-		maxSize   uint
+		maxSize   int
 		token     bool
 	}{
 		// * `st` stands for "single target"
@@ -59,9 +59,9 @@ func TestConcatObjLists(t *testing.T) {
 				lists = append(lists, list)
 				expectedObjCnt += len(list.Entries)
 			}
-			expectedObjCnt = min(expectedObjCnt, int(test.maxSize))
+			expectedObjCnt = min(expectedObjCnt, test.maxSize)
 
-			objs := cmn.ConcatLso(lists, test.maxSize)
+			objs := concatLso(lists, test.maxSize)
 			tassert.Errorf(
 				t, test.maxSize == 0 || len(objs.Entries) == expectedObjCnt,
 				"number of objects (%d) is different from expected (%d)", len(objs.Entries), expectedObjCnt,
@@ -72,4 +72,39 @@ func TestConcatObjLists(t *testing.T) {
 			)
 		})
 	}
+}
+
+// concatLso takes a slice of object lists and concatenates them: all lists
+// are appended to the first one.
+// If maxSize is greater than 0, the resulting list is sorted and truncated. Zero
+// or negative maxSize means returning all objects.
+func concatLso(lists []*cmn.LsoResult, maxSize int) (objs *cmn.LsoResult) {
+	if len(lists) == 0 {
+		return &cmn.LsoResult{}
+	}
+
+	objs = &cmn.LsoResult{}
+	objs.Entries = make(cmn.LsoEntries, 0)
+
+	for _, l := range lists {
+		objs.Flags |= l.Flags
+		objs.Entries = append(objs.Entries, l.Entries...)
+	}
+
+	if len(objs.Entries) == 0 {
+		return objs
+	}
+
+	// For corner case: we have objects with replicas on page threshold
+	// we have to sort taking status into account. Otherwise wrong
+	// one(Status=moved) may get into the response
+	cmn.SortLso(objs.Entries)
+
+	// Remove duplicates
+	objs.Entries = cmn.DedupLso(objs.Entries, maxSize)
+	l := len(objs.Entries)
+	if maxSize > 0 && l >= maxSize {
+		objs.ContinuationToken = objs.Entries[l-1].Name
+	}
+	return
 }
