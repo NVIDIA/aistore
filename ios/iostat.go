@@ -62,6 +62,7 @@ type (
 		mpath2disks map[string]FsDisks
 		disk2mpath  cos.StrKVs
 		disk2sysfn  cos.StrKVs
+		blockStats  allBlockStats
 		lsblk       ratomic.Pointer[LsBlk]
 		cache       ratomic.Pointer[cache]
 		cacheHst    [16]*cache
@@ -103,6 +104,7 @@ func New(num int) IOS {
 		mpath2disks: make(map[string]FsDisks, num),
 		disk2mpath:  make(cos.StrKVs, num),
 		disk2sysfn:  make(cos.StrKVs, num),
+		blockStats:  make(allBlockStats, num),
 	}
 	for i := 0; i < len(ios.cacheHst); i++ {
 		ios.cacheHst[i] = newCache(num)
@@ -185,6 +187,7 @@ func (ios *ios) _add(mpath string, fsdisks FsDisks, testingEnv bool) (err error)
 			return
 		}
 		ios.disk2mpath[disk] = mpath
+		ios.blockStats[disk] = &blockStats{}
 	}
 	for disk, mountpath := range ios.disk2mpath {
 		if _, ok := ios.disk2sysfn[disk]; !ok {
@@ -265,6 +268,7 @@ func (ios *ios) _delDisk(mpath, disk string) {
 	}
 	debug.Assertf(mp == mpath, "(mpath %s => disk %s => mpath %s) violation", mp, disk, mpath)
 	delete(ios.disk2mpath, disk)
+	delete(ios.blockStats, disk)
 }
 
 //
@@ -365,24 +369,21 @@ func (ios *ios) _ref(config *cmn.Config) (ncache *cache, maxUtil int64, missingI
 		}
 	}
 
-	osDiskStats := readStats(ios.disk2mpath, ios.disk2sysfn)
+	readStats(ios.disk2mpath, ios.disk2sysfn, ios.blockStats)
 	for disk, mpath := range ios.disk2mpath {
 		ncache.rbps[disk] = 0
 		ncache.wbps[disk] = 0
 		ncache.util[disk] = 0
 		ncache.ravg[disk] = 0
 		ncache.wavg[disk] = 0
-		osDisk, ok := osDiskStats[disk]
-		if !ok {
-			continue
-		}
-		ncache.ioms[disk] = osDisk.IOMs()
-		ncache.rms[disk] = osDisk.ReadMs()
-		ncache.rbytes[disk] = osDisk.ReadBytes()
-		ncache.reads[disk] = osDisk.Reads()
-		ncache.wms[disk] = osDisk.WriteMs()
-		ncache.wbytes[disk] = osDisk.WriteBytes()
-		ncache.writes[disk] = osDisk.Writes()
+		ds := ios.blockStats[disk]
+		ncache.ioms[disk] = ds.IOMs()
+		ncache.rms[disk] = ds.ReadMs()
+		ncache.rbytes[disk] = ds.ReadBytes()
+		ncache.reads[disk] = ds.Reads()
+		ncache.wms[disk] = ds.WriteMs()
+		ncache.wbytes[disk] = ds.WriteBytes()
+		ncache.writes[disk] = ds.Writes()
 
 		if _, ok := statsCache.ioms[disk]; !ok {
 			missingInfo = true
