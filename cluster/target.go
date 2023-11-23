@@ -96,7 +96,7 @@ type (
 		Close(err error)
 		UnregRecv()
 		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error
-		ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error
+		ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error
 		OWT() cmn.OWT
 	}
 	PutObjectParams struct {

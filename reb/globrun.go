@@ -769,7 +769,7 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 }
 
 // send completion
-func (rj *rebJogger) objSentCallback(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	rj.m.inQueue.Dec()
 	if err == nil {
 		rj.xreb.OutObjsAdd(1, hdr.ObjAttrs.Size) // NOTE: double-counts retransmissions

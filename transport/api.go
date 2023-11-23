@@ -85,7 +85,7 @@ type (
 	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
 	// (i.e., non-nil), the stream callback is ignored/skipped.
 	// NOTE: if defined, the callback executes asynchronously as far as the sending part is concerned
-	ObjSentCB func(ObjHdr, io.ReadCloser, any, error)
+	ObjSentCB func(*ObjHdr, io.ReadCloser, any, error)
 
 	Msg struct {
 		SID    string
@@ -97,7 +97,7 @@ type (
 	StreamCollector struct{}
 
 	// Rx callbacks
-	RecvObj func(hdr ObjHdr, objReader io.Reader, err error) error
+	RecvObj func(hdr *ObjHdr, objReader io.Reader, err error) error
 	RecvMsg func(msg Msg, err error) error
 )
 

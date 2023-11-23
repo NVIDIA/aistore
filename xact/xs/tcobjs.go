@@ -194,13 +194,13 @@ func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 //
 
 // NOTE: strict(est) error handling: abort on any of the errors below
-func (r *XactTCObjs) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *XactTCObjs) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
 		goto ex
 	}
 
 	r.IncPending()
-	err = r._recv(&hdr, objReader)
+	err = r._recv(hdr, objReader)
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 ex:

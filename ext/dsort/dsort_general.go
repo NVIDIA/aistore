@@ -414,7 +414,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	return writer.n, writer.err
 }
 
-func (ds *dsorterGeneral) sentCallback(_ transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+func (ds *dsorterGeneral) sentCallback(_ *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
 		g.tstats.Add(stats.DsortCreationReqCount, 1)
 		return
@@ -434,11 +434,12 @@ func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.O
 }
 
 // implements receiver i/f
-func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (ds *dsorterGeneral) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	ds.m.inFlightInc()
-	defer ds.m.inFlightDec()
-
-	transport.FreeRecv(objReader)
+	defer func() {
+		ds.m.inFlightDec()
+		transport.FreeRecv(objReader)
+	}()
 	req := remoteRequest{}
 	if err := jsoniter.Unmarshal(hdr.Opaque, &req); err != nil {
 		err := fmt.Errorf(cmn.FmtErrUnmarshal, apc.ActDsort, "recv request", cos.BHead(hdr.Opaque), err)
@@ -453,7 +454,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	}
 
 	if err != nil {
-		ds.errHandler(err, fromNode, &transport.Obj{Hdr: hdr})
+		ds.errHandler(err, fromNode, &transport.Obj{Hdr: *hdr})
 		return err
 	}
 
@@ -512,7 +513,7 @@ func (ds *dsorterGeneral) recvReq(hdr transport.ObjHdr, objReader io.Reader, err
 	return nil
 }
 
-func (ds *dsorterGeneral) responseCallback(hdr transport.ObjHdr, rc io.ReadCloser, _ any, err error) {
+func (ds *dsorterGeneral) responseCallback(hdr *transport.ObjHdr, rc io.ReadCloser, _ any, err error) {
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
@@ -528,7 +529,7 @@ func (ds *dsorterGeneral) postExtraction() {
 	ds.mw.stopWatchingReserved()
 }
 
-func (ds *dsorterGeneral) recvResp(hdr transport.ObjHdr, object io.Reader, err error) error {
+func (ds *dsorterGeneral) recvResp(hdr *transport.ObjHdr, object io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
 		transport.DrainAndFreeReader(object)

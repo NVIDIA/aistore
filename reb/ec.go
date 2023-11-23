@@ -158,7 +158,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 	return
 }
 
-func (reb *Reb) transportECCB(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
+func (reb *Reb) transportECCB(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 	reb.onAir.Dec()
 }
 

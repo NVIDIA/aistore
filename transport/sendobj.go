@@ -148,9 +148,9 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	// SCQ completion callback
 	if rc == 0 {
 		if obj.Callback != nil {
-			obj.Callback(obj.Hdr, obj.Reader, obj.CmplArg, err)
+			obj.Callback(&obj.Hdr, obj.Reader, obj.CmplArg, err)
 		} else if s.callback != nil {
-			s.callback(obj.Hdr, obj.Reader, obj.CmplArg, err)
+			s.callback(&obj.Hdr, obj.Reader, obj.CmplArg, err)
 		}
 	}
 	freeSend(obj)

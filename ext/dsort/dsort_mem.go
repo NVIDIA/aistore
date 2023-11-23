@@ -505,7 +505,7 @@ func (ds *dsorterMem) connectOrSend(rec *shard.Record, obj *shard.RecordObj, tsi
 	}
 }
 
-func (ds *dsorterMem) sentCallback(_ transport.ObjHdr, rc io.ReadCloser, x any, err error) {
+func (ds *dsorterMem) sentCallback(_ *transport.ObjHdr, rc io.ReadCloser, x any, err error) {
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
@@ -521,7 +521,7 @@ func (ds *dsorterMem) sentCallback(_ transport.ObjHdr, rc io.ReadCloser, x any, 
 func (*dsorterMem) postExtraction() {}
 
 // implements receiver i/f
-func (ds *dsorterMem) recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (ds *dsorterMem) recvReq(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
 		transport.DrainAndFreeReader(objReader)
@@ -548,7 +548,7 @@ func (ds *dsorterMem) recvReq(hdr transport.ObjHdr, objReader io.Reader, err err
 	return nil
 }
 
-func (ds *dsorterMem) recvResp(hdr transport.ObjHdr, object io.Reader, err error) error {
+func (ds *dsorterMem) recvResp(hdr *transport.ObjHdr, object io.Reader, err error) error {
 	ds.m.inFlightInc()
 	defer func() {
 		transport.DrainAndFreeReader(object)

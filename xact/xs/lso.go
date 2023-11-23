@@ -427,7 +427,7 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	return
 }
 
-func (r *LsoXact) sentCb(hdr transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
+func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
@@ -619,7 +619,7 @@ func (r *LsoXact) Snap() (snap *cluster.Snap) {
 // streaming receive: remote pages
 //
 
-func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(r.listRemote())
 
 	if hdr.Opcode == opcodeAbrt {
@@ -643,7 +643,7 @@ func (r *LsoXact) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	return err
 }
 
-func (r *LsoXact) _recv(hdr transport.ObjHdr, objReader io.Reader, buf []byte) (err error) {
+func (r *LsoXact) _recv(hdr *transport.ObjHdr, objReader io.Reader, buf []byte) (err error) {
 	var (
 		page = &cmn.LsoResult{}
 		mr   = msgp.NewReaderBuf(objReader, buf)

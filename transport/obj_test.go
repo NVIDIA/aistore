@@ -141,7 +141,7 @@ func Example_headers() {
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	var wg sync.WaitGroup
-	cb := func(transport.ObjHdr, io.ReadCloser, any, error) {
+	cb := func(*transport.ObjHdr, io.ReadCloser, any, error) {
 		wg.Done()
 	}
 	sgl1 := memsys.PageMM().NewSGL(0)
@@ -189,7 +189,7 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 }
 
 func Example_obj() {
-	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 		object, err := io.ReadAll(objReader)
 		if err != nil {
@@ -390,7 +390,7 @@ func TestObjAttrs(t *testing.T) {
 	defer ts.Close()
 
 	var receivedCount atomic.Int64
-	recvFunc := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	recvFunc := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 
 		idx := hdr.Opaque[0]
@@ -442,7 +442,7 @@ func TestObjAttrs(t *testing.T) {
 	}
 }
 
-func receive10G(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func receive10G(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	cos.Assert(err == nil || cos.IsEOF(err))
 	written, _ := io.Copy(io.Discard, objReader)
 	cos.Assert(written == hdr.ObjAttrs.Size)
@@ -569,14 +569,14 @@ func TestCompletionCount(t *testing.T) {
 		numCompleted, numReceived atomic.Int64
 	)
 
-	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil)
 		written, _ := io.Copy(io.Discard, objReader)
 		cos.Assert(written == hdr.ObjAttrs.Size)
 		numReceived.Inc()
 		return nil
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
+	callback := func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
 		numCompleted.Inc()
 	}
 
@@ -714,7 +714,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 func makeRecvFunc(t *testing.T) (*int64, transport.RecvObj) {
 	totalReceived := new(int64)
-	return totalReceived, func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	return totalReceived, func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		cos.Assert(err == nil || cos.IsEOF(err))
 		written, err := io.Copy(io.Discard, objReader)
 		if err != nil && !cos.IsEOF(err) {
@@ -876,7 +876,7 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	if err != nil {
 		rrc.t.Errorf("sent-callback %d(%s) returned an error: %v", rrc.idx, hdr.Cname(), err)
 	}

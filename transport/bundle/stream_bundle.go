@@ -210,7 +210,7 @@ func _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 		cos.Close(roc)
 	}
 	if obj.Callback != nil {
-		obj.Callback(obj.Hdr, roc, obj.CmplArg, err)
+		obj.Callback(&obj.Hdr, roc, obj.CmplArg, err)
 	}
 }
 

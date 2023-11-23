@@ -84,7 +84,7 @@ func (mgr *Manager) initECBundles() error {
 	if err := transport.Handle(RespStreamName, ECM.recvResponse); err != nil {
 		return fmt.Errorf("failed to register respResponse: %v", err)
 	}
-	cbReq := func(hdr transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
+	cbReq := func(hdr *transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 		if err != nil {
 			nlog.Errorf("failed to request %s: %v", hdr.Cname(), err)
 		}
@@ -189,8 +189,8 @@ func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
 }
 
 // A function to process command requests from other targets
-func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err error) error {
-	defer transport.FreeRecv(object)
+func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
+	defer transport.FreeRecv(objReader)
 	if err != nil {
 		nlog.Errorf("request failed: %v", err)
 		return err
@@ -212,7 +212,7 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 	// command requests should not have a body, but if it has,
 	// the body must be drained to avoid errors
 	if hdr.ObjAttrs.Size != 0 {
-		if _, err := io.ReadAll(object); err != nil {
+		if _, err := io.ReadAll(objReader); err != nil {
 			nlog.Errorf("failed to read request body: %v", err)
 			return err
 		}
@@ -224,15 +224,15 @@ func (mgr *Manager) recvRequest(hdr transport.ObjHdr, object io.Reader, err erro
 			return err
 		}
 	}
-	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, &hdr, bck)
+	mgr.RestoreBckRespXact(bck).DispatchReq(iReq, hdr, bck)
 	return nil
 }
 
 // A function to process big chunks of data (replica/slice/meta) sent from other targets
-func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err error) error {
-	defer transport.DrainAndFreeReader(object)
+func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
+	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
-		nlog.Errorf("receive failed: %v", err)
+		nlog.Errorln("failed to receive response:", err)
 		return err
 	}
 	// check if the request is valid
@@ -245,7 +245,7 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	unpacker := cos.NewUnpacker(hdr.Opaque)
 	iReq := intraReq{}
 	if err := unpacker.ReadAny(&iReq); err != nil {
-		nlog.Errorf("Failed to unmarshal request: %v", err)
+		nlog.Errorln("failed to unpack request:", err)
 		return err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
@@ -257,11 +257,11 @@ func (mgr *Manager) recvResponse(hdr transport.ObjHdr, object io.Reader, err err
 	}
 	switch hdr.Opcode {
 	case reqPut:
-		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, &hdr, object)
+		mgr.RestoreBckRespXact(bck).DispatchResp(iReq, hdr, objReader)
 	case respPut:
 		// Process the request even if the number of targets is insufficient
 		// (might've started when we had enough)
-		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, &hdr, bck, object)
+		mgr.RestoreBckGetXact(bck).DispatchResp(iReq, hdr, bck, objReader)
 	default:
 		debug.Assertf(false, "unknown EC response action %d", hdr.Opcode)
 	}

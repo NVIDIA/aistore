@@ -53,7 +53,7 @@ type (
 	}
 
 	handler interface {
-		recv(hdr ObjHdr, objReader io.Reader, err error) error // RecvObj
+		recv(hdr *ObjHdr, objReader io.Reader, err error) error // RecvObj
 		stats(*http.Request, string) (rxStats, uint64, string)
 		unreg()
 		addOld(uint64)
@@ -197,7 +197,7 @@ func (h *hdlExtra) cl(key, value any) bool {
 	return true
 }
 
-func (h *hdl) recv(hdr ObjHdr, objReader io.Reader, err error) error {
+func (h *hdl) recv(hdr *ObjHdr, objReader io.Reader, err error) error {
 	return h.rxObj(hdr, objReader, err)
 }
 
@@ -273,7 +273,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		err = eofOK(err)
 		size, off := obj.hdr.ObjAttrs.Size, obj.off
-		if errCb := h.recv(obj.hdr, obj, err); errCb != nil {
+		if errCb := h.recv(&obj.hdr, obj, err); errCb != nil {
 			err = errCb
 		}
 		// stats
@@ -288,7 +288,7 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 			}
 		}
 	} else if err != nil && err != io.EOF {
-		if errCb := h.recv(ObjHdr{}, nil, err); errCb != nil {
+		if errCb := h.recv(&ObjHdr{}, nil, err); errCb != nil {
 			err = errCb
 		}
 	}

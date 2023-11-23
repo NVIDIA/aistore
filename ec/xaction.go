@@ -201,7 +201,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	return r.sendByDaemonID([]string{hdr.SID}, rHdr, reader, r.sendCb, false)
 }
 
-func (r *xactECBase) sendCb(hdr transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+func (r *xactECBase) sendCb(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 	r.t.ByteMM().Free(hdr.Opaque)
 	if err != nil {
 		err = fmt.Errorf("failed to send %s: %w", hdr.Cname(), err)
@@ -367,7 +367,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	}
 	hdr.Bck.Copy(lom.Bucket())
 	oldCallback := cb
-	cb = func(hdr transport.ObjHdr, reader io.ReadCloser, arg any, err error) {
+	cb = func(hdr *transport.ObjHdr, reader io.ReadCloser, arg any, err error) {
 		mm.Free(hdr.Opaque)
 		if oldCallback != nil {
 			oldCallback(hdr, reader, arg, err)

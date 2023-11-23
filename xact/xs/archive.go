@@ -270,14 +270,14 @@ func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	r.p.dm.Send(o, fh, wi.tsi)
 }
 
-func (r *XactArch) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
 		r.addErr(err, false /*contOnErr*/)
 		return err
 	}
 
 	r.IncPending()
-	err = r._recv(&hdr, objReader)
+	err = r._recv(hdr, objReader)
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 	return err

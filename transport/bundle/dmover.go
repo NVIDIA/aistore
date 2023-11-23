@@ -233,8 +233,8 @@ func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.
 	return
 }
 
-func (dm *DataMover) ACK(hdr transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
-	return dm.ack.streams.Send(&transport.Obj{Hdr: hdr, Callback: cb}, nil, tsi)
+func (dm *DataMover) ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error {
+	return dm.ack.streams.Send(&transport.Obj{Hdr: *hdr, Callback: cb}, nil, tsi)
 }
 
 func (dm *DataMover) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
@@ -252,7 +252,7 @@ func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes
 	return cluster.QuiInactiveCB
 }
 
-func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, reader io.Reader, err error) error {
+func (dm *DataMover) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	if hdr.Bck.Name != "" && hdr.ObjName != "" && hdr.ObjAttrs.Size >= 0 {
 		dm.xctn.InObjsAdd(1, hdr.ObjAttrs.Size)
 	}
@@ -262,7 +262,7 @@ func (dm *DataMover) wrapRecvData(hdr transport.ObjHdr, reader io.Reader, err er
 	return dm.data.recv(hdr, reader, err)
 }
 
-func (dm *DataMover) wrapRecvACK(hdr transport.ObjHdr, reader io.Reader, err error) error {
+func (dm *DataMover) wrapRecvACK(hdr *transport.ObjHdr, reader io.Reader, err error) error {
 	dm.stage.laterx.Store(true)
 	return dm.ack.recv(hdr, reader, err)
 }

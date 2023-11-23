@@ -251,7 +251,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 }
 
 // NOTE: strict(est) error handling: abort on any of the errors below
-func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	if err != nil && !cos.IsEOF(err) {
 		nlog.Errorln(err)
 		return err
@@ -271,7 +271,7 @@ func (r *XactTCB) recv(hdr transport.ObjHdr, objReader io.Reader, err error) err
 	return err
 }
 
-func (r *XactTCB) _recv(hdr transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
+func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		r.AddErr(err)
 		nlog.Errorln(err)

@@ -125,10 +125,9 @@ var g global
 
 // interface guard
 var (
-	_ meta.Slistener = (*Manager)(nil)
-	_ cos.Packer     = (*buildingShardInfo)(nil)
-	_ cos.Unpacker   = (*buildingShardInfo)(nil)
-	_ cluster.Xact   = (*xaction)(nil)
+	_ cos.Packer   = (*buildingShardInfo)(nil)
+	_ cos.Unpacker = (*buildingShardInfo)(nil)
+	_ cluster.Xact = (*xaction)(nil)
 )
 
 func Pinit(si cluster.Node, config *cmn.Config) {
@@ -181,8 +180,6 @@ func (m *Manager) init(pars *parsedReqSpec) error {
 	m.Pars = pars
 	m.Metrics = newMetrics(pars.Description)
 	m.startShardCreation = make(chan struct{}, 1)
-
-	g.t.Sowner().Listeners().Reg(m)
 
 	if err := m.setDsorter(); err != nil {
 		return err
@@ -320,8 +317,6 @@ func (m *Manager) cleanup() {
 
 	m.shardRW = nil
 	m.client = nil
-
-	g.t.Sowner().Listeners().Unreg(m)
 
 	if !m.aborted() {
 		m.updateFinishedAck(g.t.SID())
@@ -606,7 +601,7 @@ func (m *Manager) setAbortedTo(aborted bool) {
 	m.Metrics.setAbortedTo(aborted)
 }
 
-func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
 		m.abort(err)
@@ -652,22 +647,6 @@ func (m *Manager) recvShard(hdr transport.ObjHdr, objReader io.Reader, err error
 		return erp
 	}
 	return nil
-}
-
-func (m *Manager) ListenSmapChanged() {
-	newSmap := g.t.Sowner().Get()
-	if newSmap.Version <= m.smap.Version {
-		return
-	}
-	if newSmap.CountActiveTs() != m.smap.CountActiveTs() {
-		// Currently adding new target as well as removing one is not
-		// supported during the run.
-		// TODO: dsort should survive adding new target. For now it is
-		// not possible as rebalance deletes moved object - dsort needs
-		// to use `GetObject` method instead of relaying on simple `os.Open`.
-		err := errors.Errorf("number of targets changed during run - aborting")
-		go m.abort(err)
-	}
 }
 
 func (m *Manager) freeMemory() uint64 {

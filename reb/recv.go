@@ -34,7 +34,7 @@ func (reb *Reb) _recvErr(err error) error {
 	return nil
 }
 
-func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+func (reb *Reb) recvObj(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	defer transport.DrainAndFreeReader(objReader)
 	if err != nil {
 		nlog.Errorln(err)
@@ -60,7 +60,7 @@ func (reb *Reb) recvObj(hdr transport.ObjHdr, objReader io.Reader, err error) er
 	return reb._recvErr(err)
 }
 
-func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
+func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 	if err != nil {
 		nlog.Errorln(err)
 		return err
@@ -81,7 +81,7 @@ func (reb *Reb) recvAck(hdr transport.ObjHdr, _ io.Reader, err error) error {
 	return reb._recvErr(err)
 }
 
-func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) error {
+func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) error {
 	if errRx != nil {
 		nlog.Errorf("%s: %v", reb.t, errRx)
 		return errRx
@@ -133,7 +133,7 @@ func (reb *Reb) recvStageNtfn(hdr transport.ObjHdr, _ io.Reader, errRx error) er
 // regular (non-EC) receive
 //
 
-func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
+func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker *cos.ByteUnpack, objReader io.Reader) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		nlog.Errorf("Failed to parse ACK: %v", err)
@@ -202,7 +202,7 @@ func (reb *Reb) recvObjRegular(hdr transport.ObjHdr, smap *meta.Smap, unpacker *
 	return nil
 }
 
-func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) error {
+func (reb *Reb) recvRegularAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) error {
 	ack := &regularAck{}
 	if err := unpacker.ReadAny(ack); err != nil {
 		nlog.Errorf("Failed to parse ACK: %v", err)
@@ -232,7 +232,7 @@ func (reb *Reb) recvRegularAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) e
 // EC receive
 //
 
-func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) (err error) {
+func (*Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err error) {
 	ack := &ecAck{}
 	err = unpacker.ReadAny(ack)
 	if err != nil {
@@ -243,7 +243,7 @@ func (*Reb) recvECAck(hdr transport.ObjHdr, unpacker *cos.ByteUnpack) (err error
 
 // Receive MD update. Handling includes partially updating local information:
 // only the list of daemons and the _main_ target.
-func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
+func (reb *Reb) receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	ctMeta, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
@@ -264,7 +264,7 @@ func (reb *Reb) receiveMD(req *stageNtfn, hdr transport.ObjHdr) error {
 	return ctMeta.Write(reb.t, bytes.NewReader(mdBytes), -1)
 }
 
-func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader) error {
+func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
 	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, reb.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
@@ -291,7 +291,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader
 		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
 	}
 	// Save received CT to local drives
-	err = reb.saveCTToDisk(req, &hdr, reader)
+	err = reb.saveCTToDisk(req, hdr, reader)
 	if err != nil {
 		if errRm := os.Remove(ct.FQN()); errRm != nil {
 			nlog.Errorf("Failed to remove %s: %v", ct.FQN(), errRm)
@@ -335,7 +335,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr transport.ObjHdr, reader io.Reader
 }
 
 // receiving EC CT
-func (reb *Reb) recvECData(hdr transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) error {
+func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, reader io.Reader) error {
 	req := &stageNtfn{}
 	err := unpacker.ReadAny(req)
 	if err != nil {

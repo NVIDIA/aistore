@@ -43,12 +43,8 @@ import (
 const PrefixJobID = "srt-"
 
 type (
-	receiver interface {
-		recvReq(hdr transport.ObjHdr, objReader io.Reader, err error) error // aka transport.RecvObj
-	}
 	dsorter interface {
 		shard.ContentLoader
-		receiver
 
 		name() string
 		init() error
@@ -387,7 +383,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 		// Make send synchronous.
 		streamWg := &sync.WaitGroup{}
 		errCh := make(chan error, 1)
-		o.Callback = func(_ transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+		o.Callback = func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 			errCh <- err
 			streamWg.Done()
 		}

@@ -123,7 +123,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	}()
 	smap.Version = 1
 
-	receive := func(hdr transport.ObjHdr, objReader io.Reader, err error) error {
+	receive := func(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 		if err != nil && !cos.IsEOF(err) {
 			tassert.CheckFatal(t, err)
 		}
@@ -131,7 +131,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		cos.Assert(written == hdr.ObjAttrs.Size || hdr.IsUnsized())
 		return nil
 	}
-	callback := func(_ transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
+	callback := func(*transport.ObjHdr, io.ReadCloser, any, error) {
 		numCompleted.Inc()
 	}
 
