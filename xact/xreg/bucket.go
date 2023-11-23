@@ -83,8 +83,9 @@ func RenewMakeNCopies(t cluster.Target, uuid, tag string) {
 		}
 		return false
 	})
-	// TODO: remote ais
-	for name, ns := range cfg.Backend.Providers {
+	// TODO: remais
+	for name := range cfg.Backend.Providers {
+		ns := cfg.Backend.Providers[name]
 		bmd.Range(&name, &ns, func(bck *meta.Bck) bool {
 			if bck.Props.Mirror.Enabled {
 				rns := RenewBckMakeNCopies(t, bck, uuid, tag, int(bck.Props.Mirror.Copies))

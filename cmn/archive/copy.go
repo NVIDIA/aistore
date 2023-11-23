@@ -33,7 +33,7 @@ func cpTar(src io.Reader, tw *tar.Writer, buf []byte) (err error) {
 			_, err = io.CopyBuffer(tw, csl, buf)
 		}
 	}
-	return
+	return err
 }
 
 func cpZip(src io.ReaderAt, size int64, zw *zip.Writer, buf []byte) (err error) {
@@ -56,12 +56,13 @@ func cpZip(src io.ReaderAt, size int64, zw *zip.Writer, buf []byte) (err error) 
 		hdr := f.FileHeader
 		zipw, err = zw.CreateHeader(&hdr)
 		if err == nil {
-			_, err = io.CopyBuffer(zipw, zipr, buf)
+			reader := &io.LimitedReader{R: zipr, N: int64(hdr.UncompressedSize64)}
+			_, err = io.CopyBuffer(zipw, reader, buf)
 		}
 		zipr.Close()
 		if err != nil {
 			break
 		}
 	}
-	return
+	return err
 }

@@ -545,9 +545,9 @@ func (bcks Bcks) Swap(i, j int) {
 }
 
 func (bcks Bcks) Select(query QueryBcks) (filtered Bcks) {
-	for _, bck := range bcks {
-		if query.Contains(&bck) {
-			filtered = append(filtered, bck)
+	for i := range bcks {
+		if query.Contains(&bcks[i]) {
+			filtered = append(filtered, bcks[i])
 		}
 	}
 	return filtered
@@ -557,10 +557,10 @@ func (bcks Bcks) Equal(other Bcks) bool {
 	if len(bcks) != len(other) {
 		return false
 	}
-	for _, b1 := range bcks {
+	for i := range bcks {
 		var found bool
-		for _, b2 := range other {
-			if b1.Equal(&b2) {
+		for j := range other {
+			if bcks[i].Equal(&other[j]) {
 				found = true
 				break
 			}

@@ -237,8 +237,8 @@ func (j *jogger) run() (err error) {
 // run selected buckets, one at a time
 func (j *jogger) runSelected() error {
 	var errs cos.Errs
-	for _, bck := range j.opts.Buckets {
-		aborted, err := j.runBck(&bck)
+	for i := range j.opts.Buckets {
+		aborted, err := j.runBck(&j.opts.Buckets[i])
 		if err != nil {
 			errs.Add(err)
 		}

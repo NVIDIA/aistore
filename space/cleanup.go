@@ -288,10 +288,11 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 
 func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 	bowner := j.ini.T.Bowner()
-	for _, bck := range bcks { // for each bucket under a given provider
+	for i := range bcks { // for each bucket under a given provider
 		var (
-			sz  int64
 			err error
+			sz  int64
+			bck = bcks[i]
 			b   = meta.CloneBck(&bck)
 		)
 		j.bck = bck
@@ -318,7 +319,7 @@ func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
 			rerr = err
 		}
 	}
-	return
+	return size, rerr
 }
 
 func (j *clnJ) removeDeleted() (err error) {
