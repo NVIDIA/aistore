@@ -229,20 +229,20 @@ func GetLatest(flt Flt) Renewable {
 // are running on given bucket.
 
 func AbortAllBuckets(err error, bcks ...*meta.Bck) {
-	dreg.abort(abortArgs{bcks: bcks, err: err})
+	dreg.abort(&abortArgs{bcks: bcks, err: err})
 }
 
 // AbortAll waits until abort of all xactions is finished
 // Every abort is done asynchronously
 func AbortAll(err error, scope ...int) {
-	dreg.abort(abortArgs{scope: scope, err: err})
+	dreg.abort(&abortArgs{scope: scope, err: err})
 }
 
 func AbortKind(err error, kind string) {
-	dreg.abort(abortArgs{kind: kind, err: err})
+	dreg.abort(&abortArgs{kind: kind, err: err})
 }
 
-func AbortByNewReb(err error) { dreg.abort(abortArgs{err: err, newreb: true}) }
+func AbortByNewReb(err error) { dreg.abort(&abortArgs{err: err, newreb: true}) }
 
 func DoAbort(flt Flt, err error) (bool /*aborted*/, error) {
 	if flt.ID != "" {
@@ -335,42 +335,44 @@ func GetSnap(flt Flt) ([]*cluster.Snap, error) {
 	return dreg.matchingXactsStats(flt.Matches), nil
 }
 
-func (r *registry) abort(args abortArgs) {
-	r.entries.forEach(func(entry Renewable) bool {
-		xctn := entry.Get()
-		if xctn.Finished() {
-			return true
-		}
+func (r *registry) abort(args *abortArgs) {
+	r.entries.forEach(args.do)
+}
 
-		var abort bool
-		switch {
-		case args.newreb:
-			debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
-			_, dtor, err := xact.GetDescriptor(xctn.Kind())
-			debug.AssertNoErr(err)
-			if dtor.AbortRebRes {
-				abort = true
-			}
-		case len(args.bcks) > 0:
-			debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
-			for _, bck := range args.bcks {
-				if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
-					abort = true
-					break
-				}
-			}
-		case args.kind != "":
-			debug.Assertf(args.scope == nil && len(args.bcks) == 0, "scope %v, bcks %v", args.scope, args.bcks)
-			abort = args.kind == xctn.Kind()
-		default:
-			abort = args.scope == nil || xact.IsSameScope(xctn.Kind(), args.scope...)
-		}
-
-		if abort {
-			xctn.Abort(args.err)
-		}
+func (args *abortArgs) do(entry Renewable) bool {
+	xctn := entry.Get()
+	if xctn.Finished() {
 		return true
-	})
+	}
+
+	var abort bool
+	switch {
+	case args.newreb:
+		debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
+		_, dtor, err := xact.GetDescriptor(xctn.Kind())
+		debug.AssertNoErr(err)
+		if dtor.AbortRebRes {
+			abort = true
+		}
+	case len(args.bcks) > 0:
+		debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
+		for _, bck := range args.bcks {
+			if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
+				abort = true
+				break
+			}
+		}
+	case args.kind != "":
+		debug.Assertf(args.scope == nil && len(args.bcks) == 0, "scope %v, bcks %v", args.scope, args.bcks)
+		abort = args.kind == xctn.Kind()
+	default:
+		abort = args.scope == nil || xact.IsSameScope(xctn.Kind(), args.scope...)
+	}
+
+	if abort {
+		xctn.Abort(args.err)
+	}
+	return true
 }
 
 func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []*cluster.Snap {

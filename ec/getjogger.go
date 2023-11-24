@@ -394,11 +394,14 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	}
 	hdr.Bck.Copy(ctx.lom.Bucket())
 
+	o := transport.AllocSend()
+	o.Hdr = hdr
+
 	// Broadcast slice request and wait for targets to respond
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Requesting daemons %v for slices of %s", daemons, ctx.lom)
 	}
-	if err := c.parent.sendByDaemonID(daemons, hdr, nil, nil, true); err != nil {
+	if err := c.parent.sendByDaemonID(daemons, o, nil, true); err != nil {
 		freeSlices(ctx.slices)
 		mm.Free(request)
 		return err

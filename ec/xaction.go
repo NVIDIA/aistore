@@ -196,9 +196,12 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 	rHdr.Bck.Copy(bck.Bucket())
 	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
 
+	o := transport.AllocSend()
+	o.Hdr, o.Callback = rHdr, r.sendCb
+
 	r.ObjsAdd(1, objAttrs.Size)
 	r.IncPending()
-	return r.sendByDaemonID([]string{hdr.SID}, rHdr, reader, r.sendCb, false)
+	return r.sendByDaemonID([]string{hdr.SID}, o, reader, false)
 }
 
 func (r *xactECBase) sendCb(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
@@ -222,23 +225,20 @@ func (r *xactECBase) sendCb(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err e
 //   - true - send lightweight request to all targets (usually reader is nil
 //     in this case)
 //   - false - send a slice/replica/metadata to targets
-func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, reader cos.ReadOpenCloser,
-	cb transport.ObjSentCB, isRequest bool) error {
-	nodes := meta.AllocNodes(len(daemonIDs))
-	smap := r.smap.Get()
+func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader cos.ReadOpenCloser, isRequest bool) error {
+	var (
+		err   error
+		nodes = meta.AllocNodes(len(daemonIDs))
+		smap  = r.smap.Get()
+	)
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
 		if !ok {
-			nlog.Errorf("Target with ID %s not found", id)
+			nlog.Errorf("t[%s] not found", id)
 			continue
 		}
 		nodes = append(nodes, si)
 	}
-	var (
-		err error
-		o   = transport.AllocSend()
-	)
-	o.Hdr, o.Callback = hdr, cb
 	if isRequest {
 		err = r.mgr.req().Send(o, reader, nodes...)
 	} else {
@@ -260,19 +260,18 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, hdr transport.ObjHdr, re
 func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqGet}
 	hdr.Bck.Copy(lom.Bucket())
-	sw := &slice{
-		writer: writer,
-		twg:    cos.NewTimeoutGroup(),
-		lom:    lom,
-	}
 
+	o := transport.AllocSend()
+	o.Hdr = hdr
+
+	sw := &slice{writer: writer, twg: cos.NewTimeoutGroup(), lom: lom}
 	sw.twg.Add(1)
 	r.regWriter(uname, sw)
 
 	if r.config.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
-	if err := r.sendByDaemonID([]string{daemonID}, hdr, nil, nil, true); err != nil {
+	if err := r.sendByDaemonID([]string{daemonID}, o, nil, true); err != nil {
 		r.unregWriter(uname)
 		r.AddErr(err)
 		return 0, err
@@ -374,8 +373,12 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 		}
 		r.DecPending()
 	}
+
+	o := transport.AllocSend()
+	o.Hdr, o.Callback = hdr, cb
+
 	r.IncPending()
-	return r.sendByDaemonID(daemonIDs, hdr, src.reader, cb, false)
+	return r.sendByDaemonID(daemonIDs, o, src.reader, false)
 }
 
 // Save data from a target response to SGL or file. When exists is false it

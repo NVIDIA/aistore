@@ -55,7 +55,7 @@ type (
 	}
 
 	RecordExtractor interface {
-		RecordWithBuffer(args extractRecordArgs) (int64, error)
+		RecordWithBuffer(args *extractRecordArgs) (int64, error)
 	}
 
 	RecordManager struct {
@@ -75,12 +75,15 @@ type (
 	}
 )
 
-func NewRecordManager(bck cmn.Bck, extractCreator RW,
-	keyExtractor KeyExtractor, onDuplicatedRecords func(string) error) *RecordManager {
+///////////////////
+// RecordManager //
+///////////////////
+
+func NewRecordManager(bck cmn.Bck, extractCreator RW, keyExtractor KeyExtractor, onDupRecs func(string) error) *RecordManager {
 	return &RecordManager{
 		Records:             NewRecords(1000),
 		bck:                 bck,
-		onDuplicatedRecords: onDuplicatedRecords,
+		onDuplicatedRecords: onDupRecs,
 		extractCreator:      extractCreator,
 		keyExtractor:        keyExtractor,
 		contents:            &sync.Map{},
@@ -88,7 +91,7 @@ func NewRecordManager(bck cmn.Bck, extractCreator RW,
 	}
 }
 
-func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64, err error) {
+func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64, err error) {
 	var (
 		storeType        string
 		contentPath      string
@@ -113,7 +116,8 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 	debug.Assert(!args.extractMethod.Has(ExtractToWriter) || args.w != nil)
 
 	r, ske, needRead := recm.keyExtractor.PrepareExtractor(args.recordName, args.r, ext)
-	if args.extractMethod.Has(ExtractToMem) {
+	switch {
+	case args.extractMethod.Has(ExtractToMem):
 		mdSize = int64(len(args.metadata))
 		storeType = SGLStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
@@ -134,7 +138,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 			return size, errors.WithStack(err)
 		}
 		recm.contents.Store(fullContentPath, sgl)
-	} else if args.extractMethod.Has(ExtractToDisk) && recm.extractCreator.SupportsOffset() {
+	case args.extractMethod.Has(ExtractToDisk) && recm.extractCreator.SupportsOffset():
 		mdSize, size = recm.extractCreator.MetadataSize(), r.Size()
 		storeType = OffsetStoreType
 		contentPath, _ = recm.encodeRecordName(storeType, args.shardName, args.recordName)
@@ -150,7 +154,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 				return 0, errors.WithStack(err)
 			}
 		}
-	} else if args.extractMethod.Has(ExtractToDisk) {
+	case args.extractMethod.Has(ExtractToDisk):
 		mdSize = int64(len(args.metadata))
 		storeType = DiskStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
@@ -165,7 +169,7 @@ func (recm *RecordManager) RecordWithBuffer(args extractRecordArgs) (size int64,
 		}
 		cos.Close(f)
 		recm.extractionPaths.Store(fullContentPath, struct{}{})
-	} else {
+	default:
 		debug.Assertf(false, "%d %d", args.extractMethod, args.extractMethod&ExtractToDisk)
 	}
 
