@@ -107,12 +107,14 @@ func (db *downloaderDB) tasks(id string) (tasks []TaskDlInfo, err error) {
 	return
 }
 
-func (db *downloaderDB) persistTaskInfo(id string, task TaskDlInfo) error {
+func (db *downloaderDB) persistTaskInfo(singleTask *singleTask) error {
+	id := singleTask.jobID()
+
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
 	if len(db.taskInfoCache[id]) < taskInfoCacheSize { // if possible store task in cache
-		db.taskInfoCache[id] = append(db.taskInfoCache[id], task)
+		db.taskInfoCache[id] = append(db.taskInfoCache[id], singleTask.ToTaskDlInfo())
 		return nil
 	}
 
@@ -120,15 +122,15 @@ func (db *downloaderDB) persistTaskInfo(id string, task TaskDlInfo) error {
 	if err != nil {
 		return err
 	}
-	persistedTasks = append(persistedTasks, task)
+	persistedTasks = append(persistedTasks, singleTask.ToTaskDlInfo())
 
 	key := path.Join(downloaderTasks, id)
 	if err := db.driver.Set(downloaderCollection, key, persistedTasks); err != nil {
-		nlog.Errorln(err)
 		return err
 	}
-
-	db.taskInfoCache[id] = db.taskInfoCache[id][:0] // clear cache
+	// clear cache
+	clear(db.taskInfoCache[id])
+	db.taskInfoCache[id] = db.taskInfoCache[id][:0]
 	return nil
 }
 

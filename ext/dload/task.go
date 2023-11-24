@@ -254,7 +254,9 @@ func (task *singleTask) markFailed(statusMsg string) {
 }
 
 func (task *singleTask) persist() {
-	_ = g.store.persistTaskInfo(task.jobID(), task.ToTaskDlInfo())
+	if err := g.store.persistTaskInfo(task); err != nil {
+		nlog.Errorln(err)
+	}
 }
 
 func (task *singleTask) jobID() string { return task.job.ID() }
@@ -271,7 +273,6 @@ func (task *singleTask) ToTaskDlInfo() TaskDlInfo {
 		Total:      task.totalSize.Load(),
 		StartTime:  task.started.Load(),
 		EndTime:    ended,
-		Running:    ended.IsZero(),
 	}
 }
 

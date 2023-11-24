@@ -468,13 +468,13 @@ func deleteEntity(errCtx *cmn.ETLErrCtx, entityType, entityName string) error {
 
 func podConditionsToString(conditions []corev1.PodCondition) string {
 	parts := make([]string, 0, len(conditions))
-	for _, cond := range conditions {
-		parts = append(parts, podConditionToString(cond))
+	for i := range conditions {
+		parts = append(parts, podConditionToString(&conditions[i]))
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-func podConditionToString(cond corev1.PodCondition) string {
+func podConditionToString(cond *corev1.PodCondition) string {
 	parts := []string{
 		fmt.Sprintf("type: %q", cond.Type),
 		fmt.Sprintf("status: %q", cond.Status),

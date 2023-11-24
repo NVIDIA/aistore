@@ -213,7 +213,7 @@ func (b *etlBootstrapper) waitPodReady() error {
 	err = cmn.NewErrETL(b.errCtx,
 		`%v (pod phase: %q, pod conditions: %s; expected condition: %s)`,
 		err, pod.Status.Phase, podConditionsToString(pod.Status.Conditions),
-		podConditionToString(corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),
+		podConditionToString(&corev1.PodCondition{Type: corev1.PodReady, Status: corev1.ConditionTrue}),
 	)
 	return err
 }

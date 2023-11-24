@@ -307,7 +307,7 @@ func (j *lruJ) jogBck() (size int64, err error) {
 	return
 }
 
-func (j *lruJ) visitLOM(parsedFQN fs.ParsedFQN) {
+func (j *lruJ) visitLOM(parsedFQN *fs.ParsedFQN) {
 	if !j.allowDelObj {
 		return
 	}
@@ -355,7 +355,7 @@ func (j *lruJ) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if parsedFQN.ContentType == fs.ObjectType {
-		j.visitLOM(parsedFQN)
+		j.visitLOM(&parsedFQN)
 	}
 
 	return nil

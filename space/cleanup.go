@@ -356,7 +356,7 @@ func (j *clnJ) jogBck() (size int64, err error) {
 	return
 }
 
-func (j *clnJ) visitCT(parsedFQN fs.ParsedFQN, fqn string) {
+func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 	switch parsedFQN.ContentType {
 	case fs.WorkfileType:
 		_, base := filepath.Split(fqn)
@@ -515,7 +515,7 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if parsedFQN.ContentType != fs.ObjectType {
-		j.visitCT(parsedFQN, fqn)
+		j.visitCT(&parsedFQN, fqn)
 	} else {
 		lom := cluster.AllocLOM("")
 		j.visitObj(fqn, lom)

@@ -207,7 +207,7 @@ func (p *proxy) dladm(method, path string, msg *dload.AdminBody) ([]byte, int, e
 			if err := jsoniter.Unmarshal(resp.bytes, &status); err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
-			stResp = stResp.Aggregate(status)
+			stResp = stResp.Aggregate(&status)
 		}
 		body := cos.MustMarshal(stResp)
 		return body, http.StatusOK, nil
@@ -238,7 +238,7 @@ func (p *proxy) dlstatus(nl nl.Listener, config *cmn.Config) ([]byte, int, error
 				return false
 			}
 		}
-		resp = resp.Aggregate(*dlStatus)
+		resp = resp.Aggregate(dlStatus)
 		return true
 	})
 
