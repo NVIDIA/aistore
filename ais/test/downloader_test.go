@@ -527,7 +527,7 @@ func TestDownloadRemote(t *testing.T) {
 			xid, err := api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-			_, err = api.WaitForXactionIC(baseParams, args)
+			_, err = api.WaitForXactionIC(baseParams, &args)
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
@@ -559,7 +559,7 @@ func TestDownloadRemote(t *testing.T) {
 			xid, err = api.EvictList(baseParams, test.srcBck, expectedObjs)
 			tassert.CheckFatal(t, err)
 			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-			_, err = api.WaitForXactionIC(baseParams, args)
+			_, err = api.WaitForXactionIC(baseParams, &args)
 			if test.srcBck.Equal(&test.dstBck) {
 				tassert.CheckFatal(t, err)
 			} else {

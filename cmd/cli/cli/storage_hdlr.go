@@ -218,7 +218,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 		}
 	}
 	xargs := xact.ArgsMsg{Kind: apc.ActStoreCleanup, Bck: bck}
-	if id, err = api.StartXaction(apiBP, xargs); err != nil {
+	if id, err = api.StartXaction(apiBP, &xargs); err != nil {
 		return
 	}
 

@@ -372,7 +372,7 @@ func downloadJobsList(c *cli.Context, regex string, caption bool) (int, error) {
 			return l, err
 		}
 		xargs := xact.ArgsMsg{ID: j.XactID, Kind: apc.ActDownload}
-		if _, err := xactList(c, xargs, false /*caption*/); err != nil {
+		if _, err := xactList(c, &xargs, false /*caption*/); err != nil {
 			return l, err
 		}
 		fmt.Fprintln(c.App.Writer)

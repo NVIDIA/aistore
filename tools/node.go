@@ -312,7 +312,7 @@ func WaitForResilvering(t *testing.T, bp api.BaseParams, target *meta.Snode) {
 		}
 		return true, true
 	}
-	err := api.WaitForXactionNode(bp, args, allFinished)
+	err := api.WaitForXactionNode(bp, &args, allFinished)
 	tassert.CheckFatal(t, err)
 }
 

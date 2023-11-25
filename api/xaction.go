@@ -20,7 +20,7 @@ import (
 )
 
 // Start xaction
-func StartXaction(bp BaseParams, args xact.ArgsMsg) (xid string, err error) {
+func StartXaction(bp BaseParams, args *xact.ArgsMsg) (xid string, err error) {
 	if !xact.Table[args.Kind].Startable {
 		return "", fmt.Errorf("xaction %q is not startable", args.Kind)
 	}
@@ -44,7 +44,7 @@ func StartXaction(bp BaseParams, args xact.ArgsMsg) (xid string, err error) {
 }
 
 // Abort ("stop") xactions
-func AbortXaction(bp BaseParams, args xact.ArgsMsg) (err error) {
+func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
 	msg := apc.ActMsg{Action: apc.ActXactStop, Value: args}
 	bp.Method = http.MethodPut
 	reqParams := AllocRp()
@@ -85,7 +85,7 @@ func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err 
 
 // QueryXactionSnaps gets all xaction snaps based on the specified selection.
 // NOTE: args.Kind can be either xaction kind or name - here and elsewhere
-func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs xact.MultiSnap, err error) {
+func QueryXactionSnaps(bp BaseParams, args *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
 		msg.OnlyRunning = apc.Bool(true)
@@ -113,7 +113,7 @@ func QueryXactionSnaps(bp BaseParams, args xact.ArgsMsg) (xs xact.MultiSnap, err
 // any matching xaction that's currently running, or - if nothing's running -
 // the one that's finished most recently,
 // if exists
-func GetOneXactionStatus(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
+func GetOneXactionStatus(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
 	status = &nl.Status{}
 	q := url.Values{apc.QparamWhat: []string{apc.WhatOneXactStatus}}
 	err = getxst(status, q, bp, args)
@@ -121,7 +121,7 @@ func GetOneXactionStatus(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, e
 }
 
 // same as above, except that it returns _all_ matching xactions
-func GetAllXactionStatus(bp BaseParams, args xact.ArgsMsg, force bool) (matching nl.StatusVec, err error) {
+func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg, force bool) (matching nl.StatusVec, err error) {
 	q := url.Values{apc.QparamWhat: []string{apc.WhatAllXactStatus}}
 	if force {
 		// (force just-in-time)
@@ -134,7 +134,7 @@ func GetAllXactionStatus(bp BaseParams, args xact.ArgsMsg, force bool) (matching
 	return
 }
 
-func getxst(out any, q url.Values, bp BaseParams, args xact.ArgsMsg) (err error) {
+func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error) {
 	bp.Method = http.MethodGet
 	msg := xact.QueryMsg{ID: args.ID, Kind: args.Kind, Bck: args.Bck}
 	if args.OnlyRunning {
@@ -176,16 +176,18 @@ func (ci *consIdle) check(snaps xact.MultiSnap) (done, resetProbeFreq bool) {
 }
 
 // WaitForXactionIdle waits for a given on-demand xaction to be idle.
-func WaitForXactionIdle(bp BaseParams, args xact.ArgsMsg) error {
-	ci := &consIdle{xid: args.ID}
+func WaitForXactionIdle(bp BaseParams, args *xact.ArgsMsg) (err error) {
+	ci, running := &consIdle{xid: args.ID}, args.OnlyRunning
 	args.OnlyRunning = true
-	return WaitForXactionNode(bp, args, ci.check)
+	err = WaitForXactionNode(bp, args, ci.check)
+	args.OnlyRunning = running
+	return err
 }
 
 // WaitForXactionIC waits for a given xaction to complete.
 // Use it only for global xactions
 // (those that execute on all targets and report their status to IC, e.g. rebalance).
-func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err error) {
+func WaitForXactionIC(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, err error) {
 	return _waitx(bp, args, nil)
 }
 
@@ -193,7 +195,7 @@ func WaitForXactionIC(bp BaseParams, args xact.ArgsMsg) (status *nl.Status, err 
 // Use for xactions that do _not_ report their status to IC members, namely:
 // - xact.IdlesBeforeFinishing()
 // - x-resilver (as it usually runs on a single node)
-func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
+func WaitForXactionNode(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) error {
 	debug.Assert(args.Kind != "" || xact.IsValidUUID(args.ID))
 	_, err := _waitx(bp, args, fn)
 	return err
@@ -201,7 +203,7 @@ func WaitForXactionNode(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap
 
 // TODO: `status` is currently always nil when we wait with a (`fn`) callback
 // TODO: un-defer cancel()
-func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) (status *nl.Status, err error) {
+func _waitx(bp BaseParams, args *xact.ArgsMsg, fn func(xact.MultiSnap) (bool, bool)) (status *nl.Status, err error) {
 	var (
 		elapsed         time.Duration
 		begin           = mono.NanoTime()
@@ -240,7 +242,7 @@ func _waitx(bp BaseParams, args xact.ArgsMsg, fn func(xact.MultiSnap) (bool, boo
 	}
 }
 
-func _times(args xact.ArgsMsg) (time.Duration, time.Duration) {
+func _times(args *xact.ArgsMsg) (time.Duration, time.Duration) {
 	total := args.Timeout
 	switch {
 	case args.Timeout == 0:

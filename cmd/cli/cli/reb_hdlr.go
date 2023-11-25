@@ -89,7 +89,7 @@ func showRebalanceHandler(c *cli.Context) error {
 	)
 	longRun.init(c, true /*run once unless*/)
 	for countdown := longRun.count; countdown > 0 || longRun.isForever(); countdown-- {
-		rebSnaps, err := api.QueryXactionSnaps(apiBP, xargs)
+		rebSnaps, err := api.QueryXactionSnaps(apiBP, &xargs)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok {
 				if herr.Status == http.StatusNotFound {

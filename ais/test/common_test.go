@@ -593,7 +593,7 @@ func (m *ioContext) ensureNumCopies(baseParams api.BaseParams, expectedCopies in
 	m.t.Helper()
 	time.Sleep(time.Second)
 	xargs := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck, Timeout: tools.RebalanceTimeout}
-	_, err := api.WaitForXactionIC(baseParams, xargs)
+	_, err := api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(m.t, err)
 
 	// List Bucket - primarily for the copies
@@ -694,7 +694,7 @@ func ensurePrevRebalanceIsFinished(baseParams api.BaseParams, err error) bool {
 	tlog.Logln("Warning: wait for unfinished rebalance(?)")
 	time.Sleep(5 * time.Second)
 	args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-	_, _ = api.WaitForXactionIC(baseParams, args)
+	_, _ = api.WaitForXactionIC(baseParams, &args)
 	time.Sleep(5 * time.Second)
 	return true
 }
@@ -727,7 +727,7 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 	tassert.Fatalf(m.t, xact.IsValidRebID(rebID), "invalid reb ID %q", rebID)
 
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceStartTimeout}
-	api.WaitForXactionNode(bp, xargs, xactSnapRunning)
+	api.WaitForXactionNode(bp, &xargs, xactSnapRunning)
 
 	return rebID
 }

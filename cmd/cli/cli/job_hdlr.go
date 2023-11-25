@@ -298,7 +298,7 @@ func startXaction(c *cli.Context, xname string, bck cmn.Bck, sid string) error {
 	}
 
 	xargs := xact.ArgsMsg{Kind: xname, Bck: bck, DaemonID: sid}
-	xid, err := api.StartXaction(apiBP, xargs)
+	xid, err := api.StartXaction(apiBP, &xargs)
 	if err != nil {
 		return V(err)
 	}
@@ -624,7 +624,7 @@ func startLRUHandler(c *cli.Context) (err error) {
 		id    string
 		xargs = xact.ArgsMsg{Kind: apc.ActLRU, Buckets: buckets, Force: flagIsSet(c, forceFlag)}
 	)
-	if id, err = api.StartXaction(apiBP, xargs); err != nil {
+	if id, err = api.StartXaction(apiBP, &xargs); err != nil {
 		return
 	}
 
@@ -764,7 +764,7 @@ func stopJobHandler(c *cli.Context) error {
 	// query
 	msg := formatXactMsg(xactID, xname, bck)
 	xargs := xact.ArgsMsg{ID: xactID, Kind: xactKind}
-	snap, err := getXactSnap(xargs)
+	snap, err := getXactSnap(&xargs)
 	if err != nil {
 		return fmt.Errorf("cannot stop %s: %v", msg, err)
 	}
@@ -795,7 +795,7 @@ func stopJobHandler(c *cli.Context) error {
 
 	// abort
 	args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: snap.Bck}
-	if err := api.AbortXaction(apiBP, args); err != nil {
+	if err := api.AbortXaction(apiBP, &args); err != nil {
 		return V(err)
 	}
 	actionDone(c, fmt.Sprintf("Stopped %s\n", msg))
@@ -819,7 +819,7 @@ func stopXactionKind(c *cli.Context, xactKind, xname string, bck cmn.Bck) error 
 			args   = xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
 			msg    = formatXactMsg(xactID, xname, bck)
 		)
-		if err := api.AbortXaction(apiBP, args); err != nil {
+		if err := api.AbortXaction(apiBP, &args); err != nil {
 			actionWarn(c, fmt.Sprintf("failed to stop %s: %v", msg, err))
 		} else {
 			actionDone(c, "Stopped "+msg)

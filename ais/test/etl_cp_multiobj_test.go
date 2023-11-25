@@ -168,7 +168,7 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 	tlog.Logf("Running x-etl[%s]: %s => %s ...\n", xid, bckFrom.Cname(""), bckTo.Cname(""))
 
 	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLObjects}
-	err = api.WaitForXactionIdle(baseParams, wargs)
+	err = api.WaitForXactionIdle(baseParams, &wargs)
 	tassert.CheckFatal(t, err)
 
 	list, err := api.ListObjects(baseParams, bckTo, nil, api.ListArgs{})

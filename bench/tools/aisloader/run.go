@@ -1086,7 +1086,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 				fmt.Println("delete err ", err)
 			}
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
-			if _, err = api.WaitForXactionIC(runParams.bp, args); err != nil {
+			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
 				fmt.Println("wait for xaction err ", err)
 			}
 		}
@@ -1097,7 +1097,7 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 				fmt.Println("delete err ", err)
 			}
 			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
-			if _, err = api.WaitForXactionIC(runParams.bp, args); err != nil {
+			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
 				fmt.Println("wait for xaction err ", err)
 			}
 		}

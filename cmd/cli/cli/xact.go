@@ -66,10 +66,10 @@ func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
 	kind, xname := xact.GetKindName(args.Kind)
 	debug.Assert(kind != "") // relying on it to decide between APIs
 	if xact.IdlesBeforeFinishing(kind) {
-		return api.WaitForXactionIdle(apiBP, args)
+		return api.WaitForXactionIdle(apiBP, &args)
 	}
 	// otherwise, IC
-	status, err := api.WaitForXactionIC(apiBP, args)
+	status, err := api.WaitForXactionIC(apiBP, &args)
 	if err != nil {
 		return V(err)
 	}
@@ -81,7 +81,7 @@ func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
 
 func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr error) {
 	xargs := xact.ArgsMsg{ID: xid}
-	status, err := api.GetOneXactionStatus(apiBP, xargs) // via IC
+	status, err := api.GetOneXactionStatus(apiBP, &xargs) // via IC
 	if err == nil {
 		kind, xname = xact.GetKindName(status.Kind)
 		return
@@ -89,7 +89,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 	if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 		// 2nd attempt assuming xaction in question `IdlesBeforeFinishing`
 		time.Sleep(time.Second)
-		xs, err := queryXactions(xargs)
+		xs, err := queryXactions(&xargs)
 		if err != nil {
 			rerr = err
 			return
@@ -185,7 +185,7 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 	return props
 }
 
-func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
+func getXactSnap(xargs *xact.ArgsMsg) (*cluster.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return nil, V(err)
@@ -198,7 +198,7 @@ func getXactSnap(xargs xact.ArgsMsg) (*cluster.Snap, error) {
 	return nil, nil
 }
 
-func queryXactions(xargs xact.ArgsMsg) (xs xact.MultiSnap, err error) {
+func queryXactions(xargs *xact.ArgsMsg) (xs xact.MultiSnap, err error) {
 	orig := apiBP.Client.Timeout
 	if !xargs.OnlyRunning {
 		apiBP.Client.Timeout = min(orig, longClientTimeout)

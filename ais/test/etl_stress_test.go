@@ -87,13 +87,15 @@ func TestETLBucketAbort(t *testing.T) {
 	}
 
 	xid := etlPrepareAndStart(t, m, tetl.Echo, etl.Hpull)
-	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}
+
 	time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 
-	tlog.Logf("Aborting ETL xaction %q\n", xid)
-	err := api.AbortXaction(baseParams, args)
+	tlog.Logf("Aborting etl[%s]\n", xid)
+	args := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck}
+	err := api.AbortXaction(baseParams, &args)
 	tassert.CheckFatal(t, err)
-	err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 5*time.Minute)
+
+	err = tetl.WaitForAborted(baseParams, xid, apc.ActETLBck, 2*time.Minute)
 	tassert.CheckFatal(t, err)
 	etls, err := api.ETLList(baseParams)
 	tassert.CheckFatal(t, err)
@@ -134,7 +136,7 @@ func TestETLTargetDown(t *testing.T) {
 		m.waitAndCheckCluState()
 
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, _ = api.WaitForXactionIC(baseParams, args)
+		_, _ = api.WaitForXactionIC(baseParams, &args)
 
 		tetl.CheckNoRunningETLContainers(t, baseParams)
 	})
@@ -246,7 +248,7 @@ def transform(input_bytes):
 			etlDoneCh.Close()
 			tassert.CheckFatal(t, err)
 
-			snaps, err := api.QueryXactionSnaps(baseParams, xact.ArgsMsg{ID: xid})
+			snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
 			tassert.CheckFatal(t, err)
 			total, err := snaps.TotalRunningTime(xid)
 			tassert.CheckFatal(t, err)

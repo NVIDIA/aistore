@@ -87,7 +87,7 @@ func BenchmarkECEncode(b *testing.B) {
 				tassert.CheckFatal(b, err)
 
 				reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
-				_, err = api.WaitForXactionIC(baseParams, reqArgs)
+				_, err = api.WaitForXactionIC(baseParams, &reqArgs)
 				tassert.CheckFatal(b, err)
 			})
 		}
@@ -138,7 +138,7 @@ func BenchmarkECRebalance(b *testing.B) {
 				tassert.CheckFatal(b, err)
 
 				reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck, Timeout: ecTime}
-				_, err = api.WaitForXactionIC(baseParams, reqArgs)
+				_, err = api.WaitForXactionIC(baseParams, &reqArgs)
 				tassert.CheckFatal(b, err)
 
 				args := &apc.ActValRmNode{DaemonID: tgtLost.ID()}

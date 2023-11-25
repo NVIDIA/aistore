@@ -639,7 +639,7 @@ func dsortJobsList(c *cli.Context, list []*dsort.JobInfo, usejs bool) error {
 		// super-verbose
 		if cliConfVerbose() {
 			xargs := xact.ArgsMsg{ID: j.ID, Kind: apc.ActDsort}
-			if _, err := xactList(c, xargs, false /*caption*/); err != nil {
+			if _, err := xactList(c, &xargs, false /*caption*/); err != nil {
 				return err
 			}
 		}

@@ -325,7 +325,7 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 				return 0, nil
 			}
 		}
-		return xactList(c, xargs, caption)
+		return xactList(c, &xargs, caption)
 	}
 }
 
@@ -397,7 +397,7 @@ func showClusterHandler(c *cli.Context) error {
 	return cluDaeStatus(c, smap, tstatusMap, pstatusMap, cluConfig, what)
 }
 
-func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {
+func xactList(c *cli.Context, xargs *xact.ArgsMsg, caption bool) (int, error) {
 	// override the caller's choice if explicitly identified
 	if xargs.ID != "" {
 		debug.Assert(xact.IsValidUUID(xargs.ID), xargs.ID)
@@ -434,7 +434,7 @@ func xactList(c *cli.Context, xargs xact.ArgsMsg, caption bool) (int, error) {
 	return ll, nil
 }
 
-func xlistByKindID(c *cli.Context, xargs xact.ArgsMsg, caption bool, xs xact.MultiSnap) (int, error) {
+func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.MultiSnap) (int, error) {
 	// first, extract snaps for: xargs.ID, Kind
 	filteredXs := make(xact.MultiSnap, 8)
 	for tid, snaps := range xs {

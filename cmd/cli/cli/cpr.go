@@ -154,7 +154,7 @@ outer:
 		var (
 			size, objs int64
 			nrun       int
-			xs, err    = queryXactions(xargs)
+			xs, err    = queryXactions(&xargs)
 		)
 		if err != nil {
 			if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {

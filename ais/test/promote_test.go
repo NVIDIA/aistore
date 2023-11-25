@@ -287,7 +287,7 @@ func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode
 	// wait "cases" 1. through 3.
 	if xid != "" && !test.singleTarget { // 1. cluster-wide xaction
 		tlog.Logf("Waiting for global %s(%s=>%s)\n", xname, tempdir, m.bck)
-		notifStatus, err := api.WaitForXactionIC(baseParams, xargs)
+		notifStatus, err := api.WaitForXactionIC(baseParams, &xargs)
 		tassert.CheckFatal(t, err)
 		if notifStatus != nil && (notifStatus.AbortedX || notifStatus.ErrMsg != "") {
 			tlog.Logf("Warning: notif-status: %+v\n", notifStatus)
@@ -295,14 +295,14 @@ func (test *prmTests) wait(t *testing.T, xid, tempdir string, target *meta.Snode
 	} else if xid != "" && test.singleTarget { // 2. single-target xaction
 		xargs.DaemonID = target.ID()
 		tlog.Logf("Waiting for %s(%s=>%s) at %s\n", xname, tempdir, m.bck, target.StringEx())
-		err := api.WaitForXactionNode(baseParams, xargs, xactSnapNotRunning)
+		err := api.WaitForXactionNode(baseParams, &xargs, xactSnapNotRunning)
 		tassert.CheckFatal(t, err)
 	} else { // 3. synchronous execution
 		tlog.Logf("Promoting without xaction (%s=>%s)\n", tempdir, m.bck)
 	}
 
 	// collect stats
-	xs, err := api.QueryXactionSnaps(baseParams, xargs)
+	xs, err := api.QueryXactionSnaps(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
 	if xid != "" {
 		locObjs, outObjs, inObjs = xs.ObjCounts(xid)

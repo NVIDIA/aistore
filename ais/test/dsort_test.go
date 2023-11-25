@@ -1374,7 +1374,7 @@ func TestDsortAbort(t *testing.T) {
 
 					if asXaction {
 						tlog.Logf("aborting dsort[%s] via api.AbortXaction\n", df.managerUUID)
-						err = api.AbortXaction(df.baseParams, xact.ArgsMsg{ID: df.managerUUID})
+						err = api.AbortXaction(df.baseParams, &xact.ArgsMsg{ID: df.managerUUID})
 					} else {
 						tlog.Logf("aborting dsort[%s] via api.AbortDsort\n", df.managerUUID)
 						err = api.AbortDsort(df.baseParams, df.managerUUID)
@@ -1431,7 +1431,7 @@ func TestDsortAbortDuringPhases(t *testing.T) {
 						var err error
 						if asXaction {
 							tlog.Logf("aborting dsort[%s] via api.AbortXaction\n", df.managerUUID)
-							err = api.AbortXaction(df.baseParams, xact.ArgsMsg{ID: df.managerUUID})
+							err = api.AbortXaction(df.baseParams, &xact.ArgsMsg{ID: df.managerUUID})
 						} else {
 							tlog.Logf("aborting dsort[%s] via api.AbortDsort\n", df.managerUUID)
 							err = api.AbortDsort(df.baseParams, df.managerUUID)

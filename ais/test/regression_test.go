@@ -366,7 +366,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 
 func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string, xid string) {
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
-	_, err := api.WaitForXactionIC(baseParams, xargs)
+	_, err := api.WaitForXactionIC(baseParams, &xargs)
 	if err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			smap := tools.GetClusterMap(t, proxyURL)
@@ -700,11 +700,11 @@ func TestLRU(t *testing.T) {
 	})
 
 	tlog.Logln("starting LRU...")
-	xid, err := api.StartXaction(baseParams, xact.ArgsMsg{Kind: apc.ActLRU})
+	xid, err := api.StartXaction(baseParams, &xact.ArgsMsg{Kind: apc.ActLRU})
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActLRU, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Check results
@@ -751,7 +751,7 @@ func TestPrefetchList(t *testing.T) {
 	}
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// 3. Prefetch evicted objects
@@ -761,12 +761,12 @@ func TestPrefetchList(t *testing.T) {
 	}
 
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure that all the prefetches occurred.
 	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
-	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
+	snaps, err := api.QueryXactionSnaps(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(m.num) {
@@ -821,7 +821,7 @@ func TestDeleteList(t *testing.T) {
 		tassert.CheckError(t, err)
 
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that all the files have been deleted
@@ -878,18 +878,18 @@ func TestPrefetchRange(t *testing.T) {
 	xid, err := api.EvictRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	xid, err = api.PrefetchRange(baseParams, bck, rng)
 	tassert.CheckError(t, err)
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// 4. Ensure all done
 	xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
-	snaps, err := api.QueryXactionSnaps(baseParams, xargs)
+	snaps, err := api.QueryXactionSnaps(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
 	locObjs, _, _ := snaps.ObjCounts(xid)
 	if locObjs != int64(len(files)) {
@@ -957,7 +957,7 @@ func TestDeleteRange(t *testing.T) {
 		xid, err := api.DeleteRange(baseParams, b, smallrange)
 		tassert.CheckError(t, err)
 		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckFatal(t, err)
 
 		// 3. Check to see that the correct files have been deleted
@@ -986,7 +986,7 @@ func TestDeleteRange(t *testing.T) {
 		xid, err = api.DeleteRange(baseParams, b, bigrange)
 		tassert.CheckError(t, err)
 		args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckFatal(t, err)
 
 		// 5. Check to see that all the files have been deleted
@@ -1063,7 +1063,7 @@ func TestStressDeleteRange(t *testing.T) {
 	xid, err := api.DeleteRange(baseParams, bck, partialRange)
 	tassert.CheckError(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// 3. Check to see that correct objects have been deleted
@@ -1095,7 +1095,7 @@ func TestStressDeleteRange(t *testing.T) {
 	xid, err = api.DeleteRange(baseParams, bck, fullRange)
 	tassert.CheckError(t, err)
 	args = xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// 5. Check to see that all files have been deleted

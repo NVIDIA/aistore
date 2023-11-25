@@ -194,7 +194,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	}
 
 	// [DRY-RUN]
-	snaps, err := api.QueryXactionSnaps(apiBP, xargs)
+	snaps, err := api.QueryXactionSnaps(apiBP, &xargs)
 	if err != nil {
 		return V(err)
 	}

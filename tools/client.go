@@ -237,7 +237,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	xid, err := api.DeleteList(bp, bck, toDelete)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: BucketCleanupTimeout}
-	_, err = api.WaitForXactionIC(bp, args)
+	_, err = api.WaitForXactionIC(bp, &args)
 	tassert.CheckFatal(t, err)
 }
 
@@ -498,7 +498,7 @@ func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) 
 	}
 
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: EvictPrefetchTimeout}
-	if _, err := api.WaitForXactionIC(bp, args); err != nil {
+	if _, err := api.WaitForXactionIC(bp, &args); err != nil {
 		t.Errorf("Wait for xaction to finish failed, err = %v", err)
 	}
 }
@@ -535,7 +535,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	go func() {
 		defer wg.Done()
 		xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(bp, xargs); err != nil {
+		if _, err := api.WaitForXactionIC(bp, &xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -546,7 +546,7 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 	go func() {
 		defer wg.Done()
 		xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-		if _, err := api.WaitForXactionIC(bp, xargs); err != nil {
+		if _, err := api.WaitForXactionIC(bp, &xargs); err != nil {
 			if cmn.IsStatusNotFound(err) {
 				return
 			}
@@ -565,14 +565,14 @@ func WaitForRebalAndResil(t testing.TB, bp api.BaseParams, timeouts ...time.Dura
 // compare w/ `tools.WaitForResilvering`
 func _waitResil(t testing.TB, bp api.BaseParams, timeout time.Duration) {
 	xargs := xact.ArgsMsg{Kind: apc.ActResilver, OnlyRunning: true, Timeout: timeout}
-	_, err := api.WaitForXactionIC(bp, xargs)
+	_, err := api.WaitForXactionIC(bp, &xargs)
 	if err == nil {
 		return
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
 		if herr.Status == http.StatusNotFound { // double check iff not found
 			time.Sleep(xactPollSleep)
-			_, err = api.WaitForXactionIC(bp, xargs)
+			_, err = api.WaitForXactionIC(bp, &xargs)
 		}
 	}
 	if err == nil {
@@ -597,7 +597,7 @@ func WaitForRebalanceByID(t *testing.T, bp api.BaseParams, rebID string, timeout
 	}
 	tlog.Logf("Wait for rebalance %s\n", rebID)
 	xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, OnlyRunning: true, Timeout: timeout}
-	_, err := api.WaitForXactionIC(bp, xargs)
+	_, err := api.WaitForXactionIC(bp, &xargs)
 	tassert.CheckFatal(t, err)
 }
 
@@ -606,12 +606,11 @@ func _waitReToStart(bp api.BaseParams) {
 		kinds   = []string{apc.ActRebalance, apc.ActResilver}
 		timeout = max(10*xactPollSleep, MaxCplaneTimeout)
 		retries = int(timeout / xactPollSleep)
-		args    = xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true}
 	)
 	for i := 0; i < retries; i++ {
 		for _, kind := range kinds {
-			args.Kind = kind
-			status, err := api.GetOneXactionStatus(bp, args)
+			args := xact.ArgsMsg{Timeout: xactPollSleep, OnlyRunning: true, Kind: kind}
+			status, err := api.GetOneXactionStatus(bp, &args)
 			if err == nil {
 				if !status.Finished() {
 					return

@@ -504,6 +504,7 @@ func FlushObject(args *FlushArgs) error {
 	var (
 		header http.Header
 		q      = make(url.Values, 4)
+		method = args.BaseParams.Method
 	)
 	q.Set(apc.QparamAppendType, apc.FlushOp)
 	q.Set(apc.QparamAppendHandle, args.Handle)
@@ -524,6 +525,7 @@ func FlushObject(args *FlushArgs) error {
 	}
 	err := reqParams.DoRequest()
 	FreeRp(reqParams)
+	args.BaseParams.Method = method
 	return err
 }
 
@@ -546,8 +548,10 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 
 // promote files and directories to ais objects
 func Promote(args *PromoteArgs) (xid string, err error) {
-	actMsg := apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN}
-	actMsg.Value = &args.PromoteArgs
+	var (
+		actMsg = apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN, Value: &args.PromoteArgs}
+		method = args.BaseParams.Method
+	)
 	args.BaseParams.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
@@ -559,6 +563,7 @@ func Promote(args *PromoteArgs) (xid string, err error) {
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
+	args.BaseParams.Method = method
 	return
 }
 

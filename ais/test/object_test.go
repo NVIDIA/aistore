@@ -351,28 +351,28 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	prefetchListID, err := api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("PrefetchRange %s\n", objRange)
 	prefetchRangeID, err := api.PrefetchRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: prefetchRangeID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	tlog.Logf("EvictList %v\n", files)
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictRange(baseParams, bckRemote, objRange)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictRangeID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
@@ -402,13 +402,13 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	prefetchListID, err = api.PrefetchList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: prefetchListID, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	evictListID, err = api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Deleting from cloud bucket
@@ -416,7 +416,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	// Deleting from ais bucket
@@ -424,7 +424,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)
 	args = xact.ArgsMsg{ID: deleteID, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, apc.FltPresent, false /*silent*/)
@@ -906,7 +906,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 
 	// Wait for async mirroring to finish
 	flt := xact.ArgsMsg{Kind: apc.ActMakeNCopies, Bck: m.bck}
-	api.WaitForXactionIdle(baseParams, flt)
+	api.WaitForXactionIdle(baseParams, &flt)
 	time.Sleep(time.Second)
 
 	err = api.EvictRemoteBucket(baseParams, m.bck, keepMD)
@@ -1549,7 +1549,7 @@ func TestOperationsWithRanges(t *testing.T) {
 					}
 
 					args := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: waitTimeout}
-					_, err = api.WaitForXactionIC(baseParams, args)
+					_, err = api.WaitForXactionIC(baseParams, &args)
 					tassert.CheckFatal(t, err)
 
 					totalFiles -= test.delta

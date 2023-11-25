@@ -510,7 +510,7 @@ func clearAllECObjects(t *testing.T, bck cmn.Bck, failOnDelErr bool, o *ecOption
 	}
 	wg.Wait()
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), reqArgs)
+	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
 }
 
 func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt string, objCount int) {
@@ -825,12 +825,12 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 				defer func() {
 					tlog.Logln("Wait for PUTs to finish...")
 					args := xact.ArgsMsg{Kind: apc.ActECPut}
-					err := api.WaitForXactionIdle(baseParams, args)
+					err := api.WaitForXactionIdle(baseParams, &args)
 					tassert.CheckError(t, err)
 
 					clearAllECObjects(t, bck, true, o)
 					reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-					err = api.WaitForXactionIdle(baseParams, reqArgs)
+					err = api.WaitForXactionIdle(baseParams, &reqArgs)
 					tassert.CheckError(t, err)
 				}()
 
@@ -1207,7 +1207,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 	})
 	tassert.CheckError(t, err)
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: bck}
-	_, err = api.WaitForXactionIC(baseParams, reqArgs)
+	_, err = api.WaitForXactionIC(baseParams, &reqArgs)
 	tassert.CheckError(t, err)
 
 	abortCh.Close()
@@ -1654,7 +1654,7 @@ func TestECDestroyBucket(t *testing.T) {
 	wg.Wait()
 	tlog.Logf("EC put files resulted in error in %d out of %d files\n", errCnt.Load(), o.objCount)
 	args := xact.ArgsMsg{Kind: apc.ActECPut}
-	api.WaitForXactionIC(baseParams, args)
+	api.WaitForXactionIC(baseParams, &args)
 
 	// create bucket with the same name and check if puts are successful
 	newLocalBckWithProps(t, baseParams, bck, bckProps, o)
@@ -2031,7 +2031,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 
 	// Wait for ec to finish
 	flt := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	_ = api.WaitForXactionIdle(baseParams, flt)
+	_ = api.WaitForXactionIdle(baseParams, &flt)
 }
 
 func TestECRebalance(t *testing.T) {
@@ -2094,7 +2094,7 @@ func TestECMountpaths(t *testing.T) {
 	}
 
 	reqArgs := xact.ArgsMsg{Kind: apc.ActECPut, Bck: bck}
-	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), reqArgs)
+	api.WaitForXactionIdle(tools.BaseAPIParams(proxyURL), &reqArgs)
 }
 
 // The test only checks that the number of object after rebalance equals
@@ -2216,7 +2216,7 @@ func TestECBucketEncode(t *testing.T) {
 
 	tlog.Logf("Wait for EC %s\n", m.bck)
 	xargs := xact.ArgsMsg{Kind: apc.ActECEncode, Bck: m.bck, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, xargs)
+	_, err = api.WaitForXactionIC(baseParams, &xargs)
 	tassert.CheckFatal(t, err)
 
 	objList, err = api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
@@ -2583,10 +2583,10 @@ func ecAndRegularUnregisterWhileRebalancing(t *testing.T, o *ecOptions, bckEC cm
 		}
 	}()
 	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: startTimeout}
-	err = api.WaitForXactionNode(baseParams, xargs, xactSnapRunning)
+	err = api.WaitForXactionNode(baseParams, &xargs, xactSnapRunning)
 	tassert.CheckError(t, err)
 
-	err = api.AbortXaction(baseParams, xargs)
+	err = api.AbortXaction(baseParams, &xargs)
 	tassert.CheckError(t, err)
 	tools.WaitForRebalAndResil(t, baseParams)
 	tassert.CheckError(t, err)

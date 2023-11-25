@@ -99,7 +99,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 		_, err = tools.WaitForClusterState(proxyURL, "target is back",
 			m.smap.Version, m.smap.CountActivePs(), m.smap.CountTargets())
 		args := xact.ArgsMsg{ID: rebID, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckFatal(t, err)
 	}()
 
@@ -143,7 +143,7 @@ func TestMaintenanceMD(t *testing.T) {
 
 	t.Cleanup(func() {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		api.WaitForXactionIC(baseParams, args)
+		api.WaitForXactionIC(baseParams, &args)
 	})
 
 	tlog.Logf("Decommission %s\n", dcmTarget.StringEx())
@@ -270,7 +270,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	if dcm != nil {
 		tlog.Logf("Canceling maintenance for %s\n", dcm.ID())
 		args := xact.ArgsMsg{Kind: apc.ActRebalance}
-		err = api.AbortXaction(baseParams, args)
+		err = api.AbortXaction(baseParams, &args)
 		tassert.CheckError(t, err)
 		val := &apc.ActValRmNode{DaemonID: dcm.ID()}
 		rebID, err = api.StopMaintenance(baseParams, val)
@@ -278,7 +278,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 		tools.WaitForRebalanceByID(t, baseParams, rebID)
 	} else {
 		args := xact.ArgsMsg{Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
-		_, err = api.WaitForXactionIC(baseParams, args)
+		_, err = api.WaitForXactionIC(baseParams, &args)
 		tassert.CheckError(t, err)
 	}
 
@@ -496,7 +496,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 		for i := 0; i < 3; i++ {
-			status, err := api.WaitForXactionIC(baseParams, xargs)
+			status, err := api.WaitForXactionIC(baseParams, &xargs)
 			if err == nil {
 				tlog.Logf("%v\n", status)
 				break
@@ -605,7 +605,7 @@ func TestShutdownListObjects(t *testing.T) {
 		time.Sleep(time.Second)
 		xargs := xact.ArgsMsg{ID: rebID, Kind: apc.ActRebalance, Timeout: tools.RebalanceTimeout}
 		for i := 0; i < 3; i++ {
-			status, err := api.WaitForXactionIC(baseParams, xargs)
+			status, err := api.WaitForXactionIC(baseParams, &xargs)
 			if err == nil {
 				tlog.Logf("%v\n", status)
 				break

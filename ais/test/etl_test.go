@@ -215,7 +215,7 @@ func testETLObjectCloud(t *testing.T, bck cmn.Bck, etlName string, onlyLong, cac
 
 // NOTE: BytesCount references number of bytes *before* the transformation.
 func checkETLStats(t *testing.T, xid string, expectedObjCnt int, expectedBytesCnt uint64, skipByteStats bool) {
-	snaps, err := api.QueryXactionSnaps(baseParams, xact.ArgsMsg{ID: xid})
+	snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid})
 	tassert.CheckFatal(t, err)
 
 	objs, outObjs, inObjs := snaps.ObjCounts(xid)
@@ -704,7 +704,7 @@ func TestETLBucketDryRun(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	args := xact.ArgsMsg{ID: xid, Timeout: time.Minute}
-	_, err = api.WaitForXactionIC(baseParams, args)
+	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
 	exists, err := api.QueryBuckets(baseParams, cmn.QueryBcks(bckTo), apc.FltPresent)

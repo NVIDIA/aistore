@@ -1503,7 +1503,7 @@ func icSyncOwnershipTable(t *testing.T) {
 
 	baseParams = tools.BaseAPIParams(newICNode.URL(cmn.NetPublic))
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck}
-	_, err = api.GetOneXactionStatus(baseParams, xargs)
+	_, err = api.GetOneXactionStatus(baseParams, &xargs)
 	tassert.CheckError(t, err)
 
 	err = tools.RestoreNode(cmd, false, "proxy")
@@ -1518,7 +1518,7 @@ func icSyncOwnershipTable(t *testing.T) {
 	tassert.Fatalf(t, smap.IsIC(cmd.Node), "primary (%s) should be a IC member, (were: %s)", primary, smap.StrIC(primary))
 
 	baseParams = tools.BaseAPIParams(cmd.Node.URL(cmn.NetPublic))
-	_, err = api.GetOneXactionStatus(baseParams, xargs)
+	_, err = api.GetOneXactionStatus(baseParams, &xargs)
 	tassert.CheckError(t, err)
 }
 
@@ -1574,7 +1574,7 @@ func icSinglePrimaryRevamp(t *testing.T) {
 		tassert.CheckFatal(t, err)
 
 		baseParams = tools.BaseAPIParams(cmd.Node.URL(cmn.NetPublic))
-		_, err = api.GetOneXactionStatus(baseParams, xargs)
+		_, err = api.GetOneXactionStatus(baseParams, &xargs)
 		tassert.CheckError(t, err)
 	}
 }
@@ -1634,7 +1634,7 @@ func startCPBckAndWait(t testing.TB, srcBck cmn.Bck, count int) *sync.WaitGroup 
 				wg.Done()
 			}()
 			xargs := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
-			_, err = api.WaitForXactionIC(baseParams, xargs)
+			_, err = api.WaitForXactionIC(baseParams, &xargs)
 			tassert.CheckError(t, err)
 		}(i)
 	}
