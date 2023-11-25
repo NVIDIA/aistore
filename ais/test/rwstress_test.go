@@ -78,7 +78,7 @@ func opPut(objName, cksumType string, bck cmn.Bck) opRes {
 		Cksum:      r.Cksum(),
 		Reader:     r,
 	}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&putArgs)
 	return opRes{http.MethodPut, err}
 }
 

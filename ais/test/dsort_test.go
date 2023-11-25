@@ -2003,7 +2003,7 @@ func TestDsortOrderFile(t *testing.T) {
 				ObjName:    orderFileName,
 				Reader:     readers.NewBytes(buffer.Bytes()),
 			}
-			_, err = api.PutObject(args)
+			_, err = api.PutObject(&args)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln(startingDS)
@@ -2111,7 +2111,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 				ObjName:    orderFileName,
 				Reader:     readers.NewBytes(jsonBytes),
 			}
-			_, err = api.PutObject(args)
+			_, err = api.PutObject(&args)
 			tassert.CheckFatal(t, err)
 
 			tlog.Logln(startingDS)

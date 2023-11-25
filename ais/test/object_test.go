@@ -92,7 +92,7 @@ func TestObjectInvalidName(t *testing.T) {
 			case putOP:
 				reader, err := readers.NewRand(cos.KiB, cos.ChecksumNone)
 				tassert.CheckFatal(t, err)
-				_, err = api.PutObject(api.PutArgs{
+				_, err = api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    test.objName,
@@ -144,7 +144,7 @@ func TestRemoteBucketObject(t *testing.T) {
 			switch test.ty {
 			case putOP:
 				var oah api.ObjAttrs
-				oah, err = api.PutObject(api.PutArgs{
+				oah, err = api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    object,
@@ -156,7 +156,7 @@ func TestRemoteBucketObject(t *testing.T) {
 				}
 			case getOP:
 				if test.exists {
-					_, err = api.PutObject(api.PutArgs{
+					_, err = api.PutObject(&api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck,
 						ObjName:    object,
@@ -262,7 +262,7 @@ func TestAppendObject(t *testing.T) {
 					Handle:     handle,
 					Reader:     cos.NewByteHandle([]byte(body)),
 				}
-				handle, err = api.AppendObject(args)
+				handle, err = api.AppendObject(&args)
 				tassert.CheckFatal(t, err)
 
 				_, err = cksum.H.Write([]byte(body))
@@ -271,7 +271,7 @@ func TestAppendObject(t *testing.T) {
 
 			// Flush object with cksum to make it persistent in the bucket.
 			cksum.Finalize()
-			err = api.FlushObject(api.FlushArgs{
+			err = api.FlushObject(&api.FlushArgs{
 				BaseParams: baseParams,
 				Bck:        bck,
 				Object:     objName,
@@ -332,7 +332,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 
 	// PUT/GET/DEL Without ais bucket
 	tlog.Logf("Validating responses for non-existent ais bucket...\n")
-	_, err := api.PutObject(putArgsLocal)
+	_, err := api.PutObject(&putArgsLocal)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
@@ -379,16 +379,16 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 
 	// PUT
 	tlog.Logf("PUT %s and %s into buckets...\n", fileName1, fileName2)
-	_, err = api.PutObject(putArgsLocal)
+	_, err = api.PutObject(&putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.ObjName = fileName2
-	_, err = api.PutObject(putArgsLocal)
+	_, err = api.PutObject(&putArgsLocal)
 	tassert.CheckFatal(t, err)
 
-	_, err = api.PutObject(putArgsRemote)
+	_, err = api.PutObject(&putArgsRemote)
 	tassert.CheckFatal(t, err)
 	putArgsRemote.ObjName = fileName2
-	_, err = api.PutObject(putArgsRemote)
+	_, err = api.PutObject(&putArgsRemote)
 	tassert.CheckFatal(t, err)
 
 	// Check ais bucket has 2 objects
@@ -484,7 +484,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		ObjName:    fileName,
 		Reader:     readers.NewBytes(dataLocal),
 	}
-	_, err := api.PutObject(putArgs)
+	_, err := api.PutObject(&putArgs)
 	tassert.CheckFatal(t, err)
 
 	resLocal, err := api.ListObjects(baseParams, bckLocal, msg, api.ListArgs{})
@@ -497,7 +497,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		ObjName:    fileName,
 		Reader:     readers.NewBytes(dataRemote),
 	}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&putArgs)
 	tassert.CheckFatal(t, err)
 
 	resRemote, err := api.ListObjects(baseParams, bckRemote, msg, api.ListArgs{})
@@ -1419,7 +1419,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 		putArgs.Cksum = cos.NewCksum(cksumType, badCksumVal)
 		putArgs.ObjName = fileName
 
-		_, err := api.PutObject(putArgs)
+		_, err := api.PutObject(&putArgs)
 		if err == nil {
 			t.Errorf("Bad checksum provided by the user, Expected an error")
 		}
@@ -1429,7 +1429,7 @@ func TestPutObjectWithChecksum(t *testing.T) {
 			t.Errorf("Object %s exists despite bad checksum", fileName)
 		}
 		putArgs.Cksum = cos.NewCksum(cksumType, cksumValue)
-		oah, err := api.PutObject(putArgs)
+		oah, err := api.PutObject(&putArgs)
 		if err != nil {
 			t.Errorf("Correct checksum provided, Err encountered %v", err)
 		}
@@ -1470,7 +1470,7 @@ func TestOperationsWithRanges(t *testing.T) {
 				}
 				for _, objName := range objList {
 					r, _ := readers.NewRand(objSize, cksumType)
-					_, err := api.PutObject(api.PutArgs{
+					_, err := api.PutObject(&api.PutArgs{
 						BaseParams: baseParams,
 						Bck:        bck.Clone(),
 						ObjName:    objName,

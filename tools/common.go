@@ -138,7 +138,7 @@ func PutObjRR(bp api.BaseParams, bck cmn.Bck, objName string, objSize int64, cks
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&putArgs)
 	return err
 }
 

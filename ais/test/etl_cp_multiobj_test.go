@@ -86,7 +86,7 @@ func TestETLMultiObj(t *testing.T) {
 		tlog.Logf("PUT %d objects (size %d) => %s/test/a-*\n", objCnt, objSize, m.bck)
 		for i := 0; i < objCnt; i++ {
 			r, _ := readers.NewRand(objSize, cksumType)
-			_, err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        m.bck,
 				ObjName:    fmt.Sprintf("test/a-%04d", i),
@@ -159,9 +159,9 @@ func testETLMultiObj(t *testing.T, etlName string, bckFrom, bckTo cmn.Bck, fileR
 
 	tlog.Logf("Starting multi-object ETL[%s] ...\n", etlName)
 	if evictRemoteSrc {
-		xid, err = api.ETLMultiObj(baseParams, bckFrom, tcomsg, apc.FltExists)
+		xid, err = api.ETLMultiObj(baseParams, bckFrom, &tcomsg, apc.FltExists)
 	} else {
-		xid, err = api.ETLMultiObj(baseParams, bckFrom, tcomsg)
+		xid, err = api.ETLMultiObj(baseParams, bckFrom, &tcomsg)
 	}
 	tassert.CheckFatal(t, err)
 

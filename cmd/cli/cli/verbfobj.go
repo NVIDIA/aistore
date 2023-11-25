@@ -194,7 +194,7 @@ func (p *uparams) _putOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 		Size:       uint64(fobj.size),
 		SkipVC:     skipVC,
 	}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&putArgs)
 	return
 }
 
@@ -233,7 +233,7 @@ func (p *uparams) _a2aOne(c *cli.Context, fobj fobj, reader cos.ReadOpenCloser, 
 		debug.Assert(!a.appendOnly)
 		putApndArchArgs.Flags = apc.ArchAppendIfExist
 	}
-	return api.PutApndArch(putApndArchArgs)
+	return api.PutApndArch(&putApndArchArgs)
 }
 
 //////////
@@ -377,7 +377,7 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 		Cksum:      cksum,
 		SkipVC:     flagIsSet(c, skipVerCksumFlag),
 	}
-	_, err = api.PutObject(putArgs)
+	_, err = api.PutObject(&putArgs)
 	if progress != nil {
 		progress.Wait()
 	}
@@ -430,7 +430,7 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 				pi.printProgress(int64(n))
 			})
 		}
-		handle, err = api.AppendObject(api.AppendArgs{
+		handle, err = api.AppendObject(&api.AppendArgs{
 			BaseParams: apiBP,
 			Bck:        bck,
 			Object:     objName,
@@ -449,7 +449,7 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
 	}
-	return api.FlushObject(api.FlushArgs{
+	return api.FlushObject(&api.FlushArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,

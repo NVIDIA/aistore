@@ -20,7 +20,7 @@ import (
 // (not necessarily distinct)
 // For supported archiving formats, see `archive.FileExtensions`.
 // See also: api.PutApndArch
-func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveBckMsg) (string, error) {
+func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.ArchiveBckMsg) (string, error) {
 	bp.Method = http.MethodPut
 	q := bckFrom.NewQuery()
 	return dolr(bp, bckFrom, apc.ActArchive, msg, q)
@@ -29,7 +29,7 @@ func ArchiveMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.ArchiveBckMsg) (str
 // `fltPresence` applies exclusively to remote `bckFrom` (is ignored if the source is ais://)
 // and is one of: { apc.FltExists, apc.FltPresent, ... } - for complete enum, see api/apc/query.go
 
-func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
 	q := bckFrom.NewQuery()
 	if len(fltPresence) > 0 {
@@ -38,7 +38,7 @@ func CopyMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence
 	return dolr(bp, bckFrom, apc.ActCopyObjects, msg, q)
 }
 
-func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
+func ETLMultiObj(bp BaseParams, bckFrom cmn.Bck, msg *cmn.TCObjsMsg, fltPresence ...int) (xid string, err error) {
 	bp.Method = http.MethodPost
 	q := bckFrom.NewQuery()
 	if len(fltPresence) > 0 {

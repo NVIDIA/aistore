@@ -135,7 +135,7 @@ func (md *checkerMD) runTestSync(method string, target *meta.Snode, mpath string
 		tassert.CheckFatal(md.t, err)
 		for _, objName := range objList {
 			r, _ := readers.NewRand(md.fileSize, p.Cksum.Type)
-			_, err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: md.baseParams,
 				Bck:        md.bck,
 				ObjName:    path.Join(fshcDir, objName),
@@ -297,7 +297,7 @@ func runAsyncJob(t *testing.T, bck cmn.Bck, wg *sync.WaitGroup, op, mpath string
 			switch op {
 			case "PUT":
 				r, _ := readers.NewRand(fileSize, p.Cksum.Type)
-				api.PutObject(api.PutArgs{
+				api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    path.Join(fshcDir, fname),

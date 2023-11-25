@@ -64,7 +64,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 		tlog.Logf("PUT %d => %s\n", len(objList), bckFrom.Cname(""))
 		for _, objName := range objList {
 			r, _ := readers.NewRand(objSize, cksumType)
-			_, err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bckFrom,
 				ObjName:    objName,
@@ -80,7 +80,7 @@ func TestCopyMultiObjSimple(t *testing.T) {
 
 		msg := cmn.TCObjsMsg{ToBck: bckTo}
 		msg.Template = template
-		xid, err = api.CopyMultiObj(baseParams, bckFrom, msg)
+		xid, err = api.CopyMultiObj(baseParams, bckFrom, &msg)
 		tassert.CheckFatal(t, err)
 	}
 
@@ -194,9 +194,9 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						)
 						msg.ObjNames = list
 						if m.bck.IsRemote() && test.evictRemoteSrc {
-							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
+							xid, err = api.CopyMultiObj(baseParams, m.bck, &msg, apc.FltExists)
 						} else {
-							xid, err = api.CopyMultiObj(baseParams, m.bck, msg)
+							xid, err = api.CopyMultiObj(baseParams, m.bck, &msg)
 						}
 						if err != nil {
 							erv.Store(err)
@@ -228,9 +228,9 @@ func testCopyMobj(t *testing.T, bck *meta.Bck) {
 						)
 						msg.Template = template
 						if m.bck.IsRemote() && test.evictRemoteSrc {
-							xid, err = api.CopyMultiObj(baseParams, m.bck, msg, apc.FltExists)
+							xid, err = api.CopyMultiObj(baseParams, m.bck, &msg, apc.FltExists)
 						} else {
-							xid, err = api.CopyMultiObj(baseParams, m.bck, msg)
+							xid, err = api.CopyMultiObj(baseParams, m.bck, &msg)
 						}
 						if err != nil {
 							erv.Store(err)

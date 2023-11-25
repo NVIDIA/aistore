@@ -160,7 +160,7 @@ def transform(input_bytes):
 		m = ioContext{
 			t:         t,
 			num:       200_000,
-			fileSize:  20 * cos.KiB, // 4Gib total
+			fileSize:  20 * cos.KiB, // 4GiB total
 			fixedSize: true,
 			bck:       bckFrom,
 		}

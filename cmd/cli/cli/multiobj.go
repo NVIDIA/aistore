@@ -73,10 +73,10 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 		msg.Name = etlName
 		text = "Transforming objects"
 		xkind = apc.ActETLObjects
-		xid, err = api.ETLMultiObj(apiBP, bckFrom, msg)
+		xid, err = api.ETLMultiObj(apiBP, bckFrom, &msg)
 	} else {
 		xkind = apc.ActCopyObjects
-		xid, err = api.CopyMultiObj(apiBP, bckFrom, msg)
+		xid, err = api.CopyMultiObj(apiBP, bckFrom, &msg)
 	}
 	if err != nil {
 		return err

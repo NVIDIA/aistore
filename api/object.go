@@ -412,7 +412,7 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 //
 // Assumes that `args.Reader` is already opened and ready for usage.
 // Returns `ObjAttrs` that can be further used to get the size and other object metadata.
-func PutObject(args PutArgs) (oah ObjAttrs, err error) {
+func PutObject(args *PutArgs) (oah ObjAttrs, err error) {
 	var (
 		resp  *http.Response
 		query = args.Bck.NewQuery()
@@ -445,7 +445,7 @@ func PutObject(args PutArgs) (oah ObjAttrs, err error) {
 // See also:
 // - api.ArchiveMultiObj(msg.AppendIfExists = true)
 // - api.AppendObject
-func PutApndArch(args PutApndArchArgs) (err error) {
+func PutApndArch(args *PutApndArchArgs) (err error) {
 	q := make(url.Values, 4)
 	q = args.Bck.AddToQuery(q)
 	q.Set(apc.QparamArchpath, args.ArchPath)
@@ -475,7 +475,7 @@ func PutApndArch(args PutApndArchArgs) (err error) {
 // Once all the "appending" is done, the caller must call `api.FlushObject`
 // to finalize the object.
 // NOTE: object becomes visible and accessible only _after_ the call to `api.FlushObject`.
-func AppendObject(args AppendArgs) (string /*handle*/, error) {
+func AppendObject(args *AppendArgs) (string /*handle*/, error) {
 	q := make(url.Values, 4)
 	q.Set(apc.QparamAppendType, apc.AppendOp)
 	q.Set(apc.QparamAppendHandle, args.Handle)
@@ -500,7 +500,7 @@ func AppendObject(args AppendArgs) (string /*handle*/, error) {
 // FlushObject must be called after all the appends (via `api.AppendObject`).
 // To "flush", it uses the handle returned by `api.AppendObject`.
 // This call will create a fully operational and accessible object.
-func FlushObject(args FlushArgs) error {
+func FlushObject(args *FlushArgs) error {
 	var (
 		header http.Header
 		q      = make(url.Values, 4)

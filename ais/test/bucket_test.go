@@ -61,7 +61,7 @@ func TestHTTPProviderBucket(t *testing.T) {
 	tassert.Fatalf(t, err != nil, "expected error")
 
 	reader, _ := readers.NewRand(cos.KiB, cos.ChecksumNone)
-	_, err = api.PutObject(api.PutArgs{
+	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		ObjName:    "something",
@@ -465,7 +465,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 	for _, en := range objList.Entries {
 		reader, err := readers.NewRand(nsize, cos.ChecksumNone)
 		tassert.CheckFatal(t, err)
-		_, err = api.PutObject(api.PutArgs{
+		_, err = api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        m.bck,
 			ObjName:    en.Name,
@@ -1396,7 +1396,7 @@ func TestListObjectsPrefix(t *testing.T) {
 				objNames = append(objNames, objName)
 
 				r, _ := readers.NewRand(fileSize, cos.ChecksumNone)
-				_, err := api.PutObject(api.PutArgs{
+				_, err := api.PutObject(&api.PutArgs{
 					BaseParams: baseParams,
 					Bck:        bck,
 					ObjName:    objName,
@@ -3386,7 +3386,7 @@ func TestListObjectsNoRecursion(t *testing.T) {
 	for _, nm := range objs {
 		objectSize := int64(rand.Intn(256) + 20)
 		reader, _ := readers.NewRand(objectSize, cos.ChecksumNone)
-		_, err := api.PutObject(api.PutArgs{
+		_, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			ObjName:    nm,

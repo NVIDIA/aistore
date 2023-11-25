@@ -227,7 +227,7 @@ func archMultiObjHandler(c *cli.Context) error {
 		return nil
 	}
 	// do
-	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, msg)
+	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, &msg)
 	if err != nil {
 		return V(err)
 	}
@@ -379,7 +379,7 @@ func a2aRegular(c *cli.Context, a *archput) error {
 		debug.Assert(!a.appendOnly)
 		putApndArchArgs.Flags = apc.ArchAppendIfExist
 	}
-	err = api.PutApndArch(putApndArchArgs)
+	err = api.PutApndArch(&putApndArchArgs)
 	if progress != nil {
 		progress.Wait()
 	}
@@ -507,7 +507,7 @@ loop:
 					Reader:     sgl,
 					SkipVC:     true,
 				}
-				_, err := api.PutObject(putArgs)
+				_, err := api.PutObject(&putArgs)
 				return V(err)
 			}
 		}(shardNum, shardName))

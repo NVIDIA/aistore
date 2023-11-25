@@ -601,7 +601,7 @@ func (m *AISBackendProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode 
 		Reader:     r.(cos.ReadOpenCloser),
 		Size:       uint64(size),
 	}
-	if oah, err = api.PutObject(args); err != nil {
+	if oah, err = api.PutObject(&args); err != nil {
 		errCode, err = extractErrCode(err, remAis.uuid)
 		return
 	}

@@ -197,7 +197,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 				Reader:     fh,
 				Handle:     handle,
 			}
-			handle, err = api.AppendObject(appendArgs)
+			handle, err = api.AppendObject(&appendArgs)
 			if err != nil {
 				return fmt.Errorf("%v. Object not created", err)
 			}
@@ -210,7 +210,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	if progress != nil {
 		progress.Wait()
 	}
-	err := api.FlushObject(api.FlushArgs{
+	err := api.FlushObject(&api.FlushArgs{
 		BaseParams: apiBP,
 		Bck:        bck,
 		Object:     objName,

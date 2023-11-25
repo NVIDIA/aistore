@@ -209,7 +209,7 @@ func TestMaintenanceDecommissionRebalance(t *testing.T) {
 	for i := 0; i < objCount; i++ {
 		objName := fmt.Sprintf("%sobj%04d", objPath, i)
 		r, _ := readers.NewRand(int64(fileSize), cos.ChecksumXXHash)
-		_, err := api.PutObject(api.PutArgs{
+		_, err := api.PutObject(&api.PutArgs{
 			BaseParams: baseParams,
 			Bck:        bck,
 			ObjName:    objName,

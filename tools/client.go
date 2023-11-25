@@ -101,7 +101,7 @@ func Put(proxyURL string, bck cmn.Bck, objName string, reader readers.Reader, er
 		Cksum:      reader.Cksum(),
 		Reader:     reader,
 	}
-	_, err := api.PutObject(putArgs)
+	_, err := api.PutObject(&putArgs)
 	if err == nil {
 		return
 	}
@@ -357,7 +357,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 					// We could PUT while creating files, but that makes it
 					// begin all the puts immediately (because creating random files is fast
 					// compared to the list objects call that getRandomFiles does)
-					_, err = api.PutObject(api.PutArgs{
+					_, err = api.PutObject(&api.PutArgs{
 						BaseParams: bp,
 						Bck:        args.Bck,
 						ObjName:    objName,
@@ -389,7 +389,7 @@ func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 func PutObjectInRemoteBucketWithoutCachingLocally(t *testing.T, bck cmn.Bck, object string, objContent cos.ReadOpenCloser) {
 	bp := BaseAPIParams()
 
-	_, err := api.PutObject(api.PutArgs{
+	_, err := api.PutObject(&api.PutArgs{
 		BaseParams: bp,
 		Bck:        bck,
 		ObjName:    object,

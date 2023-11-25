@@ -1244,7 +1244,7 @@ func TestAtimeLocalGet(t *testing.T) {
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
-	_, err := api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
+	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
 	putAtime, putAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)
@@ -1318,7 +1318,7 @@ func TestAtimePrefetch(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			object := objPath + strconv.FormatUint(uint64(idx), 10)
-			_, err := api.PutObject(api.PutArgs{
+			_, err := api.PutObject(&api.PutArgs{
 				BaseParams: baseParams,
 				Bck:        bck,
 				ObjName:    object,
@@ -1384,7 +1384,7 @@ func TestAtimeLocalPut(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	timeBeforePut := time.Now()
-	_, err := api.PutObject(api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
+	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objectName, Reader: objectContent})
 	tassert.CheckFatal(t, err)
 
 	putAtime, putAtimeFormatted := tools.GetObjectAtime(t, baseParams, bck, objectName, time.RFC3339Nano)

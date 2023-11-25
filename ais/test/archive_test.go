@@ -322,7 +322,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 						msg.ListRange.ObjNames = list
 						msg.InclSrcBname = test.inclSrcBckName
 
-						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] %2d: arch list %d objects %s => %s\n", xids, i, len(list), m.bck, bckTo)
 					}(archName, list, i)
@@ -339,7 +339,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 						msg.ListRange.Template = fmt.Sprintf(fmtRange, m.prefix, start, start+numInArch-1)
 						msg.InclSrcBname = test.inclSrcBckName
 
-						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] %2d: arch range %s %s => %s\n",
 							xids, i, msg.ListRange.Template, m.bck, bckTo)
@@ -401,7 +401,7 @@ func testArch(t *testing.T, bck *meta.Bck) {
 
 						msg.AppendIfExists = true // here
 
-						xids, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
+						xids, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 						tassert.CheckFatal(t, err)
 						tlog.Logf("[%s] APPEND %s/%s => %s/%s\n",
 							xids, m.bck, msg.ListRange.Template, bckTo, archName)
@@ -530,7 +530,7 @@ func TestAppendToArch(t *testing.T) {
 					}
 					msg.ListRange.ObjNames = list
 
-					_, err := api.ArchiveMultiObj(baseParams, m.bck, msg)
+					_, err := api.ArchiveMultiObj(baseParams, m.bck, &msg)
 					tassert.CheckFatal(t, err)
 				}(archName, list)
 			}
@@ -561,7 +561,7 @@ func TestAppendToArch(t *testing.T) {
 					msg.AppendIfExists = true
 					msg.ListRange.ObjNames = list
 					go func() {
-						_, err = api.ArchiveMultiObj(baseParams, bckFrom, msg)
+						_, err = api.ArchiveMultiObj(baseParams, bckFrom, &msg)
 						tassert.CheckError(t, err)
 					}()
 				} else {
@@ -583,7 +583,7 @@ func TestAppendToArch(t *testing.T) {
 						if sparsePrint.Inc()%13 == 0 {
 							tlog.Logf("APPEND local rand => %s/%s/%s\n", bckTo, archName, archpath)
 						}
-						err = api.PutApndArch(appendArchArgs)
+						err = api.PutApndArch(&appendArchArgs)
 						tassert.CheckError(t, err)
 					}
 				}
