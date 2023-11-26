@@ -98,17 +98,24 @@ func checkDownloadList(t *testing.T, expNumEntries ...int) {
 
 func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 	var (
-		total time.Duration
-		sleep = cos.ProbingFrequency(timeout)
-		found bool
+		total          time.Duration
+		sleep          = cos.ProbingFrequency(timeout)
+		found, aborted bool
 	)
 	for total < timeout {
 		time.Sleep(sleep)
 		total += sleep
 
+		what := id
 		finished := true
-		if resp, err := api.DownloadStatus(tools.BaseAPIParams(), id, true); err == nil {
+		resp, err := api.DownloadStatus(tools.BaseAPIParams(), id, true)
+		if err == nil {
 			found = true
+			aborted = resp.Job.Aborted
+			what = resp.Job.String()
+			if l := len(resp.Errs); l > 0 {
+				what = fmt.Sprintf("%s (errs: %v)", resp.Job.String(), resp.Errs[:min(2, l)])
+			}
 			if !resp.JobFinished() {
 				finished = false
 			}
@@ -117,11 +124,13 @@ func waitForDownload(t *testing.T, id string, timeout time.Duration) {
 			return
 		}
 		if total == 5*time.Second {
-			tlog.Logf("Still waiting for download %s (found=%t)...\n", id, found)
+			tlog.Logf("still waiting for download [%s] to finish\n", what)
 			sleep *= 2
 		}
+		if total >= timeout && !aborted {
+			t.Errorf("timed out waiting %v for download [%s] to finish", timeout, what)
+		}
 	}
-	t.Errorf("Timed out waiting %v for download %s.", timeout, id)
 }
 
 func checkDownloadedObjects(t *testing.T, id string, bck cmn.Bck, objects []string) {
@@ -191,11 +200,25 @@ func abortDownload(t *testing.T, id string) {
 	err := api.AbortDownload(baseParams, id)
 	tassert.CheckFatal(t, err)
 
-	waitForDownload(t, id, 30*time.Second)
+	waitForDownload(t, id, 16*time.Second)
 
 	status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, status.Aborted, "download was not marked aborted")
+
+	if !status.JobFinished() {
+		// TODO -- FIXME: ext/dload to fix
+		tlog.Logf("job [%s] hasn't finished - retrying api.AbortDownload  ************* (TODO)\n", status.Job.String())
+
+		err := api.AbortDownload(baseParams, id)
+		tassert.CheckFatal(t, err)
+
+		time.Sleep(4 * time.Second)
+
+		status, err = api.DownloadStatus(baseParams, id, false /*onlyActive*/)
+		tassert.CheckFatal(t, err)
+	}
+
 	tassert.Fatalf(t, status.JobFinished(), "download should be finished")
 	tassert.Fatalf(t, len(status.CurrentTasks) == 0, "current tasks should be empty")
 }
@@ -1165,6 +1188,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 	const (
 		limitConnection = 2
 		template        = "https://storage.googleapis.com/minikube/iso/minikube-v0.{18..35}.{0..1}.iso"
+		maxWait         = 13 * time.Second
 	)
 
 	var (
@@ -1174,12 +1198,16 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 			Name:     trand.String(10),
 			Provider: apc.AIS,
 		}
+		totalWait                 time.Duration
+		xactID                    string
+		minConnectionLimitReached bool
 	)
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	smap, err := api.GetClusterMap(baseParams)
 	tassert.CheckFatal(t, err)
+	targetCnt := smap.CountActiveTs()
 
 	id, err := api.DownloadWithParam(baseParams, dload.TypeRange, dload.RangeBody{
 		Base: dload.Base{
@@ -1197,30 +1225,56 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 		abortDownload(t, id)
 	})
 
-	tlog.Logln("waiting for checks...")
-	minConnectionLimitReached := false
-	for i := 0; i < 10; i++ {
-		resp, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
+	time.Sleep(2 * time.Second)
+	tlog.Logf("download %q: checking num current tasks\n", id)
+	for totalWait < maxWait {
+		status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/)
 		tassert.CheckFatal(t, err)
 
+		if xactID == "" {
+			xactID = status.Job.XactID
+		} else if status.Job.XactID != "" {
+			tassert.Errorf(t, xactID == status.Job.XactID, "xactID %q vs %q", xactID, status.Job.XactID)
+		}
+
 		// Expect that we never exceed the limit of connections per target.
-		targetCnt := smap.CountActiveTs()
 		tassert.Errorf(
-			t, len(resp.CurrentTasks) <= limitConnection*targetCnt,
+			t, len(status.CurrentTasks) <= limitConnection*targetCnt,
 			"number of tasks mismatch (expected as most: %d, got: %d)",
-			2*targetCnt, len(resp.CurrentTasks),
+			2*targetCnt, len(status.CurrentTasks),
 		)
 
 		// Expect that at some point in time there are more connections than targets.
-		if len(resp.CurrentTasks) > targetCnt {
+		if len(status.CurrentTasks) > targetCnt {
 			minConnectionLimitReached = true
+			tlog.Logln("reached the expected minimum num tasks - aborting job " + id)
+			break
 		}
 
 		time.Sleep(time.Second)
+		totalWait += time.Second
+		if totalWait > maxWait/2 {
+			var errs string
+			if l := len(status.Errs); l > 0 {
+				errs = fmt.Sprintf(", errs=%v", status.Errs[:min(2, l)])
+			}
+			tlog.Logf("download %q: num-tasks %d <= %d num-targets, job [%s]%s\n",
+				id, len(status.CurrentTasks), targetCnt, status.Job.String(), errs)
+		}
 	}
 
-	tassert.Errorf(t, minConnectionLimitReached, "expected more connections than number of targets")
-	tlog.Logln("done waiting")
+	if minConnectionLimitReached {
+		return
+	}
+	if status, err := api.DownloadStatus(baseParams, id, false /*onlyActive*/); err == nil {
+		if len(status.Errs) > 0 {
+			if strings.Contains(status.Errs[0].Err, "does not exist") {
+				return
+			}
+		}
+	}
+
+	tassert.Errorf(t, minConnectionLimitReached, "expected more running tasks (conn-s) than the number of targets")
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {

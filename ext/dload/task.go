@@ -42,7 +42,7 @@ type singleTask struct {
 	totalSize   atomic.Int64       // total size (nonzero iff Content-Length header was provided by the source)
 	downloadCtx context.Context    // w/ cancel function
 	getCtx      context.Context    // w/ timeout and size
-	cancel      context.CancelFunc // to cancel the download after the request commences
+	cancel      context.CancelFunc // to cancel in-progress download
 }
 
 // List of HTTP status codes which we shouldn'task retry (just report the job failed).
