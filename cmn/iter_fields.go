@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -16,6 +16,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
+
+const IterFieldNameSepa = "."
 
 const (
 	tagOmitempty = "omitempty" // the field must be omitted when empty (only for read-only walk)
@@ -193,8 +195,8 @@ func iterFields(prefix string, v any, updf updateFunc, opts IterOpts) (dirty, st
 				dirtyField = field.dirty
 			}
 
-			if !strings.HasSuffix(p, ".") && !isInline {
-				p += "."
+			if !strings.HasSuffix(p, IterFieldNameSepa) && !isInline {
+				p += IterFieldNameSepa
 			}
 
 			if err == nil && !stop {

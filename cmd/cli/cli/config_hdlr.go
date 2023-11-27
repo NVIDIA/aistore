@@ -156,6 +156,9 @@ func setCluConfigHandler(c *cli.Context) error {
 	if len(kvs) == 0 {
 		return showClusterConfigHandler(c)
 	}
+	if len(kvs) == 1 && kvs[0] == confLogModules {
+		kvs[0] = "log"
+	}
 	if nvs, err = makePairs(kvs); err != nil {
 		if _, ok := err.(*errInvalidNVpair); ok {
 			if err = showClusterConfigHandler(c); err != nil {
@@ -209,7 +212,7 @@ func setCluConfigHandler(c *cli.Context) error {
 show:
 	var listed = make(cos.StrKVs)
 	for what := range nvs {
-		section := strings.Split(what, ".")[0]
+		section := strings.Split(what, cmn.IterFieldNameSepa)[0]
 		if listed.Contains(section) {
 			continue
 		}

@@ -146,7 +146,7 @@ func getRandTargetConfig(c *cli.Context) (*cmn.Config, error) {
 func isConfigProp(s string) bool {
 	props := configPropList()
 	for _, p := range props {
-		if p == s || strings.HasPrefix(p, s+".") {
+		if p == s || strings.HasPrefix(p, s+cmn.IterFieldNameSepa) {
 			return true
 		}
 	}

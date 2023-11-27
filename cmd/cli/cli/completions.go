@@ -168,7 +168,7 @@ func configSectionCompletions(_ *cli.Context, cfgScope string) {
 		v = &config.LocalConfig
 	}
 	err = cmn.IterFields(v, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-		section := strings.Split(uniqueTag, ".")[0]
+		section := strings.Split(uniqueTag, cmn.IterFieldNameSepa)[0]
 		props.Set(section)
 		return nil, false
 	})
@@ -461,7 +461,7 @@ func bucketAndPropsCompletions(c *cli.Context) {
 	} else if c.NArg() == 1 {
 		var props []string
 		err := cmn.IterFields(cmn.Bprops{}, func(uniqueTag string, _ cmn.IterField) (err error, b bool) {
-			section := strings.Split(uniqueTag, ".")[0]
+			section := strings.Split(uniqueTag, cmn.IterFieldNameSepa)[0]
 			props = append(props, section)
 			if flagIsSet(c, verboseFlag) {
 				props = append(props, uniqueTag)
