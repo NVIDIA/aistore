@@ -12,12 +12,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/sys"
@@ -240,6 +242,20 @@ func NetworkCallWithRetry(args *RetryArgs) (err error) {
 			callerStr, args.Action, softErrCnt, hardErrCnt, err)
 	}
 	return
+}
+
+func ParseReadHeaderTimeout() (_ time.Duration, isSet bool) {
+	val := os.Getenv(apc.EnvReadHeaderTimeout)
+	if val == "" {
+		return 0, false
+	}
+	timeout, err := time.ParseDuration(val)
+	if err != nil {
+		nlog.Errorf("invalid env '%s = %s': %v - ignoring, proceeding with default = %v",
+			apc.EnvReadHeaderTimeout, val, err, apc.ReadHeaderTimeout)
+		return 0, false
+	}
+	return timeout, true
 }
 
 //////////////

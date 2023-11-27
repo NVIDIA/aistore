@@ -49,7 +49,14 @@ func (h *hserv) Run() (err error) {
 	nlog.Infof("Listening on *:%s", portstring)
 
 	h.registerPublicHandlers()
-	h.s = &http.Server{Addr: portstring, Handler: h.mux}
+	h.s = &http.Server{
+		Addr:              portstring,
+		Handler:           h.mux,
+		ReadHeaderTimeout: apc.ReadHeaderTimeout,
+	}
+	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
+		h.s.ReadHeaderTimeout = timeout
+	}
 	if Conf.Net.HTTP.UseHTTPS {
 		if err = h.s.ListenAndServeTLS(Conf.Net.HTTP.Certificate, Conf.Net.HTTP.Key); err == nil {
 			return nil
@@ -157,9 +164,11 @@ func (h *hserv) httpUserDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *hserv) httpUserPost(w http.ResponseWriter, r *http.Request) {
-	if apiItems, err := parseURL(w, r, 0, apc.URLPathUsers.L); err != nil {
+	apiItems, err := parseURL(w, r, 0, apc.URLPathUsers.L)
+	if err != nil {
 		return
-	} else if len(apiItems) == 0 {
+	}
+	if len(apiItems) == 0 {
 		h.userAdd(w, r)
 	} else {
 		h.userLogin(w, r)

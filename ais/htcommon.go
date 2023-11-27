@@ -579,18 +579,21 @@ func (server *netServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go transfer(clientConn, destConn)
 }
 
-func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config) (err error) {
+func (server *netServer) listen(addr string, logger *log.Logger, tlsConf *tls.Config, config *cmn.Config) (err error) {
 	var (
 		httpHandler = server.muxers
-		config      = cmn.GCO.Get()
 		tag         = "HTTP"
 		retried     bool
 	)
 	server.Lock()
 	server.s = &http.Server{
-		Addr:     addr,
-		Handler:  httpHandler,
-		ErrorLog: logger,
+		Addr:              addr,
+		Handler:           httpHandler,
+		ErrorLog:          logger,
+		ReadHeaderTimeout: apc.ReadHeaderTimeout,
+	}
+	if timeout, isSet := cmn.ParseReadHeaderTimeout(); isSet { // optional env var
+		server.s.ReadHeaderTimeout = timeout
 	}
 	if server.sndRcvBufSize > 0 && !config.Net.HTTP.UseHTTPS {
 		server.s.ConnState = server.connStateListener // setsockopt; see also cmn.NewTransport

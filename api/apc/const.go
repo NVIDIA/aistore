@@ -19,6 +19,12 @@ const (
 	DeploymentDev = "dev"
 )
 
+// in re: "Slowloris Attack"
+const (
+	ReadHeaderTimeout    = 16 * time.Second
+	EnvReadHeaderTimeout = "AIS_READ_HEADER_TIMEOUT"
+)
+
 // timeouts for intra-cluster requests
 const (
 	DefaultTimeout = time.Duration(-1)

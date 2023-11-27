@@ -508,15 +508,15 @@ func (h *htrun) run(config *cmn.Config) error {
 	}
 	if config.HostNet.UseIntraControl {
 		go func() {
-			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf)
+			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
 	if config.HostNet.UseIntraData {
 		go func() {
-			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf)
+			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
-	return h.netServ.pub.listen(h.pubListeningAddr(config), logger, tlsConf)
+	return h.netServ.pub.listen(h.pubListeningAddr(config), logger, tlsConf, config)
 }
 
 // testing environment excluding Kubernetes: listen on `host:port`

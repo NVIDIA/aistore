@@ -198,7 +198,7 @@ func (t *target) init(config *cmn.Config) {
 		daemon.cli.target.useLoopbackDevs, daemon.cli.target.startWithLostMountpath)
 	fs.ComputeDiskSize()
 
-	t.initHostIP()
+	t.initHostIP(config)
 	daemon.rg.add(t)
 
 	ts := stats.NewTrunner(t) // iostat below
@@ -227,17 +227,17 @@ func (t *target) init(config *cmn.Config) {
 	s3.Init() // s3 multipart
 }
 
-func (t *target) initHostIP() {
-	var hostIP string
-	if hostIP = os.Getenv("AIS_HOST_IP"); hostIP == "" {
+func (t *target) initHostIP(config *cmn.Config) {
+	hostIP := os.Getenv("AIS_HOST_IP")
+	if hostIP == "" {
 		return
 	}
-	var (
-		config  = cmn.GCO.Get()
-		port    = config.HostNet.Port
-		extAddr = net.ParseIP(hostIP)
-		extPort = port
-	)
+	extAddr := net.ParseIP(hostIP)
+	if extAddr == nil {
+		cos.AssertMsg(false, "invalid IP addr via 'AIS_HOST_IP' env: "+hostIP)
+	}
+
+	extPort := config.HostNet.Port
 	if portStr := os.Getenv("AIS_HOST_PORT"); portStr != "" {
 		portNum, err := cmn.ParsePort(portStr)
 		cos.AssertNoErr(err)
@@ -246,6 +246,7 @@ func (t *target) initHostIP() {
 	t.si.PubNet.Hostname = extAddr.String()
 	t.si.PubNet.Port = strconv.Itoa(extPort)
 	t.si.PubNet.URL = fmt.Sprintf("%s://%s:%d", config.Net.HTTP.Proto, extAddr.String(), extPort)
+
 	nlog.Infof("AIS_HOST_IP=%s; PubNetwork=%s", hostIP, t.si.URL(cmn.NetPublic))
 
 	// applies to intra-cluster networks unless separately defined
