@@ -61,15 +61,15 @@ func toShowMsg(c *cli.Context, xjid, prompt string, verbose bool) string {
 
 // Wait for the caller's started xaction to run until finished _or_ idle (NOTE),
 // warn if aborted
-func waitXact(apiBP api.BaseParams, args xact.ArgsMsg) error {
+func waitXact(apiBP api.BaseParams, args *xact.ArgsMsg) error {
 	debug.Assert(args.ID == "" || xact.IsValidUUID(args.ID))
 	kind, xname := xact.GetKindName(args.Kind)
 	debug.Assert(kind != "") // relying on it to decide between APIs
 	if xact.IdlesBeforeFinishing(kind) {
-		return api.WaitForXactionIdle(apiBP, &args)
+		return api.WaitForXactionIdle(apiBP, args)
 	}
 	// otherwise, IC
-	status, err := api.WaitForXactionIC(apiBP, &args)
+	status, err := api.WaitForXactionIC(apiBP, args)
 	if err != nil {
 		return V(err)
 	}

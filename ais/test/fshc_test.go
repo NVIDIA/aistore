@@ -325,7 +325,7 @@ func TestFSCheckerDetectionEnabled(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)
@@ -378,7 +378,7 @@ func TestFSCheckerDetectionDisabled(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		md     = newCheckerMD(t)
@@ -426,7 +426,7 @@ func TestFSCheckerEnablingMountpath(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		proxyURL   = tools.RandomProxyURL()
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -488,7 +488,7 @@ func TestFSCheckerTargetDisableAllMountpaths(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		target *meta.Snode
 
@@ -614,7 +614,7 @@ func TestFSDisableAllExceptOneMountpathRestartNode(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name())
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		Long:               true,
 		MinMountpaths:      3,
 		MinTargets:         2,

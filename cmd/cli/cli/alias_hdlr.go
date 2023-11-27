@@ -110,6 +110,8 @@ func (a *acli) resolveCmd(command string) *cli.Command {
 // 1. command name is changed if provided.
 // 2. category set to "ALIASES" if specified.
 // 3. "alias for" message added to usage if not a silent alias.
+//
+//nolint:gocritic // need cmd copy, ignoring hugeParam
 func makeAlias(cmd cli.Command, aliasFor string, silentAlias bool, newName ...string) cli.Command {
 	if len(newName) != 0 {
 		cmd.Name = newName[0]

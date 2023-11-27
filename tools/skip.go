@@ -41,7 +41,7 @@ func ShortSkipf(tb testing.TB, a ...any) {
 	tb.Skip(msg)
 }
 
-func CheckSkip(tb testing.TB, args SkipTestArgs) {
+func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	var smap *meta.Smap
 	if args.RequiresRemoteCluster && RemoteCluster.UUID == "" {
 		tb.Skipf("%s requires remote cluster", tb.Name())

@@ -50,7 +50,7 @@ func startTar2TfTransformer(t *testing.T) (etlName string) {
 }
 
 func TestETLTar2TFS3(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 
 	const (
 		tarObjName   = "small-mnist-3.tar"
@@ -119,7 +119,7 @@ func TestETLTar2TFS3(t *testing.T) {
 
 func TestETLTar2TFRanges(t *testing.T) {
 	// TestETLTar2TFS3 already runs in short tests, no need for short here as well.
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 
 	type testCase struct {
 		start, end int64

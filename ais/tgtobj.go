@@ -1228,7 +1228,7 @@ func (a *apndOI) do() (newHandle string, errCode int, err error) {
 				DeleteSrc:    true, // NOTE: always overwrite and remove
 			},
 		}
-		if errCode, err = a.t.Promote(params); err != nil {
+		if errCode, err = a.t.Promote(&params); err != nil {
 			return
 		}
 	default:

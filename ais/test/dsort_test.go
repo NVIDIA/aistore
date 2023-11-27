@@ -119,6 +119,7 @@ func generateDsortDesc() string {
 	return dsortDescCurPrefix + time.Now().Format(time.RFC3339Nano)
 }
 
+//nolint:gocritic // ignoring (dsortTestSpec) hugeParam
 func runDsortTest(t *testing.T, dts dsortTestSpec, f any) {
 	if dts.p {
 		t.Parallel()
@@ -808,7 +809,7 @@ func TestDsortEmptyBucket(t *testing.T) {
 }
 
 func TestDsortOutputBucket(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -856,7 +857,7 @@ func TestDsortOutputBucket(t *testing.T) {
 
 // TestDsortParallel runs multiple dSorts in parallel
 func TestDsortParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes},
@@ -887,7 +888,7 @@ func TestDsortParallel(t *testing.T) {
 
 // TestDsortChain runs multiple dSorts one after another
 func TestDsortChain(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1036,7 +1037,7 @@ func TestDsortCompressionDisk(t *testing.T) {
 }
 
 func TestDsortMemDisk(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		m = &ioContext{
@@ -1097,7 +1098,7 @@ func TestDsortMemDisk(t *testing.T) {
 }
 
 func TestDsortMinMemCompression(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTarGz, archive.ExtTarLz4, archive.ExtZip} {
 		for _, maxMem := range []string{"10%", "1%"} {
 			t.Run(ext+"/mem="+maxMem, func(t *testing.T) {
@@ -1169,7 +1170,7 @@ func minMemCompression(t *testing.T, ext, maxMem string) {
 }
 
 func TestDsortZipLz4(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	for _, ext := range []string{archive.ExtZip, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
@@ -1214,7 +1215,7 @@ func TestDsortZipLz4(t *testing.T) {
 }
 
 func TestDsortMaxMemCompression(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTgz, archive.ExtTarLz4, archive.ExtZip} {
 		t.Run(ext, func(t *testing.T) {
 			runDsortTest(
@@ -1258,7 +1259,7 @@ func TestDsortMaxMemCompression(t *testing.T) {
 }
 
 func TestDsortContent(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -1392,7 +1393,7 @@ func TestDsortAbort(t *testing.T) {
 }
 
 func TestDsortAbortDuringPhases(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, phases: dsortPhases},
@@ -1617,7 +1618,7 @@ func TestDsortManipulateMountpathDuringPhases(t *testing.T) {
 }
 
 func TestDsortAddTarget(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: false, types: dsorterTypes},
@@ -1805,7 +1806,7 @@ func TestDsortOnOOM(t *testing.T) {
 }
 
 func TestDsortMissingShards(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4} {
 		t.Run(ext, func(t *testing.T) {
 			runDsortTest(
@@ -1872,7 +1873,7 @@ func TestDsortMissingShards(t *testing.T) {
 }
 
 func TestDsortDuplications(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, ext := range []string{archive.ExtTar, archive.ExtTarLz4, archive.ExtTarGz, archive.ExtZip} { // all supported formats
 		t.Run(ext, func(t *testing.T) {
 			runDsortTest(
@@ -2150,7 +2151,7 @@ func TestDsortOrderJSONFile(t *testing.T) {
 }
 
 func TestDsortDryRun(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -2189,7 +2190,7 @@ func TestDsortDryRun(t *testing.T) {
 }
 
 func TestDsortDryRunDisk(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -2228,7 +2229,7 @@ func TestDsortDryRunDisk(t *testing.T) {
 }
 
 func TestDsortLongerExt(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes, algs: dsortAlgorithms},
@@ -2271,7 +2272,7 @@ func TestDsortLongerExt(t *testing.T) {
 }
 
 func TestDsortAutomaticallyCalculateOutputShards(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		t, dsortTestSpec{p: true, types: dsorterTypes},
@@ -2313,7 +2314,7 @@ func TestDsortAutomaticallyCalculateOutputShards(t *testing.T) {
 }
 
 func TestDsortWithTarFormats(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	runDsortTest(
 		// Include empty ("") type - in this case type must be selected automatically.

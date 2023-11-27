@@ -976,7 +976,7 @@ func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 	}
 	msg := formatXactMsg(xactID, xname, bck)
 	fmt.Fprintf(c.App.Writer, "Waiting for "+msg+" ...")
-	err := waitXact(apiBP, xargs)
+	err := waitXact(apiBP, &xargs)
 	if err == nil {
 		actionDone(c, " done.")
 	}

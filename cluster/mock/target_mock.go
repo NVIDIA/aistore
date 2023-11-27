@@ -49,7 +49,7 @@ func (*TargetMock) PutObject(*cluster.LOM, *cluster.PutObjectParams) error      
 func (*TargetMock) FinalizeObj(*cluster.LOM, string, cluster.Xact) (int, error) { return 0, nil }
 func (*TargetMock) EvictObject(*cluster.LOM) (int, error)                       { return 0, nil }
 func (*TargetMock) DeleteObject(*cluster.LOM, bool) (int, error)                { return 0, nil }
-func (*TargetMock) Promote(cluster.PromoteParams) (int, error)                  { return 0, nil }
+func (*TargetMock) Promote(*cluster.PromoteParams) (int, error)                 { return 0, nil }
 func (*TargetMock) Backend(*meta.Bck) cluster.BackendProvider                   { return nil }
 func (*TargetMock) HeadObjT2T(*cluster.LOM, *meta.Snode) bool                   { return false }
 func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   {}

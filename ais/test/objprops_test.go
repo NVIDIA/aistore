@@ -304,7 +304,7 @@ func propsCleanupObjects(t *testing.T, proxyURL string, bck cmn.Bck, newVersions
 }
 
 func TestObjPropsVersion(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	for _, versioning := range []bool{false, true} {
 		t.Run(fmt.Sprintf("enabled=%t", versioning), func(t *testing.T) {
@@ -479,11 +479,11 @@ func TestObjProps(t *testing.T) {
 			switch test.bucketType {
 			case typeCloud:
 				m.bck = cliBck
-				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 			case typeLocal:
 				tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			case typeRemoteAIS:
-				tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 				m.bck.Ns.UUID = tools.RemoteCluster.UUID
 				tools.CreateBucket(t, proxyURL, m.bck, nil, true /*cleanup*/)
 			default:

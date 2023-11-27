@@ -282,8 +282,8 @@ func InitSpec(t *testing.T, bp api.BaseParams, etlName, comm string) (xid string
 	return
 }
 
-func InitCode(t *testing.T, bp api.BaseParams, msg etl.InitCodeMsg) (xid string) {
-	id, err := api.ETLInit(bp, &msg)
+func InitCode(t *testing.T, bp api.BaseParams, msg *etl.InitCodeMsg) (xid string) {
+	id, err := api.ETLInit(bp, msg)
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, cos.IsValidUUID(id), "expected valid xaction ID, got %q", xid)
 	xid = id

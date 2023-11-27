@@ -74,7 +74,7 @@ var (
 )
 
 func TestMultiProxy(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		Long:               true,
 		RequiredDeployment: tools.ClusterTypeLocal,
 		MinProxies:         3,
@@ -157,7 +157,7 @@ func nodeCrashRestoreDifferentIP(t *testing.T) {
 
 func killRestoreDiffIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		proxyURL                      = tools.GetPrimaryURL()
@@ -328,7 +328,7 @@ func addNodeDuplicateDaemonID(t *testing.T) {
 // TODO: add test for target that tries to join with duplicate DaemonID and contains user-data
 func _addNodeDuplicateDaemonID(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		proxyURL = tools.GetPrimaryURL()
@@ -379,7 +379,7 @@ func addNodeDuplicateIP(t *testing.T) {
 // NOTE: Test assumes that the randomly chosen node is healthy (i.e. doesn't terminate or restart)
 func _addNodeDuplicateIP(t *testing.T, nodeType string) {
 	// NOTE: This function requires local deployment as it changes node config
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		proxyURL = tools.GetPrimaryURL()
@@ -1278,7 +1278,7 @@ func networkFailurePrimary(t *testing.T) {
 }
 
 func networkFailure(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeDocker})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeDocker})
 
 	t.Run("Target network disconnect", networkFailureTarget)
 	t.Run("Secondary proxy network disconnect", networkFailureProxy)
@@ -1347,7 +1347,7 @@ func primaryAndNextCrash(t *testing.T) {
 }
 
 func TestIC(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
@@ -1431,7 +1431,7 @@ func icMemberLeaveAndRejoin(t *testing.T) {
 }
 
 func icKillAndRestorePrimary(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		smap       = tools.GetClusterMap(t, proxyURL)
@@ -1523,7 +1523,7 @@ func icSyncOwnershipTable(t *testing.T) {
 }
 
 func icSinglePrimaryRevamp(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL       = tools.RandomProxyURL(t)

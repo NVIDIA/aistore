@@ -169,7 +169,7 @@ func TestNamespace(t *testing.T) {
 				}
 			)
 
-			tools.CheckSkip(t, tools.SkipTestArgs{
+			tools.CheckSkip(t, &tools.SkipTestArgs{
 				RequiresRemoteCluster: test.remote,
 			})
 
@@ -279,7 +279,7 @@ func TestNamespace(t *testing.T) {
 }
 
 func TestRemoteWithAliasAndUUID(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
 	})
 
@@ -338,7 +338,7 @@ func TestRemoteWithAliasAndUUID(t *testing.T) {
 }
 
 func TestRemoteWithSilentBucketDestroy(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		RequiresRemoteCluster: true,
 	})
 

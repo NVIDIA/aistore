@@ -429,8 +429,8 @@ MainLoop:
 		// Prioritize showing stats otherwise we will dropping the stats intervals.
 		select {
 		case <-statsTicker.C:
-			accumulatedStats.aggregate(intervalStats)
-			writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+			accumulatedStats.aggregate(&intervalStats)
+			writeStats(statsWriter, runParams.jsonFormat, false /* final */, &intervalStats, &accumulatedStats)
 			sendStatsdStats(&intervalStats)
 			intervalStats = newStats(time.Now())
 		default:
@@ -443,7 +443,7 @@ MainLoop:
 		case wo := <-resCh:
 			completeWorkOrder(wo, false)
 			if runParams.statsShowInterval == 0 && runParams.putSizeUpperBound != 0 {
-				accumulatedStats.aggregate(intervalStats)
+				accumulatedStats.aggregate(&intervalStats)
 				intervalStats = newStats(time.Now())
 			}
 			if err := postNewWorkOrder(); err != nil {
@@ -451,8 +451,8 @@ MainLoop:
 				break MainLoop
 			}
 		case <-statsTicker.C:
-			accumulatedStats.aggregate(intervalStats)
-			writeStats(statsWriter, runParams.jsonFormat, false /* final */, intervalStats, accumulatedStats)
+			accumulatedStats.aggregate(&intervalStats)
+			writeStats(statsWriter, runParams.jsonFormat, false /* final */, &intervalStats, &accumulatedStats)
 			sendStatsdStats(&intervalStats)
 			intervalStats = newStats(time.Now())
 		case sig := <-osSigChan:
@@ -942,7 +942,7 @@ func newStats(t time.Time) sts {
 }
 
 // aggregate adds another sts to self
-func (s *sts) aggregate(other sts) {
+func (s *sts) aggregate(other *sts) {
 	s.get.Aggregate(other.get)
 	s.put.Aggregate(other.put)
 	s.getConfig.Aggregate(other.getConfig)

@@ -216,7 +216,7 @@ func TestRWStressShort(t *testing.T) {
 }
 
 func TestRWStress(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	numLoops = 30
 	numFiles = 1000

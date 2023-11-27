@@ -99,7 +99,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	}
 	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
 	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
+	if err := waitXact(apiBP, &xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
 		return err
 	}
@@ -186,7 +186,7 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActETLBck, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
+	if err := waitXact(apiBP, &xargs); err != nil {
 		return err
 	}
 	if !flagIsSet(c, copyDryRunFlag) {

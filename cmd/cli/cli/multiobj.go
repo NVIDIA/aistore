@@ -111,7 +111,7 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
 	xargs := xact.ArgsMsg{ID: xid, Kind: xkind, Timeout: timeout}
-	if err = waitXact(apiBP, xargs); err != nil {
+	if err = waitXact(apiBP, &xargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, text, bckFrom, bckTo)
 	} else {
 		fmt.Fprint(c.App.Writer, fmtXactSucceeded)
@@ -167,7 +167,7 @@ func listrange(c *cli.Context, bck cmn.Bck) (err error) {
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: xname, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
+	if err := waitXact(apiBP, &xargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)

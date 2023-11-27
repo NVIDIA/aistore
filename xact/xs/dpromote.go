@@ -128,7 +128,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		},
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
-	_, err = r.p.T.Promote(params)
+	_, err = r.p.T.Promote(&params)
 	if cmn.IsNotExist(err) {
 		err = nil
 	}

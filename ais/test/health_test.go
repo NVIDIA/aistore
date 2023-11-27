@@ -54,7 +54,7 @@ func TestPrimaryProxyHealth(t *testing.T) {
 }
 
 func TestUnregisteredProxyHealth(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 
 	var (
 		proxyURL = tools.GetPrimaryURL()

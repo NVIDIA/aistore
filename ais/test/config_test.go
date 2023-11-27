@@ -184,7 +184,7 @@ func TestConfigFailOverrideClusterOnly(t *testing.T) {
 }
 
 func TestConfigOverrideAndRestart(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
 		proxyURL      = tools.GetPrimaryURL()
 		baseParams    = tools.BaseAPIParams(proxyURL)
@@ -229,7 +229,7 @@ func TestConfigOverrideAndRestart(t *testing.T) {
 }
 
 func TestConfigSyncToNewNode(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
 		proxyURL      = tools.GetPrimaryURL()
 		smap          = tools.GetClusterMap(t, proxyURL)
@@ -295,7 +295,7 @@ func checkConfig(t *testing.T, smap *meta.Smap, check func(*meta.Snode, *cmn.Con
 }
 
 func TestConfigOverrideAndResetDaemon(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
 		proxyURL   = tools.GetPrimaryURL()
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -324,7 +324,7 @@ func TestConfigOverrideAndResetDaemon(t *testing.T) {
 }
 
 func TestConfigOverrideAndResetCluster(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinProxies: 2})
 	var (
 		daemonConfig *cmn.Config
 		proxyURL     = tools.GetPrimaryURL()

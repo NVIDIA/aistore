@@ -312,6 +312,7 @@ func EnsureObjectsExist(t *testing.T, params api.BaseParams, bck cmn.Bck, object
 	}
 }
 
+//nolint:gocritic // need a copy of PutObjectsArgs
 func PutRandObjs(args PutObjectsArgs) ([]string, int, error) {
 	var (
 		errCnt = atomic.NewInt32(0)

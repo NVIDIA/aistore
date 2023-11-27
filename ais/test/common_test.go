@@ -828,7 +828,7 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 					t.Skipf("backend bucket must be a Cloud bucket (have %q)", test.backendBck)
 				}
 			}
-			tools.CheckSkip(t, test.skipArgs)
+			tools.CheckSkip(t, &test.skipArgs)
 
 			baseParams := tools.BaseAPIParams()
 
@@ -836,13 +836,13 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 				skip := tools.SkipTestArgs{
 					MinMountpaths: int(*test.props.Mirror.Copies),
 				}
-				tools.CheckSkip(t, skip)
+				tools.CheckSkip(t, &skip)
 			}
 			if test.props != nil && test.props.EC != nil {
 				skip := tools.SkipTestArgs{
 					MinTargets: *test.props.EC.DataSlices + *test.props.EC.ParitySlices + 1,
 				}
-				tools.CheckSkip(t, skip)
+				tools.CheckSkip(t, &skip)
 			}
 
 			if test.bck.IsAIS() || test.bck.IsRemoteAIS() {
@@ -1061,7 +1061,7 @@ func initFS() {
 }
 
 func initMountpaths(t *testing.T, proxyURL string) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 	fsOnce.Do(initFS)
 	baseParams := tools.BaseAPIParams(proxyURL)
 	fs.TestNew(nil)

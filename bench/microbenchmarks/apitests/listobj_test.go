@@ -57,7 +57,7 @@ func createAndFillBucket(b *testing.B, objCnt uint, u string) cmn.Bck {
 }
 
 func BenchmarkListObject(b *testing.B) {
-	tools.CheckSkip(b, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(b, &tools.SkipTestArgs{Long: true})
 	u := "http://127.0.0.1:8080"
 	tests := []testConfig{
 		{objectCnt: 1_000, pageSize: 10, useCache: false},

@@ -163,6 +163,7 @@ func downloadObject(t *testing.T, bck cmn.Bck, objName, link string, expectedSki
 	}
 }
 
+//nolint:gocritic // ignoring (dload.BackendBody) hugeParam
 func downloadObjectRemote(t *testing.T, body dload.BackendBody, expectedFinished, expectedSkipped int) {
 	baseParams := tools.BaseAPIParams()
 	body.Description = generateDownloadDesc()
@@ -494,7 +495,7 @@ func TestDownloadRemote(t *testing.T) {
 	defer tools.CleanupRemoteBucket(t, proxyURL, cliBck, prefix)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
 
 			clearDownloadList(t)
 
@@ -531,7 +532,7 @@ func TestDownloadRemote(t *testing.T) {
 			tassert.CheckFatal(t, err)
 
 			if test.dstBck.IsAIS() {
-				tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: test.srcBck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: test.srcBck})
 				tools.SetBackendBck(t, baseParams, test.dstBck, test.srcBck)
 			}
 
@@ -643,7 +644,7 @@ func TestDownloadStatus(t *testing.T) {
 }
 
 func TestDownloadStatusError(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -767,7 +768,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 }
 
 func TestDownloadRangeValidExternalAndInternalChecksum(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -1011,7 +1012,7 @@ func TestDownloadOverrideObjectRemote(t *testing.T) {
 		}
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
@@ -1071,7 +1072,7 @@ func TestDownloadSkipObjectRemote(t *testing.T) {
 		}
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
@@ -1109,7 +1110,7 @@ func TestDownloadSync(t *testing.T) {
 		objsToDelete = 4
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
@@ -1159,7 +1160,7 @@ func TestDownloadSync(t *testing.T) {
 }
 
 func TestDownloadJobLimitConnections(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		limitConnection = 2
@@ -1223,7 +1224,7 @@ func TestDownloadJobLimitConnections(t *testing.T) {
 }
 
 func TestDownloadJobConcurrency(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -1309,7 +1310,7 @@ func TestDownloadJobConcurrency(t *testing.T) {
 
 // NOTE: Test may fail if the network is SUPER slow!!
 func TestDownloadJobBytesThrottling(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		link = "https://storage.googleapis.com/minikube/iso/minikube-v0.35.0.iso"

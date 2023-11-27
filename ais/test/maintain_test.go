@@ -25,7 +25,7 @@ import (
 )
 
 func TestMaintenanceOnOff(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
 	proxyURL := tools.RandomProxyURL(t)
 	smap := tools.GetClusterMap(t, proxyURL)
 
@@ -54,7 +54,7 @@ func TestMaintenanceOnOff(t *testing.T) {
 }
 
 func TestMaintenanceListObjects(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 3})
 
 	var (
 		bck = cmn.Bck{Name: "maint-list", Provider: apc.AIS}
@@ -128,7 +128,7 @@ func TestMaintenanceListObjects(t *testing.T) {
 
 func TestMaintenanceMD(t *testing.T) {
 	// NOTE: this test requires local deployment as it checks local filesystem for VMDs.
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -189,7 +189,7 @@ func TestMaintenanceMD(t *testing.T) {
 }
 
 func TestMaintenanceDecommissionRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, RequiredDeployment: tools.ClusterTypeLocal, Long: true})
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		smap       = tools.GetClusterMap(t, proxyURL)
@@ -302,7 +302,7 @@ func countVMDTargets(tsMpaths map[*meta.Snode][]string) (total int) {
 }
 
 func TestMaintenanceRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-reb", Provider: apc.AIS}
 		m   = &ioContext{
@@ -372,7 +372,7 @@ func TestMaintenanceRebalance(t *testing.T) {
 }
 
 func TestMaintenanceGetWhileRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3, Long: true})
 	var (
 		bck = cmn.Bck{Name: "maint-get-reb", Provider: apc.AIS}
 		m   = &ioContext{
@@ -540,7 +540,7 @@ func testNodeShutdown(t *testing.T, nodeType string) {
 }
 
 func TestShutdownListObjects(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		bck = cmn.Bck{Name: "shutdown-list", Provider: apc.AIS}
 		m   = &ioContext{

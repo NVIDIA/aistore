@@ -13,7 +13,7 @@ import (
 )
 
 func TestCos(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	RegisterFailHandler(Fail)
 	RunSpecs(t, t.Name())
 }

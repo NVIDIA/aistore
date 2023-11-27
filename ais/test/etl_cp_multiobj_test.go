@@ -25,7 +25,7 @@ import (
 )
 
 func TestETLMultiObj(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	const (

@@ -99,7 +99,7 @@ func mvBucket(c *cli.Context, bckFrom, bckTo cmn.Bck) error {
 	}
 	fmt.Fprintln(c.App.Writer, text+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Timeout: timeout}
-	if err := waitXact(apiBP, xargs); err != nil {
+	if err := waitXact(apiBP, &xargs); err != nil {
 		fmt.Fprintf(c.App.Writer, fmtXactFailed, "rename", bckFrom, bckTo)
 		return err
 	}

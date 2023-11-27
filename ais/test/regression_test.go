@@ -159,7 +159,7 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 		smap       = tools.GetClusterMap(t, proxyURL)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
@@ -280,7 +280,7 @@ func TestRegressionBuckets(t *testing.T) {
 }
 
 func TestRenameBucket(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -317,6 +317,7 @@ func TestRenameBucket(t *testing.T) {
 // doBucketRe*
 //
 
+//nolint:gocritic // ignoring (regressionTestData) hugeParam
 func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	var (
 		m = ioContext{
@@ -364,6 +365,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	}
 }
 
+//nolint:gocritic // ignoring (regressionTestData) hugeParam
 func postRenameWaitAndCheck(t *testing.T, baseParams api.BaseParams, rtd regressionTestData, numPuts int, objNames []string, xid string) {
 	xargs := xact.ArgsMsg{ID: xid, Kind: apc.ActMoveBck, Bck: rtd.renamedBck, Timeout: tools.RebalanceTimeout}
 	_, err := api.WaitForXactionIC(baseParams, &xargs)
@@ -472,7 +474,7 @@ func TestObjectPrefix(t *testing.T) {
 }
 
 func TestReregisterMultipleTargets(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		filesSentOrig = make(map[string]int64)
@@ -635,7 +637,7 @@ func TestLRU(t *testing.T) {
 		}
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(false /*evict*/)
@@ -737,7 +739,7 @@ func TestPrefetchList(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(2)
@@ -850,7 +852,7 @@ func TestPrefetchRange(t *testing.T) {
 		bck           = cliBck
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	m.initAndSaveState(true /*cleanup*/)
 
@@ -1000,7 +1002,7 @@ func TestDeleteRange(t *testing.T) {
 
 // Testing only ais bucket objects since generally not concerned with cloud bucket object deletion
 func TestStressDeleteRange(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		numFiles   = 20000 // FIXME: must divide by 10 and by the numReaders

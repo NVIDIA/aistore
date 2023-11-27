@@ -115,7 +115,7 @@ func TestRemoteBucketObject(t *testing.T) {
 		bck        = cliBck
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: bck})
 
 	tests := []struct {
 		ty     string
@@ -314,7 +314,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		files      = []string{fileName1, fileName2}
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
 	putArgsLocal := api.PutArgs{
 		BaseParams: baseParams,
@@ -465,7 +465,7 @@ func Test_SameAISAndRemoteBucketName(t *testing.T) {
 		found      = false
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bckRemote})
 
 	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 
@@ -607,7 +607,7 @@ func Test_coldgetmd5(t *testing.T) {
 		propsToSet *cmn.BpropsToSet
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.initAndSaveState(true /*cleanup*/)
 
@@ -695,7 +695,7 @@ func TestHeadRemoteBucket(t *testing.T) {
 		bck        = cliBck
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	bckPropsToSet := &cmn.BpropsToSet{
 		Cksum: &cmn.CksumConfToSet{
@@ -762,7 +762,7 @@ func TestChecksumValidateOnWarmGetForRemoteBucket(t *testing.T) {
 
 	m.init(true /*cleanup*/)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	if docker.IsRunning() {
 		t.Skipf("test %q requires xattrs to be set, doesn't work with docker", t.Name())
@@ -858,7 +858,7 @@ func TestEvictRemoteBucket(t *testing.T) {
 }
 
 func testEvictRemoteAISBucket(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     trand.String(10),
 		Provider: apc.AIS,
@@ -883,7 +883,7 @@ func testEvictRemoteBucket(t *testing.T, bck cmn.Bck, keepMD bool) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 	m.initAndSaveState(true /*cleanup*/)
 
 	t.Cleanup(func() {
@@ -1261,7 +1261,7 @@ func Test_checksum(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)

@@ -205,7 +205,7 @@ func TestMetasyncDeepCopy(t *testing.T) {
 // for each test case, it creates a primary proxy, starts the metasync instance, run the test case,
 // verifies the result, and stop the syncer.
 func TestMetasyncTransport(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	tcs := []struct {
 		name  string
 		testf func(*testing.T, *proxy, *metasyncer) ([]transportData, []transportData)

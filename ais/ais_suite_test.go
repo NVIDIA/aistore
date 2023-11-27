@@ -22,6 +22,6 @@ func init() {
 
 func TestAIS(t *testing.T) {
 	RegisterFailHandler(Fail)
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	RunSpecs(t, t.Name())
 }

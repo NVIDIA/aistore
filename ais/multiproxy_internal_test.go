@@ -278,7 +278,7 @@ func TestDiscoverServers(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			tools.CheckSkip(t, tools.SkipTestArgs{Long: tc.onlyLong})
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: tc.onlyLong})
 			var (
 				primary      = newDiscoverServerPrimary()
 				discoverSmap = newSmap()

@@ -27,7 +27,7 @@ import (
 const etlBucketTimeout = cos.Duration(3 * time.Minute)
 
 func TestETLConnectionError(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	// ETL should survive occasional failures and successfully transform all objects.
@@ -68,7 +68,7 @@ def transform(input_bytes):
 	}
 	msg.Funcs.Transform = "transform"
 
-	_ = tetl.InitCode(t, baseParams, msg)
+	_ = tetl.InitCode(t, baseParams, &msg)
 
 	bckTo := cmn.Bck{Name: "etldst_" + cos.GenTie(), Provider: apc.AIS}
 	testETLBucket(t, baseParams, msg.Name(), &m, bckTo, time.Duration(etlBucketTimeout),
@@ -76,7 +76,7 @@ def transform(input_bytes):
 }
 
 func TestETLBucketAbort(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	m := &ioContext{
@@ -104,7 +104,7 @@ func TestETLBucketAbort(t *testing.T) {
 }
 
 func TestETLTargetDown(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, MinTargets: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, MinTargets: 2})
 	tetl.CheckNoRunningETLContainers(t, baseParams)
 
 	m := &ioContext{
@@ -148,7 +148,7 @@ func TestETLTargetDown(t *testing.T) {
 
 func TestETLBigBucket(t *testing.T) {
 	// The test takes a lot of time if it's run against a single target deployment.
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true, MinTargets: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, Long: true, MinTargets: 2})
 
 	const echoPythonTransform = `
 def transform(input_bytes):
@@ -223,7 +223,7 @@ def transform(input_bytes):
 					test.etlCodeMsg.Timeout = etlBucketTimeout
 					test.etlCodeMsg.Funcs.Transform = "transform"
 				}
-				_ = tetl.InitCode(t, baseParams, test.etlCodeMsg)
+				_ = tetl.InitCode(t, baseParams, &test.etlCodeMsg)
 			default:
 				debug.Assert(false, test.ty)
 			}

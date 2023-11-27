@@ -316,7 +316,7 @@ func TestCreateRemoteBucket(t *testing.T) {
 		bck        = cliBck
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	if bck.IsHDFS() {
 		hdfsBck := cmn.Bck{Provider: apc.HDFS, Name: trand.String(10)}
@@ -370,7 +370,7 @@ func TestCreateDestroyRemoteAISBucket(t *testing.T) {
 }
 
 func testCreateDestroyRemoteAISBucket(t *testing.T, withObjects bool) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 	bck := cmn.Bck{
 		Name:     trand.String(10),
 		Provider: apc.AIS,
@@ -493,7 +493,7 @@ func overwriteLomCache(mdwrite apc.WritePolicy, t *testing.T) {
 }
 
 func TestStressCreateDestroyBucket(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		bckCount  = 10
@@ -567,7 +567,7 @@ func TestResetBucketProps(t *testing.T) {
 			},
 		}
 	)
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		MinTargets: *propsToSet.EC.DataSlices + *propsToSet.EC.ParitySlices,
 	})
 
@@ -685,7 +685,7 @@ func TestListObjectsRemoteBucketVersions(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 
@@ -1046,7 +1046,7 @@ func TestListObjectsRemoteCached(t *testing.T) {
 		remoteVersioning bool
 		s                = "disabled"
 	)
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	p, err := api.HeadBucket(baseParams, m.bck, false /* don't add */)
 	tassert.CheckFatal(t, err)
@@ -1364,7 +1364,7 @@ func TestListObjectsPrefix(t *testing.T) {
 			if bckTest.IsRemote() {
 				bck = cliBck
 
-				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 				bckProp, err := api.HeadBucket(baseParams, bck, false /* don't add */)
 				tassert.CheckFatal(t, err)
@@ -1532,7 +1532,7 @@ func TestListObjectsCache(t *testing.T) {
 }
 
 func TestListObjectsWithRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		baseParams = tools.BaseAPIParams()
@@ -1781,7 +1781,7 @@ func TestLocalMirror(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.tag, func(t *testing.T) {
-			tools.CheckSkip(t, test.skipArgs)
+			tools.CheckSkip(t, &test.skipArgs)
 			testLocalMirror(t, test.numCopies)
 		})
 	}
@@ -1808,7 +1808,7 @@ func testLocalMirror(t *testing.T, numCopies []int) {
 
 	max := cos.Max(numCopies...) + 1
 	skip := tools.SkipTestArgs{MinMountpaths: max}
-	tools.CheckSkip(t, skip)
+	tools.CheckSkip(t, &skip)
 
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	{
@@ -1880,7 +1880,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 		baseParams = tools.BaseAPIParams()
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 
 	m.init(true /*cleanup*/)
 	m.remotePuts(true /*evict*/)
@@ -1904,7 +1904,7 @@ func TestRemoteBucketMirror(t *testing.T) {
 		m.bck, m.num, len(objectList.Entries),
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{MinMountpaths: 4})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinMountpaths: 4})
 
 	// cold GET - causes local mirroring
 	m.remotePrefetch(m.num)
@@ -1953,7 +1953,7 @@ func TestBucketReadOnly(t *testing.T) {
 }
 
 func TestRenameBucketEmpty(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t: t,
@@ -2005,7 +2005,7 @@ func TestRenameBucketEmpty(t *testing.T) {
 }
 
 func TestRenameBucketNonEmpty(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -2112,7 +2112,7 @@ func TestRenameBucketAlreadyExistingDst(t *testing.T) {
 
 // Tries to rename same source bucket to two destination buckets - the second should fail.
 func TestRenameBucketTwice(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:   t,
@@ -2222,7 +2222,7 @@ func TestRenameBucketNonExistentSrc(t *testing.T) {
 }
 
 func TestRenameBucketWithBackend(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: cliBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: cliBck})
 
 	var (
 		proxyURL   = tools.RandomProxyURL()
@@ -2341,7 +2341,7 @@ func TestCopyBucket(t *testing.T) {
 		}
 
 		t.Run(testName, func(t *testing.T) {
-			tools.CheckSkip(t, tools.SkipTestArgs{Long: test.onlyLong})
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: test.onlyLong})
 			var (
 				srcBckList *cmn.LsoResult
 
@@ -2384,7 +2384,7 @@ func TestCopyBucket(t *testing.T) {
 			if test.srcRemote {
 				srcm.bck = cliBck
 				bckTest.Provider = cliBck.Provider
-				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: srcm.bck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: srcm.bck})
 			}
 			if test.dstRemote {
 				dstms = []*ioContext{
@@ -2394,7 +2394,7 @@ func TestCopyBucket(t *testing.T) {
 						bck: cliBck,
 					},
 				}
-				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: dstms[0].bck})
 			}
 
 			srcm.initAndSaveState(true /*cleanup*/)
@@ -2648,7 +2648,7 @@ func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		cpyPrefix = "cpy/virt" + trand.String(5) + "/"
 		dstBck    = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
@@ -2674,7 +2674,7 @@ func testCopyBucketPrepend(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected int) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		dstBck = cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 	)
@@ -2726,7 +2726,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 }
 
 func testCopyBucketDryRun(t *testing.T, srcBck cmn.Bck, m *ioContext) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie() + trand.String(5), Provider: apc.AIS}
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{DryRun: true})
@@ -2766,7 +2766,7 @@ func TestRenameAndCopyBucket(t *testing.T) {
 		dst1       = cmn.Bck{Name: testBucketName + "_rc_dst1", Provider: apc.AIS}
 		dst2       = cmn.Bck{Name: testBucketName + "_rc_dst2", Provider: apc.AIS}
 	)
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	m.initAndSaveState(true /*cleanup*/)
 	m.expectTargets(1)
 	tools.DestroyBucket(t, m.proxyURL, dst1)
@@ -2932,7 +2932,7 @@ func TestBackendBucket(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{CloudBck: true, Bck: remoteBck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{CloudBck: true, Bck: remoteBck})
 
 	m.init(true /*cleanup*/)
 
@@ -3058,7 +3058,7 @@ func TestAllChecksums(t *testing.T) {
 		}
 		tag := cksumType + "/EC"
 		t.Run(tag, func(t *testing.T) {
-			tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 4})
+			tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 4})
 
 			started := time.Now()
 			testWarmValidation(t, cksumType, false, true)
@@ -3241,7 +3241,7 @@ func testWarmValidation(t *testing.T, cksumType string, mirrored, eced bool) {
 }
 
 func TestBucketListAndSummary(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	type test struct {
 		provider string
@@ -3303,7 +3303,7 @@ func TestBucketListAndSummary(t *testing.T) {
 				m.puts()
 			} else if m.bck.IsRemote() {
 				m.bck = cliBck
-				tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
+				tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck})
 				tlog.Logf("remote %s\n", m.bck.Cname(""))
 				m.del(-1 /* delete all */)
 

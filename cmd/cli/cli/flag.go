@@ -42,17 +42,18 @@ func (f *DurationFlagVar) Set(s string) (err error) {
 	return err
 }
 
-// compare with DurationFlag.String()
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlagVar) String() string {
-	return f.Value.String()
+	return f.Value.String() // compare with orig. DurationFlag.String()
 }
 
 //////////////////
 // DurationFlag //
 //////////////////
 
-// construction via `FlagSet.Var` to override duration-parsing default
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlag) ApplyWithError(set *flag.FlagSet) error {
+	// construction via `FlagSet.Var` to override duration-parsing default
 	fvar := DurationFlagVar(f)
 	parts := splitCsv(f.Name)
 	for _, name := range parts {
@@ -62,8 +63,9 @@ func (f DurationFlag) ApplyWithError(set *flag.FlagSet) error {
 	return nil
 }
 
-// compare with DurationFlagVar.String()
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlag) String() string {
+	// compare with DurationFlagVar.String()
 	s := cli.FlagStringer(f)
 
 	// TODO: remove the " (default: ...)" suffix - it only makes sense when actually supported
@@ -74,7 +76,10 @@ func (f DurationFlag) String() string {
 	return s
 }
 
-func (f DurationFlag) GetName() string         { return f.Name }
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
+func (f DurationFlag) GetName() string { return f.Name }
+
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func (f DurationFlag) Apply(set *flag.FlagSet) { _ = f.ApplyWithError(set) }
 
 //
@@ -109,7 +114,7 @@ func flagIsSet(c *cli.Context, flag cli.Flag) (v bool) {
 	return
 }
 
-// Returns the value of a string flag (either parent or local scope)
+// Returns the value of a string flag (either parent or local scope - here and elsewhere)
 func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
@@ -118,7 +123,7 @@ func parseStrFlag(c *cli.Context, flag cli.Flag) string {
 	return c.String(flagName)
 }
 
-// Returns the value of an int flag (either parent or local scope)
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
 	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
@@ -127,7 +132,6 @@ func parseIntFlag(c *cli.Context, flag cli.IntFlag) int {
 	return c.Int(flagName)
 }
 
-// Returns the value of an duration flag (either parent or local scope)
 func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
 	flagName := fl1n(flag.GetName())
 	if c.GlobalIsSet(flagName) {
@@ -136,15 +140,16 @@ func parseDurationFlag(c *cli.Context, flag cli.Flag) time.Duration {
 	return c.Duration(flagName)
 }
 
-// enum { unitsSI, ... }
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func parseUnitsFlag(c *cli.Context, flag cli.StringFlag) (units string, err error) {
-	units = parseStrFlag(c, flag)
+	units = parseStrFlag(c, flag) // enum { unitsSI, ... }
 	if err = teb.ValidateUnits(units); err != nil {
 		err = fmt.Errorf("%s=%s is invalid: %v", flprn(flag), units, err)
 	}
 	return
 }
 
+//nolint:gocritic // ignoring hugeParam - following the orig. github.com/urfave style
 func parseSizeFlag(c *cli.Context, flag cli.StringFlag, unitsParsed ...string) (int64, error) {
 	var (
 		err   error

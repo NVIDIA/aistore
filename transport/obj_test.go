@@ -224,7 +224,7 @@ func Example_obj() {
 
 // test random streaming
 func TestOneStream(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	ts := httptest.NewServer(objmux)
 	defer ts.Close()
 
@@ -233,7 +233,7 @@ func TestOneStream(t *testing.T) {
 }
 
 func TestMultiStream(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	tlog.Logf("Duration %v\n", duration)
 	ts := httptest.NewServer(objmux)
@@ -518,7 +518,7 @@ func TestCompressedOne(t *testing.T) {
 }
 
 func TestDryRun(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	t.Setenv("AIS_STREAM_DRY_RUN", "true")
 
@@ -563,7 +563,7 @@ func TestDryRun(t *testing.T) {
 }
 
 func TestCompletionCount(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		numSent                   int64
 		numCompleted, numReceived atomic.Int64
@@ -803,6 +803,7 @@ type randReader struct {
 	clone  bool
 }
 
+//nolint:gocritic // can do (hdr) hugeParam
 func newRandReader(random *rand.Rand, hdr transport.ObjHdr, slab *memsys.Slab) *randReader {
 	buf := slab.Alloc()
 	_, err := random.Read(buf)

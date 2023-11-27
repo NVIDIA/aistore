@@ -45,7 +45,7 @@ func TestNormalizeObjName(t *testing.T) {
 }
 
 func TestCompareObject(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		src = prepareObject(t)
 		dst = &dload.DstElement{

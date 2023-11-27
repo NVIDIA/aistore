@@ -32,7 +32,7 @@ import (
 // 3. PUT large amount of objects into the ais bucket
 // 4. GET the objects while simultaneously registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -83,7 +83,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 // 3. Crash the primary proxy and PUT in parallel
 // 4. Failback to the original primary proxy, register target, and GET in parallel
 func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 2, MinProxies: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2, MinProxies: 3})
 	m := ioContext{
 		t:                   t,
 		otherTasksToTrigger: 1,
@@ -149,7 +149,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 // 3. PUT large amounts of objects into ais bucket
 // 4. Get the objects while simultaneously registering the target
 func TestGetAndRestoreInParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -225,7 +225,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 }
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -296,7 +296,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 }
 
 func TestAckRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:             t,
@@ -327,7 +327,7 @@ func TestAckRebalance(t *testing.T) {
 }
 
 func TestStressRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := &ioContext{
 		t: t,
@@ -410,7 +410,7 @@ func testStressRebalance(t *testing.T, bck cmn.Bck) {
 }
 
 func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:   t,
 		num: 10000,
@@ -486,7 +486,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 }
 
 func TestPutDuringRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -526,7 +526,7 @@ func TestPutDuringRebalance(t *testing.T) {
 }
 
 func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -624,7 +624,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 }
 
 func TestGetDuringResilver(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -691,7 +691,7 @@ func TestGetDuringResilver(t *testing.T) {
 }
 
 func TestGetDuringRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:   t,
@@ -730,7 +730,7 @@ func TestGetDuringRebalance(t *testing.T) {
 }
 
 func TestRegisterTargetsAndCreateBucketsInParallel(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		unregisterTargetCount = 2
@@ -791,7 +791,7 @@ func TestMountpathDetachAll(t *testing.T) {
 	if true {
 		t.Skipf("skipping %s", t.Name()) // TODO -- FIXME: add back, here and elsewhere
 	}
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, MinTargets: 2})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
 
 	var (
 		m = ioContext{
@@ -855,7 +855,7 @@ func TestMountpathDetachAll(t *testing.T) {
 }
 
 func TestResilverAfterAddingMountpath(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -917,7 +917,7 @@ func TestResilverAfterAddingMountpath(t *testing.T) {
 }
 
 func TestAttachDetachMountpathAllTargets(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		m = ioContext{
 			t:               t,
@@ -1157,7 +1157,7 @@ func TestForwardCP(t *testing.T) {
 }
 
 func TestAtimeRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1269,7 +1269,7 @@ func TestAtimeColdGet(t *testing.T) {
 		objectContent = readers.NewBytes([]byte("dummy content"))
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer api.DeleteObject(baseParams, bck, objectName)
 
@@ -1290,7 +1290,7 @@ func TestAtimeColdGet(t *testing.T) {
 }
 
 func TestAtimePrefetch(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck        = cliBck
@@ -1304,7 +1304,7 @@ func TestAtimePrefetch(t *testing.T) {
 		objs       = make([]string, 0, numObjs)
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 	api.DeleteObject(baseParams, bck, objectName)
 	defer func() {
 		for _, obj := range objs {
@@ -1401,7 +1401,7 @@ func TestAtimeLocalPut(t *testing.T) {
 // 4. Put objects
 // 5. Get objects - everything should succeed
 func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1433,7 +1433,7 @@ func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 // 4. Reregister target - rebalance kicks in
 // 5. Get objects - everything should succeed
 func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	m := ioContext{
 		t:               t,
@@ -1479,7 +1479,7 @@ func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
 }
 
 func TestRenewRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		m = ioContext{
@@ -1543,7 +1543,7 @@ func TestRenewRebalance(t *testing.T) {
 }
 
 func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	var (
 		copies = 2
 		m      = ioContext{
@@ -1610,7 +1610,7 @@ func TestGetFromMirroredWithLostOneMountpath(t *testing.T) {
 }
 
 func TestGetFromMirroredWithLostMountpathAllExceptOne(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             10000,
@@ -1694,7 +1694,7 @@ func TestGetNonRedundantWithDetachedMountpath(t *testing.T) {
 }
 
 func testNonRedundantMpathDD(t *testing.T, action string) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	m := ioContext{
 		t:               t,
 		num:             1000,
@@ -1752,7 +1752,7 @@ func testNonRedundantMpathDD(t *testing.T, action string) {
 // 2. Start changing the primary proxy
 // 3. IC must survive and rebalance must finish
 func TestICRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		m = ioContext{
@@ -1814,7 +1814,7 @@ func TestICRebalance(t *testing.T) {
 // 2. Start changing the primary proxy
 // 3. IC must survive, rebalance must finish, and the target must be gone
 func TestICDecommission(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		err error

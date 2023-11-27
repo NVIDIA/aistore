@@ -1030,7 +1030,7 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 				DeleteSrc:    txnPrm.msg.DeleteSrc,
 			},
 		}
-		if _, err := t.Promote(params); err != nil {
+		if _, err := t.Promote(&params); err != nil {
 			return err
 		}
 	}

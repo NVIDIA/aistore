@@ -17,7 +17,7 @@ import (
 )
 
 func TestGetWarmValidateS3UsingScript(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{
+	tools.CheckSkip(t, &tools.SkipTestArgs{
 		CloudBck: true,
 		Bck:      cliBck,
 	})
@@ -36,7 +36,7 @@ func TestGetWarmValidateS3UsingScript(t *testing.T) {
 }
 
 func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiresRemoteCluster: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 
 	bck := cliBck
 	if bck.IsRemoteAIS() {

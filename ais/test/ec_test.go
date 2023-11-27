@@ -71,7 +71,7 @@ type ecOptions struct {
 // If initial dataCnt value is negative, it sets the number of data and
 // parity slices to maximum possible for the cluster.
 //
-//nolint:revive // modifies-value-receiver on purpose
+//nolint:revive,gocritic // modifies-value-receiver on purpose
 func (o ecOptions) init(t *testing.T, proxyURL string) *ecOptions {
 	o.smap = tools.GetClusterMap(t, proxyURL)
 	if cnt := o.smap.CountActiveTs(); cnt < o.minTargets {
@@ -546,7 +546,7 @@ func damageMetadataCksum(t *testing.T, slicePath string) {
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
 func TestECChange(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{MinTargets: 3})
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 3})
 
 	var (
 		proxyURL = tools.RandomProxyURL()
@@ -793,7 +793,7 @@ func TestECRestoreObjAndSliceRemote(t *testing.T) {
 		pattern:     "obj-rest-remote-%04d",
 	}.init(t, proxyURL)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
 
 	initMountpaths(t, proxyURL)
 	if testing.Short() {
@@ -1026,7 +1026,7 @@ func TestECChecksum(t *testing.T) {
 }
 
 func TestECEnabledDisabledEnabled(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1123,7 +1123,7 @@ func TestECEnabledDisabledEnabled(t *testing.T) {
 }
 
 func TestECDisableEnableDuringLoad(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1232,7 +1232,7 @@ func TestECDisableEnableDuringLoad(t *testing.T) {
 //   - The target restores the original object from slices/copies and returns it
 //   - No errors must occur
 func TestECStress(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1272,7 +1272,7 @@ func TestECStress(t *testing.T) {
 
 // Stress 2 buckets at the same time
 func TestECStressManyBuckets(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck1 = cmn.Bck{
@@ -1340,7 +1340,7 @@ func TestECStressManyBuckets(t *testing.T) {
 //   - filepath.Walk checks that the number of metafiles at the end is correct
 //   - No errors must occur
 func TestECExtraStress(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	const (
 		objStart = "obj-extra-"
@@ -1470,7 +1470,7 @@ func TestECXattrs(t *testing.T) {
 		smallEvery       = 4
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1587,7 +1587,7 @@ func TestECXattrs(t *testing.T) {
 // 4. create bucket with the same name
 // 5. check that EC is working properly for this bucket
 func TestECDestroyBucket(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1678,7 +1678,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 		smallEvery = 4
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1775,7 +1775,7 @@ func TestECEmergencyTargetForSlices(t *testing.T) {
 }
 
 func TestECEmergencyTargetForReplica(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -1922,7 +1922,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 		smallEvery = 4
 	)
 
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -2035,7 +2035,7 @@ func TestECEmergencyMountpath(t *testing.T) {
 }
 
 func TestECRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
@@ -2065,7 +2065,7 @@ func TestECRebalance(t *testing.T) {
 }
 
 func TestECMountpaths(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bck = cmn.Bck{
@@ -2234,7 +2234,7 @@ func TestECBucketEncode(t *testing.T) {
 // Creates two buckets (with EC enabled and disabled), fill them with data,
 // and then runs two parallel rebalances
 func TestECAndRegularRebalance(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bckReg = cmn.Bck{
@@ -2367,7 +2367,7 @@ func ecAndRegularRebalance(t *testing.T, o *ecOptions, proxyURL string, bckReg, 
 //     slices in HEAD response
 //  7. Extra check: the number of objects after rebalance equals initial number
 func TestECResilver(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 
 	var (
 		bck = cmn.Bck{
@@ -2464,7 +2464,7 @@ func ecResilver(t *testing.T, o *ecOptions, proxyURL string, bck cmn.Bck) {
 // 8. Stop reading loop and read all objects once more (nothing should fail)
 // 9. Get the number of objects in the bucket (must be the same as at start)
 func TestECAndRegularUnregisterWhileRebalancing(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal})
 
 	var (
 		bckEC = cmn.Bck{

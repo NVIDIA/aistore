@@ -153,15 +153,15 @@ func postWriteStats(to io.Writer, jsonFormat bool) {
 }
 
 func finalizeStats(to io.Writer) {
-	accumulatedStats.aggregate(intervalStats)
-	writeStats(to, runParams.jsonFormat, true /* final */, intervalStats, accumulatedStats)
+	accumulatedStats.aggregate(&intervalStats)
+	writeStats(to, runParams.jsonFormat, true /* final */, &intervalStats, &accumulatedStats)
 	postWriteStats(to, runParams.jsonFormat)
 
 	// reset gauges, otherwise they would stay at last send value
 	stats.ResetMetricsGauges(statsdC)
 }
 
-func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {
+func writeFinalStats(to io.Writer, jsonFormat bool, s *sts) {
 	if !jsonFormat {
 		writeHumanReadibleFinalStats(to, s)
 	} else {
@@ -169,7 +169,7 @@ func writeFinalStats(to io.Writer, jsonFormat bool, s sts) {
 	}
 }
 
-func writeIntervalStats(to io.Writer, jsonFormat bool, s, t sts) {
+func writeIntervalStats(to io.Writer, jsonFormat bool, s, t *sts) {
 	if !jsonFormat {
 		writeHumanReadibleIntervalStats(to, s, t)
 	} else {
@@ -193,7 +193,7 @@ func jsonStatsFromReq(r stats.HTTPReq) *jsonStats {
 	return jStats
 }
 
-func writeStatsJSON(to io.Writer, s sts, withcomma ...bool) {
+func writeStatsJSON(to io.Writer, s *sts, withcomma ...bool) {
 	jStats := struct {
 		Get *jsonStats `json:"get"`
 		Put *jsonStats `json:"put"`
@@ -218,7 +218,7 @@ func fprintf(w io.Writer, format string, a ...any) {
 	debug.AssertNoErr(err)
 }
 
-func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
+func writeHumanReadibleIntervalStats(to io.Writer, s, t *sts) {
 	p := fprintf
 	pn := prettyNumber
 	pb := prettyBytes
@@ -262,7 +262,7 @@ func writeHumanReadibleIntervalStats(to io.Writer, s, t sts) {
 	}
 }
 
-func writeHumanReadibleFinalStats(to io.Writer, t sts) {
+func writeHumanReadibleFinalStats(to io.Writer, t *sts) {
 	p := fprintf
 	pn := prettyNumber
 	pb := prettyBytes
@@ -302,7 +302,7 @@ func writeHumanReadibleFinalStats(to io.Writer, t sts) {
 
 // writeStatus writes stats to the writter.
 // if final = true, writes the total; otherwise writes the interval stats
-func writeStats(to io.Writer, jsonFormat, final bool, s, t sts) {
+func writeStats(to io.Writer, jsonFormat, final bool, s, t *sts) {
 	if final {
 		writeFinalStats(to, jsonFormat, t)
 	} else {

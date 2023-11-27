@@ -34,6 +34,7 @@ func clientForURL(u string) *http.Client {
 	return g.clientH
 }
 
+//nolint:gocritic // need a copy of cos.ParsedTemplate
 func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {
 	var (
 		smap = t.Sowner().Get()

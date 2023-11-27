@@ -1149,7 +1149,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 
 	// cluster-wide resilver
 	if xargs.Kind == apc.ActResilver && xargs.DaemonID != "" {
-		p.resilverOne(w, r, msg, xargs)
+		p.resilverOne(w, r, msg, &xargs)
 		return
 	}
 
@@ -1252,7 +1252,7 @@ func (p *proxy) rebalanceCluster(w http.ResponseWriter, r *http.Request, msg *ap
 	w.Write([]byte(rmdCtx.rebID))
 }
 
-func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs xact.ArgsMsg) {
+func (p *proxy) resilverOne(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, xargs *xact.ArgsMsg) {
 	smap := p.owner.smap.get()
 	si := smap.GetTarget(xargs.DaemonID)
 	if si == nil {

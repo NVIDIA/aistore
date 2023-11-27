@@ -187,14 +187,15 @@ func (b *downloaderPB) updateBarsAndStatus(downloadStatus *dload.StatusResp) {
 
 	b.updateFinishedFiles(fileStates)
 
-	for _, newState := range fileStates {
+	for i := range fileStates {
+		newState := fileStates[i]
 		oldState, ok := b.states[newState.Name]
 		if !ok {
-			b.trackNewFile(newState)
+			b.trackNewFile(&newState)
 			continue
 		}
 
-		b.updateFileBar(newState, oldState)
+		b.updateFileBar(&newState, oldState)
 	}
 
 	b.updateStatus(downloadStatus)
@@ -226,7 +227,7 @@ func (b *downloaderPB) updateFinishedFiles(fileStates []dload.TaskDlInfo) {
 	}
 }
 
-func (b *downloaderPB) trackNewFile(state dload.TaskDlInfo) {
+func (b *downloaderPB) trackNewFile(state *dload.TaskDlInfo) {
 	bar := b.p.AddBar(
 		state.Total,
 		mpb.BarStyle("[=>-|"),
@@ -252,7 +253,7 @@ func (b *downloaderPB) trackNewFile(state dload.TaskDlInfo) {
 	}
 }
 
-func (*downloaderPB) updateFileBar(newState dload.TaskDlInfo, state *fileDownloadingState) {
+func (*downloaderPB) updateFileBar(newState *dload.TaskDlInfo, state *fileDownloadingState) {
 	if (state.total == 0 && newState.Total != 0) || (state.total != newState.Total) {
 		state.total = newState.Total
 		state.bar.SetTotal(newState.Total, false)

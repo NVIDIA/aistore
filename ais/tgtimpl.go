@@ -191,10 +191,10 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-func (t *target) Promote(params cluster.PromoteParams) (errCode int, err error) {
+func (t *target) Promote(params *cluster.PromoteParams) (errCode int, err error) {
 	lom := cluster.AllocLOM(params.ObjName)
 	if err = lom.InitBck(params.Bck.Bucket()); err == nil {
-		errCode, err = t._promote(&params, lom)
+		errCode, err = t._promote(params, lom)
 	}
 	cluster.FreeLOM(lom)
 	return

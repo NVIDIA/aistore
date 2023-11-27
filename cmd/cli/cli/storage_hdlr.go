@@ -235,7 +235,7 @@ func cleanupStorageHandler(c *cli.Context) (err error) {
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		xargs.Timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	if err := waitXact(apiBP, xargs); err != nil {
+	if err := waitXact(apiBP, &xargs); err != nil {
 		return err
 	}
 	fmt.Fprint(c.App.Writer, fmtXactSucceeded)

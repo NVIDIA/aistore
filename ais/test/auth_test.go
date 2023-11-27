@@ -38,7 +38,7 @@ func expectUnauthorized(t *testing.T, err error) {
 }
 
 func TestAuthObj(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiresAuth: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{Name: trand.String(10)}
@@ -76,7 +76,7 @@ func TestAuthObj(t *testing.T) {
 }
 
 func TestAuthBck(t *testing.T) {
-	tools.CheckSkip(t, tools.SkipTestArgs{RequiresAuth: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
 	var (
 		unAuthBP, authBP = createBaseParams()
 		bck              = cmn.Bck{Name: trand.String(10)}
