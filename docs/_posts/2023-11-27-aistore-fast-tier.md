@@ -67,7 +67,7 @@ The tests were conducted with 1 MB and 10 MB object sizes. The table outlines th
 |                          |             |                  |                  |        |
 | S3 COLD through AIS      | 10 MB       | 2.260            | 1291.5           | 1      |
 | S3 WARM through AIS      | 10 MB       | 16.520           | 177.234          | 20     |
-| S3 DIRECT    | 10 MB     | 2.640       | 1108.5           | n/a              |        |
+| S3 DIRECT                | 10 MB       | 2.640            | 1108.5           | n/a    |
 
 ### 10-Node AIS Cluster Performance with 1000 Client Workers
 
@@ -84,8 +84,8 @@ The tests were conducted with 1 MB and 10 MB object sizes. The table outlines th
 |--------------|-------------|--------------------|------------------|--------------------|
 | S3 COLD through AIS      | 1 MB        | 2.780              | 350.823        | 1      |
 | **S3 WARM through AIS**  | **1 MB**    | **53.550**         | **18.22**      | **96** |
-| S3 DIRECT    | 1 MB      | 2.750       | 353.979            | n/a            |        |
-|              |           |             |                    |                |        |
+| S3 DIRECT                | 1 MB        | 2.750              | 353.979        | n/a    |
+|                          |             |                    |                |        |
 | S3 COLD through AIS      | 10 MB       | 2.980              | 3257.3         | 1      |
 | **S3 WARM through AIS**  | **10 MB**   | **54.680**         | **178.386**    | **97** |
 | S3 DIRECT                | 10 MB       | 2.610              | 3599.8         | n/a    |
