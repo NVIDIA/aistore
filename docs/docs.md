@@ -80,6 +80,7 @@ redirect_from:
   - [Troubleshooting](/docs/troubleshooting.md)
 - Configuration
   - [Configuration](/docs/configuration.md)
+  - [Environment variables](/docs/environment-vars.md)
   - [CLI: `ais config`](/docs/cli/config.md)
   - [Feature flags](/docs/feature_flags.md)
 - Observability

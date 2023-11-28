@@ -165,6 +165,7 @@ With a little effort, they all could be extracted and used outside.
   - [Troubleshooting](/docs/troubleshooting.md)
 - Configuration
   - [Configuration](/docs/configuration.md)
+  - [Environment variables](/docs/environment-vars.md)
   - [CLI: `ais config`](/docs/cli/config.md)
   - [Feature flags](/docs/feature_flags.md)
 - Observability

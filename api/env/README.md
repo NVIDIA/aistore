@@ -8,6 +8,8 @@ As such, the `env` package is, effectively, part of the API: the names defined h
 
 * `ais.go`:   AIS environment
 * `authn.go`: AuthN environment
-* `debug.go`: DEBUG environment (build and command-line)
 
-For the list of private system filenames (aka "filename constants"), see also: cmn/fname/fname.go
+## See also
+
+* List of _all_ [environment variables](https://github.com/NVIDIA/aistore/blob/master/docs/environment-vars.md)
+* List of [system filenames ("filename constants")](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go)

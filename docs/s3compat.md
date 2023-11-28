@@ -348,11 +348,11 @@ In this section, we use all 3 (three) clients:
 # 1. Upload via `s3cmd` => `aistore`
 
 $ s3cmd put $(which aisnode) s3://ais-aa --multipart-chunk-size-mb=8
-upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 1 of 10, 8MB] [1 of 1]
+upload: 'bin/aisnode' -> 's3://ais-aa/aisnode'  [part 1 of 10, 8MB] [1 of 1]
  8388608 of 8388608   100% in    0s   233.84 MB/s  done
 ...
  8388608 of 8388608   100% in    0s   234.19 MB/s  done
-upload: '/root/gocode/bin/aisnode' -> 's3://ais-aa/aisnode'  [part 10 of 10, 5MB] [1 of 1]
+upload: 'bin/aisnode' -> 's3://ais-aa/aisnode'  [part 10 of 10, 5MB] [1 of 1]
  5975140 of 5975140   100% in    0s   233.39 MB/s  done
 ```
 

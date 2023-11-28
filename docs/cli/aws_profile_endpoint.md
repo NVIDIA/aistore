@@ -9,7 +9,7 @@ redirect_from:
 
 AIStore supports vendor-specific configuration on a per bucket basis. For instance, any bucket _backed up_ by an AWS S3 bucket (**) can be configured to use alternative:
 
-* named AWS profiles (with alternative credentials and/or region)
+* named AWS profiles (with alternative credentials and/or AWS region)
 * s3 endpoints
 
 (**) Terminology-wise, when we say "s3 bucket" or "google cloud bucket" we in fact reference a bucket in an AIS cluster that is either:
