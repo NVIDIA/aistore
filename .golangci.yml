@@ -17,6 +17,7 @@ linters:
     - goimports
     - gomoddirectives
     - goprintffuncname
+    - gosec
     - gosimple
     - govet
     - importas
@@ -40,7 +41,6 @@ linters:
     #
     # linters that must be enabled when time permits:
     # - dupl
-    # - gosec
     #
     # linters that maybe worth running from time to time:
     # - gochecknoinits

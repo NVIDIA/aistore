@@ -35,7 +35,7 @@ const (
 
 	projectIDField  = "project_id"
 	projectIDEnvVar = "GOOGLE_CLOUD_PROJECT"
-	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS"
+	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS" //nolint:gosec // false positive G101
 )
 
 type (

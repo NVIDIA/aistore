@@ -195,7 +195,7 @@ var (
 	showCmdJob = cli.Command{
 		Name:         commandJob,
 		Usage:        "show running and finished jobs ('--all' for all, or " + tabHelpOpt + ")",
-		ArgsUsage:    jobShowStopWaitArgument,
+		ArgsUsage:    jobAnyArg,
 		Flags:        showCmdsFlags[commandJob],
 		Action:       showJobsHandler,
 		BashComplete: runningJobCompletions,

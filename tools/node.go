@@ -510,7 +510,11 @@ func getAISNodeCmd(t *testing.T) string {
 
 // getPID uses 'lsof' to find the pid of the ais process listening on a port
 func getPID(port string) (int, error) {
-	output, err := exec.Command("lsof", []string{"-sTCP:LISTEN", "-i", ":" + port}...).CombinedOutput()
+	var (
+		sport = ":" + port
+		cmd   = exec.Command("lsof", "-sTCP:LISTEN", "-i", sport)
+	)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("error executing LSOF command: %v", err)
 	}
@@ -536,8 +540,11 @@ func getProcess(port string) (pid int, cmd string, args []string, err error) {
 	if err != nil {
 		return 0, "", nil, fmt.Errorf("error getting pid on port: %v", err)
 	}
-
-	output, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command").CombinedOutput()
+	var (
+		spid = strconv.Itoa(pid)
+		ps   = exec.Command("ps", "-p", spid, "-o", "command")
+	)
+	output, err := ps.CombinedOutput()
 	if err != nil {
 		return 0, "", nil, fmt.Errorf("error executing PS command: %v", err)
 	}

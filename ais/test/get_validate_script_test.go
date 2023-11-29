@@ -27,7 +27,10 @@ func TestGetWarmValidateS3UsingScript(t *testing.T) {
 		t.Skipf("skipping %s - the test uses s3cmd (command line tool) and requires s3 bucket (see \"prerequisites\")", t.Name())
 	}
 
-	cmd := exec.Command("./scripts/s3-get-validate.sh", "--bucket", cliBck.Cname(""))
+	var (
+		bucketName = cliBck.Cname("")
+		cmd        = exec.Command("./scripts/s3-get-validate.sh", "--bucket", bucketName)
+	)
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))
@@ -50,7 +53,10 @@ func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
 		tlog.Logf("using temp bucket %s ...\n", bck.Cname(""))
 	}
 
-	cmd := exec.Command("./scripts/remais-get-validate.sh", "--bucket", bck.Cname(""))
+	var (
+		bucketName = bck.Cname("")
+		cmd        = exec.Command("./scripts/remais-get-validate.sh", "--bucket", bucketName)
+	)
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
 		tlog.Logln(string(out))

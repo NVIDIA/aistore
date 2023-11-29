@@ -275,7 +275,8 @@ func checkObjectHealth(queryBcks cmn.QueryBcks) error {
 	msg := &apc.LsoMsg{Flags: apc.LsMissing}
 	msg.AddProps(apc.GetPropsCopies, apc.GetPropsCached)
 
-	for _, bck := range bcks {
+	for i := range bcks {
+		bck := bcks[i]
 		if queryBcks.Name != "" && !queryBcks.Equal(&bck) {
 			continue
 		}

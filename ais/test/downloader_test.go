@@ -516,7 +516,8 @@ func TestDownloadRemote(t *testing.T) {
 		},
 	}
 	defer tools.CleanupRemoteBucket(t, proxyURL, cliBck, prefix)
-	for _, test := range tests {
+	for i := range tests {
+		test := tests[i]
 		t.Run(test.name, func(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RemoteBck: true, Bck: test.srcBck})
 

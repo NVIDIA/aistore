@@ -70,7 +70,8 @@ func listBckTableNoSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, fl
 			return 0
 		}
 	}
-	for _, bck := range bcks {
+	for i := range bcks {
+		bck := bcks[i]
 		if !qbck.Contains(&bck) {
 			continue
 		}
@@ -151,7 +152,8 @@ func listBckTableWithSummary(c *cli.Context, qbck cmn.QueryBcks, bcks cmn.Bcks, 
 	args.Callback = ctx.args.Callback // reusing bsummCtx.progress()
 
 	// one at a time
-	for i, bck := range bcks {
+	for i := range bcks {
+		bck := bcks[i]
 		if !qbck.Contains(&bck) {
 			continue
 		}

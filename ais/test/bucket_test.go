@@ -1779,7 +1779,8 @@ func TestLocalMirror(t *testing.T) {
 		{numCopies: []int{2, 3}, skipArgs: tools.SkipTestArgs{Long: true}, tag: "copies=2-then-3"},
 	}
 
-	for _, test := range tests {
+	for i := range tests {
+		test := tests[i]
 		t.Run(test.tag, func(t *testing.T) {
 			tools.CheckSkip(t, &test.skipArgs)
 			testLocalMirror(t, test.numCopies)

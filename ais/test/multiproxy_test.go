@@ -1712,7 +1712,11 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	target, _ := smap.GetRandTarget()
 	ip := target.PubNet.Hostname
 
-	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
+	s := &http.Server{
+		Addr:              ip + ":" + mockTargetPort,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go s.ListenAndServe()
 
 	err := registerMockTarget(proxyURL, smap)

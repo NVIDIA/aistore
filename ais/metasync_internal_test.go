@@ -129,10 +129,9 @@ func newSecondary(name string) *proxy {
 	return p
 }
 
-// newTransportServer creates a http test server to simulate a proxy or a target, it is used to test the
-// transport of metasync, which is making sync calls, retry failed calls, etc. it doesn't involve the actual
-// content of the meta data received.
-// newTransportServer's http handler calls the sync function which decide how to respond to the sync call,
+// newTransportServer creates an http test server to simulate a proxy or a target, and is used to test the
+// transport of metasync, which is making sync calls, retrying failed calls, etc.
+// newTransportServer's http handler calls the sync function which decides how to respond to the sync call,
 // counts number of times sync call received, sends result to the result channel on each sync (error or
 // no error), completes the http request with the status returned by the sync function.
 func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportData) *httptest.Server {
@@ -283,7 +282,8 @@ func syncOnce(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transportData
 		ch = make(chan transportData, len(servers))
 	)
 
-	for _, v := range servers {
+	for i := range servers {
+		v := servers[i]
 		s := newTransportServer(primary, &v, ch)
 		defer s.Close()
 	}
@@ -310,7 +310,8 @@ func syncOnceWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 		ch = make(chan transportData, len(servers))
 	)
 
-	for _, v := range servers {
+	for i := range servers {
+		v := servers[i]
 		s := newTransportServer(primary, &v, ch)
 		defer s.Close()
 	}
@@ -339,7 +340,8 @@ func syncOnceNoWait(t *testing.T, primary *proxy, syncer *metasyncer) ([]transpo
 		ch = make(chan transportData, len(servers))
 	)
 
-	for _, v := range servers {
+	for i := range servers {
+		v := servers[i]
 		s := newTransportServer(primary, &v, ch)
 		defer s.Close()
 	}
@@ -368,7 +370,8 @@ func retry(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transportData, [
 		ch = make(chan transportData, len(servers)+2)
 	)
 
-	for _, v := range servers {
+	for i := range servers {
+		v := servers[i]
 		s := newTransportServer(primary, &v, ch)
 		defer s.Close()
 	}
@@ -398,7 +401,8 @@ func multipleSync(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 		ch = make(chan transportData, len(servers)*3)
 	)
 
-	for _, v := range servers {
+	for i := range servers {
+		v := servers[i]
 		s := newTransportServer(primary, &v, ch)
 		defer s.Close()
 	}
@@ -478,7 +482,10 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 		defer timer.Stop()
 
 		wg := &sync.WaitGroup{}
-		s := &http.Server{Addr: addrInfo.String()}
+		s := &http.Server{
+			Addr:              addrInfo.String(),
+			ReadHeaderTimeout: 10 * time.Second,
+		}
 
 		wg.Add(1)
 		go func() {

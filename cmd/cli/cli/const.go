@@ -224,7 +224,7 @@ const (
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
 
-	jobShowStopWaitArgument  = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
+	jobAnyArg                = "[NAME] [JOB_ID] [NODE_ID] [BUCKET]"
 	jobShowRebalanceArgument = "[REB_ID] [NODE_ID]"
 
 	// Perf
@@ -316,7 +316,7 @@ const (
 	showAuthUserListArgument  = "[USER_NAME]"
 	addSetAuthRoleArgument    = "ROLE [PERMISSION ...]"
 	deleteAuthRoleArgument    = "ROLE"
-	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE"
+	deleteAuthTokenArgument   = "TOKEN | TOKEN_FILE" //nolint:gosec // false positive G101
 
 	// Alias
 	aliasURLPairArgument = "ALIAS=URL (or UUID=URL)"

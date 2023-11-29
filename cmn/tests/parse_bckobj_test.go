@@ -122,8 +122,11 @@ func TestParseBckObjectURI(t *testing.T) {
 		},
 	}
 
-	for _, test := range positiveTests {
-		bck, obj, err := cmn.ParseBckObjectURI(test.uri, test.opts)
+	for i := range positiveTests {
+		var (
+			test          = positiveTests[i]
+			bck, obj, err = cmn.ParseBckObjectURI(test.uri, test.opts)
+		)
 		tassert.Errorf(t, err == nil, "unexpected error for input: %s, err: %v", test.uri, err)
 
 		if !bck.Equal(&test.expectedBck) {

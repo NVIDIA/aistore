@@ -203,7 +203,8 @@ def transform(input_bytes):
 
 	m.puts()
 
-	for _, test := range tests {
+	for i := range tests {
+		test := tests[i]
 		t.Run(test.name, func(t *testing.T) {
 			tetl.CheckNoRunningETLContainers(t, baseParams)
 			var (

@@ -1,6 +1,6 @@
 // Packager docker provides common utilities for managing containerized AIS deployments
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package docker
 
@@ -51,7 +51,10 @@ func IsRunning() bool {
 }
 
 func clustersMap() (map[int]int, error) {
-	cmd := exec.Command("docker", "ps", "--format", "\"{{.Names}}\"")
+	const (
+		a, b, c, d = "docker", "ps", "--format", "\"{{.Names}}\""
+	)
+	cmd := exec.Command(a, b, c, d)
 	bytes, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -147,7 +150,7 @@ func _exec(containerName string, args ...string) error {
 		return fmt.Errorf("not enough arguments to execute a command")
 	}
 	temp := append([]string{"docker", "exec", containerName}, args...)
-	cmd := exec.Command(temp[0], temp[1:]...)
+	cmd := exec.Command(temp[0], temp[1:]...) //nolint:gosec // used only in tests
 
 	_, err := cmd.Output()
 	if err != nil {
@@ -201,16 +204,16 @@ func Connect(containerID string, networks []string) error {
 
 func ClusterEndpoint(i int) (string, error) {
 	proxies := ProxiesInCluster(i)
-
 	if len(proxies) == 0 {
 		return "", fmt.Errorf("couldn't find any proxies in cluster %d", i)
 	}
+	var (
+		containerID      = proxies[0]
+		aisPublicNetwork = prefixStr + strconv.Itoa(i) + "_public"
+		format           = "--format={{.NetworkSettings.Networks." + aisPublicNetwork + ".IPAddress }}"
 
-	containerID := proxies[0]
-
-	aisPublicNetwork := prefixStr + strconv.Itoa(i) + "_public"
-
-	cmd := exec.Command("docker", "inspect", "--format={{.NetworkSettings.Networks."+aisPublicNetwork+".IPAddress }}", containerID)
+		cmd = exec.Command("docker", "inspect", format, containerID)
+	)
 	bytes, err := cmd.Output()
 	if err != nil {
 		return "", err

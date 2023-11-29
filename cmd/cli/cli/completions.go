@@ -389,15 +389,18 @@ func bucketCompletions(opts bcmplop) cli.BashCompleteFunc {
 	return opts.buckets
 }
 
-func printNotUsedBuckets(c *cli.Context, buckets []cmn.Bck, separator, multiple bool) {
+func printNotUsedBuckets(c *cli.Context, bcks cmn.Bcks, separator, multiple bool) {
 	var sep string
 	if separator {
 		sep = "/"
 	}
 mloop:
-	for _, b := range buckets {
+	for i := range bcks {
+		b := bcks[i]
 		if multiple {
-			for _, argBck := range c.Args() {
+			args := c.Args()
+			for a := range args {
+				argBck := args[a]
 				parsedArgBck, err := parseBckURI(c, argBck, false)
 				if err != nil {
 					return

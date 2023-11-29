@@ -818,7 +818,8 @@ func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 			skipArgs: tools.SkipTestArgs{Long: true},
 		},
 	}
-	for _, test := range tests { //nolint:gocritic // no performance critical code
+	for i := range tests {
+		test := tests[i]
 		t.Run(test.name, func(t *testing.T) {
 			if test.backendBck.IsEmpty() {
 				test.skipArgs.Bck = test.bck

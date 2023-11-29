@@ -69,7 +69,8 @@ func GenerateNonexistentBucketName(prefix string, bp api.BaseParams) (string, er
 }
 
 func BucketsContain(bcks cmn.Bcks, qbck cmn.QueryBcks) bool {
-	for _, bck := range bcks {
+	for i := range bcks {
+		bck := bcks[i]
 		if qbck.Equal(&bck) || qbck.Contains(&bck) {
 			return true
 		}

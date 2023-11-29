@@ -251,7 +251,8 @@ func TestParseFQN(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.testName, func(t *testing.T) {
 			mios := mock.NewIOS()
 			fs.TestNew(mios)
@@ -347,7 +348,8 @@ func TestMakeAndParseFQN(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(strings.Join([]string{tt.mpath, tt.bck.String(), tt.contentType, tt.objName}, "|"), func(t *testing.T) {
 			mios := mock.NewIOS()
 			fs.TestNew(mios)
