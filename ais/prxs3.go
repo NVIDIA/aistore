@@ -210,7 +210,7 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	}
 	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
-	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -395,7 +395,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		return
 	}
 	objName := strings.Trim(parts[1], "/")
-	si, err = smap.HrwName2T(bckSrc.MakeUname(objName), true /*skip maint*/)
+	si, err = smap.HrwName2T(bckSrc.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -430,7 +430,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err = smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -468,7 +468,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err = smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -485,7 +485,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.Bck, q url.Values) {
 	smap := p.owner.smap.get()
 	if smap.CountActiveTs() == 1 {
-		si, err := smap.HrwName2T(bck.MakeUname(""), true /*skip maint*/)
+		si, err := smap.HrwName2T(bck.MakeUname(""))
 		if err != nil {
 			s3.WriteErr(w, r, err, 0)
 			return
@@ -545,7 +545,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -578,7 +578,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err = smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

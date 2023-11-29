@@ -71,7 +71,7 @@ func newPrimary() *proxy {
 	)
 
 	p.owner.smap = newSmapOwner(cmn.GCO.Get())
-	p.si = meta.NewSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+	p.si = newSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 
 	smap.addProxy(p.si)
 	smap.Primary = p.si
@@ -108,7 +108,7 @@ func newPrimary() *proxy {
 
 func newSecondary(name string) *proxy {
 	p := &proxy{}
-	p.si = meta.NewSnode(name, apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+	p.si = newSnode(name, apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 	p.owner.smap = newSmapOwner(cmn.GCO.Get())
 	p.owner.smap.put(newSmap())
 	p.client.data = &http.Client{}
@@ -157,9 +157,9 @@ func newTransportServer(primary *proxy, s *metaSyncServer, ch chan<- transportDa
 	addrInfo := serverTCPAddr(ts.URL)
 	clone := primary.owner.smap.get().clone()
 	if s.isProxy {
-		clone.Pmap[id] = meta.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
+		clone.Pmap[id] = newSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 	} else {
-		clone.Tmap[id] = meta.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
+		clone.Tmap[id] = newSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 	}
 	clone.Version++
 	primary.owner.smap.put(clone)
@@ -472,7 +472,7 @@ func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData,
 	})
 
 	clone := primary.owner.smap.get().clone()
-	clone.Pmap[id] = meta.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
+	clone.Pmap[id] = newSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 	clone.Version++
 	primary.owner.smap.put(clone)
 
@@ -568,9 +568,9 @@ func TestMetasyncData(t *testing.T) {
 		addrInfo := serverTCPAddr(ts.URL)
 		clone := primary.owner.smap.get().clone()
 		if s.isProxy {
-			clone.Pmap[id] = meta.NewSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
+			clone.Pmap[id] = newSnode(id, apc.Proxy, addrInfo, addrInfo, addrInfo)
 		} else {
-			clone.Tmap[id] = meta.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
+			clone.Tmap[id] = newSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		}
 		clone.Version++
 		primary.owner.smap.put(clone)
@@ -701,7 +701,7 @@ func TestMetasyncMembership(t *testing.T) {
 		id := "t"
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addTarget(meta.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo))
+		clone.addTarget(newSnode(id, apc.Target, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 		msg := primary.newAmsgStr("", nil)
 		wg1 := syncer.sync(revsPair{clone, msg})
@@ -745,7 +745,7 @@ func TestMetasyncMembership(t *testing.T) {
 
 		id := "t1111"
 		addrInfo := serverTCPAddr(s1.URL)
-		di := meta.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
+		di := newSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -771,7 +771,7 @@ func TestMetasyncMembership(t *testing.T) {
 
 		id := "t22222"
 		addrInfo := serverTCPAddr(s2.URL)
-		di := meta.NewSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
+		di := newSnode(id, apc.Target, addrInfo, addrInfo, addrInfo)
 		clone := primary.owner.smap.get().clone()
 		clone.addTarget(di)
 		primary.owner.smap.put(clone)
@@ -836,7 +836,7 @@ func TestMetasyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.owner.smap.get().clone()
-		clone.addProxy(meta.NewSnode("p1", apc.Proxy, addrInfo, addrInfo, addrInfo))
+		clone.addProxy(newSnode("p1", apc.Proxy, addrInfo, addrInfo, addrInfo))
 		primary.owner.smap.put(clone)
 
 		proxy1 := newSecondary("p1")

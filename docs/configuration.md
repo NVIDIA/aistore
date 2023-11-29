@@ -70,6 +70,39 @@ with the corresponding [JSON names](/deploy/dev/local/aisnode_config.sh), respec
 * `hostname_intra_control`
 * `hostname_intra_data`
 
+### Example
+
+```console
+$ ais config node <TAB-TAB>
+
+p[ctfooJtb]   p[qGfooQSf]   p[KffoosQR]   p[ckfooUEX]   p[DlPmfooU]   t[MgHfooNG]   t[ufooIDPc]   t[tFUfooCO]   t[wSJfoonU]   t[WofooQEW]
+p[pbarqYtn]   p[JedbargG]   p[WMbargGF]   p[barwMoEU]   p[OUgbarGf]   t[tfNbarFk]   t[fbarswQP]   t[vAWbarPv]   t[Kopbarra]   t[fXbarenn]
+
+
+## in aistore, each node has "inherited" and "local" configuration
+## choose "local" to show the (selected) target's disks and network
+
+$ ais config node t[fbarswQP] local --json
+{
+    "confdir": "/etc/ais",
+    "log_dir": "/var/log/ais",
+    "host_net": {
+        "hostname": "10.51.156.130",
+        "hostname_intra_control": "ais-target-5.nvmetal.net",
+        "hostname_intra_data": "ais-target-5.nvmetal.net",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    },
+    "fspaths": {"/ais/nvme0n1":{},"/ais/nvme1n1":{},"/ais/nvme2n1":{}},
+    "test_fspaths": {
+        "root": "",
+        "count": 0,
+        "instance": 0
+    }
+}
+```
+
 ## References
 
 * For Kubernetes deployment, please refer to a separate [ais-k8s](https://github.com/NVIDIA/ais-k8s) repository that also contains [AIS/K8s Operator](https://github.com/NVIDIA/ais-k8s/blob/master/operator/README.md) and its configuration-defining [resources](https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/config.go).
@@ -253,6 +286,38 @@ For `fspath` and `mountpath` terminology and details, please see section [Managi
 An example of 12 fspaths (and 12 local filesystems) follows below:
 
 ![Example: 12 fspaths](images/example-12-fspaths-config.png)
+
+### Example: 3 NVMe drives
+
+```console
+$ ais config node <TAB-TAB>
+
+p[ctfooJtb]   p[qGfooQSf]   p[KffoosQR]   p[ckfooUEX]   p[DlPmfooU]   t[MgHfooNG]   t[ufooIDPc]   t[tFUfooCO]   t[wSJfoonU]   t[WofooQEW]
+p[pbarqYtn]   p[JedbargG]   p[WMbargGF]   p[barwMoEU]   p[OUgbarGf]   t[tfNbarFk]   t[fbarswQP]   t[vAWbarPv]   t[Kopbarra]   t[fXbarenn]
+
+## in aistore, each node has "inherited" and "local" configuration
+## choose "local" to show the target's own disks and network
+
+$ ais config node t[fbarswQP] local --json
+{
+    "confdir": "/etc/ais",
+    "log_dir": "/var/log/ais",
+    "host_net": {
+        "hostname": "10.51.156.130",
+        "hostname_intra_control": "ais-target-5.nvmetal.net",
+        "hostname_intra_data": "ais-target-5.nvmetal.net",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    },
+    "fspaths": {"/ais/nvme0n1":{},"/ais/nvme1n1":{},"/ais/nvme2n1":{}},
+    "test_fspaths": {
+        "root": "",
+        "count": 0,
+        "instance": 0
+    }
+}
+```
 
 ## Basics
 

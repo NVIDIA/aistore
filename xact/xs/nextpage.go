@@ -99,7 +99,7 @@ func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (*
 func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 	post := npg.wi.lomVisitedCb
 	for _, obj := range lst.Entries {
-		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(obj.Name), true /*skip maint*/)
+		si, err := npg.wi.smap.HrwName2T(npg.bck.MakeUname(obj.Name))
 		if err != nil {
 			return err
 		}

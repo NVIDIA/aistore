@@ -91,7 +91,7 @@ func (p *proxy) initClusterCIDR() {
 }
 
 func (p *proxy) init(config *cmn.Config) {
-	p.initNetworks()
+	p.initNetworks(config)
 
 	// (a) get node ID from command-line or env var (see envDaemonID())
 	// (b) load existing ID from config file stored under local config `confdir` (compare w/ target)
@@ -646,7 +646,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	tsi, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -708,7 +708,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		objName = apireq.items[1]
 	)
 	if nodeID == "" {
-		tsi, err = smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+		tsi, err = smap.HrwName2T(bck.MakeUname(objName))
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -759,7 +759,7 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	tsi, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -1921,7 +1921,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -1949,7 +1949,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
@@ -2021,10 +2021,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 }
 
 func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netName string) (redirect string) {
-	var (
-		nodeURL string
-		query   = url.Values{}
-	)
+	var nodeURL string
 	if p.si.LocalNet == nil {
 		nodeURL = si.URL(cmn.NetPublic)
 	} else {
@@ -2047,8 +2044,10 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netNa
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Set(apc.QparamProxyID, p.SID())
-	query.Set(apc.QparamUnixTime, cos.UnixNano2S(ts.UnixNano()))
+	query := url.Values{
+		apc.QparamProxyID:  []string{p.SID()},
+		apc.QparamUnixTime: []string{cos.UnixNano2S(ts.UnixNano())},
+	}
 	redirect += query.Encode()
 	return
 }
@@ -2235,7 +2234,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		return
 	}
 	smap := p.owner.smap.get()
-	si, err := smap.HrwName2T(bck.MakeUname(objName), true /*skip maint*/)
+	si, err := smap.HrwName2T(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err)
 		return

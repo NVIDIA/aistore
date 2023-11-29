@@ -620,7 +620,7 @@ func (es *dsmExtractShard) do() error {
 		return err
 	}
 	smap := g.t.Sowner().Get()
-	tsi, err := smap.HrwName2T(bck.MakeUname(shard.Name), true /*skip maint*/)
+	tsi, err := smap.HrwName2T(bck.MakeUname(shard.Name))
 	if err != nil {
 		return err
 	}

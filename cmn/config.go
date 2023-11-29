@@ -38,19 +38,55 @@ type (
 	}
 )
 
+// Config is a single control structure (persistent and versioned)
+// that contains both cluster (global) and node (local) configuration
+// Naming convention for setting/getting values: (parent section json tag . child json tag)
+// See also: `IterFields`, `IterFieldNameSepa`
 type (
-	// Config contains all configuration values used by a given ais daemon.
-	// Naming convention for setting/getting specific values is defined as follows:
-	//              (parent json tag . child json tag)
-	// E.g., to set/get `EC.Enabled` use `ec.enabled`. And so on.
-	// For details, see `IterFields`.
 	Config struct {
 		role          string `list:"omit"` // Proxy or Target
 		ClusterConfig `json:",inline"`
 		LocalConfig   `json:",inline"`
 	}
+)
 
-	// global configuration
+// local config
+type (
+	LocalConfig struct {
+		ConfigDir string         `json:"confdir"`
+		LogDir    string         `json:"log_dir"`
+		HostNet   LocalNetConfig `json:"host_net"`
+		FSP       FSPConf        `json:"fspaths"`
+		TestFSP   TestFSPConf    `json:"test_fspaths"`
+	}
+
+	// ais node: (local) network config
+	LocalNetConfig struct {
+		Hostname             string `json:"hostname"`
+		HostnameIntraControl string `json:"hostname_intra_control"`
+		HostnameIntraData    string `json:"hostname_intra_data"`
+		Port                 int    `json:"port,string"`               // listening port
+		PortIntraControl     int    `json:"port_intra_control,string"` // --/-- for intra-cluster control
+		PortIntraData        int    `json:"port_intra_data,string"`    // --/-- for intra-cluster data
+		// omit
+		UseIntraControl bool `json:"-"`
+		UseIntraData    bool `json:"-"`
+	}
+
+	// ais node: fspaths (a.k.a. mountpaths)
+	FSPConf struct {
+		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
+	}
+
+	TestFSPConf struct {
+		Root     string `json:"root"`
+		Count    int    `json:"count"`
+		Instance int    `json:"instance"`
+	}
+)
+
+// global configuration
+type (
 	ClusterConfig struct {
 		Ext        any            `json:"ext,omitempty"` // within meta-version extensions
 		Backend    BackendConf    `json:"backend" allow:"cluster"`
@@ -123,27 +159,6 @@ type (
 
 		// LocalConfig
 		FSP *FSPConf `json:"fspaths,omitempty"`
-	}
-
-	LocalConfig struct {
-		ConfigDir string         `json:"confdir"`
-		LogDir    string         `json:"log_dir"`
-		HostNet   LocalNetConfig `json:"host_net"`
-		FSP       FSPConf        `json:"fspaths"`
-		TestFSP   TestFSPConf    `json:"test_fspaths"`
-	}
-
-	// Network config specific to node
-	LocalNetConfig struct {
-		Hostname             string `json:"hostname"`
-		HostnameIntraControl string `json:"hostname_intra_control"`
-		HostnameIntraData    string `json:"hostname_intra_data"`
-		Port                 int    `json:"port,string"`               // listening port
-		PortIntraControl     int    `json:"port_intra_control,string"` // listening port for intra control network
-		PortIntraData        int    `json:"port_intra_data,string"`    // listening port for intra data network
-		// omit
-		UseIntraControl bool `json:"-"`
-		UseIntraData    bool `json:"-"`
 	}
 
 	BackendConf struct {
@@ -377,12 +392,6 @@ type (
 		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
 	}
 
-	TestFSPConf struct {
-		Root     string `json:"root"`
-		Count    int    `json:"count"`
-		Instance int    `json:"instance"`
-	}
-
 	NetConf struct {
 		L4   L4Conf   `json:"l4"`
 		HTTP HTTPConf `json:"http"`
@@ -493,10 +502,6 @@ type (
 		DsorterMemThreshold *string       `json:"dsorter_mem_threshold,omitempty"`
 		Compression         *string       `json:"compression,omitempty"`
 		SbundleMult         *int          `json:"bundle_multiplier,omitempty"`
-	}
-
-	FSPConf struct {
-		Paths cos.StrSet `json:"paths,omitempty" list:"readonly"`
 	}
 
 	TransportConf struct {
@@ -1220,24 +1225,26 @@ func (c *HTTPConf) ToTLS() TLSArgs {
 // LocalNetConfig //
 ////////////////////
 
+const HostnameListSepa = ","
+
 func (c *LocalNetConfig) Validate(contextConfig *Config) (err error) {
 	c.Hostname = strings.ReplaceAll(c.Hostname, " ", "")
 	c.HostnameIntraControl = strings.ReplaceAll(c.HostnameIntraControl, " ", "")
 	c.HostnameIntraData = strings.ReplaceAll(c.HostnameIntraData, " ", "")
 
-	if overlap, addr := hostnamesOverlap(c.Hostname, c.HostnameIntraControl); overlap {
-		return fmt.Errorf("public (%s) and intra-cluster control (%s) Hostname lists overlap: %s",
+	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraControl); over {
+		return fmt.Errorf("public (%s) and intra-cluster control (%s) share the same: %q",
 			c.Hostname, c.HostnameIntraControl, addr)
 	}
-	if overlap, addr := hostnamesOverlap(c.Hostname, c.HostnameIntraData); overlap {
-		return fmt.Errorf("public (%s) and intra-cluster data (%s) Hostname lists overlap: %s",
+	if addr, over := ipsOverlap(c.Hostname, c.HostnameIntraData); over {
+		return fmt.Errorf("public (%s) and intra-cluster data (%s) share the same: %q",
 			c.Hostname, c.HostnameIntraData, addr)
 	}
-	if overlap, addr := hostnamesOverlap(c.HostnameIntraControl, c.HostnameIntraData); overlap {
+	if addr, over := ipsOverlap(c.HostnameIntraControl, c.HostnameIntraData); over {
 		if ipv4ListsEqual(c.HostnameIntraControl, c.HostnameIntraData) {
-			nlog.Warningf("control and data share one intra-cluster network (%s)", c.HostnameIntraData)
+			nlog.Warningln("control and data share the same intra-cluster network:", c.HostnameIntraData)
 		} else {
-			nlog.Warningf("intra-cluster control (%s) and data (%s) Hostname lists overlap: %s",
+			nlog.Warningf("intra-cluster control (%s) and data (%s) share the same: %q",
 				c.HostnameIntraControl, c.HostnameIntraData, addr)
 		}
 	}
@@ -1642,18 +1649,18 @@ func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 func FastV(verbosity, fl int) bool { return GCO.Get().FastV(verbosity, fl) }
 
 // checks if the two comma-separated IPv4 address lists contain at least one common IPv4
-func hostnamesOverlap(alist, blist string) (overlap bool, addr string) {
+func ipsOverlap(alist, blist string) (addr string, overlap bool) {
 	if alist == "" || blist == "" {
 		return
 	}
-	alistAddrs := strings.Split(alist, ",")
+	alistAddrs := strings.Split(alist, HostnameListSepa)
 	for _, a := range alistAddrs {
 		a = strings.TrimSpace(a)
 		if a == "" {
 			continue
 		}
 		if strings.Contains(blist, a) {
-			return true, a
+			return a, true
 		}
 	}
 	return

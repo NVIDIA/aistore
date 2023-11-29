@@ -18,15 +18,15 @@ import (
 // aka highest random weight (HRW)
 // See also: fs/hrw.go
 
-func (smap *Smap) HrwName2T(uname string, skipMaint bool) (*Snode, error) {
+func (smap *Smap) HrwName2T(uname string) (*Snode, error) {
 	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
-	return smap.HrwHash2T(digest, skipMaint)
+	return smap.HrwHash2T(digest)
 }
 
-func (smap *Smap) HrwHash2T(digest uint64, skipMaint bool) (si *Snode, err error) {
+func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
 	var max uint64
 	for _, tsi := range smap.Tmap {
-		if skipMaint && tsi.InMaintOrDecomm() {
+		if tsi.InMaintOrDecomm() { // always skipping targets 'in maintenance mode'
 			continue
 		}
 		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
@@ -38,7 +38,23 @@ func (smap *Smap) HrwHash2T(digest uint64, skipMaint bool) (si *Snode, err error
 	if si == nil {
 		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
 	}
-	return
+	return si, err
+}
+
+// NOTE: including targets 'in maintenance mode', if any
+func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
+	var max uint64
+	for _, tsi := range smap.Tmap {
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		if cs >= max {
+			max = cs
+			si = tsi
+		}
+	}
+	if si == nil {
+		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
+	}
+	return si, err
 }
 
 func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
@@ -61,7 +77,7 @@ func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 	if pi == nil {
 		err = cmn.NewErrNoNodes(apc.Proxy, len(smap.Pmap))
 	}
-	return
+	return pi, err
 }
 
 func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
@@ -82,7 +98,7 @@ func (smap *Smap) HrwIC(uuid string) (pi *Snode, err error) {
 	if pi == nil {
 		err = fmt.Errorf("IC is empty %s: %s", smap, smap.StrIC(nil))
 	}
-	return
+	return pi, err
 }
 
 // Returns a target for a given task. E.g. usage: list objects in a cloud bucket
@@ -106,7 +122,7 @@ func (smap *Smap) HrwTargetTask(uuid string) (si *Snode, err error) {
 	if si == nil {
 		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
 	}
-	return
+	return si, err
 }
 
 /////////////

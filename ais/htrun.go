@@ -332,13 +332,12 @@ func (h *htrun) initDataClient(config *cmn.Config) {
 	}
 }
 
-func (h *htrun) initNetworks() {
+func (h *htrun) initNetworks(config *cmn.Config) {
 	var (
 		s                string
 		pubAddr          meta.NetInfo
 		intraControlAddr meta.NetInfo
 		intraDataAddr    meta.NetInfo
-		config           = cmn.GCO.Get()
 		port             = strconv.Itoa(config.HostNet.Port)
 		proto            = config.Net.HTTP.Proto
 		addrList, err    = getLocalIPv4s(config)

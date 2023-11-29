@@ -573,7 +573,7 @@ func (reb *Reb) rebWaitAck(rargs *rebArgs) (errCnt int) {
 					cnt += l
 					if !logged {
 						for _, lom := range lomack.q {
-							tsi, err := smap.HrwHash2T(lom.Digest(), true /*skip maint*/)
+							tsi, err := smap.HrwHash2T(lom.Digest())
 							if err == nil {
 								nlog.Infof("waiting for %s ACK from %s", lom, tsi.StringEx())
 								logged = true
@@ -658,7 +658,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 				delete(lomAck.q, uname)
 				continue
 			}
-			tsi, _ := rargs.smap.HrwHash2T(lom.Digest(), true /*skip maint*/)
+			tsi, _ := rargs.smap.HrwHash2T(lom.Digest())
 			if reb.t.HeadObjT2T(lom, tsi) {
 				if rargs.config.FastV(4, cos.SmoduleReb) {
 					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
@@ -817,7 +817,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
 	if lom.Bck().Props.EC.Enabled {
 		return filepath.SkipDir
 	}
-	tsi, err := rj.smap.HrwHash2T(lom.Digest(), true /*skip maint*/)
+	tsi, err := rj.smap.HrwHash2T(lom.Digest())
 	if err != nil {
 		return err
 	}

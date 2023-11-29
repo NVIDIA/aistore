@@ -50,7 +50,7 @@ var _ = Describe("Notifications xaction test", func() {
 		mockNode = func(id, daeType string) *meta.Snode {
 			server := discoverServerDefaultHandler(1, 1)
 			info := serverTCPAddr(server.URL)
-			return meta.NewSnode(id, daeType, info, info, info)
+			return newSnode(id, daeType, info, info, info)
 		}
 
 		getNodeMap = func(ids ...string) (snodes meta.NodeMap) {

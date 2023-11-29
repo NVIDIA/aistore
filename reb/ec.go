@@ -316,7 +316,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	}
 
 	smap := reb.smap.Load()
-	hrwTarget, err := smap.HrwHash2T(ct.Digest(), true /*skip maint*/)
+	hrwTarget, err := smap.HrwHash2T(ct.Digest())
 	if err != nil || hrwTarget.ID() == reb.t.SID() {
 		return err
 	}

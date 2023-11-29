@@ -184,7 +184,7 @@ func getNetInfo(config *cmn.Config, addrList []*localIPv4Info, proto, configured
 		return
 	}
 
-	lst := strings.Split(configuredIPv4s, ",")
+	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
 	if host, err = _selectHost(addrList, lst); err == nil {
 		netInfo = *meta.NewNetInfo(proto, host, port)
 	}

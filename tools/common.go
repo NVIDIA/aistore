@@ -33,12 +33,14 @@ func GenerateNotConflictingObjectName(baseName, newNamePrefix string, bck cmn.Bc
 	newName := newNamePrefix
 
 	cbck := meta.CloneBck(&bck)
-	baseNameHrw, _ := smap.HrwName2T(cbck.MakeUname(baseName), true /*skip maint*/)
-	newNameHrw, _ := smap.HrwName2T(cbck.MakeUname(newName), true /*skip maint*/)
+	baseNameHrw, e1 := smap.HrwName2T(cbck.MakeUname(baseName))
+	newNameHrw, e2 := smap.HrwName2T(cbck.MakeUname(newName))
+	cos.Assert(e1 == nil && e2 == nil)
 
 	for i := 0; baseNameHrw == newNameHrw; i++ {
 		newName = newNamePrefix + strconv.Itoa(i)
-		newNameHrw, _ = smap.HrwName2T(cbck.MakeUname(newName), true /*skip maint*/)
+		newNameHrw, e1 = smap.HrwName2T(cbck.MakeUname(newName))
+		cos.AssertNoErr(e1)
 	}
 	return newName
 }

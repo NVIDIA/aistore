@@ -32,13 +32,19 @@ type (
 	}
 )
 
+func newSnode(id, daeType string, publicNet, intraControlNet, intraDataNet meta.NetInfo) (snode *meta.Snode) {
+	snode = &meta.Snode{PubNet: publicNet, ControlNet: intraControlNet, DataNet: intraDataNet}
+	snode.Init(id, daeType)
+	return
+}
+
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxy {
 	var (
 		p       = &proxy{}
 		tracker = mock.NewStatsTracker()
 	)
-	p.si = meta.NewSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
+	p.si = newSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 	p.client.data = &http.Client{}
 	p.client.control = &http.Client{}
 
@@ -288,9 +294,9 @@ func TestDiscoverServers(t *testing.T) {
 				ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 				addrInfo := serverTCPAddr(ts.URL)
 				if s.isProxy {
-					discoverSmap.addProxy(meta.NewSnode(s.id, apc.Proxy, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addProxy(newSnode(s.id, apc.Proxy, addrInfo, addrInfo, addrInfo))
 				} else {
-					discoverSmap.addTarget(meta.NewSnode(s.id, apc.Target, addrInfo, addrInfo, addrInfo))
+					discoverSmap.addTarget(newSnode(s.id, apc.Target, addrInfo, addrInfo, addrInfo))
 				}
 			}
 			svm := primary.uncoverMeta(discoverSmap)

@@ -94,12 +94,6 @@ type (
 // Snode //
 ///////////
 
-func NewSnode(id, daeType string, publicNet, intraControlNet, intraDataNet NetInfo) (snode *Snode) {
-	snode = &Snode{PubNet: publicNet, ControlNet: intraControlNet, DataNet: intraDataNet}
-	snode.Init(id, daeType)
-	return
-}
-
 func (d *Snode) Init(id, daeType string) {
 	debug.Assert(d.DaeID == "" && d.DaeType == "")
 	debug.Assert(id != "" && daeType != "")
