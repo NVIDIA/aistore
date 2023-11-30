@@ -15,7 +15,6 @@ import (
 
 const (
 	NetPublic       = "PUBLIC"
-	NetPub2         = "PUB2" // multi-home
 	NetIntraControl = "INTRA-CONTROL"
 	NetIntraData    = "INTRA-DATA"
 )

@@ -3142,7 +3142,7 @@ func (p *proxy) detectDuplicate(osi, nsi *meta.Snode) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return !nsi.Equals(si), nil
+	return !nsi.Eq(si), nil
 }
 
 // getDaemonInfo queries osi for its daemon info and returns it.

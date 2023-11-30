@@ -33,7 +33,7 @@ outer:
 			continue
 		}
 		for _, ignoreNode := range ignore {
-			if ignoreNode.Equals(node) {
+			if ignoreNode.Eq(node) {
 				continue outer
 			}
 		}

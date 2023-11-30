@@ -356,9 +356,12 @@ func (h *htrun) initSnode(config *cmn.Config) {
 	// 4. new Snode
 	h.si = &meta.Snode{
 		PubNet:     pubAddr1,
-		PubNet2:    pubAddr2,
 		ControlNet: intraControlAddr,
 		DataNet:    intraDataAddr,
+	}
+	if !pubAddr2.IsEmpty() {
+		h.si.PubExtra = make([]meta.NetInfo, 1)
+		h.si.PubExtra[0] = pubAddr2
 	}
 }
 
@@ -461,11 +464,12 @@ func (h *htrun) run(config *cmn.Config) error {
 	ep := h.si.PubNet.TCPEndpoint()
 	if h.pubAddrAny(config) {
 		ep = ":" + h.si.PubNet.Port
-	} else if !h.si.PubNet2.IsEmpty() {
-		debug.Assert(h.si.PubNet2.Port == h.si.PubNet.Port)
+	} else if len(h.si.PubExtra) > 0 {
+		pubAddr2 := h.si.PubExtra[0]
+		debug.Assert(pubAddr2.Port == h.si.PubNet.Port)
 		g.netServ.pub2 = &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize}
 		go func() {
-			_ = g.netServ.pub2.listen(h.si.PubNet2.TCPEndpoint(), logger, tlsConf, config)
+			_ = g.netServ.pub2.listen(pubAddr2.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
 

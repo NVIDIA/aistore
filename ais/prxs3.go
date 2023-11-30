@@ -22,7 +22,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// TODO -- FIXME: `checkAccess` permissions (see ais/proxy.go)
+// TODO: `checkAccess` permissions (see ais/proxy.go)
 
 var (
 	errS3Req = errors.New("invalid s3 request")
@@ -210,13 +210,13 @@ func (p *proxy) handleMptUpload(w http.ResponseWriter, r *http.Request, parts []
 	}
 	smap := p.owner.smap.get()
 	objName := s3.ObjName(parts)
-	si, err := smap.HrwName2T(bck.MakeUname(objName))
+	si, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
@@ -404,7 +404,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		nlog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	p.s3Redirect(w, r, si, redirectURL, bckDst.Name)
 }
 
@@ -418,8 +418,9 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 		return
 	}
 	var (
-		si   *meta.Snode
-		smap = p.owner.smap.get()
+		netPub string
+		si     *meta.Snode
+		smap   = p.owner.smap.get()
 	)
 	if err = bck.Allow(apc.AcePUT); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
@@ -430,7 +431,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = smap.HrwName2T(bck.MakeUname(objName))
+	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -439,7 +440,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 
@@ -469,7 +470,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		return
 	}
 	objName := s3.ObjName(items)
-	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName)) // TODO -- FIXME: here and elsewhere
+	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -492,7 +493,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 			return
 		}
 		started := time.Now()
-		redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+		redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 		p.s3Redirect(w, r, si, redirectURL, bck.Name)
 		return
 	}
@@ -588,7 +589,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 

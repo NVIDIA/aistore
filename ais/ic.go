@@ -420,7 +420,7 @@ func (ic *ic) syncICBundle() error {
 		}
 	}
 
-	if si.Equals(ic.p.si) {
+	if si.Eq(ic.p.si) {
 		return nil
 	}
 	cargs := allocCargs()

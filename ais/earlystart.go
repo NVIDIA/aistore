@@ -241,6 +241,7 @@ func (p *proxy) primaryStartup(loadedSmap *smapX, config *cmn.Config, ntargets i
 		p.owner.smap.mu.Lock()
 		clone := p.owner.smap.get().clone()
 		if loadedSmap != nil {
+			// TODO [feature]: when node re-joins with different network settings (see prxclu)
 			added, _ = clone.merge(loadedSmap, true /*override (IP, port) duplicates*/)
 			clone = loadedSmap
 			if added > 0 {

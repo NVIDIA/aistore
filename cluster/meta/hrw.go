@@ -6,6 +6,7 @@ package meta
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -18,9 +19,25 @@ import (
 // aka highest random weight (HRW)
 // See also: fs/hrw.go
 
+var robin atomic.Uint64 // round
+
 func (smap *Smap) HrwName2T(uname string) (*Snode, error) {
 	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
 	return smap.HrwHash2T(digest)
+}
+
+func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err error) {
+	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
+	si, err = smap.HrwHash2T(digest)
+	l := len(si.PubExtra)
+	if l == 0 || err != nil {
+		return si, cmn.NetPublic, err
+	}
+	i := robin.Add(1) % uint64(l+1)
+	if i == 0 {
+		return si, cmn.NetPublic, nil
+	}
+	return si, si.PubExtra[i-1].Hostname, nil
 }
 
 func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {
@@ -55,36 +72,6 @@ func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
 		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
 	}
 	return si, err
-}
-
-func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err error) {
-	var (
-		max    uint64
-		digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
-	)
-	for _, tsi := range smap.Tmap {
-		if tsi.InMaintOrDecomm() {
-			continue
-		}
-		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
-		if cs >= max {
-			max = cs
-			si = tsi
-			netName = cmn.NetPublic
-		}
-		if tsi.idDigest2 > 0 {
-			cs = xoshiro256.Hash(tsi.idDigest2 ^ digest)
-			if cs > max {
-				max = cs
-				si = tsi
-				netName = cmn.NetPub2
-			}
-		}
-	}
-	if si == nil {
-		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
-	}
-	return si, netName, err
 }
 
 func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {

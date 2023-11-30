@@ -479,7 +479,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if apiOp == apc.SelfJoin {
 		// check for dup node ID
-		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Equals(nsi) {
+		if osi := smap.GetNode(nsi.ID()); osi != nil && !osi.Eq(nsi) {
 			duplicate, err := p.detectDuplicate(osi, nsi)
 			if err != nil {
 				p.writeErrf(w, r, "failed to obtain node info: %v", err)
@@ -620,6 +620,8 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	keepalive := apiOp == apc.Keepalive
 	osi := smap.GetNode(nsi.ID())
 	if osi == nil {
+		// TODO [feature]: support node (shutdown followed by restart) with different network(s)
+		// (see also: meta.Snode.Eq())
 		if keepalive {
 			nlog.Warningf("%s keepalive %s: adding back to the %s", p, nsi.StringEx(), smap)
 		}
@@ -652,6 +654,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 	// when cluster's starting up
 	if a, b := p.ClusterStarted(), p.owner.rmd.starting.Load(); err == nil && (!a || b) {
 		clone := smap.clone()
+		// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
 		clone.putNode(nsi, flags, false /*silent*/)
 		p.owner.smap.put(clone)
 		upd = false
@@ -667,7 +670,7 @@ func (p *proxy) _joinKalive(nsi *meta.Snode, regSmap *smapX, apiOp string, flags
 }
 
 func (p *proxy) kalive(nsi, osi *meta.Snode) bool {
-	if !osi.Equals(nsi) {
+	if !osi.Eq(nsi) {
 		duplicate, err := p.detectDuplicate(osi, nsi)
 		if err != nil {
 			nlog.Errorf("%s: %s(%s) failed to obtain node info: %v", p, nsi.StringEx(), nsi.PubNet.URL, err)
@@ -689,7 +692,7 @@ func (p *proxy) rereg(nsi, osi *meta.Snode) bool {
 	if !p.NodeStarted() {
 		return true
 	}
-	if osi.Equals(nsi) {
+	if osi.Eq(nsi) {
 		nlog.Infof("%s: %s is already *in*", p, nsi.StringEx())
 		return false
 	}
@@ -1297,7 +1300,7 @@ func (p *proxy) sendOwnTbl(w http.ResponseWriter, r *http.Request, msg *apc.ActM
 		p.writeErrf(w, r, "%s: not an IC member", dst)
 		return
 	}
-	if smap.IsIC(p.si) && !p.si.Equals(dst) {
+	if smap.IsIC(p.si) && !p.si.Eq(dst) {
 		// node has older version than dst node handle locally
 		if err := p.ic.sendOwnershipTbl(dst, smap); err != nil {
 			p.writeErr(w, r, err)

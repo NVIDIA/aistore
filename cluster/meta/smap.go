@@ -65,7 +65,7 @@ type (
 	Snode struct {
 		LocalNet   *net.IPNet `json:"-"`
 		PubNet     NetInfo    `json:"public_net"` // cmn.NetPublic
-		PubNet2    NetInfo    `json:"pub2,omitempty"`
+		PubExtra   []NetInfo  `json:"pub_extra,omitempty"`
 		DataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetIntraData
 		ControlNet NetInfo    `json:"intra_control_net"` // cmn.NetIntraControl
 		DaeType    string     `json:"daemon_type"`       // "target" or "proxy"
@@ -73,7 +73,6 @@ type (
 		name       string
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
 		idDigest   uint64
-		idDigest2  uint64
 	}
 
 	Nodes   []*Snode          // slice of Snodes
@@ -106,18 +105,9 @@ func (d *Snode) Init(id, daeType string) {
 func (d *Snode) Digest() uint64 { return d.idDigest }
 
 func (d *Snode) setDigest() {
-	switch {
-	case d.idDigest != 0:
-		// nothing to do
-	case !d.PubNet2.IsEmpty(): // multi-home
-		d.idDigest2 = xxhash.Checksum64S([]byte(d.ID()+cmn.NetPub2), cos.MLCG32)
-		debug.Assert(d.idDigest2 > 0)
-		fallthrough
-	default:
+	if d.idDigest == 0 {
 		d.idDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
-		debug.Assert(d.idDigest > 0)
 	}
-	debug.Assert(d.idDigest2 != d.idDigest)
 }
 
 func (d *Snode) ID() string   { return d.DaeID }
@@ -170,19 +160,26 @@ func (d *Snode) URL(network string) string {
 	switch network {
 	case cmn.NetPublic:
 		return d.PubNet.URL
-	case cmn.NetPub2:
-		return d.PubNet2.URL
 	case cmn.NetIntraControl:
 		return d.ControlNet.URL
 	case cmn.NetIntraData:
 		return d.DataNet.URL
-	default:
-		cos.Assertf(false, "unknown network %q", network)
-		return ""
+	default: // multi-home
+		for i := range d.PubExtra {
+			if d.PubExtra[i].Hostname == network {
+				return d.PubExtra[i].URL
+			}
+		}
 	}
+	debug.Assert(false, "unknown network '"+network+"'")
+	return ""
 }
 
-func (d *Snode) Equals(o *Snode) (eq bool) {
+// TODO [feature]
+// - support node restart+join with different network(s)
+// - factor in PubExtra as well
+
+func (d *Snode) Eq(o *Snode) (eq bool) {
 	if d == nil || o == nil {
 		return
 	}
@@ -193,19 +190,17 @@ func (d *Snode) Equals(o *Snode) (eq bool) {
 		}
 		name := d.StringEx()
 		debug.Assertf(d.DaeType == o.DaeType, "%s: node type %q vs %q", name, d.DaeType, o.DaeType)
-		// generally, expecting network equality with local reconfig (and re-join) considered
-		// legit
 		if !d.PubNet.eq(&o.PubNet) {
-			nlog.Errorf("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
+			nlog.Infof("Warning %s: pub %s vs %s", name, d.PubNet.TCPEndpoint(), o.PubNet.TCPEndpoint())
 		}
 		if !d.ControlNet.eq(&o.ControlNet) {
-			nlog.Errorf("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
+			nlog.Infof("Warning %s: control %s vs %s", name, d.ControlNet.TCPEndpoint(), o.ControlNet.TCPEndpoint())
 		}
 		if !d.DataNet.eq(&o.DataNet) {
-			nlog.Errorf("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
+			nlog.Infof("Warning %s: data %s vs %s", name, d.DataNet.TCPEndpoint(), o.DataNet.TCPEndpoint())
 		}
 	})
-	return
+	return eq
 }
 
 func (d *Snode) Validate() error {
@@ -511,7 +506,7 @@ func (m *Smap) Compare(other *Smap) (uuid string, sameOrigin, sameVersion, eq bo
 	if m.Version != other.Version {
 		sameVersion = false
 	}
-	if m.Primary == nil || other.Primary == nil || !m.Primary.Equals(other.Primary) {
+	if m.Primary == nil || other.Primary == nil || !m.Primary.Eq(other.Primary) {
 		return // eq == false
 	}
 	eq = mapsEq(m.Tmap, other.Tmap) && mapsEq(m.Pmap, other.Pmap)
@@ -626,7 +621,7 @@ func mapsEq(a, b NodeMap) bool {
 	for id, anode := range a {
 		if bnode, ok := b[id]; !ok {
 			return false
-		} else if !anode.Equals(bnode) {
+		} else if !anode.Eq(bnode) {
 			return false
 		}
 	}
