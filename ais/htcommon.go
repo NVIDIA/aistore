@@ -218,8 +218,10 @@ type (
 	}
 
 	nlogWriter struct{}
+)
 
-	// error types
+// error types
+type (
 	errTgtBmdUUIDDiffer struct{ detail string } // BMD & its uuid
 	errPrxBmdUUIDDiffer struct{ detail string }
 	errBmdUUIDSplit     struct{ detail string }
@@ -246,20 +248,6 @@ type (
 	}
 	errNoUnregister struct {
 		action string
-	}
-	apiRequest struct {
-		bck *meta.Bck // out: initialized bucket
-
-		// URL query: the conventional/slow and
-		// the fast alternative tailored exclusively for the datapath (either/or)
-		dpq   *dpq
-		query url.Values
-
-		prefix []string // in: URL must start with these items
-		items  []string // out: URL items after the prefix
-
-		after  int // in: the number of items after the prefix
-		bckIdx int // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
 	}
 )
 
@@ -781,9 +769,25 @@ func extractCii(body []byte, smap *smapX, self, si *meta.Snode) *clusterInfo {
 	return &cii
 }
 
-// //////////////
+////////////////
 // apiRequest //
-// //////////////
+////////////////
+
+type apiRequest struct {
+	bck *meta.Bck // out: initialized bucket
+
+	// URL query: the conventional/slow and
+	// the fast alternative tailored exclusively for the datapath (either/or)
+	dpq   *dpq
+	query url.Values
+
+	prefix []string // in: URL must start with these items
+	items  []string // out: URL items after the prefix
+
+	after  int // in: the number of items after the prefix
+	bckIdx int // in: ordinal number of bucket in URL (some paths starts with extra items: EC & ETL)
+}
+
 var (
 	apiReqPool sync.Pool
 	apireq0    apiRequest

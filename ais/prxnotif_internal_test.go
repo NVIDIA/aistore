@@ -69,8 +69,9 @@ var _ = Describe("Notifications xaction test", func() {
 					statsT: tracker,
 				},
 			}
-			p.client.data = &http.Client{}
-			p.client.control = &http.Client{}
+			g.client.data = &http.Client{}
+			g.client.control = &http.Client{}
+
 			palive := newPalive(p, tracker, atomic.NewBool(true))
 			palive.keepalive.hb = &nopHB{}
 			p.keepalive = palive

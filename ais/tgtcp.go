@@ -1236,5 +1236,5 @@ func (t *target) Stop(err error) {
 		nlog.Warningf("Stopping %s: %v", t, err)
 	}
 	xreg.AbortAll(err)
-	t.htrun.stop(t.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
+	t.htrun.stop(g.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }

@@ -91,8 +91,9 @@ func newPrimary() *proxy {
 	cmn.GCO.CommitUpdate(config)
 	cmn.GCO.SetInitialGconfPath("/tmp/ais-tests/ais.config")
 
-	p.client.data = &http.Client{}
-	p.client.control = &http.Client{}
+	g.client.data = &http.Client{}
+	g.client.control = &http.Client{}
+
 	p.keepalive = newPalive(p, tracker, atomic.NewBool(true))
 
 	o := newBMDOwnerPrx(config)
@@ -112,8 +113,9 @@ func newSecondary(name string) *proxy {
 	p.si = newSnode(name, apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
 	p.owner.smap = newSmapOwner(cmn.GCO.Get())
 	p.owner.smap.put(newSmap())
-	p.client.data = &http.Client{}
-	p.client.control = &http.Client{}
+
+	g.client.data = &http.Client{}
+	g.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
 	config.Periodic.RetrySyncTime = cos.Duration(100 * time.Millisecond)

@@ -45,8 +45,9 @@ func newDiscoverServerPrimary() *proxy {
 		tracker = mock.NewStatsTracker()
 	)
 	p.si = newSnode("primary", apc.Proxy, meta.NetInfo{}, meta.NetInfo{}, meta.NetInfo{})
-	p.client.data = &http.Client{}
-	p.client.control = &http.Client{}
+
+	g.client.data = &http.Client{}
+	g.client.control = &http.Client{}
 
 	config := cmn.GCO.BeginUpdate()
 	config.Keepalive.Proxy.Name = "heartbeat"

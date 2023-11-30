@@ -53,17 +53,7 @@ type htrun struct {
 	si        *meta.Snode
 	keepalive keepaliver
 	statsT    stats.Tracker
-	netServ   struct {
-		pub     *netServer
-		control *netServer
-		data    *netServer
-		pub2    *netServer
-	}
-	client struct {
-		control *http.Client // http client for intra-cluster comm
-		data    *http.Client // http client to execute target <=> target GET & PUT (object)
-	}
-	owner struct {
+	owner     struct {
 		smap   *smapOwner
 		bmd    bmdOwner // an interface with proxy and target impl-s
 		rmd    *rmdOwner
@@ -85,7 +75,7 @@ type htrun struct {
 // interface guard
 var _ cluster.Node = (*htrun)(nil)
 
-func (h *htrun) DataClient() *http.Client { return h.client.data }
+func (*htrun) DataClient() *http.Client { return g.client.data } // TODO: a better way
 
 func (h *htrun) Snode() *meta.Snode { return h.si }
 func (h *htrun) callerName() string { return h.si.String() }
@@ -187,7 +177,7 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 	)
 	// common, debug
 	for r, nh := range debug.Handlers() {
-		h.registerPublicNetHandler(r, nh)
+		handlePub(r, nh)
 	}
 	// node type specific
 	for _, nh := range networkHandlers {
@@ -199,15 +189,15 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 		}
 		debug.Assert(nh.net != 0)
 		if nh.net.isSet(accessNetPublic) {
-			h.registerPublicNetHandler(path, nh.h)
+			handlePub(path, nh.h)
 			reg = true
 		}
 		if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraControl) {
-			h.registerIntraControlNetHandler(path, nh.h)
+			handleControl(path, nh.h)
 			reg = true
 		}
 		if config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraData) {
-			h.registerIntraDataNetHandler(path, nh.h)
+			handleData(path, nh.h)
 			reg = true
 		}
 		if reg {
@@ -216,54 +206,27 @@ func (h *htrun) regNetHandlers(networkHandlers []networkHandler) {
 		// none of the above
 		if !config.HostNet.UseIntraControl && !config.HostNet.UseIntraData {
 			// no intra-cluster networks: default to pub net
-			h.registerPublicNetHandler(path, nh.h)
+			handlePub(path, nh.h)
 		} else if config.HostNet.UseIntraControl && nh.net.isSet(accessNetIntraData) {
 			// (not configured) data defaults to (configured) control
-			h.registerIntraControlNetHandler(path, nh.h)
+			handleControl(path, nh.h)
 		} else {
 			debug.Assert(config.HostNet.UseIntraData && nh.net.isSet(accessNetIntraControl))
 			// (not configured) control defaults to (configured) data
-			h.registerIntraDataNetHandler(path, nh.h)
+			handleData(path, nh.h)
 		}
 	}
 	// common Prometheus
 	if h.statsT.IsPrometheus() {
 		nh := networkHandler{r: "/" + apc.Metrics, h: promhttp.Handler().ServeHTTP}
 		path := nh.r // absolute
-		h.registerPublicNetHandler(path, nh.h)
-	}
-}
-
-func (h *htrun) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
-		h.netServ.pub.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
-			h.netServ.pub.muxers[v].HandleFunc(path+"/", handler)
-		}
-	}
-}
-
-func (h *htrun) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
-		h.netServ.control.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
-			h.netServ.control.muxers[v].HandleFunc(path+"/", handler)
-		}
-	}
-}
-
-func (h *htrun) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	for _, v := range allHTTPverbs {
-		h.netServ.data.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
-			h.netServ.data.muxers[v].HandleFunc(path+"/", handler)
-		}
+		handlePub(path, nh.h)
 	}
 }
 
 func (h *htrun) init(config *cmn.Config) {
-	h.initCtrlClient(config)
-	h.initDataClient(config)
+	initCtrlClient(config)
+	initDataClient(config)
 
 	tcpbuf := config.Net.L4.SndRcvBufSize
 	if h.si.IsProxy() {
@@ -273,16 +236,16 @@ func (h *htrun) init(config *cmn.Config) {
 	}
 
 	muxers := newMuxers()
-	h.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
-	h.netServ.control = h.netServ.pub // if not separately configured, intra-control net is public
+	g.netServ.pub = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
+	g.netServ.control = g.netServ.pub // if not separately configured, intra-control net is public
 	if config.HostNet.UseIntraControl {
 		muxers = newMuxers()
-		h.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
+		g.netServ.control = &netServer{muxers: muxers, sndRcvBufSize: 0}
 	}
-	h.netServ.data = h.netServ.control // if not configured, intra-data net is intra-control
+	g.netServ.data = g.netServ.control // if not configured, intra-data net is intra-control
 	if config.HostNet.UseIntraData {
 		muxers = newMuxers()
-		h.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
+		g.netServ.data = &netServer{muxers: muxers, sndRcvBufSize: tcpbuf}
 	}
 
 	h.owner.smap = newSmapOwner(config)
@@ -293,44 +256,6 @@ func (h *htrun) init(config *cmn.Config) {
 	h.gmm.RegWithHK()
 	h.smm = memsys.ByteMM()
 	h.smm.RegWithHK()
-}
-
-func (h *htrun) initCtrlClient(config *cmn.Config) {
-	const (
-		defaultControlWriteBufferSize = 16 * cos.KiB // for more defaults see cmn/network.go
-		defaultControlReadBufferSize  = 16 * cos.KiB
-	)
-	cargs := cmn.TransportArgs{
-		Timeout:         config.Client.Timeout.D(),
-		WriteBufferSize: defaultControlWriteBufferSize,
-		ReadBufferSize:  defaultControlReadBufferSize,
-	}
-	if config.Net.HTTP.UseHTTPS {
-		h.client.control = cmn.NewIntraClientTLS(cargs, config)
-	} else {
-		h.client.control = cmn.NewClient(cargs)
-	}
-}
-
-// wbuf/rbuf - when not configured use AIS defaults (to override the usual 4KB)
-func (h *htrun) initDataClient(config *cmn.Config) {
-	wbuf, rbuf := config.Net.HTTP.WriteBufferSize, config.Net.HTTP.ReadBufferSize
-	if wbuf == 0 {
-		wbuf = cmn.DefaultWriteBufferSize
-	}
-	if rbuf == 0 {
-		rbuf = cmn.DefaultReadBufferSize
-	}
-	cargs := cmn.TransportArgs{
-		Timeout:         config.Client.TimeoutLong.D(),
-		WriteBufferSize: wbuf,
-		ReadBufferSize:  rbuf,
-	}
-	if config.Net.HTTP.UseHTTPS {
-		h.client.data = cmn.NewIntraClientTLS(cargs, config)
-	} else {
-		h.client.data = cmn.NewClient(cargs)
-	}
 }
 
 // steps 1 thru 4
@@ -524,12 +449,12 @@ func (h *htrun) run(config *cmn.Config) error {
 	}
 	if config.HostNet.UseIntraControl {
 		go func() {
-			_ = h.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
+			_ = g.netServ.control.listen(h.si.ControlNet.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
 	if config.HostNet.UseIntraData {
 		go func() {
-			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
+			_ = g.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
 
@@ -538,12 +463,13 @@ func (h *htrun) run(config *cmn.Config) error {
 		ep = ":" + h.si.PubNet.Port
 	} else if !h.si.PubNet2.IsEmpty() {
 		debug.Assert(h.si.PubNet2.Port == h.si.PubNet.Port)
-		h.netServ.pub2 = &netServer{muxers: h.netServ.pub.muxers, sndRcvBufSize: h.netServ.pub.sndRcvBufSize}
+		g.netServ.pub2 = &netServer{muxers: g.netServ.pub.muxers, sndRcvBufSize: g.netServ.pub.sndRcvBufSize}
 		go func() {
-			_ = h.netServ.pub2.listen(h.si.PubNet2.TCPEndpoint(), logger, tlsConf, config)
+			_ = g.netServ.pub2.listen(h.si.PubNet2.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
-	return h.netServ.pub.listen(ep, logger, tlsConf, config)
+
+	return g.netServ.pub.listen(ep, logger, tlsConf, config) // stay here
 }
 
 // return true to start listening on `INADDR_ANY:PubNet.Port`
@@ -557,20 +483,6 @@ func (h *htrun) pubAddrAny(config *cmn.Config) (inaddrAny bool) {
 	return inaddrAny
 }
 
-func (h *htrun) stopHTTPServer() {
-	config := cmn.GCO.Get()
-	h.netServ.pub.shutdown(config)
-	if h.netServ.pub2 != nil {
-		h.netServ.pub2.shutdown(config)
-	}
-	if config.HostNet.UseIntraControl {
-		h.netServ.control.shutdown(config)
-	}
-	if config.HostNet.UseIntraData {
-		h.netServ.data.shutdown(config)
-	}
-}
-
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
 // for running xactions to abort
 func (h *htrun) stop(rmFromSmap bool) {
@@ -582,7 +494,7 @@ func (h *htrun) stop(rmFromSmap bool) {
 	wg.Add(1)
 	go func() {
 		time.Sleep(time.Second / 2)
-		h.stopHTTPServer()
+		shuthttp()
 		wg.Done()
 	}()
 	entry := xreg.GetRunning(xreg.Flt{})
@@ -654,13 +566,13 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		if res.err != nil {
 			break
 		}
-		client = h.client.control
+		client = g.client.control
 	case apc.LongTimeout:
 		req, res.err = args.req.Req()
 		if res.err != nil {
 			break
 		}
-		client = h.client.data
+		client = g.client.data
 	default:
 		var cancel context.CancelFunc
 		if args.timeout == 0 {
@@ -676,10 +588,10 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 		// - timeout causes context.deadlineExceededError, i.e. "context deadline exceeded"
 		// - the two knobs are configurable via "client_timeout" and "client_long_timeout",
 		// respectively (client section in the global config)
-		if args.timeout > h.client.control.Timeout {
-			client = h.client.data
+		if args.timeout > g.client.control.Timeout {
+			client = g.client.data
 		} else {
-			client = h.client.control
+			client = g.client.control
 		}
 	}
 	if res.err != nil {

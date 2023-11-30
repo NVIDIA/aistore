@@ -931,7 +931,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 	}
 	defer cancel()
 
-	resp, err := goi.t.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
+	resp, err := g.client.data.Do(req) //nolint:bodyclose // closed by `poi.putObject`
 	cmn.FreeHra(reqArgs)
 	if err != nil {
 		nlog.Errorf("%s: gfn failure, %s %q, err: %v", goi.t, tsi, lom, err)
@@ -1589,7 +1589,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)
 	}
 	defer cancel()
-	resp, err := coi.t.client.data.Do(req)
+	resp, err := g.client.data.Do(req)
 	if err != nil {
 		return cmn.NewErrFailedTo(coi.t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
 	}
