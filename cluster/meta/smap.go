@@ -63,9 +63,9 @@ type (
 
 	// Snode - a node (gateway or target) in a cluster
 	Snode struct {
-		Ext        any        `json:"ext,omitempty"` // within meta-version extensions
 		LocalNet   *net.IPNet `json:"-"`
-		PubNet     NetInfo    `json:"public_net"`        // cmn.NetPublic
+		PubNet     NetInfo    `json:"public_net"` // cmn.NetPublic
+		PubNet2    NetInfo    `json:"pub2,omitempty"`
 		DataNet    NetInfo    `json:"intra_data_net"`    // cmn.NetIntraData
 		ControlNet NetInfo    `json:"intra_control_net"` // cmn.NetIntraControl
 		DaeType    string     `json:"daemon_type"`       // "target" or "proxy"
@@ -73,6 +73,7 @@ type (
 		name       string
 		Flags      cos.BitFlags `json:"flags"` // enum { SnodeNonElectable, SnodeIC, ... }
 		idDigest   uint64
+		idDigest2  uint64
 	}
 
 	Nodes   []*Snode          // slice of Snodes
@@ -105,9 +106,18 @@ func (d *Snode) Init(id, daeType string) {
 func (d *Snode) Digest() uint64 { return d.idDigest }
 
 func (d *Snode) setDigest() {
-	if d.idDigest == 0 {
+	switch {
+	case d.idDigest != 0:
+		// nothing to do
+	case !d.PubNet2.IsEmpty(): // multi-home
+		d.idDigest2 = xxhash.Checksum64S([]byte(d.ID()+cmn.NetPub2), cos.MLCG32)
+		debug.Assert(d.idDigest2 > 0)
+		fallthrough
+	default:
 		d.idDigest = xxhash.Checksum64S(cos.UnsafeB(d.ID()), cos.MLCG32)
+		debug.Assert(d.idDigest > 0)
 	}
+	debug.Assert(d.idDigest2 != d.idDigest)
 }
 
 func (d *Snode) ID() string   { return d.DaeID }
@@ -160,6 +170,8 @@ func (d *Snode) URL(network string) string {
 	switch network {
 	case cmn.NetPublic:
 		return d.PubNet.URL
+	case cmn.NetPub2:
+		return d.PubNet2.URL
 	case cmn.NetIntraControl:
 		return d.ControlNet.URL
 	case cmn.NetIntraData:
@@ -283,14 +295,12 @@ func (d *Snode) Fl2S() string {
 
 func _ep(hostname, port string) string { return hostname + ":" + port }
 
-func NewNetInfo(proto, hostname, port string) *NetInfo {
+func (ni *NetInfo) Init(proto, hostname, port string) {
 	ep := _ep(hostname, port)
-	return &NetInfo{
-		Hostname:    hostname,
-		Port:        port,
-		URL:         fmt.Sprintf("%s://%s", proto, ep),
-		tcpEndpoint: ep,
-	}
+	ni.Hostname = hostname
+	ni.Port = port
+	ni.URL = fmt.Sprintf("%s://%s", proto, ep)
+	ni.tcpEndpoint = ep
 }
 
 func (ni *NetInfo) TCPEndpoint() string {
@@ -302,6 +312,10 @@ func (ni *NetInfo) TCPEndpoint() string {
 
 func (ni *NetInfo) String() string {
 	return ni.TCPEndpoint()
+}
+
+func (ni *NetInfo) IsEmpty() bool {
+	return ni.Hostname == "" && ni.Port == ""
 }
 
 func (ni *NetInfo) eq(o *NetInfo) bool {

@@ -57,6 +57,36 @@ func (smap *Smap) HrwHash2Tall(digest uint64) (si *Snode, err error) {
 	return si, err
 }
 
+func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err error) {
+	var (
+		max    uint64
+		digest = xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
+	)
+	for _, tsi := range smap.Tmap {
+		if tsi.InMaintOrDecomm() {
+			continue
+		}
+		cs := xoshiro256.Hash(tsi.Digest() ^ digest)
+		if cs >= max {
+			max = cs
+			si = tsi
+			netName = cmn.NetPublic
+		}
+		if tsi.idDigest2 > 0 {
+			cs = xoshiro256.Hash(tsi.idDigest2 ^ digest)
+			if cs > max {
+				max = cs
+				si = tsi
+				netName = cmn.NetPub2
+			}
+		}
+	}
+	if si == nil {
+		err = cmn.NewErrNoNodes(apc.Target, len(smap.Tmap))
+	}
+	return si, netName, err
+}
+
 func (smap *Smap) HrwProxy(idToSkip string) (pi *Snode, err error) {
 	var max uint64
 	for pid, psi := range smap.Pmap {

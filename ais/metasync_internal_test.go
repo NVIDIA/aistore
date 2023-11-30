@@ -56,10 +56,11 @@ type (
 )
 
 // serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
-func serverTCPAddr(u string) meta.NetInfo {
+func serverTCPAddr(u string) (ni meta.NetInfo) {
 	s := strings.TrimPrefix(u, "http://")
 	addr, _ := net.ResolveTCPAddr("tcp", s)
-	return *meta.NewNetInfo("http", addr.IP.String(), strconv.Itoa(addr.Port))
+	ni.Init("http", addr.IP.String(), strconv.Itoa(addr.Port))
+	return
 }
 
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
@@ -457,14 +458,11 @@ func multipleSync(_ *testing.T, primary *proxy, syncer *metasyncer) ([]transport
 // retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxy, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
+		addrInfo meta.NetInfo
 		ch       = make(chan transportData, 2) // NOTE: Use 2 to avoid unbuffered channel, http handler can return.
 		id       = "p"
-		addrInfo = *meta.NewNetInfo(
-			"http",
-			"127.0.0.1",
-			"53538", // the lucky port
-		)
 	)
+	addrInfo.Init("http", "127.0.0.1", "53538")
 
 	// handler for /v1/metasync
 	http.HandleFunc(apc.URLPathMetasync.S, func(w http.ResponseWriter, r *http.Request) {

@@ -452,8 +452,9 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		return
 	}
 	var (
-		si   *meta.Snode
-		smap = p.owner.smap.get()
+		si     *meta.Snode
+		netPub string
+		smap   = p.owner.smap.get()
 	)
 	if err = bck.Allow(apc.AceGET); err != nil {
 		s3.WriteErr(w, r, err, http.StatusForbidden)
@@ -468,7 +469,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		return
 	}
 	objName := s3.ObjName(items)
-	si, err = smap.HrwName2T(bck.MakeUname(objName))
+	si, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName)) // TODO -- FIXME: here and elsewhere
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -477,7 +478,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
-	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraData, netPub)
 	p.s3Redirect(w, r, si, redirectURL, bck.Name)
 }
 

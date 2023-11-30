@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
@@ -113,14 +114,26 @@ func getLocalIPv4s(config *cmn.Config) (addrlist []*localIPv4Info, err error) {
 
 // given configured list of hostnames, return the first one matching local unicast IPv4
 func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
-	msg := fmt.Sprintf("select hostname given: local IPv4 %v, configured %v", locIPs, hostnames)
-	nlog.Infoln(msg)
+	sb := &strings.Builder{}
+	sb.WriteByte('[')
+	for i, lip := range locIPs {
+		sb.WriteString(lip.ipv4)
+		sb.WriteString("(MTU=")
+		sb.WriteString(strconv.Itoa(lip.mtu))
+		sb.WriteByte(')')
+		if i < len(locIPs)-1 {
+			sb.WriteByte(' ')
+		}
+	}
+	sb.WriteByte(']')
+	nlog.Infoln("local IPv4:", sb.String())
+	nlog.Infoln("configured:", hostnames)
 
 	for i, host := range hostnames {
+		host = strings.TrimSpace(host)
 		var ipv4 string
-		if net.ParseIP(host) != nil {
-			// parses as IP
-			ipv4 = strings.TrimSpace(host)
+		if net.ParseIP(host) != nil { // parses as IP
+			ipv4 = host
 		} else {
 			ip, err := _resolve(host)
 			if err != nil {
@@ -132,13 +145,13 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 		}
 		for _, addr := range locIPs {
 			if addr.ipv4 == ipv4 {
-				nlog.Infoln("Selected hostname", host, "IP", ipv4)
+				nlog.Infoln("selected: hostname", host, "IP", ipv4)
 				return host, nil
 			}
 		}
 	}
 
-	err := errors.New("failed to " + msg)
+	err := fmt.Errorf("failed to select hostname from: (%s, %v)", sb.String(), hostnames)
 	nlog.Errorln(err)
 	return "", err
 }
@@ -170,23 +183,33 @@ func _localIP(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err err
 	return ip, nil
 }
 
-// getNetInfo returns hostname to listen on.
-// If config doesn't contain hostnames it chooses one of the local IPv4s
-func getNetInfo(config *cmn.Config, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (netInfo meta.NetInfo, err error) {
+func multihome(configuredIPv4s string) (pub1, pub2 string) {
+	if !strings.Contains(configuredIPv4s, cmn.HostnameListSepa) {
+		return configuredIPv4s, ""
+	}
+	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
+	debug.Assert(len(lst) == 2, lst)
+	pub1, pub2 = strings.TrimSpace(lst[0]), strings.TrimSpace(lst[1])
+	nlog.Infof("multihome pub1: %s (%v), pub2: %s (%v)", pub1, net.ParseIP(pub1), pub2, net.ParseIP(pub2))
+	return
+}
+
+// choose one of the local IPv4s if local config doesn't contain (explicitly) specified
+func initNetInfo(ni *meta.NetInfo, config *cmn.Config, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (err error) {
 	var (
 		ip   net.IP
 		host string
 	)
 	if configuredIPv4s == "" {
 		if ip, err = _localIP(config, addrList); err == nil {
-			netInfo = *meta.NewNetInfo(proto, ip.String(), port)
+			ni.Init(proto, ip.String(), port)
 		}
 		return
 	}
 
 	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
 	if host, err = _selectHost(addrList, lst); err == nil {
-		netInfo = *meta.NewNetInfo(proto, host, port)
+		ni.Init(proto, host, port)
 	}
 	return
 }

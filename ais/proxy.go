@@ -91,7 +91,7 @@ func (p *proxy) initClusterCIDR() {
 }
 
 func (p *proxy) init(config *cmn.Config) {
-	p.initNetworks(config)
+	p.initSnode(config)
 
 	// (a) get node ID from command-line or env var (see envDaemonID())
 	// (b) load existing ID from config file stored under local config `confdir` (compare w/ target)
@@ -646,7 +646,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 
 	// 3. redirect
 	smap := p.owner.smap.get()
-	tsi, err := smap.HrwName2T(bck.MakeUname(objName))
+	tsi, netPub, err := smap.HrwMultiHome(bck.MakeUname(objName))
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -654,7 +654,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 	if cmn.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln("GET " + bck.Cname(objName) + " => " + tsi.String())
 	}
-	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 
 	// 4. stats
@@ -706,9 +706,10 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		smap    = p.owner.smap.get()
 		started = time.Now()
 		objName = apireq.items[1]
+		netPub  = cmn.NetPublic
 	)
 	if nodeID == "" {
-		tsi, err = smap.HrwName2T(bck.MakeUname(objName))
+		tsi, netPub, err = smap.HrwMultiHome(bck.MakeUname(objName))
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -733,7 +734,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		nlog.Infof("%s %s => %s%s", verb, bck.Cname(objName), tsi, s)
 	}
 
-	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData)
+	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 
 	// 4. stats
@@ -2020,10 +2021,16 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 	debug.AssertNoErr(err)
 }
 
-func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netName string) (redirect string) {
-	var nodeURL string
+func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netIntra string, netPubs ...string) (redirect string) {
+	var (
+		nodeURL string
+		netPub  = cmn.NetPublic
+	)
+	if len(netPubs) > 0 {
+		netPub = netPubs[0]
+	}
 	if p.si.LocalNet == nil {
-		nodeURL = si.URL(cmn.NetPublic)
+		nodeURL = si.URL(netPub)
 	} else {
 		var local bool
 		remote := r.RemoteAddr
@@ -2034,9 +2041,9 @@ func (p *proxy) redirectURL(r *http.Request, si *meta.Snode, ts time.Time, netNa
 			local = p.si.LocalNet.Contains(ip)
 		}
 		if local {
-			nodeURL = si.URL(netName)
+			nodeURL = si.URL(netIntra)
 		} else {
-			nodeURL = si.URL(cmn.NetPublic)
+			nodeURL = si.URL(netPub)
 		}
 	}
 	redirect = nodeURL + r.URL.Path + "?"

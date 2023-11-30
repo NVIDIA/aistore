@@ -31,7 +31,7 @@ const (
 )
 
 const (
-	MetaverSmap  = 1 // Smap (cluster map) formatting version (jsp)
+	MetaverSmap  = 2 // Smap (cluster map) formatting version (jsp)
 	MetaverBMD   = 2 // BMD (bucket metadata) --/-- (jsp)
 	MetaverRMD   = 1 // Rebalance MD (jsp)
 	MetaverVMD   = 1 // Volume MD (jsp)

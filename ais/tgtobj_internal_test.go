@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 	config.Log.Level = "3"
 	co := newConfigOwner(config)
 	t = newTarget(co)
-	t.initNetworks(config)
+	t.initSnode(config)
 	tid, _ := initTID(config)
 	t.si.Init(tid, apc.Target)
 

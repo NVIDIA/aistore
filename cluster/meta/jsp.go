@@ -16,12 +16,18 @@ var (
 	_ jsp.Opts = (*RMD)(nil)
 )
 
+// Compress, Checksum, Sign (CCS)
+
 var (
-	smapJspOpts = jsp.CCSign(cmn.MetaverSmap) // Compress, Checksum, Sign (CCS)
-	bmdJspOpts  = jsp.CCSign(cmn.MetaverBMD)  // ditto
-	rmdJspOpts  = jsp.CCSign(cmn.MetaverRMD)  // ditto
+	bmdJspOpts = jsp.CCSign(cmn.MetaverBMD) // ditto
+	rmdJspOpts = jsp.CCSign(cmn.MetaverRMD) // ditto
 )
 
-func (*Smap) JspOpts() jsp.Options { return smapJspOpts }
-func (*BMD) JspOpts() jsp.Options  { return bmdJspOpts }
-func (*RMD) JspOpts() jsp.Options  { return rmdJspOpts }
+func (*Smap) JspOpts() jsp.Options {
+	opts := jsp.CCSign(cmn.MetaverSmap)
+	opts.OldMetaverOk = 1
+	return opts
+}
+
+func (*BMD) JspOpts() jsp.Options { return bmdJspOpts }
+func (*RMD) JspOpts() jsp.Options { return rmdJspOpts }

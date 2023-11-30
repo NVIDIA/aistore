@@ -650,16 +650,15 @@ func (server *netServer) connStateListener(c net.Conn, cs http.ConnState) {
 	rawconn.Control(args.ConnControl(rawconn))
 }
 
-func (server *netServer) shutdown() {
+func (server *netServer) shutdown(config *cmn.Config) {
 	server.Lock()
 	defer server.Unlock()
 	if server.s == nil {
 		return
 	}
-	config := cmn.GCO.Get()
 	ctx, cancel := context.WithTimeout(context.Background(), config.Timeout.MaxHostBusy.D())
 	if err := server.s.Shutdown(ctx); err != nil {
-		nlog.Infof("Stopped server, err: %v", err)
+		nlog.Infoln("http server shutdown err:", err)
 	}
 	cancel()
 }

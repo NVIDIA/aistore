@@ -176,7 +176,7 @@ func (t *target) aisBackend() *backend.AISBackendProvider {
 }
 
 func (t *target) init(config *cmn.Config) {
-	t.initNetworks(config)
+	t.initSnode(config)
 
 	// (a) get node ID from command-line or env var (see envDaemonID())
 	// (b) load existing node ID (replicated xattr at roots of respective mountpaths)

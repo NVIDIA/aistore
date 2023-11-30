@@ -57,6 +57,7 @@ type htrun struct {
 		pub     *netServer
 		control *netServer
 		data    *netServer
+		pub2    *netServer
 	}
 	client struct {
 		control *http.Client // http client for intra-cluster comm
@@ -332,64 +333,77 @@ func (h *htrun) initDataClient(config *cmn.Config) {
 	}
 }
 
-func (h *htrun) initNetworks(config *cmn.Config) {
+// steps 1 thru 4
+func (h *htrun) initSnode(config *cmn.Config) {
 	var (
-		s                string
-		pubAddr          meta.NetInfo
-		intraControlAddr meta.NetInfo
-		intraDataAddr    meta.NetInfo
-		port             = strconv.Itoa(config.HostNet.Port)
-		proto            = config.Net.HTTP.Proto
-		addrList, err    = getLocalIPv4s(config)
+		pubAddr1, pubAddr2 meta.NetInfo
+		intraControlAddr   meta.NetInfo
+		intraDataAddr      meta.NetInfo
+		port               = strconv.Itoa(config.HostNet.Port)
+		proto              = config.Net.HTTP.Proto
 	)
+
+	addrList, err := getLocalIPv4s(config)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
 
-	// NOTE in re: K8s deployment
-	// public hostname could be load balancer's external IP or a service DNS
+	// 1. pub net
+	pub1, pub2 := multihome(config.HostNet.Hostname)
 
 	if k8s.IsK8s() && config.HostNet.Hostname != "" {
-		nlog.Infof("detected K8s deployment, skipping hostname validation for %q", config.HostNet.Hostname)
-		pubAddr = *meta.NewNetInfo(proto, config.HostNet.Hostname, port)
+		// K8s: skip IP addr validation
+		// public hostname could be a load balancer's external IP or a service DNS
+		nlog.Infof("K8s deployment: skipping hostname validation for %q", config.HostNet.Hostname)
+		pubAddr1.Init(proto, pub1, port)
 	} else {
-		pubAddr, err = getNetInfo(config, addrList, proto, config.HostNet.Hostname, port)
+		if err = initNetInfo(&pubAddr1, config, addrList, proto, config.HostNet.Hostname, port); err != nil {
+			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
+		}
 	}
-	if err != nil {
-		cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
+	// multi-home (when config.HostNet.Hostname is a comma-separated list)
+	// using the same pub port
+	if pub2 != "" {
+		if pub2 == pub1 {
+			cos.ExitLogf("%s (user) multihome access: cannot have two identical addresses: %q",
+				cmn.NetPublic, config.HostNet.Hostname)
+		}
+		pubAddr2.Init(proto, pub2, port)
+		nlog.Infof("%s (user) access: %v and %v", cmn.NetPublic, pubAddr1, pubAddr2)
+	} else {
+		nlog.Infof("%s (user) access: %v (%q)", cmn.NetPublic, pubAddr1, config.HostNet.Hostname)
 	}
-	if config.HostNet.Hostname != "" {
-		s = " (config: " + config.HostNet.Hostname + ")"
-	}
-	nlog.Infof("%s (user) access: %v%s", cmn.NetPublic, pubAddr, s)
 
-	intraControlAddr = pubAddr
+	// 2. intra-cluster
+	intraControlAddr = pubAddr1
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		intraControlAddr, err = getNetInfo(config, addrList, proto, config.HostNet.HostnameIntraControl, icport)
+		err = initNetInfo(&intraControlAddr, config, addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
 		}
-		s = ""
+		var s string
 		if config.HostNet.HostnameIntraControl != "" {
 			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
 		nlog.Infof("%s access: %v%s", cmn.NetIntraControl, intraControlAddr, s)
 	}
-	intraDataAddr = pubAddr
+	intraDataAddr = pubAddr1
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
-		intraDataAddr, err = getNetInfo(config, addrList, proto, config.HostNet.HostnameIntraData, idport)
+		err = initNetInfo(&intraDataAddr, config, addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
 		}
-		s = ""
+		var s string
 		if config.HostNet.HostnameIntraData != "" {
 			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
 		nlog.Infof("%s access: %v%s", cmn.NetIntraData, intraDataAddr, s)
 	}
-	mustDiffer(pubAddr,
+
+	// 3. validate
+	mustDiffer(pubAddr1,
 		config.HostNet.Port,
 		true,
 		intraControlAddr,
@@ -397,7 +411,7 @@ func (h *htrun) initNetworks(config *cmn.Config) {
 		config.HostNet.UseIntraControl,
 		"pub/ctl",
 	)
-	mustDiffer(pubAddr,
+	mustDiffer(pubAddr1,
 		config.HostNet.Port,
 		true,
 		intraDataAddr,
@@ -413,8 +427,11 @@ func (h *htrun) initNetworks(config *cmn.Config) {
 		config.HostNet.UseIntraControl,
 		"ctl/data",
 	)
+
+	// 4. new Snode
 	h.si = &meta.Snode{
-		PubNet:     pubAddr,
+		PubNet:     pubAddr1,
+		PubNet2:    pubAddr2,
 		ControlNet: intraControlAddr,
 		DataNet:    intraDataAddr,
 	}
@@ -515,26 +532,42 @@ func (h *htrun) run(config *cmn.Config) error {
 			_ = h.netServ.data.listen(h.si.DataNet.TCPEndpoint(), logger, tlsConf, config)
 		}()
 	}
-	return h.netServ.pub.listen(h.pubListeningAddr(config), logger, tlsConf, config)
+
+	ep := h.si.PubNet.TCPEndpoint()
+	if h.pubAddrAny(config) {
+		ep = ":" + h.si.PubNet.Port
+	} else if !h.si.PubNet2.IsEmpty() {
+		debug.Assert(h.si.PubNet2.Port == h.si.PubNet.Port)
+		h.netServ.pub2 = &netServer{muxers: h.netServ.pub.muxers, sndRcvBufSize: h.netServ.pub.sndRcvBufSize}
+		go func() {
+			_ = h.netServ.pub2.listen(h.si.PubNet2.TCPEndpoint(), logger, tlsConf, config)
+		}()
+	}
+	return h.netServ.pub.listen(ep, logger, tlsConf, config)
 }
 
-// testing environment excluding Kubernetes: listen on `host:port`
-// otherwise (including production):         listen on `*:port`
-func (h *htrun) pubListeningAddr(config *cmn.Config) string {
-	if config.TestingEnv() && !k8s.IsK8s() {
-		return h.si.PubNet.TCPEndpoint()
+// return true to start listening on `INADDR_ANY:PubNet.Port`
+func (h *htrun) pubAddrAny(config *cmn.Config) (inaddrAny bool) {
+	switch {
+	case config.HostNet.UseIntraControl && h.si.ControlNet.Port == h.si.PubNet.Port:
+	case config.HostNet.UseIntraData && h.si.DataNet.Port == h.si.PubNet.Port:
+	default:
+		inaddrAny = true
 	}
-	return ":" + h.si.PubNet.Port
+	return inaddrAny
 }
 
 func (h *htrun) stopHTTPServer() {
-	h.netServ.pub.shutdown()
 	config := cmn.GCO.Get()
+	h.netServ.pub.shutdown(config)
+	if h.netServ.pub2 != nil {
+		h.netServ.pub2.shutdown(config)
+	}
 	if config.HostNet.UseIntraControl {
-		h.netServ.control.shutdown()
+		h.netServ.control.shutdown(config)
 	}
 	if config.HostNet.UseIntraData {
-		h.netServ.data.shutdown()
+		h.netServ.data.shutdown(config)
 	}
 }
 
