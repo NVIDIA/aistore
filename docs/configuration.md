@@ -78,7 +78,6 @@ $ ais config node <TAB-TAB>
 p[ctfooJtb]   p[qGfooQSf]   p[KffoosQR]   p[ckfooUEX]   p[DlPmfooU]   t[MgHfooNG]   t[ufooIDPc]   t[tFUfooCO]   t[wSJfoonU]   t[WofooQEW]
 p[pbarqYtn]   p[JedbargG]   p[WMbargGF]   p[barwMoEU]   p[OUgbarGf]   t[tfNbarFk]   t[fbarswQP]   t[vAWbarPv]   t[Kopbarra]   t[fXbarenn]
 
-
 ## in aistore, each node has "inherited" and "local" configuration
 ## choose "local" to show the (selected) target's disks and network
 
@@ -102,6 +101,30 @@ $ ais config node t[fbarswQP] local --json
     }
 }
 ```
+
+### Multi-homing
+
+All aistore nodes - both ais targets and ais gateways - can be deployed as multi-homed servers. But of course, the capability is mostly important and relevant for the targets that may be required (and expected) to move a lot of traffic, as fast as possible.
+
+Building up on the previous section's example, here's how it may look:
+
+```console
+$ ais config node t[fbarswQP] local host_net --json
+{
+    "host_net": {
+        "hostname": "10.51.156.130, 10.51.156.131, 10.51.156.132",
+        "hostname_intra_control": "ais-target-5.nvmetal.net",
+        "hostname_intra_data": "ais-target-5.nvmetal.net",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    },
+}
+```
+
+**Note**: additional NICs can be added (or removed) transparently for users, i.e. without requiring (or causing) any other changes.
+
+The example above may serve as a simple illustration whereby `t[fbarswQP]` becomes a multi-homed device equally utilizing all 3 (three) IPv4 interfaces
 
 ## References
 
@@ -487,9 +510,59 @@ Please see [FSHC readme](/health/fshc.md) for further details.
 
 ## Networking
 
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [net section of the configuration](/deploy/dev/local/aisnode_config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](ha.md#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+In addition to user-accessible public network, AIStore will optionally make use of the two other networks:
 
-All the 3 (three) networking options are enumerated [here](/cmn/network.go).
+* intra-cluster control
+* intra-cluster data
+
+The way the corresponding config may look in production (e.g.) follows:
+
+```console
+$ ais config node t[nKfooBE] local h... <TAB-TAB>
+host_net.hostname                 host_net.port_intra_control       host_net.hostname_intra_control
+host_net.port                     host_net.port_intra_data          host_net.hostname_intra_data
+
+$ ais config node t[nKfooBE] local host_net --json
+
+    "host_net": {
+        "hostname": "10.50.56.205",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    }
+```
+
+The fact that there are 3 logical networks is not a "limitation" - not a requirement to specifically have 3. Using the example above, here's a small deployment-time change to run a single one:
+
+```console
+    "host_net": {
+        "hostname": "10.50.56.205",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51081,   # <<<<<< notice the same port
+        "port_intra_data": "51081"      # <<<<<< ditto
+    }
+```
+
+Ideally though, production clusters are deployed over 3 physically different and isolated networks, whereby intense data traffic, for instance, does not introduce additional latency for the control one, etc.
+
+Separately, there's a **multi-homing** capability motivated by the fact that today's server systems may often have, say, two 50Gbps network adapters. To deliver the entire 100Gbps _without_ LACP trunking and (static) teaming, we could simply have something like:
+
+```console
+    "host_net": {
+        "hostname": "10.50.56.205, 10.50.56.206",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    }
+```
+
+No other changes. Just add the second NIC - second IPv4 addr `10.50.56.206` above, and that's all.
 
 ## Reverse proxy
 

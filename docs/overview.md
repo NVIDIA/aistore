@@ -33,6 +33,7 @@ The rest of this document is structured as follows:
 - [Data Protection](#data-protection)
   - [Erasure Coding vs IO Performance](#erasure-coding-vs-io-performance)
 - [Scale-Out](#scale-out)
+- [Networking](#networking)
 - [HA](#ha)
 - [Other Services](#other-services)
 - [dSort](#dsort)
@@ -276,6 +277,68 @@ The scale-out category includes balanced and fair distribution of objects where 
 > AIS cluster capability to **scale-out is truly unlimited**. The real-life limitations can only be imposed by the environment - capacity of a given Data Center, for instance.
 
 Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
+
+## Networking
+
+Architecture-wise, aistore is built to support 3 (three) logical networks:
+* user-facing public and, possibly, **multi-home**) network interface
+* intra-cluster control, and
+* intra-cluster data
+
+The way the corresponding config may look in production (e.g.) follows:
+
+```console
+$ ais config node t[nKfooBE] local h... <TAB-TAB>
+host_net.hostname                 host_net.port_intra_control       host_net.hostname_intra_control
+host_net.port                     host_net.port_intra_data          host_net.hostname_intra_data
+
+$ ais config node t[nKfooBE] local host_net --json
+
+    "host_net": {
+        "hostname": "10.50.56.205",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    }
+```
+
+The fact that there are 3 logical networks is not a limitation - i.e, not a requirement to have exactly 3 (networks).
+
+Using the example above, here's a small deployment-time change to run a single one:
+
+```console
+    "host_net": {
+        "hostname": "10.50.56.205",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51081,   # <<<<<< notice the same port
+        "port_intra_data": "51081"      # <<<<<< ditto
+    }
+```
+
+Ideally though, production clusters are deployed over 3 physically different and isolated networks, whereby intense data traffic, for instance, does not introduce additional latency for the control one, etc.
+
+Separately, there's a **multi-homing** capability motivated by the fact that today's server systems may often have, say, two 50Gbps network adapters. To deliver the entire 100Gbps _without_ LACP trunking and (static) teaming, we could simply have something like:
+
+```console
+    "host_net": {
+        "hostname": "10.50.56.205, 10.50.56.206",
+        "hostname_intra_control": "ais-target-27.ais.svc.cluster.local",
+        "hostname_intra_data": "ais-target-27.ais.svc.cluster.local",
+        "port": "51081",
+        "port_intra_control": "51082",
+        "port_intra_data": "51083"
+    }
+```
+
+And that's all: add the second NIC (second IPv4 addr `10.50.56.206` above) with **no** other changes.
+
+See also:
+
+* [aistore configuration](configuration.md)
 
 ## HA
 
