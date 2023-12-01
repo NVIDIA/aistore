@@ -261,49 +261,47 @@ func (h *htrun) init(config *cmn.Config) {
 // steps 1 thru 4
 func (h *htrun) initSnode(config *cmn.Config) {
 	var (
-		pubAddr1, pubAddr2 meta.NetInfo
-		intraControlAddr   meta.NetInfo
-		intraDataAddr      meta.NetInfo
-		port               = strconv.Itoa(config.HostNet.Port)
-		proto              = config.Net.HTTP.Proto
+		pubAddr  meta.NetInfo
+		pubExtra []meta.NetInfo
+		ctrlAddr meta.NetInfo
+		dataAddr meta.NetInfo
+		port     = strconv.Itoa(config.HostNet.Port)
+		proto    = config.Net.HTTP.Proto
 	)
-
 	addrList, err := getLocalIPv4s(config)
 	if err != nil {
 		cos.ExitLogf("failed to get local IP addr list: %v", err)
 	}
 
 	// 1. pub net
-	pub1, pub2 := multihome(config.HostNet.Hostname)
+	pub, extra := multihome(config.HostNet.Hostname)
 
 	if k8s.IsK8s() && config.HostNet.Hostname != "" {
 		// K8s: skip IP addr validation
 		// public hostname could be a load balancer's external IP or a service DNS
 		nlog.Infof("K8s deployment: skipping hostname validation for %q", config.HostNet.Hostname)
-		pubAddr1.Init(proto, pub1, port)
+		pubAddr.Init(proto, pub, port)
 	} else {
-		if err = initNetInfo(&pubAddr1, config, addrList, proto, config.HostNet.Hostname, port); err != nil {
+		if err = initNetInfo(&pubAddr, config, addrList, proto, config.HostNet.Hostname, port); err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetPublic, err)
 		}
 	}
 	// multi-home (when config.HostNet.Hostname is a comma-separated list)
 	// using the same pub port
-	if pub2 != "" {
-		if pub2 == pub1 {
-			cos.ExitLogf("%s (user) multihome access: cannot have two identical addresses: %q",
-				cmn.NetPublic, config.HostNet.Hostname)
+	if l := len(extra); l > 0 {
+		pubExtra = make([]meta.NetInfo, l)
+		for i, addr := range extra {
+			pubExtra[i].Init(proto, addr, port)
 		}
-		pubAddr2.Init(proto, pub2, port)
-		nlog.Infof("%s (user) access: %v and %v", cmn.NetPublic, pubAddr1, pubAddr2)
 	} else {
-		nlog.Infof("%s (user) access: %v (%q)", cmn.NetPublic, pubAddr1, config.HostNet.Hostname)
+		nlog.Infof("%s (user) access: %v (%q)", cmn.NetPublic, pubAddr, config.HostNet.Hostname)
 	}
 
 	// 2. intra-cluster
-	intraControlAddr = pubAddr1
+	ctrlAddr = pubAddr
 	if config.HostNet.UseIntraControl {
 		icport := strconv.Itoa(config.HostNet.PortIntraControl)
-		err = initNetInfo(&intraControlAddr, config, addrList, proto, config.HostNet.HostnameIntraControl, icport)
+		err = initNetInfo(&ctrlAddr, config, addrList, proto, config.HostNet.HostnameIntraControl, icport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraControl, err)
 		}
@@ -311,12 +309,12 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		if config.HostNet.HostnameIntraControl != "" {
 			s = " (config: " + config.HostNet.HostnameIntraControl + ")"
 		}
-		nlog.Infof("%s access: %v%s", cmn.NetIntraControl, intraControlAddr, s)
+		nlog.Infof("%s access: %v%s", cmn.NetIntraControl, ctrlAddr, s)
 	}
-	intraDataAddr = pubAddr1
+	dataAddr = pubAddr
 	if config.HostNet.UseIntraData {
 		idport := strconv.Itoa(config.HostNet.PortIntraData)
-		err = initNetInfo(&intraDataAddr, config, addrList, proto, config.HostNet.HostnameIntraData, idport)
+		err = initNetInfo(&dataAddr, config, addrList, proto, config.HostNet.HostnameIntraData, idport)
 		if err != nil {
 			cos.ExitLogf("failed to get %s IPv4/hostname: %v", cmn.NetIntraData, err)
 		}
@@ -324,30 +322,30 @@ func (h *htrun) initSnode(config *cmn.Config) {
 		if config.HostNet.HostnameIntraData != "" {
 			s = " (config: " + config.HostNet.HostnameIntraData + ")"
 		}
-		nlog.Infof("%s access: %v%s", cmn.NetIntraData, intraDataAddr, s)
+		nlog.Infof("%s access: %v%s", cmn.NetIntraData, dataAddr, s)
 	}
 
 	// 3. validate
-	mustDiffer(pubAddr1,
+	mustDiffer(pubAddr,
 		config.HostNet.Port,
 		true,
-		intraControlAddr,
+		ctrlAddr,
 		config.HostNet.PortIntraControl,
 		config.HostNet.UseIntraControl,
 		"pub/ctl",
 	)
-	mustDiffer(pubAddr1,
+	mustDiffer(pubAddr,
 		config.HostNet.Port,
 		true,
-		intraDataAddr,
+		dataAddr,
 		config.HostNet.PortIntraData,
 		config.HostNet.UseIntraData,
 		"pub/data",
 	)
-	mustDiffer(intraDataAddr,
+	mustDiffer(dataAddr,
 		config.HostNet.PortIntraData,
 		config.HostNet.UseIntraData,
-		intraControlAddr,
+		ctrlAddr,
 		config.HostNet.PortIntraControl,
 		config.HostNet.UseIntraControl,
 		"ctl/data",
@@ -355,13 +353,14 @@ func (h *htrun) initSnode(config *cmn.Config) {
 
 	// 4. new Snode
 	h.si = &meta.Snode{
-		PubNet:     pubAddr1,
-		ControlNet: intraControlAddr,
-		DataNet:    intraDataAddr,
+		PubNet:     pubAddr,
+		ControlNet: ctrlAddr,
+		DataNet:    dataAddr,
 	}
-	if !pubAddr2.IsEmpty() {
-		h.si.PubExtra = make([]meta.NetInfo, 1)
-		h.si.PubExtra[0] = pubAddr2
+	if l := len(pubExtra); l > 0 {
+		h.si.PubExtra = make([]meta.NetInfo, l)
+		copy(h.si.PubExtra, pubExtra)
+		nlog.Infof("%s (multihome) access: %v and %v", cmn.NetPublic, pubAddr, h.si.PubExtra)
 	}
 }
 

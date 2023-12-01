@@ -636,9 +636,12 @@ func TestDownloadStatus(t *testing.T) {
 		longFileName  = tools.GenerateNotConflictingObjectName(shortFileName, "longFile", bck, m.smap)
 	)
 
+	// NOTE Dec 1/23: gs://nvdata-openimages started to return 403
+
 	files := map[string]string{
 		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
-		longFileName:  "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar",
+		// longFileName:  "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar",
+		longFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/docs/images/ais-s3-tf.gif",
 	}
 
 	clearDownloadList(t)

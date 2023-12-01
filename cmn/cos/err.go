@@ -7,7 +7,6 @@ package cos
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,7 +17,6 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 type (
@@ -172,41 +170,6 @@ func IsUnreachable(err error, status int) bool {
 func (e *ErrSignal) ExitCode() int               { return 128 + int(e.signal) }
 func NewSignalError(s syscall.Signal) *ErrSignal { return &ErrSignal{signal: s} }
 func (e *ErrSignal) Error() string               { return fmt.Sprintf("Signal %d", e.signal) }
-
-//
-// Abnormal Termination
-//
-
-const fatalPrefix = "FATAL ERROR: "
-
-func Exitf(f string, a ...any) {
-	msg := fmt.Sprintf(fatalPrefix+f, a...)
-	_exit(msg)
-}
-
-// +log
-func ExitLogf(f string, a ...any) {
-	msg := fmt.Sprintf(fatalPrefix+f, a...)
-	if flag.Parsed() {
-		nlog.ErrorDepth(1, msg+"\n")
-		nlog.Flush(nlog.ActExit)
-	}
-	_exit(msg)
-}
-
-func ExitLog(a ...any) {
-	msg := fatalPrefix + fmt.Sprint(a...)
-	if flag.Parsed() {
-		nlog.ErrorDepth(1, msg+"\n")
-		nlog.Flush(nlog.ActExit)
-	}
-	_exit(msg)
-}
-
-func _exit(msg string) {
-	fmt.Fprintln(os.Stderr, msg)
-	os.Exit(1)
-}
 
 //
 // url.Error

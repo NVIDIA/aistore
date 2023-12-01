@@ -37,7 +37,7 @@ func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err err
 	if i == 0 {
 		return si, cmn.NetPublic, nil
 	}
-	return si, si.PubExtra[i-1].Hostname, nil
+	return si, si.PubExtra[i-1].URL, nil
 }
 
 func (smap *Smap) HrwHash2T(digest uint64) (si *Snode, err error) {

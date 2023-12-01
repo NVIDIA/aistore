@@ -118,9 +118,7 @@ func (d *Snode) String() string { return d.Name() }
 
 func (d *Snode) SetName() {
 	name := d.StringEx()
-	if d.name != "" && d.name != name {
-		cos.AssertMsg(false, d.name+" vs. "+name)
-	}
+	debug.Assert(d.name == "" || d.name == name, name, d.name)
 	d.name = name
 }
 
@@ -156,23 +154,19 @@ func (d *Snode) nameNets() string {
 	return fmt.Sprintf("%s(%s)", d.Name(), d.PubNet.URL)
 }
 
-func (d *Snode) URL(network string) string {
+func (d *Snode) URL(network string) (u string) {
 	switch network {
 	case cmn.NetPublic:
-		return d.PubNet.URL
+		u = d.PubNet.URL
 	case cmn.NetIntraControl:
-		return d.ControlNet.URL
+		u = d.ControlNet.URL
 	case cmn.NetIntraData:
-		return d.DataNet.URL
-	default: // multi-home
-		for i := range d.PubExtra {
-			if d.PubExtra[i].Hostname == network {
-				return d.PubExtra[i].URL
-			}
-		}
+		u = d.DataNet.URL
+	default: // (exclusively via HrwMultiHome)
+		debug.Assert(strings.Contains(network, "://"), network) // "is URI" per rfc2396.txt
+		u = network
 	}
-	debug.Assert(false, "unknown network '"+network+"'")
-	return ""
+	return u
 }
 
 // TODO [feature]
@@ -294,7 +288,7 @@ func (ni *NetInfo) Init(proto, hostname, port string) {
 	ep := _ep(hostname, port)
 	ni.Hostname = hostname
 	ni.Port = port
-	ni.URL = fmt.Sprintf("%s://%s", proto, ep)
+	ni.URL = proto + "://" + ep // rfc2396.txt "Uniform Resource Identifiers (URI): Generic Syntax"
 	ni.tcpEndpoint = ep
 }
 

@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 )
@@ -183,15 +182,25 @@ func _localIP(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err err
 	return ip, nil
 }
 
-func multihome(configuredIPv4s string) (pub1, pub2 string) {
-	if !strings.Contains(configuredIPv4s, cmn.HostnameListSepa) {
-		return configuredIPv4s, ""
+func multihome(configuredIPv4s string) (pub string, extra []string) {
+	if i := strings.IndexByte(configuredIPv4s, cmn.HostnameListSepa[0]); i <= 0 {
+		cos.ExitAssertLog(i < 0, "invalid format:", configuredIPv4s)
+		return configuredIPv4s, nil
 	}
+
+	// trim + validation
 	lst := strings.Split(configuredIPv4s, cmn.HostnameListSepa)
-	debug.Assert(len(lst) == 2, lst)
-	pub1, pub2 = strings.TrimSpace(lst[0]), strings.TrimSpace(lst[1])
-	nlog.Infof("multihome pub1: %s (%v), pub2: %s (%v)", pub1, net.ParseIP(pub1), pub2, net.ParseIP(pub2))
-	return
+	pub, extra = strings.TrimSpace(lst[0]), lst[1:]
+	for i := range extra {
+		extra[i] = strings.TrimSpace(extra[i])
+		cos.ExitAssertLog(len(extra[i]) > 0, "invalid format (empty value):", configuredIPv4s)
+		cos.ExitAssertLog(extra[i] != pub, "duplicated addr or hostname:", configuredIPv4s)
+		for j := 0; j < i; j++ {
+			cos.ExitAssertLog(extra[i] != extra[j], "duplicated addr or hostname:", configuredIPv4s)
+		}
+	}
+	nlog.Infof("multihome: %s and %v", pub, extra)
+	return pub, extra
 }
 
 // choose one of the local IPv4s if local config doesn't contain (explicitly) specified
