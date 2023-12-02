@@ -1884,8 +1884,10 @@ func (p *proxy) httpbckpatch(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 	if !nprops.BackendBck.IsEmpty() {
-		// backend must exist
+		// backend must exist, must init itself
 		backendBck := meta.CloneBck(&nprops.BackendBck)
+		backendBck.Props = nil
+
 		args := bckInitArgs{p: p, w: w, r: r, bck: backendBck, msg: msg, dpq: apireq.dpq, query: apireq.query}
 		args.createAIS = false
 		if _, err = args.initAndTry(); err != nil {

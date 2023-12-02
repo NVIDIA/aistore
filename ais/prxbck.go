@@ -238,7 +238,8 @@ func (args *bckInitArgs) try() (bck *meta.Bck, err error) {
 	bck, errCode, err := args._try()
 	if err != nil && err != errForwarded {
 		if cmn.IsErrBucketAlreadyExists(err) {
-			nlog.Errorf("%s: %v - race, proceeding anyway...", args.p, err)
+			// e.g., when (re)setting backend two times in a row
+			nlog.Infoln(args.p.String()+":", err, " - nothing to do")
 			err = nil
 		} else {
 			args.p.writeErr(args.w, args.r, err, errCode)
