@@ -23,9 +23,11 @@ import (
 
 var examplesBckSetProps = `
 Usage examples:
-- ais bucket props set [BUCKET] checksum.type=xxhash
-- ais bucket props set ais://nnn checksum.type=md5 checksum.validate_warm_get=true
-- ais bucket props [BUCKET] checksum
+- ais bucket props set BUCKET checksum.type=xxhash
+- ais bucket props set BUCKET checksum.type=md5 checksum.validate_warm_get=true
+- ais bucket props BUCKET checksum		# to show
+- ais bucket props set BUCKET backend_bck=s3://abc
+- ais bucket props set BUCKET backend_bck=none	# to reset
   (see docs/cli for details)
 `
 

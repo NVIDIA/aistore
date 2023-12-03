@@ -34,6 +34,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+const ActCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
+
 // context structure to gather all (or most) of the relevant state in one place
 // (compare with txnClientCtx)
 type txnServerCtx struct {
@@ -153,6 +155,10 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	// cleanup on error
+	t.transactions.find(c.uuid, ActCleanup)
+
 	if cmn.IsErrCapExceeded(err) {
 		cs := t.OOS(nil)
 		t.writeErrStatusf(w, r, http.StatusInsufficientStorage, "%s: %v", cs.String(), err)
@@ -209,11 +215,11 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 //
 
 func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		curCopies, newCopies, err := t.validateMakeNCopies(c.bck, c.msg)
 		if err != nil {
 			return "", err
@@ -223,14 +229,15 @@ func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
 			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
 		txn := newTxnMakeNCopies(c, curCopies, newCopies)
-		if err := t.transactions.begin(txn); err != nil {
-			nlp.Unlock()
+		if err := t.transactions.begin(txn, nlp); err != nil {
 			return "", err
 		}
-		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		copies, err := _parseNCopies(c.msg.Value)
 		debug.AssertNoErr(err)
 		txn, err := t.transactions.find(c.uuid, "")
@@ -289,11 +296,11 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, new
 //
 
 func (t *target) setBprops(c *txnServerCtx) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		var (
 			nprops *cmn.Bprops
 			err    error
@@ -306,14 +313,15 @@ func (t *target) setBprops(c *txnServerCtx) (string, error) {
 			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
 		txn := newTxnSetBucketProps(c, nprops)
-		if err := t.transactions.begin(txn); err != nil {
-			nlp.Unlock()
+		if err := t.transactions.begin(txn, nlp); err != nil {
 			return "", err
 		}
-		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		var xid string
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
@@ -394,11 +402,11 @@ func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.Bprops,
 //
 
 func (t *target) renameBucket(c *txnServerCtx) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		bckFrom, bckTo := c.bck, c.bckTo
 		if err := t.validateBckRenTxn(bckFrom, bckTo, c.msg); err != nil {
 			return "", err
@@ -413,15 +421,15 @@ func (t *target) renameBucket(c *txnServerCtx) (string, error) {
 			return "", cmn.NewErrBusy("bucket", bckTo, "")
 		}
 		txn := newTxnRenameBucket(c, bckFrom, bckTo)
-		if err := t.transactions.begin(txn); err != nil {
-			nlpTo.Unlock()
-			nlpFrom.Unlock()
+		if err := t.transactions.begin(txn, nlpFrom, nlpTo); err != nil {
 			return "", err
 		}
-		txn.nlps = []cluster.NLP{nlpFrom, nlpTo}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return "", err
@@ -498,11 +506,11 @@ func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
 
 // common for both bucket copy and bucket transform - does the heavy lifting
 func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		bckTo, bckFrom := c.bckTo, c.bck
 		if err := bckTo.Validate(); err != nil {
 			return "", err
@@ -524,19 +532,15 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 		if _, present := bmd.Get(bckFrom); !present {
 			return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 		}
-		nlpTo, nlpFrom, err := t._tcbBegin(c, msg, dp)
-		if err != nil {
-			if nlpFrom != nil {
-				nlpFrom.Unlock()
-			}
-			if nlpTo != nil {
-				nlpTo.Unlock()
-			}
+		if err := t._tcbBegin(c, msg, dp); err != nil {
 			return "", err
 		}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return "", err
@@ -577,21 +581,20 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlpTo, nlpFrom cluster.NLP, err error) {
-	bckTo, bckFrom := c.bckTo, c.bck
-	nlpFrom = newBckNLP(bckFrom)
-
+func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err error) {
+	var (
+		bckTo, bckFrom = c.bckTo, c.bck
+		nlpFrom        = newBckNLP(bckFrom)
+		nlpTo          cluster.NLP
+	)
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
-		nlpFrom = nil
-		err = cmn.NewErrBusy("bucket", bckFrom, "")
-		return
+		return cmn.NewErrBusy("bucket", bckFrom, "")
 	}
 	if !msg.DryRun {
 		nlpTo = newBckNLP(bckTo)
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
-			nlpTo = nil
-			err = cmn.NewErrBusy("bucket", bckTo, "")
-			return
+			nlpFrom.Unlock()
+			return cmn.NewErrBusy("bucket", bckTo, "")
 		}
 	}
 	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
@@ -600,30 +603,30 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (nlp
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
 		return
 	}
-	xctn := rns.Entry.Get()
-	xtcb := xctn.(*mirror.XactTCB)
-	txn := newTxnTCB(c, xtcb)
-	if err = t.transactions.begin(txn); err != nil {
-		return
-	}
-	txn.nlps = []cluster.NLP{nlpFrom}
+
+	var (
+		xctn = rns.Entry.Get()
+		xtcb = xctn.(*mirror.XactTCB)
+		txn  = newTxnTCB(c, xtcb)
+		nlps = []cluster.NLP{nlpFrom}
+	)
 	if nlpTo != nil {
-		txn.nlps = append(txn.nlps, nlpTo)
+		nlps = append(nlps, nlpTo)
 	}
-	return
+	return t.transactions.begin(txn, nlps...)
 }
 
 func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
 	var xid string
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return xid, err
-	}
 	switch c.phase {
 	case apc.ActBegin:
 		var (
 			bckTo   = c.bckTo
 			bckFrom = c.bck // from
 		)
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return xid, err
+		}
 		// validate
 		if err := bckTo.Validate(); err != nil {
 			return xid, err
@@ -670,6 +673,9 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 			}
 		}
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return xid, err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return xid, err
@@ -700,11 +706,11 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (str
 //
 
 func (t *target) ecEncode(c *txnServerCtx) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		if err := t.validateECEncode(c.bck, c.msg); err != nil {
 			return "", err
 		}
@@ -713,16 +719,16 @@ func (t *target) ecEncode(c *txnServerCtx) (string, error) {
 		if !nlp.TryLock(c.timeout.netw / 4) {
 			return "", cmn.NewErrBusy("bucket", c.bck, "")
 		}
-
 		txn := newTxnECEncode(c, c.bck)
-		if err := t.transactions.begin(txn); err != nil {
-			nlp.Unlock()
+		if err := t.transactions.begin(txn, nlp); err != nil {
 			return "", err
 		}
-		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return "", err
@@ -761,15 +767,15 @@ func (t *target) validateECEncode(bck *meta.Bck, msg *aisMsg) error {
 
 func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
 	var xid string
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return xid, err
-	}
 	switch c.phase {
 	case apc.ActBegin:
 		var (
 			bckTo   = c.bckTo
 			bckFrom = c.bck
 		)
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return xid, err
+		}
 		if err := bckTo.Validate(); err != nil {
 			return xid, err
 		}
@@ -825,6 +831,9 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 			}
 		}
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return xid, err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return xid, err
@@ -865,11 +874,9 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 		}
 		txn := newTxnBckBase(c.bck)
 		txn.fillFromCtx(c)
-		if err := t.transactions.begin(txn); err != nil {
-			nlp.Unlock()
+		if err := t.transactions.begin(txn, nlp); err != nil {
 			return err
 		}
-		txn.nlps = []cluster.NLP{nlp}
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
@@ -881,11 +888,11 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 }
 
 func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
-	if err := c.bck.Init(t.owner.bmd); err != nil {
-		return "", err
-	}
 	switch c.phase {
 	case apc.ActBegin:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		prmMsg := &cluster.PromoteArgs{}
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
@@ -922,6 +929,9 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 	case apc.ActAbort:
 		t.transactions.find(c.uuid, apc.ActAbort)
 	case apc.ActCommit:
+		if err := c.bck.Init(t.owner.bmd); err != nil {
+			return "", err
+		}
 		txn, err := t.transactions.find(c.uuid, "")
 		if err != nil {
 			return "", err

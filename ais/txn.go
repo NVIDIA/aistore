@@ -39,12 +39,13 @@ type (
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
 		isDone() (done bool, err error)
+		set(nlps []cluster.NLP)
 		// triggers
 		commitAfter(caller string, msg *aisMsg, err error, args ...any) (bool, error)
 		rsvp(err error)
 		// cleanup
 		abort(error)
-		commit()
+		unlock()
 		// log
 		String() string
 	}
@@ -160,15 +161,19 @@ func (txns *transactions) init(t *target) {
 	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
 }
 
-func (txns *transactions) begin(txn txn) (err error) {
+func (txns *transactions) begin(txn txn, nlps ...cluster.NLP) (err error) {
 	txns.mtx.Lock()
 	if x, ok := txns.m[txn.uuid()]; ok {
 		txns.mtx.Unlock()
+		for _, nlp := range nlps {
+			nlp.Unlock()
+		}
 		err = fmt.Errorf("%s: %s already exists (duplicate uuid?)", txns.t.si, x)
 		debug.AssertNoErr(err)
 		return
 	}
 	txn.started(apc.ActBegin, time.Now())
+	txn.set(nlps)
 	txns.m[txn.uuid()] = txn
 	txns.mtx.Unlock()
 
@@ -182,18 +187,18 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 	txns.mtx.Lock()
 	txn, ok := txns.m[uuid]
 	if !ok {
-		// a. not found
+		// a) not found (benign in an unlikely event of failing to commit)
 		txns.mtx.Unlock()
 		return nil, cos.NewErrNotFound("%s: txn %q", txns.t, uuid)
 	}
 
 	if act == "" {
-		// b. just find & return
+		// b) just find & return
 		txns.mtx.Unlock()
 		return txn, nil
 	}
 
-	// or c. commit or abort
+	// or c) cleanup
 	delete(txns.m, uuid)
 	txns.mtx.Unlock()
 
@@ -202,9 +207,10 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 	txns.rendezvous.mtx.Unlock()
 
 	if act == apc.ActAbort {
-		txn.abort(errors.New("action: abort"))
+		txn.abort(errors.New("action: abort")) // NOTE: may call txn-specific abort, e.g. TxnAbort
 	} else {
-		txn.commit()
+		debug.Assert(act == apc.ActCommit || act == ActCleanup, act)
+		txn.unlock()
 	}
 
 	if cmn.FastV(4, cos.SmoduleAIS) {
@@ -266,7 +272,7 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 	// timestamp
 	txn.started(apc.ActCommit, time.Now())
 
-	// RSVP
+	// transfer err rendezvous => txn
 	txns.rendezvous.mtx.Lock()
 	rndzvs, ok := txns.rendezvous.m[txn.uuid()]
 	txns.rendezvous.mtx.Unlock()
@@ -274,27 +280,30 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		txn.rsvp(rndzvs.err.err)
 	}
 
-	// commit or abort, depending on returned err
-	defer func() {
-		act := apc.ActCommit
-		if err != nil {
-			act = apc.ActAbort
-		}
-		txns.find(txn.uuid(), act)
-	}()
+	err = txns._wait(txn, timeoutNetw, timeoutHost)
 
-	// poll & check
+	// cleanup or abort, depending on the returned err
+	act := apc.ActCommit
+	if err != nil {
+		act = apc.ActAbort
+	}
+	txns.find(txn.uuid(), act)
+	return err
+}
+
+// poll for 'done'
+func (txns *transactions) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err error) {
 	var (
 		sleep       = 100 * time.Millisecond
 		done, found bool
 	)
 	for total := sleep; ; {
 		if done, err = txn.isDone(); done {
-			return
+			return err
 		}
 		// aborted?
 		if _, err = txns.find(txn.uuid(), ""); err != nil {
-			return
+			return err
 		}
 
 		time.Sleep(sleep)
@@ -303,7 +312,6 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 		if total == sleep<<4 {
 			sleep *= 4
 		}
-
 		// must be ready for rendezvous
 		if !found {
 			txns.rendezvous.mtx.Lock()
@@ -322,7 +330,7 @@ func (txns *transactions) wait(txn txn, timeoutNetw, timeoutHost time.Duration) 
 			break
 		}
 	}
-	return
+	return err
 }
 
 // GC orphaned transactions
@@ -449,7 +457,11 @@ func newTxnBckBase(bck *meta.Bck) (txn *txnBckBase) {
 
 func (txn *txnBckBase) init(bck *meta.Bck) { txn.bck = *bck }
 
-func (txn *txnBckBase) cleanup() {
+func (txn *txnBckBase) set(nlps []cluster.NLP) {
+	txn.nlps = nlps
+}
+
+func (txn *txnBckBase) unlock() {
 	for _, p := range txn.nlps {
 		p.Unlock()
 	}
@@ -457,12 +469,9 @@ func (txn *txnBckBase) cleanup() {
 }
 
 func (txn *txnBckBase) abort(err error) {
-	txn.cleanup()
+	txn.unlock()
 	nlog.Infoln(txn.String(), "aborted:", err)
 }
-
-// NOTE: not keeping locks for the duration; see also: txnTCB
-func (txn *txnBckBase) commit() { txn.cleanup() }
 
 func (txn *txnBckBase) String() string {
 	var res, tm string
@@ -561,7 +570,7 @@ func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
 }
 
 func (txn *txnTCB) abort(err error) {
-	txn.txnBckBase.abort(err)
+	txn.unlock()
 	txn.xtcb.TxnAbort(err)
 }
 
@@ -582,7 +591,7 @@ func newTxnTCObjs(c *txnServerCtx, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *
 }
 
 func (txn *txnTCObjs) abort(err error) {
-	txn.txnBckBase.abort(err)
+	txn.unlock()
 	txn.xtco.TxnAbort(err)
 }
 
@@ -614,7 +623,7 @@ func newTxnArchMultiObj(c *txnServerCtx, bckFrom *meta.Bck, xarch *xs.XactArch, 
 }
 
 func (txn *txnArchMultiObj) abort(err error) {
-	txn.txnBckBase.abort(err)
+	txn.unlock()
 	txn.xarch.TxnAbort(err)
 }
 

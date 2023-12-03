@@ -53,12 +53,13 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err != nil {
-			err = c.bcastAbort(what, res.toErr())
+			err = res.toErr()
+			c.bcastAbort(what, err)
 			break
 		}
 	}
 	freeBcastRes(results)
-	return
+	return err
 }
 
 // returns cluster-wide (global) xaction UUID or - for assorted multi-object (list|range) xactions
@@ -129,11 +130,10 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 	return
 }
 
-func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) error {
+func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) {
 	nlog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
 	results := c.bcast(apc.ActAbort, 0)
 	freeBcastRes(results)
-	return err
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -235,7 +235,8 @@ func (p *proxy) _createBucketWithProps(msg *apc.ActMsg, bck *meta.Bck, bprops *c
 		setProps: bprops,
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		return c.bcastAbort(bck, err)
+		c.bcastAbort(bck, err)
+		return err
 	}
 
 	// 4. commit
@@ -307,8 +308,8 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *meta.Bck) (xid string, err err
 	}
 	bmd, err = p.owner.bmd.modify(ctx)
 	if err != nil {
-		err = c.bcastAbort(bck, err)
-		return
+		c.bcastAbort(bck, err)
+		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
 
@@ -321,9 +322,10 @@ func (p *proxy) makeNCopies(msg *apc.ActMsg, bck *meta.Bck) (xid string, err err
 	xid, _, err = c.commit(bck, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
+		c.bcastAbort(bck, err) // cleanup
 		p.undoUpdateCopies(msg, bck, ctx.revertProps)
 	}
-	return
+	return xid, err
 }
 
 func bmodMirror(ctx *bmdModifier, clone *bucketMD) error {
@@ -398,8 +400,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
-		debug.AssertNoErr(err)
-		err = c.bcastAbort(bck, err)
+		c.bcastAbort(bck, err)
 		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
@@ -418,6 +419,9 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 
 	// 5. commit
 	xid, _, rerr := c.commit(bck, c.cmtTout(waitmsync))
+	if rerr != nil {
+		c.bcastAbort(bck, rerr) // cleanup
+	}
 	return xid, rerr
 }
 
@@ -479,9 +483,8 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 
 	bmd, err = p.owner.bmd.modify(bmdCtx)
 	if err != nil {
-		debug.AssertNoErr(err)
-		err = c.bcastAbort(bckFrom, err)
-		return
+		c.bcastAbort(bckFrom, err)
+		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
 
@@ -508,8 +511,8 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
 	if err != nil {
-		nlog.Errorf("%s: failed to commit %q, err: %v", p, msg.Action, err)
-		return
+		c.bcastAbort(bckFrom, err) // cleanup txn
+		return "", err
 	}
 
 	// 6. start rebalance and resilver
@@ -527,7 +530,7 @@ func (p *proxy) renameBucket(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (xid str
 	_ = p.notifs.add(nl)
 
 	wg.Wait()
-	return
+	return xid, nil
 }
 
 func bmodMv(ctx *bmdModifier, clone *bucketMD) error {
@@ -579,9 +582,8 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 		}
 		bmd, err = p.owner.bmd.modify(ctx)
 		if err != nil {
-			debug.AssertNoErr(err)
-			err = c.bcastAbort(bckFrom, err)
-			return
+			c.bcastAbort(bckFrom, err)
+			return "", err
 		}
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
@@ -604,11 +606,13 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 	// 5. commit
 	xid, _, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
-	if err != nil && !existsTo {
-		// rm the one that we just created
-		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
+	if err != nil {
+		c.bcastAbort(bckFrom, err) // cleanup txn
+		if !existsTo {
+			_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo) // rm the one that we have just created
+		}
 	}
-	return
+	return xid, err
 }
 
 // transform or copy a list or a range of objects
@@ -643,9 +647,8 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (
 		}
 		bmd, err = p.owner.bmd.modify(ctx)
 		if err != nil {
-			debug.AssertNoErr(err)
-			err = c.bcastAbort(bckFrom, err)
-			return
+			c.bcastAbort(bckFrom, err)
+			return "", err
 		}
 		c.msg.BMDVersion = bmd.version()
 		if !ctx.terminate {
@@ -750,9 +753,8 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 	}
 	bmd, err := p.owner.bmd.modify(ctx)
 	if err != nil {
-		debug.AssertNoErr(err)
-		err = c.bcastAbort(bck, err)
-		return
+		c.bcastAbort(bck, err)
+		return "", err
 	}
 	c.msg.BMDVersion = bmd.version()
 
@@ -764,7 +766,10 @@ func (p *proxy) ecEncode(bck *meta.Bck, msg *apc.ActMsg) (xid string, err error)
 	// 6. commit
 	xid, _, err = c.commit(bck, c.cmtTout(waitmsync))
 	debug.Assertf(xid == "" || xid == c.uuid, "committed %q vs generated %q", xid, c.uuid)
-	return
+	if err != nil {
+		c.bcastAbort(bck, err) // cleanup txn
+	}
+	return xid, err
 }
 
 // compare w/ bmodSetProps
@@ -843,11 +848,15 @@ func (p *proxy) destroyBucket(msg *apc.ActMsg, bck *meta.Bck) error {
 		bcks:  []*meta.Bck{bck},
 	}
 	if _, err := p.owner.bmd.modify(ctx); err != nil {
-		return c.bcastAbort(bck, err)
+		c.bcastAbort(bck, err)
+		return err
 	}
 
 	// 3. Commit
 	_, _, err := c.commit(bck, c.cmtTout(waitmsync))
+	if err != nil {
+		c.bcastAbort(bck, err) // cleanup txn
+	}
 	return err
 }
 
@@ -928,7 +937,8 @@ func prmBegin(c *txnClientCtx, bck *meta.Bck, singleT bool) (num int64, allAgree
 	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for i, res := range results {
 		if res.err != nil {
-			err = c.bcastAbort(bck, res.toErr())
+			err = res.toErr()
+			c.bcastAbort(bck, err)
 			break
 		}
 		if singleT {
@@ -951,7 +961,7 @@ func prmBegin(c *txnClientCtx, bck *meta.Bck, singleT bool) (num int64, allAgree
 		num, err = strconv.ParseInt(totalN, 10, 64)
 	}
 	freeBcastRes(results)
-	return
+	return num, allAgree, err
 }
 
 //
