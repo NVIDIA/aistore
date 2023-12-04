@@ -25,6 +25,7 @@ redirect_from:
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
 - [Backend Bucket](#backend-bucket)
+  - [AIS bucket as a reference](#ais-bucket-as-a-reference)
 - [Bucket Properties](#bucket-properties)
   - [CLI examples: listing and setting bucket properties](#cli-examples-listing-and-setting-bucket-properties)
 - [Bucket Access Attributes](#bucket-access-attributes)
@@ -532,6 +533,27 @@ shard-0.tar	 2.50KiB	 1
 ```
 
 For more examples please refer to [CLI docs](/docs/cli/bucket.md#connectdisconnect-ais-bucket-tofrom-cloud-bucket).
+
+## AIS bucket as a reference
+
+Stated differently, aistore bucket itself can serve as a reference to another bucket. E.g., you could have, say, `ais://llm-latest` to always point to whatever is the latest result of a data prep service.
+
+```console
+### create an arbitrary bucket (say, `ais://llm-latest`) and always use it to reference the latest augmented results
+
+$ ais create ais://llm-latest
+$ ais bucket props set ais://llm-latest backend_bck=gs://llm-augmented-2023-12-04
+
+### next day, when the data prep service produces a new derivative:
+
+$ ais bucket props set ais://llm-latest backend_bck=gs://llm-augmented-2023-12-05
+
+### and keep using the same static name, etc.
+```
+
+Caching wise, when you walk `ais://llm-latest` (or any other aistore bucket with a remote backend), aistore will make sure to perform remote (cold) GETs to update itself when and if required, etc.
+
+> In re "cold GET" vs "warm GET" performance, see [AIStore as a Fast Tier Storage](https://aiatscale.org/blog/2023/11/27/aistore-fast-tier) blog.
 
 # Bucket Properties
 
