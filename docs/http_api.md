@@ -669,15 +669,16 @@ Date: Tue, 08 Nov 2022 17:03:03 GMT
 Content-Type: text/plain; charset=utf-8
 Transfer-Encoding: chunked
 
-Started up at 2022/11/08 11:33:54, host u2204, go1.19.3 for linux/amd64
-I 11:33:54.537821 config.go:1774 log.dir: "/tmp/ais/1/log"; l4.proto: tcp; pub port: 8081; verbosity: 3
-I 11:33:54.537990 config.go:1776 config: "/root/.ais1/.ais.conf"; stats_time: 10s; authentication: false; backends: [ais aws gcp]
-I 11:33:54.538001 daemon.go:177 Version 3.12-rc1.c5a523de4, build time 2022-11-08T11:33:50-0500, debug true
-I 11:33:54.538005 daemon.go:185 CPUs(16, runtime=16)
-I 11:33:54.538165 util.go:39 Verifying type of deployment (HOSTNAME: "", K8S_NODE_NAME: "")
-I 11:33:54.538169 util.go:46 Couldn't initiate a K8s client, assuming non-Kubernetes deployment
+Started up at 2023/11/08 02:34:35, host ais-target-13, go1.21.4 for linux/amd64
+W 02:34:35.701629 config:1238 control and data share one intra-cluster network (ais-target-13.ais.svc.cluster.local)
+I 02:34:35.701785 config:1755 log.dir: "/var/log/ais"; l4.proto: tcp; pub port: 51081; verbosity: 3
+I 02:34:35.701791 config:1757 config: "/etc/ais/.ais.conf"; stats_time: 10s; authentication: false; backends: [aws]
+I 02:34:35.701811 daemon:195 Version 3.21.1.4ce0e0b, build time 2023-11-08T00:05:16+0000, debug false, CPUs(256, runtime=256), containerized
+I 02:34:35.702060 init:42 Checking (HOSTNAME: "ais-target-13")
+I 02:34:35.721086 init:60 K8s spec: NodeName 10.0.140.13 Hostname ais-target-13 HostNetwork false
+
 ...
-I 11:33:55.564338 htrun.go:1637 t[CJet8081]: joined cluster via http://127.0.0.1:9080
+I 02:34:54.772574 htrun:1916 t[DfooZbarT] via primary health: cluster startup Ok, Smap v34[t=10, p=10]
 ...
 ```
 

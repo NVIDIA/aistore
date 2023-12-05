@@ -5,6 +5,7 @@
 package env
 
 // authn environment variables
+// see also: docs/environment-vars.md
 
 var (
 	AuthN = struct {

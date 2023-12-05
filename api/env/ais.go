@@ -4,6 +4,8 @@
  */
 package env
 
+// See also: docs/environment-vars.md
+
 var (
 	AIS = struct {
 		Endpoint  string
@@ -19,7 +21,9 @@ var (
 		NumTarget string
 		NumProxy  string
 		// K8s
-		K8sPod string
+		K8sPod       string
+		K8sNode      string
+		K8sNamespace string
 	}{
 		// the way to designate primary when cluster's starting up
 		Endpoint:  "AIS_ENDPOINT",
@@ -41,7 +45,12 @@ var (
 		NumTarget: "NUM_TARGET",
 		NumProxy:  "NUM_PROXY",
 
-		// via ais-k8s repo (see ais-k8s/operator/pkg/resources/cmn/env.go)
-		K8sPod: "MY_POD",
+		// via ais-k8s repo
+		// see also:
+		// * https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/env.go
+		// * docs/environment-vars.md
+		K8sPod:       "MY_POD",
+		K8sNode:      "MY_NODE",
+		K8sNamespace: "K8S_NS",
 	}
 )

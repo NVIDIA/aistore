@@ -7,53 +7,69 @@ package k8s
 import (
 	"errors"
 	"os"
+	"strings"
 
+	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	v1 "k8s.io/api/core/v1"
 )
 
 const (
-	// env var names
-	k8sPodNameEnv  = "HOSTNAME"
-	k8sNodeNameEnv = "K8S_NODE_NAME"
+	defaultPodNameEnv   = "HOSTNAME"
+	defaultNamespaceEnv = "POD_NAMESPACE"
+)
 
-	// misc.
+const (
 	Default = "default"
 	Pod     = "pod"
 	Svc     = "svc"
 )
 
-var NodeName string // assign upon successful initialization
+const nonK8s = "non-Kubernetes deployment"
 
-var ErrK8sRequired = errors.New("the operation requires Kubernetes")
+var (
+	NodeName string // assign upon successful initialization
+
+	ErrK8sRequired = errors.New("the operation requires Kubernetes")
+)
 
 func Init() {
-	var (
-		pod      *v1.Pod
-		nodeName = os.Getenv(k8sNodeNameEnv)
-		podName  = os.Getenv(k8sPodNameEnv)
-	)
 	_initClient()
 	client, err := GetClient()
 	if err != nil {
-		nlog.Infof("K8s client nil => non-Kubernetes deployment: (%s: %q, %s: %q)", k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName)
+		nlog.Infoln(nonK8s, "(init k8s-client returned:", _short(err)+")")
 		return
 	}
-	nlog.Infof("Checking (%s: %q, %s: %q)", k8sPodNameEnv, podName, k8sNodeNameEnv, nodeName)
 
-	// if specified, `k8sNodeNameEnv` takes precedence: proceed directly to check
+	var (
+		pod      *v1.Pod
+		nodeName = os.Getenv(env.AIS.K8sNode)
+		podName  = os.Getenv(env.AIS.K8sPod)
+	)
+	if podName != "" {
+		debug.Func(func() {
+			pn := os.Getenv(defaultPodNameEnv)
+			debug.Assertf(pn == "" || pn == podName, "%q vs %q", pn, podName)
+		})
+	} else {
+		podName = os.Getenv(defaultPodNameEnv)
+	}
+	nlog.Infof("Checking K8s pod: %q, node: %q", podName, nodeName)
+
+	// node name specified - proceed directly to check
 	if nodeName != "" {
 		goto checkNode
 	}
 	if podName == "" {
-		nlog.Infoln("K8s environment (above) not set => non-Kubernetes deployment")
+		nlog.Infoln("K8s environment (above) not set =>", nonK8s)
 		return
 	}
 
 	// check POD
 	pod, err = client.Pod(podName)
 	if err != nil {
-		nlog.Errorf("Failed to get K8s pod %q: %v (tip: try setting %q env variable)", podName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get K8s pod %q: %v", podName, err)
 		return
 	}
 	nodeName = pod.Spec.NodeName
@@ -63,7 +79,7 @@ func Init() {
 checkNode: // always check Node
 	node, err := client.Node(nodeName)
 	if err != nil {
-		nlog.Errorf("Failed to get K8s node %q: %v (tip: try setting %q env variable)", nodeName, err, k8sNodeNameEnv)
+		nlog.Errorf("Failed to get K8s node %q: %v", nodeName, err)
 		return
 	}
 
@@ -83,3 +99,17 @@ func _ppvols(volumes []v1.Volume) {
 }
 
 func IsK8s() bool { return NodeName != "" }
+
+func _short(err error) string {
+	const max = 20
+	msg := err.Error()
+	idx := strings.IndexByte(msg, ',')
+	switch {
+	case len(msg) < max:
+		return msg
+	case idx > max:
+		return msg[:idx]
+	default:
+		return msg[:max]
+	}
+}

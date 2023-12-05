@@ -30,7 +30,7 @@ spec:
       # Required for hostport to operate, or implement a full pod security policy
       privileged: true
     env:
-      - name: K8S_NODE_NAME
+      - name: MY_NODE
         valueFrom:
           fieldRef:
             fieldPath: spec.nodeName

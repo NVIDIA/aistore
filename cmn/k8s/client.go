@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,13 +68,22 @@ func _initClient() {
 
 // Retrieve pod namespace
 // See:
-//   - https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/client-go/tools/clientcmd/client_config.go
+//   - topic: "how to get current namespace of an in-cluster go Kubernetes client"
 //   - https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-//   - https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod.
 func _namespace() (namespace string) {
-	if namespace = os.Getenv("POD_NAMESPACE"); namespace != "" {
+	// production
+	if namespace = os.Getenv(env.AIS.K8sNamespace); namespace != "" {
+		debug.Func(func() {
+			ns := os.Getenv(defaultNamespaceEnv)
+			debug.Assertf(ns == "" || ns == namespace, "%q vs %q", ns, namespace)
+		})
 		return
 	}
+	// otherwise, try default env var
+	if namespace = os.Getenv(defaultNamespaceEnv); namespace != "" {
+		return
+	}
+	// finally, last resort kludge
 	if ns, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
 		if namespace = strings.TrimSpace(string(ns)); len(namespace) > 0 {
 			return

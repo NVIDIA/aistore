@@ -27,7 +27,7 @@ spec:
       failureThreshold: 5
       periodSeconds: 10
     env:
-      - name: K8S_NODE_NAME
+      - name: MY_NODE
         valueFrom:
           fieldRef:
             fieldPath: spec.nodeName

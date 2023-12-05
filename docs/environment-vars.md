@@ -115,9 +115,9 @@ See also:
 
 | name | comment |
 | ---- | ------- |
-| `MY_POD` | Kubernetes POD name |
-| `K8S_NODE_NAME` | Kubernetes node name |
-| `POD_NAMESPACE` | Kubernetes namespace |
+| `MY_POD` and `HOSTNAME` | Kubernetes POD name. `MY_POD` is used in [production](operator/pkg/resources/cmn/env.go); `HOSTNAME`, on the other hand, is usually considered a Kubernetes default |
+| `MY_NODE` | Kubernetes node name |
+| `K8S_NS` and `POD_NAMESPACE` | Kubernetes namespace. `K8S_NS` is used in [production](operator/pkg/resources/cmn/env.go), while `POD_NAMESPACE` - development |
 
 Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
 
