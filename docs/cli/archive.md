@@ -7,9 +7,12 @@ redirect_from:
  - /docs/cli/archive.md/
 ---
 
-# When objects are, in fact, archives (shards)
+# When objects are _shards_
 
-In this document: commands to read, write, and list *archives* - objects formatted as TAR, TGZ, ZIP, etc. For the most recently updated archival types that AIS supports, please refer to [this source](/cmn/cos/archive.go).
+In this document:
+* commands to read, write, and list *archives* - objects formatted as `TAR`, `TGZ` (or `TAR.GZ`) , `ZIP`, `TAR.LZ4`.
+
+For the most recently updated list of supported archival formats, please refer to [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/archive/mime.go).
 
 The corresponding subset of CLI commands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual (reading, writing, listing) operation.
 
@@ -44,11 +47,6 @@ COMMANDS:
                (notice quotation marks in both cases)
 ```
 
-See also:
-
-> [Append file to archive](/docs/cli/object.md#append-file-to-archive)
-> [Archive multiple objects](/docs/cli/object.md#archive-multiple-objects)
-
 ## Table of Contents
 - [Archive files and directories](#archive-files-and-directories)
 - [Append files and directories to an existing archive](#append-files-and-directories-to-an-existing-archive)
@@ -58,7 +56,7 @@ See also:
 
 ## Archive files and directories
 
-Archive multiple objects from the source bucket.
+Archive multiple files.
 
 ```console
 $ ais archive put --help
@@ -81,17 +79,17 @@ USAGE:
    ais archive put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET/SHARD_NAME
 ```
 
-The operation accepts either an explicitly defined *list* or template-defined *range* of object names (to archive).
+The operation accepts either an explicitly defined *list* or template-defined *range* of file names (to archive).
 
-As such, `archive put` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+**NOTE:**
 
-Also note that `ais put` command with its `--archive` option provides an alternative way to archive multiple objects:
+* `ais archive put` works with locally accessible (source) files and shall _not_ be confused with `ais archive bucket` command (below).
 
-* [`ais put BUCKET/OBJECT --archive`](/docs/cli/object.md##archive-multiple-objects)
+Also, note that `ais put` command with its `--archpath` option provides an alternative way to archive multiple objects:
 
 For the most recently updated list of supported archival formats, please see:
 
-* [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
+* [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/archive/mime.go).
 
 ## Append files and directories to an existing archive
 
@@ -151,7 +149,30 @@ shard-2.tar                                      7.50KiB
     shard-2.tar/license.test                     1.05KiB
 ```
 
+See also:
+
+> [Append file to archive](/docs/cli/object.md#append-file-to-archive)
+
+
 ## Archive multiple objects
+
+This is a yet another archive-**creating** operation that:
+
+1. takes in multiple objects from a given **source bucket**, and
+2. archives them all as a shard in the specified destination bucket,
+
+   where:
+
+* source and destination buckets may not necessarily be different;
+* both `--list` and `--template` options are supported
+* supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
+* archiving is carried out asynchronously, in parallel by all AIS targets.
+
+As such, `ais archive bucket` is one of the supported [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges).
+
+**NOTE:**
+
+* `ais archive bucket` multi-object bucket-to-bucket archiving shall _not_ be confused with `ais archive put` command - the latter is used to archive multiple source **files** from a local (or locally accessible) source **directory**.
 
 ```console
 $ ais archive bucket --help

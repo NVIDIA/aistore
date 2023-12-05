@@ -47,7 +47,6 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Prefetch objects](#prefetch-objects)
   - [Delete multiple objects](#delete-multiple-objects)
   - [Evict multiple objects](#evict-multiple-objects)
-  - [Archive multiple objects](#archive-multiple-objects)
 
 # GET object
 
@@ -821,8 +820,6 @@ TOTAL            33      66B
 
 # Append file to archive
 
-> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
-
 `ais put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH --append`
 
 Append a file to an existing archive. `ARCH_PATH` here defines (destination) filename in archive.
@@ -1201,32 +1198,4 @@ Note that options `--list` and `--template` are mutually exclusive.
 
 ```console
 $ ais bucket evict aws://cloudbucket --template "shard-{900..999}.tar"
-```
-
-## Archive multiple objects
-
-> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
-
-This is an archive-**creating** operation that takes in multiple objects from a source bucket and archives them all into a destination bucket, where:
-
-* source and destination buckets may not necessarily be different;
-* both `--list` and `--template` options are supported
-* supported archival formats include `.tar`, `.tar.gz` (or, same, `.tgz`), and `.zip`; more extensions may be added in the future.
-* archiving is carried out asynchronously, in parallel by all AIS targets.
-
-Note that (alternatively) multi-object archives can be created using `ais create archive`:
-
-* [`ais archive create BUCKET/OBJECT`](/docs/cli/archive.md##archive-multiple-objects)
-
-```console
-# TAR objects `obj1`, `obj2` , `obj3` in a given (destination) bucket called `destbck`.
-# NOTE: when specifying `--list` or `--template`, make sure to use double or single quotation marks.
-
-$ ais put ais://abc ais://destbck/myarch.tar --list="obj1,  obj2,obj3" --archive
-```
-
-```console
-# ZIP objects `obj1`, `obj2` , `obj3`. Note that in this example source and destination are identical.
-
-$ ais put ais://mybck ais://mybck/myarch.zip --list="obj1,obj2, obj3" --archive
 ```
