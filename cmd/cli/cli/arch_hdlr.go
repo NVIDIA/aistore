@@ -289,10 +289,16 @@ func putApndArchHandler(c *cli.Context) (err error) {
 	// multi-file cases
 	//
 	if !a.appendOnly && !a.appendOrPut {
-		warn := fmt.Sprintf("multi-file 'archive put' operation requires either %s or %s",
+		warn := fmt.Sprintf("multi-file 'archive put' operation requires either %s or %s (command line)",
 			qflprn(archAppendOnlyFlag), qflprn(archAppendOrPutFlag))
 		actionWarn(c, warn)
-		fmt.Fprintf(c.App.ErrWriter, "Assuming %s - proceeding to execute...\n\n", qflprn(archAppendOrPutFlag))
+		if flagIsSet(c, yesFlag) {
+			fmt.Fprintf(c.App.ErrWriter, "Assuming %s - proceeding to execute...\n\n", qflprn(archAppendOrPutFlag))
+		} else {
+			if ok := confirm(c, fmt.Sprintf("Proceed to execute 'archive put %s'?", flprn(archAppendOrPutFlag))); !ok {
+				return
+			}
+		}
 		a.appendOrPut = true
 	}
 

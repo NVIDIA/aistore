@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
@@ -306,6 +307,22 @@ func putHandler(c *cli.Context) (err error) {
 		return putStdin(c, &a)
 	default: // one directory
 		var ndir int
+
+		if a.dst.oname != "" {
+			warn := fmt.Sprintf("'%s' will be used as a destination name prefix for all files from '%s'",
+				a.dst.oname, a.src.arg)
+			actionWarn(c, warn)
+			if _, err := archive.Mime(a.dst.oname, ""); err == nil {
+				warn := fmt.Sprintf("did you want to use 'archive put' instead, with %q as the destination?",
+					a.dst.oname)
+				actionWarn(c, warn)
+			}
+			if !flagIsSet(c, yesFlag) {
+				if ok := confirm(c, "Proceed anyway?"); !ok {
+					return
+				}
+			}
+		}
 
 		fobjs, err := lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs, incl)
 		if err != nil {
