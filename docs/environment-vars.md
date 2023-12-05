@@ -9,33 +9,33 @@ redirect_from:
 
 ## Introduction
 
-Generally, aistore configuration comprizes several sources, including:
+Generally, aistore configuration comprises several sources:
 
 1. cluster (a.k.a. global) and node (or, local) configurations, the latter further "splitting" into local config per se and local overrides of the inherited cluster config;
 2. `aisnode` [command line](/docs/command_line.md);
-3. environment variables - this document;
-4. assorted low-level constants (also referred to as "hardcoded defaults") that almost never have to change.
+3. environment variables (this document);
+4. finally, assorted low-level constants (also referred to as "hardcoded defaults") that almost never have to change.
 
-This enumeration does _not_ include buckets. In aistore, buckets inherit a part of the cluster config that can be further changed on a per-bucket basis - either at creation time or at any later time, etc.
+This enumeration does _not_ include buckets (and their respective configurations). In aistore, buckets inherit a part of the cluster config that can be further changed on a per-bucket basis - either at creation time or at any later time, etc.
 
 > In effect, cluster configuration contains cluster-wide defaults for all AIS buckets, current and future.
 
-For additional references, please see the [last section](#references) in this document. The rest of it, though, describes only and exclusively **environment variables** - the item number 3 above.
+For additional references, please see the [last section](#references) in this document. The rest of it, though, describes only and exclusively **environment variables** - item `3` above.
 
 ## Rules
 
-But first, let's state two common rules that, in fact, apply across the board:
+First though, two common rules that, in fact, apply across the board:
 
-* all environment settings are **optional**
-* if specified, environment variable will **override**:
-  - the corresponding default *constant* in the code (if exists), and/or
-  - persistent *configuration* (again, if exists)
+* in aistore, all environment settings are **optional**
+* if specified, environment variable will always **override**:
+  - the corresponding default *constant* (if exists), and/or
+  - persistent *configuration* (again, if the latter exists).
 
 For example:
 
-* persistent (and replicated) node ID can be overridden via `AIS_DAEMON_ID` (below)
-* `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/master/api/apc/const.go)
-* `AIS_USE_HTTPS` takes precedence over `net.http.use_https` value from the [cluster configuration](/docs/configuration.md)
+* in aistore cluster, each node has an `ID`, which is persistent, replicated and unique; at node startup its `ID` can be overridden via `AIS_DAEMON_ID` environment (see below);
+* environment `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/master/api/apc/const.go) in the code;
+* `AIS_USE_HTTPS` takes precedence over `net.http.use_https` value from the [cluster configuration](/docs/configuration.md),
 
 and so on.
 
@@ -104,38 +104,30 @@ See also:
 
 | name | comment |
 | ---- | ------- |
-| `NUM_TARGET` | usage: development scripts, local playground automation |
+| `NUM_TARGET` | usage is limited to development scripts and test automation |
 | `NUM_PROXY` | (ditto) |
 
 See also:
 * [deploy/scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/clean_deploy.sh)
-
-Or, just run the script for quick inline help:
-
-```console
-$ deploy/scripts/clean_deploy.sh --help
-NAME:
-  clean_deploy.sh - locally deploy AIS clusters for development
-
-USAGE:
-  ./clean_deploy.sh [options...]
-
-OPTIONS:
-  --target-cnt        Number of target nodes in the cluster (default: 5)
-  --proxy-cnt         Number of proxies/gateways (default: 5)
-...
-...
-```
+* [wait-for-cluster](https://github.com/NVIDIA/aistore/blob/master/ais/test/main_test.go#L47-L56)
 
 ## Kubernetes
 
 | name | comment |
 | ---- | ------- |
-| `MY_POD` | POD name |
+| `MY_POD` | Kubernetes POD name |
 | `K8S_NODE_NAME` | Kubernetes node name |
 | `POD_NAMESPACE` | Kubernetes namespace |
 
-See also:
+Kubernetes POD name is also reported via `ais show cluster` CLI - when it is a Kubernetes deployment, e.g.:
+
+```console
+$ ais show cluster t[fXbarEnn]
+TARGET         MEM USED(%)   MEM AVAIL     CAP USED(%)   CAP AVAIL     LOAD AVERAGE    REBALANCE   UPTIME        K8s POD         STATUS  VERSION        BUILD TIME
+t[fXbarEnn]    3.08%         367.66GiB     51%           8.414TiB      [0.9 1.1 1.3]   -           1852h19m40s   ais-target-26   online  3.20.92bc0c1   2023-09-18T19:12:52+0000
+```
+
+See related:
 * [AIS K8s Operator: environment variables](https://github.com/NVIDIA/ais-k8s/blob/master/operator/pkg/resources/cmn/env.go)
 
 ## Package: backend
@@ -154,9 +146,9 @@ The corresponding environment "belongs" to the internal [backend](https://github
 | `AZURE_STORAGE_KEY` | (ditto) |
 | `AIS_AZURE_URL` | Azure endpoint, e.g. `http://<account_name>.blob.core.windows.net` |
 
-Notice in the table above that variables `S3_ENDPOINT` and `AWS_PROFILE` are designated as _global_.
+Notice in the table above that the variables `S3_ENDPOINT` and `AWS_PROFILE` are designated as _global_: cluster-wide.
 
-The implication: it is possible to override one or both of them on a per-bucket basis:
+The implication: it is possible to override one or both of them on a **per-bucket basis**:
 
 * [configuring buckets with alternative S3 andpoint and/or credentials](/docs/cli/aws_profile_endpoint.md)
 
@@ -178,7 +170,7 @@ Moreover, configure aistore to handle S3 requests at its "/" root:
 $ ais config cluster features Provide-S3-API-via-Root
 ```
 
-and specify `S3_ENDPOINT` environment that looks even better (some would maybe say):
+and re-specify `S3_ENDPOINT` environment to make it looking slightly more conventional:
 
 ```console
 export S3_ENDPOINT=https://10.0.4.53:51080
@@ -218,30 +210,57 @@ Namely:
 
 | name | comment |
 | ---- | ------- |
-| `AIS_MINMEM_FREE` | TODO |
-| `AIS_MINMEM_PCT_TOTAL` | TODO |
-| `AIS_MINMEM_PCT_FREE` | TODO |
+| `AIS_MINMEM_FREE` | for details, see [Memory Manager, Slab Allocator (MMSA)](https://github.com/NVIDIA/aistore/blob/master/memsys/README.md) |
+| `AIS_MINMEM_PCT_TOTAL` | same as above and, specifically, te section "Minimum Available Memory" |
+| `AIS_MINMEM_PCT_FREE` | (ditto) |
 
 ## Package: transport
 
 | name | comment |
 | ---- | ------- |
-| `AIS_STREAM_DRY_RUN` | TODO |
-| `AIS_STREAM_BURST_NUM` | TODO |
+| `AIS_STREAM_DRY_RUN` | read and immediately discard all read data (can be used to evaluate client-side throughput) |
+| `AIS_STREAM_BURST_NUM` | overrides `transport.burst_buffer` knob from the [cluster configuration](/docs/configuration.md) |
+
+See also: [streaming intra-cluster transport](https://github.com/NVIDIA/aistore/blob/master/transport/README.md).
 
 ## AuthN
 
+AIStore Authentication Server (**AuthN**) provides OAuth 2.0 compliant [JSON Web Tokens](https://datatracker.ietf.org/doc/html/rfc7519) based secure access to AIStore.
+
+AuthN supports multiple AIS clusters; in fact, there's no limit on the number of clusters a given AuthN instance can provide authentication and access control service for.
+
 | name | comment |
 | ---- | ------- |
-| `AIS_AUTHN_ENABLED` | TODO |
-| `AIS_AUTHN_URL` | TODO |
-| `AIS_AUTHN_TOKEN_FILE` | TODO |
-| `AIS_AUTHN_CONF_DIR` | TODO |
-| `AIS_AUTHN_LOG_DIR` | TODO |
-| `AIS_AUTHN_LOG_LEVEL` | TODO |
-| `AIS_AUTHN_PORT` | TODO |
-| `AIS_AUTHN_TTL` | TODO |
-| `AIS_AUTHN_USE_HTTPS` | TODO |
+| `AIS_AUTHN_ENABLED` | aistore cluster itself must "know" whether it is being authenticated; see usage and references below |
+| `AIS_AUTHN_CONF_DIR` | AuthN server configuration directory, e.g. `"$HOME/.config/ais/authn` |
+| `AIS_AUTHN_LOG_DIR` | usage: deployment scripts and integration tests |
+| `AIS_AUTHN_LOG_LEVEL` | ditto |
+| `AIS_AUTHN_PORT` | can be used to override `52001` default |
+| `AIS_AUTHN_TTL` | authentication token expiration time; 0 (zero) means "never expires" |
+| `AIS_AUTHN_USE_HTTPS` | when true, tells a starting-up AuthN to use HTTPS |
+
+Separately, there's also client-side AuthN environment that includes:
+
+| name | comment |
+| ---- | ------- |
+| `AIS_AUTHN_URL` | used by [CLI](docs/cli/auth.md) to configure and query authenication server (AuthN) |
+| `AIS_AUTHN_TOKEN_FILE` | token file pathname; can be used to override the default `$HOME/.config/ais/cli/<fname.Token>`  |
+
+When AuthN is disabled (i.e., not used), `ais config` CLI will show something like:
+
+```console
+$ ais config cluster auth
+PROPERTY         VALUE
+auth.secret      **********
+auth.enabled     false
+```
+
+Notice: this command is executed on the aistore cluster, not AuthN per se.
+
+See also:
+
+* [AIS AuthN server](/docs/authn.md)
+* [AIS AuthN server: CLI management](/docs/cli/authn.md)
 
 ## References
 
