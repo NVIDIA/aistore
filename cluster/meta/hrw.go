@@ -29,9 +29,12 @@ func (smap *Smap) HrwName2T(uname string) (*Snode, error) {
 func (smap *Smap) HrwMultiHome(uname string) (si *Snode, netName string, err error) {
 	digest := xxhash.Checksum64S(cos.UnsafeB(uname), cos.MLCG32)
 	si, err = smap.HrwHash2T(digest)
+	if err != nil {
+		return nil, cmn.NetPublic, err
+	}
 	l := len(si.PubExtra)
-	if l == 0 || err != nil {
-		return si, cmn.NetPublic, err
+	if l == 0 {
+		return si, cmn.NetPublic, nil
 	}
 	i := robin.Add(1) % uint64(l+1)
 	if i == 0 {

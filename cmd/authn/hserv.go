@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -76,7 +75,7 @@ rerr:
 
 func (h *hserv) registerHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	h.mux.HandleFunc(path, handler)
-	if !strings.HasSuffix(path, "/") {
+	if !cos.IsLastB(path, '/') {
 		h.mux.HandleFunc(path+"/", handler)
 	}
 }

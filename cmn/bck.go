@@ -283,14 +283,6 @@ func (b *Bck) ValidateName() (err error) {
 	return
 }
 
-// related, inlined
-func ValidateObjname(s string) error {
-	if !strings.Contains(s, "../") {
-		return nil
-	}
-	return fmt.Errorf("invalid object name %q", s)
-}
-
 // ditto
 func ValidatePrefix(s string) error {
 	if !strings.Contains(s, "../") {

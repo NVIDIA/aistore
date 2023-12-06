@@ -881,7 +881,7 @@ func _clean(err error) {
 func (e *ErrHTTP) StringEx() (s string) {
 	s = e.Error()
 	if e.Method != "" || e.URLPath != "" {
-		if !strings.HasSuffix(s, ".") {
+		if !cos.IsLastB(s, '.') {
 			s += ":"
 		}
 		if e.Method != "" {

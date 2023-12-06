@@ -107,13 +107,16 @@ var (
 	objectCmdPut = cli.Command{
 		Name: commandPut,
 		Usage: "PUT or APPEND one file, one directory, or multiple files and/or directories.\n" +
-			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select multiple sources, for example:\n" +
-			indent4 + "\t\t$ ais put 'docs/*.md' ais://abc/markdown/  # notice single quotes\n" +
-			indent4 + "\t- '--compute-checksum' to facilitate end-to-end protection;\n" +
-			indent4 + "\t- progress bar via '--progress' to show runtime execution (uploaded files count and size);\n" +
-			indent4 + "\t- when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent4 + "\t- '--archpath' to APPEND to an existing " + archExts + "-formatted object (\"shard\");\n" +
-			indent4 + "\t(tip: use '--dry-run' to see the results without making any changes)",
+			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select multiple sources.\n" +
+			indent4 + "\tAssorted examples and usage options follow (and see docs/cli/object.md for more):\n" +
+			indent4 + "\t- upload matching files: 'ais put \"docs/*.md\" ais://abc/markdown/'\n" +
+			indent4 + "\t- (notice quotation marks and a forward slash after 'markdown/' destination);\n" +
+			indent4 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
+			indent4 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
+			indent4 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
+			indent4 + "\t- '--dry-run': see the results without making any changes.\n" +
+			indent4 + "\tNotes:\n" +
+			indent4 + "\t- to write or append to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
@@ -271,31 +274,47 @@ func removeObjectHandler(c *cli.Context) (err error) {
 	return multiobjArg(c, commandRemove)
 }
 
-func putHandler(c *cli.Context) (err error) {
-	// main PUT switch
+// main PUT handler: cases 1 through 4
+func putHandler(c *cli.Context) error {
 	var a putargs
-	if err = a.parse(c, true /*empty dst oname*/); err != nil {
-		return
+	if err := a.parse(c, true /*empty dst oname*/); err != nil {
+		return err
 	}
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
+
+	// 1. one file
 	if a.srcIsRegular() {
 		debug.Assert(a.src.abspath != "")
+		if cos.IsLastB(a.dst.oname, '/') {
+			a.dst.oname += a.src.arg
+		}
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
 			return err
 		}
 		actionDone(c, fmt.Sprintf("%s %q => %s\n", a.verb(), a.src.arg, a.dst.bck.Cname(a.dst.oname)))
 		return nil
 	}
-	// multi-file cases
+
+	// 2. multi-file list & range
 	incl := flagIsSet(c, inclSrcDirNameFlag)
 	switch {
 	case len(a.src.fdnames) > 0:
+		var s string
+		if len(a.src.fdnames) > 1 {
+			s = " ..."
+		}
+		if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from [%s%s]", a.src.fdnames[0], s)); !ok {
+			return nil
+		}
 		// a) csv of files and/or directories (names) embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
 		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.dst.oname /*virt subdir*/, incl)
 	case a.pt != nil:
+		if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("matching '%s'", a.src.tmpl)); !ok {
+			return nil
+		}
 		// a) range via the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www
 		// b) range and prefix from the parsed '--template'
 		var trimPrefix string
@@ -303,34 +322,44 @@ func putHandler(c *cli.Context) (err error) {
 			trimPrefix = rangeTrimPrefix(a.pt)
 		}
 		return verbRange(c, &a, a.pt, a.dst.bck, trimPrefix, a.dst.oname, incl)
-	case a.src.stdin:
-		return putStdin(c, &a)
-	default: // one directory
-		var ndir int
-
-		if a.dst.oname != "" {
-			warn := fmt.Sprintf("'%s' will be used as a destination name prefix for all files from '%s'",
-				a.dst.oname, a.src.arg)
-			actionWarn(c, warn)
-			if _, err := archive.Mime(a.dst.oname, ""); err == nil {
-				warn := fmt.Sprintf("did you want to use 'archive put' instead, with %q as the destination?",
-					a.dst.oname)
-				actionWarn(c, warn)
-			}
-			if !flagIsSet(c, yesFlag) {
-				if ok := confirm(c, "Proceed anyway?"); !ok {
-					return
-				}
-			}
-		}
-
-		fobjs, err := lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs, incl)
-		if err != nil {
-			return err
-		}
-		debug.Assert(ndir == 1)
-		return verbFobjs(c, &a, fobjs, a.dst.bck, ndir, a.src.recurs)
 	}
+
+	// 3. STDIN
+	if a.src.stdin {
+		return putStdin(c, &a)
+	}
+
+	// 4. directory
+	var ndir int
+	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s' directory", a.src.arg)); !ok {
+		return nil
+	}
+	fobjs, err := lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs, incl)
+	if err != nil {
+		return err
+	}
+	debug.Assert(ndir == 1)
+	return verbFobjs(c, &a, fobjs, a.dst.bck, ndir, a.src.recurs)
+}
+
+func warnMultiSrcDstPrefix(c *cli.Context, a *putargs, from string) bool {
+	if a.dst.oname == "" || cos.IsLastB(a.dst.oname, '/') {
+		return true
+	}
+	warn := fmt.Sprintf("'%s' will be used as the destination name prefix for all files %s",
+		a.dst.oname, from)
+	actionWarn(c, warn)
+	if _, err := archive.Mime(a.dst.oname, ""); err == nil {
+		warn := fmt.Sprintf("did you want to use 'archive put' instead, with %q as the destination shard?",
+			a.dst.oname)
+		actionWarn(c, warn)
+	}
+	if !flagIsSet(c, yesFlag) {
+		if ok := confirm(c, "Proceed anyway?"); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func putStdin(c *cli.Context, a *putargs) error {

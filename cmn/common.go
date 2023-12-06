@@ -65,12 +65,12 @@ func PropToHeader(prop string) string {
 	return apc.HeaderPrefix + prop
 }
 
-// promoted destination object's name
+// TODO -- FIXME: reconcile w/ PUT
 func PromotedObjDstName(objfqn, dirfqn, givenObjName string) (objName string, err error) {
-	if err = ValidateObjname(givenObjName); err != nil {
-		return
-	}
 	var baseName string
+	if strings.Contains(givenObjName, "../") {
+		return "", fmt.Errorf("invalid object name %q", givenObjName)
+	}
 	givenObjName = strings.TrimRightFunc(givenObjName, func(r rune) bool {
 		return r == filepath.Separator
 	})

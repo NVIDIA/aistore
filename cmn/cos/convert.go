@@ -64,7 +64,7 @@ func StrToSentence(str string) string {
 		return ""
 	}
 	capitalized := CapitalizeString(str)
-	if !strings.HasSuffix(capitalized, ".") {
+	if !IsLastB(capitalized, '.') {
 		capitalized += "."
 	}
 	return capitalized

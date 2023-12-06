@@ -778,7 +778,7 @@ var (
 
 	continueOnErrorFlag = cli.BoolFlag{
 		Name:  "cont-on-err",
-		Usage: "keep running archiving xaction in presence of errors in a any given multi-object transaction",
+		Usage: "keep running archiving xaction (job) in presence of errors in a any given multi-object transaction",
 	}
 	// end archive
 

@@ -62,7 +62,11 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 		return fmt.Errorf("no files to %s (check source name and formatting, see examples)", wop.verb())
 	}
 
-	cptn := fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
+	var cptn string
+	if flagIsSet(c, dryRunFlag) {
+		cptn = dryRunHeader() + " "
+	}
+	cptn += fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
 	cptn += ndir2tag(ndir, recurs)
 	cptn += fmt.Sprintf(" => %s", wop.dest())
 

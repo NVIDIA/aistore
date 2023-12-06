@@ -6,7 +6,6 @@ package ais
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -30,7 +29,7 @@ var g global
 func handlePub(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		g.netServ.pub.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
+		if !cos.IsLastB(path, '/') {
 			g.netServ.pub.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}
@@ -39,7 +38,7 @@ func handlePub(path string, handler func(http.ResponseWriter, *http.Request)) {
 func handleControl(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		g.netServ.control.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
+		if !cos.IsLastB(path, '/') {
 			g.netServ.control.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}
@@ -48,7 +47,7 @@ func handleControl(path string, handler func(http.ResponseWriter, *http.Request)
 func handleData(path string, handler func(http.ResponseWriter, *http.Request)) {
 	for _, v := range allHTTPverbs {
 		g.netServ.data.muxers[v].HandleFunc(path, handler)
-		if !strings.HasSuffix(path, "/") {
+		if !cos.IsLastB(path, '/') {
 			g.netServ.data.muxers[v].HandleFunc(path+"/", handler)
 		}
 	}

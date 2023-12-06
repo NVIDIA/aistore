@@ -4,7 +4,9 @@
  */
 package cos
 
-import "strings"
+import (
+	"strings"
+)
 
 // based on Wikipedia https://en.wikipedia.org/wiki/Damerau–Levenshtein_distance
 func DamerauLevenstheinDistance(s, t string) int {
@@ -71,3 +73,5 @@ func SHead(s string) string {
 	}
 	return s
 }
+
+func IsLastB(s string, b byte) bool { return s[len(s)-1] == b }

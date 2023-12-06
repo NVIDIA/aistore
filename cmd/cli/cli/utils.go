@@ -844,12 +844,12 @@ func actionCptn(c *cli.Context, prefix, msg string) {
 	}
 }
 
+func dryRunHeader() string {
+	return fcyan("[DRY RUN]")
+}
+
 func dryRunCptn(c *cli.Context) {
-	const (
-		dryRunHeader      = "[DRY RUN]"
-		dryRunExplanation = "with no modifications to the cluster"
-	)
-	fmt.Fprintln(c.App.Writer, fcyan(dryRunHeader)+" "+dryRunExplanation)
+	fmt.Fprintln(c.App.Writer, dryRunHeader()+" with no modifications to the cluster")
 }
 
 //////////////

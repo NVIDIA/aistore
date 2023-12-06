@@ -28,7 +28,7 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Put single file with implicitly defined name](#put-single-file-with-implicitly-defined-name)
   - [Put content from STDIN](#put-content-from-stdin)
   - [Put directory](#put-directory)
-  - [Put directory with prefix added to destination object names](#put-directory-with-prefix-added-to-destination-object-names)
+  - [Put multiple files with prefix added to destination object names](#put-multiple-files-with-prefix-added-to-destination-object-names)
   - [PUT multiple files into virtual directory, track progress](#put-multiple-files-into-virtual-directory-track-progress)
   - [Put pattern-matching files from directory](#put-pattern-matching-files-from-directory)
   - [Put a range of files](#put-a-range-of-files)
@@ -36,7 +36,6 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Dry-Run option](#dry-run-option)
   - [Put multiple directories](#put-multiple-directories)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
-- [Append file to archive](#append-file-to-archive)
 - [Delete object](#delete-object)
 - [Evict object](#evict-object)
 - [Promote files and directories](#promote-files-and-directories)
@@ -514,7 +513,21 @@ The current user HOME directory is `/home/user`.
 
 ## Put single file
 
-Put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
+First, compare two simple examples:
+
+```console
+$ ais put README.md ais://nnn/ccc/
+PUT "README.md" => ais://nnn/ccc/README.md
+
+$ ais put README.md ais://nnn/ccc
+PUT "README.md" => ais://nnn/ccc
+```
+
+In other words, a **trailing forward slash** in the destination name is interpreted as a destination directory
+
+> which is what one would expect from something like Bash: `cp README.md /nnn/ccc/`
+
+One other example: put a single file `img1.tar` into local bucket `mybucket`, name it `img-set-1.tar`.
 
 ```console
 $ ais put "/home/user/bck/img1.tar" ais://mybucket/img-set-1.tar
@@ -604,9 +617,77 @@ PUT 10 objects to "ais://vvv"
 
 > NOTE double quotes to denote the `"../../../../bin/g*"` source above. With pattern matching, using quotation marks is a MUST. Single quotes can be used as well.
 
-## Put directory with prefix added to destination object names
+## Put multiple files with prefix added to destination object names
 
-The same as above, but add `OBJECT_NAME` (`../subdir/`) prefix to object names.
+The multi-file source can be: a directory, a comma-separated list, a template-defined range - all of the above.
+
+Examples follow below, but also notice:
+* the flexibility in terms specifying source-matching templates, and
+* destination prefix - with or without trailing forward slash
+
+### Example 1.
+
+```console
+$ ais put ais://nnn/fff --template "/tmp/www/shard-{001..002}.tar"
+Warning: 'fff' will be used as the destination name prefix for all files matching '/tmp/www/shard-{001..002}.tar'
+Proceed anyway? [Y/N]: y
+Files to upload:
+EXTENSION        COUNT   SIZE
+.tar             2       17.00KiB
+TOTAL            2       17.00KiB
+PUT 2 files => ais://nnn/fff? [Y/N]: y
+Done
+$ ais ls ais://nnn
+NAME                     SIZE
+fffshard-001.tar         8.50KiB
+fffshard-002.tar         8.50KiB
+```
+
+### Example 2.
+
+Same as above, except now we make sure that destination is a virtual directory (notice trailing forward '/'):
+
+```console
+$ ais put ais://nnn/ggg/ --template "/tmp/www/shard-{003..004}.tar"
+Files to upload:
+EXTENSION        COUNT   SIZE
+.tar             2       17.00KiB
+TOTAL            2       17.00KiB
+PUT 2 files => ais://nnn/ggg/? [Y/N]: y
+Done
+$ ais ls ais://nnn
+NAME                     SIZE
+fffshard-001.tar         8.50KiB
+fffshard-002.tar         8.50KiB
+ggg/shard-003.tar        8.50KiB
+ggg/shard-004.tar        8.50KiB
+```
+
+### Example 3.
+
+Same as above, with `--template` embedded into the source argument:
+
+```console
+$ ais put "/tmp/www/shard-{005..006}.tar"  ais://nnn/hhh/
+Files to upload:
+EXTENSION        COUNT   SIZE
+.tar             2       17.00KiB
+TOTAL            2       17.00KiB
+PUT 2 files => ais://nnn/hhh/? [Y/N]: y
+Done
+$ ais ls ais://nnn
+NAME                     SIZE
+fffshard-001.tar         8.50KiB
+fffshard-002.tar         8.50KiB
+ggg/shard-003.tar        8.50KiB
+ggg/shard-004.tar        8.50KiB
+hhh/shard-005.tar        8.50KiB
+hhh/shard-006.tar        8.50KiB
+```
+
+And finally, we can certainly PUT source directory:
+
+### Example 4.
 
 ```console
 $ ais put /home/user/bck ais://mybucket/subdir/
@@ -817,37 +898,6 @@ EXTENSION        COUNT   SIZE
 .txt             33      66B
 TOTAL            33      66B
 ```
-
-# Append file to archive
-
-`ais put FILE BUCKET/OBJECT_NAME --archpath ARCH_PATH --append`
-
-Append a file to an existing archive. `ARCH_PATH` here defines (destination) filename in archive.
-
-## Examples
-
-Add a file to an archive:
-
-```console
-# list archived content prior to appending new files
-$ ais ls ais://bck --prefix test --archive
-NAME                             SIZE
-test.tar                         42.00KiB
-    test.tar/main.c              40.00KiB
-
-# add a new file to the archive
-$ ais put readme.txt ais://bck/test.tar --archpath=doc/README --append
-APPEND "readme.txt" to object "ais://abc/test.tar[/doc/README]"
-
-$ # check that the archive is updated
-$ ais ls ais://bck --prefix test --archive
-NAME                             SIZE
-test.tar                         45.50KiB
-    test.tar/doc/README          3.11KiB
-    test.tar/main.c              40.00KiB
-```
-
-> **NOTE**: for more "archival" options and examples, please see [docs/cli/archive.md](archive.md).
 
 # Promote files and directories
 

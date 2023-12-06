@@ -289,7 +289,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 	// multi-file cases
 	//
 	if !a.appendOnly && !a.appendOrPut {
-		warn := fmt.Sprintf("multi-file 'archive put' operation requires either %s or %s (command line)",
+		warn := fmt.Sprintf("multi-file 'archive put' operation requires either %s or %s option",
 			qflprn(archAppendOnlyFlag), qflprn(archAppendOrPutFlag))
 		actionWarn(c, warn)
 		if flagIsSet(c, yesFlag) {
@@ -303,7 +303,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 	}
 
 	// archpath
-	if a.archpath != "" && !strings.HasSuffix(a.archpath, "/") {
+	if a.archpath != "" && !cos.IsLastB(a.archpath, '/') {
 		if !flagIsSet(c, yesFlag) {
 			warn := fmt.Sprintf("no trailing filepath separator in: '%s=%s'", qflprn(archpathFlag), a.archpath)
 			actionWarn(c, warn)

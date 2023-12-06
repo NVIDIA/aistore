@@ -22,6 +22,7 @@ type (
 	here struct {
 		arg     string
 		abspath string
+		tmpl    string
 		finfo   os.FileInfo
 		fdnames []string // files and directories (names)
 		isdir   bool
@@ -71,7 +72,14 @@ var (
 
 func (*putargs) verb() string { return "PUT" }
 
-func (a *putargs) dest() string       { return a.dst.bck.Cname("") }
+func (a *putargs) dest() string {
+	if a.dst.oname == "" {
+		return a.dst.bck.Cname("")
+	}
+	// if len(a.src.fdnames) < 2 {
+	return a.dst.bck.Cname(a.dst.oname)
+}
+
 func (a *putargs) srcIsRegular() bool { return a.src.finfo != nil && !a.src.isdir }
 
 func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
@@ -105,11 +113,9 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 			return
 		}
 		// optional template to select local source(s)
-		var (
-			pt   cos.ParsedTemplate
-			tmpl = parseStrFlag(c, templateFlag)
-		)
-		pt, err = cos.NewParsedTemplate(tmpl)
+		var pt cos.ParsedTemplate
+		a.src.tmpl = parseStrFlag(c, templateFlag)
+		pt, err = cos.NewParsedTemplate(a.src.tmpl)
 		if err == nil {
 			a.pt = &pt
 		}

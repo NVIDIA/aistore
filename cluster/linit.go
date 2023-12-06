@@ -81,9 +81,6 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 	if err = lom.bck.InitFast(g.t.Bowner()); err != nil {
 		return
 	}
-	if err = cmn.ValidateObjname(lom.ObjName); err != nil {
-		return
-	}
 	lom.md.uname = lom.bck.MakeUname(lom.ObjName)
 	lom.mi, lom.digest, err = fs.Hrw(lom.md.uname)
 	if err != nil {

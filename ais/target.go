@@ -745,6 +745,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		started = time.Now().UnixNano()
 		t2tput  = isT2TPut(r.Header)
 	)
+	if !t.isValidObjname(w, r, lom.ObjName) {
+		return
+	}
 	if apireq.dpq.ptime == "" && !t2tput {
 		t.writeErrf(w, r, "%s: %s(obj) is expected to be redirected or replicated", t.si, r.Method)
 		return
@@ -893,6 +896,9 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 	}
 
 	lom := cluster.AllocLOM(apireq.items[1])
+	if !t.isValidObjname(w, r, lom.ObjName) {
+		return
+	}
 	err = lom.InitBck(apireq.bck.Bucket())
 	if err == nil {
 		err = t.objMv(lom, msg)
@@ -1074,6 +1080,9 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 	}
 	lom := cluster.AllocLOM(apireq.items[1] /*objName*/)
 	defer cluster.FreeLOM(lom)
+	if !t.isValidObjname(w, r, lom.ObjName) {
+		return
+	}
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
 		return
