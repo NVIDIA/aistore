@@ -7,12 +7,10 @@ package cmn
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
 const GitHubHome = "https://github.com/NVIDIA/aistore"
@@ -63,37 +61,4 @@ func PropToHeader(prop string) string {
 	prop = strings.ReplaceAll(prop, ".", "-")
 	prop = strings.ReplaceAll(prop, "_", "-")
 	return apc.HeaderPrefix + prop
-}
-
-// TODO -- FIXME: reconcile w/ PUT
-func PromotedObjDstName(objfqn, dirfqn, givenObjName string) (objName string, err error) {
-	var baseName string
-	if strings.Contains(givenObjName, "../") {
-		return "", fmt.Errorf("invalid object name %q", givenObjName)
-	}
-	givenObjName = strings.TrimRightFunc(givenObjName, func(r rune) bool {
-		return r == filepath.Separator
-	})
-	// first, base name
-	if dirfqn == "" {
-		// dst = "given-name/(fqn base)" unless the given name itself
-		// is a dir/name
-		if strings.ContainsRune(givenObjName, filepath.Separator) {
-			return givenObjName, nil
-		}
-		baseName = filepath.Base(objfqn)
-	} else {
-		baseName, err = filepath.Rel(dirfqn, objfqn)
-		debug.AssertNoErr(err)
-		if err != nil {
-			return
-		}
-	}
-	// destination name
-	if givenObjName == "" {
-		objName = baseName
-	} else {
-		objName = filepath.Join(givenObjName, baseName)
-	}
-	return
 }

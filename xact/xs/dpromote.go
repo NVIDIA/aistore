@@ -6,7 +6,9 @@
 package xs
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -103,7 +105,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 
 	// promote
 	args := r.p.args
-	objName, err := cmn.PromotedObjDstName(fqn, args.SrcFQN, args.ObjName)
+	objName, err := PrmObjName(fqn, args.SrcFQN, args.ObjName)
 	if err != nil {
 		return err
 	}
@@ -144,5 +146,37 @@ func (r *XactDirPromote) Snap() (snap *cluster.Snap) {
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()
+	return
+}
+
+//
+// naming
+//
+
+func PrmObjName(objfqn, dirfqn, prefix string) (objName string, err error) {
+	if strings.Contains(prefix, "../") {
+		return "", fmt.Errorf("invalid object name or prefix %q", prefix)
+	}
+	if prefix != "" && cos.IsLastB(prefix, filepath.Separator) {
+		prefix = prefix[:len(prefix)-1]
+	}
+	var baseName string
+	if dirfqn == "" {
+		if strings.IndexByte(prefix, filepath.Separator) > 0 {
+			return prefix, nil
+		}
+		baseName = filepath.Base(objfqn)
+	} else {
+		baseName, err = filepath.Rel(dirfqn, objfqn)
+		if err != nil {
+			debug.Assert(false, err, dirfqn, objfqn)
+			return
+		}
+	}
+	if prefix == "" {
+		objName = baseName
+	} else {
+		objName = filepath.Join(prefix, baseName)
+	}
 	return
 }

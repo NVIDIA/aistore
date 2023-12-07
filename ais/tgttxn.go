@@ -904,7 +904,7 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 			return "", err
 		}
 		if !finfo.IsDir() {
-			txn := newTxnPromote(c, prmMsg, []string{srcFQN}, "", 1)
+			txn := newTxnPromote(c, prmMsg, []string{srcFQN}, "" /*dirFQN*/, 1)
 			if err := t.transactions.begin(txn); err != nil {
 				return "", err
 			}
@@ -1017,7 +1017,7 @@ func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN 
 func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshare bool) error {
 	smap := t.owner.smap.Get()
 	for _, fqn := range txnPrm.fqns {
-		objName, err := cmn.PromotedObjDstName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
+		objName, err := xs.PrmObjName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
 		if err != nil {
 			return err
 		}
