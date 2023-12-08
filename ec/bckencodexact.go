@@ -29,7 +29,6 @@ type (
 	}
 	XactBckEncode struct {
 		xact.Base
-		t    cluster.Target
 		bck  *meta.Bck
 		wg   *sync.WaitGroup // to wait for EC finishes all objects
 		smap *meta.Smap
@@ -53,7 +52,7 @@ func (*encFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *encFactory) Start() error {
-	p.xctn = newXactBckEncode(p.Bck, p.T, p.UUID())
+	p.xctn = newXactBckEncode(p.Bck, p.UUID())
 	return nil
 }
 
@@ -75,8 +74,8 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // XactBckEncode //
 ///////////////////
 
-func newXactBckEncode(bck *meta.Bck, t cluster.Target, uuid string) (r *XactBckEncode) {
-	r = &XactBckEncode{t: t, bck: bck, wg: &sync.WaitGroup{}, smap: t.Sowner().Get()}
+func newXactBckEncode(bck *meta.Bck, uuid string) (r *XactBckEncode) {
+	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: g.t.Sowner().Get()}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
@@ -84,7 +83,7 @@ func newXactBckEncode(bck *meta.Bck, t cluster.Target, uuid string) (r *XactBckE
 func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	bck := r.bck
-	if err := bck.Init(r.t.Bowner()); err != nil {
+	if err := bck.Init(g.t.Bowner()); err != nil {
 		r.AddErr(err)
 		r.Finish()
 		return
@@ -96,7 +95,7 @@ func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	}
 
 	opts := &mpather.JgroupOpts{
-		T:        r.t,
+		T:        g.t,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.bckEncode,
 		DoLoad:   mpather.LoadUnsafe,

@@ -1,6 +1,6 @@
 # AIS Plugin for PyTorch
 
-## PyTorch Dataset and DataLoader for AIS 
+## PyTorch Dataset and DataLoader for AIS
 
 
 AIS plugin is a PyTorch dataset library to access datasets stored on AIStore.
@@ -15,7 +15,7 @@ The PyTorch DataLoader class gives you an iterable over a Dataset. It can be use
 
 But, to create a DataLoader you have to first create a Dataset, which is a class to read samples into memory. Most of the logic of the DataLoader resides on the Dataset.
 
-PyTorch offers two styles of Dataset class: Map-style and Iterable-style. 
+PyTorch offers two styles of Dataset class: Map-style and Iterable-style.
 
 #### ***Map-style Dataset***
 
@@ -62,18 +62,18 @@ train_loader = torch.utils.data.DataLoader(
 
 ### AIS File Lister
 
-Iterable Datapipe that lists files from the AIS backends with the given URL  prefixes. Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`, `ais://bucket-name/folder`, `ais://bucket-name/folder/`, `ais://bucket-name/prefix`. 
+Iterable Datapipe that lists files from the AIS backends with the given URL  prefixes. Acceptable prefixes include but not limited to - `ais://bucket-name`, `ais://bucket-name/`, `ais://bucket-name/folder`, `ais://bucket-name/folder/`, `ais://bucket-name/prefix`.
 
-**Note:** 
+**Note:**
 1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
 2) Input *must* be a list and direct URLs are not supported.
 3) `length` is -1 by default, all calls to `len()` are invalid as not all items are iterated at the start.
-4) This internally uses [AIStore Python SDK](https://gitlab-master.nvidia.com/aistorage/aistore/-/tree/master/python/aistore/sdk).
+4) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/tree/master/python).
 
 ### AIS File Loader
 
-Iterable Datapipe that loads files from the AIS backends with the given list of URLs (no prefixes allowed). Iterates all files in BytesIO format and returns a tuple (url, BytesIO). 
-**Note:** 
+Iterable Datapipe that loads files from the AIS backends with the given list of URLs (no prefixes allowed). Iterates all files in BytesIO format and returns a tuple (url, BytesIO).
+**Note:**
 1) This function also supports files from multiple backends (`aws://..`, `gcp://..`, etc)
 2) Input *must* be a list and direct URLs are not supported.
 3) This internally uses [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk).
@@ -86,7 +86,7 @@ prefixes = ['ais://bucket1/train/', 'aws://bucket2/train/']
 
 list_of_files = AISFileListerIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=prefixes)
 
-files = AISFileLoaderIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=list_of_files) 
+files = AISFileLoaderIterDataPipe(url='http://ais-gateway-url:8080', source_datapipe=list_of_files)
 ```
 
 For a more in-depth example, see [here](https://github.com/NVIDIA/aistore/blob/master/python/examples/aisio_pytorch_example.ipynb)

@@ -142,7 +142,7 @@ func (c *putJogger) processRequest(req *request) {
 func (c *putJogger) run(wg *sync.WaitGroup) {
 	nlog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	defer wg.Done()
-	c.buffer, c.slab = mm.Alloc()
+	c.buffer, c.slab = g.mm.Alloc()
 	for {
 		select {
 		case req := <-c.putCh:
@@ -364,7 +364,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 		sliceWriters = make([]io.Writer, ctx.paritySlices)
 	)
 	for i := 0; i < ctx.paritySlices; i++ {
-		writer := mm.NewSGL(initSize)
+		writer := g.mm.NewSGL(initSize)
 		ctx.slices[i+ctx.dataSlices] = &slice{obj: writer}
 		if cksumType == cos.ChecksumNone {
 			sliceWriters[i] = writer

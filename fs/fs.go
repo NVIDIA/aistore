@@ -511,12 +511,6 @@ func FillDiskStats(m ios.AllDiskStats)         { mfs.ios.FillDiskStats(m) }
 // TestDisableValidation disables fsid checking and allows mountpaths without disks (testing-only)
 func TestDisableValidation() { mfs.allowSharedDisksAndNoDisks = true }
 
-// Returns number of available mountpaths
-func NumAvail() int {
-	avail := mfs.available.Load()
-	return len(*avail)
-}
-
 func putAvailMPI(available MPI) { mfs.available.Store(&available) }
 func putDisabMPI(disabled MPI)  { mfs.disabled.Store(&disabled) }
 
@@ -835,6 +829,11 @@ func Disable(mpath string, cb ...func()) (disabledMpath *Mountpath, err error) {
 		return nil, nil // nothing to do
 	}
 	return nil, cmn.NewErrMountpathNotFound(mpath, "" /*fqn*/, false /*disabled*/)
+}
+
+func NumAvail() int {
+	avail := GetAvail()
+	return len(avail)
 }
 
 // returns both available and disabled mountpaths (compare with GetAvail)

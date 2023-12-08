@@ -179,31 +179,41 @@ type (
 	}
 )
 
-var (
-	emptyReq request
+type global struct {
+	t        cluster.Target
 	reqPool  sync.Pool
 	mm       *memsys.MMSA // memory manager and slab/SGL allocator
+	emptyReq request
+}
 
+var g global
+
+var (
 	ErrorECDisabled = errors.New("EC is disabled for bucket")
 	ErrorNoMetafile = errors.New("no metafile")
 	ErrorNotFound   = errors.New("not found")
 )
 
-func allocateReq(action string, lif cluster.LIF) (req *request) {
-	if v := reqPool.Get(); v != nil {
-		req = v.(*request)
-	} else {
-		req = &request{}
+func Init(t cluster.Target) {
+	g.t = t
+	g.mm = t.PageMM()
+
+	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
+	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
+
+	xreg.RegBckXact(&getFactory{})
+	xreg.RegBckXact(&putFactory{})
+	xreg.RegBckXact(&rspFactory{})
+	xreg.RegBckXact(&encFactory{})
+
+	if err := initManager(); err != nil {
+		cos.ExitLogf("Failed to init manager: %v", err)
 	}
-	req.Action = action
-	req.LIF = lif
-	return
 }
 
-func freeReq(req *request) {
-	*req = emptyReq
-	reqPool.Put(req)
-}
+///////////
+// slice //
+///////////
 
 // Free allocated memory and removes slice's temporary file
 func (s *slice) free() {
@@ -271,20 +281,24 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 	return reader, err
 }
 
-func Init(t cluster.Target) {
-	mm = t.PageMM()
+//
+// misc. utils
+//
 
-	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
-	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
-
-	xreg.RegBckXact(&getFactory{})
-	xreg.RegBckXact(&putFactory{})
-	xreg.RegBckXact(&rspFactory{})
-	xreg.RegBckXact(&encFactory{})
-
-	if err := initManager(t); err != nil {
-		cos.ExitLogf("Failed to init manager: %v", err)
+func allocateReq(action string, lif cluster.LIF) (req *request) {
+	if v := g.reqPool.Get(); v != nil {
+		req = v.(*request)
+	} else {
+		req = &request{}
 	}
+	req.Action = action
+	req.LIF = lif
+	return
+}
+
+func freeReq(req *request) {
+	*req = g.emptyReq
+	g.reqPool.Put(req)
 }
 
 // SliceSize returns the size of one slice that EC will create for the object
@@ -310,7 +324,7 @@ func useDisk(objSize int64, config *cmn.Config) bool {
 	if config.EC.DiskOnly {
 		return true
 	}
-	memPressure := mm.Pressure()
+	memPressure := g.mm.Pressure()
 	switch memPressure {
 	case memsys.OOM, memsys.PressureExtreme:
 		return true
@@ -379,7 +393,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 }
 
 // Saves the main replica to local drives
-func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xact) error {
+func writeObject(lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xact) error {
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
@@ -394,17 +408,17 @@ func writeObject(t cluster.Target, lom *cluster.LOM, reader io.Reader, size int6
 		// to avoid changing version; TODO: introduce cmn.OwtEC
 		params.OWT = cmn.OwtMigrate
 	}
-	err := t.PutObject(lom, params)
+	err := g.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	return err
 }
 
-func validateBckBID(t cluster.Target, bck *cmn.Bck, bid uint64) error {
+func validateBckBID(bck *cmn.Bck, bid uint64) error {
 	if bid == 0 {
 		return nil
 	}
 	newBck := meta.CloneBck(bck)
-	err := newBck.Init(t.Bowner())
+	err := newBck.Init(g.t.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
 	}
@@ -412,8 +426,8 @@ func validateBckBID(t cluster.Target, bck *cmn.Bck, bid uint64) error {
 }
 
 // WriteSliceAndMeta saves slice and its metafile
-func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, t.Bowner(), fs.ECSliceType)
+func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
+	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, g.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -437,23 +451,23 @@ func WriteSliceAndMeta(t cluster.Target, hdr *transport.ObjHdr, args *WriteArgs)
 		}
 	}
 	tmpFQN := ct.Make(fs.WorkfileType)
-	if err := ct.Write(t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
+	if err := ct.Write(g.t, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	if err := ctMeta.Write(t, bytes.NewReader(args.MD), -1); err != nil {
+	if err := ctMeta.Write(g.t, bytes.NewReader(args.MD), -1); err != nil {
 		return err
 	}
-	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("slice-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return err
 	}
-	err = validateBckBID(t, &hdr.Bck, args.BID)
+	err = validateBckBID(&hdr.Bck, args.BID)
 	return err
 }
 
 // WriteReplicaAndMeta saves replica and its metafile
-func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (err error) {
+func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
 	lom.Lock(false)
 	if args.Generation != 0 {
 		ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
@@ -464,7 +478,7 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 	}
 	lom.Unlock(false)
 
-	if err = writeObject(t, lom, args.Reader, lom.SizeBytes(true), args.Xact); err != nil {
+	if err = writeObject(lom, args.Reader, lom.SizeBytes(true), args.Xact); err != nil {
 		return
 	}
 	if !args.Cksum.IsEmpty() && args.Cksum.Value() != "" { // NOTE: empty value
@@ -488,14 +502,14 @@ func WriteReplicaAndMeta(t cluster.Target, lom *cluster.LOM, args *WriteArgs) (e
 			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}()
-	if err = ctMeta.Write(t, bytes.NewReader(args.MD), -1); err != nil {
+	if err = ctMeta.Write(g.t, bytes.NewReader(args.MD), -1); err != nil {
 		return
 	}
-	if _, exists := t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("replica-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return
 	}
-	err = validateBckBID(t, lom.Bucket(), args.BID)
+	err = validateBckBID(lom.Bucket(), args.BID)
 	return
 }

@@ -83,28 +83,30 @@ func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactGet //
 /////////////
 
-func NewGetXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactGet {
-	availablePaths, disabledPaths := fs.Get()
-	totalPaths := len(availablePaths) + len(disabledPaths)
-	smap, si := t.Sowner(), t.Snode()
-	config := cmn.GCO.Get()
-	runner := &XactGet{
-		getJoggers:  make(map[string]*getJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, config, bck, mgr),
-		xactReqBase: newXactReqECBase(),
-	}
+func newGetXact(bck *cmn.Bck, mgr *Manager) *XactGet {
+	var (
+		avail, disabled = fs.Get()
+		totalPaths      = len(avail) + len(disabled)
+		smap            = g.t.Sowner()
+		si              = g.t.Snode()
+		config          = cmn.GCO.Get()
+		xctn            = &XactGet{
+			getJoggers:  make(map[string]*getJogger, totalPaths),
+			xactECBase:  newXactECBase(g.t, smap, si, config, bck, mgr),
+			xactReqBase: newXactReqECBase(),
+		}
+	)
 
 	// create all runners but do not start them until Run is called
-	for mpath := range availablePaths {
-		getJog := runner.newGetJogger(mpath)
-		runner.getJoggers[mpath] = getJog
+	for mpath := range avail {
+		getJog := xctn.newGetJogger(mpath)
+		xctn.getJoggers[mpath] = getJog
 	}
-	for mpath := range disabledPaths {
-		getJog := runner.newGetJogger(mpath)
-		runner.getJoggers[mpath] = getJog
+	for mpath := range disabled {
+		getJog := xctn.newGetJogger(mpath)
+		xctn.getJoggers[mpath] = getJog
 	}
-
-	return runner
+	return xctn
 }
 
 func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.Bck, reader io.Reader) {

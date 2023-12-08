@@ -151,26 +151,26 @@ print([entry.name for entry in objects])
 ```
 Output:
 ```
-shuffled-shard-0.tar     102.36MiB       
-shuffled-shard-1.tar     102.44MiB       
-shuffled-shard-2.tar     102.40MiB       
-shuffled-shard-3.tar     102.45MiB       
-shuffled-shard-4.tar     102.36MiB       
-shuffled-shard-5.tar     102.40MiB       
-shuffled-shard-6.tar     102.49MiB       
-shuffled-shard-7.tar     74.84MiB 
+shuffled-shard-0.tar     102.36MiB
+shuffled-shard-1.tar     102.44MiB
+shuffled-shard-2.tar     102.40MiB
+shuffled-shard-3.tar     102.45MiB
+shuffled-shard-4.tar     102.36MiB
+shuffled-shard-5.tar     102.40MiB
+shuffled-shard-6.tar     102.49MiB
+shuffled-shard-7.tar     74.84MiB
 ```
 
 Finally we have our result: WebDataset-formatted, shuffled shards stored in AIS and ready for use!
 
-In future posts, we'll show how to run transformations on this data and load it for model training. 
+In future posts, we'll show how to run transformations on this data and load it for model training.
 
---- 
+---
 ## References
 
 1. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
-    - [Local Kubernetes Deployment](https://gitlab-master.nvidia.com/aistorage/aistore/-/blob/master/deploy/dev/k8s/README.md)
+    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md)
     - [AIS/Kubernetes Operator, AIS on bare-metal, Deployment Playbooks, Helm](https://github.com/NVIDIA/ais-k8s)
     - [WebDataset Library](https://github.com/webdataset/webdataset)
 2. Documentation, blogs, videos:

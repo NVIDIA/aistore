@@ -248,7 +248,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 		Generation: ctx.meta.Generation,
 		Xact:       c.parent,
 	}
-	if err := WriteReplicaAndMeta(c.parent.t, ctx.lom, args); err != nil {
+	if err := WriteReplicaAndMeta(ctx.lom, args); err != nil {
 		writer.Free()
 		return err
 	}
@@ -370,7 +370,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 			}
 		} else {
 			writer = &slice{
-				writer: mm.NewSGL(cos.KiB * 512),
+				writer: g.mm.NewSGL(cos.KiB * 512),
 				twg:    wgSlices,
 			}
 		}
@@ -430,7 +430,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 		}
 		restored[idx] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
-		sgl := mm.NewSGL(sliceSize)
+		sgl := g.mm.NewSGL(sliceSize)
 		restored[idx] = &slice{obj: sgl, n: sliceSize}
 		if cksumType != cos.ChecksumNone {
 			cksums[idx] = cos.NewCksumHash(cksumType)
@@ -605,7 +605,7 @@ func (c *getJogger) restoreMainObj(ctx *restoreCtx) ([]*slice, error) {
 		Generation: mainMeta.Generation,
 		Xact:       c.parent,
 	}
-	err = WriteReplicaAndMeta(c.parent.t, ctx.lom, args)
+	err = WriteReplicaAndMeta(ctx.lom, args)
 	return restored, err
 }
 

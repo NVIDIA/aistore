@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -71,12 +71,13 @@ func (p *rspFactory) Start() error {
 // XactRespond //
 /////////////////
 
-func NewRespondXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactRespond {
+func newRespondXact(bck *cmn.Bck, mgr *Manager) *XactRespond {
 	var (
-		config   = cmn.GCO.Get()
-		smap, si = t.Sowner(), t.Snode()
+		config = cmn.GCO.Get()
+		smap   = g.t.Sowner()
+		si     = g.t.Snode()
 	)
-	return &XactRespond{xactECBase: newXactECBase(t, smap, si, config, bck, mgr)}
+	return &XactRespond{xactECBase: newXactECBase(g.t, smap, si, config, bck, mgr)}
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
@@ -209,7 +210,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 		md := meta.NewPack()
 		if iReq.isSlice {
 			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation, Xact: r}
-			err = WriteSliceAndMeta(r.t, hdr, args)
+			err = WriteSliceAndMeta(hdr, args)
 		} else {
 			var lom *cluster.LOM
 			lom, err = cluster.AllocLomFromHdr(hdr)
@@ -222,7 +223,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 					Generation: meta.Generation,
 					Xact:       r,
 				}
-				err = WriteReplicaAndMeta(r.t, lom, args)
+				err = WriteReplicaAndMeta(lom, args)
 			}
 			cluster.FreeLOM(lom)
 		}

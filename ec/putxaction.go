@@ -84,30 +84,30 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 // XactPut //
 /////////////
 
-func NewPutXact(t cluster.Target, bck *cmn.Bck, mgr *Manager) *XactPut {
+func newPutXact(bck *cmn.Bck, mgr *Manager) *XactPut {
 	var (
-		availablePaths, disabledPaths = fs.Get()
-		totalPaths                    = len(availablePaths) + len(disabledPaths)
-		smap, si                      = t.Sowner(), t.Snode()
-		config                        = cmn.GCO.Get()
+		avail, disabled = fs.Get()
+		totalPaths      = len(avail) + len(disabled)
+		smap            = g.t.Sowner()
+		si              = g.t.Snode()
+		config          = cmn.GCO.Get()
+		xctn            = &XactPut{
+			putJoggers:  make(map[string]*putJogger, totalPaths),
+			xactECBase:  newXactECBase(g.t, smap, si, config, bck, mgr),
+			xactReqBase: newXactReqECBase(),
+		}
 	)
-	runner := &XactPut{
-		putJoggers:  make(map[string]*putJogger, totalPaths),
-		xactECBase:  newXactECBase(t, smap, si, config, bck, mgr),
-		xactReqBase: newXactReqECBase(),
-	}
 
 	// create all runners but do not start them until Run is called
-	for mpath := range availablePaths {
-		putJog := runner.newPutJogger(mpath)
-		runner.putJoggers[mpath] = putJog
+	for mpath := range avail {
+		putJog := xctn.newPutJogger(mpath)
+		xctn.putJoggers[mpath] = putJog
 	}
-	for mpath := range disabledPaths {
-		putJog := runner.newPutJogger(mpath)
-		runner.putJoggers[mpath] = putJog
+	for mpath := range disabled {
+		putJog := xctn.newPutJogger(mpath)
+		xctn.putJoggers[mpath] = putJog
 	}
-
-	return runner
+	return xctn
 }
 
 func (r *XactPut) newPutJogger(mpath string) *putJogger {

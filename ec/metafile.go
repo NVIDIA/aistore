@@ -92,9 +92,7 @@ func (md *Metadata) RemoteTargets(t cluster.Target) []*meta.Snode {
 	return nodes
 }
 
-// Do not use MM.SGL for a byte buffer: as the buffer is sent via
-// HTTP, it can result in hard to debug errors when SGL is freed.
-// For details:  https://gitlab-master.nvidia.com/aistorage/aistore/issues/472#note_4212419
+// TODO: use 'buf, slab = smm.Alloc()'
 func (md *Metadata) NewPack() []byte {
 	var (
 		buf []byte

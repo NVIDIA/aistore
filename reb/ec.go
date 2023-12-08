@@ -178,13 +178,13 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 	md := ntfn.md.NewPack()
 	if ntfn.md.SliceID != 0 {
 		args := &ec.WriteArgs{Reader: data, MD: md, Xact: reb.xctn()}
-		err = ec.WriteSliceAndMeta(reb.t, hdr, args)
+		err = ec.WriteSliceAndMeta(hdr, args)
 	} else {
 		var lom *cluster.LOM
 		lom, err = cluster.AllocLomFromHdr(hdr)
 		if err == nil {
 			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: reb.xctn()}
-			err = ec.WriteReplicaAndMeta(reb.t, lom, args)
+			err = ec.WriteReplicaAndMeta(lom, args)
 		}
 		cluster.FreeLOM(lom)
 	}
