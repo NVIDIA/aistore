@@ -86,6 +86,22 @@ client.bucket("my-aws-bucket", provider="aws").list_objects()
 Please note that certain operations do **not** support external cloud storage buckets. Please refer to the [SDK reference documentation](https://aiatscale.org/docs/python_sdk.md) for more information on which bucket/object operations support remote cloud buckets, as well as general information on class and method usage.
 
 ---
+### HTTPS
+
+The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTPS. To start using HTTPS:
+
+1. Set up HTTPS on your cluster: [Guide for K8s cluster](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_https_configuration.md)
+2. If using a self-signed certificate with your own CA, copy the CA certificate to your local machine. If using our built-in cert-manager config to generate your certificates, you can use [our playbook](https://github.com/NVIDIA/ais-k8s/blob/master/playbooks/docs/ais_generate_https_cert.md)
+3. Options to configure the SDK for HTTPS connectivity:
+    - Skip verification (for testing, insecure):
+      - `client = Client(skip_verify=True)`
+   - Point the SDK to use your certificate using one of the below methods:
+     - Pass an argument to the path of the certificate when creating the client:
+        - `client = Client(ca_cert=/path/to/cert)`
+     - Use the environment variable
+       - Set `AIS_SERVER_CRT` to the path of your certificate before initializing the client
+    - If your AIS cluster is using a certificate signed by a trusted CA, the client will default to using verification without needing to provide a CA cert.
+---
 
 ### ETLs
 

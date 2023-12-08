@@ -30,6 +30,14 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable
             HEADER_USER_AGENT: f"{USER_AGENT_BASE}/{sdk_version}",
         }
 
+    def test_default_session(self):
+        with patch(
+            "aistore.sdk.request_client.os.getenv", return_value=None
+        ) as mock_getenv:
+            self.request_client = RequestClient(self.endpoint)
+            mock_getenv.assert_called_with(AIS_SERVER_CRT)
+            self.assertEqual(True, self.request_client.session.verify)
+
     @test_cases(
         (("env-cert", "arg-cert", False), "arg-cert"),
         (("env-cert", "arg-cert", True), False),

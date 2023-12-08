@@ -29,7 +29,7 @@ class RequestClient:
         endpoint (str): AIStore endpoint
     """
 
-    def __init__(self, endpoint: str, skip_verify: bool = True, ca_cert: str = None):
+    def __init__(self, endpoint: str, skip_verify: bool = False, ca_cert: str = None):
         self._endpoint = endpoint
         self._base_url = urljoin(endpoint, "v1")
         self._session = requests.sessions.session()
