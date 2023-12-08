@@ -7,6 +7,8 @@ package cmn
 
 import "github.com/NVIDIA/aistore/cmn/jsp"
 
+const GitHubHome = "https://github.com/NVIDIA/aistore"
+
 // ========================== IMPORTANT NOTE ==============================
 //
 // - (major.minor) version indicates the current version of AIS software
@@ -31,8 +33,8 @@ const (
 )
 
 const (
-	MetaverSmap  = 2 // Smap (cluster map) formatting version (jsp)
-	MetaverBMD   = 2 // BMD (bucket metadata) --/-- (jsp)
+	MetaverSmap  = 2 // Smap (cluster map) formatting version a.k.a. meta-version (see cluster/meta/jsp.go)
+	MetaverBMD   = 2 // BMD (bucket metadata) --/--
 	MetaverRMD   = 1 // Rebalance MD (jsp)
 	MetaverVMD   = 1 // Volume MD (jsp)
 	MetaverEtlMD = 1 // ETL MD (jsp)

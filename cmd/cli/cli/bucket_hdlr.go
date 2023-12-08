@@ -345,7 +345,7 @@ func showMisplacedAndMore(c *cli.Context) error {
 	f := func() error {
 		return checkObjectHealth(queryBcks)
 	}
-	return cmn.WaitForFunc(f, longClientTimeout)
+	return waitForFunc(f, longClientTimeout)
 }
 
 func mvBucketHandler(c *cli.Context) error {

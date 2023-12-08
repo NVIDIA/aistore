@@ -6,9 +6,7 @@
 package xs
 
 import (
-	"fmt"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -150,19 +148,13 @@ func (r *XactDirPromote) Snap() (snap *cluster.Snap) {
 }
 
 //
-// naming
+// destination naming
 //
 
-func PrmObjName(objfqn, dirfqn, prefix string) (objName string, err error) {
-	if strings.Contains(prefix, "../") {
-		return "", fmt.Errorf("invalid object name or prefix %q", prefix)
-	}
-	if prefix != "" && cos.IsLastB(prefix, filepath.Separator) {
-		prefix = prefix[:len(prefix)-1]
-	}
+func PrmObjName(objfqn, dirfqn, prefix string) (_ string, err error) {
 	var baseName string
 	if dirfqn == "" {
-		if strings.IndexByte(prefix, filepath.Separator) > 0 {
+		if prefix != "" && !cos.IsLastB(prefix, filepath.Separator) {
 			return prefix, nil
 		}
 		baseName = filepath.Base(objfqn)
@@ -170,13 +162,8 @@ func PrmObjName(objfqn, dirfqn, prefix string) (objName string, err error) {
 		baseName, err = filepath.Rel(dirfqn, objfqn)
 		if err != nil {
 			debug.Assert(false, err, dirfqn, objfqn)
-			return
+			return "", err
 		}
 	}
-	if prefix == "" {
-		objName = baseName
-	} else {
-		objName = filepath.Join(prefix, baseName)
-	}
-	return
+	return prefix + baseName, nil
 }

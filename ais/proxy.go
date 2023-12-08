@@ -595,6 +595,10 @@ func (p *proxy) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 		p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 		return
 	}
+	if lsmsg.Prefix != "" && strings.Contains(lsmsg.Prefix, "../") {
+		p.writeErrf(w, r, "bad list-objects request: invalid prefix %q", lsmsg.Prefix)
+		return
+	}
 	bckArgs := bckInitArgs{p: p, w: w, r: r, msg: msg, perms: apc.AceObjLIST, bck: bck, dpq: dpq}
 	bckArgs.createAIS = false
 

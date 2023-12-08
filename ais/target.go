@@ -1043,7 +1043,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 		if v == "" {
 			return nil, false
 		}
-		name := cmn.PropToHeader(tag)
+		name := apc.PropToHeader(tag)
 		debug.Func(func() {
 			vv := hdr.Get(name)
 			debug.Assertf(vv == "", "not expecting duplications: %s=(%q, %q)", name, v, vv)

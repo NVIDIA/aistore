@@ -46,7 +46,7 @@ func lsblk(fs string, testingEnv bool) (res *LsBlk) {
 		return
 	}
 	var (
-		cmd      = exec.Command("lsblk", "-Jt") // JSON output format
+		cmd      = exec.Command("lsblk", "-Jt") // JSON output format (TODO: '-e7' to skip loopbacks)
 		out, err = cmd.CombinedOutput()
 	)
 	if err != nil {

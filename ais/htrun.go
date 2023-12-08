@@ -1238,7 +1238,7 @@ func (h *htrun) writeErrURL(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/favicon.ico" || r.URL.Path == "favicon.ico" {
 		return
 	}
-	h.writeErrf(w, r, "invalid request: '%s %s'", r.Method, r.RequestURI)
+	h.writeErrf(w, r, "invalid request URI: '%s %s'", r.Method, r.RequestURI)
 }
 
 func (h *htrun) writeErrAct(w http.ResponseWriter, r *http.Request, action string) {

@@ -252,19 +252,21 @@ const (
 
 	// Objects
 	objectArgument          = "BUCKET/OBJECT_NAME"
-	optionalObjArgument     = "BUCKET[/OBJECT_NAME]"
 	optionalObjectsArgument = "BUCKET[/OBJECT_NAME] ..."
-	shardArgument           = "BUCKET/SHARD_NAME"
-	optionalShardArgument   = "BUCKET[/SHARD_NAME]"
 	dstShardArgument        = bucketDstArgument + "/SHARD_NAME"
 
-	getObjectArgument   = optionalObjArgument + " [OUT_FILE|OUT_DIR|-]"
-	getShardArgument    = optionalShardArgument + " [OUT_FILE|OUT_DIR|-]"
-	putObjectArgument   = "[-|FILE|DIRECTORY[/PATTERN]] " + optionalObjArgument
-	putApndArchArgument = "[-|FILE|DIRECTORY[/PATTERN]] " + shardArgument
+	getObjectArgument = "BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]"
 
-	promoteObjectArgument = "FILE|DIRECTORY[/PATTERN] " + optionalObjArgument
-	concatObjectArgument  = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] " + objectArgument
+	optionalPrefixArgument = "BUCKET[/OBJECT_NAME_or_PREFIX]"
+	putObjectArgument      = "[-|FILE|DIRECTORY[/PATTERN]] " + optionalPrefixArgument
+	promoteObjectArgument  = "FILE|DIRECTORY[/PATTERN] " + optionalPrefixArgument
+
+	shardArgument         = "BUCKET/SHARD_NAME"
+	optionalShardArgument = "BUCKET[/SHARD_NAME]"
+	putApndArchArgument   = "[-|FILE|DIRECTORY[/PATTERN]] " + shardArgument
+	getShardArgument      = optionalShardArgument + " [OUT_FILE|OUT_DIR|-]"
+
+	concatObjectArgument = "FILE|DIRECTORY[/PATTERN] [ FILE|DIRECTORY[/PATTERN] ...] " + objectArgument
 
 	renameObjectArgument = objectArgument + " NEW_OBJECT_NAME"
 

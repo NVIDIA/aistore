@@ -129,7 +129,7 @@ class TestObjectOps(unittest.TestCase):
         top_folder = self.local_test_files.joinpath("promote_folder")
         top_item = "test_file_top"
         top_item_contents = "contents in the test file"
-        inner_folder = "inner_folder"
+        inner_folder_name = "inner_folder/"
         inner_item = "test_file_inner"
         inner_item_contents = "contents of the file in the inner folder"
         # Create a folder in the current directory
@@ -139,7 +139,7 @@ class TestObjectOps(unittest.TestCase):
             local_files_path.joinpath(top_item), "w", encoding=UTF_ENCODING
         ) as file:
             file.write(top_item_contents)
-        inner_folder = local_files_path.joinpath(inner_folder)
+        inner_folder = local_files_path.joinpath(inner_folder_name)
         inner_folder.mkdir()
         with open(
             inner_folder.joinpath(inner_item), "w", encoding=UTF_ENCODING
@@ -147,11 +147,11 @@ class TestObjectOps(unittest.TestCase):
             file.write(inner_item_contents)
 
         # Promote to AIS bucket
-        obj_name = "promoted_obj"
+        obj_name = "promoted_obj/"
         self.bucket.object(obj_name).promote(str(local_files_path))
         # Check bucket, only top object is promoted
         self.assertEqual(1, len(self.bucket.list_all_objects()))
-        top_object = self.bucket.object(obj_name + "/" + top_item).get()
+        top_object = self.bucket.object(obj_name + top_item).get()
         self.assertEqual(top_item_contents, top_object.read_all().decode(UTF_ENCODING))
 
         # Update local top item contents
@@ -170,12 +170,12 @@ class TestObjectOps(unittest.TestCase):
         )
         # Check bucket, both objects promoted, top overwritten
         self.assertEqual(2, len(self.bucket.list_all_objects()))
-        expected_top_obj = obj_name + "/" + top_item
+        expected_top_obj = obj_name + top_item
         top_obj = self.bucket.object(expected_top_obj).get()
         self.assertEqual(
             top_item_updated_contents, top_obj.read_all().decode(UTF_ENCODING)
         )
-        inner_obj = self.bucket.object(obj_name + "/inner_folder/" + inner_item).get()
+        inner_obj = self.bucket.object(obj_name + inner_folder_name + inner_item).get()
         self.assertEqual(inner_item_contents, inner_obj.read_all().decode(UTF_ENCODING))
         # Check source deleted
         top_level_files = [

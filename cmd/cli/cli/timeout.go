@@ -4,7 +4,10 @@
  */
 package cli
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // see also: xact/api.go
 
@@ -32,3 +35,33 @@ const (
 	// job wait: start printing "."(s)
 	wasFast = refreshRateDefault
 )
+
+// execute a function in goroutine and wait for it to finish;
+// if the function runs longer than `timeLong`: return "please wait" error
+func waitForFunc(f func() error, timeLong time.Duration, prompts ...string) error {
+	var (
+		timer  = time.NewTimer(timeLong)
+		chDone = make(chan struct{}, 1)
+		err    error
+		prompt = "Please wait, the operation may take some time..."
+	)
+	if len(prompts) > 0 && prompts[0] != "" {
+		prompt = prompts[0]
+	}
+	go func() {
+		err = f()
+		chDone <- struct{}{}
+	}()
+loop:
+	for {
+		select {
+		case <-timer.C:
+			fmt.Println(prompt)
+		case <-chDone:
+			timer.Stop()
+			break loop
+		}
+	}
+
+	return err
+}

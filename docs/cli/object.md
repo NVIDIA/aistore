@@ -401,7 +401,7 @@ ec          2:2[replicated]
 
 Briefly:
 
-`ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]`<sup>[1](#ft1)</sup>
+`ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]`<sup>[1](#ft1)</sup>
 
 writes a single file, an entire directory (of files), or a typed content directly from STDIN (`-`) - into the specified (destination) bucket.
 
@@ -419,30 +419,46 @@ Confirmation request can be disabled with the option `--yes` for use in scripts.
 
 When writing from `STDIN`, type Ctrl-D to terminate the input.
 
-## Options
+## Inline help
 
 ```console
 $ ais put --help
 NAME:
-   ais put - (alias for "object put") PUT or APPEND one file or one directory, or multiple files and/or directories.
-              - use optional shell filename pattern (wildcard) to match/select sources;
-              - request '--compute-checksum' to facilitate end-to-end protection;
-              - progress bar via '--progress' to show runtime execution (uploaded files count and size);
-              - when writing directly from standard input use Ctrl-D to terminate;
-              - use '--archpath' to APPEND to an existing tar-formatted object.
+   ais put - (alias for "object put") PUT or APPEND one file, one directory, or multiple files and/or directories.
+   Use optional shell filename PATTERN (wildcard) to match/select multiple sources.
+   Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX
+   becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').
+   Assorted examples and usage options follow (and see docs/cli/object.md for more):
+     - upload matching files: 'ais put "docs/*.md" ais://abc/markdown/'
+     - (notice quotation marks and a forward slash after 'markdown/' destination);
+     - '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;
+     - '--progress': progress bar, to show running counts and sizes of uploaded files;
+     - Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;
+     - '--dry-run': see the results without making any changes.
+     Notes:
+     - to write or append to (.tar, .tgz or .tar.gz, .zip, .tar.lz4)-formatted objects ("shards"), use 'ais archive'
 
 USAGE:
-   ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME]
+   ais put [command options] [-|FILE|DIRECTORY[/PATTERN]] BUCKET[/OBJECT_NAME_or_PREFIX]
 
 OPTIONS:
-   --list value        comma-separated list of file names, e.g.:
-                       --list 'f1,f2,f3'
-                       --list "/home/abc/1.tar, /home/abc/1.cls, /home/abc/1.jpeg"
-   --template value    template to match file names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
-                       --template '/home/dir/subdir/'
+   --list value        comma-separated list of object or file names, e.g.:
+                       --list 'o1,o2,o3'
+                       --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                       or, when listing files and/or directories:
+                       --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value    template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                       (with optional steps and gaps), e.g.:
+                       --template "" # (an empty or '*' template matches eveything)
+                       --template 'dir/subdir/'
                        --template 'shard-{1000..9999}.tar'
                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                       --template "prefix-{0010..9999..2}-suffix"
+                       and similarly, when specifying files and directories:
+                       --template '/home/dir/subdir/'
+                       --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait              wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value     maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                       valid time units: ns, us (or µs), ms, s (default), m, h
    --progress          show progress bar(s) and progress of execution in real time
    --refresh value     interval for continuous monitoring;
                        valid time units: ns, us (or µs), ms, s (default), m, h
@@ -450,19 +466,16 @@ OPTIONS:
    --conc value        limits number of concurrent put requests and number of concurrent shards created (default: 10)
    --dry-run           preview the results without really running the action
    --recursive, -r     recursive operation
-   --verbose, -v       verbose
+   --verbose, -v       verbose output
    --yes, -y           assume 'yes' to all questions
-   --include-src-bck   prefix names of archived objects with the source bucket name
-   --cont-on-err       keep running archiving xaction in presence of errors in a any given multi-object transaction
+   --cont-on-err       keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
    --units value       show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
                        iec - IEC format, e.g.: KiB, MiB, GiB (default)
                        si  - SI (metric) format, e.g.: KB, MB, GB
                        raw - do not convert to (or from) human-readable format
-   --archpath value    filename in archive
-   --archive           archive a given list ('--list') or range ('--template') of objects
-   --append-to-arch    add object(s) to an existing (.tar, .tgz, .tar.gz, .zip, .msgpack)-formatted object ("archive", "shard")
    --skip-vc           skip loading object metadata (and the associated checksum & version related processing)
    --compute-checksum  [end-to-end protection] compute client-side checksum configured for the destination bucket
+                       and provide it as part of the PUT request for subsequent validation on the server side
    --crc32c value      compute client-side crc32c checksum
                        and provide it as part of the PUT request for subsequent validation on the server side
    --md5 value         compute client-side md5 checksum
@@ -473,7 +486,7 @@ OPTIONS:
                        and provide it as part of the PUT request for subsequent validation on the server side
    --xxhash value      compute client-side xxhash checksum
                        and provide it as part of the PUT request for subsequent validation on the server side
-   --help, -h          show help
+
 ```
 
 <a name="ft1">1</a> `FILE|DIRECTORY` should point to a file or a directory. Wildcards are supported, but they work a bit differently from shell wildcards.
@@ -901,10 +914,35 @@ TOTAL            33      66B
 
 # Promote files and directories
 
-`ais object promote FILE|DIRECTORY BUCKET/[OBJECT_NAME]`<sup>[1](#ft1)</sup>
+Inline help follows below:
 
-Promote **AIS-colocated** files and directories to AIS objects in a specified bucket.
-Colocation in context means that the files in question are already located *inside* AIStore (bare-metal or virtual) storage servers (targets).
+```console
+$ ais object promote --help
+NAME:
+   ais object promote - PROMOTE target-accessible files and directories.
+   The operation is intended for copying NFS and SMB shares mounted on any/all targets
+   but can be also used to copy local files (again, on any/all targets in the cluster).
+   Copied files and directories become regular stored objects that can be further listed and operated upon.
+   Destination naming is consistent with 'ais put' command, e.g.:
+     - 'promote /tmp/subdir/f1 ais://nnn'        - ais://nnn/f1
+     - 'promote /tmp/subdir/f2 ais://nnn/aaa'    - ais://nnn/aaa
+     - 'promote /tmp/subdir/f3 ais://nnn/aaa/'   - ais://nnn/aaa/f3
+     - 'promote /tmp/subdir ais://nnn'           - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3
+     - 'promote /tmp/subdir ais://nnn/aaa/'      - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3
+   Other supported options follow below.
+
+USAGE:
+   ais object promote [command options] FILE|DIRECTORY[/PATTERN] BUCKET[/OBJECT_NAME_or_PREFIX]
+
+OPTIONS:
+   --recursive, -r      recursive operation
+   --overwrite-dst, -o  overwrite destination, if exists
+   --not-file-share     each target must act autonomously skipping file-share auto-detection and promoting the entire source (as seen from the target)
+   --delete-src         delete successfully promoted source
+   --target-id value    ais target designated to carry out the entire operation
+   --verbose, -v        verbose output
+   --help, -h           show help
+```
 
 ## Options
 
@@ -917,22 +955,9 @@ Colocation in context means that the files in question are already located *insi
 | `--delete-src` | `bool` | Delete promoted source | `false` |
 | `--not-file-share` | `bool` | Each target must act autonomously, skipping file-share auto-detection and promoting the entire source (as seen from _the_ target) | `false` |
 
-## Object names
+## Destination naming
 
-When the specified source references a **directory, or a tree of nested directories**, object naming is set as follows:
-
-- For path `p` of source directory, resulting objects names are path to files with trimmed `p` prefix
-- `OBJECT_NAME` is prepended to each object name.
-- Abbreviations in source like `../` are not supported at the moment.
-
-If the source references a **single file**, the resulting object name is set as follows:
-
-- Object name is not provided: `ais object promote /path/to/(..)/file.go ais://bucket/` promotes to object `file.go` in `bucket`
-- Explicit object name is provided: `ais object promote /path/to/(..)/file.go ais://bucket/path/to/object.go` promotes object `path/to/object.go` in `bucket`
-
-Notice that `keep` option is required - it cannot be omitted.
-
-> The usual argument for **not keeping** the original file-based content (`keep=false`) is a) saving space on the target servers and b) optimizing time to promote (larger) files and directories.
+See above.
 
 ## Promote a single file
 

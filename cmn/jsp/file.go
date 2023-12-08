@@ -7,7 +7,6 @@ package jsp
 
 import (
 	"errors"
-	"flag"
 	"io"
 	"os"
 
@@ -86,11 +85,9 @@ func Load(filepath string, v any, opts Options) (checksum *cos.Cksum, err error)
 	}
 	if errors.Is(err, &cos.ErrBadCksum{}) {
 		if errRm := os.Remove(filepath); errRm == nil {
-			if flag.Parsed() {
-				nlog.Errorf("bad checksum: removing %s", filepath)
-			}
-		} else if flag.Parsed() {
-			nlog.Errorf("bad checksum: failed to remove %s: %v", filepath, errRm)
+			cos.Errorf("jsp: %v, removed %q", err, filepath)
+		} else {
+			cos.Errorf("jsp: %v, failed to remove %q: %v", err, filepath, errRm)
 		}
 	}
 	return

@@ -193,28 +193,34 @@ func (*WorkfileContentResolver) PermToEvict() bool   { return true }
 func (*WorkfileContentResolver) PermToProcess() bool { return false }
 
 func (*WorkfileContentResolver) GenUniqueFQN(base, prefix string) string {
+	const (
+		contentSepa = "."
+	)
 	var (
 		dir, fname = filepath.Split(base)
 		tieBreaker = cos.GenTie()
 	)
-	fname = prefix + "." + fname
+	fname = prefix + contentSepa + fname
 	base = filepath.Join(dir, fname)
-	return base + "." + tieBreaker + "." + spid
+	return base + contentSepa + tieBreaker + contentSepa + spid
 }
 
 func (*WorkfileContentResolver) ParseUniqueFQN(base string) (orig string, old, ok bool) {
+	const (
+		contentSepa = '.'
+	)
 	// remove original content type
-	cntIndex := strings.Index(base, ".")
+	cntIndex := strings.IndexByte(base, contentSepa)
 	if cntIndex < 0 {
 		return "", false, false
 	}
 	base = base[cntIndex+1:]
 
-	pidIndex := strings.LastIndex(base, ".") // pid
+	pidIndex := strings.LastIndexByte(base, contentSepa) // pid
 	if pidIndex < 0 {
 		return "", false, false
 	}
-	tieIndex := strings.LastIndex(base[:pidIndex], ".") // tie breaker
+	tieIndex := strings.LastIndexByte(base[:pidIndex], contentSepa) // tie breaker
 	if tieIndex < 0 {
 		return "", false, false
 	}

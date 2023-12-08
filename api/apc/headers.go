@@ -4,6 +4,8 @@
  */
 package apc
 
+import "strings"
+
 // For standard and provider-specific HTTP headers, see cmn/cos/const_http.go
 
 const HdrError = "Hdr-Error"
@@ -89,3 +91,19 @@ const (
 	HdrPromoteNamesHash = HeaderPrefix + "promote-names-hash"
 	HdrPromoteNamesNum  = HeaderPrefix + "promote-names-num"
 )
+
+//
+// convert prop name to HTTP header tag name
+//
+
+func PropToHeader(prop string) string {
+	if strings.HasPrefix(prop, HeaderPrefix) {
+		return prop
+	}
+	if prop[0] == '.' || prop[0] == '_' {
+		prop = prop[1:]
+	}
+	prop = strings.ReplaceAll(prop, ".", "-")
+	prop = strings.ReplaceAll(prop, "_", "-")
+	return HeaderPrefix + prop
+}

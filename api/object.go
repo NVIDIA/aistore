@@ -332,7 +332,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, sile
 	op.Cksum = op.ObjAttrs.FromHeader(hdr)
 	// second, all the rest
 	err = cmn.IterFields(op, func(tag string, field cmn.IterField) (error, bool) {
-		headerName := cmn.PropToHeader(tag)
+		headerName := apc.PropToHeader(tag)
 		// skip the missing ones
 		if _, ok := hdr[textproto.CanonicalMIMEHeaderKey(headerName)]; !ok {
 			return nil, false

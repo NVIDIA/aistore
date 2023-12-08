@@ -43,7 +43,7 @@ linters:
     # - dupl
     #
     # linters that maybe worth running from time to time:
-    # - gochecknoinits
+    # - gochecknoinits  - 'func init()'
     # - goconst
     # - errchkjson
     # - nilnil

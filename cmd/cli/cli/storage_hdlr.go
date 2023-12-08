@@ -435,7 +435,7 @@ func newBsummContext(c *cli.Context, units string, qbck cmn.QueryBcks, bckPresen
 // "slow" version of the bucket-summary (compare with `listBuckets` => `listBckTableWithSummary`)
 func (ctx *bsummCtx) slow() (xid string, res cmn.AllBsummResults, err error) {
 	if ctx.longWaitTime > 0 {
-		err = cmn.WaitForFunc(ctx.get, ctx.longWaitTime, ctx.longWaitPrompt)
+		err = waitForFunc(ctx.get, ctx.longWaitTime, ctx.longWaitPrompt)
 	} else {
 		err = ctx.get()
 	}

@@ -107,19 +107,39 @@ var (
 	objectCmdPut = cli.Command{
 		Name: commandPut,
 		Usage: "PUT or APPEND one file, one directory, or multiple files and/or directories.\n" +
-			indent4 + "\t- use optional shell filename pattern (wildcard) to match/select multiple sources.\n" +
-			indent4 + "\tAssorted examples and usage options follow (and see docs/cli/object.md for more):\n" +
-			indent4 + "\t- upload matching files: 'ais put \"docs/*.md\" ais://abc/markdown/'\n" +
-			indent4 + "\t- (notice quotation marks and a forward slash after 'markdown/' destination);\n" +
-			indent4 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
-			indent4 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
-			indent4 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
-			indent4 + "\t- '--dry-run': see the results without making any changes.\n" +
-			indent4 + "\tNotes:\n" +
-			indent4 + "\t- to write or append to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
+			indent1 + "Use optional shell filename PATTERN (wildcard) to match/select multiple sources.\n" +
+			indent1 + "Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX\n" +
+			indent1 + "becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').\n" +
+			indent1 + "Assorted examples and usage options follow (and see docs/cli/object.md for more):\n" +
+			indent1 + "\t- upload matching files: 'ais put \"docs/*.md\" ais://abc/markdown/'\n" +
+			indent1 + "\t- (notice quotation marks and a forward slash after 'markdown/' destination);\n" +
+			indent1 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
+			indent1 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
+			indent1 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
+			indent1 + "\t- '--dry-run': see the results without making any changes.\n" +
+			indent1 + "\tNotes:\n" +
+			indent1 + "\t- to write or append to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
+		BashComplete: putPromApndCompletions,
+	}
+	objectCmdPromote = cli.Command{
+		Name: commandPromote,
+		Usage: "PROMOTE target-accessible files and directories.\n" +
+			indent1 + "The operation is intended for copying NFS and SMB shares mounted on any/all targets\n" +
+			indent1 + "but can be also used to copy local files (again, on any/all targets in the cluster).\n" +
+			indent1 + "Copied files and directories become regular stored objects that can be further listed and operated upon.\n" +
+			indent1 + "Destination naming is consistent with 'ais put' command, e.g.:\n" +
+			indent1 + "\t- 'promote /tmp/subdir/f1 ais://nnn'\t - ais://nnn/f1\n" +
+			indent1 + "\t- 'promote /tmp/subdir/f2 ais://nnn/aaa'\t - ais://nnn/aaa\n" +
+			indent1 + "\t- 'promote /tmp/subdir/f3 ais://nnn/aaa/'\t - ais://nnn/aaa/f3\n" +
+			indent1 + "\t- 'promote /tmp/subdir ais://nnn'\t - ais://nnn/f1, ais://nnn/f2, ais://nnn/f3\n" +
+			indent1 + "\t- 'promote /tmp/subdir ais://nnn/aaa/'\t - ais://nnn/aaa/f1, ais://nnn/aaa/f2, ais://nnn/aaa/f3\n" +
+			indent1 + "Other supported options follow below.",
+		ArgsUsage:    promoteObjectArgument,
+		Flags:        objectCmdsFlags[commandPromote],
+		Action:       promoteHandler,
 		BashComplete: putPromApndCompletions,
 	}
 
@@ -138,6 +158,7 @@ var (
 			objectCmdGet,
 			bucketsObjectsCmdList,
 			objectCmdPut,
+			objectCmdPromote,
 			objectCmdSetCustom,
 			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
@@ -156,14 +177,6 @@ var (
 				Flags:        objectCmdsFlags[commandRemove],
 				Action:       removeObjectHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
-			},
-			{
-				Name:         commandPromote,
-				Usage:        "promote files and directories (i.e., replicate files and convert them to objects)",
-				ArgsUsage:    promoteObjectArgument,
-				Flags:        objectCmdsFlags[commandPromote],
-				Action:       promoteHandler,
-				BashComplete: putPromApndCompletions,
 			},
 			{
 				Name:      commandConcat,

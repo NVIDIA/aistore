@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -897,6 +898,9 @@ func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 			return "", err
+		}
+		if strings.Contains(prmMsg.ObjName, "../") || strings.Contains(prmMsg.ObjName, "~/") {
+			return "", fmt.Errorf("invalid object name or prefix %q", prmMsg.ObjName)
 		}
 		srcFQN := c.msg.Name
 		finfo, err := os.Stat(srcFQN)
