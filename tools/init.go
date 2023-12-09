@@ -32,7 +32,6 @@ const (
 
 const (
 	registerTimeout = time.Minute * 2
-	bucketTimeout   = time.Minute
 )
 
 type (

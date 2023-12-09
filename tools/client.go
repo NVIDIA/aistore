@@ -464,33 +464,6 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 	return api.BaseParams{Client: gctx.Client, URL: u, Token: LoggedUserToken, UA: "tools/test"}
 }
 
-// waitForBucket waits until all targets ack having ais bucket created or deleted
-func WaitForBucket(proxyURL string, query cmn.QueryBcks, exists bool) error {
-	bp := BaseAPIParams(proxyURL)
-	smap, err := api.GetClusterMap(bp)
-	if err != nil {
-		return err
-	}
-	to := time.Now().Add(bucketTimeout)
-	for _, s := range smap.Tmap {
-		for {
-			bp := BaseAPIParams(s.URL(cmn.NetPublic))
-			bucketExists, err := api.QueryBuckets(bp, query, apc.FltExists)
-			if err != nil {
-				return err
-			}
-			if bucketExists == exists {
-				break
-			}
-			if time.Now().After(to) {
-				return fmt.Errorf("wait for ais bucket timed out, target = %s", bp.URL)
-			}
-			time.Sleep(time.Second)
-		}
-	}
-	return nil
-}
-
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
 	bp := BaseAPIParams(proxyURL)
 	xid, err := api.EvictList(bp, bck, objList)

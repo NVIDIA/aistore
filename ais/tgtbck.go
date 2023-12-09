@@ -38,6 +38,10 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	if err != nil {
 		return
 	}
+	if err = t.isIntraCall(r.Header, false); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
 	msg, err := t.readAisMsg(w, r)
 	if err != nil {
 		return
@@ -85,8 +89,20 @@ func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 				return
 			}
 		}
-		begin := mono.NanoTime()
-		if ok := t.listObjects(w, r, bck, msg); !ok {
+		var (
+			begin = mono.NanoTime()
+			lsmsg *apc.LsoMsg
+		)
+		if err := cos.MorphMarshal(msg.Value, &lsmsg); err != nil {
+			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+			return
+		}
+		if !cos.IsValidUUID(lsmsg.UUID) {
+			debug.Assert(false, lsmsg.UUID)
+			t.writeErrf(w, r, "list-objects: invalid UUID %q", lsmsg.UUID)
+			return
+		}
+		if ok := t.listObjects(w, r, bck, lsmsg); !ok {
 			t.statsT.IncErr(stats.ListCount)
 			return
 		}
@@ -237,29 +253,24 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config, bmd *bucketMD) (
 
 // returns `cmn.LsoResult` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
-func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, actMsg *aisMsg) (ok bool) {
-	var msg *apc.LsoMsg
-	if err := cos.MorphMarshal(actMsg.Value, &msg); err != nil {
-		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, actMsg.Action, actMsg.Value, err)
-		return
-	}
-	if !bck.IsAIS() && !msg.IsFlagSet(apc.LsObjCached) {
+func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) (ok bool) {
+	if !bck.IsAIS() && !lsmsg.IsFlagSet(apc.LsObjCached) {
 		maxRemotePageSize := t.Backend(bck).MaxPageSize()
-		if msg.PageSize > maxRemotePageSize {
-			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", msg.PageSize, maxRemotePageSize)
+		if lsmsg.PageSize > maxRemotePageSize {
+			t.writeErrf(w, r, "page size %d exceeds the supported maximum (%d)", lsmsg.PageSize, maxRemotePageSize)
 			return false
 		}
-		if msg.PageSize == 0 {
-			msg.PageSize = maxRemotePageSize
+		if lsmsg.PageSize == 0 {
+			lsmsg.PageSize = maxRemotePageSize
 		}
 	}
-	debug.Assert(msg.PageSize > 0 && msg.PageSize < 100000 && cos.IsValidUUID(msg.UUID))
+	debug.Assert(lsmsg.PageSize > 0 && lsmsg.PageSize < 100000)
 
 	// (advanced) user-selected target to execute remote ls
-	if msg.SID != "" {
+	if lsmsg.SID != "" {
 		smap := t.owner.smap.get()
-		if smap.GetTarget(msg.SID) == nil {
-			err := &errNodeNotFound{"list-objects failure:", msg.SID, t.si, smap}
+		if smap.GetTarget(lsmsg.SID) == nil {
+			err := &errNodeNotFound{"list-objects failure:", lsmsg.SID, t.si, smap}
 			t.writeErr(w, r, err)
 			return
 		}
@@ -267,12 +278,12 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 	var (
 		xctn cluster.Xact
-		rns  = xreg.RenewLso(t, bck, msg.UUID, msg)
+		rns  = xreg.RenewLso(t, bck, lsmsg.UUID, lsmsg)
 	)
 	// check that xaction hasn't finished prior to this page read, restart if needed
 	if rns.Err == xs.ErrGone {
 		runtime.Gosched()
-		rns = xreg.RenewLso(t, bck, msg.UUID, msg)
+		rns = xreg.RenewLso(t, bck, lsmsg.UUID, lsmsg)
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
@@ -286,12 +297,12 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	xls := xctn.(*xs.LsoXact)
 
 	// NOTE: blocking next-page request
-	resp := xls.Do(msg)
+	resp := xls.Do(lsmsg)
 	if resp.Err != nil {
 		t.writeErr(w, r, resp.Err, resp.Status)
 		return false
 	}
-	debug.Assert(resp.Lst.UUID == msg.UUID)
+	debug.Assert(resp.Lst.UUID == lsmsg.UUID)
 
 	// TODO: `Flags` have limited usability, consider to remove
 	marked := xreg.GetRebMarked()

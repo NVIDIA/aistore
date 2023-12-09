@@ -44,11 +44,9 @@ type (
 )
 
 // ListBuckets returns buckets for provided query, where
-//   - `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
-//   - ListBuckets utiizes `cmn.QueryBcks` - control structure that's practically identical to `cmn.Bck`,
-//     except for the fact that some or all its fields can be empty (to facilitate the corresponding
-//     query).
-//
+// - `fltPresence` is one of { apc.FltExists, apc.FltPresent, ... } - see api/apc/query.go
+// - ListBuckets utilizes `cmn.QueryBcks` - control structure that's practically identical to `cmn.Bck`,
+// except for the fact that some or all its fields can be empty (to facilitate the corresponding query).
 // See also: QueryBuckets, ListObjects
 func ListBuckets(bp BaseParams, qbck cmn.QueryBcks, fltPresence int) (cmn.Bcks, error) {
 	q := make(url.Values, 4)
