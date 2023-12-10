@@ -133,7 +133,7 @@ func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
 	}
 
 	// make copies and slices (async)
-	if err = ec.ECM.EncodeObject(lom); err != nil && err != ec.ErrorECDisabled {
+	if err = ec.ECM.EncodeObject(lom, nil); err != nil && err != ec.ErrorECDisabled {
 		nlog.Errorln(ftcg+"(ec)", lom, err)
 	}
 	t.putMirror(lom)

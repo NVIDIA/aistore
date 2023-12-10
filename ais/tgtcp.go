@@ -693,8 +693,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 		}(rmbcks...)
 	}
 	if tag != bmdReg {
-		// ecmanager will get updated BMD upon its init()
-		if err := ec.ECM.BucketsMDChanged(); err != nil {
+		if err := ec.ECM.BMDChanged(); err != nil {
 			nlog.Errorf("Failed to initialize EC manager: %v", err)
 		}
 	}

@@ -72,12 +72,9 @@ func (p *rspFactory) Start() error {
 /////////////////
 
 func newRespondXact(bck *cmn.Bck, mgr *Manager) *XactRespond {
-	var (
-		config = cmn.GCO.Get()
-		smap   = g.t.Sowner()
-		si     = g.t.Snode()
-	)
-	return &XactRespond{xactECBase: newXactECBase(g.t, smap, si, config, bck, mgr)}
+	xctn := &XactRespond{}
+	xctn.xactECBase.init(cmn.GCO.Get(), bck, mgr)
+	return xctn
 }
 
 func (r *XactRespond) Run(*sync.WaitGroup) {
@@ -110,7 +107,7 @@ func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 		nlog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
-	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, g.t.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -146,7 +143,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		nlog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, r.t.Bowner(), fs.ECSliceType)
+		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, g.t.Bowner(), fs.ECSliceType)
 		if err != nil {
 			return err
 		}
@@ -168,7 +165,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			err = fmt.Errorf("%s: failed to delete %s: %w", r.t, bck.Cname(hdr.ObjName), err)
+			err = fmt.Errorf("%s: failed to delete %s: %w", g.t, bck.Cname(hdr.ObjName), err)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}
@@ -199,7 +196,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			nlog.Errorf("%s: no metadata for %s", r.t, hdr.Cname())
+			nlog.Errorf("%s: no metadata for %s", g.t, hdr.Cname())
 			return
 		}
 

@@ -148,7 +148,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return err
 	}
-	smap := c.parent.smap.Get()
+	smap := g.t.Sowner().Get()
 	targets, err := smap.HrwTargetList(ctx.lom.Uname(), ctx.meta.Parity+1)
 	if err != nil {
 		return err
@@ -157,7 +157,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Fill the list of daemonIDs that do not have replica
 	daemons := make([]string, 0, len(targets))
 	for _, target := range targets {
-		if target.ID() == c.parent.si.ID() {
+		if target.ID() == g.t.SID() {
 			continue
 		}
 
@@ -193,7 +193,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
 	cb := func(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		if err != nil {
-			nlog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemons, err)
+			nlog.Errorf("%s failed to send %s to %v: %v", g.t, ctx.lom, daemons, err)
 		}
 		freeObject(reader)
 	}
@@ -209,22 +209,21 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 	var (
 		writer *memsys.SGL
-		mm     = c.parent.t.ByteMM()
 	)
 	// Try to read replica from targets one by one until the replica is downloaded
 	for node := range ctx.nodes {
 		uname := unique(node, ctx.lom.Bck(), ctx.lom.ObjName)
-		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
+		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(g.smm)
 
-		w := mm.NewSGL(cos.KiB)
+		w := g.smm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
-			nlog.Errorf("%s failed to read from %s", c.parent.t, node)
+			nlog.Errorf("%s failed to read from %s", g.t, node)
 			w.Free()
-			mm.Free(iReqBuf)
+			g.smm.Free(iReqBuf)
 			w = nil
 			continue
 		}
-		mm.Free(iReqBuf)
+		g.smm.Free(iReqBuf)
 		if w.Size() != 0 {
 			// A valid replica is found - break and do not free SGL
 			writer = w
@@ -264,7 +263,6 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 	var (
 		writer *os.File
 		n      int64
-		mm     = c.parent.t.ByteMM()
 	)
 	// Try to read a replica from targets one by one until the replica is downloaded
 	tmpFQN := fs.CSM.Gen(ctx.lom, fs.WorkfileType, "ec-restore-repl")
@@ -277,9 +275,9 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 			nlog.Errorf("Failed to create file: %v", err)
 			break
 		}
-		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(mm)
+		iReqBuf := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck()).NewPack(g.smm)
 		n, err = c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w)
-		mm.Free(iReqBuf)
+		g.smm.Free(iReqBuf)
 
 		if err == nil && n != 0 {
 			// A valid replica is found - break and do close file handle
@@ -314,10 +312,10 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 
 	b := cos.MustMarshal(ctx.meta)
 	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
-	if err := ctMeta.Write(c.parent.t, bytes.NewReader(b), -1); err != nil {
+	if err := ctMeta.Write(g.t, bytes.NewReader(b), -1); err != nil {
 		return err
 	}
-	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
 			nlog.Errorf("nested error: save restored replica -> remove metafile: %v", errRm)
 		}
@@ -370,7 +368,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 			}
 		} else {
 			writer = &slice{
-				writer: g.mm.NewSGL(cos.KiB * 512),
+				writer: g.pmm.NewSGL(cos.KiB * 512),
 				twg:    wgSlices,
 			}
 		}
@@ -385,8 +383,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 
 	iReq := newIntraReq(reqGet, ctx.meta, ctx.lom.Bck())
 	iReq.isSlice = true
-	mm := c.parent.t.ByteMM()
-	request := iReq.NewPack(mm)
+	request := iReq.NewPack(g.smm)
 	hdr := transport.ObjHdr{
 		ObjName: ctx.lom.ObjName,
 		Opaque:  request,
@@ -403,13 +400,13 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 	}
 	if err := c.parent.sendByDaemonID(daemons, o, nil, true); err != nil {
 		freeSlices(ctx.slices)
-		mm.Free(request)
+		g.smm.Free(request)
 		return err
 	}
 	if wgSlices.WaitTimeout(c.parent.config.Timeout.SendFile.D()) {
-		nlog.Errorf("%s timed out waiting for %s slices", c.parent.t, ctx.lom)
+		nlog.Errorf("%s timed out waiting for %s slices", g.t, ctx.lom)
 	}
-	mm.Free(request)
+	g.smm.Free(request)
 	return nil
 }
 
@@ -430,7 +427,7 @@ func newSliceWriter(ctx *restoreCtx, writers []io.Writer, restored []*slice,
 		}
 		restored[idx] = &slice{workFQN: fqn, n: sliceSize}
 	} else {
-		sgl := g.mm.NewSGL(sliceSize)
+		sgl := g.pmm.NewSGL(sliceSize)
 		restored[idx] = &slice{obj: sgl, n: sliceSize}
 		if cksumType != cos.ChecksumNone {
 			cksums[idx] = cos.NewCksumHash(cksumType)
@@ -630,7 +627,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 		nodeToID[v] = k
 	}
 	// Generate the list of targets that should have a slice.
-	smap := c.parent.smap.Get()
+	smap := g.t.Sowner().Get()
 	targets, err := smap.HrwTargetList(ctx.lom.Uname(), sliceCnt+1)
 	if err != nil {
 		nlog.Warningln(err)
@@ -638,7 +635,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	}
 	empty := make([]string, 0, len(targets))
 	for _, t := range targets {
-		if t.ID() == c.parent.si.ID() {
+		if t.ID() == g.t.SID() {
 			continue
 		}
 		if _, ok := nodeToID[t.ID()]; ok {
@@ -719,14 +716,14 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		cb := func(daemonID string, s *slice) transport.ObjSentCB {
 			return func(hdr *transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 				if err != nil {
-					nlog.Errorf("%s failed to send %s to %v: %v", c.parent.t, ctx.lom, daemonID, err)
+					nlog.Errorf("%s failed to send %s to %v: %v", g.t, ctx.lom, daemonID, err)
 				}
 				s.free()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {
 			remoteErr = err
-			nlog.Errorf("%s failed to send slice %s[%d] to %s", c.parent.t, ctx.lom, sliceID, tid)
+			nlog.Errorf("%s failed to send slice %s[%d] to %s", g.t, ctx.lom, sliceID, tid)
 		}
 	}
 
@@ -764,7 +761,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	// Restore and save locally the main replica
 	restored, err := c.restoreMainObj(ctx)
 	if err != nil {
-		nlog.Errorf("%s failed to restore main object %s: %v", c.parent.t, ctx.lom, err)
+		nlog.Errorf("%s failed to restore main object %s: %v", g.t, ctx.lom, err)
 		c.freeDownloaded(ctx)
 		freeSlices(restored)
 		return err
@@ -820,54 +817,37 @@ func (c *getJogger) restore(ctx *restoreCtx) error {
 // nodes(with their EC metadata) that have the lastest object version
 func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
-		tmap     = c.parent.smap.Get().Tmap
-		wg       = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), 8)
-		mtx      = &sync.Mutex{}
-		gen      int64
-		mdExists bool
+		wg     = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), 8)
+		mtx    = &sync.Mutex{}
+		tmap   = g.t.Sowner().Get().Tmap
+		ctMeta = cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
+
+		md, err  = LoadMetadata(ctMeta.FQN())
+		mdExists = err == nil && len(md.Daemons) != 0
 	)
-	requestMeta := func(si *meta.Snode) {
-		defer wg.Done()
-		md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
-		if err != nil {
-			if mdExists {
-				nlog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
-			} else if c.parent.config.FastV(4, cos.SmoduleEC) {
-				nlog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
-			}
-			return
-		}
-
-		mtx.Lock()
-		ctx.nodes[si.ID()] = md
-		// Detect the metadata with the latest generation on the fly.
-		if md.Generation > gen {
-			gen = md.Generation
-			ctx.meta = md
-		}
-		mtx.Unlock()
-	}
-
-	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
-	md, err := LoadMetadata(ctMeta.FQN())
-	mdExists = err == nil && len(md.Daemons) != 0
 	if mdExists {
 		// Metafile exists and contains a list of targets
-		nodes := md.RemoteTargets(c.parent.t)
+		nodes := md.RemoteTargets()
 		ctx.nodes = make(map[string]*Metadata, len(nodes))
 		for _, node := range nodes {
 			wg.Add(1)
-			go requestMeta(node)
+			go func(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
+				ctx.requestMeta(si, c, mtx, mdExists)
+				wg.Done()
+			}(node, c, mtx, mdExists)
 		}
 	} else {
-		// Otherwise, send cluster-wide request
+		// Otherwise, broadcast
 		ctx.nodes = make(map[string]*Metadata, len(tmap))
 		for _, node := range tmap {
-			if node.ID() == c.parent.si.ID() {
+			if node.ID() == g.t.SID() {
 				continue
 			}
 			wg.Add(1)
-			go requestMeta(node)
+			go func(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
+				ctx.requestMeta(si, c, mtx, mdExists)
+				wg.Done()
+			}(node, c, mtx, mdExists)
 		}
 	}
 	wg.Wait()
@@ -879,12 +859,36 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 
 	// Cleanup: delete all metadatas with "obsolete" information
 	for k, v := range ctx.nodes {
-		if v.Generation != gen {
+		if v.Generation != ctx.meta.Generation {
 			nlog.Warningf("Target %s[slice id %d] old generation: %v == %v",
-				k, v.SliceID, v.Generation, gen)
+				k, v.SliceID, v.Generation, ctx.meta.Generation)
 			delete(ctx.nodes, k)
 		}
 	}
 
 	return nil
+}
+
+////////////////
+// restoreCtx //
+////////////////
+
+func (ctx *restoreCtx) requestMeta(si *meta.Snode, c *getJogger, mtx *sync.Mutex, mdExists bool) {
+	md, err := RequestECMeta(ctx.lom.Bucket(), ctx.lom.ObjName, si, c.client)
+	if err != nil {
+		if mdExists {
+			nlog.Errorf("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+		} else if c.parent.config.FastV(4, cos.SmoduleEC) {
+			nlog.Infof("No EC meta %s from %s: %v", ctx.lom.Cname(), si, err)
+		}
+		return
+	}
+
+	mtx.Lock()
+	ctx.nodes[si.ID()] = md
+	// Detect the metadata with the latest generation on the fly.
+	if ctx.meta == nil || md.Generation > ctx.meta.Generation {
+		ctx.meta = md
+	}
+	mtx.Unlock()
 }

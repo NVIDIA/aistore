@@ -87,15 +87,13 @@ func newGetXact(bck *cmn.Bck, mgr *Manager) *XactGet {
 	var (
 		avail, disabled = fs.Get()
 		totalPaths      = len(avail) + len(disabled)
-		smap            = g.t.Sowner()
-		si              = g.t.Snode()
 		config          = cmn.GCO.Get()
 		xctn            = &XactGet{
-			getJoggers:  make(map[string]*getJogger, totalPaths),
-			xactECBase:  newXactECBase(g.t, smap, si, config, bck, mgr),
-			xactReqBase: newXactReqECBase(),
+			getJoggers: make(map[string]*getJogger, totalPaths),
 		}
 	)
+	xctn.xactECBase.init(config, bck, mgr)
+	xctn.xactReqBase.init()
 
 	// create all runners but do not start them until Run is called
 	for mpath := range avail {
@@ -127,13 +125,13 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", r.t, bck.Cname(objName), uname)
+			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", g.t, bck.Cname(objName), uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", r.t, bck.Cname(objName), err, uname)
+			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", g.t, bck.Cname(objName), err, uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}

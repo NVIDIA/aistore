@@ -88,15 +88,13 @@ func newPutXact(bck *cmn.Bck, mgr *Manager) *XactPut {
 	var (
 		avail, disabled = fs.Get()
 		totalPaths      = len(avail) + len(disabled)
-		smap            = g.t.Sowner()
-		si              = g.t.Snode()
 		config          = cmn.GCO.Get()
 		xctn            = &XactPut{
-			putJoggers:  make(map[string]*putJogger, totalPaths),
-			xactECBase:  newXactECBase(g.t, smap, si, config, bck, mgr),
-			xactReqBase: newXactReqECBase(),
+			putJoggers: make(map[string]*putJogger, totalPaths),
 		}
 	)
+	xctn.xactECBase.init(config, bck, mgr)
+	xctn.xactReqBase.init()
 
 	// create all runners but do not start them until Run is called
 	for mpath := range avail {

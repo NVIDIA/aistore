@@ -30,10 +30,6 @@ const (
 type (
 	xactECBase struct {
 		xact.DemandBase
-		t cluster.Target
-
-		smap   meta.Sowner // to get current cluster map
-		si     *meta.Snode // target daemonInfo
 		config *cmn.Config // config
 		stats  stats       // EC statistics
 		bck    cmn.Bck     // which bucket xctn belongs to
@@ -67,30 +63,21 @@ type (
 	}
 )
 
+func (r *xactECBase) init(config *cmn.Config, bck *cmn.Bck, mgr *Manager) {
+	r.stats = stats{bck: *bck}
+	r.config = config
+	r.bck = *bck
+	r.dOwner = &dataOwner{slices: make(map[string]*slice, 10)}
+	r.mgr = mgr
+}
+
 /////////////////
 // xactReqBase //
 /////////////////
 
-func newXactReqECBase() xactReqBase {
-	return xactReqBase{
-		mpathReqCh: make(chan mpathReq, 1),
-		controlCh:  make(chan RequestsControlMsg, 8),
-	}
-}
-
-func newXactECBase(t cluster.Target, smap meta.Sowner, si *meta.Snode, config *cmn.Config, bck *cmn.Bck, mgr *Manager) xactECBase {
-	return xactECBase{
-		t:      t,
-		smap:   smap,
-		si:     si,
-		stats:  stats{bck: *bck},
-		config: config,
-		bck:    *bck,
-		dOwner: &dataOwner{
-			slices: make(map[string]*slice, 10),
-		},
-		mgr: mgr,
-	}
+func (r *xactReqBase) init() {
+	r.mpathReqCh = make(chan mpathReq, 1)
+	r.controlCh = make(chan RequestsControlMsg, 8)
 }
 
 // ClearRequests disables receiving new EC requests, they will be terminated with error
@@ -194,7 +181,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 
 	rHdr := transport.ObjHdr{ObjName: objName, ObjAttrs: objAttrs, Opcode: act}
 	rHdr.Bck.Copy(bck.Bucket())
-	rHdr.Opaque = ireq.NewPack(r.t.ByteMM())
+	rHdr.Opaque = ireq.NewPack(g.smm)
 
 	o := transport.AllocSend()
 	o.Hdr, o.Callback = rHdr, r.sendCb
@@ -205,7 +192,7 @@ func (r *xactECBase) dataResponse(act intraReqType, hdr *transport.ObjHdr, fqn s
 }
 
 func (r *xactECBase) sendCb(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
-	r.t.ByteMM().Free(hdr.Opaque)
+	g.smm.Free(hdr.Opaque)
 	if err != nil {
 		err = fmt.Errorf("failed to send %s: %w", hdr.Cname(), err)
 		nlog.Errorln(err)
@@ -229,7 +216,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader
 	var (
 		err   error
 		nodes = meta.AllocNodes(len(daemonIDs))
-		smap  = r.smap.Get()
+		smap  = g.t.Sowner().Get()
 	)
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
@@ -342,8 +329,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	req := newIntraReq(src.reqType, src.metadata, lom.Bck())
 	req.isSlice = src.isSlice
 
-	mm := r.t.ByteMM()
-	putData := req.NewPack(mm)
+	putData := req.NewPack(g.smm)
 	objAttrs := cmn.ObjAttrs{
 		Size:  src.size,
 		Ver:   lom.Version(),
@@ -367,7 +353,7 @@ func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *data
 	hdr.Bck.Copy(lom.Bucket())
 	oldCallback := cb
 	cb = func(hdr *transport.ObjHdr, reader io.ReadCloser, arg any, err error) {
-		mm.Free(hdr.Opaque)
+		g.smm.Free(hdr.Opaque)
 		if oldCallback != nil {
 			oldCallback(hdr, reader, arg, err)
 		}
@@ -394,7 +380,7 @@ func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io
 		return ErrorNotFound
 	}
 
-	buf, slab := g.mm.Alloc()
+	buf, slab := g.pmm.Alloc()
 	writer.n, err = io.CopyBuffer(writer.writer, reader, buf)
 	writer.cksum = objAttrs.Cksum
 	if writer.version == "" && objAttrs.Ver != "" {

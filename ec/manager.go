@@ -26,8 +26,7 @@ import (
 )
 
 type Manager struct {
-	smap *meta.Smap
-	bmd  *meta.BMD // bmd owner
+	bmd *meta.BMD
 
 	xacts map[string]*BckXacts // bckName -> xctn map, only ais buckets allowed, no naming collisions
 
@@ -38,8 +37,7 @@ type Manager struct {
 	reqBundle  ratomic.Pointer[bundle.Streams]
 	respBundle ratomic.Pointer[bundle.Streams]
 
-	targetCnt     atomic.Int32 // atomic, to avoid races between read/write on smap
-	bundleEnabled atomic.Bool  // to disable and enable on the fly
+	bundleEnabled atomic.Bool // to disable and enable on the fly
 
 	mu sync.RWMutex
 }
@@ -49,25 +47,17 @@ var (
 	errSkipped = errors.New("skipped") // CT is skipped due to EC unsupported for the content type
 )
 
-func initManager() error {
-	var (
-		netReq, netResp = cmn.NetIntraControl, cmn.NetIntraData
-		sowner          = g.t.Sowner()
-		smap            = sowner.Get()
-	)
+func initManager() (err error) {
 	ECM = &Manager{
-		netReq:    netReq,
-		netResp:   netResp,
-		smap:      smap,
-		targetCnt: *atomic.NewInt32(int32(smap.CountActiveTs())),
-		bmd:       g.t.Bowner().Get(),
-		xacts:     make(map[string]*BckXacts),
+		netReq:  cmn.NetIntraControl,
+		netResp: cmn.NetIntraData,
+		bmd:     g.t.Bowner().Get(),
+		xacts:   make(map[string]*BckXacts),
 	}
-
 	if ECM.bmd.IsECUsed() {
-		return ECM.initECBundles()
+		err = ECM.initECBundles()
 	}
-	return nil
+	return err
 }
 
 func (mgr *Manager) req() *bundle.Streams  { return mgr.reqBundle.Load() }
@@ -111,9 +101,6 @@ func (mgr *Manager) initECBundles() error {
 	mgr.reqBundle.Store(bundle.New(sowner, g.t.Snode(), client, reqSbArgs))
 	mgr.respBundle.Store(bundle.New(sowner, g.t.Snode(), client, respSbArgs))
 
-	mgr.smap = sowner.Get()
-	mgr.targetCnt.Store(int32(mgr.smap.CountActiveTs()))
-	sowner.Listeners().Reg(mgr)
 	return nil
 }
 
@@ -121,7 +108,6 @@ func (mgr *Manager) closeECBundles() {
 	if !mgr.bundleEnabled.CAS(true, false) {
 		return
 	}
-	g.t.Sowner().Listeners().Unreg(mgr)
 	mgr.req().Close(false)
 	mgr.resp().Close(false)
 	transport.Unhandle(ReqStreamName)
@@ -263,21 +249,13 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 //   - lom - object to encode
 //   - intra - if true, it is internal request and has low priority
 //   - cb - optional callback that is called after the object is encoded
-func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) error {
+func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb cluster.OnFinishObj) error {
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		return err
-	}
-	isECCopy := IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
-	targetCnt := mgr.targetCnt.Load()
-
-	// compromise: encoding a small object requires fewer targets
-	if required := lom.Bprops().EC.RequiredEncodeTargets(); !isECCopy && int(targetCnt) < required {
-		return fmt.Errorf("%v: %d targets required to erasure code %s (have %d)",
-			cmn.ErrNotEnoughTargets, required, lom, targetCnt)
 	}
 	spec, _ := fs.CSM.FileSpec(lom.FQN)
 	if spec != nil && !spec.PermToProcess() {
@@ -286,9 +264,9 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb ...cluster.OnFinishObj) er
 
 	req := allocateReq(ActSplit, lom.LIF())
 	req.IsCopy = IsECCopy(lom.SizeBytes(), &lom.Bprops().EC)
-	if len(cb) != 0 {
+	if cb != nil {
 		req.rebuild = true
-		req.Callback = cb[0]
+		req.Callback = cb
 	}
 
 	mgr.RestoreBckPutXact(lom.Bck()).encode(req, lom)
@@ -312,12 +290,6 @@ func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
 	cs := fs.Cap()
 	if err := cs.Err(); err != nil {
 		return err
-	}
-	targetCnt := mgr.targetCnt.Load()
-	// NOTE: Restore replica object is done with GFN, safe to always abort.
-	if required := lom.Bprops().EC.RequiredRestoreTargets(); int(targetCnt) < required {
-		return fmt.Errorf("%v: %d targets required to EC-restore %s (have %d)",
-			cmn.ErrNotEnoughTargets, required, lom, targetCnt)
 	}
 
 	debug.Assert(lom.Mountpath() != nil && lom.Mountpath().Path != "")
@@ -344,27 +316,30 @@ func (mgr *Manager) enableBck(bck *meta.Bck) {
 	mgr.RestoreBckPutXact(bck).EnableRequests()
 }
 
-func (mgr *Manager) BucketsMDChanged() error {
+func (mgr *Manager) BMDChanged() error {
 	mgr.mu.Lock()
-	newBckMD := g.t.Bowner().Get()
-	oldBckMD := mgr.bmd
-	if newBckMD.Version <= mgr.bmd.Version {
+	newBMD := g.t.Bowner().Get()
+	oldBMD := mgr.bmd
+	if newBMD.Version <= mgr.bmd.Version {
 		mgr.mu.Unlock()
 		return nil
 	}
-	mgr.bmd = newBckMD
+	mgr.bmd = newBMD
 	mgr.mu.Unlock()
 
-	if newBckMD.IsECUsed() && !oldBckMD.IsECUsed() {
+	// globally
+	if newBMD.IsECUsed() && !oldBMD.IsECUsed() {
 		if err := mgr.initECBundles(); err != nil {
 			return err
 		}
-	} else if !newBckMD.IsECUsed() && oldBckMD.IsECUsed() {
+	} else if !newBMD.IsECUsed() && oldBMD.IsECUsed() {
 		mgr.closeECBundles()
+		return nil
 	}
-	provider := apc.AIS
-	newBckMD.Range(&provider, nil, func(nbck *meta.Bck) bool {
-		oprops, ok := oldBckMD.Get(nbck)
+
+	// by bucket
+	newBMD.Range(nil, nil, func(nbck *meta.Bck) bool {
+		oprops, ok := oldBMD.Get(nbck)
 		if !ok {
 			if nbck.Props.EC.Enabled {
 				mgr.enableBck(nbck)
@@ -381,48 +356,3 @@ func (mgr *Manager) BucketsMDChanged() error {
 	})
 	return nil
 }
-
-func (mgr *Manager) ListenSmapChanged() {
-	smap := g.t.Sowner().Get()
-	if smap.Version <= mgr.smap.Version {
-		return
-	}
-
-	mgr.smap = g.t.Sowner().Get()
-	targetCnt := mgr.smap.CountActiveTs()
-	mgr.targetCnt.Store(int32(targetCnt))
-
-	mgr.mu.Lock()
-
-	// Manager is initialized before being registered for smap changes
-	// bckMD will be present at this point
-	// stopping relevant EC xactions which can't be satisfied with current number of targets
-	// respond xaction is never stopped as it should respond regardless of the other targets
-	provider := apc.AIS
-	mgr.bmd.Range(&provider, nil, func(bck *meta.Bck) bool {
-		bckName, bckProps := bck.Name, bck.Props
-		bckXacts := mgr.getBckXactsUnlocked(bckName)
-		if !bckProps.EC.Enabled {
-			return false
-		}
-		if required := bckProps.EC.RequiredEncodeTargets(); targetCnt < required {
-			nlog.Warningf("not enough targets for EC encoding for bucket %s; actual: %v, expected: %v",
-				bckName, targetCnt, required)
-			bckXacts.AbortPut()
-		}
-		// NOTE: this doesn't guarantee that present targets are sufficient to restore an object
-		// if one target was killed, and a new one joined, this condition will be satisfied even though
-		// slices of the object are not present on the new target
-		if required := bckProps.EC.RequiredRestoreTargets(); targetCnt < required {
-			nlog.Warningf("not enough targets for EC restoring for bucket %s; actual: %v, expected: %v",
-				bckName, targetCnt, required)
-			bckXacts.AbortGet()
-		}
-		return false
-	})
-
-	mgr.mu.Unlock()
-}
-
-// implementing cluster.Slistener interface
-func (*Manager) String() string { return "ecmanager" }

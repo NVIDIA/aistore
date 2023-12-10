@@ -252,7 +252,7 @@ func (poi *putOI) finalize() (errCode int, err error) {
 		return
 	}
 	if !poi.skipEC {
-		if ecErr := ec.ECM.EncodeObject(poi.lom); ecErr != nil && ecErr != ec.ErrorECDisabled {
+		if ecErr := ec.ECM.EncodeObject(poi.lom, nil); ecErr != nil && ecErr != ec.ErrorECDisabled {
 			err = ecErr
 			if cmn.IsErrCapExceeded(err) {
 				errCode = http.StatusInsufficientStorage
@@ -1742,7 +1742,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 		return err
 	}
 	if a.lom.Bprops().EC.Enabled {
-		if err := ec.ECM.EncodeObject(a.lom); err != nil && err != ec.ErrorECDisabled {
+		if err := ec.ECM.EncodeObject(a.lom, nil); err != nil && err != ec.ErrorECDisabled {
 			return err
 		}
 	}

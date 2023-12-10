@@ -22,8 +22,8 @@ const (
 	ActSummaryBck = "summary-bck"
 
 	ActECEncode  = "ec-encode" // erasure code a bucket
-	ActECGet     = "ec-get"    // erasure decode objects
-	ActECPut     = "ec-put"    // erasure encode objects
+	ActECGet     = "ec-get"    // read erasure coded objects
+	ActECPut     = "ec-put"    // erasure code objects
 	ActECRespond = "ec-resp"   // respond to other targets' EC requests
 
 	ActCopyBck = "copy-bck"

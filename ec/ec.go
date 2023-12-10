@@ -182,7 +182,8 @@ type (
 type global struct {
 	t        cluster.Target
 	reqPool  sync.Pool
-	mm       *memsys.MMSA // memory manager and slab/SGL allocator
+	pmm      *memsys.MMSA // memory manager slab/SGL allocator (pages)
+	smm      *memsys.MMSA // ditto, bytes
 	emptyReq request
 }
 
@@ -196,7 +197,8 @@ var (
 
 func Init(t cluster.Target) {
 	g.t = t
-	g.mm = t.PageMM()
+	g.pmm = t.PageMM()
+	g.smm = t.ByteMM()
 
 	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
 	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
@@ -324,7 +326,7 @@ func useDisk(objSize int64, config *cmn.Config) bool {
 	if config.EC.DiskOnly {
 		return true
 	}
-	memPressure := g.mm.Pressure()
+	memPressure := g.pmm.Pressure()
 	switch memPressure {
 	case memsys.OOM, memsys.PressureExtreme:
 		return true

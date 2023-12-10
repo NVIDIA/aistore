@@ -74,14 +74,14 @@ func MetaFromReader(reader io.Reader) (*Metadata, error) {
 
 // RemoteTargets returns list of Snodes that contain a slice or replica.
 // This target(`t`) is removed from the list.
-func (md *Metadata) RemoteTargets(t cluster.Target) []*meta.Snode {
+func (md *Metadata) RemoteTargets() []*meta.Snode {
 	if len(md.Daemons) == 0 {
 		return nil
 	}
 	nodes := make([]*meta.Snode, 0, len(md.Daemons))
-	smap := t.Sowner().Get()
+	smap := g.t.Sowner().Get()
 	for tid := range md.Daemons {
-		if tid == t.SID() {
+		if tid == g.t.SID() {
 			continue
 		}
 		tsi := smap.GetTarget(tid)

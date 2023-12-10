@@ -133,7 +133,7 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		err = fmt.Errorf("%s: failed to %s %s: %w", c.parent.t, req.Action, lom.StringEx(), err)
+		err = fmt.Errorf("%s: failed to %s %s: %w", g.t, req.Action, lom.StringEx(), err)
 		nlog.Errorln(err)
 		c.parent.AddErr(err)
 	}
@@ -142,7 +142,7 @@ func (c *putJogger) processRequest(req *request) {
 func (c *putJogger) run(wg *sync.WaitGroup) {
 	nlog.Infof("Started EC for mountpath: %s, bucket %s", c.mpath, c.parent.bck)
 	defer wg.Done()
-	c.buffer, c.slab = g.mm.Alloc()
+	c.buffer, c.slab = g.pmm.Alloc()
 	for {
 		select {
 		case req := <-c.putCh:
@@ -211,29 +211,28 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
-	var (
-		cksumValue, cksumType string
-		ecConf                = lom.Bprops().EC
-	)
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
-		nlog.Infof("Encoding %q...", lom.FQN)
+		nlog.Infof("Encoding %q...", lom)
 	}
-	if lom.Checksum() != nil {
-		cksumType, cksumValue = lom.Checksum().Get()
-	}
-	reqTargets := ecConf.ParitySlices + 1
+	var (
+		ecConf     = lom.Bprops().EC
+		reqTargets = ecConf.ParitySlices + 1
+		smap       = g.t.Sowner().Get()
+	)
 	if !req.IsCopy {
 		reqTargets += ecConf.DataSlices
 	}
-	smap := c.parent.smap.Get()
 	targetCnt := smap.CountActiveTs()
 	if targetCnt < reqTargets {
 		return fmt.Errorf("%v: given EC config (d=%d, p=%d), %d targets required to encode %s (have %d, %s)",
 			cmn.ErrNotEnoughTargets, ecConf.DataSlices, ecConf.ParitySlices, reqTargets, lom, targetCnt, smap.StringEx())
 	}
 
-	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
-	generation := mono.NanoTime()
+	var (
+		ctMeta                = cluster.NewCTFromLOM(lom, fs.ECMetaType)
+		generation            = mono.NanoTime()
+		cksumType, cksumValue = lom.Checksum().Get()
+	)
 	meta := &Metadata{
 		MDVersion:   MDVersionLast,
 		Generation:  generation,
@@ -243,7 +242,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		IsCopy:      req.IsCopy,
 		ObjCksum:    cksumValue,
 		CksumType:   cksumType,
-		FullReplica: c.parent.t.SID(),
+		FullReplica: g.t.SID(),
 		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 
@@ -277,10 +276,10 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		return err
 	}
 	metaBuf := bytes.NewReader(meta.NewPack())
-	if err := ctMeta.Write(c.parent.t, metaBuf, -1); err != nil {
+	if err := ctMeta.Write(g.t, metaBuf, -1); err != nil {
 		return err
 	}
-	if _, exists := c.parent.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
 			nlog.Errorf("nested error: encode -> remove metafile: %v", errRm)
 		}
@@ -290,7 +289,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 }
 
 func (c *putJogger) ctSendCallback(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
-	c.parent.t.ByteMM().Free(hdr.Opaque)
+	g.smm.Free(hdr.Opaque)
 	if err != nil {
 		nlog.Errorf("failed to send o[%s]: %v", hdr.Cname(), err)
 	}
@@ -309,13 +308,12 @@ func (c *putJogger) cleanup(lom *cluster.LOM) error {
 		}
 		return err
 	}
-	nodes := md.RemoteTargets(c.parent.t)
+	nodes := md.RemoteTargets()
 	if err := cos.RemoveFile(ctMeta.FQN()); err != nil {
 		return err
 	}
 
-	mm := c.parent.t.ByteMM()
-	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(mm)
+	request := newIntraReq(reqDel, nil, lom.Bck()).NewPack(g.smm)
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqDel}
 	o.Hdr.Bck.Copy(lom.Bucket())
@@ -364,7 +362,7 @@ func generateSlicesToMemory(ctx *encodeCtx) error {
 		sliceWriters = make([]io.Writer, ctx.paritySlices)
 	)
 	for i := 0; i < ctx.paritySlices; i++ {
-		writer := g.mm.NewSGL(initSize)
+		writer := g.pmm.NewSGL(initSize)
 		ctx.slices[i+ctx.dataSlices] = &slice{obj: writer}
 		if cksumType == cos.ChecksumNone {
 			sliceWriters[i] = writer

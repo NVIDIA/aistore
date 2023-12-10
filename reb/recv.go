@@ -312,7 +312,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	}
 	// Broadcast updated MD
 	ntfnMD := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
-	nodes := req.md.RemoteTargets(reb.t)
+	nodes := req.md.RemoteTargets()
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
 			continue
