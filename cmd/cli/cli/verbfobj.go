@@ -388,7 +388,9 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 	return err
 }
 
-// PUT fixed-sized chunks using `api.AppendObject` and `api.FlushObject`
+// PUT and then APPEND fixed-sized chunks using `api.PutObject`, `api.AppendObject` and `api.FlushObject`
+// - currently, is only used to PUT from standard input when we do expect to overwrite existing destination object
+// - APPEND and flush will only be executed with there's a second chunk
 func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, cksumType string, chunkSize int64) error {
 	var (
 		handle string
@@ -398,7 +400,7 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 	if flagIsSet(c, progressFlag) {
 		pi.start()
 	}
-	for {
+	for i := 0; ; i++ {
 		var (
 			b      = bytes.NewBuffer(nil)
 			n      int64
@@ -434,14 +436,27 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 				pi.printProgress(int64(n))
 			})
 		}
-		handle, err = api.AppendObject(&api.AppendArgs{
-			BaseParams: apiBP,
-			Bck:        bck,
-			Object:     objName,
-			Handle:     handle,
-			Reader:     reader,
-			Size:       n,
-		})
+		if i == 0 {
+			// overwrite, if exists
+			// NOTE: when followed by APPEND (below) will increment resulting ais object's version one extra time
+			putArgs := api.PutArgs{
+				BaseParams: apiBP,
+				Bck:        bck,
+				ObjName:    objName,
+				Reader:     reader,
+				Size:       uint64(n),
+			}
+			_, err = api.PutObject(&putArgs)
+		} else {
+			handle, err = api.AppendObject(&api.AppendArgs{
+				BaseParams: apiBP,
+				Bck:        bck,
+				Object:     objName,
+				Handle:     handle,
+				Reader:     reader,
+				Size:       n,
+			})
+		}
 		if err != nil {
 			return err
 		}
@@ -452,6 +467,9 @@ func putAppendChunks(c *cli.Context, bck cmn.Bck, objName string, r io.Reader, c
 	}
 	if cksumType != cos.ChecksumNone {
 		cksum.Finalize()
+	}
+	if handle == "" {
+		return nil
 	}
 	return api.FlushObject(&api.FlushArgs{
 		BaseParams: apiBP,

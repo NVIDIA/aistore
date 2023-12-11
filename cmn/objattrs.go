@@ -19,7 +19,7 @@ import (
 // LOM custom metadata stored under `lomCustomMD`.
 const (
 	// source of the cold-GET and download; the values include all
-	// 3rd party backend providers (remote AIS not including)
+	// 3rd party backend providers
 	SourceObjMD = "source"
 
 	// downloader' source is "web"
@@ -204,20 +204,23 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	)
 	// size check
 	if remSize := rem.SizeBytes(true); oa.Size != 0 && remSize != 0 && oa.Size != remSize {
-		return
+		return false
 	}
 
 	// version check
 	if remVer := rem.Version(true); oa.Ver != "" && remVer != "" {
 		if oa.Ver != remVer {
-			return
+			return false
 		}
 		ver = oa.Ver
-		count++
+		// NOTE: ais own version is, currently, a nonunique sequence number - not counting
+		if remSrc, _ := rem.GetCustomKey(SourceObjMD); remSrc != apc.AIS {
+			count++
+		}
 	} else if remMeta, ok := rem.GetCustomKey(VersionObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(VersionObjMD); ok && locMeta != "" {
 			if remMeta != locMeta {
-				return
+				return false
 			}
 			count++
 			ver = locMeta
@@ -225,7 +228,10 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	}
 
 	// checksum check
-	if rem.Checksum().Equal(oa.Cksum) {
+	if !rem.Checksum().IsEmpty() && !oa.Cksum.IsEmpty() {
+		if !rem.Checksum().Equal(oa.Cksum) {
+			return false
+		}
 		cksumVal = oa.Cksum.Val()
 		count++
 	}
@@ -234,7 +240,7 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	if remMeta, ok := rem.GetCustomKey(ETag); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(ETag); ok && locMeta != "" {
 			if remMeta != locMeta {
-				return
+				return false
 			}
 			etag = locMeta
 			if ver != locMeta && cksumVal != locMeta { // against double-counting
@@ -246,10 +252,12 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	// custom MD: CRC check
 	if remMeta, ok := rem.GetCustomKey(CRC32CObjMD); ok && remMeta != "" {
 		if locMeta, ok := oa.GetCustomKey(CRC32CObjMD); ok && locMeta != "" {
-			if remMeta != locMeta && cksumVal != locMeta { // (ditto)
-				return
+			if remMeta != locMeta {
+				return false
 			}
-			count++
+			if cksumVal != locMeta {
+				count++
+			}
 		}
 	}
 
@@ -271,21 +279,19 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 
 	switch {
 	case count >= 2: // e.g., equal because they have the same (version & md5, where version != md5)
-		eq = true
-		return
+		return true
 	case count == 0:
-		return
+		return false
 	default:
 		// same version or ETag from the same (remote) backend
 		// (arguably, must be configurable)
 		if remMeta, ok := rem.GetCustomKey(SourceObjMD); ok && remMeta != "" {
 			if locMeta, ok := oa.GetCustomKey(SourceObjMD); ok && locMeta != "" {
-				if ver != "" || etag != "" {
-					eq = true
-					return
+				if (ver != "" || etag != "") && remMeta == locMeta {
+					return true
 				}
 			}
 		}
 	}
-	return
+	return eq
 }

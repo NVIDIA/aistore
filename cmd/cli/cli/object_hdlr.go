@@ -1,5 +1,4 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-// This file handles CLI commands that pertain to AIS objects.
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
@@ -18,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/urfave/cli"
 )
+
+// in this file: operations on objects
 
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
@@ -62,6 +63,8 @@ var (
 			// cksum
 			skipVerCksumFlag,
 			putObjDfltCksumFlag,
+			// append
+			appendConcatFlag,
 		),
 		commandSetCustom: {
 			setNewCustomMDFlag,
@@ -106,7 +109,7 @@ var (
 
 	objectCmdPut = cli.Command{
 		Name: commandPut,
-		Usage: "PUT or APPEND one file, one directory, or multiple files and/or directories.\n" +
+		Usage: "PUT or append one file, one directory, or multiple files and/or directories.\n" +
 			indent1 + "Use optional shell filename PATTERN (wildcard) to match/select multiple sources.\n" +
 			indent1 + "Destination naming is consistent with 'ais object promote' command, whereby the optional OBJECT_NAME_or_PREFIX\n" +
 			indent1 + "becomes either a name, a prefix, or a virtual destination directory (if it ends with a forward '/').\n" +
@@ -116,9 +119,10 @@ var (
 			indent1 + "\t- '--compute-checksum': use '--compute-checksum' to facilitate end-to-end protection;\n" +
 			indent1 + "\t- '--progress': progress bar, to show running counts and sizes of uploaded files;\n" +
 			indent1 + "\t- Ctrl-D: when writing directly from standard input use Ctrl-D to terminate;\n" +
+			indent1 + "\t- '--append' to append (concatenate) files, e.g.: 'ais put docs ais://nnn/all-docs --append';\n" +
 			indent1 + "\t- '--dry-run': see the results without making any changes.\n" +
 			indent1 + "\tNotes:\n" +
-			indent1 + "\t- to write or append to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
+			indent1 + "\t- to write or add files to " + archExts + "-formatted objects (\"shards\"), use 'ais archive'",
 		ArgsUsage:    putObjectArgument,
 		Flags:        append(objectCmdsFlags[commandPut], putObjCksumFlags...),
 		Action:       putHandler,
@@ -142,6 +146,15 @@ var (
 		Action:       promoteHandler,
 		BashComplete: putPromApndCompletions,
 	}
+	objectCmdConcat = cli.Command{
+		Name: commandConcat,
+		Usage: "append a file, a directory, or multiple files and/or directories\n" +
+			indent1 + "as a new " + objectArgument + " if doesn't exists, and to an existing " + objectArgument + " otherwise, e.g.:\n" +
+			indent1 + "$ ais object concat docs ais://nnn/all-docs ### concatenate all files from docs/ directory.",
+		ArgsUsage: concatObjectArgument,
+		Flags:     objectCmdsFlags[commandConcat],
+		Action:    concatHandler,
+	}
 
 	objectCmdSetCustom = cli.Command{
 		Name:      commandSetCustom,
@@ -159,6 +172,7 @@ var (
 			bucketsObjectsCmdList,
 			objectCmdPut,
 			objectCmdPromote,
+			objectCmdConcat,
 			objectCmdSetCustom,
 			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
@@ -177,13 +191,6 @@ var (
 				Flags:        objectCmdsFlags[commandRemove],
 				Action:       removeObjectHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
-			},
-			{
-				Name:      commandConcat,
-				Usage:     "concatenate multiple files and/or directories (with or without matching pattern) as a new single object",
-				ArgsUsage: concatObjectArgument,
-				Flags:     objectCmdsFlags[commandConcat],
-				Action:    concatHandler,
 			},
 			{
 				Name:         commandCat,
@@ -289,6 +296,10 @@ func removeObjectHandler(c *cli.Context) (err error) {
 
 // main PUT handler: cases 1 through 4
 func putHandler(c *cli.Context) error {
+	if flagIsSet(c, appendConcatFlag) {
+		return concatHandler(c)
+	}
+
 	var a putargs
 	if err := a.parse(c, true /*empty dst oname*/); err != nil {
 		return err
@@ -296,7 +307,6 @@ func putHandler(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
-
 	// 1. one file
 	if a.srcIsRegular() {
 		debug.Assert(a.src.abspath != "")

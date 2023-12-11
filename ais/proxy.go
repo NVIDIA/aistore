@@ -679,13 +679,15 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	if !appendTyProvided {
 		perms = apc.AcePUT
 	} else {
-		hi, err := parseAppendHandle(apireq.dpq.appendHdl) // apc.QparamAppendHandle
-		if err != nil {
-			p.writeErr(w, r, err)
-			return
-		}
-		nodeID = hi.nodeID
 		perms = apc.AceAPPEND
+		if apireq.dpq.appendHdl != "" {
+			items, err := preParse(apireq.dpq.appendHdl) // apc.QparamAppendHandle
+			if err != nil {
+				p.writeErr(w, r, err)
+				return
+			}
+			nodeID = items[0] // nodeID; compare w/ apndOI.parse
+		}
 	}
 
 	// 2. bucket

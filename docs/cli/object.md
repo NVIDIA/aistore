@@ -36,6 +36,7 @@ This document contains `ais object` commands - the commands to read (GET), write
   - [Dry-Run option](#dry-run-option)
   - [Put multiple directories](#put-multiple-directories)
   - [Put multiple directories with the `--skip-vc` option](#put-multiple-directories-with-the-skip-vc-option)
+- [APPEND object](#append-object)
 - [Delete object](#delete-object)
 - [Evict object](#evict-object)
 - [Promote files and directories](#promote-files-and-directories)
@@ -1007,6 +1008,56 @@ TARGET          MEM USED %  MEM AVAIL   CAP USED %  CAP AVAIL   CPU USED %  REBA
 ...
 $ ais object promote /target/1014646t8081/nonexistent/dir/ ais://testbucket --target 1014646t8081 --keep=false
 (...) Bad Request: stat /target/1014646t8081/nonexistent/dir: no such file or directory
+```
+
+# APPEND object
+
+APPEND operation (not to confuse with appending or [adding to existing archive](/docs/cli/archive.md)) can be executed in 3 different ways:
+
+* using `ais put` with `--append` option;
+* using `ais object concat`;
+and finally
+* writing from standard input with chunk size (ie., `--chunk-size`) small enough to require (appending) multiple chunks.
+
+Here're some examples:
+
+```console
+## append all files from a given directory as a single object:
+
+$ ais put docs ais://nnn/all-docs --append
+
+Created ais://nnn/all-docs (size 571.45KiB)
+$ ais ls ais://nnn/all-docs -props all
+PROPERTY         VALUE
+atime            11 Dec 23 12:18 EST
+checksum         xxhash[f0eac0698e2489ff]
+copies           1 [/ais/mp1/7]
+custom           -
+ec               -
+location         t[VQWtTyuI]:mp[/ais/mp1/7, nvme0n1]
+name             ais://nnn/all-docs
+size             571.45KiB
+version          1
+```
+
+```console
+## overwrite existing object with 4KiB of random data;
+## note that the operation (below) will write about 410 chunks from standard input
+
+$ head -c 4096 /dev/urandom | ais object put - ais://nnn/all-docs --chunk-size 10
+PUT (standard input) => ais://nnn/all-docs
+
+$ ais ls ais://nnn/all-docs -props all
+PROPERTY         VALUE
+atime            11 Dec 23 12:21 EST
+checksum         xxhash[b5edf46a1b9459fb]
+copies           1 [/ais/mp1/7]
+custom           -
+ec               -
+location         t[VQWtTyuI]:mp[/ais/mp1/7, nvme0n1]
+name             ais://nnn/all-docs
+size             4.00KiB
+version          3
 ```
 
 # Delete object

@@ -728,6 +728,11 @@ var (
 			putObjCksumText,
 	}
 
+	appendConcatFlag = cli.BoolFlag{
+		Name:  "append",
+		Usage: "concatenate files: append a file or multiple files as a new _or_ to an existing object",
+	}
+
 	skipVerCksumFlag = cli.BoolFlag{
 		Name:  "skip-vc",
 		Usage: "skip loading object metadata (and the associated checksum & version related processing)",

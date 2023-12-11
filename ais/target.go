@@ -806,8 +806,20 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 		errCode, err = t.putApndArch(r, lom, started, apireq.dpq)
 		lom.Unlock(true)
 	case apireq.dpq.appendTy != "": // apc.QparamAppendType
-		handle, errCode, err = t.appendObj(r, lom, started, apireq.dpq)
-		if err == nil {
+		a := &apndOI{
+			started: started,
+			t:       t,
+			config:  config,
+			lom:     lom,
+			r:       r.Body,
+			op:      apireq.dpq.appendTy, // apc.QparamAppendType
+		}
+		if err := a.parse(apireq.dpq.appendHdl /*apc.QparamAppendHandle*/); err != nil {
+			t.writeErr(w, r, err)
+			return
+		}
+		handle, errCode, err = a.do(r)
+		if err == nil && handle != "" {
 			w.Header().Set(apc.HdrAppendHandle, handle)
 			return
 		}
@@ -1199,40 +1211,6 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 		equal = lom.Equal(objAttrs)
 	}
 	return
-}
-
-func (t *target) appendObj(r *http.Request, lom *cluster.LOM, started int64, dpq *dpq) (string, int, error) {
-	var (
-		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
-		cksumType     = r.Header.Get(apc.HdrObjCksumType)
-		contentLength = r.Header.Get(cos.HdrContentLength)
-	)
-	hdl, err := parseAppendHandle(dpq.appendHdl) // apc.QparamAppendHandle
-	if err != nil {
-		return "", http.StatusBadRequest, err
-	}
-	a := &apndOI{
-		started: started,
-		t:       t,
-		lom:     lom,
-		r:       r.Body,
-		op:      dpq.appendTy, // apc.QparamAppendType
-		hdl:     hdl,
-	}
-	if a.op != apc.AppendOp && a.op != apc.FlushOp {
-		err = fmt.Errorf("invalid operation %q (expecting either %q or %q) - check %q query",
-			a.op, apc.AppendOp, apc.FlushOp, apc.QparamAppendType)
-		return "", http.StatusBadRequest, err
-	}
-	if contentLength != "" {
-		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
-			a.size = size
-		}
-	}
-	if cksumValue != "" {
-		a.cksum = cos.NewCksum(cksumType, cksumValue)
-	}
-	return a.do()
 }
 
 // called under lock

@@ -367,3 +367,17 @@ func cleanupConfigDir(name string, keepInitialConfig bool) {
 		return nil
 	})
 }
+
+//
+// common APPEND(file(s)) pre-parser
+//
+
+const appendHandleSepa = "|"
+
+func preParse(packedHdl string) (items []string, err error) {
+	items = strings.SplitN(packedHdl, appendHandleSepa, 4)
+	if len(items) != 4 {
+		err = fmt.Errorf("invalid APPEND handle: %q", packedHdl)
+	}
+	return
+}

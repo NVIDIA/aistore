@@ -122,6 +122,7 @@ func BenchmarkObjPut(b *testing.B) {
 					lom:     lom,
 					r:       r,
 					workFQN: path.Join(testMountpath, "objname.work"),
+					config:  cmn.GCO.Get(),
 				}
 				os.Remove(lom.FQN)
 				b.StartTimer()
@@ -150,6 +151,7 @@ func BenchmarkObjAppend(b *testing.B) {
 		{fileSize: 16 * cos.MiB},
 	}
 
+	buf := make([]byte, 16*cos.KiB)
 	for _, bench := range benches {
 		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
 			lom := cluster.AllocLOM("objname")
@@ -175,18 +177,18 @@ func BenchmarkObjAppend(b *testing.B) {
 				os.Remove(lom.FQN)
 				b.StartTimer()
 
-				newHandle, _, err := aoi.do()
+				newHandle, _, err := aoi.apnd(buf)
 				if err != nil {
 					b.Fatal(err)
 				}
-				hdl, err = parseAppendHandle(newHandle)
+				err = aoi.parse(newHandle)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
 			b.StopTimer()
 			os.Remove(lom.FQN)
-			os.Remove(hdl.filePath)
+			os.Remove(hdl.workFQN)
 		})
 	}
 }
@@ -231,6 +233,7 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 				lom:     lom,
 				r:       r,
 				workFQN: path.Join(testMountpath, "objname.work"),
+				config:  cmn.GCO.Get(),
 			}
 			_, err = poi.putObject()
 			if err != nil {

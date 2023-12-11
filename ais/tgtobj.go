@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +44,7 @@ import (
 
 type (
 	putOI struct {
-		r          io.ReadCloser // reader that has the content
+		r          io.ReadCloser // content reader
 		xctn       cluster.Xact  // xaction that puts
 		t          *target       // this
 		lom        *cluster.LOM  // obj
@@ -78,24 +77,24 @@ type (
 		unlocked   bool            // internal
 		verchanged bool            // version changed
 		retry      bool            // once
-		cold       bool            // executed backend.Get
+		cold       bool            // true if executed backend.Get
 	}
 
-	// append handle (packed)
+	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
 	aoHdl struct {
 		partialCksum *cos.CksumHash
 		nodeID       string
-		filePath     string
+		workFQN      string
 	}
-	// (see also putA2I)
 	apndOI struct {
-		started int64         // started time of receiving - used to calculate the recv duration
-		r       io.ReadCloser // reader with the content of the object.
+		started int64         // start time (nanoseconds)
+		r       io.ReadCloser // content reader
 		t       *target       // this
-		lom     *cluster.LOM  // append to
-		cksum   *cos.Cksum    // expected checksum of the final object.
-		hdl     aoHdl         // packed
-		op      string        // operation (Append | Flush)
+		config  *cmn.Config   // (during this request)
+		lom     *cluster.LOM  // append to or _as_
+		cksum   *cos.Cksum    // checksum expected once Flush-ed
+		hdl     aoHdl         // (packed)
+		op      string        // enum {apc.AppendOp, apc.FlushOp}
 		size    int64         // Content-Length
 	}
 
@@ -1159,124 +1158,147 @@ func (goi *getOI) parseRange(resphdr http.Header, size int64) (hrng *htrange, er
 }
 
 //
-// APPEND to existing object (as file)
+// APPEND a file or multiple files:
+// - as a new object, if doesn't exist
+// - to an existing object, if exists
 //
 
-func (a *apndOI) do() (newHandle string, errCode int, err error) {
-	filePath := a.hdl.filePath
+func (a *apndOI) do(r *http.Request) (packedHdl string, errCode int, err error) {
+	var (
+		cksumValue    = r.Header.Get(apc.HdrObjCksumVal)
+		cksumType     = r.Header.Get(apc.HdrObjCksumType)
+		contentLength = r.Header.Get(cos.HdrContentLength)
+	)
+	if contentLength != "" {
+		if size, ers := strconv.ParseInt(contentLength, 10, 64); ers == nil {
+			a.size = size
+		}
+	}
+	if cksumValue != "" {
+		a.cksum = cos.NewCksum(cksumType, cksumValue)
+	}
+
 	switch a.op {
 	case apc.AppendOp:
-		var f *os.File
-		if filePath == "" {
-			filePath = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppend)
-			f, err = a.lom.CreateFile(filePath)
-			if err != nil {
-				errCode = http.StatusInternalServerError
-				return
-			}
-			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
-		} else {
-			f, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
-			if err != nil {
-				errCode = http.StatusInternalServerError
-				return
-			}
-			debug.Assert(a.hdl.partialCksum != nil)
-		}
-
-		var (
-			buf  []byte
-			slab *memsys.Slab
-		)
-		if a.size == 0 {
-			buf, slab = a.t.gmm.Alloc()
-		} else {
-			buf, slab = a.t.gmm.AllocSize(a.size)
-		}
-
-		w := cos.NewWriterMulti(f, a.hdl.partialCksum.H)
-		_, err = cos.CopyBuffer(w, a.r, buf)
-
+		buf, slab := a.t.gmm.Alloc()
+		packedHdl, errCode, err = a.apnd(buf)
 		slab.Free(buf)
-		cos.Close(f)
-		if err != nil {
-			errCode = http.StatusInternalServerError
-			return
-		}
-
-		newHandle = combineAppendHandle(a.t.SID(), filePath, a.hdl.partialCksum)
 	case apc.FlushOp:
-		if filePath == "" {
-			err = fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", a.hdl)
-			errCode = http.StatusBadRequest
-			return
-		}
-		debug.Assert(a.hdl.partialCksum != nil)
-		a.hdl.partialCksum.Finalize()
-		partialCksum := a.hdl.partialCksum.Clone()
-		if !a.cksum.IsEmpty() && !partialCksum.Equal(a.cksum) {
-			err = cos.NewErrDataCksum(partialCksum, a.cksum)
-			errCode = http.StatusInternalServerError
-			return
-		}
-		params := cluster.PromoteParams{
-			Bck:   a.lom.Bck(),
-			Cksum: partialCksum,
-			PromoteArgs: cluster.PromoteArgs{
-				SrcFQN:       filePath,
-				ObjName:      a.lom.ObjName,
-				OverwriteDst: true,
-				DeleteSrc:    true, // NOTE: always overwrite and remove
-			},
-		}
-		if errCode, err = a.t.Promote(&params); err != nil {
-			return
-		}
+		errCode, err = a.flush()
 	default:
-		err = fmt.Errorf("invalid append-file operation %q", a.op)
-		debug.AssertNoErr(err)
+		err = fmt.Errorf("invalid operation %q (expecting either %q or %q) - check %q query",
+			a.op, apc.AppendOp, apc.FlushOp, apc.QparamAppendType)
+	}
+
+	return packedHdl, errCode, err
+}
+
+func (a *apndOI) apnd(buf []byte) (packedHdl string, errCode int, err error) {
+	var (
+		fh      *os.File
+		workFQN = a.hdl.workFQN
+	)
+	if workFQN == "" {
+		workFQN = fs.CSM.Gen(a.lom, fs.WorkfileType, fs.WorkfileAppend)
+		a.lom.Lock(false)
+		if a.lom.Load(false /*cache it*/, false /*locked*/) == nil {
+			_, a.hdl.partialCksum, err = cos.CopyFile(a.lom.FQN, workFQN, buf, a.lom.CksumType())
+			a.lom.Unlock(false)
+			if err != nil {
+				errCode = http.StatusInternalServerError
+				return
+			}
+			fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
+		} else {
+			a.lom.Unlock(false)
+			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
+			fh, err = a.lom.CreateFile(workFQN)
+		}
+	} else {
+		fh, err = os.OpenFile(workFQN, os.O_APPEND|os.O_WRONLY, cos.PermRWR)
+		debug.Assert(a.hdl.partialCksum != nil)
+	}
+	if err != nil { // failed to open or create
+		errCode = http.StatusInternalServerError
 		return
 	}
 
-	delta := time.Now().UnixNano() - a.started
+	w := cos.NewWriterMulti(fh, a.hdl.partialCksum.H)
+	_, err = cos.CopyBuffer(w, a.r, buf)
+	cos.Close(fh)
+	if err != nil {
+		errCode = http.StatusInternalServerError
+		return
+	}
+
+	packedHdl = a.pack(workFQN)
+
+	// stats (TODO: add `stats.FlushCount` for symmetry)
+	lat := time.Now().UnixNano() - a.started
 	a.t.statsT.AddMany(
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
-		cos.NamedVal64{Name: stats.AppendLatency, Value: delta},
+		cos.NamedVal64{Name: stats.AppendLatency, Value: lat},
 	)
-	if cmn.FastV(4, cos.SmoduleAIS) {
-		nlog.Infof("APPEND %s: %s", a.lom, delta)
+	if a.config.FastV(4, cos.SmoduleAIS) {
+		nlog.Infof("APPEND %s: %s", a.lom, lat)
 	}
 	return
 }
 
-func parseAppendHandle(handle string) (hdl aoHdl, err error) {
-	if handle == "" {
-		return
+func (a *apndOI) flush() (int, error) {
+	if a.hdl.workFQN == "" {
+		return 0, fmt.Errorf("failed to finalize append-file operation: empty source in the %+v handle", a.hdl)
 	}
-	p := strings.SplitN(handle, "|", 4)
-	if len(p) != 4 {
-		return hdl, fmt.Errorf("invalid APPEND handle: %q", handle)
+
+	// finalize checksum
+	debug.Assert(a.hdl.partialCksum != nil)
+	a.hdl.partialCksum.Finalize()
+	partialCksum := a.hdl.partialCksum.Clone()
+	if !a.cksum.IsEmpty() && !partialCksum.Equal(a.cksum) {
+		return http.StatusInternalServerError, cos.NewErrDataCksum(partialCksum, a.cksum)
 	}
-	hdl.partialCksum = cos.NewCksumHash(p[2])
-	buf, err := base64.StdEncoding.DecodeString(p[3])
-	if err != nil {
-		return hdl, err
+
+	params := cluster.PromoteParams{
+		Bck:   a.lom.Bck(),
+		Cksum: partialCksum,
+		PromoteArgs: cluster.PromoteArgs{
+			SrcFQN:       a.hdl.workFQN,
+			ObjName:      a.lom.ObjName,
+			OverwriteDst: true,
+			DeleteSrc:    true, // NOTE: always overwrite and remove
+		},
 	}
-	err = hdl.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf)
-	if err != nil {
-		return hdl, err
-	}
-	hdl.nodeID = p[0]
-	hdl.filePath = p[1]
-	return
+	return a.t.Promote(&params)
 }
 
-func combineAppendHandle(nodeID, filePath string, partialCksum *cos.CksumHash) string {
-	buf, err := partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
+func (a *apndOI) parse(packedHdl string) error {
+	if packedHdl == "" {
+		return nil
+	}
+	items, err := preParse(packedHdl)
+	if err != nil {
+		return err
+	}
+	a.hdl.partialCksum = cos.NewCksumHash(items[2])
+	buf, err := base64.StdEncoding.DecodeString(items[3])
+	if err != nil {
+		return err
+	}
+	if err := a.hdl.partialCksum.H.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf); err != nil {
+		return err
+	}
+
+	a.hdl.nodeID = items[0]
+	a.hdl.workFQN = items[1]
+	return nil
+}
+
+func (a *apndOI) pack(workFQN string) string {
+	buf, err := a.hdl.partialCksum.H.(encoding.BinaryMarshaler).MarshalBinary()
 	debug.AssertNoErr(err)
-	cksumTy := partialCksum.Type()
+	cksumTy := a.hdl.partialCksum.Type()
 	cksumBinary := base64.StdEncoding.EncodeToString(buf)
-	return nodeID + "|" + filePath + "|" + cksumTy + "|" + cksumBinary
+	return a.t.SID() + appendHandleSepa + workFQN + appendHandleSepa + cksumTy + appendHandleSepa + cksumBinary
 }
 
 //
