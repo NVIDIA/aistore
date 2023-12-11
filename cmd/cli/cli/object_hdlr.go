@@ -334,7 +334,7 @@ func putHandler(c *cli.Context) error {
 		// a) csv of files and/or directories (names) embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
 		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.dst.oname /*virt subdir*/, incl)
-	case a.pt != nil:
+	case a.pt != nil && len(a.pt.Ranges) > 0:
 		if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("matching '%s'", a.src.tmpl)); !ok {
 			return nil
 		}
@@ -353,11 +353,18 @@ func putHandler(c *cli.Context) error {
 	}
 
 	// 4. directory
-	var ndir int
-	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s' directory", a.src.arg)); !ok {
+	var (
+		ndir    int
+		srcpath = a.src.arg
+	)
+	if a.pt != nil {
+		debug.Assert(srcpath == "", srcpath)
+		srcpath = a.pt.Prefix
+	}
+	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s' directory", srcpath)); !ok {
 		return nil
 	}
-	fobjs, err := lsFobj(c, a.src.abspath, "", a.dst.oname, &ndir, a.src.recurs, incl)
+	fobjs, err := lsFobj(c, srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl)
 	if err != nil {
 		return err
 	}

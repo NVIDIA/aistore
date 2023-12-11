@@ -63,9 +63,6 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	}
 
 	var cptn string
-	if flagIsSet(c, dryRunFlag) {
-		cptn = dryRunHeader() + " "
-	}
 	cptn += fmt.Sprintf("%s %d file%s", wop.verb(), l, cos.Plural(l))
 	cptn += ndir2tag(ndir, recurs)
 	cptn += fmt.Sprintf(" => %s", wop.dest())
@@ -89,7 +86,9 @@ func verbFobjs(c *cli.Context, wop wop, fobjs []fobj, bck cmn.Bck, ndir int, rec
 	}
 
 	// confirm
-	if !flagIsSet(c, yesFlag) {
+	if flagIsSet(c, dryRunFlag) {
+		actionCptn(c, dryRunHeader()+" ", cptn)
+	} else if !flagIsSet(c, yesFlag) {
 		if ok := confirm(c, cptn+"?"); !ok {
 			fmt.Fprintln(c.App.Writer, "Operation canceled")
 			return nil

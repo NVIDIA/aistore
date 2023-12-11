@@ -5,6 +5,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,23 +104,25 @@ func (a *putargs) parse(c *cli.Context, emptyDstOnameOK bool) (err error) {
 		if err != nil {
 			return
 		}
-		// src via local filenames
-		if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-			return fmt.Errorf("missing source arg in %q", c.Command.ArgsUsage)
-		}
-		if flagIsSet(c, listFlag) {
+
+		// source files via '--list' or '--template'
+		switch {
+		case flagIsSet(c, listFlag):
 			csv := parseStrFlag(c, listFlag)
 			a.src.fdnames = splitCsv(csv)
-			return
+			return nil
+		case flagIsSet(c, templateFlag):
+			a.src.tmpl = parseStrFlag(c, templateFlag)
+			pt, err := cos.NewParsedTemplate(a.src.tmpl)
+			if err == nil {
+				a.pt = &pt
+			} else if err == cos.ErrEmptyTemplate {
+				err = errors.New("template to select source files cannot be empty")
+			}
+			return err
+		default:
+			return fmt.Errorf("missing source arg in %q", c.Command.ArgsUsage)
 		}
-		// optional template to select local source(s)
-		var pt cos.ParsedTemplate
-		a.src.tmpl = parseStrFlag(c, templateFlag)
-		pt, err = cos.NewParsedTemplate(a.src.tmpl)
-		if err == nil {
-			a.pt = &pt
-		}
-		return
 
 	case c.NArg() == 2: // FILE|DIRECTORY|DIRECTORY/PATTERN   BUCKET/[OBJECT_NAME]
 		a.src.arg = c.Args().Get(0) // src

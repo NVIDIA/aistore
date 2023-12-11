@@ -879,6 +879,8 @@ subdir/README.md         11.24KiB
 
 Preview the files that would be sent to the cluster, without actually putting them.
 
+### Example 1
+
 ```bash
 $ for d1 in {0..2}; do for d2 in {0..2}; mkdir -p ~/dir/test${d1}/dir && do echo "0" > ~/dir/test${d1}/dir/test${d2}.txt; done; done
 $ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
@@ -887,6 +889,33 @@ $ ais put "~/dir/test{0..2}/dir/test{0..2}.txt" ais://mybucket --dry-run
 /home/user/dir/test0/dir/test0.txt => ais://mybucket/test0/dir/test0.txt
 (...)
 ```
+
+### Example 2
+
+Generally, the `--template` option combines (an optional) prefix and/or one or more ranges (e.g., bash brace expansions).
+
+In this example, we only use the "prefix" part of the `--template` to specify source directory.
+
+```console
+$ ls -l /tmp/w
+total 32
+-rw-r--r-- 1 root root 14180 Dec 11 18:18 111
+-rw-r--r-- 1 root root 14180 Dec 11 18:18 222
+
+$ ais put ais://nnn/fff --template /tmp/w --dry-run
+[DRY RUN] with no modifications to the cluster
+Warning: 'fff' will be used as the destination name prefix for all files from '/tmp/w' directory
+Proceed anyway? [Y/N]: y
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 2       27.70KiB
+TOTAL            2       27.70KiB
+[DRY RUN] PUT 2 files (one directory, non-recursive) => ais://nnn/fff
+PUT /tmp/w/222 -> ais://nnn/fff222
+PUT /tmp/w/111 -> ais://nnn/fff111
+```
+
+> Note: to PUT files into a virtual destination directory, use trailing '/', e.g.: `ais put ais://nnn/fff/ ...`
 
 ## Put multiple directories
 

@@ -100,10 +100,9 @@ APPEND operation provides for appending files to existing archives (shards). As 
 | `--append` | add newly archived content to the destination object (\"archive\", \"shard\") that **must** exist |
 | `--append-or-put` | **if** destination object (\"archive\", \"shard\") exists append to it, otherwise archive a new one |
 
-
 ### Example 1: add file to archive
 
-#### step 1. archive a directory
+#### step 1. create archive (by archiving a given source dir)
 
 ```console
 $ ais archive put sys ais://nnn/sys.tar.lz4
@@ -117,7 +116,7 @@ APPEND 11 files (one directory, non-recursive) => ais://nnn/sys.tar.lz4? [Y/N]: 
 Done
 ```
 
-#### step 2. add file to archive
+#### step 2. add a single file to existing archive
 
 ```console
 $ ais archive put README.md ais://nnn/sys.tar.lz4 --archpath=docs/README --append
@@ -153,7 +152,40 @@ NAME                             SIZE
     sys.tar.lz4/docs/README      13.85KiB
 ```
 
-### Example 2: add file to archive
+### Example 2: use `--template` flag to add source files
+
+Generally, the `--template` option combines (an optional) prefix and/or one or more ranges (e.g., bash brace expansions).
+
+In this case, the template we use is a simple prefix with no ranges.
+
+```console
+$ ls -l /tmp/w
+total 32
+-rw-r--r-- 1 root root 14180 Dec 11 18:18 111
+-rw-r--r-- 1 root root 14180 Dec 11 18:18 222
+
+$ ais archive put ais://nnn/shard-001.tar --template /tmp/w/ --append
+Files to upload:
+EXTENSION        COUNT   SIZE
+                 2       27.70KiB
+TOTAL            2       27.70KiB
+APPEND 2 files (one directory, non-recursive) => ais://nnn/shard-001.tar? [Y/N]: y
+Done
+$ ais ls ais://nnn/shard-001.tar --archive
+NAME                                             SIZE
+shard-001.tar                                    37.50KiB
+    shard-001.tar/111                            13.85KiB
+    shard-001.tar/222                            13.85KiB
+    shard-001.tar/23ed44d8bf3952a35484-1.test    1.00KiB
+    shard-001.tar/452938788ebb87807043-4.test    1.00KiB
+    shard-001.tar/7925bc9b5eb1daa12ed0-2.test    1.00KiB
+    shard-001.tar/8264574b49bd188a4b27-0.test    1.00KiB
+    shard-001.tar/f1f25e52c5edd768e0ec-3.test    1.00KiB
+```
+
+### Example 3: add file to archive
+
+In this example, we assume that `arch.tar` already exists.
 
 ```console
 # contents _before_:
@@ -176,7 +208,7 @@ arch.tar                6KiB
     arch.tar/obj2       1.0KiB
 ```
 
-### Example 3: add file to archive
+### Example 4: add file to archive
 
 ```console
 # contents _before_:

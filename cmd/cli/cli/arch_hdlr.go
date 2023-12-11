@@ -319,7 +319,7 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		// a) csv of files and/or directories (names) from the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
 		return verbList(c, &a, a.src.fdnames, a.dst.bck, a.archpath /*append pref*/, incl)
-	case a.pt != nil:
+	case a.pt != nil && len(a.pt.Ranges) > 0:
 		// a) range from the first arg, e.g. "/tmp/www/test{0..2}{0..2}.txt" dst-bucket/www.zip
 		// b) from '--template'
 		var trimPrefix string
@@ -328,9 +328,15 @@ func putApndArchHandler(c *cli.Context) (err error) {
 		}
 		return verbRange(c, &a, a.pt, a.dst.bck, trimPrefix, a.archpath, incl)
 	default: // one directory
-		var ndir int
-
-		fobjs, err := lsFobj(c, a.src.arg, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl)
+		var (
+			ndir    int
+			srcpath = a.src.arg
+		)
+		if a.pt != nil {
+			debug.Assert(srcpath == "", srcpath)
+			srcpath = a.pt.Prefix
+		}
+		fobjs, err := lsFobj(c, srcpath, "" /*trim pref*/, a.archpath /*append pref*/, &ndir, a.src.recurs, incl)
 		if err != nil {
 			return err
 		}
