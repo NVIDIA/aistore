@@ -53,7 +53,7 @@ client = Client("http://localhost:8080")
 ```
 
 The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
-See the [examples](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk) and the [reference docs](https://aiatscale.org/docs/python-sdk) for more details
+See the [examples](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk) and the [reference docs](https://aiatscale.org/docs/python-sdk) for more details
 
 **External Cloud Storage Buckets**
 
@@ -107,9 +107,9 @@ The SDK supports HTTPS connectivity if the AIS cluster is configured to use HTTP
 
 AIStore also supports [ETLs](https://aiatscale.org/docs/etl), short for Extract-Transform-Load. ETLs with AIS are beneficial given that the transformations occur *locally*, which largely contributes to the linear scalability of AIS.
 
-> Note: AIS-ETL requires [Kubernetes](https://kubernetes.io/). For more information on deploying AIStore with Kubernetes (or Minikube), refer [here](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md).
+> Note: AIS-ETL requires [Kubernetes](https://kubernetes.io/). For more information on deploying AIStore with Kubernetes (or Minikube), refer [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md).
 
-Check out the [provided examples](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl_templates.py) to learn more about working with AIS ETL.
+Check out the [provided examples](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl_templates.py) to learn more about working with AIS ETL.
 
 ---
 
@@ -117,16 +117,16 @@ Check out the [provided examples](https://github.com/NVIDIA/aistore/blob/master/
 
 |Module|Summary|
 |--|--|
-|[api.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/client.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Job` classes.|
-|[cluster.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
-|[bucket.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
-|[object.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
-|[object_group.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/object_group.py)|Contains class `ObjectGroup`, representing a collection of objects belonging to a bucket in an AIS cluster. Includes all multi-object operations such as deleting, evicting, prefetching, copying, and transforming objects.|
-|[job.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/job.py)|Contains class `Job` and all job-related operations.|
-|[dsort.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/dsort.py)|Contains class `Dsort` and all dsort-related operations.|
-|[etl.py](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/etl.py)|Contains class `Etl` and all ETL-related operations.|
+|[api.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/client.py)|Contains `Client` class, which has methods for making HTTP requests to an AIStore server. Includes factory constructors for `Bucket`, `Cluster`, and `Job` classes.|
+|[cluster.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/cluster.py)|Contains `Cluster` class that represents a cluster bound to a client and contains all cluster-related operations, including checking the cluster's health and retrieving vital cluster information.|
+|[bucket.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/bucket.py)|Contains `Bucket` class that represents a bucket in an AIS cluster and contains all bucket-related operations, including (but not limited to) creating, deleting, evicting, renaming, copying.|
+|[object.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/object.py)|Contains class `Object` that represents an object belonging to a bucket in an AIS cluster, and contains all object-related operations, including (but not limited to) retreiving, adding and deleting objects.|
+|[object_group.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/object_group.py)|Contains class `ObjectGroup`, representing a collection of objects belonging to a bucket in an AIS cluster. Includes all multi-object operations such as deleting, evicting, prefetching, copying, and transforming objects.|
+|[job.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/job.py)|Contains class `Job` and all job-related operations.|
+|[dsort.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/dsort.py)|Contains class `Dsort` and all dsort-related operations.|
+|[etl.py](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl.py)|Contains class `Etl` and all ETL-related operations.|
 
-For more information on SDK usage, refer to the [SDK reference documentation](https://aiatscale.org/docs/python_sdk.md) or see the examples [here](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/).
+For more information on SDK usage, refer to the [SDK reference documentation](https://aiatscale.org/docs/python_sdk.md) or see the examples [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/).
 
 
 ## References
@@ -134,4 +134,4 @@ For more information on SDK usage, refer to the [SDK reference documentation](ht
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aiatscale.org/docs)
 * [AIStore pip package](https://pypi.org/project/aistore/)
-* [Videos and demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)
+* [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)

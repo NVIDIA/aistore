@@ -40,7 +40,7 @@ Recently, we conducted benchmarks of AIS on Oracle Cloud Infrastructure ([OCI](h
 
 It's important to note that while AIS in this context doesn't demand extensive CPU and memory resources (in fact, during our benchmarks we never observed CPU utilization exceeding 5%), other scenarios like resharding or ETL may have different requirements.
 
-Parallel to this, the clients utilized [`aisloader`](https://github.com/NVIDIA/aistore/blob/master/docs/aisloader.md), a load generator for benchmarking AIS and other S3-compatible backends. For the 3-node cluster, we deployed 6 clients (6 separate DenseIO.E4 machines), each running 50 workers, totaling 300 workers. For the 10-node cluster, the setup included 10 clients with 100 workers each for a total of 1000 workers. Each worker in every `aisloader` performed 1MB and 10MB read requests - from AIS or directly from S3. For testing, we utilized the [aisloader-composer](https://github.com/NVIDIA/aistore/tree/master/bench/tools/aisloader-composer) tool, a suite of scripts and [Ansible](https://github.com/ansible/ansible) playbooks, enabling the benchmarking of an AIS cluster across multiple hosts with `aisloader`, orchestrated by Ansible.
+Parallel to this, the clients utilized [`aisloader`](https://github.com/NVIDIA/aistore/blob/main/docs/aisloader.md), a load generator for benchmarking AIS and other S3-compatible backends. For the 3-node cluster, we deployed 6 clients (6 separate DenseIO.E4 machines), each running 50 workers, totaling 300 workers. For the 10-node cluster, the setup included 10 clients with 100 workers each for a total of 1000 workers. Each worker in every `aisloader` performed 1MB and 10MB read requests - from AIS or directly from S3. For testing, we utilized the [aisloader-composer](https://github.com/NVIDIA/aistore/tree/main/bench/tools/aisloader-composer) tool, a suite of scripts and [Ansible](https://github.com/ansible/ansible) playbooks, enabling the benchmarking of an AIS cluster across multiple hosts with `aisloader`, orchestrated by Ansible.
 
 ## Summary of Performance Metrics
 
@@ -187,5 +187,5 @@ In summary, AIS demonstrated linear scalability in a particular setup, effective
     - [Deploying AIStore on K8s](https://github.com/NVIDIA/ais-K8s/blob/master/docs/README.md)
 2. Documentation, blogs, videos:
     - https://aiatscale.org
-    - https://github.com/NVIDIA/aistore/tree/master/docs
-    - [aisloader](https://github.com/NVIDIA/aistore/blob/master/docs/aisloader.md)
+    - https://github.com/NVIDIA/aistore/tree/main/docs
+    - [aisloader](https://github.com/NVIDIA/aistore/blob/main/docs/aisloader.md)

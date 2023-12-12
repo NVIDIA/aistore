@@ -123,9 +123,9 @@ $ ais -h
 
 DESCRIPTION:
    If [Tab] completion doesn't work:
-   * download https://github.com/NVIDIA/aistore/tree/master/cmd/cli/autocomplete
+   * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
    * and run 'install.sh'.
-   For more information, please refer to https://github.com/NVIDIA/aistore/blob/master/cmd/cli/README.md
+   For more information, please refer to https://github.com/NVIDIA/aistore/blob/main/cmd/cli/README.md
 
 COMMANDS:
    bucket          create/destroy buckets, list bucket's content, show existing buckets and their properties

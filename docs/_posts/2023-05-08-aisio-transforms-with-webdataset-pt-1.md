@@ -23,7 +23,7 @@ In this series of posts, we'll show how to effectively pair WebDataset with AISt
 
 For background it may be useful to view the [previous post](https://aiatscale.org/blog/2023/04/03/transform-images-with-python-sdk) demonstrating basic ETL operations using the AIStore Python SDK. 
 
-All code used below can be found here: [Inline WebDataset Transform Example](https://github.com/NVIDIA/aistore/blob/master/docs/examples/aisio_webdataset/load_webdataset_example.py)
+All code used below can be found here: [Inline WebDataset Transform Example](https://github.com/NVIDIA/aistore/blob/main/docs/examples/aisio_webdataset/load_webdataset_example.py)
 
 ---
 ## Software
@@ -33,7 +33,7 @@ For this example we will be using:
 - Python 3.10
 - [WebDataset Python Library v0.2.48](https://pypi.org/project/webdataset/0.2.48/) 
 - [AIStore Python SDK v1.2.2](https://pypi.org/project/aistore/)
-- [AIStore Cluster v3.17](https://github.com/NVIDIA/aistore) -- Running in Kubernetes (see [here](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md) for minikube deployment or [here](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md#kubernetes-deployments) for more advanced options)
+- [AIStore Cluster v3.17](https://github.com/NVIDIA/aistore) -- Running in Kubernetes (see [here](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md) for minikube deployment or [here](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#kubernetes-deployments) for more advanced options)
 
 --- 
 ## The Dataset
@@ -62,7 +62,7 @@ Below is a structured view of the dataset. `list.txt` contains a mapping from ea
 
 There are several ways you could [convert a dataset to the WebDataset format](https://github.com/webdataset/webdataset#creating-a-webdataset), but in this case we will do it via Python using the WebDataset `ShardWriter`. Notice the callback function provided to upload the results of each created shard to the AIS bucket. For more info on creating WebDatasets [check out the video here](https://www.youtube.com/watch?v=v_PacO-3OGQ).
 
-The full code is available [here](https://github.com/NVIDIA/aistore/blob/master/docs/examples/aisio_webdataset/load_webdataset_example.py) but the key points are shown below:
+The full code is available [here](https://github.com/NVIDIA/aistore/blob/main/docs/examples/aisio_webdataset/load_webdataset_example.py) but the key points are shown below:
 
 ```python
 
@@ -170,14 +170,14 @@ In future posts, we'll show how to run transformations on this data and load it 
 
 1. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
-    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md)
+    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md)
     - [AIS/Kubernetes Operator, AIS on bare-metal, Deployment Playbooks, Helm](https://github.com/NVIDIA/ais-k8s)
     - [WebDataset Library](https://github.com/webdataset/webdataset)
 2. Documentation, blogs, videos:
     - https://aiatscale.org
-    - https://github.com/NVIDIA/aistore/tree/master/docs
+    - https://github.com/NVIDIA/aistore/tree/main/docs
 3. Full code example
-    - [Inline WebDataset Transform Example](https://github.com/NVIDIA/aistore/blob/master/docs/examples/aisio_webdataset/load_webdataset_example.py)
+    - [Inline WebDataset Transform Example](https://github.com/NVIDIA/aistore/blob/main/docs/examples/aisio_webdataset/load_webdataset_example.py)
 4. Dataset
     - [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/)
 

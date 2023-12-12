@@ -81,7 +81,7 @@ and more.
 
 For the most recently updated **URL paths**, please see:
 
-* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go)
+* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/main/api/apc/urlpaths.go)
 
 5. **URL query**, e. g., `?what=config`.
 
@@ -97,8 +97,8 @@ In particular, all API requests that operate on a bucket carry the bucket's spec
 
 All supported query parameters and all HTTP headers are enumerated and commented in the following two sources, respectively:
 
-* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
-* [REST API Headers](https://github.com/NVIDIA/aistore/blob/master/api/apc/headers.go)
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/main/api/apc/query.go)
+* [REST API Headers](https://github.com/NVIDIA/aistore/blob/main/api/apc/headers.go)
 
 ## Easy URL
 
@@ -149,15 +149,15 @@ $ curl -s -L -X GET 'http://aistore/gs/my-google-bucket' | jq
 
 The entire AIStore RESTful API is substantial in size. It is also constantly growing, which is why this section is structured as several groups of related APIs.
 
-In addition, the rightmost column references AIS [api](https://github.com/NVIDIA/aistore/tree/master/api) package and the specific Go-based API in it that performs the same **operation**. Needless to say - simply because we use it ourselves across a variety of Go-based clients and apps, the [api](https://github.com/NVIDIA/aistore/tree/master/api) package will always contain the most recently updated version of the API.
+In addition, the rightmost column references AIS [api](https://github.com/NVIDIA/aistore/tree/main/api) package and the specific Go-based API in it that performs the same **operation**. Needless to say - simply because we use it ourselves across a variety of Go-based clients and apps, the [api](https://github.com/NVIDIA/aistore/tree/main/api) package will always contain the most recently updated version of the API.
 
-In other words, AIS [api](https://github.com/NVIDIA/aistore/tree/master/api) is always current and can be used to lookup the most recently updated version of the RESTful API.
+In other words, AIS [api](https://github.com/NVIDIA/aistore/tree/main/api) is always current and can be used to lookup the most recently updated version of the RESTful API.
 
 ### Cluster Operations
 
 This and the next section reference a variety of URL paths (e.g., `/v1/cluster`). For the most recently updated list of all URLs, see:
 
-* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/master/api/apc/urlpaths.go)
+* [`api/apc/urlpaths.go`](https://github.com/NVIDIA/aistore/blob/main/api/apc/urlpaths.go)
 
 | Operation | HTTP action | Example | Go API |
 |--- | --- | ---|--- |
@@ -246,8 +246,8 @@ Unless cluster rebalancing was previously interrupted, there's usually a few sec
 
 To the (fully expected) question of where the `prr` query comes from - all supported query parameters and all HTTP headers are enumerated and commented in the following two sources:
 
-* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
-* [REST API Headers](https://github.com/NVIDIA/aistore/blob/master/api/apc/headers.go)
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/main/api/apc/query.go)
+* [REST API Headers](https://github.com/NVIDIA/aistore/blob/main/api/apc/headers.go)
 
 ### Mountpaths and Disks
 
@@ -366,7 +366,7 @@ Remote buckets (such as, for instance, `s3://jonh-s3-bucket` above) may not be p
 
 Further, all supported query parameters are enumerated and commented in the following source:
 
-* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/main/api/apc/query.go)
 
 #### Examples 3.1 and 3.2. Listing buckets in remote namespaces
 
@@ -615,7 +615,7 @@ README.md        9.97KiB         a56d5e9f313480b7bbe41256012fb7b0        1658425
 
 A typical query is a GET request that includes `?what=<...>` (HTTP) query. For the most recently updated `what=` enumeration, see:
 
-* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/master/api/apc/query.go)
+* [REST API Query parameters](https://github.com/NVIDIA/aistore/blob/main/api/apc/query.go)
 
 Notice that many cluster-level operations can be designated to both the entire cluster or any specific node. For instance, for the current cluster map we can use `GET /v1/cluster?what=smap` and `GET /v1/daemon?what=smap`. This is because each node in the cluster would have a replica (of the map), and it also may be useful to find out the current cluster map of the node that's joining right now, and so on.
 

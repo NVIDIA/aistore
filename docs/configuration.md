@@ -11,8 +11,8 @@ AIS configuration comprises:
 
 | Name | Scope | Comment |
 | --- | --- | --- |
-| [ClusterConfig](https://github.com/NVIDIA/aistore/blob/master/cmn/config.go#L48) | Global | [Named sections](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/local/aisnode_config.sh#L13) containing name-value knobs |
-| [LocalConfig](https://github.com/NVIDIA/aistore/blob/master/cmn/config.go#L49) | Local | Allows to override global defaults on a per-node basis |
+| [ClusterConfig](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L48) | Global | [Named sections](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/aisnode_config.sh#L13) containing name-value knobs |
+| [LocalConfig](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L49) | Local | Allows to override global defaults on a per-node basis |
 
 Cluster-wide (global) configuration is protected, namely: checksummed, versioned, and safely replicated. In effect, global config defines cluster-wide defaults inherited by each node joining the cluster.
 
@@ -23,7 +23,7 @@ Local config includes:
    * **inheriting** cluster configuration, and optionally
    * optionally, **locally overriding** assorted inherited defaults (see usage examples below).
 
-Majority of the configuration knobs can be changed at runtime (and at any time). A few read-only variables are explicitly [marked](https://github.com/NVIDIA/aistore/blob/master/cmn/config.go) in the source; any attempt to modify those at runtime will return "read-only" error message.
+Majority of the configuration knobs can be changed at runtime (and at any time). A few read-only variables are explicitly [marked](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go) in the source; any attempt to modify those at runtime will return "read-only" error message.
 
 ## CLI
 

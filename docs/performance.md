@@ -128,7 +128,7 @@ The corresponding system configuration file is `/etc/security/limits.conf`.
 
 > In Linux, the default per-process maximum is 1024. It is **strongly recommended** to raise it to at least `100,000`.
 
-Here's a full replica of [/etc/security/limits.conf](https://github.com/NVIDIA/aistore/blob/master/deploy/conf/limits.conf) that we use for development _and_ production.
+Here's a full replica of [/etc/security/limits.conf](https://github.com/NVIDIA/aistore/blob/main/deploy/conf/limits.conf) that we use for development _and_ production.
 
 To check your current settings, run `ulimit -n` or `tail /etc/security/limits.conf`.
 
@@ -344,7 +344,7 @@ AIS loader (aisloader v1.3, build ...) is a tool to measure storage performance.
 It's a load generator that has been developed to benchmark and stress-test AIStore
 but can be easily extended to benchmark any S3-compatible backend.
 For usage, run: `aisloader`, or `aisloader usage`, or `aisloader --help`.
-Further details at https://github.com/NVIDIA/aistore/blob/master/docs/howto_benchmark.md
+Further details at https://github.com/NVIDIA/aistore/blob/main/docs/howto_benchmark.md
 
 Command-line options
 ====================

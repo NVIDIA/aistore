@@ -59,7 +59,7 @@ variables:
 
 .default_only_template: &default_only_def
   only:
-    - master
+    - main
     - merge_requests
     - schedules
     - webs
@@ -82,7 +82,7 @@ variables:
     - ais
   timeout: 25m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -95,7 +95,7 @@ variables:
   timeout: 25m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -107,7 +107,7 @@ variables:
   timeout: 3h
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -118,7 +118,7 @@ variables:
     - ais
   timeout: 3h
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   <<: *gather_logs_def
@@ -320,7 +320,7 @@ test:long:aisloader:
     - FLAGS="--duration=5m" make test-aisloader
     - cd ./python; make PYAISLOADER_TEST_TYPE=long test-pyaisloader
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
 
@@ -374,7 +374,7 @@ test:short:assorted:k8s:
     - ais-k8s
   timeout: 30m
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   variables:
@@ -398,7 +398,7 @@ test:long:k8s:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master" || $CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "web"'
       when: manual
       allow_failure: true
   script:
@@ -415,7 +415,7 @@ test:long:k8s:single-target:
   timeout: 3h
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   script:
@@ -432,7 +432,7 @@ test:long:k8s:aisloader:
   timeout: 15m
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   script:
@@ -450,7 +450,7 @@ test:long:k8s:all:
   timeout: 5h
   rules:
     - if: '$CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == "main"'
       when: manual
       allow_failure: true
   before_script:

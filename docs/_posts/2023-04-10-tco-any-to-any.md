@@ -12,9 +12,9 @@ TL;DR a simple demonstration that does exactly that (and see detailed comments i
 
 | Script | Action |
 | --- | --- |
-| [cp-rmnode-rebalance](https://github.com/NVIDIA/aistore/blob/master/ais/test/scripts/cp-rmnode-rebalance.sh) | taking a random node to maintenance when there's no data redundancy |
-| [cp-rmnode-ec](https://github.com/NVIDIA/aistore/blob/master/ais/test/scripts/cp-rmnode-ec.sh) | (erasure coded content) + (immediate loss of a node) |
-| [cp-rmdisk](https://github.com/NVIDIA/aistore/blob/master/ais/test/scripts/cp-rmdisk.sh) | (3-way replication) + (immediate loss of a random drive) |
+| [cp-rmnode-rebalance](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-rmnode-rebalance.sh) | taking a random node to maintenance when there's no data redundancy |
+| [cp-rmnode-ec](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-rmnode-ec.sh) | (erasure coded content) + (immediate loss of a node) |
+| [cp-rmdisk](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/cp-rmdisk.sh) | (3-way replication) + (immediate loss of a random drive) |
 
 > The scripts are self-contained and will run with any aistore instance that has at least 5 nodes, each with 3+ disks.
 
@@ -83,7 +83,7 @@ That was the first step - the second is virtually identical to copying (see prev
 
 ## Despite node and drive failures
 
-The [scripts](https://github.com/NVIDIA/aistore/tree/master/ais/test/scripts) above periodically fail and recover nodes and disks. But we could also go ahead and replace `ais cp` command with its `ais etl` counterpart - that is, replace dataset replication with dataset (offline) transformation, while leaving everything else intact.
+The [scripts](https://github.com/NVIDIA/aistore/tree/main/ais/test/scripts) above periodically fail and recover nodes and disks. But we could also go ahead and replace `ais cp` command with its `ais etl` counterpart - that is, replace dataset replication with dataset (offline) transformation, while leaving everything else intact.
 
 We could do even more - select any _startable_ job:
 
@@ -97,7 +97,7 @@ and run it while simultaneously taking out nodes and disks. It'll run and, given
 
 **NOTE:**
 
-The ability to recover is much more fundamental than any specific [job kind](https://github.com/NVIDIA/aistore/blob/master/xact/api.go#L108-L230) that's already supported today or will be added in the future.
+The ability to recover is much more fundamental than any specific [job kind](https://github.com/NVIDIA/aistore/blob/main/xact/api.go#L108-L230) that's already supported today or will be added in the future.
 
 > Not every job is _startable_. In fact, majority of the supported jobs have their own dedicated API and CLI, and there are still other jobs that run only on demand.
 

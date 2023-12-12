@@ -8,9 +8,9 @@ categories: aistore etl pytorch python webdataset
 
 In the [previous post](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1) we converted a dataset to the WebDataset format and stored it in a bucket in AIStore. 
 
-This post will demonstrate AIStore's ability to efficiently apply custom transformations to the dataset on the storage cluster. We'll do this using [AIS ETL](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
+This post will demonstrate AIStore's ability to efficiently apply custom transformations to the dataset on the storage cluster. We'll do this using [AIS ETL](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md).
 
-All code used below can be found here: [WebDataset ETL Example](https://github.com/NVIDIA/aistore/blob/master/docs/examples/aisio_webdataset/etl_webdataset.py)
+All code used below can be found here: [WebDataset ETL Example](https://github.com/NVIDIA/aistore/blob/main/docs/examples/aisio_webdataset/etl_webdataset.py)
 
 ---
 ## Motivation for AIS ETL
@@ -20,7 +20,7 @@ Performing transformations close to the data maximizes efficiency and can reduce
 This makes it a much better option than pulling all the required data for training and doing both preprocessing and training on the same system. 
 
 In this demo, the ETL on AIStore is relatively lightweight, but offloading the pre-training computation to the AIS cluster could be much more important with a more intensive transform. 
-For more advanced workloads such as audio or video transcoding or other computer-vision tasks, GPU-accelerated transformations may be desired. While it is beyond the scope of this article, such a setup can be achieved with the right hardware (e.g. [Nvidia DGX](https://www.nvidia.com/en-us/data-center/dgx-platform/)), containers with GPU access ([NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)), and the AIS [init_spec option](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#init-spec-request).
+For more advanced workloads such as audio or video transcoding or other computer-vision tasks, GPU-accelerated transformations may be desired. While it is beyond the scope of this article, such a setup can be achieved with the right hardware (e.g. [Nvidia DGX](https://www.nvidia.com/en-us/data-center/dgx-platform/)), containers with GPU access ([NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)), and the AIS [init_spec option](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#init-spec-request).
 
 --- 
 ## WebDataset-compatible Transforms
@@ -135,16 +135,16 @@ In the next post, we'll show how to put ETL to use when training a dataset by pe
 
 1. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
-    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md)
+    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md)
     - [AIS/Kubernetes Operator, AIS on bare-metal, Deployment Playbooks, Helm](https://github.com/NVIDIA/ais-k8s)
     - [AIS-ETL containers and specs](https://github.com/NVIDIA/ais-etl)
     - [WebDataset Library](https://github.com/webdataset/webdataset)
 2. Documentation, blogs, videos:
     - https://aiatscale.org
-    - https://github.com/NVIDIA/aistore/tree/master/docs
+    - https://github.com/NVIDIA/aistore/tree/main/docs
     - [AIStore with WebDataset Part 1 -- Storing WebDataset format in AIS](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1)
 3. Full code example
-    - [WebDataset ETL Example](https://github.com/NVIDIA/aistore/blob/master/docs/examples/aisio_webdataset/etl_webdataset.py)
+    - [WebDataset ETL Example](https://github.com/NVIDIA/aistore/blob/main/docs/examples/aisio_webdataset/etl_webdataset.py)
 4. Dataset
     - [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/)
 5. PyTorch 

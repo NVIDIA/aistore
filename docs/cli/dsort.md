@@ -72,7 +72,7 @@ OPTIONS:
 
 ## Example
 
-This example simply runs [ais/test/scripts/dsort-ex1-spec.json](https://github.com/NVIDIA/aistore/blob/master/ais/test/scripts/dsort-ex1-spec.json) specification. The source and destination buckets - ais://src and ais://dst, respectively - must exist.
+This example simply runs [ais/test/scripts/dsort-ex1-spec.json](https://github.com/NVIDIA/aistore/blob/main/ais/test/scripts/dsort-ex1-spec.json) specification. The source and destination buckets - ais://src and ais://dst, respectively - must exist.
 
 Further, the source buckets must have at least 10 shards with names that match `input_format` (see below).
 

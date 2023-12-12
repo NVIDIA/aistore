@@ -198,13 +198,13 @@ In effect, a user can skip the entire step of writing their Dockerfile and build
 
 > If you are familiar with [FasS](https://en.wikipedia.org/wiki/Function_as_a_service), then you probably will find this type of ETL initialization the most intuitive.
 
-For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/examples/ais-etl).
+For a detailed step-by-step tutorial on *init code* requests, please see [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb) and [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl).
 
 The `init_code` request currently supports two communication types:
 
 ### `hpush://` communication
 
-In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_md5_hpush.py)
+In `hpush` communication type, the user has to define a function that takes bytes as a parameter, processes it and returns bytes. e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush.py)
 
 ```python
 def transform(input_bytes: bytes) -> bytes
@@ -212,7 +212,7 @@ def transform(input_bytes: bytes) -> bytes
 
 You can also stream objects in `transform()` by setting the `CHUNK_SIZE` parameter (`CHUNK_SIZE` > 0).
 
-e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_md5_hpush_streaming.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_torchvision_hpush.py).
+e.g. [ETL to calculate MD5 of an object with streaming](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_hpush_streaming.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_hpush.py).
 
 > **Note:**
 >- If the function uses external dependencies, a user can provide an optional dependencies file or in the `elt().init()` function of Python SDK. These requirements will be installed on the machine executing the `transform` function and will be available for the function.
@@ -228,7 +228,7 @@ def transform() -> None:
     sys.stdout.buffer.write(output_bytes)
 ```
 
-e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/master/python/examples/ais-etl/etl_torchvision_io.py)
+e.g. [ETL to calculate MD5 of an object](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_md5_io.py), [ETL to transform images using torchvision](https://github.com/NVIDIA/aistore/blob/main/python/examples/ais-etl/etl_torchvision_io.py)
 
 ### Runtimes
 
@@ -334,7 +334,7 @@ AIStore supports both *inline* transformation of selected objects and *offline* 
 There are two ways to run ETL transformations:
 - HTTP RESTful APIs are described in [API Reference section](#api-reference) of this document.
 - [ETL CLI](/docs/cli/etl.md)
-- [Python SDK](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md#etls)
+- [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
 - [AIS Loader](/docs/aisloader.md)
 
 ## API Reference
@@ -393,6 +393,6 @@ Below are specifications for a valid `ETL_NAME`:
   - [Compute the MD5 of the object](/docs/tutorials/etl/compute_md5.md)
 * For a quick CLI introduction and reference, see [ETL CLI](/docs/cli/etl.md)
 * For initializing ETLs with AIStore Python SDK, see:
-  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/master/python/aistore/sdk/README.md#etls)
-  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/master/python/examples/ais-etl)
-  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/master/python/examples/sdk/sdk-etl-tutorial.ipynb)
+  - [Python SDK ETL Usage Docs](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/README.md#etls)
+  - [Python SDK ETL Examples](https://github.com/NVIDIA/aistore/tree/main/python/examples/ais-etl)
+  - [Python SDK ETL Tutorial](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/sdk-etl-tutorial.ipynb)

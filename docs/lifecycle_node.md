@@ -128,7 +128,7 @@ The takeaway: global rebalance runs its full way _before_ the node in question i
 
 ### Assorted notes
 
-Normally, a starting-up AIS node (`aisnode`) will use its local [configuration](/docs/configuration.md) to communicate with any other node in the cluster and perform what's called [self-join](https://github.com/NVIDIA/aistore/blob/master/api/apc/actmsg.go). The latter does not require a `join` command or any other explicit administration.
+Normally, a starting-up AIS node (`aisnode`) will use its local [configuration](/docs/configuration.md) to communicate with any other node in the cluster and perform what's called [self-join](https://github.com/NVIDIA/aistore/blob/main/api/apc/actmsg.go). The latter does not require a `join` command or any other explicit administration.
 
 Still, the `join` command can solve the case when the node is misconfigured. Secondly and separately, it can be used to join a standby node - a node that started in a `standby` mode, as per:
 

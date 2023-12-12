@@ -30,7 +30,7 @@ But again, if we want to use `s3cmd` (or `aws`, etc.), there must be a **single 
 ```console
 $ ais ls ais:
 $ ais create ais://abc
-"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)
 
 $ ais bucket props set ais://abc checksum.type=md5
 Bucket props successfully updated

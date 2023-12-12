@@ -17,13 +17,13 @@ In a previous series of posts, we transformed the ImageNet dataset using a mixtu
 
 As we did in the posts above, we'll assume that an instance of AIStore has been already deployed on Kubernetes. All the code below will expect an `AIS_ENDPOINT` environment variable set to the cluster's endpoint.
 
-> To set up a local Kubernetes cluster with Minikube, checkout the [docs here](https://github.com/NVIDIA/aistore/tree/master/deploy/dev/k8s). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/).
+> To set up a local Kubernetes cluster with Minikube, checkout the [docs here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s). For more advanced deployments, take a look at our dedicated [ais-k8s repository](https://github.com/NVIDIA/ais-k8s/).
 
 We'll be using PyTorch's `torchvision` to transform [The Oxford-IIIT Pet Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/) - as illustrated:
 
 ![AIS-ETL Overview](/assets/ais_etl_series/ais-etl-overview.png)
 
-To interact with the cluster, we'll be using the [AIS Python SDK](https://github.com/NVIDIA/aistore/tree/master/python). Set up your Python environment and install the following requirements:
+To interact with the cluster, we'll be using the [AIS Python SDK](https://github.com/NVIDIA/aistore/tree/main/python). Set up your Python environment and install the following requirements:
 
 ```text
 aistore
@@ -113,7 +113,7 @@ def etl():
 
 We will use `python3` (`python:3.10`) *runtime* and install the `torchvision` package to run the `etl` function above. When using the Python SDK `init_code`, it will automatically select the current version of Python (if supported) as the runtime for compatibility with the code passed in. To use a different runtime, check out the `init_spec` option.
 
-> [runtime](https://github.com/NVIDIA/ais-etl/tree/master/runtime) contains a predefined work environment in which the provided code/script will be run. A full list of supported runtimes can be found [here](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#runtimes).
+> [runtime](https://github.com/NVIDIA/ais-etl/tree/master/runtime) contains a predefined work environment in which the provided code/script will be run. A full list of supported runtimes can be found [here](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#runtimes).
 
 
 ```python
@@ -139,7 +139,7 @@ show_etl(image_etl)
 
 ## Inline and Offline ETL
 
-AIS supports both inline (applied when getting objects) and offline (bucket to bucket) ETL. For more info see the [ETL docs here](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
+AIS supports both inline (applied when getting objects) and offline (bucket to bucket) ETL. For more info see the [ETL docs here](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md).
 
 ## Transforming a single object inline
 
@@ -213,12 +213,12 @@ Full code examples for each action above can be found [here](/examples/transform
 1. [AIStore & ETL: Introduction](https://aiatscale.org/blog/2021/10/21/ais-etl-1)
 2. GitHub:
     - [AIStore](https://github.com/NVIDIA/aistore)
-    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/k8s/README.md)
+    - [Local Kubernetes Deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/k8s/README.md)
     - [AIS/Kubernetes Operator, AIS on bare-metal, Deployment Playbooks, Helm](https://github.com/NVIDIA/ais-k8s)
     - [AIS-ETL containers and specs](https://github.com/NVIDIA/ais-etl)
 3. Documentation, blogs, videos:
     - https://aiatscale.org
-    - https://github.com/NVIDIA/aistore/tree/master/docs
+    - https://github.com/NVIDIA/aistore/tree/main/docs
 4. Deprecated training code samples:
     - [ImageNet PyTorch training with `aistore.pytorch.Dataset`](/examples/etl-imagenet-dataset/train_aistore.py)
 5. Full code example

@@ -60,4 +60,4 @@ Run on UNIX systems:
 ## References
 
 * [Minio Python SDK](https://github.com/minio/minio-py)
-* [Python Tests README](https://github.com/NVIDIA/aistore/tree/master/python/tests/README.md)
+* [Python Tests README](https://github.com/NVIDIA/aistore/tree/main/python/tests/README.md)

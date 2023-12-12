@@ -384,7 +384,7 @@ Summary:
    Build:               2022-11-16T17:55:50+0000
 ```
 
-> `AIS_ENDPOINT` is part of the `AIS_**` [environment](https://github.com/NVIDIA/aistore/blob/master/api/env/ais.go).
+> `AIS_ENDPOINT` is part of the `AIS_**` [environment](https://github.com/NVIDIA/aistore/blob/main/api/env/ais.go).
 
 > `AIS_ENDPOINT` can point to any AIS gateway (proxy) in a given cluster. Does not necessarily have to be the _primary_ gateway.
 

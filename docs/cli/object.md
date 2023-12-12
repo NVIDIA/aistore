@@ -169,7 +169,7 @@ Read 1.00KiB (1024 B)
 
 ### Example: read-range multiple objects
 
-Let's say, bucket ais://src contains 4 copies of [aistore readme](https://github.com/NVIDIA/aistore/blob/master/README.md) in its virtual directory `docs/`:
+Let's say, bucket ais://src contains 4 copies of [aistore readme](https://github.com/NVIDIA/aistore/blob/main/README.md) in its virtual directory `docs/`:
 
 The following reads 10 bytes from each copy and prints the result:
 

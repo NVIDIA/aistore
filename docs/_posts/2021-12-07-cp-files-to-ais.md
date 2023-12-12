@@ -6,14 +6,14 @@ author: Alex Aizman
 categories: aistore migration replication
 ---
 
-AIStore supports [numerous ways](https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#existing-datasets) to copy, download, or otherwise transfer existing datasets. Much depends on *where is* the dataset in question, and whether we can access this location using some of sort of HTTP-based interface. I'll put more references below. But in this post, let's talk about datasets that already reside *on premises*.
+AIStore supports [numerous ways](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#existing-datasets) to copy, download, or otherwise transfer existing datasets. Much depends on *where is* the dataset in question, and whether we can access this location using some of sort of HTTP-based interface. I'll put more references below. But in this post, let's talk about datasets that already reside *on premises*.
 
 > The term *on premises* here includes a super-wide spectrum of use cases ranging from commercial high-end (and, possibly, distributed) filers to your own Linux or Mac (where you may, or may not, want to run AIStore itself, etc.).
 
 Ultimately, the only precondition is that there is a *directory* you can access that contains files to migrate or copy. It turns out that **everything else** can be done in two easy steps:
 
 1. Run local HTTP server.
-2. [Prefetch](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) the files.
+2. [Prefetch](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges) or [download](https://github.com/NVIDIA/aistore/blob/main/docs/downloader.md) the files.
 
 Implementation-wise, both Step 1 and Step 2 have multiple variations and we'll consider at least some of them below. But first, let's take a look at an example:
 
@@ -61,7 +61,7 @@ func main() {
 }
 ```
 
-and then using AIS [downloader](https://github.com/NVIDIA/aistore/blob/master/docs/downloader.md) extension instead of the multi-object `prefetch` that we have used above:
+and then using AIS [downloader](https://github.com/NVIDIA/aistore/blob/main/docs/downloader.md) extension instead of the multi-object `prefetch` that we have used above:
 
 ```bash
 # Step 1. run local http server
@@ -97,6 +97,6 @@ Other than a different, albeit still arbitrary, listening port and a user-select
 
 ## References
 
-* [Using AIS Downloader](https://github.com/NVIDIA/aistore/blob/master/docs/cli/download.md)
-* [Multi-object operations](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#operations-on-lists-and-ranges)
-* [Promote files and directories](https://github.com/NVIDIA/aistore/blob/master/docs/cli/object.md#promote-files-and-directories)
+* [Using AIS Downloader](https://github.com/NVIDIA/aistore/blob/main/docs/cli/download.md)
+* [Multi-object operations](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#operations-on-lists-and-ranges)
+* [Promote files and directories](https://github.com/NVIDIA/aistore/blob/main/docs/cli/object.md#promote-files-and-directories)

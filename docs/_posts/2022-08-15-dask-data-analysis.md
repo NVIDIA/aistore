@@ -94,13 +94,13 @@ df.groupby(' "Baths"')[' "List Price ($)"'].mean().compute()
 filtered_df = df[df[' "Year"'] > 2000]
 ```
 
-> For an interactive demonstration of the Dask `DataFrame` features shown in this article (and more), please refer to the [Dask AIStore Demo (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/master/python/examples/dask/dask-aistore-demo.ipynb).
+> For an interactive demonstration of the Dask `DataFrame` features shown in this article (and more), please refer to the [Dask AIStore Demo (Jupyter Notebook)](https://github.com/NVIDIA/aistore/blob/main/python/examples/dask/dask-aistore-demo.ipynb).
 
 
 ## References
 
 * [Dask API](https://docs.dask.org/en/stable/dataframe-api.html)
 * [Pandas API](https://pandas.pydata.org/docs/reference/index.html)
-* [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/master/docs/python_sdk.md)
+* [AIStore Python SDK](https://github.com/NVIDIA/aistore/blob/main/docs/python_sdk.md)
 
 

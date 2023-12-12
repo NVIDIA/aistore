@@ -34,7 +34,7 @@ First though, two common rules that, in fact, apply across the board:
 For example:
 
 * in aistore cluster, each node has an `ID`, which is persistent, replicated and unique; at node startup its `ID` can be overridden via `AIS_DAEMON_ID` environment (see below);
-* environment `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/master/api/apc/const.go) in the code;
+* environment `AIS_READ_HEADER_TIMEOUT`, if specified, will be used instead of the `apc.ReadHeaderTimeout` [constant](https://github.com/NVIDIA/aistore/blob/main/api/apc/const.go) in the code;
 * `AIS_USE_HTTPS` takes precedence over `net.http.use_https` value from the [cluster configuration](/docs/configuration.md),
 
 and so on.
@@ -108,8 +108,8 @@ See also:
 | `NUM_PROXY` | (ditto) |
 
 See also:
-* [deploy/scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/clean_deploy.sh)
-* [wait-for-cluster](https://github.com/NVIDIA/aistore/blob/master/ais/test/main_test.go#L47-L56)
+* [deploy/scripts/clean_deploy.sh](https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/clean_deploy.sh)
+* [wait-for-cluster](https://github.com/NVIDIA/aistore/blob/main/ais/test/main_test.go#L47-L56)
 
 ## Kubernetes
 
@@ -134,7 +134,7 @@ See related:
 
 AIS natively supports 3 (three) [Cloud storages](/docs/providers.md).
 
-The corresponding environment "belongs" to the internal [backend](https://github.com/NVIDIA/aistore/tree/master/ais/backend) package and includes:
+The corresponding environment "belongs" to the internal [backend](https://github.com/NVIDIA/aistore/tree/main/ais/backend) package and includes:
 
 | name | comment |
 | ---- | ------- |
@@ -210,7 +210,7 @@ Namely:
 
 | name | comment |
 | ---- | ------- |
-| `AIS_MINMEM_FREE` | for details, see [Memory Manager, Slab Allocator (MMSA)](https://github.com/NVIDIA/aistore/blob/master/memsys/README.md) |
+| `AIS_MINMEM_FREE` | for details, see [Memory Manager, Slab Allocator (MMSA)](https://github.com/NVIDIA/aistore/blob/main/memsys/README.md) |
 | `AIS_MINMEM_PCT_TOTAL` | same as above and, specifically, te section "Minimum Available Memory" |
 | `AIS_MINMEM_PCT_FREE` | (ditto) |
 
@@ -221,7 +221,7 @@ Namely:
 | `AIS_STREAM_DRY_RUN` | read and immediately discard all read data (can be used to evaluate client-side throughput) |
 | `AIS_STREAM_BURST_NUM` | overrides `transport.burst_buffer` knob from the [cluster configuration](/docs/configuration.md) |
 
-See also: [streaming intra-cluster transport](https://github.com/NVIDIA/aistore/blob/master/transport/README.md).
+See also: [streaming intra-cluster transport](https://github.com/NVIDIA/aistore/blob/main/transport/README.md).
 
 ## AuthN
 
@@ -264,10 +264,10 @@ See also:
 
 ## References
 
-* `env` package [README](https://github.com/NVIDIA/aistore/blob/master/api/env/README.md)
-* [system filenames](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go)
+* `env` package [README](https://github.com/NVIDIA/aistore/blob/main/api/env/README.md)
+* [system filenames](https://github.com/NVIDIA/aistore/blob/main/cmn/fname/fname.go)
 * [cluster configuration](/docs/configuration.md)
-* [local playground: cluster and node configuration](https://github.com/NVIDIA/aistore/blob/master/deploy/dev/local/aisnode_config.sh)
+* [local playground: cluster and node configuration](https://github.com/NVIDIA/aistore/blob/main/deploy/dev/local/aisnode_config.sh)
 * [`ais config` command](/docs/cli/config.md)
 * [performance tunables](/docs/performance.md)
 * [feature flags](/docs/feature_flags.md)

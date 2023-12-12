@@ -6,7 +6,7 @@ author: Aaron Wilson
 categories: aistore etl pytorch python webdataset
 ---
 
-In the previous posts ([pt1](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1), [pt2](https://aiatscale.org/blog/2023/05/11/aisio-transforms-with-webdataset-pt-2)), we discussed converting a dataset into shards of samples in the [WebDataset format](https://github.com/webdataset/webdataset#the-webdataset-format) and creating a function to transform these shards using [AIStore ETL](https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
+In the previous posts ([pt1](https://aiatscale.org/blog/2023/05/05/aisio-transforms-with-webdataset-pt-1), [pt2](https://aiatscale.org/blog/2023/05/11/aisio-transforms-with-webdataset-pt-2)), we discussed converting a dataset into shards of samples in the [WebDataset format](https://github.com/webdataset/webdataset#the-webdataset-format) and creating a function to transform these shards using [AIStore ETL](https://github.com/NVIDIA/aistore/blob/main/docs/etl.md).
 For the next step of model training, we must continuously fetch transformed samples from these shards.
 This post will demonstrate how to use the WebDataset library and PyTorch to generate a DataLoader for the last stage of the pipeline.
 The final pipeline will transform, decode, shuffle, and batch samples on demand for model training.
@@ -127,7 +127,7 @@ def view_data(dataloader):
     - [WebDataset Library](https://github.com/webdataset/webdataset)
 2. Documentation, blogs, videos:
     - https://aiatscale.org
-    - https://github.com/NVIDIA/aistore/tree/master/docs
+    - https://github.com/NVIDIA/aistore/tree/main/docs
     - Pytorch intro to Datasets and DataLoaders: https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
     - Discussion on Datasets, DataPipes, DataLoaders: https://sebastianraschka.com/blog/2022/datapipes.html
 3. Full code example

@@ -17,11 +17,11 @@ Note:
 
 The directory usually contains plain-text `authn.json` configuration and tokens DB `authn.db`
 
-> For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go) source.
+> For the most updated system filenames and configuration directories, please see [`fname/fname.go`](https://github.com/NVIDIA/aistore/blob/main/cmn/fname/fname.go) source.
 
 Examples below use AuthN specific environment variables. Note that all of them are enumerated in:
 
-* [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/master/api/env/authn.go)
+* [`api/env/authn.go`](https://github.com/NVIDIA/aistore/blob/main/api/env/authn.go)
 
 ## Getting started with AuthN: local-playground session
 
@@ -49,7 +49,7 @@ Guest-myclu             Read-only access to buckets in WayZWN_f4[myclu]
 
 # 3. Create a bucket (to further demonstrate access permissions in action)
 $ ais create ais://nnn
-"ais://nnn" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+"ais://nnn" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)
 $ ais put README.md ais://nnn
 PUT "README.md" to ais://nnn
 

@@ -56,7 +56,7 @@ Or, you can also download the latest released CLI binary from the [release asset
 Further references:
 
 * [AIS CLI](/docs/cli.md)
-* [CLI Documentation](https://github.com/NVIDIA/aistore/tree/master/docs/cli)
+* [CLI Documentation](https://github.com/NVIDIA/aistore/tree/main/docs/cli)
 
 ## How to Build
 

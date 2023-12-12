@@ -232,7 +232,7 @@ But first and separately, we create `ais://` bucket and configure it with MD5:
 
 ```console
 $ ais create ais://abc
-"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)
+"ais://abc" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)
 $ ais bucket props set ais://abc checksum.type=md5
 Bucket props successfully updated
 "checksum.type" set to: "md5" (was: "xxhash")

@@ -13,7 +13,7 @@ By definition,  *eXtended actions* (aka *xactions*) are batch operations that ru
 
 Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset, and many more.
 
-> In the source code, all supported - and the most recently updated - *xactions* are enumerated [here](https://github.com/NVIDIA/aistore/blob/master/xaction/table.go).
+> In the source code, all supported - and the most recently updated - *xactions* are enumerated [here](https://github.com/NVIDIA/aistore/blob/main/xaction/table.go).
 
 All [eXtended actions](/xact/README.md) support generic [API](/api/xaction.go) and [CLI](/docs/cli/job.md#show-job-statistics) to show both common counters (byte and object numbers) as well as operation-specific extended statistics.
 

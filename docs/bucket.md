@@ -635,11 +635,11 @@ For background and usage examples, please see [CLI: AWS-specific bucket configur
 
 # List Objects
 
-> Note: some of the following content **may be outdated**. For the most recent updates, please check [`ais ls`](https://github.com/NVIDIA/aistore/blob/master/docs/cli/bucket.md#list-objects) CLI.
+> Note: some of the following content **may be outdated**. For the most recent updates, please check [`ais ls`](https://github.com/NVIDIA/aistore/blob/main/docs/cli/bucket.md#list-objects) CLI.
 
 ListObjects API returns a page of object names and, optionally, their properties (including sizes, access time, checksums, and more), in addition to a token that serves as a cursor, or a marker for the *next* page retrieval.
 
-> Go [ListObjects](https://github.com/NVIDIA/aistore/blob/master/api/bucket.go) API
+> Go [ListObjects](https://github.com/NVIDIA/aistore/blob/main/api/bucket.go) API
 
 When a cluster is rebalancing, the returned list of objects can be incomplete due to objects are being migrated.
 The returned [result](#list-result) has non-zero value(the least significant bit is set to `1`) to indicate that the list was generated when the cluster was unstable.

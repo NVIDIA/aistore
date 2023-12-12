@@ -72,9 +72,9 @@ VERSION:
 
 DESCRIPTION:
    If <TAB-TAB> completion doesn't work:
-   * download https://github.com/NVIDIA/aistore/tree/master/cmd/cli/autocomplete
+   * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
    * and run 'install.sh'.
-   To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/install_from_binaries.sh
+   To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/install_from_binaries.sh
 
 COMMANDS:
    bucket          create/destroy buckets, list bucket's contents, show existing buckets and their properties

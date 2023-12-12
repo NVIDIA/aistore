@@ -39,15 +39,15 @@ from torchdata.datapipes.iter import AISFileLister, AISFileLoader, Mapper
 ### Running the AIStore Cluster
 
 [Getting started with
-AIS](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md)
+AIS](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md)
 will take only a few minutes (prerequisites boil down to having a Linux
 with a disk) and can be done either by running a prebuilt [all-in-one
-docker image](https://github.com/NVIDIA/aistore/tree/master/deploy) or
+docker image](https://github.com/NVIDIA/aistore/tree/main/deploy) or
 directly from the open-source.
 
 To keep this example simple, we will be running a [minimal standalone
 docker
-deployment](https://github.com/NVIDIA/aistore/blob/master/deploy/prod/docker/single/README.md)
+deployment](https://github.com/NVIDIA/aistore/blob/main/deploy/prod/docker/single/README.md)
 of AIStore.
 
 ``` {.python}
@@ -69,9 +69,9 @@ of AIStore.
 
 To create and put objects (dataset) in the bucket, I am going to be
 using [AIS
-CLI](https://github.com/NVIDIA/aistore/blob/master/docs/cli.md). But we
+CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md). But we
 can also use the [Python
-SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore) for the
+SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore) for the
 same.
 
 ``` {.python}
@@ -84,7 +84,7 @@ same.
 ! ais put -r -y <path_to_dataset> ais://caltech256/
 ```
 
-> OUTPUT:<br>"ais://caltech256" created (see https://github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties)<br>
+> OUTPUT:<br>"ais://caltech256" created (see https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties)<br>
 > Files to upload:<br>
     EXTENSION	 COUNT	 SIZE<br>
                     1	 3.06KiB<br>
@@ -157,7 +157,7 @@ that you have the corresponding credentials (to access cloud buckets).
 
 For the following example, AIStore must be built with `--gcp` build tag.
 
-> `--gcp`, `--aws`, and a number of other [build tags](https://github.com/NVIDIA/aistore/blob/master/Makefile) is the mechanism we use to include optional libraries in the [build](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md#build-make-and-development-tools).
+> `--gcp`, `--aws`, and a number of other [build tags](https://github.com/NVIDIA/aistore/blob/main/Makefile) is the mechanism we use to include optional libraries in the [build](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md#build-make-and-development-tools).
 
 ``` {.python}
 # list of prefixes which contain data
@@ -189,13 +189,13 @@ for url, file in dp_files.load_from_tar():
 
 -   [AIStore](https://github.com/NVIDIA/aistore)
 -   [AIStore Blog](https://aiatscale.org/blog)
--   [AIS CLI](https://github.com/NVIDIA/aistore/blob/master/docs/cli.md)
+-   [AIS CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli.md)
 -   [AIStore Cloud Backend
     Providers](https://aiatscale.org/docs/providers)
 -   [AIStore Documentation](https://aiatscale.org/docs)
 -   [AIStore Python
-    SDK](https://github.com/NVIDIA/aistore/tree/master/python/aistore)
+    SDK](https://github.com/NVIDIA/aistore/tree/main/python/aistore)
 -   [Caltech 256 Dataset](https://authors.library.caltech.edu/7694/)
 -   [Getting started with
-    AIStore](https://github.com/NVIDIA/aistore/blob/master/docs/getting_started.md)
+    AIStore](https://github.com/NVIDIA/aistore/blob/main/docs/getting_started.md)
 -   [Microsoft COCO Dataset](https://cocodataset.org/#home)

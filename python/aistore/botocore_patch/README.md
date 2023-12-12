@@ -38,4 +38,4 @@ Now AIS will accept S3 commands and behave as an S3 client.
 * [AIStore GitHub](https://github.com/NVIDIA/aistore)
 * [Documentation](https://aiatscale.org/docs)
 * [AIStore pip package](https://pypi.org/project/aistore/)
-* [Videos and demos](https://github.com/NVIDIA/aistore/blob/master/docs/videos.md)
+* [Videos and demos](https://github.com/NVIDIA/aistore/blob/main/docs/videos.md)

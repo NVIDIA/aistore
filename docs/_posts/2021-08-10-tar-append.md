@@ -126,5 +126,5 @@ fh.Close()
 
 For the latest code, please see:
 
-- The function `OpenTarForAppend` in ["cos" package](https://github.com/NVIDIA/aistore/blob/master/cmn/cos/archive.go).
-- Example of how to use `OpenTarForAppend` in the implementation of the function `appendToArch` in the [core package](https://github.com/NVIDIA/aistore/blob/master/ais/tgtobj.go).
+- The function `OpenTarForAppend` in ["cos" package](https://github.com/NVIDIA/aistore/blob/main/cmn/cos/archive.go).
+- Example of how to use `OpenTarForAppend` in the implementation of the function `appendToArch` in the [core package](https://github.com/NVIDIA/aistore/blob/main/ais/tgtobj.go).

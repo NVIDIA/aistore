@@ -12,7 +12,7 @@ redirect_from:
 In this document:
 * commands to read, write, and list *archives* - objects formatted as `TAR`, `TGZ` (or `TAR.GZ`) , `ZIP`, `TAR.LZ4`.
 
-For the most recently updated list of supported archival formats, please refer to [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/archive/mime.go).
+For the most recently updated list of supported archival formats, please refer to [this source](https://github.com/NVIDIA/aistore/blob/main/cmn/archive/mime.go).
 
 The corresponding subset of CLI commands starts with `ais archive`, from where you can `<TAB-TAB>` to the actual (reading, writing, listing) operation.
 
@@ -89,7 +89,7 @@ Also, note that `ais put` command with its `--archpath` option provides an alter
 
 For the most recently updated list of supported archival formats, please see:
 
-* [this source](https://github.com/NVIDIA/aistore/blob/master/cmn/archive/mime.go).
+* [this source](https://github.com/NVIDIA/aistore/blob/main/cmn/archive/mime.go).
 
 ## Append files and directories to an existing archive
 

@@ -11,5 +11,5 @@ As such, the `env` package is, effectively, part of the API: the names defined h
 
 ## See also
 
-* List of _all_ [environment variables](https://github.com/NVIDIA/aistore/blob/master/docs/environment-vars.md)
-* List of [system filenames ("filename constants")](https://github.com/NVIDIA/aistore/blob/master/cmn/fname/fname.go)
+* List of _all_ [environment variables](https://github.com/NVIDIA/aistore/blob/main/docs/environment-vars.md)
+* List of [system filenames ("filename constants")](https://github.com/NVIDIA/aistore/blob/main/cmn/fname/fname.go)
