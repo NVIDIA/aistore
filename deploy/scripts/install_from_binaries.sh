@@ -51,8 +51,8 @@ cleanup() {
 
 install_completions() {
   echo "Downloading CLI autocompletions (bash & zsh)..."
-  curl -Lo bash https://raw.githubusercontent.com/NVIDIA/aistore/master/cmd/cli/autocomplete/bash
-  curl -Lo zsh https://raw.githubusercontent.com/NVIDIA/aistore/master/cmd/cli/autocomplete/zsh
+  curl -Lo bash https://raw.githubusercontent.com/NVIDIA/aistore/main/cmd/cli/autocomplete/bash
+  curl -Lo zsh https://raw.githubusercontent.com/NVIDIA/aistore/main/cmd/cli/autocomplete/zsh
 
   echo "NOTE:"
 

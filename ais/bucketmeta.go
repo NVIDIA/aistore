@@ -496,7 +496,7 @@ func remoteBckProps(args bckPropsArgs) (props *cmn.Bprops, err error) {
 // Used to initialize "local" bucket, in particular when there's a remote one
 // (compare with `remoteBckProps` above)
 // See also:
-//   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//   - github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties
 //   - cmn.BpropsToSet
 //   - cmn.Bck.DefaultProps
 func defaultBckProps(args bckPropsArgs) (props *cmn.Bprops) {

@@ -202,7 +202,7 @@ metadata:
   name: transformer-compress
   annotations:
     # Values `communication_type` can take are ["hpull://", "hrev://", "hpush://", "io://"].
-    # Visit https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#communication-mechanisms 
+    # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     # for more details.
     communication_type: "{communication_type}://"
     wait_timeout: 5m
@@ -324,7 +324,7 @@ metadata:
   name: transformer-torchvision
   annotations:
     # Values `communication_type` can take are ["hpull://", "hrev://", "hpush://", "io://"].
-    # Visit https://github.com/NVIDIA/aistore/blob/master/docs/etl.md#communication-mechanisms 
+    # Visit https://github.com/NVIDIA/aistore/blob/main/docs/etl.md#communication-mechanisms
     communication_type: "{communication_type}://"
     wait_timeout: 10m
 spec:

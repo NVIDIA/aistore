@@ -59,7 +59,7 @@ const (
 // 1. User initiates a custom ETL workload by executing one of the documented APIs
 //    and providing either the corresponding docker image or a *transforming function* -
 //    a piece of code that we further run using one of the pre-built `runtimes`
-//    (see https://github.com/NVIDIA/aistore/blob/master/docs/etl.md).
+//    (see https://github.com/NVIDIA/aistore/blob/main/docs/etl.md).
 // 2. The API call results in deploying multiple ETL containers (K8s pods)
 //    simultaneously: one container per storage target.
 // 3. Each target creates a local `Communicator` instance that is based on the specified

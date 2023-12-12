@@ -434,7 +434,7 @@ func (p *proxy) objectHandler(w http.ResponseWriter, r *http.Request) {
 //
 //	Amazon S3 is missing in the list that includes GCP and Azure. The reason
 //	for this is that AIS provides S3 compatibility layer via its "/s3" endpoint.
-//	S3 compatibility (see https://github.com/NVIDIA/aistore/blob/master/docs/s3compat.md)
+//	S3 compatibility (see https://github.com/NVIDIA/aistore/blob/main/docs/s3compat.md)
 //	shall not be confused with a simple alternative URL Path mapping via easyURLHandler,
 //	whereby a path (e.g.) "gs/mybucket/myobject" gets replaced with
 //	"v1/objects/mybucket/myobject?provider=gcp" with _no_ other changes to the request

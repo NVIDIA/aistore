@@ -27,7 +27,7 @@ def _assert_aistore() -> None:
         raise ModuleNotFoundError(
             "Package `aistore` is required to be installed to use this datapipe."
             "Please run `pip install aistore` or `conda install aistore` to install the package"
-            "For more info visit: https://github.com/NVIDIA/aistore/blob/master/python/aistore/"
+            "For more info visit: https://github.com/NVIDIA/aistore/blob/main/python/aistore/"
         )
 
 
@@ -104,7 +104,7 @@ class AISFileLoaderIterDataPipe(IterDataPipe[Tuple[str, StreamWrapper]]):
     -   Input must be a list and direct URLs are not supported.
     -   This internally uses AIStore Python SDK.
     -   An `etl_name` can be provided to run an existing ETL on the AIS cluster.
-        See https://github.com/NVIDIA/aistore/blob/master/docs/etl.md for more info on AIStore ETL.
+        See https://github.com/NVIDIA/aistore/blob/main/docs/etl.md for more info on AIStore ETL.
 
     Args:
         source_datapipe(IterDataPipe[str]): a DataPipe that contains URLs/URL prefixes to objects

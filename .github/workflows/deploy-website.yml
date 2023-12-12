@@ -2,7 +2,7 @@ name: Deploy website on Netlify
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 jobs:
   deploy_website:

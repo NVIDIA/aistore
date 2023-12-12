@@ -70,7 +70,7 @@ import (
 // utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 // buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
 
-const readme = cmn.GitHubHome + "/blob/master/memsys/README.md"
+const readme = cmn.GitHubHome + "/blob/main/memsys/README.md"
 
 // =================================== tunables ==========================================
 // The minimum memory (that must remain available) gets computed as follows:

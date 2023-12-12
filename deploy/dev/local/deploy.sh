@@ -8,12 +8,12 @@
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
 # NOTE: system environment variables are listed in the `env` package.
-# See https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+# See https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 #
 # NOTE: by default, configuration files are stored under $HOME/.config/ais/<app-name>
 # E.g., $HOME/.config/ais/authn - AuthN config, $HOME/.config/ais/cli - CLI config
 # and so on. This rule holds for all AIS "applications" except `aisnode` itself.
-# See https://github.com/NVIDIA/aistore/tree/master/cmn/fname for the most updated locations.
+# See https://github.com/NVIDIA/aistore/tree/main/cmn/fname for the most updated locations.
 #
 ############################################
 

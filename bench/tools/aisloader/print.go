@@ -62,7 +62,7 @@ var examples = `# 1. Cleanup (i.e., destroy) an existing bucket:
      $ aisloader -bucket=s3://xyz -cleanup=false -minsize=16B -maxsize=16B -numworkers=8 -pctput=100 -totalputsize=128k -s3endpoint=https://s3.amazonaws.com -quiet
 `
 
-const readme = cmn.GitHubHome + "/blob/master/docs/howto_benchmark.md"
+const readme = cmn.GitHubHome + "/blob/main/docs/howto_benchmark.md"
 
 func printUsage(f *flag.FlagSet) {
 	fmt.Printf("aisloader v%s (build %s)\n", _version, _buildtime)

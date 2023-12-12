@@ -50,7 +50,7 @@ Usage examples:
 - ais config cluster checksum.type=xxhash
 - ais config cluster checksum.type=md5 checksum.validate_warm_get=true
 - ais config cluster checksum --json
-For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.md
+For more usage examples, see ` + cmn.GitHubHome + `/blob/main/docs/cli/config.md
 `
 
 const examplesNodeSetCfg = `
@@ -58,7 +58,7 @@ Usage examples:
 - ais config node [NODE_ID] inherited log.level=4
 - ais config node [NODE_ID] inherited log
 - ais config node [NODE_ID] inherited disk.disk_util_high_wm=93
-For more usage examples, see ` + cmn.GitHubHome + `/blob/master/docs/cli/config.md
+For more usage examples, see ` + cmn.GitHubHome + `/blob/main/docs/cli/config.md
 `
 
 const localNodeCfgErr = `All nodes in a cluster inherit global (cluster) configuration,

@@ -15,7 +15,7 @@ $ make cli-autocompletions	# 2. install CLI autocompletions (Bash and/or Zsh)
 
 Alternatively, install directly from GitHub:
 
-* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/master/deploy/scripts/install_from_binaries.sh)
+* [Install CLI from release binaries](https://github.com/NVIDIA/aistore/blob/main/deploy/scripts/install_from_binaries.sh)
 
 For example, the following command extracts CLI binary to the specified destination and, secondly, installs Bash autocompletions:
 
@@ -27,7 +27,7 @@ For more usage options, run: `./deploy/scripts/install_from_binaries.sh --help`
 
 You can also install Bash and/or Zsh autocompletions separately at any (later) time:
 
-* [Install CLI autocompletions](https://github.com/NVIDIA/aistore/blob/master/cmd/cli/install_autocompletions.sh)
+* [Install CLI autocompletions](https://github.com/NVIDIA/aistore/blob/main/cmd/cli/install_autocompletions.sh)
 
 Once installed, you should be able to start by running ais `<TAB-TAB>`, selecting one of the available (completion) options, and repeating until the command is ready to be entered.
 

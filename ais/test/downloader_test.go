@@ -379,7 +379,7 @@ func TestDownloadMultiRange(t *testing.T) {
 func TestDownloadMultiMap(t *testing.T) {
 	var (
 		mapping = map[string]string{
-			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+			"ais": "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md",
 			"k8s": "https://raw.githubusercontent.com/kubernetes/kubernetes/master/README.md",
 		}
 		expectedObjects = []string{"ais", "k8s"}
@@ -408,7 +408,7 @@ func TestDownloadMultiMap(t *testing.T) {
 func TestDownloadMultiList(t *testing.T) {
 	var (
 		l = []string{
-			"https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+			"https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md",
 			"https://raw.githubusercontent.com/kubernetes/kubernetes/master/LICENSE?query=values",
 		}
 		expectedObjs = []string{"LICENSE", "README.md"}
@@ -639,9 +639,9 @@ func TestDownloadStatus(t *testing.T) {
 	// NOTE Dec 1/23: gs://nvdata-openimages started to return 403
 
 	files := map[string]string{
-		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+		shortFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md",
 		// longFileName:  "https://storage.googleapis.com/nvdata-openimages/openimages-train-000001.tar",
-		longFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/master/docs/images/ais-s3-tf.gif",
+		longFileName: "https://raw.githubusercontent.com/NVIDIA/aistore/main/docs/images/ais-s3-tf.gif",
 	}
 
 	clearDownloadList(t)
@@ -738,7 +738,7 @@ func TestDownloadSingleValidExternalAndInternalChecksum(t *testing.T) {
 		objNameSecond = "object-second"
 
 		linkFirst  = "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256"
-		linkSecond = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
+		linkSecond = "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md"
 
 		expectedObjects = []string{objNameFirst, objNameSecond}
 	)
@@ -778,7 +778,7 @@ func TestDownloadMultiValidExternalAndInternalChecksum(t *testing.T) {
 
 		m = map[string]string{
 			"linkFirst":  "https://storage.googleapis.com/minikube/iso/minikube-v0.23.2.iso.sha256",
-			"linkSecond": "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md",
+			"linkSecond": "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md",
 		}
 
 		expectedObjects = []string{objNameFirst, objNameSecond}
@@ -874,7 +874,7 @@ func TestDownloadMountpath(t *testing.T) {
 	// Prepare objects to be downloaded. Multiple objects to make
 	// sure that at least one of them gets into target with disabled mountpath.
 	for i := 0; i < objsCnt; i++ {
-		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/master/README.md"
+		m[strconv.FormatInt(int64(i), 10)] = "https://raw.githubusercontent.com/NVIDIA/aistore/main/README.md"
 	}
 
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
@@ -990,7 +990,7 @@ func TestDownloadOverrideObjectWeb(t *testing.T) {
 		p = bck.DefaultProps(initialClusterConfig)
 
 		objName = trand.String(10)
-		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/master/LICENSE"
+		link    = "https://raw.githubusercontent.com/NVIDIA/aistore/main/LICENSE"
 
 		expectedSize int64 = 1075
 		newSize      int64 = 10

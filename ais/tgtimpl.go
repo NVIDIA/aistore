@@ -243,7 +243,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 	if params.DeleteSrc {
 		// To use `params.SrcFQN` as `workFQN`, make sure both are
 		// located on the same filesystem. About "filesystem sharing" see also:
-		// * https://github.com/NVIDIA/aistore/blob/master/docs/overview.md#terminology
+		// * https://github.com/NVIDIA/aistore/blob/main/docs/overview.md#terminology
 		mi, _, err := fs.FQN2Mpath(params.SrcFQN)
 		extraCopy = err != nil || !mi.FS.Equal(lom.Mountpath().FS)
 	}

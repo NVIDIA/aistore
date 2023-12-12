@@ -62,7 +62,7 @@ OPTIONS:
 "
 
 # NOTE: `AIS_USE_HTTPS` and other system environment variables are listed in the `env` package:
-# https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+# https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
 export MODE="debug"
 

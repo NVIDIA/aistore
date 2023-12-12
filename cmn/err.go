@@ -34,7 +34,7 @@ const (
 	fmtErrBckName   = "bucket name %q is invalid: " + cos.OnlyPlus
 	fmtErrNamespace = "bucket namespace (uuid: %q, name: %q) " + cos.OnlyNice
 
-	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/master/docs/troubleshooting.md]"
+	FmtErrIntegrity      = "[%s%d, for troubleshooting see %s/blob/main/docs/troubleshooting.md]"
 	FmtErrUnmarshal      = "%s: failed to unmarshal %s (%s), err: %w"
 	FmtErrMorphUnmarshal = "%s: failed to unmarshal %s (%T), err: %w"
 	FmtErrUnknown        = "%s: unknown %s %q"

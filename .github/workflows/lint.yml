@@ -2,11 +2,11 @@ name: lint (on linux)
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
-      - master
+      - main
   workflow_dispatch:
 
 jobs:

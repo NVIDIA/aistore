@@ -23,9 +23,9 @@ const (
 	ua       = "ais/cli"
 	metadata = "md"
 	cliDescr = `If <TAB-TAB> completion doesn't work:
-   * download ` + cmn.GitHubHome + `/tree/master/cmd/cli/autocomplete
+   * download ` + cmn.GitHubHome + `/tree/main/cmd/cli/autocomplete
    * and run 'install.sh'.
-   To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/master/deploy/scripts/install_from_binaries.sh`
+   To install CLI directly from GitHub: ` + cmn.GitHubHome + `/blob/main/deploy/scripts/install_from_binaries.sh`
 )
 
 const (

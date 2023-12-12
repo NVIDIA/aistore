@@ -19,7 +19,7 @@ from aistore.sdk.utils import validate_file, probing_frequency
 
 class Dsort:
     """
-    Class for managing jobs for the dSort extension: https://github.com/NVIDIA/aistore/blob/master/docs/cli/dsort.md
+    Class for managing jobs for the dSort extension: https://github.com/NVIDIA/aistore/blob/main/docs/cli/dsort.md
     """
 
     def __init__(self, client: "Client", dsort_id: str = ""):

@@ -1,5 +1,5 @@
 # NOTE: system environment variables are listed in the `env` package,
-# see https://github.com/NVIDIA/aistore/blob/master/api/env/README.md
+# see https://github.com/NVIDIA/aistore/blob/main/api/env/README.md
 
 backend_desc=()
 for backend in ${AIS_BACKEND_PROVIDERS}; do

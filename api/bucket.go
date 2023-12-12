@@ -116,7 +116,7 @@ func hdr2msg(bck cmn.Bck, status int, err error) error {
 // optionally, specific non-default properties (via cmn.BpropsToSet).
 //
 // See also:
-//   - github.com/NVIDIA/aistore/blob/master/docs/bucket.md#default-bucket-properties
+//   - github.com/NVIDIA/aistore/blob/main/docs/bucket.md#default-bucket-properties
 //   - cmn.BpropsToSet (cmn/api.go)
 //
 // Bucket properties can be also changed at any time via SetBucketProps (above).
