@@ -67,7 +67,7 @@ func mkhealth(bp BaseParams, readyToRebalance ...bool) (reqParams *ReqParams) {
 	return
 }
 
-// GetClusterMap retrieves AIStore cluster map.
+// get cluster map from a BaseParams-referenced node
 func GetClusterMap(bp BaseParams) (smap *meta.Smap, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -78,10 +78,10 @@ func GetClusterMap(bp BaseParams) (smap *meta.Smap, err error) {
 	}
 	_, err = reqParams.DoReqAny(&smap)
 	FreeRp(reqParams)
-	return
+	return smap, err
 }
 
-// GetNodeClusterMap retrieves AIStore cluster map from a specific node.
+// GetNodeClusterMap retrieves cluster map from the specified node.
 func GetNodeClusterMap(bp BaseParams, sid string) (smap *meta.Smap, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -94,6 +94,22 @@ func GetNodeClusterMap(bp BaseParams, sid string) (smap *meta.Smap, err error) {
 	_, err = reqParams.DoReqAny(&smap)
 	FreeRp(reqParams)
 	return
+}
+
+// get bucket metadata (BMD) from a BaseParams-referenced node
+func GetBMD(bp BaseParams) (bmd *meta.BMD, err error) {
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathDae.S
+		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatBMD}}
+	}
+
+	bmd = &meta.BMD{}
+	_, err = reqParams.DoReqAny(bmd)
+	FreeRp(reqParams)
+	return bmd, err
 }
 
 // - get (smap, bmd, config) *cluster-level* metadata from the spec-ed node
@@ -129,7 +145,7 @@ func GetNodeMeta(bp BaseParams, sid, what string) (out any, err error) {
 	return
 }
 
-// GetClusterSysInfo retrieves AIStore system info.
+// GetClusterSysInfo retrieves cluster's system information
 func GetClusterSysInfo(bp BaseParams) (info apc.ClusterSysInfo, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
@@ -321,25 +337,6 @@ func GetClusterConfig(bp BaseParams) (*cmn.ClusterConfig, error) {
 		return nil, err
 	}
 	return cluConfig, nil
-}
-
-// GetBMD returns bucket metadata
-func GetBMD(bp BaseParams) (*meta.BMD, error) {
-	bp.Method = http.MethodGet
-	reqParams := AllocRp()
-	{
-		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathClu.S
-		reqParams.Query = url.Values{apc.QparamWhat: []string{apc.WhatBMD}}
-	}
-
-	bmd := &meta.BMD{}
-	_, err := reqParams.DoReqAny(bmd)
-	FreeRp(reqParams)
-	if err != nil {
-		return nil, err
-	}
-	return bmd, nil
 }
 
 func AttachRemoteAIS(bp BaseParams, alias, u string) error {

@@ -1093,7 +1093,7 @@ func TestMountpathDisableAll(t *testing.T) {
 	tools.WaitForResilvering(t, baseParams, target)
 
 	tlog.Logf("waiting for bucket %s to show up on all targets\n", m.bck)
-	err = checkBMDsFor(m.proxyURL, m.bck)
+	err = checkTargetBMDsFor(m.proxyURL, m.bck)
 	tassert.CheckFatal(t, err)
 
 	// Put and read random files
@@ -1104,8 +1104,8 @@ func TestMountpathDisableAll(t *testing.T) {
 	m.ensureNumMountpaths(target, origMountpaths)
 }
 
-// TODO: instead, need target query w/ access control
-func checkBMDsFor(proxyURL string, bck cmn.Bck) error {
+// get BMD from each target; check the BMD for the specified bucket
+func checkTargetBMDsFor(proxyURL string, bck cmn.Bck) error {
 	bp := tools.BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(bp)
 	if err != nil {
@@ -1113,12 +1113,15 @@ func checkBMDsFor(proxyURL string, bck cmn.Bck) error {
 	}
 	to := time.Now().Add(10 * time.Second)
 	b := meta.CloneBck(&bck)
-	for _, s := range smap.Pmap {
+	for tid := range smap.Tmap {
+		// poll
 		for {
-			bmd, err := api.GetBMD(tools.BaseAPIParams(s.URL(cmn.NetPublic)))
+			// alternatively, something like: api.GetBMD(tools.BaseAPIParams(tsi.URL(...)))
+			val, err := api.GetNodeMeta(bp, tid, apc.WhatBMD)
 			if err != nil {
 				return err
 			}
+			bmd := val.(*meta.BMD)
 			if _, bucketExists := bmd.Get(b); bucketExists {
 				break
 			}
