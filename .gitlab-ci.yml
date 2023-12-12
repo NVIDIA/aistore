@@ -192,7 +192,7 @@ test:short:python-etl:
   except:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
-      - $CI_MERGE_REQUEST_LABELS !~ /.*python.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*etl.*/
   retry:
     max: 2
     when:
@@ -359,6 +359,7 @@ test:short:k8s:
     variables:
       - $CI_MERGE_REQUEST_LABELS =~ /.*skip-ci.*/
       - $CI_MERGE_REQUEST_LABELS =~ /.*python-tests-only.*/
+      - $CI_MERGE_REQUEST_LABELS !~ /.*etl.*/
   script:
     - export NUM_TARGET=3
     - export NUM_PROXY=3
