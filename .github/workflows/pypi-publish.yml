@@ -1,0 +1,58 @@
+name: Publish Python distribution to PyPI
+
+on:
+    workflow_dispatch:
+        inputs:
+          check_version:
+            description: 'I confirm that I have verified version to be published at https://github.com/NVIDIA/aistore/blob/main/python/aistore/version.py'
+            required: true
+            type: boolean
+            default: false
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    if: ${{ inputs.check_version }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.x"
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+    - name: Build a binary wheel and a source tarball
+      run: |
+        pushd $GITHUB_WORKSPACE/python 
+        python3 -m build
+        popd
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package-distributions
+        path: python/dist
+
+  publish-to-pypi:
+    name: >-
+      Publish Python distribution to PyPI
+    needs:
+    - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aistore/
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
