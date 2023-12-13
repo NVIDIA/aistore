@@ -97,15 +97,14 @@ func multiobjTCO(c *cli.Context, bckFrom, bckTo cmn.Bck, listObjs, tmplObjs, etl
 
 	// done
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
-		baseMsg := fmt.Sprintf("%s %s => %s. ", text, bckFrom, bckTo)
-		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
+		actionDone(c, tcbtcoCptn(text, bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
 	// or wait
 	var timeout time.Duration
 
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, text, bckFrom, bckTo)
+	fmt.Fprintf(c.App.Writer, tcbtcoCptn(text, bckFrom, bckTo)+" ...")
 
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)

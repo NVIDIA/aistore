@@ -126,27 +126,41 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *cluster.LOM, params *cluster.CopyObjectParams, dryRun bool) (size int64, err error) {
-	objNameTo := lom.ObjName
+func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.DP, xact cluster.Xact,
+	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun bool) (size int64, err error) {
 	coi := allocCOI()
 	{
-		coi.CopyObjectParams = *params
+		coi.dm = dm
+		coi.dp = dp
+		coi.xact = xact
+		coi.bckTo = bckTo
+		coi.objnameTo = objnameTo
+		coi.buf = buf
+		coi.dryRun = dryRun
+		// defaults
 		coi.t = t
 		coi.owt = cmn.OwtMigrate
 		coi.finalize = false
-		coi.dryRun = dryRun
 	}
-	if params.ObjNameTo != "" {
-		objNameTo = params.ObjNameTo
+	if coi.objnameTo == "" {
+		coi.objnameTo = lom.ObjName
 	}
-	if params.DP != nil { // NOTE: w/ transformation
-		size, err = coi.copyReader(lom, objNameTo)
-	} else {
-		size, err = coi.copyObject(lom, objNameTo)
+
+	// TODO -- FIXME: must be provided by the caller
+	coi.copyRemote = lom.Bck().Equal(coi.bckTo, true /*same ID*/, true /*same backend*/) && lom.ObjName == coi.objnameTo
+
+	switch {
+	case dp != nil: // 1. w/ transformation
+		size, err = coi.copyReader(lom)
+	case lom.Bck().IsRemote() || coi.bckTo.IsRemote(): // 2. when either one or both buckets are remote
+		coi.dp = &cluster.LDP{}
+		size, err = coi.copyReader(lom)
+	default: // 3.
+		size, err = coi.copyObject(lom)
 	}
 	coi.objsAdd(size, err)
 	freeCOI(coi)
-	return
+	return size, err
 }
 
 // compare with goi.getCold
@@ -318,9 +332,9 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 	coi := allocCOI()
 	{
 		coi.t = t
-		coi.BckTo = lom.Bck()
+		coi.bckTo = lom.Bck()
 		coi.owt = cmn.OwtPromote
-		coi.Xact = params.Xact
+		coi.xact = params.Xact
 	}
 	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
 	freeCOI(coi)

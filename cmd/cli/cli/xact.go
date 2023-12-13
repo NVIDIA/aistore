@@ -24,9 +24,8 @@ import (
 )
 
 const (
-	fmtXactFailed      = "Failed to %s (%q => %q)\n"
-	fmtXactSucceeded   = "Done.\n"
-	fmtXactWaitStarted = "%s %s => %s ...\n"
+	fmtXactFailed    = "Failed to %s (%q => %q)\n"
+	fmtXactSucceeded = "Done.\n"
 )
 
 func toMonitorMsg(c *cli.Context, xjid, suffix string) (out string) {

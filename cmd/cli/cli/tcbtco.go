@@ -87,8 +87,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 
 	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
 		/// TODO: unify vs e2e: ("%s[%s] %s => %s", kind, xid, from, to)
-		baseMsg := fmt.Sprintf("Copying %s => %s. ", from, to)
-		actionDone(c, baseMsg+toMonitorMsg(c, xid, ""))
+		actionDone(c, tcbtcoCptn("Copying", bckFrom, bckTo)+". "+toMonitorMsg(c, xid, ""))
 		return nil
 	}
 
@@ -97,7 +96,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	if flagIsSet(c, waitJobXactFinishedFlag) {
 		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
 	}
-	fmt.Fprintf(c.App.Writer, fmtXactWaitStarted, "Copying", from, to)
+	fmt.Fprintf(c.App.Writer, tcbtcoCptn("Copying", bckFrom, bckTo)+" ...")
 	xargs := xact.ArgsMsg{ID: xid, Kind: kind, Timeout: timeout}
 	if err := waitXact(apiBP, &xargs); err != nil {
 		fmt.Fprintf(c.App.ErrWriter, fmtXactFailed, "copy", from, to)
@@ -105,6 +104,14 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	}
 	actionDone(c, fmtXactSucceeded)
 	return nil
+}
+
+func tcbtcoCptn(action string, bckFrom, bckTo cmn.Bck) string {
+	from, to := bckFrom.Cname(""), bckTo.Cname("")
+	if bckFrom.Equal(&bckTo) {
+		return fmt.Sprintf("%s %s", action, from)
+	}
+	return fmt.Sprintf("%s %s => %s", action, from, to)
 }
 
 //
@@ -261,7 +268,8 @@ func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncluding
 
 	// (I) TCB
 	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		if bckFrom.Equal(&bckTo) {
+		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
+		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
 			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
 		}
 		if dryRun {

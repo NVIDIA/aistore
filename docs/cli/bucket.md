@@ -583,11 +583,35 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 
 `ais cp SRC_BUCKET DST_BUCKET`
 
-Copy an existing bucket to a new bucket.
+Copy source bucket (`SRC_BUCKET`) to destination bucket (`DST_BUCKET`).
 
-When the destination bucket is in the Cloud it must exist (and be writeable, of course).
+Source bucket must exist. When the destination bucket is in the Cloud it must also exist (and be writeable).
 
-For AIS (and remote AIS) buckets, on the other hand, the existence is optional. They get created on the fly, their properties copied from the source (`SRC_BUCKET`).
+There's _no_ requirement that either of the buckets is _present_ in aistore.
+
+> Note: not to confuse in-cluster presence and existence.
+
+Moreover, when the destination is AIS (`ais://`) or remote AIS (`ais://@remote-alias`) bucket, the existence is optional: the destination will be created on the fly, with bucket properties copied from the source (`SRC_BUCKET`).
+
+Finally, the option to copy remote bucket onto itself is also supported - syntax-wise. Here's an example that'll shed some light:
+
+```console
+## 1. at first, we don't have any gs:// buckets in the cluster
+
+$ ais ls gs
+No "gs://" buckets in the cluster. Use '--all' option to list matching remote buckets, if any.
+
+## 2. notwithstanding, we go ahead and start copying gs://coco-dataset
+
+$ ais cp gs://coco-dataset gs://coco-dataset --prefix d-tokens --progress --all
+Copied objects:                  282/393 [===========================================>------------------] 72 %
+Copied size:    719.48 MiB / 1000.08 MiB [============================================>-----------------] 72 %
+
+## 3. and done: all 393 objects from the remote bucket are now present ("cached") in the cluster
+
+$ ais ls gs://coco-dataset --cached | grep Listed
+Listed: 393 names
+```
 
 ### Options
 
@@ -601,7 +625,7 @@ USAGE:
 
 OPTIONS:
    --all             copy all objects from a remote bucket including those that are not present (not "cached") in the cluster
-   --cont-on-err     keep running archiving xaction in presence of errors in a any given multi-object transaction
+   --cont-on-err     keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
    --force, -f       force an action
    --dry-run         show total size of new objects without really creating them
    --prepend value   prefix to prepend to every copied object name, e.g.:
@@ -610,19 +634,25 @@ OPTIONS:
    --prefix value    copy objects that start with the specified prefix, e.g.:
                      '--prefix a/b/c' - copy virtual directory a/b/c and/or objects from the virtual directory
                      a/b that have their names (relative to this directory) starting with the letter c
-   --list value      comma-separated list of object names, e.g.:
+   --list value      comma-separated list of object or file names, e.g.:
                      --list 'o1,o2,o3'
                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
-   --template value  template to match object names; may contain prefix with zero or more ranges (with optional steps and gaps), e.g.:
+                     or, when listing files and/or directories:
+                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value  template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                     (with optional steps and gaps), e.g.:
+                     --template "" # (an empty or '*' template matches eveything)
                      --template 'dir/subdir/'
                      --template 'shard-{1000..9999}.tar'
                      --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
-                     --template "prefix-{0010..9999..2}-suffix"
+                     and similarly, when specifying files and directories:
+                     --template '/home/dir/subdir/'
+                     --template "/abc/prefix-{0010..9999..2}-suffix"
    --progress        show progress bar(s) and progress of execution in real time
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --wait            wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
-   --timeout value   maximum time to wait for a job to finish; if omitted wait forever or Ctrl-C;
+   --timeout value   maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --help, -h        show help
 ```

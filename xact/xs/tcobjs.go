@@ -281,22 +281,13 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
 	objNameTo := wi.msg.ToName(lom.ObjName)
 	buf, slab := lrit.t.PageMM().Alloc()
-	params := cluster.AllocCpObjParams()
-	{
-		params.BckTo = wi.r.args.BckTo
-		params.ObjNameTo = objNameTo
-		params.DM = wi.r.p.dm
-		params.Buf = buf
-		params.DP = wi.r.args.DP
-		params.Xact = wi.r
-	}
-	// NOTE:
+
 	// under ETL, the returned sizes of transformed objects are unknown (cos.ContentLengthUnknown)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := lrit.t.CopyObject(lom, params, wi.msg.DryRun)
+	_, err := lrit.t.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.args.BckTo, objNameTo, buf, wi.msg.DryRun)
 	slab.Free(buf)
-	cluster.FreeCpObjParams(params)
+
 	if err != nil {
 		if !cmn.IsObjNotExist(err) || lrit.lrp != lrpList {
 			wi.r.addErr(err, wi.msg.ContinueOnError)

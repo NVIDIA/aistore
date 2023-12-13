@@ -1336,7 +1336,7 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 }
 
 // rename obj
-func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
+func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) (err error) {
 	if lom.Bck().IsRemote() {
 		return fmt.Errorf("%s: cannot rename object %s from a remote bucket", t.si, lom)
 	}
@@ -1350,12 +1350,22 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) error {
 	buf, slab := t.gmm.Alloc()
 	coi := allocCOI()
 	{
-		coi.CopyObjectParams = cluster.CopyObjectParams{BckTo: lom.Bck(), Buf: buf}
+		coi.bckTo = lom.Bck()
+		coi.objnameTo = msg.Name /* new object name */
+		coi.buf = buf
 		coi.t = t
 		coi.owt = cmn.OwtMigrate
 		coi.finalize = true
 	}
-	_, err := coi.copyObject(lom, msg.Name /* new object name */)
+
+	if lom.Bck().IsRemote() || coi.bckTo.IsRemote() {
+		// when either one or both buckets are remote
+		coi.dp = &cluster.LDP{}
+		_, err = coi.copyReader(lom)
+	} else {
+		_, err = coi.copyObject(lom)
+	}
+
 	slab.Free(buf)
 	freeCOI(coi)
 	if err != nil {

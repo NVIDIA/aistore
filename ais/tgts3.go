@@ -139,11 +139,18 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	coi := allocCOI()
 	{
 		coi.t = t
-		coi.BckTo = bckDst
+		coi.bckTo = bckDst
+		coi.objnameTo = s3.ObjName(items)
 		coi.owt = cmn.OwtMigrate
 	}
-	objName := s3.ObjName(items)
-	_, err = coi.copyObject(lom, objName)
+	if lom.Bck().IsRemote() || coi.bckTo.IsRemote() {
+		// when either one or both buckets are remote
+		coi.dp = &cluster.LDP{}
+		_, err = coi.copyReader(lom)
+	} else {
+		_, err = coi.copyObject(lom)
+	}
+
 	freeCOI(coi)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)

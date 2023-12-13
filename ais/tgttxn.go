@@ -591,7 +591,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 		return cmn.NewErrBusy("bucket", bckFrom, "")
 	}
-	if !msg.DryRun {
+	if !msg.DryRun && !bckFrom.Equal(bckTo, true, true) {
 		nlpTo = newBckNLP(bckTo)
 		if !nlpTo.TryLock(c.timeout.netw / 4) {
 			nlpFrom.Unlock()

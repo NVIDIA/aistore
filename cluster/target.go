@@ -71,10 +71,12 @@ type (
 		FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
 		EvictObject(lom *LOM) (errCode int, err error)
 		DeleteObject(lom *LOM, evict bool) (errCode int, err error)
-		CopyObject(lom *LOM, params *CopyObjectParams, dryRun bool) (int64, error)
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
 		Promote(params *PromoteParams) (errCode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
+
+		CopyObject(lom *LOM, dm DataMover, dp DP, xact Xact, bckTo *meta.Bck, objnameTo string, buf []byte,
+			dryRun bool) (int64, error)
 	}
 
 	TargetExt interface {
@@ -108,14 +110,6 @@ type (
 		OWT     cmn.OWT
 		SkipEC  bool // don't erasure-code when finalizing
 		ColdGET bool // this PUT is in fact a cold-GET
-	}
-	CopyObjectParams struct {
-		DM        DataMover
-		DP        DP // Data Provider (optional; see Transform/Copy Bucket (TCB))
-		Xact      Xact
-		BckTo     *meta.Bck
-		ObjNameTo string
-		Buf       []byte
 	}
 	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
 	PromoteArgs struct {

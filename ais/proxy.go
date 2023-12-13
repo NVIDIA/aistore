@@ -1181,6 +1181,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
+			bckFrom     = bck
 			bckTo       *meta.Bck
 			tcbmsg      = &apc.TCBMsg{}
 			errCode     int
@@ -1207,9 +1208,12 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			p.writeErr(w, r, err)
 			return
 		}
-		if bck.Equal(bckTo, false, true) {
-			p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bck)
-			return
+		if bckFrom.Equal(bckTo, true, true) {
+			if !bckFrom.IsRemote() {
+				p.writeErrf(w, r, "cannot %s bucket %q onto itself", msg.Action, bckFrom)
+				return
+			}
+			nlog.Infoln("proceeding to copy remote", bckFrom.String())
 		}
 
 		bckTo, errCode, err = p.initBckTo(w, r, query, bckTo)
@@ -1223,7 +1227,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 				return
 			}
-			nlog.Warningf("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bck)
+			nlog.Infof("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bckFrom)
 		}
 
 		// start x-tcb or x-tco
@@ -1231,10 +1235,10 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			fltPresence, _ = strconv.Atoi(v)
 		}
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
-		if !apc.IsFltPresent(fltPresence) && bck.IsCloud() {
+		if !apc.IsFltPresent(fltPresence) && bckFrom.IsCloud() {
 			lstcx := &lstcx{
 				p:       p,
-				bckFrom: bck,
+				bckFrom: bckFrom,
 				bckTo:   bckTo,
 				amsg:    msg,
 				tcbmsg:  tcbmsg,
@@ -1242,8 +1246,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 			xid, err = lstcx.do()
 		} else {
-			nlog.Infof("%s: %s => %s", msg.Action, bck, bckTo)
-			xid, err = p.tcb(bck, bckTo, msg, tcbmsg.DryRun)
+			nlog.Infof("%s: %s => %s", msg.Action, bckFrom, bckTo)
+			xid, err = p.tcb(bckFrom, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {
 			p.writeErr(w, r, err)

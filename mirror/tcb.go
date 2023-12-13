@@ -226,16 +226,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	params := cluster.AllocCpObjParams()
-	{
-		params.BckTo = args.BckTo
-		params.ObjNameTo = toName
-		params.Buf = buf
-		params.DM = r.dm
-		params.DP = args.DP
-		params.Xact = r
-	}
-	_, err = r.p.T.CopyObject(lom, params, args.Msg.DryRun)
+	_, err = r.p.T.CopyObject(lom, r.dm, args.DP, r, args.BckTo, toName, buf, args.Msg.DryRun)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			// TODO: call r.Abort() instead
@@ -246,7 +237,6 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 			nlog.Infof("Error: %v", err)
 		}
 	}
-	cluster.FreeCpObjParams(params)
 	return
 }
 
