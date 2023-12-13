@@ -1354,6 +1354,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) (err error) {
 		coi.objnameTo = msg.Name /* new object name */
 		coi.buf = buf
 		coi.t = t
+		coi.config = cmn.GCO.Get()
 		coi.owt = cmn.OwtMigrate
 		coi.finalize = true
 	}

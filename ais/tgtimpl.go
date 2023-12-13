@@ -126,17 +126,19 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.DP, xact cluster.Xact,
-	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun bool) (size int64, err error) {
+func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.DP, xact cluster.Xact, config *cmn.Config,
+	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun, syncRemote bool) (size int64, err error) {
 	coi := allocCOI()
 	{
 		coi.dm = dm
 		coi.dp = dp
 		coi.xact = xact
+		coi.config = config
 		coi.bckTo = bckTo
 		coi.objnameTo = objnameTo
 		coi.buf = buf
 		coi.dryRun = dryRun
+		coi.syncRemote = syncRemote
 		// defaults
 		coi.t = t
 		coi.owt = cmn.OwtMigrate
@@ -145,9 +147,6 @@ func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.D
 	if coi.objnameTo == "" {
 		coi.objnameTo = lom.ObjName
 	}
-
-	// TODO -- FIXME: must be provided by the caller
-	coi.copyRemote = lom.Bck().Equal(coi.bckTo, true /*same ID*/, true /*same backend*/) && lom.ObjName == coi.objnameTo
 
 	switch {
 	case dp != nil: // 1. w/ transformation
@@ -308,6 +307,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 	{
 		poi.atime = time.Now().UnixNano()
 		poi.t = t
+		poi.config = params.Config
 		poi.lom = lom
 		poi.workFQN = workFQN
 		poi.owt = cmn.OwtPromote
@@ -335,6 +335,7 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 		coi.bckTo = lom.Bck()
 		coi.owt = cmn.OwtPromote
 		coi.xact = params.Xact
+		coi.config = params.Config
 	}
 	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
 	freeCOI(coi)

@@ -41,8 +41,9 @@ type (
 		dm     *bundle.DataMover
 		rxlast atomic.Int64 // finishing
 		xact.BckJog
-		wg   sync.WaitGroup // starting up
-		refc atomic.Int32   // finishing
+		wg         sync.WaitGroup // starting up
+		refc       atomic.Int32   // finishing
+		syncRemote bool           // when BckFrom = BckTo
 	}
 )
 
@@ -72,6 +73,10 @@ func (p *tcbFactory) Start() error {
 	)
 	debug.AssertNoErr(err)
 	p.xctn = newTCB(p, slab, config)
+
+	// sync same-name remote
+	p.xctn.syncRemote = p.kind != apc.ActETLBck &&
+		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	smap := p.T.Sowner().Get()
@@ -120,7 +125,7 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		err = cmn.NewErrXactUsePrev(prevEntry.Get().String())
 		return
 	}
-	bckEq := prev.args.BckFrom.Equal(p.args.BckFrom, true /*same BID*/, true /* same backend */)
+	bckEq := prev.args.BckFrom.Equal(p.args.BckFrom, true /*same BID*/, true /*same backend*/)
 	debug.Assert(bckEq)
 	debug.Assert(prev.phase == apc.ActBegin && p.phase == apc.ActCommit)
 	prev.args.Phase = apc.ActCommit // transition
@@ -226,7 +231,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	_, err = r.p.T.CopyObject(lom, r.dm, args.DP, r, args.BckTo, toName, buf, args.Msg.DryRun)
+	_, err = r.p.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			// TODO: call r.Abort() instead

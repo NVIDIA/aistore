@@ -103,13 +103,14 @@ type (
 		dp         cluster.DP
 		xact       cluster.Xact
 		t          *target
+		config     *cmn.Config
 		bckTo      *meta.Bck
 		objnameTo  string
 		buf        []byte
 		owt        cmn.OWT
 		finalize   bool // copies and EC (as in poi.finalize())
 		dryRun     bool
-		copyRemote bool // as is: gs://abc => gs://abc
+		syncRemote bool // as is: gs://abc => gs://abc
 	}
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
@@ -1265,8 +1266,9 @@ func (a *apndOI) flush() (int, error) {
 	}
 
 	params := cluster.PromoteParams{
-		Bck:   a.lom.Bck(),
-		Cksum: partialCksum,
+		Bck:    a.lom.Bck(),
+		Cksum:  partialCksum,
+		Config: a.config,
 		PromoteArgs: cluster.PromoteArgs{
 			SrcFQN:       a.hdl.workFQN,
 			ObjName:      a.lom.ObjName,
@@ -1450,7 +1452,7 @@ func (coi *copyOI) putReader(lom, dst *cluster.LOM) (size int64, err error) {
 	{
 		poi.t = coi.t
 		poi.lom = dst
-		poi.config = cmn.GCO.Get() // TODO -- FIXME: called must provide
+		poi.config = coi.config
 		poi.r = reader
 		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
 		poi.atime = lom.Atime().UnixNano()
@@ -1458,8 +1460,8 @@ func (coi *copyOI) putReader(lom, dst *cluster.LOM) (size int64, err error) {
 		// TODO -- FIXME: checksum
 	}
 	switch {
-	case coi.copyRemote:
-		poi.owt = cmn.OwtCopyRemote
+	case coi.syncRemote:
+		poi.owt = cmn.OwtSyncRemote
 	case coi.dm != nil:
 		poi.owt = coi.dm.OWT()
 	default:
@@ -1613,8 +1615,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	config := cmn.GCO.Get()
-	req, _, cancel, err := reqArgs.ReqWithTimeout(config.Timeout.SendFile.D())
+	req, _, cancel, err := reqArgs.ReqWithTimeout(coi.config.Timeout.SendFile.D())
 	if err != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)

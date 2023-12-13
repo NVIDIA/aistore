@@ -83,15 +83,15 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 			t.putMptPart(w, r, items, q, bck)
 		}
 	case r.Header.Get(cos.S3HdrObjSrc) == "":
-		t.putObjS3(w, r, items, bck)
+		t.putObjS3(w, r, bck, config, items)
 	default:
-		t.copyObjS3(w, r, items)
+		t.copyObjS3(w, r, config, items)
 	}
 }
 
 // Copy object (maybe from another bucket)
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html
-func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
+func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
@@ -139,6 +139,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	coi := allocCOI()
 	{
 		coi.t = t
+		coi.config = config
 		coi.bckTo = bckDst
 		coi.objnameTo = s3.ObjName(items)
 		coi.owt = cmn.OwtMigrate
@@ -172,7 +173,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	sgl.Free()
 }
 
-func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
+func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck, config *cmn.Config, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
@@ -206,7 +207,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, items []string
 		poi.atime = started.UnixNano()
 		poi.t = t
 		poi.lom = lom
-		poi.config = cmn.GCO.Get()
+		poi.config = config
 		poi.skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(dpq.skipVC) // apc.QparamSkipVC
 		poi.restful = true
 	}

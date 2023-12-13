@@ -1020,6 +1020,7 @@ func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN 
 // synchronously wo/ xaction
 func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshare bool) error {
 	smap := t.owner.smap.Get()
+	config := cmn.GCO.Get()
 	for _, fqn := range txnPrm.fqns {
 		objName, err := xs.PrmObjName(fqn, txnPrm.dirFQN, txnPrm.msg.ObjName)
 		if err != nil {
@@ -1036,7 +1037,8 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 			}
 		}
 		params := cluster.PromoteParams{
-			Bck: c.bck,
+			Bck:    c.bck,
+			Config: config,
 			PromoteArgs: cluster.PromoteArgs{
 				SrcFQN:       fqn,
 				ObjName:      objName,

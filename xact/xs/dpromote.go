@@ -118,8 +118,9 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		}
 	}
 	params := cluster.PromoteParams{
-		Bck:  bck,
-		Xact: r,
+		Bck:    bck,
+		Xact:   r,
+		Config: r.Config,
 		PromoteArgs: cluster.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,

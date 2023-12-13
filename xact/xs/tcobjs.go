@@ -39,6 +39,7 @@ type (
 		args   *xreg.TCObjsArgs
 		workCh chan *cmn.TCObjsMsg
 		streamingX
+		syncRemote bool
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -86,6 +87,9 @@ func (p *tcoFactory) Start() (err error) {
 		// unlike apc.ActCopyObjects (where we know the size)
 		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
+	} else {
+		// sync same-name remote
+		r.syncRemote = p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 	}
 	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, sizePDU); err != nil {
 		return
@@ -285,7 +289,8 @@ func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
 	// under ETL, the returned sizes of transformed objects are unknown (cos.ContentLengthUnknown)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := lrit.t.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.args.BckTo, objNameTo, buf, wi.msg.DryRun)
+	_, err := lrit.t.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
+		wi.msg.DryRun, wi.r.syncRemote)
 	slab.Free(buf)
 
 	if err != nil {

@@ -27,7 +27,7 @@ const (
 	OwtGetLock                    // lock(exclusive); read from remote; ...
 	OwtGet                        // GET (with upgrading read-lock in the local-write path)
 	OwtGetPrefetchLock            // (used for maximum parallelism when prefetching)
-	OwtCopyRemote                 // as in: gs://abc => gs://abc
+	OwtSyncRemote                 // as in: gs://abc => gs://abc
 )
 
 func (owt *OWT) FromS(s string) {

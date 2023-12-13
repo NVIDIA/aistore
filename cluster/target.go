@@ -75,8 +75,8 @@ type (
 		Promote(params *PromoteParams) (errCode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 
-		CopyObject(lom *LOM, dm DataMover, dp DP, xact Xact, bckTo *meta.Bck, objnameTo string, buf []byte,
-			dryRun bool) (int64, error)
+		CopyObject(lom *LOM, dm DataMover, dp DP, xact Xact, config *cmn.Config, bckTo *meta.Bck, objnameTo string, buf []byte,
+			dryRun, syncRemote bool) (int64, error)
 	}
 
 	TargetExt interface {
@@ -126,9 +126,10 @@ type (
 		SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
 	}
 	PromoteParams struct {
-		Bck         *meta.Bck  // destination bucket
-		Cksum       *cos.Cksum // checksum to validate
-		Xact        Xact       // responsible xaction
-		PromoteArgs            // all of the above
+		Bck         *meta.Bck   // destination bucket
+		Cksum       *cos.Cksum  // checksum to validate
+		Config      *cmn.Config // during xaction
+		Xact        Xact        // responsible xaction
+		PromoteArgs             // all of the above
 	}
 )
