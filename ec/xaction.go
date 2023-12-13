@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"sync"
-	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
@@ -54,12 +53,6 @@ type (
 	dataOwner struct {
 		mtx    sync.Mutex
 		slices map[string]*slice
-	}
-
-	BckXacts struct {
-		get ratomic.Pointer[XactGet]
-		put ratomic.Pointer[XactPut]
-		req ratomic.Pointer[XactRespond]
 	}
 )
 
@@ -400,29 +393,4 @@ func (r *xactECBase) baseSnap() (snap *cluster.Snap) {
 
 	snap.IdleX = r.IsIdle()
 	return
-}
-
-//////////////
-// BckXacts //
-//////////////
-
-func (xacts *BckXacts) Get() *XactGet            { return xacts.get.Load() }
-func (xacts *BckXacts) Put() *XactPut            { return xacts.put.Load() }
-func (xacts *BckXacts) Req() *XactRespond        { return xacts.req.Load() }
-func (xacts *BckXacts) SetGet(xctn *XactGet)     { xacts.get.Store(xctn) }
-func (xacts *BckXacts) SetPut(xctn *XactPut)     { xacts.put.Store(xctn) }
-func (xacts *BckXacts) SetReq(xctn *XactRespond) { xacts.req.Store(xctn) }
-
-func (xacts *BckXacts) AbortGet() { // TODO: caller must provide the error (reason) - here and elsewhere
-	xctn := xacts.get.Load()
-	if xctn != nil {
-		xctn.Abort(nil)
-	}
-}
-
-func (xacts *BckXacts) AbortPut() {
-	xctn := xacts.put.Load()
-	if xctn != nil {
-		xctn.Abort(nil)
-	}
 }

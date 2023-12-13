@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -28,8 +27,6 @@ import (
 type Manager struct {
 	bmd *meta.BMD
 
-	xacts map[string]*BckXacts // bckName -> xctn map, only ais buckets allowed, no naming collisions
-
 	netReq  string // network used to send object request
 	netResp string // network used to send/receive slices
 
@@ -38,8 +35,6 @@ type Manager struct {
 	respBundle ratomic.Pointer[bundle.Streams]
 
 	bundleEnabled atomic.Bool // to disable and enable on the fly
-
-	mu sync.RWMutex
 }
 
 var (
@@ -52,7 +47,6 @@ func initManager() (err error) {
 		netReq:  cmn.NetIntraControl,
 		netResp: cmn.NetIntraData,
 		bmd:     g.t.Bowner().Get(),
-		xacts:   make(map[string]*BckXacts),
 	}
 	if ECM.bmd.IsECUsed() {
 		err = ECM.initECBundles()
@@ -118,28 +112,22 @@ func (mgr *Manager) NewGetXact(bck *cmn.Bck) *XactGet         { return newGetXac
 func (mgr *Manager) NewPutXact(bck *cmn.Bck) *XactPut         { return newPutXact(bck, mgr) }
 func (mgr *Manager) NewRespondXact(bck *cmn.Bck) *XactRespond { return newRespondXact(bck, mgr) }
 
-func (mgr *Manager) RestoreBckGetXact(bck *meta.Bck) (xget *XactGet) {
+func (*Manager) RestoreBckGetXact(bck *meta.Bck) *XactGet {
 	xctn, err := _renewXact(bck, apc.ActECGet)
 	debug.AssertNoErr(err) // TODO: handle, here and elsewhere
-	xget = xctn.(*XactGet)
-	mgr.getBckXacts(bck.Name).SetGet(xget)
-	return
+	return xctn.(*XactGet)
 }
 
-func (mgr *Manager) RestoreBckPutXact(bck *meta.Bck) (xput *XactPut) {
+func (*Manager) RestoreBckPutXact(bck *meta.Bck) *XactPut {
 	xctn, err := _renewXact(bck, apc.ActECPut)
 	debug.AssertNoErr(err)
-	xput = xctn.(*XactPut)
-	mgr.getBckXacts(bck.Name).SetPut(xput)
-	return
+	return xctn.(*XactPut)
 }
 
-func (mgr *Manager) RestoreBckRespXact(bck *meta.Bck) (xrsp *XactRespond) {
+func (*Manager) RestoreBckRespXact(bck *meta.Bck) *XactRespond {
 	xctn, err := _renewXact(bck, apc.ActECRespond)
 	debug.AssertNoErr(err)
-	xrsp = xctn.(*XactRespond)
-	mgr.getBckXacts(bck.Name).SetReq(xrsp)
-	return
+	return xctn.(*XactRespond)
 }
 
 func _renewXact(bck *meta.Bck, kind string) (cluster.Xact, error) {
@@ -148,21 +136,6 @@ func _renewXact(bck *meta.Bck, kind string) (cluster.Xact, error) {
 		return nil, rns.Err
 	}
 	return rns.Entry.Get(), nil
-}
-
-func (mgr *Manager) getBckXacts(bckName string) *BckXacts {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-	return mgr.getBckXactsUnlocked(bckName)
-}
-
-func (mgr *Manager) getBckXactsUnlocked(bckName string) *BckXacts {
-	xacts, ok := mgr.xacts[bckName]
-	if !ok {
-		xacts = &BckXacts{}
-		mgr.xacts[bckName] = xacts
-	}
-	return xacts
 }
 
 // A function to process command requests from other targets
@@ -317,15 +290,12 @@ func (mgr *Manager) enableBck(bck *meta.Bck) {
 }
 
 func (mgr *Manager) BMDChanged() error {
-	mgr.mu.Lock()
 	newBMD := g.t.Bowner().Get()
 	oldBMD := mgr.bmd
 	if newBMD.Version <= mgr.bmd.Version {
-		mgr.mu.Unlock()
 		return nil
 	}
 	mgr.bmd = newBMD
-	mgr.mu.Unlock()
 
 	// globally
 	if newBMD.IsECUsed() && !oldBMD.IsECUsed() {
