@@ -355,3 +355,40 @@ spec:
         path: /tmp/
         type: Directory
 """
+
+# pylint: disable=unused-variable
+FACE_DETECTION_TRANSFORMER = """
+apiVersion: v1
+kind: Pod
+metadata:
+  name: transformer-face-detection
+  annotations:
+    communication_type: "{communication_type}://"
+    wait_timeout: 5m
+spec:
+  containers:
+    - name: server
+      image: aistorage/transformer_face_detection:latest
+      imagePullPolicy: Always
+      ports:
+        - name: default
+          containerPort: 8000
+      command:  ["gunicorn", "main:app", "--workers", "5", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: default
+      env:
+        - name: FORMAT
+          value: "{format}"
+        - name: ARG_TYPE
+          value: "{arg_type}"
+      volumeMounts:
+        - name: ais
+          mountPath: /tmp/ais
+  volumes:
+    - name: ais
+      hostPath:
+        path: /tmp/ais
+        type: Directory
+"""
