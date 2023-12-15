@@ -50,7 +50,7 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 	return nil, cmn.NewErrFailedTo(g.t, "open", lom.FQN, err)
 }
 
-// compare with etl/dp.go
+// compare with ext/etl/dp.go
 func (*LDP) Reader(lom *LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	lom.Lock(false)
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)

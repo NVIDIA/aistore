@@ -76,6 +76,7 @@ func (p *tcbFactory) Start() error {
 
 	// sync same-name remote
 	p.xctn.syncRemote = p.kind != apc.ActETLBck &&
+		p.args.Msg.CopyBckMsg.Prepend == "" &&
 		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
@@ -226,7 +227,7 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	var (
 		args   = r.p.args // TCBArgs
-		toName = r.p.args.Msg.ToName(lom.ObjName)
+		toName = args.Msg.ToName(lom.ObjName)
 	)
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
@@ -234,10 +235,10 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	_, err = r.p.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
 	if err != nil {
 		if cos.IsErrOOS(err) {
-			// TODO: call r.Abort() instead
-			err = cmn.NewErrAborted(r.Name(), "tcb", err)
+			r.Abort(err)
+		} else {
+			r.AddErr(err)
 		}
-		r.AddErr(err)
 		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 			nlog.Infof("Error: %v", err)
 		}
@@ -305,12 +306,31 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.p.args }
 
+func (r *XactTCB) _str() (s string) {
+	msg := &r.p.args.Msg.CopyBckMsg
+	if msg.Prefix != "" {
+		s = ", prefix " + r.p.args.Msg.Prefix
+	}
+	if msg.Prepend != "" {
+		s = ", prepend " + r.p.args.Msg.Prepend
+	}
+	return s
+}
+
 func (r *XactTCB) String() string {
-	return fmt.Sprintf("%s <= %s", r.Base.String(), r.p.args.BckFrom)
+	s := r._str()
+	if r.syncRemote {
+		return fmt.Sprintf("%s%s sync-remote", r.Base.String(), s)
+	}
+	return fmt.Sprintf("%s <= %s%s", r.Base.String(), r.p.args.BckFrom.String(), s)
 }
 
 func (r *XactTCB) Name() string {
-	return fmt.Sprintf("%s <= %s", r.Base.Name(), r.p.args.BckFrom)
+	s := r._str()
+	if r.syncRemote {
+		return fmt.Sprintf("%s%s sync-remote", r.Base.Name(), s)
+	}
+	return fmt.Sprintf("%s <= %s%s", r.Base.Name(), r.p.args.BckFrom.String(), s)
 }
 
 func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {

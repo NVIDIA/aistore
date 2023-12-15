@@ -702,10 +702,12 @@ func (cii *clusterInfo) fill(h *htrun) {
 func (cii *clusterInfo) fillSmap(smap *smapX) {
 	cii.Smap.Version = smap.version()
 	cii.Smap.UUID = smap.UUID
-	cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetIntraControl)
-	cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetPublic)
-	cii.Smap.Primary.ID = smap.Primary.ID()
-	cii.Flags.VoteInProgress = voteInProgress() != nil
+	if smap.Primary != nil {
+		cii.Smap.Primary.CtrlURL = smap.Primary.URL(cmn.NetIntraControl)
+		cii.Smap.Primary.PubURL = smap.Primary.URL(cmn.NetPublic)
+		cii.Smap.Primary.ID = smap.Primary.ID()
+		cii.Flags.VoteInProgress = voteInProgress() != nil
+	}
 }
 
 func (cii *clusterInfo) smapEqual(other *clusterInfo) (ok bool) {

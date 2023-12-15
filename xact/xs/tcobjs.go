@@ -33,8 +33,8 @@ type (
 	}
 	XactTCObjs struct {
 		pending struct {
-			m map[string]*tcowi
-			sync.RWMutex
+			m   map[string]*tcowi
+			mtx sync.RWMutex
 		}
 		args   *xreg.TCObjsArgs
 		workCh chan *cmn.TCObjsMsg
@@ -127,10 +127,10 @@ func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
 
 func (r *XactTCObjs) Begin(msg *cmn.TCObjsMsg) {
 	wi := &tcowi{r: r, msg: msg}
-	r.pending.Lock()
+	r.pending.mtx.Lock()
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
-	r.pending.Unlock()
+	r.pending.mtx.Unlock()
 }
 
 func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
@@ -144,9 +144,9 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 				smap = r.p.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
-			r.pending.RLock()
+			r.pending.mtx.Lock()
 			wi, ok := r.pending.m[msg.TxnUUID]
-			r.pending.RUnlock()
+			r.pending.mtx.Unlock()
 			if !ok {
 				debug.Assert(r.ErrCnt() > 0) // see cleanup
 				goto fin
@@ -181,9 +181,9 @@ fin:
 	r.fin(true /*unreg Rx*/)
 	if r.Err() != nil {
 		// cleanup: destroy destination iff it was created by this copy
-		r.pending.Lock()
+		r.pending.mtx.Lock()
 		clear(r.pending.m)
-		r.pending.Unlock()
+		r.pending.mtx.Unlock()
 	}
 }
 
@@ -217,20 +217,19 @@ ex:
 func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode == opcodeDone {
 		txnUUID := string(hdr.Opaque)
-		r.pending.RLock()
+		r.pending.mtx.Lock()
 		wi, ok := r.pending.m[txnUUID]
-		r.pending.RUnlock()
 		if !ok {
+			r.pending.mtx.Unlock()
 			_, err := r.JoinErr()
 			return err
 		}
 		refc := wi.refc.Dec()
 		if refc == 0 {
-			r.pending.Lock()
 			delete(r.pending.m, txnUUID)
 			r.wiCnt.Dec()
-			r.pending.Unlock()
 		}
+		r.pending.mtx.Unlock()
 		return nil
 	}
 
@@ -283,14 +282,17 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 ///////////
 
 func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
-	objNameTo := wi.msg.ToName(lom.ObjName)
-	buf, slab := lrit.t.PageMM().Alloc()
+	var (
+		objNameTo  = wi.msg.ToName(lom.ObjName)
+		buf, slab  = lrit.t.PageMM().Alloc()
+		syncRemote = wi.r.syncRemote && wi.msg.Prepend == ""
+	)
 
-	// under ETL, the returned sizes of transformed objects are unknown (cos.ContentLengthUnknown)
+	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
 	_, err := lrit.t.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
-		wi.msg.DryRun, wi.r.syncRemote)
+		wi.msg.DryRun, syncRemote)
 	slab.Free(buf)
 
 	if err != nil {
