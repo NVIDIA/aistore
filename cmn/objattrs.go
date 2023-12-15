@@ -228,11 +228,11 @@ func (oa *ObjAttrs) Equal(rem cos.OAH) (eq bool) {
 	}
 
 	// checksum check
-	if !rem.Checksum().IsEmpty() && !oa.Cksum.IsEmpty() {
-		if !rem.Checksum().Equal(oa.Cksum) {
+	if a, b := rem.Checksum(), oa.Cksum; !a.IsEmpty() && !b.IsEmpty() && a.Ty() == b.Ty() {
+		if !a.Equal(b) {
 			return false
 		}
-		cksumVal = oa.Cksum.Val()
+		cksumVal = a.Val()
 		count++
 	}
 

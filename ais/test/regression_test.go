@@ -114,11 +114,9 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 			})
 
 			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
-
-			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
-			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
-			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
-
+			if err == nil {
+				tlog.Logln("Warning: expected error, got nil")
+			}
 			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
 	}
@@ -201,9 +199,9 @@ func TestListObjectsCloudGetLocation(t *testing.T) {
 			tools.SetClusterConfig(t, cos.StrKVs{"features": feat.EnforceIntraClusterAccess.Value()})
 			_, err = api.GetObject(baseParams, m.bck, e.Name, nil)
 
-			// TODO -- FIXME: see cmn.ConfigRestartRequired and cmn.Features
-			// tassert.Errorf(t, err != nil, "expected intra-cluster access enforced")
-			tlog.Logf("TODO: updating feature flags requires cluster restart (err=%v)\n", err)
+			if err == nil {
+				tlog.Logln("Warning: expected error, got nil")
+			}
 
 			tools.SetClusterConfig(t, cos.StrKVs{"features": "0"})
 		}
