@@ -2328,14 +2328,14 @@ func TestCopyBucket(t *testing.T) {
 			testName = fmt.Sprintf("src-remote-evicted/dst-remote=%t/", test.dstRemote)
 		}
 		if test.dstBckExist {
-			testName += "present/"
+			testName += "dst-present/"
 			if test.dstBckHasObjects {
 				testName += "with_objs"
 			} else {
 				testName += "without_objs"
 			}
 		} else {
-			testName += "absent"
+			testName += "dst-absent"
 		}
 		if test.multipleDests {
 			testName += "/multiple_dests"
@@ -2468,12 +2468,13 @@ func TestCopyBucket(t *testing.T) {
 					err  error
 					cmsg = &apc.CopyBckMsg{Force: true}
 				)
-				tlog.Logf("copying %s => %s\n", srcm.bck, dstm.bck)
 				if test.evictRemoteSrc {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg, apc.FltExists)
 				} else {
 					uuid, err = api.CopyBucket(baseParams, srcm.bck, dstm.bck, cmsg)
 				}
+				tassert.CheckFatal(t, err)
+				tlog.Logf("copying %s => %s: %s\n", srcm.bck, dstm.bck, uuid)
 				if uuids := strings.Split(uuid, xact.UUIDSepa); len(uuids) > 1 {
 					for _, u := range uuids {
 						tassert.Fatalf(t, xact.IsValidUUID(u), "invalid UUID %q", u)
@@ -2483,7 +2484,6 @@ func TestCopyBucket(t *testing.T) {
 					tassert.Fatalf(t, xact.IsValidUUID(uuid), "invalid UUID %q", uuid)
 					xactIDs = append(xactIDs, uuid)
 				}
-				tassert.CheckFatal(t, err)
 			}
 
 			for _, uuid := range xactIDs {
@@ -2555,7 +2555,8 @@ func TestCopyBucket(t *testing.T) {
 				dstBckList, err := api.ListObjects(baseParams, dstm.bck, msg, api.ListArgs{})
 				tassert.CheckFatal(t, err)
 				if len(dstBckList.Entries) != expectedObjCount {
-					t.Fatalf("list_objects: dst %d != %d src", len(dstBckList.Entries), expectedObjCount)
+					t.Fatalf("list_objects: dst %s, cnt %d != %d cnt, src %s",
+						dstm.bck.Cname(""), len(dstBckList.Entries), expectedObjCount, srcm.bck.Cname(""))
 				}
 
 				tlog.Logf("verifying that %d copied objects have identical props\n", expectedObjCount)
@@ -2566,14 +2567,15 @@ func TestCopyBucket(t *testing.T) {
 							found = true
 
 							if dstm.bck.IsRemote() && dstmProps.Versioning.Enabled {
-								tassert.Fatalf(t, b.Version != "", "Expected non-empty object %q version", b.Name)
+								tassert.Fatalf(t, b.Version != "",
+									"Expected non-empty object %q version", b.Name)
 							}
 
 							break
 						}
 					}
 					if !found {
-						t.Fatalf("%s is missing in the copied objects", srcm.bck.Cname(a.Name))
+						t.Fatalf("%s is missing in the destination bucket %s", srcm.bck.Cname(a.Name), dstm.bck.Cname(""))
 					}
 				}
 			}

@@ -91,8 +91,6 @@ func (*lsoFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 		streamingF: streamingF{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: apc.ActList},
 		msg:        args.Custom.(*apc.LsoMsg),
 	}
-	debug.Assert(p.Bck.Props != nil && p.msg.PageSize > 0 &&
-		p.msg.PageSize < max(100000, 10*apc.DefaultPageSizeAIS))
 	return p
 }
 

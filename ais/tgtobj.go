@@ -1310,44 +1310,115 @@ func (a *apndOI) pack(workFQN string) string {
 }
 
 //
-// COPY(object)
+// COPY (object | reader)
 //
 
-func (coi *copyOI) objsAdd(size int64, err error) {
-	if err == nil && coi.xact != nil {
-		coi.xact.ObjsAdd(1, size)
-	}
-}
-
-func (coi *copyOI) copyObject(lom *cluster.LOM) (size int64, err error) {
-	debug.Assert(coi.dp == nil)
-
-	// TODO -- FIXME: redundant check?
+// main method
+func (coi *copyOI) do(lom *cluster.LOM) (size int64, err error) {
 	smap := coi.t.owner.smap.Get()
-	tsi, err := smap.HrwName2T(coi.bckTo.MakeUname(coi.objnameTo))
-	if err != nil {
-		return 0, err
+	tsi, errN := smap.HrwName2T(coi.bckTo.MakeUname(coi.objnameTo))
+	if errN != nil {
+		return 0, errN
 	}
 	if tsi.ID() != coi.t.SID() {
-		// dst location is tsi
-		return coi.sendRemote(lom, coi.objnameTo, tsi)
-	}
-
-	// dry-run
-	if coi.dryRun {
-		// TODO: replace with something similar to lom.FQN == dst.FQN, but dstBck might not exist.
-		if lom.Bck().Equal(coi.bckTo, true /*same ID*/, true /*same backend*/) && lom.ObjName == coi.objnameTo {
-			return 0, nil
+		if coi.dp == nil && lom.Bck().IsRemote() {
+			coi.dp = &cluster.LDP{}
 		}
-		return lom.SizeBytes(), nil
+		return coi.send(lom, coi.objnameTo, tsi)
 	}
 
-	// copy here
-	dst := cluster.AllocLOM(coi.objnameTo)
-	defer cluster.FreeLOM(dst)
-	if err = dst.InitBck(coi.bckTo.Bucket()); err != nil {
-		return
+	if coi.dryRun {
+		return coi._dryRun(lom, coi.objnameTo)
 	}
+
+	// 1. with transformation
+	// 2. when the source bucket is remote
+	// 3. regular
+	dst := cluster.AllocLOM(coi.objnameTo)
+	if err := dst.InitBck(coi.bckTo.Bucket()); err != nil {
+		cluster.FreeLOM(dst)
+		return 0, err
+	}
+	switch {
+	case coi.dp != nil: // 1.
+		size, err = coi._reader(lom, dst)
+	case lom.Bck().IsRemote(): // 2.
+		coi.dp = &cluster.LDP{}
+		size, err = coi._reader(lom, dst)
+	default: // 3.
+		size, err = coi._regular(lom, dst)
+	}
+	cluster.FreeLOM(dst)
+	return size, err
+}
+
+func (coi *copyOI) _dryRun(lom *cluster.LOM, objnameTo string) (size int64, err error) {
+	if coi.dp == nil {
+		if lom.Uname() != coi.bckTo.MakeUname(objnameTo) {
+			size = lom.SizeBytes()
+		}
+		return size, nil
+	}
+
+	// discard the reader and be done
+	var reader io.ReadCloser
+	if reader, _, err = coi.dp.Reader(lom); err != nil {
+		return 0, err
+	}
+	size, err = io.Copy(io.Discard, reader)
+	reader.Close()
+	return size, err
+}
+
+// PUT DP(lom) => dst
+// The DP reader is responsible for any read-locking of the source lom.
+//
+// NOTE: no assumpions are being made on whether the source lom is present in cluster.
+// (can be a "pure" metadata of a (non-existing) Cloud object; accordingly, DP's reader must
+// be able to hande cold get, warm get, etc.)
+//
+// If destination bucket is remote:
+// - create a local replica of the object on one of the targets, and
+// - PUT to the relevant backend
+// An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
+// further debated.
+func (coi *copyOI) _reader(lom, dst *cluster.LOM) (size int64, err error) {
+	reader, oah, errN := coi.dp.Reader(lom)
+	if errN != nil {
+		return 0, errN
+	}
+	if lom.Bck().Equal(coi.bckTo, true, true) {
+		dst.SetVersion(oah.Version())
+	}
+	poi := allocPOI()
+	{
+		poi.t = coi.t
+		poi.lom = dst
+		poi.config = coi.config
+		poi.r = reader
+		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
+		poi.atime = lom.Atime().UnixNano()
+		poi.xctn = coi.xact
+		// TODO -- FIXME: checksum
+	}
+	switch {
+	case coi.syncRemote:
+		poi.owt = cmn.OwtSyncRemote
+	case coi.dm != nil:
+		poi.owt = coi.dm.OWT()
+	default:
+		poi.owt = cmn.OwtMigrate
+	}
+	_, err = poi.putObject()
+	freePOI(poi)
+	if err == nil {
+		// xaction stats: inc locally processed (and see data mover for in and out objs)
+		size = oah.SizeBytes()
+	}
+	return size, err
+}
+
+func (coi *copyOI) _regular(lom, dst *cluster.LOM) (size int64, err error) {
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
@@ -1386,106 +1457,10 @@ func (coi *copyOI) copyObject(lom *cluster.LOM) (size int64, err error) {
 	return
 }
 
-/////////////////
-// COPY READER //
-/////////////////
-
-// copyReader writes a new object that it reads using a special reader returned by
-// coi.DP.Reader(lom).
-//
-// The reader is responsible for any read-locking of the source LOM, if necessary.
-// (If the reader doesn't rlock the object's content may be subject to changing in the middle
-// of copying/transforming, etc.)
-//
-// LOM can be a "pure" metadata of a (non-existing) Cloud object. Accordingly, DP's reader must
-// be able to hande cold get, warm get, etc.
-//
-// If destination bucket is remote, copyReader will:
-// - create a local replica of the object on one of the targets, and
-// - PUT to the relevant backend
-// An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
-// further debated.
-func (coi *copyOI) copyReader(lom *cluster.LOM) (size int64, err error) {
-	var (
-		tsi  *meta.Snode
-		smap = coi.t.owner.smap.Get()
-	)
-	// TODO -- FIXME: may be redundant, needless at this point
-	tsi, err = smap.HrwName2T(coi.bckTo.MakeUname(coi.objnameTo))
-	if err != nil {
-		return
-	}
-	if tsi.ID() != coi.t.SID() {
-		// remote dst
-		return coi.sendRemote(lom, coi.objnameTo, tsi)
-	}
-
-	if coi.dryRun {
-		// discard the reader and be done
-		return coi.dryRunCopyReader(lom)
-	}
-
-	// local dst (NOTE: no assumpions on whether the (src) lom is present)
-	dst := cluster.AllocLOM(coi.objnameTo)
-	size, err = coi.putReader(lom, dst)
-	cluster.FreeLOM(dst)
-
-	return
-}
-
-// PUT DP(lom) => dst
-func (coi *copyOI) putReader(lom, dst *cluster.LOM) (size int64, err error) {
-	var (
-		reader cos.ReadOpenCloser
-		oah    cos.OAH
-	)
-	if err = dst.InitBck(coi.bckTo.Bucket()); err != nil {
-		return
-	}
-	if reader, oah, err = coi.dp.Reader(lom); err != nil {
-		return
-	}
-	if lom.Bck().Equal(coi.bckTo, true, true) {
-		dst.SetVersion(oah.Version())
-	}
-	poi := allocPOI()
-	{
-		poi.t = coi.t
-		poi.lom = dst
-		poi.config = coi.config
-		poi.r = reader
-		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
-		poi.atime = lom.Atime().UnixNano()
-		poi.xctn = coi.xact
-		// TODO -- FIXME: checksum
-	}
-	switch {
-	case coi.syncRemote:
-		poi.owt = cmn.OwtSyncRemote
-	case coi.dm != nil:
-		poi.owt = coi.dm.OWT()
-	default:
-		poi.owt = cmn.OwtMigrate
-	}
-	_, err = poi.putObject()
-	freePOI(poi)
-	if err == nil {
-		// xaction stats: inc locally processed (and see data mover for in and out objs)
-		size = oah.SizeBytes()
-	}
-	return size, err
-}
-
-func (coi *copyOI) dryRunCopyReader(lom *cluster.LOM) (size int64, err error) {
-	var reader io.ReadCloser
-	if reader, _, err = coi.dp.Reader(lom); err != nil {
-		return 0, err
-	}
-	defer reader.Close()
-	return io.Copy(io.Discard, reader)
-}
-
-func (coi *copyOI) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+// send object => designated target
+// * source is a LOM or a reader (that may be reading from remote)
+// * one of the two equivalent transmission mechanisms: PUT or transport Send
+func (coi *copyOI) send(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
 	debug.Assert(coi.owt > 0)
 	sargs := allocSnda()
 	{
@@ -1498,15 +1473,12 @@ func (coi *copyOI) sendRemote(lom *cluster.LOM, objNameTo string, tsi *meta.Snod
 			sargs.owt = coi.owt
 		}
 	}
-	size, err = coi.doSend(lom, sargs)
+	size, err = coi._send(lom, sargs)
 	freeSnda(sargs)
 	return
 }
 
-// send object => designated target
-// * source is a LOM or a reader (that may be reading from remote)
-// * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyOI) doSend(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
+func (coi *copyOI) _send(lom *cluster.LOM, sargs *sendArgs) (size int64, err error) {
 	if coi.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
@@ -1628,6 +1600,12 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
 	return nil
+}
+
+func (coi *copyOI) stats(size int64, err error) {
+	if err == nil && coi.xact != nil {
+		coi.xact.ObjsAdd(1, size)
+	}
 }
 
 //

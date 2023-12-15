@@ -131,7 +131,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		return
 	}
 	// dst
-	bckDst, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
+	bckTo, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
 		return
@@ -140,18 +140,11 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	{
 		coi.t = t
 		coi.config = config
-		coi.bckTo = bckDst
+		coi.bckTo = bckTo
 		coi.objnameTo = s3.ObjName(items)
 		coi.owt = cmn.OwtMigrate
 	}
-	if lom.Bck().IsRemote() || coi.bckTo.IsRemote() {
-		// when either one or both buckets are remote
-		coi.dp = &cluster.LDP{}
-		_, err = coi.copyReader(lom)
-	} else {
-		_, err = coi.copyObject(lom)
-	}
-
+	_, err = coi.do(lom)
 	freeCOI(coi)
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)

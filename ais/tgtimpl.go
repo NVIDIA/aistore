@@ -148,17 +148,10 @@ func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.D
 		coi.objnameTo = lom.ObjName
 	}
 
-	switch {
-	case dp != nil: // 1. w/ transformation
-		size, err = coi.copyReader(lom)
-	case lom.Bck().IsRemote() || coi.bckTo.IsRemote(): // 2. when either one or both buckets are remote
-		coi.dp = &cluster.LDP{}
-		size, err = coi.copyReader(lom)
-	default: // 3.
-		size, err = coi.copyObject(lom)
-	}
-	coi.objsAdd(size, err)
+	size, err = coi.do(lom)
+	coi.stats(size, err)
 	freeCOI(coi)
+
 	return size, err
 }
 
@@ -337,7 +330,7 @@ func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, ts
 		coi.xact = params.Xact
 		coi.config = params.Config
 	}
-	size, err := coi.sendRemote(lom, lom.ObjName, tsi)
+	size, err := coi.send(lom, lom.ObjName, tsi)
 	freeCOI(coi)
 	return size, err
 }

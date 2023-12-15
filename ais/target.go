@@ -1359,14 +1359,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) (err error) {
 		coi.finalize = true
 	}
 
-	if lom.Bck().IsRemote() || coi.bckTo.IsRemote() {
-		// when either one or both buckets are remote
-		coi.dp = &cluster.LDP{}
-		_, err = coi.copyReader(lom)
-	} else {
-		_, err = coi.copyObject(lom)
-	}
-
+	_, err = coi.do(lom)
 	slab.Free(buf)
 	freeCOI(coi)
 	if err != nil {

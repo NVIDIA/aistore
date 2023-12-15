@@ -104,9 +104,14 @@ func checkVersionWarn(c *cli.Context, role string, mmc []string, stmap teb.StstM
 		return false
 	}
 	for _, ds := range stmap {
+		if ds.Version == "" {
+			warn := fmt.Sprintf("empty version from %s (in maintenance mode?)", ds.Node.Snode.StringEx())
+			actionWarn(c, warn)
+			continue
+		}
 		mmx := strings.Split(ds.Version, versionSepa)
 		if _, err := strconv.Atoi(mmx[0]); err != nil {
-			warn := fmt.Sprintf("%s: unexpected version format: %v", ds.Node.Snode.StringEx(), mmc)
+			warn := fmt.Sprintf("%s: unexpected version format: %s, %v", ds.Node.Snode.StringEx(), ds.Version, mmx)
 			fmt.Fprintln(c.App.ErrWriter, fred("Error: ")+warn)
 			debug.Assert(false)
 			continue
