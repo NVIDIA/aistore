@@ -403,7 +403,7 @@ func lsoErr(msg *apc.LsoMsg, err error) error {
 	if herr, ok := err.(*cmn.ErrHTTP); ok && msg.IsFlagSet(apc.LsBckPresent) {
 		if herr.TypeCode == "ErrRemoteBckNotFound" {
 			err = V(err)
-			return fmt.Errorf("%v\nTip: use %s option to list _all_ objects", V(err), qflprn(allObjsOrBcksFlag))
+			return fmt.Errorf("%v\nTip: use %s to list all objects including remote", V(err), qflprn(allObjsOrBcksFlag))
 		}
 	}
 	return V(err)

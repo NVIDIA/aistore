@@ -121,8 +121,8 @@ var (
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "transform entire bucket or selected objects (to select, use '--list' or '--template')",
-		ArgsUsage:    etlNameArgument + " " + bucketSrcArgument + " " + bucketDstArgument,
+		Usage:        "transform entire bucket or selected objects (to select multiple, use '--list' or '--template')",
+		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[cmdBucket],
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{etlIDCompletions}, 1, 2),

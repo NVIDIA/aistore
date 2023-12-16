@@ -235,14 +235,16 @@ func cannotExecuteError(c *cli.Context, err error, bottomMessage string) *errUsa
 	}
 }
 
-func incorrectUsageMsg(c *cli.Context, fmtString string, args ...any) *errUsage {
-	const incorrectUsageFmt = "too many arguments or unrecognized (or misplaced) option '%+v'"
-
-	if fmtString == "" {
-		fmtString = incorrectUsageFmt
+func incorrectUsageMsg(c *cli.Context, fmtMsg string, args ...any) *errUsage {
+	const dfltMsg = "too many arguments or unrecognized (misplaced?) option '%+v'"
+	if fmtMsg == "" {
+		fmtMsg = dfltMsg
 	}
-	msg := fmt.Sprintf(fmtString, args...)
-	return _errUsage(c, msg)
+	if len(args) == 0 {
+		debug.Assert(!strings.Contains(fmtMsg, "%"))
+		return _errUsage(c, fmtMsg)
+	}
+	return _errUsage(c, fmt.Sprintf(fmtMsg, args...))
 }
 
 func missingArgumentsError(c *cli.Context, missingArgs ...string) *errUsage {

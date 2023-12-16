@@ -130,12 +130,9 @@ func lsFobj(c *cli.Context, path, trimPref, appendPref string, ndir *int, recurs
 	}
 
 	if err != nil {
-		// expecting the base to be a filename-matching pattern
+		// expecting the base to be a filename-matching pattern (wildcard)
 		pattern = filepath.Base(path)
-		isPattern := strings.Contains(pattern, "*") ||
-			strings.Contains(pattern, "?") ||
-			strings.Contains(pattern, "\\")
-		if !isPattern {
+		if isPattern(pattern) {
 			warn := fmt.Sprintf("%q is not a directory and does not appear to be a shell filename matching pattern (%q)",
 				path, pattern)
 			actionWarn(c, warn)

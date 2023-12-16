@@ -10,11 +10,13 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
 
 // Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
-func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom, bckTo cmn.Bck, err error) {
+func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalSrcObjname bool) (bckFrom, bckTo cmn.Bck, objFrom string,
+	err error) {
 	if c.NArg() == shift {
 		err = missingArgumentsError(c, bckFromArg, bckToArg)
 		return
@@ -24,14 +26,31 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int) (bckFrom,
 		return
 	}
 
-	bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*error only*/)
+	// src
+	if optionalSrcObjname {
+		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
+	} else {
+		bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*error only*/)
+	}
 	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
+		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+			// slightly nicer
+			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift))
+		} else {
+			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
+		}
 		return
 	}
+
+	// dst
 	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
 	if err != nil {
-		err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
+		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+			// slightly nicer
+			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift+1))
+		} else {
+			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
+		}
 	}
 	return
 }
@@ -140,17 +159,27 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 			if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
 				return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
 			}
-			msg := "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
+			var msg string
+			if emptyObjnameOK {
+				msg = "Expecting " + optionalObjectsArgument + ", e.g.: ais://mmm, s3://nnn/obj2, gs://ppp/a/b/c, etc."
+			} else {
+				msg = "Expecting " + objectArgument + ", e.g.: ais://mmm/obj1, s3://nnn/obj2, gs://ppp/obj3, etc."
+			}
 			return bck, objName, cannotExecuteError(c, err, msg)
 		}
 	}
 
 	if bck.Name == "" {
-		return bck, objName, incorrectUsageMsg(c, "%q: missing bucket name", uri)
-	} else if err := bck.Validate(); err != nil {
-		return bck, objName, cannotExecuteError(c, err, "")
+		err = incorrectUsageMsg(c, "%q: missing bucket name", uri)
+	} else if err = bck.Validate(); err != nil {
+		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+			// slightly nicer
+			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
+		} else {
+			err = cannotExecuteError(c, err, "")
+		}
 	} else if objName == "" && !emptyObjnameOK {
-		return bck, objName, incorrectUsageMsg(c, "%q: missing object name", uri)
+		err = incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
-	return
+	return bck, objName, err
 }

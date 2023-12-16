@@ -10,6 +10,15 @@ redirect_from:
 # CLI Reference for Objects
 This document contains `ais object` commands - the commands to read (GET), write (PUT), APPEND, PROMOTE, PREFETCH, EVICT etc. user data.
 
+Namely:
+
+```console
+$ ais object <TAB-TAB>
+
+get          put          cp           set-custom   show         rm
+ls           promote      concat       evict        mv           cat
+```
+
 ## Table of Contents
 - [GET object](#get-object)
   - [Save object to local file](#save-object-to-local-file)

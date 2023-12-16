@@ -172,6 +172,7 @@ var (
 			bucketsObjectsCmdList,
 			objectCmdPut,
 			objectCmdPromote,
+			makeAlias(bucketCmdCopy, "", true, commandCopy), // alias for `ais [bucket] cp`
 			objectCmdConcat,
 			objectCmdSetCustom,
 			bucketObjCmdEvict,

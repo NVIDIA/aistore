@@ -7,9 +7,26 @@ redirect_from:
  - /docs/cli/bucket.md/
 ---
 
-# CLI Reference for Buckets
-This section lists operations on *buckets* using the AIS CLI, with `ais bucket`.
-For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, please see the [in-depth overview of buckets](/docs/bucket.md).
+It is easy to see all CLI operations on *buckets*:
+
+```console
+$ ais bucket <TAB-TAB>
+
+ls        summary   lru       evict     show      create    cp        mv        rm        props
+```
+
+For convenience, a few of the most popular verbs are also aliased:
+
+```console
+$ ais alias | grep bucket
+cp              bucket cp
+create          bucket create
+evict           bucket evict
+ls              bucket ls
+rmb             bucket rm
+```
+
+> For types of supported buckets (AIS, Cloud, backend, etc.) and many more examples, see [in-depth overview](/docs/bucket.md).
 
 ## Table of Contents
 - [Create bucket](#create-bucket)

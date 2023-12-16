@@ -41,7 +41,7 @@ var (
 		indent1 + "\t- 'src-dir gs://w/shard-999.zip --append' - archive entire 'src-dir' directory; iff the destination .zip doesn't exist create a new one;\n" +
 		indent1 + "\t- '\"sys, docs\" ais://dst/CCC.tar --dry-run -y -r --archpath ggg/' - dry-run to recursively archive two directories.\n" +
 		indent1 + "\tTips:\n" +
-		indent1 + "\t- use '--dry-run' option if in doubt;\n" +
+		indent1 + "\t- use '--dry-run' if in doubt;\n" +
 		indent1 + "\t- to archive objects from a ais:// or remote bucket, run 'ais archive bucket' (see --help for details)."
 )
 

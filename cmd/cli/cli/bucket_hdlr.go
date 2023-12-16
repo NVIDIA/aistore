@@ -165,8 +165,8 @@ var (
 	}
 	bucketCmdCopy = cli.Command{
 		Name:         commandCopy,
-		Usage:        "copy entire bucket or selected objects (to select, use '--list' or '--template')",
-		ArgsUsage:    bucketSrcArgument + " " + bucketDstArgument,
+		Usage:        "copy entire bucket or selected objects (to select multiple, use '--list' or '--template')",
+		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
 		Flags:        bucketCmdsFlags[commandCopy],
 		Action:       copyBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
@@ -350,7 +350,7 @@ func showMisplacedAndMore(c *cli.Context) error {
 }
 
 func mvBucketHandler(c *cli.Context) error {
-	bckFrom, bckTo, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/)
+	bckFrom, bckTo, _, err := parseBcks(c, bucketArgument, bucketNewArgument, 0 /*shift*/, false /*optionalSrcObjname*/)
 	if err != nil {
 		return err
 	}
@@ -378,17 +378,9 @@ func evictHandler(c *cli.Context) error {
 
 	// Bucket argument provided by the user.
 	if c.NArg() == 1 {
-		var (
-			opts = cmn.ParseURIOpts{IsQuery: true}
-			uri  = c.Args().Get(0)
-		)
-		uri = preparseBckObjURI(uri)
-		bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
+		uri := preparseBckObjURI(c.Args().Get(0))
+		bck, objName, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/) // cmn.ParseBckObjectURI(uri, opts)
 		if err != nil {
-			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-				// slightly nicer
-				err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
-			}
 			return err
 		}
 		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
@@ -561,7 +553,8 @@ func listAnyHandler(c *cli.Context) error {
 		uri  = c.Args().Get(0)
 	)
 	uri = preparseBckObjURI(uri)
-	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
+	bck, objName, err := cmn.ParseBckObjectURI(uri, opts) // `ais ls` with no args - is Ok
+
 	if err != nil {
 		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
 			// slightly nicer

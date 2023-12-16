@@ -239,14 +239,15 @@ const (
 	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
 
 	// Buckets
-	bucketArgument         = "BUCKET"
-	optionalBucketArgument = "[BUCKET]"
-	bucketsArgument        = "BUCKET [BUCKET...]"
-	bucketPropsArgument    = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
-	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
-	bucketSrcArgument      = "SRC_BUCKET"
-	bucketDstArgument      = "DST_BUCKET"
-	bucketNewArgument      = "NEW_BUCKET"
+	bucketArgument          = "BUCKET"
+	optionalBucketArgument  = "[BUCKET]"
+	bucketsArgument         = "BUCKET [BUCKET...]"
+	bucketPropsArgument     = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
+	bucketAndPropsArgument  = "BUCKET [PROP_PREFIX]"
+	bucketSrcArgument       = "SRC_BUCKET"
+	bucketObjectSrcArgument = "SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE]"
+	bucketDstArgument       = "DST_BUCKET"
+	bucketNewArgument       = "NEW_BUCKET"
 
 	dsortSpecArgument = "[JSON_SPECIFICATION|YAML_SPECIFICATION|-] [SRC_BUCKET] [DST_BUCKET]"
 

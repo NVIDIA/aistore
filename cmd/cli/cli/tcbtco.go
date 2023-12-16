@@ -21,7 +21,7 @@ import (
 )
 
 //
-// copy
+// copy -----------------------------------------------------------------------------
 //
 
 // via (I) x-copy-bucket ("full bucket") _or_ (II) x-copy-listrange ("multi-object")
@@ -30,25 +30,124 @@ import (
 // is the same as:
 // (II) `ais cp from to --template abc"
 func copyBucketHandler(c *cli.Context) (err error) {
-	var bckFrom, bckTo cmn.Bck
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	if c.NArg() == 1 && flagIsSet(c, syncFlag) {
-		bckFrom, err = parseBckURI(c, c.Args().Get(0), true /*error only*/)
-		bckTo = bckFrom
+	var (
+		bckFrom, bckTo cmn.Bck
+		objFrom        string
+	)
+	switch {
+	case c.NArg() == 0:
+		err = missingArgumentsError(c, c.Command.ArgsUsage)
+	case c.NArg() == 1:
+		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
 		if err != nil {
-			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bucketSrcArgument, c.Args().Get(0), err)
+			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+				// slightly nicer
+				err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(0))
+			}
 		}
-	} else {
-		bckFrom, bckTo, err = parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
+	default:
+		bckFrom, bckTo, objFrom, err = parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/, true /*optionalSrcObjname*/)
 	}
 	if err != nil {
 		return err
 	}
 
-	return tcbtco(c, "", bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
+	if flagIsSet(c, syncFlag) {
+		if bckTo.IsEmpty() {
+			bckTo = bckFrom
+		} else if !bckTo.Equal(&bckFrom) {
+			return fmt.Errorf("invalid %s usage: the option implies that %s argument is either omitted or be the same as %s",
+				qflprn(syncFlag), bucketDstArgument, bucketSrcArgument)
+		}
+	}
+
+	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
+}
+
+//
+// main function: (cp | etl) & (bucket | multi-object)
+//
+
+func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
+	text1, text2 := "copy", "Copying"
+	if etlName != "" {
+		text1, text2 = "transform", "Transforming"
+	}
+	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
+		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+	}
+	if objName != "" && (flagIsSet(c, listFlag) || flagIsSet(c, templateFlag)) {
+		return fmt.Errorf("source object name or pattern (%s) cannot be used together with source-specifying %s and/or %s",
+			objName, qflprn(listFlag), qflprn(templateFlag))
+	}
+	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
+		return err
+	}
+	empty, err := isBucketEmpty(bckFrom, !bckFrom.IsRemote() || !allIncludingRemote /*cached*/)
+	debug.AssertNoErr(err)
+	if empty {
+		if bckFrom.IsRemote() && !allIncludingRemote {
+			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
+			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
+			actionNote(c, note)
+			return nil
+		}
+		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
+		actionNote(c, note)
+		return nil
+	}
+	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
+		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
+			return err
+		}
+		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
+			bckTo, bckFrom)
+		actionWarn(c, warn)
+	}
+
+	dryRun := flagIsSet(c, copyDryRunFlag)
+
+	// (I) copy/transform bucket (x-tcb)
+	if objName == "" && !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
+		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
+			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
+		}
+		if dryRun {
+			// TODO -- FIXME: show object names with destinations, make the output consistent with etl dry-run
+			dryRunCptn(c)
+			actionDone(c, text2+" the entire bucket")
+		}
+		if etlName != "" {
+			return etlBucket(c, etlName, bckFrom, bckTo, allIncludingRemote)
+		}
+		return copyBucket(c, bckFrom, bckTo, allIncludingRemote)
+	}
+
+	// (II) multi-object x-tco
+	listObjs := parseStrFlag(c, listFlag)
+	tmplObjs := parseStrFlag(c, templateFlag)
+
+	if objName != "" {
+		debug.Assert(listObjs == "" && tmplObjs == "")
+		if isPattern(objName) {
+			tmplObjs = objName
+		} else {
+			listObjs = objName
+		}
+	}
+
+	if dryRun {
+		var msg string
+		if listObjs != "" {
+			msg = fmt.Sprintf("%s %q ...\n", text2, listObjs)
+		} else {
+			msg = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
+		}
+		dryRunCptn(c) // TODO -- FIXME: ditto
+		actionDone(c, msg)
+	}
+	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 }
 
 func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
@@ -126,19 +225,19 @@ func tcbtcoCptn(action string, bckFrom, bckTo cmn.Bck) string {
 }
 
 //
-// etl
+// etl -------------------------------------------------------------------------------
 //
 
-func etlBucketHandler(c *cli.Context) (err error) {
+func etlBucketHandler(c *cli.Context) error {
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	etlName := c.Args().Get(0)
-	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/)
+	bckFrom, bckTo, objFrom, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 1 /*shift*/, true /*optionalSrcObjname*/)
 	if err != nil {
 		return err
 	}
-	return tcbtco(c, etlName, bckFrom, bckTo, flagIsSet(c, etlAllObjsFlag))
+	return copyTransform(c, etlName, objFrom, bckFrom, bckTo, flagIsSet(c, etlAllObjsFlag))
 }
 
 func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
@@ -236,77 +335,4 @@ func handleETLHTTPError(err error, etlName string) error {
 		}
 	}
 	return V(err)
-}
-
-//
-// common for both (cp | etl)
-//
-
-func tcbtco(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
-	text1, text2 := "copy", "Copying"
-	if etlName != "" {
-		text1, text2 = "transform", "Transforming"
-	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
-	}
-	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
-		return err
-	}
-	empty, err := isBucketEmpty(bckFrom, !bckFrom.IsRemote() || !allIncludingRemote /*cached*/)
-	debug.AssertNoErr(err)
-	if empty {
-		if bckFrom.IsRemote() && !allIncludingRemote {
-			hint := "(tip: use option %s to " + text1 + " remote objects from the backend store)\n"
-			note := fmt.Sprintf("source %s appears to be empty "+hint, bckFrom, qflprn(copyAllObjsFlag))
-			actionNote(c, note)
-			return nil
-		}
-		note := fmt.Sprintf("source %s is empty, nothing to do\n", bckFrom)
-		actionNote(c, note)
-		return nil
-	}
-	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
-		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
-			return err
-		}
-		warn := fmt.Sprintf("destination %s doesn't exist and will be created with configuration copied from the source (%s))",
-			bckTo, bckFrom)
-		actionWarn(c, warn)
-	}
-
-	dryRun := flagIsSet(c, copyDryRunFlag)
-
-	// (I) TCB
-	if !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
-		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
-		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
-			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
-		}
-		if dryRun {
-			// TODO -- FIXME: show object names with destinations, make the output consistent with etl dry-run
-			dryRunCptn(c)
-			actionDone(c, text2+" the entire bucket")
-		}
-		if etlName != "" {
-			return etlBucket(c, etlName, bckFrom, bckTo, allIncludingRemote)
-		}
-		return copyBucket(c, bckFrom, bckTo, allIncludingRemote)
-	}
-
-	// (II) multi-object TCO
-	listObjs := parseStrFlag(c, listFlag)
-	tmplObjs := parseStrFlag(c, templateFlag)
-
-	if dryRun {
-		var msg string
-		if listObjs != "" {
-			msg = fmt.Sprintf("%s %q ...\n", text2, listObjs)
-		} else {
-			msg = fmt.Sprintf("%s objects that match the pattern %q ...\n", text2, tmplObjs)
-		}
-		dryRunCptn(c) // TODO -- FIXME: ditto
-		actionDone(c, msg)
-	}
-	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 }
