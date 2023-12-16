@@ -30,13 +30,24 @@ import (
 // is the same as:
 // (II) `ais cp from to --template abc"
 func copyBucketHandler(c *cli.Context) (err error) {
+	var bckFrom, bckTo cmn.Bck
 	if c.NArg() == 0 {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
-	bckFrom, bckTo, err := parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
+
+	if c.NArg() == 1 && flagIsSet(c, syncFlag) {
+		bckFrom, err = parseBckURI(c, c.Args().Get(0), true /*error only*/)
+		bckTo = bckFrom
+		if err != nil {
+			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bucketSrcArgument, c.Args().Get(0), err)
+		}
+	} else {
+		bckFrom, bckTo, err = parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/)
+	}
 	if err != nil {
 		return err
 	}
+
 	return tcbtco(c, "", bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
 }
 

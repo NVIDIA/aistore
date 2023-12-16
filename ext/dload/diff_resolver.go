@@ -57,10 +57,10 @@ type (
 	}
 
 	DiffResolverResult struct {
-		Action uint8
+		Err    error
 		Src    *cluster.LOM
 		Dst    *DstElement
-		Err    error
+		Action uint8
 	}
 )
 
@@ -68,13 +68,13 @@ type (
 // DiffResolver //
 //////////////////
 
+// TODO: configurable burst size of the channels, plus `chanFull` check
 func NewDiffResolver(ctx DiffResolverCtx) *DiffResolver {
 	return &DiffResolver{
-		ctx: ctx,
-		// TODO: configurable size of the channels, plus `chanFull` check
-		srcCh:    make(chan *cluster.LOM, 1000),
-		dstCh:    make(chan *DstElement, 1000),
-		resultCh: make(chan DiffResolverResult, 1000),
+		ctx:      ctx,
+		srcCh:    make(chan *cluster.LOM, 128),
+		dstCh:    make(chan *DstElement, 128),
+		resultCh: make(chan DiffResolverResult, 128),
 	}
 }
 
@@ -88,13 +88,16 @@ func (dr *DiffResolver) Start() {
 				Action: DiffResolverEOF,
 			}
 			return
-		} else if !srcOk || (dstOk && src.ObjName > dst.ObjName) {
+		}
+
+		switch {
+		case !srcOk || (dstOk && src.ObjName > dst.ObjName):
 			dr.resultCh <- DiffResolverResult{
 				Action: DiffResolverRecv,
 				Dst:    dst,
 			}
 			dst, dstOk = <-dr.dstCh
-		} else if !dstOk || (srcOk && src.ObjName < dst.ObjName) {
+		case !dstOk || (srcOk && src.ObjName < dst.ObjName):
 			remote, err := dr.ctx.IsObjFromRemote(src)
 			if err != nil {
 				dr.resultCh <- DiffResolverResult{
@@ -118,7 +121,7 @@ func (dr *DiffResolver) Start() {
 				}
 			}
 			src, srcOk = <-dr.srcCh
-		} else { /* s.ObjName == d.ObjName */
+		default: /* s.ObjName == d.ObjName */
 			equal, err := dr.ctx.CompareObjects(src, dst)
 			if err != nil {
 				dr.resultCh <- DiffResolverResult{
@@ -200,24 +203,26 @@ func (dr *DiffResolver) walk(job jobif) {
 		WalkOpts: fs.WalkOpts{CTs: []string{fs.ObjectType}, Sorted: true},
 	}
 	opts.WalkOpts.Bck.Copy(job.Bck())
-	opts.Callback = func(fqn string, de fs.DirEntry) error {
-		if dr.Stopped() {
-			return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
-		}
-		lom := &cluster.LOM{}
-		if err := lom.InitFQN(fqn, job.Bck()); err != nil {
-			return err
-		}
-		if !job.checkObj(lom.ObjName) {
-			return nil
-		}
-		dr.PushSrc(lom)
-		return nil
-	}
+	opts.Callback = func(fqn string, _ fs.DirEntry) error { return dr.cb(fqn, job) }
+
 	err := fs.WalkBck(opts)
 	if err != nil && !cmn.IsErrAborted(err) {
 		dr.Abort(err)
 	}
+}
+
+func (dr *DiffResolver) cb(fqn string, job jobif) error {
+	if dr.Stopped() {
+		return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
+	}
+	lom := &cluster.LOM{}
+	if err := lom.InitFQN(fqn, job.Bck()); err != nil {
+		return err
+	}
+	if job.checkObj(lom.ObjName) {
+		dr.PushSrc(lom)
+	}
+	return nil
 }
 
 func (dr *DiffResolver) push(job jobif, d *dispatcher) {

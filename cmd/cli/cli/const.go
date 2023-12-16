@@ -388,7 +388,7 @@ var (
 		Name: "prefix",
 		Usage: "list objects that start with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory\n" +
-			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter c",
+			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter 'c'",
 	}
 	getObjPrefixFlag = cli.StringFlag{
 		Name: listObjPrefixFlag.Name,
@@ -569,7 +569,13 @@ var (
 		Name:  "object-list,from",
 		Usage: "path to file containing JSON array of object names to download",
 	}
-	syncFlag = cli.BoolFlag{Name: "sync", Usage: "sync bucket with Cloud"}
+
+	// sync
+	syncFlag = cli.BoolFlag{
+		Name: "sync",
+		Usage: "synchronize destination bucket with its remote (e.g., Cloud) source;\n" +
+			indent4 + "\tin particular, the option may entail removing of the objects that no longer exist remotely",
+	}
 
 	// dsort
 	dsortFsizeFlag  = cli.StringFlag{Name: "fsize", Value: "1024", Usage: "size of the files in a shard"}

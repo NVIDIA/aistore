@@ -165,7 +165,7 @@ cat > $AIS_CONF_FILE <<EOL
 		"call_timeout":          "10m",
 		"dsorter_mem_threshold": "100GB",
 		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
-		"bundle_multiplier":	${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
+		"bundle_multiplier":	 ${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
 	},
 	"tcb": {
 		"compression":		"never",

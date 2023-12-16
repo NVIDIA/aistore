@@ -613,6 +613,18 @@ $ ais ls gs://coco-dataset --cached | grep Listed
 Listed: 393 names
 ```
 
+> Incidentally, notice the `--cached` difference:
+
+```console
+$ ais ls gs://coco-dataset --cached | grep Listed
+Listed: 393 names
+
+## vs _all_ including remote:
+
+$ ais ls gs://coco-dataset | grep Listed
+Listed: 2,290 names
+```
+
 ### Options
 
 ```console
