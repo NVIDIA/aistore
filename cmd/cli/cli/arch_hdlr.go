@@ -49,16 +49,18 @@ var (
 	// flags
 	archCmdsFlags = map[string][]cli.Flag{
 		commandBucket: {
-			templateFlag,
-			listFlag,
-			dryRunFlag,
-			inclSrcBucketNameFlag,
 			archAppendOrPutFlag,
 			continueOnErrorFlag,
+			dontHeadBucketFlag,
+			dryRunFlag,
+			listFlag,
+			templateFlag,
+			verbObjPrefixFlag,
+			inclSrcBucketNameFlag,
 			waitFlag,
 		},
 		commandPut: append(
-			listrangeFlags,
+			listRangeProgressWaitFlags,
 			archAppendOrPutFlag,
 			archAppendOnlyFlag,
 			archpathFlag,
@@ -82,9 +84,14 @@ var (
 
 	// archive bucket
 	archBucketCmd = cli.Command{
-		Name:         commandBucket,
-		Usage:        "archive multiple objects from " + bucketSrcArgument + " as " + archExts + "-formatted shard",
-		ArgsUsage:    bucketSrcArgument + " " + dstShardArgument,
+		Name: commandBucket,
+		Usage: "archive selected or matching objects from " + bucketObjectSrcArgument + " as\n" +
+			indent1 + archExts + "-formatted object (a.k.a. shard),\n" +
+			indent1 + "e.g.:\n" +
+			indent1 + "\t- 'archive bucket ais://src ais://dst/a.tar.lz4 --template \"shard-{001..997}\"'\n" +
+			indent1 + "\t- 'archive bucket \"ais://src/shard-{001..997}\" ais://dst/a.tar.lz4'\t- same as above (notice double quotes)\n" +
+			indent1 + "\t- 'archive bucket \"ais://src/shard-{998..999}\" ais://dst/a.tar.lz4 --append-or-put'\t- append (ie., archive) 2 more objects",
+		ArgsUsage:    bucketObjectSrcArgument + " " + dstShardArgument,
 		Flags:        archCmdsFlags[commandBucket],
 		Action:       archMultiObjHandler,
 		BashComplete: putPromApndCompletions,
@@ -191,10 +198,11 @@ func archUsageHandler(c *cli.Context) error {
 }
 
 func archMultiObjHandler(c *cli.Context) error {
-	// ditto
+	// is it an attempt to PUT => archive?
 	{
 		a := archput{}
 		if err := a.parse(c); err == nil {
+			// Yes, it is
 			msg := fmt.Sprintf("expecting %s\n(hint: use 'ais archive put' command, %s for details)",
 				c.Command.ArgsUsage, qflprn(cli.HelpFlag))
 			return errors.New(msg)
@@ -225,6 +233,14 @@ func archMultiObjHandler(c *cli.Context) error {
 		}
 		fmt.Fprintf(c.App.Writer, "archive %s/{%s} as %q\n", a.rsrc.bck, what, a.dest())
 		return nil
+	}
+	if !flagIsSet(c, dontHeadBucketFlag) {
+		if _, err := headBucket(a.rsrc.bck, false /* don't add */); err != nil {
+			return err
+		}
+		if _, err := headBucket(a.dst.bck, false /* don't add */); err != nil {
+			return err
+		}
 	}
 	// do
 	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, &msg)

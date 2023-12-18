@@ -164,7 +164,7 @@ func (oah *ObjAttrs) RespHeader() http.Header {
 // `io.Copy` is used internally to copy response bytes from the request to the writer.
 //
 // Returns `ObjAttrs` that can be further used to get the size and other object metadata.
-func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah ObjAttrs, err error) {
+func GetObject(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (oah ObjAttrs, err error) {
 	var (
 		wresp     *wrappedResp
 		w, q, hdr = args.ret()
@@ -173,7 +173,7 @@ func GetObject(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (oah Ob
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = bck.NewQuery()
 		reqParams.Header = hdr
 	}
@@ -231,14 +231,14 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 
 // GetObjectReader returns reader of the requested object. It does not read body
 // bytes, nor validates a checksum. Caller is responsible for closing the reader.
-func GetObjectReader(bp BaseParams, bck cmn.Bck, object string, args *GetArgs) (r io.ReadCloser, err error) {
+func GetObjectReader(bp BaseParams, bck cmn.Bck, objName string, args *GetArgs) (r io.ReadCloser, err error) {
 	_, q, hdr := args.ret()
 	q = bck.AddToQuery(q)
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = q
 		reqParams.Header = hdr
 	}
@@ -303,7 +303,7 @@ func (args *AppendArgs) _append(reqArgs *cmn.HreqArgs) (*http.Request, error) {
 // HeadObject returns object properties; can be conventionally used to establish in-cluster presence.
 // - fltPresence:  as per QparamFltPresence enum (for values and comments, see api/apc/query.go)
 // - silent==true: not to log (not-found) error
-func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, silent bool) (*cmn.ObjectProps, error) {
+func HeadObject(bp BaseParams, bck cmn.Bck, objName string, fltPresence int, silent bool) (*cmn.ObjectProps, error) {
 	bp.Method = http.MethodHead
 
 	q := bck.NewQuery()
@@ -316,7 +316,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, sile
 	defer FreeRp(reqParams)
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = q
 	}
 	hdr, _, err := reqParams.doReqHdr()
@@ -350,7 +350,7 @@ func HeadObject(bp BaseParams, bck cmn.Bck, object string, fltPresence int, sile
 // By default, adds new or updates existing custom keys.
 // Use `setNewCustomMDFlag` to _replace_ all existing keys with the specified (new) ones.
 // See also: HeadObject() and apc.HdrObjCustomMD
-func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.StrKVs, setNew bool) error {
+func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, objName string, custom cos.StrKVs, setNew bool) error {
 	var (
 		actMsg = apc.ActMsg{Value: custom}
 		q      url.Values
@@ -366,7 +366,7 @@ func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = q
@@ -376,13 +376,12 @@ func SetObjectCustomProps(bp BaseParams, bck cmn.Bck, object string, custom cos.
 	return err
 }
 
-// DeleteObject deletes an object specified by bucket/object.
-func DeleteObject(bp BaseParams, bck cmn.Bck, object string) error {
+func DeleteObject(bp BaseParams, bck cmn.Bck, objName string) error {
 	bp.Method = http.MethodDelete
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Query = bck.NewQuery()
 	}
 	err := reqParams.DoRequest()
@@ -390,14 +389,13 @@ func DeleteObject(bp BaseParams, bck cmn.Bck, object string) error {
 	return err
 }
 
-// EvictObject evicts an object specified by bucket/object.
-func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
+func EvictObject(bp BaseParams, bck cmn.Bck, objName string) error {
 	bp.Method = http.MethodDelete
-	actMsg := apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, object)}
+	actMsg := apc.ActMsg{Action: apc.ActEvictObjects, Name: cos.JoinWords(bck.Name, objName)}
 	reqParams := AllocRp()
 	{
 		reqParams.BaseParams = bp
-		reqParams.Path = apc.URLPathObjects.Join(bck.Name, object)
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name, objName)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
 		reqParams.Query = bck.NewQuery()
@@ -407,8 +405,15 @@ func EvictObject(bp BaseParams, bck cmn.Bck, object string) error {
 	return err
 }
 
-// PutObject creates an object from the body of the reader (`args.Reader`) and puts
-// it in the specified bucket.
+// prefetch object
+// - convenience method added also for "symmetry" with the evict (above)
+// - compare with api.PrefetchList and api.PrefetchRange
+func PrefetchObject(bp BaseParams, bck cmn.Bck, objName string) (string, error) {
+	return PrefetchList(bp, bck, []string{objName})
+}
+
+// PutObject PUTs the specified reader (`args.Reader`) as a new object
+// (or a new version of the object) it in the specified bucket.
 //
 // Assumes that `args.Reader` is already opened and ready for usage.
 // Returns `ObjAttrs` that can be further used to get the size and other object metadata.
@@ -564,7 +569,7 @@ func Promote(args *PromoteArgs) (xid string, err error) {
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
 	args.BaseParams.Method = method
-	return
+	return xid, err
 }
 
 // DoWithRetry executes `http-client.Do` and retries *retriable connection errors*,

@@ -203,7 +203,7 @@ func (a *archbck) dest() string { return a.dst.bck.Cname(a.dst.oname) }
 func (a *archbck) parse(c *cli.Context) (err error) {
 	err = a.putargs.parse(c, false /*empty dst oname ok*/)
 	if a.dst.bck.IsEmpty() || err == nil {
-		return
+		return err
 	}
 	//
 	// parse a.rsrc (TODO -- FIXME: support archiving local a.src)
@@ -217,15 +217,26 @@ func (a *archbck) parse(c *cli.Context) (err error) {
 		return incorrectUsageMsg(c, fmt.Sprintf("%s and %s options are mutually exclusive",
 			flprn(listFlag), flprn(templateFlag)))
 	}
-	uri := c.Args().Get(0) // remote source
-	if a.rsrc.bck, err = parseBckURI(c, uri, false); err != nil {
-		return
+
+	// source bucket[/obj-or-range]
+	var (
+		objNameOrTmpl string
+		uri           = c.Args().Get(0)
+	)
+	if a.rsrc.bck, objNameOrTmpl, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/); err != nil {
+		return err
 	}
-	if flagIsSet(c, listFlag) {
-		list := parseStrFlag(c, listFlag)
-		a.rsrc.lr.ObjNames = splitCsv(list)
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	if err != nil {
+		return err
+	}
+	if listObjs == "" && tmplObjs == "" {
+		listObjs = objName // NOTE: "pure" prefix comment in parseObjListTemplate (above)
+	}
+	if listObjs != "" {
+		a.rsrc.lr.ObjNames = splitCsv(listObjs)
 	} else {
-		a.rsrc.lr.Template = parseStrFlag(c, templateFlag)
+		a.rsrc.lr.Template = tmplObjs
 	}
 	return
 }

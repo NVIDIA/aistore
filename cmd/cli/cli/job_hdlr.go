@@ -25,6 +25,17 @@ import (
 	"github.com/urfave/cli"
 )
 
+const (
+	prefetchUsage = "prefetch one remote bucket, multiple remote buckets, or\n" +
+		indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
+		indent1 + "\t- 'prefetch gs://abc'\t- prefetch entire bucket (all gs://abc objects that are _not_ present in the cluster);\n" +
+		indent1 + "\t- 'prefetch gs:'\t- prefetch all visible/accessible GCP buckets;\n" +
+		indent1 + "\t- 'prefetch gs://abc --template images/'\t- prefetch all objects from the virtual subdirectory \"images\";\n" +
+		indent1 + "\t- 'prefetch gs://abc/images/'\t- same as above;\n" +
+		indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
+		indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+)
+
 // top-level job command
 var (
 	jobCmd = cli.Command{
@@ -67,8 +78,9 @@ var (
 			verboseFlag,
 		},
 		commandPrefetch: append(
-			listrangeFlags,
+			listRangeProgressWaitFlags,
 			dryRunFlag,
+			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 		),
 		cmdLRU: {
 			lruBucketsFlag,
@@ -85,18 +97,21 @@ var (
 		Action:       startResilverHandler,
 		BashComplete: suggestTargets,
 	}
+
+	prefetchStartCmd = cli.Command{
+		Name:         commandPrefetch,
+		Usage:        prefetchUsage,
+		ArgsUsage:    bucketObjectOrTemplateMultiArg,
+		Flags:        startSpecialFlags[commandPrefetch],
+		Action:       startPrefetchHandler,
+		BashComplete: bucketCompletions(bcmplop{multiple: true}),
+	}
+
 	jobStartSub = cli.Command{
 		Name:  commandStart,
 		Usage: "run batch job",
 		Subcommands: []cli.Command{
-			{
-				Name:         commandPrefetch,
-				Usage:        "prefetch objects from remote buckets",
-				ArgsUsage:    bucketArgument,
-				Flags:        startSpecialFlags[commandPrefetch],
-				Action:       startPrefetchHandler,
-				BashComplete: bucketCompletions(bcmplop{multiple: true}),
-			},
+			prefetchStartCmd,
 			{
 				Name:      cmdDownload,
 				Usage:     "download files and objects from remote sources",
@@ -630,33 +645,6 @@ func startLRUHandler(c *cli.Context) (err error) {
 
 	fmt.Fprintf(c.App.Writer, "Started %s %s. %s\n", apc.ActLRU, id, toMonitorMsg(c, id, ""))
 	return
-}
-
-func startPrefetchHandler(c *cli.Context) (err error) {
-	if flagIsSet(c, dryRunFlag) {
-		dryRunCptn(c)
-	}
-	if c.NArg() == 0 {
-		return incorrectUsageMsg(c, c.Command.ArgsUsage)
-	}
-	if c.NArg() > 1 {
-		return incorrectUsageMsg(c, "", c.Args()[1:])
-	}
-	bck, err := parseBckURI(c, c.Args().Get(0), false)
-	if err != nil {
-		return
-	}
-	if bck.IsAIS() {
-		return fmt.Errorf("cannot prefetch from ais buckets (the operation applies to remote buckets only)")
-	}
-	if _, err = headBucket(bck, false /* don't add */); err != nil {
-		return
-	}
-
-	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return listrange(c, bck)
-	}
-	return missingArgumentsError(c, "object list or range")
 }
 
 //

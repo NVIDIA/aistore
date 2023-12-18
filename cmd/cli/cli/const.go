@@ -239,11 +239,14 @@ const (
 	jsonKeyValueArgument  = "JSON-formatted-KEY-VALUE"
 
 	// Buckets
-	bucketArgument          = "BUCKET"
-	optionalBucketArgument  = "[BUCKET]"
-	bucketsArgument         = "BUCKET [BUCKET...]"
-	bucketPropsArgument     = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
-	bucketAndPropsArgument  = "BUCKET [PROP_PREFIX]"
+	bucketArgument         = "BUCKET"
+	optionalBucketArgument = "[BUCKET]"
+	bucketsArgument        = "BUCKET [BUCKET...]"
+	bucketPropsArgument    = bucketArgument + " " + jsonKeyValueArgument + " | " + keyValuePairsArgument
+	bucketAndPropsArgument = "BUCKET [PROP_PREFIX]"
+
+	bucketObjectOrTemplateMultiArg = "BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]"
+
 	bucketSrcArgument       = "SRC_BUCKET"
 	bucketObjectSrcArgument = "SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE]"
 	bucketDstArgument       = "DST_BUCKET"
@@ -387,7 +390,7 @@ var (
 	// prefix (to match)
 	listObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "list objects that start with the specified prefix, e.g.:\n" +
+		Usage: "list objects that have names starting with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - list virtual directory a/b/c and/or objects from the virtual directory\n" +
 			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter 'c'",
 	}
@@ -395,15 +398,16 @@ var (
 		Name: listObjPrefixFlag.Name,
 		Usage: "get objects that start with the specified prefix, e.g.:\n" +
 			indent4 + "\t'--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory\n" +
-			indent4 + "\ta/b that have their names (relative to this directory) starting with c;\n" +
-			indent4 + "\t'--prefix \"\"' - get entire bucket",
+			indent4 + "\ta/b that have their names (relative to this directory) starting with 'c';\n" +
+			indent4 + "\t'--prefix \"\"' - get entire bucket (all objects)",
 	}
-	copyObjPrefixFlag = cli.StringFlag{
+	verbObjPrefixFlag = cli.StringFlag{
 		Name: "prefix",
-		Usage: "copy objects that start with the specified prefix, e.g.:\n" +
-			indent4 + "\t'--prefix a/b/c' - copy virtual directory a/b/c and/or objects from the virtual directory\n" +
-			indent4 + "\ta/b that have their names (relative to this directory) starting with the letter c",
+		Usage: "select objects that have names starting with the specified prefix, e.g.:\n" +
+			indent4 + "\t'--prefix a/b/c'\t- matches names 'a/b/c/d', 'a/b/cdef', and similar;\n" +
+			indent4 + "\t'--prefix a/b/c/'\t- only matches objects from the virtual directory a/b/c/",
 	}
+
 	bsummPrefixFlag = cli.StringFlag{
 		Name: "prefix",
 		Usage: "for each bucket, select only those objects (names) that start with the specified prefix, e.g.:\n" +
@@ -457,7 +461,7 @@ var (
 	dryRunFlag   = cli.BoolFlag{Name: "dry-run", Usage: "preview the results without really running the action"}
 
 	verboseFlag    = cli.BoolFlag{Name: "verbose,v", Usage: "verbose output"}
-	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose output"}
+	nonverboseFlag = cli.BoolFlag{Name: "non-verbose,nv", Usage: "non-verbose (quiet) output, minimized reporting"}
 	verboseJobFlag = cli.BoolFlag{
 		Name:  verboseFlag.Name,
 		Usage: "show extended statistics",
@@ -637,7 +641,7 @@ var (
 			indent4 + "\t--template \"/abc/prefix-{0010..9999..2}-suffix\"",
 	}
 
-	listrangeFlags = []cli.Flag{
+	listRangeProgressWaitFlags = []cli.Flag{
 		listFlag,
 		templateFlag,
 		waitFlag,
@@ -680,6 +684,10 @@ var (
 		Usage: "show properties of _all_ objects from a remote bucket including those (objects) that are not present (not \"cached\")",
 	}
 
+	dontHeadBucketFlag = cli.BoolFlag{
+		Name:  "skip-lookup",
+		Usage: "skip checking bucket(s) existence (trading off extra lookup for performance)\n",
+	}
 	dontHeadRemoteFlag = cli.BoolFlag{
 		Name: "skip-lookup",
 		Usage: "do not execute HEAD(bucket) request to lookup remote bucket and its properties; possible usage scenarios include:\n" +
@@ -781,8 +789,9 @@ var (
 	}
 	// 'ais archive put': conditional APPEND
 	archAppendOrPutFlag = cli.BoolFlag{
-		Name:  "append-or-put",
-		Usage: "if destination object (\"archive\", \"shard\") exists append to it, otherwise archive a new one",
+		Name: "append-or-put",
+		Usage: "append to an existing destination object (\"archive\", \"shard\") iff exists; otherwise PUT a new archive (shard);\n" +
+			indent4 + "\tnote that PUT (with subsequent overwrite if the destination exists) is the default behavior when the flag is omitted",
 	}
 	// 'ais archive put': unconditional APPEND: destination must exist
 	archAppendOnlyFlag = cli.BoolFlag{

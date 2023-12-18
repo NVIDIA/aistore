@@ -1069,7 +1069,6 @@ func (p *proxy) httpbckput(w http.ResponseWriter, r *http.Request) {
 			bckToArgs := bckInitArgs{p: p, w: w, r: r, bck: bckTo, msg: msg, perms: apc.AcePUT, query: query}
 			bckToArgs.createAIS = false
 			if bckTo, err = bckToArgs.initAndTry(); err != nil {
-				p.writeErr(w, r, err)
 				return
 			}
 		}

@@ -876,7 +876,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	}
 
 	errCode, err := t.DeleteObject(lom, evict)
-	if err == nil {
+	if err == nil && errCode == 0 {
 		// EC cleanup if EC is enabled
 		ec.ECM.CleanupObject(lom)
 	} else {

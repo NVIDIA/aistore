@@ -23,9 +23,11 @@ import (
 var (
 	objectCmdsFlags = map[string][]cli.Flag{
 		commandRemove: append(
-			listrangeFlags,
+			listRangeProgressWaitFlags,
+			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
 			rmrfFlag,
-			verboseFlag,
+			verboseFlag, // rm -rf
+			nonverboseFlag,
 			yesFlag,
 		),
 		commandRename: {},
@@ -51,7 +53,7 @@ var (
 		},
 
 		commandPut: append(
-			listrangeFlags,
+			listRangeProgressWaitFlags,
 			chunkSizeFlag,
 			concurrencyFlag,
 			dryRunFlag,
@@ -164,6 +166,30 @@ var (
 		Action:    setCustomPropsHandler,
 	}
 
+	objectCmdPrefetch = cli.Command{
+		Name:         commandPrefetch,
+		Usage:        prefetchUsage,
+		ArgsUsage:    bucketObjectOrTemplateMultiArg,
+		Flags:        startSpecialFlags[commandPrefetch],
+		Action:       startPrefetchHandler,
+		BashComplete: bucketCompletions(bcmplop{multiple: true}),
+	}
+
+	objectCmdRemove = cli.Command{
+		Name: commandRemove,
+		Usage: "remove object or selected objects from the specified bucket, or buckets - e.g.:\n" +
+			indent1 + "\t- 'rm ais://nnn --all'\t- remove all objects from the bucket ais://nnn;\n" +
+			indent1 + "\t- 'rm s3://abc' --all\t- remove all objects including those that are not _present_ in the cluster;\n" +
+			indent1 + "\t- 'rm gs://abc --template images/'\t- remove all objects from the virtual subdirectory \"images\";\n" +
+			indent1 + "\t- 'rm gs://abc/images/'\t- same as above;\n" +
+			indent1 + "\t- 'rm gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- remove the matching range (prefix + brace expansion);\n" +
+			indent1 + "\t- 'rm \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)",
+		ArgsUsage:    bucketObjectOrTemplateMultiArg,
+		Flags:        objectCmdsFlags[commandRemove],
+		Action:       rmHandler,
+		BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
+	}
+
 	objectCmd = cli.Command{
 		Name:  commandObject,
 		Usage: "put, get, list, rename, remove, and other operations on objects",
@@ -175,6 +201,8 @@ var (
 			makeAlias(bucketCmdCopy, "", true, commandCopy), // alias for `ais [bucket] cp`
 			objectCmdConcat,
 			objectCmdSetCustom,
+			objectCmdRemove,
+			objectCmdPrefetch,
 			bucketObjCmdEvict,
 			makeAlias(showCmdObject, "", true, commandShow), // alias for `ais show`
 			{
@@ -183,14 +211,6 @@ var (
 				ArgsUsage:    renameObjectArgument,
 				Flags:        objectCmdsFlags[commandRename],
 				Action:       mvObjectHandler,
-				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
-			},
-			{
-				Name:         commandRemove,
-				Usage:        "remove object(s) from the specified bucket",
-				ArgsUsage:    optionalObjectsArgument,
-				Flags:        objectCmdsFlags[commandRemove],
-				Action:       removeObjectHandler,
 				BashComplete: bucketCompletions(bcmplop{multiple: true, separator: true}),
 			},
 			{
@@ -250,49 +270,6 @@ func mvObjectHandler(c *cli.Context) (err error) {
 
 	fmt.Fprintf(c.App.Writer, "%q moved to %q\n", oldObj, newObj)
 	return
-}
-
-func removeObjectHandler(c *cli.Context) (err error) {
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	if c.NArg() == 1 {
-		uri := c.Args().Get(0)
-		bck, objName, err := parseBckObjURI(c, uri, true /*is optional*/)
-		if err != nil {
-			return err
-		}
-		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-			// List or range operation on a given bucket.
-			return listrange(c, bck)
-		}
-		if flagIsSet(c, rmrfFlag) {
-			if !flagIsSet(c, yesFlag) {
-				warn := fmt.Sprintf("will remove all objects from %s. The operation cannot be undone!", bck)
-				if ok := confirm(c, "Proceed?", warn); !ok {
-					return nil
-				}
-			}
-			return rmRfAllObjects(c, bck)
-		}
-
-		if objName == "" {
-			return incorrectUsageMsg(c, "use one of: (%s or %s or %s) to indicate _which_ objects to remove",
-				qflprn(listFlag), qflprn(templateFlag), qflprn(rmrfFlag))
-		}
-
-		// ais rm BUCKET/OBJECT_NAME - pass, multiObjOp will handle it
-	}
-
-	// List and range flags are invalid with object argument(s).
-	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q, %q cannot be used together with object name arguments",
-			listFlag.Name, templateFlag.Name)
-	}
-
-	// Object argument(s) given by the user; operation on given object(s).
-	return multiobjArg(c, commandRemove)
 }
 
 // main PUT handler: cases 1 through 4

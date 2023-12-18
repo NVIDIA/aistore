@@ -68,8 +68,9 @@ var (
 
 	DefaultAliasConfig = AliasConfig{
 		// object
-		"get": "object get",
-		"put": "object put",
+		"get":      "object get",
+		"put":      "object put",
+		"prefetch": "object prefetch", // same as "job start prefetch"
 		// bucket
 		"ls":     "bucket ls",
 		"create": "bucket create",

@@ -80,10 +80,10 @@ func EvictRange(bp BaseParams, bck cmn.Bck, rng string) (string, error) {
 }
 
 // PrefetchList sends request to prefetch a list of objects from a remote bucket.
-func PrefetchList(bp BaseParams, bck cmn.Bck, fileslist []string) (string, error) {
+func PrefetchList(bp BaseParams, bck cmn.Bck, objNames []string) (string, error) {
 	bp.Method = http.MethodPost
 	q := bck.NewQuery()
-	msg := apc.ListRange{ObjNames: fileslist}
+	msg := apc.ListRange{ObjNames: objNames}
 	return dolr(bp, bck, apc.ActPrefetchObjects, msg, q)
 }
 

@@ -809,8 +809,10 @@ func parseHexOrUint(s string) (uint64, error) {
 	return strconv.ParseUint(s, 10, 64)
 }
 
+// loosely, wildcard or range
 func isPattern(ptrn string) bool {
-	return strings.Contains(ptrn, "*") || strings.Contains(ptrn, "?") || strings.Contains(ptrn, "\\")
+	return strings.Contains(ptrn, "*") || strings.Contains(ptrn, "?") || strings.Contains(ptrn, "\\") ||
+		(strings.Contains(ptrn, "{") && strings.Contains(ptrn, "}"))
 }
 
 // NOTE: as provider, AIS can be (local cluster | remote cluster) -

@@ -556,7 +556,7 @@ func (u *_listed) cb(ctx *api.LsoCounter) {
 		}
 		s += strings.Repeat(" ", u.l-len(s))
 		fmt.Fprintf(u.c.App.Writer, "\r%s", s)
-	} else {
+	} else if !flagIsSet(u.c, noFooterFlag) {
 		elapsed := teb.FormatDuration(ctx.Elapsed())
 		fmt.Fprintf(u.c.App.Writer, "\rListed %s objects in %v\n", cos.FormatBigNum(ctx.Count()), elapsed)
 		time.Sleep(time.Second)

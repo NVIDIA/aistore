@@ -41,7 +41,6 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
 		if err != nil {
 			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-				// slightly nicer
 				err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(0))
 			}
 		}
@@ -68,18 +67,18 @@ func copyBucketHandler(c *cli.Context) (err error) {
 // main function: (cp | etl) & (bucket | multi-object)
 //
 
-func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
+func copyTransform(c *cli.Context, etlName, objNameOrTmpl string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) (err error) {
 	text1, text2 := "copy", "Copying"
 	if etlName != "" {
 		text1, text2 = "transform", "Transforming"
 	}
-	if flagIsSet(c, listFlag) && flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+
+	objName, listObjs, tmplObjs, err := parseObjListTemplate(c, objNameOrTmpl)
+	if err != nil {
+		return err
 	}
-	if objName != "" && (flagIsSet(c, listFlag) || flagIsSet(c, templateFlag)) {
-		return fmt.Errorf("source object name or pattern (%s) cannot be used together with source-specifying %s and/or %s",
-			objName, qflprn(listFlag), qflprn(templateFlag))
-	}
+
+	// HEAD(from)
 	if _, err = headBucket(bckFrom, true /* don't add */); err != nil {
 		return err
 	}
@@ -96,6 +95,8 @@ func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.B
 		actionNote(c, note)
 		return nil
 	}
+
+	// HEAD(to)
 	if _, err = api.HeadBucket(apiBP, bckTo, true /* don't add */); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); !ok || herr.Status != http.StatusNotFound {
 			return err
@@ -107,8 +108,8 @@ func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.B
 
 	dryRun := flagIsSet(c, copyDryRunFlag)
 
-	// (I) copy/transform bucket (x-tcb)
-	if objName == "" && !flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag) {
+	// either 1. copy/transform bucket (x-tcb)
+	if objName == "" && listObjs == "" && tmplObjs == "" {
 		// NOTE: e.g. 'ais cp gs://abc gs:/abc' to sync remote bucket => aistore
 		if bckFrom.Equal(&bckTo) && !bckFrom.IsRemote() {
 			return incorrectUsageMsg(c, errFmtSameBucket, commandCopy, bckTo)
@@ -124,19 +125,10 @@ func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.B
 		return copyBucket(c, bckFrom, bckTo, allIncludingRemote)
 	}
 
-	// (II) multi-object x-tco
-	listObjs := parseStrFlag(c, listFlag)
-	tmplObjs := parseStrFlag(c, templateFlag)
-
-	if objName != "" {
-		debug.Assert(listObjs == "" && tmplObjs == "")
-		if isPattern(objName) {
-			tmplObjs = objName
-		} else {
-			listObjs = objName
-		}
+	// or 2. multi-object x-tco
+	if listObjs == "" && tmplObjs == "" {
+		listObjs = objName // NOTE: "pure" prefix comment in parseObjListTemplate (above)
 	}
-
 	if dryRun {
 		var msg string
 		if listObjs != "" {
@@ -147,7 +139,7 @@ func copyTransform(c *cli.Context, etlName, objName string, bckFrom, bckTo cmn.B
 		dryRunCptn(c) // TODO -- FIXME: ditto
 		actionDone(c, msg)
 	}
-	return multiobjTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
+	return runTCO(c, bckFrom, bckTo, listObjs, tmplObjs, etlName)
 }
 
 func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
@@ -163,7 +155,7 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	// copy: with/wo progress/wait
 	msg := &apc.CopyBckMsg{
 		Prepend: parseStrFlag(c, copyPrependFlag),
-		Prefix:  parseStrFlag(c, copyObjPrefixFlag),
+		Prefix:  parseStrFlag(c, verbObjPrefixFlag),
 		DryRun:  flagIsSet(c, copyDryRunFlag),
 		Force:   flagIsSet(c, forceFlag),
 	}
@@ -241,16 +233,11 @@ func etlBucketHandler(c *cli.Context) error {
 }
 
 func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allIncludingRemote bool) error {
-	debug.Assert(!flagIsSet(c, listFlag) && !flagIsSet(c, templateFlag))
-	debug.Assert(etlName != "")
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 		CopyBckMsg: apc.CopyBckMsg{
 			Prepend: parseStrFlag(c, copyPrependFlag),
-			Prefix:  parseStrFlag(c, copyObjPrefixFlag),
+			Prefix:  parseStrFlag(c, verbObjPrefixFlag),
 			DryRun:  flagIsSet(c, copyDryRunFlag),
 			Force:   flagIsSet(c, forceFlag),
 		},

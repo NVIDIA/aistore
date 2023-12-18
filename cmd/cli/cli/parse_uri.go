@@ -34,7 +34,6 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			// slightly nicer
 			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift))
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
@@ -46,7 +45,6 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
 	if err != nil {
 		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			// slightly nicer
 			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift+1))
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
@@ -173,7 +171,6 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 		err = incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err = bck.Validate(); err != nil {
 		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			// slightly nicer
 			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
 		} else {
 			err = cannotExecuteError(c, err, "")
@@ -182,4 +179,45 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 		err = incorrectUsageMsg(c, "%q: missing object name", uri)
 	}
 	return bck, objName, err
+}
+
+func parseObjListTemplate(c *cli.Context, objNameOrTmpl string) (objName, listObjs, tmplObjs string, err error) {
+	var prefix string
+	if flagIsSet(c, listFlag) {
+		listObjs = parseStrFlag(c, listFlag)
+	}
+	if flagIsSet(c, templateFlag) {
+		tmplObjs = parseStrFlag(c, templateFlag)
+	}
+
+	// when template is a "pure" prefix (use '--prefix' to disambiguate vs. objName)
+	if flagIsSet(c, verbObjPrefixFlag) {
+		prefix = parseStrFlag(c, verbObjPrefixFlag)
+		if tmplObjs != "" {
+			err = incorrectUsageMsg(c, errFmtExclusive, qflprn(verbObjPrefixFlag), qflprn(templateFlag))
+			return "", "", "", err
+		}
+		tmplObjs = prefix
+	}
+
+	if listObjs != "" && tmplObjs != "" {
+		err = incorrectUsageMsg(c, errFmtExclusive, qflprn(listFlag), qflprn(templateFlag))
+		return "", "", "", err
+	}
+
+	if objNameOrTmpl != "" {
+		if listObjs != "" || tmplObjs != "" {
+			what := "object name or prefix"
+			if isPattern(objNameOrTmpl) {
+				what = "pattern or template"
+			}
+			err = fmt.Errorf("%s (%s) cannot be used together with flags %s and %s (tip: use either one or the other)",
+				what, objNameOrTmpl, qflprn(listFlag), qflprn(templateFlag))
+		} else if isPattern(objNameOrTmpl) {
+			tmplObjs = objNameOrTmpl
+		} else {
+			objName = objNameOrTmpl
+		}
+	}
+	return objName, listObjs, tmplObjs, err
 }

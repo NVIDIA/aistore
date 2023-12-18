@@ -151,7 +151,7 @@ func _evictBck(c *cli.Context, bck cmn.Bck) (err error) {
 	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
 		return
 	}
-	fmt.Fprintf(c.App.Writer, "%q bucket evicted\n", bck.Cname(""))
+	actionDone(c, "Evicted bucket "+bck.Cname("")+" from aistore")
 	return
 }
 
@@ -436,6 +436,7 @@ func ecEncode(c *cli.Context, bck cmn.Bck, data, parity int) (err error) {
 func printObjProps(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter, props string, addCachedCol bool) error {
 	var (
 		hideHeader     = flagIsSet(c, noHeaderFlag)
+		hideFooter     = flagIsSet(c, noFooterFlag)
 		matched, other = lstFilter.apply(entries)
 		units, errU    = parseUnitsFlag(c, unitsFlag)
 	)
@@ -449,7 +450,7 @@ func printObjProps(c *cli.Context, entries cmn.LsoEntries, lstFilter *lstFilter,
 	if err := teb.Print(matched, tmpl, opts); err != nil {
 		return err
 	}
-	if len(matched) > 10 {
+	if !hideFooter && len(matched) > 10 {
 		listed := fblue("Listed:")
 		fmt.Fprintln(c.App.Writer, listed, cos.FormatBigNum(len(matched)), "names")
 	}

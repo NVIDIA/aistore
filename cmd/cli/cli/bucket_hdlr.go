@@ -45,14 +45,14 @@ var (
 			yesFlag,
 		},
 		commandCopy: {
+			listFlag,
+			templateFlag,
+			verbObjPrefixFlag,
 			copyAllObjsFlag,
 			continueOnErrorFlag,
 			forceFlag,
 			copyDryRunFlag,
 			copyPrependFlag,
-			copyObjPrefixFlag,
-			listFlag,
-			templateFlag,
 			progressFlag,
 			refreshFlag,
 			waitFlag,
@@ -64,10 +64,12 @@ var (
 			waitJobXactFinishedFlag,
 		},
 		commandEvict: append(
-			listrangeFlags,
-			dryRunFlag,
+			listRangeProgressWaitFlags,
 			keepMDFlag,
-			verboseFlag,
+			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
+			dryRunFlag,
+			verboseFlag, // not yet used
+			nonverboseFlag,
 		),
 		cmdSetBprops: {
 			forceFlag,
@@ -153,12 +155,15 @@ var (
 	}
 	bucketObjCmdEvict = cli.Command{
 		Name: commandEvict,
-		Usage: "evict one remote bucket, multiple buckets, or selected objects in a given remote bucket\n" +
-			indent1 + "(to select, use '--list' or '--template'), e.g.:\n" +
-			indent1 + "\t* gs://abc\t- evict entire bucket (all gs://abc objects in aistore);\n" +
-			indent1 + "\t* gs:\t- evict all GCP buckets;\n" +
-			indent1 + "\t* gs://abc --template images/\t- evict all objects from the virtual subdirectory called \"images\"",
-		ArgsUsage:    optionalObjectsArgument,
+		Usage: "evict one remote bucket, multiple remote buckets, or\n" +
+			indent1 + "selected objects in a given remote bucket or buckets, e.g.:\n" +
+			indent1 + "\t- 'evict gs://abc'\t- evict entire bucket (all gs://abc objects in aistore);\n" +
+			indent1 + "\t- 'evict gs:'\t- evict all GCP buckets from the cluster;\n" +
+			indent1 + "\t- 'evict gs://abc --template images/'\t- evict all objects from the virtual subdirectory \"images\";\n" +
+			indent1 + "\t- 'evict gs://abc/images/'\t- same as above;\n" +
+			indent1 + "\t- 'evict gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- evict the matching range (prefix + brace expansion);\n" +
+			indent1 + "\t- 'evict \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)",
+		ArgsUsage:    bucketObjectOrTemplateMultiArg,
 		Flags:        bucketCmdsFlags[commandEvict],
 		Action:       evictHandler,
 		BashComplete: bucketCompletions(bcmplop{multiple: true}),
@@ -368,48 +373,6 @@ func removeBucketHandler(c *cli.Context) error {
 	return destroyBuckets(c, buckets)
 }
 
-func evictHandler(c *cli.Context) error {
-	if flagIsSet(c, dryRunFlag) {
-		dryRunCptn(c)
-	}
-	if c.NArg() == 0 {
-		return missingArgumentsError(c, c.Command.ArgsUsage)
-	}
-
-	// Bucket argument provided by the user.
-	if c.NArg() == 1 {
-		uri := preparseBckObjURI(c.Args().Get(0))
-		bck, objName, err := parseBckObjURI(c, uri, true /*emptyObjnameOK*/) // cmn.ParseBckObjectURI(uri, opts)
-		if err != nil {
-			return err
-		}
-		if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-			if objName != "" {
-				return incorrectUsageMsg(c,
-					"object name (%q) cannot be used together with %s and/or %s flags",
-					objName, qflprn(listFlag), qflprn(templateFlag))
-			}
-			// List or range operation on a given bucket.
-			return listrange(c, bck)
-		}
-		if objName == "" {
-			// Evict entire bucket.
-			return evictBucket(c, bck)
-		}
-
-		// Evict a single object from remote bucket - multiObjOp will handle.
-	}
-
-	// List and range flags are invalid with object argument(s)
-	if flagIsSet(c, listFlag) || flagIsSet(c, templateFlag) {
-		return incorrectUsageMsg(c, "flags %q, %q cannot be used together with object name arguments",
-			listFlag.Name, templateFlag.Name)
-	}
-
-	// operation on a given object or objects.
-	return multiobjArg(c, commandEvict)
-}
-
 func resetPropsHandler(c *cli.Context) error {
 	bck, err := parseBckURI(c, c.Args().Get(0), false)
 	if err != nil {
@@ -557,7 +520,6 @@ func listAnyHandler(c *cli.Context) error {
 
 	if err != nil {
 		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			// slightly nicer
 			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
 		}
 		return err

@@ -947,7 +947,11 @@ func (h *htrun) logerr(tag string, v any, err error) {
 		f := filepath.Base(file)
 		msg += fmt.Sprintf("%s:%d", f, line)
 	}
-	nlog.Errorln(msg)
+	if cos.IsErrBrokenPipe(err) { // client went away
+		nlog.Infoln("Warning: " + msg)
+	} else {
+		nlog.Errorln(msg)
+	}
 	h.statsT.IncErr(stats.ErrHTTPWriteCount)
 }
 
