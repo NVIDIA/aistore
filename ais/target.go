@@ -1295,17 +1295,19 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 		delFromAIS, delFromBackend bool
 	)
 	delFromBackend = lom.Bck().IsRemote() && !evict
-	if err := lom.Load(false /*cache it*/, true /*locked*/); err == nil {
-		delFromAIS = true
-	} else if !cmn.IsObjNotExist(err) {
-		return 0, err, false
-	} else {
-		aisErrCode = http.StatusNotFound
+	err := lom.Load(false /*cache it*/, true /*locked*/)
+	if err != nil {
+		if !cmn.IsObjNotExist(err) {
+			return 0, err, false
+		}
 		if !delFromBackend {
 			return http.StatusNotFound, err, false
 		}
+	} else {
+		delFromAIS = true
 	}
 
+	// do
 	if delFromBackend {
 		backendErrCode, backendErr = t.Backend(lom.Bck()).DeleteObj(lom)
 	}
