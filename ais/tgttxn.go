@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/xact"
@@ -607,7 +606,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err
 
 	var (
 		xctn = rns.Entry.Get()
-		xtcb = xctn.(*mirror.XactTCB)
+		xtcb = xctn.(*xs.XactTCB)
 		txn  = newTxnTCB(c, xtcb)
 		nlps = []cluster.NLP{nlpFrom}
 	)

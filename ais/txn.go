@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/hk"
-	"github.com/NVIDIA/aistore/mirror"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
 
@@ -110,7 +109,7 @@ type (
 		txnBckBase
 	}
 	txnTCB struct {
-		xtcb *mirror.XactTCB
+		xtcb *xs.XactTCB
 		txnBckBase
 	}
 	txnTCObjs struct {
@@ -562,7 +561,7 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *meta.Bck) (txn *txnRena
 // txnTCB //
 ////////////
 
-func newTxnTCB(c *txnServerCtx, xtcb *mirror.XactTCB) (txn *txnTCB) {
+func newTxnTCB(c *txnServerCtx, xtcb *xs.XactTCB) (txn *txnTCB) {
 	txn = &txnTCB{xtcb: xtcb}
 	txn.init(xtcb.Args().BckFrom)
 	txn.fillFromCtx(c)

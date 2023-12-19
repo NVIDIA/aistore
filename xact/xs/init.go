@@ -27,6 +27,9 @@ func Xreg() {
 	xreg.RegBckXact(&proFactory{})
 	xreg.RegBckXact(&llcFactory{})
 
+	xreg.RegBckXact(&tcbFactory{kind: apc.ActCopyBck})
+	xreg.RegBckXact(&tcbFactory{kind: apc.ActETLBck})
+
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActETLObjects}})
 	xreg.RegBckXact(&tcoFactory{streamingF: streamingF{kind: apc.ActCopyObjects}})
 	xreg.RegBckXact(&archFactory{streamingF: streamingF{kind: apc.ActArchive}})
