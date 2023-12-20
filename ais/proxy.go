@@ -61,13 +61,14 @@ type (
 		qm         lsobjMem
 		rproxy     reverseProxy
 		notifs     notifs
+		lstca      lstca
 		reg        struct {
 			pool nodeRegPool
 			mu   sync.RWMutex
 		}
 		remais struct {
 			cluster.Remotes
-			old []*cluster.RemAis // to facilitate a2u resultion (and, therefore, offline access)
+			old []*cluster.RemAis // to facilitate a2u resolution (and, therefore, offline access)
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
@@ -1240,9 +1241,9 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				bckFrom: bckFrom,
 				bckTo:   bckTo,
 				amsg:    msg,
-				tcbmsg:  tcbmsg,
 				config:  cmn.GCO.Get(),
 			}
+			lstcx.tcomsg.TCBMsg = *tcbmsg
 			xid, err = lstcx.do()
 		} else {
 			nlog.Infof("%s: %s => %s", msg.Action, bckFrom, bckTo)
@@ -1290,7 +1291,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 		}
 
 		nlog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
-		if xid, err = p.tcobjs(bck, bckTo, msg, tcomsg.TCBMsg.CopyBckMsg.DryRun); err != nil {
+		if xid, err = p.tcobjs(bck, bckTo, cmn.GCO.Get(), msg, tcomsg); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

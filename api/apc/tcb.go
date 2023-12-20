@@ -24,10 +24,11 @@ type (
 		Timeout cos.Duration `json:"request_timeout,omitempty"`
 	}
 	TCBMsg struct {
-		// NOTE: resulting object names will have this extension, if specified.
-		// NOTE: if source bucket has two (or more) objects with the same base name but different extension,
-		// specifying this field might cause unintended override.
-		// TODO: this field might not be required when range/list transformation is supported.
+		// NOTE: objname extension ----------------------------------------------------------------------
+		// - resulting object names will have this extension, if specified.
+		// - if source bucket has two (or more) objects with the same base name but different extension,
+		//   specifying this field might cause unintended override.
+		// - this field might not be any longer required - TODO review
 		Ext cos.StrKVs `json:"ext"`
 
 		Transform

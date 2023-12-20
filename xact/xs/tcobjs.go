@@ -26,6 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+const PrefixTcoID = "tco-"
+
 type (
 	tcoFactory struct {
 		args *xreg.TCObjsArgs
@@ -66,14 +68,15 @@ func (p *tcoFactory) New(args xreg.Args, bckFrom *meta.Bck) xreg.Renewable {
 	return np
 }
 
-func (p *tcoFactory) Start() (err error) {
+func (p *tcoFactory) Start() error {
 	//
 	// target-local generation of a global UUID
 	//
-	p.Args.UUID, err = p.genBEID(p.args.BckFrom, p.args.BckTo)
+	uuid, err := p.genBEID(p.args.BckFrom, p.args.BckTo)
 	if err != nil {
 		return err
 	}
+	p.Args.UUID = PrefixTcoID + uuid
 
 	// new x-tco
 	workCh := make(chan *cmn.TCObjsMsg, maxNumInParallel)

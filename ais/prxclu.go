@@ -1190,18 +1190,21 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	}
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
 
+	// (lso + tco) special
+	p.lstca.abort(&xargs)
+
 	if xargs.Kind == apc.ActRebalance {
 		// disallow aborting rebalance during
 		// critical (meta.SnodeMaint => meta.SnodeMaintPostReb) and (meta.SnodeDecomm => removed) transitions
 		smap := p.owner.smap.get()
 		for _, tsi := range smap.Tmap {
 			if tsi.Flags.IsAnySet(meta.SnodeMaint) && !tsi.Flags.IsAnySet(meta.SnodeMaintPostReb) {
-				p.writeErrf(w, r, "cannot abort %s: putting target %s in maintenance mode - rebalancing cluster...",
+				p.writeErrf(w, r, "cannot abort %s: putting %s in maintenance mode - rebalancing...",
 					xargs.String(), tsi.StringEx())
 				return
 			}
 			if tsi.Flags.IsAnySet(meta.SnodeDecomm) {
-				p.writeErrf(w, r, "cannot abort %s: decommissioning target %s - rebalancing cluster...",
+				p.writeErrf(w, r, "cannot abort %s: decommissioning %s - rebalancing...",
 					xargs.String(), tsi.StringEx())
 				return
 			}
@@ -1214,13 +1217,12 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	args.to = cluster.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
+
 	for _, res := range results {
-		if res.err == nil {
-			continue
+		if res.err != nil {
+			p.writeErr(w, r, res.toErr())
+			break
 		}
-		p.writeErr(w, r, res.toErr())
-		freeBcastRes(results)
-		return
 	}
 	freeBcastRes(results)
 }

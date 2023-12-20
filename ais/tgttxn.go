@@ -616,8 +616,7 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err
 	return t.transactions.begin(txn, nlps...)
 }
 
-func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (string, error) {
-	var xid string
+func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -1090,6 +1089,7 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 		}
 	}
 
+	c.t = t
 	c.uuid = c.msg.UUID
 	if c.uuid == "" {
 		return c, nil
@@ -1104,7 +1104,6 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 	}
 	c.query = query // operation-specific values, if any
 
-	c.t = t
 	return c, err
 }
 

@@ -616,27 +616,35 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 }
 
 // transform or copy a list or a range of objects
-// TODO: check dry-run
-func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid string, err error) {
+func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.ActMsg, tcomsg *cmn.TCObjsMsg) (xid string,
+	err error) {
 	// 1. confirm existence
 	bmd := p.owner.bmd.get()
 	if _, present := bmd.Get(bckFrom); !present {
-		err = cmn.NewErrBckNotFound(bckFrom.Bucket())
-		return
+		return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
 	}
-	_, existsTo := bmd.Get(bckTo)
-	// 2. begin
+
+	// prep
 	var (
-		waitmsync = !dryRun && !existsTo
-		c         = p.prepTxnClient(msg, bckFrom, waitmsync)
+		_, existsTo = bmd.Get(bckTo) // cleanup on fail: destroy if created
+		waitmsync   = !tcomsg.TCBMsg.DryRun && !existsTo
 	)
+	c := &txnClientCtx{
+		p:    p,
+		uuid: cos.GenUUID(), // TODO -- FIXME tcomsg.TxnUUID, // (via target-local xreg.GenBEID)
+		smap: p.owner.smap.get(),
+	}
+	c.init(msg, bckFrom, config, waitmsync)
+
 	_ = bckTo.AddUnameToQuery(c.req.Query, apc.QparamBckTo)
-	if err = c.begin(bckFrom); err != nil {
-		return
+
+	// 2. begin
+	if err := c.begin(bckFrom); err != nil {
+		return "", err
 	}
 
 	// 3. create dst bucket if doesn't exist - clone bckFrom props
-	if !dryRun && !existsTo {
+	if !tcomsg.TCBMsg.DryRun && !existsTo {
 		ctx := &bmdModifier{
 			pre:   bmodCpProps,
 			final: p.bmodSync,
@@ -659,18 +667,19 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (
 		}
 	}
 
-	// 4. commit
+	// 4. commit - that is, execute xtco.Do(msg)
 	var all []string
 	xid, all, err = c.commit(bckFrom, c.cmtTout(waitmsync))
 	if err != nil && !existsTo {
 		// rm the one that we just created
 		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
-		return
+		return "", err
 	}
+
 	if err != nil || xid != "" {
-		return
+		return xid, err
 	}
-	return strings.Join(all, xact.UUIDSepa), nil
+	return strings.Join(all, xact.UUIDSepa), nil // NOTE: multiple xaction IDs, comma-separated
 }
 
 func parseECConf(value any) (*cmn.ECConfToSet, error) {
@@ -965,22 +974,23 @@ func prmBegin(c *txnClientCtx, bck *meta.Bck, singleT bool) (num int64, allAgree
 }
 
 //
-// misc helpers and utilities
+// misc
 ///
 
 func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnClientCtx {
 	c := &txnClientCtx{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
-	c.msg = p.newAmsg(msg, nil, c.uuid)
-	body := cos.MustMarshal(c.msg)
+	c.init(msg, bck, cmn.GCO.Get(), waitmsync)
+	return c
+}
 
-	query := make(url.Values, 2)
+func (c *txnClientCtx) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnClientCtx {
+	query := make(url.Values, 3)
 	if bck == nil {
 		c.path = apc.URLPathTxn.S
 	} else {
 		c.path = apc.URLPathTxn.Join(bck.Name)
 		query = bck.AddToQuery(query)
 	}
-	config := cmn.GCO.Get()
 	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
 	c.timeout.host = config.Timeout.MaxHostBusy.D()
 	if !waitmsync { // when commit does not block behind metasync
@@ -988,6 +998,8 @@ func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *t
 	}
 	query.Set(apc.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
 
+	c.msg = c.p.newAmsg(msg, nil, c.uuid)
+	body := cos.MustMarshal(c.msg)
 	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
 }
