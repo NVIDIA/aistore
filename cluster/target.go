@@ -75,7 +75,7 @@ type (
 		Promote(params *PromoteParams) (errCode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
 
-		CopyObject(lom *LOM, dm DataMover, dp DP, xact Xact, config *cmn.Config, bckTo *meta.Bck, objnameTo string, buf []byte,
+		CopyObject(lom *LOM, dm DM, dp DP, xact Xact, config *cmn.Config, bckTo *meta.Bck, objnameTo string, buf []byte,
 			dryRun, syncRemote bool) (int64, error)
 	}
 
@@ -91,16 +91,10 @@ type (
 type (
 	OnFinishObj = func(lom *LOM, err error)
 
-	DataMover interface {
-		RegRecv() error
-		GetXact() Xact
-		Open()
-		Close(err error)
-		UnregRecv()
+	DM interface {
 		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error
-		ACK(hdr *transport.ObjHdr, cb transport.ObjSentCB, tsi *meta.Snode) error
-		OWT() cmn.OWT
 	}
+
 	PutObjectParams struct {
 		Reader  io.ReadCloser
 		Cksum   *cos.Cksum // checksum to check

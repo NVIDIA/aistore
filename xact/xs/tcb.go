@@ -81,7 +81,7 @@ func (p *tcbFactory) Start() error {
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	smap := p.T.Sowner().Get()
-	if err := p.xctn.InMaintOrDecomm(smap, p.T.Snode()); err != nil {
+	if err := cluster.InMaintOrDecomm(smap, p.T.Snode(), p.xctn); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()
@@ -92,8 +92,10 @@ func (p *tcbFactory) Start() error {
 	if p.kind == apc.ActETLBck {
 		sizePDU = memsys.DefaultBufSize
 	}
-	err = p.newDM(config, p.UUID(), sizePDU)
-	return err
+	if nat <= 1 {
+		return nil
+	}
+	return p.newDM(config, p.UUID(), sizePDU)
 }
 
 func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error {
@@ -144,7 +146,7 @@ func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 // limited pre-run abort
 func (r *XactTCB) TxnAbort(err error) {
 	err = cmn.NewErrAborted(r.Name(), "tcb: txn-abort", err)
-	r.dm.CloseIf(err)
+	r.dm.Close(err)
 	r.dm.UnregRecv()
 	r.AddErr(err)
 	r.Base.Finish()
@@ -174,8 +176,10 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 func (r *XactTCB) WaitRunning() { r.wg.Wait() }
 
 func (r *XactTCB) Run(wg *sync.WaitGroup) {
-	r.dm.SetXact(r)
-	r.dm.Open()
+	if r.dm != nil {
+		r.dm.SetXact(r)
+		r.dm.Open()
+	}
 	wg.Done()
 
 	r.wg.Done()
@@ -185,19 +189,20 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 
 	err := r.BckJog.Wait()
 
-	o := transport.AllocSend()
-	o.Hdr.Opcode = OpcTxnDone
-	r.dm.Bcast(o, nil)
+	if r.dm != nil {
+		o := transport.AllocSend()
+		o.Hdr.Opcode = OpcTxnDone
+		r.dm.Bcast(o, nil)
 
-	q := r.Quiesce(cmn.Rom.CplaneOperation(), r.qcb)
-	if q == cluster.QuiTimeout {
-		r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
+		q := r.Quiesce(cmn.Rom.CplaneOperation(), r.qcb)
+		if q == cluster.QuiTimeout {
+			r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
+		}
+
+		// close
+		r.dm.Close(err)
+		r.dm.UnregRecv()
 	}
-
-	// close
-	r.dm.Close(err)
-	r.dm.UnregRecv()
-
 	r.Finish()
 }
 

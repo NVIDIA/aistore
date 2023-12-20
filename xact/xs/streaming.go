@@ -90,36 +90,33 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	return "", err
 }
 
-// transport (below, via bundle.Extra) can be extended with:
-// - Compression: config.X.Compression
-// - Multiplier:  config.X.SbundleMult (currently, always 1)
-
 func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, sizePDU int32) (err error) {
-	dmxtra := bundle.Extra{
-		Config:     config,
-		Multiplier: 1,
-		SizePDU:    sizePDU,
+	smap := p.Args.T.Sowner().Get()
+	if err := cluster.InMaintOrDecomm(smap, p.T.Snode(), p.xctn); err != nil {
+		return err
 	}
+	if smap.CountActiveTs() <= 1 {
+		return nil
+	}
+
+	// consider adding config.X.Compression, config.X.SbundleMult (currently, always 1), etc.
+	dmxtra := bundle.Extra{Config: config, Multiplier: 1, SizePDU: sizePDU}
 	p.dm, err = bundle.NewDataMover(p.Args.T, trname, recv, cmn.OwtPut, dmxtra)
 	if err != nil {
-		return
+		return err
 	}
-	if err = p.dm.RegRecv(); err != nil {
-		var total time.Duration // retry for upto waitRegRecv
-		nlog.Errorln(err)
-		sleep := cos.ProbingFrequency(waitRegRecv)
-		for err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv {
-			time.Sleep(sleep)
-			total += sleep
-			err = p.dm.RegRecv()
-		}
+	if err = p.dm.RegRecv(); err == nil {
+		return nil
 	}
-	return
-}
 
-//
-// (common xaction part)
-//
+	nlog.Errorln(err)
+	sleep := cos.ProbingFrequency(waitRegRecv)
+	for total := time.Duration(0); err != nil && transport.IsErrDuplicateTrname(err) && total < waitRegRecv; total += sleep {
+		time.Sleep(sleep)
+		err = p.dm.RegRecv()
+	}
+	return err
+}
 
 func (r *streamingX) String() (s string) {
 	s = r.DemandBase.String()
@@ -132,7 +129,7 @@ func (r *streamingX) String() (s string) {
 // limited pre-run abort
 func (r *streamingX) TxnAbort(err error) {
 	err = cmn.NewErrAborted(r.Name(), "txn-abort", err)
-	r.p.dm.CloseIf(err)
+	r.p.dm.Close(err)
 	r.p.dm.UnregRecv()
 	r.AddErr(err)
 	r.Base.Finish()
@@ -151,6 +148,9 @@ func (r *streamingX) addErr(err error, contOnErr bool, errCode ...int) {
 }
 
 func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
+	if r.p.dm == nil { // single target
+		return
+	}
 	o := transport.AllocSend()
 	o.Hdr.SID = r.p.T.SID()
 	o.Hdr.Opaque = []byte(uuid)
@@ -170,7 +170,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 func (r *streamingX) fin(unreg bool) {
 	if r.DemandBase.Finished() {
 		// must be aborted
-		r.p.dm.CloseIf(r.Err())
+		r.p.dm.Close(r.Err())
 		r.p.dm.UnregRecv()
 		return
 	}
@@ -178,14 +178,11 @@ func (r *streamingX) fin(unreg bool) {
 	r.DemandBase.Stop()
 	r.p.dm.Close(r.Err())
 	r.Finish()
-	if unreg {
+	if unreg && r.p.dm != nil {
 		r.maxWt = 0
-		r.postponeUnregRx()
+		hk.Reg(r.ID()+hk.NameSuffix, r.wurr, waitUnregRecv) // compare w/ lso
 	}
 }
-
-// compare w/ lso
-func (r *streamingX) postponeUnregRx() { hk.Reg(r.ID()+hk.NameSuffix, r.wurr, waitUnregRecv) }
 
 func (r *streamingX) wurr() time.Duration {
 	if cnt := r.wiCnt.Load(); cnt > 0 {

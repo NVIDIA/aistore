@@ -136,10 +136,11 @@ func New(t cluster.Target, config *cmn.Config) *Reb {
 		Compression: config.Rebalance.Compression,
 		Multiplier:  config.Rebalance.SbundleMult,
 	}
-	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrate, dmExtra)
+	dm, err := bundle.NewDataMover(t, trname, reb.recvObj, cmn.OwtMigrateRepl, dmExtra)
 	if err != nil {
 		cos.ExitLog(err)
 	}
+	debug.Assert(dm != nil)
 	reb.dm = dm
 
 	// serialize one global rebalance at a time

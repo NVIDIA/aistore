@@ -408,7 +408,7 @@ func writeObject(lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xa
 		params.Atime = time.Now()
 		params.Xact = xctn
 		// to avoid changing version; TODO: introduce cmn.OwtEC
-		params.OWT = cmn.OwtMigrate
+		params.OWT = cmn.OwtMigrateRepl
 	}
 	err := g.t.PutObject(lom, params)
 	cluster.FreePutObjParams(params)

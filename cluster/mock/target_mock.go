@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -56,7 +56,7 @@ func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                   
 func (*TargetMock) FSHC(error, string)                                          {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                              { return fs.CapStatus{} }
 
-func (*TargetMock) CopyObject(*cluster.LOM, cluster.DataMover, cluster.DP, cluster.Xact, *cmn.Config, *meta.Bck, string, []byte,
+func (*TargetMock) CopyObject(*cluster.LOM, cluster.DM, cluster.DP, cluster.Xact, *cmn.Config, *meta.Bck, string, []byte,
 	bool, bool) (int64, error) {
 	return 0, nil
 }

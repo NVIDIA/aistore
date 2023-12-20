@@ -1357,7 +1357,7 @@ func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) (err error) {
 		coi.buf = buf
 		coi.t = t
 		coi.config = cmn.GCO.Get()
-		coi.owt = cmn.OwtMigrate
+		coi.owt = cmn.OwtMigrateRepl
 		coi.finalize = true
 	}
 

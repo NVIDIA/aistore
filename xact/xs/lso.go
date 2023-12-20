@@ -117,25 +117,29 @@ func (p *lsoFactory) Start() (err error) {
 
 	// open streams iff:
 	if r.listRemote() && !r.walk.wor {
-		if !r.walk.this {
-			r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
-		}
-		trname := "lso-" + p.UUID()
-		dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
-		p.dm, err = bundle.NewDataMover(p.Args.T, trname, r.recv, cmn.OwtPut, dmxtra)
-		if err != nil {
-			return
-		}
-		if err = p.dm.RegRecv(); err != nil {
-			if p.msg.ContinuationToken != "" {
-				err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", p.Args.T,
-					p.msg.UUID, p.msg.ContinuationToken, err)
+		smap := r.p.T.Sowner().Get()
+		if smap.CountActiveTs() > 1 {
+			if !r.walk.this {
+				r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
 			}
-			nlog.Errorln(err)
-			return
+			trname := "lso-" + p.UUID()
+			dmxtra := bundle.Extra{Multiplier: 1, Config: r.config}
+			p.dm, err = bundle.NewDataMover(p.Args.T, trname, r.recv, cmn.OwtPut, dmxtra)
+			if err != nil {
+				return
+			}
+			debug.Assert(p.dm != nil)
+			if err = p.dm.RegRecv(); err != nil {
+				if p.msg.ContinuationToken != "" {
+					err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", p.Args.T,
+						p.msg.UUID, p.msg.ContinuationToken, err)
+				}
+				nlog.Errorln(err)
+				return
+			}
+			p.dm.SetXact(r)
+			p.dm.Open()
 		}
-		p.dm.SetXact(r)
-		p.dm.Open()
 	}
 
 	p.xctn = r
@@ -188,7 +192,7 @@ func (r *LsoXact) stop() {
 		if r.DemandBase.Finished() {
 			// must be aborted
 			if !r.walk.wor {
-				r.p.dm.CloseIf(r.Err())
+				r.p.dm.Close(r.Err())
 				r.p.dm.UnregRecv()
 			}
 		} else {
@@ -203,7 +207,7 @@ func (r *LsoXact) stop() {
 					debug.Assert(r.remtCh == nil)
 					close(r.msgCh)
 					r.p.dm.UnregRecv()
-				} else {
+				} else if r.p.dm != nil {
 					// postpone unreg
 					hk.Reg(r.ID()+hk.NameSuffix, r.fcleanup, r.config.Timeout.MaxKeepalive.D())
 				}
@@ -394,6 +398,9 @@ ex:
 }
 
 func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
+	if r.p.dm == nil { // single target
+		return nil
+	}
 	var (
 		mm        = r.p.T.PageMM()
 		siz       = max(r.lensgl, memsys.DefaultBufSize)
@@ -408,7 +415,7 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	r.lensgl = sgl.Len()
 	if err != nil {
 		sgl.Free()
-		return
+		return err
 	}
 
 	o := transport.AllocSend()
@@ -422,7 +429,7 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 	o.Reader = sgl
 	roc := memsys.NewReader(sgl)
 	r.p.dm.Bcast(o, roc)
-	return
+	return nil
 }
 
 func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {

@@ -4,7 +4,10 @@
  */
 package cluster
 
-import "github.com/NVIDIA/aistore/cluster/meta"
+import (
+	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/cmn"
+)
 
 const (
 	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
@@ -26,3 +29,10 @@ type (
 		NodeStarted() bool
 	}
 )
+
+func InMaintOrDecomm(smap *meta.Smap, tsi *meta.Snode, xact Xact) (err error) {
+	if smap.InMaintOrDecomm(tsi) {
+		err = cmn.NewErrXactTgtInMaint(xact.String(), tsi.StringEx())
+	}
+	return err
+}

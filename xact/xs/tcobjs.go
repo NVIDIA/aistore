@@ -72,7 +72,7 @@ func (p *tcoFactory) Start() (err error) {
 	//
 	p.Args.UUID, err = p.genBEID(p.args.BckFrom, p.args.BckTo)
 	if err != nil {
-		return
+		return err
 	}
 
 	// new x-tco
@@ -91,14 +91,15 @@ func (p *tcoFactory) Start() (err error) {
 		// sync same-name remote
 		r.syncRemote = p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 	}
-	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, sizePDU); err != nil {
-		return
+	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, sizePDU); err != nil {
+		return err
 	}
-	p.dm.SetXact(r)
-	p.dm.Open()
-
+	if r.p.dm != nil {
+		p.dm.SetXact(r)
+		p.dm.Open()
+	}
 	xact.GoRunW(r)
-	return
+	return nil
 }
 
 ////////////////
@@ -153,7 +154,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			}
 
 			// this target must be active (ref: ignoreMaintenance)
-			if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
+			if err = cluster.InMaintOrDecomm(smap, r.p.T.Snode(), r); err != nil {
 				nlog.Errorln(err)
 				goto fin
 			}

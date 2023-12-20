@@ -20,7 +20,7 @@ type OWT int
 
 const (
 	OwtPut             OWT = iota // PUT
-	OwtMigrate                    // migrate or replicate objects within cluster (e.g. global rebalance)
+	OwtMigrateRepl                // migrate or replicate objects within cluster (e.g. global rebalance)
 	OwtPromote                    // promote target-accessible files and directories
 	OwtFinalize                   // finalize object archives
 	OwtGetTryLock                 // if !try-lock(exclusive) { return error }; read from remote; ...
@@ -42,7 +42,7 @@ func (owt OWT) String() (s string) {
 	switch owt {
 	case OwtPut:
 		s = "owt-put"
-	case OwtMigrate:
+	case OwtMigrateRepl:
 		s = "owt-migrate"
 	case OwtPromote:
 		s = "owt-promote"

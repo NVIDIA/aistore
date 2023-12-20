@@ -2601,7 +2601,7 @@ func TestCopyBucketSimple(t *testing.T) {
 
 	tlog.Logf("Preparing source bucket %s\n", srcBck)
 	tools.CreateBucket(t, proxyURL, srcBck, nil, true /*cleanup*/)
-	m.init(true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
 
 	m.puts()
 	m.prefix = "subdir/"
@@ -2614,10 +2614,16 @@ func TestCopyBucketSimple(t *testing.T) {
 		tassert.Errorf(t, len(list.Entries) == m.num, "expected %d in the source bucket, got %d", m.num, len(list.Entries))
 	}
 
+	// pre-abort sleep
+	sleep := time.Second
+	if m.smap.CountActiveTs() == 1 {
+		sleep = time.Millisecond
+	}
+
 	t.Run("Stats", func(t *testing.T) { f(); testCopyBucketStats(t, srcBck, m) })
 	t.Run("Prepend", func(t *testing.T) { f(); testCopyBucketPrepend(t, srcBck, m) })
 	t.Run("Prefix", func(t *testing.T) { f(); testCopyBucketPrefix(t, srcBck, m, m.num/2) })
-	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m) })
+	t.Run("Abort", func(t *testing.T) { f(); testCopyBucketAbort(t, srcBck, m, sleep) })
 	t.Run("DryRun", func(t *testing.T) { f(); testCopyBucketDryRun(t, srcBck, m) })
 }
 
@@ -2701,7 +2707,7 @@ func testCopyBucketPrefix(t *testing.T, srcBck cmn.Bck, m *ioContext, expected i
 	}
 }
 
-func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
+func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext, sleep time.Duration) {
 	dstBck := cmn.Bck{Name: testBucketName + cos.GenTie(), Provider: apc.AIS}
 
 	xid, err := api.CopyBucket(baseParams, srcBck, dstBck, &apc.CopyBckMsg{Force: true})
@@ -2710,7 +2716,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 		tools.DestroyBucket(t, m.proxyURL, dstBck)
 	})
 
-	time.Sleep(time.Second)
+	time.Sleep(sleep)
 
 	tlog.Logf("Aborting x-%s[%s]\n", apc.ActCopyBck, xid)
 	err = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid})
@@ -2721,7 +2727,7 @@ func testCopyBucketAbort(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	tassert.CheckError(t, err)
 	aborted, err := snaps.IsAborted(xid)
 	tassert.CheckError(t, err)
-	tassert.Errorf(t, aborted, "failed to abort copy-bucket (%s)", xid)
+	tassert.Errorf(t, aborted, "failed to abort copy-bucket: %q, %v", xid, err)
 
 	bcks, err := api.ListBuckets(baseParams, cmn.QueryBcks(dstBck), apc.FltExists)
 	tassert.CheckError(t, err)

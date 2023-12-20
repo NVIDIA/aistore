@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -126,11 +127,11 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.DP, xact cluster.Xact, config *cmn.Config,
+func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DM, dp cluster.DP, xact cluster.Xact, config *cmn.Config,
 	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun, syncRemote bool) (size int64, err error) {
 	coi := allocCOI()
 	{
-		coi.dm = dm
+		coi.dm = dm.(*bundle.DataMover) // TODO -- FIXME: opt-out typecast
 		coi.dp = dp
 		coi.xact = xact
 		coi.config = config
@@ -141,7 +142,7 @@ func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DataMover, dp cluster.D
 		coi.syncRemote = syncRemote
 		// defaults
 		coi.t = t
-		coi.owt = cmn.OwtMigrate
+		coi.owt = cmn.OwtMigrateRepl
 		coi.finalize = false
 	}
 	if coi.objnameTo == "" {

@@ -62,13 +62,12 @@ type (
 	}
 )
 
-// interface guard
-var _ cluster.DataMover = (*DataMover)(nil)
+var _ cluster.DM = (*DataMover)(nil) // via t.CopyObject()
 
 // In re `owt` (below): data mover passes it to the target's `PutObject`
 // to properly finalize received payload.
 // For DMs that do not create new objects (e.g, rebalance) `owt` should
-// be set to `OwtMigrate`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
+// be set to `OwtMigrateRepl`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 
 func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
 	debug.Assert(extra.Config != nil)
@@ -176,25 +175,18 @@ func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
 	return dm.xctn.Quiesce(d, dm.quicb)
 }
 
-func (dm *DataMover) CloseIf(err error) {
-	if dm.stage.opened.CAS(true, false) {
-		dm._close(err)
-	}
-}
-
 func (dm *DataMover) Close(err error) {
-	debug.Assert(dm.stage.opened.Load())
-	dm._close(err)
-	dm.stage.opened.Store(false)
-}
-
-func (dm *DataMover) _close(err error) {
-	if err == nil && dm.xctn != nil {
-		if dm.xctn.IsAborted() {
-			err = dm.xctn.AbortErr()
-		}
+	if dm == nil {
+		return
 	}
-	dm.data.streams.Close(err == nil) // err == nil: close gracefully via `fin`, otherwise abort
+	if !dm.stage.opened.CAS(true, false) {
+		return
+	}
+	if err == nil && dm.xctn != nil && dm.xctn.IsAborted() {
+		err = dm.xctn.AbortErr()
+	}
+	// nil: close gracefully via `fin`, otherwise abort
+	dm.data.streams.Close(err == nil)
 	if dm.useACKs() {
 		dm.ack.streams.Close(err == nil)
 	}
@@ -208,7 +200,10 @@ func (dm *DataMover) Abort() {
 }
 
 func (dm *DataMover) UnregRecv() {
-	if !dm.stage.regred.Load() {
+	if dm == nil {
+		return
+	}
+	if !dm.stage.regred.CAS(true, false) {
 		return // e.g., 2PC (begin => abort) sequence with no Open
 	}
 	if dm.xctn != nil {
@@ -222,7 +217,6 @@ func (dm *DataMover) UnregRecv() {
 			nlog.Errorln(err)
 		}
 	}
-	dm.stage.regred.Store(false)
 }
 
 func (dm *DataMover) Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) (err error) {

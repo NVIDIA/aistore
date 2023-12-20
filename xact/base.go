@@ -376,13 +376,6 @@ func (xctn *Base) ToStats(stats *cluster.Stats) {
 	stats.InBytes = xctn.InBytes()
 }
 
-func (xctn *Base) InMaintOrDecomm(smap *meta.Smap, tsi *meta.Snode) (err error) {
-	if smap.InMaintOrDecomm(tsi) {
-		err = cmn.NewErrXactTgtInMaint(xctn.String(), tsi.String())
-	}
-	return
-}
-
 // RebID helpers
 
 func RebID2S(id int64) string          { return fmt.Sprintf("g%d", id) }

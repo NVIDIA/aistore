@@ -90,7 +90,7 @@ func (p *archFactory) Start() (err error) {
 	}
 	p.Args.UUID, err = p.genBEID(p.Bck, bckTo)
 	if err != nil {
-		return
+		return err
 	}
 	//
 	// new x-archive
@@ -101,12 +101,13 @@ func (p *archFactory) Start() (err error) {
 	p.xctn = r
 	r.DemandBase.Init(p.UUID() /*== p.Args.UUID above*/, p.kind, p.Bck /*from*/, xact.IdleDefault)
 
-	if err = p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, 0 /*pdu*/); err != nil {
-		return
+	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, 0 /*pdu*/); err != nil {
+		return err
 	}
-	r.p.dm.SetXact(r)
-	r.p.dm.Open()
-
+	if r.p.dm != nil {
+		r.p.dm.SetXact(r)
+		r.p.dm.Open()
+	}
 	xact.GoRunW(r)
 	return
 }
@@ -128,7 +129,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	smap := r.p.T.Sowner().Get()
-	if err = r.InMaintOrDecomm(smap, r.p.T.Snode()); err != nil {
+	if err = cluster.InMaintOrDecomm(smap, r.p.T.Snode(), r); err != nil {
 		return
 	}
 	nat := smap.CountActiveTs()
@@ -258,6 +259,7 @@ fin:
 }
 
 func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
+	debug.Assert(r.p.dm != nil)
 	o := transport.AllocSend()
 	hdr := &o.Hdr
 	{

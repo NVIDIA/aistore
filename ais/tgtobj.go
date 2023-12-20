@@ -35,6 +35,7 @@ import (
 	"github.com/NVIDIA/aistore/reb"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -99,7 +100,7 @@ type (
 	}
 
 	copyOI struct {
-		dm         cluster.DataMover
+		dm         *bundle.DataMover
 		dp         cluster.DP // transform via: ext/etl/dp.go or cluster/lom_dp.go
 		xact       cluster.Xact
 		t          *target
@@ -114,7 +115,7 @@ type (
 	}
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
-		dm        cluster.DataMover
+		dm        *bundle.DataMover
 		objAttrs  cos.OAH
 		tsi       *meta.Snode
 		bckTo     *meta.Bck
@@ -478,7 +479,7 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 
 func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 	switch poi.owt {
-	case cmn.OwtMigrate, cmn.OwtPromote, cmn.OwtFinalize:
+	case cmn.OwtMigrateRepl, cmn.OwtPromote, cmn.OwtFinalize:
 		v = c.ValidateObjMove
 	case cmn.OwtPut:
 		v = true
@@ -952,7 +953,7 @@ func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
 		poi.lom = lom
 		poi.config = config
 		poi.r = resp.Body
-		poi.owt = cmn.OwtMigrate
+		poi.owt = cmn.OwtMigrateRepl
 		poi.workFQN = workFQN
 		poi.atime = lom.ObjAttrs().Atime
 		poi.cksumToUse = cksumToUse
@@ -1407,7 +1408,7 @@ func (coi *copyOI) _reader(lom, dst *cluster.LOM) (size int64, _ error) {
 	case coi.dm != nil:
 		poi.owt = coi.dm.OWT()
 	default:
-		poi.owt = cmn.OwtMigrate
+		poi.owt = cmn.OwtMigrateRepl
 	}
 	_, err := poi.putObject()
 	freePOI(poi)

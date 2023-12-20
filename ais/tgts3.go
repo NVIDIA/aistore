@@ -142,7 +142,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		coi.config = config
 		coi.bckTo = bckTo
 		coi.objnameTo = s3.ObjName(items)
-		coi.owt = cmn.OwtMigrate
+		coi.owt = cmn.OwtMigrateRepl
 	}
 	_, err = coi.do(lom)
 	freeCOI(coi)
