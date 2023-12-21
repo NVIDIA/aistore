@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -17,8 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-const UUIDSepa = ","
-
 const (
 	ScopeG  = iota + 1 // cluster
 	ScopeB             // bucket
@@ -27,6 +26,8 @@ const (
 )
 
 const (
+	SepaID = ","
+
 	LeftID  = "["
 	RightID = "]"
 )
@@ -300,6 +301,20 @@ func GetKindName(kindOrName string) (kind, name string) {
 		name = kind
 	}
 	return
+}
+
+func ParseCname(cname string) (xactKind, xactID string, _ error) {
+	const efmt = "invalid name %q"
+	l := len(cname)
+	if l == 0 || cname[l-1] != RightID[0] {
+		return "", "", fmt.Errorf(efmt, cname)
+	}
+	i := strings.IndexByte(cname, LeftID[0])
+	if i < 0 {
+		return "", "", fmt.Errorf(efmt, cname)
+	}
+	xactKind, xactID = cname[:i], cname[i+1:l-1]
+	return xactKind, xactID, nil
 }
 
 func IdlesBeforeFinishing(kindOrName string) bool {

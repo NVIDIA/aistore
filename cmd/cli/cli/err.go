@@ -80,7 +80,7 @@ func newAdditionalInfoError(err error, info string) error {
 }
 
 func (e *errAdditionalInfo) Error() string {
-	return fmt.Sprintf("%s.\n%s\n", e.baseErr.Error(), cos.StrToSentence(e.additionalInfo))
+	return fmt.Sprintf("%s.\n%s\n", e.baseErr.Error(), strToSentence(e.additionalInfo))
 }
 
 /////////////////////

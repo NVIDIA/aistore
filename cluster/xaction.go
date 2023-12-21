@@ -52,6 +52,7 @@ type (
 		// reporting: log, err
 		String() string
 		Name() string
+		Cname() string
 
 		// modifiers
 		Finish()

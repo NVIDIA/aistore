@@ -47,29 +47,6 @@ func ParseBool(s string) (bool, error) {
 	return strconv.ParseBool(s)
 }
 
-func StringSliceToIntSlice(strs []string) ([]int64, error) {
-	res := make([]int64, 0, len(strs))
-	for _, s := range strs {
-		i, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, i)
-	}
-	return res, nil
-}
-
-func StrToSentence(str string) string {
-	if str == "" {
-		return ""
-	}
-	capitalized := CapitalizeString(str)
-	if !IsLastB(capitalized, '.') {
-		capitalized += "."
-	}
-	return capitalized
-}
-
 func ConvertToString(value any) (valstr string, err error) {
 	switch v := value.(type) {
 	case string:

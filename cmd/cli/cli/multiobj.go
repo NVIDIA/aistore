@@ -312,7 +312,7 @@ func _evictOne(c *cli.Context, shift int) error {
 	}
 	if !bck.IsRemote() {
 		const msg = "evicting objects from AIS buckets (ie., buckets with no remote backends) is not allowed."
-		return errors.New(msg + "\n(Tip: maybe use 'ais object rm' instead)")
+		return errors.New(msg + "\n(Tip:  consider 'ais object rm' or 'ais rmb', see --help for details)")
 	}
 	if _, err := headBucket(bck, false /* don't add */); err != nil {
 		return err

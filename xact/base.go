@@ -214,12 +214,15 @@ func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
 	return cluster.Quiescent
 }
 
+// see also: xact.ParseCname (api.go)
+func (xctn *Base) Cname() string { return xctn.Kind() + LeftID + xctn.ID() + RightID }
+
 func (xctn *Base) Name() (s string) {
 	var b string
 	if !xctn.bck.IsEmpty() {
 		b = "-" + xctn.bck.String()
 	}
-	s = "x-" + xctn.Kind() + "[" + xctn.ID() + "]" + b
+	s = "x-" + xctn.Kind() + LeftID + xctn.ID() + RightID + b
 	return
 }
 

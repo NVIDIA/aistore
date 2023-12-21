@@ -64,7 +64,7 @@ func AbortXaction(bp BaseParams, args *xact.ArgsMsg) (err error) {
 // querying and waiting
 //
 
-// returns unique ':'-separated kind/ID pairs (strings)
+// returns a slice of canonical xaction names, as in: `xact.Cname()`
 // e.g.: put-copies[D-ViE6HEL_j] list[H96Y7bhR2s] copy-bck[matRQMRes] put-copies[pOibtHExY]
 // TODO: return idle xactions separately
 func GetAllRunningXactions(bp BaseParams, kindOrName string) (out []string, err error) {

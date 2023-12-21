@@ -154,10 +154,16 @@ var (
 	stopCmdsFlags = []cli.Flag{
 		allRunningJobsFlag,
 		regexJobsFlag,
+		yesFlag,
 	}
 	jobStopSub = cli.Command{
-		Name:         commandStop,
-		Usage:        "terminate a single batch job or multiple jobs (" + tabHelpOpt + ")",
+		Name: commandStop,
+		Usage: "terminate a single batch job or multiple jobs, e.g.:\n" +
+			indent1 + "\t- 'stop tco-cysbohAGL'\t- terminate a given job identified by its unique ID;\n" +
+			indent1 + "\t- 'stop copy-listrange'\t- terminate all multi-object copies;\n" +
+			indent1 + "\t- 'stop copy-objects'\t- same as above (using display name);\n" +
+			indent1 + "\t- 'stop --all'\t- terminate all running jobs\n" +
+			indent1 + strToSentence(tabHelpOpt),
 		ArgsUsage:    jobAnyArg,
 		Flags:        stopCmdsFlags,
 		Action:       stopJobHandler,
@@ -660,7 +666,7 @@ func stopJobHandler(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if name == "" && xid == "" {
+	if name == "" && xid == "" && !flagIsSet(c, allRunningJobsFlag) {
 		return missingArgumentsError(c, c.Command.ArgsUsage)
 	}
 	if daemonID != "" {
@@ -691,27 +697,41 @@ func stopJobHandler(c *cli.Context) error {
 		}
 	}
 
-	var otherID string
+	var (
+		otherID         string
+		xactID          = xid
+		xname, xactKind string
+	)
 	if name == "" && xid != "" {
 		name, otherID = xid2Name(xid)
+	}
+	if name != "" {
+		xactKind, xname = xact.GetKindName(name)
+		if xactKind == "" {
+			return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
+		}
+	}
+
+	// confirm unless
+	if xactID == "" && name != "" {
+		if name != commandRebalance && !flagIsSet(c, yesFlag) && !flagIsSet(c, allRunningJobsFlag) {
+			prompt := fmt.Sprintf("Stop all '%s' jobs?", name)
+			if ok := confirm(c, prompt); !ok {
+				return nil
+			}
+		}
 	}
 
 	// specialized stop
 	switch name {
 	case cmdDownload:
 		if xid == "" {
-			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
-				return stopDownloadRegex(c, regex)
-			}
-			return missingArgumentsError(c, jobIDArgument)
+			return stopDownloadRegex(c, regex)
 		}
 		return stopDownloadHandler(c, xid)
 	case cmdDsort:
 		if xid == "" {
-			if flagIsSet(c, allRunningJobsFlag) || regex != "" {
-				return stopDsortRegex(c, regex)
-			}
-			return missingArgumentsError(c, jobIDArgument)
+			return stopDsortRegex(c, regex)
 		}
 		return stopDsortHandler(c, xid)
 	case commandETL:
@@ -720,33 +740,10 @@ func stopJobHandler(c *cli.Context) error {
 		return stopClusterRebalanceHandler(c)
 	}
 
-	// common stop
-	var (
-		xactID          = xid
-		xname, xactKind string
-	)
-	if name != "" {
-		xactKind, xname = xact.GetKindName(name)
-		if xactKind == "" {
-			return incorrectUsageMsg(c, "unrecognized or misplaced option '%s'", name)
-		}
-	}
+	// generic xstop
 
 	if xactID == "" {
-		// NOTE: differentiate global (cluster-wide) xactions from non-global
-		// (the latter require --all to confirm stopping potentially many...)
-		var isGlobal bool
-		if _, dtor, err := xact.GetDescriptor(xactKind); err == nil {
-			isGlobal = dtor.Scope == xact.ScopeG || dtor.Scope == xact.ScopeGB
-		}
-		if !isGlobal && !flagIsSet(c, allRunningJobsFlag) {
-			msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
-				jobIDArgument, qflprn(allRunningJobsFlag))
-			return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
-		}
-
-		// stop all xactions of a given kind (TODO: bck)
-		return stopXactionKind(c, xactKind, xname, bck)
+		return stopXactionKindOrAll(c, xactKind, xname, bck)
 	}
 
 	// query
@@ -790,27 +787,32 @@ func stopJobHandler(c *cli.Context) error {
 	return nil
 }
 
-// TODO: `bck` must provide additional filtering (NIY)
-func stopXactionKind(c *cli.Context, xactKind, xname string, bck cmn.Bck) error {
-	xactIDs, err := api.GetAllRunningXactions(apiBP, xactKind)
+// NOTE: the '--all' case when both (xactKind == "" && xname == "") - is also handled here
+// TODO: aistore supports `bck` for additional filtering (NIY)
+func stopXactionKindOrAll(c *cli.Context, xactKind, xname string, bck cmn.Bck) error {
+	cnames, err := api.GetAllRunningXactions(apiBP, xactKind)
 	if err != nil {
 		return V(err)
 	}
-	if len(xactIDs) == 0 {
-		actionDone(c, fmt.Sprintf("No running '%s' jobs, nothing to do", xname))
+	if len(cnames) == 0 {
+		var what string
+		if xname != "" {
+			what = " '" + xname + "'"
+		}
+		actionDone(c, fmt.Sprintf("No running%s jobs, nothing to do", what))
 		return nil
 	}
-	for _, ki := range xactIDs {
-		var (
-			i      = strings.IndexByte(ki, xact.LeftID[0])
-			xactID = ki[i+1 : len(ki)-1] // extract UUID from "name[UUID]"
-			args   = xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
-			msg    = formatXactMsg(xactID, xname, bck)
-		)
+	for _, cname := range cnames {
+		xactKind, xactID, err := xact.ParseCname(cname)
+		if err != nil {
+			debug.AssertNoErr(err)
+			continue
+		}
+		args := xact.ArgsMsg{ID: xactID, Kind: xactKind, Bck: bck}
 		if err := api.AbortXaction(apiBP, &args); err != nil {
-			actionWarn(c, fmt.Sprintf("failed to stop %s: %v", msg, err))
+			actionWarn(c, fmt.Sprintf("failed to stop %s: %v", cname, err))
 		} else {
-			actionDone(c, "Stopped "+msg)
+			actionDone(c, "Stopped "+cname)
 		}
 	}
 	return nil
@@ -823,13 +825,13 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	}
 	switch {
 	case xactKind != "" && xactID != "":
-		return fmt.Sprintf("%s[%s%s]", xactKind, xactID, sb)
+		return fmt.Sprintf("%s[%s]%s", xactKind, xactID, sb)
 	case xactKind != "" && sb != "":
-		return fmt.Sprintf("%s[%s]", xactKind, sb)
+		return fmt.Sprintf("%s%s", xactKind, sb)
 	case xactKind != "":
 		return xactKind
 	default:
-		return fmt.Sprintf("job[%s%s]", xactID, sb)
+		return fmt.Sprintf("[%s]%s", xactID, sb)
 	}
 }
 

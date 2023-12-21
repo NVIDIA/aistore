@@ -211,7 +211,7 @@ const nodeLogFlushName = "log.flush_time"
 
 const (
 	tabtab     = "press <TAB-TAB> to select"
-	tabHelpOpt = "press <TAB-TAB> to select, '--help' for options"
+	tabHelpOpt = "press <TAB-TAB> to select, '--help' for more options"
 	tabHelpDet = "press <TAB-TAB> to select, '--help' for details"
 )
 

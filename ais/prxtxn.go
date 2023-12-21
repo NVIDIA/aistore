@@ -671,7 +671,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 	}
 
 	if xid == "" {
-		xid = strings.Join(all, xact.UUIDSepa) // return comma-separated x-tco IDs
+		xid = strings.Join(all, xact.SepaID) // return comma-separated x-tco IDs
 	}
 	return xid, nil
 }
@@ -807,7 +807,7 @@ func (p *proxy) createArchMultiObj(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg) (x
 	if err != nil || xid != "" {
 		return
 	}
-	return strings.Join(all, xact.UUIDSepa), nil
+	return strings.Join(all, xact.SepaID), nil
 }
 
 func (p *proxy) beginRmTarget(si *meta.Snode, msg *apc.ActMsg) error {

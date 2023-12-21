@@ -117,7 +117,7 @@ func findClosestCommand(cmd string, candidates []cli.Command) (result string, di
 		closestName string
 	)
 	for i := 0; i < len(candidates); i++ {
-		dist := cos.DamerauLevenstheinDistance(cmd, candidates[i].Name)
+		dist := DamerauLevenstheinDistance(cmd, candidates[i].Name)
 		if dist < minDist {
 			minDist = dist
 			closestName = candidates[i].Name

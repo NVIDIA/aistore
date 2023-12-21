@@ -244,33 +244,25 @@ func AbortKind(err error, kind string) {
 
 func AbortByNewReb(err error) { dreg.abort(&abortArgs{err: err, newreb: true}) }
 
-func DoAbort(flt Flt, err error) (bool /*aborted*/, error) {
-	if flt.ID != "" {
+func DoAbort(flt Flt, err error) {
+	switch {
+	case flt.ID != "":
 		xctn, err := dreg.getXact(flt.ID)
 		if xctn == nil || err != nil {
-			return false, err
+			return
 		}
-		debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind,
-			"UUID must uniquely identify kind: %s vs %+v", xctn, flt)
-		return xctn.Abort(err), nil
-	}
-
-	if flt.Kind != "" {
+		debug.Assertf(flt.Kind == "" || xctn.Kind() == flt.Kind, "wrong xaction kind: %s vs %q", xctn.Cname(), flt.Kind)
+		xctn.Abort(err)
+	case flt.Kind != "" && flt.Bck != nil:
+		dreg.abort(&abortArgs{kind: flt.Kind, bcks: []*meta.Bck{flt.Bck}, err: err})
+	case flt.Kind != "":
 		debug.Assert(xact.IsValidKind(flt.Kind), flt.Kind)
-		entry := dreg.getRunning(flt)
-		if entry == nil {
-			return false, nil
-		}
-		return entry.Get().Abort(err), nil
-	}
-	if flt.Bck == nil {
-		// No bucket and no kind - request for all available xactions.
-		AbortAll(err)
-	} else {
-		// Bucket present and no kind - request for all available bucket's xactions.
+		AbortKind(err, flt.Kind)
+	case flt.Bck != nil:
 		AbortAllBuckets(err, flt.Bck)
+	default:
+		AbortAll(err)
 	}
-	return true, nil
 }
 
 func GetSnap(flt Flt) ([]*cluster.Snap, error) {
@@ -355,12 +347,15 @@ func (args *abortArgs) do(entry Renewable) bool {
 			abort = true
 		}
 	case len(args.bcks) > 0:
-		debug.Assertf(args.scope == nil && args.kind == "", "scope %v, kind %q", args.scope, args.kind)
+		debug.Assertf(args.scope == nil, "scope %v", args.scope)
 		for _, bck := range args.bcks {
 			if xctn.Bck() != nil && bck.Equal(xctn.Bck(), true /*sameID*/, true /*same backend*/) {
 				abort = true
 				break
 			}
+		}
+		if abort && args.kind != "" {
+			abort = args.kind == xctn.Kind()
 		}
 	case args.kind != "":
 		debug.Assertf(args.scope == nil && len(args.bcks) == 0, "scope %v, bcks %v", args.scope, args.bcks)

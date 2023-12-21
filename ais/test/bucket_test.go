@@ -2475,7 +2475,7 @@ func TestCopyBucket(t *testing.T) {
 				}
 				tassert.CheckFatal(t, err)
 				tlog.Logf("copying %s => %s: %s\n", srcm.bck, dstm.bck, uuid)
-				if uuids := strings.Split(uuid, xact.UUIDSepa); len(uuids) > 1 {
+				if uuids := strings.Split(uuid, xact.SepaID); len(uuids) > 1 {
 					for _, u := range uuids {
 						tassert.Fatalf(t, xact.IsValidUUID(u), "invalid UUID %q", u)
 					}
