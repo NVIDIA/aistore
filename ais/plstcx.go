@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -40,20 +41,18 @@ type (
 	}
 )
 
-func (a *lstca) add(c *lstcx) {
-	debug.Assert(c.tcomsg.TxnUUID != "")
+func (a *lstca) add(c *lstcx, xid string) {
 	a.mu.Lock()
 	if a.a == nil {
 		a.a = make(map[string]*lstcx, 4)
 	}
-	a.a[c.tcomsg.TxnUUID] = c
+	a.a[xid] = c
 	a.mu.Unlock()
 }
 
-func (a *lstca) del(c *lstcx) {
-	debug.Assert(c.tcomsg.TxnUUID != "")
+func (a *lstca) del(xid string) {
 	a.mu.Lock()
-	delete(a.a, c.tcomsg.TxnUUID)
+	delete(a.a, xid)
 	a.mu.Unlock()
 }
 
@@ -127,25 +126,30 @@ func (c *lstcx) do() (string, error) {
 	if c.amsg.Action == apc.ActETLBck {
 		c.altmsg.Action = apc.ActETLObjects
 	}
-	cnt := min(len(names), 10)
-	nlog.Infof("(%s => %s): %s => %s %v...", c.amsg.Action, c.altmsg.Action, c.bckFrom, c.bckTo, names[:cnt])
 
-	// Run
-	c.tcomsg.TxnUUID, err = c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
-	if lst.ContinuationToken != "" {
-		c.lsmsg.ContinuationToken = lst.ContinuationToken
-		go func() {
-			c.p.lstca.add(c)
-			c.pages(smap)
-			c.p.lstca.del(c)
-		}()
+	xid, err := c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
+	if err != nil {
+		return "", err
 	}
 
-	return c.tcomsg.TxnUUID, err
+	s := fmt.Sprintf("(%s => %s)[%s]: %s => %s %v", c.amsg.Action, c.altmsg.Action, xid, c.bckFrom, c.bckTo, names[:min(len(names), 4)])
+	if lst.ContinuationToken != "" {
+		// Run
+		nlog.Infoln("run", s, "...")
+		c.lsmsg.ContinuationToken = lst.ContinuationToken
+		go func() {
+			c.p.lstca.add(c, xid)
+			c.pages(smap, xid)
+			c.p.lstca.del(xid)
+		}()
+	} else {
+		nlog.Infoln(s, "done.")
+	}
+	return xid, nil
 }
 
 // pages 2..last
-func (c *lstcx) pages(smap *smapX) {
+func (c *lstcx) pages(smap *smapX, xid string) {
 	for !c.stopped.Load() {
 		// next page
 		lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, c.config, true)
@@ -169,12 +173,12 @@ func (c *lstcx) pages(smap *smapX) {
 		}
 		// next tco action
 		c.altmsg.Value = &c.tcomsg
-		xid, err := c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
+		xactID, err := c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
 		if err != nil {
 			nlog.Errorln(err)
 			return
 		}
-		debug.Assertf(c.tcomsg.TxnUUID == xid, "%q vs %q", c.tcomsg.TxnUUID, xid)
+		debug.Assertf(xactID == xid, "%q vs %q", xactID, xid)
 
 		// last page?
 		if lst.ContinuationToken == "" {

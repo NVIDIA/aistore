@@ -27,8 +27,8 @@ import (
 )
 
 // context structure to gather all (or most) of the relevant state in one place
-// (compare with txnServerCtx)
-type txnClientCtx struct {
+// (compare with txnSrv)
+type txnCln struct {
 	p        *proxy
 	smap     *smapX
 	msg      *aisMsg
@@ -45,11 +45,11 @@ type txnClientCtx struct {
 // TODO: IC(c.uuid) vs _committed_ xid (currently asserted)
 // TODO: cleanup upon failures
 
-//////////////////
-// txnClientCtx //
-//////////////////
+////////////
+// txnCln //
+////////////
 
-func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
+func (c *txnCln) begin(what fmt.Stringer) (err error) {
 	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for _, res := range results {
 		if res.err != nil {
@@ -64,7 +64,7 @@ func (c *txnClientCtx) begin(what fmt.Stringer) (err error) {
 
 // returns cluster-wide (global) xaction UUID or - for assorted multi-object (list|range) xactions
 // that can be run concurrently - comma-separated list of UUIDs
-func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid string, all []string, err error) {
+func (c *txnCln) commit(what fmt.Stringer, timeout time.Duration) (xid string, all []string, err error) {
 	same4all := true
 	results := c.bcast(apc.ActCommit, timeout)
 	for _, res := range results {
@@ -100,14 +100,14 @@ func (c *txnClientCtx) commit(what fmt.Stringer, timeout time.Duration) (xid str
 	return
 }
 
-func (c *txnClientCtx) cmtTout(waitmsync bool) time.Duration {
+func (c *txnCln) cmtTout(waitmsync bool) time.Duration {
 	if waitmsync {
 		return c.timeout.host + c.timeout.netw
 	}
 	return c.timeout.netw
 }
 
-func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results sliceResults) {
+func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResults) {
 	c.req.Path = cos.JoinWords(c.path, phase)
 	if phase != apc.ActAbort {
 		now := time.Now()
@@ -130,7 +130,7 @@ func (c *txnClientCtx) bcast(phase string, timeout time.Duration) (results slice
 	return
 }
 
-func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) {
+func (c *txnCln) bcastAbort(what fmt.Stringer, err error) {
 	nlog.Errorf("Abort %q %s: %v %s", c.msg.Action, what, err, c.msg)
 	results := c.bcast(apc.ActAbort, 0)
 	freeBcastRes(results)
@@ -143,10 +143,10 @@ func (c *txnClientCtx) bcastAbort(what fmt.Stringer, err error) {
 // 6 (plus/minus) steps as shown below:
 // - notice a certain symmetry between the client and the server sides whetreby
 //   the control flow looks as follows:
-//   	txnClientCtx =>
+//   	txnCln =>
 //   		(POST to /v1/txn) =>
 //   			switch msg.Action =>
-//   				txnServerCtx =>
+//   				txnSrv =>
 //   					concrete transaction, etc.
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -616,20 +616,13 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 }
 
 // transform or copy a list or a range of objects
-func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.ActMsg, tcomsg *cmn.TCObjsMsg) (xid string,
-	err error) {
-	// 1. confirm existence
-	bmd := p.owner.bmd.get()
-	if _, present := bmd.Get(bckFrom); !present {
-		return "", cmn.NewErrBckNotFound(bckFrom.Bucket())
-	}
-
-	// prep
+func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.ActMsg, tcomsg *cmn.TCObjsMsg) (string, error) {
+	// 1. prep
 	var (
-		_, existsTo = bmd.Get(bckTo) // cleanup on fail: destroy if created
+		_, existsTo = p.owner.bmd.get().Get(bckTo) // cleanup on fail: destroy if created
 		waitmsync   = !tcomsg.TCBMsg.DryRun && !existsTo
 	)
-	c := &txnClientCtx{
+	c := &txnCln{
 		p:    p,
 		uuid: cos.GenUUID(), // TODO -- FIXME tcomsg.TxnUUID, // (via target-local xreg.GenBEID)
 		smap: p.owner.smap.get(),
@@ -653,7 +646,7 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 			bcks:  []*meta.Bck{bckFrom, bckTo},
 			wait:  waitmsync,
 		}
-		bmd, err = p.owner.bmd.modify(ctx)
+		bmd, err := p.owner.bmd.modify(ctx)
 		if err != nil {
 			c.bcastAbort(bckFrom, err)
 			return "", err
@@ -668,18 +661,19 @@ func (p *proxy) tcobjs(bckFrom, bckTo *meta.Bck, config *cmn.Config, msg *apc.Ac
 	}
 
 	// 4. commit - that is, execute xtco.Do(msg)
-	var all []string
-	xid, all, err = c.commit(bckFrom, c.cmtTout(waitmsync))
-	if err != nil && !existsTo {
-		// rm the one that we just created
-		_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
+	xid, all, err := c.commit(bckFrom, c.cmtTout(waitmsync))
+	if err != nil {
+		if !existsTo {
+			// rm the one that we just created
+			_ = p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, bckTo)
+		}
 		return "", err
 	}
 
-	if err != nil || xid != "" {
-		return xid, err
+	if xid == "" {
+		xid = strings.Join(all, xact.UUIDSepa) // return comma-separated x-tco IDs
 	}
-	return strings.Join(all, xact.UUIDSepa), nil // NOTE: multiple xaction IDs, comma-separated
+	return xid, nil
 }
 
 func parseECConf(value any) (*cmn.ECConfToSet, error) {
@@ -939,7 +933,7 @@ func (p *proxy) promote(bck *meta.Bck, msg *apc.ActMsg, tsi *meta.Snode) (xid st
 }
 
 // begin phase customized to (specifically) detect file share
-func prmBegin(c *txnClientCtx, bck *meta.Bck, singleT bool) (num int64, allAgree bool, err error) {
+func prmBegin(c *txnCln, bck *meta.Bck, singleT bool) (num int64, allAgree bool, err error) {
 	var cksumVal, totalN string
 	allAgree = !singleT
 
@@ -977,13 +971,13 @@ func prmBegin(c *txnClientCtx, bck *meta.Bck, singleT bool) (num int64, allAgree
 // misc
 ///
 
-func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnClientCtx {
-	c := &txnClientCtx{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
+func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnCln {
+	c := &txnCln{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
 	c.init(msg, bck, cmn.GCO.Get(), waitmsync)
 	return c
 }
 
-func (c *txnClientCtx) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnClientCtx {
+func (c *txnCln) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnCln {
 	query := make(url.Values, 3)
 	if bck == nil {
 		c.path = apc.URLPathTxn.S

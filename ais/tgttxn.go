@@ -37,8 +37,8 @@ import (
 const ActCleanup = "cleanup" // in addition to (apc.ActBegin, ...)
 
 // context structure to gather all (or most) of the relevant state in one place
-// (compare with txnClientCtx)
-type txnServerCtx struct {
+// (compare with txnCln)
+type txnSrv struct {
 	t          *target
 	msg        *aisMsg
 	bck        *meta.Bck // aka bckFrom
@@ -87,11 +87,13 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		t.writeErrURL(w, r)
 		return
 	}
-	c, err := t.prepTxnServer(r, msg, bucket, phase)
-	if err != nil {
+
+	c := &txnSrv{t: t, msg: msg, phase: phase}
+	if err := c.init(r, bucket); err != nil {
 		t.writeErr(w, r, err)
 		return
 	}
+
 	switch msg.Action {
 	case apc.ActCreateBck, apc.ActAddRemoteBck:
 		err = t.createBucket(c)
@@ -171,7 +173,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 // createBucket
 //
 
-func (t *target) createBucket(c *txnServerCtx) error {
+func (t *target) createBucket(c *txnSrv) error {
 	switch c.phase {
 	case apc.ActBegin:
 		txn := newTxnCreateBucket(c)
@@ -198,7 +200,7 @@ func (t *target) createBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
+func (t *target) _commitCreateDestroy(c *txnSrv) (err error) {
 	txn, err := t.transactions.find(c.uuid, "")
 	if err != nil {
 		return err
@@ -214,7 +216,7 @@ func (t *target) _commitCreateDestroy(c *txnServerCtx) (err error) {
 // makeNCopies
 //
 
-func (t *target) makeNCopies(c *txnServerCtx) (string, error) {
+func (t *target) makeNCopies(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -295,7 +297,7 @@ func (t *target) validateMakeNCopies(bck *meta.Bck, msg *aisMsg) (curCopies, new
 // setBprops
 //
 
-func (t *target) setBprops(c *txnServerCtx) (string, error) {
+func (t *target) setBprops(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -401,7 +403,7 @@ func (t *target) validateNprops(bck *meta.Bck, msg *aisMsg) (nprops *cmn.Bprops,
 // renameBucket
 //
 
-func (t *target) renameBucket(c *txnServerCtx) (string, error) {
+func (t *target) renameBucket(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -505,7 +507,7 @@ func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, error) {
+func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -581,7 +583,7 @@ func (t *target) tcb(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (string, e
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (err error) {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
@@ -616,7 +618,10 @@ func (t *target) _tcbBegin(c *txnServerCtx, msg *apc.TCBMsg, dp cluster.DP) (err
 	return t.transactions.begin(txn, nlps...)
 }
 
-func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (xid string, _ error) {
+// Two IDs:
+// - TxnUUID: transaction (txn) ID
+// - xid: xaction ID (will have "tco-" prefix)
+func (t *target) tcobjs(c *txnSrv, msg *cmn.TCObjsMsg, dp cluster.DP) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -704,7 +709,7 @@ func (t *target) tcobjs(c *txnServerCtx, msg *cmn.TCObjsMsg, dp cluster.DP) (xid
 // ecEncode
 //
 
-func (t *target) ecEncode(c *txnServerCtx) (string, error) {
+func (t *target) ecEncode(c *txnSrv) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -764,7 +769,7 @@ func (t *target) validateECEncode(bck *meta.Bck, msg *aisMsg) error {
 // createArchMultiObj
 //
 
-func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, error) {
+func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) {
 	var xid string
 	switch c.phase {
 	case apc.ActBegin:
@@ -849,7 +854,7 @@ func (t *target) createArchMultiObj(c *txnServerCtx) (string /*xaction uuid*/, e
 // begin (maintenance -- decommission -- shutdown) via p.beginRmTarget
 //
 
-func (t *target) beginRm(c *txnServerCtx) error {
+func (t *target) beginRm(c *txnSrv) error {
 	var opts apc.ActValRmNode
 	if c.phase != apc.ActBegin {
 		return fmt.Errorf("%s: expecting begin phase, got %q", t, c.phase)
@@ -864,7 +869,7 @@ func (t *target) beginRm(c *txnServerCtx) error {
 // destroy local bucket / evict cloud bucket
 //
 
-func (t *target) destroyBucket(c *txnServerCtx) error {
+func (t *target) destroyBucket(c *txnSrv) error {
 	switch c.phase {
 	case apc.ActBegin:
 		nlp := newBckNLP(c.bck)
@@ -886,7 +891,7 @@ func (t *target) destroyBucket(c *txnServerCtx) error {
 	return nil
 }
 
-func (t *target) promote(c *txnServerCtx, hdr http.Header) (string, error) {
+func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -1016,7 +1021,7 @@ func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN 
 }
 
 // synchronously wo/ xaction
-func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshare bool) error {
+func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool) error {
 	smap := t.owner.smap.Get()
 	config := cmn.GCO.Get()
 	for _, fqn := range txnPrm.fqns {
@@ -1051,48 +1056,41 @@ func (t *target) prmNumFiles(c *txnServerCtx, txnPrm *txnPromote, confirmedFshar
 	return nil
 }
 
-//
-// misc
-//
+////////////
+// txnSrv //
+////////////
 
-func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase string) (*txnServerCtx, error) {
-	var (
-		err   error
-		query = r.URL.Query()
-		c     = &txnServerCtx{}
-	)
-	c.msg = msg
+func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	c.callerName = r.Header.Get(apc.HdrCallerName)
 	c.callerID = r.Header.Get(apc.HdrCallerID)
-	c.phase = phase
 
+	query := r.URL.Query()
 	if bucket != "" {
 		if c.bck, err = newBckFromQ(bucket, query, nil); err != nil {
-			return c, err
+			return err
 		}
 	}
 	c.bckTo, err = newBckFromQuname(query, false /*required*/)
 	if err != nil {
-		return c, err
+		return err
 	}
 
 	// latency = (network) +- (clock drift)
-	if phase == apc.ActBegin {
+	if c.phase == apc.ActBegin {
 		if ptime := query.Get(apc.QparamUnixTime); ptime != "" {
 			now := time.Now().UnixNano()
 			dur := ptLatency(now, ptime, r.Header.Get(apc.HdrCallerIsPrimary))
 			lim := int64(cmn.Rom.CplaneOperation()) >> 1
 			if dur > lim || dur < -lim {
 				nlog.Errorf("Warning: clock drift %s <-> %s(self) = %v, txn %s[%s]",
-					c.callerName, t, time.Duration(dur), msg.Action, c.msg.UUID)
+					c.callerName, c.t, time.Duration(dur), c.msg.Action, c.msg.UUID)
 			}
 		}
 	}
 
-	c.t = t
 	c.uuid = c.msg.UUID
 	if c.uuid == "" {
-		return c, nil
+		return nil
 	}
 	if tout := query.Get(apc.QparamNetwTimeout); tout != "" {
 		c.timeout.netw, err = cos.S2Duration(tout)
@@ -1103,15 +1101,10 @@ func (t *target) prepTxnServer(r *http.Request, msg *aisMsg, bucket, phase strin
 		debug.AssertNoErr(err)
 	}
 	c.query = query // operation-specific values, if any
-
-	return c, err
+	return err
 }
 
-//
-// notifications
-//
-
-func (c *txnServerCtx) addNotif(xctn cluster.Xact) {
+func (c *txnSrv) addNotif(xctn cluster.Xact) {
 	dsts, ok := c.query[apc.QparamNotifyMe]
 	if !ok {
 		return

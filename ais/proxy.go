@@ -1290,8 +1290,8 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			}
 		}
 
-		nlog.Infof("multi-obj %s %s => %s", msg.Action, bck, bckTo)
-		if xid, err = p.tcobjs(bck, bckTo, cmn.GCO.Get(), msg, tcomsg); err != nil {
+		xid, err = p.tcobjs(bck, bckTo, cmn.GCO.Get(), msg, tcomsg)
+		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

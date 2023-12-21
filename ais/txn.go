@@ -435,7 +435,7 @@ func (txn *txnBase) isDone() (done bool, err error) {
 
 func (txn *txnBase) rsvp(err error) { txn.err.Store(&txnError{err: err}) }
 
-func (txn *txnBase) fillFromCtx(c *txnServerCtx) {
+func (txn *txnBase) fillFromCtx(c *txnSrv) {
 	txn.uid = c.uuid
 	txn.action = c.msg.Action
 	txn.callerName = c.callerName
@@ -510,7 +510,7 @@ func (txn *txnBckBase) commitAfter(caller string, msg *aisMsg, err error, args .
 // txnCreateBucket //
 /////////////////////
 
-func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
+func newTxnCreateBucket(c *txnSrv) (txn *txnCreateBucket) {
 	txn = &txnCreateBucket{}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)
@@ -521,7 +521,7 @@ func newTxnCreateBucket(c *txnServerCtx) (txn *txnCreateBucket) {
 // txnMakeNCopies //
 ////////////////////
 
-func newTxnMakeNCopies(c *txnServerCtx, curCopies, newCopies int64) (txn *txnMakeNCopies) {
+func newTxnMakeNCopies(c *txnSrv, curCopies, newCopies int64) (txn *txnMakeNCopies) {
 	txn = &txnMakeNCopies{curCopies: curCopies, newCopies: newCopies}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)
@@ -537,7 +537,7 @@ func (txn *txnMakeNCopies) String() string {
 // txnSetBucketProps //
 ///////////////////////
 
-func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.Bprops) (txn *txnSetBucketProps) {
+func newTxnSetBucketProps(c *txnSrv, nprops *cmn.Bprops) (txn *txnSetBucketProps) {
 	cos.Assert(c.bck.Props != nil)
 	bprops := c.bck.Props.Clone()
 	txn = &txnSetBucketProps{bprops: bprops, nprops: nprops}
@@ -550,7 +550,7 @@ func newTxnSetBucketProps(c *txnServerCtx, nprops *cmn.Bprops) (txn *txnSetBucke
 // txnRenameBucket //
 /////////////////////
 
-func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *meta.Bck) (txn *txnRenameBucket) {
+func newTxnRenameBucket(c *txnSrv, bckFrom, bckTo *meta.Bck) (txn *txnRenameBucket) {
 	txn = &txnRenameBucket{bckFrom: bckFrom, bckTo: bckTo}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)
@@ -561,7 +561,7 @@ func newTxnRenameBucket(c *txnServerCtx, bckFrom, bckTo *meta.Bck) (txn *txnRena
 // txnTCB //
 ////////////
 
-func newTxnTCB(c *txnServerCtx, xtcb *xs.XactTCB) (txn *txnTCB) {
+func newTxnTCB(c *txnSrv, xtcb *xs.XactTCB) (txn *txnTCB) {
 	txn = &txnTCB{xtcb: xtcb}
 	txn.init(xtcb.Args().BckFrom)
 	txn.fillFromCtx(c)
@@ -582,7 +582,7 @@ func (txn *txnTCB) String() string {
 // txnTCObjs //
 ///////////////
 
-func newTxnTCObjs(c *txnServerCtx, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
+func newTxnTCObjs(c *txnSrv, bckFrom *meta.Bck, xtco *xs.XactTCObjs, msg *cmn.TCObjsMsg) (txn *txnTCObjs) {
 	txn = &txnTCObjs{xtco: xtco, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)
@@ -603,7 +603,7 @@ func (txn *txnTCObjs) String() string {
 // txnECEncode //
 /////////////////
 
-func newTxnECEncode(c *txnServerCtx, bck *meta.Bck) (txn *txnECEncode) {
+func newTxnECEncode(c *txnSrv, bck *meta.Bck) (txn *txnECEncode) {
 	txn = &txnECEncode{}
 	txn.init(bck)
 	txn.fillFromCtx(c)
@@ -614,7 +614,7 @@ func newTxnECEncode(c *txnServerCtx, bck *meta.Bck) (txn *txnECEncode) {
 // txnCreateArchMultiObj //
 ///////////////////////////
 
-func newTxnArchMultiObj(c *txnServerCtx, bckFrom *meta.Bck, xarch *xs.XactArch, msg *cmn.ArchiveBckMsg) (txn *txnArchMultiObj) {
+func newTxnArchMultiObj(c *txnSrv, bckFrom *meta.Bck, xarch *xs.XactArch, msg *cmn.ArchiveBckMsg) (txn *txnArchMultiObj) {
 	txn = &txnArchMultiObj{xarch: xarch, msg: msg}
 	txn.init(bckFrom)
 	txn.fillFromCtx(c)
@@ -635,7 +635,7 @@ func (txn *txnArchMultiObj) String() string {
 // txnPromote //
 ////////////////
 
-func newTxnPromote(c *txnServerCtx, msg *cluster.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
+func newTxnPromote(c *txnSrv, msg *cluster.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
 	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)
