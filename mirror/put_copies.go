@@ -203,7 +203,7 @@ func (r *XactPut) stop() (err error) {
 		r.SubPending(n)
 		err = fmt.Errorf("%s: dropped %d object%s", r, n, cos.Plural(n))
 	}
-	if cnt := r.chanFull.Load(); cnt > 10 || (cnt > 0 && r.config.FastV(5, cos.SmoduleMirror)) {
+	if cnt := r.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && r.config.FastV(5, cos.SmoduleMirror)) {
 		nlog.Errorln("work channel full (all mp workers)", r.String(), cnt)
 	}
 	return

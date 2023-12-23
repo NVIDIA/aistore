@@ -6,10 +6,12 @@ package ais
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -32,8 +34,11 @@ type (
 		bckTo   *meta.Bck
 		amsg    *apc.ActMsg // orig
 		config  *cmn.Config
+		smap    *smapX
 		// work
 		tsi     *meta.Snode
+		xid     string // x-tco
+		cnt     int
 		lsmsg   apc.LsoMsg
 		altmsg  apc.ActMsg
 		tcomsg  cmn.TCObjsMsg
@@ -41,18 +46,18 @@ type (
 	}
 )
 
-func (a *lstca) add(c *lstcx, xid string) {
+func (a *lstca) add(c *lstcx) {
 	a.mu.Lock()
 	if a.a == nil {
 		a.a = make(map[string]*lstcx, 4)
 	}
-	a.a[xid] = c
+	a.a[c.xid] = c
 	a.mu.Unlock()
 }
 
-func (a *lstca) del(xid string) {
+func (a *lstca) del(c *lstcx) {
 	a.mu.Lock()
-	delete(a.a, xid)
+	delete(a.a, c.xid)
 	a.mu.Unlock()
 }
 
@@ -92,8 +97,8 @@ func (c *lstcx) do() (string, error) {
 		PageSize: 0, // i.e., backend.MaxPageSize()
 	}
 	c.lsmsg.SetFlag(apc.LsNameOnly)
-	smap := c.p.owner.smap.get()
-	tsi, err := smap.HrwTargetTask(c.lsmsg.UUID)
+	c.smap = c.p.owner.smap.get()
+	tsi, err := c.smap.HrwTargetTask(c.lsmsg.UUID)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +107,7 @@ func (c *lstcx) do() (string, error) {
 
 	// 2. ls 1st page
 	var lst *cmn.LsoResult
-	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, smap, tsi /*designated target*/, c.config, true)
+	lst, err = c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.smap, tsi /*designated target*/, c.config, true)
 	if err != nil {
 		return "", err
 	}
@@ -114,76 +119,96 @@ func (c *lstcx) do() (string, error) {
 
 	// 3. tcomsg
 	c.tcomsg.ToBck = c.bckTo.Clone()
-	names := make([]string, 0, len(lst.Entries))
+	lr, cnt := &c.tcomsg.ListRange, len(lst.Entries)
+	lr.ObjNames = make([]string, 0, cnt)
 	for _, e := range lst.Entries {
-		names = append(names, e.Name)
+		lr.ObjNames = append(lr.ObjNames, e.Name)
 	}
-	c.tcomsg.ListRange.ObjNames = names
 
-	// 4. multi-obj action: transform/copy
+	// 4. multi-obj action: transform/copy 1st page
 	c.altmsg.Value = &c.tcomsg
 	c.altmsg.Action = apc.ActCopyObjects
 	if c.amsg.Action == apc.ActETLBck {
 		c.altmsg.Action = apc.ActETLObjects
 	}
 
-	xid, err := c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
-	if err != nil {
+	if c.xid, err = c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg); err != nil {
 		return "", err
 	}
 
-	s := fmt.Sprintf("(%s => %s)[%s]: %s => %s %v", c.amsg.Action, c.altmsg.Action, xid, c.bckFrom, c.bckTo, names[:min(len(names), 4)])
+	nlog.Infoln("'ls --all' to execute [" + c.amsg.Action + " -> " + c.altmsg.Action + "]")
+	s := fmt.Sprintf("%s[%s] %s => %s", c.altmsg.Action, c.xid, c.bckFrom, c.bckTo)
+
+	// 5. more pages, if any
 	if lst.ContinuationToken != "" {
 		// Run
 		nlog.Infoln("run", s, "...")
 		c.lsmsg.ContinuationToken = lst.ContinuationToken
-		go func() {
-			c.p.lstca.add(c, xid)
-			c.pages(smap, xid)
-			c.p.lstca.del(xid)
-		}()
+		go c.pages(s, cnt)
 	} else {
-		nlog.Infoln(s, "done.")
+		nlog.Infoln(s, "count", cnt)
 	}
-	return xid, nil
+	return c.xid, nil
 }
 
-// pages 2..last
-func (c *lstcx) pages(smap *smapX, xid string) {
-	for !c.stopped.Load() {
-		// next page
-		lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, smap, c.tsi, c.config, true)
-		if err != nil {
-			nlog.Errorln(err)
-			return
-		}
-		if len(lst.Entries) == 0 {
-			return
-		}
+func (c *lstcx) pages(s string, cnt int) {
+	c.cnt = cnt
+	c.p.lstca.add(c)
 
-		// next tcomsg
-		names := make([]string, 0, len(lst.Entries))
-		for _, e := range lst.Entries {
-			names = append(names, e.Name)
+	// pages 2, 3, ...
+	var err error
+	for !c.stopped.Load() && c.lsmsg.ContinuationToken != "" {
+		if cnt, err = c._page(); err != nil {
+			break
 		}
-		c.tcomsg.ListRange.ObjNames = names
-
-		if c.stopped.Load() {
-			return
-		}
-		// next tco action
-		c.altmsg.Value = &c.tcomsg
-		xactID, err := c.p.tcobjs(c.bckFrom, c.bckTo, c.config, &c.altmsg, &c.tcomsg)
-		if err != nil {
-			nlog.Errorln(err)
-			return
-		}
-		debug.Assertf(xactID == xid, "%q vs %q", xactID, xid)
-
-		// last page?
-		if lst.ContinuationToken == "" {
-			return
-		}
-		c.lsmsg.ContinuationToken = lst.ContinuationToken
+		c.cnt += cnt
 	}
+	c.p.lstca.del(c)
+	nlog.Infoln(s, "count", c.cnt, "stopped", c.stopped.Load(), "c-token", c.lsmsg.ContinuationToken, "err", err)
+}
+
+// next page
+func (c *lstcx) _page() (int, error) {
+	lst, err := c.p.lsObjsR(c.bckFrom, &c.lsmsg, c.smap, c.tsi, c.config, true)
+	if err != nil {
+		return 0, err
+	}
+	c.lsmsg.ContinuationToken = lst.ContinuationToken
+	if len(lst.Entries) == 0 {
+		debug.Assert(lst.ContinuationToken == "")
+		return 0, nil
+	}
+
+	lr := &c.tcomsg.ListRange
+	clear(lr.ObjNames)
+	lr.ObjNames = lr.ObjNames[:0]
+	for _, e := range lst.Entries {
+		lr.ObjNames = append(lr.ObjNames, e.Name)
+	}
+	c.altmsg.Value = &c.tcomsg
+	err = c.bcast()
+	return len(lr.ObjNames), err
+}
+
+// calls t.httpxpost (TODO: slice of names is the only "delta" - optimize)
+func (c *lstcx) bcast() (err error) {
+	body := cos.MustMarshal(apc.ActMsg{Name: c.xid, Value: &c.tcomsg})
+	args := allocBcArgs()
+	{
+		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathXactions.S, Body: body}
+		args.to = cluster.Targets
+		args.timeout = cmn.Rom.MaxKeepalive()
+	}
+	if c.stopped.Load() {
+		return
+	}
+	results := c.p.bcastGroup(args)
+	freeBcArgs(args)
+	for _, res := range results {
+		if err = res.err; err != nil {
+			break
+		}
+	}
+	freeBcastRes(results)
+	return err
 }

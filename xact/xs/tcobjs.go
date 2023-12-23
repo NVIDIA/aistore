@@ -8,6 +8,7 @@ package xs
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 	"time"
 
@@ -39,8 +40,9 @@ type (
 			m   map[string]*tcowi
 			mtx sync.RWMutex
 		}
-		args   *xreg.TCObjsArgs
-		workCh chan *cmn.TCObjsMsg
+		args     *xreg.TCObjsArgs
+		workCh   chan *cmn.TCObjsMsg
+		chanFull atomic.Int64
 		streamingX
 		syncRemote bool
 	}
@@ -196,6 +198,16 @@ fin:
 func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 	r.IncPending()
 	r.workCh <- msg
+
+	if l, c := len(r.workCh), cap(r.workCh); l > c/2 {
+		runtime.Gosched() // poor man's throttle
+		if l == c {
+			cnt := r.chanFull.Inc()
+			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && r.config.FastV(5, cos.SmoduleXs)) {
+				nlog.Errorln("work channel full", r.Name())
+			}
+		}
+	}
 }
 
 //

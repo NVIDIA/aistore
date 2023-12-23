@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
+	"github.com/NVIDIA/aistore/xact/xs"
 )
 
 // TODO: uplift via higher-level query and similar (#668)
@@ -34,10 +35,16 @@ func (t *target) xactHandler(w http.ResponseWriter, r *http.Request) {
 		t.httpxget(w, r)
 	case http.MethodPut:
 		t.httpxput(w, r)
+	case http.MethodPost:
+		t.httpxpost(w, r)
 	default:
 		cmn.WriteErr405(w, r, http.MethodGet, http.MethodPut)
 	}
 }
+
+//
+// GET
+//
 
 func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -158,6 +165,10 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 	}
 }
 
+//
+// PUT
+//
+
 func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
@@ -236,4 +247,35 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		return cmn.NewErrUnsupp("start xaction", args.Kind)
 	}
 	return nil
+}
+
+//
+// POST
+//
+
+// client: plstcx.go
+func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
+	var (
+		err    error
+		xctn   cluster.Xact
+		amsg   *apc.ActMsg
+		tcomsg cmn.TCObjsMsg
+	)
+	if amsg, err = t.readActionMsg(w, r); err != nil {
+		return
+	}
+
+	xactID := amsg.Name
+	if xctn, err = xreg.GetXact(xactID); err != nil {
+		t.writeErr(w, r, err)
+		return
+	}
+	xtco, ok := xctn.(*xs.XactTCObjs)
+	debug.Assert(ok)
+
+	if err = cos.MorphMarshal(amsg.Value, &tcomsg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "special", amsg.Value, err)
+		return
+	}
+	xtco.Do(&tcomsg)
 }

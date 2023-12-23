@@ -49,6 +49,27 @@ type txnCln struct {
 // txnCln //
 ////////////
 
+func (c *txnCln) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnCln {
+	query := make(url.Values, 3)
+	if bck == nil {
+		c.path = apc.URLPathTxn.S
+	} else {
+		c.path = apc.URLPathTxn.Join(bck.Name)
+		query = bck.AddToQuery(query)
+	}
+	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
+	c.timeout.host = config.Timeout.MaxHostBusy.D()
+	if !waitmsync { // when commit does not block behind metasync
+		query.Set(apc.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
+	}
+	query.Set(apc.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
+
+	c.msg = c.p.newAmsg(msg, nil, c.uuid)
+	body := cos.MustMarshal(c.msg)
+	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
+	return c
+}
+
 func (c *txnCln) begin(what fmt.Stringer) (err error) {
 	results := c.bcast(apc.ActBegin, c.timeout.netw)
 	for _, res := range results {
@@ -974,27 +995,6 @@ func prmBegin(c *txnCln, bck *meta.Bck, singleT bool) (num int64, allAgree bool,
 func (p *proxy) prepTxnClient(msg *apc.ActMsg, bck *meta.Bck, waitmsync bool) *txnCln {
 	c := &txnCln{p: p, uuid: cos.GenUUID(), smap: p.owner.smap.get()}
 	c.init(msg, bck, cmn.GCO.Get(), waitmsync)
-	return c
-}
-
-func (c *txnCln) init(msg *apc.ActMsg, bck *meta.Bck, config *cmn.Config, waitmsync bool) *txnCln {
-	query := make(url.Values, 3)
-	if bck == nil {
-		c.path = apc.URLPathTxn.S
-	} else {
-		c.path = apc.URLPathTxn.Join(bck.Name)
-		query = bck.AddToQuery(query)
-	}
-	c.timeout.netw = 2 * config.Timeout.MaxKeepalive.D()
-	c.timeout.host = config.Timeout.MaxHostBusy.D()
-	if !waitmsync { // when commit does not block behind metasync
-		query.Set(apc.QparamNetwTimeout, cos.UnixNano2S(int64(c.timeout.netw)))
-	}
-	query.Set(apc.QparamHostTimeout, cos.UnixNano2S(int64(c.timeout.host)))
-
-	c.msg = c.p.newAmsg(msg, nil, c.uuid)
-	body := cos.MustMarshal(c.msg)
-	c.req = cmn.HreqArgs{Method: http.MethodPost, Query: query, Body: body}
 	return c
 }
 

@@ -288,7 +288,7 @@ func (s *streamBase) sendLoop(dryrun bool) {
 	// cleanup
 	s.streamer.abortPending(err, false /*completions*/)
 
-	if cnt := s.chanFull.Load(); cnt > 10 || (cnt > 0 && verbose) {
+	if cnt := s.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && verbose) {
 		nlog.Errorln("work channel full", s.lid, cnt)
 	}
 }
