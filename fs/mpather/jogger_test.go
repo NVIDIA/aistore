@@ -40,7 +40,6 @@ func TestJoggerGroup(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
@@ -86,7 +85,6 @@ func TestJoggerGroupParallel(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	baseJgOpts := &mpather.JgroupOpts{
-		T:    out.T,
 		Bck:  out.Bck,
 		CTs:  []string{fs.ObjectType},
 		Slab: slab,
@@ -141,7 +139,6 @@ func TestJoggerGroupLoad(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
@@ -181,7 +178,6 @@ func TestJoggerGroupError(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	opts := &mpather.JgroupOpts{
-		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
@@ -229,7 +225,6 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 	}
 
 	opts := &mpather.JgroupOpts{
-		T:   out.T,
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {
@@ -285,7 +280,6 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 		counters[ct] = atomic.NewInt32(0)
 	}
 	opts := &mpather.JgroupOpts{
-		T:   out.T,
 		Bck: out.Bck,
 		CTs: cts,
 		VisitObj: func(lom *cluster.LOM, buf []byte) error {

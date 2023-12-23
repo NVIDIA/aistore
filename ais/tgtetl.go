@@ -72,9 +72,9 @@ func (t *target) handleETLPut(w http.ResponseWriter, r *http.Request) {
 
 	switch msg := initMsg.(type) {
 	case *etl.InitSpecMsg:
-		err = etl.InitSpec(t, msg, xid, etl.StartOpts{})
+		err = etl.InitSpec(msg, xid, etl.StartOpts{})
 	case *etl.InitCodeMsg:
-		err = etl.InitCode(t, msg, xid)
+		err = etl.InitCode(msg, xid)
 	default:
 		debug.Assert(false, initMsg.String())
 	}
@@ -142,7 +142,7 @@ func (t *target) handleETLPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *target) stopETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	if err := etl.Stop(t, etlName, cmn.ErrXactUserAbort); err != nil {
+	if err := etl.Stop(etlName, cmn.ErrXactUserAbort); err != nil {
 		statusCode := http.StatusBadRequest
 		if cos.IsErrNotFound(err) {
 			statusCode = http.StatusNotFound
@@ -157,7 +157,7 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, b
 		comm etl.Communicator
 		err  error
 	)
-	comm, err = etl.GetCommunicator(etlName, t.si)
+	comm, err = etl.GetCommunicator(etlName)
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			smap := t.owner.smap.Get()
@@ -179,7 +179,7 @@ func (t *target) doETL(w http.ResponseWriter, r *http.Request, etlName string, b
 }
 
 func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	logs, err := etl.PodLogs(t, etlName)
+	logs, err := etl.PodLogs(etlName)
 	if err != nil {
 		t.writeErr(w, r, err)
 		return
@@ -188,7 +188,7 @@ func (t *target) logsETL(w http.ResponseWriter, r *http.Request, etlName string)
 }
 
 func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	health, err := etl.PodHealth(t, etlName)
+	health, err := etl.PodHealth(etlName)
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)
@@ -202,7 +202,7 @@ func (t *target) healthETL(w http.ResponseWriter, r *http.Request, etlName strin
 }
 
 func (t *target) metricsETL(w http.ResponseWriter, r *http.Request, etlName string) {
-	metricMsg, err := etl.PodMetrics(t, etlName)
+	metricMsg, err := etl.PodMetrics(etlName)
 	if err != nil {
 		if cos.IsErrNotFound(err) {
 			t.writeErr(w, r, err, http.StatusNotFound, Silent)

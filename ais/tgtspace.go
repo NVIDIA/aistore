@@ -90,7 +90,6 @@ func (t *target) runLRU(id string, wg *sync.WaitGroup, force bool, bcks ...cmn.B
 		t.bcastAsyncIC(msg)
 	}
 	ini := space.IniLRU{
-		T:                   t,
 		Xaction:             xlru.(*space.XactLRU),
 		Config:              cmn.GCO.Get(),
 		StatsT:              t.statsT,
@@ -128,7 +127,6 @@ func (t *target) runStoreCleanup(id string, wg *sync.WaitGroup, bcks ...cmn.Bck)
 		t.bcastAsyncIC(msg)
 	}
 	ini := space.IniCln{
-		T:       t,
 		Xaction: xcln.(*space.XactCln),
 		Config:  cmn.GCO.Get(),
 		StatsT:  t.statsT,

@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
@@ -30,7 +31,6 @@ import (
 
 type (
 	IniCln struct {
-		T       cluster.Target
 		Config  *cmn.Config
 		Xaction *XactCln
 		StatsT  stats.Tracker
@@ -287,7 +287,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 }
 
 func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
-	bowner := j.ini.T.Bowner()
+	bowner := glob.T.Bowner()
 	for i := range bcks { // for each bucket under a given provider
 		var (
 			err error
@@ -370,7 +370,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		// EC slices:
 		// - EC enabled: remove only slices with missing metafiles
 		// - EC disabled: remove all slices
-		ct, err := cluster.NewCTFromFQN(fqn, j.p.ini.T.Bowner())
+		ct, err := cluster.NewCTFromFQN(fqn, glob.T.Bowner())
 		if err != nil || !ct.Bck().Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			return
@@ -391,7 +391,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		// EC metafiles:
 		// - EC enabled: remove only without corresponding slice or replica
 		// - EC disabled: remove all metafiles
-		ct, err := cluster.NewCTFromFQN(fqn, j.p.ini.T.Bowner())
+		ct, err := cluster.NewCTFromFQN(fqn, glob.T.Bowner())
 		if err != nil || !ct.Bck().Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			return
@@ -425,7 +425,7 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
 				j.ini.Xaction.AddErr(err)
-				j.ini.T.FSHC(err, lom.FQN)
+				glob.T.FSHC(err, lom.FQN)
 			}
 			return
 		}

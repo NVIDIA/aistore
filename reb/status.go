@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -19,7 +20,7 @@ import (
 // via GET /v1/health (apc.Health)
 func (reb *Reb) RebStatus(status *Status) {
 	var (
-		tsmap  = reb.t.Sowner().Get()
+		tsmap  = glob.T.Sowner().Get()
 		marked = xreg.GetRebMarked()
 	)
 	status.Aborted = marked.Interrupted
@@ -48,14 +49,14 @@ func (reb *Reb) RebStatus(status *Status) {
 				id, _ := xact.S2RebID(marked.Xact.ID())
 				debug.Assert(id > xreb.RebID(), marked.Xact.String()+" vs "+xreb.String())
 				nlog.Warningf("%s: must be transitioning (renewing) from %s (stage %s) to %s",
-					reb.t, xreb, stages[status.Stage], marked.Xact)
+					glob.T, xreb, stages[status.Stage], marked.Xact)
 				status.Running = false // not yet
 			} else {
 				debug.Assertf(reb.RebID() == xreb.RebID(), "rebID[%d] vs %s", reb.RebID(), xreb)
 			}
 		}
 	} else if status.Running {
-		nlog.Warningln(reb.t.String()+": transitioning (renewing) to", marked.Xact.String())
+		nlog.Warningln(glob.T.String()+": transitioning (renewing) to", marked.Xact.String())
 		status.Running = false
 	}
 
@@ -64,7 +65,7 @@ func (reb *Reb) RebStatus(status *Status) {
 		return
 	}
 	if status.SmapVersion != status.RebVersion {
-		nlog.Warningf("%s: Smap v%d != %d", reb.t, status.SmapVersion, status.RebVersion)
+		nlog.Warningf("%s: Smap v%d != %d", glob.T, status.SmapVersion, status.RebVersion)
 		return
 	}
 	reb.awaiting.mtx.Lock()

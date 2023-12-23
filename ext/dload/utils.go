@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -254,7 +255,7 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
-		oa, _, err = g.t.Backend(lom.Bck()).HeadObj(ctx, lom)
+		oa, _, err = glob.T.Backend(lom.Bck()).HeadObj(ctx, lom)
 		if err != nil {
 			return false, err
 		}

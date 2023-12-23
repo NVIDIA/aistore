@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -128,8 +129,8 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	wi.cksum.Init(archlom.CksumType())
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
-	smap := r.p.T.Sowner().Get()
-	if err = cluster.InMaintOrDecomm(smap, r.p.T.Snode(), r); err != nil {
+	smap := glob.T.Sowner().Get()
+	if err = cluster.InMaintOrDecomm(smap, glob.T.Snode(), r); err != nil {
 		return
 	}
 	nat := smap.CountActiveTs()
@@ -142,7 +143,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	}
 
 	// fcreate at BEGIN time
-	if r.p.T.SID() == wi.tsi.ID() {
+	if glob.T.SID() == wi.tsi.ID() {
 		var (
 			s           string
 			lmfh        *os.File
@@ -211,10 +212,10 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			var (
-				smap = r.p.T.Sowner().Get()
+				smap = glob.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
-			lrit.init(r, r.p.T, &msg.ListRange)
+			lrit.init(r, &msg.ListRange)
 			if msg.IsList() {
 				err = lrit.iterList(wi, smap)
 			} else {
@@ -225,7 +226,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				wi.cleanup()
 				goto fin
 			}
-			if r.p.T.SID() == wi.tsi.ID() {
+			if glob.T.SID() == wi.tsi.ID() {
 				go r.finalize(wi) // async finalize this shard
 			} else {
 				r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil)
@@ -298,7 +299,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		debug.Assert(cnt > 0) // see cleanup
 		return err
 	}
-	debug.Assert(wi.tsi.ID() == r.p.T.SID() && wi.msg.TxnUUID == txnUUID)
+	debug.Assert(wi.tsi.ID() == glob.T.SID() && wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == opcodeDone {
@@ -382,7 +383,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 
-	errCode, err = r.p.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
+	errCode, err = glob.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
 	cluster.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
 	return
@@ -489,10 +490,9 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		}
 	}
 
-	t := lrit.t
 	if coldGet {
 		// cold
-		if errCode, err := t.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
+		if errCode, err := glob.T.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
 			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cmn.IsObjNotExist(err)) {
 				return
 			}
@@ -506,7 +506,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		wi.r.addErr(err, wi.msg.ContinueOnError)
 		return
 	}
-	if t.SID() != wi.tsi.ID() {
+	if glob.T.SID() != wi.tsi.ID() {
 		wi.r.doSend(lom, wi, fh)
 		return
 	}

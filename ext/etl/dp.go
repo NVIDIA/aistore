@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -29,8 +28,8 @@ type (
 // interface guard
 var _ cluster.DP = (*OfflineDP)(nil)
 
-func NewOfflineDP(msg *apc.TCBMsg, lsnode *meta.Snode, config *cmn.Config) (*OfflineDP, error) {
-	comm, err := GetCommunicator(msg.Transform.Name, lsnode)
+func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
+	comm, err := GetCommunicator(msg.Transform.Name)
 	if err != nil {
 		return nil, err
 	}

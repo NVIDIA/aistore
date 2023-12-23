@@ -10,15 +10,9 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/feat"
 )
 
 const TarBlockSize = 512 // Size of each block in a tar stream
-
-// package-local copy of config feature flags (a change requires restart)
-var features feat.Flags
-
-func Init(f feat.Flags) { features = f }
 
 // assorted errors
 type (

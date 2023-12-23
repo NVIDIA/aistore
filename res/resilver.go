@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
@@ -32,11 +33,9 @@ const timedDuration = 4 * time.Second // see also: timedDuration in tgtgfn.go
 
 type (
 	Res struct {
-		t cluster.Target
 		// last or current resilver's time interval
-		begin  atomic.Int64
-		end    atomic.Int64
-		config *cmn.Config
+		begin atomic.Int64
+		end   atomic.Int64
 	}
 	Args struct {
 		UUID              string
@@ -48,15 +47,12 @@ type (
 		SingleRmiJogger   bool
 	}
 	joggerCtx struct {
-		t      cluster.Target
 		xres   *xs.Resilver
 		config *cmn.Config
 	}
 )
 
-func New(t cluster.Target) *Res {
-	return &Res{t: t, config: cmn.GCO.Get()}
-}
+func New() *Res { return &Res{} }
 
 func (res *Res) IsActive(multiplier int64) (yes bool) {
 	begin := res.begin.Load()
@@ -103,11 +99,11 @@ func (res *Res) RunResilver(args Args) {
 	// jogger group
 	var (
 		jg        *mpather.Jgroup
-		slab, err = res.t.PageMM().GetSlab(memsys.MaxPageSlabSize)
-		jctx      = &joggerCtx{xres: xres, t: res.t, config: res.config}
+		slab, err = glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+		config    = cmn.GCO.Get()
+		jctx      = &joggerCtx{xres: xres, config: config}
 
 		opts = &mpather.JgroupOpts{
-			T:                     res.t,
 			CTs:                   []string{fs.ObjectType, fs.ECSliceType},
 			VisitObj:              jctx.visitObj,
 			VisitCT:               jctx.visitCT,
@@ -119,10 +115,10 @@ func (res *Res) RunResilver(args Args) {
 	debug.Assert(args.PostDD == nil || (args.Action == apc.ActMountpathDetach || args.Action == apc.ActMountpathDisable))
 
 	if args.SingleRmiJogger {
-		jg = mpather.NewJoggerGroup(opts, res.config, args.Rmi.Path)
+		jg = mpather.NewJoggerGroup(opts, config, args.Rmi.Path)
 		nlog.Infof("%s, action %q, jogger->(%q)", xres.Name(), args.Action, args.Rmi)
 	} else {
-		jg = mpather.NewJoggerGroup(opts, res.config, "")
+		jg = mpather.NewJoggerGroup(opts, config, "")
 		if args.Rmi != nil {
 			nlog.Infof("%s, action %q, rmi %s, num %d", xres.Name(), args.Action, args.Rmi, jg.Num())
 		} else {
@@ -133,7 +129,7 @@ func (res *Res) RunResilver(args Args) {
 	// run and block waiting
 	res.end.Store(0)
 	jg.Run()
-	err = res.wait(jg, xres)
+	err = wait(jg, xres)
 	xres.AddErr(err)
 
 	// callback to, finally, detach-disable
@@ -144,8 +140,8 @@ func (res *Res) RunResilver(args Args) {
 }
 
 // Wait for an abort or for resilvering joggers to finish.
-func (res *Res) wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
-	tsi := res.t.Snode()
+func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
+	tsi := glob.T.Snode()
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
@@ -191,7 +187,7 @@ func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 	if jg.config.FastV(4, cos.SmoduleReb) {
-		nlog.Infof("%s: moving %q -> %q", jg.t, ct.FQN(), destFQN)
+		nlog.Infof("%s: moving %q -> %q", glob.T, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
@@ -345,7 +341,7 @@ redo:
 			continue
 		}
 		if cos.IsErrOOS(err) {
-			errV := fmt.Errorf("%s: %s OOS, err: %w", jg.t, mi, err)
+			errV := fmt.Errorf("%s: %s OOS, err: %w", glob.T, mi, err)
 			jg.xres.AddErr(errV)
 			err = cmn.NewErrAborted(xname, "", errV)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {

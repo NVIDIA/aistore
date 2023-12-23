@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -92,7 +92,6 @@ type (
 	// each of the targets will receive it as well. Hence, all ETL containers
 	// will be stopped.
 	Aborter struct {
-		t           cluster.Target
 		currentSmap *meta.Smap
 		name        string
 		mtx         sync.Mutex
@@ -106,11 +105,10 @@ type (
 // interface guard
 var _ meta.Slistener = (*Aborter)(nil)
 
-func newAborter(t cluster.Target, name string) *Aborter {
+func newAborter(name string) *Aborter {
 	return &Aborter{
 		name:        name,
-		t:           t,
-		currentSmap: t.Sowner().Get(),
+		currentSmap: glob.T.Sowner().Get(),
 	}
 }
 
@@ -124,7 +122,7 @@ func (e *Aborter) ListenSmapChanged() {
 	go func() {
 		e.mtx.Lock()
 		defer e.mtx.Unlock()
-		newSmap := e.t.Sowner().Get()
+		newSmap := glob.T.Sowner().Get()
 
 		if newSmap.Version <= e.currentSmap.Version {
 			return
@@ -132,12 +130,12 @@ func (e *Aborter) ListenSmapChanged() {
 
 		if !newSmap.CompareTargets(e.currentSmap) {
 			err := cmn.NewErrETL(&cmn.ETLErrCtx{
-				TID:     e.t.SID(),
+				TID:     glob.T.SID(),
 				ETLName: e.name,
 			}, "targets have changed, aborting...")
 			nlog.Warningln(err)
 			// Stop will unregister `e` from smap listeners.
-			if err := Stop(e.t, e.name, err); err != nil {
+			if err := Stop(e.name, err); err != nil {
 				nlog.Errorln(err)
 			}
 		}
@@ -147,9 +145,9 @@ func (e *Aborter) ListenSmapChanged() {
 }
 
 // (common for both `InitCode` and `InitSpec` flows)
-func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts) error {
+func InitSpec(msg *InitSpecMsg, etlName string, opts StartOpts) error {
 	config := cmn.GCO.Get()
-	errCtx, podName, svcName, err := start(t, msg, etlName, opts, config)
+	errCtx, podName, svcName, err := start(msg, etlName, opts, config)
 	if err == nil {
 		if config.FastV(4, cos.SmoduleETL) {
 			nlog.Infof("started etl[%s], msg %s, pod %s", etlName, msg, podName)
@@ -169,7 +167,7 @@ func InitSpec(t cluster.Target, msg *InitSpecMsg, etlName string, opts StartOpts
 // - make the corresponding assorted substitutions in the etl/runtime/podspec.yaml spec, and
 // - execute `InitSpec` with the modified podspec
 // See also: etl/runtime/podspec.yaml
-func InitCode(t cluster.Target, msg *InitCodeMsg, xid string) error {
+func InitCode(msg *InitCodeMsg, xid string) error {
 	var (
 		ftp      = fromToPairs(msg)
 		replacer = strings.NewReplacer(ftp...)
@@ -181,7 +179,7 @@ func InitCode(t cluster.Target, msg *InitCodeMsg, xid string) error {
 
 	// Start ETL
 	// (the point where InitCode flow converges w/ InitSpec)
-	return InitSpec(t,
+	return InitSpec(
 		&InitSpecMsg{msg.InitMsgBase, []byte(podSpec)},
 		xid,
 		StartOpts{Env: map[string]string{
@@ -247,12 +245,12 @@ func cleanupEntities(errCtx *cmn.ETLErrCtx, podName, svcName string) (err error)
 // * podName - non-empty if at least one attempt of creating pod was executed
 // * svcName - non-empty if at least one attempt of creating service was executed
 // * err - any error occurred that should be passed on.
-func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (errCtx *cmn.ETLErrCtx,
+func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (errCtx *cmn.ETLErrCtx,
 	podName, svcName string, err error) {
 	debug.Assert(k8s.NodeName != "") // checked above
 
-	errCtx = &cmn.ETLErrCtx{TID: t.SID(), ETLName: msg.IDX}
-	boot := &etlBootstrapper{t: t, errCtx: errCtx, config: config, env: opts.Env}
+	errCtx = &cmn.ETLErrCtx{TID: glob.T.SID(), ETLName: msg.IDX}
+	boot := &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env}
 	boot.msg = *msg
 
 	// Parse spec template and fill Pod object with necessary fields.
@@ -289,26 +287,26 @@ func start(t cluster.Target, msg *InitSpecMsg, xid string, opts StartOpts, confi
 	boot.setupXaction(xid)
 
 	// finally, add Communicator to the runtime registry
-	comm := newCommunicator(newAborter(t, msg.IDX), boot)
+	comm := newCommunicator(newAborter(msg.IDX), boot)
 	if err = reg.add(msg.IDX, comm); err != nil {
 		return
 	}
-	t.Sowner().Listeners().Reg(comm)
+	glob.T.Sowner().Listeners().Reg(comm)
 	return
 }
 
 // Stop deletes all occupied by the ETL resources, including Pods and Services.
 // It unregisters ETL smap listener.
-func Stop(t cluster.Target, id string, errCause error) error {
+func Stop(id string, errCause error) error {
 	errCtx := &cmn.ETLErrCtx{
-		TID:     t.SID(),
+		TID:     glob.T.SID(),
 		ETLName: id,
 	}
 
 	// Abort all running offline ETLs.
 	xreg.AbortKind(errCause, apc.ActETLBck)
 
-	c, err := GetCommunicator(id, t.Snode())
+	c, err := GetCommunicator(id)
 	if err != nil {
 		return cmn.NewErrETL(errCtx, err.Error())
 	}
@@ -320,7 +318,7 @@ func Stop(t cluster.Target, id string, errCause error) error {
 	}
 
 	if c := reg.del(id); c != nil {
-		t.Sowner().Listeners().Unreg(c)
+		glob.T.Sowner().Listeners().Unreg(c)
 	}
 
 	c.Stop()
@@ -329,29 +327,29 @@ func Stop(t cluster.Target, id string, errCause error) error {
 }
 
 // StopAll terminates all running ETLs.
-func StopAll(t cluster.Target) {
+func StopAll() {
 	if !k8s.IsK8s() {
 		return
 	}
 	for _, e := range List() {
-		if err := Stop(t, e.Name, nil); err != nil {
+		if err := Stop(e.Name, nil); err != nil {
 			nlog.Errorln(err)
 		}
 	}
 }
 
-func GetCommunicator(etlName string, lsnode *meta.Snode) (Communicator, error) {
+func GetCommunicator(etlName string) (Communicator, error) {
 	c, exists := reg.get(etlName)
 	if !exists {
-		return nil, cos.NewErrNotFound("%s: etl[%s]", lsnode, etlName)
+		return nil, cos.NewErrNotFound("%s: etl[%s]", glob.T, etlName)
 	}
 	return c, nil
 }
 
 func List() []Info { return reg.list() }
 
-func PodLogs(t cluster.Target, transformID string) (logs Logs, err error) {
-	c, err := GetCommunicator(transformID, t.Snode())
+func PodLogs(transformID string) (logs Logs, err error) {
+	c, err := GetCommunicator(transformID)
 	if err != nil {
 		return logs, err
 	}
@@ -364,13 +362,13 @@ func PodLogs(t cluster.Target, transformID string) (logs Logs, err error) {
 		return logs, err
 	}
 	return Logs{
-		TargetID: t.SID(),
+		TargetID: glob.T.SID(),
 		Logs:     b,
 	}, nil
 }
 
-func PodHealth(t cluster.Target, etlName string) (string, error) {
-	c, err := GetCommunicator(etlName, t.Snode())
+func PodHealth(etlName string) (string, error) {
+	c, err := GetCommunicator(etlName)
 	if err != nil {
 		return "", err
 	}
@@ -381,8 +379,8 @@ func PodHealth(t cluster.Target, etlName string) (string, error) {
 	return client.Health(c.PodName())
 }
 
-func PodMetrics(t cluster.Target, etlName string) (*CPUMemUsed, error) {
-	c, err := GetCommunicator(etlName, t.Snode())
+func PodMetrics(etlName string) (*CPUMemUsed, error) {
+	c, err := GetCommunicator(etlName)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +390,7 @@ func PodMetrics(t cluster.Target, etlName string) (*CPUMemUsed, error) {
 	}
 	cpuUsed, memUsed, err := k8s.Metrics(c.PodName())
 	if err == nil {
-		return &CPUMemUsed{TargetID: t.SID(), CPU: cpuUsed, Mem: memUsed}, nil
+		return &CPUMemUsed{TargetID: glob.T.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
 	if cos.IsErrNotFound(err) {
 		return nil, err

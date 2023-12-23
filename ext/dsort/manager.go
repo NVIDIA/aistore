@@ -23,8 +23,8 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
-	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -53,11 +53,8 @@ const (
 
 type (
 	global struct {
-		t      cluster.Target
-		tstats stats.Tracker
-		mm     *memsys.MMSA
+		mm *memsys.MMSA
 	}
-
 	buildingShardInfo struct {
 		shardName string
 	}
@@ -135,17 +132,13 @@ func Pinit(si cluster.Node, config *cmn.Config) {
 	newBcastClient(config)
 }
 
-func Tinit(t cluster.Target, stats stats.Tracker, db kvdb.Driver, config *cmn.Config) {
+func Tinit(db kvdb.Driver, config *cmn.Config) {
 	Managers = NewManagerGroup(db, false)
 
 	xreg.RegBckXact(&factory{})
 
 	debug.Assert(g.mm == nil) // only once
-	g.mm = t.PageMM()
-	g.t = t
-	g.tstats = stats
-
-	shard.Init(t)
+	g.mm = glob.T.PageMM()
 
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
@@ -173,7 +166,7 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(pars *parsedReqSpec) error {
-	m.smap = g.t.Sowner().Get()
+	m.smap = glob.T.Sowner().Get()
 
 	targetCount := m.smap.CountActiveTs()
 
@@ -269,7 +262,7 @@ func (m *Manager) initStreams() error {
 		return errors.WithStack(err)
 	}
 	client := transport.NewIntraDataClient()
-	m.streams.shards = bundle.New(g.t.Sowner(), g.t.Snode(), client, shardsSbArgs)
+	m.streams.shards = bundle.New(client, shardsSbArgs)
 	return nil
 }
 
@@ -319,7 +312,7 @@ func (m *Manager) cleanup() {
 	m.client = nil
 
 	if !m.aborted() {
-		m.updateFinishedAck(g.t.SID())
+		m.updateFinishedAck(glob.T.SID())
 		m.xctn.Finish()
 	}
 }
@@ -336,7 +329,7 @@ func (m *Manager) cleanup() {
 // in goroutines (there is a possibility that finalCleanup would start before
 // cleanup) - this cannot happen with current ordering mechanism.
 func (m *Manager) finalCleanup() {
-	nlog.Infof("%s: [dsort] %s started final cleanup", g.t, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s started final cleanup", glob.T, m.ManagerUUID)
 
 	m.lock()
 	for m.state.cleaned != initiallyCleanedState {
@@ -382,7 +375,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", g.t, m.ManagerUUID, time.Since(now))
+	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", glob.T, m.ManagerUUID, time.Since(now))
 }
 
 // stop this job and free associated resources
@@ -406,7 +399,7 @@ func (m *Manager) abort(err error) {
 	inProgress := m.inProgress()
 	m.unlock()
 
-	nlog.Infof("%s: [dsort] %s aborted", g.t, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s aborted", glob.T, m.ManagerUUID)
 
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
@@ -640,7 +633,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 		params.Cksum = nil
 		params.Atime = started
 	}
-	erp := g.t.PutObject(lom, params)
+	erp := glob.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		m.abort(err)

@@ -77,12 +77,7 @@ type (
 
 		CopyObject(lom *LOM, dm DM, dp DP, xact Xact, config *cmn.Config, bckTo *meta.Bck, objnameTo string, buf []byte,
 			dryRun, syncRemote bool) (int64, error)
-	}
 
-	TargetExt interface {
-		Target
-
-		// misc
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	}
 )

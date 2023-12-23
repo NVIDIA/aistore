@@ -264,8 +264,10 @@ func (it *iterator) rxloop(uid uint64, loghdr string, mm *memsys.MMSA) (err erro
 }
 
 func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
-	var obj *objReader
-	h := it.handler
+	var (
+		obj *objReader
+		h   = it.handler
+	)
 	obj, err = it.nextObj(loghdr, hlen)
 	if obj != nil {
 		if !obj.hdr.IsHeaderOnly() {
@@ -278,13 +280,14 @@ func (it *iterator) rxObj(loghdr string, hlen int) (err error) {
 		}
 		// stats
 		if err == nil {
-			it.stats.incNum()              // this stream stats
-			g.statsTracker.Inc(InObjCount) // stats/target_stats.go
+			it.stats.incNum()        // 1. this stream stats
+			g.tstats.Inc(InObjCount) // 2. stats/target_stats.go
+
 			if size >= 0 {
-				g.statsTracker.Add(InObjSize, size)
+				g.tstats.Add(InObjSize, size)
 			} else {
 				debug.Assert(size == SizeUnknown)
-				g.statsTracker.Add(InObjSize, obj.off-off)
+				g.tstats.Add(InObjSize, obj.off-off)
 			}
 		}
 	} else if err != nil && err != io.EOF {

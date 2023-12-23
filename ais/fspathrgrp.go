@@ -72,7 +72,7 @@ func (g *fsprungroup) _postAdd(action string, mi *fs.Mountpath) {
 		if cmn.GCO.Get().Resilver.Enabled {
 			g.t.runResilver(res.Args{}, nil /*wg*/)
 		}
-		xreg.RenewMakeNCopies(g.t, cos.GenUUID(), action)
+		xreg.RenewMakeNCopies(cos.GenUUID(), action)
 	}()
 
 	g.checkEnable(action, mi.Path)

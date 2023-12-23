@@ -37,7 +37,6 @@ type (
 			trname  string
 			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
 		}
-		t           cluster.Node
 		xctn        cluster.Xact
 		config      *cmn.Config
 		compression string // enum { apc.CompressNever, ... }
@@ -69,9 +68,9 @@ var _ cluster.DM = (*DataMover)(nil) // via t.CopyObject()
 // For DMs that do not create new objects (e.g, rebalance) `owt` should
 // be set to `OwtMigrateRepl`; all others are expected to have `OwtPut` (see e.g, CopyBucket).
 
-func NewDataMover(t cluster.Target, trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
+func NewDataMover(trname string, recvCB transport.RecvObj, owt cmn.OWT, extra Extra) (*DataMover, error) {
 	debug.Assert(extra.Config != nil)
-	dm := &DataMover{t: t, config: extra.Config}
+	dm := &DataMover{config: extra.Config}
 	dm.owt = owt
 	dm.multiplier = extra.Multiplier
 	dm.sizePDU, dm.maxHdrSize = extra.SizePDU, extra.MaxHdrSize
@@ -139,7 +138,7 @@ func (dm *DataMover) Open() {
 	if dm.xctn != nil {
 		dataArgs.Extra.SenderID = dm.xctn.ID()
 	}
-	dm.data.streams = New(dm.t.Sowner(), dm.t.Snode(), dm.data.client, dataArgs)
+	dm.data.streams = New(dm.data.client, dataArgs)
 	if dm.useACKs() {
 		ackArgs := Args{
 			Net:          dm.ack.net,
@@ -151,7 +150,7 @@ func (dm *DataMover) Open() {
 		if dm.xctn != nil {
 			ackArgs.Extra.SenderID = dm.xctn.ID()
 		}
-		dm.ack.streams = New(dm.t.Sowner(), dm.t.Snode(), dm.ack.client, ackArgs)
+		dm.ack.streams = New(dm.ack.client, ackArgs)
 	}
 	dm.stage.opened.Store(true)
 }

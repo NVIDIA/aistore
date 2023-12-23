@@ -25,8 +25,8 @@ const (
 )
 
 type global struct {
-	statsTracker cos.StatsUpdater // aka stats.Trunner
-	mm           *memsys.MMSA
+	tstats cos.StatsUpdater // subset of stats.Tracker interface, the minimum required
+	mm     *memsys.MMSA
 }
 
 var (
@@ -35,11 +35,11 @@ var (
 	verbose    bool
 )
 
-func Init(st cos.StatsUpdater, config *cmn.Config) *StreamCollector {
+func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
 	verbose = config.FastV(5 /*super-verbose*/, cos.SmoduleTransport)
 
 	g.mm = memsys.PageMM()
-	g.statsTracker = st
+	g.tstats = tstats
 
 	nextSessionID.Store(100)
 	for i := 0; i < numHmaps; i++ {

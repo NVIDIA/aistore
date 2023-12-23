@@ -278,12 +278,12 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 	var (
 		xctn cluster.Xact
-		rns  = xreg.RenewLso(t, bck, lsmsg.UUID, lsmsg)
+		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg)
 	)
 	// check that xaction hasn't finished prior to this page read, restart if needed
 	if rns.Err == xs.ErrGone {
 		runtime.Gosched()
-		rns = xreg.RenewLso(t, bck, lsmsg.UUID, lsmsg)
+		rns = xreg.RenewLso(bck, lsmsg.UUID, lsmsg)
 	}
 	if rns.Err != nil {
 		t.writeErr(w, r, rns.Err)
@@ -315,7 +315,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck *meta.Bck, msg *apc.BsummCtrlMsg, dpq *dpq) {
 	if phase == apc.ActBegin {
-		rns := xreg.RenewBckSummary(t, bck, msg)
+		rns := xreg.RenewBckSummary(bck, msg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err, http.StatusInternalServerError)
 			return
@@ -412,7 +412,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 				return
 			}
 		}
-		rns := xreg.RenewEvictDelete(msg.UUID, t, msg.Action /*xaction kind*/, apireq.bck, lrMsg)
+		rns := xreg.RenewEvictDelete(msg.UUID, msg.Action /*xaction kind*/, apireq.bck, lrMsg)
 		if rns.Err != nil {
 			t.writeErr(w, r, rns.Err)
 			return
@@ -470,7 +470,7 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
-		rns := xreg.RenewPrefetch(msg.UUID, t, apireq.bck, lrMsg)
+		rns := xreg.RenewPrefetch(msg.UUID, apireq.bck, lrMsg)
 		xctn := rns.Entry.Get()
 		go xctn.Run(nil)
 	default:

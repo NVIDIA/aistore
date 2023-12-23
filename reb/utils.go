@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -42,7 +43,7 @@ func (reb *Reb) logHdr(rebID int64, smap *meta.Smap, initializing ...bool) strin
 	if smap != nil {
 		smapv = "v" + strconv.FormatInt(smap.Version, 10)
 	}
-	s := fmt.Sprintf("%s[g%d,%s", reb.t, rebID, smapv)
+	s := fmt.Sprintf("%s[g%d,%s", glob.T, rebID, smapv)
 	if len(initializing) > 0 {
 		return s + "]"
 	}
@@ -72,7 +73,7 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 		curwt  time.Duration
 	)
 	maxwt = min(maxwt, config.Timeout.SendFile.D()/3)
-	nlog.Warningf("%s: waiting to start...", reb.t)
+	nlog.Warningf("%s: waiting to start...", glob.T)
 	time.Sleep(sleep)
 	for curwt < maxwt {
 		smap = reb.smap.Load()
@@ -82,7 +83,7 @@ func (reb *Reb) _waitForSmap() (smap *meta.Smap, err error) {
 		time.Sleep(sleep)
 		curwt += sleep
 	}
-	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", reb.t)
+	return nil, fmt.Errorf("%s: timed out waiting for usable Smap", glob.T)
 }
 
 // Rebalance moves to the next stage:
@@ -93,7 +94,7 @@ func (reb *Reb) changeStage(newStage uint32) {
 	reb.stages.stage.Store(newStage)
 	var (
 		req = stageNtfn{
-			daemonID: reb.t.SID(), stage: newStage, rebID: reb.rebID.Load(),
+			daemonID: glob.T.SID(), stage: newStage, rebID: reb.rebID.Load(),
 		}
 		hdr = transport.ObjHdr{}
 	)
@@ -115,7 +116,7 @@ func (reb *Reb) abortAndBroadcast(err error) {
 
 	var (
 		req = stageNtfn{
-			daemonID: reb.t.SID(),
+			daemonID: glob.T.SID(),
 			rebID:    reb.RebID(),
 			stage:    rebStageAbort,
 		}

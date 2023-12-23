@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/klauspost/reedsolomon"
@@ -133,7 +134,7 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		err = fmt.Errorf("%s: failed to %s %s: %w", g.t, req.Action, lom.StringEx(), err)
+		err = fmt.Errorf("%s: failed to %s %s: %w", glob.T, req.Action, lom.StringEx(), err)
 		nlog.Errorln(err)
 		c.parent.AddErr(err)
 	}
@@ -217,7 +218,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	var (
 		ecConf     = lom.Bprops().EC
 		reqTargets = ecConf.ParitySlices + 1
-		smap       = g.t.Sowner().Get()
+		smap       = glob.T.Sowner().Get()
 	)
 	if !req.IsCopy {
 		reqTargets += ecConf.DataSlices
@@ -242,7 +243,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		IsCopy:      req.IsCopy,
 		ObjCksum:    cksumValue,
 		CksumType:   cksumType,
-		FullReplica: g.t.SID(),
+		FullReplica: glob.T.SID(),
 		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 
@@ -276,10 +277,10 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		return err
 	}
 	metaBuf := bytes.NewReader(meta.NewPack())
-	if err := ctMeta.Write(g.t, metaBuf, -1); err != nil {
+	if err := ctMeta.Write(glob.T, metaBuf, -1); err != nil {
 		return err
 	}
-	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := glob.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
 			nlog.Errorf("nested error: encode -> remove metafile: %v", errRm)
 		}

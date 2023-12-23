@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -48,7 +49,6 @@ type (
 
 	ObjectsOut struct {
 		Dir             string
-		T               cluster.Target
 		Bck             cmn.Bck
 		FQNs            map[string][]string // ContentType => FQN
 		MpathObjectsCnt map[string]int      // mpath -> # objects on the mpath
@@ -141,8 +141,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 				BID:   0xa5b6e7d8,
 			},
 		}
-		bmd   = mock.NewBaseBownerMock((*meta.Bck)(&bck))
-		tMock cluster.Target
+		bmd = mock.NewBaseBownerMock((*meta.Bck)(&bck))
 	)
 
 	mios := mock.NewIOS()
@@ -168,7 +167,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	tMock = mock.NewTarget(bmd)
+	glob.T = mock.NewTarget(bmd) // a.k.a. tMock
 
 	errs := fs.CreateBucket(&bck, false /*nilbmd*/)
 	if len(errs) > 0 {
@@ -212,7 +211,6 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 
 	return &ObjectsOut{
 		Dir:             dir,
-		T:               tMock,
 		Bck:             bck,
 		FQNs:            fqns,
 		MpathObjectsCnt: mpathCnts,

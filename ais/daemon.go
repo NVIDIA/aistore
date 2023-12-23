@@ -199,16 +199,15 @@ func initDaemon(version, buildTime string) cos.Runner {
 	hk.Init(&daemon.stopping)
 	daemon.rg.add(hk.DefaultHK)
 
-	// reg xaction factories
-	xreg.Init()
-	xs.Xreg()
-
 	// K8s
 	k8s.Init()
+
+	xreg.Init()
 
 	// fork (proxy | target)
 	co := newConfigOwner(config)
 	if daemon.cli.role == apc.Proxy {
+		xs.Xreg(true /* x-ele only */)
 		p := newProxy(co)
 		p.init(config)
 		title := "Node " + p.si.Name() + ", " + loghdr + "\n"
@@ -220,7 +219,8 @@ func initDaemon(version, buildTime string) cos.Runner {
 		return p
 	}
 
-	// reg more xaction factories
+	// reg xaction factories
+	xs.Xreg(false /* x-ele only */)
 	space.Xreg(config)
 
 	t := newTarget(co)

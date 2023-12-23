@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 type npgCtx struct {
@@ -23,15 +24,14 @@ type npgCtx struct {
 	idx  int
 }
 
-func newNpgCtx(t cluster.Target, bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
+func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
 	npg = &npgCtx{
 		bck: bck,
 		wi: walkInfo{
-			t:            t,
 			msg:          msg.Clone(),
 			lomVisitedCb: cb,
 			wanted:       wanted(msg),
-			smap:         t.Sowner().Get(),
+			smap:         glob.T.Sowner().Get(),
 		},
 	}
 	return
@@ -66,7 +66,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if err != nil {
-		return cmn.NewErrAborted(npg.wi.t.String()+" ResultSetXact", "query", err)
+		return cmn.NewErrAborted(glob.T.String()+" ResultSetXact", "query", err)
 	}
 	if npg.idx < len(npg.page.Entries) {
 		*npg.page.Entries[npg.idx] = *entry
@@ -82,7 +82,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (*cmn.LsoResult, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst := &cmn.LsoResult{Entries: nentries}
-	_, err := npg.wi.t.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
+	_, err := glob.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
 	if err != nil {
 		freeLsoEntries(nentries)
 		return nil, err
@@ -103,7 +103,7 @@ func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != npg.wi.t.SID() {
+		if si.ID() != glob.T.SID() {
 			continue
 		}
 		lom := cluster.AllocLOM(obj.Name)

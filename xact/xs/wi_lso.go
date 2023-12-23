@@ -15,6 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 // common context and helper methods for object listing
@@ -24,7 +25,6 @@ type (
 
 	// context used to `list` objects in local filesystems
 	walkInfo struct {
-		t            cluster.Target
 		smap         *meta.Smap
 		lomVisitedCb lomVisitedCb
 		msg          *apc.LsoMsg
@@ -38,10 +38,9 @@ func noopCb(*cluster.LOM) {}
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
-func newWalkInfo(t cluster.Target, msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
+func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 	wi = &walkInfo{
-		t:            t,
-		smap:         t.Sowner().Get(),
+		smap:         glob.T.Sowner().Get(),
 		lomVisitedCb: lomVisitedCb,
 		msg:          msg,
 		wanted:       wanted(msg),

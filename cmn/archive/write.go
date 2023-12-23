@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
@@ -240,9 +241,9 @@ func (lzw *lz4Writer) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	lzw.lzw = lz4.NewWriter(lzw.tw.wmul)
 
 	lzw.lzw.Header.BlockChecksum = false
-	lzw.lzw.Header.NoChecksum = !features.IsSet(feat.LZ4FrameChecksum)
+	lzw.lzw.Header.NoChecksum = !cmn.Rom.Features().IsSet(feat.LZ4FrameChecksum)
 	lzw.lzw.Header.BlockMaxSize = 256 * cos.KiB
-	if features.IsSet(feat.LZ4Block1MB) {
+	if cmn.Rom.Features().IsSet(feat.LZ4Block1MB) {
 		lzw.lzw.Header.BlockMaxSize = cos.MiB
 	}
 

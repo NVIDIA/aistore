@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
@@ -60,15 +61,15 @@ func (*putFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *putFactory) Start() error {
-	lom, t := p.lom, p.T
-	slab, err := t.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	lom := p.lom
+	slab, err := glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	debug.AssertNoErr(err)
 
 	bck, mirror := lom.Bck(), lom.MirrorConf()
 	if !mirror.Enabled {
 		return fmt.Errorf("%s: mirroring disabled, nothing to do", bck)
 	}
-	if err = fs.ValidateNCopies(t.String(), int(mirror.Copies)); err != nil {
+	if err = fs.ValidateNCopies(glob.T.String(), int(mirror.Copies)); err != nil {
 		nlog.Errorln(err)
 		return err
 	}

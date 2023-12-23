@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -46,7 +47,7 @@ func initManager() (err error) {
 	ECM = &Manager{
 		netReq:  cmn.NetIntraControl,
 		netResp: cmn.NetIntraData,
-		bmd:     g.t.Bowner().Get(),
+		bmd:     glob.T.Bowner().Get(),
 	}
 	if ECM.bmd.IsECUsed() {
 		err = ECM.initECBundles()
@@ -91,9 +92,8 @@ func (mgr *Manager) initECBundles() error {
 		Extra:      &transport.Extra{Compression: compression, Config: config},
 	}
 
-	sowner := g.t.Sowner()
-	mgr.reqBundle.Store(bundle.New(sowner, g.t.Snode(), client, reqSbArgs))
-	mgr.respBundle.Store(bundle.New(sowner, g.t.Snode(), client, respSbArgs))
+	mgr.reqBundle.Store(bundle.New(client, reqSbArgs))
+	mgr.respBundle.Store(bundle.New(client, respSbArgs))
 
 	return nil
 }
@@ -168,7 +168,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 		}
 	}
 	bck := meta.CloneBck(&hdr.Bck)
-	if err = bck.Init(g.t.Bowner()); err != nil {
+	if err = bck.Init(glob.T.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			nlog.Errorf("failed to init bucket %s: %v", bck, err)
 			return err
@@ -199,7 +199,7 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 		return err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
-	if err = bck.Init(g.t.Bowner()); err != nil {
+	if err = bck.Init(glob.T.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			nlog.Errorln(err)
 			return err
@@ -290,7 +290,7 @@ func (mgr *Manager) enableBck(bck *meta.Bck) {
 }
 
 func (mgr *Manager) BMDChanged() error {
-	newBMD := g.t.Bowner().Get()
+	newBMD := glob.T.Bowner().Get()
 	oldBMD := mgr.bmd
 	if newBMD.Version <= mgr.bmd.Version {
 		return nil

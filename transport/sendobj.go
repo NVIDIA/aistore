@@ -323,9 +323,10 @@ func (s *Stream) eoObj(err error) {
 	if verbose {
 		nlog.Infof("%s: sent %s (%d/%d)", s, obj, s.numCur, s.stats.Num.Load())
 	}
+
 	// target stats
-	g.statsTracker.Inc(OutObjCount)
-	g.statsTracker.Add(OutObjSize, objSize)
+	g.tstats.Inc(OutObjCount)
+	g.tstats.Add(OutObjSize, objSize)
 exit:
 	if err != nil {
 		nlog.Errorln(err)

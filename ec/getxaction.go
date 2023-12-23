@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -125,13 +126,13 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", g.t, bck.Cname(objName), uname)
+			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", glob.T, bck.Cname(objName), uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", g.t, bck.Cname(objName), err, uname)
+			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", glob.T, bck.Cname(objName), err, uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}

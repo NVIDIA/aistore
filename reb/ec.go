@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -136,7 +137,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 	}
 
 	// transmit
-	ntfn := stageNtfn{daemonID: reb.t.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
+	ntfn := stageNtfn{daemonID: glob.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: meta.Size}}
 	o.Hdr.Bck.Copy(ct.Bck().Bucket())
@@ -172,7 +173,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 		err error
 		bck = meta.CloneBck(&hdr.Bck)
 	)
-	if err := bck.Init(reb.t.Bowner()); err != nil {
+	if err := bck.Init(glob.T.Bowner()); err != nil {
 		return err
 	}
 	md := ntfn.md.NewPack()
@@ -216,10 +217,10 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 		return nil, err
 	}
 	for _, tsi := range hrwList {
-		if tsi.ID() == sender || tsi.ID() == reb.t.SID() {
+		if tsi.ID() == sender || tsi.ID() == glob.T.SID() {
 			continue
 		}
-		remoteMD, err := ec.RequestECMeta(ct.Bucket(), ct.ObjectName(), tsi, reb.t.DataClient())
+		remoteMD, err := ec.RequestECMeta(ct.Bucket(), ct.ObjectName(), tsi, glob.T.DataClient())
 		if remoteMD != nil && remoteMD.Generation < md.Generation {
 			return tsi, nil
 		}
@@ -241,15 +242,15 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 }
 
 // Check if this target has a metadata for the received CT
-func (reb *Reb) detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, error) {
+func detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, error) {
 	if req.action == rebActMoveCT {
 		// internal CT move after slice conflict - save always
 		return nil, nil
 	}
-	if _, ok := req.md.Daemons[reb.t.SID()]; !ok {
+	if _, ok := req.md.Daemons[glob.T.SID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), reb.t.Bowner(), fs.ECMetaType)
+	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), glob.T.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +296,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	ct, err := cluster.NewCTFromFQN(fqn, reb.t.Bowner())
+	ct, err := cluster.NewCTFromFQN(fqn, glob.T.Bowner())
 	if err != nil {
 		return nil
 	}
@@ -311,13 +312,13 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	}
 
 	// Skip a CT if this target is not the 'main' one
-	if md.FullReplica != reb.t.SID() {
+	if md.FullReplica != glob.T.SID() {
 		return nil
 	}
 
 	smap := reb.smap.Load()
 	hrwTarget, err := smap.HrwHash2T(ct.Digest())
-	if err != nil || hrwTarget.ID() == reb.t.SID() {
+	if err != nil || hrwTarget.ID() == glob.T.SID() {
 		return err
 	}
 
@@ -330,11 +331,11 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 		fileFQN = ct.Make(fs.ECSliceType)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
-		nlog.Warningf("%s no CT for metadata[%d]: %s", reb.t, md.SliceID, fileFQN)
+		nlog.Warningf("%s no CT for metadata[%d]: %s", glob.T, md.SliceID, fileFQN)
 		return nil
 	}
 
-	ct, err = cluster.NewCTFromFQN(fileFQN, reb.t.Bowner())
+	ct, err = cluster.NewCTFromFQN(fileFQN, glob.T.Bowner())
 	if err != nil {
 		return nil
 	}

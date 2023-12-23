@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +28,6 @@ const appLabel = "app"
 
 type etlBootstrapper struct {
 	// construction
-	t      cluster.Target
 	errCtx *cmn.ETLErrCtx
 	config *cmn.Config
 	msg    InitSpecMsg
@@ -54,7 +54,7 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 func (b *etlBootstrapper) _prepSpec() (err error) {
 	// Override pod name: append target ID
 	// (K8s doesn't allow `_` and uppercase)
-	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + b.t.SID()))
+	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + glob.T.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
 
@@ -219,7 +219,7 @@ func (b *etlBootstrapper) waitPodReady() error {
 }
 
 func (b *etlBootstrapper) setupXaction(xid string) {
-	rns := xreg.RenewETL(b.t, b.msg, xid)
+	rns := xreg.RenewETL(b.msg, xid)
 	debug.AssertNoErr(rns.Err)
 	debug.Assert(!rns.IsRunning())
 	b.xctn = rns.Entry.Get()
@@ -297,7 +297,7 @@ func (b *etlBootstrapper) _updPodLabels() {
 	b.pod.Labels[appLabel] = "ais"
 	b.pod.Labels[podNameLabel] = b.pod.GetName()
 	b.pod.Labels[podNodeLabel] = k8s.NodeName
-	b.pod.Labels[podTargetLabel] = b.t.SID()
+	b.pod.Labels[podTargetLabel] = glob.T.SID()
 	b.pod.Labels[appK8sNameLabel] = "etl"
 	b.pod.Labels[appK8sComponentLabel] = "server"
 }
@@ -332,7 +332,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: b.t.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
+			Value: glob.T.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
 		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{

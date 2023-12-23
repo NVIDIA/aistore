@@ -44,17 +44,17 @@ func RenewStoreCleanup(id string) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewDownloader(t cluster.Target, xid string, bck *meta.Bck) RenewRes {
-	e := dreg.nonbckXacts[apc.ActDownload].New(Args{T: t, UUID: xid, Custom: bck}, nil)
+func RenewDownloader(xid string, bck *meta.Bck) RenewRes {
+	e := dreg.nonbckXacts[apc.ActDownload].New(Args{UUID: xid, Custom: bck}, nil)
 	return dreg.renew(e, nil)
 }
 
-func RenewETL(t cluster.Target, msg any, xid string) RenewRes {
-	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{T: t, UUID: xid, Custom: msg}, nil)
+func RenewETL(msg any, xid string) RenewRes {
+	e := dreg.nonbckXacts[apc.ActETLInline].New(Args{UUID: xid, Custom: msg}, nil)
 	return dreg.renew(e, nil)
 }
 
-func RenewBckSummary(t cluster.Target, bck *meta.Bck, msg *apc.BsummCtrlMsg) RenewRes {
-	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{T: t, UUID: msg.UUID, Custom: msg}, bck)
+func RenewBckSummary(bck *meta.Bck, msg *apc.BsummCtrlMsg) RenewRes {
+	e := dreg.nonbckXacts[apc.ActSummaryBck].New(Args{UUID: msg.UUID, Custom: msg}, bck)
 	return dreg.renew(e, bck)
 }

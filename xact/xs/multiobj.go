@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -52,7 +53,6 @@ type (
 	// common multi-obj operation context and iterList()/iterRangeOrPref() logic
 	lriterator struct {
 		xctn lrxact
-		t    cluster.Target
 		ctx  context.Context
 		msg  *apc.ListRange
 		lrp  int // { lrpList, ... } enum
@@ -102,9 +102,8 @@ var (
 // lriterator //
 ////////////////
 
-func (r *lriterator) init(xctn lrxact, t cluster.Target, msg *apc.ListRange) {
+func (r *lriterator) init(xctn lrxact, msg *apc.ListRange) {
 	r.xctn = xctn
-	r.t = t
 	r.ctx = context.Background()
 	r.msg = msg
 }
@@ -160,10 +159,10 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		lst     *cmn.LsoResult
 		msg     = &apc.LsoMsg{Prefix: prefix, Props: apc.GetPropsStatus}
 		bck     = r.xctn.Bck()
-		npg     = newNpgCtx(r.t, bck, msg, noopCb)
+		npg     = newNpgCtx(bck, msg, noopCb)
 		bremote = bck.IsRemote()
 	)
-	if err := bck.Init(r.t.Bowner()); err != nil {
+	if err := bck.Init(glob.T.Bowner()); err != nil {
 		return err
 	}
 	if !bremote {
@@ -175,7 +174,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		}
 		if bremote {
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			_, err = r.t.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
+			_, err = glob.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 			}
@@ -273,13 +272,13 @@ func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete) {
 	ed = &evictDelete{config: cmn.GCO.Get()}
-	ed.lriterator.init(ed, xargs.T, msg)
+	ed.lriterator.init(ed, msg)
 	ed.InitBase(xargs.UUID, kind, bck)
 	return
 }
 
 func (r *evictDelete) Run(*sync.WaitGroup) {
-	smap := r.t.Sowner().Get()
+	smap := glob.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -289,7 +288,7 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 }
 
 func (r *evictDelete) do(lom *cluster.LOM, lrit *lriterator) {
-	errCode, err := r.t.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
+	errCode, err := glob.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
@@ -328,7 +327,7 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *prfFactory) Start() error {
 	b := p.Bck
-	if err := b.Init(p.Args.T.Bowner()); err != nil {
+	if err := b.Init(glob.T.Bowner()); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
@@ -350,14 +349,14 @@ func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (prf *prefetch) {
 	prf = &prefetch{config: cmn.GCO.Get()}
-	prf.lriterator.init(prf, xargs.T, msg)
+	prf.lriterator.init(prf, msg)
 	prf.InitBase(xargs.UUID, kind, bck)
 	prf.lriterator.xctn = prf
 	return
 }
 
 func (r *prefetch) Run(*sync.WaitGroup) {
-	smap := r.t.Sowner().Get()
+	smap := glob.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -375,7 +374,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 		return // simply exists
 	}
 
-	if equal, _, err := r.t.CompareObjects(r.ctx, lom); equal || err != nil {
+	if equal, _, err := glob.T.CompareObjects(r.ctx, lom); equal || err != nil {
 		return
 	}
 
@@ -385,7 +384,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see cluster/lom_cache_hk.go).
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err := r.t.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	errCode, err := glob.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -145,7 +146,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
-				smap = r.p.T.Sowner().Get()
+				smap = glob.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
 			r.pending.mtx.Lock()
@@ -157,14 +158,14 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			}
 
 			// this target must be active (ref: ignoreMaintenance)
-			if err = cluster.InMaintOrDecomm(smap, r.p.T.Snode(), r); err != nil {
+			if err = cluster.InMaintOrDecomm(smap, glob.T.Snode(), r); err != nil {
 				nlog.Errorln(err)
 				goto fin
 			}
 			nat := smap.CountActiveTs()
 			wi.refc.Store(int32(nat - 1))
 
-			lrit.init(r, r.p.T, &msg.ListRange)
+			lrit.init(r, &msg.ListRange)
 			if msg.IsList() {
 				err = lrit.iterList(wi, smap)
 			} else {
@@ -267,7 +268,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	params.Atime = lom.Atime()
-	err = r.p.T.PutObject(lom, params)
+	err = glob.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 
 	if err != nil {
@@ -288,14 +289,14 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
 	var (
 		objNameTo  = wi.msg.ToName(lom.ObjName)
-		buf, slab  = lrit.t.PageMM().Alloc()
+		buf, slab  = glob.T.PageMM().Alloc()
 		syncRemote = wi.r.syncRemote && wi.msg.Prepend == ""
 	)
 
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := lrit.t.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
+	_, err := glob.T.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
 		wi.msg.DryRun, syncRemote)
 	slab.Free(buf)
 

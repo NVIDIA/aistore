@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/pkg/errors"
 )
@@ -122,7 +123,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 		storeType = SGLStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := g.t.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := glob.T.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
 			sgl.Free()
@@ -184,7 +185,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 	recm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: g.t.SID(),
+		DaemonID: glob.T.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -360,7 +361,7 @@ func (recm *RecordManager) Cleanup() {
 	recm.contents = nil
 
 	// NOTE: may call cos.FreeMemToOS
-	g.t.PageMM().FreeSpec(memsys.FreeSpec{
+	glob.T.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
@@ -157,10 +158,10 @@ func (c *rwConnector) connectWriter(key string, w io.Writer) (int64, error) {
 
 	timed, stopped := rw.wgr.WaitTimeoutWithStop(c.m.callTimeout, c.m.listenAborted()) // wait for reader
 	if timed {
-		return 0, errors.Errorf("%s: timed out waiting for remote content", g.t)
+		return 0, errors.Errorf("%s: timed out waiting for remote content", glob.T)
 	}
 	if stopped {
-		return 0, errors.Errorf("%s: aborted waiting for remote content", g.t)
+		return 0, errors.Errorf("%s: aborted waiting for remote content", glob.T)
 	}
 
 	if all { // reader connected and left SGL with the content
@@ -238,8 +239,8 @@ func (ds *dsorterMem) start() error {
 		return errors.WithStack(err)
 	}
 
-	ds.streams.builder = bundle.New(g.t.Sowner(), g.t.Snode(), client, reqSbArgs)
-	ds.streams.records = bundle.New(g.t.Sowner(), g.t.Snode(), client, respSbArgs)
+	ds.streams.builder = bundle.New(client, reqSbArgs)
+	ds.streams.records = bundle.New(client, respSbArgs)
 	return nil
 }
 
@@ -290,8 +291,8 @@ func (ds *dsorterMem) preShardCreation(shardName string, mi *fs.Mountpath) error
 		shardName: shardName,
 	}
 	o := transport.AllocSend()
-	o.Hdr.Opaque = bsi.NewPack(g.t.ByteMM())
-	if ds.m.smap.HasActiveTs(g.t.SID() /*except*/) {
+	o.Hdr.Opaque = bsi.NewPack(glob.T.ByteMM())
+	if ds.m.smap.HasActiveTs(glob.T.SID() /*except*/) {
 		if err := ds.streams.builder.Send(o, nil); err != nil {
 			return err
 		}
@@ -446,7 +447,7 @@ outer:
 }
 
 func (ds *dsorterMem) connectOrSend(rec *shard.Record, obj *shard.RecordObj, tsi *meta.Snode) error {
-	debug.Assert(g.t.SID() == rec.DaemonID, g.t.SID()+" vs "+rec.DaemonID)
+	debug.Assert(glob.T.SID() == rec.DaemonID, glob.T.SID()+" vs "+rec.DaemonID)
 	var (
 		resp = &dsmCS{
 			ds:  ds,
@@ -513,7 +514,7 @@ func (ds *dsorterMem) sentCallback(_ *transport.ObjHdr, rc io.ReadCloser, x any,
 	if err != nil {
 		req := x.(*RemoteResponse)
 		nlog.Errorf("%s: [dsort] %s failed to send remore-rsp %s: %v - aborting...",
-			g.t, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
+			glob.T, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
 		ds.m.abort(err)
 	}
 }
@@ -616,10 +617,10 @@ func (es *dsmExtractShard) do() error {
 	defer ds.creationPhase.adjuster.read.releaseGoroutineSema()
 
 	bck := meta.NewBck(ds.m.Pars.OutputBck.Name, ds.m.Pars.OutputBck.Provider, cmn.NsGlobal)
-	if err := bck.Init(g.t.Bowner()); err != nil {
+	if err := bck.Init(glob.T.Bowner()); err != nil {
 		return err
 	}
-	smap := g.t.Sowner().Get()
+	smap := glob.T.Sowner().Get()
 	tsi, err := smap.HrwName2T(bck.MakeUname(shard.Name))
 	if err != nil {
 		return err
@@ -647,7 +648,7 @@ type dsmCS struct {
 }
 
 func (resp *dsmCS) connectOrSend(r cos.ReadOpenCloser) (err error) {
-	if resp.tsi.ID() == g.t.SID() {
+	if resp.tsi.ID() == glob.T.SID() {
 		uname := resp.rsp.Record.MakeUniqueName(resp.rsp.RecordObj)
 		err = resp.ds.creationPhase.connector.connectReader(uname, r, resp.hdr.ObjAttrs.Size)
 		cos.Close(r)

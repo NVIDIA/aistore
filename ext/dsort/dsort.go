@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/OneOfOne/xxhash"
@@ -66,7 +67,7 @@ var js = jsoniter.ConfigFastest
 
 func (m *Manager) finish() {
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("%s: %s finished", g.t, m.ManagerUUID)
+		nlog.Infof("%s: %s finished", glob.T, m.ManagerUUID)
 	}
 	m.lock()
 	m.setInProgressTo(false)
@@ -86,7 +87,7 @@ func (m *Manager) start() (err error) {
 	}
 
 	// Phase 1.
-	nlog.Infof("%s: %s started extraction stage", g.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started extraction stage", glob.T, m.ManagerUUID)
 	if err := m.extractLocalShards(); err != nil {
 		return err
 	}
@@ -94,12 +95,12 @@ func (m *Manager) start() (err error) {
 	s := binary.BigEndian.Uint64(m.Pars.TargetOrderSalt)
 	targetOrder := _torder(s, m.smap.Tmap)
 	if m.config.FastV(4, cos.SmoduleDsort) {
-		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", g.t, m.ManagerUUID,
+		nlog.Infof("%s: %s final target in targetOrder => URL: %s, tid %s", glob.T, m.ManagerUUID,
 			targetOrder[len(targetOrder)-1].PubNet.URL, targetOrder[len(targetOrder)-1].ID())
 	}
 
 	// Phase 2.
-	nlog.Infof("%s: %s started sort stage", g.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started sort stage", glob.T, m.ManagerUUID)
 	curTargetIsFinal, err := m.participateInRecordDistribution(targetOrder)
 	if err != nil {
 		return err
@@ -110,16 +111,16 @@ func (m *Manager) start() (err error) {
 		// assuming uniform distribution estimate avg. output shard size
 		ratio := m.compressionRatio()
 		if m.config.FastV(4, cos.SmoduleDsort) {
-			nlog.Infof("%s [dsort] %s phase3: ratio=%f", g.t, m.ManagerUUID, ratio)
+			nlog.Infof("%s [dsort] %s phase3: ratio=%f", glob.T, m.ManagerUUID, ratio)
 		}
 		debug.Assertf(shard.IsCompressed(m.Pars.InputExtension) || ratio == 1, "tar ratio=%f, ext=%q",
 			ratio, m.Pars.InputExtension)
 
 		shardSize := int64(float64(m.Pars.OutputShardSize) / ratio)
 		nlog.Infof("%s: [dsort] %s started phase 3: ratio=%f, shard size (%d, %d)",
-			g.t, m.ManagerUUID, shardSize, m.Pars.OutputShardSize)
+			glob.T, m.ManagerUUID, shardSize, m.Pars.OutputShardSize)
 		if err := m.phase3(shardSize); err != nil {
-			nlog.Errorf("%s: [dsort] %s phase3 err: %v", g.t, m.ManagerUUID, err)
+			nlog.Errorf("%s: [dsort] %s phase3 err: %v", glob.T, m.ManagerUUID, err)
 			return err
 		}
 	}
@@ -135,12 +136,12 @@ func (m *Manager) start() (err error) {
 
 	// After each target participates in the cluster-wide record distribution,
 	// start listening for the signal to start creating shards locally.
-	nlog.Infof("%s: %s started creation stage", g.t, m.ManagerUUID)
+	nlog.Infof("%s: %s started creation stage", glob.T, m.ManagerUUID)
 	if err := m.dsorter.createShardsLocally(); err != nil {
 		return err
 	}
 
-	nlog.Infof("%s: %s finished successfully", g.t, m.ManagerUUID)
+	nlog.Infof("%s: %s finished successfully", glob.T, m.ManagerUUID)
 	return nil
 }
 
@@ -172,7 +173,7 @@ func (m *Manager) startDsorter() error {
 	if err := m.initStreams(); err != nil {
 		return err
 	}
-	nlog.Infof("%s: %s starting with dsorter: %q", g.t, m.ManagerUUID, m.dsorter.name())
+	nlog.Infof("%s: %s starting with dsorter: %q", glob.T, m.ManagerUUID, m.dsorter.name())
 	return m.dsorter.start()
 }
 
@@ -300,7 +301,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 				// TODO: params.Xact - in part, to count PUTs and bytes in a generic fashion
 				// (vs metrics.ShardCreationStats.updateThroughput - see below)
 			}
-			err = g.t.PutObject(lom, params)
+			err = glob.T.PutObject(lom, params)
 			cluster.FreePutObjParams(params)
 		} else {
 			_, err = io.Copy(io.Discard, r)
@@ -355,7 +356,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 	// according to HRW, send it there. Since it doesn't really matter
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
-	if si.ID() != g.t.SID() && !m.Pars.DryRun {
+	if si.ID() != glob.T.SID() && !m.Pars.DryRun {
 		lom.Lock(false)
 		defer lom.Unlock(false)
 
@@ -401,7 +402,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *cluster.LOM) (err error) {
 exit:
 	metrics.mu.Lock()
 	metrics.CreatedCnt++
-	if si.ID() != g.t.SID() {
+	if si.ID() != glob.T.SID() {
 		metrics.MovedShardCnt++
 	}
 	metrics.mu.Unlock()
@@ -450,7 +451,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder meta.Nodes) (curre
 		}
 
 		for i, d = range targetOrder {
-			if d != dummyTarget && d.ID() == g.t.SID() {
+			if d != dummyTarget && d.ID() == glob.T.SID() {
 				break
 			}
 		}
@@ -622,7 +623,7 @@ func (m *Manager) generateShardsWithOrderingFile(maxSize int64) ([]*shard.Shard,
 		return nil, err
 	}
 	// is intra-call
-	tsi := g.t.Snode()
+	tsi := glob.T.Snode()
 	req.Header.Set(apc.HdrCallerID, tsi.ID())
 	req.Header.Set(apc.HdrCallerName, tsi.String())
 
@@ -758,7 +759,7 @@ func (m *Manager) phase3(maxSize int64) error {
 	}
 
 	bck := meta.CloneBck(&m.Pars.OutputBck)
-	if err := bck.Init(g.t.Bowner()); err != nil {
+	if err := bck.Init(glob.T.Bowner()); err != nil {
 		return err
 	}
 	for _, s := range shards {
@@ -800,10 +801,10 @@ func (m *Manager) phase3(maxSize int64) error {
 	close(errCh)
 
 	for err := range errCh {
-		nlog.Errorf("%s: [dsort] %s err while sending shards: %v", g.t, m.ManagerUUID, err)
+		nlog.Errorf("%s: [dsort] %s err while sending shards: %v", glob.T, m.ManagerUUID, err)
 		return err
 	}
-	nlog.Infof("%s: [dsort] %s finished sending shards", g.t, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s finished sending shards", glob.T, m.ManagerUUID)
 	return nil
 }
 
@@ -859,9 +860,9 @@ func (m *Manager) _do(reqArgs *cmn.HreqArgs, tsi *meta.Snode, act string) error 
 		var b []byte
 		b, err = io.ReadAll(resp.Body)
 		if err == nil {
-			err = fmt.Errorf("%s: %s failed to %s: %s", g.t, m.ManagerUUID, act, strings.TrimSuffix(string(b), "\n"))
+			err = fmt.Errorf("%s: %s failed to %s: %s", glob.T, m.ManagerUUID, act, strings.TrimSuffix(string(b), "\n"))
 		} else {
-			err = fmt.Errorf("%s: %s failed to %s: got %v(%d) from %s", g.t, m.ManagerUUID, act, err,
+			err = fmt.Errorf("%s: %s failed to %s: got %v(%d) from %s", glob.T, m.ManagerUUID, act, err,
 				resp.StatusCode, tsi.StringEx())
 		}
 	}
@@ -888,7 +889,7 @@ func (es *extractShard) do() (err error) {
 		if errV == nil {
 			if !archive.EqExt(ext, m.Pars.InputExtension) {
 				if m.config.FastV(4, cos.SmoduleDsort) {
-					nlog.Infof("%s: %s skipping %s: %q vs %q", g.t, m.ManagerUUID,
+					nlog.Infof("%s: %s skipping %s: %q vs %q", glob.T, m.ManagerUUID,
 						es.name, ext, m.Pars.InputExtension)
 				}
 				return
@@ -977,11 +978,11 @@ func (es *extractShard) _do(lom *cluster.LOM) error {
 	}
 
 	if toDisk {
-		g.tstats.Add(stats.DsortExtractShardDskCnt, 1)
+		glob.Tstats.Add(stats.DsortExtractShardDskCnt, 1)
 	} else {
-		g.tstats.Add(stats.DsortExtractShardMemCnt, 1)
+		glob.Tstats.Add(stats.DsortExtractShardMemCnt, 1)
 	}
-	g.tstats.Add(stats.DsortExtractShardSize, extractedSize)
+	glob.Tstats.Add(stats.DsortExtractShardSize, extractedSize)
 
 	//
 	// update metrics, check OOM

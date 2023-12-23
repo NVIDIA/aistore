@@ -1777,7 +1777,7 @@ func (t *target) putMirror(lom *cluster.LOM) {
 		}
 		return
 	}
-	rns := xreg.RenewPutMirror(t, lom)
+	rns := xreg.RenewPutMirror(lom)
 	if rns.Err != nil {
 		nlog.Errorf("%s: %s %v", t, lom, rns.Err)
 		debug.AssertNoErr(rns.Err)

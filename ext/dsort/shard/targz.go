@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 type tgzRW struct {
@@ -46,7 +47,7 @@ func (trw *tgzRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := g.t.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := glob.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

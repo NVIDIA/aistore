@@ -38,6 +38,7 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
@@ -364,18 +365,18 @@ func (t *target) Run() error {
 		return err
 	}
 
-	archive.Init(config.Features)
-
-	// transactions
 	t.transactions.init(t)
 
-	t.reb = reb.New(t, config)
-	t.res = res.New(t)
+	// share this target with reb, ec, and all the rest modules (below)
+	glob.Init(t, t.statsT)
+
+	t.reb = reb.New(config)
+	t.res = res.New()
 
 	// register storage target's handler(s) and start listening
 	t.initRecvHandlers()
 
-	ec.Init(t)
+	ec.Init()
 	mirror.Init()
 
 	xreg.RegWithHK()
@@ -385,12 +386,12 @@ func (t *target) Run() error {
 		go t.goreslver(marked.Interrupted)
 	}
 
-	dsort.Tinit(t, t.statsT, db, config)
-	dload.Init(t, t.statsT, db, &config.Client)
+	dsort.Tinit(db, config)
+	dload.Init(db, &config.Client)
 
 	err = t.htrun.run(config)
 
-	etl.StopAll(t)                             // stop all running ETLs if any
+	etl.StopAll()                              // stop all running ETLs if any
 	cos.Close(db)                              // close kv db
 	fs.RemoveMarker(fname.NodeRestartedMarker) // exit gracefully
 	return err

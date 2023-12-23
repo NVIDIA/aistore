@@ -114,7 +114,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == apc.ActETLBck {
 			var err error
-			if dp, err = t.etlDP(tcbmsg); err != nil {
+			if dp, err = etlDP(tcbmsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
@@ -131,7 +131,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if msg.Action == apc.ActETLObjects {
 			var err error
-			if dp, err = t.etlDP(&tcomsg.TCBMsg); err != nil {
+			if dp, err = etlDP(&tcomsg.TCBMsg); err != nil {
 				t.writeErr(w, r, err)
 				return
 			}
@@ -255,7 +255,7 @@ func (t *target) makeNCopies(c *txnSrv) (string, error) {
 		}
 
 		// do the work in xaction
-		rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-actmnc", int(copies))
+		rns := xreg.RenewBckMakeNCopies(c.bck, c.uuid, "mnc-actmnc", int(copies))
 		if rns.Err != nil {
 			return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 		}
@@ -337,7 +337,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		}
 		if _reMirror(bprops, nprops) {
 			n := int(nprops.Mirror.Copies)
-			rns := xreg.RenewBckMakeNCopies(t, c.bck, c.uuid, "mnc-setprops", n)
+			rns := xreg.RenewBckMakeNCopies(c.bck, c.uuid, "mnc-setprops", n)
 			if rns.Err != nil {
 				return "", fmt.Errorf("%s %s: %v", t, txn, rns.Err)
 			}
@@ -351,7 +351,7 @@ func (t *target) setBprops(c *txnSrv) (string, error) {
 		if _, reec := _reEC(bprops, nprops, c.bck, nil /*smap*/); reec {
 			flt := xreg.Flt{Kind: apc.ActECEncode, Bck: c.bck}
 			xreg.DoAbort(flt, errors.New("re-ec"))
-			rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
+			rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit)
 			if rns.Err != nil {
 				return "", rns.Err
 			}
@@ -441,7 +441,7 @@ func (t *target) renameBucket(c *txnSrv) (string, error) {
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		rns := xreg.RenewBckRename(t, txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.ActCommit)
+		rns := xreg.RenewBckRename(txnRenB.bckFrom, txnRenB.bckTo, c.uuid, c.msg.RMDVersion, apc.ActCommit)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err // must not happen at commit time
@@ -496,14 +496,14 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error 
 	return nil
 }
 
-func (t *target) etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
+func etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
 	if !k8s.IsK8s() {
 		return nil, k8s.ErrK8sRequired
 	}
 	if err := msg.Validate(true); err != nil {
 		return nil, err
 	}
-	return etl.NewOfflineDP(msg, t.si, cmn.GCO.Get())
+	return etl.NewOfflineDP(msg, cmn.GCO.Get())
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
@@ -565,7 +565,7 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (string, error) 
 			return "", err
 		}
 		custom.Phase = apc.ActCommit
-		rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
+		rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, txnTcb.xtcb.Args())
 		if rns.Err != nil {
 			txnTcb.xtcb.TxnAbort(rns.Err)
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
@@ -600,7 +600,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (err error
 		}
 	}
 	custom := &xreg.TCBArgs{Phase: apc.ActBegin, BckFrom: bckFrom, BckTo: bckTo, DP: dp, Msg: msg}
-	rns := xreg.RenewTCB(t, c.uuid, c.msg.Action /*kind*/, custom)
+	rns := xreg.RenewTCB(c.uuid, c.msg.Action /*kind*/, custom)
 	if err = rns.Err; err != nil {
 		nlog.Errorf("%s: %q %+v %v", t, c.uuid, msg, rns.Err)
 		return
@@ -651,7 +651,7 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCObjsMsg, dp cluster.DP) (xid strin
 		}
 		// begin
 		custom := &xreg.TCObjsArgs{BckFrom: bckFrom, BckTo: bckTo, DP: dp}
-		rns := xreg.RenewTCObjs(t, c.msg.Action /*kind*/, custom)
+		rns := xreg.RenewTCObjs(c.msg.Action /*kind*/, custom)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, c.msg, rns.Err)
 			return xid, rns.Err
@@ -741,7 +741,7 @@ func (t *target) ecEncode(c *txnSrv) (string, error) {
 		if err = t.transactions.wait(txn, c.timeout.netw, c.timeout.host); err != nil {
 			return "", cmn.NewErrFailedTo(t, "commit", txn, err)
 		}
-		rns := xreg.RenewECEncode(t, c.bck, c.uuid, apc.ActCommit)
+		rns := xreg.RenewECEncode(c.bck, c.uuid, apc.ActCommit)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txn, rns.Err)
 			return "", rns.Err
@@ -803,7 +803,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 			return xid, err
 		}
 
-		rns := xreg.RenewPutArchive(t, bckFrom, bckTo)
+		rns := xreg.RenewPutArchive(bckFrom, bckTo)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %q %+v %v", t, c.uuid, archMsg, rns.Err)
 			return xid, rns.Err
@@ -962,7 +962,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 			return "", err
 		}
 
-		rns := xreg.RenewPromote(t, c.uuid, c.bck, txnPrm.msg)
+		rns := xreg.RenewPromote(c.uuid, c.bck, txnPrm.msg)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, txnPrm, rns.Err)
 			return "", rns.Err

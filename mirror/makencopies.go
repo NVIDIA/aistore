@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
@@ -53,7 +54,7 @@ func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *mncFactory) Start() error {
-	slab, err := p.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
 	p.xctn = newMNC(p, slab)
 	return nil
@@ -76,7 +77,6 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 	debug.Assert(p.args.Tag != "" && p.args.Copies > 0)
 	r = &mncXact{p: p}
 	mpopts := &mpather.JgroupOpts{
-		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.visitObj,
 		Slab:     slab,
@@ -90,7 +90,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 
 func (r *mncXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	tname := r.p.T.String()
+	tname := glob.T.String()
 	if err := fs.ValidateNCopies(tname, r.p.args.Copies); err != nil {
 		r.AddErr(err)
 		r.Finish()

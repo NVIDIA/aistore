@@ -39,7 +39,6 @@ var _ = Describe("CommunicatorTest", func() {
 	var (
 		tmpDir            string
 		comm              Communicator
-		tMock             cluster.Target
 		transformerServer *httptest.Server
 		targetServer      *httptest.Server
 		proxyServer       *httptest.Server
@@ -73,7 +72,7 @@ var _ = Describe("CommunicatorTest", func() {
 		_, err = fs.Add(mpath, "daeID")
 		Expect(err).NotTo(HaveOccurred())
 
-		tMock = mock.NewTarget(bmdMock)
+		_ = mock.NewTarget(bmdMock)
 		// cluster.InitLomLocker(tMock)
 
 		// Create an object.
@@ -121,7 +120,6 @@ var _ = Describe("CommunicatorTest", func() {
 
 			xctn := mock.NewXact(apc.ActETLInline)
 			boot := &etlBootstrapper{
-				t: tMock,
 				msg: InitSpecMsg{
 					InitMsgBase: InitMsgBase{
 						CommTypeX: commType,

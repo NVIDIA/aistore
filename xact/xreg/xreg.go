@@ -52,7 +52,6 @@ type (
 	}
 	// used in constructions
 	Args struct {
-		T      cluster.Target
 		Custom any // Additional arguments that are specific for a given xact.
 		UUID   string
 	}

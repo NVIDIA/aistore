@@ -22,6 +22,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/klauspost/reedsolomon"
@@ -148,7 +149,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	if err := ctx.lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		return err
 	}
-	smap := g.t.Sowner().Get()
+	smap := glob.T.Sowner().Get()
 	targets, err := smap.HrwTargetList(ctx.lom.Uname(), ctx.meta.Parity+1)
 	if err != nil {
 		return err
@@ -157,7 +158,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Fill the list of daemonIDs that do not have replica
 	daemons := make([]string, 0, len(targets))
 	for _, target := range targets {
-		if target.ID() == g.t.SID() {
+		if target.ID() == glob.T.SID() {
 			continue
 		}
 
@@ -193,7 +194,7 @@ func (c *getJogger) copyMissingReplicas(ctx *restoreCtx, reader cos.ReadOpenClos
 	// Reason: memsys.Reader does not provide access to internal memsys.SGL that must be freed
 	cb := func(hdr *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
 		if err != nil {
-			nlog.Errorf("%s failed to send %s to %v: %v", g.t, ctx.lom, daemons, err)
+			nlog.Errorf("%s failed to send %s to %v: %v", glob.T, ctx.lom, daemons, err)
 		}
 		freeObject(reader)
 	}
@@ -217,7 +218,7 @@ func (c *getJogger) restoreReplicatedFromMemory(ctx *restoreCtx) error {
 
 		w := g.smm.NewSGL(cos.KiB)
 		if _, err := c.parent.readRemote(ctx.lom, node, uname, iReqBuf, w); err != nil {
-			nlog.Errorf("%s failed to read from %s", g.t, node)
+			nlog.Errorf("%s failed to read from %s", glob.T, node)
 			w.Free()
 			g.smm.Free(iReqBuf)
 			w = nil
@@ -312,10 +313,10 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 
 	b := cos.MustMarshal(ctx.meta)
 	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
-	if err := ctMeta.Write(g.t, bytes.NewReader(b), -1); err != nil {
+	if err := ctMeta.Write(glob.T, bytes.NewReader(b), -1); err != nil {
 		return err
 	}
-	if _, exists := g.t.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := glob.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
 			nlog.Errorf("nested error: save restored replica -> remove metafile: %v", errRm)
 		}
@@ -404,7 +405,7 @@ func (c *getJogger) requestSlices(ctx *restoreCtx) error {
 		return err
 	}
 	if wgSlices.WaitTimeout(c.parent.config.Timeout.SendFile.D()) {
-		nlog.Errorf("%s timed out waiting for %s slices", g.t, ctx.lom)
+		nlog.Errorf("%s timed out waiting for %s slices", glob.T, ctx.lom)
 	}
 	g.smm.Free(request)
 	return nil
@@ -627,7 +628,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 		nodeToID[v] = k
 	}
 	// Generate the list of targets that should have a slice.
-	smap := g.t.Sowner().Get()
+	smap := glob.T.Sowner().Get()
 	targets, err := smap.HrwTargetList(ctx.lom.Uname(), sliceCnt+1)
 	if err != nil {
 		nlog.Warningln(err)
@@ -635,7 +636,7 @@ func (c *getJogger) emptyTargets(ctx *restoreCtx) ([]string, error) {
 	}
 	empty := make([]string, 0, len(targets))
 	for _, t := range targets {
-		if t.ID() == g.t.SID() {
+		if t.ID() == glob.T.SID() {
 			continue
 		}
 		if _, ok := nodeToID[t.ID()]; ok {
@@ -716,14 +717,14 @@ func (c *getJogger) uploadRestoredSlices(ctx *restoreCtx, slices []*slice) error
 		cb := func(daemonID string, s *slice) transport.ObjSentCB {
 			return func(hdr *transport.ObjHdr, reader io.ReadCloser, _ any, err error) {
 				if err != nil {
-					nlog.Errorf("%s failed to send %s to %v: %v", g.t, ctx.lom, daemonID, err)
+					nlog.Errorf("%s failed to send %s to %v: %v", glob.T, ctx.lom, daemonID, err)
 				}
 				s.free()
 			}
 		}(tid, sl)
 		if err := c.parent.writeRemote([]string{tid}, ctx.lom, dataSrc, cb); err != nil {
 			remoteErr = err
-			nlog.Errorf("%s failed to send slice %s[%d] to %s", g.t, ctx.lom, sliceID, tid)
+			nlog.Errorf("%s failed to send slice %s[%d] to %s", glob.T, ctx.lom, sliceID, tid)
 		}
 	}
 
@@ -761,7 +762,7 @@ func (c *getJogger) restoreEncoded(ctx *restoreCtx) error {
 	// Restore and save locally the main replica
 	restored, err := c.restoreMainObj(ctx)
 	if err != nil {
-		nlog.Errorf("%s failed to restore main object %s: %v", g.t, ctx.lom, err)
+		nlog.Errorf("%s failed to restore main object %s: %v", glob.T, ctx.lom, err)
 		c.freeDownloaded(ctx)
 		freeSlices(restored)
 		return err
@@ -819,7 +820,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 	var (
 		wg     = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), 8)
 		mtx    = &sync.Mutex{}
-		tmap   = g.t.Sowner().Get().Tmap
+		tmap   = glob.T.Sowner().Get().Tmap
 		ctMeta = cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
 
 		md, err  = LoadMetadata(ctMeta.FQN())
@@ -840,7 +841,7 @@ func (c *getJogger) requestMeta(ctx *restoreCtx) error {
 		// Otherwise, broadcast
 		ctx.nodes = make(map[string]*Metadata, len(tmap))
 		for _, node := range tmap {
-			if node.ID() == g.t.SID() {
+			if node.ID() == glob.T.SID() {
 				continue
 			}
 			wg.Add(1)

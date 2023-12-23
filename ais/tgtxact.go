@@ -205,7 +205,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		var (
 			smsg = &apc.ListRange{}
 		)
-		rns := xreg.RenewPrefetch(args.ID, t, bck, smsg)
+		rns := xreg.RenewPrefetch(args.ID, bck, smsg)
 		if rns.Err != nil {
 			nlog.Errorf("%s: %s %v", t, bck, rns.Err)
 			debug.AssertNoErr(rns.Err)
@@ -222,7 +222,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		})
 		go xctn.Run(nil)
 	case apc.ActLoadLomCache:
-		rns := xreg.RenewBckLoadLomCache(t, args.ID, bck)
+		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
 		return rns.Err
 	// 3. cannot start
 	case apc.ActPutCopies:

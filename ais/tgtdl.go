@@ -81,7 +81,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		xdl, err := t.renewdl(xid, bck)
+		xdl, err := renewdl(xid, bck)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
@@ -124,7 +124,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 		if msg.ID != "" {
 			xid := r.URL.Query().Get(apc.QparamUUID)
 			debug.Assert(cos.IsValidUUID(xid))
-			xdl, err := t.renewdl(xid, nil)
+			xdl, err := renewdl(xid, nil)
 			if err != nil {
 				t.writeErr(w, r, err, http.StatusInternalServerError)
 				return
@@ -166,7 +166,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 
 		xid := r.URL.Query().Get(apc.QparamUUID)
 		debug.Assertf(cos.IsValidUUID(xid), "%q", xid)
-		xdl, err := t.renewdl(xid, nil)
+		xdl, err := renewdl(xid, nil)
 		if err != nil {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
@@ -193,8 +193,8 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *target) renewdl(xid string, bck *meta.Bck) (*dload.Xact, error) {
-	rns := xreg.RenewDownloader(t, xid, bck)
+func renewdl(xid string, bck *meta.Bck) (*dload.Xact, error) {
+	rns := xreg.RenewDownloader(xid, bck)
 	if rns.Err != nil {
 		return nil, rns.Err
 	}

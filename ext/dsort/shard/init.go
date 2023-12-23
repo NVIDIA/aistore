@@ -6,21 +6,10 @@
 package shard
 
 import (
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/archive"
 )
 
-type global struct {
-	t cluster.Target
-}
-
+// padding buffer (zero-filled)
 var (
-	g global
-
-	// padding buffer (zero-filled)
 	padBuf [archive.TarBlockSize]byte
 )
-
-func Init(t cluster.Target) {
-	g.t = t
-}

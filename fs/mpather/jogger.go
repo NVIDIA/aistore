@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
 )
@@ -46,7 +47,6 @@ const (
 
 type (
 	JgroupOpts struct {
-		T                     cluster.Target
 		onFinish              func()
 		VisitObj              func(lom *cluster.LOM, buf []byte) error
 		VisitCT               func(ct *cluster.CT, buf []byte) error
@@ -252,7 +252,7 @@ func (j *jogger) runSelected() error {
 // run matching, one at a time
 func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 	var (
-		bmd      = j.opts.T.Bowner().Get()
+		bmd      = glob.T.Bowner().Get()
 		provider *string
 		ns       *cmn.Ns
 		errs     cos.Errs
@@ -357,18 +357,18 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 }
 
 func (j *jogger) visitFQN(fqn string, buf []byte) error {
-	ct, err := cluster.NewCTFromFQN(fqn, j.opts.T.Bowner())
+	ct, err := cluster.NewCTFromFQN(fqn, glob.T.Bowner())
 	if err != nil {
 		return err
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		smap := j.opts.T.Sowner().Get()
+		smap := glob.T.Sowner().Get()
 		tsi, err := smap.HrwHash2T(ct.Digest())
 		if err != nil {
 			return err
 		}
-		if tsi.ID() != j.opts.T.SID() {
+		if tsi.ID() != glob.T.SID() {
 			return nil
 		}
 	}

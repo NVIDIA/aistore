@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -29,7 +30,6 @@ const (
 
 type (
 	bckRename struct {
-		t       cluster.TargetExt
 		bckFrom *meta.Bck
 		bckTo   *meta.Bck
 		rebID   string
@@ -64,7 +64,6 @@ func (p *bmvFactory) Get() cluster.Xact { return p.xctn }
 
 func (p *bmvFactory) Start() error {
 	p.xctn = newBckRename(p.UUID(), p.Kind(), p.cargs.RebID, p.Bck, p.cargs.BckFrom, p.cargs.BckTo)
-	p.xctn.t = p.cargs.T // cluster.TargetExt
 	return nil
 }
 
@@ -130,7 +129,7 @@ loop:
 	if total >= bmvMaxWait {
 		r.AddErr(fmt.Errorf("timeout %s", total))
 	}
-	r.t.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
+	glob.T.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish()
 }
 

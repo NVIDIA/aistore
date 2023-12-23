@@ -17,9 +17,12 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
+const mockID = "mock-id"
+
 // TargetMock provides cluster.Target interface with mocked return values.
 type TargetMock struct {
 	BO meta.Bowner
+	SO meta.Sowner
 }
 
 // interface guard
@@ -32,15 +35,14 @@ func NewTarget(bo meta.Bowner) *TargetMock {
 }
 
 func (t *TargetMock) Bowner() meta.Bowner { return t.BO }
+func (t *TargetMock) Sowner() meta.Sowner { return t.SO }
 
-func (*TargetMock) Sname() string            { return "tmock" }
-func (*TargetMock) SID() string              { return "mock-id" }
+func (*TargetMock) SID() string              { return mockID }
 func (*TargetMock) String() string           { return "tmock" }
-func (*TargetMock) Snode() *meta.Snode       { return nil }
+func (*TargetMock) Snode() *meta.Snode       { return &meta.Snode{DaeID: mockID} }
 func (*TargetMock) ClusterStarted() bool     { return true }
 func (*TargetMock) NodeStarted() bool        { return true }
 func (*TargetMock) DataClient() *http.Client { return http.DefaultClient }
-func (*TargetMock) Sowner() meta.Sowner      { return nil }
 func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 

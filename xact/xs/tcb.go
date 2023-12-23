@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -69,7 +70,7 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
-		slab, err = p.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+		slab, err = glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
 	debug.AssertNoErr(err)
 	p.xctn = newTCB(p, slab, config)
@@ -80,8 +81,8 @@ func (p *tcbFactory) Start() error {
 		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
-	smap := p.T.Sowner().Get()
-	if err := cluster.InMaintOrDecomm(smap, p.T.Snode(), p.xctn); err != nil {
+	smap := glob.T.Sowner().Get()
+	if err := cluster.InMaintOrDecomm(smap, glob.T.Snode(), p.xctn); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()
@@ -107,7 +108,7 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 		Multiplier:  config.TCB.SbundleMult,
 		SizePDU:     sizePDU,
 	}
-	dm, err := bundle.NewDataMover(p.T, trname+"-"+uuid, p.xctn.recv, cmn.OwtPut, dmExtra)
+	dm, err := bundle.NewDataMover(trname+"-"+uuid, p.xctn.recv, cmn.OwtPut, dmExtra)
 	if err != nil {
 		return err
 	}
@@ -159,7 +160,6 @@ func newTCB(p *tcbFactory, slab *memsys.Slab, config *cmn.Config) (r *XactTCB) {
 		parallel = etlBucketParallelCnt // TODO: optimize with respect to disk bw and transforming computation
 	}
 	mpopts := &mpather.JgroupOpts{
-		T:        p.T,
 		CTs:      []string{fs.ObjectType},
 		VisitObj: r.copyObject,
 		Prefix:   p.args.Msg.Prefix,
@@ -237,7 +237,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	_, err = r.p.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
+	_, err = glob.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			r.Abort(err)
@@ -298,7 +298,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster
 	}
 	params.Atime = lom.Atime()
 
-	erp := r.p.T.PutObject(lom, params)
+	erp := glob.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		r.AddErr(erp)

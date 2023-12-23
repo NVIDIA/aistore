@@ -11,8 +11,12 @@ import (
 )
 
 // for additional startup-time reg-s see lru, downloader, ec
-func Xreg() {
+func Xreg(xeleOnly bool) {
 	xreg.RegNonBckXact(&eleFactory{})
+	if xeleOnly {
+		return
+	}
+
 	xreg.RegNonBckXact(&resFactory{})
 	xreg.RegNonBckXact(&rebFactory{})
 	xreg.RegNonBckXact(&etlFactory{})

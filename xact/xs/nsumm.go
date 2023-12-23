@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -82,17 +83,16 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
 	if listRemote {
 		var (
-			smap = p.T.Sowner().Get()
+			smap = glob.T.Sowner().Get()
 			tsi  *meta.Snode
 		)
 		if tsi, err = smap.HrwTargetTask(p.UUID()); err != nil {
 			return
 		}
-		r.listRemote = listRemote && tsi.ID() == p.T.SID() // this target
+		r.listRemote = listRemote && tsi.ID() == glob.T.SID() // this target
 	}
 
 	opts := &mpather.JgroupOpts{
-		T:           p.T,
 		CTs:         []string{fs.ObjectType},
 		Prefix:      p.msg.Prefix,
 		VisitObj:    r.visitObj,
@@ -177,7 +177,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 // to add all `res` pointers up front
 func (r *XactNsumm) initResQbck() (cmn.Bcks, *meta.Bck) {
 	var (
-		bmd      = r.p.T.Bowner().Get()
+		bmd      = glob.T.Bowner().Get()
 		qbck     = (*cmn.QueryBcks)(r.p.Bck)
 		provider *string
 		ns       *cmn.Ns
@@ -305,7 +305,7 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 	lsmsg := &apc.LsoMsg{Props: apc.GetPropsSize, Prefix: r.p.msg.Prefix}
 	lsmsg.SetFlag(apc.LsNameSize)
 	for !r.IsAborted() {
-		npg := newNpgCtx(r.p.T, bck, lsmsg, noopCb)
+		npg := newNpgCtx(bck, lsmsg, noopCb)
 		nentries := allocLsoEntries()
 		lst, err := npg.nextPageR(nentries, false /*load LOMs to include status and local MD*/)
 		if err != nil {

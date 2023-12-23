@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -51,7 +52,6 @@ const (
 
 type (
 	IniLRU struct {
-		T                   cluster.Target
 		Xaction             *XactLRU
 		Config              *cmn.Config
 		StatsT              stats.Tracker
@@ -502,7 +502,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 
 func (j *lruJ) allow() (ok bool, err error) {
 	var (
-		bowner = j.ini.T.Bowner()
+		bowner = glob.T.Bowner()
 		b      = meta.CloneBck(&j.bck)
 	)
 	if err = b.Init(bowner); err != nil {
