@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -45,7 +44,7 @@ var _ RW = (*tarRW)(nil)
 
 func newTarRecordDataReader() *tarRecordDataReader {
 	rd := &tarRecordDataReader{}
-	rd.metadataBuf, rd.slab = glob.T.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = cluster.T.ByteMM().Alloc()
 	return rd
 }
 
@@ -109,7 +108,7 @@ func (trw *tarRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Record
 		return 0, 0, err
 	}
 	c := &rcbCtx{parent: trw, tw: nil, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := glob.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := cluster.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

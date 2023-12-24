@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -167,7 +166,7 @@ func PrepareObjects(t *testing.T, desc ObjectsDesc) *ObjectsOut {
 		return nil
 	}
 
-	glob.T = mock.NewTarget(bmd) // a.k.a. tMock
+	cluster.T = mock.NewTarget(bmd) // a.k.a. tMock
 
 	errs := fs.CreateBucket(&bck, false /*nilbmd*/)
 	if len(errs) > 0 {

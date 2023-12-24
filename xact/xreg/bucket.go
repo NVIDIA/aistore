@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -71,7 +70,7 @@ func RenewECEncode(bck *meta.Bck, uuid, phase string) RenewRes {
 func RenewMakeNCopies(uuid, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
-		bmd      = glob.T.Bowner().Get()
+		bmd      = cluster.T.Bowner().Get()
 		provider = apc.AIS
 	)
 	bmd.Range(&provider, nil, func(bck *meta.Bck) bool {

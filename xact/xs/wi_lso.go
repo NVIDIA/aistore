@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 // common context and helper methods for object listing
@@ -40,7 +39,7 @@ func isOK(status uint16) bool { return status == apc.LocOK }
 // TODO: `msg.StartAfter`
 func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 	wi = &walkInfo{
-		smap:         glob.T.Sowner().Get(),
+		smap:         cluster.T.Sowner().Get(),
 		lomVisitedCb: lomVisitedCb,
 		msg:          msg,
 		wanted:       wanted(msg),

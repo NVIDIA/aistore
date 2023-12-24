@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -20,7 +21,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"golang.org/x/sync/errgroup"
 )
@@ -45,8 +46,9 @@ type (
 	}
 
 	global struct {
-		db    kvdb.Driver
-		store *infoStore
+		tstats stats.Tracker
+		db     kvdb.Driver
+		store  *infoStore
 
 		// Downloader selects one of the two clients (below) by the destination URL.
 		// Certification check is disabled for now and does not depend on cluster settings.
@@ -57,15 +59,17 @@ type (
 
 var g global
 
-func Init(db kvdb.Driver, clientConf *cmn.ClientConf) {
+func Init(tstats stats.Tracker, db kvdb.Driver, clientConf *cmn.ClientConf) {
 	g.clientH, g.clientTLS = cmn.NewDefaultClients(clientConf.TimeoutLong.D())
 
 	if db == nil { // unit tests only
 		return
 	}
-
-	g.store = newInfoStore(db)
-	g.db = db
+	{
+		g.tstats = tstats
+		g.db = db
+		g.store = newInfoStore(db)
+	}
 	xreg.RegNonBckXact(&factory{})
 }
 
@@ -249,7 +253,7 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			if result.Action == DiffResolverDelete {
 				requiresSync := job.Sync()
 				debug.Assert(requiresSync)
-				if _, err := glob.T.EvictObject(result.Src); err != nil {
+				if _, err := cluster.T.EvictObject(result.Src); err != nil {
 					task.markFailed(err.Error())
 				} else {
 					g.store.incFinished(job.ID())
@@ -311,7 +315,7 @@ func (d *dispatcher) checkAborted() bool {
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 	bck := meta.CloneBck(task.job.Bck())
-	if err := bck.Init(glob.T.Bowner()); err != nil {
+	if err := bck.Init(cluster.T.Bowner()); err != nil {
 		return true, err
 	}
 

@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -76,7 +75,7 @@ func (p *encFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 ///////////////////
 
 func newXactBckEncode(bck *meta.Bck, uuid string) (r *XactBckEncode) {
-	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: glob.T.Sowner().Get()}
+	r = &XactBckEncode{bck: bck, wg: &sync.WaitGroup{}, smap: cluster.T.Sowner().Get()}
 	r.InitBase(uuid, apc.ActECEncode, bck)
 	return
 }
@@ -84,7 +83,7 @@ func newXactBckEncode(bck *meta.Bck, uuid string) (r *XactBckEncode) {
 func (r *XactBckEncode) Run(wg *sync.WaitGroup) {
 	wg.Done()
 	bck := r.bck
-	if err := bck.Init(glob.T.Bowner()); err != nil {
+	if err := bck.Init(cluster.T.Bowner()); err != nil {
 		r.AddErr(err)
 		r.Finish()
 		return

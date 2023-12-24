@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/hk"
 )
 
@@ -145,7 +145,7 @@ func (is *infoStore) checkExists(req *request) (dljob *dljob, err error) {
 	dljob, err = is.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
-		err = cos.NewErrNotFound("%s: download job %q", glob.T, req.id)
+		err = cos.NewErrNotFound("%s: download job %q", cluster.T, req.id)
 		req.errRsp(err, http.StatusNotFound)
 	}
 	return

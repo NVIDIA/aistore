@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -84,7 +83,7 @@ func (reb *Reb) recvAck(hdr *transport.ObjHdr, _ io.Reader, err error) error {
 
 func (reb *Reb) recvStageNtfn(hdr *transport.ObjHdr, _ io.Reader, errRx error) error {
 	if errRx != nil {
-		nlog.Errorf("%s: %v", glob.T, errRx)
+		nlog.Errorf("%s: %v", cluster.T, errRx)
 		return errRx
 	}
 	ntfn, err := reb.decodeStageNtfn(hdr.Opaque)
@@ -156,10 +155,10 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		reb.laterx.Store(true)
 		if stage > rebStageFin && cmn.FastV(4, cos.SmoduleReb) {
 			nlog.Infof("Warning: %s: post stage-fin receive from %s %s (stage %s)",
-				glob.T.Snode(), meta.Tname(tsid), lom, stages[stage])
+				cluster.T.Snode(), meta.Tname(tsid), lom, stages[stage])
 		}
 	} else if stage < rebStageTraverse {
-		nlog.Errorf("%s: early receive from %s %s (stage %s)", glob.T, meta.Tname(tsid), lom, stages[stage])
+		nlog.Errorf("%s: early receive from %s %s (stage %s)", cluster.T, meta.Tname(tsid), lom, stages[stage])
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip-checksum*/) // see "PUT is a no-op"
 	xreb := reb.xctn()
@@ -175,7 +174,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		params.Atime = lom.Atime()
 		params.Xact = xreb
 	}
-	erp := glob.T.PutObject(lom, params)
+	erp := cluster.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		nlog.Errorln(erp)
@@ -192,7 +191,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, smap *meta.Smap, unpacker 
 		return err
 	}
 	if stage := reb.stages.stage.Load(); stage < rebStageFinStreams && stage != rebStageInactive {
-		ack := &regularAck{rebID: reb.RebID(), daemonID: glob.T.SID()}
+		ack := &regularAck{rebID: reb.RebID(), daemonID: cluster.T.SID()}
 		hdr.Opaque = ack.NewPack()
 		hdr.ObjAttrs.Size = 0
 		if err := reb.dm.ACK(hdr, nil, tsi); err != nil {
@@ -245,7 +244,7 @@ func (*Reb) recvECAck(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack) (err erro
 // Receive MD update. Handling includes partially updating local information:
 // only the list of daemons and the _main_ target.
 func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
-	ctMeta, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, glob.T.Bowner(), fs.ECMetaType)
+	ctMeta, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, cluster.T.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return err
 	}
@@ -263,11 +262,11 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	md.Daemons = req.md.Daemons
 	mdBytes := md.NewPack()
 
-	return ctMeta.Write(glob.T, bytes.NewReader(mdBytes), -1)
+	return ctMeta.Write(cluster.T, bytes.NewReader(mdBytes), -1)
 }
 
 func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
-	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, glob.T.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, cluster.T.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -287,8 +286,8 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 	if err != nil {
 		return err
 	}
-	req.md.FullReplica = glob.T.SID()
-	req.md.Daemons[glob.T.SID()] = uint16(req.md.SliceID)
+	req.md.FullReplica = cluster.T.SID()
+	req.md.Daemons[cluster.T.SID()] = uint16(req.md.SliceID)
 	if moveTo != nil {
 		req.md.Daemons[moveTo.ID()] = uint16(md.SliceID)
 	}
@@ -313,7 +312,7 @@ func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reade
 		}
 	}
 	// Broadcast updated MD
-	ntfnMD := stageNtfn{daemonID: glob.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
+	ntfnMD := stageNtfn{daemonID: cluster.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: req.md, action: rebActUpdateMD}
 	nodes := req.md.RemoteTargets()
 	for _, tsi := range nodes {
 		if moveTo != nil && moveTo.ID() == tsi.ID() {
@@ -346,14 +345,14 @@ func (reb *Reb) recvECData(hdr *transport.ObjHdr, unpacker *cos.ByteUnpack, read
 	}
 	if req.rebID != reb.rebID.Load() {
 		nlog.Warningf("%s: not yet started or already finished rebalancing (%d, %d)",
-			glob.T.Snode(), req.rebID, reb.rebID.Load())
+			cluster.T.Snode(), req.rebID, reb.rebID.Load())
 		return nil
 	}
 	if req.action == rebActUpdateMD {
 		err := receiveMD(req, hdr)
 		if err != nil {
 			nlog.Errorf("failed to receive MD for %s: %v", hdr.Cname(), err)
-			nlog.Errorf("Warning: (g%d, %s) ignoring, proceeding anyway...", req.rebID, glob.T) // TODO: revisit
+			nlog.Errorf("Warning: (g%d, %s) ignoring, proceeding anyway...", req.rebID, cluster.T) // TODO: revisit
 		}
 		return nil
 	}

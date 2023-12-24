@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 type quiArgs struct {
@@ -38,7 +37,7 @@ func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *re
 func (reb *Reb) nodesQuiescent(rargs *rebArgs) (quiescent bool) {
 	locStage := reb.stages.stage.Load()
 	for _, si := range rargs.smap.Tmap {
-		if si.ID() == glob.T.SID() && !reb.isQuiescent() {
+		if si.ID() == cluster.T.SID() && !reb.isQuiescent() {
 			return
 		}
 		status, ok := reb.checkStage(si, rargs, locStage)

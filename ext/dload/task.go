@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -97,7 +96,7 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 
 	g.store.incFinished(task.jobID())
 
-	glob.Tstats.AddMany(
+	g.tstats.AddMany(
 		cos.NamedVal64{Name: stats.DownloadSize, Value: task.currentSize.Load()},
 		cos.NamedVal64{Name: stats.DownloadLatency, Value: int64(task.ended.Load().Sub(task.started.Load()))},
 	)
@@ -153,7 +152,7 @@ func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Re
 		params.Atime = task.started.Load()
 		params.Xact = task.xdl
 	}
-	erp := glob.T.PutObject(lom, params)
+	erp := cluster.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		return true, erp
@@ -219,7 +218,7 @@ func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
 	task.getCtx = ctx
 
 	// Do final GET (prefetch) request.
-	_, err := glob.T.GetCold(ctx, lom, cmn.OwtGetTryLock)
+	_, err := cluster.T.GetCold(ctx, lom, cmn.OwtGetTryLock)
 	return err
 }
 
@@ -249,7 +248,7 @@ func (task *singleTask) wrapReader(r io.ReadCloser) io.ReadCloser {
 // Probably we need to extend the persistent database (db.go) so that it will contain
 // also information about specific tasks.
 func (task *singleTask) markFailed(statusMsg string) {
-	glob.Tstats.IncErr(stats.ErrDownloadCount)
+	g.tstats.IncErr(stats.ErrDownloadCount)
 	g.store.persistError(task.jobID(), task.obj.objName, statusMsg)
 	g.store.incErrorCnt(task.jobID())
 }

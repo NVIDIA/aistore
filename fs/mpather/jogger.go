@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
 )
@@ -252,7 +251,7 @@ func (j *jogger) runSelected() error {
 // run matching, one at a time
 func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 	var (
-		bmd      = glob.T.Bowner().Get()
+		bmd      = cluster.T.Bowner().Get()
 		provider *string
 		ns       *cmn.Ns
 		errs     cos.Errs
@@ -357,18 +356,18 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 }
 
 func (j *jogger) visitFQN(fqn string, buf []byte) error {
-	ct, err := cluster.NewCTFromFQN(fqn, glob.T.Bowner())
+	ct, err := cluster.NewCTFromFQN(fqn, cluster.T.Bowner())
 	if err != nil {
 		return err
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		smap := glob.T.Sowner().Get()
+		smap := cluster.T.Sowner().Get()
 		tsi, err := smap.HrwHash2T(ct.Digest())
 		if err != nil {
 			return err
 		}
-		if tsi.ID() != glob.T.SID() {
+		if tsi.ID() != cluster.T.SID() {
 			return nil
 		}
 	}

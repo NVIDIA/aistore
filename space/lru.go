@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -502,7 +501,7 @@ func (j *lruJ) sortBsize(bcks []cmn.Bck) {
 
 func (j *lruJ) allow() (ok bool, err error) {
 	var (
-		bowner = glob.T.Bowner()
+		bowner = cluster.T.Bowner()
 		b      = meta.CloneBck(&j.bck)
 	)
 	if err = b.Init(bowner); err != nil {

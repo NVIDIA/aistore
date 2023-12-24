@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -269,7 +268,7 @@ func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.Record
 	if ds.m.aborted() {
 		return 0, ds.m.newErrAborted()
 	}
-	if rec.DaemonID != glob.T.SID() {
+	if rec.DaemonID != cluster.T.SID() {
 		return ds.loadRemote(w, rec, obj)
 	}
 	return ds.loadLocal(w, obj)
@@ -384,7 +383,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 	} else {
 		// stats
 		delta := mono.Since(beforeRecv)
-		glob.Tstats.AddMany(
+		g.tstats.AddMany(
 			cos.NamedVal64{Name: stats.DsortCreationRespCount, Value: 1},
 			cos.NamedVal64{Name: stats.DsortCreationRespLatency, Value: int64(delta)},
 		)
@@ -401,7 +400,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		case stopped:
 			err = cmn.NewErrAborted("wait for remote content", "", nil)
 		case timed:
-			err = errors.Errorf("wait for remote content timed out (%q was waiting for %q)", glob.T.SID(), tid)
+			err = errors.Errorf("wait for remote content timed out (%q was waiting for %q)", cluster.T.SID(), tid)
 		default:
 			debug.Assert(false, "pulled but not stopped or timed?")
 		}
@@ -417,12 +416,12 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 
 func (ds *dsorterGeneral) sentCallback(_ *transport.ObjHdr, _ io.ReadCloser, arg any, err error) {
 	if err == nil {
-		glob.Tstats.Add(stats.DsortCreationReqCount, 1)
+		g.tstats.Add(stats.DsortCreationReqCount, 1)
 		return
 	}
 	req := arg.(*remoteRequest)
 	nlog.Errorf("%s: [dsort] %s failed to send remore-req %s: %v",
-		glob.T, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
+		cluster.T, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
 }
 
 func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.Obj) {
@@ -521,7 +520,7 @@ func (ds *dsorterGeneral) responseCallback(hdr *transport.ObjHdr, rc io.ReadClos
 	ds.m.decrementRef(1)
 	if err != nil {
 		nlog.Errorf("%s: [dsort] %s failed to send rsp %s (size %d): %v - aborting...",
-			glob.T, ds.m.ManagerUUID, hdr.ObjName, hdr.ObjAttrs.Size, err)
+			cluster.T, ds.m.ManagerUUID, hdr.ObjName, hdr.ObjAttrs.Size, err)
 		ds.m.abort(err)
 	}
 }

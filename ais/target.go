@@ -38,7 +38,6 @@ import (
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/health"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/mirror"
@@ -367,9 +366,6 @@ func (t *target) Run() error {
 
 	t.transactions.init(t)
 
-	// share this target with reb, ec, and all the rest modules (below)
-	glob.Init(t, t.statsT)
-
 	t.reb = reb.New(config)
 	t.res = res.New()
 
@@ -386,8 +382,8 @@ func (t *target) Run() error {
 		go t.goreslver(marked.Interrupted)
 	}
 
-	dsort.Tinit(db, config)
-	dload.Init(db, &config.Client)
+	dsort.Tinit(t.statsT, db, config)
+	dload.Init(t.statsT, db, &config.Client)
 
 	err = t.htrun.run(config)
 

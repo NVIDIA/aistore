@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -162,7 +161,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		npg     = newNpgCtx(bck, msg, noopCb)
 		bremote = bck.IsRemote()
 	)
-	if err := bck.Init(glob.T.Bowner()); err != nil {
+	if err := bck.Init(cluster.T.Bowner()); err != nil {
 		return err
 	}
 	if !bremote {
@@ -174,7 +173,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		}
 		if bremote {
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			_, err = glob.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
+			_, err = cluster.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 			}
@@ -278,7 +277,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 }
 
 func (r *evictDelete) Run(*sync.WaitGroup) {
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -288,7 +287,7 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 }
 
 func (r *evictDelete) do(lom *cluster.LOM, lrit *lriterator) {
-	errCode, err := glob.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
+	errCode, err := cluster.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
@@ -327,7 +326,7 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *prfFactory) Start() error {
 	b := p.Bck
-	if err := b.Init(glob.T.Bowner()); err != nil {
+	if err := b.Init(cluster.T.Bowner()); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
@@ -356,7 +355,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRang
 }
 
 func (r *prefetch) Run(*sync.WaitGroup) {
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -374,7 +373,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 		return // simply exists
 	}
 
-	if equal, _, err := glob.T.CompareObjects(r.ctx, lom); equal || err != nil {
+	if equal, _, err := cluster.T.CompareObjects(r.ctx, lom); equal || err != nil {
 		return
 	}
 
@@ -384,7 +383,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see cluster/lom_cache_hk.go).
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err := glob.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	errCode, err := cluster.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return

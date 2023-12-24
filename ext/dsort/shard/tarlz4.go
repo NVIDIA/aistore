@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/pierrec/lz4/v3"
 )
 
@@ -46,7 +45,7 @@ func (trw *tlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Recor
 
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := glob.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := cluster.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

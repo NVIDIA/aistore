@@ -25,7 +25,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -196,8 +195,8 @@ var (
 )
 
 func Init() {
-	g.pmm = glob.T.PageMM()
-	g.smm = glob.T.ByteMM()
+	g.pmm = cluster.T.PageMM()
+	g.smm = cluster.T.ByteMM()
 
 	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
 	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
@@ -409,7 +408,7 @@ func writeObject(lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xa
 		// to avoid changing version; TODO: introduce cmn.OwtEC
 		params.OWT = cmn.OwtMigrateRepl
 	}
-	err := glob.T.PutObject(lom, params)
+	err := cluster.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	return err
 }
@@ -419,7 +418,7 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 		return nil
 	}
 	newBck := meta.CloneBck(bck)
-	err := newBck.Init(glob.T.Bowner())
+	err := newBck.Init(cluster.T.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
 	}
@@ -428,7 +427,7 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, glob.T.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, cluster.T.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -452,13 +451,13 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 		}
 	}
 	tmpFQN := ct.Make(fs.WorkfileType)
-	if err := ct.Write(glob.T, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
+	if err := ct.Write(cluster.T, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	if err := ctMeta.Write(glob.T, bytes.NewReader(args.MD), -1); err != nil {
+	if err := ctMeta.Write(cluster.T, bytes.NewReader(args.MD), -1); err != nil {
 		return err
 	}
-	if _, exists := glob.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("slice-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return err
@@ -503,10 +502,10 @@ func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
 			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}()
-	if err = ctMeta.Write(glob.T, bytes.NewReader(args.MD), -1); err != nil {
+	if err = ctMeta.Write(cluster.T, bytes.NewReader(args.MD), -1); err != nil {
 		return
 	}
-	if _, exists := glob.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("replica-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return

@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -101,9 +100,9 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 		sb.extra.Config = cmn.GCO.Get()
 	}
 	if !sb.extra.Compressed() {
-		sb.lid = fmt.Sprintf("sb[%s-%s-%s]", glob.T.SID(), sb.network, sb.trname)
+		sb.lid = fmt.Sprintf("sb[%s-%s-%s]", cluster.T.SID(), sb.network, sb.trname)
 	} else {
-		sb.lid = fmt.Sprintf("sb[%s-%s-%s[%s]]", glob.T.SID(), sb.network, sb.trname,
+		sb.lid = fmt.Sprintf("sb[%s-%s-%s[%s]]", cluster.T.SID(), sb.network, sb.trname,
 			cos.ToSizeIEC(int64(sb.extra.Config.Transport.LZ4BlockMaxSize), 0))
 	}
 
@@ -114,7 +113,7 @@ func New(cl transport.Client, args Args) (sb *Streams) {
 
 	// register this stream-bundle as Smap listener
 	if !sb.manualResync {
-		listeners := glob.T.Sowner().Listeners()
+		listeners := cluster.T.Sowner().Listeners()
 		listeners.Reg(sb)
 	}
 	return
@@ -129,7 +128,7 @@ func (sb *Streams) Close(gracefully bool) {
 		sb.apply(closeStop)
 	}
 	if !sb.manualResync {
-		listeners := glob.T.Sowner().Listeners()
+		listeners := cluster.T.Sowner().Listeners()
 		listeners.Unreg(sb)
 	}
 }
@@ -140,9 +139,9 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	debug.Assert(!transport.ReservedOpcode(obj.Hdr.Opcode))
 	streams := sb.get()
 	if len(streams) == 0 {
-		err = fmt.Errorf("no streams %s => .../%s", glob.T.Snode(), sb.trname)
+		err = fmt.Errorf("no streams %s => .../%s", cluster.T.Snode(), sb.trname)
 	} else if nodes != nil && len(nodes) == 0 {
-		err = fmt.Errorf("no destinations %s => .../%s", glob.T.Snode(), sb.trname)
+		err = fmt.Errorf("no destinations %s => .../%s", cluster.T.Snode(), sb.trname)
 	} else if obj.IsUnsized() && sb.extra.SizePDU == 0 {
 		err = fmt.Errorf("[%s] sending unsized object supported only with PDUs", obj.Hdr.Cname())
 	}
@@ -171,7 +170,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 		// In other words, for the N object replicas over the N bundled streams, the
 		// original reader will get reopened (N-1) times.
 		for sid, robin := range streams {
-			if glob.T.SID() == sid {
+			if cluster.T.SID() == sid {
 				continue
 			}
 			if err = sb.sendOne(obj, roc, robin, idx, cnt); err != nil {
@@ -216,7 +215,7 @@ func (sb *Streams) Smap() *meta.Smap { return sb.smap }
 
 // keep streams to => (clustered nodes as per rxNodeType) in sync at all times
 func (sb *Streams) ListenSmapChanged() {
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	if smap.Version <= sb.smap.Version {
 		return
 	}
@@ -251,7 +250,7 @@ func (sb *Streams) get() (bun bundle) {
 
 // one obj, one stream
 func (sb *Streams) sendOne(obj *transport.Obj, roc cos.ReadOpenCloser, robin *robin, idx, cnt int) error {
-	obj.Hdr.SID = glob.T.SID()
+	obj.Hdr.SID = cluster.T.SID()
 	one := obj
 	one.Reader = roc
 	if cnt == 1 {
@@ -313,7 +312,7 @@ func (sb *Streams) apply(action int) {
 // Resync streams asynchronously
 // is a slowpath; is called under lock; NOTE: calls stream.Stop()
 func (sb *Streams) Resync() {
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	if smap.Version <= sb.smap.Version {
 		debug.Assertf(smap.Version == sb.smap.Version, "%s[%s]: %s vs %s", sb.trname, sb.lid, smap, sb.smap)
 		return
@@ -322,7 +321,7 @@ func (sb *Streams) Resync() {
 	var (
 		oldm []meta.NodeMap
 		newm []meta.NodeMap
-		node = smap.GetNode(glob.T.SID()) // upd flags
+		node = smap.GetNode(cluster.T.SID()) // upd flags
 	)
 	switch sb.rxNodeType {
 	case cluster.Targets:
@@ -339,10 +338,10 @@ func (sb *Streams) Resync() {
 	}
 	if node == nil {
 		// extremely unlikely
-		debug.Assert(false, glob.T.SID())
+		debug.Assert(false, cluster.T.SID())
 		newm = []meta.NodeMap{make(meta.NodeMap)}
 	} else {
-		glob.T.Snode().Flags = node.Flags
+		cluster.T.Snode().Flags = node.Flags
 	}
 
 	added, removed := mdiff(oldm, newm)
@@ -357,7 +356,7 @@ func (sb *Streams) Resync() {
 		nbundle[id] = robin
 	}
 	for id, si := range added {
-		if id == glob.T.SID() {
+		if id == cluster.T.SID() {
 			continue
 		}
 		// not connecting to the peer that's in maintenance and already rebalanced-out
@@ -375,7 +374,7 @@ func (sb *Streams) Resync() {
 		nbundle[id] = nrobin
 	}
 	for id := range removed {
-		if id == glob.T.SID() {
+		if id == cluster.T.SID() {
 			continue
 		}
 		orobin := nbundle[id]

@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
@@ -54,7 +53,7 @@ func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *mncFactory) Start() error {
-	slab, err := glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
 	p.xctn = newMNC(p, slab)
 	return nil
@@ -90,7 +89,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 
 func (r *mncXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	tname := glob.T.String()
+	tname := cluster.T.String()
 	if err := fs.ValidateNCopies(tname, r.p.args.Copies); err != nil {
 		r.AddErr(err)
 		r.Finish()

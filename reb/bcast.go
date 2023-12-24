@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -48,7 +47,7 @@ func bcast(rargs *rebArgs, cb syncCallback) (errCnt int) {
 		wg  = cos.NewLimitedWaitGroup(cmn.MaxBcastParallel(), len(rargs.smap.Tmap))
 	)
 	for _, tsi := range rargs.smap.Tmap {
-		if tsi.ID() == glob.T.SID() {
+		if tsi.ID() == cluster.T.SID() {
 			continue
 		}
 		wg.Add(1)
@@ -74,7 +73,7 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		tname  = tsi.StringEx()
 	)
 	for i := 0; i < 4; i++ {
-		_, code, err := glob.T.Health(tsi, cmn.Rom.MaxKeepalive(), nil)
+		_, code, err := cluster.T.Health(tsi, cmn.Rom.MaxKeepalive(), nil)
 		if err == nil {
 			if i > 0 {
 				nlog.Infof("%s: %s is online", logHdr, tname)
@@ -87,7 +86,7 @@ func (reb *Reb) pingTarget(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		}
 		nlog.Warningf("%s: waiting for %s, err %v(%d)", logHdr, tname, err, code)
 		time.Sleep(sleep)
-		nver := glob.T.Sowner().Get().Version
+		nver := cluster.T.Sowner().Get().Version
 		if nver > ver {
 			return
 		}
@@ -158,7 +157,7 @@ func (reb *Reb) waitFinExtended(tsi *meta.Snode, rargs *rebArgs) (ok bool) {
 		//
 		var w4me bool // true: this target is waiting for ACKs from me
 		for _, si := range status.Targets {
-			if si.ID() == glob.T.SID() {
+			if si.ID() == cluster.T.SID() {
 				nlog.Infof("%s: keep wack <= %s[%s]", logHdr, tsi.StringEx(), stages[status.Stage])
 				w4me = true
 				break
@@ -192,13 +191,13 @@ func (reb *Reb) checkStage(tsi *meta.Snode, rargs *rebArgs, desiredStage uint32)
 		return
 	}
 	debug.Assertf(reb.RebID() == xreb.RebID(), "%s (rebID=%d) vs %s", logHdr, reb.RebID(), xreb)
-	body, code, err := glob.T.Health(tsi, apc.DefaultTimeout, query)
+	body, code, err := cluster.T.Health(tsi, apc.DefaultTimeout, query)
 	if err != nil {
 		if errAborted := xreb.AbortedAfter(sleepRetry); errAborted != nil {
 			nlog.Infoln(logHdr, "abort check status", errAborted)
 			return
 		}
-		body, code, err = glob.T.Health(tsi, apc.DefaultTimeout, query) // retry once
+		body, code, err = cluster.T.Health(tsi, apc.DefaultTimeout, query) // retry once
 	}
 	if err != nil {
 		ctx := fmt.Sprintf("health(%s) failure: %v(%d)", tname, err, code)

@@ -96,7 +96,6 @@ type (
 
 	rangeDlJob struct {
 		baseDlJob
-		t     cluster.Target
 		objs  []dlObj            // objects' metas which are ready to be downloaded
 		pt    cos.ParsedTemplate // range template
 		dir   string             // objects directory(prefix) from request
@@ -106,7 +105,6 @@ type (
 
 	backendDlJob struct {
 		baseDlJob
-		t                 cluster.Target
 		prefix            string
 		suffix            string
 		continuationToken string
@@ -135,11 +133,11 @@ type (
 // baseDlJob //
 ///////////////
 
-func (j *baseDlJob) init(t cluster.Target, id string, bck *meta.Bck, timeout, desc string, limits Limits, xdl *Xact) {
+func (j *baseDlJob) init(id string, bck *meta.Bck, timeout, desc string, limits Limits, xdl *Xact) {
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= t.Sowner().Get().CountActiveTs()
+		limits.BytesPerHour /= cluster.T.Sowner().Get().CountActiveTs()
 	}
 	td, _ := time.ParseDuration(timeout)
 	{
@@ -206,8 +204,8 @@ func (j *baseDlJob) cleanup() {
 // sliceDlJob -- multiDlJob -- singleDlJob
 //
 
-func (j *sliceDlJob) init(t cluster.Target, bck *meta.Bck, objects cos.StrKVs) error {
-	objs, err := buildDlObjs(t, bck, objects)
+func (j *sliceDlJob) init(bck *meta.Bck, objects cos.StrKVs) error {
+	objs, err := buildDlObjs(bck, objects)
 	if err != nil {
 		return err
 	}
@@ -232,31 +230,31 @@ func (j *sliceDlJob) genNext() (objs []dlObj, ok bool, err error) {
 	return objs, true, nil
 }
 
-func newMultiDlJob(t cluster.Target, id string, bck *meta.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
+func newMultiDlJob(id string, bck *meta.Bck, payload *MultiBody, xdl *Xact) (mj *multiDlJob, err error) {
 	var objs cos.StrKVs
 
 	mj = &multiDlJob{}
-	mj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+	mj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
-	err = mj.sliceDlJob.init(t, bck, objs)
+	err = mj.sliceDlJob.init(bck, objs)
 	return
 }
 
 func (j *multiDlJob) String() (s string) { return "multi-" + j.baseDlJob.String() }
 
-func newSingleDlJob(t cluster.Target, id string, bck *meta.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
+func newSingleDlJob(id string, bck *meta.Bck, payload *SingleBody, xdl *Xact) (sj *singleDlJob, err error) {
 	var objs cos.StrKVs
 
 	sj = &singleDlJob{}
-	sj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+	sj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 
 	if objs, err = payload.ExtractPayload(); err != nil {
 		return nil, err
 	}
-	err = sj.sliceDlJob.init(t, bck, objs)
+	err = sj.sliceDlJob.init(bck, objs)
 	return
 }
 
@@ -269,18 +267,17 @@ func (j *singleDlJob) String() (s string) {
 ////////////////
 
 // NOTE: the sizes of objects to be downloaded will be unknown.
-func newRangeDlJob(t cluster.Target, id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj *rangeDlJob, err error) {
+func newRangeDlJob(id string, bck *meta.Bck, payload *RangeBody, xdl *Xact) (rj *rangeDlJob, err error) {
 	rj = &rangeDlJob{}
 	if rj.pt, err = cos.ParseBashTemplate(payload.Template); err != nil {
 		return nil, err
 	}
-	rj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+	rj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 
-	if rj.count, err = countObjects(t, rj.pt, payload.Subdir, rj.bck); err != nil {
+	if rj.count, err = countObjects(rj.pt, payload.Subdir, rj.bck); err != nil {
 		return nil, err
 	}
 	rj.pt.InitIter()
-	rj.t = t
 	rj.dir = payload.Subdir
 	return
 }
@@ -304,8 +301,8 @@ func (j *rangeDlJob) String() (s string) {
 
 func (j *rangeDlJob) getNextObjs() error {
 	var (
-		smap = j.t.Sowner().Get()
-		sid  = j.t.SID()
+		smap = cluster.T.Sowner().Get()
+		sid  = cluster.T.SID()
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
@@ -331,16 +328,15 @@ func (j *rangeDlJob) getNextObjs() error {
 // backendDlJob //
 //////////////////
 
-func newBackendDlJob(t cluster.Target, id string, bck *meta.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
+func newBackendDlJob(id string, bck *meta.Bck, payload *BackendBody, xdl *Xact) (bj *backendDlJob, err error) {
 	if !bck.IsRemote() {
 		return nil, errors.New("bucket download requires a remote bucket")
 	} else if bck.IsHTTP() {
 		return nil, errors.New("bucket download does not support HTTP buckets")
 	}
 	bj = &backendDlJob{}
-	bj.baseDlJob.init(t, id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
+	bj.baseDlJob.init(id, bck, payload.Timeout, payload.Describe(), payload.Limits, xdl)
 	{
-		bj.t = t
 		bj.sync = payload.Sync
 		bj.prefix = payload.Prefix
 		bj.suffix = payload.Suffix
@@ -373,9 +369,9 @@ func (j *backendDlJob) genNext() (objs []dlObj, ok bool, err error) {
 // download found or the bucket list is over.
 func (j *backendDlJob) getNextObjs() error {
 	var (
-		sid     = j.t.SID()
-		smap    = j.t.Sowner().Get()
-		backend = j.t.Backend(j.bck)
+		sid     = cluster.T.SID()
+		smap    = cluster.T.Sowner().Get()
+		backend = cluster.T.Backend(j.bck)
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {

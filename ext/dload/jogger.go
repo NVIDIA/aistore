@@ -10,7 +10,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 )
 
 const queueChSize = 1000
@@ -154,7 +153,7 @@ func (j *jogger) abortJob(id string) {
 	j.mtx.Unlock()
 
 	if task != nil && j.parent.config.FastV(4, cos.SmoduleDload) /*verbose*/ {
-		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", glob.T.String(), id, j.mpath, j.task.String())
+		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", cluster.T.String(), id, j.mpath, j.task.String())
 	}
 }
 

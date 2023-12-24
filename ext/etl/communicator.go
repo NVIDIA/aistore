@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -169,7 +168,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
 	}
 	if err == nil {
-		resp, err = glob.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+		resp, err = cluster.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	}
 	if err != nil {
 		if cancel != nil {
@@ -206,7 +205,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Dura
 	lom.Unlock(false)
 
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
-		_, err = glob.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
+		_, err = cluster.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +276,7 @@ func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (_ cos.ReadClose
 	//
 	// Do it
 	//
-	resp, err = glob.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+	resp, err = cluster.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 
 finish:
 	if err != nil {
@@ -316,7 +315,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 	if size < 0 {
 		size = memsys.DefaultBufSize // TODO: track an average
 	}
-	buf, slab := glob.T.PageMM().AllocSize(size)
+	buf, slab := cluster.T.PageMM().AllocSize(size)
 	_, err = io.CopyBuffer(w, r, buf)
 
 	slab.Free(buf)

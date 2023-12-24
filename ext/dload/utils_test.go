@@ -56,7 +56,7 @@ func TestCompareObject(t *testing.T) {
 	// initialize http clients
 	clientConf.Timeout = 5 * cos.Duration(time.Second)
 	clientConf.TimeoutLong = 15 * cos.Duration(time.Second)
-	dload.Init(nil, &clientConf)
+	dload.Init(nil, nil, &clientConf)
 
 	// Modify local object to contain invalid (meta)data.
 	customMD := cos.StrKVs{

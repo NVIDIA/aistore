@@ -66,18 +66,20 @@ type (
 
 type (
 	global struct {
-		statsTracker cos.StatsUpdater // (stats.Trunner)
-		t            Target
-		gmm, smm     *memsys.MMSA
-		maxLmeta     atomic.Int64
-		locker       nameLocker
-		lchk         lchk
+		tstats   cos.StatsUpdater // (stats.Trunner)
+		pmm, smm *memsys.MMSA
+		maxLmeta atomic.Int64
+		locker   nameLocker
+		lchk     lchk
 	}
 )
 
+var bckLocker nameLocker // common
+
+// target only
 var (
-	bckLocker nameLocker // proxy & target
-	g         global     // target only
+	T Target
+	g global
 )
 
 // interface guard
@@ -89,17 +91,16 @@ var (
 
 func Pinit() { bckLocker = newNameLocker() }
 
-func Tinit(t Target, st cos.StatsUpdater, runHK bool) {
+func Tinit(t Target, tstats cos.StatsUpdater, runHK bool) {
 	bckLocker = newNameLocker()
-
-	g.maxLmeta.Store(xattrMaxSize)
-
-	g.locker = newNameLocker()
-	g.t = t
-	g.statsTracker = st
-	g.gmm = t.PageMM()
-	g.smm = t.ByteMM()
-
+	T = t
+	{
+		g.maxLmeta.Store(xattrMaxSize)
+		g.locker = newNameLocker()
+		g.tstats = tstats
+		g.pmm = t.PageMM()
+		g.smm = t.ByteMM()
+	}
 	if runHK {
 		regLomCacheWithHK()
 	}
@@ -175,7 +176,7 @@ func (lom *LOM) ObjectName() string       { return lom.ObjName }
 func (lom *LOM) Bck() *meta.Bck           { return &lom.bck }
 func (lom *LOM) Bucket() *cmn.Bck         { return (*cmn.Bck)(&lom.bck) }
 func (lom *LOM) Mountpath() *fs.Mountpath { return lom.mi }
-func (lom *LOM) Location() string         { return g.t.String() + apc.LocationPropSepa + lom.mi.String() }
+func (lom *LOM) Location() string         { return T.String() + apc.LocationPropSepa + lom.mi.String() }
 
 func ParseObjLoc(loc string) (tname, mpname string) {
 	i := strings.IndexByte(loc, apc.LocationPropSepa[0])
@@ -202,7 +203,7 @@ func (lom *LOM) HrwTarget(smap *meta.Smap) (tsi *meta.Snode, local bool, err err
 	if err != nil {
 		return
 	}
-	local = tsi.ID() == g.t.SID()
+	local = tsi.ID() == T.SID()
 	return
 }
 
@@ -372,7 +373,7 @@ func (lom *LOM) ComputeCksum(cksumType string) (cksum *cos.CksumHash, err error)
 func (lom *LOM) Load(cacheit, locked bool) (err error) {
 	var (
 		lcache, lmd = lom.fromCache()
-		bmd         = g.t.Bowner().Get()
+		bmd         = T.Bowner().Get()
 	)
 	// fast path
 	if lmd != nil {
@@ -427,7 +428,7 @@ func (lom *LOM) _checkBucket(bmd *meta.BMD) (err error) {
 func (lom *LOM) LoadUnsafe() (err error) {
 	var (
 		_, lmd = lom.fromCache()
-		bmd    = g.t.Bowner().Get()
+		bmd    = T.Bowner().Get()
 	)
 	// fast path
 	if lmd != nil {
@@ -503,7 +504,7 @@ func (lom *LOM) Recache() {
 	}
 	lmd := val.(*lmeta)
 	if lmd.uname != lom.md.uname {
-		g.statsTracker.Inc(LcacheCollisionCount) // target stats
+		g.tstats.Inc(LcacheCollisionCount) // target stats
 	} else {
 		// updating the value that's already in the map (race extremely unlikely, benign anyway)
 		md.cpAtime(lmd)
@@ -518,7 +519,7 @@ func (lom *LOM) Uncache() {
 	}
 	lmd := md.(*lmeta)
 	if lmd.uname != lom.md.uname {
-		g.statsTracker.Inc(LcacheCollisionCount) // target stats
+		g.tstats.Inc(LcacheCollisionCount) // target stats
 	} else {
 		lom.md.cpAtime(lmd)
 	}
@@ -544,7 +545,7 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 	if md, ok := lcache.Load(lom.digest); ok {
 		lmd = md.(*lmeta)
 		if lmd.uname != lom.md.uname {
-			g.statsTracker.Inc(LcacheCollisionCount) // target stats
+			g.tstats.Inc(LcacheCollisionCount) // target stats
 		}
 	}
 	return
@@ -555,7 +556,7 @@ func (lom *LOM) FromFS() error {
 	if err != nil {
 		if !os.IsNotExist(err) {
 			err = os.NewSyscallError("stat", err)
-			g.t.FSHC(err, lom.FQN)
+			T.FSHC(err, lom.FQN)
 		}
 		return err
 	}
@@ -568,7 +569,7 @@ func (lom *LOM) FromFS() error {
 	}
 	if err != nil {
 		if !cmn.IsErrLmetaNotFound(err) {
-			g.t.FSHC(err, lom.FQN)
+			T.FSHC(err, lom.FQN)
 		}
 		return err
 	}

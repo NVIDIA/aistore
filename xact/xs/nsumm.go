@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/xact"
@@ -83,13 +82,13 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
 	if listRemote {
 		var (
-			smap = glob.T.Sowner().Get()
+			smap = cluster.T.Sowner().Get()
 			tsi  *meta.Snode
 		)
 		if tsi, err = smap.HrwTargetTask(p.UUID()); err != nil {
 			return
 		}
-		r.listRemote = listRemote && tsi.ID() == glob.T.SID() // this target
+		r.listRemote = listRemote && tsi.ID() == cluster.T.SID() // this target
 	}
 
 	opts := &mpather.JgroupOpts{
@@ -177,7 +176,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 // to add all `res` pointers up front
 func (r *XactNsumm) initResQbck() (cmn.Bcks, *meta.Bck) {
 	var (
-		bmd      = glob.T.Bowner().Get()
+		bmd      = cluster.T.Bowner().Get()
 		qbck     = (*cmn.QueryBcks)(r.p.Bck)
 		provider *string
 		ns       *cmn.Ns

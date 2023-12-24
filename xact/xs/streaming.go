@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -77,7 +76,7 @@ func (p *streamingF) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 	var (
 		div = uint64(xact.IdleDefault)
-		bmd = glob.T.Bowner().Get()
+		bmd = cluster.T.Bowner().Get()
 		tag = p.kind + "|" + fromBck.MakeUname("") + "|" + toBck.MakeUname("") + "|" + strconv.FormatInt(bmd.Version, 10)
 	)
 	beid, prev, err := xreg.GenBEID(div, tag)
@@ -86,14 +85,14 @@ func (p *streamingF) genBEID(fromBck, toBck *meta.Bck) (string, error) {
 		return beid, nil
 	}
 	if prev != nil {
-		err = cmn.NewErrBusy("node", glob.T, "running "+prev.Name())
+		err = cmn.NewErrBusy("node", cluster.T, "running "+prev.Name())
 	}
 	return "", err
 }
 
 func (p *streamingF) newDM(trname string, recv transport.RecvObj, config *cmn.Config, sizePDU int32) (err error) {
-	smap := glob.T.Sowner().Get()
-	if err := cluster.InMaintOrDecomm(smap, glob.T.Snode(), p.xctn); err != nil {
+	smap := cluster.T.Sowner().Get()
+	if err := cluster.InMaintOrDecomm(smap, cluster.T.Snode(), p.xctn); err != nil {
 		return err
 	}
 	if smap.CountActiveTs() <= 1 {
@@ -153,7 +152,7 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, err error) {
 		return
 	}
 	o := transport.AllocSend()
-	o.Hdr.SID = glob.T.SID()
+	o.Hdr.SID = cluster.T.SID()
 	o.Hdr.Opaque = []byte(uuid)
 	if err == nil {
 		o.Hdr.Opcode = opcodeDone

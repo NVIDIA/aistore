@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -81,7 +80,7 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	dir := r.p.args.SrcFQN
 	nlog.Infof("%s(%s)", r.Name(), dir)
 
-	r.smap = glob.T.Sowner().Get()
+	r.smap = cluster.T.Sowner().Get()
 	var (
 		err  error
 		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk, Sorted: false}
@@ -114,7 +113,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != glob.T.SID() {
+		if si.ID() != cluster.T.SID() {
 			return nil
 		}
 	}
@@ -130,7 +129,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		},
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
-	_, err = glob.T.Promote(&params)
+	_, err = cluster.T.Promote(&params)
 	if cmn.IsNotExist(err) {
 		err = nil
 	}

@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -68,7 +67,7 @@ var _ = Describe("space evict/cleanup tests", func() {
 		BeforeEach(func() {
 			initConfig()
 			createAndAddMountpath(basePath)
-			glob.T = newTargetLRUMock()
+			cluster.T = newTargetLRUMock()
 			availablePaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.AIS, Ns: cmn.NsGlobal}

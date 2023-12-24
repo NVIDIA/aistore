@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -59,7 +58,7 @@ type (
 			done         bool               // done walking (indication)
 			wor          bool               // wantOnlyRemote
 			dontPopulate bool               // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
-			this         bool               // r.msg.SID == glob.T.SID(): true when this target does remote paging
+			this         bool               // r.msg.SID == cluster.T.SID(): true when this target does remote paging
 		}
 		streamingX
 		lensgl int64
@@ -110,7 +109,7 @@ func (p *lsoFactory) Start() (err error) {
 
 	// NOTE: is set by the first message, never changes
 	r.walk.wor = r.msg.WantOnlyRemoteProps()
-	r.walk.this = r.msg.SID == glob.T.SID()
+	r.walk.this = r.msg.SID == cluster.T.SID()
 
 	// true iff the bucket was not added - not initialized
 	r.walk.dontPopulate = r.walk.wor && p.Bck.Props == nil
@@ -118,7 +117,7 @@ func (p *lsoFactory) Start() (err error) {
 
 	// open streams iff:
 	if r.listRemote() && !r.walk.wor {
-		smap := glob.T.Sowner().Get()
+		smap := cluster.T.Sowner().Get()
 		if smap.CountActiveTs() > 1 {
 			if !r.walk.this {
 				r.remtCh = make(chan *LsoRsp, remtPageChSize) // <= by selected target (selected to page remote bucket)
@@ -132,7 +131,7 @@ func (p *lsoFactory) Start() (err error) {
 			debug.Assert(p.dm != nil)
 			if err = p.dm.RegRecv(); err != nil {
 				if p.msg.ContinuationToken != "" {
-					err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", glob.T,
+					err = fmt.Errorf("%s: late continuation [%s,%s], DM: %v", cluster.T,
 						p.msg.UUID, p.msg.ContinuationToken, err)
 				}
 				nlog.Errorln(err)
@@ -167,7 +166,7 @@ loop:
 			r.msg.PageSize = msg.PageSize
 
 			// cannot change
-			debug.Assert((r.msg.SID == glob.T.SID()) == r.walk.this)
+			debug.Assert((r.msg.SID == cluster.T.SID()) == r.walk.this)
 			debug.Assert(r.walk.wor == r.msg.WantOnlyRemoteProps())
 
 			r.IncPending()
@@ -342,7 +341,7 @@ func (r *LsoXact) nextPageR() (err error) {
 	var (
 		page *cmn.LsoResult
 		npg  = newNpgCtx(r.p.Bck, r.msg, r.LomAdd)
-		smap = glob.T.Sowner().Get()
+		smap = cluster.T.Sowner().Get()
 		tsi  = smap.GetActiveNode(r.msg.SID)
 	)
 	if tsi == nil {
@@ -403,7 +402,7 @@ func (r *LsoXact) bcast(page *cmn.LsoResult) (err error) {
 		return nil
 	}
 	var (
-		mm        = glob.T.PageMM()
+		mm        = cluster.T.PageMM()
 		siz       = max(r.lensgl, memsys.DefaultBufSize)
 		buf, slab = mm.AllocSize(siz)
 		sgl       = mm.NewSGL(siz, slab.Size())
@@ -438,7 +437,7 @@ func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err er
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
 	} else if r.config.FastV(4, cos.SmoduleXs) || !cos.IsRetriableConnErr(err) {
-		nlog.Infof("Warning: %s: failed to send [%+v]: %v", glob.T, hdr, err)
+		nlog.Infof("Warning: %s: failed to send [%+v]: %v", cluster.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)
 	debug.Assertf(ok, "%T", arg)
@@ -632,14 +631,14 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		err = errors.New(hdr.ObjName) // definitely see `streamingX.sendTerm()`
 	}
 	if err != nil && !cos.IsEOF(err) {
-		nlog.Errorln(glob.T.String(), r.String(), len(r.remtCh), err)
+		nlog.Errorln(cluster.T.String(), r.String(), len(r.remtCh), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 		return err
 	}
 
 	debug.Assert(hdr.Opcode == 0)
 	r.IncPending()
-	buf, slab := glob.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+	buf, slab := cluster.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
 
 	err = r._recv(hdr, objReader, buf)
 
@@ -661,7 +660,7 @@ func (r *LsoXact) _recv(hdr *transport.ObjHdr, objReader io.Reader, buf []byte) 
 		r.InObjsAdd(1, hdr.ObjAttrs.Size)
 	} else {
 		nlog.Errorf("%s: failed to recv [%s: %s] num=%d from %s (%s, %s): %v",
-			glob.T, page.UUID, page.ContinuationToken, len(page.Entries),
+			cluster.T, page.UUID, page.ContinuationToken, len(page.Entries),
 			hdr.SID, hdr.Bck.Cname(""), string(hdr.Opaque), err)
 		r.remtCh <- &LsoRsp{Status: http.StatusInternalServerError, Err: err}
 	}

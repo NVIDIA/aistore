@@ -72,7 +72,7 @@ func (lom *LOM) RenameFrom(workfqn string) error {
 		return fmt.Errorf("%s(bdir: %s): %w", lom, bdir, err)
 	}
 	if err := cos.Rename(workfqn, lom.FQN); err != nil {
-		return cmn.NewErrFailedTo(g.t, "finalize", lom, err)
+		return cmn.NewErrFailedTo(T, "finalize", lom, err)
 	}
 	return nil
 }

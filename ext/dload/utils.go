@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -36,10 +35,10 @@ func clientForURL(u string) *http.Client {
 }
 
 //nolint:gocritic // need a copy of cos.ParsedTemplate
-func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {
+func countObjects(pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {
 	var (
-		smap = t.Sowner().Get()
-		sid  = t.SID()
+		smap = cluster.T.Sowner().Get()
+		sid  = cluster.T.SID()
 		si   *meta.Snode
 	)
 	pt.InitIter()
@@ -61,10 +60,10 @@ func countObjects(t cluster.Target, pt cos.ParsedTemplate, dir string, bck *meta
 }
 
 // buildDlObjs returns list of objects that must be downloaded by target.
-func buildDlObjs(t cluster.Target, bck *meta.Bck, objects cos.StrKVs) ([]dlObj, error) {
+func buildDlObjs(bck *meta.Bck, objects cos.StrKVs) ([]dlObj, error) {
 	var (
-		smap = t.Sowner().Get()
-		sid  = t.SID()
+		smap = cluster.T.Sowner().Get()
+		sid  = cluster.T.SID()
 	)
 
 	objs := make([]dlObj, 0, len(objects))
@@ -118,7 +117,7 @@ func NormalizeObjName(objName string) (string, error) {
 	return url.PathUnescape(u.Path)
 }
 
-func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
+func ParseStartRequest(bck *meta.Bck, id string, dlb Body, xdl *Xact) (jobif, error) {
 	switch dlb.Type {
 	case TypeBackend:
 		dp := &BackendBody{}
@@ -129,7 +128,7 @@ func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newBackendDlJob(t, id, bck, dp, xdl)
+		return newBackendDlJob(id, bck, dp, xdl)
 	case TypeMulti:
 		dp := &MultiBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -139,7 +138,7 @@ func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newMultiDlJob(t, id, bck, dp, xdl)
+		return newMultiDlJob(id, bck, dp, xdl)
 	case TypeRange:
 		dp := &RangeBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -149,7 +148,7 @@ func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newRangeDlJob(t, id, bck, dp, xdl)
+		return newRangeDlJob(id, bck, dp, xdl)
 	case TypeSingle:
 		dp := &SingleBody{}
 		err := jsoniter.Unmarshal(dlb.RawMessage, dp)
@@ -159,7 +158,7 @@ func ParseStartRequest(t cluster.Target, bck *meta.Bck, id string, dlb Body, xdl
 		if err := dp.Validate(); err != nil {
 			return nil, err
 		}
-		return newSingleDlJob(t, id, bck, dp, xdl)
+		return newSingleDlJob(id, bck, dp, xdl)
 	default:
 		return nil, errors.New("input does not match any of the supported formats (single, range, multi, backend)")
 	}
@@ -255,7 +254,7 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
-		oa, _, err = glob.T.Backend(lom.Bck()).HeadObj(ctx, lom)
+		oa, _, err = cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
 		if err != nil {
 			return false, err
 		}

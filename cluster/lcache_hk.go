@@ -99,7 +99,7 @@ func (lchk *lchk) housekeep() (d time.Duration) {
 }
 
 func (*lchk) mp() (d time.Duration, tag string) {
-	p := g.gmm.Pressure()
+	p := g.pmm.Pressure()
 	switch p {
 	case memsys.OOM:
 		d = oomEvictAtime
@@ -134,8 +134,8 @@ func (lchk *lchk) evictAll(d time.Duration) {
 	}
 
 	// stats
-	g.statsTracker.Add(LcacheEvictedCount, lchk.evictedCnt)
-	g.statsTracker.Add(LcacheFlushColdCount, lchk.flushColdCnt)
+	g.tstats.Add(LcacheEvictedCount, lchk.evictedCnt)
+	g.tstats.Add(LcacheFlushColdCount, lchk.flushColdCnt)
 
 	lchk.running.Store(false)
 }

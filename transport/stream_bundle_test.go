@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -96,7 +96,7 @@ func TestBundle(t *testing.T) {
 
 	tMock := mock.NewTarget(nil)
 	tMock.SO = &sowner{}
-	glob.T = tMock
+	cluster.T = tMock
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -118,7 +118,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 	// init local target
 	tMock := mock.NewTarget(nil)
 	tMock.SO = &sowner{}
-	glob.T = tMock
+	cluster.T = tMock
 	lsnode := tMock.Snode()
 
 	// add target nodes

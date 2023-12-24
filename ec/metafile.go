@@ -13,7 +13,6 @@ import (
 	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -80,9 +79,9 @@ func (md *Metadata) RemoteTargets() []*meta.Snode {
 		return nil
 	}
 	nodes := make([]*meta.Snode, 0, len(md.Daemons))
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	for tid := range md.Daemons {
-		if tid == glob.T.SID() {
+		if tid == cluster.T.SID() {
 			continue
 		}
 		tsi := smap.GetTarget(tid)

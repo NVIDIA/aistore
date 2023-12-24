@@ -21,7 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/xact"
@@ -99,7 +98,7 @@ func (res *Res) RunResilver(args Args) {
 	// jogger group
 	var (
 		jg        *mpather.Jgroup
-		slab, err = glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+		slab, err = cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		config    = cmn.GCO.Get()
 		jctx      = &joggerCtx{xres: xres, config: config}
 
@@ -141,7 +140,7 @@ func (res *Res) RunResilver(args Args) {
 
 // Wait for an abort or for resilvering joggers to finish.
 func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
-	tsi := glob.T.Snode()
+	tsi := cluster.T.Snode()
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
@@ -187,7 +186,7 @@ func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 	if jg.config.FastV(4, cos.SmoduleReb) {
-		nlog.Infof("%s: moving %q -> %q", glob.T, ct.FQN(), destFQN)
+		nlog.Infof("%s: moving %q -> %q", cluster.T, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
@@ -341,7 +340,7 @@ redo:
 			continue
 		}
 		if cos.IsErrOOS(err) {
-			errV := fmt.Errorf("%s: %s OOS, err: %w", glob.T, mi, err)
+			errV := fmt.Errorf("%s: %s OOS, err: %w", cluster.T, mi, err)
 			jg.xres.AddErr(errV)
 			err = cmn.NewErrAborted(xname, "", errV)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {

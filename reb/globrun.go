@@ -26,7 +26,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/prob"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
@@ -188,7 +187,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 	logHdr := reb.logHdr(id, smap, true /*initializing*/)
 	nlog.Infoln(logHdr + ": initializing")
 
-	bmd := glob.T.Bowner().Get()
+	bmd := cluster.T.Bowner().Get()
 	rargs := &rebArgs{id: id, smap: smap, config: cmn.GCO.Get(), ecUsed: bmd.IsECUsed()}
 	if !reb.serialize(rargs, logHdr) {
 		return
@@ -196,7 +195,7 @@ func (reb *Reb) RunRebalance(smap *meta.Smap, id int64, notif *xact.NotifXact) {
 
 	reb.regRecv()
 
-	haveStreams := smap.HasActiveTs(glob.T.SID())
+	haveStreams := smap.HasActiveTs(cluster.T.SID())
 	if bmd.IsEmpty() {
 		haveStreams = false
 	}
@@ -276,7 +275,7 @@ func (reb *Reb) serialize(rargs *rebArgs, logHdr string) bool {
 		return false
 	}
 	if rargs.smap.Version == 0 {
-		rargs.smap = glob.T.Sowner().Get()
+		rargs.smap = cluster.T.Sowner().Get()
 	}
 	// 2. serialize global rebalance and start new xaction -
 	//    but only if the one that handles the current version is _not_ already in progress
@@ -284,7 +283,7 @@ func (reb *Reb) serialize(rargs *rebArgs, logHdr string) bool {
 		return false
 	}
 	if rargs.smap.Version == 0 {
-		rargs.smap = glob.T.Sowner().Get()
+		rargs.smap = cluster.T.Sowner().Get()
 	}
 	rargs.apaths = fs.GetAvail()
 	return true
@@ -411,10 +410,10 @@ func (reb *Reb) initRenew(rargs *rebArgs, notif *xact.NotifXact, logHdr string, 
 	reb.rebID.Store(rargs.id)
 
 	// check Smap _prior_ to opening streams
-	smap := glob.T.Sowner().Get()
+	smap := cluster.T.Sowner().Get()
 	if smap.Version != rargs.smap.Version {
 		debug.Assert(smap.Version > rargs.smap.Version)
-		nlog.Errorf("Warning %s: %s post-init version change %s => %s", glob.T, xreb, rargs.smap, smap)
+		nlog.Errorf("Warning %s: %s post-init version change %s => %s", cluster.T, xreb, rargs.smap, smap)
 		// TODO: handle an unlikely corner case keeping in mind that not every change warants a different rebalance
 	}
 
@@ -506,7 +505,7 @@ func (reb *Reb) runEC(rargs *rebArgs) error {
 		nlog.Infoln(logHdr, "abort ec-joggers", err)
 		return err
 	}
-	nlog.Infof("[%s] RebalanceEC done", glob.T.SID())
+	nlog.Infof("[%s] RebalanceEC done", cluster.T.SID())
 	return nil
 }
 
@@ -659,7 +658,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 				continue
 			}
 			tsi, _ := rargs.smap.HrwHash2T(lom.Digest())
-			if glob.T.HeadObjT2T(lom, tsi) {
+			if cluster.T.HeadObjT2T(lom, tsi) {
 				if rargs.config.FastV(4, cos.SmoduleReb) {
 					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
@@ -700,7 +699,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 
 func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 	yes = reb.xctn().IsAborted()
-	yes = yes || (rargs.smap.Version != glob.T.Sowner().Get().Version)
+	yes = yes || (rargs.smap.Version != cluster.T.Sowner().Get().Version)
 	return
 }
 
@@ -712,7 +711,7 @@ func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	// prior to closing the streams
 	if q := reb.quiesce(rargs, rargs.config.Transport.QuiesceTime.D(), reb.nodesQuiescent); q != cluster.QuiAborted {
 		if errM := fs.RemoveMarker(fname.RebalanceMarker); errM == nil {
-			nlog.Infof("%s: %s removed marker ok", glob.T, reb.xctn())
+			nlog.Infof("%s: %s removed marker ok", cluster.T, reb.xctn())
 		}
 		_ = fs.RemoveMarker(fname.NodeRestartedPrev)
 	}
@@ -750,7 +749,7 @@ func (rj *rebJogger) jog(mi *fs.Mountpath) {
 		rj.opts.Callback = rj.visitObj
 		rj.opts.Sorted = false
 	}
-	bmd := glob.T.Bowner().Get()
+	bmd := cluster.T.Bowner().Get()
 	bmd.Range(nil, nil, rj.walkBck)
 }
 
@@ -763,7 +762,7 @@ func (rj *rebJogger) walkBck(bck *meta.Bck) bool {
 	if rj.xreb.IsAborted() {
 		nlog.Infoln(rj.xreb.Name(), "aborting traversal")
 	} else {
-		nlog.Errorln(glob.T.String(), rj.xreb.Name(), "failed to traverse", err)
+		nlog.Errorln(cluster.T.String(), rj.xreb.Name(), "failed to traverse", err)
 	}
 	return true
 }
@@ -782,7 +781,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 		} else {
 			lom, ok := arg.(*cluster.LOM)
 			debug.Assert(ok)
-			nlog.Errorf("%s: %s failed to send %s: %v", glob.T, rj.xreb.Name(), lom, err)
+			nlog.Errorf("%s: %s failed to send %s: %v", cluster.T, rj.xreb.Name(), lom, err)
 		}
 	}
 }
@@ -821,7 +820,7 @@ func (rj *rebJogger) _lwalk(lom *cluster.LOM, fqn string) error {
 	if err != nil {
 		return err
 	}
-	if tsi.ID() == glob.T.SID() {
+	if tsi.ID() == cluster.T.SID() {
 		return cmn.ErrSkip
 	}
 
@@ -872,7 +871,7 @@ func _getReader(lom *cluster.LOM) (roc cos.ReadOpenCloser, err error) {
 
 func (rj *rebJogger) doSend(lom *cluster.LOM, tsi *meta.Snode, roc cos.ReadOpenCloser) error {
 	var (
-		ack    = regularAck{rebID: rj.m.RebID(), daemonID: glob.T.SID()}
+		ack    = regularAck{rebID: rj.m.RebID(), daemonID: cluster.T.SID()}
 		o      = transport.AllocSend()
 		opaque = ack.NewPack()
 	)

@@ -168,7 +168,7 @@ func (lom *LOM) PersistMain() (err error) {
 	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache()
-		g.t.FSHC(err, lom.FQN)
+		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
 		lom.Recache()
@@ -196,7 +196,7 @@ func (lom *LOM) Persist() (err error) {
 	buf := lom.marshal()
 	if err = fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
 		lom.Uncache()
-		g.t.FSHC(err, lom.FQN)
+		T.FSHC(err, lom.FQN)
 	} else {
 		lom.md.clearDirty()
 		if lom.Bprops() != nil {
@@ -239,7 +239,7 @@ func (lom *LOM) flushCold(md *lmeta, atime time.Time) {
 	}
 	buf := lom.marshal()
 	if err := fs.SetXattr(lom.FQN, XattrLOM, buf); err != nil {
-		g.t.FSHC(err, lom.FQN)
+		T.FSHC(err, lom.FQN)
 	}
 	g.smm.Free(buf)
 }

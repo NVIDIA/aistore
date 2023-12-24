@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -70,7 +69,7 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
-		slab, err = glob.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+		slab, err = cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
 	debug.AssertNoErr(err)
 	p.xctn = newTCB(p, slab, config)
@@ -81,8 +80,8 @@ func (p *tcbFactory) Start() error {
 		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
-	smap := glob.T.Sowner().Get()
-	if err := cluster.InMaintOrDecomm(smap, glob.T.Snode(), p.xctn); err != nil {
+	smap := cluster.T.Sowner().Get()
+	if err := cluster.InMaintOrDecomm(smap, cluster.T.Snode(), p.xctn); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()
@@ -237,7 +236,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	_, err = glob.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
+	_, err = cluster.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			r.Abort(err)
@@ -298,7 +297,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster
 	}
 	params.Atime = lom.Atime()
 
-	erp := glob.T.PutObject(lom, params)
+	erp := cluster.T.PutObject(lom, params)
 	cluster.FreePutObjParams(params)
 	if erp != nil {
 		r.AddErr(erp)

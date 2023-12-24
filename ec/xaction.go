@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -210,7 +209,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader
 	var (
 		err   error
 		nodes = meta.AllocNodes(len(daemonIDs))
-		smap  = glob.T.Sowner().Get()
+		smap  = cluster.T.Sowner().Get()
 	)
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]

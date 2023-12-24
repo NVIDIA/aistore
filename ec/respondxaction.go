@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/fs/glob"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -108,7 +107,7 @@ func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 		nlog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
-	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, glob.T.Bowner(), fs.ECSliceType)
+	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, cluster.T.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -144,7 +143,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		nlog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, glob.T.Bowner(), fs.ECSliceType)
+		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, cluster.T.Bowner(), fs.ECSliceType)
 		if err != nil {
 			return err
 		}
@@ -166,7 +165,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			err = fmt.Errorf("%s: failed to delete %s: %w", glob.T, bck.Cname(hdr.ObjName), err)
+			err = fmt.Errorf("%s: failed to delete %s: %w", cluster.T, bck.Cname(hdr.ObjName), err)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}
@@ -197,7 +196,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			nlog.Errorf("%s: no metadata for %s", glob.T, hdr.Cname())
+			nlog.Errorf("%s: no metadata for %s", cluster.T, hdr.Cname())
 			return
 		}
 

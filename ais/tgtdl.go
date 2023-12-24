@@ -86,7 +86,7 @@ func (t *target) downloadHandler(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err, http.StatusInternalServerError)
 			return
 		}
-		dljob, err := dload.ParseStartRequest(t, bck, jobID, dlb, xdl)
+		dljob, err := dload.ParseStartRequest(bck, jobID, dlb, xdl)
 		if err != nil {
 			xdl.Abort(err)
 			t.writeErr(w, r, err)
