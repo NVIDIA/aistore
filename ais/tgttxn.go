@@ -15,8 +15,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -24,6 +22,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
@@ -105,7 +105,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		xid, err = t.renameBucket(c)
 	case apc.ActCopyBck, apc.ActETLBck:
 		var (
-			dp     cluster.DP
+			dp     core.DP
 			tcbmsg = &apc.TCBMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcbmsg); err != nil {
@@ -122,7 +122,7 @@ func (t *target) txnHandler(w http.ResponseWriter, r *http.Request) {
 		xid, err = t.tcb(c, tcbmsg, dp)
 	case apc.ActCopyObjects, apc.ActETLObjects:
 		var (
-			dp     cluster.DP
+			dp     core.DP
 			tcomsg = &cmn.TCObjsMsg{}
 		)
 		if err := cos.MorphMarshal(c.msg.Value, tcomsg); err != nil {
@@ -496,7 +496,7 @@ func (t *target) validateBckRenTxn(bckFrom, bckTo *meta.Bck, msg *aisMsg) error 
 	return nil
 }
 
-func etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
+func etlDP(msg *apc.TCBMsg) (core.DP, error) {
 	if !k8s.IsK8s() {
 		return nil, k8s.ErrK8sRequired
 	}
@@ -507,7 +507,7 @@ func etlDP(msg *apc.TCBMsg) (cluster.DP, error) {
 }
 
 // common for both bucket copy and bucket transform - does the heavy lifting
-func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (string, error) {
+func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (string, error) {
 	switch c.phase {
 	case apc.ActBegin:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
@@ -583,11 +583,11 @@ func (t *target) tcb(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (string, error) 
 	return "", nil
 }
 
-func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (err error) {
+func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp core.DP) (err error) {
 	var (
 		bckTo, bckFrom = c.bckTo, c.bck
 		nlpFrom        = newBckNLP(bckFrom)
-		nlpTo          cluster.NLP
+		nlpTo          core.NLP
 	)
 	if !nlpFrom.TryRLock(c.timeout.netw / 4) {
 		return cmn.NewErrBusy("bucket", bckFrom, "")
@@ -610,7 +610,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (err error
 		xctn = rns.Entry.Get()
 		xtcb = xctn.(*xs.XactTCB)
 		txn  = newTxnTCB(c, xtcb)
-		nlps = []cluster.NLP{nlpFrom}
+		nlps = []core.NLP{nlpFrom}
 	)
 	if nlpTo != nil {
 		nlps = append(nlps, nlpTo)
@@ -621,7 +621,7 @@ func (t *target) _tcbBegin(c *txnSrv, msg *apc.TCBMsg, dp cluster.DP) (err error
 // Two IDs:
 // - TxnUUID: transaction (txn) ID
 // - xid: xaction ID (will have "tco-" prefix)
-func (t *target) tcobjs(c *txnSrv, msg *cmn.TCObjsMsg, dp cluster.DP) (xid string, _ error) {
+func (t *target) tcobjs(c *txnSrv, msg *cmn.TCObjsMsg, dp core.DP) (xid string, _ error) {
 	switch c.phase {
 	case apc.ActBegin:
 		var (
@@ -815,9 +815,9 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 		// finalize the message and begin local transaction
 		archMsg.TxnUUID = c.uuid
 		archMsg.FromBckName = bckFrom.Name
-		archlom := cluster.AllocLOM(archMsg.ArchName)
+		archlom := core.AllocLOM(archMsg.ArchName)
 		if err := xarch.Begin(archMsg, archlom); err != nil {
-			cluster.FreeLOM(archlom) // otherwise is freed by x-archive
+			core.FreeLOM(archlom) // otherwise is freed by x-archive
 			return xid, err
 		}
 		txn := newTxnArchMultiObj(c, bckFrom, xarch, archMsg)
@@ -897,7 +897,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		prmMsg := &cluster.PromoteArgs{}
+		prmMsg := &core.PromoteArgs{}
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 			return "", err
@@ -981,7 +981,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 }
 
 // scan and, optionally, auto-detect file-share
-func prmScan(dirFQN string, prmMsg *cluster.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
+func prmScan(dirFQN string, prmMsg *core.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
@@ -1039,10 +1039,10 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 				continue
 			}
 		}
-		params := cluster.PromoteParams{
+		params := core.PromoteParams{
 			Bck:    c.bck,
 			Config: config,
-			PromoteArgs: cluster.PromoteArgs{
+			PromoteArgs: core.PromoteArgs{
 				SrcFQN:       fqn,
 				ObjName:      objName,
 				OverwriteDst: txnPrm.msg.OverwriteDst,
@@ -1104,13 +1104,13 @@ func (c *txnSrv) init(r *http.Request, bucket string) (err error) {
 	return err
 }
 
-func (c *txnSrv) addNotif(xctn cluster.Xact) {
+func (c *txnSrv) addNotif(xctn core.Xact) {
 	dsts, ok := c.query[apc.QparamNotifyMe]
 	if !ok {
 		return
 	}
 	xctn.AddNotif(&xact.NotifXact{
-		Base: nl.Base{When: cluster.UponTerm, Dsts: dsts, F: c.t.notifyTerm},
+		Base: nl.Base{When: core.UponTerm, Dsts: dsts, F: c.t.notifyTerm},
 		Xact: xctn,
 	})
 }

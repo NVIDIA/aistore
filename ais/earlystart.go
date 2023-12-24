@@ -11,12 +11,12 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const maxVerConfirmations = 3 // NOTE: minimum number of max-ver confirmations required to make the decision
@@ -689,7 +689,7 @@ func (p *proxy) bcastMaxVer(bcastSmap *smapX, bmds bmds, smaps smaps) (out cluMe
 		Query: url.Values{apc.QparamWhat: []string{apc.WhatSmapVote}},
 	}
 	args.smap = bcastSmap
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	args.cresv = cresCM{} // -> cluMeta
 	results := p.bcastGroup(args)
 	freeBcArgs(args)

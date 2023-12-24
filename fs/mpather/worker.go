@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -19,12 +19,12 @@ import (
 
 type (
 	WorkerGroupOpts struct {
-		Callback  func(lom *cluster.LOM, buf []byte)
+		Callback  func(lom *core.LOM, buf []byte)
 		Slab      *memsys.Slab
 		QueueSize int
 	}
 
-	// WorkerGroup starts one worker per mountpath; each worker receives (*cluster.LOM) tasks
+	// WorkerGroup starts one worker per mountpath; each worker receives (*core.LOM) tasks
 	// and executes the specified callback.
 	WorkerGroup struct {
 		wg      *errgroup.Group
@@ -33,7 +33,7 @@ type (
 	worker struct {
 		opts   *WorkerGroupOpts
 		mi     *fs.Mountpath
-		workCh chan cluster.LIF
+		workCh chan core.LIF
 		stopCh cos.StopCh
 	}
 )
@@ -59,7 +59,7 @@ func (wg *WorkerGroup) Run() {
 	}
 }
 
-func (wg *WorkerGroup) PostLIF(lom *cluster.LOM) (chanFull bool, err error) {
+func (wg *WorkerGroup) PostLIF(lom *core.LOM) (chanFull bool, err error) {
 	mi := lom.Mountpath()
 	worker, ok := wg.workers[mi.Path]
 	if !ok {
@@ -87,7 +87,7 @@ func newWorker(opts *WorkerGroupOpts, mi *fs.Mountpath) (w *worker) {
 	w = &worker{
 		opts:   opts,
 		mi:     mi,
-		workCh: make(chan cluster.LIF, opts.QueueSize),
+		workCh: make(chan core.LIF, opts.QueueSize),
 	}
 	w.stopCh.Init()
 	return
@@ -109,7 +109,7 @@ func (w *worker) work() error {
 			if err = lom.Load(false /*cache it*/, false); err == nil {
 				w.opts.Callback(lom, buf)
 			} else {
-				cluster.FreeLOM(lom)
+				core.FreeLOM(lom)
 			}
 		case <-w.stopCh.Listen(): // ABORT
 			close(w.workCh)
@@ -131,7 +131,7 @@ func (w *worker) abort() int {
 
 func (w *worker) String() string { return fmt.Sprintf("worker %q", w.mi.Path) }
 
-func drainWorkCh(workCh chan cluster.LIF) (n int) {
+func drainWorkCh(workCh chan core.LIF) (n int) {
 	for {
 		select {
 		case <-workCh:

@@ -14,12 +14,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,8 +37,8 @@ func clientForURL(u string) *http.Client {
 //nolint:gocritic // need a copy of cos.ParsedTemplate
 func countObjects(pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, err error) {
 	var (
-		smap = cluster.T.Sowner().Get()
-		sid  = cluster.T.SID()
+		smap = core.T.Sowner().Get()
+		sid  = core.T.SID()
 		si   *meta.Snode
 	)
 	pt.InitIter()
@@ -62,8 +62,8 @@ func countObjects(pt cos.ParsedTemplate, dir string, bck *meta.Bck) (cnt int, er
 // buildDlObjs returns list of objects that must be downloaded by target.
 func buildDlObjs(bck *meta.Bck, objects cos.StrKVs) ([]dlObj, error) {
 	var (
-		smap = cluster.T.Sowner().Get()
-		sid  = cluster.T.SID()
+		smap = core.T.Sowner().Get()
+		sid  = core.T.SID()
 	)
 
 	objs := make([]dlObj, 0, len(objects))
@@ -241,7 +241,7 @@ func headLink(link string) (resp *http.Response, err error) {
 
 // Use all available metadata including {size, version, ETag, MD5, CRC}
 // to compare local object with its remote counterpart.
-func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
+func CompareObjects(lom *core.LOM, dst *DstElement) (equal bool, err error) {
 	var oa *cmn.ObjAttrs
 	if dst.Link != "" {
 		resp, errHead := headLink(dst.Link) //nolint:bodyclose // cos.Close
@@ -254,7 +254,7 @@ func CompareObjects(lom *cluster.LOM, dst *DstElement) (equal bool, err error) {
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
 		defer cancel()
-		oa, _, err = cluster.T.Backend(lom.Bck()).HeadObj(ctx, lom)
+		oa, _, err = core.T.Backend(lom.Bck()).HeadObj(ctx, lom)
 		if err != nil {
 			return false, err
 		}

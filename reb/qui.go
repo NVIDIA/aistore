@@ -7,7 +7,7 @@ package reb
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/core"
 )
 
 type quiArgs struct {
@@ -16,19 +16,19 @@ type quiArgs struct {
 	done  func(rargs *rebArgs) bool
 }
 
-func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) cluster.QuiRes {
+func (q *quiArgs) quicb(_ time.Duration /*accum. wait time*/) core.QuiRes {
 	if q.done(q.rargs) {
-		return cluster.QuiDone
+		return core.QuiDone
 	}
 	if q.reb.laterx.CAS(true, false) {
-		return cluster.QuiActive
+		return core.QuiActive
 	}
-	return cluster.QuiInactiveCB
+	return core.QuiInactiveCB
 }
 
 // Uses generic xact.Quiesce to make sure that no objects are received
 // during a given `maxWait` interval of time.
-func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *rebArgs) bool) cluster.QuiRes {
+func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *rebArgs) bool) core.QuiRes {
 	q := &quiArgs{rargs, reb, cb}
 	return reb.xctn().Quiesce(maxWait, q.quicb)
 }
@@ -37,7 +37,7 @@ func (reb *Reb) quiesce(rargs *rebArgs, maxWait time.Duration, cb func(rargs *re
 func (reb *Reb) nodesQuiescent(rargs *rebArgs) (quiescent bool) {
 	locStage := reb.stages.stage.Load()
 	for _, si := range rargs.smap.Tmap {
-		if si.ID() == cluster.T.SID() && !reb.isQuiescent() {
+		if si.ID() == core.T.SID() && !reb.isQuiescent() {
 			return
 		}
 		status, ok := reb.checkStage(si, rargs, locStage)

@@ -9,9 +9,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/OneOfOne/xxhash"
 )
@@ -79,9 +79,9 @@ func (md *Metadata) RemoteTargets() []*meta.Snode {
 		return nil
 	}
 	nodes := make([]*meta.Snode, 0, len(md.Daemons))
-	smap := cluster.T.Sowner().Get()
+	smap := core.T.Sowner().Get()
 	for tid := range md.Daemons {
-		if tid == cluster.T.SID() {
+		if tid == core.T.SID() {
 			continue
 		}
 		tsi := smap.GetTarget(tid)
@@ -111,7 +111,7 @@ func (md *Metadata) Clone() *Metadata {
 
 // ObjectMetadata returns metadata for an object or its slice if any exists
 func ObjectMetadata(bck *meta.Bck, objName string) (*Metadata, error) {
-	fqn, _, err := cluster.HrwFQN(bck.Bucket(), fs.ECMetaType, objName)
+	fqn, _, err := core.HrwFQN(bck.Bucket(), fs.ECMetaType, objName)
 	if err != nil {
 		return nil, err
 	}

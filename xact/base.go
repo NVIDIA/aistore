@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 )
@@ -47,7 +47,7 @@ type (
 		err cos.Errs
 	}
 	Marked struct {
-		Xact        cluster.Xact
+		Xact        core.Xact
 		Interrupted bool // (rebalance | resilver) interrupted
 		Restarted   bool // node restarted
 	}
@@ -56,7 +56,7 @@ type (
 var IncFinished func()
 
 // common helper to go-run and wait until it actually starts running
-func GoRunW(xctn cluster.Xact) {
+func GoRunW(xctn core.Xact) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go xctn.Run(wg)
@@ -66,7 +66,7 @@ func GoRunW(xctn cluster.Xact) {
 func IsValidUUID(id string) bool { return cos.IsValidUUID(id) || IsValidRebID(id) }
 
 //////////////
-// Base - partially implements `cluster.Xact` interface
+// Base - partially implements `core.Xact` interface
 //////////////
 
 func (xctn *Base) InitBase(id, kind string, bck *meta.Bck) {
@@ -182,36 +182,36 @@ func (xctn *Base) JoinErr() (int, error) { return xctn.err.JoinErr() }
 func (xctn *Base) ErrCnt() int           { return xctn.err.Cnt() }
 
 // count all the way to duration; reset and adjust every time activity is detected
-func (xctn *Base) Quiesce(d time.Duration, cb cluster.QuiCB) cluster.QuiRes {
+func (xctn *Base) Quiesce(d time.Duration, cb core.QuiCB) core.QuiRes {
 	var (
 		idle, total time.Duration
 		sleep       = cos.ProbingFrequency(d)
 		dur         = d
 	)
 	if xctn.IsAborted() {
-		return cluster.QuiAborted
+		return core.QuiAborted
 	}
 	for idle < dur {
 		time.Sleep(sleep)
 		if xctn.IsAborted() {
-			return cluster.QuiAborted
+			return core.QuiAborted
 		}
 		total += sleep
 		switch res := cb(total); res {
-		case cluster.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
+		case core.QuiInactiveCB: // NOTE: used by callbacks, converts to one of the returned codes
 			idle += sleep
-		case cluster.QuiActive:
+		case core.QuiActive:
 			idle = 0                  // reset
 			dur = min(dur+sleep, 2*d) // bump up to 2x initial
-		case cluster.QuiActiveRet:
-			return cluster.QuiActiveRet
-		case cluster.QuiDone:
-			return cluster.QuiDone
-		case cluster.QuiTimeout:
-			return cluster.QuiTimeout
+		case core.QuiActiveRet:
+			return core.QuiActiveRet
+		case core.QuiDone:
+			return core.QuiDone
+		case core.QuiTimeout:
+			return core.QuiTimeout
 		}
 	}
-	return cluster.Quiescent
+	return core.Quiescent
 }
 
 // see also: xact.ParseCname (api.go)
@@ -275,10 +275,10 @@ func (xctn *Base) onFinished(err error) {
 	IncFinished() // in re: HK cleanup long-time finished
 }
 
-func (xctn *Base) AddNotif(n cluster.Notif) {
+func (xctn *Base) AddNotif(n core.Notif) {
 	xctn.notif = n.(*NotifXact)
-	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)        // always fin-notif and points to self
-	debug.Assert(!n.Upon(cluster.UponProgress) || xctn.notif.P != nil) // progress notification is optional
+	debug.Assert(xctn.notif.Xact != nil && xctn.notif.F != nil)     // always fin-notif and points to self
+	debug.Assert(!n.Upon(core.UponProgress) || xctn.notif.P != nil) // progress notification is optional
 }
 
 // atomically set end-time
@@ -328,7 +328,7 @@ func (xctn *Base) ObjsAdd(cnt int, size int64) {
 }
 
 // oft. used
-func (xctn *Base) LomAdd(lom *cluster.LOM) { xctn.ObjsAdd(1, lom.SizeBytes(true)) }
+func (xctn *Base) LomAdd(lom *core.LOM) { xctn.ObjsAdd(1, lom.SizeBytes(true)) }
 
 // base stats: transmit
 func (xctn *Base) OutObjs() int64  { return xctn.stats.outobjs.Load() }
@@ -352,7 +352,7 @@ func (xctn *Base) InObjsAdd(cnt int, size int64) {
 }
 
 // provided for external use to fill-in xaction-specific `SnapExt` part
-func (xctn *Base) ToSnap(snap *cluster.Snap) {
+func (xctn *Base) ToSnap(snap *core.Snap) {
 	snap.ID = xctn.ID()
 	snap.Kind = xctn.Kind()
 	snap.StartTime = xctn.StartTime()
@@ -370,7 +370,7 @@ func (xctn *Base) ToSnap(snap *cluster.Snap) {
 	xctn.ToStats(&snap.Stats)
 }
 
-func (xctn *Base) ToStats(stats *cluster.Stats) {
+func (xctn *Base) ToStats(stats *core.Stats) {
 	stats.Objs = xctn.Objs()         // locally processed
 	stats.Bytes = xctn.Bytes()       //
 	stats.OutObjs = xctn.OutObjs()   // transmit

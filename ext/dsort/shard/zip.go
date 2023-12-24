@@ -9,10 +9,10 @@ import (
 	"archive/zip"
 	"io"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -56,13 +56,13 @@ func (*zipRW) SupportsOffset() bool { return false }
 func (*zipRW) MetadataSize() int64  { return 0 } // zip does not have header size
 
 // Extract reads the tarball f and extracts its metadata.
-func (zrw *zipRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+func (zrw *zipRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
 	ar, err := archive.NewReader(zrw.ext, r, lom.SizeBytes())
 	if err != nil {
 		return 0, 0, err
 	}
 	c := &rcbCtx{parent: zrw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
-	buf, slab := cluster.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xzip)
@@ -99,7 +99,7 @@ func (*zipRW) Create(s *Shard, w io.Writer, loader ContentLoader) (written int64
 
 func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
-	rd.metadataBuf, rd.slab = cluster.T.ByteMM().Alloc()
+	rd.metadataBuf, rd.slab = core.T.ByteMM().Alloc()
 	return rd
 }
 

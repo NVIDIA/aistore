@@ -13,11 +13,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -66,7 +66,7 @@ func (task *singleTask) init() {
 	task.downloadCtx, task.cancel = context.WithCancel(context.Background())
 }
 
-func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
+func (task *singleTask) download(lom *core.LOM, config *cmn.Config) {
 	err := lom.InitBck(task.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
@@ -103,7 +103,7 @@ func (task *singleTask) download(lom *cluster.LOM, config *cmn.Config) {
 	task.xdl.ObjsAdd(1, task.currentSize.Load())
 }
 
-func (task *singleTask) _dlocal(lom *cluster.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
+func (task *singleTask) _dlocal(lom *core.LOM, timeout time.Duration) (bool /*err is fatal*/, error) {
 	ctx, cancel := context.WithTimeout(task.downloadCtx, timeout)
 	defer cancel()
 
@@ -130,7 +130,7 @@ func (task *singleTask) _dlocal(lom *cluster.LOM, timeout time.Duration) (bool /
 	return fatal, err
 }
 
-func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Response) (bool /*err is fatal*/, error) {
+func (task *singleTask) _dput(lom *core.LOM, req *http.Request, resp *http.Response) (bool /*err is fatal*/, error) {
 	if resp.StatusCode >= http.StatusBadRequest {
 		if resp.StatusCode == http.StatusNotFound {
 			return false, cmn.NewErrHTTP(req, fmt.Errorf("%q does not exist", task.obj.link), http.StatusNotFound)
@@ -144,7 +144,7 @@ func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Re
 	size := attrsFromLink(task.obj.link, resp, lom)
 	task.setTotalSize(size)
 
-	params := cluster.AllocPutObjParams()
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = "dl"
 		params.Reader = r
@@ -152,8 +152,8 @@ func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Re
 		params.Atime = task.started.Load()
 		params.Xact = task.xdl
 	}
-	erp := cluster.T.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	erp := core.T.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	if erp != nil {
 		return true, erp
 	}
@@ -163,7 +163,7 @@ func (task *singleTask) _dput(lom *cluster.LOM, req *http.Request, resp *http.Re
 	return false, nil
 }
 
-func (task *singleTask) downloadLocal(lom *cluster.LOM) (err error) {
+func (task *singleTask) downloadLocal(lom *core.LOM) (err error) {
 	var (
 		timeout = task.initialTimeout()
 		fatal   bool
@@ -208,7 +208,7 @@ func (task *singleTask) reset() {
 	task.currentSize.Store(0)
 }
 
-func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
+func (task *singleTask) downloadRemote(lom *core.LOM) error {
 	// Set custom context values (used by `ais/backend/*`).
 	ctx, cancel := context.WithTimeout(task.downloadCtx, task.initialTimeout())
 	defer cancel()
@@ -218,7 +218,7 @@ func (task *singleTask) downloadRemote(lom *cluster.LOM) error {
 	task.getCtx = ctx
 
 	// Do final GET (prefetch) request.
-	_, err := cluster.T.GetCold(ctx, lom, cmn.OwtGetTryLock)
+	_, err := core.T.GetCold(ctx, lom, cmn.OwtGetTryLock)
 	return err
 }
 

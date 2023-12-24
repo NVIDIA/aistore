@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
 )
@@ -110,7 +110,7 @@ func getKindNameForID(xid string, otherKind ...string) (kind, xname string, rerr
 	return
 }
 
-func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
+func flattenXactStats(snap *core.Snap, units string) nvpairList {
 	props := make(nvpairList, 0, 16)
 	if snap == nil {
 		return props
@@ -184,7 +184,7 @@ func flattenXactStats(snap *cluster.Snap, units string) nvpairList {
 	return props
 }
 
-func getXactSnap(xargs *xact.ArgsMsg) (*cluster.Snap, error) {
+func getXactSnap(xargs *xact.ArgsMsg) (*core.Snap, error) {
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return nil, V(err)

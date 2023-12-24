@@ -11,26 +11,26 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 type (
 	httpProvider struct {
-		t      cluster.TargetPut
+		t      core.TargetPut
 		cliH   *http.Client
 		cliTLS *http.Client
 	}
 )
 
 // interface guard
-var _ cluster.BackendProvider = (*httpProvider)(nil)
+var _ core.BackendProvider = (*httpProvider)(nil)
 
-func NewHTTP(t cluster.TargetPut, config *cmn.Config) cluster.BackendProvider {
+func NewHTTP(t core.TargetPut, config *cmn.Config) core.BackendProvider {
 	hp := &httpProvider{t: t}
 	hp.cliH, hp.cliTLS = cmn.NewDefaultClients(config.Client.TimeoutLong.D())
 	return hp
@@ -110,7 +110,7 @@ func getOriginalURL(ctx context.Context, bck *meta.Bck, objName string) (string,
 	return origURL, nil
 }
 
-func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		h   = cmn.BackendHelpers.HTTP
 		bck = lom.Bck() // TODO: This should be `cloudBck = lom.Bck().RemoteBck()`
@@ -143,14 +143,14 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.
 	return
 }
 
-func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
 	res := hp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
 	params := allocPutObjParams(res, owt)
 	res.Err = hp.t.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	core.FreePutObjParams(params)
 	if res.Err != nil {
 		return 0, res.Err
 	}
@@ -160,7 +160,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 	return 0, nil
 }
 
-func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
+func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
 	var (
 		resp *http.Response
 		h    = cmn.BackendHelpers.HTTP
@@ -199,10 +199,10 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res
 	return
 }
 
-func (*httpProvider) PutObj(io.ReadCloser, *cluster.LOM) (int, error) {
+func (*httpProvider) PutObj(io.ReadCloser, *core.LOM) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("PUT", " objects => HTTP backend")
 }
 
-func (*httpProvider) DeleteObj(*cluster.LOM) (int, error) {
+func (*httpProvider) DeleteObj(*core.LOM) (int, error) {
 	return http.StatusBadRequest, cmn.NewErrUnsupp("DELETE", " objects from HTTP backend")
 }

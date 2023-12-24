@@ -16,12 +16,12 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/ais/s3"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -80,7 +80,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 	}
 
 	objName := s3.ObjName(items)
-	lom := &cluster.LOM{ObjName: objName}
+	lom := &core.LOM{ObjName: objName}
 	err = lom.InitBck(bck.Bucket())
 	if err != nil {
 		s3.WriteErr(w, r, err, 0)
@@ -149,7 +149,7 @@ func (t *target) putMptPart(w http.ResponseWriter, r *http.Request, items []stri
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html
 func (t *target) startMpt(w http.ResponseWriter, r *http.Request, items []string, bck *meta.Bck) {
 	objName := s3.ObjName(items)
-	lom := cluster.LOM{ObjName: objName}
+	lom := core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -189,7 +189,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 		return
 	}
 	objName := s3.ObjName(items)
-	lom := &cluster.LOM{ObjName: objName}
+	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -287,7 +287,7 @@ func (t *target) completeMpt(w http.ResponseWriter, r *http.Request, items []str
 func (t *target) listMptParts(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
 	uploadID := q.Get(s3.QparamMptUploadID)
 
-	lom := &cluster.LOM{ObjName: objName}
+	lom := &core.LOM{ObjName: objName}
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -359,8 +359,8 @@ func (*target) abortMptUpload(w http.ResponseWriter, r *http.Request, items []st
 // See:
 // https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
 func (t *target) getMptPart(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string, q url.Values) {
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

@@ -13,12 +13,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
@@ -95,9 +95,9 @@ func (reb *Reb) jogEC(mi *fs.Mountpath, bck *cmn.Bck, wg *sync.WaitGroup) {
 
 // Sends local CT along with EC metadata to default target.
 // The CT is on a local drive and not loaded into SGL. Just read and send.
-func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) (err error) {
+func (reb *Reb) sendFromDisk(ct *core.CT, meta *ec.Metadata, target *meta.Snode, workFQN ...string) (err error) {
 	var (
-		lom    *cluster.LOM
+		lom    *core.LOM
 		roc    cos.ReadOpenCloser
 		fqn    = ct.FQN()
 		action = uint32(rebActRebCT)
@@ -109,15 +109,15 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 	}
 	// TODO: unify acquiring a reader for LOM and CT
 	if ct.ContentType() == fs.ObjectType {
-		lom = cluster.AllocLOM(ct.ObjectName())
+		lom = core.AllocLOM(ct.ObjectName())
 		if err = lom.InitBck(ct.Bck().Bucket()); err != nil {
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			return
 		}
 		lom.Lock(false)
 		if err = lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 			lom.Unlock(false)
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			return
 		}
 	} else {
@@ -126,7 +126,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 
 	// open
 	if lom != nil {
-		defer cluster.FreeLOM(lom)
+		defer core.FreeLOM(lom)
 		roc, err = lom.NewDeferROC()
 	} else {
 		roc, err = cos.NewFileHandle(fqn)
@@ -136,7 +136,7 @@ func (reb *Reb) sendFromDisk(ct *cluster.CT, meta *ec.Metadata, target *meta.Sno
 	}
 
 	// transmit
-	ntfn := stageNtfn{daemonID: cluster.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
+	ntfn := stageNtfn{daemonID: core.T.SID(), stage: rebStageTraverse, rebID: reb.rebID.Load(), md: meta, action: action}
 	o := transport.AllocSend()
 	o.Hdr = transport.ObjHdr{ObjName: ct.ObjectName(), ObjAttrs: cmn.ObjAttrs{Size: meta.Size}}
 	o.Hdr.Bck.Copy(ct.Bck().Bucket())
@@ -172,7 +172,7 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 		err error
 		bck = meta.CloneBck(&hdr.Bck)
 	)
-	if err := bck.Init(cluster.T.Bowner()); err != nil {
+	if err := bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
 	md := ntfn.md.NewPack()
@@ -180,20 +180,20 @@ func (reb *Reb) saveCTToDisk(ntfn *stageNtfn, hdr *transport.ObjHdr, data io.Rea
 		args := &ec.WriteArgs{Reader: data, MD: md, Xact: reb.xctn()}
 		err = ec.WriteSliceAndMeta(hdr, args)
 	} else {
-		var lom *cluster.LOM
-		lom, err = cluster.AllocLomFromHdr(hdr)
+		var lom *core.LOM
+		lom, err = core.AllocLomFromHdr(hdr)
 		if err == nil {
 			args := &ec.WriteArgs{Reader: data, MD: md, Cksum: hdr.ObjAttrs.Cksum, Xact: reb.xctn()}
 			err = ec.WriteReplicaAndMeta(lom, args)
 		}
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 	}
 	return err
 }
 
 // Used when slice conflict is detected: a target receives a new slice and it already
 // has a slice of the same generation with different ID
-func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
+func (*Reb) renameAsWorkFile(ct *core.CT) (string, error) {
 	fqn := ct.Make(fs.WorkfileType)
 	// Using os.Rename is safe as both CT and Workfile on the same mountpath
 	if err := os.Rename(ct.FQN(), fqn); err != nil {
@@ -206,7 +206,7 @@ func (*Reb) renameAsWorkFile(ct *cluster.CT) (string, error) {
 // Used to resolve the conflict: this target is the "main" one (has a full
 // replica) but it also stores a slice of the object. So, the existing slice
 // goes to any other _free_ target.
-func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) (*meta.Snode, error) {
+func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*meta.Snode, error) {
 	var (
 		sliceCnt     = md.Data + md.Parity + 2
 		smap         = reb.smap.Load()
@@ -216,10 +216,10 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 		return nil, err
 	}
 	for _, tsi := range hrwList {
-		if tsi.ID() == sender || tsi.ID() == cluster.T.SID() {
+		if tsi.ID() == sender || tsi.ID() == core.T.SID() {
 			continue
 		}
-		remoteMD, err := ec.RequestECMeta(ct.Bucket(), ct.ObjectName(), tsi, cluster.T.DataClient())
+		remoteMD, err := ec.RequestECMeta(ct.Bucket(), ct.ObjectName(), tsi, core.T.DataClient())
 		if remoteMD != nil && remoteMD.Generation < md.Generation {
 			return tsi, nil
 		}
@@ -241,15 +241,15 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *cluster.CT, sender string) 
 }
 
 // Check if this target has a metadata for the received CT
-func detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, error) {
+func detectLocalCT(req *stageNtfn, ct *core.CT) (*ec.Metadata, error) {
 	if req.action == rebActMoveCT {
 		// internal CT move after slice conflict - save always
 		return nil, nil
 	}
-	if _, ok := req.md.Daemons[cluster.T.SID()]; !ok {
+	if _, ok := req.md.Daemons[core.T.SID()]; !ok {
 		return nil, nil
 	}
-	mdCT, err := cluster.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), cluster.T.Bowner(), fs.ECMetaType)
+	mdCT, err := core.NewCTFromBO(ct.Bck().Bucket(), ct.ObjectName(), core.T.Bowner(), fs.ECMetaType)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func detectLocalCT(req *stageNtfn, ct *cluster.CT) (*ec.Metadata, error) {
 // - move slice to a workfile directory
 // - return Snode that must receive the local slice, and workfile path
 // - the caller saves received CT to local drives, and then sends workfile
-func (reb *Reb) renameLocalCT(req *stageNtfn, ct *cluster.CT, md *ec.Metadata) (
+func (reb *Reb) renameLocalCT(req *stageNtfn, ct *core.CT, md *ec.Metadata) (
 	workFQN string, moveTo *meta.Snode, err error) {
 	if md == nil || req.action == rebActMoveCT {
 		return
@@ -295,7 +295,7 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 
-	ct, err := cluster.NewCTFromFQN(fqn, cluster.T.Bowner())
+	ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
 	if err != nil {
 		return nil
 	}
@@ -311,13 +311,13 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 	}
 
 	// Skip a CT if this target is not the 'main' one
-	if md.FullReplica != cluster.T.SID() {
+	if md.FullReplica != core.T.SID() {
 		return nil
 	}
 
 	smap := reb.smap.Load()
 	hrwTarget, err := smap.HrwHash2T(ct.Digest())
-	if err != nil || hrwTarget.ID() == cluster.T.SID() {
+	if err != nil || hrwTarget.ID() == core.T.SID() {
 		return err
 	}
 
@@ -330,11 +330,11 @@ func (reb *Reb) walkEC(fqn string, de fs.DirEntry) error {
 		fileFQN = ct.Make(fs.ECSliceType)
 	}
 	if err := cos.Stat(fileFQN); err != nil {
-		nlog.Warningf("%s no CT for metadata[%d]: %s", cluster.T, md.SliceID, fileFQN)
+		nlog.Warningf("%s no CT for metadata[%d]: %s", core.T, md.SliceID, fileFQN)
 		return nil
 	}
 
-	ct, err = cluster.NewCTFromFQN(fileFQN, cluster.T.Bowner())
+	ct, err = core.NewCTFromFQN(fileFQN, core.T.Bowner())
 	if err != nil {
 		return nil
 	}

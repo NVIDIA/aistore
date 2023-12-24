@@ -9,10 +9,10 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -29,7 +29,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*Election)(nil)
+	_ core.Xact      = (*Election)(nil)
 	_ xreg.Renewable = (*eleFactory)(nil)
 )
 
@@ -41,8 +41,8 @@ func (p *eleFactory) Start() error {
 	return nil
 }
 
-func (*eleFactory) Kind() string        { return apc.ActElection }
-func (p *eleFactory) Get() cluster.Xact { return p.xctn }
+func (*eleFactory) Kind() string     { return apc.ActElection }
+func (p *eleFactory) Get() core.Xact { return p.xctn }
 
 func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprUse, nil
@@ -50,8 +50,8 @@ func (*eleFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 
 func (*Election) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *Election) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *Election) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 	return
 }

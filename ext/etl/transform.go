@@ -12,13 +12,13 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl/runtime"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
@@ -108,7 +108,7 @@ var _ meta.Slistener = (*Aborter)(nil)
 func newAborter(name string) *Aborter {
 	return &Aborter{
 		name:        name,
-		currentSmap: cluster.T.Sowner().Get(),
+		currentSmap: core.T.Sowner().Get(),
 	}
 }
 
@@ -122,7 +122,7 @@ func (e *Aborter) ListenSmapChanged() {
 	go func() {
 		e.mtx.Lock()
 		defer e.mtx.Unlock()
-		newSmap := cluster.T.Sowner().Get()
+		newSmap := core.T.Sowner().Get()
 
 		if newSmap.Version <= e.currentSmap.Version {
 			return
@@ -130,7 +130,7 @@ func (e *Aborter) ListenSmapChanged() {
 
 		if !newSmap.CompareTargets(e.currentSmap) {
 			err := cmn.NewErrETL(&cmn.ETLErrCtx{
-				TID:     cluster.T.SID(),
+				TID:     core.T.SID(),
 				ETLName: e.name,
 			}, "targets have changed, aborting...")
 			nlog.Warningln(err)
@@ -249,7 +249,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (er
 	podName, svcName string, err error) {
 	debug.Assert(k8s.NodeName != "") // checked above
 
-	errCtx = &cmn.ETLErrCtx{TID: cluster.T.SID(), ETLName: msg.IDX}
+	errCtx = &cmn.ETLErrCtx{TID: core.T.SID(), ETLName: msg.IDX}
 	boot := &etlBootstrapper{errCtx: errCtx, config: config, env: opts.Env}
 	boot.msg = *msg
 
@@ -291,7 +291,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (er
 	if err = reg.add(msg.IDX, comm); err != nil {
 		return
 	}
-	cluster.T.Sowner().Listeners().Reg(comm)
+	core.T.Sowner().Listeners().Reg(comm)
 	return
 }
 
@@ -299,7 +299,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (er
 // It unregisters ETL smap listener.
 func Stop(id string, errCause error) error {
 	errCtx := &cmn.ETLErrCtx{
-		TID:     cluster.T.SID(),
+		TID:     core.T.SID(),
 		ETLName: id,
 	}
 
@@ -318,7 +318,7 @@ func Stop(id string, errCause error) error {
 	}
 
 	if c := reg.del(id); c != nil {
-		cluster.T.Sowner().Listeners().Unreg(c)
+		core.T.Sowner().Listeners().Unreg(c)
 	}
 
 	c.Stop()
@@ -341,7 +341,7 @@ func StopAll() {
 func GetCommunicator(etlName string) (Communicator, error) {
 	c, exists := reg.get(etlName)
 	if !exists {
-		return nil, cos.NewErrNotFound("%s: etl[%s]", cluster.T, etlName)
+		return nil, cos.NewErrNotFound("%s: etl[%s]", core.T, etlName)
 	}
 	return c, nil
 }
@@ -362,7 +362,7 @@ func PodLogs(transformID string) (logs Logs, err error) {
 		return logs, err
 	}
 	return Logs{
-		TargetID: cluster.T.SID(),
+		TargetID: core.T.SID(),
 		Logs:     b,
 	}, nil
 }
@@ -390,7 +390,7 @@ func PodMetrics(etlName string) (*CPUMemUsed, error) {
 	}
 	cpuUsed, memUsed, err := k8s.Metrics(c.PodName())
 	if err == nil {
-		return &CPUMemUsed{TargetID: cluster.T.SID(), CPU: cpuUsed, Mem: memUsed}, nil
+		return &CPUMemUsed{TargetID: core.T.SID(), CPU: cpuUsed, Mem: memUsed}, nil
 	}
 	if cos.IsErrNotFound(err) {
 		return nil, err

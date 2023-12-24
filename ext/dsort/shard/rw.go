@@ -8,14 +8,14 @@ package shard
 import (
 	"io"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 )
 
 type RW interface {
-	Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
+	Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error)
 	Create(s *Shard, w io.Writer, loader ContentLoader) (int64, error)
 	IsCompressed() bool
 	SupportsOffset() bool

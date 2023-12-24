@@ -17,11 +17,11 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -40,7 +40,7 @@ const (
 
 type (
 	gcpProvider struct {
-		t         cluster.TargetPut
+		t         core.TargetPut
 		projectID string
 	}
 )
@@ -56,10 +56,10 @@ var (
 	gctx context.Context
 
 	// interface guard
-	_ cluster.BackendProvider = (*gcpProvider)(nil)
+	_ core.BackendProvider = (*gcpProvider)(nil)
 )
 
-func NewGCP(t cluster.TargetPut) (bp cluster.BackendProvider, err error) {
+func NewGCP(t core.TargetPut) (bp core.BackendProvider, err error) {
 	var (
 		projectID     string
 		credProjectID = readCredFile()
@@ -254,7 +254,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT
 //
 
-func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		h        = cmn.BackendHelpers.Google
@@ -302,7 +302,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjA
 // GET OBJECT
 //
 
-func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
 	res := gcpp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
@@ -315,7 +315,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	return 0, err
 }
 
-func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
+func (*gcpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
 	var (
 		attrs    *storage.ObjectAttrs
 		rc       *storage.Reader
@@ -345,7 +345,7 @@ func (*gcpProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res clu
 	return
 }
 
-func setCustomGs(lom *cluster.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {
+func setCustomGs(lom *core.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Cksum) {
 	h := cmn.BackendHelpers.Google
 	if v, ok := h.EncodeVersion(attrs.Generation); ok {
 		lom.SetVersion(v)
@@ -372,7 +372,7 @@ func setCustomGs(lom *cluster.LOM, attrs *storage.ObjectAttrs) (expCksum *cos.Ck
 // PUT OBJECT
 //
 
-func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
+func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err error) {
 	var (
 		attrs    *storage.ObjectAttrs
 		written  int64
@@ -411,7 +411,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int,
 // DELETE OBJECT
 //
 
-func (*gcpProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
+func (*gcpProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		o        = gcpClient.Bucket(cloudBck.Name).Object(lom.ObjName)

@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/stats"
@@ -61,8 +61,8 @@ type (
 		// runtime
 		oldWork   []string
 		misplaced struct {
-			loms []*cluster.LOM
-			ec   []*cluster.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
+			loms []*core.LOM
+			ec   []*core.CT // EC slices and replicas without corresponding metafiles (CT FQN -> Meta FQN)
 		}
 		bck cmn.Bck
 		now int64
@@ -83,13 +83,13 @@ type (
 // interface guard
 var (
 	_ xreg.Renewable = (*clnFactory)(nil)
-	_ cluster.Xact   = (*XactCln)(nil)
+	_ core.Xact      = (*XactCln)(nil)
 )
 
 func (*XactCln) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *XactCln) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactCln) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()
@@ -110,8 +110,8 @@ func (p *clnFactory) Start() error {
 	return nil
 }
 
-func (*clnFactory) Kind() string        { return apc.ActStoreCleanup }
-func (p *clnFactory) Get() cluster.Xact { return p.xctn }
+func (*clnFactory) Kind() string     { return apc.ActStoreCleanup }
+func (p *clnFactory) Get() core.Xact { return p.xctn }
 
 func (*clnFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	return xreg.WprUse, cmn.NewErrXactUsePrev(prevEntry.Get().String())
@@ -146,8 +146,8 @@ func RunCleanup(ini *IniCln) fs.CapStatus {
 			ini:     &parent.ini,
 			p:       parent,
 		}
-		joggers[mpath].misplaced.loms = make([]*cluster.LOM, 0, 64)
-		joggers[mpath].misplaced.ec = make([]*cluster.CT, 0, 64)
+		joggers[mpath].misplaced.loms = make([]*core.LOM, 0, 64)
+		joggers[mpath].misplaced.ec = make([]*core.CT, 0, 64)
 	}
 	parent.jcnt.Store(int32(len(joggers)))
 	providers := apc.Providers.ToSlice()
@@ -286,7 +286,7 @@ func (j *clnJ) jog(providers []string) (size int64, rerr error) {
 }
 
 func (j *clnJ) jogBcks(bcks []cmn.Bck) (size int64, rerr error) {
-	bowner := cluster.T.Bowner()
+	bowner := core.T.Bowner()
 	for i := range bcks { // for each bucket under a given provider
 		var (
 			err error
@@ -369,7 +369,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		// EC slices:
 		// - EC enabled: remove only slices with missing metafiles
 		// - EC disabled: remove all slices
-		ct, err := cluster.NewCTFromFQN(fqn, cluster.T.Bowner())
+		ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
 		if err != nil || !ct.Bck().Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			return
@@ -390,7 +390,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 		// EC metafiles:
 		// - EC enabled: remove only without corresponding slice or replica
 		// - EC disabled: remove all metafiles
-		ct, err := cluster.NewCTFromFQN(fqn, cluster.T.Bowner())
+		ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
 		if err != nil || !ct.Bck().Props.EC.Enabled {
 			j.oldWork = append(j.oldWork, fqn)
 			return
@@ -413,7 +413,7 @@ func (j *clnJ) visitCT(parsedFQN *fs.ParsedFQN, fqn string) {
 
 // TODO: add stats error counters (stats.ErrLmetaCorruptedCount, ...)
 // TODO: revisit rm-ed byte counting
-func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
+func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	if err := lom.InitFQN(fqn, &j.bck); err != nil {
 		return
 	}
@@ -424,7 +424,7 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 			if !os.IsNotExist(err) {
 				err = os.NewSyscallError("stat", err)
 				j.ini.Xaction.AddErr(err)
-				cluster.T.FSHC(err, lom.FQN)
+				core.T.FSHC(err, lom.FQN)
 			}
 			return
 		}
@@ -468,14 +468,14 @@ func (j *clnJ) visitObj(fqn string, lom *cluster.LOM) {
 	if lom.Bprops().EC.Enabled {
 		metaFQN := fs.CSM.Gen(lom, fs.ECMetaType, "")
 		if cos.Stat(metaFQN) != nil {
-			j.misplaced.ec = append(j.misplaced.ec, cluster.NewCTFromLOM(lom, fs.ObjectType))
+			j.misplaced.ec = append(j.misplaced.ec, core.NewCTFromLOM(lom, fs.ObjectType))
 		}
 	} else {
 		j.misplaced.loms = append(j.misplaced.loms, lom)
 	}
 }
 
-func (j *clnJ) rmExtraCopies(lom *cluster.LOM) {
+func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	if !lom.TryLock(true) {
 		return // must be busy
 	}
@@ -509,16 +509,16 @@ func (j *clnJ) walk(fqn string, de fs.DirEntry) error {
 	if err := j.yieldTerm(); err != nil {
 		return err
 	}
-	parsedFQN, _, err := cluster.ResolveFQN(fqn)
+	parsedFQN, _, err := core.ResolveFQN(fqn)
 	if err != nil {
 		return nil
 	}
 	if parsedFQN.ContentType != fs.ObjectType {
 		j.visitCT(&parsedFQN, fqn)
 	} else {
-		lom := cluster.AllocLOM("")
+		lom := core.AllocLOM("")
 		j.visitObj(fqn, lom)
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 	}
 	return nil
 }
@@ -558,7 +558,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				fqn     = mlom.FQN
 				removed bool
 			)
-			lom := cluster.AllocLOM(mlom.ObjName) // yes placed
+			lom := core.AllocLOM(mlom.ObjName) // yes placed
 			if lom.InitBck(&j.bck) != nil {
 				removed = os.Remove(fqn) == nil
 			} else if lom.FromFS() != nil {
@@ -566,7 +566,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 			} else {
 				removed, _ = lom.DelExtraCopies(fqn)
 			}
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			if removed {
 				fevicted++
 				bevicted += mlom.SizeBytes(true /*not loaded*/)

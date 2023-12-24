@@ -23,8 +23,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -34,6 +32,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -73,7 +73,7 @@ type htrun struct {
 ///////////
 
 // interface guard
-var _ cluster.Node = (*htrun)(nil)
+var _ core.Node = (*htrun)(nil)
 
 func (*htrun) DataClient() *http.Client { return g.client.data } // TODO: a better way
 
@@ -662,10 +662,10 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *htrun) notifyTerm(n cluster.Notif, err error) { h._nfy(n, err, apc.Finished) }
-func (h *htrun) notifyProgress(n cluster.Notif)        { h._nfy(n, nil, apc.Progress) }
+func (h *htrun) notifyTerm(n core.Notif, err error) { h._nfy(n, err, apc.Finished) }
+func (h *htrun) notifyProgress(n core.Notif)        { h._nfy(n, nil, apc.Progress) }
 
-func (h *htrun) _nfy(n cluster.Notif, err error, upon string) {
+func (h *htrun) _nfy(n core.Notif, err error, upon string) {
 	var (
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()
@@ -730,19 +730,19 @@ func (h *htrun) bcastGroup(args *bcastArgs) sliceResults {
 	}
 
 	switch args.to {
-	case cluster.Targets:
+	case core.Targets:
 		args.nodes = []meta.NodeMap{args.smap.Tmap}
 		args.nodeCount = len(args.smap.Tmap)
 		if present && h.si.IsTarget() {
 			args.nodeCount--
 		}
-	case cluster.Proxies:
+	case core.Proxies:
 		args.nodes = []meta.NodeMap{args.smap.Pmap}
 		args.nodeCount = len(args.smap.Pmap)
 		if present && h.si.IsProxy() {
 			args.nodeCount--
 		}
-	case cluster.AllNodes:
+	case core.AllNodes:
 		args.nodes = []meta.NodeMap{args.smap.Pmap, args.smap.Tmap}
 		args.nodeCount = len(args.smap.Pmap) + len(args.smap.Tmap)
 		if present {
@@ -833,7 +833,7 @@ func (h *htrun) bcastAsyncIC(msg *aisMsg) {
 }
 
 func (h *htrun) bcastAllNodes(w http.ResponseWriter, r *http.Request, args *bcastArgs) {
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	results := h.bcastGroup(args)
 	for _, res := range results {
 		if res.err != nil {

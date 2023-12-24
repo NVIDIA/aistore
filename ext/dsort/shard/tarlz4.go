@@ -9,10 +9,10 @@ import (
 	"archive/tar"
 	"io"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/pierrec/lz4/v3"
@@ -32,7 +32,7 @@ func (*tlz4RW) SupportsOffset() bool { return true }
 func (*tlz4RW) MetadataSize() int64  { return archive.TarBlockSize } // size of tar header with padding
 
 // Extract  the tarball f and extracts its metadata.
-func (trw *tlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
+func (trw *tlz4RW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (int64, int, error) {
 	ar, err := archive.NewReader(trw.ext, r)
 	if err != nil {
 		return 0, 0, err
@@ -45,7 +45,7 @@ func (trw *tlz4RW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor Recor
 
 	c := &rcbCtx{parent: trw, extractor: extractor, shardName: lom.ObjName, toDisk: toDisk}
 	c.tw = tar.NewWriter(wfh)
-	buf, slab := cluster.T.PageMM().AllocSize(lom.SizeBytes())
+	buf, slab := core.T.PageMM().AllocSize(lom.SizeBytes())
 	c.buf = buf
 
 	_, err = ar.Range("", c.xtar)

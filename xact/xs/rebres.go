@@ -9,12 +9,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -41,10 +41,10 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*Rebalance)(nil)
+	_ core.Xact      = (*Rebalance)(nil)
 	_ xreg.Renewable = (*rebFactory)(nil)
 
-	_ cluster.Xact   = (*Resilver)(nil)
+	_ core.Xact      = (*Resilver)(nil)
 	_ xreg.Renewable = (*resFactory)(nil)
 )
 
@@ -61,8 +61,8 @@ func (p *rebFactory) Start() error {
 	return nil
 }
 
-func (*rebFactory) Kind() string        { return apc.ActRebalance }
-func (p *rebFactory) Get() cluster.Xact { return p.xctn }
+func (*rebFactory) Kind() string     { return apc.ActRebalance }
+func (p *rebFactory) Get() core.Xact { return p.xctn }
 
 func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	xreb := prevEntry.(*rebFactory)
@@ -93,8 +93,8 @@ func (xreb *Rebalance) RebID() int64 {
 	return id
 }
 
-func (xreb *Rebalance) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (xreb *Rebalance) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	xreb.ToSnap(snap)
 	snap.RebID = xreb.RebID()
 
@@ -121,7 +121,7 @@ func (p *resFactory) Start() error {
 }
 
 func (*resFactory) Kind() string                                       { return apc.ActResilver }
-func (p *resFactory) Get() cluster.Xact                                { return p.xctn }
+func (p *resFactory) Get() core.Xact                                   { return p.xctn }
 func (*resFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprAbort, nil }
 
 func NewResilver(id, kind string) (xres *Resilver) {
@@ -139,8 +139,8 @@ func (xres *Resilver) String() string {
 	return xres.Base.String()
 }
 
-func (xres *Resilver) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (xres *Resilver) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	xres.ToSnap(snap)
 
 	snap.IdleX = xres.IsIdle()

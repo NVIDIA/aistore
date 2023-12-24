@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 func TestSmoke(t *testing.T) {

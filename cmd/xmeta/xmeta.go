@@ -12,12 +12,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/volume"
@@ -257,12 +257,12 @@ func extractLOM() (err error) {
 	if flags.in == "" || flags.in == "." {
 		return errors.New("make sure to specify '-in=<fully qualified source filename>', run 'xmeta' for help and examples")
 	}
-	os.Setenv(cluster.DumpLomEnvVar, "1")
+	os.Setenv(core.DumpLomEnvVar, "1")
 	fs.TestNew(nil)
 
 	_ = mock.NewTarget(mock.NewBaseBownerMock()) // => cluster.Tinit
 
-	lom := &cluster.LOM{FQN: flags.in}
+	lom := &core.LOM{FQN: flags.in}
 	err = lom.LoadMetaFromFS()
 	if err != nil {
 		return

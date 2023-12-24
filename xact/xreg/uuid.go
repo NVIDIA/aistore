@@ -7,9 +7,9 @@ package xreg
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -21,7 +21,7 @@ var (
 // see related: cmn/cos/uuid.go
 
 // "best-effort ID" - to independently and locally generate globally unique xaction ID
-func GenBEID(div uint64, tag string) (beid string, xctn cluster.Xact, err error) {
+func GenBEID(div uint64, tag string) (beid string, xctn core.Xact, err error) {
 	// primary's "now"
 	now := uint64(time.Now().UnixNano() - MyTime.Load() + PrimeTime.Load())
 

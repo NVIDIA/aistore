@@ -6,9 +6,9 @@ package xreg
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -22,7 +22,7 @@ func RenewRebalance(id int64) RenewRes {
 	return dreg.renew(e, nil)
 }
 
-func RenewResilver(id string) cluster.Xact {
+func RenewResilver(id string) core.Xact {
 	e := dreg.nonbckXacts[apc.ActResilver].New(Args{UUID: id}, nil)
 	rns := dreg.renew(e, nil)
 	debug.Assert(!rns.IsRunning()) // NOTE: resilver is always preempted

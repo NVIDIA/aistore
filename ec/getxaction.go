@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -71,8 +71,8 @@ func (p *getFactory) Start() error {
 	go xec.Run(nil)
 	return nil
 }
-func (*getFactory) Kind() string        { return apc.ActECGet }
-func (p *getFactory) Get() cluster.Xact { return p.xctn }
+func (*getFactory) Kind() string     { return apc.ActECGet }
+func (p *getFactory) Get() core.Xact { return p.xctn }
 
 func (p *getFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -125,13 +125,13 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 		r.dOwner.mtx.Unlock()
 
 		if !ok {
-			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", cluster.T, bck.Cname(objName), uname)
+			err := fmt.Errorf("%s: no slice writer for %s (uname %s)", core.T, bck.Cname(objName), uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 			return
 		}
 		if err := _writerReceive(writer, iReq.exists, objAttrs, reader); err != nil {
-			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", cluster.T, bck.Cname(objName), err, uname)
+			err = fmt.Errorf("%s: failed to read %s replica: %w (uname %s)", core.T, bck.Cname(objName), err, uname)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}
@@ -161,7 +161,7 @@ func (r *XactGet) newGetJogger(mpath string) *getJogger {
 	return j
 }
 
-func (r *XactGet) dispatchRequest(req *request, lom *cluster.LOM) error {
+func (r *XactGet) dispatchRequest(req *request, lom *core.LOM) error {
 	if !r.ecRequestsEnabled() {
 		if req.ErrCh != nil {
 			req.ErrCh <- ErrorECDisabled
@@ -245,7 +245,7 @@ func (r *XactGet) stop() {
 // channel the error or nil. The caller may read the object after receiving
 // a nil value from channel but ecrunner keeps working - it reuploads all missing
 // slices or copies
-func (r *XactGet) decode(req *request, lom *cluster.LOM) {
+func (r *XactGet) decode(req *request, lom *core.LOM) {
 	debug.Assert(req.Action == ActRestore, "invalid action for restore: "+req.Action)
 	r.stats.updateDecode()
 	req.putTime = time.Now()
@@ -300,7 +300,7 @@ func (r *XactGet) removeMpath(mpath string) {
 	delete(r.getJoggers, mpath)
 }
 
-func (r *XactGet) Snap() (snap *cluster.Snap) {
+func (r *XactGet) Snap() (snap *core.Snap) {
 	snap = r.baseSnap()
 	st := r.stats.stats()
 	snap.Ext = &ExtECGetStats{

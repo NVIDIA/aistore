@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -53,7 +53,7 @@ const etlBucketParallelCnt = 2
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactTCB)(nil)
+	_ core.Xact      = (*XactTCB)(nil)
 	_ xreg.Renewable = (*tcbFactory)(nil)
 )
 
@@ -69,7 +69,7 @@ func (p *tcbFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 func (p *tcbFactory) Start() error {
 	var (
 		config    = cmn.GCO.Get()
-		slab, err = cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	)
 	debug.AssertNoErr(err)
 	p.xctn = newTCB(p, slab, config)
@@ -80,8 +80,8 @@ func (p *tcbFactory) Start() error {
 		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
-	smap := cluster.T.Sowner().Get()
-	if err := cluster.InMaintOrDecomm(smap, cluster.T.Snode(), p.xctn); err != nil {
+	smap := core.T.Sowner().Get()
+	if err := core.InMaintOrDecomm(smap, core.T.Snode(), p.xctn); err != nil {
 		return err
 	}
 	nat := smap.CountActiveTs()
@@ -119,8 +119,8 @@ func (p *tcbFactory) newDM(config *cmn.Config, uuid string, sizePDU int32) error
 	return nil
 }
 
-func (p *tcbFactory) Kind() string      { return p.kind }
-func (p *tcbFactory) Get() cluster.Xact { return p.xctn }
+func (p *tcbFactory) Kind() string   { return p.kind }
+func (p *tcbFactory) Get() core.Xact { return p.xctn }
 
 func (p *tcbFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	prev := prevEntry.(*tcbFactory)
@@ -194,7 +194,7 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 		r.dm.Bcast(o, nil)
 
 		q := r.Quiesce(cmn.Rom.CplaneOperation(), r.qcb)
-		if q == cluster.QuiTimeout {
+		if q == core.QuiTimeout {
 			r.AddErr(fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout))
 		}
 
@@ -205,11 +205,11 @@ func (r *XactTCB) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
+func (r *XactTCB) qcb(tot time.Duration) core.QuiRes {
 	// TODO -- FIXME =======================
 	if cnt := r.ErrCnt(); cnt > 0 {
 		// to break quiescence - the waiter will look at r.Err() first anyway
-		return cluster.QuiTimeout
+		return core.QuiTimeout
 	}
 
 	since := mono.Since(r.rxlast.Load())
@@ -217,18 +217,18 @@ func (r *XactTCB) qcb(tot time.Duration) cluster.QuiRes {
 		if since > cmn.Rom.MaxKeepalive() {
 			// idle on the Rx side despite having some (refc > 0) senders
 			if tot > r.BckJog.Config.Timeout.SendFile.D() {
-				return cluster.QuiTimeout
+				return core.QuiTimeout
 			}
 		}
-		return cluster.QuiActive
+		return core.QuiActive
 	}
 	if since > cmn.Rom.CplaneOperation() {
-		return cluster.QuiDone
+		return core.QuiDone
 	}
-	return cluster.QuiInactiveCB
+	return core.QuiInactiveCB
 }
 
-func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
+func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 	var (
 		args   = r.p.args // TCBArgs
 		toName = args.Msg.ToName(lom.ObjName)
@@ -236,7 +236,7 @@ func (r *XactTCB) copyObject(lom *cluster.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	_, err = cluster.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
+	_, err = core.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			r.Abort(err)
@@ -264,21 +264,21 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	}
 
 	debug.Assert(hdr.Opcode == 0)
-	lom := cluster.AllocLOM(hdr.ObjName)
+	lom := core.AllocLOM(hdr.ObjName)
 	err = r._recv(hdr, objReader, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	transport.DrainAndFreeReader(objReader)
 	return err
 }
 
-func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) error {
+func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) error {
 	if err := lom.InitBck(&hdr.Bck); err != nil {
 		r.AddErr(err)
 		nlog.Errorln(err)
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := cluster.AllocPutObjParams()
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
@@ -297,8 +297,8 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster
 	}
 	params.Atime = lom.Atime()
 
-	erp := cluster.T.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	erp := core.T.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	if erp != nil {
 		r.AddErr(erp)
 		nlog.Errorln(erp)
@@ -341,8 +341,8 @@ func (r *XactTCB) FromTo() (*meta.Bck, *meta.Bck) {
 	return r.p.args.BckFrom, r.p.args.BckTo
 }
 
-func (r *XactTCB) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactTCB) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

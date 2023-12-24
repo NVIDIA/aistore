@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -29,7 +29,7 @@ import (
 
 type (
 	encodeCtx struct {
-		lom          *cluster.LOM     // replica
+		lom          *core.LOM        // replica
 		meta         *Metadata        //
 		fh           *cos.FileHandle  // file handle for the replica
 		sliceSize    int64            // calculated slice size
@@ -79,7 +79,7 @@ func (ctx *encodeCtx) freeReplica() {
 // putJogger //
 ///////////////
 
-func (*putJogger) newCtx(lom *cluster.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
+func (*putJogger) newCtx(lom *core.LOM, meta *Metadata) (ctx *encodeCtx, err error) {
 	ctx = allocCtx()
 	ctx.lom = lom
 	ctx.dataSlices = lom.Bprops().EC.DataSlices
@@ -117,7 +117,7 @@ func (c *putJogger) processRequest(req *request) {
 		if req.Callback != nil {
 			req.Callback(lom, err)
 		}
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		c.parent.DecPending()
 	}()
 
@@ -133,7 +133,7 @@ func (c *putJogger) processRequest(req *request) {
 	c.parent.stats.updateWaitTime(time.Since(req.tm))
 	req.tm = time.Now()
 	if err = c.ec(req, lom); err != nil {
-		err = fmt.Errorf("%s: failed to %s %s: %w", cluster.T, req.Action, lom.StringEx(), err)
+		err = fmt.Errorf("%s: failed to %s %s: %w", core.T, req.Action, lom.StringEx(), err)
 		nlog.Errorln(err)
 		c.parent.AddErr(err)
 	}
@@ -163,11 +163,11 @@ func (c *putJogger) stop() {
 	c.stopCh.Close()
 }
 
-func (c *putJogger) ec(req *request, lom *cluster.LOM) (err error) {
+func (c *putJogger) ec(req *request, lom *core.LOM) (err error) {
 	switch req.Action {
 	case ActSplit:
 		if err = c.encode(req, lom); err != nil {
-			ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
+			ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 			errRm := cos.RemoveFile(ctMeta.FQN())
 			debug.AssertNoErr(errRm)
 		}
@@ -210,14 +210,14 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 }
 
 // calculates and stores data and parity slices
-func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
+func (c *putJogger) encode(req *request, lom *core.LOM) error {
 	if c.parent.config.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Encoding %q...", lom)
 	}
 	var (
 		ecConf     = lom.Bprops().EC
 		reqTargets = ecConf.ParitySlices + 1
-		smap       = cluster.T.Sowner().Get()
+		smap       = core.T.Sowner().Get()
 	)
 	if !req.IsCopy {
 		reqTargets += ecConf.DataSlices
@@ -229,7 +229,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	}
 
 	var (
-		ctMeta                = cluster.NewCTFromLOM(lom, fs.ECMetaType)
+		ctMeta                = core.NewCTFromLOM(lom, fs.ECMetaType)
 		generation            = mono.NanoTime()
 		cksumType, cksumValue = lom.Checksum().Get()
 	)
@@ -242,7 +242,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		IsCopy:      req.IsCopy,
 		ObjCksum:    cksumValue,
 		CksumType:   cksumType,
-		FullReplica: cluster.T.SID(),
+		FullReplica: core.T.SID(),
 		Daemons:     make(cos.MapStrUint16, reqTargets),
 	}
 
@@ -279,7 +279,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 	if err := ctMeta.Write(metaBuf, -1); err != nil {
 		return err
 	}
-	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		if errRm := cos.RemoveFile(ctMeta.FQN()); errRm != nil {
 			nlog.Errorf("nested error: encode -> remove metafile: %v", errRm)
 		}
@@ -298,8 +298,8 @@ func (c *putJogger) ctSendCallback(hdr *transport.ObjHdr, _ io.ReadCloser, _ any
 
 // Remove slices and replicas across the cluster: remove local metafile
 // if exists and broadcast the request to other targets
-func (c *putJogger) cleanup(lom *cluster.LOM) error {
-	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
+func (c *putJogger) cleanup(lom *core.LOM) error {
+	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 	md, err := LoadMetadata(ctMeta.FQN())
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -5,8 +5,8 @@
 package ec
 
 import (
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 )
 

@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 )
 
 const (
@@ -71,7 +71,7 @@ type (
 	}
 
 	// primarily: `api.QueryXactionSnaps`
-	MultiSnap map[string][]*cluster.Snap // by target ID (tid)
+	MultiSnap map[string][]*core.Snap // by target ID (tid)
 )
 
 type (
@@ -448,7 +448,7 @@ func (xs MultiSnap) GetUUIDs() []string {
 	return uuids.ToSlice()
 }
 
-func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *cluster.Snap, error) {
+func (xs MultiSnap) RunningTarget(xid string) (string /*tid*/, *core.Snap, error) {
 	if err := xs.checkEmptyID(xid); err != nil {
 		return "", nil, err
 	}

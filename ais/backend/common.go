@@ -8,9 +8,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -35,8 +35,8 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 //nolint:deadcode,unused // It is used but in `*_mock.go` files.
 func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }
 
-func allocPutObjParams(res cluster.GetReaderResult, owt cmn.OWT) *cluster.PutObjectParams {
-	params := cluster.AllocPutObjParams()
+func allocPutObjParams(res core.GetReaderResult, owt cmn.OWT) *core.PutObjectParams {
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
 		params.Reader = res.R

@@ -11,13 +11,13 @@ import (
 	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -46,7 +46,7 @@ func initManager() (err error) {
 	ECM = &Manager{
 		netReq:  cmn.NetIntraControl,
 		netResp: cmn.NetIntraData,
-		bmd:     cluster.T.Bowner().Get(),
+		bmd:     core.T.Bowner().Get(),
 	}
 	if ECM.bmd.IsECUsed() {
 		err = ECM.initECBundles()
@@ -129,7 +129,7 @@ func (*Manager) RestoreBckRespXact(bck *meta.Bck) *XactRespond {
 	return xctn.(*XactRespond)
 }
 
-func _renewXact(bck *meta.Bck, kind string) (cluster.Xact, error) {
+func _renewXact(bck *meta.Bck, kind string) (core.Xact, error) {
 	rns := xreg.RenewBucketXact(kind, bck, xreg.Args{})
 	if rns.Err != nil {
 		return nil, rns.Err
@@ -167,7 +167,7 @@ func (mgr *Manager) recvRequest(hdr *transport.ObjHdr, objReader io.Reader, err 
 		}
 	}
 	bck := meta.CloneBck(&hdr.Bck)
-	if err = bck.Init(cluster.T.Bowner()); err != nil {
+	if err = bck.Init(core.T.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			nlog.Errorf("failed to init bucket %s: %v", bck, err)
 			return err
@@ -198,7 +198,7 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 		return err
 	}
 	bck := meta.CloneBck(&hdr.Bck)
-	if err = bck.Init(cluster.T.Bowner()); err != nil {
+	if err = bck.Init(core.T.Bowner()); err != nil {
 		if _, ok := err.(*cmn.ErrRemoteBckNotFound); !ok { // is ais
 			nlog.Errorln(err)
 			return err
@@ -221,7 +221,7 @@ func (mgr *Manager) recvResponse(hdr *transport.ObjHdr, objReader io.Reader, err
 //   - lom - object to encode
 //   - intra - if true, it is internal request and has low priority
 //   - cb - optional callback that is called after the object is encoded
-func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb cluster.OnFinishObj) error {
+func (mgr *Manager) EncodeObject(lom *core.LOM, cb core.OnFinishObj) error {
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
@@ -246,7 +246,7 @@ func (mgr *Manager) EncodeObject(lom *cluster.LOM, cb cluster.OnFinishObj) error
 	return nil
 }
 
-func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
+func (mgr *Manager) CleanupObject(lom *core.LOM) {
 	if !lom.Bprops().EC.Enabled {
 		return
 	}
@@ -255,7 +255,7 @@ func (mgr *Manager) CleanupObject(lom *cluster.LOM) {
 	mgr.RestoreBckPutXact(lom.Bck()).cleanup(req, lom)
 }
 
-func (mgr *Manager) RestoreObject(lom *cluster.LOM) error {
+func (mgr *Manager) RestoreObject(lom *core.LOM) error {
 	if !lom.Bprops().EC.Enabled {
 		return ErrorECDisabled
 	}
@@ -289,7 +289,7 @@ func (mgr *Manager) enableBck(bck *meta.Bck) {
 }
 
 func (mgr *Manager) BMDChanged() error {
-	newBMD := cluster.T.Bowner().Get()
+	newBMD := core.T.Bowner().Get()
 	oldBMD := mgr.bmd
 	if newBMD.Version <= mgr.bmd.Version {
 		return nil

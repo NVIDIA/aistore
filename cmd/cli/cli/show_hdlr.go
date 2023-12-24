@@ -17,12 +17,12 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/urfave/cli"
@@ -31,7 +31,7 @@ import (
 type (
 	daemonTemplateXactSnaps struct {
 		DaemonID  string
-		XactSnaps []*cluster.Snap
+		XactSnaps []*core.Snap
 	}
 
 	targetMpath struct {
@@ -444,7 +444,7 @@ func xlistByKindID(c *cli.Context, xargs *xact.ArgsMsg, caption bool, xs xact.Mu
 			}
 			debug.Assert(snap.Kind == xargs.Kind)
 			if _, ok := filteredXs[tid]; !ok {
-				filteredXs[tid] = make([]*cluster.Snap, 0, 8)
+				filteredXs[tid] = make([]*core.Snap, 0, 8)
 			}
 			filteredXs[tid] = append(filteredXs[tid], snap)
 		}

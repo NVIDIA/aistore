@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -253,7 +253,7 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 			if result.Action == DiffResolverDelete {
 				requiresSync := job.Sync()
 				debug.Assert(requiresSync)
-				if _, err := cluster.T.EvictObject(result.Src); err != nil {
+				if _, err := core.T.EvictObject(result.Src); err != nil {
 					task.markFailed(err.Error())
 				} else {
 					g.store.incFinished(job.ID())
@@ -315,7 +315,7 @@ func (d *dispatcher) checkAborted() bool {
 // returns false if dispatcher encountered hard error, true otherwise
 func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 	bck := meta.CloneBck(task.job.Bck())
-	if err := bck.Init(cluster.T.Bowner()); err != nil {
+	if err := bck.Init(core.T.Bowner()); err != nil {
 		return true, err
 	}
 

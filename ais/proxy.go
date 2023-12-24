@@ -22,8 +22,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -33,6 +31,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
@@ -67,8 +67,8 @@ type (
 			mu   sync.RWMutex
 		}
 		remais struct {
-			cluster.Remotes
-			old []*cluster.RemAis // to facilitate a2u resolution (and, therefore, offline access)
+			core.Remotes
+			old []*core.RemAis // to facilitate a2u resolution (and, therefore, offline access)
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
@@ -176,7 +176,7 @@ func (p *proxy) Run() error {
 	p.owner.bmd.init() // initialize owner and load BMD
 	p.owner.etl.init() // initialize owner and load EtlMD
 
-	cluster.Pinit()
+	core.Pinit()
 
 	p.statsT.RegMetrics(p.si) // reg target metrics to common; init Prometheus if used
 
@@ -1607,7 +1607,7 @@ func (p *proxy) _lstop(amsg *apc.ActMsg, lst *cmn.LsoResult) {
 	body := cos.MustMarshal(apc.ActMsg{Action: apc.ActXactStop, Value: xact.ArgsMsg{ID: lst.UUID, Kind: amsg.Action}})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	args.to = cluster.Targets
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	ok := true
@@ -1717,7 +1717,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 			}
 			return
 		}
-		args := &cluster.PromoteArgs{}
+		args := &core.PromoteArgs{}
 		if err := cos.MorphMarshal(msg.Value, args); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return

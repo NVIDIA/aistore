@@ -9,10 +9,10 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -31,7 +31,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*xactLLC)(nil)
+	_ core.Xact      = (*xactLLC)(nil)
 	_ xreg.Renewable = (*llcFactory)(nil)
 )
 
@@ -52,8 +52,8 @@ func (p *llcFactory) Start() error {
 	return nil
 }
 
-func (*llcFactory) Kind() string        { return apc.ActLoadLomCache }
-func (p *llcFactory) Get() cluster.Xact { return p.xctn }
+func (*llcFactory) Kind() string     { return apc.ActLoadLomCache }
+func (p *llcFactory) Get() core.Xact { return p.xctn }
 
 func (*llcFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) { return xreg.WprUse, nil }
 
@@ -65,7 +65,7 @@ func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 	r = &xactLLC{}
 	mpopts := &mpather.JgroupOpts{
 		CTs:      []string{fs.ObjectType},
-		VisitObj: func(*cluster.LOM, []byte) error { return nil },
+		VisitObj: func(*core.LOM, []byte) error { return nil },
 		DoLoad:   mpather.Load,
 	}
 	mpopts.Bck.Copy(bck.Bucket())
@@ -81,8 +81,8 @@ func (r *xactLLC) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *xactLLC) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *xactLLC) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

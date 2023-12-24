@@ -8,13 +8,13 @@ import (
 	"io"
 	"os"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -23,7 +23,7 @@ import (
 
 const ftcg = "failed to cold-GET"
 
-func (goi *getOI) coldSeek(res *cluster.GetReaderResult) error {
+func (goi *getOI) coldSeek(res *core.GetReaderResult) error {
 	var (
 		t, lom = goi.t, goi.lom
 		fqn    = lom.FQN

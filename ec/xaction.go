@@ -10,13 +10,13 @@ import (
 	"os"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -127,8 +127,8 @@ func newSliceResponse(md *Metadata, attrs *cmn.ObjAttrs, fqn string) (reader cos
 
 // replica/full object request
 func newReplicaResponse(attrs *cmn.ObjAttrs, bck *meta.Bck, objName string) (reader cos.ReadOpenCloser, err error) {
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err = lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader
 	var (
 		err   error
 		nodes = meta.AllocNodes(len(daemonIDs))
-		smap  = cluster.T.Sowner().Get()
+		smap  = core.T.Sowner().Get()
 	)
 	for _, id := range daemonIDs {
 		si, ok := smap.Tmap[id]
@@ -237,7 +237,7 @@ func (r *xactECBase) sendByDaemonID(daemonIDs []string, o *transport.Obj, reader
 //     name, it puts the data to its writer and notifies when download is done
 //   - request - request to send
 //   - writer - an opened writer that will receive the replica/slice/meta
-func (r *xactECBase) readRemote(lom *cluster.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
+func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request []byte, writer io.Writer) (int64, error) {
 	hdr := transport.ObjHdr{ObjName: lom.ObjName, Opaque: request, Opcode: reqGet}
 	hdr.Bck.Copy(lom.Bucket())
 
@@ -315,7 +315,7 @@ func (r *xactECBase) unregWriter(uname string) {
 //     The counter is used for sending slices of one big SGL to a few nodes. In
 //     this case every slice must be sent to only one target, and transport bundle
 //     cannot help to track automatically when SGL should be freed.
-func (r *xactECBase) writeRemote(daemonIDs []string, lom *cluster.LOM, src *dataSource, cb transport.ObjSentCB) error {
+func (r *xactECBase) writeRemote(daemonIDs []string, lom *core.LOM, src *dataSource, cb transport.ObjSentCB) error {
 	if src.metadata != nil && src.metadata.ObjVersion == "" {
 		src.metadata.ObjVersion = lom.Version()
 	}
@@ -387,8 +387,8 @@ func _writerReceive(writer *slice, exists bool, objAttrs cmn.ObjAttrs, reader io
 
 func (r *xactECBase) ECStats() *Stats { return r.stats.stats() }
 
-func (r *xactECBase) baseSnap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *xactECBase) baseSnap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

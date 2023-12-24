@@ -8,8 +8,8 @@ package shard
 import (
 	"io"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // interface guard
@@ -26,7 +26,7 @@ func (n *nopRW) SupportsOffset() bool { return n.internal.SupportsOffset() }
 func (n *nopRW) MetadataSize() int64  { return n.internal.MetadataSize() }
 
 // Extract reads the tarball f and extracts its metadata.
-func (n *nopRW) Extract(lom *cluster.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64,
+func (n *nopRW) Extract(lom *core.LOM, r cos.ReadReaderAt, extractor RecordExtractor, toDisk bool) (extractedSize int64,
 	extractedCount int, err error) {
 	return n.internal.Extract(lom, r, extractor, toDisk)
 }

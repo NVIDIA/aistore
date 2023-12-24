@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/tools"
@@ -33,7 +33,7 @@ func TestWorkerGroup(t *testing.T) {
 	defer os.RemoveAll(out.Dir)
 
 	wg := mpather.NewWorkerGroup(&mpather.WorkerGroupOpts{
-		Callback: func(lom *cluster.LOM, buf []byte) {
+		Callback: func(lom *core.LOM, buf []byte) {
 			counter.Inc()
 		},
 		QueueSize: 10,
@@ -43,7 +43,7 @@ func TestWorkerGroup(t *testing.T) {
 	wg.Run()
 
 	for _, fqn := range out.FQNs[fs.ObjectType] {
-		lom := &cluster.LOM{}
+		lom := &core.LOM{}
 		err := lom.InitFQN(fqn, &out.Bck)
 		tassert.CheckError(t, err)
 

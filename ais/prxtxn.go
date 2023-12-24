@@ -15,12 +15,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -141,7 +141,7 @@ func (c *txnCln) bcast(phase string, timeout time.Duration) (results sliceResult
 	args.req = c.req
 	args.smap = c.smap
 	args.timeout = timeout
-	args.to = cluster.Targets // the (0) default
+	args.to = core.Targets // the (0) default
 	if args.selected = c.selected; args.selected == nil {
 		results = c.p.bcastGroup(args)
 	} else {
@@ -894,7 +894,7 @@ func (p *proxy) destroyBucketData(msg *apc.ActMsg, bck *meta.Bck) error {
 		Body:   cos.MustMarshal(msg),
 		Query:  query,
 	}
-	args.to = cluster.Targets
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {

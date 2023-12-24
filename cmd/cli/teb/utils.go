@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
@@ -249,10 +249,10 @@ func dsortJobInfoStatus(j *dsort.JobInfo) string {
 }
 
 //
-// cluster.Snap helpers
+// core.Snap helpers
 //
 
-func fmtRebStatus(snap *cluster.Snap) string {
+func fmtRebStatus(snap *core.Snap) string {
 	if snap == nil {
 		return unknownVal
 	}
@@ -277,7 +277,7 @@ func fmtRebStatus(snap *cluster.Snap) string {
 	return unknownVal
 }
 
-func FmtXactStatus(snap *cluster.Snap) (s string) {
+func FmtXactStatus(snap *core.Snap) (s string) {
 	switch {
 	case snap.AbortedX:
 		if snap.AbortErr == cmn.ErrXactUserAbort.Error() {
@@ -300,7 +300,7 @@ func FmtXactStatus(snap *cluster.Snap) (s string) {
 	return
 }
 
-func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {
+func extECGetStats(base *core.Snap) *ec.ExtECGetStats {
 	ecGet := &ec.ExtECGetStats{}
 	if err := cos.MorphMarshal(base.Ext, ecGet); err != nil {
 		return &ec.ExtECGetStats{}
@@ -308,7 +308,7 @@ func extECGetStats(base *cluster.Snap) *ec.ExtECGetStats {
 	return ecGet
 }
 
-func extECPutStats(base *cluster.Snap) *ec.ExtECPutStats {
+func extECPutStats(base *core.Snap) *ec.ExtECPutStats {
 	ecPut := &ec.ExtECPutStats{}
 	if err := cos.MorphMarshal(base.Ext, ecPut); err != nil {
 		return &ec.ExtECPutStats{}

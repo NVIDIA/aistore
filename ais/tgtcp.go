@@ -17,13 +17,13 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
@@ -294,7 +294,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatMountpaths:
 		t.writeJSON(w, r, fs.MountpathsToLists(), httpdaeWhat)
 	case apc.WhatNodeStatsAndStatus:
-		var rebSnap *cluster.Snap
+		var rebSnap *core.Snap
 		if entry := xreg.GetLatest(xreg.Flt{Kind: apc.ActRebalance}); entry != nil {
 			if xctn := entry.Get(); xctn != nil {
 				rebSnap = xctn.Snap()
@@ -336,7 +336,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		anyConf := cmn.GCO.Get().Backend.Get(apc.AIS)
 		if anyConf == nil {
-			t.writeJSON(w, r, cluster.Remotes{}, httpdaeWhat)
+			t.writeJSON(w, r, core.Remotes{}, httpdaeWhat)
 			return
 		}
 		aisConf, ok := anyConf.(cmn.BackendConfAIS)
@@ -688,7 +688,7 @@ func (t *target) _postBMD(newBMD *bucketMD, tag string, rmbcks []*meta.Bck) {
 		xreg.AbortAllBuckets(errV, rmbcks...)
 		go func(bcks ...*meta.Bck) {
 			for _, b := range bcks {
-				cluster.UncacheBck(b)
+				core.UncacheBck(b)
 			}
 		}(rmbcks...)
 	}
@@ -732,7 +732,7 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *aisMsg) (err error) {
 		// run rebalance
 		//
 		notif := &xact.NotifXact{
-			Base: nl.Base{When: cluster.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+			Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 		}
 		if msg.Action == apc.ActRebalance {
 			nlog.Infof("%s: starting user-requested rebalance[%s]", t, msg.UUID)
@@ -1126,7 +1126,7 @@ func (t *target) enable() error {
 
 // checks with a given target to see if it has the object.
 // target acts as a client - compare with api.HeadObject
-func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
+func (t *target) headt2t(lom *core.LOM, tsi *meta.Snode, smap *smapX) (ok bool) {
 	q := lom.Bck().NewQuery()
 	q.Set(apc.QparamSilent, "true")
 	q.Set(apc.QparamFltPresence, strconv.Itoa(apc.FltPresent))
@@ -1154,7 +1154,7 @@ func (t *target) headt2t(lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (ok boo
 
 // headObjBcast broadcasts to all targets to find out if anyone has the specified object.
 // NOTE: 1) apc.QparamCheckExistsAny to make an extra effort, 2) `ignoreMaintenance`
-func (t *target) headObjBcast(lom *cluster.LOM, smap *smapX) *meta.Snode {
+func (t *target) headObjBcast(lom *core.LOM, smap *smapX) *meta.Snode {
 	q := lom.Bck().NewQuery()
 	q.Set(apc.QparamSilent, "true")
 	// lookup across all mountpaths and copy (ie., restore) if misplaced

@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -38,7 +38,7 @@ type (
 		uuid() string
 		started(phase string, tm ...time.Time) time.Time
 		isDone() (done bool, err error)
-		set(nlps []cluster.NLP)
+		set(nlps []core.NLP)
 		// triggers
 		commitAfter(caller string, msg *aisMsg, err error, args ...any) (bool, error)
 		rsvp(err error)
@@ -71,7 +71,7 @@ type (
 			begin  time.Time
 			commit time.Time
 		}
-		xctn       cluster.Xact
+		xctn       core.Xact
 		err        ratomic.Pointer[txnError]
 		action     string
 		callerName string
@@ -83,7 +83,7 @@ type (
 	}
 	txnBckBase struct {
 		bck  meta.Bck
-		nlps []cluster.NLP
+		nlps []core.NLP
 		txnBase
 	}
 
@@ -126,7 +126,7 @@ type (
 		txnBckBase
 	}
 	txnPromote struct {
-		msg    *cluster.PromoteArgs
+		msg    *core.PromoteArgs
 		xprm   *xs.XactDirPromote
 		dirFQN string
 		fqns   []string
@@ -160,7 +160,7 @@ func (txns *transactions) init(t *target) {
 	hk.Reg("txn"+hk.NameSuffix, txns.housekeep, gcTxnsInterval)
 }
 
-func (txns *transactions) begin(txn txn, nlps ...cluster.NLP) (err error) {
+func (txns *transactions) begin(txn txn, nlps ...core.NLP) (err error) {
 	txns.mtx.Lock()
 	if x, ok := txns.m[txn.uuid()]; ok {
 		txns.mtx.Unlock()
@@ -456,7 +456,7 @@ func newTxnBckBase(bck *meta.Bck) (txn *txnBckBase) {
 
 func (txn *txnBckBase) init(bck *meta.Bck) { txn.bck = *bck }
 
-func (txn *txnBckBase) set(nlps []cluster.NLP) {
+func (txn *txnBckBase) set(nlps []core.NLP) {
 	txn.nlps = nlps
 }
 
@@ -635,7 +635,7 @@ func (txn *txnArchMultiObj) String() string {
 // txnPromote //
 ////////////////
 
-func newTxnPromote(c *txnSrv, msg *cluster.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
+func newTxnPromote(c *txnSrv, msg *core.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
 	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)

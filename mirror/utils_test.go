@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/readers"
 	. "github.com/onsi/ginkgo"
@@ -138,8 +138,8 @@ func createTestFile(filePath, objName string, size int64) {
 	Expect(r.Close()).ShouldNot(HaveOccurred())
 }
 
-func newBasicLom(fqn string) *cluster.LOM {
-	lom := &cluster.LOM{}
+func newBasicLom(fqn string) *core.LOM {
+	lom := &core.LOM{}
 	err := lom.InitFQN(fqn, nil)
 	Expect(err).NotTo(HaveOccurred())
 	lom.UncacheUnless()

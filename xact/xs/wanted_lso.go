@@ -9,10 +9,10 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // `apc.LsoMsg` flags
@@ -37,7 +37,7 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 	return
 }
 
-func setWanted(e *cmn.LsoEntry, lom *cluster.LOM, tmformat string, wanted cos.BitFlags) {
+func setWanted(e *cmn.LsoEntry, lom *core.LOM, tmformat string, wanted cos.BitFlags) {
 	for name, fl := range allmap {
 		if !wanted.IsSet(fl) {
 			continue

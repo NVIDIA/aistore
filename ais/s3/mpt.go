@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // NOTE: xattr stores only the (*) marked attributes
@@ -175,7 +175,7 @@ func ListUploads(bckName, idMarker string, maxUploads int) (result *ListMptUploa
 	return
 }
 
-func ListParts(id string, lom *cluster.LOM) (parts []*PartInfo, err error, errCode int) {
+func ListParts(id string, lom *core.LOM) (parts []*PartInfo, err error, errCode int) {
 	mu.RLock()
 	mpt, ok := ups[id]
 	if !ok {

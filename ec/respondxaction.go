@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -51,8 +51,8 @@ func (*rspFactory) New(_ xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (*rspFactory) Kind() string        { return apc.ActECRespond }
-func (p *rspFactory) Get() cluster.Xact { return p.xctn }
+func (*rspFactory) Kind() string     { return apc.ActECRespond }
+func (p *rspFactory) Get() core.Xact { return p.xctn }
 
 func (p *rspFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -107,7 +107,7 @@ func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 		nlog.Infof("Delete request for %s", bck.Cname(objName))
 	}
 
-	ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, cluster.T.Bowner(), fs.ECSliceType)
+	ct, err := core.NewCTFromBO(bck.Bucket(), objName, core.T.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (r *XactRespond) removeObjAndMeta(bck *meta.Bck, objName string) error {
 	// metafile that makes remained slices/replicas outdated and can be cleaned
 	// up later by LRU or other runner
 	for _, tp := range []string{fs.ECMetaType, fs.ObjectType, fs.ECSliceType} {
-		fqnMeta, _, err := cluster.HrwFQN(bck.Bucket(), tp, objName)
+		fqnMeta, _, err := core.HrwFQN(bck.Bucket(), tp, objName)
 		if err != nil {
 			return err
 		}
@@ -143,7 +143,7 @@ func (r *XactRespond) trySendCT(iReq intraReq, hdr *transport.ObjHdr, bck *meta.
 		nlog.Infof("Received request for slice %d of %s", iReq.meta.SliceID, objName)
 	}
 	if iReq.isSlice {
-		ct, err := cluster.NewCTFromBO(bck.Bucket(), objName, cluster.T.Bowner(), fs.ECSliceType)
+		ct, err := core.NewCTFromBO(bck.Bucket(), objName, core.T.Bowner(), fs.ECSliceType)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (r *XactRespond) DispatchReq(iReq intraReq, hdr *transport.ObjHdr, bck *met
 	case reqDel:
 		// object cleanup request: delete replicas, slices and metafiles
 		if err := r.removeObjAndMeta(bck, hdr.ObjName); err != nil {
-			err = fmt.Errorf("%s: failed to delete %s: %w", cluster.T, bck.Cname(hdr.ObjName), err)
+			err = fmt.Errorf("%s: failed to delete %s: %w", core.T, bck.Cname(hdr.ObjName), err)
 			nlog.Errorln(err)
 			r.AddErr(err)
 		}
@@ -196,7 +196,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			meta = iReq.meta
 		)
 		if meta == nil {
-			nlog.Errorf("%s: no metadata for %s", cluster.T, hdr.Cname())
+			nlog.Errorf("%s: no metadata for %s", core.T, hdr.Cname())
 			return
 		}
 
@@ -209,8 +209,8 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 			args := &WriteArgs{Reader: object, MD: md, BID: iReq.bid, Generation: meta.Generation, Xact: r}
 			err = WriteSliceAndMeta(hdr, args)
 		} else {
-			var lom *cluster.LOM
-			lom, err = cluster.AllocLomFromHdr(hdr)
+			var lom *core.LOM
+			lom, err = core.AllocLomFromHdr(hdr)
 			if err == nil {
 				args := &WriteArgs{
 					Reader:     object,
@@ -222,7 +222,7 @@ func (r *XactRespond) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, object 
 				}
 				err = WriteReplicaAndMeta(lom, args)
 			}
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 		}
 		if err != nil {
 			r.AddErr(err)
@@ -244,4 +244,4 @@ func (r *XactRespond) stop() {
 }
 
 // (compare w/ XactGet/Put)
-func (r *XactRespond) Snap() *cluster.Snap { return r.baseSnap() }
+func (r *XactRespond) Snap() *core.Snap { return r.baseSnap() }

@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -187,7 +187,7 @@ func (r *ListObjectResult) FillFromAisBckList(bckList *cmn.LsoResult, lsmsg *apc
 	}
 }
 
-func lomMD5(lom *cluster.LOM) string {
+func lomMD5(lom *core.LOM) string {
 	if v, exists := lom.GetCustomKey(cmn.SourceObjMD); exists && v == apc.AWS {
 		if v, exists := lom.GetCustomKey(cmn.MD5ObjMD); exists {
 			return v
@@ -199,7 +199,7 @@ func lomMD5(lom *cluster.LOM) string {
 	return ""
 }
 
-func SetETag(header http.Header, lom *cluster.LOM) {
+func SetETag(header http.Header, lom *core.LOM) {
 	if md5val := lomMD5(lom); md5val != "" {
 		header.Set(cos.S3CksumHeader, md5val)
 	}

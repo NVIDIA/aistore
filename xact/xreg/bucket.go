@@ -6,16 +6,16 @@ package xreg
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 )
 
 type (
 	TCBArgs struct {
-		DP      cluster.DP
+		DP      core.DP
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
 		Msg     *apc.TCBMsg
@@ -24,7 +24,7 @@ type (
 	TCObjsArgs struct {
 		BckFrom *meta.Bck
 		BckTo   *meta.Bck
-		DP      cluster.DP
+		DP      core.DP
 	}
 	DsortArgs struct {
 		BckFrom *meta.Bck
@@ -70,7 +70,7 @@ func RenewECEncode(bck *meta.Bck, uuid, phase string) RenewRes {
 func RenewMakeNCopies(uuid, tag string) {
 	var (
 		cfg      = cmn.GCO.Get()
-		bmd      = cluster.T.Bowner().Get()
+		bmd      = core.T.Bowner().Get()
 		provider = apc.AIS
 	)
 	bmd.Range(&provider, nil, func(bck *meta.Bck) bool {
@@ -102,7 +102,7 @@ func RenewBckMakeNCopies(bck *meta.Bck, uuid, tag string, copies int) (res Renew
 	return dreg.renew(e, bck)
 }
 
-func RenewPromote(uuid string, bck *meta.Bck, args *cluster.PromoteArgs) RenewRes {
+func RenewPromote(uuid string, bck *meta.Bck, args *core.PromoteArgs) RenewRes {
 	return RenewBucketXact(apc.ActPromote, bck, Args{Custom: args, UUID: uuid})
 }
 
@@ -110,7 +110,7 @@ func RenewBckLoadLomCache(uuid string, bck *meta.Bck) RenewRes {
 	return RenewBucketXact(apc.ActLoadLomCache, bck, Args{UUID: uuid})
 }
 
-func RenewPutMirror(lom *cluster.LOM) RenewRes {
+func RenewPutMirror(lom *core.LOM) RenewRes {
 	return RenewBucketXact(apc.ActPutCopies, lom.Bck(), Args{Custom: lom})
 }
 

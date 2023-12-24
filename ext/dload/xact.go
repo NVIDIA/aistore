@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -173,8 +173,8 @@ func (p *factory) Start() error {
 	return nil
 }
 
-func (*factory) Kind() string        { return apc.ActDownload }
-func (p *factory) Get() cluster.Xact { return p.xctn }
+func (*factory) Kind() string     { return apc.ActDownload }
+func (p *factory) Get() core.Xact { return p.xctn }
 
 func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -247,8 +247,8 @@ func (xld *Xact) JobStatus(id string, onlyActive bool) (resp any, statusCode int
 	return
 }
 
-func (xld *Xact) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (xld *Xact) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	xld.ToSnap(snap)
 
 	snap.IdleX = xld.IsIdle()

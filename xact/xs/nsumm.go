@@ -12,12 +12,12 @@ import (
 	ratomic "sync/atomic"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/sys"
@@ -46,7 +46,7 @@ type (
 // interface guard
 var (
 	_ xreg.Renewable = (*nsummFactory)(nil)
-	_ cluster.Xact   = (*XactNsumm)(nil)
+	_ core.Xact      = (*XactNsumm)(nil)
 )
 
 //////////////////
@@ -67,8 +67,8 @@ func (p *nsummFactory) Start() (err error) {
 	return
 }
 
-func (*nsummFactory) Kind() string        { return apc.ActSummaryBck }
-func (p *nsummFactory) Get() cluster.Xact { return p.xctn }
+func (*nsummFactory) Kind() string     { return apc.ActSummaryBck }
+func (p *nsummFactory) Get() core.Xact { return p.xctn }
 
 func (*nsummFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -82,13 +82,13 @@ func newSumm(p *nsummFactory) (r *XactNsumm, err error) {
 	listRemote := p.Bck.IsCloud() && !p.msg.ObjCached
 	if listRemote {
 		var (
-			smap = cluster.T.Sowner().Get()
+			smap = core.T.Sowner().Get()
 			tsi  *meta.Snode
 		)
 		if tsi, err = smap.HrwTargetTask(p.UUID()); err != nil {
 			return
 		}
-		r.listRemote = listRemote && tsi.ID() == cluster.T.SID() // this target
+		r.listRemote = listRemote && tsi.ID() == core.T.SID() // this target
 	}
 
 	opts := &mpather.JgroupOpts{
@@ -176,7 +176,7 @@ func (r *XactNsumm) Run(started *sync.WaitGroup) {
 // to add all `res` pointers up front
 func (r *XactNsumm) initResQbck() (cmn.Bcks, *meta.Bck) {
 	var (
-		bmd      = cluster.T.Bowner().Get()
+		bmd      = core.T.Bowner().Get()
 		qbck     = (*cmn.QueryBcks)(r.p.Bck)
 		provider *string
 		ns       *cmn.Ns
@@ -220,8 +220,8 @@ func (r *XactNsumm) _str(s string) string { return fmt.Sprintf("%s %+v", s, r.p.
 func (r *XactNsumm) String() string       { return r._str(r.Base.String()) }
 func (r *XactNsumm) Name() string         { return r._str(r.Base.Name()) }
 
-func (r *XactNsumm) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactNsumm) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 	snap.IdleX = r.IsIdle()
 	return
@@ -270,7 +270,7 @@ func (r *XactNsumm) cloneRes(dst, src *cmn.BsummResult) {
 	dst.UsedPct = cos.DivRoundU64(dst.TotalSize.OnDisk*100, r.totalDiskSize)
 }
 
-func (r *XactNsumm) visitObj(lom *cluster.LOM, _ []byte) error {
+func (r *XactNsumm) visitObj(lom *core.LOM, _ []byte) error {
 	var res *cmn.BsummResult
 	if r.single {
 		res = &r.oneRes

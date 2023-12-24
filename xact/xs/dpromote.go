@@ -10,12 +10,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/xact"
@@ -28,7 +28,7 @@ type (
 	proFactory struct {
 		xreg.RenewBase
 		xctn *XactDirPromote
-		args *cluster.PromoteArgs
+		args *core.PromoteArgs
 	}
 	XactDirPromote struct {
 		p    *proFactory
@@ -40,7 +40,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactDirPromote)(nil)
+	_ core.Xact      = (*XactDirPromote)(nil)
 	_ xreg.Renewable = (*proFactory)(nil)
 )
 
@@ -49,7 +49,7 @@ var (
 ////////////////
 
 func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	c := args.Custom.(*cluster.PromoteArgs)
+	c := args.Custom.(*core.PromoteArgs)
 	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: c}
 	return p
 }
@@ -61,8 +61,8 @@ func (p *proFactory) Start() error {
 	return nil
 }
 
-func (*proFactory) Kind() string        { return apc.ActPromote }
-func (p *proFactory) Get() cluster.Xact { return p.xctn }
+func (*proFactory) Kind() string     { return apc.ActPromote }
+func (p *proFactory) Get() core.Xact { return p.xctn }
 
 func (*proFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -80,7 +80,7 @@ func (r *XactDirPromote) Run(wg *sync.WaitGroup) {
 	dir := r.p.args.SrcFQN
 	nlog.Infof("%s(%s)", r.Name(), dir)
 
-	r.smap = cluster.T.Sowner().Get()
+	r.smap = core.T.Sowner().Get()
 	var (
 		err  error
 		opts = &fs.WalkOpts{Dir: dir, Callback: r.walk, Sorted: false}
@@ -113,15 +113,15 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != cluster.T.SID() {
+		if si.ID() != core.T.SID() {
 			return nil
 		}
 	}
-	params := cluster.PromoteParams{
+	params := core.PromoteParams{
 		Bck:    bck,
 		Xact:   r,
 		Config: r.Config,
-		PromoteArgs: cluster.PromoteArgs{
+		PromoteArgs: core.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,
 			OverwriteDst: args.OverwriteDst,
@@ -129,7 +129,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		},
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
-	_, err = cluster.T.Promote(&params)
+	_, err = core.T.Promote(&params)
 	if cmn.IsNotExist(err) {
 		err = nil
 	}
@@ -140,8 +140,8 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	return err
 }
 
-func (r *XactDirPromote) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactDirPromote) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

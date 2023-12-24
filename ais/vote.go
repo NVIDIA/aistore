@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -63,7 +63,7 @@ type (
 	}
 )
 
-func voteInProgress() (xele cluster.Xact) {
+func voteInProgress() (xele core.Xact) {
 	if e := xreg.GetRunning(xreg.Flt{Kind: apc.ActElection}); e != nil {
 		xele = e.Get()
 	}
@@ -334,7 +334,7 @@ func (p *proxy) requestVotes(vr *VoteRecord) chan voteResult {
 		Body:   cos.MustMarshal(&msg),
 		Query:  q,
 	}
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	resCh := make(chan voteResult, len(results))
@@ -374,7 +374,7 @@ func (p *proxy) electPhase2(vr *VoteRecord) cos.StrSet {
 	)
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathVoteVoteres.S, Body: cos.MustMarshal(msg)}
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {

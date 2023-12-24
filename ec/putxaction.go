@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
@@ -72,8 +72,8 @@ func (p *putFactory) Start() error {
 	return nil
 }
 
-func (*putFactory) Kind() string        { return apc.ActECPut }
-func (p *putFactory) Get() cluster.Xact { return p.xctn }
+func (*putFactory) Kind() string     { return apc.ActECPut }
+func (p *putFactory) Get() core.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -119,7 +119,7 @@ func (r *XactPut) newPutJogger(mpath string) *putJogger {
 	return j
 }
 
-func (r *XactPut) dispatchRequest(req *request, lom *cluster.LOM) error {
+func (r *XactPut) dispatchRequest(req *request, lom *core.LOM) error {
 	debug.Assert(req.Action == ActDelete || req.Action == ActSplit, req.Action)
 	debug.Assert(req.ErrCh == nil, "ec-put does not support ErrCh")
 	if !r.ecRequestsEnabled() {
@@ -211,7 +211,7 @@ func (r *XactPut) stop() {
 }
 
 // Encode schedules FQN for erasure coding process
-func (r *XactPut) encode(req *request, lom *cluster.LOM) {
+func (r *XactPut) encode(req *request, lom *core.LOM) {
 	now := time.Now()
 	req.putTime, req.tm = now, now
 	if err := r.dispatchRequest(req, lom); err != nil {
@@ -221,7 +221,7 @@ func (r *XactPut) encode(req *request, lom *cluster.LOM) {
 }
 
 // Cleanup deletes all object slices or copies after the main object is removed
-func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
+func (r *XactPut) cleanup(req *request, lom *core.LOM) {
 	now := time.Now()
 	req.putTime, req.tm = now, now
 
@@ -231,7 +231,7 @@ func (r *XactPut) cleanup(req *request, lom *cluster.LOM) {
 	}
 }
 
-func (r *XactPut) Snap() (snap *cluster.Snap) {
+func (r *XactPut) Snap() (snap *core.Snap) {
 	snap = r.baseSnap()
 	st := r.stats.stats()
 	snap.Ext = &ExtECPutStats{

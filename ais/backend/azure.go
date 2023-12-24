@@ -18,18 +18,18 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 type (
 	azureProvider struct {
 		u string
 		c *azblob.SharedKeyCredential
-		t cluster.TargetPut
+		t core.TargetPut
 		s azblob.ServiceURL
 	}
 )
@@ -63,7 +63,7 @@ var (
 	defaultKeyOptions azblob.ClientProvidedKeyOptions
 
 	// interface guard
-	_ cluster.BackendProvider = (*azureProvider)(nil)
+	_ core.BackendProvider = (*azureProvider)(nil)
 )
 
 func azureProto() string {
@@ -125,7 +125,7 @@ func azureURL() string {
 
 // Only one authentication way is supported: with Shared Credentials that
 // requires Account name and key.
-func NewAzure(t cluster.TargetPut) (cluster.BackendProvider, error) {
+func NewAzure(t core.TargetPut) (core.BackendProvider, error) {
 	path := azureURL()
 	u, err := url.Parse(path)
 	if err != nil {
@@ -314,7 +314,7 @@ func (ap *azureProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 // HEAD OBJECT //
 /////////////////
 
-func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		resp     *azblob.BlobGetPropertiesResponse
 		h        = cmn.BackendHelpers.Azure
@@ -352,7 +352,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *cluster.LOM) (oa *cmn
 // GET OBJECT //
 ////////////////
 
-func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
 	res := ap.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
@@ -369,7 +369,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 // GET OBJ READER //
 ////////////////////
 
-func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
+func (ap *azureProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bck().RemoteBck()
@@ -423,7 +423,7 @@ func (ap *azureProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (re
 // PUT OBJECT //
 ////////////////
 
-func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (int, error) {
+func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM) (int, error) {
 	defer cos.Close(r)
 
 	var (
@@ -486,7 +486,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (int, error) 
 
 // Delete looks complex because according to docs, it needs acquiring
 // an object beforehand and releasing the lease after
-func (ap *azureProvider) DeleteObj(lom *cluster.LOM) (int, error) {
+func (ap *azureProvider) DeleteObj(lom *core.LOM) (int, error) {
 	var (
 		cloudBck = lom.Bck().RemoteBck()
 		cntURL   = ap.s.NewContainerURL(lom.Bck().Name)

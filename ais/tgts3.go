@@ -14,12 +14,12 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -114,8 +114,8 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	lom := cluster.AllocLOM(objSrc)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objSrc)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bckSrc.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -172,8 +172,8 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 		return
 	}
 	objName := s3.ObjName(items)
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -257,13 +257,13 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	if config.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("getObject", lom.String(), dpq)
 	}
 	t.getObject(w, r, dpq, bck, lom)
 	s3.SetETag(w.Header(), lom) // add etag/md5
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	dpqFree(dpq)
 }
 
@@ -280,8 +280,8 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return
@@ -347,8 +347,8 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 		return
 	}
 	objName := s3.ObjName(items)
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		s3.WriteErr(w, r, err, 0)
 		return

@@ -5,11 +5,11 @@
 package dload
 
 import (
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -24,8 +24,8 @@ const (
 
 type (
 	DiffResolverCtx interface {
-		CompareObjects(*cluster.LOM, *DstElement) (bool, error)
-		IsObjFromRemote(*cluster.LOM) (bool, error)
+		CompareObjects(*core.LOM, *DstElement) (bool, error)
+		IsObjFromRemote(*core.LOM) (bool, error)
 	}
 
 	defaultDiffResolverCtx struct{}
@@ -34,7 +34,7 @@ type (
 	// of objects. The streams are expected to be in sorted order.
 	DiffResolver struct {
 		ctx      DiffResolverCtx
-		srcCh    chan *cluster.LOM
+		srcCh    chan *core.LOM
 		dstCh    chan *DstElement
 		resultCh chan DiffResolverResult
 		err      cos.Errs
@@ -58,7 +58,7 @@ type (
 
 	DiffResolverResult struct {
 		Err    error
-		Src    *cluster.LOM
+		Src    *core.LOM
 		Dst    *DstElement
 		Action uint8
 	}
@@ -72,7 +72,7 @@ type (
 func NewDiffResolver(ctx DiffResolverCtx) *DiffResolver {
 	return &DiffResolver{
 		ctx:      ctx,
-		srcCh:    make(chan *cluster.LOM, 128),
+		srcCh:    make(chan *core.LOM, 128),
 		dstCh:    make(chan *DstElement, 128),
 		resultCh: make(chan DiffResolverResult, 128),
 	}
@@ -152,7 +152,7 @@ func (dr *DiffResolver) Start() {
 
 func (dr *DiffResolver) PushSrc(v any) {
 	switch x := v.(type) {
-	case *cluster.LOM:
+	case *core.LOM:
 		dr.srcCh <- x
 	default:
 		debug.FailTypeCast(v)
@@ -215,7 +215,7 @@ func (dr *DiffResolver) cb(fqn string, job jobif) error {
 	if dr.Stopped() {
 		return cmn.NewErrAborted(job.String(), "diff-resolver stopped", nil)
 	}
-	lom := &cluster.LOM{}
+	lom := &core.LOM{}
 	if err := lom.InitFQN(fqn, job.Bck()); err != nil {
 		return err
 	}
@@ -255,7 +255,7 @@ func (dr *DiffResolver) push(job jobif, d *dispatcher) {
 			if !job.Sync() {
 				// When it is not a sync job, push LOM for a given object
 				// because we need to check if it exists.
-				lom := &cluster.LOM{ObjName: obj.objName}
+				lom := &core.LOM{ObjName: obj.objName}
 				if err := lom.InitBck(job.Bck()); err != nil {
 					dr.Abort(err)
 					return
@@ -280,7 +280,7 @@ func (dr *DiffResolver) push(job jobif, d *dispatcher) {
 // defaultDiffResolverCtx //
 ////////////////////////////
 
-func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement) (bool, error) {
+func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (bool, error) {
 	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil
@@ -290,7 +290,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *cluster.LOM, dst *DstElement)
 	return CompareObjects(src, dst)
 }
 
-func (*defaultDiffResolverCtx) IsObjFromRemote(src *cluster.LOM) (bool, error) {
+func (*defaultDiffResolverCtx) IsObjFromRemote(src *core.LOM) (bool, error) {
 	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil

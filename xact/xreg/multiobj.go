@@ -6,7 +6,7 @@ package xreg
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 func RenewPutArchive(bckFrom, bckTo *meta.Bck) RenewRes {

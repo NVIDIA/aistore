@@ -12,13 +12,13 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/ios"
 	"github.com/NVIDIA/aistore/memsys"
@@ -93,21 +93,21 @@ const (
 	PutSize = "put.size"
 
 	// internal
-	LcacheCollisionCount = cluster.LcacheCollisionCount
-	LcacheEvictedCount   = cluster.LcacheEvictedCount
-	LcacheFlushColdCount = cluster.LcacheFlushColdCount
+	LcacheCollisionCount = core.LcacheCollisionCount
+	LcacheEvictedCount   = core.LcacheEvictedCount
+	LcacheFlushColdCount = core.LcacheFlushColdCount
 )
 
 type (
 	Trunner struct {
-		t         cluster.NodeMemCap
+		t         core.NodeMemCap
 		TargetCDF fs.TargetCDF `json:"cdf"`
 		disk      ios.AllDiskStats
 		xln       string
 		runner    // the base (compare w/ Prunner)
 		lines     []string
 		mem       sys.MemStat
-		xallRun   cluster.AllRunningInOut
+		xallRun   core.AllRunningInOut
 		standby   bool
 	}
 )
@@ -125,12 +125,12 @@ const (
 // interface guard
 var _ cos.Runner = (*Trunner)(nil)
 
-func NewTrunner(t cluster.NodeMemCap) *Trunner { return &Trunner{t: t} }
+func NewTrunner(t core.NodeMemCap) *Trunner { return &Trunner{t: t} }
 
 func (r *Trunner) Run() error     { return r._run(r /*as statsLogger*/) }
 func (r *Trunner) Standby(v bool) { r.standby = v }
 
-func (r *Trunner) Init(t cluster.Target) *atomic.Bool {
+func (r *Trunner) Init(t core.Target) *atomic.Bool {
 	r.core = &coreStats{}
 
 	r.core.init(numTargetStats)

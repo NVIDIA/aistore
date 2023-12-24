@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -40,9 +40,9 @@ const (
 type (
 	// one multi-object operation work item
 	lrwi interface {
-		do(*cluster.LOM, *lriterator)
+		do(*core.LOM, *lriterator)
 	}
-	// a strict subset of cluster.Xact, includes only the methods
+	// a strict subset of core.Xact, includes only the methods
 	// lriterator needs for itself
 	lrxact interface {
 		Bck() *meta.Bck
@@ -87,8 +87,8 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact = (*evictDelete)(nil)
-	_ cluster.Xact = (*prefetch)(nil)
+	_ core.Xact = (*evictDelete)(nil)
+	_ core.Xact = (*prefetch)(nil)
 
 	_ xreg.Renewable = (*evdFactory)(nil)
 	_ xreg.Renewable = (*prfFactory)(nil)
@@ -138,9 +138,9 @@ func (r *lriterator) iterRange(smap *meta.Smap, pt *cos.ParsedTemplate, wi lrwi)
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			return nil
 		}
-		lom := cluster.AllocLOM(objName)
+		lom := core.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		npg     = newNpgCtx(bck, msg, noopCb)
 		bremote = bck.IsRemote()
 	)
-	if err := bck.Init(cluster.T.Bowner()); err != nil {
+	if err := bck.Init(core.T.Bowner()); err != nil {
 		return err
 	}
 	if !bremote {
@@ -173,7 +173,7 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 		}
 		if bremote {
 			lst = &cmn.LsoResult{Entries: allocLsoEntries()}
-			_, err = cluster.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
+			_, err = core.T.Backend(bck).ListObjects(bck, msg, lst) // (TODO comment above)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 			}
@@ -193,9 +193,9 @@ func (r *lriterator) iteratePrefix(smap *meta.Smap, prefix string, wi lrwi) erro
 				freeLsoEntries(lst.Entries)
 				return nil
 			}
-			lom := cluster.AllocLOM(be.Name)
+			lom := core.AllocLOM(be.Name)
 			err := r.do(lom, wi, smap)
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			if err != nil {
 				freeLsoEntries(lst.Entries)
 				return err
@@ -218,9 +218,9 @@ func (r *lriterator) iterList(wi lrwi, smap *meta.Smap) error {
 		if r.xctn.IsAborted() || r.xctn.Finished() {
 			break
 		}
-		lom := cluster.AllocLOM(objName)
+		lom := core.AllocLOM(objName)
 		err := r.do(lom, wi, smap)
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		if err != nil {
 			return err
 		}
@@ -228,7 +228,7 @@ func (r *lriterator) iterList(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-func (r *lriterator) do(lom *cluster.LOM, wi lrwi, smap *meta.Smap) error {
+func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) error {
 	if err := lom.InitBck(r.xctn.Bck().Bucket()); err != nil {
 		return err
 	}
@@ -262,8 +262,8 @@ func (p *evdFactory) Start() error {
 	return nil
 }
 
-func (p *evdFactory) Kind() string      { return p.kind }
-func (p *evdFactory) Get() cluster.Xact { return p.xctn }
+func (p *evdFactory) Kind() string   { return p.kind }
+func (p *evdFactory) Get() core.Xact { return p.xctn }
 
 func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -277,7 +277,7 @@ func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListR
 }
 
 func (r *evictDelete) Run(*sync.WaitGroup) {
-	smap := cluster.T.Sowner().Get()
+	smap := core.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -286,8 +286,8 @@ func (r *evictDelete) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *evictDelete) do(lom *cluster.LOM, lrit *lriterator) {
-	errCode, err := cluster.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
+func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
+	errCode, err := core.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes(true))
 		return
@@ -305,8 +305,8 @@ eret:
 	}
 }
 
-func (r *evictDelete) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *evictDelete) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()
@@ -326,7 +326,7 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 
 func (p *prfFactory) Start() error {
 	b := p.Bck
-	if err := b.Init(cluster.T.Bowner()); err != nil {
+	if err := b.Init(core.T.Bowner()); err != nil {
 		if !cmn.IsErrRemoteBckNotFound(err) {
 			return err
 		}
@@ -339,8 +339,8 @@ func (p *prfFactory) Start() error {
 	return nil
 }
 
-func (*prfFactory) Kind() string        { return apc.ActPrefetchObjects }
-func (p *prfFactory) Get() cluster.Xact { return p.xctn }
+func (*prfFactory) Kind() string     { return apc.ActPrefetchObjects }
+func (p *prfFactory) Get() core.Xact { return p.xctn }
 
 func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -355,7 +355,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRang
 }
 
 func (r *prefetch) Run(*sync.WaitGroup) {
-	smap := cluster.T.Sowner().Get()
+	smap := core.T.Sowner().Get()
 	if r.msg.IsList() {
 		_ = r.iterList(r, smap)
 	} else {
@@ -364,7 +364,7 @@ func (r *prefetch) Run(*sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
+func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
 			return
@@ -373,7 +373,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 		return // simply exists
 	}
 
-	if equal, _, err := cluster.T.CompareObjects(r.ctx, lom); equal || err != nil {
+	if equal, _, err := core.T.CompareObjects(r.ctx, lom); equal || err != nil {
 		return
 	}
 
@@ -383,7 +383,7 @@ func (r *prefetch) do(lom *cluster.LOM, lrit *lriterator) {
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see cluster/lom_cache_hk.go).
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err := cluster.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	errCode, err := core.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return
@@ -404,8 +404,8 @@ eret:
 	}
 }
 
-func (r *prefetch) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *prefetch) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

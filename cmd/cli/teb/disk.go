@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 )
 

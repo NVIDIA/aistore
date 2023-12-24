@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/xact/xreg"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +33,7 @@ type etlBootstrapper struct {
 	env    map[string]string
 
 	// runtime
-	xctn            cluster.Xact
+	xctn            core.Xact
 	pod             *corev1.Pod
 	svc             *corev1.Service
 	uri             string
@@ -53,7 +53,7 @@ func (b *etlBootstrapper) createPodSpec() (err error) {
 func (b *etlBootstrapper) _prepSpec() (err error) {
 	// Override pod name: append target ID
 	// (K8s doesn't allow `_` and uppercase)
-	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + cluster.T.SID()))
+	b.pod.SetName(k8s.CleanName(b.msg.IDX + "-" + core.T.SID()))
 	b.errCtx.PodName = b.pod.GetName()
 	b.pod.APIVersion = "v1"
 
@@ -296,7 +296,7 @@ func (b *etlBootstrapper) _updPodLabels() {
 	b.pod.Labels[appLabel] = "ais"
 	b.pod.Labels[podNameLabel] = b.pod.GetName()
 	b.pod.Labels[podNodeLabel] = k8s.NodeName
-	b.pod.Labels[podTargetLabel] = cluster.T.SID()
+	b.pod.Labels[podTargetLabel] = core.T.SID()
 	b.pod.Labels[appK8sNameLabel] = "etl"
 	b.pod.Labels[appK8sComponentLabel] = "server"
 }
@@ -331,7 +331,7 @@ func (b *etlBootstrapper) _setPodEnv() {
 	for idx := range containers {
 		containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{
 			Name:  "AIS_TARGET_URL",
-			Value: cluster.T.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
+			Value: core.T.Snode().URL(cmn.NetPublic) + apc.URLPathETLObject.Join(reqSecret),
 		})
 		for k, v := range b.env {
 			containers[idx].Env = append(containers[idx].Env, corev1.EnvVar{

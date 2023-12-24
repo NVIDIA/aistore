@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -55,7 +55,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactTCObjs)(nil)
+	_ core.Xact      = (*XactTCObjs)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 	_ lrwi           = (*tcowi)(nil)
 )
@@ -121,8 +121,8 @@ func (r *XactTCObjs) String() string {
 
 func (r *XactTCObjs) FromTo() (*meta.Bck, *meta.Bck) { return r.args.BckFrom, r.args.BckTo }
 
-func (r *XactTCObjs) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactTCObjs) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()
@@ -147,7 +147,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 		select {
 		case msg := <-r.workCh:
 			var (
-				smap = cluster.T.Sowner().Get()
+				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
 			r.pending.mtx.Lock()
@@ -159,7 +159,7 @@ func (r *XactTCObjs) Run(wg *sync.WaitGroup) {
 			}
 
 			// this target must be active (ref: ignoreMaintenance)
-			if err = cluster.InMaintOrDecomm(smap, cluster.T.Snode(), r); err != nil {
+			if err = core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
 				nlog.Errorln(err)
 				goto fin
 			}
@@ -250,18 +250,18 @@ func (r *XactTCObjs) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	}
 
 	debug.Assert(hdr.Opcode == 0)
-	lom := cluster.AllocLOM(hdr.ObjName)
+	lom := core.AllocLOM(hdr.ObjName)
 	err := r._put(hdr, objReader, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return err
 }
 
-func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *cluster.LOM) (err error) {
+func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LOM) (err error) {
 	if err = lom.InitBck(&hdr.Bck); err != nil {
 		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := cluster.AllocPutObjParams()
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
@@ -279,8 +279,8 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 		lom.SetAtimeUnix(time.Now().UnixNano())
 	}
 	params.Atime = lom.Atime()
-	err = cluster.T.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	err = core.T.PutObject(lom, params)
+	core.FreePutObjParams(params)
 
 	if err != nil {
 		r.AddErr(err)
@@ -297,17 +297,17 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *clust
 // tcowi //
 ///////////
 
-func (wi *tcowi) do(lom *cluster.LOM, lrit *lriterator) {
+func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 	var (
 		objNameTo  = wi.msg.ToName(lom.ObjName)
-		buf, slab  = cluster.T.PageMM().Alloc()
+		buf, slab  = core.T.PageMM().Alloc()
 		syncRemote = wi.r.syncRemote && wi.msg.Prepend == ""
 	)
 
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := cluster.T.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
+	_, err := core.T.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
 		wi.msg.DryRun, syncRemote)
 	slab.Free(buf)
 

@@ -18,13 +18,13 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -133,7 +133,7 @@ func ecGetAllSlices(t *testing.T, bck cmn.Bck, objName string) (map[string]ecSli
 		if de.IsDir() {
 			return nil
 		}
-		ct, err := cluster.NewCTFromFQN(fqn, nil)
+		ct, err := core.NewCTFromFQN(fqn, nil)
 		tassert.CheckFatal(t, err)
 		if !strings.Contains(ct.ObjectName(), objName) {
 			return nil
@@ -180,7 +180,7 @@ func ecCheckSlices(t *testing.T, sliceList map[string]ecSliceMD,
 
 	metaCnt := 0
 	for k, md := range sliceList {
-		ct, err := cluster.NewCTFromFQN(k, nil)
+		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
 		if ct.ContentType() == fs.ECMetaType {
@@ -208,7 +208,7 @@ func waitForECFinishes(t *testing.T, totalCnt int, objSize, sliceSize int64, doE
 		if len(foundParts) == totalCnt {
 			same := true
 			for nm, md := range foundParts {
-				ct, err := cluster.NewCTFromFQN(nm, nil)
+				ct, err := core.NewCTFromFQN(nm, nil)
 				tassert.CheckFatal(t, err)
 				if doEC {
 					if ct.ContentType() == fs.ECSliceType {
@@ -354,7 +354,7 @@ func doECPutsAndCheck(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, o *e
 			}
 			metaCnt, sliceCnt, replCnt := 0, 0, 0
 			for k, md := range foundParts {
-				ct, err := cluster.NewCTFromFQN(k, nil)
+				ct, err := core.NewCTFromFQN(k, nil)
 				tassert.CheckFatal(t, err)
 				if ct.ContentType() == fs.ECMetaType {
 					metaCnt++
@@ -533,7 +533,7 @@ func objectsExist(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, objPatt 
 
 // Simulates damaged slice by changing slice's checksum in metadata file
 func damageMetadataCksum(t *testing.T, slicePath string) {
-	ct, err := cluster.NewCTFromFQN(slicePath, nil)
+	ct, err := core.NewCTFromFQN(slicePath, nil)
 	tassert.CheckFatal(t, err)
 	metaFQN := ct.Make(fs.ECMetaType)
 	md, err := ec.LoadMetadata(metaFQN)
@@ -704,7 +704,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	tlog.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, mainObjPath)
 	tassert.CheckFatal(t, os.Remove(mainObjPath))
 
-	ct, err := cluster.NewCTFromFQN(mainObjPath, nil)
+	ct, err := core.NewCTFromFQN(mainObjPath, nil)
 	tassert.CheckFatal(t, err)
 	metafile := ct.Make(fs.ECMetaType)
 	tlog.LogfCond(!o.silent, "Damaging %s [removing %s]\n", objPath, metafile)
@@ -712,7 +712,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 	if delSlice {
 		sliceToDel := ""
 		for k := range foundParts {
-			ct, err := cluster.NewCTFromFQN(k, nil)
+			ct, err := core.NewCTFromFQN(k, nil)
 			tassert.CheckFatal(t, err)
 			if k != mainObjPath && ct.ContentType() == fs.ECSliceType && doEC {
 				sliceToDel = k
@@ -729,7 +729,7 @@ func createDamageRestoreECFile(t *testing.T, baseParams api.BaseParams, bck cmn.
 		tlog.LogfCond(!o.silent, "Removing slice/replica: %s\n", sliceToDel)
 		tassert.CheckFatal(t, os.Remove(sliceToDel))
 
-		ct, err := cluster.NewCTFromFQN(sliceToDel, nil)
+		ct, err := core.NewCTFromFQN(sliceToDel, nil)
 		tassert.CheckFatal(t, err)
 		metafile := ct.Make(fs.ECMetaType)
 		if doEC {
@@ -996,7 +996,7 @@ func TestECChecksum(t *testing.T) {
 
 	// Corrupt just one slice, EC should be able to restore the original object
 	for k := range foundParts1 {
-		ct, err := cluster.NewCTFromFQN(k, nil)
+		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
 		if k != mainObjPath1 && ct.ContentType() == fs.ECSliceType {
@@ -1013,7 +1013,7 @@ func TestECChecksum(t *testing.T) {
 
 	// Corrupt all slices, EC should not be able to restore
 	for k := range foundParts2 {
-		ct, err := cluster.NewCTFromFQN(k, nil)
+		ct, err := core.NewCTFromFQN(k, nil)
 		tassert.CheckFatal(t, err)
 
 		if k != mainObjPath2 && ct.ContentType() == fs.ECSliceType {
@@ -1522,7 +1522,7 @@ func TestECXattrs(t *testing.T) {
 		tlog.Logf("Damaging %s [removing %s]\n", objPath, mainObjPath)
 		tassert.CheckFatal(t, os.Remove(mainObjPath))
 
-		ct, err := cluster.NewCTFromFQN(mainObjPath, nil)
+		ct, err := core.NewCTFromFQN(mainObjPath, nil)
 		tassert.CheckFatal(t, err)
 		metafile := ct.Make(fs.ECMetaType)
 		tlog.Logf("Damaging %s [removing %s]\n", objPath, metafile)

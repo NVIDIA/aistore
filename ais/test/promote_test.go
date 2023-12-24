@@ -17,9 +17,9 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -151,7 +151,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	args := api.PromoteArgs{
 		BaseParams: baseParams,
 		Bck:        m.bck,
-		PromoteArgs: cluster.PromoteArgs{
+		PromoteArgs: core.PromoteArgs{
 			SrcFQN:         tempdir,
 			Recursive:      test.recurs,
 			OverwriteDst:   test.overwriteDst,

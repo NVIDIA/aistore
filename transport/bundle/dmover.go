@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
 )
 
@@ -37,7 +37,7 @@ type (
 			trname  string
 			net     string // one of cmn.KnownNetworks, empty defaults to cmn.NetIntraControl
 		}
-		xctn        cluster.Xact
+		xctn        core.Xact
 		config      *cmn.Config
 		compression string // enum { apc.CompressNever, ... }
 		multiplier  int
@@ -61,7 +61,7 @@ type (
 	}
 )
 
-var _ cluster.DM = (*DataMover)(nil) // via t.CopyObject()
+var _ core.DM = (*DataMover)(nil) // via t.CopyObject()
 
 // In re `owt` (below): data mover passes it to the target's `PutObject`
 // to properly finalize received payload.
@@ -106,8 +106,8 @@ func (dm *DataMover) NetC() string  { return dm.ack.net }
 func (dm *DataMover) OWT() cmn.OWT  { return dm.owt }
 
 // xaction that drives and utilizes this data mover
-func (dm *DataMover) SetXact(xctn cluster.Xact) { dm.xctn = xctn }
-func (dm *DataMover) GetXact() cluster.Xact     { return dm.xctn }
+func (dm *DataMover) SetXact(xctn core.Xact) { dm.xctn = xctn }
+func (dm *DataMover) GetXact() core.Xact     { return dm.xctn }
 
 // register user's receive-data (and, optionally, receive-ack) wrappers
 func (dm *DataMover) RegRecv() (err error) {
@@ -131,7 +131,7 @@ func (dm *DataMover) Open() {
 			SizePDU:     dm.sizePDU,
 			MaxHdrSize:  dm.maxHdrSize,
 		},
-		Ntype:        cluster.Targets,
+		Ntype:        core.Targets,
 		Multiplier:   dm.multiplier,
 		ManualResync: true,
 	}
@@ -144,7 +144,7 @@ func (dm *DataMover) Open() {
 			Net:          dm.ack.net,
 			Trname:       dm.ack.trname,
 			Extra:        &transport.Extra{Config: dm.config},
-			Ntype:        cluster.Targets,
+			Ntype:        core.Targets,
 			ManualResync: true,
 		}
 		if dm.xctn != nil {
@@ -170,7 +170,7 @@ func (dm *DataMover) String() string {
 }
 
 // quiesce *local* Rx
-func (dm *DataMover) Quiesce(d time.Duration) cluster.QuiRes {
+func (dm *DataMover) Quiesce(d time.Duration) core.QuiRes {
 	return dm.xctn.Quiesce(d, dm.quicb)
 }
 
@@ -238,11 +238,11 @@ func (dm *DataMover) Bcast(obj *transport.Obj, roc cos.ReadOpenCloser) error {
 // private
 //
 
-func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) cluster.QuiRes {
+func (dm *DataMover) quicb(_ time.Duration /*accum. sleep time*/) core.QuiRes {
 	if dm.stage.laterx.CAS(true, false) {
-		return cluster.QuiActive
+		return core.QuiActive
 	}
-	return cluster.QuiInactiveCB
+	return core.QuiInactiveCB
 }
 
 func (dm *DataMover) wrapRecvData(hdr *transport.ObjHdr, reader io.Reader, err error) error {

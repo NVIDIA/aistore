@@ -7,13 +7,13 @@ package mirror
 import (
 	"fmt"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 // is under lock
-func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
+func delCopies(lom *core.LOM, copies int) (size int64, err error) {
 	// force reloading metadata
 	lom.UncacheUnless()
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -47,7 +47,7 @@ func delCopies(lom *cluster.LOM, copies int) (size int64, err error) {
 
 // under LOM's w-lock => TODO: a finer-grade mechanism to write-protect
 // metadata only, md.copies in this case
-func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error) {
+func addCopies(lom *core.LOM, copies int, buf []byte) (size int64, err error) {
 	// Reload metadata, it is necessary to have it fresh.
 	lom.UncacheUnless()
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
@@ -76,7 +76,7 @@ func addCopies(lom *cluster.LOM, copies int, buf []byte) (size int64, err error)
 	return
 }
 
-func drainWorkCh(workCh chan cluster.LIF) (n int) {
+func drainWorkCh(workCh chan core.LIF) (n int) {
 	for {
 		select {
 		case <-workCh:

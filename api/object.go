@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 )
 
 const (
@@ -91,7 +91,7 @@ type (
 	PromoteArgs struct {
 		BaseParams BaseParams
 		Bck        cmn.Bck
-		cluster.PromoteArgs
+		core.PromoteArgs
 	}
 
 	// (see also: api.PutApndArchArgs)

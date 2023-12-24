@@ -12,12 +12,12 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport/bundle"
@@ -25,13 +25,13 @@ import (
 )
 
 // interface guard
-var _ cluster.Target = (*target)(nil)
+var _ core.Target = (*target)(nil)
 
 func (t *target) FSHC(err error, path string) { t.fsErr(err, path) }
 func (t *target) PageMM() *memsys.MMSA        { return t.gmm }
 func (t *target) ByteMM() *memsys.MMSA        { return t.smm }
 
-func (*target) GetAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+func (*target) GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	xreg.GetAllRunning(inout, periodic)
 }
 
@@ -39,7 +39,7 @@ func (t *target) Health(si *meta.Snode, timeout time.Duration, query url.Values)
 	return t.reqHealth(si, timeout, query, t.owner.smap.get())
 }
 
-func (t *target) Backend(bck *meta.Bck) cluster.BackendProvider {
+func (t *target) Backend(bck *meta.Bck) core.BackendProvider {
 	if bck.IsRemoteAIS() {
 		return t.backend[apc.AIS]
 	}
@@ -63,7 +63,7 @@ func (t *target) Backend(bck *meta.Bck) cluster.BackendProvider {
 	return c
 }
 
-func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) error {
+func (t *target) PutObject(lom *core.LOM, params *core.PutObjectParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
 	poi := allocPOI()
@@ -87,7 +87,7 @@ func (t *target) PutObject(lom *cluster.LOM, params *cluster.PutObjectParams) er
 	return err
 }
 
-func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact) (errCode int, err error) {
+func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact) (errCode int, err error) {
 	poi := allocPOI()
 	{
 		poi.t = t
@@ -102,12 +102,12 @@ func (t *target) FinalizeObj(lom *cluster.LOM, workFQN string, xctn cluster.Xact
 	return
 }
 
-func (t *target) EvictObject(lom *cluster.LOM) (errCode int, err error) {
+func (t *target) EvictObject(lom *core.LOM) (errCode int, err error) {
 	errCode, err = t.DeleteObject(lom, true /*evict*/)
 	return
 }
 
-func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
+func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 	return t.headt2t(lom, si, t.owner.smap.get())
 }
 
@@ -127,7 +127,7 @@ func (t *target) HeadObjT2T(lom *cluster.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DM, dp cluster.DP, xact cluster.Xact, config *cmn.Config,
+func (t *target) CopyObject(lom *core.LOM, dm core.DM, dp core.DP, xact core.Xact, config *cmn.Config,
 	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun, syncRemote bool) (size int64, err error) {
 	coi := allocCOI()
 	{
@@ -157,7 +157,7 @@ func (t *target) CopyObject(lom *cluster.LOM, dm cluster.DM, dp cluster.DP, xact
 }
 
 // compare with goi.getCold
-func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (errCode int, err error) {
+func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCode int, err error) {
 	// 1. lock
 	switch owt {
 	case cmn.OwtGetPrefetchLock:
@@ -198,16 +198,16 @@ func (t *target) GetCold(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (er
 	return
 }
 
-func (t *target) Promote(params *cluster.PromoteParams) (errCode int, err error) {
-	lom := cluster.AllocLOM(params.ObjName)
+func (t *target) Promote(params *core.PromoteParams) (errCode int, err error) {
+	lom := core.AllocLOM(params.ObjName)
 	if err = lom.InitBck(params.Bck.Bucket()); err == nil {
 		errCode, err = t._promote(params, lom)
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return
 }
 
-func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errCode int, err error) {
+func (t *target) _promote(params *core.PromoteParams, lom *core.LOM) (errCode int, err error) {
 	smap := t.owner.smap.get()
 	tsi, local, erh := lom.HrwTarget(&smap.Smap)
 	if erh != nil {
@@ -236,7 +236,7 @@ func (t *target) _promote(params *cluster.PromoteParams, lom *cluster.LOM) (errC
 	return
 }
 
-func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fileSize int64, errCode int, err error) {
+func (t *target) _promLocal(params *core.PromoteParams, lom *core.LOM) (fileSize int64, errCode int, err error) {
 	var (
 		cksum     *cos.CksumHash
 		workFQN   string
@@ -281,11 +281,11 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 		} else {
 			clone := lom.CloneMD(params.SrcFQN)
 			if cksum, err = clone.ComputeCksum(lom.CksumType()); err != nil {
-				cluster.FreeLOM(clone)
+				core.FreeLOM(clone)
 				return
 			}
 			lom.SetCksum(cksum.Clone())
-			cluster.FreeLOM(clone)
+			core.FreeLOM(clone)
 		}
 	}
 	if params.Cksum != nil && cksum != nil {
@@ -315,7 +315,7 @@ func (t *target) _promLocal(params *cluster.PromoteParams, lom *cluster.LOM) (fi
 
 // TODO: use DM streams
 // TODO: Xact.InObjsAdd on the receive side
-func (t *target) _promRemote(params *cluster.PromoteParams, lom *cluster.LOM, tsi *meta.Snode, smap *smapX) (int64, error) {
+func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *meta.Snode, smap *smapX) (int64, error) {
 	lom.FQN = params.SrcFQN
 
 	// when not overwriting check w/ remote target first (and separately)

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -20,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -98,7 +98,7 @@ func (res *Res) RunResilver(args Args) {
 	// jogger group
 	var (
 		jg        *mpather.Jgroup
-		slab, err = cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+		slab, err = core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 		config    = cmn.GCO.Get()
 		jctx      = &joggerCtx{xres: xres, config: config}
 
@@ -140,7 +140,7 @@ func (res *Res) RunResilver(args Args) {
 
 // Wait for an abort or for resilvering joggers to finish.
 func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
-	tsi := cluster.T.Snode()
+	tsi := core.T.Snode()
 	for {
 		select {
 		case errCause := <-xres.ChanAbort():
@@ -163,7 +163,7 @@ func wait(jg *mpather.Jgroup, xres *xs.Resilver) (err error) {
 // Copies a slice and its metafile (if exists) to the current mpath. At the
 // end does proper cleanup: removes ether source files(on success), or
 // destination files(on copy failure)
-func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
+func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	uname := ct.Bck().MakeUname(ct.ObjectName())
 	destMpath, _, err := fs.Hrw(uname)
 	if err != nil {
@@ -186,7 +186,7 @@ func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 		return
 	}
 	if jg.config.FastV(4, cos.SmoduleReb) {
-		nlog.Infof("%s: moving %q -> %q", cluster.T, ct.FQN(), destFQN)
+		nlog.Infof("%s: moving %q -> %q", core.T, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {
 		errV := fmt.Errorf("failed to copy %q -> %q: %v. Rolling back", ct.FQN(), destFQN, err)
@@ -208,7 +208,7 @@ func (jg *joggerCtx) _mvSlice(ct *cluster.CT, buf []byte) {
 // Copies EC metafile to correct mpath. It returns FQNs of the source and
 // destination for a caller to do proper cleanup. Empty values means: either
 // the source FQN does not exist(err==nil), or copying failed
-func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
+func _moveECMeta(ct *core.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (string, string, error) {
 	src := srcMpath.MakePathFQN(ct.Bucket(), fs.ECMetaType, ct.ObjectName())
 	// If metafile does not exist it may mean that EC has not processed the
 	// object yet (e.g, EC was enabled after the bucket was filled), or
@@ -229,11 +229,11 @@ func _moveECMeta(ct *cluster.CT, srcMpath, dstMpath *fs.Mountpath, buf []byte) (
 
 // TODO: revisit EC bits and check for OOS preemptively
 // NOTE: not deleting extra copies - delegating to `storage cleanup`
-func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
+func (jg *joggerCtx) visitObj(lom *core.LOM, buf []byte) (errHrw error) {
 	const maxRetries = 3
 	var (
 		orig   = lom
-		hlom   *cluster.LOM
+		hlom   *core.LOM
 		xname  = jg.xres.Name()
 		size   int64
 		copied bool
@@ -257,12 +257,12 @@ func (jg *joggerCtx) visitObj(lom *cluster.LOM, buf []byte) (errHrw error) {
 	var metaOldPath, metaNewPath string
 	if !lom.IsHRW() && lom.Bprops().EC.Enabled {
 		// copy metafile
-		newMpath, _, errEc := cluster.ResolveFQN(lom.HrwFQN)
+		newMpath, _, errEc := core.ResolveFQN(lom.HrwFQN)
 		if errEc != nil {
 			nlog.Warningf("%s: %s %v", xname, lom, errEc)
 			return nil
 		}
-		ct := cluster.NewCTFromLOM(lom, fs.ObjectType)
+		ct := core.NewCTFromLOM(lom, fs.ObjectType)
 		metaOldPath, metaNewPath, errEc = _moveECMeta(ct, lom.Mountpath(), newMpath.Mountpath, buf)
 		if errEc != nil {
 			nlog.Warningf("%s: failed to copy EC metafile %s %q -> %q: %v",
@@ -340,7 +340,7 @@ redo:
 			continue
 		}
 		if cos.IsErrOOS(err) {
-			errV := fmt.Errorf("%s: %s OOS, err: %w", cluster.T, mi, err)
+			errV := fmt.Errorf("%s: %s OOS, err: %w", core.T, mi, err)
 			jg.xres.AddErr(errV)
 			err = cmn.NewErrAborted(xname, "", errV)
 		} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "does not exist") {
@@ -360,12 +360,12 @@ ret:
 	return nil
 }
 
-func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.Mountpath, buf []byte) (hlom *cluster.LOM, err error) {
+func (*joggerCtx) fixHrw(lom *core.LOM, mi *fs.Mountpath, buf []byte) (hlom *core.LOM, err error) {
 	if err = lom.Copy(mi, buf); err != nil {
 		return
 	}
 	hrwFQN := mi.MakePathFQN(lom.Bucket(), fs.ObjectType, lom.ObjName)
-	hlom = &cluster.LOM{}
+	hlom = &core.LOM{}
 	if err = hlom.InitFQN(hrwFQN, lom.Bucket()); err != nil {
 		return
 	}
@@ -376,7 +376,7 @@ func (*joggerCtx) fixHrw(lom *cluster.LOM, mi *fs.Mountpath, buf []byte) (hlom *
 	return
 }
 
-func (jg *joggerCtx) visitCT(ct *cluster.CT, buf []byte) (err error) {
+func (jg *joggerCtx) visitCT(ct *core.CT, buf []byte) (err error) {
 	debug.Assert(ct.ContentType() == fs.ECSliceType)
 	if !ct.Bck().Props.EC.Enabled {
 		// Since `%ec` directory is inside a bucket, it is safe to skip

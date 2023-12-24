@@ -1,10 +1,10 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata
+// Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package core
 
-import "github.com/NVIDIA/aistore/cluster/meta"
+import "github.com/NVIDIA/aistore/core/meta"
 
 type (
 	RemAis struct {

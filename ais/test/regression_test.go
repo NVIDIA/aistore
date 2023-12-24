@@ -21,11 +21,11 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/feat"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
@@ -91,7 +91,7 @@ func TestListObjectsLocalGetLocation(t *testing.T) {
 		if e.Location == "" {
 			t.Fatalf("[%#v]: location is empty", e)
 		}
-		tname, _ := cluster.ParseObjLoc(e.Location)
+		tname, _ := core.ParseObjLoc(e.Location)
 		tid := meta.N2ID(tname)
 		targets[tid] = struct{}{}
 		tsi := smap.GetTarget(tid)

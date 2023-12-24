@@ -1,16 +1,16 @@
-// Package cluster provides local access to cluster-level metadata
+// Package core provides core metadata and in-cluster API
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package core
 
 import (
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const (
-	Targets = iota // 0 (cluster.Targets) used as default value for NewStreamBundle
+	Targets = iota // 0 (core.Targets) used as default value for NewStreamBundle
 	Proxies
 	AllNodes
 )

@@ -7,13 +7,13 @@ package xact
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 )
 
@@ -25,7 +25,7 @@ type (
 	// xaction that self-terminates after staying idle for a while
 	// with an added capability to renew itself and ref-count its pending work
 	Demand interface {
-		cluster.Xact
+		core.Xact
 		IdleTimer() <-chan struct{}
 		IncPending()
 		DecPending()

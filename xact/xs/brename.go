@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -45,7 +45,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*bckRename)(nil)
+	_ core.Xact      = (*bckRename)(nil)
 	_ xreg.Renewable = (*bmvFactory)(nil)
 )
 
@@ -58,8 +58,8 @@ func (*bmvFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 	return p
 }
 
-func (*bmvFactory) Kind() string        { return apc.ActMoveBck }
-func (p *bmvFactory) Get() cluster.Xact { return p.xctn }
+func (*bmvFactory) Kind() string     { return apc.ActMoveBck }
+func (p *bmvFactory) Get() core.Xact { return p.xctn }
 
 func (p *bmvFactory) Start() error {
 	p.xctn = newBckRename(p.UUID(), p.Kind(), p.cargs.RebID, p.Bck, p.cargs.BckFrom, p.cargs.BckTo)
@@ -128,7 +128,7 @@ loop:
 	if total >= bmvMaxWait {
 		r.AddErr(fmt.Errorf("timeout %s", total))
 	}
-	cluster.T.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
+	core.T.BMDVersionFixup(nil, r.bckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	r.Finish()
 }
 
@@ -142,8 +142,8 @@ func (r *bckRename) Name() string {
 
 func (r *bckRename) FromTo() (*meta.Bck, *meta.Bck) { return r.bckFrom, r.bckTo }
 
-func (r *bckRename) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *bckRename) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

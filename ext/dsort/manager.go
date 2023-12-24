@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
@@ -125,10 +125,10 @@ var g global
 var (
 	_ cos.Packer   = (*buildingShardInfo)(nil)
 	_ cos.Unpacker = (*buildingShardInfo)(nil)
-	_ cluster.Xact = (*xaction)(nil)
+	_ core.Xact    = (*xaction)(nil)
 )
 
-func Pinit(si cluster.Node, config *cmn.Config) {
+func Pinit(si core.Node, config *cmn.Config) {
 	psi = si
 	newBcastClient(config)
 }
@@ -141,7 +141,7 @@ func Tinit(tstats stats.Tracker, db kvdb.Driver, config *cmn.Config) {
 	debug.Assert(g.mm == nil) // only once
 	{
 		g.tstats = tstats
-		g.mm = cluster.T.PageMM()
+		g.mm = core.T.PageMM()
 	}
 	fs.CSM.Reg(ct.DsortFileType, &ct.DsortFile{})
 	fs.CSM.Reg(ct.DsortWorkfileType, &ct.DsortFile{})
@@ -169,7 +169,7 @@ func (m *Manager) unlock()        { m.mu.Unlock() }
 // init initializes all necessary fields.
 // PRECONDITION: `m.mu` must be locked.
 func (m *Manager) init(pars *parsedReqSpec) error {
-	m.smap = cluster.T.Sowner().Get()
+	m.smap = core.T.Sowner().Get()
 
 	targetCount := m.smap.CountActiveTs()
 
@@ -255,7 +255,7 @@ func (m *Manager) initStreams() error {
 		Multiplier: config.Dsort.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
-		Ntype:      cluster.Targets,
+		Ntype:      core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			Config:      config,
@@ -315,7 +315,7 @@ func (m *Manager) cleanup() {
 	m.client = nil
 
 	if !m.aborted() {
-		m.updateFinishedAck(cluster.T.SID())
+		m.updateFinishedAck(core.T.SID())
 		m.xctn.Finish()
 	}
 }
@@ -332,7 +332,7 @@ func (m *Manager) cleanup() {
 // in goroutines (there is a possibility that finalCleanup would start before
 // cleanup) - this cannot happen with current ordering mechanism.
 func (m *Manager) finalCleanup() {
-	nlog.Infof("%s: [dsort] %s started final cleanup", cluster.T, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s started final cleanup", core.T, m.ManagerUUID)
 
 	m.lock()
 	for m.state.cleaned != initiallyCleanedState {
@@ -378,7 +378,7 @@ func (m *Manager) finalCleanup() {
 	m.unlock()
 
 	m.mg.persist(m.ManagerUUID)
-	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", cluster.T, m.ManagerUUID, time.Since(now))
+	nlog.Infof("%s: [dsort] %s finished final cleanup in %v", core.T, m.ManagerUUID, time.Since(now))
 }
 
 // stop this job and free associated resources
@@ -402,7 +402,7 @@ func (m *Manager) abort(err error) {
 	inProgress := m.inProgress()
 	m.unlock()
 
-	nlog.Infof("%s: [dsort] %s aborted", cluster.T, m.ManagerUUID)
+	nlog.Infof("%s: [dsort] %s aborted", core.T, m.ManagerUUID)
 
 	// If job has already finished we just free resources, otherwise we must wait
 	// for it to finish.
@@ -606,8 +606,8 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	if m.aborted() {
 		return m.newErrAborted()
 	}
-	lom := cluster.AllocLOM(hdr.ObjName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(hdr.ObjName)
+	defer core.FreeLOM(lom)
 	if err = lom.InitBck(&hdr.Bck); err == nil {
 		err = lom.Load(false /*cache it*/, false /*locked*/)
 	}
@@ -629,15 +629,15 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	lom.SetAtimeUnix(started.UnixNano())
 	rc := io.NopCloser(objReader)
 
-	params := cluster.AllocPutObjParams()
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = ct.WorkfileRecvShard
 		params.Reader = rc
 		params.Cksum = nil
 		params.Atime = started
 	}
-	erp := cluster.T.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	erp := core.T.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	if erp != nil {
 		m.abort(err)
 		return erp

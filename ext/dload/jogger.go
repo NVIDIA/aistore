@@ -7,9 +7,9 @@ package dload
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 )
 
 const queueChSize = 1000
@@ -77,11 +77,11 @@ func (j *jogger) jog() {
 		j.mtx.Unlock()
 
 		// do
-		lom := cluster.AllocLOM(t.obj.objName)
+		lom := core.AllocLOM(t.obj.objName)
 		t.download(lom, j.parent.config)
 
 		// finish, cleanup
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		t.cancel()
 
 		t.job.throttler().release()
@@ -153,7 +153,7 @@ func (j *jogger) abortJob(id string) {
 	j.mtx.Unlock()
 
 	if task != nil && j.parent.config.FastV(4, cos.SmoduleDload) /*verbose*/ {
-		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", cluster.T.String(), id, j.mpath, j.task.String())
+		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", core.T.String(), id, j.mpath, j.task.String())
 	}
 }
 

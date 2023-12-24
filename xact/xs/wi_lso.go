@@ -10,17 +10,17 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 // common context and helper methods for object listing
 
 type (
-	lomVisitedCb func(lom *cluster.LOM)
+	lomVisitedCb func(lom *core.LOM)
 
 	// context used to `list` objects in local filesystems
 	walkInfo struct {
@@ -32,14 +32,14 @@ type (
 	}
 )
 
-func noopCb(*cluster.LOM) {}
+func noopCb(*core.LOM) {}
 
 func isOK(status uint16) bool { return status == apc.LocOK }
 
 // TODO: `msg.StartAfter`
 func newWalkInfo(msg *apc.LsoMsg, lomVisitedCb lomVisitedCb) (wi *walkInfo) {
 	wi = &walkInfo{
-		smap:         cluster.T.Sowner().Get(),
+		smap:         core.T.Sowner().Get(),
 		lomVisitedCb: lomVisitedCb,
 		msg:          msg,
 		wanted:       wanted(msg),
@@ -61,7 +61,7 @@ func (wi *walkInfo) lsmsg() *apc.LsoMsg { return wi.msg }
 //   - Object name is not in early processed directories by the previous call:
 //     paging support
 func (wi *walkInfo) processDir(fqn string) error {
-	ct, err := cluster.NewCTFromFQN(fqn, nil)
+	ct, err := core.NewCTFromFQN(fqn, nil)
 	if err != nil {
 		return nil
 	}
@@ -81,7 +81,7 @@ func (wi *walkInfo) processDir(fqn string) error {
 }
 
 // Returns true if LOM is to be included in the result set.
-func (wi *walkInfo) match(lom *cluster.LOM) bool {
+func (wi *walkInfo) match(lom *core.LOM) bool {
 	if !cmn.ObjHasPrefix(lom.ObjName, wi.msg.Prefix) {
 		return false
 	}
@@ -92,7 +92,7 @@ func (wi *walkInfo) match(lom *cluster.LOM) bool {
 }
 
 // new entry to be added to the listed page
-func (wi *walkInfo) ls(lom *cluster.LOM, status uint16) (e *cmn.LsoEntry) {
+func (wi *walkInfo) ls(lom *core.LOM, status uint16) (e *cmn.LsoEntry) {
 	e = &cmn.LsoEntry{Name: lom.ObjName, Flags: status | apc.EntryIsCached}
 	if wi.msg.IsFlagSet(apc.LsNameOnly) {
 		return
@@ -107,13 +107,13 @@ func (wi *walkInfo) callback(fqn string, de fs.DirEntry) (entry *cmn.LsoEntry, e
 	if de.IsDir() {
 		return
 	}
-	lom := cluster.AllocLOM("")
+	lom := core.AllocLOM("")
 	entry, err = wi.cb(lom, fqn)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return
 }
 
-func (wi *walkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
+func (wi *walkInfo) cb(lom *core.LOM, fqn string) (*cmn.LsoEntry, error) {
 	status := uint16(apc.LocOK)
 	if err := lom.InitFQN(fqn, nil); err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (wi *walkInfo) cb(lom *cluster.LOM, fqn string) (*cmn.LsoEntry, error) {
 	}
 	if local {
 		// check hrw mountpath location
-		hlom := &cluster.LOM{}
+		hlom := &core.LOM{}
 		if err := hlom.InitFQN(lom.HrwFQN, lom.Bucket()); err != nil {
 			return nil, err
 		}

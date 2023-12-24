@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/space"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/xact"
@@ -79,7 +79,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 		)
 		tMock = mock.NewTarget(bmd)
 	)
-	cluster.T = tMock
+	core.T = tMock
 	xreg.TestReset()
 	bmd.Add(bck)
 
@@ -100,7 +100,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	wg.Wait()
 	close(ch)
 
-	res := make(map[cluster.Xact]struct{}, 10)
+	res := make(map[core.Xact]struct{}, 10)
 	for rns := range ch {
 		if xctn := rns.Entry.Get(); xctn != nil {
 			res[xctn] = struct{}{}
@@ -117,7 +117,7 @@ func TestXactionAbortAll(t *testing.T) {
 		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
-	cluster.T = tMock
+	core.T = tMock
 	xreg.TestReset()
 	bmd.Add(bckFrom)
 	bmd.Add(bckTo)
@@ -145,7 +145,7 @@ func TestXactionAbortAllGlobal(t *testing.T) {
 		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
-	cluster.T = tMock
+	core.T = tMock
 	xreg.TestReset()
 
 	defer xreg.AbortAll(errors.New("test-abort-global"))
@@ -176,7 +176,7 @@ func TestXactionAbortBuckets(t *testing.T) {
 		bckTo   = meta.NewBck("test", apc.AIS, cmn.NsGlobal)
 		tMock   = mock.NewTarget(bmd)
 	)
-	cluster.T = tMock
+	core.T = tMock
 	xreg.TestReset()
 
 	defer xreg.AbortAll(errors.New("abort-buckets"))
@@ -215,7 +215,7 @@ func TestXactionQueryFinished(t *testing.T) {
 		bck3  = meta.NewBck("test3", apc.GCP, cmn.NsGlobal)
 		tMock = mock.NewTarget(bmd)
 	)
-	cluster.T = tMock
+	core.T = tMock
 	xreg.TestReset()
 
 	defer xreg.AbortAll(nil)

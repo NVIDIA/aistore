@@ -13,11 +13,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dsort/ct"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -122,7 +122,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 		storeType = SGLStoreType
 		contentPath, fullContentPath = recm.encodeRecordName(storeType, args.shardName, args.recordName)
 
-		sgl := cluster.T.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
+		sgl := core.T.PageMM().NewSGL(r.Size() + int64(len(args.metadata)))
 		// No need for `io.CopyBuffer` since SGL implements `io.ReaderFrom`.
 		if _, err = io.Copy(sgl, bytes.NewReader(args.metadata)); err != nil {
 			sgl.Free()
@@ -184,7 +184,7 @@ func (recm *RecordManager) RecordWithBuffer(args *extractRecordArgs) (size int64
 	recm.Records.Insert(&Record{
 		Key:      key,
 		Name:     recordUniqueName,
-		DaemonID: cluster.T.SID(),
+		DaemonID: core.T.SID(),
 		Objects: []*RecordObj{{
 			ContentPath:    contentPath,
 			ObjectFileType: args.fileType,
@@ -242,7 +242,7 @@ func (recm *RecordManager) encodeRecordName(storeType, shardName, recordName str
 		//  * fullContentPath = fqn to recordUniqueName with extension (eg. <bucket_fqn>/shard_1-record_name.cls)
 		recordExt := cosExt(recordName)
 		contentPath := genRecordUname(shardName, recordName) + recordExt
-		c, err := cluster.NewCTFromBO(&recm.bck, contentPath, nil)
+		c, err := core.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
 		return contentPath, c.Make(ct.DsortFileType)
 	default:
@@ -256,7 +256,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 	case OffsetStoreType:
 		// To convert contentPath to fullContentPath we need to make shard name
 		// full FQN.
-		ct, err := cluster.NewCTFromBO(&recm.bck, obj.ContentPath, nil)
+		ct, err := core.NewCTFromBO(&recm.bck, obj.ContentPath, nil)
 		debug.AssertNoErr(err)
 		return ct.Make(obj.ObjectFileType)
 	case SGLStoreType:
@@ -267,7 +267,7 @@ func (recm *RecordManager) FullContentPath(obj *RecordObj) string {
 		// To convert contentPath to fullContentPath we need to make record
 		// unique name full FQN.
 		contentPath := obj.ContentPath
-		c, err := cluster.NewCTFromBO(&recm.bck, contentPath, nil)
+		c, err := core.NewCTFromBO(&recm.bck, contentPath, nil)
 		debug.AssertNoErr(err)
 		return c.Make(ct.DsortFileType)
 	default:
@@ -360,7 +360,7 @@ func (recm *RecordManager) Cleanup() {
 	recm.contents = nil
 
 	// NOTE: may call cos.FreeMemToOS
-	cluster.T.PageMM().FreeSpec(memsys.FreeSpec{
+	core.T.PageMM().FreeSpec(memsys.FreeSpec{
 		Totally: true,
 		ToOS:    true,
 		MinSize: 1, // force toGC to free all (even small) memory to system

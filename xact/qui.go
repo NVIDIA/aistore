@@ -7,17 +7,17 @@ package xact
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // common ref-counted quiescence
-func RefcntQuiCB(refc *atomic.Int32, maxTimeout, totalSoFar time.Duration) cluster.QuiRes {
+func RefcntQuiCB(refc *atomic.Int32, maxTimeout, totalSoFar time.Duration) core.QuiRes {
 	if refc.Load() > 0 {
-		return cluster.QuiActive
+		return core.QuiActive
 	}
 	if totalSoFar > maxTimeout {
-		return cluster.QuiTimeout
+		return core.QuiTimeout
 	}
-	return cluster.QuiInactiveCB
+	return core.QuiInactiveCB
 }

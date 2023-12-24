@@ -7,8 +7,8 @@ package mock
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -17,9 +17,9 @@ func init() {
 }
 
 // interface guard
-var _ cluster.Xact = (*XactMock)(nil)
+var _ core.Xact = (*XactMock)(nil)
 
-// XactMock provides cluster.Xact interface with mocked return values.
+// XactMock provides core.Xact interface with mocked return values.
 type XactMock struct {
 	xact.Base
 }
@@ -34,8 +34,8 @@ func NewXact(kind string) *XactMock {
 	return xctn
 }
 
-func (r *XactMock) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactMock) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 	return
 }

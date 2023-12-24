@@ -7,8 +7,8 @@ package reb
 import (
 	"sync"
 
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 ////////////////

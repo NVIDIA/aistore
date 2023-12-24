@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -42,7 +42,7 @@ func TestJoggerGroup(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
 			return nil
@@ -88,7 +88,7 @@ func TestJoggerGroupParallel(t *testing.T) {
 		Bck:  out.Bck,
 		CTs:  []string{fs.ObjectType},
 		Slab: slab,
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			b := bytes.NewBuffer(buf[:0])
 			_, err = b.WriteString(lom.FQN)
 			tassert.CheckFatal(t, err)
@@ -141,7 +141,7 @@ func TestJoggerGroupLoad(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			tassert.Errorf(t, lom.SizeBytes() == desc.ObjectSize, "incorrect object size (lom probably not loaded)")
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counter.Inc()
@@ -180,7 +180,7 @@ func TestJoggerGroupError(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			counter.Inc()
 			return fmt.Errorf("oops")
 		},
@@ -227,7 +227,7 @@ func TestJoggerGroupOneErrorStopsAll(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: []string{fs.ObjectType},
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			cnt := counters[lom.Mountpath().Path].Inc()
 
 			// Fail only once, on one mpath.
@@ -282,12 +282,12 @@ func TestJoggerGroupMultiContentTypes(t *testing.T) {
 	opts := &mpather.JgroupOpts{
 		Bck: out.Bck,
 		CTs: cts,
-		VisitObj: func(lom *cluster.LOM, buf []byte) error {
+		VisitObj: func(lom *core.LOM, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counters[fs.ObjectType].Inc()
 			return nil
 		},
-		VisitCT: func(ct *cluster.CT, buf []byte) error {
+		VisitCT: func(ct *core.CT, buf []byte) error {
 			tassert.Errorf(t, len(buf) == 0, "buffer expected to be empty")
 			counters[ct.ContentType()].Inc()
 			return nil

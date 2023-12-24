@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -43,8 +43,8 @@ func (p *factory) Start() error {
 	return nil
 }
 
-func (*factory) Kind() string        { return apc.ActDsort }
-func (p *factory) Get() cluster.Xact { return p.xctn }
+func (*factory) Kind() string     { return apc.ActDsort }
+func (p *factory) Get() core.Xact { return p.xctn }
 
 func (*factory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -71,8 +71,8 @@ func (r *xaction) Abort(err error) (ok bool) {
 	return
 }
 
-func (r *xaction) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *xaction) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	m, exists := Managers.Get(r.ID(), true /*incl. archived*/)

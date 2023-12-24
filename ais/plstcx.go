@@ -11,13 +11,13 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xs"
 )
@@ -196,7 +196,7 @@ func (c *lstcx) bcast() (err error) {
 	args := allocBcArgs()
 	{
 		args.req = cmn.HreqArgs{Method: http.MethodPost, Path: apc.URLPathXactions.S, Body: body}
-		args.to = cluster.Targets
+		args.to = core.Targets
 		args.timeout = cmn.Rom.MaxKeepalive()
 	}
 	if c.stopped.Load() {

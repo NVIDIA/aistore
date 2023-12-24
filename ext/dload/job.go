@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/nl"
 )
 
@@ -49,8 +49,8 @@ type (
 		Timeout() time.Duration
 		ActiveStats() (*StatusResp, error)
 		String() string
-		Notif() cluster.Notif // notifications
-		AddNotif(n cluster.Notif, job jobif)
+		Notif() core.Notif // notifications
+		AddNotif(n core.Notif, job jobif)
 
 		// If total length (size) of download job is not known, -1 should be returned.
 		Len() int
@@ -137,7 +137,7 @@ func (j *baseDlJob) init(id string, bck *meta.Bck, timeout, desc string, limits 
 	// TODO: this might be inaccurate if we download 1 or 2 objects because then
 	//  other targets will have limits but will not use them.
 	if limits.BytesPerHour > 0 {
-		limits.BytesPerHour /= cluster.T.Sowner().Get().CountActiveTs()
+		limits.BytesPerHour /= core.T.Sowner().Get().CountActiveTs()
 	}
 	td, _ := time.ParseDuration(timeout)
 	{
@@ -165,16 +165,16 @@ func (j *baseDlJob) String() (s string) {
 	return s + "-" + j.Description()
 }
 
-func (j *baseDlJob) Notif() cluster.Notif { return j.notif }
+func (j *baseDlJob) Notif() core.Notif { return j.notif }
 
-func (j *baseDlJob) AddNotif(n cluster.Notif, job jobif) {
+func (j *baseDlJob) AddNotif(n core.Notif, job jobif) {
 	var ok bool
 	debug.Assert(j.notif == nil) // currently, "add" means "set"
 	j.notif, ok = n.(*NotifDownload)
 	debug.Assert(ok)
 	j.notif.job = job
 	debug.Assert(j.notif.F != nil)
-	if n.Upon(cluster.UponProgress) {
+	if n.Upon(core.UponProgress) {
 		debug.Assert(j.notif.P != nil)
 	}
 }
@@ -301,8 +301,8 @@ func (j *rangeDlJob) String() (s string) {
 
 func (j *rangeDlJob) getNextObjs() error {
 	var (
-		smap = cluster.T.Sowner().Get()
-		sid  = cluster.T.SID()
+		smap = core.T.Sowner().Get()
+		sid  = core.T.SID()
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {
@@ -369,9 +369,9 @@ func (j *backendDlJob) genNext() (objs []dlObj, ok bool, err error) {
 // download found or the bucket list is over.
 func (j *backendDlJob) getNextObjs() error {
 	var (
-		sid     = cluster.T.SID()
-		smap    = cluster.T.Sowner().Get()
-		backend = cluster.T.Backend(j.bck)
+		sid     = core.T.SID()
+		smap    = core.T.Sowner().Get()
+		backend = core.T.Backend(j.bck)
 	)
 	j.objs = j.objs[:0]
 	for len(j.objs) < downloadBatchSize {

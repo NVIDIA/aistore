@@ -18,12 +18,12 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -185,7 +185,7 @@ func (m *ioContext) checkObjectDistribution(t *testing.T) {
 	lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Props: apc.GetPropsLocation}, api.ListArgs{})
 	tassert.CheckFatal(t, err)
 	for _, obj := range lst.Entries {
-		tname, _ := cluster.ParseObjLoc(obj.Location)
+		tname, _ := core.ParseObjLoc(obj.Location)
 		tid := meta.N2ID(tname)
 		targetObjectCount[tid]++
 	}
@@ -1088,7 +1088,7 @@ func findObjOnDisk(bck cmn.Bck, objName string) (fqn string) {
 			return nil
 		}
 
-		ct, err := cluster.NewCTFromFQN(path, nil)
+		ct, err := core.NewCTFromFQN(path, nil)
 		if err != nil {
 			return nil
 		}

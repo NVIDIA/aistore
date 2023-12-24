@@ -17,13 +17,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/transport"
@@ -126,10 +126,10 @@ const (
 type (
 	// request - structure to request an object to be EC'ed or restored
 	request struct {
-		LIF      cluster.LIF // object info
-		Action   string      // what to do with the object (see Act* consts)
-		ErrCh    chan error  // for final EC result (used only in restore)
-		Callback cluster.OnFinishObj
+		LIF      core.LIF   // object info
+		Action   string     // what to do with the object (see Act* consts)
+		ErrCh    chan error // for final EC result (used only in restore)
+		Callback core.OnFinishObj
 
 		putTime time.Time // time when the object is put into main queue
 		tm      time.Time // to measure different steps
@@ -142,12 +142,12 @@ type (
 	}
 
 	WriteArgs struct {
-		MD         []byte       // CT's metafile content
-		Reader     io.Reader    // CT content
-		BID        uint64       // bucket ID
-		Cksum      *cos.Cksum   // object checksum
-		Generation int64        // EC Generation
-		Xact       cluster.Xact // xaction that drives it
+		MD         []byte     // CT's metafile content
+		Reader     io.Reader  // CT content
+		BID        uint64     // bucket ID
+		Cksum      *cos.Cksum // object checksum
+		Generation int64      // EC Generation
+		Xact       core.Xact  // xaction that drives it
 	}
 
 	// keeps temporarily a slice of object data until it is sent to remote node
@@ -156,7 +156,7 @@ type (
 		reader  cos.ReadOpenCloser // used in encoding - a slice of `obj`
 		writer  io.Writer          // for parity slices and downloading slices from other targets when restoring
 		twg     *cos.TimeoutGroup  // for synchronous download (when restoring from slices)
-		lom     *cluster.LOM       // for xattrs
+		lom     *core.LOM          // for xattrs
 		n       int64              // number of byte sent/received
 		refCnt  atomic.Int32       // number of references
 		workFQN string             // FQN for temporary slice/replica
@@ -195,8 +195,8 @@ var (
 )
 
 func Init() {
-	g.pmm = cluster.T.PageMM()
-	g.smm = cluster.T.ByteMM()
+	g.pmm = core.T.PageMM()
+	g.smm = core.T.ByteMM()
 
 	fs.CSM.Reg(fs.ECSliceType, &fs.ECSliceContentResolver{})
 	fs.CSM.Reg(fs.ECMetaType, &fs.ECMetaContentResolver{})
@@ -285,7 +285,7 @@ func (s *slice) reopenReader() (reader cos.ReadOpenCloser, err error) {
 // misc. utils
 //
 
-func allocateReq(action string, lif cluster.LIF) (req *request) {
+func allocateReq(action string, lif core.LIF) (req *request) {
 	if v := g.reqPool.Get(); v != nil {
 		req = v.(*request)
 	} else {
@@ -393,12 +393,12 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 }
 
 // Saves the main replica to local drives
-func writeObject(lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xact) error {
+func writeObject(lom *core.LOM, reader io.Reader, size int64, xctn core.Xact) error {
 	if size > 0 {
 		reader = io.LimitReader(reader, size)
 	}
 	readCloser := io.NopCloser(reader)
-	params := cluster.AllocPutObjParams()
+	params := core.AllocPutObjParams()
 	{
 		params.WorkTag = "ec"
 		params.Reader = readCloser
@@ -408,8 +408,8 @@ func writeObject(lom *cluster.LOM, reader io.Reader, size int64, xctn cluster.Xa
 		// to avoid changing version; TODO: introduce cmn.OwtEC
 		params.OWT = cmn.OwtMigrateRepl
 	}
-	err := cluster.T.PutObject(lom, params)
-	cluster.FreePutObjParams(params)
+	err := core.T.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	return err
 }
 
@@ -418,7 +418,7 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 		return nil
 	}
 	newBck := meta.CloneBck(bck)
-	err := newBck.Init(cluster.T.Bowner())
+	err := newBck.Init(core.T.Bowner())
 	if err == nil && newBck.Props.BID != bid {
 		err = fmt.Errorf("bucket ID mismatch: local %d, sender %d", newBck.Props.BID, bid)
 	}
@@ -427,7 +427,7 @@ func validateBckBID(bck *cmn.Bck, bid uint64) error {
 
 // WriteSliceAndMeta saves slice and its metafile
 func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
-	ct, err := cluster.NewCTFromBO(&hdr.Bck, hdr.ObjName, cluster.T.Bowner(), fs.ECSliceType)
+	ct, err := core.NewCTFromBO(&hdr.Bck, hdr.ObjName, core.T.Bowner(), fs.ECSliceType)
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 	if err := ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
 		return err
 	}
-	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("slice-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return err
@@ -467,10 +467,10 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 }
 
 // WriteReplicaAndMeta saves replica and its metafile
-func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
+func WriteReplicaAndMeta(lom *core.LOM, args *WriteArgs) (err error) {
 	lom.Lock(false)
 	if args.Generation != 0 {
-		ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
+		ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 		if oldMeta, oldErr := LoadMetadata(ctMeta.FQN()); oldErr == nil && oldMeta.Generation > args.Generation {
 			lom.Unlock(false)
 			return nil
@@ -487,7 +487,7 @@ func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
 			return
 		}
 	}
-	ctMeta := cluster.NewCTFromLOM(lom, fs.ECMetaType)
+	ctMeta := core.NewCTFromLOM(lom, fs.ECMetaType)
 	ctMeta.Lock(true)
 
 	defer func() {
@@ -505,7 +505,7 @@ func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
 	if err = ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
 		return
 	}
-	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
+	if _, exists := core.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
 		err = fmt.Errorf("replica-and-meta: %s metafile saved while bucket %s was being destroyed",
 			ctMeta.ObjectName(), ctMeta.Bucket())
 		return

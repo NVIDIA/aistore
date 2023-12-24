@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 	"golang.org/x/sync/errgroup"
@@ -47,8 +47,8 @@ const (
 type (
 	JgroupOpts struct {
 		onFinish              func()
-		VisitObj              func(lom *cluster.LOM, buf []byte) error
-		VisitCT               func(ct *cluster.CT, buf []byte) error
+		VisitObj              func(lom *core.LOM, buf []byte) error
+		VisitCT               func(ct *core.CT, buf []byte) error
 		Slab                  *memsys.Slab
 		Bck                   cmn.Bck
 		Buckets               cmn.Bcks
@@ -251,7 +251,7 @@ func (j *jogger) runSelected() error {
 // run matching, one at a time
 func (j *jogger) runQbck(qbck cmn.QueryBcks) (err error) {
 	var (
-		bmd      = cluster.T.Bowner().Get()
+		bmd      = core.T.Bowner().Get()
 		provider *string
 		ns       *cmn.Ns
 		errs     cos.Errs
@@ -356,30 +356,30 @@ func (j *jogger) jog(fqn string, de fs.DirEntry) error {
 }
 
 func (j *jogger) visitFQN(fqn string, buf []byte) error {
-	ct, err := cluster.NewCTFromFQN(fqn, cluster.T.Bowner())
+	ct, err := core.NewCTFromFQN(fqn, core.T.Bowner())
 	if err != nil {
 		return err
 	}
 
 	if j.opts.SkipGloballyMisplaced {
-		smap := cluster.T.Sowner().Get()
+		smap := core.T.Sowner().Get()
 		tsi, err := smap.HrwHash2T(ct.Digest())
 		if err != nil {
 			return err
 		}
-		if tsi.ID() != cluster.T.SID() {
+		if tsi.ID() != core.T.SID() {
 			return nil
 		}
 	}
 
 	switch ct.ContentType() {
 	case fs.ObjectType:
-		lom := cluster.AllocLOM("")
+		lom := core.AllocLOM("")
 		lom.InitCT(ct)
 		err := j.visitObj(lom, buf)
 		// NOTE: j.visitObj() callback impl-s must either finish the entire
 		//       operation synchronously OR pass lom.LIF to other gorouine(s)
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return err
 	default:
 		if err := j.visitCT(ct, buf); err != nil {
@@ -389,7 +389,7 @@ func (j *jogger) visitFQN(fqn string, buf []byte) error {
 	return nil
 }
 
-func (j *jogger) visitObj(lom *cluster.LOM, buf []byte) (err error) {
+func (j *jogger) visitObj(lom *core.LOM, buf []byte) (err error) {
 	switch j.opts.DoLoad {
 	case noLoad:
 		goto visit
@@ -410,7 +410,7 @@ visit:
 	return j.opts.VisitObj(lom, buf)
 }
 
-func (j *jogger) visitCT(ct *cluster.CT, buf []byte) error { return j.opts.VisitCT(ct, buf) }
+func (j *jogger) visitCT(ct *core.CT, buf []byte) error { return j.opts.VisitCT(ct, buf) }
 
 func (j *jogger) getBuf(position int) []byte {
 	if j.bufs == nil {

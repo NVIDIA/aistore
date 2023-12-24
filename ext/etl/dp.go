@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 )
 
 // NOTE: compare with cluster/lom_dp.go
@@ -26,7 +26,7 @@ type (
 )
 
 // interface guard
-var _ cluster.DP = (*OfflineDP)(nil)
+var _ core.DP = (*OfflineDP)(nil)
 
 func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 	comm, err := GetCommunicator(msg.Transform.Name)
@@ -39,7 +39,7 @@ func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDP) Reader(lom *cluster.LOM) (cos.ReadOpenCloser, cos.OAH, error) {
+func (dp *OfflineDP) Reader(lom *core.LOM) (cos.ReadOpenCloser, cos.OAH, error) {
 	var (
 		r      cos.ReadCloseSizer // note: +sizer
 		err    error

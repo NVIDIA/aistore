@@ -19,8 +19,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -28,6 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -46,9 +46,9 @@ import (
 type (
 	putOI struct {
 		r          io.ReadCloser // content reader
-		xctn       cluster.Xact  // xaction that puts
+		xctn       core.Xact     // xaction that puts
 		t          *target       // this
-		lom        *cluster.LOM  // obj
+		lom        *core.LOM     // obj
 		cksumToUse *cos.Cksum    // if available (not `none`), can be validated and will be stored
 		config     *cmn.Config   // (during this request)
 		resphdr    http.Header   // as implied
@@ -68,7 +68,7 @@ type (
 		w          http.ResponseWriter
 		ctx        context.Context // context used when getting object from remote backend (access creds)
 		t          *target         // this
-		lom        *cluster.LOM    // obj
+		lom        *core.LOM       // obj
 		archive    archiveQuery    // archive query
 		ranges     byteRanges      // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 		atime      int64           // access time.Now()
@@ -92,7 +92,7 @@ type (
 		r       io.ReadCloser // content reader
 		t       *target       // this
 		config  *cmn.Config   // (during this request)
-		lom     *cluster.LOM  // append to or _as_
+		lom     *core.LOM     // append to or _as_
 		cksum   *cos.Cksum    // checksum expected once Flush-ed
 		hdl     aoHdl         // (packed)
 		op      string        // enum {apc.AppendOp, apc.FlushOp}
@@ -101,8 +101,8 @@ type (
 
 	copyOI struct {
 		dm         *bundle.DataMover
-		dp         cluster.DP // transform via: ext/etl/dp.go or cluster/lom_dp.go
-		xact       cluster.Xact
+		dp         core.DP // transform via: ext/etl/dp.go or cluster/lom_dp.go
+		xact       core.Xact
 		t          *target
 		config     *cmn.Config
 		bckTo      *meta.Bck
@@ -127,7 +127,7 @@ type (
 	putA2I struct {
 		r        io.ReadCloser // read bytes to append
 		t        *target       // this
-		lom      *cluster.LOM  // resulting shard
+		lom      *core.LOM     // resulting shard
 		filename string        // fqn inside
 		mime     string        // format
 		started  int64         // time of receiving
@@ -534,17 +534,17 @@ do:
 			goi.lom.Unlock(false)
 			doubleCheck, errCode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 			if doubleCheck && err != nil {
-				lom2 := cluster.AllocLOM(goi.lom.ObjName)
+				lom2 := core.AllocLOM(goi.lom.ObjName)
 				er2 := lom2.InitBck(goi.lom.Bucket())
 				if er2 == nil {
 					er2 = lom2.Load(true /*cache it*/, false /*locked*/)
 				}
 				if er2 == nil {
-					cluster.FreeLOM(goi.lom)
+					core.FreeLOM(goi.lom)
 					goi.lom = lom2
 					err = nil
 				} else {
-					cluster.FreeLOM(lom2)
+					core.FreeLOM(lom2)
 				}
 			}
 			if err != nil {
@@ -601,7 +601,7 @@ do:
 	// cold-GET: upgrade rlock => wlock, call t.Backend.GetObjReader
 	if cold {
 		var (
-			res    cluster.GetReaderResult
+			res    core.GetReaderResult
 			ckconf = goi.lom.CksumConf()
 			fast   = !cmn.Rom.Features().IsSet(feat.DisableFastColdGET) // can be disabled
 			loaded bool
@@ -710,7 +710,7 @@ outer:
 }
 
 // see also: t.GetCold() and goi.coldMem()
-func (goi *getOI) coldPut(res *cluster.GetReaderResult) (int, error) {
+func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 	var (
 		t, lom = goi.t, goi.lom
 		poi    = allocPOI()
@@ -916,7 +916,7 @@ gfn:
 	return
 }
 
-func (goi *getOI) getFromNeighbor(lom *cluster.LOM, tsi *meta.Snode) bool {
+func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	query := lom.Bck().NewQuery()
 	query.Set(apc.QparamIsGFNRequest, "true")
 	reqArgs := cmn.AllocHra()
@@ -1266,11 +1266,11 @@ func (a *apndOI) flush() (int, error) {
 		return http.StatusInternalServerError, cos.NewErrDataCksum(partialCksum, a.cksum)
 	}
 
-	params := cluster.PromoteParams{
+	params := core.PromoteParams{
 		Bck:    a.lom.Bck(),
 		Cksum:  partialCksum,
 		Config: a.config,
-		PromoteArgs: cluster.PromoteArgs{
+		PromoteArgs: core.PromoteArgs{
 			SrcFQN:       a.hdl.workFQN,
 			ObjName:      a.lom.ObjName,
 			OverwriteDst: true,
@@ -1315,14 +1315,14 @@ func (a *apndOI) pack(workFQN string) string {
 //
 
 // main method
-func (coi *copyOI) do(lom *cluster.LOM) (size int64, err error) {
+func (coi *copyOI) do(lom *core.LOM) (size int64, err error) {
 	if coi.dryRun {
 		return coi._dryRun(lom, coi.objnameTo)
 	}
 
 	// DP == nil: use default (no-op transform) if source bucket is remote
 	if coi.dp == nil && lom.Bck().IsRemote() {
-		coi.dp = &cluster.LDP{}
+		coi.dp = &core.LDP{}
 	}
 
 	// 1: dst location
@@ -1337,9 +1337,9 @@ func (coi *copyOI) do(lom *cluster.LOM) (size int64, err error) {
 
 	// dst is this target
 	// 2, 3: with transformation and without
-	dst := cluster.AllocLOM(coi.objnameTo)
+	dst := core.AllocLOM(coi.objnameTo)
 	if err := dst.InitBck(coi.bckTo.Bucket()); err != nil {
-		cluster.FreeLOM(dst)
+		core.FreeLOM(dst)
 		return 0, err
 	}
 	if coi.dp != nil {
@@ -1347,12 +1347,12 @@ func (coi *copyOI) do(lom *cluster.LOM) (size int64, err error) {
 	} else {
 		size, err = coi._regular(lom, dst)
 	}
-	cluster.FreeLOM(dst)
+	core.FreeLOM(dst)
 
 	return size, err
 }
 
-func (coi *copyOI) _dryRun(lom *cluster.LOM, objnameTo string) (size int64, err error) {
+func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
 	if coi.dp == nil {
 		if lom.Uname() != coi.bckTo.MakeUname(objnameTo) {
 			size = lom.SizeBytes()
@@ -1382,7 +1382,7 @@ func (coi *copyOI) _dryRun(lom *cluster.LOM, objnameTo string) (size int64, err 
 // - PUT to the relevant backend
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *copyOI) _reader(lom, dst *cluster.LOM) (size int64, _ error) {
+func (coi *copyOI) _reader(lom, dst *core.LOM) (size int64, _ error) {
 	reader, oah, errN := coi.dp.Reader(lom)
 	if errN != nil {
 		return 0, errN
@@ -1419,7 +1419,7 @@ func (coi *copyOI) _reader(lom, dst *cluster.LOM) (size int64, _ error) {
 	return size, err
 }
 
-func (coi *copyOI) _regular(lom, dst *cluster.LOM) (size int64, _ error) {
+func (coi *copyOI) _regular(lom, dst *core.LOM) (size int64, _ error) {
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
@@ -1454,7 +1454,7 @@ func (coi *copyOI) _regular(lom, dst *cluster.LOM) (size int64, _ error) {
 		}
 	}
 	if dst2 != nil {
-		cluster.FreeLOM(dst2)
+		core.FreeLOM(dst2)
 	}
 	return size, err
 }
@@ -1462,7 +1462,7 @@ func (coi *copyOI) _regular(lom, dst *cluster.LOM) (size int64, _ error) {
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyOI) send(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+func (coi *copyOI) send(lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
 	debug.Assert(coi.owt > 0)
 	sargs := allocSnda()
 	{
@@ -1480,7 +1480,7 @@ func (coi *copyOI) send(lom *cluster.LOM, objNameTo string, tsi *meta.Snode) (si
 	return
 }
 
-func (coi *copyOI) _send(lom *cluster.LOM, sargs *sendArgs) (size int64, _ error) {
+func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 	debug.Assert(!coi.dryRun)
 	if coi.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
@@ -1546,7 +1546,7 @@ func (coi *copyOI) _send(lom *cluster.LOM, sargs *sendArgs) (size int64, _ error
 
 // use data mover to transmit objects to other targets
 // (compare with coi.put())
-func (coi *copyOI) _dm(lom *cluster.LOM, sargs *sendArgs) error {
+func (coi *copyOI) _dm(lom *core.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
 	debug.Assert(sargs.dm.GetXact() == coi.xact || sargs.dm.GetXact().ID() == coi.xact.ID())
 	o := transport.AllocSend()
@@ -1557,7 +1557,7 @@ func (coi *copyOI) _dm(lom *cluster.LOM, sargs *sendArgs) error {
 		hdr.ObjAttrs.CopyFrom(oa, false /*skip cksum*/)
 	}
 	o.Callback = func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, _ error) {
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 	}
 	return sargs.dm.Send(o, sargs.reader, sargs.tsi)
 }
@@ -1760,7 +1760,7 @@ func (a *putA2I) finalize(size int64, cksum *cos.Cksum, fqn string) error {
 // put mirorr (main)
 //
 
-func (t *target) putMirror(lom *cluster.LOM) {
+func (t *target) putMirror(lom *core.LOM) {
 	mconfig := lom.MirrorConf()
 	if !mconfig.Enabled {
 		return

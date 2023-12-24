@@ -1,17 +1,17 @@
-// Package cluster provides local access to cluster-level metadata
+// Package core provides core metadata and in-cluster API
 /*
  * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package core
 
 import (
 	"context"
 	"io"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 type (

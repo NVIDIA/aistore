@@ -11,22 +11,22 @@ import (
 	"net/http"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const mock = "mock-backend"
 
 type mockBP struct {
-	t cluster.TargetPut
+	t core.TargetPut
 }
 
 // interface guard
-var _ cluster.BackendProvider = (*mockBP)(nil)
+var _ core.BackendProvider = (*mockBP)(nil)
 
-func NewDummyBackend(t cluster.TargetPut) (cluster.BackendProvider, error) { return &mockBP{t: t}, nil }
+func NewDummyBackend(t core.TargetPut) (core.BackendProvider, error) { return &mockBP{t: t}, nil }
 
 func (*mockBP) Provider() string  { return mock }
 func (*mockBP) MaxPageSize() uint { return math.MaxUint32 }
@@ -48,22 +48,22 @@ func (*mockBP) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error
 	return
 }
 
-func (*mockBP) HeadObj(_ ctx, lom *cluster.LOM) (*cmn.ObjAttrs, int, error) {
+func (*mockBP) HeadObj(_ ctx, lom *core.LOM) (*cmn.ObjAttrs, int, error) {
 	return &cmn.ObjAttrs{}, http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObj(_ ctx, lom *cluster.LOM, _ cmn.OWT) (int, error) {
+func (*mockBP) GetObj(_ ctx, lom *core.LOM, _ cmn.OWT) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) GetObjReader(context.Context, *cluster.LOM) (res cluster.GetReaderResult) {
+func (*mockBP) GetObjReader(context.Context, *core.LOM) (res core.GetReaderResult) {
 	return
 }
 
-func (*mockBP) PutObj(_ io.ReadCloser, lom *cluster.LOM) (int, error) {
+func (*mockBP) PutObj(_ io.ReadCloser, lom *core.LOM) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }
 
-func (*mockBP) DeleteObj(lom *cluster.LOM) (int, error) {
+func (*mockBP) DeleteObj(lom *core.LOM) (int, error) {
 	return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(lom.Bucket())
 }

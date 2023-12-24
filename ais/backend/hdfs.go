@@ -16,26 +16,26 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/colinmarc/hdfs/v2"
 )
 
 type (
 	hdfsProvider struct {
-		t cluster.TargetPut
+		t core.TargetPut
 		c *hdfs.Client
 	}
 )
 
 // interface guard
-var _ cluster.BackendProvider = (*hdfsProvider)(nil)
+var _ core.BackendProvider = (*hdfsProvider)(nil)
 
-func NewHDFS(t cluster.TargetPut) (cluster.BackendProvider, error) {
+func NewHDFS(t core.TargetPut) (core.BackendProvider, error) {
 	var (
 		config   = cmn.GCO.Get()
 		anyConf  = config.Backend.Get(apc.HDFS)
@@ -208,7 +208,7 @@ func (*hdfsProvider) ListBuckets(cmn.QueryBcks) (buckets cmn.Bcks, errCode int, 
 // HEAD OBJECT
 //
 
-func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (hp *hdfsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		fr       *hdfs.FileReader
 		filePath = filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
@@ -230,7 +230,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errC
 // GET OBJECT
 //
 
-func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+func (hp *hdfsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
 	res := hp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
@@ -243,7 +243,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OW
 	return 0, err
 }
 
-func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
+func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *core.LOM) (res core.GetReaderResult) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fr, err := hp.c.Open(filePath)
 	if err != nil {
@@ -260,7 +260,7 @@ func (hp *hdfsProvider) GetObjReader(_ context.Context, lom *cluster.LOM) (res c
 // PUT OBJECT
 //
 
-func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	fw, err := hp.c.Create(filePath)
 	if err != nil {
@@ -306,7 +306,7 @@ finish:
 // DELETE OBJECT
 //
 
-func (hp *hdfsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
+func (hp *hdfsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 	filePath := filepath.Join(lom.Bck().Props.Extra.HDFS.RefDirectory, lom.ObjName)
 	if err := hp.c.Remove(filePath); err != nil {
 		errCode, err = hdfsErrorToAISError(err)

@@ -10,12 +10,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/res"
 	"github.com/NVIDIA/aistore/xact"
@@ -66,7 +66,7 @@ func (t *target) httpxget(w http.ResponseWriter, r *http.Request) {
 	// TODO: add user option to return idle xactions (separately)
 	//
 	if what == apc.WhatAllRunningXacts {
-		var inout = cluster.AllRunningInOut{Kind: xactMsg.Kind}
+		var inout = core.AllRunningInOut{Kind: xactMsg.Kind}
 		xreg.GetAllRunning(&inout, false /*periodic*/)
 		t.writeJSON(w, r, inout.Running, what)
 		return
@@ -202,7 +202,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		}
 		notif := &xact.NotifXact{
 			Base: nl.Base{
-				When: cluster.UponTerm,
+				When: core.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.notifyTerm,
 			},
@@ -225,7 +225,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{
 			Base: nl.Base{
-				When: cluster.UponTerm,
+				When: core.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.notifyTerm,
 			},
@@ -257,7 +257,7 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 func (t *target) httpxpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		err    error
-		xctn   cluster.Xact
+		xctn   core.Xact
 		amsg   *apc.ActMsg
 		tcomsg cmn.TCObjsMsg
 	)

@@ -9,10 +9,10 @@ package xs
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -30,7 +30,7 @@ func newNpgCtx(bck *meta.Bck, msg *apc.LsoMsg, cb lomVisitedCb) (npg *npgCtx) {
 			msg:          msg.Clone(),
 			lomVisitedCb: cb,
 			wanted:       wanted(msg),
-			smap:         cluster.T.Sowner().Get(),
+			smap:         core.T.Sowner().Get(),
 		},
 	}
 	return
@@ -65,7 +65,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 		return nil
 	}
 	if err != nil {
-		return cmn.NewErrAborted(cluster.T.String()+" ResultSetXact", "query", err)
+		return cmn.NewErrAborted(core.T.String()+" ResultSetXact", "query", err)
 	}
 	if npg.idx < len(npg.page.Entries) {
 		*npg.page.Entries[npg.idx] = *entry
@@ -81,7 +81,7 @@ func (npg *npgCtx) cb(fqn string, de fs.DirEntry) error {
 func (npg *npgCtx) nextPageR(nentries cmn.LsoEntries, inclStatusLocalMD bool) (*cmn.LsoResult, error) {
 	debug.Assert(!npg.wi.msg.IsFlagSet(apc.LsObjCached))
 	lst := &cmn.LsoResult{Entries: nentries}
-	_, err := cluster.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
+	_, err := core.T.Backend(npg.bck).ListObjects(npg.bck, npg.wi.msg, lst)
 	if err != nil {
 		freeLsoEntries(nentries)
 		return nil, err
@@ -102,19 +102,19 @@ func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 		if err != nil {
 			return err
 		}
-		if si.ID() != cluster.T.SID() {
+		if si.ID() != core.T.SID() {
 			continue
 		}
-		lom := cluster.AllocLOM(obj.Name)
+		lom := core.AllocLOM(obj.Name)
 		if err := lom.InitBck(npg.bck.Bucket()); err != nil {
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			if cmn.IsErrBucketNought(err) {
 				return err
 			}
 			continue
 		}
 		if err := lom.Load(true /* cache it*/, false /*locked*/); err != nil {
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 			continue
 		}
 
@@ -124,7 +124,7 @@ func (npg *npgCtx) populate(lst *cmn.LsoResult) error {
 		if post != nil {
 			post(lom)
 		}
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 	}
 	return nil
 }

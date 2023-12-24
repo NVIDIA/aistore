@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/xact"
 	. "github.com/onsi/ginkgo"
@@ -91,7 +91,7 @@ var _ = Describe("Notifications xaction test", func() {
 			return n
 		}
 
-		baseXact = func(xid string, counts ...int64) *cluster.Snap {
+		baseXact = func(xid string, counts ...int64) *core.Snap {
 			var (
 				objCount  int64
 				byteCount int64
@@ -102,28 +102,28 @@ var _ = Describe("Notifications xaction test", func() {
 			if len(counts) > 1 {
 				byteCount = counts[1]
 			}
-			return &cluster.Snap{
+			return &core.Snap{
 				ID: xid,
-				Stats: cluster.Stats{
+				Stats: core.Stats{
 					Bytes: byteCount,
 					Objs:  objCount,
 				}}
 		}
 
-		finishedXact = func(xid string, counts ...int64) (snap *cluster.Snap) {
+		finishedXact = func(xid string, counts ...int64) (snap *core.Snap) {
 			snap = baseXact(xid, counts...)
 			snap.EndTime = time.Now()
 			return
 		}
 
-		abortedXact = func(xid string, counts ...int64) (snap *cluster.Snap) {
+		abortedXact = func(xid string, counts ...int64) (snap *core.Snap) {
 			snap = finishedXact(xid, counts...)
 			snap.AbortedX = true
 			return
 		}
 
 		notifRequest = func(daeID, xid, notifKind string, stats any) *http.Request {
-			nm := cluster.NotifMsg{
+			nm := core.NotifMsg{
 				UUID: xid,
 				Data: cos.MustMarshal(stats),
 			}
@@ -211,7 +211,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
 			Expect(err).To(BeNil())
 			val, _ := nl.NodeStats().Load(target1ID)
-			snap, ok := val.(*cluster.Snap)
+			snap, ok := val.(*core.Snap)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(initObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(initByteCount))
@@ -220,7 +220,7 @@ var _ = Describe("Notifications xaction test", func() {
 			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
 			Expect(err).To(BeNil())
 			val, _ = nl.NodeStats().Load(target1ID)
-			snap, ok = val.(*cluster.Snap)
+			snap, ok = val.(*core.Snap)
 			Expect(ok).To(BeTrue())
 			Expect(snap.Stats.Objs).To(BeEquivalentTo(updatedObjCount))
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(updatedByteCount))

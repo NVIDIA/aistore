@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
@@ -19,7 +19,7 @@ const mptXattrID = "user.ais.s3-multipart"
 
 const iniCapParts = 8
 
-func OffsetSorted(lom *cluster.LOM, partNum int64) (off, size int64, status int, err error) {
+func OffsetSorted(lom *core.LOM, partNum int64) (off, size int64, status int, err error) {
 	var mpt *mpt
 	if mpt, err = loadMptXattr(lom.FQN); err != nil {
 		return

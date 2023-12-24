@@ -21,8 +21,6 @@ import (
 	"github.com/NVIDIA/aistore/ais/backend"
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -33,6 +31,8 @@ import (
 	"github.com/NVIDIA/aistore/cmn/kvdb"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/dsort"
@@ -59,7 +59,7 @@ type (
 		disabled atomic.Bool // true: standing by
 		prevbmd  atomic.Bool // special
 	}
-	backends map[string]cluster.BackendProvider
+	backends map[string]core.BackendProvider
 	// main
 	target struct {
 		htrun
@@ -130,7 +130,7 @@ func (t *target) _initBuiltin() error {
 	)
 	for provider := range apc.Providers {
 		var (
-			add cluster.BackendProvider
+			add core.BackendProvider
 			err error
 		)
 		switch provider {
@@ -299,7 +299,7 @@ func (t *target) Run() error {
 
 	tstats := t.statsT.(*stats.Trunner)
 
-	cluster.Tinit(t, tstats, true /*run hk*/)
+	core.Tinit(t, tstats, true /*run hk*/)
 
 	// metrics, disks first
 	availablePaths, disabledPaths := fs.Get()
@@ -597,9 +597,9 @@ func (t *target) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		apireq := apiReqAlloc(2, apc.URLPathObjects.L, true /*dpq*/)
 		if err := t.parseReq(w, r, apireq); err == nil {
-			lom := cluster.AllocLOM(apireq.items[1])
+			lom := core.AllocLOM(apireq.items[1])
 			t.httpobjput(w, r, apireq, lom)
-			cluster.FreeLOM(lom)
+			core.FreeLOM(lom)
 		}
 		apiReqFree(apireq)
 	case http.MethodDelete:
@@ -659,12 +659,12 @@ func (t *target) httpobjget(w http.ResponseWriter, r *http.Request, apireq *apiR
 			return
 		}
 	}
-	lom := cluster.AllocLOM(apireq.items[1])
+	lom := core.AllocLOM(apireq.items[1])
 	lom = t.getObject(w, r, apireq.dpq, apireq.bck, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 }
 
-func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *cluster.LOM) *cluster.LOM {
+func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck *meta.Bck, lom *core.LOM) *core.LOM {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -736,7 +736,7 @@ func (t *target) _erris(w http.ResponseWriter, r *http.Request, silent string /*
 
 // PUT /v1/objects/bucket-name/object-name; does:
 // 1) append object 2) append to archive 3) PUT
-func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *cluster.LOM) {
+func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRequest, lom *core.LOM) {
 	var (
 		config  = cmn.GCO.Get()
 		started = time.Now().UnixNano()
@@ -865,10 +865,10 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 	}
 
 	evict := msg.Action == apc.ActEvictObjects
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	if err := lom.InitBck(apireq.bck.Bucket()); err != nil {
 		t.writeErr(w, r, err)
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return
 	}
 
@@ -883,7 +883,7 @@ func (t *target) httpobjdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErr(w, r, err, errCode)
 		}
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 }
 
 // POST /v1/objects/bucket-name/object-name
@@ -904,7 +904,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		return
 	}
 
-	lom := cluster.AllocLOM(apireq.items[1])
+	lom := core.AllocLOM(apireq.items[1])
 	if !t.isValidObjname(w, r, lom.ObjName) {
 		return
 	}
@@ -918,7 +918,7 @@ func (t *target) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *api
 		t.statsT.IncErr(stats.RenameCount)
 		t.writeErr(w, r, err)
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 }
 
 // HEAD /v1/objects/<bucket-name>/<object-name>
@@ -935,15 +935,15 @@ func (t *target) httpobjhead(w http.ResponseWriter, r *http.Request, apireq *api
 			return
 		}
 	}
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	errCode, err := t.objhead(w.Header(), query, bck, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	if err != nil {
 		t._erris(w, r, query.Get(apc.QparamSilent), err, errCode)
 	}
 }
 
-func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *cluster.LOM) (errCode int, err error) {
+func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *core.LOM) (errCode int, err error) {
 	var (
 		fltPresence int
 		exists      = true
@@ -1087,8 +1087,8 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, "set-custom", msg.Value, err)
 		return
 	}
-	lom := cluster.AllocLOM(apireq.items[1] /*objName*/)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(apireq.items[1] /*objName*/)
+	defer core.FreeLOM(lom)
 	if !t.isValidObjname(w, r, lom.ObjName) {
 		return
 	}
@@ -1161,8 +1161,8 @@ func (t *target) sendECMetafile(w http.ResponseWriter, r *http.Request, bck *met
 }
 
 func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) {
-	lom := cluster.AllocLOM(objName)
-	defer cluster.FreeLOM(lom)
+	lom := core.AllocLOM(objName)
+	defer core.FreeLOM(lom)
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		if cmn.IsErrRemoteBckNotFound(err) {
 			t.BMDVersionFixup(r)
@@ -1199,7 +1199,7 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 //
 
 // usage including: prefetch; validate-warm-get (this target)
-func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bool, errCode int, err error) {
+func (t *target) CompareObjects(ctx context.Context, lom *core.LOM) (equal bool, errCode int, err error) {
 	var objAttrs *cmn.ObjAttrs
 	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
 	if err != nil {
@@ -1211,7 +1211,7 @@ func (t *target) CompareObjects(ctx context.Context, lom *cluster.LOM) (equal bo
 }
 
 // called under lock
-func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started int64, dpq *dpq) (int, error) {
+func (t *target) putApndArch(r *http.Request, lom *core.LOM, started int64, dpq *dpq) (int, error) {
 	var (
 		mime     = dpq.archmime // apc.QparamArchmime
 		filename = dpq.archpath // apc.QparamArchpath
@@ -1261,7 +1261,7 @@ func (t *target) putApndArch(r *http.Request, lom *cluster.LOM, started int64, d
 	return a.do()
 }
 
-func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error) {
+func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	var isback bool
 	lom.Lock(true)
 	code, err, isback = t.delobj(lom, evict)
@@ -1285,7 +1285,7 @@ func (t *target) DeleteObject(lom *cluster.LOM, evict bool) (code int, err error
 	return
 }
 
-func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
+func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	var (
 		aisErr, backendErr         error
 		aisErrCode, backendErrCode int
@@ -1335,7 +1335,7 @@ func (t *target) delobj(lom *cluster.LOM, evict bool) (int, error, bool) {
 }
 
 // rename obj
-func (t *target) objMv(lom *cluster.LOM, msg *apc.ActMsg) (err error) {
+func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	if lom.Bck().IsRemote() {
 		return fmt.Errorf("%s: cannot rename object %s from a remote bucket", t.si, lom)
 	}

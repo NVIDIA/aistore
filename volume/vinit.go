@@ -9,16 +9,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 // initializes mountpaths and volume; on SIE (storage integrity error) terminates and exits
-func Init(t cluster.Target, config *cmn.Config,
+func Init(t core.Target, config *cmn.Config,
 	allowSharedDisksAndNoDisks, useLoopbackDevs, ignoreMissingMountpath bool) (created bool) {
 	var (
 		vmd *VMD

@@ -12,14 +12,14 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
@@ -141,7 +141,7 @@ func (ds *dsorterGeneral) start() error {
 		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        reqNetwork,
 		Trname:     trname,
-		Ntype:      cluster.Targets,
+		Ntype:      core.Targets,
 		Extra: &transport.Extra{
 			Config: config,
 		},
@@ -155,7 +155,7 @@ func (ds *dsorterGeneral) start() error {
 		Multiplier: ds.m.Pars.SbundleMult,
 		Net:        respNetwork,
 		Trname:     trname,
-		Ntype:      cluster.Targets,
+		Ntype:      core.Targets,
 		Extra: &transport.Extra{
 			Compression: config.Dsort.Compression,
 			Config:      config,
@@ -268,7 +268,7 @@ func (ds *dsorterGeneral) Load(w io.Writer, rec *shard.Record, obj *shard.Record
 	if ds.m.aborted() {
 		return 0, ds.m.newErrAborted()
 	}
-	if rec.DaemonID != cluster.T.SID() {
+	if rec.DaemonID != core.T.SID() {
 		return ds.loadRemote(w, rec, obj)
 	}
 	return ds.loadLocal(w, obj)
@@ -400,7 +400,7 @@ func (ds *dsorterGeneral) loadRemote(w io.Writer, rec *shard.Record, obj *shard.
 		case stopped:
 			err = cmn.NewErrAborted("wait for remote content", "", nil)
 		case timed:
-			err = errors.Errorf("wait for remote content timed out (%q was waiting for %q)", cluster.T.SID(), tid)
+			err = errors.Errorf("wait for remote content timed out (%q was waiting for %q)", core.T.SID(), tid)
 		default:
 			debug.Assert(false, "pulled but not stopped or timed?")
 		}
@@ -421,7 +421,7 @@ func (ds *dsorterGeneral) sentCallback(_ *transport.ObjHdr, _ io.ReadCloser, arg
 	}
 	req := arg.(*remoteRequest)
 	nlog.Errorf("%s: [dsort] %s failed to send remore-req %s: %v",
-		cluster.T, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
+		core.T, ds.m.ManagerUUID, req.Record.MakeUniqueName(req.RecordObj), err)
 }
 
 func (ds *dsorterGeneral) errHandler(err error, node *meta.Snode, o *transport.Obj) {
@@ -520,7 +520,7 @@ func (ds *dsorterGeneral) responseCallback(hdr *transport.ObjHdr, rc io.ReadClos
 	ds.m.decrementRef(1)
 	if err != nil {
 		nlog.Errorf("%s: [dsort] %s failed to send rsp %s (size %d): %v - aborting...",
-			cluster.T, ds.m.ManagerUUID, hdr.ObjName, hdr.ObjAttrs.Size, err)
+			core.T, ds.m.ManagerUUID, hdr.ObjName, hdr.ObjAttrs.Size, err)
 		ds.m.abort(err)
 	}
 }
@@ -586,9 +586,9 @@ type dsgCreateShard struct {
 }
 
 func (cs *dsgCreateShard) do() (err error) {
-	lom := cluster.AllocLOM(cs.shard.Name)
+	lom := core.AllocLOM(cs.shard.Name)
 	err = cs.ds.m.createShard(cs.shard, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	cs.ds.creationPhase.adjuster.releaseGoroutineSema()
 	return
 }

@@ -9,12 +9,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -39,7 +39,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*mncXact)(nil)
+	_ core.Xact      = (*mncXact)(nil)
 	_ xreg.Renewable = (*mncFactory)(nil)
 )
 
@@ -53,14 +53,14 @@ func (*mncFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *mncFactory) Start() error {
-	slab, err := cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
+	slab, err := core.T.PageMM().GetSlab(memsys.MaxPageSlabSize)
 	debug.AssertNoErr(err)
 	p.xctn = newMNC(p, slab)
 	return nil
 }
 
-func (*mncFactory) Kind() string        { return apc.ActMakeNCopies }
-func (p *mncFactory) Get() cluster.Xact { return p.xctn }
+func (*mncFactory) Kind() string     { return apc.ActMakeNCopies }
+func (p *mncFactory) Get() core.Xact { return p.xctn }
 
 func (p *mncFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, err error) {
 	err = fmt.Errorf("%s is currently running, cannot start a new %q", prevEntry.Get(), p.Str(p.Kind()))
@@ -89,7 +89,7 @@ func newMNC(p *mncFactory, slab *memsys.Slab) (r *mncXact) {
 
 func (r *mncXact) Run(wg *sync.WaitGroup) {
 	wg.Done()
-	tname := cluster.T.String()
+	tname := core.T.String()
 	if err := fs.ValidateNCopies(tname, r.p.args.Copies); err != nil {
 		r.AddErr(err)
 		r.Finish()
@@ -102,7 +102,7 @@ func (r *mncXact) Run(wg *sync.WaitGroup) {
 	r.Finish()
 }
 
-func (r *mncXact) visitObj(lom *cluster.LOM, buf []byte) (err error) {
+func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 	var (
 		size   int64
 		n      = lom.NumCopies()
@@ -159,8 +159,8 @@ func (r *mncXact) str(s string) string {
 func (r *mncXact) String() string { return r.str(r.Base.String()) }
 func (r *mncXact) Name() string   { return r.str(r.Base.Name()) }
 
-func (r *mncXact) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *mncXact) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

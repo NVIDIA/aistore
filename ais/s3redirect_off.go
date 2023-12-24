@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/NVIDIA/aistore/cluster/meta"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 func init() {

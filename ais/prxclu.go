@@ -16,13 +16,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/xact"
 	jsoniter "github.com/json-iterator/go"
@@ -131,7 +131,7 @@ func (p *proxy) xquery(w http.ResponseWriter, r *http.Request, what string, quer
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
-	args.to = cluster.Targets
+	args.to = core.Targets
 
 	var (
 		config      = cmn.GCO.Get()
@@ -174,7 +174,7 @@ func (p *proxy) xgetRunning(w http.ResponseWriter, r *http.Request, what string,
 
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodGet, Path: apc.URLPathXactions.S, Body: body, Query: query}
-	args.to = cluster.Targets
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
@@ -206,7 +206,7 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 		config  = cmn.GCO.Get()
 		timeout = config.Client.Timeout.D()
 	)
-	proxyResults, err := p._sysinfo(r, timeout, cluster.Proxies, query)
+	proxyResults, err := p._sysinfo(r, timeout, core.Proxies, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -214,7 +214,7 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 	out := &apc.ClusterSysInfoRaw{}
 	out.Proxy = proxyResults
 
-	targetResults, err := p._sysinfo(r, timeout, cluster.Targets, query)
+	targetResults, err := p._sysinfo(r, timeout, core.Targets, query)
 	if err != nil {
 		p.writeErr(w, r, err)
 		return
@@ -223,7 +223,7 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 	p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
+func (p *proxy) getRemAises(refresh bool) (*core.Remotes, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
@@ -245,12 +245,12 @@ func (p *proxy) getRemAises(refresh bool) (*cluster.Remotes, error) {
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
-		v   *cluster.Remotes
+		v   *core.Remotes
 		res = p.call(cargs, smap)
 		err = res.toErr()
 	)
 	if err == nil {
-		v = res.v.(*cluster.Remotes)
+		v = res.v.(*core.Remotes)
 	}
 	freeCargs(cargs)
 	freeCR(res)
@@ -970,7 +970,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 	case apc.ActShutdownCluster:
 		args := allocBcArgs()
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-		args.to = cluster.AllNodes
+		args.to = core.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
 		// self
@@ -986,7 +986,7 @@ func (p *proxy) cluputJSON(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathDae.S, Body: cos.MustMarshal(msg)}
-		args.to = cluster.AllNodes
+		args.to = core.AllNodes
 		_ = p.bcastGroup(args)
 		freeBcArgs(args)
 		// self
@@ -1160,7 +1160,7 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	args.to = cluster.Targets
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -1214,7 +1214,7 @@ func (p *proxy) xstop(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) {
 	body := cos.MustMarshal(apc.ActMsg{Action: msg.Action, Value: xargs})
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: body}
-	args.to = cluster.Targets
+	args.to = core.Targets
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 
@@ -1842,7 +1842,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	}
 	args.req.Body = cos.MustMarshal(cluMeta)
 
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	results := p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {
@@ -1872,7 +1872,7 @@ func (p *proxy) _setPrimary(w http.ResponseWriter, r *http.Request, npsi *meta.S
 	q.Set(apc.QparamPrepare, "false")
 	args = allocBcArgs()
 	args.req = cmn.HreqArgs{Method: http.MethodPut, Path: urlPath, Query: q}
-	args.to = cluster.AllNodes
+	args.to = core.AllNodes
 	results = p.bcastGroup(args)
 	freeBcArgs(args)
 	for _, res := range results {

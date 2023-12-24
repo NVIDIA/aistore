@@ -12,13 +12,13 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/reb"
@@ -277,7 +277,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 
 	var (
-		xctn cluster.Xact
+		xctn core.Xact
 		rns  = xreg.RenewLso(bck, lsmsg.UUID, lsmsg)
 	)
 	// check that xaction hasn't finished prior to this page read, restart if needed
@@ -388,7 +388,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			nlp.Lock()
 			defer nlp.Unlock()
 
-			cluster.UncacheBck(apireq.bck)
+			core.UncacheBck(apireq.bck)
 			err := fs.DestroyBucket(msg.Action, apireq.bck.Bucket(), apireq.bck.Props.BID)
 			if err != nil {
 				t.writeErr(w, r, err)
@@ -420,7 +420,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 		xctn := rns.Entry.Get()
 		xctn.AddNotif(&xact.NotifXact{
 			Base: nl.Base{
-				When: cluster.UponTerm,
+				When: core.UponTerm,
 				Dsts: []string{equalIC},
 				F:    t.notifyTerm,
 			},

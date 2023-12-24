@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/readers"
 )
@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 	t.htrun.init(config)
 
 	t.statsT = mock.NewStatsTracker()
-	cluster.Tinit(t, t.statsT, false)
+	core.Tinit(t, t.statsT, false)
 
 	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
 	bmd := newBucketMD()
@@ -105,8 +105,8 @@ func BenchmarkObjPut(b *testing.B) {
 	}
 	for _, bench := range benches {
 		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
-			lom := cluster.AllocLOM("objname")
-			defer cluster.FreeLOM(lom)
+			lom := core.AllocLOM("objname")
+			defer core.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
@@ -154,8 +154,8 @@ func BenchmarkObjAppend(b *testing.B) {
 	buf := make([]byte, 16*cos.KiB)
 	for _, bench := range benches {
 		b.Run(cos.ToSizeIEC(bench.fileSize, 2), func(b *testing.B) {
-			lom := cluster.AllocLOM("objname")
-			defer cluster.FreeLOM(lom)
+			lom := core.AllocLOM("objname")
+			defer core.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)
@@ -219,8 +219,8 @@ func BenchmarkObjGetDiscard(b *testing.B) {
 			benchName += "-chunked"
 		}
 		b.Run(benchName, func(b *testing.B) {
-			lom := cluster.AllocLOM("objname")
-			defer cluster.FreeLOM(lom)
+			lom := core.AllocLOM("objname")
+			defer core.FreeLOM(lom)
 			err := lom.InitBck(&cmn.Bck{Name: testBucket, Provider: apc.AIS, Ns: cmn.NsGlobal})
 			if err != nil {
 				b.Fatal(err)

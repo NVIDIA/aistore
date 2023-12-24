@@ -17,14 +17,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -553,4 +553,4 @@ func mergeRemoteBckProps(props *cmn.Bprops, header http.Header) *cmn.Bprops {
 }
 
 // returns (uname, nlc) pair to lock/unlock buckets
-func newBckNLP(b *meta.Bck) cluster.NLP { return cluster.NewNLP(b.MakeUname("")) }
+func newBckNLP(b *meta.Bck) core.NLP { return core.NewNLP(b.MakeUname("")) }

@@ -9,10 +9,10 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -29,7 +29,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*xactETL)(nil)
+	_ core.Xact      = (*xactETL)(nil)
 	_ xreg.Renewable = (*etlFactory)(nil)
 )
 
@@ -43,8 +43,8 @@ func (p *etlFactory) Start() error {
 	return nil
 }
 
-func (*etlFactory) Kind() string        { return apc.ActETLInline }
-func (p *etlFactory) Get() cluster.Xact { return p.xctn }
+func (*etlFactory) Kind() string     { return apc.ActETLInline }
+func (p *etlFactory) Get() core.Xact { return p.xctn }
 
 func (*etlFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
 	return xreg.WprKeepAndStartNew, nil
@@ -60,8 +60,8 @@ func newETL(id, kind string) (xctn *xactETL) {
 
 func (*xactETL) Run(*sync.WaitGroup) { debug.Assert(false) }
 
-func (r *xactETL) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *xactETL) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/space"
@@ -67,7 +67,7 @@ var _ = Describe("space evict/cleanup tests", func() {
 		BeforeEach(func() {
 			initConfig()
 			createAndAddMountpath(basePath)
-			cluster.T = newTargetLRUMock()
+			core.T = newTargetLRUMock()
 			availablePaths := fs.GetAvail()
 			bck := cmn.Bck{Name: bucketName, Provider: apc.AIS, Ns: cmn.NsGlobal}
 			bckAnother = cmn.Bck{Name: bucketNameAnother, Provider: apc.AIS, Ns: cmn.NsGlobal}
@@ -390,7 +390,7 @@ func saveRandomFile(filename string, size int64) {
 	buff := make([]byte, size)
 	_, err := cos.SaveReader(filename, rand.Reader, buff, cos.ChecksumNone, size)
 	Expect(err).NotTo(HaveOccurred())
-	lom := &cluster.LOM{}
+	lom := &core.LOM{}
 	err = lom.InitFQN(filename, nil)
 	Expect(err).NotTo(HaveOccurred())
 	lom.SetSize(size)

@@ -13,12 +13,12 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dsort/shard"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
@@ -39,7 +39,7 @@ type response struct {
 ///// PROXY //////
 //////////////////
 
-var psi cluster.Node
+var psi core.Node
 
 // POST /v1/sort
 func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
@@ -210,7 +210,7 @@ func pmetricsHandler(w http.ResponseWriter, r *http.Request, query url.Values) {
 	}
 
 	if notFound == len(responses) && notFound > 0 {
-		msg := fmt.Sprintf("%s: [dsort] %s does not exist", cluster.T, managerUUID)
+		msg := fmt.Sprintf("%s: [dsort] %s does not exist", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, msg, http.StatusNotFound)
 		return
 	}
@@ -509,8 +509,8 @@ func (m *Manager) startDsort() {
 	}
 
 	nlog.Infof("[dsort] %s broadcasting finished ack to other targets", m.ManagerUUID)
-	path := apc.URLPathdSortAck.Join(m.ManagerUUID, cluster.T.SID())
-	bcast(http.MethodPut, path, nil, nil, cluster.T.Sowner().Get(), cluster.T.Snode())
+	path := apc.URLPathdSortAck.Join(m.ManagerUUID, core.T.SID())
+	bcast(http.MethodPut, path, nil, nil, core.T.Sowner().Get(), core.T.Snode())
 }
 
 func (m *Manager) errHandler(err error) {
@@ -530,7 +530,7 @@ func (m *Manager) errHandler(err error) {
 
 		nlog.Warningln("broadcasting abort to other targets")
 		path := apc.URLPathdSortAbort.Join(m.ManagerUUID)
-		bcast(http.MethodDelete, path, nil, nil, cluster.T.Sowner().Get(), cluster.T.Snode())
+		bcast(http.MethodDelete, path, nil, nil, core.T.Sowner().Get(), core.T.Snode())
 	}
 }
 
@@ -672,17 +672,17 @@ func tabortHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
-		s := fmt.Sprintf("%s: [dsort] %s does not exist", cluster.T, managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s does not exist", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 	if m.Metrics.Archived.Load() {
-		s := fmt.Sprintf("%s: [dsort] %s is already archived", cluster.T, managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s is already archived", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusGone)
 		return
 	}
 
-	err = fmt.Errorf("%s: [dsort] %s aborted", cluster.T, managerUUID)
+	err = fmt.Errorf("%s: [dsort] %s aborted", core.T, managerUUID)
 	m.abort(err)
 }
 
@@ -737,7 +737,7 @@ func tmetricsHandler(w http.ResponseWriter, r *http.Request) {
 	managerUUID := apiItems[0]
 	m, exists := Managers.Get(managerUUID, true /*incl. archived*/)
 	if !exists {
-		s := fmt.Sprintf("%s: [dsort] %s does not exist", cluster.T, managerUUID)
+		s := fmt.Sprintf("%s: [dsort] %s does not exist", core.T, managerUUID)
 		cmn.WriteErrMsg(w, r, s, http.StatusNotFound)
 		return
 	}

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
@@ -98,7 +98,7 @@ func TestCompareObject(t *testing.T) {
 	tassert.Errorf(t, equal, "expected the objects to be equal")
 }
 
-func prepareObject(t *testing.T) *cluster.LOM {
+func prepareObject(t *testing.T) *core.LOM {
 	out := tools.PrepareObjects(t, tools.ObjectsDesc{
 		CTs: []tools.ContentTypeDesc{{
 			Type:       fs.ObjectType,
@@ -107,7 +107,7 @@ func prepareObject(t *testing.T) *cluster.LOM {
 		MountpathsCnt: 1,
 		ObjectSize:    1024,
 	})
-	lom := &cluster.LOM{}
+	lom := &core.LOM{}
 	err := lom.InitFQN(out.FQNs[fs.ObjectType][0], &out.Bck)
 	tassert.CheckFatal(t, err)
 	err = lom.Load(false, false)

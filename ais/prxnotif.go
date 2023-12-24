@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/nl"
@@ -99,7 +99,7 @@ func (n *notifs) init(p *proxy) {
 // verb /v1/notifs/[progress|finished] - apc.Progress and apc.Finished, respectively
 func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
-		notifMsg = &cluster.NotifMsg{}
+		notifMsg = &core.NotifMsg{}
 		nl       nl.Listener
 		errMsg   error
 		uuid     string

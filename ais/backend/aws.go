@@ -18,12 +18,12 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
@@ -45,7 +45,7 @@ const (
 
 type (
 	awsProvider struct {
-		t cluster.TargetPut
+		t core.TargetPut
 	}
 	sessConf struct {
 		bck    *cmn.Bck
@@ -61,9 +61,9 @@ var (
 )
 
 // interface guard
-var _ cluster.BackendProvider = (*awsProvider)(nil)
+var _ core.BackendProvider = (*awsProvider)(nil)
 
-func NewAWS(t cluster.TargetPut) (cluster.BackendProvider, error) {
+func NewAWS(t core.TargetPut) (core.BackendProvider, error) {
 	clients = make(map[string]*s3.S3, 2)
 	s3Endpoint = os.Getenv(awsEnvS3Endpoint)
 	awsProfile = os.Getenv(awsEnvConfigProfile)
@@ -275,7 +275,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 // HEAD OBJECT
 //
 
-func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
+func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int, err error) {
 	var (
 		headOutput *s3.HeadObjectOutput
 		svc        *s3.S3
@@ -344,7 +344,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *cluster.LOM) (oa *cmn.ObjAttrs, errCode 
 // GET OBJECT
 //
 
-func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.OWT) (int, error) {
+func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) (int, error) {
 	res := awsp.GetObjReader(ctx, lom)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
@@ -357,7 +357,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *cluster.LOM, owt cmn.O
 	return 0, err
 }
 
-func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res cluster.GetReaderResult) {
+func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.GetReaderResult) {
 	var (
 		obj      *s3.GetObjectOutput
 		cloudBck = lom.Bck().RemoteBck()
@@ -394,7 +394,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *cluster.LOM) (res clu
 	return
 }
 
-func _getCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
+func _getCustom(lom *core.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 	h := cmn.BackendHelpers.Amazon
 	if v, ok := h.EncodeVersion(obj.VersionId); ok {
 		lom.SetVersion(v)
@@ -417,7 +417,7 @@ func _getCustom(lom *cluster.LOM, obj *s3.GetObjectOutput) (md5 *cos.Cksum) {
 // PUT OBJECT
 //
 
-func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err error) {
+func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err error) {
 	var (
 		svc                   *s3.S3
 		uploadOutput          *s3manager.UploadOutput
@@ -470,7 +470,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *cluster.LOM) (errCode int, err 
 // DELETE OBJECT
 //
 
-func (*awsProvider) DeleteObj(lom *cluster.LOM) (errCode int, err error) {
+func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 	var (
 		svc      *s3.S3
 		cloudBck = lom.Bck().RemoteBck()

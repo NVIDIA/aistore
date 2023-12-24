@@ -10,14 +10,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/fs/mpather"
 	"github.com/NVIDIA/aistore/memsys"
@@ -29,14 +29,14 @@ type (
 	putFactory struct {
 		xreg.RenewBase
 		xctn *XactPut
-		lom  *cluster.LOM
+		lom  *core.LOM
 	}
 	XactPut struct {
-		// implements cluster.Xact interface
+		// implements core.Xact interface
 		xact.DemandBase
 		// runtime
 		workers  *mpather.WorkerGroup
-		workCh   chan cluster.LIF
+		workCh   chan core.LIF
 		chanFull atomic.Int64
 		// init
 		mirror cmn.MirrorConf
@@ -46,7 +46,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactPut)(nil)
+	_ core.Xact      = (*XactPut)(nil)
 	_ xreg.Renewable = (*putFactory)(nil)
 )
 
@@ -55,24 +55,24 @@ var (
 ////////////////
 
 func (*putFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	p := &putFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, lom: args.Custom.(*cluster.LOM)}
+	p := &putFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, lom: args.Custom.(*core.LOM)}
 	return p
 }
 
 func (p *putFactory) Start() error {
 	lom := p.lom
-	slab, err := cluster.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
+	slab, err := core.T.PageMM().GetSlab(memsys.MaxPageSlabSize) // TODO: estimate
 	debug.AssertNoErr(err)
 
 	bck, mirror := lom.Bck(), lom.MirrorConf()
 	if !mirror.Enabled {
 		return fmt.Errorf("%s: mirroring disabled, nothing to do", bck)
 	}
-	if err = fs.ValidateNCopies(cluster.T.String(), int(mirror.Copies)); err != nil {
+	if err = fs.ValidateNCopies(core.T.String(), int(mirror.Copies)); err != nil {
 		nlog.Errorln(err)
 		return err
 	}
-	r := &XactPut{mirror: *mirror, workCh: make(chan cluster.LIF, mirror.Burst)}
+	r := &XactPut{mirror: *mirror, workCh: make(chan core.LIF, mirror.Burst)}
 
 	//
 	// target-local generation of a global UUID
@@ -98,8 +98,8 @@ func (p *putFactory) Start() error {
 	return nil
 }
 
-func (*putFactory) Kind() string        { return apc.ActPutCopies }
-func (p *putFactory) Get() cluster.Xact { return p.xctn }
+func (*putFactory) Kind() string     { return apc.ActPutCopies }
+func (p *putFactory) Get() core.Xact { return p.xctn }
 
 func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 	debug.Assertf(false, "%s vs %s", p.Str(p.Kind()), xprev) // xreg.usePrev() must've returned true
@@ -111,7 +111,7 @@ func (p *putFactory) WhenPrevIsRunning(xprev xreg.Renewable) (xreg.WPR, error) {
 /////////////
 
 // (one worker per mountpath)
-func (r *XactPut) do(lom *cluster.LOM, buf []byte) {
+func (r *XactPut) do(lom *core.LOM, buf []byte) {
 	copies := int(lom.Bprops().Mirror.Copies)
 
 	lom.Lock(true)
@@ -127,7 +127,7 @@ func (r *XactPut) do(lom *cluster.LOM, buf []byte) {
 		r.ObjsAdd(1, size)
 	}
 	r.DecPending() // (see IncPending below)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 }
 
 // control logic: stop and idle timer
@@ -154,7 +154,7 @@ loop:
 }
 
 // main method
-func (r *XactPut) Repl(lom *cluster.LOM) {
+func (r *XactPut) Repl(lom *core.LOM) {
 	debug.Assert(!r.Finished(), r.String())
 
 	// ref-count on-demand, decrement via worker.Callback = r.do
@@ -208,8 +208,8 @@ func (r *XactPut) stop() (err error) {
 	return
 }
 
-func (r *XactPut) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactPut) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()

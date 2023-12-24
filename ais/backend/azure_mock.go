@@ -8,9 +8,9 @@ package backend
 
 import (
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/core"
 )
 
-func NewAzure(_ cluster.TargetPut) (cluster.BackendProvider, error) {
+func NewAzure(_ core.TargetPut) (core.BackendProvider, error) {
 	return nil, newErrInitBackend(apc.Azure)
 }

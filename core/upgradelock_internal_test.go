@@ -1,8 +1,8 @@
-// Package cluster provides common interfaces and local access to cluster-level metadata.
+// Package core provides core metadata and in-cluster API
 /*
  * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  */
-package cluster
+package core
 
 import (
 	"sync"

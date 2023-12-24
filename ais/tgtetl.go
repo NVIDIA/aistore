@@ -12,13 +12,13 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 )
@@ -264,9 +264,9 @@ func (t *target) getObjectETL(w http.ResponseWriter, r *http.Request) {
 		t.writeErr(w, r, err)
 		return
 	}
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	t.getObject(w, r, dpq, bck, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	dpqFree(dpq)
 }
 
@@ -285,9 +285,9 @@ func (t *target) headObjectETL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	errCode, err := t.objhead(w.Header(), r.URL.Query(), bck, lom)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	if err != nil {
 		// always silent (compare w/ httpobjhead)
 		t.writeErr(w, r, err, errCode, Silent)

@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -45,7 +45,7 @@ type (
 		New(args Args, bck *meta.Bck) Renewable // new xaction stub that can be `Start`-ed.
 		Start() error                           // starts an xaction, will be called when entry is stored into registry
 		Kind() string
-		Get() cluster.Xact
+		Get() core.Xact
 		WhenPrevIsRunning(prevEntry Renewable) (action WPR, err error)
 		Bucket() *meta.Bck
 		UUID() string
@@ -137,9 +137,9 @@ func RegWithHK() {
 	hk.Reg("x-prune-active"+hk.NameSuffix, dreg.hkPruneActive, 0)
 }
 
-func GetXact(uuid string) (cluster.Xact, error) { return dreg.getXact(uuid) }
+func GetXact(uuid string) (core.Xact, error) { return dreg.getXact(uuid) }
 
-func (r *registry) getXact(uuid string) (xctn cluster.Xact, err error) {
+func (r *registry) getXact(uuid string) (xctn core.Xact, err error) {
 	if !xact.IsValidUUID(uuid) {
 		err = fmt.Errorf("invalid UUID %q", uuid)
 		return
@@ -160,11 +160,11 @@ outer:
 	return
 }
 
-func GetAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+func GetAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	dreg.entries.getAllRunning(inout, periodic)
 }
 
-func (e *entries) getAllRunning(inout *cluster.AllRunningInOut, periodic bool) {
+func (e *entries) getAllRunning(inout *core.AllRunningInOut, periodic bool) {
 	var roActive []Renewable
 	if periodic {
 		roActive = e.roActive
@@ -264,7 +264,7 @@ func DoAbort(flt Flt, err error) {
 	}
 }
 
-func GetSnap(flt Flt) ([]*cluster.Snap, error) {
+func GetSnap(flt Flt) ([]*core.Snap, error) {
 	var onlyRunning bool
 	if flt.OnlyRunning != nil {
 		onlyRunning = *flt.OnlyRunning
@@ -281,14 +281,14 @@ func GetSnap(flt Flt) ([]*cluster.Snap, error) {
 			if flt.Kind != "" && xctn.Kind() != flt.Kind {
 				return nil, cmn.NewErrXactNotFoundError("[kind=" + flt.Kind + " vs " + xctn.String() + "]")
 			}
-			return []*cluster.Snap{xctn.Snap()}, nil
+			return []*core.Snap{xctn.Snap()}, nil
 		}
 		if onlyRunning || flt.Kind != apc.ActRebalance {
 			return nil, cmn.NewErrXactNotFoundError("ID=" + flt.ID)
 		}
 		// not running rebalance: include all finished (but not aborted) ones
 		// with ID at ot _after_ the specified
-		return dreg.matchingXactsStats(func(xctn cluster.Xact) bool {
+		return dreg.matchingXactsStats(func(xctn core.Xact) bool {
 			cmp := xact.CompareRebIDs(xctn.ID(), flt.ID)
 			return cmp >= 0 && xctn.Finished() && !xctn.IsAborted()
 		}), nil
@@ -303,7 +303,7 @@ func GetSnap(flt Flt) ([]*cluster.Snap, error) {
 		}
 
 		if onlyRunning {
-			matching := make([]*cluster.Snap, 0, 10)
+			matching := make([]*core.Snap, 0, 10)
 			if flt.Kind == "" {
 				dreg.entries.mtx.RLock()
 				for kind := range xact.Table {
@@ -369,7 +369,7 @@ func (args *abortArgs) do(entry Renewable) bool {
 	return true
 }
 
-func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []*cluster.Snap {
+func (r *registry) matchingXactsStats(match func(xctn core.Xact) bool) []*core.Snap {
 	matchingEntries := make([]Renewable, 0, 20)
 	r.entries.forEach(func(entry Renewable) bool {
 		if !match(entry.Get()) {
@@ -379,7 +379,7 @@ func (r *registry) matchingXactsStats(match func(xctn cluster.Xact) bool) []*clu
 		return true
 	})
 	// TODO: we cannot do this inside `forEach` because - nested locks
-	sts := make([]*cluster.Snap, 0, len(matchingEntries))
+	sts := make([]*core.Snap, 0, len(matchingEntries))
 	for _, entry := range matchingEntries {
 		sts = append(sts, entry.Get().Snap())
 	}
@@ -510,7 +510,7 @@ func (r *registry) _renewFlt(entry Renewable, flt Flt) (rns RenewRes) {
 }
 
 // reusing current (aka "previous") xaction: default policies
-func usePrev(xprev cluster.Xact, nentry Renewable, flt Flt) bool {
+func usePrev(xprev core.Xact, nentry Renewable, flt Flt) bool {
 	pkind, nkind := xprev.Kind(), nentry.Kind()
 	debug.Assertf(pkind == nkind && pkind != "", "%s != %s", pkind, nkind)
 	pdtor, ndtor := xact.Table[pkind], xact.Table[nkind]
@@ -548,7 +548,7 @@ func usePrev(xprev cluster.Xact, nentry Renewable, flt Flt) bool {
 
 func (r *registry) renewLocked(entry Renewable, flt Flt) (rns RenewRes) {
 	var (
-		xprev cluster.Xact
+		xprev core.Xact
 		wpr   WPR
 		err   error
 	)
@@ -825,7 +825,7 @@ func (flt *Flt) String() string {
 	return msg.String()
 }
 
-func (flt Flt) Matches(xctn cluster.Xact) (yes bool) {
+func (flt Flt) Matches(xctn core.Xact) (yes bool) {
 	debug.Assert(xact.IsValidKind(xctn.Kind()), xctn.String())
 	// running?
 	if flt.OnlyRunning != nil {

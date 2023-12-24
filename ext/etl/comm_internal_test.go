@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
-	"github.com/NVIDIA/aistore/cluster/mock"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/cryptorand"
 	. "github.com/onsi/ginkgo"
@@ -76,7 +76,7 @@ var _ = Describe("CommunicatorTest", func() {
 		// cluster.InitLomLocker(tMock)
 
 		// Create an object.
-		lom := &cluster.LOM{ObjName: objName}
+		lom := &core.LOM{ObjName: objName}
 		err = lom.InitBck(clusterBck.Bucket())
 		Expect(err).NotTo(HaveOccurred())
 		err = createRandomFile(lom.FQN, dataSize)

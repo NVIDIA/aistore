@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/core/meta"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

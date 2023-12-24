@@ -8,12 +8,12 @@ package stats
 import (
 	"time"
 
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 )
 
 const numProxyStats = 24 // approx. initial
@@ -39,7 +39,7 @@ func (r *Prunner) RegMetrics(node *meta.Snode) {
 }
 
 // All stats that proxy currently has are CoreStats which are registered at startup
-func (r *Prunner) Init(p cluster.Node) *atomic.Bool {
+func (r *Prunner) Init(p core.Node) *atomic.Bool {
 	r.core = &coreStats{}
 
 	r.core.init(numProxyStats)

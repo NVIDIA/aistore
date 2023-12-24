@@ -15,12 +15,12 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 )
 
@@ -37,7 +37,7 @@ type (
 		meta.Slistener
 
 		Name() string
-		Xact() cluster.Xact
+		Xact() core.Xact
 		PodName() string
 		SvcName() string
 
@@ -143,10 +143,10 @@ func (c *baseComm) String() string {
 	return fmt.Sprintf("%s[%s]-%s", c.boot.originalPodName, c.boot.xctn.ID(), c.boot.msg.CommTypeX)
 }
 
-func (c *baseComm) Xact() cluster.Xact { return c.boot.xctn }
-func (c *baseComm) ObjCount() int64    { return c.boot.xctn.Objs() }
-func (c *baseComm) InBytes() int64     { return c.boot.xctn.InBytes() }
-func (c *baseComm) OutBytes() int64    { return c.boot.xctn.OutBytes() }
+func (c *baseComm) Xact() core.Xact { return c.boot.xctn }
+func (c *baseComm) ObjCount() int64 { return c.boot.xctn.Objs() }
+func (c *baseComm) InBytes() int64  { return c.boot.xctn.InBytes() }
+func (c *baseComm) OutBytes() int64 { return c.boot.xctn.OutBytes() }
 
 func (c *baseComm) Stop() { c.boot.xctn.Finish() }
 
@@ -168,7 +168,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 		req, err = http.NewRequest(http.MethodGet, url, http.NoBody)
 	}
 	if err == nil {
-		resp, err = cluster.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+		resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 	}
 	if err != nil {
 		if cancel != nil {
@@ -195,7 +195,7 @@ func (c *baseComm) getWithTimeout(url string, size int64, timeout time.Duration)
 // pushComm: implements (Hpush | HpushStdin)
 //////////////
 
-func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
+func (pc *pushComm) doRequest(bck *meta.Bck, lom *core.LOM, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	if err := lom.InitBck(bck.Bucket()); err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Dura
 	lom.Unlock(false)
 
 	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
-		_, err = cluster.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
+		_, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +216,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *cluster.LOM, timeout time.Dura
 	return
 }
 
-func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, err error) {
+func (pc *pushComm) do(lom *core.LOM, timeout time.Duration) (_ cos.ReadCloseSizer, err error) {
 	var (
 		body   io.ReadCloser
 		cancel func()
@@ -276,7 +276,7 @@ func (pc *pushComm) do(lom *cluster.LOM, timeout time.Duration) (_ cos.ReadClose
 	//
 	// Do it
 	//
-	resp, err = cluster.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
+	resp, err = core.T.DataClient().Do(req) //nolint:bodyclose // Closed by the caller.
 
 finish:
 	if err != nil {
@@ -301,9 +301,9 @@ finish:
 }
 
 func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck *meta.Bck, objName string) error {
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	r, err := pc.doRequest(bck, lom, 0 /*timeout*/)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	if err != nil {
 		return err
 	}
@@ -315,7 +315,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 	if size < 0 {
 		size = memsys.DefaultBufSize // TODO: track an average
 	}
-	buf, slab := cluster.T.PageMM().AllocSize(size)
+	buf, slab := core.T.PageMM().AllocSize(size)
 	_, err = io.CopyBuffer(w, r, buf)
 
 	slab.Free(buf)
@@ -324,12 +324,12 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 }
 
 func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	r, err = pc.doRequest(bck, lom, timeout)
 	if err == nil && pc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return
 }
 
@@ -342,10 +342,10 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 		return err
 	}
 
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	size, err := lomLoad(lom, bck)
 	if err != nil {
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return err
 	}
 	if size > 0 {
@@ -357,11 +357,11 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 	if rc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return nil
 }
 
-func (rc *redirectComm) redirectURL(lom *cluster.LOM) string {
+func (rc *redirectComm) redirectURL(lom *core.LOM) string {
 	switch rc.boot.msg.ArgTypeX {
 	case ArgTypeDefault, ArgTypeURL:
 		return cos.JoinPath(rc.boot.uri, transformerPath(lom.Bck(), lom.ObjName))
@@ -373,10 +373,10 @@ func (rc *redirectComm) redirectURL(lom *cluster.LOM) string {
 }
 
 func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	size, errV := lomLoad(lom, bck)
 	if errV != nil {
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return nil, errV
 	}
 
@@ -386,7 +386,7 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	if rc.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname(), err)
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return r, err
 }
 
@@ -395,17 +395,17 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 //////////////////
 
 func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, bck *meta.Bck, objName string) error {
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	size, err := lomLoad(lom, bck)
 	if err != nil {
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return err
 	}
 	if size > 0 {
 		rp.boot.xctn.OutObjsAdd(1, size)
 	}
 	path := transformerPath(bck, objName)
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 
 	r.URL.Path, _ = url.PathUnescape(path) // `Path` must be unescaped otherwise it will be escaped again.
 	r.URL.RawPath = path                   // `RawPath` should be escaped version of `Path`.
@@ -415,10 +415,10 @@ func (rp *revProxyComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 }
 
 func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (cos.ReadCloseSizer, error) {
-	lom := cluster.AllocLOM(objName)
+	lom := core.AllocLOM(objName)
 	size, errV := lomLoad(lom, bck)
 	if errV != nil {
-		cluster.FreeLOM(lom)
+		core.FreeLOM(lom)
 		return nil, errV
 	}
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(bck, objName))
@@ -427,7 +427,7 @@ func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	if rp.boot.config.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, lom.Cname(), err)
 	}
-	cluster.FreeLOM(lom)
+	core.FreeLOM(lom)
 	return r, err
 }
 
@@ -467,7 +467,7 @@ func transformerPath(bck *meta.Bck, objName string) string {
 	return "/" + url.PathEscape(bck.MakeUname(objName))
 }
 
-func lomLoad(lom *cluster.LOM, bck *meta.Bck) (size int64, err error) {
+func lomLoad(lom *core.LOM, bck *meta.Bck) (size int64, err error) {
 	if err = lom.InitBck(bck.Bucket()); err != nil {
 		return
 	}

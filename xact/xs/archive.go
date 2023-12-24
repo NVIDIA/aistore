@@ -16,14 +16,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/xact"
@@ -41,7 +41,7 @@ type (
 		r       *XactArch
 		msg     *cmn.ArchiveBckMsg
 		tsi     *meta.Snode
-		archlom *cluster.LOM
+		archlom *core.LOM
 		fqn     string   // workFQN --/--
 		wfh     *os.File // --/--
 		cksum   cos.CksumHashSize
@@ -65,7 +65,7 @@ type (
 
 // interface guard
 var (
-	_ cluster.Xact   = (*XactArch)(nil)
+	_ core.Xact      = (*XactArch)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
 )
@@ -116,7 +116,7 @@ func (p *archFactory) Start() (err error) {
 // XactArch //
 //////////////
 
-func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err error) {
+func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
 	if err = archlom.InitBck(&msg.ToBck); err != nil {
 		r.addErr(err, false)
 		return
@@ -128,8 +128,8 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	wi.cksum.Init(archlom.CksumType())
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
-	smap := cluster.T.Sowner().Get()
-	if err = cluster.InMaintOrDecomm(smap, cluster.T.Snode(), r); err != nil {
+	smap := core.T.Sowner().Get()
+	if err = core.InMaintOrDecomm(smap, core.T.Snode(), r); err != nil {
 		return
 	}
 	nat := smap.CountActiveTs()
@@ -142,7 +142,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *cluster.LOM) (err erro
 	}
 
 	// fcreate at BEGIN time
-	if cluster.T.SID() == wi.tsi.ID() {
+	if core.T.SID() == wi.tsi.ID() {
 		var (
 			s           string
 			lmfh        *os.File
@@ -211,7 +211,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				goto fin
 			}
 			var (
-				smap = cluster.T.Sowner().Get()
+				smap = core.T.Sowner().Get()
 				lrit = &lriterator{}
 			)
 			lrit.init(r, &msg.ListRange)
@@ -225,7 +225,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				wi.cleanup()
 				goto fin
 			}
-			if cluster.T.SID() == wi.tsi.ID() {
+			if core.T.SID() == wi.tsi.ID() {
 				go r.finalize(wi) // async finalize this shard
 			} else {
 				r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil)
@@ -235,7 +235,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 				r.pending.Unlock()
 				r.DecPending()
 
-				cluster.FreeLOM(wi.archlom)
+				core.FreeLOM(wi.archlom)
 			}
 		case <-r.IdleTimer():
 			goto fin
@@ -258,7 +258,7 @@ fin:
 	r.pending.Unlock()
 }
 
-func (r *XactArch) doSend(lom *cluster.LOM, wi *archwi, fh cos.ReadOpenCloser) {
+func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) {
 	debug.Assert(r.p.dm != nil)
 	o := transport.AllocSend()
 	hdr := &o.Hdr
@@ -298,7 +298,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		debug.Assert(cnt > 0) // see cleanup
 		return err
 	}
-	debug.Assert(wi.tsi.ID() == cluster.T.SID() && wi.msg.TxnUUID == txnUUID)
+	debug.Assert(wi.tsi.ID() == core.T.SID() && wi.msg.TxnUUID == txnUUID)
 
 	// NOTE: best-effort via ref-counting
 	if hdr.Opcode == opcodeDone {
@@ -320,7 +320,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 // NOTE: in goroutine
 func (r *XactArch) finalize(wi *archwi) {
 	q := wi.quiesce()
-	if q == cluster.QuiTimeout {
+	if q == core.QuiTimeout {
 		err := fmt.Errorf("%s: %v", r, cmn.ErrQuiesceTimeout)
 		r.addErr(err, wi.msg.ContinueOnError)
 	}
@@ -342,7 +342,7 @@ func (r *XactArch) finalize(wi *archwi) {
 	if err == nil || r.IsAborted() { // done ok (unless aborted)
 		return
 	}
-	debug.Assert(q != cluster.QuiAborted)
+	debug.Assert(q != core.QuiAborted)
 
 	wi.cleanup()
 	r.addErr(err, wi.msg.ContinueOnError, errCode)
@@ -353,7 +353,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 
 	if r.IsAborted() {
 		wi.cleanup()
-		cluster.FreeLOM(wi.archlom)
+		core.FreeLOM(wi.archlom)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	}
 	if err != nil {
 		wi.cleanup()
-		cluster.FreeLOM(wi.archlom)
+		core.FreeLOM(wi.archlom)
 		errCode = http.StatusInternalServerError
 		return
 	}
@@ -382,8 +382,8 @@ func (r *XactArch) fini(wi *archwi) (errCode int, err error) {
 	cos.Close(wi.wfh)
 	wi.wfh = nil
 
-	errCode, err = cluster.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
-	cluster.FreeLOM(wi.archlom)
+	errCode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r) // cmn.OwtFinalize
+	core.FreeLOM(wi.archlom)
 	r.ObjsAdd(1, size-wi.appendPos)
 	return
 }
@@ -411,8 +411,8 @@ func (r *XactArch) FromTo() (src, dst *meta.Bck) {
 	return
 }
 
-func (r *XactArch) Snap() (snap *cluster.Snap) {
-	snap = &cluster.Snap{}
+func (r *XactArch) Snap() (snap *core.Snap) {
+	snap = &core.Snap{}
 	r.ToSnap(snap)
 
 	snap.IdleX = r.IsIdle()
@@ -473,7 +473,7 @@ roll:
 }
 
 // multi-object iterator i/f: "handle work item"
-func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
+func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
@@ -491,7 +491,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 
 	if coldGet {
 		// cold
-		if errCode, err := cluster.T.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
+		if errCode, err := core.T.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
 			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cmn.IsObjNotExist(err)) {
 				return
 			}
@@ -505,7 +505,7 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 		wi.r.addErr(err, wi.msg.ContinueOnError)
 		return
 	}
-	if cluster.T.SID() != wi.tsi.ID() {
+	if core.T.SID() != wi.tsi.ID() {
 		wi.r.doSend(lom, wi, fh)
 		return
 	}
@@ -519,11 +519,11 @@ func (wi *archwi) do(lom *cluster.LOM, lrit *lriterator) {
 	}
 }
 
-func (wi *archwi) quiesce() cluster.QuiRes {
+func (wi *archwi) quiesce() core.QuiRes {
 	timeout := cmn.Rom.CplaneOperation()
-	return wi.r.Quiesce(timeout, func(total time.Duration) cluster.QuiRes {
+	return wi.r.Quiesce(timeout, func(total time.Duration) core.QuiRes {
 		if wi.refc.Load() == 0 && wi.r.wiCnt.Load() == 1 /*the last wi (so far) about to `fini`*/ {
-			return cluster.QuiDone
+			return core.QuiDone
 		}
 		return xact.RefcntQuiCB(&wi.refc, wi.r.config.Timeout.SendFile.D()/2, total)
 	})

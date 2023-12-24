@@ -13,14 +13,14 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/cluster"
-	"github.com/NVIDIA/aistore/cluster/meta"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
+	"github.com/NVIDIA/aistore/core"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -323,13 +323,13 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	var (
 		urlPath = apc.URLPathMetasync.S
 		body    = payload.marshal(y.p.gmm)
-		to      = cluster.AllNodes
+		to      = core.AllNodes
 		smap    = y.p.owner.smap.get()
 	)
 	defer body.Free()
 
 	if reqT == reqNotify {
-		to = cluster.Targets
+		to = core.Targets
 	}
 	args := allocBcArgs()
 	args.req = cmn.HreqArgs{Method: method, Path: urlPath, BodyR: body}
