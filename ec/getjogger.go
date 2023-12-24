@@ -312,7 +312,7 @@ func (c *getJogger) restoreReplicatedFromDisk(ctx *restoreCtx) error {
 
 	b := cos.MustMarshal(ctx.meta)
 	ctMeta := cluster.NewCTFromLOM(ctx.lom, fs.ECMetaType)
-	if err := ctMeta.Write(cluster.T, bytes.NewReader(b), -1); err != nil {
+	if err := ctMeta.Write(bytes.NewReader(b), -1); err != nil {
 		return err
 	}
 	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {

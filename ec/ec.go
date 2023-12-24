@@ -451,10 +451,10 @@ func WriteSliceAndMeta(hdr *transport.ObjHdr, args *WriteArgs) error {
 		}
 	}
 	tmpFQN := ct.Make(fs.WorkfileType)
-	if err := ct.Write(cluster.T, args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
+	if err := ct.Write(args.Reader, hdr.ObjAttrs.Size, tmpFQN); err != nil {
 		return err
 	}
-	if err := ctMeta.Write(cluster.T, bytes.NewReader(args.MD), -1); err != nil {
+	if err := ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
 		return err
 	}
 	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {
@@ -502,7 +502,7 @@ func WriteReplicaAndMeta(lom *cluster.LOM, args *WriteArgs) (err error) {
 			nlog.Errorf("nested error: save replica -> remove metafile: %v", rmErr)
 		}
 	}()
-	if err = ctMeta.Write(cluster.T, bytes.NewReader(args.MD), -1); err != nil {
+	if err = ctMeta.Write(bytes.NewReader(args.MD), -1); err != nil {
 		return
 	}
 	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {

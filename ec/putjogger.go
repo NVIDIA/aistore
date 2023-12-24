@@ -276,7 +276,7 @@ func (c *putJogger) encode(req *request, lom *cluster.LOM) error {
 		return err
 	}
 	metaBuf := bytes.NewReader(meta.NewPack())
-	if err := ctMeta.Write(cluster.T, metaBuf, -1); err != nil {
+	if err := ctMeta.Write(metaBuf, -1); err != nil {
 		return err
 	}
 	if _, exists := cluster.T.Bowner().Get().Get(ctMeta.Bck()); !exists {

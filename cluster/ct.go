@@ -163,12 +163,12 @@ func (ct *CT) Make(toType string, pref ...string /*optional prefix*/) string {
 // Save CT to local drives. If workFQN is set, it saves in two steps: first,
 // save to workFQN; second, rename workFQN to ct.FQN. If unset, it writes
 // directly to ct.FQN
-func (ct *CT) Write(t Target, reader io.Reader, size int64, workFQN ...string) (err error) {
+func (ct *CT) Write(reader io.Reader, size int64, workFQN ...string) (err error) {
 	bdir := ct.mi.MakePathBck(ct.Bucket())
 	if err := cos.Stat(bdir); err != nil {
 		return err
 	}
-	buf, slab := t.PageMM().Alloc()
+	buf, slab := g.pmm.Alloc()
 	if len(workFQN) == 0 {
 		_, err = cos.SaveReader(ct.fqn, reader, buf, cos.ChecksumNone, size)
 	} else {

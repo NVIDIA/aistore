@@ -262,7 +262,7 @@ func receiveMD(req *stageNtfn, hdr *transport.ObjHdr) error {
 	md.Daemons = req.md.Daemons
 	mdBytes := md.NewPack()
 
-	return ctMeta.Write(cluster.T, bytes.NewReader(mdBytes), -1)
+	return ctMeta.Write(bytes.NewReader(mdBytes), -1)
 }
 
 func (reb *Reb) receiveCT(req *stageNtfn, hdr *transport.ObjHdr, reader io.Reader) error {
