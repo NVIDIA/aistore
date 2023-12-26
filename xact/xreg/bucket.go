@@ -102,7 +102,7 @@ func RenewBckMakeNCopies(bck *meta.Bck, uuid, tag string, copies int) (res Renew
 	return dreg.renew(e, bck)
 }
 
-func RenewPromote(uuid string, bck *meta.Bck, args *core.PromoteArgs) RenewRes {
+func RenewPromote(uuid string, bck *meta.Bck, args *apc.PromoteArgs) RenewRes {
 	return RenewBucketXact(apc.ActPromote, bck, Args{Custom: args, UUID: uuid})
 }
 

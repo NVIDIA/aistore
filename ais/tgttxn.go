@@ -897,7 +897,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return "", err
 		}
-		prmMsg := &core.PromoteArgs{}
+		prmMsg := &apc.PromoteArgs{}
 		if err := cos.MorphMarshal(c.msg.Value, prmMsg); err != nil {
 			err = fmt.Errorf(cmn.FmtErrMorphUnmarshal, t, c.msg.Action, c.msg.Value, err)
 			return "", err
@@ -981,7 +981,7 @@ func (t *target) promote(c *txnSrv, hdr http.Header) (string, error) {
 }
 
 // scan and, optionally, auto-detect file-share
-func prmScan(dirFQN string, prmMsg *core.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
+func prmScan(dirFQN string, prmMsg *apc.PromoteArgs) (fqns []string, totalN int, cksumVal string, err error) {
 	var (
 		cksum      *cos.CksumHash
 		autoDetect = !prmMsg.SrcIsNotFshare || !cmn.Rom.Features().IsSet(feat.DontAutoDetectFshare)
@@ -1042,7 +1042,7 @@ func (t *target) prmNumFiles(c *txnSrv, txnPrm *txnPromote, confirmedFshare bool
 		params := core.PromoteParams{
 			Bck:    c.bck,
 			Config: config,
-			PromoteArgs: core.PromoteArgs{
+			PromoteArgs: apc.PromoteArgs{
 				SrcFQN:       fqn,
 				ObjName:      objName,
 				OverwriteDst: txnPrm.msg.OverwriteDst,

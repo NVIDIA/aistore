@@ -17,7 +17,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/core"
 )
 
 const (
@@ -87,11 +86,6 @@ type (
 		// - we massively write a new content into a bucket, and/or
 		// - we simply don't care.
 		SkipVC bool
-	}
-	PromoteArgs struct {
-		BaseParams BaseParams
-		Bck        cmn.Bck
-		core.PromoteArgs
 	}
 
 	// (see also: api.PutApndArchArgs)
@@ -552,23 +546,19 @@ func RenameObject(bp BaseParams, bck cmn.Bck, oldName, newName string) error {
 }
 
 // promote files and directories to ais objects
-func Promote(args *PromoteArgs) (xid string, err error) {
-	var (
-		actMsg = apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN, Value: &args.PromoteArgs}
-		method = args.BaseParams.Method
-	)
-	args.BaseParams.Method = http.MethodPost
+func Promote(bp BaseParams, bck cmn.Bck, args *apc.PromoteArgs) (xid string, err error) {
+	actMsg := apc.ActMsg{Action: apc.ActPromote, Name: args.SrcFQN, Value: args}
+	bp.Method = http.MethodPost
 	reqParams := AllocRp()
 	{
-		reqParams.BaseParams = args.BaseParams
-		reqParams.Path = apc.URLPathObjects.Join(args.Bck.Name)
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathObjects.Join(bck.Name)
 		reqParams.Body = cos.MustMarshal(actMsg)
 		reqParams.Header = http.Header{cos.HdrContentType: []string{cos.ContentJSON}}
-		reqParams.Query = args.Bck.NewQuery()
+		reqParams.Query = bck.NewQuery()
 	}
 	_, err = reqParams.doReqStr(&xid)
 	FreeRp(reqParams)
-	args.BaseParams.Method = method
 	return xid, err
 }
 

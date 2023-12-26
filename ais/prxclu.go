@@ -81,7 +81,7 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case apc.WhatMountpaths:
 		p.qcluMountpaths(w, r, what, query)
 	case apc.WhatRemoteAIS:
-		all, err := p.getRemAises(true /*refresh*/)
+		all, err := p.getRemAisVec(true /*refresh*/)
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
@@ -223,7 +223,7 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 	p.writeJSON(w, r, out, what)
 }
 
-func (p *proxy) getRemAises(refresh bool) (*core.Remotes, error) {
+func (p *proxy) getRemAisVec(refresh bool) (*meta.RemAisVec, error) {
 	smap := p.owner.smap.get()
 	si, errT := smap.GetRandTarget()
 	if errT != nil {
@@ -245,12 +245,12 @@ func (p *proxy) getRemAises(refresh bool) (*core.Remotes, error) {
 		cargs.cresv = cresBA{} // -> cmn.BackendInfoAIS
 	}
 	var (
-		v   *core.Remotes
+		v   *meta.RemAisVec
 		res = p.call(cargs, smap)
 		err = res.toErr()
 	)
 	if err == nil {
-		v = res.v.(*core.Remotes)
+		v = res.v.(*meta.RemAisVec)
 	}
 	freeCargs(cargs)
 	freeCR(res)

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -100,25 +101,11 @@ type (
 		SkipEC  bool // don't erasure-code when finalizing
 		ColdGET bool // this PUT is in fact a cold-GET
 	}
-	// common part that's used in `api.PromoteArgs` and `PromoteParams`(server side), both
-	PromoteArgs struct {
-		DaemonID  string `json:"tid,omitempty"` // target ID
-		SrcFQN    string `json:"src,omitempty"` // source file or directory (must be absolute pathname)
-		ObjName   string `json:"obj,omitempty"` // destination object name or prefix
-		Recursive bool   `json:"rcr,omitempty"` // recursively promote nested dirs
-		// once successfully promoted:
-		OverwriteDst bool `json:"ovw,omitempty"` // overwrite destination
-		DeleteSrc    bool `json:"dls,omitempty"` // remove source when (and after) successfully promoting
-		// explicit request _not_ to treat the source as a potential file share
-		// and _not_ to try to auto-detect if it is;
-		// (auto-detection takes time, etc.)
-		SrcIsNotFshare bool `json:"notshr,omitempty"` // the source is not a file share equally accessible by all targets
-	}
 	PromoteParams struct {
-		Bck         *meta.Bck   // destination bucket
-		Cksum       *cos.Cksum  // checksum to validate
-		Config      *cmn.Config // during xaction
-		Xact        Xact        // responsible xaction
-		PromoteArgs             // all of the above
+		Bck             *meta.Bck   // destination bucket
+		Cksum           *cos.Cksum  // checksum to validate
+		Config          *cmn.Config // during xaction
+		Xact            Xact        // responsible xaction
+		apc.PromoteArgs             // all of the above
 	}
 )

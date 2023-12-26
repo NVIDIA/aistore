@@ -28,7 +28,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/memsys"
@@ -473,7 +472,7 @@ func (c cresSM) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jr
 func (cresND) newV() any                              { return &meta.Snode{} }
 func (c cresND) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
-func (cresBA) newV() any                              { return &core.Remotes{} }
+func (cresBA) newV() any                              { return &meta.RemAisVec{} }
 func (c cresBA) read(res *callResult, body io.Reader) { res.v = c.newV(); res.jread(body) }
 
 func (cresEI) newV() any                              { return &etl.InfoList{} }

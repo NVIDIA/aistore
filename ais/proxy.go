@@ -67,8 +67,8 @@ type (
 			mu   sync.RWMutex
 		}
 		remais struct {
-			core.Remotes
-			old []*core.RemAis // to facilitate a2u resolution (and, therefore, offline access)
+			meta.RemAisVec
+			old []*meta.RemAis // to facilitate a2u resolution (and, therefore, offline access)
 			mu  sync.RWMutex
 			in  atomic.Bool
 		}
@@ -1717,7 +1717,7 @@ func (p *proxy) httpobjpost(w http.ResponseWriter, r *http.Request, apireq *apiR
 			}
 			return
 		}
-		args := &core.PromoteArgs{}
+		args := &apc.PromoteArgs{}
 		if err := cos.MorphMarshal(msg.Value, args); err != nil {
 			p.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, p.si, msg.Action, msg.Value, err)
 			return
@@ -3035,7 +3035,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 	}
 	for ; retries > 0; retries-- {
 		time.Sleep(sleep)
-		all, err := p.getRemAises(false /*refresh*/)
+		all, err := p.getRemAisVec(false /*refresh*/)
 		if err != nil {
 			if retries < maxretries {
 				nlog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
@@ -3049,7 +3049,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 		if p.remais.Ver < all.Ver {
 			// keep old/detached clusters to support access to existing ("cached") buckets
 			// i.e., the ability to resolve remote alias to Ns.UUID (see p.a2u)
-			for _, a := range p.remais.Remotes.A {
+			for _, a := range p.remais.RemAisVec.A {
 				var found bool
 				for _, b := range p.remais.old {
 					if b.UUID == a.UUID {
@@ -3066,7 +3066,7 @@ func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
 				}
 			}
 
-			p.remais.Remotes = *all
+			p.remais.RemAisVec = *all
 			nver = p.remais.Ver
 			p.remais.mu.Unlock()
 			break

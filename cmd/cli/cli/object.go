@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/sys"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/urfave/cli"
@@ -32,20 +31,16 @@ func promote(c *cli.Context, bck cmn.Bck, objName, fqn string) error {
 		target = parseStrFlag(c, targetIDFlag)
 		recurs = flagIsSet(c, recursFlag)
 	)
-	promoteArgs := &api.PromoteArgs{
-		BaseParams: apiBP,
-		Bck:        bck,
-		PromoteArgs: core.PromoteArgs{
-			DaemonID:       target,
-			ObjName:        objName,
-			SrcFQN:         fqn,
-			Recursive:      recurs,
-			SrcIsNotFshare: flagIsSet(c, notFshareFlag),
-			OverwriteDst:   flagIsSet(c, overwriteFlag),
-			DeleteSrc:      flagIsSet(c, deleteSrcFlag),
-		},
+	args := apc.PromoteArgs{
+		DaemonID:       target,
+		ObjName:        objName,
+		SrcFQN:         fqn,
+		Recursive:      recurs,
+		SrcIsNotFshare: flagIsSet(c, notFshareFlag),
+		OverwriteDst:   flagIsSet(c, overwriteFlag),
+		DeleteSrc:      flagIsSet(c, deleteSrcFlag),
 	}
-	xid, err := api.Promote(promoteArgs)
+	xid, err := api.Promote(apiBP, bck, &args)
 	if err != nil {
 		return V(err)
 	}

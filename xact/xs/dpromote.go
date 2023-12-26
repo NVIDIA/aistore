@@ -28,7 +28,7 @@ type (
 	proFactory struct {
 		xreg.RenewBase
 		xctn *XactDirPromote
-		args *core.PromoteArgs
+		args *apc.PromoteArgs
 	}
 	XactDirPromote struct {
 		p    *proFactory
@@ -49,7 +49,7 @@ var (
 ////////////////
 
 func (*proFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	c := args.Custom.(*core.PromoteArgs)
+	c := args.Custom.(*apc.PromoteArgs)
 	p := &proFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, args: c}
 	return p
 }
@@ -121,7 +121,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 		Bck:    bck,
 		Xact:   r,
 		Config: r.Config,
-		PromoteArgs: core.PromoteArgs{
+		PromoteArgs: apc.PromoteArgs{
 			SrcFQN:       fqn,
 			ObjName:      objName,
 			OverwriteDst: args.OverwriteDst,

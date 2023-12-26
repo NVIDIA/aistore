@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -148,16 +147,12 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	test.generate(t, from, to, tempdir, subdir)
 
 	// prepare request
-	args := api.PromoteArgs{
-		BaseParams: baseParams,
-		Bck:        m.bck,
-		PromoteArgs: core.PromoteArgs{
-			SrcFQN:         tempdir,
-			Recursive:      test.recurs,
-			OverwriteDst:   test.overwriteDst,
-			DeleteSrc:      test.deleteSrc,
-			SrcIsNotFshare: test.notFshare,
-		},
+	args := apc.PromoteArgs{
+		SrcFQN:         tempdir,
+		Recursive:      test.recurs,
+		OverwriteDst:   test.overwriteDst,
+		DeleteSrc:      test.deleteSrc,
+		SrcIsNotFshare: test.notFshare,
 	}
 	var target *meta.Snode
 	if test.singleTarget {
@@ -167,7 +162,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	}
 
 	// (I) do
-	xid, err := api.Promote(&args)
+	xid, err := api.Promote(baseParams, m.bck, &args)
 	tassert.CheckFatal(t, err)
 
 	// wait for the operation to finish and collect stats
@@ -245,7 +240,7 @@ func (test *prmTests) do(t *testing.T, bck *meta.Bck) {
 	}
 
 	// do
-	xid, err = api.Promote(&args)
+	xid, err = api.Promote(baseParams, m.bck, &args)
 	tassert.CheckFatal(t, err)
 
 	locObjs, outObjs, inObjs = test.wait(t, xid, tempdir, target, &m)

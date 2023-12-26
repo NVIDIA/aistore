@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
@@ -199,7 +198,7 @@ func GetClusterStats(bp BaseParams) (res stats.Cluster, err error) {
 	return
 }
 
-func GetRemoteAIS(bp BaseParams) (remais core.Remotes, err error) {
+func GetRemoteAIS(bp BaseParams) (remais meta.RemAisVec, err error) {
 	bp.Method = http.MethodGet
 	reqParams := AllocRp()
 	{

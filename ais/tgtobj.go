@@ -1270,7 +1270,7 @@ func (a *apndOI) flush() (int, error) {
 		Bck:    a.lom.Bck(),
 		Cksum:  partialCksum,
 		Config: a.config,
-		PromoteArgs: core.PromoteArgs{
+		PromoteArgs: apc.PromoteArgs{
 			SrcFQN:       a.hdl.workFQN,
 			ObjName:      a.lom.ObjName,
 			OverwriteDst: true,

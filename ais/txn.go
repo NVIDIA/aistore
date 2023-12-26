@@ -126,7 +126,7 @@ type (
 		txnBckBase
 	}
 	txnPromote struct {
-		msg    *core.PromoteArgs
+		msg    *apc.PromoteArgs
 		xprm   *xs.XactDirPromote
 		dirFQN string
 		fqns   []string
@@ -635,7 +635,7 @@ func (txn *txnArchMultiObj) String() string {
 // txnPromote //
 ////////////////
 
-func newTxnPromote(c *txnSrv, msg *core.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
+func newTxnPromote(c *txnSrv, msg *apc.PromoteArgs, fqns []string, dirFQN string, totalN int) (txn *txnPromote) {
 	txn = &txnPromote{msg: msg, fqns: fqns, dirFQN: dirFQN, totalN: totalN}
 	txn.init(c.bck)
 	txn.fillFromCtx(c)

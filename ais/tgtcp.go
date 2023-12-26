@@ -336,7 +336,7 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 		anyConf := cmn.GCO.Get().Backend.Get(apc.AIS)
 		if anyConf == nil {
-			t.writeJSON(w, r, core.Remotes{}, httpdaeWhat)
+			t.writeJSON(w, r, meta.RemAisVec{}, httpdaeWhat)
 			return
 		}
 		aisConf, ok := anyConf.(cmn.BackendConfAIS)
