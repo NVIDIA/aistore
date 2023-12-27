@@ -86,6 +86,11 @@ const (
 	// - shutdown the primary and the entire cluster
 	// - attach invalid mountpath
 	QparamForce = "frc"
+
+	// same as `Versioning.ValidateWarmGet` (cluster config and bucket props)
+	// - usage: GET and (copy|transform) x (bucket|multi-object) operations
+	// - implies remote backend
+	QparamLatestVer = "latest-ver"
 )
 
 // QparamFltPresence enum.

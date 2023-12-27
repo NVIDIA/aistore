@@ -471,6 +471,13 @@ var (
 		Usage: "server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
 	}
 
+	latestVersionFlag = cli.BoolFlag{
+		Name: "latest",
+		Usage: "GET or copy the latest object version from the associated remote bucket:\n" +
+			indent1 + "\t- allows fine-grained (operation-level) control without changing bucket configuration\n" +
+			indent1 + "\t- see also: 'ais bucket props ... versioning.validate_warm_get'",
+	}
+
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
 
 	ignoreErrorFlag = cli.BoolFlag{
@@ -666,9 +673,10 @@ var (
 	// speaking, not true for AIStore where LRU eviction is per-bucket configurable with default
 	// settings inherited from the cluster config, etc. etc.
 	// See also: apc.Flt* enum.
-	checkObjCachedFlag = cli.BoolFlag{
-		Name:  "check-cached",
-		Usage: "check if a given object from a remote bucket is present (\"cached\") in AIS",
+	headObjPresentFlag = cli.BoolFlag{
+		Name: "check-cached",
+		Usage: "instead of GET execute HEAD(object) to check if the object is present in aistore\n" +
+			indent1 + "\t(applies only to buckets with remote backend)",
 	}
 	listObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
@@ -676,7 +684,7 @@ var (
 	}
 	getObjCachedFlag = cli.BoolFlag{
 		Name:  "cached",
-		Usage: "get only those objects from a remote bucket that are present (\"cached\") in AIS",
+		Usage: "get only those objects from a remote bucket that are present (\"cached\") in aistore",
 	}
 	// when '--all' is used for/by another flag
 	objNotCachedPropsFlag = cli.BoolFlag{

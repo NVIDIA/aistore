@@ -1,6 +1,23 @@
-## Validate Warm GET: a quick synopsys
+## Validate Warm GET
 
-1. with version validation enabled, aistore will now detect both out-of-band writes and deletes;
+One way to deal with out-of-band updates is configuring aistore bucket as follows:
+
+```console
+$ ais bucket props set s3://abc versioning.validate_warm_get true
+"versioning.validate_warm_get" set to: "true" (was: "false")
+```
+
+Here, `s3://abc` is presumably an Amazon S3 bucket but it could be any Cloud or remote AIS bucket.
+
+> And even an `ais://` bucket that would have Cloud or remote AIS backend - see `backend_bck` option in CLI documentation and examples.
+
+Once `validate_warm_get` is set, each read operation on the bucket will take a bit of extra time to compare in-cluster and remote object metadata. If and when this comparison fails, aistore performs a _cold_ GET, to make sure that it has the latest version.
+
+Needless to say, the latest version will be always returned to the user as well.
+
+## Out-of-band writes, deletes, and more...
+
+1. with version validation enabled, aistore will detect both out-of-band writes and deletes;
 2. buckets with versioning disabled are also supported;
 3. decision on whether to perform cold-GET is made upon comparing remote and local metadata;
 4. the latter always includes object size, but also may include any combination of:
@@ -59,3 +76,71 @@ features         Dont-Rm-via-Validate-Warm-GET
 
 Cluster config updated
 ```
+
+## GET latest version
+
+But sometimes, there may be a need to have a more fine-grained, operation level, control over this functionality.
+
+AIS API supports that. In CLI, the corresponding option is called `--latest`. Let's see a brief example, where:
+
+1. `s3:///abc` is a bucket that contains
+2. `s3://abc/README.md` object that was previously
+3. out-of-band updated
+
+In other words, the setup we describe boils down to a single main point:
+
+* aistore contains a different version of an object (in this example: `s3://abc/README.md`).
+
+Namely:
+
+```console
+$ aws s3api list-object-versions --bucket abc --prefix README.md --max-keys 1
+{
+    "Name": "abc",
+    "KeyMarker": "",
+    "MaxKeys": 1,
+    "IsTruncated": true,
+    "NextVersionIdMarker": "KJOQsGcR3qBX5WvXbwiB.2LAQW12opbQ",
+...
+    "Versions": [
+        {
+            "IsLatest": true,
+...
+        }
+    ],
+    "Prefix": "README.md"
+}
+```
+
+AIS, on the other hand, shows:
+
+
+```console
+$ ais show object s3://abc/README.md --props version
+PROPERTY         VALUE
+version          1yNHzpfd9Y16nDS71V5scjTMfbRZUPJI
+```
+
+Moreover, GET operatio with default parameters doesn't help:
+
+```console
+$ ais get s3://abc/README.md /dev/null
+GET (and discard) README.md from s3://abc (13.82KiB)
+
+$ ais show object s3://abc/README.md --props version
+PROPERTY         VALUE
+version          1yNHzggpfd9Y16nDS71V5scjTMfbRZUPJI
+```
+
+To reconcile, we employ the `--latest` option:
+
+```console
+$ ais get s3://abc/README.md /dev/null --latest
+GET (and discard) README.md from s3://abc (13.82KiB)
+
+$ ais show object s3://abc/README.md --props version
+PROPERTY         VALUE
+version          KJOQsGcR3qBX5WvXbwiB.2LAQW12opbQ
+```
+
+Notice that we now have the latest `KJOQsGc...` version (that `s3api` also calls `VersionIdMarker`).

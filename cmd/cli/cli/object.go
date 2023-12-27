@@ -224,17 +224,18 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 	return nil
 }
 
-func isObjPresent(c *cli.Context, bck cmn.Bck, object string) error {
-	_, err := api.HeadObject(apiBP, bck, object, apc.FltPresentNoProps, true)
+func isObjPresent(c *cli.Context, bck cmn.Bck, objName string) error {
+	name := bck.Cname(objName)
+	_, err := api.HeadObject(apiBP, bck, objName, apc.FltPresentNoProps, true)
 	if err != nil {
 		if cmn.IsStatusNotFound(err) {
-			fmt.Fprintf(c.App.Writer, "Cached: %v\n", false)
+			fmt.Fprintf(c.App.Writer, "%s is not present (\"not cached\")\n", name)
 			return nil
 		}
 		return V(err)
 	}
 
-	fmt.Fprintf(c.App.Writer, "Cached: %v\n", true)
+	fmt.Fprintf(c.App.Writer, "%s is present (is cached)\n", name)
 	return nil
 }
 

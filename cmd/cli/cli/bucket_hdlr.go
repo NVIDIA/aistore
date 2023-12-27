@@ -450,14 +450,19 @@ func setPropsHandler(c *cli.Context) (err error) {
 	return updateBckProps(c, bck, currProps, newProps)
 }
 
+// TODO: more validation; e.g. `validate_warm_get = true` is only supported for buckets with Cloud and remais backends
 func updateBckProps(c *cli.Context, bck cmn.Bck, currProps *cmn.Bprops, updateProps *cmn.BpropsToSet) (err error) {
-	// Apply updated props and check for change
+	// apply updated props
 	allNewProps := currProps.Clone()
 	allNewProps.Apply(updateProps)
+
+	// check for changes
 	if allNewProps.Equal(currProps) {
 		displayPropsEqMsg(c, bck)
 		return nil
 	}
+
+	// do
 	if _, err = api.SetBucketProps(apiBP, bck, updateProps); err != nil {
 		if herr, ok := err.(*cmn.ErrHTTP); ok && herr.Status == http.StatusNotFound {
 			return herr

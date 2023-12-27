@@ -130,6 +130,19 @@ func (lom *LOM) Version(special ...bool) string {
 	return lom.md.Ver
 }
 
+func (lom *LOM) ValidateWarmGet(qparam string /*apc.QparamLatestVer*/) bool {
+	switch {
+	case !lom.Bck().IsCloud() && !lom.Bck().IsRemoteAIS():
+		return false
+	case qparam == "":
+		return lom.VersionConf().ValidateWarmGet // bucket prop
+	case qparam == "true":
+		return true
+	default:
+		return cos.IsParseBool(qparam)
+	}
+}
+
 func (lom *LOM) Uname() string  { return lom.md.uname }
 func (lom *LOM) Digest() uint64 { return lom.digest }
 

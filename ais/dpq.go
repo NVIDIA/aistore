@@ -31,6 +31,7 @@ type dpq struct {
 	bsummRemote         string // QparamBsummRemote
 	etlName             string // QparamETLName
 	silent              string // QparamSilent
+	latestVer           string // QparamLatestVer
 }
 
 var (
@@ -119,6 +120,8 @@ func (dpq *dpq) parse(rawQuery string) (err error) {
 			dpq.etlName = value
 		case apc.QparamSilent:
 			dpq.silent = value
+		case apc.QparamLatestVer:
+			dpq.latestVer = value
 
 		case s3.QparamMptUploadID, s3.QparamMptUploads, s3.QparamMptPartNo:
 			// TODO: ignore for now

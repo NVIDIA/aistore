@@ -108,4 +108,4 @@ redirect_from:
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
-  - [Validate Warm GET: a quick synopsys](/docs/validate_warm_get.md)
+  - [Out of band updates](/docs/validate_warm_get.md)

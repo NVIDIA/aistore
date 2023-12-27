@@ -30,6 +30,7 @@ ls           promote      concat       evict        mv           cat
 - [GET archived content](#get-archived-content)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
+- [Out of band updates](/docs/validate_warm_get.md)
 - [PUT object](#put-object)
   - [Object names](#object-names)
   - [Put single file](#put-single-file)
@@ -88,7 +89,11 @@ OPTIONS:
    --length value    object read length; default formatting: IEC (use '--units' to override)
    --checksum        validate checksum
    --yes, -y         assume 'yes' to all questions
-   --check-cached    check if a given object from a remote bucket is present ("cached") in AIS
+   --check-cached    instead of GET execute HEAD(object), to check if the object's present in aistore
+                     (applies only to buckets with remote backend)
+   --latest          GET or copy the latest object version from the associated Cloud bucket ("Cloud backend"):
+                     - allows fine-grained (operation-level) control without changing bucket configuration
+                     - see also: 'ais bucket props ... versioning.validate_warm_get'
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --progress        show progress bar(s) and progress of execution in real time

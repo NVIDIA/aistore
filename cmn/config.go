@@ -381,10 +381,11 @@ type (
 	}
 
 	VersionConf struct {
-		// Determines if the versioning is enabled.
+		// Determines if versioning is enabled
 		Enabled bool `json:"enabled"`
 
-		// Validate object version upon warm GET.
+		// Validate object version upon warm GET
+		// See also: apc.QparamLatestVer
 		ValidateWarmGet bool `json:"validate_warm_get"`
 	}
 	VersionConfToSet struct {

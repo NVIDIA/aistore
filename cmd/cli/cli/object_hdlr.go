@@ -36,7 +36,8 @@ var (
 			lengthFlag,
 			cksumFlag,
 			yesFlag,
-			checkObjCachedFlag,
+			headObjPresentFlag,
+			latestVersionFlag,
 			refreshFlag,
 			progressFlag,
 			// archive

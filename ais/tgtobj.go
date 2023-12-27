@@ -79,6 +79,7 @@ type (
 		verchanged bool            // version changed
 		retry      bool            // once
 		cold       bool            // true if executed backend.Get
+		latestVer  bool            // a.k.a. versioning.validate_warm_get
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -557,7 +558,7 @@ do:
 			}
 			goto fin
 		}
-	} else if goi.lom.Bck().IsRemote() && goi.lom.VersionConf().ValidateWarmGet { // check remote version
+	} else if goi.latestVer { // apc.QparamLatestVer or versioning.validate_warm_get
 		var equal bool
 		goi.lom.Unlock(false)
 		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {

@@ -123,7 +123,7 @@ var (
 			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4 --archpath file456 /tmp/out - same as above\n" +
 			indent4 + "\t- ais archive get ais://abc/trunk-0123.tar.lz4/file456 /tmp/out/file456.new - same as above w/ rename",
 		ArgsUsage:    getShardArgument,
-		Flags:        rmFlags(objectCmdGet.Flags, checkObjCachedFlag, lengthFlag, offsetFlag),
+		Flags:        rmFlags(objectCmdGet.Flags, headObjPresentFlag, lengthFlag, offsetFlag),
 		Action:       getArchHandler,
 		BashComplete: objectCmdGet.BashComplete,
 	}

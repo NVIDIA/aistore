@@ -40,6 +40,7 @@ type (
 		// 1. `apc.QparamETLName`: named ETL to transform the object (i.e., perform "inline transformation")
 		// 2. `apc.QparamOrigURL`: GET from a vanilla http(s) location (`ht://` bucket with the corresponding `OrigURLBck`)
 		// 3. `apc.QparamSilent`: do not log errors
+		// 4. `apc.QparamLatestVer`: get latest version from the associated Cloud bucket; see also: `ValidateWarmGet`
 		Query url.Values
 
 		// The field is exclusively used to facilitate Range Read.

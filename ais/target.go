@@ -707,8 +707,8 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			filename: filename,
 			mime:     dpq.archmime, // apc.QparamArchmime
 		}
-		goi.isGFN = cos.IsParseBool(dpq.isGFN) // query.Get(apc.QparamIsGFNRequest)
-		// goi.chunked = config.Net.HTTP.Chunked NOTE: disabled - no need
+		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // query.Get(apc.QparamIsGFNRequest)
+		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer or versioning.validate_warm_get
 	}
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
