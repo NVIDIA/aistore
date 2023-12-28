@@ -28,6 +28,8 @@ const (
 	iniEvictAtime = mpnEvictAtime / 2 // initial
 )
 
+const termDuration = time.Duration(-1)
+
 type lchk struct {
 	cache        *sync.Map
 	now          time.Time
@@ -128,6 +130,9 @@ func (lchk *lchk) evictAll(d time.Duration) {
 		lchk.cache = cache
 		cache.Range(lchk.f)
 	}
+	if d == termDuration {
+		return
+	}
 
 	if _, tag := lchk.mp(); tag != "" {
 		nlog.Infof("memory pressure %q, total %d, evicted %d", tag, lchk.totalCnt, lchk.evictedCnt)
@@ -141,19 +146,23 @@ func (lchk *lchk) evictAll(d time.Duration) {
 }
 
 func (lchk *lchk) f(hkey, value any) bool {
-	md := value.(*lmeta)
-	mdTime := md.Atime
+	var (
+		md      = value.(*lmeta)
+		mdTime  = md.Atime
+		special bool
+	)
 	if mdTime < 0 {
 		mdTime = -mdTime // special case: prefetched but not yet accessed
+		special = true
 	}
 	lchk.totalCnt++
 	atime := time.Unix(0, mdTime)
-	if lchk.now.Sub(atime) < lchk.d {
+	if lchk.d != termDuration && lchk.now.Sub(atime) < lchk.d {
 		return true
 	}
 
 	atimefs := md.atimefs & ^lomDirtyMask
-	if md.Atime > 0 && atimefs != uint64(md.Atime) {
+	if special || (md.Atime > 0 && atimefs != uint64(md.Atime)) {
 		debug.Assert(cos.IsValidAtime(md.Atime), md.Atime)
 		lif := LIF{Uname: md.uname, BID: md.bckID}
 		lom, err := lif.LOM()
@@ -165,7 +174,9 @@ func (lchk *lchk) f(hkey, value any) bool {
 			lchk.flushColdCnt++
 		}
 	}
-	lchk.cache.Delete(hkey)
-	lchk.evictedCnt++
+	if lchk.d != termDuration {
+		lchk.cache.Delete(hkey)
+		lchk.evictedCnt++
+	}
 	return true
 }

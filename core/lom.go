@@ -58,7 +58,6 @@ type (
 		ObjName string
 		FQN     string
 		HrwFQN  string // (=> main replica)
-		info    string
 		md      lmeta  // on-disk metadata
 		digest  uint64 // uname digest
 	}
@@ -104,6 +103,14 @@ func Tinit(t Target, tstats cos.StatsUpdater, runHK bool) {
 	if runHK {
 		regLomCacheWithHK()
 	}
+}
+
+func Term() {
+	const sleep = time.Second >> 2 // total <= 2s
+	for i := 0; i < 8 && !g.lchk.running.CAS(false, true); i++ {
+		time.Sleep(sleep)
+	}
+	g.lchk.evictAll(termDuration)
 }
 
 /////////

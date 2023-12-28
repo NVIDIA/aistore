@@ -36,17 +36,17 @@ func OnTimedGFN() {
 	if gfn.gon.Load() {
 		return
 	}
-	act := " updated"
+	act := "updated"
 	exp := mono.NanoTime() + timedDuration.Nanoseconds()
 	if gfn.exp.Swap(exp) == 0 {
-		act = " on"
+		act = "on"
 	}
 	nlog.Infoln(gfnT, act)
 }
 
 func OffTimedGFN(detail string) {
 	gfn.exp.Store(0)
-	nlog.Infoln(gfnT, " off ", detail)
+	nlog.Infoln(gfnT, "off", detail)
 }
 
 func onGFN() (prev bool) {
@@ -54,14 +54,14 @@ func onGFN() (prev bool) {
 		return
 	}
 	if exp := gfn.exp.Swap(0); exp > mono.NanoTime() {
-		nlog.Infoln(gfnG, " on ", gfnT, " off")
+		nlog.Infoln(gfnG, "on", gfnT, "off")
 	} else {
-		nlog.Infoln(gfnG, " on")
+		nlog.Infoln(gfnG, "on")
 	}
 	return
 }
 
 func offGFN() {
 	gfn.gon.Store(false)
-	nlog.Infoln(gfnG, " off")
+	nlog.Infoln(gfnG, "off")
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/ais/backend"
@@ -176,18 +177,18 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.termKaliveX(msg.Action)
+		t.termKaliveX(msg.Action, true)
 	case apc.ActShutdownCluster, apc.ActShutdownNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.termKaliveX(msg.Action)
+		t.termKaliveX(msg.Action, false)
 		t.shutdown(msg.Action)
 	case apc.ActRmNodeUnsafe:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
 		}
-		t.termKaliveX(msg.Action)
+		t.termKaliveX(msg.Action, true)
 	case apc.ActDecommissionCluster, apc.ActDecommissionNode:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
 			return
@@ -197,7 +198,7 @@ func (t *target) daeputJSON(w http.ResponseWriter, r *http.Request) {
 			t.writeErr(w, r, err)
 			return
 		}
-		t.termKaliveX(msg.Action)
+		t.termKaliveX(msg.Action, opts.NoShutdown)
 		t.decommission(msg.Action, &opts)
 	case apc.ActCleanupMarkers:
 		if !t.ensureIntraControl(w, r, true /* from primary */) {
@@ -1188,11 +1189,13 @@ func (t *target) headObjBcast(lom *core.LOM, smap *smapX) *meta.Snode {
 // termination(s)
 //
 
-func (t *target) termKaliveX(action string) {
+func (t *target) termKaliveX(action string, abort bool) {
 	t.keepalive.ctrl(kaSuspendMsg)
 
-	err := fmt.Errorf("%s: term-kalive by %q", t, action)
-	xreg.AbortAll(err) // all xactions
+	if abort {
+		err := fmt.Errorf("%s: term-kalive by %q", t, action)
+		xreg.AbortAll(err) // all xactions
+	}
 }
 
 func (t *target) shutdown(action string) {
@@ -1230,10 +1233,19 @@ func (t *target) Stop(err error) {
 		t.regstate.mu.Unlock()
 	}
 	if err == nil {
-		nlog.Infoln("Stopping " + t.String())
+		nlog.Infoln("Stopping", t.String())
 	} else {
-		nlog.Warningf("Stopping %s: %v", t, err)
+		nlog.Warningln("Stopping", t.String()+":", err)
 	}
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		core.Term()
+		wg.Done()
+	}()
+
 	xreg.AbortAll(err)
-	t.htrun.stop(g.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
+
+	t.htrun.stop(wg, g.netServ.pub.s != nil && !isErrNoUnregister(err) /*rm from Smap*/)
 }

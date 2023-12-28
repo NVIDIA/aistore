@@ -488,26 +488,29 @@ func (h *htrun) pubAddrAny(config *cmn.Config) (inaddrAny bool) {
 
 // remove self from Smap (if required), terminate http, and wait (w/ timeout)
 // for running xactions to abort
-func (h *htrun) stop(rmFromSmap bool) {
+func (h *htrun) stop(wg *sync.WaitGroup, rmFromSmap bool) {
+	const sleep = time.Second >> 1
+
 	if rmFromSmap {
 		h.unregisterSelf(true)
 	}
-	nlog.Warningln("Shutting down HTTP")
-	wg := &sync.WaitGroup{}
+	nlog.Infoln("Shutting down HTTP")
+
 	wg.Add(1)
 	go func() {
-		time.Sleep(time.Second / 2)
+		time.Sleep(sleep)
 		shuthttp()
 		wg.Done()
 	}()
 	entry := xreg.GetRunning(xreg.Flt{})
 	if entry != nil {
-		time.Sleep(time.Second)
+		time.Sleep(sleep)
 		entry = xreg.GetRunning(xreg.Flt{})
 		if entry != nil {
-			nlog.Warningf("Timed out waiting for %q to finish aborting", entry.Kind())
+			nlog.Warningln("Timed out waiting for", entry.Kind(), "... to stop")
 		}
 	}
+
 	if h.si.IsTarget() {
 		wg.Wait()
 	}

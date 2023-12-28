@@ -1,17 +1,19 @@
 ## Validate Warm GET
 
-One way to deal with out-of-band updates is configuring aistore bucket as follows:
+One way to deal with out-of-band updates is to configure aistore bucket, as follows:
 
 ```console
 $ ais bucket props set s3://abc versioning.validate_warm_get true
 "versioning.validate_warm_get" set to: "true" (was: "false")
 ```
 
-Here, `s3://abc` is presumably an Amazon S3 bucket but it could be any Cloud or remote AIS bucket.
+Here, `s3://abc` is presumably an Amazon S3 bucket, but it could be any Cloud or remote AIS bucket.
 
-> And even an `ais://` bucket that would have Cloud or remote AIS backend - see `backend_bck` option in CLI documentation and examples.
+> It could also be any `ais://` bucket with Cloud or remote AIS backend. For usage,  see `backend_bck` option in CLI documentation and examples.
 
-Once `validate_warm_get` is set, each read operation on the bucket will take a bit of extra time to compare in-cluster and remote object metadata. If and when this comparison fails, aistore performs a _cold_ GET, to make sure that it has the latest version.
+Once `validate_warm_get` is set, any read operation on the bucket will take a bit of extra time to compare in-cluster and remote object metadata.
+
+Further, if and when this comparison fails, aistore performs a _cold_ GET, to make sure that it has the latest version.
 
 Needless to say, the latest version will be always returned to the user as well.
 
@@ -27,7 +29,7 @@ Needless to say, the latest version will be always returned to the user as well.
    - `MD5`
    - `CRC32C`
 
-To enable validation, run:
+To enable version validation, run:
 
 ```console
 $ ais bucket props set BUCKET versioning.validate_warm_get true
@@ -121,7 +123,7 @@ PROPERTY         VALUE
 version          1yNHzpfd9Y16nDS71V5scjTMfbRZUPJI
 ```
 
-Moreover, GET operatio with default parameters doesn't help:
+Moreover, GET operation with default parameters doesn't help:
 
 ```console
 $ ais get s3://abc/README.md /dev/null

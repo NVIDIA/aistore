@@ -6,9 +6,9 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -92,46 +92,16 @@ func (lom *LOM) InitBck(bck *cmn.Bck) (err error) {
 }
 
 func (lom *LOM) String() string {
-	if lom.info == "" {
-		lom.info = "o[" + lom.bck.Name + "/" + lom.ObjName + lom.str() + "]"
+	sb := &strings.Builder{}
+	sb.WriteString("o[")
+	sb.WriteString(lom.bck.Name)
+	sb.WriteByte('/')
+	sb.WriteString(lom.ObjName)
+	if !lom.loaded() {
+		sb.WriteString("(-)")
 	}
-	return lom.info
-}
-
-func (lom *LOM) str() (a string) {
-	if lom.loaded() {
-		if lom.IsCopy() {
-			a = "(copy)"
-		} else if !lom.IsHRW() {
-			a = "(misplaced)"
-		}
-		if n := lom.NumCopies(); n > 1 {
-			a += fmt.Sprintf("(%dc)", n)
-		}
-	} else {
-		a = "(-)"
-		if !lom.IsHRW() {
-			a += "(not-hrw)"
-		}
-	}
-	return
-}
-
-func (lom *LOM) StringEx() string {
-	s := "o[" + lom.bck.String() + "/" + lom.ObjName
-	if lom.mi != nil {
-		s += ", " + lom.mi.String()
-	}
-	if lom.md.Size != 0 {
-		s += " size=" + cos.ToSizeIEC(lom.md.Size, 1)
-	}
-	if lom.md.Ver != "" {
-		s += " ver=" + lom.md.Ver
-	}
-	if lom.md.Cksum != nil {
-		s += " " + lom.md.Cksum.String()
-	}
-	return s + lom.str() + "]"
+	sb.WriteByte(']')
+	return sb.String()
 }
 
 // allocates and copies metadata (in particular, atime and uname)

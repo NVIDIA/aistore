@@ -365,29 +365,44 @@ func (r *prefetch) Run(*sync.WaitGroup) {
 }
 
 func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
-	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if !cmn.IsObjNotExist(err) {
-			return
+	var (
+		err     error
+		errCode int
+	)
+	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+		if !cmn.IsErrObjNought(err) {
+			goto eret
 		}
-	} else if !lom.VersionConf().ValidateWarmGet {
-		return // simply exists
+	} else {
+		if !lom.VersionConf().ValidateWarmGet {
+			return // nothing to do
+		}
+		var eq bool
+		eq, errCode, err = core.T.CompareObjects(r.ctx, lom)
+		if eq {
+			debug.AssertNoErr(err)
+			return // nothing to do
+		}
+		if err != nil {
+			goto emaybe
+		}
 	}
 
-	if equal, _, err := core.T.CompareObjects(r.ctx, lom); equal || err != nil {
-		return
-	}
-
-	// NOTE 1: minimal locking, optimistic concurrency
-	// NOTE 2: not setting atime as prefetching does not mean the object is being accessed.
+	// NOTE minimal locking, optimistic concurrency
+	// Not setting atime (a.k.a. access time) as prefetching != actual access.
+	//
 	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
 	// (see cluster/lom_cache_hk.go).
+
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err := core.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	errCode, err = core.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return
 	}
+
+emaybe:
 	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
 		if lrit.lrp == lrpList {
 			goto eret // listing is explicit
@@ -399,7 +414,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	}
 eret:
 	r.AddErr(err)
-	if r.config.FastV(5, cos.SmoduleXs) {
+	if r.config.FastV(4, cos.SmoduleXs) {
 		nlog.Warningln(err)
 	}
 }

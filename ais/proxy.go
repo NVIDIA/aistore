@@ -1107,6 +1107,7 @@ func (p *proxy) httpbckpost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg, bucket string) {
+	const warn = "%s: destination %s doesn't exist and will be created with the %s (source bucket) props"
 	var (
 		query    = r.URL.Query()
 		bck, err = newBckFromQ(bucket, query, nil)
@@ -1227,7 +1228,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 				return
 			}
-			nlog.Infof("%s: dst %s doesn't exist and will be created with the src (%s) props", p, bckTo, bckFrom)
+			nlog.Infof(warn, p, bckTo, bckFrom)
 		}
 
 		// start x-tcb or x-tco
@@ -1235,7 +1236,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			fltPresence, _ = strconv.Atoi(v)
 		}
 		debug.Assertf(fltPresence != apc.FltExistsOutside, "(flt %d=\"outside\") not implemented yet", fltPresence)
-		if !apc.IsFltPresent(fltPresence) && bckFrom.IsCloud() {
+		if !apc.IsFltPresent(fltPresence) && (bckFrom.IsCloud() || bckFrom.IsRemoteAIS()) {
 			lstcx := &lstcx{
 				p:       p,
 				bckFrom: bckFrom,
@@ -1246,7 +1247,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 			lstcx.tcomsg.TCBMsg = *tcbmsg
 			xid, err = lstcx.do()
 		} else {
-			nlog.Infof("%s: %s => %s", msg.Action, bckFrom, bckTo)
+			nlog.Infoln("x-tcb:", bckFrom.String(), bckTo.String())
 			xid, err = p.tcb(bckFrom, bckTo, msg, tcbmsg.DryRun)
 		}
 		if err != nil {
@@ -1268,7 +1269,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 
 		if bck.Equal(bckTo, true, true) {
 			eq = true
-			nlog.Warningf("multi-obj %s within the same bucket %q", msg.Action, bck)
+			nlog.Warningf("multi-object operation %q within the same bucket %q", msg.Action, bck)
 		}
 		if bckTo.IsHTTP() {
 			p.writeErrf(w, r, "cannot %s to HTTP bucket %q", msg.Action, bckTo)
@@ -1286,7 +1287,7 @@ func (p *proxy) _bckpost(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg
 				if err := p.checkAccess(w, r, nil, apc.AceCreateBucket); err != nil {
 					return
 				}
-				nlog.Warningf("%s: dst %s doesn't exist and will be created with src %s props", p, bck, bckTo)
+				nlog.Infof(warn, p, bckTo, bck)
 			}
 		}
 
@@ -3320,7 +3321,7 @@ func (p *proxy) Stop(err error) {
 	}
 	xreg.AbortAll(errors.New("p-stop"))
 
-	p.htrun.stop(!isPrimary && smap.isValid() && !isEnu /*rmFromSmap*/)
+	p.htrun.stop(&sync.WaitGroup{}, !isPrimary && smap.isValid() && !isEnu /*rmFromSmap*/)
 }
 
 // on a best-effort basis, ignoring errors and bodyclose
