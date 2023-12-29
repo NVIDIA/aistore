@@ -63,10 +63,6 @@ func (*TargetMock) CopyObject(*core.LOM, core.DM, core.DP, core.Xact, *cmn.Confi
 	return 0, nil
 }
 
-func (*TargetMock) CompareObjects(context.Context, *core.LOM) (bool, int, error) {
-	return true, 0, nil
-}
-
 func (*TargetMock) GetCold(context.Context, *core.LOM, cmn.OWT) (int, error) {
 	return http.StatusOK, nil
 }

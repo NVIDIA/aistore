@@ -558,10 +558,11 @@ do:
 			}
 			goto fin
 		}
-	} else if goi.latestVer { // apc.QparamLatestVer or versioning.validate_warm_get
-		var equal bool
+	} else if goi.latestVer { // apc.QparamLatestVer or 'versioning.validate_warm_get'
 		goi.lom.Unlock(false)
-		if equal, errCode, err = goi.t.CompareObjects(goi.ctx, goi.lom); err != nil {
+
+		var eq bool
+		if eq, errCode, err = goi.lom.CompareRemoteMD(); err != nil {
 			goi.unlocked = true
 			if errCode == http.StatusNotFound {
 				if cmn.Rom.Features().IsSet(feat.DontRmViaValidateWarmGET) {
@@ -578,12 +579,12 @@ do:
 			}
 			return
 		}
-		if !equal {
-			cold, goi.verchanged = true, true
-			if err = goi.lom.AllowDisconnectedBackend(true /*loaded*/); err != nil {
+		if !eq {
+			if err = goi.lom.CheckRemoteBackend(true /*loaded*/); err != nil {
 				goi.unlocked = true
 				return
 			}
+			cold, goi.verchanged = true, true
 		}
 		goi.lom.Lock(false)
 	}
@@ -1363,7 +1364,10 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 
 	// discard the reader and be done
 	var reader io.ReadCloser
-	if reader, _, err = coi.dp.Reader(lom); err != nil {
+	if reader, _, err = coi.dp.Reader(lom, false); err != nil {
+		if err == cmn.ErrSkip {
+			err = nil
+		}
 		return 0, err
 	}
 	size, err = io.Copy(io.Discard, reader)
@@ -1384,7 +1388,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyOI) _reader(lom, dst *core.LOM) (size int64, _ error) {
-	reader, oah, errN := coi.dp.Reader(lom)
+	reader, oah, errN := coi.dp.Reader(lom, false) // TODO -- FIXME: provide
 	if errN != nil {
 		return 0, errN
 	}
@@ -1525,7 +1529,7 @@ func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 	default:
 		// 3. DP transform (possibly, no-op)
 		// If the object is not present call t.Backend.GetObjReader
-		reader, oah, err := coi.dp.Reader(lom)
+		reader, oah, err := coi.dp.Reader(lom, false) // TODO -- FIXME: provide
 		if err != nil {
 			return
 		}

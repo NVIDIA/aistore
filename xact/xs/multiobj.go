@@ -52,7 +52,6 @@ type (
 	// common multi-obj operation context and iterList()/iterRangeOrPref() logic
 	lriterator struct {
 		xctn lrxact
-		ctx  context.Context
 		msg  *apc.ListRange
 		lrp  int // { lrpList, ... } enum
 	}
@@ -103,7 +102,6 @@ var (
 
 func (r *lriterator) init(xctn lrxact, msg *apc.ListRange) {
 	r.xctn = xctn
-	r.ctx = context.Background()
 	r.msg = msg
 }
 
@@ -378,9 +376,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 			return // nothing to do
 		}
 		var eq bool
-		eq, errCode, err = core.T.CompareObjects(r.ctx, lom)
-		if eq {
-			debug.AssertNoErr(err)
+		if eq, errCode, err = lom.CompareRemoteMD(); eq {
 			return // nothing to do
 		}
 		if err != nil {
@@ -396,7 +392,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 	// (see cluster/lom_cache_hk.go).
 
 	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err = core.T.GetCold(r.ctx, lom, cmn.OwtGetPrefetchLock)
+	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
 	if err == nil { // done
 		r.ObjsAdd(1, lom.SizeBytes())
 		return

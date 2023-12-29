@@ -66,8 +66,6 @@ type (
 		// (for intra-cluster data-net comm - no streams)
 		DataClient() *http.Client
 
-		CompareObjects(ctx context.Context, lom *LOM) (equal bool, errCode int, err error)
-
 		// core object (+ PutObject above)
 		FinalizeObj(lom *LOM, workFQN string, xctn Xact) (errCode int, err error)
 		EvictObject(lom *LOM) (errCode int, err error)

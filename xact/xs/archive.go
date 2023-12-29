@@ -7,6 +7,7 @@ package xs
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -491,7 +492,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 
 	if coldGet {
 		// cold
-		if errCode, err := core.T.GetCold(lrit.ctx, lom, cmn.OwtGetLock); err != nil {
+		if errCode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
 			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cmn.IsObjNotExist(err)) {
 				return
 			}

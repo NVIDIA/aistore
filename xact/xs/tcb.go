@@ -77,6 +77,7 @@ func (p *tcbFactory) Start() error {
 	// sync same-name remote
 	p.xctn.syncRemote = p.kind != apc.ActETLBck &&
 		p.args.Msg.CopyBckMsg.Prepend == "" &&
+		p.args.BckFrom.IsRemote() &&
 		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)

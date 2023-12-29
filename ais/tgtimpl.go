@@ -152,7 +152,6 @@ func (t *target) CopyObject(lom *core.LOM, dm core.DM, dp core.DP, xact core.Xac
 	size, err = coi.do(lom)
 	coi.stats(size, err)
 	freeCOI(coi)
-
 	return size, err
 }
 

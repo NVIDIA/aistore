@@ -147,7 +147,12 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	_, err = coi.do(lom)
 	freeCOI(coi)
 	if err != nil {
-		s3.WriteErr(w, r, err, 0)
+		if err == cmn.ErrSkip {
+			name := lom.Cname()
+			s3.WriteErr(w, r, cos.NewErrNotFound("%s: %s", t.si, name), http.StatusNotFound)
+		} else {
+			s3.WriteErr(w, r, err, 0)
+		}
 		return
 	}
 

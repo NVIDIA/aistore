@@ -469,36 +469,33 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	return lom._checkBucket(bmd)
 }
 
-// permission to overwrite objects that were previously read from:
-// a) any remote backend that is currently not configured as the bucket's backend
-// b) HTPP ("ht://") since it's not writable
-func (lom *LOM) AllowDisconnectedBackend(loaded bool) (err error) {
+// same remote backend _or_
+// permission to overwrite objects that were previously read from
+// remote backend that is currently _not_ configured as the bucket's
+func (lom *LOM) CheckRemoteBackend(loaded bool) (err error) {
 	bck := lom.Bck()
-	// allowed
+	debug.Assert(bck.IsRemote(), bck.String())
+	// allowed - no more checks
 	if bck.Props.Access.Has(apc.AceDisconnectedBackend) {
 		return
 	}
 	if !loaded {
-		// doesn't exist
+		// doesn't exist - nothing to do
 		if lom.Load(true /*cache it*/, false /*locked*/) != nil {
 			return
 		}
 	}
-	// not allowed & exists & no remote source
 	srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
 	if !hasSrc {
+		// not allowed, present, no remote source
 		return
 	}
-	// case 1
-	if bck.IsAIS() {
-		goto rerr
-	}
-	// case 2
 	if b := bck.RemoteBck(); b != nil && b.Provider == srcProvider {
+		// same
 		return
 	}
-rerr:
-	msg := fmt.Sprintf("%s(downoaded from %q)", lom, srcProvider)
+
+	msg := fmt.Sprintf("%s(downloaded from %q)", lom, srcProvider)
 	err = cmn.NewObjectAccessDenied(msg, apc.AccessOp(apc.AceDisconnectedBackend), bck.Props.Access)
 	return
 }

@@ -240,27 +240,23 @@ func headLink(link string) (resp *http.Response, err error) {
 }
 
 // Use all available metadata including {size, version, ETag, MD5, CRC}
-// to compare local object with its remote counterpart.
-func CompareObjects(lom *core.LOM, dst *DstElement) (equal bool, err error) {
-	var oa *cmn.ObjAttrs
-	if dst.Link != "" {
-		resp, errHead := headLink(dst.Link) //nolint:bodyclose // cos.Close
-		if errHead != nil {
-			return false, errHead
-		}
-		cos.Close(resp.Body)
-		oa = &cmn.ObjAttrs{}
-		oa.Size = attrsFromLink(dst.Link, resp, oa)
-	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), headReqTimeout)
-		defer cancel()
-		oa, _, err = core.T.Backend(lom.Bck()).HeadObj(ctx, lom)
-		if err != nil {
-			return false, err
-		}
+// to compare local object with its remote counterpart (source).
+func CompareObjects(lom *core.LOM, dst *DstElement) (bool /*equal*/, error) {
+	if dst.Link == "" {
+		eq, _, err := lom.CompareRemoteMD()
+		return eq, err
 	}
-	equal = lom.Equal(oa)
-	return
+
+	resp, err := headLink(dst.Link) //nolint:bodyclose // cos.Close
+	if err != nil {
+		return false, err
+	}
+	cos.Close(resp.Body)
+
+	oa := &cmn.ObjAttrs{}
+	oa.Size = attrsFromLink(dst.Link, resp, oa) // fill in from resp
+
+	return lom.Equal(oa), nil
 }
 
 // called via ais/prxnotifs generic mechanism

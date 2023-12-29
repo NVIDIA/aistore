@@ -10,6 +10,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 )
@@ -39,12 +40,14 @@ func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-func (dp *OfflineDP) Reader(lom *core.LOM) (cos.ReadOpenCloser, cos.OAH, error) {
+// TODO: comm.OfflineTransform to support latestVer
+func (dp *OfflineDP) Reader(lom *core.LOM, latestVer bool) (cos.ReadOpenCloser, cos.OAH, error) {
 	var (
 		r      cos.ReadCloseSizer // note: +sizer
 		err    error
 		action = "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname()
 	)
+	debug.Assert(!latestVer, "NIY")
 	call := func() (int, error) {
 		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err

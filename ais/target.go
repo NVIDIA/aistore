@@ -772,18 +772,18 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// load (maybe)
-	var (
-		errdb  error
-		skipVC = cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
-	)
-	if skipVC {
-		errdb = lom.AllowDisconnectedBackend(false)
-	} else if lom.Load(true, false) == nil {
-		errdb = lom.AllowDisconnectedBackend(true)
-	}
-	if errdb != nil {
-		t.writeErr(w, r, errdb)
-		return
+	skipVC := cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
+	if lom.Bck().IsRemote() {
+		var errdb error
+		if skipVC {
+			errdb = lom.CheckRemoteBackend(false)
+		} else if lom.Load(true, false) == nil {
+			errdb = lom.CheckRemoteBackend(true)
+		}
+		if errdb != nil {
+			t.writeErr(w, r, errdb)
+			return
+		}
 	}
 
 	// do
@@ -1192,22 +1192,6 @@ func (t *target) sendECCT(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 	if err != nil {
 		nlog.Errorf("Failed to send slice %s: %v", bck.Cname(objName), err)
 	}
-}
-
-//
-// supporting methods
-//
-
-// usage including: prefetch; validate-warm-get (this target)
-func (t *target) CompareObjects(ctx context.Context, lom *core.LOM) (equal bool, errCode int, err error) {
-	var objAttrs *cmn.ObjAttrs
-	objAttrs, errCode, err = t.Backend(lom.Bck()).HeadObj(ctx, lom)
-	if err != nil {
-		err = cmn.NewErrFailedTo(t, "HEAD(object)", lom, err)
-	} else {
-		equal = lom.Equal(objAttrs)
-	}
-	return
 }
 
 // called under lock
