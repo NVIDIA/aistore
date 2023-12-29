@@ -32,9 +32,7 @@ import (
 //   that contains this LOM
 
 const (
-	fmtNestedErr      = "nested err: %v"
 	lomInitialVersion = "1"
-	lomDirtyMask      = uint64(1 << 63)
 )
 
 // lcache stats

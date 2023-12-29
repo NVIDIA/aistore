@@ -26,7 +26,10 @@ import (
 func fmtObjStatus(obj *cmn.LsoEntry) string {
 	switch obj.Status() {
 	case apc.LocOK:
-		return "ok"
+		if obj.IsPresent() {
+			return "ok"
+		}
+		return UnknownStatusVal
 	case apc.LocMisplacedNode:
 		return "misplaced(cluster)"
 	case apc.LocMisplacedMountpath:

@@ -18,6 +18,8 @@ import (
 // LOM copy management
 //
 
+const fmtNestedErr = "nested err: %v"
+
 func (lom *LOM) whingeCopy() (yes bool) {
 	if !lom.IsCopy() {
 		return

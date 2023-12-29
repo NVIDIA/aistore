@@ -11,7 +11,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
@@ -21,23 +20,26 @@ import (
 )
 
 const (
-	oomEvictAtime = time.Minute * 5   // OOM
-	mpeEvictAtime = time.Minute * 10  // extreme
-	mphEvictAtime = time.Minute * 20  // high
-	mpnEvictAtime = time.Hour         // normal
+	oomEvictAtime = time.Minute * 5  // OOM
+	mpeEvictAtime = time.Minute * 10 // extreme
+	mphEvictAtime = time.Minute * 20 // high
+	mpnEvictAtime = time.Hour        // normal
+
 	iniEvictAtime = mpnEvictAtime / 2 // initial
+	maxEvictAtime = mpnEvictAtime * 2 // maximum
 )
 
-const termDuration = time.Duration(-1)
-
 type lchk struct {
-	cache        *sync.Map
-	now          time.Time
-	d            time.Duration
+	cache *sync.Map
+	// runtime
+	now      time.Time
+	d        time.Duration
+	totalCnt int64
+	// stats
 	evictedCnt   int64
-	totalCnt     int64
 	flushColdCnt int64
-	running      atomic.Bool
+	// single entry
+	running atomic.Bool
 }
 
 func regLomCacheWithHK() {
@@ -100,6 +102,10 @@ func (lchk *lchk) housekeep() (d time.Duration) {
 	return
 }
 
+const termDuration = time.Duration(-1)
+
+func (lchk *lchk) terminating() bool { return lchk.d == termDuration }
+
 func (*lchk) mp() (d time.Duration, tag string) {
 	p := g.pmm.Pressure()
 	switch p {
@@ -126,12 +132,17 @@ func (lchk *lchk) evictAll(d time.Duration) {
 
 	// single-threaded: one cache at a time
 	caches := lomCaches()
+	if lchk.terminating() {
+		for _, cache := range caches {
+			lchk.cache = cache
+			cache.Range(lchk.fterm)
+		}
+		return
+	}
+
 	for _, cache := range caches {
 		lchk.cache = cache
-		cache.Range(lchk.f)
-	}
-	if d == termDuration {
-		return
+		cache.Range(lchk.frun)
 	}
 
 	if _, tag := lchk.mp(); tag != "" {
@@ -145,38 +156,56 @@ func (lchk *lchk) evictAll(d time.Duration) {
 	lchk.running.Store(false)
 }
 
-func (lchk *lchk) f(hkey, value any) bool {
-	var (
-		md      = value.(*lmeta)
-		mdTime  = md.Atime
-		special bool
-	)
-	if mdTime < 0 {
-		mdTime = -mdTime // special case: prefetched but not yet accessed
-		special = true
-	}
-	lchk.totalCnt++
-	atime := time.Unix(0, mdTime)
-	if lchk.d != termDuration && lchk.now.Sub(atime) < lchk.d {
+func (lchk *lchk) fterm(_, value any) bool {
+	md := value.(*lmeta)
+	if md.Atime < 0 {
+		// prefetched, not yet accessed
+		lchk.flush(md, time.Unix(0, -md.Atime))
 		return true
 	}
-
-	atimefs := md.atimefs & ^lomDirtyMask
-	if special || (md.Atime > 0 && atimefs != uint64(md.Atime)) {
-		debug.Assert(cos.IsValidAtime(md.Atime), md.Atime)
-		lif := LIF{Uname: md.uname, BID: md.bckID}
-		lom, err := lif.LOM()
-		if err == nil {
-			lom.Lock(true)
-			lom.flushCold(md, atime)
-			lom.Unlock(true)
-			FreeLOM(lom)
-			lchk.flushColdCnt++
-		}
-	}
-	if lchk.d != termDuration {
-		lchk.cache.Delete(hkey)
-		lchk.evictedCnt++
+	if md.isDirty() || md.atimefs != uint64(md.Atime) {
+		lchk.flush(md, time.Unix(0, md.Atime))
 	}
 	return true
+}
+
+func (lchk *lchk) frun(hkey, value any) bool {
+	var (
+		md     = value.(*lmeta)
+		mdTime = md.Atime
+	)
+	lchk.totalCnt++
+
+	if mdTime < 0 {
+		// prefetched, not yet accessed
+		mdTime = -mdTime
+	}
+	atime := time.Unix(0, mdTime)
+	elapsed := lchk.now.Sub(atime)
+	if elapsed < lchk.d {
+		return true
+	}
+	if md.isDirty() {
+		if lchk.d > mphEvictAtime && elapsed < maxEvictAtime {
+			return true
+		}
+		lchk.flush(md, atime)
+	} else if md.atimefs != uint64(md.Atime) {
+		lchk.flush(md, atime)
+	}
+	lchk.cache.Delete(hkey)
+	lchk.evictedCnt++
+	return true
+}
+
+func (lchk *lchk) flush(md *lmeta, atime time.Time) {
+	lif := LIF{Uname: md.uname, BID: md.bckID}
+	lom, err := lif.LOM()
+	if err == nil {
+		lom.Lock(true)
+		lom.flushCold(md, atime)
+		lom.Unlock(true)
+		FreeLOM(lom)
+		lchk.flushColdCnt++
+	}
 }

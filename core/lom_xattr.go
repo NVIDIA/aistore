@@ -278,6 +278,8 @@ func _recomputeMdSize(size, mdSize int64) {
 // lmeta //
 ///////////
 
+const lomDirtyMask = uint64(1 << 63)
+
 func (md *lmeta) makeDirty()    { md.atimefs |= lomDirtyMask }
 func (md *lmeta) clearDirty()   { md.atimefs &= ^lomDirtyMask }
 func (md *lmeta) isDirty() bool { return md.atimefs&lomDirtyMask == lomDirtyMask }
