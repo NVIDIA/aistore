@@ -367,7 +367,8 @@ func (e *ErrBusy) Error() string {
 // errAccessDenied & ErrBucketAccessDenied
 
 func (e *errAccessDenied) String() string {
-	return fmt.Sprintf("%s: %s access denied (%#x)", e.entity, e.operation, e.accessAttrs)
+	return fmt.Sprintf("%s: %s access denied (allowed: [%s])",
+		e.entity, e.operation, e.accessAttrs.Describe(false /*include all*/))
 }
 
 func (e *ErrBucketAccessDenied) Error() string {

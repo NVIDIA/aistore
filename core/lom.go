@@ -469,37 +469,6 @@ func (lom *LOM) LoadUnsafe() (err error) {
 	return lom._checkBucket(bmd)
 }
 
-// same remote backend _or_
-// permission to overwrite objects that were previously read from
-// remote backend that is currently _not_ configured as the bucket's
-func (lom *LOM) CheckRemoteBackend(loaded bool) (err error) {
-	bck := lom.Bck()
-	debug.Assert(bck.IsRemote(), bck.String())
-	// allowed - no more checks
-	if bck.Props.Access.Has(apc.AceDisconnectedBackend) {
-		return
-	}
-	if !loaded {
-		// doesn't exist - nothing to do
-		if lom.Load(true /*cache it*/, false /*locked*/) != nil {
-			return
-		}
-	}
-	srcProvider, hasSrc := lom.GetCustomKey(cmn.SourceObjMD)
-	if !hasSrc {
-		// not allowed, present, no remote source
-		return
-	}
-	if b := bck.RemoteBck(); b != nil && b.Provider == srcProvider {
-		// same
-		return
-	}
-
-	msg := fmt.Sprintf("%s(downloaded from %q)", lom, srcProvider)
-	err = cmn.NewObjectAccessDenied(msg, apc.AccessOp(apc.AceDisconnectedBackend), bck.Props.Access)
-	return
-}
-
 //
 // lom cache -------------------------------------------------------------
 //

@@ -22,10 +22,8 @@ const (
 	AceObjDELETE
 	AceObjMOVE
 	AcePromote
-	// permission to overwrite objects that were previously read from:
-	// a) any remote backend that is currently not configured as the bucket's backend
-	// b) HTPP ("ht://") since it's not writable
-	AceDisconnectedBackend
+	// TODO: reserving the only perm that must be checked on the target side (NIY)
+	AceObjUpdate
 	// bucket metadata
 	AceBckHEAD   // get bucket props and ACL
 	AceObjLIST   // list objects in a bucket
@@ -45,14 +43,14 @@ const (
 // access => operation
 var accessOp = map[AccessAttrs]string{
 	// object
-	AceGET:                 "GET",
-	AceObjHEAD:             "HEAD-OBJECT",
-	AcePUT:                 "PUT",
-	AceAPPEND:              "APPEND",
-	AceObjDELETE:           "DELETE-OBJECT",
-	AceObjMOVE:             "MOVE-OBJECT",
-	AcePromote:             "PROMOTE",
-	AceDisconnectedBackend: "DISCONNECTED-BACKEND",
+	AceGET:       "GET",
+	AceObjHEAD:   "HEAD-OBJECT",
+	AcePUT:       "PUT",
+	AceAPPEND:    "APPEND",
+	AceObjDELETE: "DELETE-OBJECT",
+	AceObjMOVE:   "MOVE-OBJECT",
+	AcePromote:   "PROMOTE",
+	AceObjUpdate: "UPDATE-OBJECT",
 	// bucket
 	AceBckHEAD:   "HEAD-BUCKET",
 	AceObjLIST:   "LIST-OBJECTS",
@@ -99,9 +97,9 @@ func SupportedPermissions() []string {
 func (a AccessAttrs) Has(perms AccessAttrs) bool { return a&perms == perms }
 func (a AccessAttrs) String() string             { return strconv.FormatUint(uint64(a), 10) }
 
-func (a AccessAttrs) Describe() string {
+func (a AccessAttrs) Describe(all bool) string {
 	if a == 0 {
-		return "No access"
+		return "none"
 	}
 	accList := make([]string, 0, 24)
 	if a.Has(AceGET) {
@@ -125,8 +123,8 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AcePromote) {
 		accList = append(accList, accessOp[AcePromote])
 	}
-	if a.Has(AceDisconnectedBackend) {
-		accList = append(accList, accessOp[AceDisconnectedBackend])
+	if a.Has(AceObjUpdate) {
+		accList = append(accList, accessOp[AceObjUpdate])
 	}
 	//
 	if a.Has(AceBckHEAD) {
@@ -160,7 +158,13 @@ func (a AccessAttrs) Describe() string {
 	if a.Has(AceAdmin) {
 		accList = append(accList, accessOp[AceAdmin])
 	}
-	return strings.Join(accList, ",")
+
+	// return
+	if all || len(accList) <= 4 {
+		return strings.Join(accList, ",")
+	}
+	accList = accList[:4]
+	return strings.Join(accList, ",") + ", ..."
 }
 
 func AccessOp(access AccessAttrs) string {

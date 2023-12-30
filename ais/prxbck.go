@@ -117,8 +117,8 @@ func (args *bckInitArgs) init() (errCode int, err error) {
 		}
 	}
 
-	if err = args._checkRemoteBckPermissions(); err != nil {
-		errCode = http.StatusBadRequest
+	if err = args.accessSupported(); err != nil {
+		errCode = http.StatusMethodNotAllowed
 		return
 	}
 	if args.skipBackend {
@@ -144,46 +144,48 @@ func (args *bckInitArgs) init() (errCode int, err error) {
 		}
 		args.perms = dtor.Access
 	}
-	errCode, err = args.access(bck)
+	errCode, err = args.accessAllowed(bck)
 	return
 }
 
-func (args *bckInitArgs) _checkRemoteBckPermissions() (err error) {
-	var op string
+// returns true when operation requires the 'perm' type access
+func (args *bckInitArgs) _perm(perm apc.AccessAttrs) bool { return (args.perms & perm) == perm }
+
+// (compare w/ accessAllowed)
+func (args *bckInitArgs) accessSupported() error {
 	if !args.bck.IsRemote() {
-		return
+		return nil
 	}
-	if args._requiresPermission(apc.AceMoveBucket) {
+
+	var op string
+	if args._perm(apc.AceMoveBucket) {
 		op = "rename/move remote bucket"
-		goto retErr
+		goto rerr
 	}
-	// HDFS buckets are allowed to be deleted.
+	// accept rename (check!) HDFS buckets are fine across the board
 	if args.bck.IsHDFS() {
-		return
+		return nil
 	}
-	// HTTP buckets should fail on PUT and bucket rename operations
-	if args.bck.IsHTTP() && args._requiresPermission(apc.AcePUT) {
-		op = "PUT => HTTP bucket"
-		goto retErr
+	// HTTP buckets are not writeable
+	if args.bck.IsHTTP() && args._perm(apc.AcePUT) {
+		op = "write to HTTP bucket"
+		goto rerr
 	}
-	// Destroy and Rename/Move are not permitted.
-	if args.bck.IsCloud() && args._requiresPermission(apc.AceDestroyBucket) && args.msg.Action == apc.ActDestroyBck {
-		op = "destroy " + args.bck.Provider + " (cloud) bucket"
-		goto retErr
+	// Cloud bucket: destroy op. not allowed, and not supported yet
+	// (have no separate perm for eviction, that's why an extra check)
+	if rmb := args.bck.IsCloud() && args._perm(apc.AceDestroyBucket) && args.msg.Action == apc.ActDestroyBck; !rmb {
+		return nil
 	}
-	return
-retErr:
-	return cmn.NewErrUnsupp(op, args.bck.String())
+	op = "destroy cloud bucket"
+rerr:
+	return cmn.NewErrUnsupp(op, args.bck.Cname(""))
 }
 
-func (args *bckInitArgs) _requiresPermission(perm apc.AccessAttrs) bool {
-	return (args.perms & perm) == perm
-}
-
-func (args *bckInitArgs) access(bck *meta.Bck) (errCode int, err error) {
+// (compare w/ accessSupported)
+func (args *bckInitArgs) accessAllowed(bck *meta.Bck) (errCode int, err error) {
 	err = args.p.access(args.r.Header, bck, args.perms)
 	errCode = aceErrToCode(err)
-	return
+	return errCode, err
 }
 
 // initAndTry initializes the bucket (proxy-only, as the filename implies).

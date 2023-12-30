@@ -244,14 +244,13 @@ func aceErrToCode(err error) (status int) {
 	default:
 		status = http.StatusForbidden
 	}
-	return
+	return status
 }
 
-func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) error {
+func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	var (
 		tk     *tok.Token
 		bucket *cmn.Bck
-		err    error
 		cfg    = cmn.GCO.Get()
 	)
 	if p.isIntraCall(hdr, false /*from primary*/) == nil {
@@ -278,18 +277,17 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) erro
 		// cluster ACL: create/list buckets, node management, etc.
 		return nil
 	}
-	if !cfg.Auth.Enabled || tk.IsAdmin {
-		// PATCH and ACL are always allowed in two cases:
-		// - a user is a superuser
-		// - AuthN is disabled
+
+	// bucket access conventions:
+	// - PATCH and ACL are always allowed if: a) user is a superuser, or b) AuthN is disabled
+	// - without AuthN, read-only access is also always permitted
+	if !cfg.Auth.Enabled {
+		ace &^= (apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO)
+	} else if tk.IsAdmin {
 		ace &^= (apc.AcePATCH | apc.AceBckSetACL)
 	}
 	if ace == 0 {
 		return nil
-	}
-	if !cfg.Auth.Enabled {
-		// Without AuthN, read-only access is always OK
-		ace &^= apc.AccessRO
 	}
 	return bck.Allow(ace)
 }

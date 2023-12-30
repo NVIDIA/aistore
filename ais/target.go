@@ -772,18 +772,9 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 	}
 
 	// load (maybe)
-	skipVC := cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC) // apc.QparamSkipVC
-	if lom.Bck().IsRemote() {
-		var errdb error
-		if skipVC {
-			errdb = lom.CheckRemoteBackend(false)
-		} else if lom.Load(true, false) == nil {
-			errdb = lom.CheckRemoteBackend(true)
-		}
-		if errdb != nil {
-			t.writeErr(w, r, errdb)
-			return
-		}
+	skipVC := cmn.Rom.Features().IsSet(feat.SkipVC) || cos.IsParseBool(apireq.dpq.skipVC)
+	if !skipVC {
+		_ = lom.Load(true, false)
 	}
 
 	// do
@@ -833,7 +824,7 @@ func (t *target) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiR
 			poi.t = t
 			poi.lom = lom
 			poi.config = config
-			poi.skipVC = skipVC
+			poi.skipVC = skipVC // feat.SkipVC || apc.QparamSkipVC
 			poi.restful = true
 			poi.t2t = t2tput
 		}

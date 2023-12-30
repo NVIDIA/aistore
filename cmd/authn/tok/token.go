@@ -133,7 +133,8 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 			return errors.New("requested cluster permissions without cluster ID")
 		}
 		if !cluACL.Has(cluPerms) {
-			return fmt.Errorf("%v: [cluster %s, %s, granted(%s)]", ErrNoPermissions, clusterID, tk, cluACL.Describe())
+			return fmt.Errorf("%v: [cluster %s, %s, granted(%s)]",
+				ErrNoPermissions, clusterID, tk, cluACL.Describe(false /*include all*/))
 		}
 	}
 	if objPerms == 0 {
@@ -149,10 +150,11 @@ func (tk *Token) CheckPermissions(clusterID string, bck *cmn.Bck, perms apc.Acce
 		if bckACL.Has(objPerms) {
 			return nil
 		}
-		return fmt.Errorf("%v: [%s, bucket %s, granted(%s)]", ErrNoPermissions, tk, bck.String(), bckACL.Describe())
+		return fmt.Errorf("%v: [%s, bucket %s, granted(%s)]",
+			ErrNoPermissions, tk, bck.String(), bckACL.Describe(false /*include all*/))
 	}
 	if !cluOk || !cluACL.Has(objPerms) {
-		return fmt.Errorf("%v: [%s, granted(%s)]", ErrNoPermissions, tk, cluACL.Describe())
+		return fmt.Errorf("%v: [%s, granted(%s)]", ErrNoPermissions, tk, cluACL.Describe(false /*include all*/))
 	}
 	return nil
 }

@@ -951,17 +951,21 @@ func TestDownloadOverrideObject(t *testing.T) {
 
 	clearDownloadList(t)
 
-	// disallow updating downloaded objects
-	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
-	props := &cmn.BpropsToSet{Access: apc.AccAttrs(aattrs)}
-	tools.CreateBucket(t, proxyURL, bck, props, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
 	downloadObject(t, bck, objName, link, false /*expectedSkipped*/, true /*bucket exists*/)
 	oldProps := verifyProps(t, bck, objName, expectedSize, "1")
 
-	// Update the file
+	// Disallow PUT (TODO: use apc.AceObjUpdate instead when/if supported)
+	aattrs := apc.AccessAll &^ apc.AcePUT
+	_, err := api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
+		Access: apc.AccAttrs(aattrs),
+	})
+	tassert.CheckFatal(t, err)
+
+	tlog.Logln("Trying to update the object (expecting to fail)")
 	r, _ := readers.NewRand(10, p.Cksum.Type)
-	_, err := api.PutObject(&api.PutArgs{
+	_, err = api.PutObject(&api.PutArgs{
 		BaseParams: baseParams,
 		Bck:        bck,
 		ObjName:    objName,
@@ -970,6 +974,14 @@ func TestDownloadOverrideObject(t *testing.T) {
 	})
 	tassert.Fatalf(t, err != nil, "expected: err!=nil, got: nil")
 	verifyProps(t, bck, objName, expectedSize, "1")
+
+	// Allow PUT back again (TODO: ditto)
+	tlog.Logln("Allow updates back again, and download " + link)
+	aattrs = apc.AccessAll
+	_, err = api.SetBucketProps(baseParams, bck, &cmn.BpropsToSet{
+		Access: apc.AccAttrs(aattrs),
+	})
+	tassert.CheckFatal(t, err)
 
 	downloadObject(t, bck, objName, link, true /*expectedSkipped*/, true /*bucket exists*/)
 	newProps := verifyProps(t, bck, objName, expectedSize, "1")

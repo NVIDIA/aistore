@@ -3003,8 +3003,9 @@ func TestBackendBucket(t *testing.T) {
 		aisObjList.Entries, cachedObjName,
 	)
 
-	// Disconnect backend bucket while denying (the default) apc.AceDisconnectedBackend permission
-	aattrs := apc.AccessAll &^ apc.AceDisconnectedBackend
+	// Disallow PUT (TODO: use apc.AceObjUpdate instead, when/if supported)
+
+	aattrs := apc.AccessAll &^ apc.AcePUT
 	_, err = api.SetBucketProps(baseParams, aisBck, &cmn.BpropsToSet{
 		BackendBck: &cmn.BackendBckToSet{
 			Name:     apc.String(""),
@@ -3015,9 +3016,9 @@ func TestBackendBucket(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	p, err = api.HeadBucket(baseParams, aisBck, true /* don't add */)
 	tassert.CheckFatal(t, err)
-	tassert.Fatalf(t, p.BackendBck.IsEmpty(), "backend bucket isn't empty")
+	tassert.Fatalf(t, p.BackendBck.IsEmpty(), "backend bucket is still configured: %s", p.BackendBck.String())
 
-	// Check if we can still get object and list objects.
+	// Check that we can still GET and list-objects
 	_, err = api.GetObject(baseParams, aisBck, cachedObjName, nil)
 	tassert.CheckFatal(t, err)
 
@@ -3029,13 +3030,15 @@ func TestBackendBucket(t *testing.T) {
 		aisObjList.Entries, cachedObjName,
 	)
 
-	// Check that we cannot do cold gets anymore.
+	// Check that we cannot cold GET anymore - no backend
+	tlog.Logln("Trying to cold-GET when there's no backend anymore (expecting to fail)")
 	_, err = api.GetObject(baseParams, aisBck, remoteObjList.Entries[1].Name, nil)
 	tassert.Fatalf(t, err != nil, "expected error (object should not exist)")
 
-	// Check that we cannot do put anymore.
+	// Check that we cannot do PUT anymore.
+	tlog.Logln("Trying to PUT 2nd version (expecting to fail)")
 	err = tools.PutObjRR(baseParams, aisBck, cachedObjName, 256, cos.ChecksumNone)
-	tassert.Errorf(t, err != nil, "expected err!=nil (put should not be allowed with objSrc!=BackendBck )")
+	tassert.Errorf(t, err != nil, "expected err != nil")
 }
 
 //

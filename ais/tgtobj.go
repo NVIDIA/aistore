@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -228,21 +229,26 @@ rerr:
 	return
 }
 
+// verbose only
 func (poi *putOI) loghdr() string {
-	s := poi.owt.String() + ", " + poi.lom.String()
-	if poi.xctn != nil { // may not be showing remote xaction (see doPut)
-		s += ", " + poi.xctn.String()
+	sb := strings.Builder{}
+	sb.WriteString(poi.owt.String())
+	sb.WriteString(", ")
+	sb.WriteString(poi.lom.String())
+	if poi.xctn != nil {
+		sb.WriteString(", ")
+		sb.WriteString(poi.xctn.String())
 	}
 	if poi.skipVC {
-		s += ", skip-vc"
+		sb.WriteString(", skip-vc")
 	}
 	if poi.coldGET {
-		s += ", cold-get"
+		sb.WriteString(", cold-get")
 	}
 	if poi.t2t {
-		s += ", t2t"
+		sb.WriteString(", t2t")
 	}
-	return s
+	return sb.String()
 }
 
 func (poi *putOI) finalize() (errCode int, err error) {
@@ -305,7 +311,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
 			if poi.config.FastV(4, cos.SmoduleAIS) {
-				nlog.Warningf("(%s) is busy", poi.loghdr())
+				nlog.Warningln(poi.loghdr(), "is busy")
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
 		}
@@ -323,7 +329,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		if poi.owt == cmn.OwtPut || poi.owt == cmn.OwtFinalize || poi.owt == cmn.OwtPromote {
 			if poi.skipVC {
 				err = lom.IncVersion()
-				debug.Assert(err == nil)
+				debug.AssertNoErr(err)
 			} else if remSrc, ok := lom.GetCustomKey(cmn.SourceObjMD); !ok || remSrc == "" {
 				if err = lom.IncVersion(); err != nil {
 					nlog.Errorln(err)
@@ -580,10 +586,6 @@ do:
 			return
 		}
 		if !eq {
-			if err = goi.lom.CheckRemoteBackend(true /*loaded*/); err != nil {
-				goi.unlocked = true
-				return
-			}
 			cold, goi.verchanged = true, true
 		}
 		goi.lom.Lock(false)
