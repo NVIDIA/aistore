@@ -19,8 +19,9 @@ type readMostly struct {
 		cplane    time.Duration // Config.Timeout.CplaneOperation
 		keepalive time.Duration // ditto MaxKeepalive
 	}
-	features   feat.Flags
-	testingEnv bool
+	features    feat.Flags
+	testingEnv  bool
+	authEnabled bool
 }
 
 var Rom readMostly
@@ -34,9 +35,11 @@ func (rom *readMostly) Set(cfg *ClusterConfig) {
 	rom.timeout.cplane = cfg.Timeout.CplaneOperation.D()
 	rom.timeout.keepalive = cfg.Timeout.MaxKeepalive.D()
 	rom.features = cfg.Features
+	rom.authEnabled = cfg.Auth.Enabled
 }
 
 func (rom *readMostly) CplaneOperation() time.Duration { return rom.timeout.cplane }
 func (rom *readMostly) MaxKeepalive() time.Duration    { return rom.timeout.keepalive }
 func (rom *readMostly) Features() feat.Flags           { return rom.features }
 func (rom *readMostly) TestingEnv() bool               { return rom.testingEnv }
+func (rom *readMostly) AuthEnabled() bool              { return rom.authEnabled }

@@ -57,7 +57,7 @@ PUT "README.md" to ais://nnn
 #  and a (user-friendly) description. A given role can be assigned to multiple users.
 $ ais auth add role new-role myclu <TAB-TAB>
 ADMIN                  DESTROY-BUCKET         HEAD-OBJECT            MOVE-OBJECT            ro
-APPEND                 DISCONNECTED-BACKEND   LIST-BUCKETS           PATCH                  rw
+APPEND                 UPDATE-OBJECT          LIST-BUCKETS           PATCH                  rw
 CREATE-BUCKET          GET                    LIST-OBJECTS           PROMOTE                SET-BUCKET-ACL
 DELETE-OBJECT          HEAD-BUCKET            MOVE-BUCKET            PUT                    su
 

@@ -228,7 +228,7 @@ func fmtACL(acl apc.AccessAttrs) string {
 	if acl == 0 {
 		return unknownVal
 	}
-	return acl.Describe()
+	return acl.Describe(true /*incl. all*/)
 }
 
 func fmtNameArch(val string, flags uint16) string {

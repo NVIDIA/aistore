@@ -509,7 +509,7 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 		propList = nvpairList{
 			{"created", fmtBucketCreatedTime(props.Created)},
 			{"provider", props.Provider},
-			{"access", props.Access.Describe()},
+			{"access", props.Access.Describe(true /*incl. all*/)},
 			{"checksum", props.Cksum.String()},
 			{"mirror", props.Mirror.String()},
 			{"ec", props.EC.String()},
@@ -529,7 +529,7 @@ func bckPropList(props *cmn.Bprops, verbose bool) (propList nvpairList) {
 			case cmn.PropBucketCreated:
 				value = fmtBucketCreatedTime(props.Created)
 			case cmn.PropBucketAccessAttrs:
-				value = props.Access.Describe()
+				value = props.Access.Describe(true /*incl. all*/)
 			default:
 				value = fmt.Sprintf("%v", field.Value())
 			}

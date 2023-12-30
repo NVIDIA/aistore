@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-type bckInitArgs struct {
+type bctx struct {
 	w http.ResponseWriter
 	r *http.Request
 
@@ -56,18 +56,18 @@ type bckInitArgs struct {
 
 var (
 	ibargsPool sync.Pool
-	ib0        bckInitArgs
+	ib0        bctx
 )
 
-func allocInitBckArgs() (a *bckInitArgs) {
+func allocBctx() (a *bctx) {
 	if v := ibargsPool.Get(); v != nil {
-		a = v.(*bckInitArgs)
+		a = v.(*bctx)
 		return
 	}
-	return &bckInitArgs{}
+	return &bctx{}
 }
 
-func freeInitBckArgs(a *bckInitArgs) {
+func freeBctx(a *bctx) {
 	*a = ib0
 	ibargsPool.Put(a)
 }
@@ -96,35 +96,35 @@ func (p *proxy) a2u(aliasOrUUID string) string {
 	return aliasOrUUID
 }
 
-// args.init initializes bucket and checks access permissions.
-func (args *bckInitArgs) init() (errCode int, err error) {
-	debug.Assert(args.bck != nil)
+// initialize bucket and check access permissions
+func (bctx *bctx) init() (errCode int, err error) {
+	debug.Assert(bctx.bck != nil)
 
-	bck := args.bck
+	bck := bctx.bck
 
 	// remote ais aliasing
 	if bck.IsRemoteAIS() {
-		if uuid := args.p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
-			args.modified = true
+		if uuid := bctx.p.a2u(bck.Ns.UUID); uuid != bck.Ns.UUID {
+			bctx.modified = true
 			// care of targets
-			query := args.query
+			query := bctx.query
 			if query == nil {
-				query = args.r.URL.Query()
+				query = bctx.r.URL.Query()
 			}
 			bck.Ns.UUID = uuid
 			query.Set(apc.QparamNamespace, bck.Ns.Uname())
-			args.r.URL.RawQuery = query.Encode()
+			bctx.r.URL.RawQuery = query.Encode()
 		}
 	}
 
-	if err = args.accessSupported(); err != nil {
+	if err = bctx.accessSupported(); err != nil {
 		errCode = http.StatusMethodNotAllowed
 		return
 	}
-	if args.skipBackend {
-		err = bck.InitNoBackend(args.p.owner.bmd)
+	if bctx.skipBackend {
+		err = bck.InitNoBackend(bctx.p.owner.bmd)
 	} else {
-		err = bck.Init(args.p.owner.bmd)
+		err = bck.Init(bctx.p.owner.bmd)
 	}
 	if err != nil {
 		errCode = http.StatusBadRequest
@@ -134,56 +134,56 @@ func (args *bckInitArgs) init() (errCode int, err error) {
 		return
 	}
 
-	args.isPresent = true
+	bctx.isPresent = true
 
 	// if permissions are not explicitly specified check the default (msg.Action => permissions)
-	if args.perms == 0 && args.msg != nil {
-		dtor, ok := xact.Table[args.msg.Action]
+	if bctx.perms == 0 && bctx.msg != nil {
+		dtor, ok := xact.Table[bctx.msg.Action]
 		if !ok || dtor.Access == 0 {
 			return
 		}
-		args.perms = dtor.Access
+		bctx.perms = dtor.Access
 	}
-	errCode, err = args.accessAllowed(bck)
+	errCode, err = bctx.accessAllowed(bck)
 	return
 }
 
 // returns true when operation requires the 'perm' type access
-func (args *bckInitArgs) _perm(perm apc.AccessAttrs) bool { return (args.perms & perm) == perm }
+func (bctx *bctx) _perm(perm apc.AccessAttrs) bool { return (bctx.perms & perm) == perm }
 
 // (compare w/ accessAllowed)
-func (args *bckInitArgs) accessSupported() error {
-	if !args.bck.IsRemote() {
+func (bctx *bctx) accessSupported() error {
+	if !bctx.bck.IsRemote() {
 		return nil
 	}
 
 	var op string
-	if args._perm(apc.AceMoveBucket) {
+	if bctx._perm(apc.AceMoveBucket) {
 		op = "rename/move remote bucket"
 		goto rerr
 	}
 	// accept rename (check!) HDFS buckets are fine across the board
-	if args.bck.IsHDFS() {
+	if bctx.bck.IsHDFS() {
 		return nil
 	}
 	// HTTP buckets are not writeable
-	if args.bck.IsHTTP() && args._perm(apc.AcePUT) {
+	if bctx.bck.IsHTTP() && bctx._perm(apc.AcePUT) {
 		op = "write to HTTP bucket"
 		goto rerr
 	}
 	// Cloud bucket: destroy op. not allowed, and not supported yet
 	// (have no separate perm for eviction, that's why an extra check)
-	if rmb := args.bck.IsCloud() && args._perm(apc.AceDestroyBucket) && args.msg.Action == apc.ActDestroyBck; !rmb {
+	if rmb := bctx.bck.IsCloud() && bctx._perm(apc.AceDestroyBucket) && bctx.msg.Action == apc.ActDestroyBck; !rmb {
 		return nil
 	}
 	op = "destroy cloud bucket"
 rerr:
-	return cmn.NewErrUnsupp(op, args.bck.Cname(""))
+	return cmn.NewErrUnsupp(op, bctx.bck.Cname(""))
 }
 
 // (compare w/ accessSupported)
-func (args *bckInitArgs) accessAllowed(bck *meta.Bck) (errCode int, err error) {
-	err = args.p.access(args.r.Header, bck, args.perms)
+func (bctx *bctx) accessAllowed(bck *meta.Bck) (errCode int, err error) {
+	err = bctx.p.access(bctx.r.Header, bck, bctx.perms)
 	errCode = aceErrToCode(err)
 	return errCode, err
 }
@@ -193,58 +193,58 @@ func (args *bckInitArgs) accessAllowed(bck *meta.Bck) (errCode int, err error) {
 // NOTE:
 // - on error it calls `p.writeErr` and friends, so make sure _not_ to do the same in the caller
 // - for remais buckets: user-provided alias(***)
-func (args *bckInitArgs) initAndTry() (bck *meta.Bck, err error) {
+func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 	var errCode int
 
 	// 1. init bucket
-	bck = args.bck
-	if errCode, err = args.init(); err == nil {
+	bck = bctx.bck
+	if errCode, err = bctx.init(); err == nil {
 		return
 	}
 	if errCode != http.StatusNotFound {
-		args.p.writeErr(args.w, args.r, err, errCode)
+		bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
 		return
 	}
 	// 2. handle two specific errors
 	switch {
 	case cmn.IsErrBckNotFound(err):
 		debug.Assert(bck.IsAIS())
-		if !args.createAIS {
-			if args.perms == apc.AceBckHEAD {
-				args.p.writeErr(args.w, args.r, err, errCode, Silent)
+		if !bctx.createAIS {
+			if bctx.perms == apc.AceBckHEAD {
+				bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
 			} else {
-				args.p.writeErr(args.w, args.r, err, errCode)
+				bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
 			}
 			return
 		}
 	case cmn.IsErrRemoteBckNotFound(err):
 		debug.Assert(bck.IsRemote())
 		// when remote-bucket lookup is not permitted
-		if args.dontHeadRemote {
-			args.p.writeErr(args.w, args.r, err, errCode, Silent)
+		if bctx.dontHeadRemote {
+			bctx.p.writeErr(bctx.w, bctx.r, err, errCode, Silent)
 			return
 		}
 	default:
-		debug.Assertf(false, "%q: unexpected %v(%d)", args.bck, err, errCode)
-		args.p.writeErr(args.w, args.r, err, errCode)
+		debug.Assertf(false, "%q: unexpected %v(%d)", bctx.bck, err, errCode)
+		bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
 		return
 	}
 
 	// 3. create ais bucket _or_ lookup and, *if* confirmed, add remote bucket to the BMD
 	// (see also: "on the fly")
-	bck, err = args.try()
+	bck, err = bctx.try()
 	return
 }
 
-func (args *bckInitArgs) try() (bck *meta.Bck, err error) {
-	bck, errCode, err := args._try()
+func (bctx *bctx) try() (bck *meta.Bck, err error) {
+	bck, errCode, err := bctx._try()
 	if err != nil && err != errForwarded {
 		if cmn.IsErrBucketAlreadyExists(err) {
 			// e.g., when (re)setting backend two times in a row
-			nlog.Infoln(args.p.String()+":", err, " - nothing to do")
+			nlog.Infoln(bctx.p.String()+":", err, " - nothing to do")
 			err = nil
 		} else {
-			args.p.writeErr(args.w, args.r, err, errCode)
+			bctx.p.writeErr(bctx.w, bctx.r, err, errCode)
 		}
 	}
 	return bck, err
@@ -254,27 +254,27 @@ func (args *bckInitArgs) try() (bck *meta.Bck, err error) {
 // methods that are internal to this source
 //
 
-func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
-	if err = args.bck.Validate(); err != nil {
+func (bctx *bctx) _try() (bck *meta.Bck, errCode int, err error) {
+	if err = bctx.bck.Validate(); err != nil {
 		errCode = http.StatusBadRequest
 		return
 	}
 
 	// if HDFS bucket is not present in the BMD there is no point
 	// in checking if it exists remotely (in re: `ref_directory`)
-	if args.bck.IsHDFS() {
-		err = cmn.NewErrBckNotFound(args.bck.Bucket())
+	if bctx.bck.IsHDFS() {
+		err = cmn.NewErrBckNotFound(bctx.bck.Bucket())
 		errCode = http.StatusNotFound
 		return
 	}
 
-	if args.p.forwardCP(args.w, args.r, args.msg, "add-bucket", args.reqBody) {
+	if bctx.p.forwardCP(bctx.w, bctx.r, bctx.msg, "add-bucket", bctx.reqBody) {
 		err = errForwarded
 		return
 	}
 
 	// am primary from this point on
-	bck = args.bck
+	bck = bctx.bck
 	var (
 		action    = apc.ActCreateBck
 		remoteHdr http.Header
@@ -283,32 +283,32 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 		bck = backend
 	}
 	if bck.IsAIS() {
-		if err = args.p.access(args.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
+		if err = bctx.p.access(bctx.r.Header, nil /*bck*/, apc.AceCreateBucket); err != nil {
 			errCode = aceErrToCode(err)
 			return
 		}
-		nlog.Warningf("%s: %q doesn't exist, proceeding to create", args.p, args.bck)
+		nlog.Warningf("%s: %q doesn't exist, proceeding to create", bctx.p, bctx.bck)
 		goto creadd
 	}
-	action = apc.ActAddRemoteBck // only if requested via args
+	action = apc.ActAddRemoteBck // only if requested via bctx
 
 	// lookup remote
-	if remoteHdr, errCode, err = args.lookup(bck); err != nil {
+	if remoteHdr, errCode, err = bctx.lookup(bck); err != nil {
 		bck = nil
 		return
 	}
 
 	// orig-url for the ht:// bucket
 	if bck.IsHTTP() {
-		if args.origURLBck != "" {
-			remoteHdr.Set(apc.HdrOrigURLBck, args.origURLBck)
+		if bctx.origURLBck != "" {
+			remoteHdr.Set(apc.HdrOrigURLBck, bctx.origURLBck)
 		} else {
 			var (
 				hbo     *cmn.HTTPBckObj
-				origURL = args.getOrigURL()
+				origURL = bctx.getOrigURL()
 			)
 			if origURL == "" {
-				err = cmn.NewErrFailedTo(args.p, "initialize", args.bck, errors.New("missing HTTP URL"))
+				err = cmn.NewErrFailedTo(bctx.p, "initialize", bctx.bck, errors.New("missing HTTP URL"))
 				return
 			}
 			if hbo, err = cmn.NewHTTPObjPath(origURL); err != nil {
@@ -319,8 +319,8 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 	}
 
 	// when explicitly asked _not to_
-	args.exists = true
-	if args.dontAddRemote {
+	bctx.exists = true
+	if bctx.dontAddRemote {
 		if bck.IsRemoteAIS() {
 			bck.Props, err = remoteBckProps(bckPropsArgs{bck: bck, hdr: remoteHdr})
 		} else {
@@ -342,47 +342,47 @@ func (args *bckInitArgs) _try() (bck *meta.Bck, errCode int, err error) {
 
 	// add/create
 creadd:
-	if err = args.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
+	if err = bctx.p.createBucket(&apc.ActMsg{Action: action}, bck, remoteHdr); err != nil {
 		errCode = crerrStatus(err)
 		return
 	}
 	// finally, initialize the newly added/created
-	if err = bck.Init(args.p.owner.bmd); err != nil {
+	if err = bck.Init(bctx.p.owner.bmd); err != nil {
 		debug.AssertNoErr(err)
 		errCode = http.StatusInternalServerError
-		err = cmn.NewErrFailedTo(args.p, "post create-bucket init", bck, err, errCode)
+		err = cmn.NewErrFailedTo(bctx.p, "post create-bucket init", bck, err, errCode)
 	}
-	bck = args.bck
+	bck = bctx.bck
 	return
 }
 
-func (args *bckInitArgs) getOrigURL() (ourl string) {
-	if args.query != nil {
-		debug.Assert(args.dpq == nil)
-		ourl = args.query.Get(apc.QparamOrigURL)
+func (bctx *bctx) getOrigURL() (ourl string) {
+	if bctx.query != nil {
+		debug.Assert(bctx.dpq == nil)
+		ourl = bctx.query.Get(apc.QparamOrigURL)
 	} else {
-		ourl = args.dpq.origURL
+		ourl = bctx.dpq.origURL
 	}
 	return
 }
 
-func (args *bckInitArgs) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
+func (bctx *bctx) lookup(bck *meta.Bck) (hdr http.Header, code int, err error) {
 	var (
 		q       = url.Values{}
 		retried bool
 	)
 	if bck.IsHTTP() {
-		origURL := args.getOrigURL()
+		origURL := bctx.getOrigURL()
 		q.Set(apc.QparamOrigURL, origURL)
 	}
-	if args.tryHeadRemote {
+	if bctx.tryHeadRemote {
 		q.Set(apc.QparamSilent, "true")
 	}
 retry:
-	hdr, code, err = args.p.headRemoteBck(bck.Bucket(), q)
+	hdr, code, err = bctx.p.headRemoteBck(bck.Bucket(), q)
 
-	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && args.tryHeadRemote {
-		if args.dontAddRemote {
+	if (code == http.StatusUnauthorized || code == http.StatusForbidden) && bctx.tryHeadRemote {
+		if bctx.dontAddRemote {
 			return
 		}
 		// NOTE: assuming OK
@@ -396,7 +396,7 @@ retry:
 	}
 	// NOTE: retrying once (via random target)
 	if err != nil && !retried && cos.IsErrClientURLTimeout(err) {
-		nlog.Warningf("%s: HEAD(%s) timeout %q - retrying...", args.p, bck, errors.Unwrap(err))
+		nlog.Warningf("%s: HEAD(%s) timeout %q - retrying...", bctx.p, bck, errors.Unwrap(err))
 		retried = true
 		goto retry
 	}

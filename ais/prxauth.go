@@ -251,12 +251,11 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 	var (
 		tk     *tok.Token
 		bucket *cmn.Bck
-		cfg    = cmn.GCO.Get()
 	)
 	if p.isIntraCall(hdr, false /*from primary*/) == nil {
 		return nil
 	}
-	if cfg.Auth.Enabled {
+	if cmn.Rom.AuthEnabled() { // config.Auth.Enabled
 		tk, err = p.validateToken(hdr)
 		if err != nil {
 			// NOTE: making exception to allow 3rd party clients read remote ht://bucket
@@ -279,9 +278,9 @@ func (p *proxy) access(hdr http.Header, bck *meta.Bck, ace apc.AccessAttrs) (err
 	}
 
 	// bucket access conventions:
-	// - PATCH and ACL are always allowed if: a) user is a superuser, or b) AuthN is disabled
-	// - without AuthN, read-only access is also always permitted
-	if !cfg.Auth.Enabled {
+	// - without AuthN: read-only access, PATCH, and ACL
+	// - with AuthN:    superuser can PATCH and change ACL
+	if !cmn.Rom.AuthEnabled() {
 		ace &^= (apc.AcePATCH | apc.AceBckSetACL | apc.AccessRO)
 	} else if tk.IsAdmin {
 		ace &^= (apc.AcePATCH | apc.AceBckSetACL)

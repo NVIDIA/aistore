@@ -109,7 +109,7 @@ func (h *htrun) parseReq(w http.ResponseWriter, r *http.Request, apireq *apiRequ
 	if err != nil {
 		h.writeErr(w, r, err)
 	}
-	return
+	return err
 }
 
 func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {

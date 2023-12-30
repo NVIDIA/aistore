@@ -283,7 +283,7 @@ func (p *proxy) validateDownload(w http.ResponseWriter, r *http.Request, body []
 		return
 	}
 	bck := meta.CloneBck(&dlBase.Bck)
-	args := bckInitArgs{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
+	args := bctx{p: p, w: w, r: r, reqBody: body, bck: bck, perms: apc.AccessRW}
 	args.createAIS = true
 	if _, err := args.initAndTry(); err == nil {
 		ok = true

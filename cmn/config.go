@@ -1729,7 +1729,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
-	// initialize readonly config
+	// initialize read-mostly (rom) config
 	Rom.Set(&config.ClusterConfig)
 	Rom.testingEnv = config.TestingEnv()
 
