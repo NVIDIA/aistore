@@ -213,25 +213,8 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		wg.Wait()
 	// 2. with bucket
 	case apc.ActPrefetchObjects:
-		var (
-			smsg = &apc.ListRange{}
-		)
-		rns := xreg.RenewPrefetch(args.ID, bck, smsg)
-		if rns.Err != nil {
-			nlog.Errorf("%s: %s %v", t, bck, rns.Err)
-			debug.AssertNoErr(rns.Err)
-			return rns.Err
-		}
-		xctn := rns.Entry.Get()
-		xctn.AddNotif(&xact.NotifXact{
-			Base: nl.Base{
-				When: core.UponTerm,
-				Dsts: []string{equalIC},
-				F:    t.notifyTerm,
-			},
-			Xact: xctn,
-		})
-		go xctn.Run(nil)
+		// TODO: consider adding `Value any` to generic `xact.ArgsMsg`
+		return t.runPrefetch(args.ID, bck, &apc.PrefetchMsg{})
 	case apc.ActLoadLomCache:
 		rns := xreg.RenewBckLoadLomCache(args.ID, bck)
 		return rns.Err

@@ -81,6 +81,7 @@ var (
 			listRangeProgressWaitFlags,
 			dryRunFlag,
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
+			latestVersionFlag,
 		),
 		cmdLRU: {
 			lruBucketsFlag,
@@ -242,9 +243,18 @@ outer:
 			kind, _ := xact.GetKindName(xname)
 			// CLI is allowed to make it even shorter..
 			if strings.HasPrefix(xname, cmd.Name) || strings.HasPrefix(kind, cmd.Name) {
+				// the following x-s, even through startable, have their own custom CLI handlers:
+				// - cleanup-store
+				// - ec-encode
+				// - lru
+				// - make-n-copies
+				// - prefetch-listrange
+				// - rebalance
+				// - resilver
 				continue outer
 			}
 		}
+		// add generic start handler on the fly
 		cmd := cli.Command{
 			Name:   xname,
 			Usage:  fmt.Sprintf("start %s", xname),

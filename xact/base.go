@@ -284,8 +284,9 @@ func (xctn *Base) AddNotif(n core.Notif) {
 // atomically set end-time
 func (xctn *Base) Finish() {
 	var (
-		err, infoErr error
-		aborted      bool
+		err     error
+		info    string
+		aborted bool
 	)
 	if !xctn.eutime.CAS(0, 1) {
 		return
@@ -301,20 +302,20 @@ func (xctn *Base) Finish() {
 			debug.Assert(!aborted)
 			err = xctn.Err()
 		} else {
-			infoErr = xctn.Err() // abort takes precedence
+			// abort takes precedence
+			info = "(" + xctn.Err().Error() + ")"
 		}
 	}
 	xctn.onFinished(err)
 	// log
-	if xctn.Kind() == apc.ActList {
-		return
-	}
-	if err == nil {
-		nlog.Infof("%s finished", xctn)
-	} else if aborted {
-		nlog.Warningf("%s aborted: %v (%v)", xctn, err, infoErr)
-	} else {
-		nlog.Warningf("%s finished w/err: %v", xctn, infoErr)
+	switch {
+	case xctn.Kind() == apc.ActList:
+	case err == nil:
+		nlog.Infoln(xctn.String(), "finished")
+	case aborted:
+		nlog.Warningln(xctn.String(), "aborted:", err.Error(), info)
+	default:
+		nlog.Warningln(xctn.String(), "finished w/err:", err.Error())
 	}
 }
 

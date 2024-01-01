@@ -297,7 +297,7 @@ func TestAppendObject(t *testing.T) {
 	}
 }
 
-func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
+func TestSameBucketName(t *testing.T) {
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
 		baseParams = tools.BaseAPIParams(proxyURL)
@@ -309,7 +309,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		fileName1  = "mytestobj1.txt"
 		fileName2  = "mytestobj2.txt"
 		objRange   = "mytestobj{1..2}.txt"
-		dataLocal  = []byte("im local")
+		dataLocal  = []byte("I'm from ais:// bucket")
 		dataRemote = []byte("I'm from the cloud!")
 		files      = []string{fileName1, fileName2}
 	)
@@ -337,6 +337,14 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
 	}
 
+	// PUT -> remote
+	_, err = api.PutObject(&putArgsRemote)
+	tassert.CheckFatal(t, err)
+	putArgsRemote.ObjName = fileName2
+	_, err = api.PutObject(&putArgsRemote)
+	tassert.CheckFatal(t, err)
+	putArgsRemote.ObjName = fileName1
+
 	_, err = api.GetObject(baseParams, bckLocal, fileName1, nil)
 	if err == nil {
 		t.Fatalf("ais bucket %s does not exist: Expected an error.", bckLocal.String())
@@ -361,6 +369,10 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
+	// delete one obj from remote, and check evictions (below)
+	err = api.DeleteObject(baseParams, bckRemote, fileName1)
+	tassert.CheckFatal(t, err)
+
 	tlog.Logf("EvictList %v\n", files)
 	evictListID, err := api.EvictList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
@@ -378,7 +390,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	tools.CreateBucket(t, proxyURL, bckLocal, nil, true /*cleanup*/)
 
 	// PUT
-	tlog.Logf("PUT %s and %s into buckets...\n", fileName1, fileName2)
+	tlog.Logf("PUT %s and %s -> both buckets...\n", fileName1, fileName2)
 	_, err = api.PutObject(&putArgsLocal)
 	tassert.CheckFatal(t, err)
 	putArgsLocal.ObjName = fileName2
@@ -391,7 +403,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.PutObject(&putArgsRemote)
 	tassert.CheckFatal(t, err)
 
-	// Check ais bucket has 2 objects
+	// Check that ais bucket has 2 objects
 	tlog.Logf("Validating ais bucket has %s and %s ...\n", fileName1, fileName2)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, apc.FltPresent, false /*silent*/)
 	tassert.CheckFatal(t, err)
@@ -411,7 +423,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	// Deleting from cloud bucket
+	// Delete from cloud bucket
 	tlog.Logf("Deleting %s and %s from cloud bucket ...\n", fileName1, fileName2)
 	deleteID, err := api.DeleteList(baseParams, bckRemote, files)
 	tassert.CheckFatal(t, err)
@@ -419,7 +431,7 @@ func Test_SameLocalAndRemoteBckNameValidate(t *testing.T) {
 	_, err = api.WaitForXactionIC(baseParams, &args)
 	tassert.CheckFatal(t, err)
 
-	// Deleting from ais bucket
+	// Delete from ais bucket
 	tlog.Logf("Deleting %s and %s from ais bucket ...\n", fileName1, fileName2)
 	deleteID, err = api.DeleteList(baseParams, bckLocal, files)
 	tassert.CheckFatal(t, err)

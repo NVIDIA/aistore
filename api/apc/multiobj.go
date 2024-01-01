@@ -4,14 +4,19 @@
  */
 package apc
 
+// TODO: ContinueOnError vs. cmn.SupportedReactions - unify
+
 type (
-	// List of object names _or_ a template specifying { Prefix, Regex, and/or Range }
+	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
 	ListRange struct {
 		Template string   `json:"template"`
 		ObjNames []string `json:"objnames"`
 	}
-
-	// TODO: ContinueOnError vs. cmn.SupportedReactions - unify
+	PrefetchMsg struct {
+		ListRange
+		ContinueOnError bool `json:"coer"`
+		LatestVer       bool `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.validate_warm_get'
+	}
 
 	// ArchiveMsg contains the parameters (all except the destination bucket)
 	// for archiving mutiple objects as one of the supported archive.FileExtensions types

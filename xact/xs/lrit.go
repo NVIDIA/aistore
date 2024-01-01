@@ -6,20 +6,12 @@
 package xs
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"sync"
-	"time"
-
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
-	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -59,28 +51,6 @@ type (
 
 // concrete list-range type xactions (see also: archive.go)
 type (
-	evdFactory struct {
-		xreg.RenewBase
-		xctn *evictDelete
-		msg  *apc.ListRange
-		kind string
-	}
-	evictDelete struct {
-		lriterator
-		xact.Base
-		config *cmn.Config
-	}
-	prfFactory struct {
-		xreg.RenewBase
-		xctn *prefetch
-		msg  *apc.ListRange
-	}
-	prefetch struct {
-		lriterator
-		xact.Base
-		config *cmn.Config
-	}
-
 	TestXFactory struct{ prfFactory } // tests only
 )
 
@@ -242,183 +212,4 @@ func (r *lriterator) do(lom *core.LOM, wi lrwi, smap *meta.Smap) error {
 	// NOTE: lom is alloc-ed prior to the call and freed upon return
 	wi.do(lom, r)
 	return nil
-}
-
-//////////////////
-// evict/delete //
-//////////////////
-
-func (p *evdFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	msg := args.Custom.(*apc.ListRange)
-	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	np := &evdFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, kind: p.kind, msg: msg}
-	return np
-}
-
-func (p *evdFactory) Start() error {
-	p.xctn = newEvictDelete(&p.Args, p.kind, p.Bck, p.msg)
-	return nil
-}
-
-func (p *evdFactory) Kind() string   { return p.kind }
-func (p *evdFactory) Get() core.Xact { return p.xctn }
-
-func (*evdFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
-	return xreg.WprKeepAndStartNew, nil
-}
-
-func newEvictDelete(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (ed *evictDelete) {
-	ed = &evictDelete{config: cmn.GCO.Get()}
-	ed.lriterator.init(ed, msg)
-	ed.InitBase(xargs.UUID, kind, bck)
-	return
-}
-
-func (r *evictDelete) Run(*sync.WaitGroup) {
-	smap := core.T.Sowner().Get()
-	if r.msg.IsList() {
-		_ = r.iterList(r, smap)
-	} else {
-		_ = r.rangeOrPref(r, smap)
-	}
-	r.Finish()
-}
-
-func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
-	errCode, err := core.T.DeleteObject(lom, r.Kind() == apc.ActEvictObjects)
-	if err == nil { // done
-		r.ObjsAdd(1, lom.SizeBytes(true))
-		return
-	}
-	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
-		if lrit.lrp == lrpList {
-			goto eret // unlike range and prefix
-		}
-		return
-	}
-eret:
-	r.AddErr(err)
-	if r.config.FastV(5, cos.SmoduleXs) {
-		nlog.Warningln(err)
-	}
-}
-
-func (r *evictDelete) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.ToSnap(snap)
-
-	snap.IdleX = r.IsIdle()
-	return
-}
-
-//////////////
-// prefetch //
-//////////////
-
-func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
-	msg := args.Custom.(*apc.ListRange)
-	debug.Assert(!msg.IsList() || !msg.HasTemplate())
-	np := &prfFactory{RenewBase: xreg.RenewBase{Args: args, Bck: bck}, msg: msg}
-	return np
-}
-
-func (p *prfFactory) Start() error {
-	b := p.Bck
-	if err := b.Init(core.T.Bowner()); err != nil {
-		if !cmn.IsErrRemoteBckNotFound(err) {
-			return err
-		}
-		nlog.Warningln(err) // may show up later via ais/prxtrybck.go logic
-	} else if b.IsAIS() {
-		nlog.Errorf("bucket %q: can only prefetch remote buckets", b)
-		return fmt.Errorf("bucket %q: can only prefetch remote buckets", b)
-	}
-	p.xctn = newPrefetch(&p.Args, p.Kind(), p.Bck, p.msg)
-	return nil
-}
-
-func (*prfFactory) Kind() string     { return apc.ActPrefetchObjects }
-func (p *prfFactory) Get() core.Xact { return p.xctn }
-
-func (*prfFactory) WhenPrevIsRunning(xreg.Renewable) (xreg.WPR, error) {
-	return xreg.WprKeepAndStartNew, nil
-}
-
-func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.ListRange) (prf *prefetch) {
-	prf = &prefetch{config: cmn.GCO.Get()}
-	prf.lriterator.init(prf, msg)
-	prf.InitBase(xargs.UUID, kind, bck)
-	prf.lriterator.xctn = prf
-	return
-}
-
-func (r *prefetch) Run(*sync.WaitGroup) {
-	smap := core.T.Sowner().Get()
-	if r.msg.IsList() {
-		_ = r.iterList(r, smap)
-	} else {
-		_ = r.rangeOrPref(r, smap)
-	}
-	r.Finish()
-}
-
-func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
-	var (
-		err     error
-		errCode int
-	)
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if !cmn.IsErrObjNought(err) {
-			goto eret
-		}
-	} else {
-		if !lom.VersionConf().ValidateWarmGet {
-			return // nothing to do
-		}
-		var eq bool
-		if eq, errCode, err = lom.CompareRemoteMD(); eq {
-			return // nothing to do
-		}
-		if err != nil {
-			goto emaybe
-		}
-	}
-
-	// NOTE minimal locking, optimistic concurrency
-	// Not setting atime (a.k.a. access time) as prefetching != actual access.
-	//
-	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
-	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
-	// (see cluster/lom_cache_hk.go).
-
-	lom.SetAtimeUnix(-time.Now().UnixNano())
-	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
-	if err == nil { // done
-		r.ObjsAdd(1, lom.SizeBytes())
-		return
-	}
-
-emaybe:
-	if errCode == http.StatusNotFound || cmn.IsErrObjNought(err) {
-		if lrit.lrp == lrpList {
-			goto eret // listing is explicit
-		}
-		return
-	}
-	if err == cmn.ErrSkip {
-		return
-	}
-eret:
-	r.AddErr(err)
-	if r.config.FastV(4, cos.SmoduleXs) {
-		nlog.Warningln(err)
-	}
-}
-
-func (r *prefetch) Snap() (snap *core.Snap) {
-	snap = &core.Snap{}
-	r.ToSnap(snap)
-
-	snap.IdleX = r.IsIdle()
-	return
 }

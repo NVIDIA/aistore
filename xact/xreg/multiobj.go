@@ -17,7 +17,7 @@ func RenewEvictDelete(uuid, kind string, bck *meta.Bck, msg *apc.ListRange) Rene
 	return RenewBucketXact(kind, bck, Args{UUID: uuid, Custom: msg})
 }
 
-func RenewPrefetch(uuid string, bck *meta.Bck, msg *apc.ListRange) RenewRes {
+func RenewPrefetch(uuid string, bck *meta.Bck, msg *apc.PrefetchMsg) RenewRes {
 	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{UUID: uuid, Custom: msg})
 }
 

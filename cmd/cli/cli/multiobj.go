@@ -135,7 +135,7 @@ func listrange(c *cli.Context, bck cmn.Bck, listObjs, tmplObjs string) (err erro
 	}
 
 	// progress bar
-	var showProgress = flagIsSet(c, progressFlag)
+	showProgress := flagIsSet(c, progressFlag)
 	if showProgress {
 		var cpr = cprCtx{
 			xname:  xname,
@@ -450,5 +450,5 @@ func _prefetchOne(c *cli.Context, shift int) error {
 	if listObjs == "" && tmplObjs == "" {
 		listObjs = objName
 	}
-	return listrange(c, bck, listObjs, tmplObjs) // empty tmplObjs => all objects
+	return listrange(c, bck, listObjs, tmplObjs) // NOTE: empty tmplObjs means "all objects"
 }

@@ -473,7 +473,7 @@ var (
 
 	latestVersionFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "GET or copy the latest object version from the associated remote bucket:\n" +
+		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket:\n" +
 			indent1 + "\t- allows fine-grained (operation-level) control without changing bucket configuration\n" +
 			indent1 + "\t- see also: 'ais bucket props ... versioning.validate_warm_get'",
 	}

@@ -71,9 +71,9 @@ func TestXactionRenewLRU(t *testing.T) {
 
 func TestXactionRenewPrefetch(t *testing.T) {
 	var (
-		evArgs = &apc.ListRange{}
-		bmd    = mock.NewBaseBownerMock()
-		bck    = meta.NewBck(
+		msg = &apc.PrefetchMsg{}
+		bmd = mock.NewBaseBownerMock()
+		bck = meta.NewBck(
 			"test", apc.GCP, cmn.NsGlobal,
 			&cmn.Bprops{Cksum: cmn.CksumConf{Type: cos.ChecksumXXHash}},
 		)
@@ -93,7 +93,7 @@ func TestXactionRenewPrefetch(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			ch <- xreg.RenewPrefetch(cos.GenUUID(), bck, evArgs)
+			ch <- xreg.RenewPrefetch(cos.GenUUID(), bck, msg)
 		}()
 	}
 
@@ -236,8 +236,9 @@ func TestXactionQueryFinished(t *testing.T) {
 
 	rns1 = xreg.RenewBckRename(bck1, bck1, cos.GenUUID(), 123, "phase")
 	tassert.Errorf(t, rns1.Err == nil && rns1.Entry.Get() != nil, "Xaction must be created")
-	rns3 := xreg.RenewPrefetch(cos.GenUUID(), bck3, &apc.ListRange{})
-	tassert.Errorf(t, rns3.Entry.Get() != nil, "Xaction must be created %v", rns3.Err)
+
+	rns3 := xreg.RenewPrefetch(cos.GenUUID(), bck3, &apc.PrefetchMsg{})
+	tassert.Fatalf(t, cmn.IsErrRemoteBckNotFound(rns3.Err), "x-prefetch: expected 'cloud bucket does not exist' error")
 
 	xactBck1 := rns1.Entry.Get()
 

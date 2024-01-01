@@ -80,7 +80,7 @@ type (
 		verchanged bool            // version changed
 		retry      bool            // once
 		cold       bool            // true if executed backend.Get
-		latestVer  bool            // a.k.a. versioning.validate_warm_get
+		latestVer  bool            // see also: QparamLatestVer, 'versioning.validate_warm_get'
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)

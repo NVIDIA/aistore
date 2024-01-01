@@ -407,6 +407,7 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
+		// note extra safety check
 		for _, name := range lrMsg.ObjNames {
 			if !t.isValidObjname(w, r, name) {
 				return
@@ -418,15 +419,12 @@ func (t *target) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *a
 			return
 		}
 		xctn := rns.Entry.Get()
-		xctn.AddNotif(&xact.NotifXact{
-			Base: nl.Base{
-				When: core.UponTerm,
-				Dsts: []string{equalIC},
-				F:    t.notifyTerm,
-			},
+		notif := &xact.NotifXact{
+			Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
 			Xact: xctn,
-		})
-		go xctn.Run(nil)
+		}
+		xctn.AddNotif(notif)
+		xact.GoRunW(xctn)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -438,44 +436,46 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 	if err != nil {
 		return
 	}
+	if msg.Action != apc.ActPrefetchObjects {
+		t.writeErrAct(w, r, msg.Action)
+		return
+	}
 	if err := t.parseReq(w, r, apireq); err != nil {
 		return
 	}
-
+	// extra check
 	t.ensureLatestBMD(msg, r)
-
 	if err := apireq.bck.Init(t.owner.bmd); err != nil {
-		if cmn.IsErrRemoteBckNotFound(err) {
-			t.BMDVersionFixup(r)
-			err = apireq.bck.Init(t.owner.bmd)
-		}
-		if err != nil {
-			t.writeErr(w, r, err)
-			return
-		}
+		t.writeErr(w, r, err)
+		return
 	}
 
-	switch msg.Action {
-	case apc.ActPrefetchObjects:
-		var (
-			err   error
-			lrMsg = &apc.ListRange{}
-		)
-		if !apireq.bck.IsRemote() {
-			t.writeErrf(w, r, "%s: expecting remote bucket, got %s, action=%s",
-				t.si, apireq.bck, msg.Action)
-			return
-		}
-		if err = cos.MorphMarshal(msg.Value, lrMsg); err != nil {
-			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
-			return
-		}
-		rns := xreg.RenewPrefetch(msg.UUID, apireq.bck, lrMsg)
-		xctn := rns.Entry.Get()
-		go xctn.Run(nil)
-	default:
-		t.writeErrAct(w, r, msg.Action)
+	prfMsg := &apc.PrefetchMsg{}
+	if err := cos.MorphMarshal(msg.Value, prfMsg); err != nil {
+		t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
+		return
 	}
+	if err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
+		t.writeErr(w, r, err)
+	}
+}
+
+// handle apc.ActPrefetchObjects <-- via api.Prefetch* and api.StartX*
+func (t *target) runPrefetch(xactID string, bck *meta.Bck, prfMsg *apc.PrefetchMsg) error {
+	rns := xreg.RenewPrefetch(xactID, bck, prfMsg)
+	if rns.Err != nil {
+		return rns.Err
+	}
+
+	xctn := rns.Entry.Get()
+	notif := &xact.NotifXact{
+		Base: nl.Base{When: core.UponTerm, Dsts: []string{equalIC}, F: t.notifyTerm},
+		Xact: xctn,
+	}
+	xctn.AddNotif(notif)
+
+	xact.GoRunW(xctn)
+	return nil
 }
 
 // HEAD /v1/buckets/bucket-name
