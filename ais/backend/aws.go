@@ -613,14 +613,20 @@ func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
 }
 
 func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
-	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
-		if reqErr.Code() == s3.ErrCodeNoSuchBucket {
-			return reqErr.StatusCode(), cmn.NewErrRemoteBckNotFound(bck)
-		}
-		return reqErr.StatusCode(), cleanError(awsError)
+	reqErr, ok := awsError.(awserr.RequestFailure)
+	if !ok {
+		return http.StatusInternalServerError, _awsErr(awsError)
 	}
-
-	return http.StatusInternalServerError, cleanError(awsError)
+	awsCode, status := reqErr.Code(), reqErr.StatusCode()
+	switch awsCode {
+	case s3.ErrCodeNoSuchBucket:
+		return status, cmn.NewErrRemoteBckNotFound(bck)
+	case s3.ErrCodeNoSuchKey:
+		debug.Assert(status == http.StatusNotFound) // expected
+		fallthrough
+	default:
+		return status, _awsErr(awsError)
+	}
 }
 
 // Original AWS error contains extra information that a caller does not need:
@@ -628,12 +634,12 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 // The extra information starts from the new line (`\n`) and tab (`\t`) of the message.
 // At the same time we want to preserve original error which starts with `\ncaused by:`.
 // See more `aws-sdk-go/aws/awserr/types.go:12` (`SprintError`).
-func cleanError(awsError error) error {
+func _awsErr(awsError error) error {
 	var (
 		msg        = awsError.Error()
 		origErrMsg = awsError.Error()
 	)
-	// Strip extra information...
+	// Strip extra information
 	if idx := strings.Index(msg, "\n\t"); idx > 0 {
 		msg = msg[:idx]
 	}
@@ -642,5 +648,5 @@ func cleanError(awsError error) error {
 		// `idx+1` because we want to remove `\n`.
 		msg += " (" + origErrMsg[idx+1:] + ")"
 	}
-	return errors.New("aws-error[" + msg + "]")
+	return errors.New("aws-error[" + strings.TrimSuffix(msg, ".") + "]")
 }

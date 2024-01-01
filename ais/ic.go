@@ -262,7 +262,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	if err := nl.Err(); err != nil {
 		status.ErrMsg = err.Error()
 		if !nl.Aborted() {
-			ic.p.writeErrf(w, r, "%v: %v", nl, err)
+			ic.p.writeErrf(w, r, "%s: %v", nl.Name(), err)
 			return
 		}
 	}

@@ -216,7 +216,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 	}
 	nl.SetAddedTime()
 	if cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln("add " + nl.String())
+		nlog.Infoln("add", nl.Name())
 	}
 	return
 }
@@ -224,7 +224,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
 	if ok && cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln("del " + nl.String())
+		nlog.Infoln("del", nl.Name())
 	}
 	return
 }

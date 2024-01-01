@@ -445,16 +445,22 @@ func readCredFile() (projectID string) {
 }
 
 func gcpErrorToAISError(gcpError error, bck *cmn.Bck) (int, error) {
-	if gcpError == storage.ErrBucketNotExist {
+	switch {
+	case gcpError == storage.ErrBucketNotExist:
 		return http.StatusNotFound, cmn.NewErrRemoteBckNotFound(bck)
+	case gcpError == storage.ErrObjectNotExist:
+		return http.StatusNotFound, _gcpErr(gcpError)
+	default:
+		if apiErr, ok := gcpError.(*googleapi.Error); ok {
+			return apiErr.Code, _gcpErr(gcpError)
+		}
+		return http.StatusInternalServerError, _gcpErr(gcpError)
 	}
-	status := http.StatusBadRequest
-	if apiErr, ok := gcpError.(*googleapi.Error); ok {
-		status = apiErr.Code
-	} else if gcpError == storage.ErrObjectNotExist {
-		status = http.StatusNotFound
-	}
-	return status, errors.New("gcp-error[" + gcpError.Error() + "]")
+}
+
+// (compare w/ _awsErr)
+func _gcpErr(gcpError error) error {
+	return errors.New("gcp-error[" + gcpError.Error() + "]")
 }
 
 func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
