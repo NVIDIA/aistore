@@ -145,14 +145,14 @@ func evictBucket(c *cli.Context, bck cmn.Bck) error {
 }
 
 func _evictBck(c *cli.Context, bck cmn.Bck) (err error) {
-	if err = ensureHasProvider(bck); err != nil {
-		return
+	if err = ensureRemoteProvider(bck); err != nil {
+		return err
 	}
 	if err = api.EvictRemoteBucket(apiBP, bck, flagIsSet(c, keepMDFlag)); err != nil {
-		return
+		return V(err)
 	}
 	actionDone(c, "Evicted bucket "+bck.Cname("")+" from aistore")
-	return
+	return nil
 }
 
 func listOrSummBuckets(c *cli.Context, qbck cmn.QueryBcks, lsb lsbCtx) error {

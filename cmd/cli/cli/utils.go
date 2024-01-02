@@ -467,8 +467,8 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 
 // Prints multiple lines of fmtStr to writer w.
 // For line number i, fmtStr is formatted with values of args at index i
-// if maxLines >= 0 prints at most maxLines, otherwise prints everything until
-// it reaches the end of one of args
+// - if maxLines >= 0 prints at most maxLines
+// - otherwise, prints everything until the end of one of the args
 func limitedLineWriter(w io.Writer, maxLines int, fmtStr string, args ...[]string) {
 	objs := make([]any, 0, len(args))
 	if fmtStr == "" || fmtStr[len(fmtStr)-1] != '\n' {
@@ -613,9 +613,12 @@ func isBucketEmpty(bck cmn.Bck, cached bool) (bool, error) {
 	return len(objList.Entries) == 0, nil
 }
 
-func ensureHasProvider(bck cmn.Bck) error {
+func ensureRemoteProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
-		return fmt.Errorf("missing backend provider in %q", bck)
+		return fmt.Errorf("invalid bucket %q: missing backend provider", bck)
+	}
+	if !bck.IsRemote() {
+		return fmt.Errorf("invalid bucket %q: expecting remote backend", bck)
 	}
 	return nil
 }

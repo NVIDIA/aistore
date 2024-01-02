@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
@@ -286,6 +287,7 @@ func putHandler(c *cli.Context) error {
 	if flagIsSet(c, dryRunFlag) {
 		dryRunCptn(c)
 	}
+
 	// 1. one file
 	if a.srcIsRegular() {
 		debug.Assert(a.src.abspath != "")
@@ -303,12 +305,10 @@ func putHandler(c *cli.Context) error {
 	incl := flagIsSet(c, inclSrcDirNameFlag)
 	switch {
 	case len(a.src.fdnames) > 0:
-		var s string
 		if len(a.src.fdnames) > 1 {
-			s = " ..."
-		}
-		if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from [%s%s]", a.src.fdnames[0], s)); !ok {
-			return nil
+			if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from [%s ...]", a.src.fdnames[0])); !ok {
+				return nil
+			}
 		}
 		// a) csv of files and/or directories (names) embedded into the first arg, e.g. "f1[,f2...]" dst-bucket[/prefix]
 		// b) csv from '--list' flag
@@ -333,6 +333,7 @@ func putHandler(c *cli.Context) error {
 
 	// 4. directory
 	var (
+		s       string
 		ndir    int
 		srcpath = a.src.arg
 	)
@@ -340,7 +341,10 @@ func putHandler(c *cli.Context) error {
 		debug.Assert(srcpath == "", srcpath)
 		srcpath = a.pt.Prefix
 	}
-	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s' directory", srcpath)); !ok {
+	if !strings.HasSuffix(srcpath, "/") {
+		s = "/"
+	}
+	if ok := warnMultiSrcDstPrefix(c, &a, fmt.Sprintf("from '%s%s'", srcpath, s)); !ok {
 		return nil
 	}
 	fobjs, err := lsFobj(c, srcpath, "", a.dst.oname, &ndir, a.src.recurs, incl)

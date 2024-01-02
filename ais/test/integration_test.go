@@ -1369,7 +1369,7 @@ func TestAtimePrefetch(t *testing.T) {
 	for obj := range nameCh {
 		objs = append(objs, obj)
 	}
-	xid, err := api.EvictList(baseParams, bck, objs)
+	xid, err := api.EvictMultiObj(baseParams, bck, objs, "" /*template*/)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Timeout: tools.RebalanceTimeout}
 	_, err = api.WaitForXactionIC(baseParams, &args)
@@ -1377,11 +1377,15 @@ func TestAtimePrefetch(t *testing.T) {
 
 	timeAfterPut := time.Now()
 
-	xid, err = api.PrefetchList(baseParams, bck, objs)
-	tassert.CheckFatal(t, err)
-	args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
-	tassert.CheckFatal(t, err)
+	{
+		var msg apc.PrefetchMsg
+		msg.ObjNames = objs
+		xid, err = api.Prefetch(baseParams, bck, msg)
+		tassert.CheckFatal(t, err)
+		args = xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
+		_, err = api.WaitForXactionIC(baseParams, &args)
+		tassert.CheckFatal(t, err)
+	}
 
 	timeFormat := time.RFC3339Nano
 	msg := &apc.LsoMsg{Props: apc.GetPropsAtime, TimeFormat: timeFormat, Prefix: objPath}

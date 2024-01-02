@@ -234,7 +234,7 @@ func CleanupRemoteBucket(t *testing.T, proxyURL string, bck cmn.Bck, prefix stri
 	}
 
 	bp := BaseAPIParams(proxyURL)
-	xid, err := api.DeleteList(bp, bck, toDelete)
+	xid, err := api.DeleteMultiObj(bp, bck, toDelete, "" /*template*/)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: BucketCleanupTimeout}
 	_, err = api.WaitForXactionIC(bp, &args)
@@ -466,7 +466,7 @@ func BaseAPIParams(urls ...string) api.BaseParams {
 
 func EvictObjects(t *testing.T, proxyURL string, bck cmn.Bck, objList []string) {
 	bp := BaseAPIParams(proxyURL)
-	xid, err := api.EvictList(bp, bck, objList)
+	xid, err := api.EvictMultiObj(bp, bck, objList, "" /*template*/)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", bck, err)
 	}

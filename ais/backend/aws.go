@@ -622,7 +622,7 @@ func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
 	case s3.ErrCodeNoSuchBucket:
 		return status, cmn.NewErrRemoteBckNotFound(bck)
 	case s3.ErrCodeNoSuchKey:
-		debug.Assert(status == http.StatusNotFound) // expected
+		debug.Assert(status == http.StatusNotFound, status) // expected
 		fallthrough
 	default:
 		return status, _awsErr(awsError)

@@ -400,11 +400,12 @@ func EvictObject(bp BaseParams, bck cmn.Bck, objName string) error {
 	return err
 }
 
-// prefetch object
-// - convenience method added also for "symmetry" with the evict (above)
+// prefetch object - a convenience method added for "symmetry" with the evict (above)
 // - compare with api.PrefetchList and api.PrefetchRange
 func PrefetchObject(bp BaseParams, bck cmn.Bck, objName string) (string, error) {
-	return PrefetchList(bp, bck, []string{objName})
+	var msg apc.PrefetchMsg
+	msg.ObjNames = []string{objName}
+	return Prefetch(bp, bck, msg)
 }
 
 // PutObject PUTs the specified reader (`args.Reader`) as a new object

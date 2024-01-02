@@ -473,9 +473,9 @@ var (
 
 	latestVersionFlag = cli.BoolFlag{
 		Name: "latest",
-		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket:\n" +
-			indent1 + "\t- allows fine-grained (operation-level) control without changing bucket configuration\n" +
-			indent1 + "\t- see also: 'ais bucket props ... versioning.validate_warm_get'",
+		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
+			indent1 + "\tallows operation-level control without changing bucket configuration\n" +
+			indent1 + "\t(see also: 'ais bucket props ... versioning.validate_warm_get')",
 	}
 
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
