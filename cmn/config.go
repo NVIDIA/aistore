@@ -384,13 +384,27 @@ type (
 		// Determines if versioning is enabled
 		Enabled bool `json:"enabled"`
 
-		// Validate object version upon warm GET
+		// Validate remote object version when reading its in-cluster ("cached") counterpart -
+		// scenarios including (but not limited to):
+		//   - warm GET
+		//   - prefetch bucket
+		//   - prefetch multiple objects (see api/apc/multiobj.go)
+		//   - copy object, copy bucket, and more
+		// Applies to Cloud and remote AIS buckets - generally, those backends that provide some form
+		// of object versioning
 		// See also: apc.QparamLatestVer
 		ValidateWarmGet bool `json:"validate_warm_get"`
+
+		// A stronger variant of the above that entails both:
+		// - validating remote object version (as above), and
+		// - deleting in-cluster object if its remote ("cached") counterpart does not exist
+		// See also: apc.QparamSync
+		SyncWarmGet bool `json:"sync_warm_get"`
 	}
 	VersionConfToSet struct {
 		Enabled         *bool `json:"enabled,omitempty"`
 		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
+		SyncWarmGet     *bool `json:"sync_warm_get,omitempty"`
 	}
 
 	NetConf struct {

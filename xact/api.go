@@ -96,7 +96,7 @@ type (
 		Idles bool
 
 		// xaction returns extended xaction-specific stats
-		// (see related: `Snap.Ext` in cluster/xaction.go)
+		// (see related: `Snap.Ext` in core/xaction.go)
 		ExtendedStats bool
 	}
 )

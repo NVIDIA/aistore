@@ -6,6 +6,8 @@ package ais
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -179,7 +181,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 	default:
 		// for cmn.OwtGet, see goi.getCold
 		debug.Assert(false, "owt", owt)
-		return
+		return http.StatusInternalServerError, errors.New("invalid OWT")
 	}
 
 	// 2. GET remote object and store it
@@ -188,8 +190,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
 		}
-		nlog.Infof("%s: failed to GET remote %s (%s): %v(%d)", t, lom.Cname(), owt, err, errCode)
-		return
+		nlog.Infoln(t.String()+":", "failed to GET remote", lom.Cname()+":", err, errCode)
+		return errCode, err
 	}
 
 	// 3. unlock
@@ -206,7 +208,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
 		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(now)},
 	)
-	return
+	return 0, nil
 }
 
 func (t *target) Promote(params *core.PromoteParams) (errCode int, err error) {

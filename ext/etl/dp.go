@@ -15,7 +15,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 )
 
-// NOTE: compare with cluster/lom_dp.go
+// NOTE: compare with core/ldp.go
 
 type (
 	OfflineDP struct {

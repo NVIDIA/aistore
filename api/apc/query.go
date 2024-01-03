@@ -91,6 +91,8 @@ const (
 	// - usage: GET and (copy|transform) x (bucket|multi-object) operations
 	// - implies remote backend
 	QparamLatestVer = "latest-ver"
+
+	QparamSync = "synchronize"
 )
 
 // QparamFltPresence enum.

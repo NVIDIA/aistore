@@ -281,7 +281,9 @@ func (dr *DiffResolver) push(job jobif, d *dispatcher) {
 ////////////////////////////
 
 func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (bool, error) {
-	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
+	src.Lock(false)
+	defer src.Unlock(false)
+	if err := src.Load(true /*cache it*/, true /*locked*/); err != nil {
 		if cmn.IsObjNotExist(err) {
 			return false, nil
 		}

@@ -40,6 +40,7 @@ $ ais bucket props show BUCKET versioning
 PROPERTY                         VALUE
 versioning.enabled               ...
 versioning.validate_warm_get     true
+versioning.sync_warm_get         false
 ```
 
 No assumption is being made on whether any of the above is present (except, of course, the size aka "Content-Length").
@@ -60,24 +61,32 @@ A single match - e.g. only the `version` (if exists), or only `ETag`, etc. - is 
 
 > TODO: make it configurable to require at least two matches.
 
-Needless to say, if querying remote metadata fails the corresponding GET will fail as well.
+Needless to say, if querying remote metadata fails the corresponding GET transaction will fail as well.
 
-But there's one special condition when we receive "object not found". In this case, we go ahead and delete the object locally (returning the same "not found" to client).
+## When reading in-cluster data causes deletion
 
-This (behavior) is the current default; to disable local deletion, simply run:
+But there's one special condition when the call to query remote metadata returns "object not found". In other words, when the remote backend unambiguously indicates that the remote object does not exist (any longer).
+
+In this case, there are two configurable choices as per (already shown) `versioning` section of the bucket config:
 
 ```console
-$ ais config cluster features <TAB-TAB>
-Enforce-IntraCluster-Access        Do-not-Auto-Detect-FileShare   LZ4-Block-1MB                   Ignore-LimitedCoexistence-Conflict
-Do-not-HEAD-Remote-Bucket          Provide-S3-API-via-Root        LZ4-Frame-Checksum              Dont-Rm-via-Validate-Warm-GET
-Skip-Loading-VersionChecksum-MD    Fsync-PUT                      Dont-Allow-Passing-FQN-to-ETL   none
-
-$ ais config cluster features Dont-Rm-via-Validate-Warm-GET
-PROPERTY         VALUE
-features         Dont-Rm-via-Validate-Warm-GET
-
-Cluster config updated
+$ ais bucket props show BUCKET versioning
+PROPERTY                         VALUE
+versioning.enabled               ...
+versioning.validate_warm_get     true
+versioning.sync_warm_get         false  ## <<<<<<<<<<<<<<<< note!
 ```
+
+The knob called `versioning.sync_warm_get` is simply a stronger variant of the `versioning.validate_warm_get`;
+that entails both:
+
+1. validating remote object version, and
+2. deleting in-cluster object if its remote ("cached") counterpart does not exist.
+
+To recap:
+
+if an attempt to read remote metadata returns "object not found", and `versioning.sync_warm_get` is set to `true`, then
+we go ahead and delete the object locally, thus effectively _synchronizing_ in-cluster content with it's remote source.
 
 ## GET latest version
 

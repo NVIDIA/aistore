@@ -13,7 +13,7 @@ import (
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
-// See also: cluster/meta/hrw.go
+// See also: core/meta/hrw.go
 
 func Hrw(uname string) (mi *Mountpath, digest uint64, err error) {
 	var (

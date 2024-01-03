@@ -24,7 +24,7 @@ import (
 )
 
 // NOTE: some of the methods here are part of the of the *extended* native AIS API outside
-// generic `BackendProvider` (see cluster/backend.go)
+// generic `BackendProvider` (see core/backend.go)
 
 // TODO:
 // - include `appliedCfgVer` in the GetInfo* response (to synchronize p._remais, etc.)

@@ -103,7 +103,7 @@ type (
 
 	copyOI struct {
 		dm         *bundle.DataMover
-		dp         core.DP // transform via: ext/etl/dp.go or cluster/lom_dp.go
+		dp         core.DP // transform via: ext/etl/dp.go or core/ldp.go
 		xact       core.Xact
 		t          *target
 		config     *cmn.Config
@@ -526,13 +526,11 @@ do:
 	if err != nil {
 		cold = cmn.IsObjNotExist(err)
 		if !cold {
-			errCode = http.StatusInternalServerError
-			return
+			return http.StatusInternalServerError, err
 		}
 		cs = fs.Cap()
 		if cs.IsOOS() {
-			errCode, err = http.StatusInsufficientStorage, cs.Err()
-			return
+			return http.StatusInsufficientStorage, cs.Err()
 		}
 	}
 
@@ -556,39 +554,22 @@ do:
 			}
 			if err != nil {
 				goi.unlocked = true
-				return
+				return errCode, err
 			}
 			goi.lom.Lock(false)
 			if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-				return
+				return 0, err
 			}
 			goto fin
 		}
 	} else if goi.latestVer { // apc.QparamLatestVer or 'versioning.validate_warm_get'
-		goi.lom.Unlock(false)
-
-		var eq bool
-		if eq, errCode, err = goi.lom.CompareRemoteMD(); err != nil {
-			goi.unlocked = true
-			if errCode == http.StatusNotFound {
-				if cmn.Rom.Features().IsSet(feat.DontRmViaValidateWarmGET) {
-					goi.lom.Uncache()
-				} else {
-					errCodeDel, errDel := goi.t.DeleteObject(goi.lom, false /*evict*/)
-					if errDel != nil {
-						nlog.Errorln(goi.lom.String(), errDel)
-						errCode, err = errCodeDel, errDel
-					}
-				}
-			} else {
-				goi.lom.Uncache()
-			}
-			return
+		eq, errCodeSync, errSync := goi.lom.CheckRemoteMD(true /* rlocked */)
+		if errSync != nil {
+			return errCodeSync, errSync
 		}
 		if !eq {
 			cold, goi.verchanged = true, true
 		}
-		goi.lom.Lock(false)
 	}
 
 	if !cold && goi.lom.CksumConf().ValidateWarmGet { // validate checksums and recover (self-heal) if corrupted
@@ -596,7 +577,7 @@ do:
 		if err != nil {
 			if !cold {
 				nlog.Errorln(err)
-				return
+				return errCode, err
 			}
 			nlog.Errorf("%v - proceeding to cold-GET from %s", err, goi.lom.Bck())
 		}
@@ -614,13 +595,12 @@ do:
 			cs = fs.Cap()
 		}
 		if cs.IsOOS() {
-			errCode, err = http.StatusInsufficientStorage, cs.Err()
-			return
+			return http.StatusInsufficientStorage, cs.Err()
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
 
 		if loaded, err = goi._coldLock(); err != nil {
-			return
+			return 0, err
 		}
 		if loaded {
 			goto fin
@@ -649,14 +629,14 @@ do:
 		if fast {
 			err = goi.coldSeek(&res)
 			goi.unlocked = true // always
-			return
+			return 0, err
 		}
 
 		// regular path
 		errCode, err = goi._coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
-			return
+			return errCode, err
 		}
 		// with remaining stats via goi.stats()
 		goi.t.statsT.AddMany(
@@ -670,7 +650,8 @@ do:
 fin:
 	errCode, err = goi.finalize()
 	if err == nil {
-		return
+		debug.Assert(errCode == 0, errCode)
+		return 0, nil
 	}
 	goi.lom.Uncache()
 	if goi.retry {
@@ -682,7 +663,7 @@ fin:
 		}
 		nlog.Warningf("GET %s: failed retrying %v(%d)", goi.lom, err, errCode)
 	}
-	return
+	return errCode, err
 }
 
 // upgrade rlock => wlock
@@ -696,7 +677,7 @@ outer:
 	for lom.UpgradeLock() {
 		if erl := lom.Load(true /*cache it*/, true /*locked*/); erl == nil {
 			// nothing to do
-			// (lock was upgraded by another goroutine that had also performed PUT on out behalf)
+			// (lock was upgraded by another goroutine that had also performed PUT on our behalf)
 			return true, nil
 		}
 		switch {

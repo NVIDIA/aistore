@@ -18,18 +18,18 @@ The features themselves are enumerated below. By default, all features are disab
 ```console
 $ ais config cluster features <TAB-TAB>
 
-Enforce-IntraCluster-Access           Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL         none
+Enforce-IntraCluster-Access           Provide-S3-API-via-Root               Dont-Allow-Passing-FQN-to-ETL
 Do-not-HEAD-Remote-Bucket             Fsync-PUT                             Ignore-LimitedCoexistence-Conflicts
-Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Dont-Rm-via-Validate-Warm-GET
-Do-not-Auto-Detect-FileShare          LZ4-Frame-Checksum                    Disable-Fast-Cold-GET
+Skip-Loading-VersionChecksum-MD       LZ4-Block-1MB                         Do-not-Auto-Detect-FileShare
+LZ4-Frame-Checksum                    Disable-Fast-Cold-GET                 none
 ```
 
 For example:
 
 ```console
-$ ais config cluster features Provide-S3-API-via-Root Dont-Rm-via-Validate-Warm-GET Ignore-LimitedCoexistence-Conflicts
+$ ais config cluster features Provide-S3-API-via-Root Skip-Loading-VersionChecksum-MD Ignore-LimitedCoexistence-Conflicts
 PROPERTY         VALUE
-features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Dont-Rm-via-Validate-Warm-GET
+features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
 
 Cluster config updated
 ```
@@ -41,7 +41,7 @@ To view the current (configured) setting, type the same command and hit `Enter`:
 ```console
 $ ais config cluster features
 PROPERTY         VALUE
-features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Dont-Rm-via-Validate-Warm-GET
+features         Provide-S3-API-via-Root,Ignore-LimitedCoexistence-Conflicts,Skip-Loading-VersionChecksum-MD
 ```
 
 The same in JSON:
@@ -76,6 +76,5 @@ Cluster config updated
 | `Skip-Loading-VersionChecksum-MD` | skip loading existing object's metadata, Version and Checksum (VC) in particular |
 | `LZ4-Block-1MB` | .tar.lz4 format, lz4 compression: maximum uncompressed block size=1MB (default: 256K) |
 | `LZ4-Frame-Checksum` | checksum lz4 frames |
-| `Dont-Rm-via-Validate-Warm-GET` | when version validation (`versioning.validate_warm_get`) is enabled GET(object) shall _not_ delete the object if its remote source doesn't exist |
 | `Do-not-Auto-Detect-FileShare` | do not auto-detect file share (NFS, SMB) when _promoting_ shared files to AIS |
 | `Disable-Fast-Cold-GET` | use regular datapath to execute cold-GET operations |

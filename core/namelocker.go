@@ -167,9 +167,10 @@ func (nlc *nlc) Lock(uname string, exclusive bool) {
 	}
 }
 
-// NOTE: `UpgradeLock` correctly synchronizes threads waiting for **the same** operation
-// (e.g., get object from a remote backend)
-func (nlc *nlc) UpgradeLock(uname string) (upgraded bool) {
+// upgrade rlock -> wlock
+// e.g. usage: simultaneous cold GET
+// returns true if exclusively locked by _another_ thread
+func (nlc *nlc) UpgradeLock(uname string) bool {
 	nlc.mu.Lock()
 	li, found := nlc.m[uname]
 	debug.Assert(found && !li.exclusive && li.rc > 0)

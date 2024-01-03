@@ -56,11 +56,14 @@ ais show bucket $bucket --add 1>/dev/null || exit 1
 ## remember existing bucket 'validate_warm_get' setting; disable if need be
 validate=$(ais bucket props show ${bucket} versioning.validate_warm_get -H | awk '{print $2}')
 [[ "$validate" == "false"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false
+sync=$(ais bucket props show ${bucket} versioning.sync_warm_get -H | awk '{print $2}')
+[[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false
 
 cleanup() {
   rc=$?
   ais object rm "$bucket/lorem-duis" 1>/dev/null 2>&1
   [[ "$validate" == "true"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false 1>/dev/null 2>&1
+  [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false 1>/dev/null 2>&1
   [[ "$exists" == "true" ]] || ais rmb $bucket -y 1>/dev/null 2>&1
   exit $rc
 }
@@ -113,7 +116,10 @@ cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{pr
 echo "10. out-of-band DELETE"
 AIS_ENDPOINT=$rendpoint ais object rm "$rbucket/lorem-duis" 1>/dev/null || exit $?
 
-echo "11. warm GET must (silently) trigger deletion"
+echo "11. update bucket props: disable validate-warm-get _and_ enable sync-warm-get"
+ais bucket props set $bucket versioning.validate_warm_get=false versioning.sync_warm_get=true
+
+echo "12. warm GET must now trigger deletion"
 ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
 [[ $? != 0 ]] || { echo "FAIL: expecting GET error, got $?"; exit 1; }
 ais ls "$bucket/lorem-duis" --cached --silent -H 2>/dev/null

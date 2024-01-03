@@ -59,8 +59,8 @@ func (*LDP) Reader(lom *LOM, latestVer bool) (cos.ReadOpenCloser, cos.OAH, error
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
 	if loadErr == nil {
 		if latestVer {
-			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String())
-			eq, errCode, err := lom.CompareRemoteMD()
+			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String()) // caller's responsibility
+			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/)
 			if err != nil {
 				lom.Unlock(false)
 				if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
@@ -109,15 +109,32 @@ remote:
 	return cos.NopOpener(res.R), oah, res.Err
 }
 
-func (lom *LOM) CompareRemoteMD() (bool, int, error) {
+// NOTE:
+// - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
+// - caller must take wlock _or_ rlock
+// - may delete non-existing
+func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
 	bck := lom.Bck()
 	if !bck.IsCloud() && !bck.IsRemoteAIS() {
+		// nothing to do with: in-cluster ais:// bucket, or a remote one
+		// that doesn't provide any versioning metadata
 		return true, 0, nil
 	}
+
 	oa, errCode, err := T.Backend(bck).HeadObj(context.Background(), lom)
-	if err != nil {
+	if err == nil {
+		debug.Assert(errCode == 0, errCode)
+		return lom.Equal(oa), errCode, nil
+	}
+
+	if errCode == http.StatusNotFound && lom.VersionConf().SyncWarmGet {
+		errDel := lom.Remove(rlocked /*force through rlock*/)
+		if errDel != nil {
+			errCode, err = 0, errDel
+		}
 		return false, errCode, err
 	}
-	debug.Assert(errCode == 0, errCode)
-	return lom.Equal(oa), errCode, nil
+
+	lom.Uncache()
+	return false, errCode, err
 }

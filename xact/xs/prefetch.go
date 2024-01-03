@@ -93,29 +93,35 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 		err     error
 		errCode int
 	)
-	if err = lom.Load(true /*cache it*/, false /*locked*/); err != nil {
+	lom.Lock(false)
+	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsErrObjNought(err) {
+			lom.Unlock(false)
 			goto eret
 		}
 	} else {
 		if !r.latestVer {
+			lom.Unlock(false)
 			return // nothing to do
 		}
 		var eq bool
-		if eq, errCode, err = lom.CompareRemoteMD(); eq {
+		if eq, errCode, err = lom.CheckRemoteMD(true /*rlocked*/); eq {
+			lom.Unlock(false)
 			return // nothing to do
 		}
 		if err != nil {
+			lom.Unlock(false)
 			goto emaybe
 		}
 	}
+	lom.Unlock(false)
 
-	// NOTE minimal locking, optimistic concurrency
+	// Minimal locking, optimistic concurrency ====================================================
 	// Not setting atime (a.k.a. access time) as prefetching != actual access.
 	//
 	// On the other hand, zero atime makes the object's lifespan in the cache too short - the first
 	// housekeeping traversal will remove it. Using neative `-now` value for subsequent correction
-	// (see cluster/lom_cache_hk.go).
+	// (see core/lcache.go).                                             ==========================
 
 	lom.SetAtimeUnix(-time.Now().UnixNano())
 	errCode, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetPrefetchLock)
