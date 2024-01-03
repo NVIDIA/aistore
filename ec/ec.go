@@ -404,6 +404,7 @@ func writeObject(lom *core.LOM, reader io.Reader, size int64, xctn core.Xact) er
 		params.Reader = readCloser
 		params.SkipEC = true
 		params.Atime = time.Now()
+		params.Size = size
 		params.Xact = xctn
 		// to avoid changing version; TODO: introduce cmn.OwtEC
 		params.OWT = cmn.OwtMigrateRepl

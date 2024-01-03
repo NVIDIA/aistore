@@ -35,6 +35,10 @@ import (
 //	-> "*.id" - ID
 const (
 	// KindCounter & KindSize - always incremented
+
+	// NOTE semantics:
+	// - counts all instances when remote GET is followed by storing of the new object (version) locally
+	// - does _not_ count assorted calls to `GetObjReader` (e.g., via tcb/tco -> LDP.Reader)
 	GetColdCount = "get.cold.n"
 	GetColdSize  = "get.cold.size"
 

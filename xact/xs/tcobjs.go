@@ -267,6 +267,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 		params.Reader = io.NopCloser(objReader)
 		params.Cksum = hdr.ObjAttrs.Cksum
 		params.Xact = r
+		params.Size = hdr.ObjAttrs.Size
 
 		// Transaction is used only by CopyBucket and ETL. In both cases, new objects
 		// are created at the destination. Setting `OwtPut` type informs `t.PutObject()`

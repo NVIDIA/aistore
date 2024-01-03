@@ -351,6 +351,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	}
 	params := allocPutObjParams(res, owt)
 	err := awsp.t.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}

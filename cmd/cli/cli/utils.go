@@ -617,10 +617,21 @@ func ensureRemoteProvider(bck cmn.Bck) error {
 	if !apc.IsProvider(bck.Provider) {
 		return fmt.Errorf("invalid bucket %q: missing backend provider", bck)
 	}
-	if !bck.IsRemote() {
-		return fmt.Errorf("invalid bucket %q: expecting remote backend", bck)
+	if bck.IsRemote() {
+		return nil
 	}
-	return nil
+	if bck.Props == nil {
+		// double-take: ais:// bucket with remote backend?
+		p, err := headBucket(bck, true)
+		if err != nil {
+			return err
+		}
+		bck.Props = p
+		if bck.IsRemote() {
+			return nil // yes it is
+		}
+	}
+	return fmt.Errorf("invalid bucket %q: expecting remote backend", bck)
 }
 
 func parseURLtoBck(strURL string) (bck cmn.Bck) {

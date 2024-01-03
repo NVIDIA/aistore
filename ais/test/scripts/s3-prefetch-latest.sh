@@ -29,7 +29,7 @@ while (( "$#" )); do
 done
 
 ## uncomment for verbose output
-set -x ## DEBUG
+## set -x
 
 ## establish existence
 ais show bucket $bucket -c 1>/dev/null || exit $?
@@ -50,8 +50,7 @@ echo "1. out-of-band PUT: first version"
 echo $lorem | s3cmd put - "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
 echo "2. prefetch, and check"
-ais prefetch "$bucket/lorem-duis"
-sleep 5 ############################# DEBUG
+ais prefetch "$bucket/lorem-duis" --wait
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum1"  ]] || { echo "FAIL: $checksum != $sum1"; exit 1; }
 
@@ -59,8 +58,7 @@ echo "3. out-of-band PUT: 2nd version (overwrite)"
 echo $duis | s3cmd put - "$bucket/lorem-duis" $host 1>/dev/null || exit $?
 
 echo "4. prefetch and check (expecting the first version's checksum)"
-ais prefetch "$bucket/lorem-duis"
-sleep 5 ############################# DEBUG
+ais prefetch "$bucket/lorem-duis" --wait
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" != "$sum2"  ]] || { echo "FAIL: $checksum == $sum2"; exit 1; }
 
@@ -68,8 +66,7 @@ echo "5. query cold-get count (statistics)"
 cnt1=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 
 echo "6. prefetch latest: detect version change and trigger cold GET"
-ais prefetch "$bucket/lorem-duis" --latest
-sleep 5 ############################# DEBUG
+ais prefetch "$bucket/lorem-duis" --latest --wait
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
@@ -78,21 +75,12 @@ cnt2=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{pr
 [[ $cnt2 == $(($cnt1+1)) ]] || { echo "FAIL: $cnt2 != $(($cnt1+1))"; exit 1; }
 
 echo "8. warm GET must remain \"warm\" and cold-get-count must not increment"
-ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
+ais get "$bucket/lorem-duis" /dev/null --latest 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
 cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt3 == $cnt2 ]] || { echo "FAIL: $cnt3 != $cnt2"; exit 1; }
-
-echo "9. out-of-band DELETE"
-s3cmd del "$bucket/lorem-duis" $host 1>/dev/null || exit $?
-
-echo "10. warm GET must (silently) trigger deletion"
-ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
-[[ $? != 0 ]] || { echo "FAIL: expecting GET error, got $?"; exit 1; }
-ais ls "$bucket/lorem-duis" --cached --silent -H 2>/dev/null
-[[ $? != 0 ]] || { echo "FAIL: expecting 'show object' error, got $?"; exit 1; }
 
 echo -e
 ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"

@@ -15,11 +15,13 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
@@ -75,6 +77,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutObjectParams) error {
 		poi.workFQN = workFQN
 		poi.atime = params.Atime.UnixNano()
 		poi.xctn = params.Xact
+		poi.size = params.Size
 		poi.owt = params.OWT
 		poi.skipEC = params.SkipEC
 		poi.coldGET = params.ColdGET
@@ -84,6 +87,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutObjectParams) error {
 	}
 	_, err := poi.putObject()
 	freePOI(poi)
+	debug.Assert(err != nil || params.Size <= 0 || params.Size == lom.SizeBytes(true), lom.String(), params.Size, lom.SizeBytes(true))
 	return err
 }
 
@@ -155,7 +159,7 @@ func (t *target) CopyObject(lom *core.LOM, dm core.DM, dp core.DP, xact core.Xac
 	return size, err
 }
 
-// compare with goi.getCold
+// use `backend.GetObj` (compare w/ other instances calling `backend.GetObjReader`)
 func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCode int, err error) {
 	// 1. lock
 	switch owt {
@@ -178,7 +182,8 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 		return
 	}
 
-	// 2. get from the remote B
+	// 2. GET remote object and store it
+	now := mono.NanoTime()
 	if errCode, err = t.Backend(lom.Bck()).GetObj(ctx, lom, owt); err != nil {
 		if owt != cmn.OwtGetPrefetchLock {
 			lom.Unlock(true)
@@ -194,6 +199,13 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 	case cmn.OwtGetTryLock, cmn.OwtGetLock:
 		lom.Unlock(true)
 	}
+
+	// 4. stats
+	t.statsT.AddMany(
+		cos.NamedVal64{Name: stats.GetColdCount, Value: 1},
+		cos.NamedVal64{Name: stats.GetColdSize, Value: lom.SizeBytes()},
+		cos.NamedVal64{Name: stats.GetColdRwLatency, Value: mono.SinceNano(now)},
+	)
 	return
 }
 

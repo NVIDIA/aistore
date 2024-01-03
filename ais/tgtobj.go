@@ -392,7 +392,7 @@ func (poi *putOI) write() (buf []byte, slab *memsys.Slab, lmfh *os.File, err err
 	if lmfh, err = poi.lom.CreateFile(poi.workFQN); err != nil {
 		return
 	}
-	if poi.size == 0 {
+	if poi.size <= 0 {
 		buf, slab = poi.t.gmm.Alloc()
 	} else {
 		buf, slab = poi.t.gmm.AllocSize(poi.size)
@@ -619,7 +619,7 @@ do:
 		}
 		goi.lom.SetAtimeUnix(goi.atime)
 
-		if loaded, err = goi.coldLock(); err != nil {
+		if loaded, err = goi._coldLock(); err != nil {
 			return
 		}
 		if loaded {
@@ -629,7 +629,7 @@ do:
 		// zero-out prev. version custom metadata, if any
 		goi.lom.SetCustomMD(nil)
 
-		// backend: read remote
+		// get remote reader (compare w/ t.GetCold)
 		res = goi.t.Backend(goi.lom.Bck()).GetObjReader(goi.ctx, goi.lom)
 		if res.Err != nil {
 			goi.lom.Unlock(true)
@@ -653,7 +653,7 @@ do:
 		}
 
 		// regular path
-		errCode, err = goi.coldPut(&res)
+		errCode, err = goi._coldPut(&res)
 		if err != nil {
 			goi.unlocked = true
 			return
@@ -687,7 +687,7 @@ fin:
 
 // upgrade rlock => wlock
 // done early to prevent multiple cold-readers duplicating network/disk operation and overwriting each other
-func (goi *getOI) coldLock() (loaded bool, err error) {
+func (goi *getOI) _coldLock() (loaded bool, err error) {
 	var (
 		t, lom = goi.t, goi.lom
 		now    int64
@@ -713,8 +713,7 @@ outer:
 	return
 }
 
-// see also: t.GetCold() and goi.coldMem()
-func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
+func (goi *getOI) _coldPut(res *core.GetReaderResult) (int, error) {
 	var (
 		t, lom = goi.t, goi.lom
 		poi    = allocPOI()
@@ -739,7 +738,6 @@ func (goi *getOI) coldPut(res *core.GetReaderResult) (int, error) {
 		nlog.Infoln(ftcg+"(put)", lom.Cname(), err)
 		return code, err
 	}
-	goi.t.statsT.Add(stats.GetColdRwLatency, mono.SinceNano(goi.ltime))
 
 	// load, downgrade lock, inc stats
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {

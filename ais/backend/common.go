@@ -42,6 +42,7 @@ func allocPutObjParams(res core.GetReaderResult, owt cmn.OWT) *core.PutObjectPar
 		params.Reader = res.R
 		params.OWT = owt
 		params.Cksum = res.ExpCksum
+		params.Size = res.Size
 		params.Atime = time.Now()
 		params.ColdGET = true
 	}

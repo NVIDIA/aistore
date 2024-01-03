@@ -1,6 +1,6 @@
 // Package integration_test.
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package integration_test
 
@@ -56,6 +56,28 @@ func TestGetWarmValidateRemaisUsingScript(t *testing.T) {
 	var (
 		bucketName = bck.Cname("")
 		cmd        = exec.Command("./scripts/remais-get-validate.sh", "--bucket", bucketName)
+	)
+	out, err := cmd.CombinedOutput()
+	if len(out) > 0 {
+		tlog.Logln(string(out))
+	}
+	tassert.CheckFatal(t, err)
+}
+
+func TestPrefetchLatestUsingScript(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		CloudBck: true,
+		Bck:      cliBck,
+	})
+	// note additional limitation
+	normp, _ := cmn.NormalizeProvider(cliBck.Provider)
+	if normp != apc.AWS {
+		t.Skipf("skipping %s - the test uses s3cmd (command line tool) and requires s3 bucket (see \"prerequisites\")", t.Name())
+	}
+
+	var (
+		bucketName = cliBck.Cname("")
+		cmd        = exec.Command("./scripts/s3-prefetch-latest.sh", "--bucket", bucketName)
 	)
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {

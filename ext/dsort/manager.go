@@ -635,6 +635,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 		params.Reader = rc
 		params.Cksum = nil
 		params.Atime = started
+		params.Size = hdr.ObjAttrs.Size
 	}
 	erp := core.T.PutObject(lom, params)
 	core.FreePutObjParams(params)

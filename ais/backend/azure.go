@@ -359,6 +359,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	}
 	params := allocPutObjParams(res, owt)
 	err := ap.t.PutObject(lom, params)
+	core.FreePutObjParams(params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}

@@ -95,6 +95,7 @@ type (
 		Atime   time.Time
 		Xact    Xact
 		WorkTag string // (=> work fqn)
+		Size    int64
 		OWT     cmn.OWT
 		SkipEC  bool // don't erasure-code when finalizing
 		ColdGET bool // this PUT is in fact a cold-GET

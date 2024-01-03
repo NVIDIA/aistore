@@ -150,6 +150,7 @@ func (task *singleTask) _dput(lom *core.LOM, req *http.Request, resp *http.Respo
 		params.Reader = r
 		params.OWT = cmn.OwtPut
 		params.Atime = task.started.Load()
+		params.Size = size
 		params.Xact = task.xdl
 	}
 	erp := core.T.PutObject(lom, params)

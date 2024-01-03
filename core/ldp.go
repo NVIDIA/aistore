@@ -90,7 +90,8 @@ func (*LDP) Reader(lom *LOM, latestVer bool) (cos.ReadOpenCloser, cos.OAH, error
 	}
 
 remote:
-	// cold GetObjReader and return oah (holder) to represent non-existing object
+	// GetObjReader and return remote (object) reader and oah for object metadata
+	// (compare w/ T.GetCold)
 	lom.SetAtimeUnix(time.Now().UnixNano())
 	oah := &cmn.ObjAttrs{
 		Ver:   "",            // TODO: differentiate between copying (same version) vs. transforming

@@ -299,6 +299,8 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 
 				// TODO: params.Xact - in part, to count PUTs and bytes in a generic fashion
 				// (vs metrics.ShardCreationStats.updateThroughput - see below)
+
+				// TODO: add params.Size = (size resulting from shardRW.Create below)
 			}
 			err = core.T.PutObject(lom, params)
 			core.FreePutObjParams(params)
