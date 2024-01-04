@@ -36,6 +36,7 @@ rmb             bucket rm
 - [Evict remote bucket](#evict-remote-bucket)
 - [Move or Rename a bucket](#move-or-rename-a-bucket)
 - [Copy bucket](#copy-bucket)
+- [Copy multiple objects](#copy-multiple-objects)
 - [Show bucket summary](#show-bucket-summary)
 - [Start N-way Mirroring](#start-n-way-mirroring)
 - [Start Erasure Coding](#start-erasure-coding)
@@ -598,15 +599,13 @@ To check the status, run: ais show job xaction mvlb ais://new_bucket_name
 
 ## Copy bucket
 
-`ais cp SRC_BUCKET DST_BUCKET`
+`ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET`
 
-Copy source bucket (`SRC_BUCKET`) to destination bucket (`DST_BUCKET`).
+Source bucket must exist. When the destination bucket is remote (e.g. in the Cloud) it must also exist and be writeable.
 
-Source bucket must exist. When the destination bucket is in the Cloud it must also exist (and be writeable).
+> **NOTE:** there's _no_ requirement that either of the buckets is _present_ in aistore.
 
-There's _no_ requirement that either of the buckets is _present_ in aistore.
-
-> Note: not to confuse in-cluster presence and existence.
+> **NOTE:** not to confuse in-cluster _presence_ and existence. Remote object may exist (remotely), etc.
 
 Moreover, when the destination is AIS (`ais://`) or remote AIS (`ais://@remote-alias`) bucket, the existence is optional: the destination will be created on the fly, with bucket properties copied from the source (`SRC_BUCKET`).
 
@@ -647,22 +646,12 @@ Listed: 2,290 names
 ```console
 $ ais cp --help
 NAME:
-   ais cp - (alias for "bucket cp") copy entire bucket or selected objects (to select, use '--list' or '--template')
+   ais cp - (alias for "bucket cp") copy entire bucket or selected objects (to select multiple, use '--list' or '--template')
 
 USAGE:
-   ais cp [command options] SRC_BUCKET DST_BUCKET
+   ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET
 
 OPTIONS:
-   --all             copy all objects from a remote bucket including those that are not present (not "cached") in the cluster
-   --cont-on-err     keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
-   --force, -f       force an action
-   --dry-run         show total size of new objects without really creating them
-   --prepend value   prefix to prepend to every copied object name, e.g.:
-                     --prepend=abc   - prefix all copied object names with "abc"
-                     --prepend=abc/  - copy objects into a virtual directory "abc" (note trailing filepath separator)
-   --prefix value    copy objects that start with the specified prefix, e.g.:
-                     '--prefix a/b/c' - copy virtual directory a/b/c and/or objects from the virtual directory
-                     a/b that have their names (relative to this directory) starting with the letter c
    --list value      comma-separated list of object or file names, e.g.:
                      --list 'o1,o2,o3'
                      --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
@@ -677,16 +666,39 @@ OPTIONS:
                      and similarly, when specifying files and directories:
                      --template '/home/dir/subdir/'
                      --template "/abc/prefix-{0010..9999..2}-suffix"
+   --prefix value    select objects that have names starting with the specified prefix, e.g.:
+                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --all             copy all objects from a remote bucket including those that are not present (not "cached") in the cluster
+   --cont-on-err     keep running archiving xaction (job) in presence of errors in a any given multi-object transaction
+   --force, -f       force an action
+   --dry-run         show total size of new objects without really creating them
+   --prepend value   prefix to prepend to every copied object name, e.g.:
+                     --prepend=abc   - prefix all copied object names with "abc"
+                     --prepend=abc/  - copy objects into a virtual directory "abc" (note trailing filepath separator)
    --progress        show progress bar(s) and progress of execution in real time
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --wait            wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    --timeout value   maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
                      valid time units: ns, us (or µs), ms, s (default), m, h
+   --sync            synchronize destination bucket with its remote (e.g., Cloud) source;
+                     in particular, the option may entail removing of the objects that no longer exist remotely
    --help, -h        show help
 ```
 
 ### Examples
+
+#### Copy _non-existing_ remote bucket to a non-existing in-cluster destination
+
+```console
+$ ais ls s3
+No "s3://" buckets in the cluster. Use '--all' option to list matching remote buckets, if any.
+
+$ ais cp s3://abc ais://nnn --all
+Warning: destination ais://nnn doesn't exist and will be created with configuration copied from the source (s3://abc))
+Copying s3://abc => ais://nnn. To monitor the progress, run 'ais show job tco-JcTKbhvFy'
+```
 
 #### Copy AIS bucket
 
@@ -698,7 +710,7 @@ Copying bucket "ais://bucket_name" to "ais://dst_bucket" in progress.
 To check the status, run: ais show job xaction copy-bck ais://dst_bucket
 ```
 
-#### Copy AIS bucket and wait until finish
+#### Copy AIS bucket and wait until the job finishes
 
 The same as above, but wait until copying is finished.
 
@@ -721,9 +733,44 @@ Copying bucket "aws://src_bucket" to "aws://dst_bucket" in progress.
 To check the status, run: ais show job xaction copy-bck aws://dst_bucket
 ```
 
-#### Copy only selected objects
+## Copy multiple objects
 
-Copy objects `obj1.tar` and `obj1.info` from bucket `ais://bck1` to `ais://bck2`, and wait until the operation finishes.
+The same `ais cp` command can also copy multiple selected objects. Here's the corresponding excerpt from the inline help:
+
+```console
+$ ais cp --help
+NAME:
+   ais cp - (alias for "bucket cp") copy entire bucket or selected objects (to select multiple, use '--list' or '--template')
+
+USAGE:
+   ais cp [command options] SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE] DST_BUCKET
+
+OPTIONS:
+   --list value      comma-separated list of object or file names, e.g.:
+                     --list 'o1,o2,o3'
+                     --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                     or, when listing files and/or directories:
+                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value  template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                     (with optional steps and gaps), e.g.:
+                     --template "" # (an empty or '*' template matches eveything)
+                     --template 'dir/subdir/'
+                     --template 'shard-{1000..9999}.tar'
+                     --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                     and similarly, when specifying files and directories:
+                     --template '/home/dir/subdir/'
+                     --template "/abc/prefix-{0010..9999..2}-suffix"
+   --prefix value    select objects that have names starting with the specified prefix, e.g.:
+                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --all             copy all objects from a remote bucket including those that are not present (not "cached") in the cluster
+...
+...
+```
+
+### Examples
+
+**1.** Copy objects `obj1.tar` and `obj1.info` from bucket `ais://bck1` to `ais://bck2`, and wait until the operation finishes
 
 ```console
 $ ais cp ais://bck1 ais://bck2 --list obj1.tar,obj1.info --wait
@@ -731,14 +778,28 @@ copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
 copying objects operation succeeded.
 ```
 
-Copy object with pattern matching: copy `obj2`, `obj3`, and `obj4` from `ais://bck1` to `ais://bck2`.
-Do not wait for the operation is done.
+**2.** Copy objects matching Bash brace-expansion `obj{2..4}, do not wait for the operation is done.
 
 ```console
 $ ais cp ais://bck1 ais://bck2 --template "obj{2..4}"
 copying objects operation ("ais://bck1" => "ais://bck2") is in progress...
 To check the status, run: ais show job xaction copy-bck ais://bck2
 ```
+
+**3.** Use `--sync` option to copy remote virtual subdirectory
+
+```console
+$ ais cp gs://coco-dataset --sync --prefix d-tokens
+Copying objects gs://coco-dataset. To monitor the progress, run 'ais show job tco-kJPUtYJld'
+```
+
+In the example, `--sync` synchronizes destination bucket with its remote (e.g., Cloud) source.
+
+In particular, the option will make sure that aistore has the **latest** versions of remote objects _and_ may also entail **removing** of the objects that no longer exist remotely
+
+### See also
+
+* [Out of band updates](/docs/out_of_band.md)
 
 ## Show bucket summary
 

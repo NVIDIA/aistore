@@ -184,7 +184,7 @@ With a little effort, they all could be extracted and used outside.
   - [Downloader](/docs/downloader.md)
   - [On-disk layout](/docs/on_disk_layout.md)
   - [Buckets: definition, operations, properties](https://github.com/NVIDIA/aistore/blob/main/docs/bucket.md#bucket)
-  - [Out of band updates](/docs/validate_warm_get.md)
+  - [Out of band updates](/docs/out_of_band.md)
 
 ## License
 

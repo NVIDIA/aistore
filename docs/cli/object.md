@@ -30,7 +30,7 @@ ls           promote      concat       evict        mv           cat
 - [GET archived content](#get-archived-content)
 - [Print object content](#print-object-content)
 - [Show object properties](#show-object-properties)
-- [Out of band updates](/docs/validate_warm_get.md)
+- [Out of band updates](/docs/out_of_band.md)
 - [PUT object](#put-object)
   - [Object names](#object-names)
   - [Put single file](#put-single-file)
@@ -60,7 +60,7 @@ ls           promote      concat       evict        mv           cat
 
 # GET object
 
-The command is very useful in terms getting your data out of the cluster. In its brief description:
+Use `ais object get` or, same, `ais get` to GET data from aistore. In other words, read data from the cluster and, optionally, save it locally.
 
 `ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|-]`
 
@@ -73,7 +73,7 @@ Here's in detail:
 
 ```console
 $ ais get --help
-
+NAME:
    ais get - (alias for "object get") get an object, a shard, an archived file, or a range of bytes from all of the above;
               write the content locally with destination options including: filename, directory, STDOUT ('-'), or '/dev/null' (discard);
               assorted options further include:
@@ -81,6 +81,7 @@ $ ais get --help
               - '--extract' or '--archpath' to extract archived content;
               - '--progress' and '--refresh' to watch progress bar;
               - '-v' to produce verbose output when getting multiple objects.
+
 USAGE:
    ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
 
@@ -89,11 +90,11 @@ OPTIONS:
    --length value    object read length; default formatting: IEC (use '--units' to override)
    --checksum        validate checksum
    --yes, -y         assume 'yes' to all questions
-   --check-cached    instead of GET execute HEAD(object), to check if the object's present in aistore
+   --check-cached    instead of GET execute HEAD(object) to check if the object is present in aistore
                      (applies only to buckets with remote backend)
-   --latest          GET or copy the latest object version from the associated Cloud bucket ("Cloud backend"):
-                     - allows fine-grained (operation-level) control without changing bucket configuration
-                     - see also: 'ais bucket props ... versioning.validate_warm_get'
+   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
+                     allows operation-level control over object version synchronization _without_ changing bucket configuration
+                     (the latter can be done using 'ais bucket props set BUCKET versioning')
    --refresh value   interval for continuous monitoring;
                      valid time units: ns, us (or µs), ms, s (default), m, h
    --progress        show progress bar(s) and progress of execution in real time
@@ -101,16 +102,17 @@ OPTIONS:
    --extract, -x     extract all files from archive(s)
    --prefix value    get objects that start with the specified prefix, e.g.:
                      '--prefix a/b/c' - get objects from the virtual directory a/b/c and objects from the virtual directory
-                     a/b that have their names (relative to this directory) starting with c;
-                     '--prefix ""' - get entire bucket
-   --cached          get only those objects from a remote bucket that are present ("cached") in AIS
+                     a/b that have their names (relative to this directory) starting with 'c';
+                     '--prefix ""' - get entire bucket (all objects)
+   --cached          get only those objects from a remote bucket that are present ("cached") in aistore
    --archive         list archived content (see docs/archive.md for details)
    --limit value     limit object name count (0 - unlimited) (default: 0)
    --units value     show statistics and/or parse command-line specified sizes using one of the following _units of measurement_:
                      iec - IEC format, e.g.: KiB, MiB, GiB (default)
                      si  - SI (metric) format, e.g.: KB, MB, GB
                      raw - do not convert to (or from) human-readable format
-   --verbose, -v     verbose outout when getting multiple objects
+   --verbose, -v     verbose output
+   --silent          server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)
    --help, -h        show help
 ```
 
@@ -1270,36 +1272,146 @@ The number of objects "involved" in a single operation does not have any designe
 
 ## Prefetch objects
 
-`ais start prefetch BUCKET/ --list|--template <value>`
+This is `ais start prefetch` or, same, `ais prefetch` command:
 
-[Prefetch](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+```console
+$ ais prefetch --help
+NAME:
+   ais prefetch - (alias for "object prefetch") prefetch one remote bucket, multiple remote buckets, or
+   selected objects in a given remote bucket or buckets, e.g.:
+     - 'prefetch gs://abc'                                          - prefetch entire bucket (all gs://abc objects that are _not_ present in the cluster);
+     - 'prefetch gs:'                                               - prefetch all visible/accessible GCP buckets;
+     - 'prefetch gs://abc --template images/'                       - prefetch all objects from the virtual subdirectory "images";
+     - 'prefetch gs://abc/images/'                                  - same as above;
+     - 'prefetch gs://abc --template "shard-{0000..9999}.tar.lz4"'  - prefetch the matching range (prefix + brace expansion);
+     - 'prefetch "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
 
-### Options
+USAGE:
+   ais prefetch [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
-| `--dry-run` | `bool` | Do not actually perform PREFETCH. Shows a few objects to be prefetched |
+OPTIONS:
+   --list value      comma-separated list of object or file names, e.g.:
+                     --list 'o1,o2,o3'
+                     --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                     or, when listing files and/or directories:
+                     --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value  template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                     (with optional steps and gaps), e.g.:
+                     --template "" # (an empty or '*' template matches eveything)
+                     --template 'dir/subdir/'
+                     --template 'shard-{1000..9999}.tar'
+                     --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                     and similarly, when specifying files and directories:
+                     --template '/home/dir/subdir/'
+                     --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait            wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value   maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress        show progress bar(s) and progress of execution in real time
+   --refresh value   interval for continuous monitoring;
+                     valid time units: ns, us (or µs), ms, s (default), m, h
+   --dry-run         preview the results without really running the action
+   --prefix value    select objects that have names starting with the specified prefix, e.g.:
+                     '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                     '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
+                     allows operation-level control over object version synchronization _without_ changing bucket configuration
+                     (the latter can be done using 'ais bucket props set BUCKET versioning')
+   --help, -h        show help
+```
 
-Options `--list` and `--template` are mutually exclusive.
+Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
 
-### Prefetch a list of objects
+### See also
+* [Prefetch/Evict objects](/docs/bucket.md#prefetchevict-objects)
+
+### Example: prefetch using prefix
+
+Initially:
+
+```console
+$ ais ls s3://abc --all --limit 10
+NAME     SIZE            CACHED  STATUS
+10000a2  10.00MiB        no      n/a
+10000b4  10.00MiB        no      n/a
+10000bd  10.00MiB        no      n/a
+10000d6  10.00MiB        no      n/a
+10000ea  10.00MiB        no      n/a
+10001a2  10.00MiB        no      n/a
+10001b4  10.00MiB        no      n/a
+10001bd  10.00MiB        no      n/a
+10001d6  10.00MiB        no      n/a
+10001ea  10.00MiB        no      n/a
+```
+
+Now, let's use `--prefix` option to - in this case - fetch a single object:
+
+```console
+$ ais prefetch s3://abc --prefix 10000a2
+prefetch-objects[E0e5mq9Kav]: prefetch "10000a2" from s3://abc. To monitor the progress, run 'ais show job E0e5mq9Kav'
+
+$ ais ls s3://abc --all --limit 10
+NAME     SIZE            CACHED  STATUS
+10000a2  10.00MiB        yes     ok     ### <<<<< in cluster
+10000b4  10.00MiB        no      n/a
+10000bd  10.00MiB        no      n/a
+10000d6  10.00MiB        no      n/a
+10000ea  10.00MiB        no      n/a
+10001a2  10.00MiB        no      n/a
+10001b4  10.00MiB        no      n/a
+10001bd  10.00MiB        no      n/a
+10001d6  10.00MiB        no      n/a
+10001ea  10.00MiB        no      n/a
+```
+
+### Example: prefetch using template
+
+Since `--template` can optionally contain prefix and zero or more _ranges_, we could execute the above example as follows:
+
+```console
+$ ais prefetch s3://abc --template 10000a2
+```
+
+This, in fact, would produce the same result (see previous section).
+
+But of course, "templated" match can also specify an actual range, for example:
+
+```console
+$ ais ls gs://nnn --all --limit 5
+NAME     SIZE            CACHED  STATUS
+shard-001  1.00MiB       no      n/a
+shard-002  1.00MiB       no      n/a
+shard-003  1.00MiB       no      n/a
+shard-004  1.00MiB       no      n/a
+shard-005  1.00MiB       no      n/a
+
+$ ais prefetch gs://nnn --template --template "shard-{001..003}"
+
+$ ais ls gs://nnn --all --limit 5
+NAME     SIZE            CACHED  STATUS
+shard-001  1.00MiB       yes     ok
+shard-002  1.00MiB       yes     ok
+shard-003  1.00MiB       yes     ok
+shard-004  1.00MiB       no      n/a
+shard-005  1.00MiB       no      n/a
+```
+
+### Example: prefetch a list of objects
 
 NOTE: make sure to use double or single quotations to specify the list, as shown below.
 
 ```console
 # Prefetch o1, o2, and o3 from AWS bucket `cloudbucket`:
-$ ais start prefetch aws://cloudbucket --list 'o1,o2,o3'
+$ ais prefetch aws://cloudbucket --list 'o1,o2,o3'
 ```
 
-### Prefetch a range of objects
+### Example: prefetch a range of objects
 
 ```console
 # Prefetch from AWS bucket `cloudbucket` all objects in the specified range.
 # NOTE: make sure to use double or single quotations to specify the template (aka "range")
 
-$ ais start prefetch aws://cloudbucket --template "shard-{001..999}.tar"
+$ ais prefetch aws://cloudbucket --template "shard-{001..999}.tar"
 ```
 
 ## Delete multiple objects
@@ -1349,19 +1461,61 @@ removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", us
 
 ## Evict multiple objects
 
-`ais bucket evict BUCKET/[OBJECT_NAME]...`
+`ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]`
 
-[Evict](/docs/bucket.md#prefetchevict-objects) objects from a remote bucket.
+Command `ais evict` is a shorter version of `ais bucket evict`.
 
 ### Options
 
-| Flag | Type | Description | Default |
-| --- | --- | --- | --- |
-| `--list` | `string` | Comma separated list of objects for list deletion | `""` |
-| `--template` | `string` | The object name template with optional range parts | `""` |
-| `--dry-run` | `bool` | Do not actually perform EVICT. Shows a few objects to be evicted |
+Here's inline help, and specifically notice the _multi-object_ options: `--template`, `--list`, and `--prefix`:
 
-Note that options `--list` and `--template` are mutually exclusive.
+```concole
+$ ais evict --help
+NAME:
+   ais evict - (alias for "bucket evict") evict one remote bucket, multiple remote buckets, or
+   selected objects in a given remote bucket or buckets, e.g.:
+     - 'evict gs://abc'                                          - evict entire bucket (all gs://abc objects in aistore);
+     - 'evict gs:'                                               - evict all GCP buckets from the cluster;
+     - 'evict gs://abc --template images/'                       - evict all objects from the virtual subdirectory "images";
+     - 'evict gs://abc/images/'                                  - same as above;
+     - 'evict gs://abc --template "shard-{0000..9999}.tar.lz4"'  - evict the matching range (prefix + brace expansion);
+     - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+
+USAGE:
+   ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+
+OPTIONS:
+   --list value         comma-separated list of object or file names, e.g.:
+                        --list 'o1,o2,o3'
+                        --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                        or, when listing files and/or directories:
+                        --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                        (with optional steps and gaps), e.g.:
+                        --template "" # (an empty or '*' template matches eveything)
+                        --template 'dir/subdir/'
+                        --template 'shard-{1000..9999}.tar'
+                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                        and similarly, when specifying files and directories:
+                        --template '/home/dir/subdir/'
+                        --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress           show progress bar(s) and progress of execution in real time
+   --refresh value      interval for continuous monitoring;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --keep-md            keep bucket metadata
+   --prefix value       select objects that have names starting with the specified prefix, e.g.:
+                        '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                        '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --dry-run            preview the results without really running the action
+   --verbose, -v        verbose output
+   --non-verbose, --nv  non-verbose (quiet) output, minimized reporting
+   --help, -h           show help
+```
+
+Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
 
 ### Evict a range of objects
 

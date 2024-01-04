@@ -24,6 +24,7 @@ redirect_from:
   - [Public HTTP(S) Datasets](#public-https-dataset)
   - [Prefetch/Evict Objects](#prefetchevict-objects)
   - [Evict Remote Bucket](#evict-remote-bucket)
+  - [Out of band updates](/docs/out_of_band.md)
 - [Backend Bucket](#backend-bucket)
   - [AIS bucket as a reference](#ais-bucket-as-a-reference)
 - [Bucket Properties](#bucket-properties)
@@ -468,9 +469,61 @@ To use a [range operation](batch.md#range) to evict the 1000th to 2000th objects
 $ ais bucket evict aws://abc --template "__tst/test-{1000..2000}"
 ```
 
+### See also
+
+* [Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
+
 ## Evict Remote Bucket
 
-Before a remote bucket is accessed through AIS, the cluster has no awareness of the bucket.
+This is `ais bucket evict` command but most of the time we'll be using its `ais evict` alias:
+
+```console
+$ ais evict --help
+NAME:
+   ais evict - (alias for "bucket evict") evict one remote bucket, multiple remote buckets, or
+   selected objects in a given remote bucket or buckets, e.g.:
+     - 'evict gs://abc'                                          - evict entire bucket (all gs://abc objects in aistore);
+     - 'evict gs:'                                               - evict all GCP buckets from the cluster;
+     - 'evict gs://abc --template images/'                       - evict all objects from the virtual subdirectory "images";
+     - 'evict gs://abc/images/'                                  - same as above;
+     - 'evict gs://abc --template "shard-{0000..9999}.tar.lz4"'  - evict the matching range (prefix + brace expansion);
+     - 'evict "gs://abc/shard-{0000..9999}.tar.lz4"'             - same as above (notice double quotes)
+
+USAGE:
+   ais evict [command options] BUCKET[/OBJECT_NAME_or_TEMPLATE] [BUCKET[/OBJECT_NAME_or_TEMPLATE] ...]
+
+OPTIONS:
+   --list value         comma-separated list of object or file names, e.g.:
+                        --list 'o1,o2,o3'
+                        --list "abc/1.tar, abc/1.cls, abc/1.jpeg"
+                        or, when listing files and/or directories:
+                        --list "/home/docs, /home/abc/1.tar, /home/abc/1.jpeg"
+   --template value     template to match object or file names; may contain prefix (that could be empty) with zero or more ranges
+                        (with optional steps and gaps), e.g.:
+                        --template "" # (an empty or '*' template matches eveything)
+                        --template 'dir/subdir/'
+                        --template 'shard-{1000..9999}.tar'
+                        --template "prefix-{0010..0013..2}-gap-{1..2}-suffix"
+                        and similarly, when specifying files and directories:
+                        --template '/home/dir/subdir/'
+                        --template "/abc/prefix-{0010..9999..2}-suffix"
+   --wait               wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
+   --timeout value      maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --progress           show progress bar(s) and progress of execution in real time
+   --refresh value      interval for continuous monitoring;
+                        valid time units: ns, us (or µs), ms, s (default), m, h
+   --keep-md            keep bucket metadata
+   --prefix value       select objects that have names starting with the specified prefix, e.g.:
+                        '--prefix a/b/c'   - matches names 'a/b/c/d', 'a/b/cdef', and similar;
+                        '--prefix a/b/c/'  - only matches objects from the virtual directory a/b/c/
+   --dry-run            preview the results without really running the action
+   --verbose, -v        verbose output
+   --non-verbose, --nv  non-verbose (quiet) output, minimized reporting
+   --help, -h           show help
+```
+
+Note usage examples above. You can always run `--help` option to see the most recently updated inline help.
 
 Once there is a request to access the bucket, or a request to change the bucket's properties (see `set bucket props` in [REST API](http_api.md)), then the AIS cluster starts keeping track of the bucket.
 
@@ -484,6 +537,10 @@ $ ais bucket evict aws://abc
 
 Note: When an HDFS bucket is evicted, AIS will only delete objects stored in the cluster. AIS will retain the bucket's metadata to allow the bucket to re-register later.
 This behavior can be applied to other remote buckets by using the `--keep-md` flag with `ais bucket evict`.
+
+### See also
+
+* [Operations on Lists and Ranges](/docs/cli/object.md#operations-on-lists-and-ranges)
 
 # Backend Bucket
 

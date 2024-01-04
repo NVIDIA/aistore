@@ -1,6 +1,6 @@
-## Validate Warm GET
+## Out-of-band updates
 
-One way to deal with out-of-band updates is to configure aistore bucket, as follows:
+One (but not the only one) way to deal with out-of-band updates is to configure bucket as follows:
 
 ```console
 $ ais bucket props set s3://abc versioning.validate_warm_get true
@@ -11,13 +11,52 @@ Here, `s3://abc` is presumably an Amazon S3 bucket, but it could be any Cloud or
 
 > It could also be any `ais://` bucket with Cloud or remote AIS backend. For usage,  see `backend_bck` option in CLI documentation and examples.
 
-Once `validate_warm_get` is set, any read operation on the bucket will take a bit of extra time to compare in-cluster and remote object metadata.
+Once `validate_warm_get` is set, **any read** operation on the bucket will take a bit of extra time to compare the in-cluster metadata with its remote counterpart.
 
-Further, if and when this comparison fails, aistore performs a _cold_ GET, to make sure that it has the latest version.
+Further, if and when this comparison fails, aistore performs a _cold_ GET, to create a new copy of the remote object and make sure that the cluster has the latest version.
 
 Needless to say, the latest version will be always returned to the user as well.
 
-## Out-of-band writes, deletes, and more...
+## Lesser scope
+
+But sometimes, we may want to perform a single given operation without updating bucket configuration. For instance:
+
+```console
+$ ais prefetch s3://abc --latest
+
+prefetch-objects[f70MKzP63]: prefetch entire bucket s3://abc. To monitor the progress, run 'ais show job f70MKzP63'
+```
+
+Notice the `--latest` switch above. As far as this particular `prefetch` is concerned `--latest` will have the same effect as setting `versioning.validate_warm_get=true`. But only "as far" - the scope of validating in-cluster versions will be limited to this specific batch job.
+
+The same applies to copying buckets, [copying ranges and lists of objects](/docs/cli/bucket.md#copy-multiple-objects), and certainly getting (as in `GET`) individual objects.
+
+Here's the an excerpt from `GET` help (and note `--latest` below):
+
+```console
+$ ais get --help
+
+USAGE:
+   ais get [command options] BUCKET[/OBJECT_NAME] [OUT_FILE|OUT_DIR|-]
+
+OPTIONS:
+   --offset value    object read offset; must be used together with '--length'; default formatting: IEC (use '--units' to override)
+   --length value    object read length; default formatting: IEC (use '--units' to override)
+   --checksum        validate checksum
+   --yes, -y         assume 'yes' to all questions
+   --check-cached    instead of GET execute HEAD(object) to check if the object is present in aistore
+                     (applies only to buckets with remote backend)
+   --latest          GET, prefetch, or copy the latest object version from the associated remote bucket;
+                     allows operation-level control over object version synchronization _without_ changing bucket configuration
+                     (the latter can be done using 'ais bucket props set BUCKET versioning')
+...
+```
+
+### See also
+
+* [`ais cp` command](/docs/cli/bucket.md) and, in particular, its `--sync` option.
+
+## Out-of-band writes, deletes, and more
 
 1. with version validation enabled, aistore will detect both out-of-band writes and deletes;
 2. buckets with versioning disabled are also supported;
