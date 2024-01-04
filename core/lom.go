@@ -35,8 +35,11 @@ const (
 	lomInitialVersion = "1"
 )
 
-// lcache stats
+// core stats
 const (
+	RemoteDeletedDelCount = "remote.deleted.del.n"
+
+	// lcache stats
 	LcacheCollisionCount = "lcache.collision.n"
 	LcacheEvictedCount   = "lcache.evicted.n"
 	LcacheFlushColdCount = "lcache.flush.cold.n"

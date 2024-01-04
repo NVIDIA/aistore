@@ -96,7 +96,9 @@ const (
 	GetSize = "get.size"
 	PutSize = "put.size"
 
-	// internal
+	// core
+	RemoteDeletedDelCount = core.RemoteDeletedDelCount // compare w/ common `DeleteCount`
+
 	LcacheCollisionCount = core.LcacheCollisionCount
 	LcacheEvictedCount   = core.LcacheEvictedCount
 	LcacheFlushColdCount = core.LcacheFlushColdCount
@@ -249,7 +251,8 @@ func (r *Trunner) RegMetrics(node *meta.Snode) {
 	r.reg(node, DsortExtractShardMemCnt, KindCounter)
 	r.reg(node, DsortExtractShardSize, KindSize)
 
-	// internal
+	// core
+	r.reg(node, RemoteDeletedDelCount, KindCounter)
 	r.reg(node, LcacheCollisionCount, KindCounter)
 	r.reg(node, LcacheEvictedCount, KindCounter)
 	r.reg(node, LcacheFlushColdCount, KindCounter)

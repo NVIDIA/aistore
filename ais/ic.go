@@ -262,6 +262,7 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	if err := nl.Err(); err != nil {
 		status.ErrMsg = err.Error()
 		if !nl.Aborted() {
+			// TODO -- FIXME: Silent (apc.QparamSilent)
 			ic.p.writeErrf(w, r, "%s: %v", nl.Name(), err)
 			return
 		}

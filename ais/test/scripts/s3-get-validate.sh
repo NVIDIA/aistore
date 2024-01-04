@@ -76,7 +76,7 @@ ais bucket props set $bucket versioning.validate_warm_get=true
 echo "6. query cold-get count (statistics)"
 cnt1=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{print sum;}')
 
-echo "7. warm GET: detect version change and trigger cold GET"
+echo "7. warm GET: detect version change and perform cold GET"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }

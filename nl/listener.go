@@ -48,15 +48,15 @@ type Listener interface {
 	String() string
 	GetOwner() string
 	SetOwner(string)
-	LastUpdated(si *meta.Snode) int64
+	LastUpdated(*meta.Snode) int64
 	ProgressInterval() time.Duration
 
 	// detailed ref-counting
 	ActiveNotifiers() meta.NodeMap
 	FinCount() int
 	ActiveCount() int
-	HasFinished(node *meta.Snode) bool
-	MarkFinished(node *meta.Snode)
+	HasFinished(*meta.Snode) bool
+	MarkFinished(*meta.Snode)
 	NodesTardy(periodicNotifTime time.Duration) (nodes meta.NodeMap, tardy bool)
 }
 
