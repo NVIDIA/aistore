@@ -184,6 +184,24 @@ var (
 		Action:       mvBucketHandler,
 		BashComplete: manyBucketsCompletions([]cli.BashCompleteFunc{}, 0, 2),
 	}
+	bucketCmdSetProps = cli.Command{
+		Name: cmdSetBprops,
+		Usage: "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
+			indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
+			indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
+			indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.sync_warm_get=true\n" +
+			indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
+			indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
+			indent1 + "\tReferences:\n" +
+			indent1 + "\t* for details and many more examples, see docs/cli/bucket.md\n" +
+			indent1 + "\t* to show bucket properties (names and current values), use 'ais bucket show'",
+		ArgsUsage: bucketPropsArgument,
+		Flags:     bucketCmdsFlags[cmdSetBprops],
+		Action:    setPropsHandler,
+		BashComplete: bucketCompletions(
+			bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
+		),
+	}
 
 	bucketCmd = cli.Command{
 		Name:  commandBucket,
@@ -218,16 +236,7 @@ var (
 				Usage:  "show, update or reset bucket properties",
 				Action: showBckPropsHandler,
 				Subcommands: []cli.Command{
-					{
-						Name:      cmdSetBprops,
-						Usage:     "update bucket properties",
-						ArgsUsage: bucketPropsArgument,
-						Flags:     bucketCmdsFlags[cmdSetBprops],
-						Action:    setPropsHandler,
-						BashComplete: bucketCompletions(
-							bcmplop{additionalCompletions: []cli.BashCompleteFunc{bpropCompletions}},
-						),
-					},
+					bucketCmdSetProps,
 					{
 						Name:      cmdResetBprops,
 						Usage:     "reset bucket properties",

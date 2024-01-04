@@ -474,20 +474,24 @@ var (
 	latestVersionFlag = cli.BoolFlag{
 		Name: "latest",
 		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
-			indent1 + "\tallows operation-level control without changing bucket configuration\n" +
-			indent1 + "\t(see also: 'ais bucket props ... versioning.validate_warm_get')",
+			indent1 + "\tallows operation-level control over object version synchronization _without_ changing bucket configuration\n" +
+			indent1 + "\t(the latter can be done using 'ais bucket props set BUCKET versioning')",
 	}
 
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
 
 	ignoreErrorFlag = cli.BoolFlag{
 		Name:  "ignore-error",
-		Usage: "ignore \"soft\" failures, such as \"bucket already exists\", etc.",
+		Usage: "ignore \"soft\" failures such as \"bucket already exists\", etc.",
 	}
 
 	bucketPropsFlag = cli.StringFlag{
-		Name:  "props",
-		Usage: "bucket properties, e.g. --props=\"mirror.enabled=true mirror.copies=4 checksum.type=md5\"",
+		Name: "props",
+		Usage: "create bucket with the specified (non-default) properties, e.g.:\n" +
+			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.sync_warm_get=true\"\n" +
+			indent1 + "\t* ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'\n" +
+			indent1 + "\t(tip: use '--props' to override properties that a new bucket inherits from cluster config at creation time;\n" +
+			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",
 	}
 
 	forceFlag = cli.BoolFlag{Name: "force,f", Usage: "force an action"}

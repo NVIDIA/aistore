@@ -79,6 +79,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled":           false,
 					"versioning.validate_warm_get": false,
+					"versioning.sync_warm_get":     false,
 
 					"checksum.type":              cos.ChecksumXXHash,
 					"checksum.validate_warm_get": false,
@@ -134,6 +135,7 @@ var _ = Describe("IterFields", func() {
 
 					"versioning.enabled":           (*bool)(nil),
 					"versioning.validate_warm_get": (*bool)(nil),
+					"versioning.sync_warm_get":     (*bool)(nil),
 
 					"checksum.type":              apc.String(cos.ChecksumXXHash),
 					"checksum.validate_warm_get": (*bool)(nil),
