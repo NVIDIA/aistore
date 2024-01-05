@@ -102,12 +102,12 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 		// AWS bucket may not yet exist in the BMD -
 		// get the region manually and recreate S3 client.
 		if region, err = getBucketLocation(svc, cloudBck.Name); err != nil {
-			errCode, err = awsErrorToAISError(err, cloudBck)
+			errCode, err = awsErrorToAISError(err, cloudBck, "")
 			return
 		}
 		// Create new svc with the region details.
 		if svc, _, err = newClient(sessConf{region: region}, ""); err != nil {
-			errCode, err = awsErrorToAISError(err, cloudBck)
+			errCode, err = awsErrorToAISError(err, cloudBck, "")
 			return
 		}
 	}
@@ -124,7 +124,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 	}
 	versioned, errV := getBucketVersioning(svc, cloudBck)
 	if errV != nil {
-		errCode, err = awsErrorToAISError(errV, cloudBck)
+		errCode, err = awsErrorToAISError(errV, cloudBck, "")
 		return
 	}
 	bckProps[apc.HdrBucketVerEnabled] = strconv.FormatBool(versioned)
@@ -170,7 +170,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		if verbose {
 			nlog.Infoln("list_objects", cloudBck.Name, err)
 		}
-		errCode, err = awsErrorToAISError(err, cloudBck)
+		errCode, err = awsErrorToAISError(err, cloudBck, "")
 		return
 	}
 
@@ -222,7 +222,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		verParams.Prefix = aws.String(entry.Name)
 		verResp, err := svc.ListObjectVersions(verParams)
 		if err != nil {
-			return awsErrorToAISError(err, cloudBck)
+			return awsErrorToAISError(err, cloudBck, "")
 		}
 		for _, vers := range verResp.Versions {
 			if latest := *(vers.IsLatest); !latest {
@@ -249,12 +249,12 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err error) {
 	svc, _, err := newClient(sessConf{}, "")
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS})
+		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
 		return
 	}
 	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS})
+		errCode, err = awsErrorToAISError(err, &cmn.Bck{Provider: apc.AWS}, "")
 		return
 	}
 
@@ -291,7 +291,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck)
+		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
 	oa = &cmn.ObjAttrs{}
@@ -372,7 +372,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.G
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck)
+		res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
 
@@ -444,7 +444,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err err
 		Metadata: md,
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck)
+		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		cos.Close(r)
 		return
 	}
@@ -485,7 +485,7 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		Key:    aws.String(lom.ObjName),
 	})
 	if err != nil {
-		errCode, err = awsErrorToAISError(err, cloudBck)
+		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
 	if superVerbose {
@@ -613,18 +613,18 @@ func getBucketLocation(svc *s3.S3, bckName string) (region string, err error) {
 	return
 }
 
-func awsErrorToAISError(awsError error, bck *cmn.Bck) (int, error) {
+func awsErrorToAISError(awsError error, bck *cmn.Bck, objName string) (int, error) {
 	reqErr, ok := awsError.(awserr.RequestFailure)
 	if !ok {
 		return http.StatusInternalServerError, _awsErr(awsError)
 	}
 	awsCode, status := reqErr.Code(), reqErr.StatusCode()
-	switch awsCode {
-	case s3.ErrCodeNoSuchBucket:
+	switch {
+	case awsCode == s3.ErrCodeNoSuchBucket:
 		return status, cmn.NewErrRemoteBckNotFound(bck)
-	case s3.ErrCodeNoSuchKey:
+	case awsCode == s3.ErrCodeNoSuchKey || (status == http.StatusNotFound && objName != ""):
 		debug.Assert(status == http.StatusNotFound, status) // expected
-		fallthrough
+		return status, errors.New("aws-error[NotFound: " + bck.Cname(objName) + "]")
 	default:
 		return status, _awsErr(awsError)
 	}

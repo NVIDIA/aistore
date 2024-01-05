@@ -385,8 +385,9 @@ func TestSameBucketName(t *testing.T) {
 	evictListID, err := api.EvictMultiObj(baseParams, bckRemote, files, "" /*template*/)
 	tassert.CheckFatal(t, err)
 	args := xact.ArgsMsg{ID: evictListID, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-	_, err = api.WaitForXactionIC(baseParams, &args)
-	tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
+	status, err := api.WaitForXactionIC(baseParams, &args)
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, status.ErrMsg != "", "expecting errors when not finding listed objects")
 
 	tlog.Logf("EvictRange\n")
 	evictRangeID, err := api.EvictMultiObj(baseParams, bckRemote, nil /*lst objnames*/, objRange)
@@ -412,7 +413,7 @@ func TestSameBucketName(t *testing.T) {
 	tassert.CheckFatal(t, err)
 
 	// Check that ais bucket has 2 objects
-	tlog.Logf("Validating ais bucket has %s and %s ...\n", fileName1, fileName2)
+	tlog.Logf("Validating that ais bucket contains %s and %s ...\n", fileName1, fileName2)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName1, apc.FltPresent, false /*silent*/)
 	tassert.CheckFatal(t, err)
 	_, err = api.HeadObject(baseParams, bckLocal, fileName2, apc.FltPresent, false /*silent*/)

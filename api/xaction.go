@@ -121,9 +121,9 @@ func GetOneXactionStatus(bp BaseParams, args *xact.ArgsMsg) (status *nl.Status, 
 }
 
 // same as above, except that it returns _all_ matching xactions
-func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg, force bool) (matching nl.StatusVec, err error) {
+func GetAllXactionStatus(bp BaseParams, args *xact.ArgsMsg) (matching nl.StatusVec, err error) {
 	q := url.Values{apc.QparamWhat: []string{apc.WhatAllXactStatus}}
-	if force {
+	if args.Force {
 		// (force just-in-time)
 		// for each args-selected xaction:
 		// check if any of the targets delayed updating the corresponding status,

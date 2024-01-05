@@ -584,12 +584,13 @@ func TestDownloadRemote(t *testing.T) {
 			xid, err = api.EvictMultiObj(baseParams, test.srcBck, expectedObjs, "" /*template*/)
 			tassert.CheckFatal(t, err)
 			args = xact.ArgsMsg{ID: xid, Kind: apc.ActEvictObjects, Timeout: tools.RebalanceTimeout}
-			_, err = api.WaitForXactionIC(baseParams, &args)
+			status, err := api.WaitForXactionIC(baseParams, &args)
+			tassert.CheckFatal(t, err)
 			if test.srcBck.Equal(&test.dstBck) {
 				tassert.CheckFatal(t, err)
 			} else {
 				// this time downloaded a different bucket - test.srcBck remained empty
-				tassert.Errorf(t, err != nil, "list iterator must produce not-found when not finding listed objects")
+				tassert.Errorf(t, status.ErrMsg != "", "expecting errors when when not finding listed objects")
 			}
 
 			tlog.Logln("starting remote download...")

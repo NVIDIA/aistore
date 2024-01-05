@@ -92,7 +92,9 @@ const (
 	// - implies remote backend
 	QparamLatestVer = "latest-ver"
 
-	QparamSync = "synchronize"
+	QparamSync = "synchronize" // TODO: in progress
+
+	QparamSilent = "sln" // when true., skip nlog.Error* (motivation: can be quite numerous and/or ignorable)
 )
 
 // QparamFltPresence enum.
@@ -142,7 +144,6 @@ const (
 	QparamNonElectable     = "nel" // true: proxy is non-electable for the primary role
 	QparamUnixTime         = "utm" // Unix time since 01/01/70 UTC (nanoseconds)
 	QparamIsGFNRequest     = "gfn" // true if the request is a Get-From-Neighbor
-	QparamSilent           = "sln" // true: skip nlog.Error* (motivation: can be quite, multiple, and/or ignorable)
 	QparamRebStatus        = "rbs" // true: get detailed rebalancing status
 	QparamRebData          = "rbd" // true: get EC rebalance data (pulling data if push way fails)
 	QparamClusterInfo      = "cii" // true: /Health to return cluster info and status

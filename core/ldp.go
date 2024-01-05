@@ -131,8 +131,9 @@ func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
 		errDel := lom.Remove(rlocked /*force through rlock*/)
 		if errDel != nil {
 			errCode, err = 0, errDel
+		} else {
+			g.tstats.Inc(RemoteDeletedDelCount)
 		}
-		g.tstats.Inc(RemoteDeletedDelCount)
 		return false, errCode, err
 	}
 

@@ -173,10 +173,11 @@ func (ic *ic) xstatusAll(w http.ResponseWriter, r *http.Request, query url.Value
 	if !msg.Bck.IsEmpty() {
 		flt.Bck = (*meta.Bck)(&msg.Bck)
 	}
-	nls := ic.p.notifs.findAll(flt)
 
-	var vec nl.StatusVec
-
+	var (
+		vec nl.StatusVec
+		nls = ic.p.notifs.findAll(flt)
+	)
 	if cos.IsParseBool(query.Get(apc.QparamForce)) {
 		// (force just-in-time)
 		// for each args-selected xaction:
@@ -261,11 +262,6 @@ func (ic *ic) xstatusOne(w http.ResponseWriter, r *http.Request) {
 	status := nl.Status()
 	if err := nl.Err(); err != nil {
 		status.ErrMsg = err.Error()
-		if !nl.Aborted() {
-			// TODO -- FIXME: Silent (apc.QparamSilent)
-			ic.p.writeErrf(w, r, "%s: %v", nl.Name(), err)
-			return
-		}
 	}
 	b := cos.MustMarshal(status) // TODO: include stats, e.g., progress when ready
 	w.Header().Set(cos.HdrContentLength, strconv.Itoa(len(b)))

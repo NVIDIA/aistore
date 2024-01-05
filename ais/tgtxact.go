@@ -112,12 +112,12 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
-		nlog.Infof("%s %s", msg.Action, xargs.String())
+		nlog.Infoln(msg.Action, xargs.String())
 	}
 	switch msg.Action {
 	case apc.ActXactStart:
 		debug.Assert(xact.IsValidKind(xargs.Kind), xargs.String())
-		if err := t.xstart(r, &xargs, bck); err != nil {
+		if err := t.xstart(&xargs, bck); err != nil {
 			t.writeErr(w, r, err)
 			return
 		}
@@ -169,7 +169,7 @@ func (t *target) xquery(w http.ResponseWriter, r *http.Request, what string, xac
 // PUT
 //
 
-func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) error {
+func (t *target) xstart(args *xact.ArgsMsg, bck *meta.Bck) error {
 	const erfmb = "global xaction %q does not require bucket (%s) - ignoring it and proceeding to start"
 	const erfmn = "xaction %q requires a bucket to start"
 
@@ -185,11 +185,9 @@ func (t *target) xstart(r *http.Request, args *xact.ArgsMsg, bck *meta.Bck) erro
 		if bck != nil {
 			nlog.Errorf(erfmb, args.Kind, bck)
 		}
-		q := r.URL.Query()
-		force := cos.IsParseBool(q.Get(apc.QparamForce)) // NOTE: the only 'force' use case so far
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
-		go t.runLRU(args.ID, wg, force, args.Buckets...)
+		go t.runLRU(args.ID, wg, args.Force, args.Buckets...)
 		wg.Wait()
 	case apc.ActStoreCleanup:
 		wg := &sync.WaitGroup{}
