@@ -112,7 +112,7 @@ remote:
 // NOTE:
 // - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
 // - caller must take wlock _or_ rlock
-// - may delete remotely deleted (non-existing) object and inc associated stats counter
+// - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
 func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
 	bck := lom.Bck()
 	if !bck.IsCloud() && !bck.IsRemoteAIS() {

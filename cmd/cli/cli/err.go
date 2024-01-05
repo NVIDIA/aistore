@@ -270,19 +270,13 @@ func objectNameArgNotExpected(c *cli.Context, objectName string) *errUsage {
 	return _errUsage(c, msg)
 }
 
-func _errUsage(c *cli.Context, msg string) (err *errUsage) {
-	err = &errUsage{
+func _errUsage(c *cli.Context, msg string) *errUsage {
+	return &errUsage{
 		context:      c,
 		message:      msg,
 		helpData:     c.Command,
-		helpTemplate: cli.CommandHelpTemplate,
+		helpTemplate: teb.UsageOnlyTmpl, // NOTE: `cli.CommandHelpTemplate` is often way too long
 	}
-	switch c.Command.Name {
-	// long list of options makes it difficult to see the actual error
-	case commandList, commandPut, commandCopy:
-		err.helpTemplate = teb.UsageOnlyTmpl
-	}
-	return
 }
 
 func mistypedFlag(extraArgs []string) error {

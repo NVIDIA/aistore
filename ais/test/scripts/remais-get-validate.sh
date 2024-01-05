@@ -2,8 +2,8 @@
 
 ## Prerequisites: #################################################################################
 # - aistore cluster
-# - remote aistore cluster (aka, "remais")
-# - remais bucket
+# - remote aistore cluster (a.k.a. "remais")
+# - optionally, remais bucket (the bucket will be created if doesn't exist)
 # - ais (CLI)
 #
 ## Example usage:
@@ -19,7 +19,7 @@ lorem='Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod t
 duis='Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Et harum quidem..'
 
 ## Command line options (and their respective defaults)
-bucket="s3://abc"
+bucket="ais://@remais/abc"
 
 ## constants
 sum1="xxhash[ad97df912d23103f]"
@@ -74,7 +74,7 @@ echo -e
 ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"
 echo -e
 
-echo "1. out-of-band PUT: first version"
+echo "1. out-of-band PUT: 1st version"
 echo $lorem | AIS_ENDPOINT=$rendpoint ais put - "$rbucket/lorem-duis" 1>/dev/null || exit $?
 
 echo "2. cold GET, and check"
@@ -116,14 +116,26 @@ cnt3=$(ais show performance counters --regex GET-COLD -H | awk '{sum+=$2;}END{pr
 echo "10. out-of-band DELETE"
 AIS_ENDPOINT=$rendpoint ais object rm "$rbucket/lorem-duis" 1>/dev/null || exit $?
 
-echo "11. update bucket props: disable validate-warm-get _and_ enable sync-warm-get"
-ais bucket props set $bucket versioning.validate_warm_get=false versioning.sync_warm_get=true
+echo "11. update bucket props: disable validate-warm-get; subsequent warm GET must still succeed"
+ais bucket props set $bucket versioning.validate_warm_get=false
 
-echo "12. warm GET must now trigger deletion"
+ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
+[[ $? == 0 ]] || { echo "FAIL: expecting warm GET to succeed, got $?"; exit 1; }
+
+echo "12. remember 'remote-deleted' counter and update bucket props: enable sync-warm-get"
+ais bucket props set $bucket versioning.sync_warm_get=true
+
+cnt4=$(ais show performance counters --regex DELETED -H | awk '{sum+=$2;}END{print sum;}')
+
+echo "13. this time, warm GET must trigger deletion, 'remote-deleted' must increment"
+
 ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
 [[ $? != 0 ]] || { echo "FAIL: expecting GET error, got $?"; exit 1; }
 ais ls "$bucket/lorem-duis" --cached --silent -H 2>/dev/null
 [[ $? != 0 ]] || { echo "FAIL: expecting 'show object' error, got $?"; exit 1; }
+
+cnt5=$(ais show performance counters --regex DELETED -H | awk '{sum+=$2;}END{print sum;}')
+[[ $cnt5 == $(($cnt4+1)) ]] || { echo "FAIL: $cnt5 != $(($cnt4+1))"; exit 1; }
 
 echo -e
 ais show performance counters --regex "(GET-COLD$|VERSION-CHANGE$|DELETE)"

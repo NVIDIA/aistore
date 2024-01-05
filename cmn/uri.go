@@ -45,6 +45,7 @@ func OrigURLBck2Name(origURLBck string) (bckName string) {
 }
 
 func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, err error) {
+	const fmtErrEmpty = "backend provider cannot be empty%s (did you mean \"ais://%s\"?)"
 	parts := strings.SplitN(uri, apc.BckProviderSeparator, 2)
 	if len(parts) > 1 && parts[0] != "" {
 		if bck.Provider, err = NormalizeProvider(parts[0]); err != nil {
@@ -62,8 +63,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if !opts.IsQuery && bck.Provider == "" {
-			return bck, "",
-				fmt.Errorf("provider cannot be empty when namespace is not (did you mean \"ais://%s\"?)", bck)
+			return bck, "", fmt.Errorf(fmtErrEmpty, " when namespace is not", bck)
 		}
 		if len(parts) == 1 {
 			if parts[0] == string(apc.NsUUIDPrefix) && opts.IsQuery {
@@ -87,7 +87,7 @@ func ParseBckObjectURI(uri string, opts ParseURIOpts) (bck Bck, objName string, 
 			return bck, "", err
 		}
 		if bck.Provider == "" {
-			return bck, "", fmt.Errorf("provider cannot be empty - did you mean: \"ais://%s\"?", bck)
+			return bck, "", fmt.Errorf(fmtErrEmpty, "", bck)
 		}
 	}
 	if len(parts) > 1 {
