@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -629,7 +629,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 	lom.SetAtimeUnix(started.UnixNano())
 	rc := io.NopCloser(objReader)
 
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = ct.WorkfileRecvShard
 		params.Reader = rc
@@ -638,7 +638,7 @@ func (m *Manager) recvShard(hdr *transport.ObjHdr, objReader io.Reader, err erro
 		params.Size = hdr.ObjAttrs.Size
 	}
 	erp := core.T.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	if erp != nil {
 		m.abort(err)
 		return erp

@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -47,7 +47,7 @@ func (*TargetMock) PageMM() *memsys.MMSA     { return memsys.PageMM() }
 func (*TargetMock) ByteMM() *memsys.MMSA     { return memsys.ByteMM() }
 
 func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)             {}
-func (*TargetMock) PutObject(*core.LOM, *core.PutObjectParams) error      { return nil }
+func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error            { return nil }
 func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact) (int, error) { return 0, nil }
 func (*TargetMock) EvictObject(*core.LOM) (int, error)                    { return 0, nil }
 func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)             { return 0, nil }
@@ -58,8 +58,7 @@ func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)             {}
 func (*TargetMock) FSHC(error, string)                                    {}
 func (*TargetMock) OOS(*fs.CapStatus) fs.CapStatus                        { return fs.CapStatus{} }
 
-func (*TargetMock) CopyObject(*core.LOM, core.DM, core.DP, core.Xact, *cmn.Config, *meta.Bck, string, []byte,
-	bool, bool) (int64, error) {
+func (*TargetMock) CopyObject(*core.LOM, core.DM, *core.CopyParams) (int64, error) {
 	return 0, nil
 }
 

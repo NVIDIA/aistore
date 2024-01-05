@@ -2,7 +2,7 @@
 
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -357,9 +357,9 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := allocPutObjParams(res, owt)
+	params := allocPutParams(res, owt)
 	err := ap.t.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	if superVerbose {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}

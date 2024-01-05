@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -15,7 +15,10 @@ var (
 	lom0    LOM
 
 	putObjPool sync.Pool
-	putObj0    PutObjectParams
+	putObj0    PutParams
+
+	coiPool sync.Pool
+	coi0    CopyParams
 )
 
 /////////////
@@ -40,18 +43,35 @@ func FreeLOM(lom *LOM) {
 }
 
 //
-// PutObjectParams pool
+// PutParams pool
 //
 
-func AllocPutObjParams() (a *PutObjectParams) {
+func AllocPutParams() (a *PutParams) {
 	if v := putObjPool.Get(); v != nil {
-		a = v.(*PutObjectParams)
+		a = v.(*PutParams)
 		return
 	}
-	return &PutObjectParams{}
+	return &PutParams{}
 }
 
-func FreePutObjParams(a *PutObjectParams) {
+func FreePutParams(a *PutParams) {
 	*a = putObj0
 	putObjPool.Put(a)
+}
+
+//
+// CopyParams pool
+//
+
+func AllocCOI() (a *CopyParams) {
+	if v := coiPool.Get(); v != nil {
+		a = v.(*CopyParams)
+		return
+	}
+	return &CopyParams{}
+}
+
+func FreeCOI(a *CopyParams) {
+	*a = coi0
+	coiPool.Put(a)
 }

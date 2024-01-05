@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -708,7 +708,7 @@ func (t *target) getObject(w http.ResponseWriter, r *http.Request, dpq *dpq, bck
 			mime:     dpq.archmime, // apc.QparamArchmime
 		}
 		goi.isGFN = cos.IsParseBool(dpq.isGFN)                 // query.Get(apc.QparamIsGFNRequest)
-		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer or versioning.validate_warm_get
+		goi.latestVer = goi.lom.ValidateWarmGet(dpq.latestVer) // apc.QparamLatestVer || versioning.*_warm_get
 	}
 	if bck.IsHTTP() {
 		originalURL := dpq.origURL // query.Get(apc.QparamOrigURL)
@@ -1322,20 +1322,19 @@ func (t *target) objMv(lom *core.LOM, msg *apc.ActMsg) (err error) {
 	}
 
 	buf, slab := t.gmm.Alloc()
-	coi := allocCOI()
+	coiParams := core.AllocCOI()
 	{
-		coi.bckTo = lom.Bck()
-		coi.objnameTo = msg.Name /* new object name */
-		coi.buf = buf
-		coi.t = t
-		coi.config = cmn.GCO.Get()
-		coi.owt = cmn.OwtMigrateRepl
-		coi.finalize = true
+		coiParams.BckTo = lom.Bck()
+		coiParams.ObjnameTo = msg.Name /* new object name */
+		coiParams.Buf = buf
+		coiParams.Config = cmn.GCO.Get()
+		coiParams.OWT = cmn.OwtMigrateRepl
+		coiParams.Finalize = true
 	}
-
-	_, err = coi.do(lom)
+	coi := (*copyOI)(coiParams)
+	_, err = coi.do(t, nil /*DM*/, lom)
+	core.FreeCOI(coiParams)
 	slab.Free(buf)
-	freeCOI(coi)
 	if err != nil {
 		return err
 	}

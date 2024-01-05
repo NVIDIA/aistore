@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -35,8 +35,8 @@ func calcPageSize(pageSize, maxPageSize uint) uint {
 //nolint:deadcode,unused // It is used but in `*_mock.go` files.
 func newErrInitBackend(provider string) error { return &cmn.ErrInitBackend{Provider: provider} }
 
-func allocPutObjParams(res core.GetReaderResult, owt cmn.OWT) *core.PutObjectParams {
-	params := core.AllocPutObjParams()
+func allocPutParams(res core.GetReaderResult, owt cmn.OWT) *core.PutParams {
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
 		params.Reader = res.R

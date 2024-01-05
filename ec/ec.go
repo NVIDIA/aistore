@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -398,7 +398,7 @@ func writeObject(lom *core.LOM, reader io.Reader, size int64, xctn core.Xact) er
 		reader = io.LimitReader(reader, size)
 	}
 	readCloser := io.NopCloser(reader)
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = "ec"
 		params.Reader = readCloser
@@ -410,7 +410,7 @@ func writeObject(lom *core.LOM, reader io.Reader, size int64, xctn core.Xact) er
 		params.OWT = cmn.OwtMigrateRepl
 	}
 	err := core.T.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	return err
 }
 

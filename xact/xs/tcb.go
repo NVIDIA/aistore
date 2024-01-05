@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -237,7 +237,19 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
-	_, err = core.T.CopyObject(lom, r.dm, args.DP, r, r.Config, args.BckTo, toName, buf, args.Msg.DryRun, r.syncRemote)
+	coiParams := core.AllocCOI()
+	{
+		coiParams.DP = args.DP
+		coiParams.Xact = r
+		coiParams.Config = r.Config
+		coiParams.BckTo = args.BckTo
+		coiParams.ObjnameTo = toName
+		coiParams.Buf = buf
+		coiParams.DryRun = args.Msg.DryRun
+		coiParams.SyncRemote = r.syncRemote
+	}
+	_, err = core.T.CopyObject(lom, r.dm, coiParams)
+	core.FreeCOI(coiParams)
 	if err != nil {
 		if cos.IsErrOOS(err) {
 			r.Abort(err)
@@ -279,7 +291,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 		return err
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
@@ -300,7 +312,7 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 	params.Atime = lom.Atime()
 
 	erp := core.T.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	if erp != nil {
 		r.AddErr(erp)
 		nlog.Errorln(erp)

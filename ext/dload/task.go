@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -144,7 +144,7 @@ func (task *singleTask) _dput(lom *core.LOM, req *http.Request, resp *http.Respo
 	size := attrsFromLink(task.obj.link, resp, lom)
 	task.setTotalSize(size)
 
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = "dl"
 		params.Reader = r
@@ -154,7 +154,7 @@ func (task *singleTask) _dput(lom *core.LOM, req *http.Request, resp *http.Respo
 		params.Xact = task.xdl
 	}
 	erp := core.T.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	if erp != nil {
 		return true, erp
 	}

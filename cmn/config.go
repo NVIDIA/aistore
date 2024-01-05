@@ -384,19 +384,23 @@ type (
 		// Determines if versioning is enabled
 		Enabled bool `json:"enabled"`
 
-		// Validate remote object version when reading its in-cluster ("cached") counterpart -
-		// scenarios including (but not limited to):
-		//   - warm GET
-		//   - prefetch bucket
-		//   - prefetch multiple objects (see api/apc/multiobj.go)
-		//   - copy object, copy bucket, and more
-		// Applies to Cloud and remote AIS buckets - generally, those backends that provide some form
-		// of object versioning
-		// See also: apc.QparamLatestVer
+		// Validate and, possibly, synchronize(*) remote object's version when reading its
+		// in-cluster ("cached") copy, scenarios including (but not limited to):
+		// - warm GET
+		// - prefetch bucket (**)
+		// - prefetch multiple objects (see api/multiobj.go)
+		// - copy bucket
+		// Applies to Cloud and remote AIS buckets - generally, buckets that have remote backends
+		// that in turn provide some form of object versioning
+		// (*)  Update in-cluster copy to the _latest_
+		// (**) Xactions (jobs) that read multiple objects (e.g., prefetch and copy-bucket)
+		//      provide their own, operation-level, option to syncronize in-cluster versions
+		//      (which doesn't require changing bucket configuration)
+		// See also:
+		// - apc.QparamLatestVer, "latest-ver"
 		ValidateWarmGet bool `json:"validate_warm_get"`
 
-		// A stronger variant of the above that entails both:
-		// - validating remote object version (as above), and
+		// A stronger variant of the above that in addition entails:
 		// - deleting in-cluster object if its remote ("cached") counterpart does not exist
 		// See also: apc.QparamSync
 		SyncWarmGet bool `json:"sync_warm_get"`

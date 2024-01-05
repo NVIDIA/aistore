@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -545,7 +545,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *core.LOM, owt cmn.OWT) (errCode 
 	if r, err = api.GetObjectReader(remAis.bp, remoteBck, lom.ObjName, nil /*api.GetArgs*/); err != nil {
 		return extractErrCode(err, remAis.uuid)
 	}
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = fs.WorkfileColdget
 		params.Reader = r
@@ -553,7 +553,7 @@ func (m *AISBackendProvider) GetObj(_ ctx, lom *core.LOM, owt cmn.OWT) (errCode 
 		params.Atime = time.Now()
 	}
 	err = m.t.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	return extractErrCode(err, remAis.uuid)
 }
 

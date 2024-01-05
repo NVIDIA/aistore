@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -44,7 +44,7 @@ type (
 		NodeMemCap
 
 		// local PUT
-		PutObject(lom *LOM, params *PutObjectParams) (err error)
+		PutObject(lom *LOM, params *PutParams) (err error)
 	}
 
 	// local target node
@@ -71,17 +71,15 @@ type (
 		EvictObject(lom *LOM) (errCode int, err error)
 		DeleteObject(lom *LOM, evict bool) (errCode int, err error)
 		GetCold(ctx context.Context, lom *LOM, owt cmn.OWT) (errCode int, err error)
+		CopyObject(lom *LOM, dm DM, coi *CopyParams) (int64, error)
 		Promote(params *PromoteParams) (errCode int, err error)
 		HeadObjT2T(lom *LOM, si *meta.Snode) bool
-
-		CopyObject(lom *LOM, dm DM, dp DP, xact Xact, config *cmn.Config, bckTo *meta.Bck, objnameTo string, buf []byte,
-			dryRun, syncRemote bool) (int64, error)
 
 		BMDVersionFixup(r *http.Request, bck ...cmn.Bck)
 	}
 )
 
-// data path: control structures and types
+// intra-cluster data path: control structures and types
 type (
 	OnFinishObj = func(lom *LOM, err error)
 
@@ -89,7 +87,7 @@ type (
 		Send(obj *transport.Obj, roc cos.ReadOpenCloser, tsi *meta.Snode) error
 	}
 
-	PutObjectParams struct {
+	PutParams struct {
 		Reader  io.ReadCloser
 		Cksum   *cos.Cksum // checksum to check
 		Atime   time.Time
@@ -106,5 +104,18 @@ type (
 		Config          *cmn.Config // during xaction
 		Xact            Xact        // responsible xaction
 		apc.PromoteArgs             // all of the above
+	}
+	CopyParams struct {
+		DP         DP // transform via: ext/etl/dp.go or core/ldp.go
+		Xact       Xact
+		Config     *cmn.Config
+		BckTo      *meta.Bck
+		ObjnameTo  string
+		Buf        []byte
+		OWT        cmn.OWT
+		Finalize   bool // copies and EC (as in poi.finalize())
+		DryRun     bool
+		SyncRemote bool // use instead of bucket's 'versioning.sync_warm_get'
+		LatestVer  bool // use instead of bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
 	}
 )

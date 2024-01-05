@@ -1,6 +1,6 @@
 // Package backend contains implementation of various backend providers.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package backend
 
@@ -148,9 +148,9 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) 
 	if res.Err != nil {
 		return res.ErrCode, res.Err
 	}
-	params := allocPutObjParams(res, owt)
+	params := allocPutParams(res, owt)
 	res.Err = hp.t.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 	if res.Err != nil {
 		return 0, res.Err
 	}

@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -287,7 +287,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 	go func() {
 		var err error
 		if !m.Pars.DryRun {
-			params := core.AllocPutObjParams()
+			params := core.AllocPutParams()
 			{
 				params.WorkTag = "dsort"
 				params.Cksum = nil
@@ -303,7 +303,7 @@ func (m *Manager) createShard(s *shard.Shard, lom *core.LOM) (err error) {
 				// TODO: add params.Size = (size resulting from shardRW.Create below)
 			}
 			err = core.T.PutObject(lom, params)
-			core.FreePutObjParams(params)
+			core.FreePutParams(params)
 		} else {
 			_, err = io.Copy(io.Discard, r)
 		}

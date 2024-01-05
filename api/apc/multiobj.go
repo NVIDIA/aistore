@@ -1,6 +1,6 @@
 // Package apc: API messages and constants
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package apc
 
@@ -15,7 +15,7 @@ type (
 	PrefetchMsg struct {
 		ListRange
 		ContinueOnError bool `json:"coer"`
-		LatestVer       bool `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.validate_warm_get'
+		LatestVer       bool `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.*_warm_get'
 	}
 
 	// ArchiveMsg contains the parameters (all except the destination bucket)
@@ -40,7 +40,7 @@ type (
 		ListRange
 		TxnUUID string `json:"-"`
 		TCBMsg
-		ContinueOnError bool `json:"coer"` // ditto; TODO above
+		ContinueOnError bool `json:"coer"`
 	}
 )
 

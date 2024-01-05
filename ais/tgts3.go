@@ -136,16 +136,18 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 		s3.WriteErr(w, r, err, errCode)
 		return
 	}
-	coi := allocCOI()
+
+	coiParams := core.AllocCOI()
 	{
-		coi.t = t
-		coi.config = config
-		coi.bckTo = bckTo
-		coi.objnameTo = s3.ObjName(items)
-		coi.owt = cmn.OwtMigrateRepl
+		coiParams.Config = config
+		coiParams.BckTo = bckTo
+		coiParams.ObjnameTo = s3.ObjName(items)
+		coiParams.OWT = cmn.OwtMigrateRepl
 	}
-	_, err = coi.do(lom)
-	freeCOI(coi)
+	coi := (*copyOI)(coiParams)
+	_, err = coi.do(t, nil /*DM*/, lom)
+	core.FreeCOI(coiParams)
+
 	if err != nil {
 		if err == cmn.ErrSkip {
 			name := lom.Cname()

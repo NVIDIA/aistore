@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -261,7 +261,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 		return
 	}
 	lom.CopyAttrs(&hdr.ObjAttrs, true /*skip cksum*/)
-	params := core.AllocPutObjParams()
+	params := core.AllocPutParams()
 	{
 		params.WorkTag = fs.WorkfilePut
 		params.Reader = io.NopCloser(objReader)
@@ -281,7 +281,7 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 	}
 	params.Atime = lom.Atime()
 	err = core.T.PutObject(lom, params)
-	core.FreePutObjParams(params)
+	core.FreePutParams(params)
 
 	if err != nil {
 		r.AddErr(err)
@@ -308,8 +308,20 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
 	// until after the transformation; here we are disregarding the size anyway as the stats
 	// are done elsewhere
-	_, err := core.T.CopyObject(lom, wi.r.p.dm, wi.r.args.DP, wi.r, wi.r.config, wi.r.args.BckTo, objNameTo, buf,
-		wi.msg.DryRun, syncRemote)
+
+	coiParams := core.AllocCOI()
+	{
+		coiParams.DP = wi.r.args.DP
+		coiParams.Xact = wi.r
+		coiParams.Config = wi.r.config
+		coiParams.BckTo = wi.r.args.BckTo
+		coiParams.ObjnameTo = objNameTo
+		coiParams.Buf = buf
+		coiParams.DryRun = wi.msg.DryRun
+		coiParams.SyncRemote = syncRemote
+	}
+	_, err := core.T.CopyObject(lom, wi.r.p.dm, coiParams)
+	core.FreeCOI(coiParams)
 	slab.Free(buf)
 
 	if err != nil {

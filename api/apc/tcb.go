@@ -14,10 +14,11 @@ import (
 // copy & (offline) transform bucket to bucket
 type (
 	CopyBckMsg struct {
-		Prepend string `json:"prepend"` // destination naming, as in: dest-obj-name = Prepend + source-obj-name
-		Prefix  string `json:"prefix"`  // prefix to select matching _source_ objects or virtual directories
-		DryRun  bool   `json:"dry_run"` // visit all source objects, don't make any modifications
-		Force   bool   `json:"force"`   // force running in presence of "limited coexistence" type conflicts
+		Prepend   string `json:"prepend"`    // destination naming, as in: dest-obj-name = Prepend + source-obj-name
+		Prefix    string `json:"prefix"`     // prefix to select matching _source_ objects or virtual directories
+		DryRun    bool   `json:"dry_run"`    // visit all source objects, don't make any modifications
+		Force     bool   `json:"force"`      // force running in presence of "limited coexistence" type conflicts
+		LatestVer bool   `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.*_warm_get'
 	}
 	Transform struct {
 		Name    string       `json:"id,omitempty"`

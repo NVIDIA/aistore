@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -80,7 +80,7 @@ type (
 		verchanged bool            // version changed
 		retry      bool            // once
 		cold       bool            // true if executed backend.Get
-		latestVer  bool            // see also: QparamLatestVer, 'versioning.validate_warm_get'
+		latestVer  bool            // QparamLatestVer || 'versioning.*_warm_get'
 	}
 
 	// textbook append: (packed) handle and control structure (see also `putA2I` arch below)
@@ -101,20 +101,8 @@ type (
 		size    int64         // Content-Length
 	}
 
-	copyOI struct {
-		dm         *bundle.DataMover
-		dp         core.DP // transform via: ext/etl/dp.go or core/ldp.go
-		xact       core.Xact
-		t          *target
-		config     *cmn.Config
-		bckTo      *meta.Bck
-		objnameTo  string
-		buf        []byte
-		owt        cmn.OWT
-		finalize   bool // copies and EC (as in poi.finalize())
-		dryRun     bool
-		syncRemote bool // as is: gs://abc => gs://abc
-	}
+	copyOI core.CopyParams
+
 	sendArgs struct {
 		reader    cos.ReadOpenCloser
 		dm        *bundle.DataMover
@@ -1298,37 +1286,37 @@ func (a *apndOI) pack(workFQN string) string {
 //
 
 // main method
-func (coi *copyOI) do(lom *core.LOM) (size int64, err error) {
-	if coi.dryRun {
-		return coi._dryRun(lom, coi.objnameTo)
+func (coi *copyOI) do(t *target, dm *bundle.DataMover, lom *core.LOM) (size int64, err error) {
+	if coi.DryRun {
+		return coi._dryRun(lom, coi.ObjnameTo)
 	}
 
 	// DP == nil: use default (no-op transform) if source bucket is remote
-	if coi.dp == nil && lom.Bck().IsRemote() {
-		coi.dp = &core.LDP{}
+	if coi.DP == nil && lom.Bck().IsRemote() {
+		coi.DP = &core.LDP{}
 	}
 
 	// 1: dst location
-	smap := coi.t.owner.smap.Get()
-	tsi, errN := smap.HrwName2T(coi.bckTo.MakeUname(coi.objnameTo))
+	smap := t.owner.smap.Get()
+	tsi, errN := smap.HrwName2T(coi.BckTo.MakeUname(coi.ObjnameTo))
 	if errN != nil {
 		return 0, errN
 	}
-	if tsi.ID() != coi.t.SID() {
-		return coi.send(lom, coi.objnameTo, tsi)
+	if tsi.ID() != t.SID() {
+		return coi.send(t, dm, lom, coi.ObjnameTo, tsi)
 	}
 
 	// dst is this target
 	// 2, 3: with transformation and without
-	dst := core.AllocLOM(coi.objnameTo)
-	if err := dst.InitBck(coi.bckTo.Bucket()); err != nil {
+	dst := core.AllocLOM(coi.ObjnameTo)
+	if err := dst.InitBck(coi.BckTo.Bucket()); err != nil {
 		core.FreeLOM(dst)
 		return 0, err
 	}
-	if coi.dp != nil {
-		size, err = coi._reader(lom, dst)
+	if coi.DP != nil {
+		size, err = coi._reader(t, dm, lom, dst)
 	} else {
-		size, err = coi._regular(lom, dst)
+		size, err = coi._regular(t, lom, dst)
 	}
 	core.FreeLOM(dst)
 
@@ -1336,8 +1324,8 @@ func (coi *copyOI) do(lom *core.LOM) (size int64, err error) {
 }
 
 func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err error) {
-	if coi.dp == nil {
-		if lom.Uname() != coi.bckTo.MakeUname(objnameTo) {
+	if coi.DP == nil {
+		if lom.Uname() != coi.BckTo.MakeUname(objnameTo) {
 			size = lom.SizeBytes()
 		}
 		return size, nil
@@ -1345,7 +1333,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 
 	// discard the reader and be done
 	var reader io.ReadCloser
-	if reader, _, err = coi.dp.Reader(lom, false); err != nil {
+	if reader, _, err = coi.DP.Reader(lom, false); err != nil {
 		if err == cmn.ErrSkip {
 			err = nil
 		}
@@ -1368,31 +1356,31 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 // - PUT to the relevant backend
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
-func (coi *copyOI) _reader(lom, dst *core.LOM) (size int64, _ error) {
-	reader, oah, errN := coi.dp.Reader(lom, false) // TODO -- FIXME: provide
+func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ error) {
+	reader, oah, errN := coi.DP.Reader(lom, false) // TODO -- FIXME: provide
 	if errN != nil {
 		return 0, errN
 	}
-	if lom.Bck().Equal(coi.bckTo, true, true) {
+	if lom.Bck().Equal(coi.BckTo, true, true) {
 		dst.SetVersion(oah.Version())
 	}
 
 	poi := allocPOI()
 	{
-		poi.t = coi.t
+		poi.t = t
 		poi.lom = dst
-		poi.config = coi.config
+		poi.config = coi.Config
 		poi.r = reader
-		poi.xctn = coi.xact // on behalf of
+		poi.xctn = coi.Xact // on behalf of
 		poi.workFQN = fs.CSM.Gen(dst, fs.WorkfileType, "copy-dp")
 		poi.atime = oah.AtimeUnix()
 		poi.cksumToUse = oah.Checksum()
 	}
 	switch {
-	case coi.syncRemote:
+	case coi.SyncRemote:
 		poi.owt = cmn.OwtSyncRemote
-	case coi.dm != nil:
-		poi.owt = coi.dm.OWT()
+	case dm != nil:
+		poi.owt = dm.OWT()
 	default:
 		poi.owt = cmn.OwtMigrateRepl
 	}
@@ -1405,7 +1393,7 @@ func (coi *copyOI) _reader(lom, dst *core.LOM) (size int64, _ error) {
 	return size, err
 }
 
-func (coi *copyOI) _regular(lom, dst *core.LOM) (size int64, _ error) {
+func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error) {
 	if lom.FQN == dst.FQN { // resilvering with a single mountpath?
 		return
 	}
@@ -1415,7 +1403,7 @@ func (coi *copyOI) _regular(lom, dst *core.LOM) (size int64, _ error) {
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
 		if !cmn.IsObjNotExist(err) {
-			err = cmn.NewErrFailedTo(coi.t, "coi-load", lom, err)
+			err = cmn.NewErrFailedTo(t, "coi-load", lom, err)
 		}
 		return 0, err
 	}
@@ -1432,11 +1420,11 @@ func (coi *copyOI) _regular(lom, dst *core.LOM) (size int64, _ error) {
 			return 0, err
 		}
 	}
-	dst2, err := lom.Copy2FQN(dst.FQN, coi.buf)
+	dst2, err := lom.Copy2FQN(dst.FQN, coi.Buf)
 	if err == nil {
 		size = lom.SizeBytes()
-		if coi.finalize {
-			coi.t.putMirror(dst2)
+		if coi.Finalize {
+			t.putMirror(dst2)
 		}
 	}
 	if dst2 != nil {
@@ -1448,35 +1436,35 @@ func (coi *copyOI) _regular(lom, dst *core.LOM) (size int64, _ error) {
 // send object => designated target
 // * source is a LOM or a reader (that may be reading from remote)
 // * one of the two equivalent transmission mechanisms: PUT or transport Send
-func (coi *copyOI) send(lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
-	debug.Assert(coi.owt > 0)
+func (coi *copyOI) send(t *target, dm *bundle.DataMover, lom *core.LOM, objNameTo string, tsi *meta.Snode) (size int64, err error) {
+	debug.Assert(coi.OWT > 0)
 	sargs := allocSnda()
 	{
 		sargs.objNameTo = objNameTo
 		sargs.tsi = tsi
-		sargs.dm = coi.dm
-		if coi.dm != nil {
-			sargs.owt = coi.dm.OWT() // takes precedence
+		sargs.dm = dm
+		if dm != nil {
+			sargs.owt = dm.OWT() // takes precedence
 		} else {
-			sargs.owt = coi.owt
+			sargs.owt = coi.OWT
 		}
 	}
-	size, err = coi._send(lom, sargs)
+	size, err = coi._send(t, lom, sargs)
 	freeSnda(sargs)
 	return
 }
 
-func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
-	debug.Assert(!coi.dryRun)
-	if coi.dm != nil {
+func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
+	debug.Assert(!coi.DryRun)
+	if sargs.dm != nil {
 		// clone the `lom` to use it in the async operation (free it via `_sendObjDM` callback)
 		lom = lom.CloneMD(lom.FQN)
 	}
 
 	switch {
-	case coi.owt == cmn.OwtPromote:
+	case coi.OWT == cmn.OwtPromote:
 		// 1. promote
-		debug.Assert(coi.dp == nil)
+		debug.Assert(coi.DP == nil)
 		debug.Assert(sargs.owt == cmn.OwtPromote)
 
 		fh, err := cos.NewFileHandle(lom.FQN)
@@ -1484,16 +1472,16 @@ func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 			if os.IsNotExist(err) {
 				return 0, nil
 			}
-			return 0, cmn.NewErrFailedTo(coi.t, "open", lom.FQN, err)
+			return 0, cmn.NewErrFailedTo(t, "open", lom.FQN, err)
 		}
 		fi, err := fh.Stat()
 		if err != nil {
 			fh.Close()
-			return 0, cmn.NewErrFailedTo(coi.t, "fstat", lom.FQN, err)
+			return 0, cmn.NewErrFailedTo(t, "fstat", lom.FQN, err)
 		}
 		size = fi.Size()
 		sargs.reader, sargs.objAttrs = fh, lom
-	case coi.dp == nil:
+	case coi.DP == nil:
 		// 2. migrate/replicate lom
 
 		lom.Lock(false)
@@ -1510,7 +1498,7 @@ func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 	default:
 		// 3. DP transform (possibly, no-op)
 		// If the object is not present call t.Backend.GetObjReader
-		reader, oah, err := coi.dp.Reader(lom, false) // TODO -- FIXME: provide
+		reader, oah, err := coi.DP.Reader(lom, false) // TODO -- FIXME: provide
 		if err != nil {
 			return
 		}
@@ -1521,11 +1509,11 @@ func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 
 	// do
 	var err error
-	sargs.bckTo = coi.bckTo
+	sargs.bckTo = coi.BckTo
 	if sargs.dm != nil {
 		err = coi._dm(lom /*for attrs*/, sargs)
 	} else {
-		err = coi.put(sargs)
+		err = coi.put(t, sargs)
 	}
 	return size, err
 }
@@ -1534,7 +1522,7 @@ func (coi *copyOI) _send(lom *core.LOM, sargs *sendArgs) (size int64, _ error) {
 // (compare with coi.put())
 func (coi *copyOI) _dm(lom *core.LOM, sargs *sendArgs) error {
 	debug.Assert(sargs.dm.OWT() == sargs.owt)
-	debug.Assert(sargs.dm.GetXact() == coi.xact || sargs.dm.GetXact().ID() == coi.xact.ID())
+	debug.Assert(sargs.dm.GetXact() == coi.Xact || sargs.dm.GetXact().ID() == coi.Xact.ID())
 	o := transport.AllocSend()
 	hdr, oa := &o.Hdr, sargs.objAttrs
 	{
@@ -1550,16 +1538,16 @@ func (coi *copyOI) _dm(lom *core.LOM, sargs *sendArgs) error {
 
 // PUT(lom) => destination target (compare with coi.dm())
 // always closes params.Reader, either explicitly or via Do()
-func (coi *copyOI) put(sargs *sendArgs) error {
+func (coi *copyOI) put(t *target, sargs *sendArgs) error {
 	var (
 		hdr   = make(http.Header, 8)
 		query = sargs.bckTo.NewQuery()
 	)
 	cmn.ToHeader(sargs.objAttrs, hdr)
-	hdr.Set(apc.HdrT2TPutterID, coi.t.SID())
+	hdr.Set(apc.HdrT2TPutterID, t.SID())
 	query.Set(apc.QparamOWT, sargs.owt.ToS())
-	if coi.xact != nil {
-		query.Set(apc.QparamUUID, coi.xact.ID())
+	if coi.Xact != nil {
+		query.Set(apc.QparamUUID, coi.Xact.ID())
 	}
 	reqArgs := cmn.HreqArgs{
 		Method: http.MethodPut,
@@ -1569,7 +1557,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 		Header: hdr,
 		BodyR:  sargs.reader,
 	}
-	req, _, cancel, err := reqArgs.ReqWithTimeout(coi.config.Timeout.SendFile.D())
+	req, _, cancel, err := reqArgs.ReqWithTimeout(coi.Config.Timeout.SendFile.D())
 	if err != nil {
 		cos.Close(sargs.reader)
 		return fmt.Errorf("unexpected failure to create request, err: %w", err)
@@ -1577,7 +1565,7 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 	defer cancel()
 	resp, err := g.client.data.Do(req)
 	if err != nil {
-		return cmn.NewErrFailedTo(coi.t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
+		return cmn.NewErrFailedTo(t, "coi.put "+sargs.bckTo.Name+"/"+sargs.objNameTo, sargs.tsi, err)
 	}
 	cos.DrainReader(resp.Body)
 	resp.Body.Close()
@@ -1585,8 +1573,8 @@ func (coi *copyOI) put(sargs *sendArgs) error {
 }
 
 func (coi *copyOI) stats(size int64, err error) {
-	if err == nil && coi.xact != nil {
-		coi.xact.ObjsAdd(1, size)
+	if err == nil && coi.Xact != nil {
+		coi.Xact.ObjsAdd(1, size)
 	}
 }
 
@@ -1779,11 +1767,10 @@ func (t *target) putMirror(lom *core.LOM) {
 //
 
 var (
-	goiPool, poiPool, coiPool, sndPool sync.Pool
+	goiPool, poiPool, sndPool sync.Pool
 
 	goi0 getOI
 	poi0 putOI
-	coi0 copyOI
 	snd0 sendArgs
 )
 
@@ -1811,19 +1798,6 @@ func allocPOI() (a *putOI) {
 func freePOI(a *putOI) {
 	*a = poi0
 	poiPool.Put(a)
-}
-
-func allocCOI() (a *copyOI) {
-	if v := coiPool.Get(); v != nil {
-		a = v.(*copyOI)
-		return
-	}
-	return &copyOI{}
-}
-
-func freeCOI(a *copyOI) {
-	*a = coi0
-	coiPool.Put(a)
 }
 
 func allocSnda() (a *sendArgs) {

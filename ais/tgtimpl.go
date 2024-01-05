@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -67,7 +67,7 @@ func (t *target) Backend(bck *meta.Bck) core.BackendProvider {
 	return c
 }
 
-func (t *target) PutObject(lom *core.LOM, params *core.PutObjectParams) error {
+func (t *target) PutObject(lom *core.LOM, params *core.PutParams) error {
 	debug.Assert(params.WorkTag != "" && !params.Atime.IsZero())
 	workFQN := fs.CSM.Gen(lom, fs.WorkfileType, params.WorkTag)
 	poi := allocPOI()
@@ -133,31 +133,20 @@ func (t *target) HeadObjT2T(lom *core.LOM, si *meta.Snode) bool {
 //     the AIS cluster (by performing a cold GET if need be).
 //   - if the dst is cloud, we perform a regular PUT logic thus also making sure that the new
 //     replica gets created in the cloud bucket of _this_ AIS cluster.
-func (t *target) CopyObject(lom *core.LOM, dm core.DM, dp core.DP, xact core.Xact, config *cmn.Config,
-	bckTo *meta.Bck, objnameTo string, buf []byte, dryRun, syncRemote bool) (size int64, err error) {
-	coi := allocCOI()
-	{
-		coi.dm = dm.(*bundle.DataMover) // TODO -- FIXME: opt-out typecast
-		coi.dp = dp
-		coi.xact = xact
-		coi.config = config
-		coi.bckTo = bckTo
-		coi.objnameTo = objnameTo
-		coi.buf = buf
-		coi.dryRun = dryRun
-		coi.syncRemote = syncRemote
-		// defaults
-		coi.t = t
-		coi.owt = cmn.OwtMigrateRepl
-		coi.finalize = false
+func (t *target) CopyObject(lom *core.LOM, dm core.DM, params *core.CopyParams) (size int64, err error) {
+	coi := (*copyOI)(params)
+	// defaults
+	coi.OWT = cmn.OwtMigrateRepl
+	coi.Finalize = false
+	if coi.ObjnameTo == "" {
+		coi.ObjnameTo = lom.ObjName
 	}
-	if coi.objnameTo == "" {
-		coi.objnameTo = lom.ObjName
-	}
+	realDM, ok := dm.(*bundle.DataMover) // TODO -- FIXME: eliminate typecast
+	debug.Assert(ok)
 
-	size, err = coi.do(lom)
+	size, err = coi.do(t, realDM, lom)
+
 	coi.stats(size, err)
-	freeCOI(coi)
 	return size, err
 }
 
@@ -336,16 +325,17 @@ func (t *target) _promRemote(params *core.PromoteParams, lom *core.LOM, tsi *met
 		return -1, nil
 	}
 
-	coi := allocCOI()
+	coiParams := core.AllocCOI()
 	{
-		coi.t = t
-		coi.bckTo = lom.Bck()
-		coi.owt = cmn.OwtPromote
-		coi.xact = params.Xact
-		coi.config = params.Config
+		coiParams.BckTo = lom.Bck()
+		coiParams.OWT = cmn.OwtPromote
+		coiParams.Xact = params.Xact
+		coiParams.Config = params.Config
 	}
-	size, err := coi.send(lom, lom.ObjName, tsi)
-	freeCOI(coi)
+	coi := (*copyOI)(coiParams)
+	size, err := coi.send(t, nil /*DM*/, lom, lom.ObjName, tsi)
+	core.FreeCOI(coiParams)
+
 	return size, err
 }
 
