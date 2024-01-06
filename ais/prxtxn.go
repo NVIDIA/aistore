@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -618,9 +618,10 @@ func (p *proxy) tcb(bckFrom, bckTo *meta.Bck, msg *apc.ActMsg, dryRun bool) (xid
 	// 4. IC
 	nl := xact.NewXactNL(c.uuid, msg.Action, &c.smap.Smap, nil, bckFrom.Bucket(), bckTo.Bucket())
 	nl.SetOwner(equalIC)
-	// cleanup upon failure via notification listener callback
-	// (note synchronous cleanup below)
-	r := &_rmbck{p, bckTo, existsTo}
+
+	// add abort-triggered cleanup via notifications
+	// (also, note immediate cleanup below on failure to commit)
+	r := &_tcbfin{p, bckTo, existsTo}
 	nl.F = r.cb
 	p.ic.registerEqual(regIC{nl: nl, smap: c.smap, query: c.req.Query})
 
@@ -1148,27 +1149,35 @@ func (p *proxy) initBackendProp(nprops *cmn.Bprops) (err error) {
 	return
 }
 
-////////////
-// _rmbck //
-////////////
+/////////////
+// _tcbfin //
+/////////////
 
-type _rmbck struct {
+type _tcbfin struct {
 	p       *proxy
 	bck     *meta.Bck
 	existed bool
 }
 
-// TODO: revisit other cleanup
-func (r *_rmbck) cb(nl nl.Listener) {
-	err := nl.Err()
-	if err == nil {
+// NOTE: _may_ remove newly created destination bucket
+func (r *_tcbfin) cb(nl nl.Listener) {
+	var (
+		err     = nl.Err()
+		aborted = nl.Aborted()
+	)
+	switch {
+	case err == nil:
+		debug.Assert(!aborted, nl.String())
 		return
-	}
-	if err != cmn.ErrXactUserAbort {
-		nlog.Errorln(err)
-	}
-	if r.existed {
+	case !aborted:
+		nlog.Infoln("Warning:", err)
 		return
+	default:
+		nlog.Warningln("abort:", err)
+		if r.existed {
+			return
+		}
 	}
+	// when (tcb aborted) and (did not exist prior)
 	_ = r.p.destroyBucket(&apc.ActMsg{Action: apc.ActDestroyBck}, r.bck)
 }

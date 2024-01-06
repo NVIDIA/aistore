@@ -69,8 +69,8 @@ func (nd *NotifDownloadListerner) QueryArgs() cmn.HreqArgs {
 // NotifDownloader
 //
 
-func (nd *NotifDownload) ToNotifMsg() core.NotifMsg {
-	msg := core.NotifMsg{UUID: nd.job.ID(), Kind: apc.ActDownload}
+func (nd *NotifDownload) ToNotifMsg(aborted bool) core.NotifMsg {
+	msg := core.NotifMsg{UUID: nd.job.ID(), Kind: apc.ActDownload, AbortedX: aborted}
 	stats, err := nd.job.ActiveStats()
 	if err != nil {
 		msg.ErrMsg = err.Error()

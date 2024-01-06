@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -192,12 +192,13 @@ func (j *baseDlJob) throttler() *throttler { return &j.throt }
 
 func (j *baseDlJob) cleanup() {
 	j.throttler().stop()
-	err := g.store.markFinished(j.ID())
+	err, aborted := g.store.markFinished(j.ID())
+	aborted = aborted || j.xdl.IsAborted() // TODO: assert equality
 	if err != nil {
-		nlog.Errorf("%s: %v", j, err)
+		nlog.Errorln(j.String()+":", err, aborted)
 	}
 	g.store.flush(j.ID())
-	nl.OnFinished(j.Notif(), err)
+	nl.OnFinished(j.Notif(), err, aborted)
 }
 
 //

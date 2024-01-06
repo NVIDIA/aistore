@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -260,10 +260,10 @@ func (xctn *Base) EndTime() time.Time {
 }
 
 // upon completion, all xactions optionally notify listener(s) and refresh local capacity stats
-func (xctn *Base) onFinished(err error) {
+func (xctn *Base) onFinished(err error, aborted bool) {
 	// notifications
 	if xctn.notif != nil {
-		nl.OnFinished(xctn.notif, err)
+		nl.OnFinished(xctn.notif, err, aborted)
 	}
 	xactRecord := Table[xctn.kind]
 	if xactRecord.RefreshCap {
@@ -306,7 +306,7 @@ func (xctn *Base) Finish() {
 			info = "(" + xctn.Err().Error() + ")"
 		}
 	}
-	xctn.onFinished(err)
+	xctn.onFinished(err, aborted)
 	// log
 	switch {
 	case xctn.Kind() == apc.ActList:
@@ -315,7 +315,7 @@ func (xctn *Base) Finish() {
 	case aborted:
 		nlog.Warningln(xctn.String(), "aborted:", err.Error(), info)
 	default:
-		nlog.Warningln(xctn.String(), "finished w/err:", err.Error())
+		nlog.Infoln("Warning:", xctn.String(), "finished w/err:", err.Error())
 	}
 }
 

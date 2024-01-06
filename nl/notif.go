@@ -1,6 +1,6 @@
 // Package notifications provides interfaces for AIStore notifications
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package nl
 
@@ -15,8 +15,8 @@ import (
 
 type (
 	Base struct {
-		F func(n core.Notif, err error) // notification callback
-		P func(n core.Notif)            // on progress notification callback
+		F func(n core.Notif, err error, aborted bool) // notification callback
+		P func(n core.Notif)                          // on progress notification callback
 
 		Dsts []string // node IDs to notify
 
@@ -31,12 +31,12 @@ type (
 // Base //
 //////////
 
-func (base *Base) OnFinishedCB() func(core.Notif, error) { return base.F }
-func (base *Base) OnProgressCB() func(core.Notif)        { return base.P }
-func (base *Base) Upon(u core.Upon) bool                 { return base != nil && base.When&u != 0 }
-func (base *Base) Subscribers() []string                 { return base.Dsts }
-func (base *Base) LastNotifTime() int64                  { return base.lastNotified.Load() }
-func (base *Base) SetLastNotified(now int64)             { base.lastNotified.Store(now) }
+func (base *Base) OnFinishedCB() func(core.Notif, error, bool /*aborted*/) { return base.F }
+func (base *Base) OnProgressCB() func(core.Notif)                          { return base.P }
+func (base *Base) Upon(u core.Upon) bool                                   { return base != nil && base.When&u != 0 }
+func (base *Base) Subscribers() []string                                   { return base.Dsts }
+func (base *Base) LastNotifTime() int64                                    { return base.lastNotified.Load() }
+func (base *Base) SetLastNotified(now int64)                               { base.lastNotified.Store(now) }
 func (base *Base) NotifyInterval() time.Duration {
 	if base.Interval == 0 {
 		return cmn.GCO.Get().Periodic.NotifTime.D()
@@ -63,11 +63,8 @@ func OnProgress(n core.Notif) {
 	}
 }
 
-func OnFinished(n core.Notif, err error) {
-	if n == nil {
-		return
-	}
+func OnFinished(n core.Notif, err error, aborted bool) {
 	if cb := n.OnFinishedCB(); cb != nil {
-		cb(n, err)
+		cb(n, err, aborted)
 	}
 }

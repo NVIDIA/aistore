@@ -5,7 +5,7 @@
 package core
 
 import (
-	"fmt"
+	"strings"
 	"time"
 )
 
@@ -34,30 +34,39 @@ type (
 
 	// intra-cluster notification interface
 	Notif interface {
-		OnFinishedCB() func(Notif, error)
+		OnFinishedCB() func(Notif, error, bool /*aborted*/)
 		OnProgressCB() func(Notif)
 		NotifyInterval() time.Duration // notify interval in secs
 		LastNotifTime() int64          // time last notified
 		SetLastNotified(now int64)
 		Upon(u Upon) bool
 		Subscribers() []string
-		ToNotifMsg() NotifMsg
+		ToNotifMsg(aborted bool) NotifMsg
 	}
-	// intra-cluster notification base
 
+	// intra-cluster notification message
 	NotifMsg struct {
-		UUID   string `json:"uuid"`    // xaction UUID
-		NodeID string `json:"node_id"` // notifier node ID
-		Kind   string `json:"kind"`    // xaction `Kind`
-		ErrMsg string `json:"err"`     // error.Error()
-		Data   []byte `json:"message"` // typed message
+		UUID     string `json:"uuid"`    // xaction UUID
+		NodeID   string `json:"node_id"` // notifier node ID
+		Kind     string `json:"kind"`    // xaction `Kind`
+		ErrMsg   string `json:"err"`     // error.Error()
+		Data     []byte `json:"message"` // (e.g. usage: custom progress stats)
+		AbortedX bool   `json:"aborted"` // true if aborted (see related: Snap.AbortedX)
 	}
 )
 
 func (msg *NotifMsg) String() (s string) {
-	s = fmt.Sprintf("nmsg-%s[%s]<=%s", msg.Kind, msg.UUID, msg.NodeID)
+	var sb strings.Builder
+	sb.WriteString("nmsg-")
+	sb.WriteString(msg.Kind)
+	sb.WriteByte('[')
+	sb.WriteString(msg.UUID)
+	sb.WriteByte(']')
+	sb.WriteString("<=")
+	sb.WriteString(msg.NodeID)
 	if msg.ErrMsg != "" {
-		s += ", err: " + msg.ErrMsg
+		sb.WriteString(", err: ")
+		sb.WriteString(msg.ErrMsg)
 	}
-	return
+	return sb.String()
 }

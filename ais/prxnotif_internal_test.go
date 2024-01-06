@@ -1,12 +1,11 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -122,10 +121,11 @@ var _ = Describe("Notifications xaction test", func() {
 			return
 		}
 
-		notifRequest = func(daeID, xid, notifKind string, stats any) *http.Request {
+		notifRequest = func(daeID, xid, notifKind string, stats *core.Snap) *http.Request {
 			nm := core.NotifMsg{
-				UUID: xid,
-				Data: cos.MustMarshal(stats),
+				UUID:     xid,
+				Data:     cos.MustMarshal(stats),
+				AbortedX: stats.AbortedX,
 			}
 			body := bytes.NewBuffer(cos.MustMarshal(nm))
 			req := httptest.NewRequest(http.MethodPost, apc.URLPathNotifs.Join(notifKind), body)
@@ -161,8 +161,8 @@ var _ = Describe("Notifications xaction test", func() {
 		It("should add node to finished set on receiving finished stats", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			snap := finishedXact(xid)
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
-			Expect(err).To(BeNil())
+			msg := &core.NotifMsg{Data: cos.MustMarshal(snap)}
+			n._finished(nl, targets[target1ID], msg)
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 			Expect(nl.Finished()).To(BeFalse())
 		})
@@ -170,10 +170,9 @@ var _ = Describe("Notifications xaction test", func() {
 		It("should set error when source sends an error message", func() {
 			Expect(nl.Err()).To(BeNil())
 			snap := finishedXact(xid)
-			srcErr := errors.New("some error")
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), srcErr)
-			Expect(err).To(BeNil())
-			Expect(srcErr.Error()).To(BeEquivalentTo(nl.Err().Error()))
+			msg := &core.NotifMsg{Data: cos.MustMarshal(snap), ErrMsg: "some error"}
+			n._finished(nl, targets[target1ID], msg)
+			Expect(msg.ErrMsg).To(BeEquivalentTo(nl.Err().Error()))
 			Expect(nl.ActiveNotifiers().Contains(target1ID)).To(BeFalse())
 		})
 
@@ -181,17 +180,17 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(nl.FinCount()).To(BeEquivalentTo(0))
 			n.add(nl)
 			snap := finishedXact(xid)
-			n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
-			err := n.handleFinished(nl, targets[target2ID], cos.MustMarshal(snap), nil)
-			Expect(err).To(BeNil())
+			msg := &core.NotifMsg{Data: cos.MustMarshal(snap)}
+			n._finished(nl, targets[target1ID], msg)
+			n._finished(nl, targets[target2ID], msg)
 			Expect(nl.FinCount()).To(BeEquivalentTo(len(targets)))
 			Expect(nl.Finished()).To(BeTrue())
 		})
 
 		It("should be done if xaction Aborted", func() {
 			snap := abortedXact(xid)
-			err := n.handleFinished(nl, targets[target1ID], cos.MustMarshal(snap), nil)
-			Expect(err).To(BeNil())
+			msg := &core.NotifMsg{Data: cos.MustMarshal(snap), AbortedX: snap.AbortedX}
+			n._finished(nl, targets[target1ID], msg)
 			Expect(nl.Aborted()).To(BeTrue())
 			Expect(nl.Err()).NotTo(BeNil())
 		})
@@ -208,8 +207,10 @@ var _ = Describe("Notifications xaction test", func() {
 			statsProgress := baseXact(xid, updatedObjCount, updatedByteCount)
 
 			// Handle fist set of stats
-			err := n.handleProgress(nl, targets[target1ID], cos.MustMarshal(statsFirst), nil)
-			Expect(err).To(BeNil())
+			msg := &core.NotifMsg{Data: cos.MustMarshal(statsFirst)}
+			nl.Lock()
+			n._progress(nl, targets[target1ID], msg)
+			nl.Unlock()
 			val, _ := nl.NodeStats().Load(target1ID)
 			snap, ok := val.(*core.Snap)
 			Expect(ok).To(BeTrue())
@@ -217,8 +218,8 @@ var _ = Describe("Notifications xaction test", func() {
 			Expect(snap.Stats.Bytes).To(BeEquivalentTo(initByteCount))
 
 			// Next a Finished notification with stats
-			err = n.handleFinished(nl, targets[target1ID], cos.MustMarshal(statsProgress), nil)
-			Expect(err).To(BeNil())
+			msg = &core.NotifMsg{Data: cos.MustMarshal(statsProgress)}
+			n._finished(nl, targets[target1ID], msg)
 			val, _ = nl.NodeStats().Load(target1ID)
 			snap, ok = val.(*core.Snap)
 			Expect(ok).To(BeTrue())

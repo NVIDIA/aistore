@@ -1,6 +1,6 @@
 // Package xact provides core functionality for the AIStore eXtended Actions (xactions).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xact
 
@@ -34,6 +34,10 @@ var (
 	_ nl.Listener = (*NotifXactListener)(nil)
 )
 
+///////////////////////
+// NotifXactListener //
+///////////////////////
+
 func NewXactNL(uuid, kind string, smap *meta.Smap, srcs meta.NodeMap, bck ...*cmn.Bck) *NotifXactListener {
 	if srcs == nil {
 		srcs = smap.Tmap.ActiveMap()
@@ -66,10 +70,15 @@ func (nxb *NotifXactListener) QueryArgs() cmn.HreqArgs {
 	return args
 }
 
-func (nx *NotifXact) ToNotifMsg() core.NotifMsg {
+///////////////
+// NotifXact //
+///////////////
+
+func (nx *NotifXact) ToNotifMsg(aborted bool) core.NotifMsg {
 	return core.NotifMsg{
-		UUID: nx.Xact.ID(),
-		Kind: nx.Xact.Kind(),
-		Data: cos.MustMarshal(nx.Xact.Snap()),
+		UUID:     nx.Xact.ID(),
+		Kind:     nx.Xact.Kind(),
+		Data:     cos.MustMarshal(nx.Xact.Snap()),
+		AbortedX: aborted,
 	}
 }

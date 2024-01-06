@@ -1,9 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
-//
-// This file contains common constants and global variables
-// (including all command-line options aka flags).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -16,6 +13,8 @@ import (
 	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/urfave/cli"
 )
+
+// Contains common constants and global variables (including all command-line options aka flags).
 
 // top-level commands (categories - nouns)
 const (
@@ -590,7 +589,7 @@ var (
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
 		Usage: "synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source;\n" +
-			indent1 + "\tthe option is a stronger variant of the '--latest' (option) that in addition entails\n" +
+			indent1 + "\tthe option is a stronger variant of the '--latest' (option) - in addition it entails\n" +
 			indent1 + "\tremoving of the objects that no longer exist remotely\n" +
 			indent1 + "\t(see also: 'ais show bucket versioning' and the corresponding documentation)",
 	}

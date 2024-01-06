@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -665,14 +665,16 @@ func (h *htrun) call(args *callArgs, smap *smapX) (res *callResult) {
 // intra-cluster IPC, control plane: notify another node
 //
 
-func (h *htrun) notifyTerm(n core.Notif, err error) { h._nfy(n, err, apc.Finished) }
-func (h *htrun) notifyProgress(n core.Notif)        { h._nfy(n, nil, apc.Progress) }
+func (h *htrun) notifyTerm(n core.Notif, err error, aborted bool) {
+	h._nfy(n, err, apc.Finished, aborted)
+}
+func (h *htrun) notifyProgress(n core.Notif) { h._nfy(n, nil, apc.Progress, false) }
 
-func (h *htrun) _nfy(n core.Notif, err error, upon string) {
+func (h *htrun) _nfy(n core.Notif, err error, upon string, aborted bool) {
 	var (
 		smap  = h.owner.smap.get()
 		dsts  = n.Subscribers()
-		msg   = n.ToNotifMsg()
+		msg   = n.ToNotifMsg(aborted)
 		args  = allocBcArgs()
 		nodes = args.selected
 	)
@@ -695,6 +697,7 @@ func (h *htrun) _nfy(n core.Notif, err error, upon string) {
 	}
 	if err != nil {
 		msg.ErrMsg = err.Error()
+		msg.AbortedX = aborted
 	}
 	msg.NodeID = h.si.ID()
 	if len(nodes) == 0 {

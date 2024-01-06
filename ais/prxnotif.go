@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -101,7 +101,6 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	var (
 		notifMsg = &core.NotifMsg{}
 		nl       nl.Listener
-		errMsg   error
 		uuid     string
 		tid      = r.Header.Get(apc.HdrCallerID) // sender node ID
 	)
@@ -152,57 +151,52 @@ func (n *notifs) handler(w http.ResponseWriter, r *http.Request) {
 	}
 	nl.RUnlock()
 
-	if notifMsg.ErrMsg != "" {
-		errMsg = errors.New(notifMsg.ErrMsg)
-	}
-
-	// NOTE: Default case is not required - will reach here only for valid types.
 	switch apiItems[0] {
-	// TODO: implement on Started notification
 	case apc.Progress:
-		err = n.handleProgress(nl, tsi, notifMsg.Data, errMsg)
+		nl.Lock()
+		n._progress(nl, tsi, notifMsg)
+		nl.Unlock()
 	case apc.Finished:
-		err = n.handleFinished(nl, tsi, notifMsg.Data, errMsg)
-	}
-
-	if err != nil {
-		n.p.writeErr(w, r, err)
-	}
+		n._finished(nl, tsi, notifMsg)
+	} // default not needed - cannot happen
 }
 
-func (*notifs) handleProgress(nl nl.Listener, tsi *meta.Snode, data []byte, srcErr error) (err error) {
-	nl.Lock()
-	defer nl.Unlock()
-
-	if srcErr != nil {
-		nl.AddErr(srcErr)
+func (*notifs) _progress(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) {
+	if msg.ErrMsg != "" {
+		nl.AddErr(errors.New(msg.ErrMsg))
 	}
-	if data != nil {
-		stats, _, _, err := nl.UnmarshalStats(data)
+	// when defined, `data must be valid encoded stats
+	if msg.Data != nil {
+		stats, _, _, err := nl.UnmarshalStats(msg.Data)
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
 	}
-	return
 }
 
-func (n *notifs) handleFinished(nl nl.Listener, tsi *meta.Snode, data []byte, srcErr error) (err error) {
+func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) {
 	var (
-		stats   any
-		aborted bool
+		srcErr  error
+		done    bool
+		aborted = msg.AbortedX
 	)
 	nl.Lock()
-	// data can either be `nil` or a valid encoded stats
-	if data != nil {
-		stats, _, aborted, err = nl.UnmarshalStats(data)
+	if msg.Data != nil {
+		// ditto
+		stats, _, abortedSnap, err := nl.UnmarshalStats(msg.Data)
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
+		debug.Assertf(abortedSnap == msg.AbortedX, "%s: %t vs %t [%s]", msg, abortedSnap, msg.AbortedX, nl.String())
+		aborted = aborted || abortedSnap
 	}
-	done := n.markFinished(nl, tsi, srcErr, aborted)
+	if msg.ErrMsg != "" {
+		srcErr = errors.New(msg.ErrMsg)
+	}
+	done = n.markFinished(nl, tsi, srcErr, aborted)
 	nl.Unlock()
+
 	if done {
 		n.done(nl)
 	}
-	return
 }
 
 // start listening
