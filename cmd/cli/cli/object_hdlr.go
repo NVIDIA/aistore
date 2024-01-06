@@ -38,7 +38,7 @@ var (
 			cksumFlag,
 			yesFlag,
 			headObjPresentFlag,
-			latestVersionFlag,
+			latestVerFlag,
 			refreshFlag,
 			progressFlag,
 			// archive

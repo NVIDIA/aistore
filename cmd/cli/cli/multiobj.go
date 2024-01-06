@@ -423,7 +423,7 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		{
 			msg.ObjNames = fileList
 			msg.Template = lr.tmplObjs
-			msg.LatestVer = flagIsSet(c, latestVersionFlag)
+			msg.LatestVer = flagIsSet(c, latestVerFlag)
 		}
 		xid, err = api.Prefetch(apiBP, lr.bck, msg)
 		kind = apc.ActPrefetchObjects

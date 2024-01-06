@@ -471,13 +471,6 @@ var (
 		Usage: "server-side flag, an indication for aistore _not_ to log assorted errors (e.g., HEAD(object) failures)",
 	}
 
-	latestVersionFlag = cli.BoolFlag{
-		Name: "latest",
-		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
-			indent1 + "\tallows operation-level control over object version synchronization _without_ changing bucket configuration\n" +
-			indent1 + "\t(the latter can be done using 'ais bucket props set BUCKET versioning')",
-	}
-
 	averageSizeFlag = cli.BoolFlag{Name: "average-size", Usage: "show average GET, PUT, etc. request size"}
 
 	ignoreErrorFlag = cli.BoolFlag{
@@ -587,10 +580,19 @@ var (
 	}
 
 	// sync
+	latestVerFlag = cli.BoolFlag{
+		Name: "latest",
+		Usage: "GET, prefetch, or copy the latest object version from the associated remote bucket;\n" +
+			indent1 + "\tprovides operation-level control over object versioning (and version synchronization)\n" +
+			indent1 + "\t_without_ requiring to change bucket configuration\n" +
+			indent1 + "\t(the latter can be done using 'ais bucket props set BUCKET versioning')",
+	}
 	syncFlag = cli.BoolFlag{
 		Name: "sync",
-		Usage: "synchronize destination bucket with its remote (e.g., Cloud) source;\n" +
-			indent4 + "\tin particular, the option may entail removing of the objects that no longer exist remotely",
+		Usage: "synchronize destination bucket with its remote (e.g., Cloud or remote AIS) source;\n" +
+			indent1 + "\tthe option is a stronger variant of the '--latest' (option) that in addition entails\n" +
+			indent1 + "\tremoving of the objects that no longer exist remotely\n" +
+			indent1 + "\t(see also: 'ais show bucket versioning' and the corresponding documentation)",
 	}
 
 	// dsort

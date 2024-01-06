@@ -105,7 +105,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lriterator) {
 			return // nothing to do
 		}
 		var eq bool
-		if eq, errCode, err = lom.CheckRemoteMD(true /*rlocked*/); eq {
+		if eq, errCode, err = lom.CheckRemoteMD(true /*rlocked*/, false /*synchronize*/); eq {
 			lom.Unlock(false)
 			return // nothing to do
 		}

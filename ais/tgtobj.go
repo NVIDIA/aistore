@@ -551,7 +551,7 @@ do:
 			goto fin
 		}
 	} else if goi.latestVer { // apc.QparamLatestVer or 'versioning.validate_warm_get'
-		eq, errCodeSync, errSync := goi.lom.CheckRemoteMD(true /* rlocked */)
+		eq, errCodeSync, errSync := goi.lom.CheckRemoteMD(true /* rlocked */, false /*synchronize*/)
 		if errSync != nil {
 			return errCodeSync, errSync
 		}
@@ -1333,7 +1333,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 
 	// discard the reader and be done
 	var reader io.ReadCloser
-	if reader, _, err = coi.DP.Reader(lom, false); err != nil {
+	if reader, _, err = coi.DP.Reader(lom, false, false); err != nil {
 		if err == cmn.ErrSkip {
 			err = nil
 		}
@@ -1357,7 +1357,7 @@ func (coi *copyOI) _dryRun(lom *core.LOM, objnameTo string) (size int64, err err
 // An option for _not_ storing the object _in_ the cluster would be a _feature_ that can be
 // further debated.
 func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) (size int64, _ error) {
-	reader, oah, errN := coi.DP.Reader(lom, false) // TODO -- FIXME: provide
+	reader, oah, errN := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 	if errN != nil {
 		return 0, errN
 	}
@@ -1377,7 +1377,7 @@ func (coi *copyOI) _reader(t *target, dm *bundle.DataMover, lom, dst *core.LOM) 
 		poi.cksumToUse = oah.Checksum()
 	}
 	switch {
-	case coi.SyncRemote:
+	case coi.Sync:
 		poi.owt = cmn.OwtSyncRemote
 	case dm != nil:
 		poi.owt = dm.OWT()
@@ -1498,7 +1498,7 @@ func (coi *copyOI) _send(t *target, lom *core.LOM, sargs *sendArgs) (size int64,
 	default:
 		// 3. DP transform (possibly, no-op)
 		// If the object is not present call t.Backend.GetObjReader
-		reader, oah, err := coi.DP.Reader(lom, false) // TODO -- FIXME: provide
+		reader, oah, err := coi.DP.Reader(lom, coi.LatestVer, coi.Sync)
 		if err != nil {
 			return
 		}

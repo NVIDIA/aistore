@@ -40,14 +40,14 @@ func NewOfflineDP(msg *apc.TCBMsg, config *cmn.Config) (*OfflineDP, error) {
 }
 
 // Returns reader resulting from lom ETL transformation.
-// TODO: comm.OfflineTransform to support latestVer
-func (dp *OfflineDP) Reader(lom *core.LOM, latestVer bool) (cos.ReadOpenCloser, cos.OAH, error) {
+// TODO -- FIXME: comm.OfflineTransform to support latestVer and sync
+func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
 	var (
 		r      cos.ReadCloseSizer // note: +sizer
 		err    error
 		action = "read [" + dp.tcbmsg.Transform.Name + "]-transformed " + lom.Cname()
 	)
-	debug.Assert(!latestVer, "NIY")
+	debug.Assert(!latestVer && !sync, "NIY") // TODO -- FIXME
 	call := func() (int, error) {
 		r, err = dp.comm.OfflineTransform(lom.Bck(), lom.ObjName, dp.requestTimeout)
 		return 0, err

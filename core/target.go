@@ -106,16 +106,16 @@ type (
 		apc.PromoteArgs             // all of the above
 	}
 	CopyParams struct {
-		DP         DP // transform via: ext/etl/dp.go or core/ldp.go
-		Xact       Xact
-		Config     *cmn.Config
-		BckTo      *meta.Bck
-		ObjnameTo  string
-		Buf        []byte
-		OWT        cmn.OWT
-		Finalize   bool // copies and EC (as in poi.finalize())
-		DryRun     bool
-		SyncRemote bool // use instead of bucket's 'versioning.synchronize'
-		LatestVer  bool // use instead of bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
+		DP        DP // transform via: ext/etl/dp.go or core/ldp.go
+		Xact      Xact
+		Config    *cmn.Config
+		BckTo     *meta.Bck
+		ObjnameTo string
+		Buf       []byte
+		OWT       cmn.OWT
+		Finalize  bool // copies and EC (as in poi.finalize())
+		DryRun    bool
+		LatestVer bool // can be used without changing bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
+		Sync      bool // ditto -  bucket's 'versioning.synchronize'
 	}
 )

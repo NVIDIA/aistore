@@ -57,6 +57,7 @@ var (
 			refreshFlag,
 			waitFlag,
 			waitJobXactFinishedFlag,
+			latestVerFlag,
 			syncFlag,
 		},
 		commandRename: {

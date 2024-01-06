@@ -51,13 +51,8 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if flagIsSet(c, syncFlag) {
-		if bckTo.IsEmpty() {
-			bckTo = bckFrom
-		} else if !bckTo.Equal(&bckFrom) {
-			return fmt.Errorf("invalid %s usage: the option implies that %s argument is either omitted or be the same as %s",
-				qflprn(syncFlag), bucketDstArgument, bucketSrcArgument)
-		}
+	if flagIsSet(c, syncFlag) && bckTo.IsEmpty() {
+		bckTo = bckFrom
 	}
 
 	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
@@ -154,10 +149,12 @@ func copyBucket(c *cli.Context, bckFrom, bckTo cmn.Bck, allIncludingRemote bool)
 	}
 	// copy: with/wo progress/wait
 	msg := &apc.CopyBckMsg{
-		Prepend: parseStrFlag(c, copyPrependFlag),
-		Prefix:  parseStrFlag(c, verbObjPrefixFlag),
-		DryRun:  flagIsSet(c, copyDryRunFlag),
-		Force:   flagIsSet(c, forceFlag),
+		Prepend:   parseStrFlag(c, copyPrependFlag),
+		Prefix:    parseStrFlag(c, verbObjPrefixFlag),
+		DryRun:    flagIsSet(c, copyDryRunFlag),
+		Force:     flagIsSet(c, forceFlag),
+		LatestVer: flagIsSet(c, latestVerFlag),
+		Sync:      flagIsSet(c, syncFlag),
 	}
 
 	// by default, copying objects in the cluster, with an option to override
@@ -236,10 +233,12 @@ func etlBucket(c *cli.Context, etlName string, bckFrom, bckTo cmn.Bck, allInclud
 	msg := &apc.TCBMsg{
 		Transform: apc.Transform{Name: etlName},
 		CopyBckMsg: apc.CopyBckMsg{
-			Prepend: parseStrFlag(c, copyPrependFlag),
-			Prefix:  parseStrFlag(c, verbObjPrefixFlag),
-			DryRun:  flagIsSet(c, copyDryRunFlag),
-			Force:   flagIsSet(c, forceFlag),
+			Prepend:   parseStrFlag(c, copyPrependFlag),
+			Prefix:    parseStrFlag(c, verbObjPrefixFlag),
+			DryRun:    flagIsSet(c, copyDryRunFlag),
+			Force:     flagIsSet(c, forceFlag),
+			LatestVer: flagIsSet(c, latestVerFlag),
+			Sync:      flagIsSet(c, syncFlag),
 		},
 	}
 	if flagIsSet(c, etlExtFlag) {

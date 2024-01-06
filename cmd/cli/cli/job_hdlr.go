@@ -81,7 +81,7 @@ var (
 			listRangeProgressWaitFlags,
 			dryRunFlag,
 			verbObjPrefixFlag, // to disambiguate bucket/prefix vs bucket/objName
-			latestVersionFlag,
+			latestVerFlag,
 		),
 		cmdLRU: {
 			lruBucketsFlag,

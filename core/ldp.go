@@ -21,7 +21,7 @@ const ldpact = ".LDP.Reader"
 type (
 	// data provider
 	DP interface {
-		Reader(lom *LOM, latestVer bool) (reader cos.ReadOpenCloser, oah cos.OAH, err error)
+		Reader(lom *LOM, latestVer, sync bool) (reader cos.ReadOpenCloser, oah cos.OAH, err error)
 	}
 
 	LDP struct{}
@@ -54,13 +54,13 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 
 // compare with ext/etl/dp.go
 // returns ErrSkip if not found (to favor streaming callers)
-func (*LDP) Reader(lom *LOM, latestVer bool) (cos.ReadOpenCloser, cos.OAH, error) {
+func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
 	lom.Lock(false)
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
 	if loadErr == nil {
 		if latestVer {
 			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String()) // caller's responsibility
-			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/)
+			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/, sync)
 			if err != nil {
 				lom.Unlock(false)
 				if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
@@ -113,7 +113,7 @@ remote:
 // - [PRECONDITION]: `versioning.validate_warm_get` || QparamLatestVer
 // - caller must take wlock _or_ rlock
 // - [MAY] delete remotely-deleted (non-existing) object and increment associated stats counter
-func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
+func (lom *LOM) CheckRemoteMD(rlocked, sync bool) (bool, int, error) {
 	bck := lom.Bck()
 	if !bck.IsCloud() && !bck.IsRemoteAIS() {
 		// nothing to do with: in-cluster ais:// bucket, or a remote one
@@ -127,7 +127,7 @@ func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
 		return lom.Equal(oa), errCode, nil
 	}
 
-	if errCode == http.StatusNotFound && lom.VersionConf().Sync {
+	if errCode == http.StatusNotFound && (lom.VersionConf().Sync || sync) {
 		errDel := lom.Remove(rlocked /*force through rlock*/)
 		if errDel != nil {
 			errCode, err = 0, errDel

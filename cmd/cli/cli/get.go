@@ -48,12 +48,12 @@ func getHandler(c *cli.Context) error {
 	if flagIsSet(c, lengthFlag) != flagIsSet(c, offsetFlag) {
 		return fmt.Errorf("%s and %s must be both present (or not)", qflprn(lengthFlag), qflprn(offsetFlag))
 	}
-	if flagIsSet(c, latestVersionFlag) {
+	if flagIsSet(c, latestVerFlag) {
 		if flagIsSet(c, headObjPresentFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(latestVersionFlag), qflprn(headObjPresentFlag))
+			return fmt.Errorf(errFmtExclusive, qflprn(latestVerFlag), qflprn(headObjPresentFlag))
 		}
 		if flagIsSet(c, getObjCachedFlag) {
-			return fmt.Errorf(errFmtExclusive, qflprn(latestVersionFlag), qflprn(getObjCachedFlag))
+			return fmt.Errorf(errFmtExclusive, qflprn(latestVerFlag), qflprn(getObjCachedFlag))
 		}
 	}
 
@@ -68,10 +68,10 @@ func getHandler(c *cli.Context) error {
 			return err
 		}
 	}
-	if flagIsSet(c, latestVersionFlag) && !bck.IsCloud() && !bck.IsRemoteAIS() {
+	if flagIsSet(c, latestVerFlag) && !bck.IsCloud() && !bck.IsRemoteAIS() {
 		return fmt.Errorf("option %s is incompatible with the specified bucket %s\n"+
 			"(tip: can only GET latest object's version from a bucket with Cloud or remote AIS backend)",
-			qflprn(latestVersionFlag), bck.String())
+			qflprn(latestVerFlag), bck.String())
 	}
 
 	// destination (empty "" implies using source `basename`)
@@ -420,7 +420,7 @@ func getObject(c *cli.Context, bck cmn.Bck, objName, archpath, outFile string, q
 	}
 
 	// finally, http query
-	if bck.IsHTTP() || archpath != "" || flagIsSet(c, silentFlag) || flagIsSet(c, latestVersionFlag) {
+	if bck.IsHTTP() || archpath != "" || flagIsSet(c, silentFlag) || flagIsSet(c, latestVerFlag) {
 		getArgs.Query = _getQparams(c, &bck, archpath)
 	}
 
@@ -506,7 +506,7 @@ func _getQparams(c *cli.Context, bck *cmn.Bck, archpath string) (q url.Values) {
 	if flagIsSet(c, silentFlag) {
 		q.Set(apc.QparamSilent, "true")
 	}
-	if flagIsSet(c, latestVersionFlag) {
+	if flagIsSet(c, latestVerFlag) {
 		q.Set(apc.QparamLatestVer, "true")
 	}
 	return q

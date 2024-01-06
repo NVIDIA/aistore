@@ -41,9 +41,8 @@ type (
 		dm     *bundle.DataMover
 		rxlast atomic.Int64 // finishing
 		xact.BckJog
-		wg         sync.WaitGroup // starting up
-		refc       atomic.Int32   // finishing
-		syncRemote bool           // when BckFrom = BckTo
+		wg   sync.WaitGroup // starting up
+		refc atomic.Int32   // finishing
 	}
 )
 
@@ -73,12 +72,6 @@ func (p *tcbFactory) Start() error {
 	)
 	debug.AssertNoErr(err)
 	p.xctn = newTCB(p, slab, config)
-
-	// sync same-name remote
-	p.xctn.syncRemote = p.kind != apc.ActETLBck &&
-		p.args.Msg.CopyBckMsg.Prepend == "" &&
-		p.args.BckFrom.IsRemote() &&
-		p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 
 	// refcount OpcTxnDone; this target must ve active (ref: ignoreMaintenance)
 	smap := core.T.Sowner().Get()
@@ -246,7 +239,8 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 		coiParams.ObjnameTo = toName
 		coiParams.Buf = buf
 		coiParams.DryRun = args.Msg.DryRun
-		coiParams.SyncRemote = r.syncRemote
+		coiParams.LatestVer = args.Msg.LatestVer
+		coiParams.Sync = args.Msg.Sync
 	}
 	_, err = core.T.CopyObject(lom, r.dm, coiParams)
 	core.FreeCOI(coiParams)
@@ -332,22 +326,22 @@ func (r *XactTCB) _str() (s string) {
 	if msg.Prepend != "" {
 		s = ", prepend " + r.p.args.Msg.Prepend
 	}
+	if msg.LatestVer {
+		s = ", latest-ver"
+	}
+	if msg.Sync {
+		s = ", synchronize"
+	}
 	return s
 }
 
 func (r *XactTCB) String() string {
 	s := r._str()
-	if r.syncRemote {
-		return fmt.Sprintf("%s%s sync-remote", r.Base.String(), s)
-	}
 	return fmt.Sprintf("%s <= %s%s", r.Base.String(), r.p.args.BckFrom.String(), s)
 }
 
 func (r *XactTCB) Name() string {
 	s := r._str()
-	if r.syncRemote {
-		return fmt.Sprintf("%s%s sync-remote", r.Base.Name(), s)
-	}
 	return fmt.Sprintf("%s <= %s%s", r.Base.Name(), r.p.args.BckFrom.String(), s)
 }
 

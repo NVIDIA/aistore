@@ -43,7 +43,6 @@ type (
 		workCh   chan *cmn.TCObjsMsg
 		chanFull atomic.Int64
 		streamingX
-		syncRemote bool
 	}
 	tcowi struct {
 		r   *XactTCObjs
@@ -92,9 +91,6 @@ func (p *tcoFactory) Start() error {
 		// unlike apc.ActCopyObjects (where we know the size)
 		// apc.ActETLObjects (transform) generates arbitrary sizes where we use PDU-based transport
 		sizePDU = memsys.DefaultBufSize
-	} else {
-		// sync same-name remote
-		r.syncRemote = p.args.BckFrom.Equal(p.args.BckTo, true /*same BID*/, true /*same backend*/)
 	}
 	if err := p.newDM(p.Args.UUID /*trname*/, r.recv, r.config, sizePDU); err != nil {
 		return err
@@ -300,9 +296,8 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 
 func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 	var (
-		objNameTo  = wi.msg.ToName(lom.ObjName)
-		buf, slab  = core.T.PageMM().Alloc()
-		syncRemote = wi.r.syncRemote && wi.msg.Prepend == ""
+		objNameTo = wi.msg.ToName(lom.ObjName)
+		buf, slab = core.T.PageMM().Alloc()
 	)
 
 	// under ETL, the returned sizes of transformed objects are unknown (`cos.ContentLengthUnknown`)
@@ -318,7 +313,8 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 		coiParams.ObjnameTo = objNameTo
 		coiParams.Buf = buf
 		coiParams.DryRun = wi.msg.DryRun
-		coiParams.SyncRemote = syncRemote
+		coiParams.LatestVer = wi.msg.LatestVer
+		coiParams.Sync = wi.msg.Sync
 	}
 	_, err := core.T.CopyObject(lom, wi.r.p.dm, coiParams)
 	core.FreeCOI(coiParams)
