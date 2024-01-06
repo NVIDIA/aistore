@@ -203,10 +203,10 @@ func (d *dispatcher) dispatchDownload(job jobif) (ok bool) {
 	diffResolver := NewDiffResolver(&defaultDiffResolverCtx{})
 	go diffResolver.Start()
 
-	// In case of `!job.Sync()` we don't want to traverse the whole bucket.
-	// We just want to download requested objects so we know exactly which
-	// objects must be checked (compared) and which not. Therefore, only traverse
-	// bucket when we need to sync the objects.
+	// In case of `!job.Sync()` we don't want to traverse entire bucket.
+	// We just want to download requested objects and to find out which
+	// objects must be checked (latest version-wise). Therefore, "walk"
+	// bucket only when we need to sync the objects.
 	if job.Sync() {
 		go diffResolver.walk(job)
 	}

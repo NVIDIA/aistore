@@ -115,7 +115,7 @@ type (
 		OWT        cmn.OWT
 		Finalize   bool // copies and EC (as in poi.finalize())
 		DryRun     bool
-		SyncRemote bool // use instead of bucket's 'versioning.sync_warm_get'
+		SyncRemote bool // use instead of bucket's 'versioning.synchronize'
 		LatestVer  bool // use instead of bucket's 'versioning.validate_warm_get'; see also: QparamLatestVer
 	}
 )

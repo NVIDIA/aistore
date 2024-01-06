@@ -488,7 +488,7 @@ var (
 	bucketPropsFlag = cli.StringFlag{
 		Name: "props",
 		Usage: "create bucket with the specified (non-default) properties, e.g.:\n" +
-			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.sync_warm_get=true\"\n" +
+			indent1 + "\t* ais create ais://mmm --props=\"versioning.validate_warm_get=false versioning.synchronize=true\"\n" +
 			indent1 + "\t* ais create ais://nnn --props='mirror.enabled=true mirror.copies=4 checksum.type=md5'\n" +
 			indent1 + "\t(tip: use '--props' to override properties that a new bucket inherits from cluster config at creation time;\n" +
 			indent1 + "\t see also: 'ais bucket props show' and 'ais bucket props set')",

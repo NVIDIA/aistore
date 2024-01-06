@@ -79,7 +79,7 @@ $ ais bucket props show BUCKET versioning
 PROPERTY                         VALUE
 versioning.enabled               ...
 versioning.validate_warm_get     true
-versioning.sync_warm_get         false
+versioning.synchronize           false
 ```
 
 No assumption is being made on whether any of the above is present (except, of course, the size aka "Content-Length").
@@ -113,10 +113,10 @@ $ ais bucket props show BUCKET versioning
 PROPERTY                         VALUE
 versioning.enabled               ...
 versioning.validate_warm_get     true
-versioning.sync_warm_get         false  ## <<<<<<<<<<<<<<<< note!
+versioning.synchronize           false  ## <<<<<<<<<<<<<<<< note!
 ```
 
-The knob called `versioning.sync_warm_get` is simply a stronger variant of the `versioning.validate_warm_get`;
+The knob called `versioning.synchronize` is simply a stronger variant of the `versioning.validate_warm_get`;
 that entails both:
 
 1. validating remote object version, and
@@ -124,7 +124,7 @@ that entails both:
 
 To recap:
 
-if an attempt to read remote metadata returns "object not found", and `versioning.sync_warm_get` is set to `true`, then
+if an attempt to read remote metadata returns "object not found", and `versioning.synchronize` is set to `true`, then
 we go ahead and delete the object locally, thus effectively _synchronizing_ in-cluster content with it's remote source.
 
 ## GET latest version

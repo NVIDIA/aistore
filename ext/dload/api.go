@@ -112,7 +112,7 @@ type (
 		Base
 		Prefix string `json:"prefix"`
 		Suffix string `json:"suffix"`
-		Sync   bool   `json:"sync"`
+		Sync   bool   `json:"synchronize"`
 	}
 
 	SingleBody struct {

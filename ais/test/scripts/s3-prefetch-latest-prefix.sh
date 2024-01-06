@@ -35,13 +35,13 @@ done
 ais show bucket $bucket -c 1>/dev/null || exit $?
 
 ## remember existing bucket's versioning; disable if need be
-sync=$(ais bucket props show ${bucket} versioning.sync_warm_get -H | awk '{print $2}')
-[[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false
+sync=$(ais bucket props show ${bucket} versioning.synchronize -H | awk '{print $2}')
+[[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.synchronize=false
 
 cleanup() {
   rc=$?
   ais object rm "$bucket/lorem-duis" 1>/dev/null 2>&1
-  [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false 1>/dev/null 2>&1
+  [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.synchronize=false 1>/dev/null 2>&1
   exit $rc
 }
 
@@ -95,9 +95,9 @@ ais prefetch "$bucket/lorem-duis" --wait
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-echo "11. remember 'remote-deleted' counter and update bucket props: set sync-warm-get = true"
+echo "11. remember 'remote-deleted' counter and enable version synchronization"
 cnt4=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{print sum;}')
-ais bucket props set $bucket versioning.sync_warm_get=true
+ais bucket props set $bucket versioning.synchronize=true
 
 echo "12. run 'prefetch --latest' one last time, and make sure the object \"disappears\""
 ais prefetch "$bucket/lorem-duis" --latest --wait 2>/dev/null

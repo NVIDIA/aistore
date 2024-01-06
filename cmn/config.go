@@ -384,31 +384,30 @@ type (
 		// Determines if versioning is enabled
 		Enabled bool `json:"enabled"`
 
-		// Validate and, possibly, synchronize(*) remote object's version when reading its
-		// in-cluster ("cached") copy, scenarios including (but not limited to):
+		// Validate remote version and, possibly, update in-cluster ("cached") copy.
+		// Scenarios include (but are not limited to):
 		// - warm GET
-		// - prefetch bucket (**)
+		// - prefetch bucket (*)
 		// - prefetch multiple objects (see api/multiobj.go)
 		// - copy bucket
 		// Applies to Cloud and remote AIS buckets - generally, buckets that have remote backends
-		// that in turn provide some form of object versioning
-		// (*)  Update in-cluster copy to the _latest_
-		// (**) Xactions (jobs) that read multiple objects (e.g., prefetch and copy-bucket)
-		//      provide their own, operation-level, option to syncronize in-cluster versions
-		//      (which doesn't require changing bucket configuration)
+		// that in turn provide some form of object versioning.
+		// (*) Xactions (ie., jobs) that read-access multiple objects (e.g., prefetch, copy-bucket)
+		// may support operation-scope option to synchronize remote content (to aistore) - the option
+		// not requiring changing bucket configuration.
 		// See also:
-		// - apc.QparamLatestVer, "latest-ver"
+		// - apc.QparamLatestVer, apc.PrefetchMsg, apc.CopyBckMsg
 		ValidateWarmGet bool `json:"validate_warm_get"`
 
 		// A stronger variant of the above that in addition entails:
 		// - deleting in-cluster object if its remote ("cached") counterpart does not exist
-		// See also: apc.QparamSync
-		SyncWarmGet bool `json:"sync_warm_get"`
+		// See also: apc.QparamSync, apc.CopyBckMsg
+		Sync bool `json:"synchronize"`
 	}
 	VersionConfToSet struct {
 		Enabled         *bool `json:"enabled,omitempty"`
 		ValidateWarmGet *bool `json:"validate_warm_get,omitempty"`
-		SyncWarmGet     *bool `json:"sync_warm_get,omitempty"`
+		Sync            *bool `json:"synchronize,omitempty"`
 	}
 
 	NetConf struct {

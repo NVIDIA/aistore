@@ -56,14 +56,14 @@ ais show bucket $bucket --add 1>/dev/null || exit 1
 ## remember existing bucket 'validate_warm_get' setting; disable if need be
 validate=$(ais bucket props show ${bucket} versioning.validate_warm_get -H | awk '{print $2}')
 [[ "$validate" == "false"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false
-sync=$(ais bucket props show ${bucket} versioning.sync_warm_get -H | awk '{print $2}')
-[[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false
+sync=$(ais bucket props show ${bucket} versioning.synchronize -H | awk '{print $2}')
+[[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.synchronize=false
 
 cleanup() {
   rc=$?
   ais object rm "$bucket/lorem-duis" 1>/dev/null 2>&1
   [[ "$validate" == "true"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false 1>/dev/null 2>&1
-  [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.sync_warm_get=false 1>/dev/null 2>&1
+  [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.synchronize=false 1>/dev/null 2>&1
   [[ "$exists" == "true" ]] || ais rmb $bucket -y 1>/dev/null 2>&1
   exit $rc
 }
@@ -122,8 +122,8 @@ ais bucket props set $bucket versioning.validate_warm_get=false
 ais get "$bucket/lorem-duis" /dev/null --silent 1>/dev/null 2>&1
 [[ $? == 0 ]] || { echo "FAIL: expecting warm GET to succeed, got $?"; exit 1; }
 
-echo "12. remember 'remote-deleted' counter and update bucket props: enable sync-warm-get"
-ais bucket props set $bucket versioning.sync_warm_get=true
+echo "12. remember 'remote-deleted' counter and enable version synchronization"
+ais bucket props set $bucket versioning.synchronize=true
 
 cnt4=$(ais show performance counters --regex DELETED -H | awk '{sum+=$2;}END{print sum;}')
 

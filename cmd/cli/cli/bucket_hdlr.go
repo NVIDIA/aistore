@@ -189,7 +189,7 @@ var (
 		Usage: "update bucket properties; the command accepts both JSON-formatted input and plain Name=Value pairs, e.g.:\n" +
 			indent1 + "\t* ais bucket props set ais://nnn backend_bck=s3://mmm\n" +
 			indent1 + "\t* ais bucket props set ais://nnn backend_bck=none\n" +
-			indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.sync_warm_get=true\n" +
+			indent1 + "\t* ais bucket props set gs://vvv versioning.validate_warm_get=false versioning.synchronize=true\n" +
 			indent1 + "\t* ais bucket props set gs://vvv mirror.enabled=true mirror.copies=4 checksum.type=md5\n" +
 			indent1 + "\t* ais bucket props set s3://mmm ec.enabled true ec.data_slices 6 ec.parity_slices 4 --force\n" +
 			indent1 + "\tReferences:\n" +

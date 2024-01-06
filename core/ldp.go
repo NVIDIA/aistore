@@ -127,7 +127,7 @@ func (lom *LOM) CheckRemoteMD(rlocked bool) (bool, int, error) {
 		return lom.Equal(oa), errCode, nil
 	}
 
-	if errCode == http.StatusNotFound && lom.VersionConf().SyncWarmGet {
+	if errCode == http.StatusNotFound && lom.VersionConf().Sync {
 		errDel := lom.Remove(rlocked /*force through rlock*/)
 		if errDel != nil {
 			errCode, err = 0, errDel

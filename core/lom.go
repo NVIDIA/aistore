@@ -143,7 +143,7 @@ func (lom *LOM) ValidateWarmGet(qparam string /*apc.QparamLatestVer*/) bool {
 	case !lom.Bck().IsCloud() && !lom.Bck().IsRemoteAIS():
 		return false
 	case qparam == "":
-		return lom.VersionConf().ValidateWarmGet || lom.VersionConf().SyncWarmGet // bucket prop
+		return lom.VersionConf().ValidateWarmGet || lom.VersionConf().Sync // bucket prop
 	case qparam == "true":
 		return true
 	default:

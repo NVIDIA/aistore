@@ -4,8 +4,6 @@
  */
 package apc
 
-// TODO: ContinueOnError vs. cmn.SupportedReactions - unify
-
 type (
 	// List of object names _or_ a template specifying { optional Prefix, zero or more Ranges }
 	ListRange struct {
@@ -15,7 +13,7 @@ type (
 	PrefetchMsg struct {
 		ListRange
 		ContinueOnError bool `json:"coer"`
-		LatestVer       bool `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.*_warm_get'
+		LatestVer       bool `json:"latest-ver"` // see also: QparamLatestVer, 'versioning.validate_warm_get'
 	}
 
 	// ArchiveMsg contains the parameters (all except the destination bucket)
