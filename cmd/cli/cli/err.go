@@ -147,7 +147,7 @@ func commandNotFoundError(c *cli.Context, cmd string) *errUsage {
 		context:       c,
 		message:       msg,
 		helpData:      c.App,
-		helpTemplate:  teb.ShortUsageTmpl,
+		helpTemplate:  teb.ExtendedUsageTmpl,
 		bottomMessage: didYouMeanMessage(c, cmd, similar, closestCommand, distance, trailingShow),
 	}
 }
@@ -275,7 +275,7 @@ func _errUsage(c *cli.Context, msg string) *errUsage {
 		context:      c,
 		message:      msg,
 		helpData:     c.Command,
-		helpTemplate: teb.UsageOnlyTmpl, // NOTE: `cli.CommandHelpTemplate` is often way too long
+		helpTemplate: teb.ShortUsageTmpl,
 	}
 }
 

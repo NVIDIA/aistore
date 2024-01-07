@@ -154,8 +154,11 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 		}
 		bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 		if err != nil {
-			if len(uri) > 1 && uri[:2] == "--" { // FIXME: needed smth like c.LooksLikeFlag
-				return bck, objName, incorrectUsageMsg(c, "misplaced flag %q", uri)
+			if errV := errMisplacedFlag(c, uri); errV != nil {
+				return bck, objName, errV
+			}
+			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+				return bck, objName, fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
 			}
 			var msg string
 			if emptyObjnameOK {

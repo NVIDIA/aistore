@@ -171,7 +171,7 @@ var (
 	}
 	bucketCmdCopy = cli.Command{
 		Name:         commandCopy,
-		Usage:        "copy entire bucket or selected objects (to select multiple, use '--list' or '--template')",
+		Usage:        "copy entire bucket or selected objects (to select multiple, use '--list', '--template', or '--prefix')",
 		ArgsUsage:    bucketObjectSrcArgument + " " + bucketDstArgument,
 		Flags:        bucketCmdsFlags[commandCopy],
 		Action:       copyBucketHandler,

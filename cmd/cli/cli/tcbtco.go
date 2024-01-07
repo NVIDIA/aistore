@@ -26,9 +26,10 @@ import (
 
 // via (I) x-copy-bucket ("full bucket") _or_ (II) x-copy-listrange ("multi-object")
 // Notice a certain usable redundancy:
-// (I)  `ais cp from to --prefix abc"
-// is the same as:
-// (II) `ais cp from to --template abc"
+//
+//	(I) `ais cp from to --prefix abc" is the same as (II) `ais cp from to --template abc"
+//
+// Also, note [CONVENTIONS] below.
 func copyBucketHandler(c *cli.Context) (err error) {
 	var (
 		bckFrom, bckTo cmn.Bck
@@ -39,11 +40,6 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		err = missingArgumentsError(c, c.Command.ArgsUsage)
 	case c.NArg() == 1:
 		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
-		if err != nil {
-			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-				err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(0))
-			}
-		}
 	default:
 		bckFrom, bckTo, objFrom, err = parseBcks(c, bucketSrcArgument, bucketDstArgument, 0 /*shift*/, true /*optionalSrcObjname*/)
 	}
@@ -51,11 +47,26 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		return err
 	}
 
-	if flagIsSet(c, syncFlag) && bckTo.IsEmpty() {
+	// [CONVENTIONS]
+	// 1. '--sync' and '--latest' both require aistore to reach out for remote metadata and, therefore,
+	//   if destination is omitted both options imply namesake in-cluster destination (ie., bckTo = bckFrom)
+	// 2. in addition, '--sync' also implies '--all' (will traverse non-present)
+
+	if bckTo.IsEmpty() {
+		if !flagIsSet(c, syncFlag) && !flagIsSet(c, latestVerFlag) {
+			var hint string
+			if bckFrom.IsRemote() {
+				hint = fmt.Sprintf(" (or, did you mean 'ais cp %s %s' or 'ais cp %s %s'?)",
+					c.Args().Get(0), flprn(syncFlag), c.Args().Get(0), flprn(latestVerFlag))
+			}
+			return incorrectUsageMsg(c, "missing destination bucket%s", hint)
+		}
 		bckTo = bckFrom
 	}
 
-	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
+	allIncludingRemote := flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, syncFlag)
+
+	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, allIncludingRemote)
 }
 
 //

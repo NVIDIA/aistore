@@ -96,6 +96,13 @@ func arg0Node(c *cli.Context) (node *meta.Snode, sname string, err error) {
 	return
 }
 
+func errMisplacedFlag(c *cli.Context, arg string) (err error) {
+	if len(arg) > 1 && arg[0] == '-' {
+		err = incorrectUsageMsg(c, "missing command line argument (hint: flag '%s' misplaced?)", arg)
+	}
+	return err
+}
+
 func isWebURL(url string) bool { return cos.IsHTTP(url) || cos.IsHTTPS(url) }
 
 func jsonMarshalIndent(v any) ([]byte, error) { return jsoniter.MarshalIndent(v, "", "    ") }

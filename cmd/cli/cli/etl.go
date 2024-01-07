@@ -121,7 +121,7 @@ var (
 	}
 	bckCmdETL = cli.Command{
 		Name:         cmdBucket,
-		Usage:        "transform entire bucket or selected objects (to select multiple, use '--list' or '--template')",
+		Usage:        "transform entire bucket or selected objects (to select multiple, use '--list', '--template', or '--prefix')",
 		ArgsUsage:    etlNameArgument + " " + bucketObjectSrcArgument + " " + bucketDstArgument,
 		Action:       etlBucketHandler,
 		Flags:        etlSubFlags[cmdBucket],

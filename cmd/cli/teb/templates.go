@@ -262,7 +262,7 @@ const (
 		"{{end}}" +
 		"TOTAL\t "
 
-	ShortUsageTmpl = "{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}} - {{.Usage}}\n" +
+	ExtendedUsageTmpl = "{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}} - {{.Usage}}\n" +
 		"\n\tCOMMANDS:\t" +
 		"{{range .VisibleCategories}}" +
 		"{{ range $index, $element := .VisibleCommands}}" +
@@ -277,8 +277,11 @@ const (
 		"--{{FlagName $flag }}" +
 		"{{end}}{{end}}\n"
 
-	UsageOnlyTmpl = `{{.HelpName}} - {{.Usage}}
+	ShortUsageTmpl = `{{.HelpName}} - {{.Usage}}
    {{.UsageText}}
+USAGE:
+   {{.HelpName}} {{.ArgsUsage}}
+
 See '--help' and docs/cli for details.`
 
 	AuthNClusterTmpl = "CLUSTER ID\tALIAS\tURLs\n" +
