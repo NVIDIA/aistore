@@ -534,8 +534,8 @@ func listAnyHandler(c *cli.Context) error {
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts) // `ais ls` with no args - is Ok
 
 	if err != nil {
-		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			return errV
 		}
 		return err
 	}

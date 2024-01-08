@@ -35,12 +35,15 @@ done
 ais show bucket $bucket -c 1>/dev/null || exit $?
 
 ## remember existing bucket's versioning; disable if need be
+validate=$(ais bucket props show ${bucket} versioning.validate_warm_get -H | awk '{print $2}')
+[[ "$validate" == "false"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false
 sync=$(ais bucket props show ${bucket} versioning.synchronize -H | awk '{print $2}')
 [[ "$sync" == "false"  ]] || ais bucket props set $bucket versioning.synchronize=false
 
 cleanup() {
   rc=$?
   ais object rm "$bucket/lorem-duis" 1>/dev/null 2>&1
+  [[ "$validate" == "true"  ]] || ais bucket props set $bucket versioning.validate_warm_get=false 1>/dev/null 2>&1
   [[ "$sync" == "true"  ]] || ais bucket props set $bucket versioning.synchronize=false 1>/dev/null 2>&1
   exit $rc
 }

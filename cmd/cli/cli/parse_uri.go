@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -13,6 +13,20 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/urfave/cli"
 )
+
+func errBucketNameInvalid(c *cli.Context, arg string, err error) error {
+	if errV := errMisplacedFlag(c, arg); errV != nil {
+		return errV
+	}
+	if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
+		if strings.Contains(arg, ":/") && !strings.Contains(arg, apc.BckProviderSeparator) {
+			a := strings.Replace(arg, ":/", apc.BckProviderSeparator, 1)
+			return fmt.Errorf("bucket name in %q is invalid: (did you mean %q?)", arg, a)
+		}
+		return fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, arg)
+	}
+	return nil
+}
 
 // Return `bckFrom` and `bckTo` - the [shift] and the [shift+1] arguments, respectively
 func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalSrcObjname bool) (bckFrom, bckTo cmn.Bck, objFrom string,
@@ -27,14 +41,17 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	}
 
 	// src
+	var uri string
 	if optionalSrcObjname {
-		bckFrom, objFrom, err = parseBckObjURI(c, c.Args().Get(0), true /*emptyObjnameOK*/)
+		uri = c.Args().Get(0)
+		bckFrom, objFrom, err = parseBckObjURI(c, uri, true /*emptyObjnameOK*/)
 	} else {
-		bckFrom, err = parseBckURI(c, c.Args().Get(shift), true /*error only*/)
+		uri = c.Args().Get(shift)
+		bckFrom, err = parseBckURI(c, uri, true /*error only*/)
 	}
 	if err != nil {
-		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift))
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			err = errV
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckFromArg, c.Args().Get(shift), err)
 		}
@@ -42,10 +59,11 @@ func parseBcks(c *cli.Context, bckFromArg, bckToArg string, shift int, optionalS
 	}
 
 	// dst
-	bckTo, err = parseBckURI(c, c.Args().Get(shift+1), true)
+	uri = c.Args().Get(shift + 1)
+	bckTo, err = parseBckURI(c, uri, true)
 	if err != nil {
-		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, c.Args().Get(shift+1))
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			err = errV
 		} else {
 			err = incorrectUsageMsg(c, "invalid %s argument '%s' - %v", bckToArg, c.Args().Get(shift+1), err)
 		}
@@ -61,22 +79,15 @@ func parseBckURI(c *cli.Context, uri string, errorOnly bool) (cmn.Bck, error) {
 	}
 
 	opts := cmn.ParseURIOpts{}
-	if providerRequired {
-		parts := strings.Split(uri, apc.BckProviderSeparator)
-		if len(parts) < 2 {
-			err := fmt.Errorf("invalid %q: backend provider cannot be empty\n(e.g. valid names%s)", uri, validNames)
-			return cmn.Bck{}, err
-		}
-		if len(parts) > 2 {
-			err := fmt.Errorf("invalid bucket arg: too many parts %v\n(e.g. valid names%s)", parts, validNames)
-			return cmn.Bck{}, err
-		}
-	} else {
+	if !providerRequired {
 		opts.DefaultProvider = cfg.DefaultProvider
 	}
 	bck, objName, err := cmn.ParseBckObjectURI(uri, opts)
 	switch {
 	case err != nil:
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			err = errV
+		}
 		return cmn.Bck{}, err
 	case objName != "":
 		if errorOnly {
@@ -154,11 +165,8 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 		}
 		bck, objName, err = cmn.ParseBckObjectURI(uri, opts)
 		if err != nil {
-			if errV := errMisplacedFlag(c, uri); errV != nil {
+			if errV := errBucketNameInvalid(c, uri, err); errV != nil {
 				return bck, objName, errV
-			}
-			if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-				return bck, objName, fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
 			}
 			var msg string
 			if emptyObjnameOK {
@@ -173,8 +181,8 @@ func parseBckObjURI(c *cli.Context, uri string, emptyObjnameOK bool) (bck cmn.Bc
 	if bck.Name == "" {
 		err = incorrectUsageMsg(c, "%q: missing bucket name", uri)
 	} else if err = bck.Validate(); err != nil {
-		if strings.Contains(err.Error(), cos.OnlyPlus) && strings.Contains(err.Error(), "bucket name") {
-			err = fmt.Errorf("bucket name in %q is invalid: "+cos.OnlyPlus, uri)
+		if errV := errBucketNameInvalid(c, uri, err); errV != nil {
+			err = errV
 		} else {
 			err = cannotExecuteError(c, err, "")
 		}
