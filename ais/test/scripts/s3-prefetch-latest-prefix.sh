@@ -95,7 +95,7 @@ ais prefetch "$bucket/lorem-duis" --wait
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
 [[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
 
-echo "11. remember 'remote-deleted' counter and enable version synchronization"
+echo "11. remember 'remote-deleted' counter _and_ enable version synchronization"
 cnt4=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{print sum;}')
 ais bucket props set $bucket versioning.synchronize=true
 
@@ -103,7 +103,7 @@ echo "12. run 'prefetch --latest' one last time, and make sure the object \"disa
 ais prefetch "$bucket/lorem-duis" --latest --wait 2>/dev/null
 [[ $? == 0 ]] || { echo "FAIL: expecting 'prefetch --wait' to return Ok, got $?"; exit 1; }
 
-echo "13. 'remote-deleted' counter must increment"
+echo "13. 'remote-deleted' counter must increment (because 'versioning.synchronize=true')"
 cnt5=$(ais show performance counters --regex REMOTE-DEL -H | awk '{sum+=$2;}END{print sum;}')
 [[ $cnt5 == $(($cnt4+1)) ]] || { echo "FAIL: $cnt5 != $(($cnt4+1))"; exit 1; }
 

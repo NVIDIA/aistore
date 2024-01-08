@@ -85,6 +85,21 @@ checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print
 echo "3. out-of-band PUT: 2nd version (overwrite)"
 echo $duis | AIS_ENDPOINT=$rendpoint ais put - "$rbucket/lorem-duis" 1>/dev/null || exit $?
 
+######### --latest
+
+echo "3.1 'get --latest' without changing bucket props"
+
+ais get "$bucket/lorem-duis" /dev/null --latest 1>/dev/null
+checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
+[[ "$checksum" == "$sum2"  ]] || { echo "FAIL: $checksum != $sum2"; exit 1; }
+
+echo "3.2 restore the state prior to step 3.1"
+
+echo $lorem | ais put - "$bucket/lorem-duis" 1>/dev/null || exit $?
+echo $duis  | AIS_ENDPOINT=$rendpoint ais put - "$rbucket/lorem-duis" $host 1>/dev/null || exit $?
+
+######### end of --latest
+
 echo "4. warm GET and check (expecting the first version's checksum)"
 ais get "$bucket/lorem-duis" /dev/null 1>/dev/null
 checksum=$(ais ls "$bucket/lorem-duis" --cached -H -props checksum | awk '{print $2}')
