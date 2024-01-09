@@ -4,6 +4,8 @@
 import unittest
 from pathlib import Path
 
+import boto3
+
 import requests
 
 from aistore.sdk import ListObjectFlag
@@ -12,6 +14,8 @@ from aistore.sdk.errors import InvalidBckProvider, AISError, ErrBckNotFound
 
 from tests.integration.sdk.remote_enabled_test import RemoteEnabledTest
 from tests.unit.sdk.test_utils import test_cases
+from tests import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+from tests.integration.boto3 import AWS_REGION
 
 from tests.utils import random_string, cleanup_local
 from tests.integration import REMOTE_BUCKET, OBJECT_COUNT
@@ -117,6 +121,64 @@ class TestBucketOps(RemoteEnabledTest):
         entries = to_bck.list_all_objects()
         self.assertEqual(1, len(entries))
         self.assertEqual(new_prefix + expected_name, entries[0].name)
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
+    def test_get_latest_flag(self):
+        obj_name = random_string()
+        self.cloud_objects.append(obj_name)
+
+        lorem = (
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod"
+            " tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim"
+            " veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea"
+            " commodo consequat."
+        )
+        duis = (
+            "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum"
+            " dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non"
+            " proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+            " Et harum quidem.."
+        )
+
+        s3_client = boto3.client(
+            "s3",
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            # aws_session_token=AWS_SESSION_TOKEN,
+        )
+
+        # out-of-band PUT: first version
+        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=lorem)
+
+        # cold GET, and check
+        content = self.bucket.object(obj_name).get().read_all()
+        self.assertEqual(lorem, content.decode("utf-8"))
+
+        # out-of-band PUT: 2nd version (overwrite)
+        s3_client.put_object(Bucket=self.bucket.name, Key=obj_name, Body=duis)
+
+        # warm GET and check (expecting the first version's content)
+        content = self.bucket.object(obj_name).get().read_all()
+        self.assertEqual(lorem, content.decode("utf-8"))
+
+        # warm GET with `--latest` flag, content should be updated
+        content = self.bucket.object(obj_name).get(latest=True).read_all()
+        self.assertEqual(duis, content.decode("utf-8"))
+
+        # out-of-band DELETE
+        s3_client.delete_object(Bucket=self.bucket.name, Key=obj_name)
+
+        # warm GET must be fine
+        content = self.bucket.object(obj_name).get().read_all()
+        self.assertEqual(duis, content.decode("utf-8"))
+
+        # cold GET must result in Error
+        with self.assertRaises(AISError):
+            self.bucket.object(obj_name).get(latest=True)
 
     @unittest.skipIf(
         not REMOTE_SET,

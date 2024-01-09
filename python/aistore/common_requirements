@@ -7,3 +7,4 @@ requests==2.27.1
 humanize>=4.6.0
 braceexpand>=0.1.7
 msgspec>=0.15.1
+boto3==1.34.15

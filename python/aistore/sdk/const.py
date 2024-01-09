@@ -38,6 +38,7 @@ QPARAM_PRIMARY_READY_REB = "prr"
 QPARAM_NAMESPACE = "namespace"
 DSORT_UUID = "uuid"
 QPARAM_UUID = "uuid"
+QPARAM_LATEST = "latest-ver"
 
 # URL Param values
 # See api/apc/query.go

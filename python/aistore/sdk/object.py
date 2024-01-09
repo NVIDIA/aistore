@@ -15,6 +15,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     QPARAM_ARCHPATH,
     QPARAM_ETL_NAME,
+    QPARAM_LATEST,
     ACT_PROMOTE,
     HTTP_METHOD_POST,
     URL_PATH_OBJECTS,
@@ -79,12 +80,14 @@ class Object(AISSource):
             params=self._qparams,
         ).headers
 
+    # pylint: disable=too-many-arguments
     def get(
         self,
         archpath: str = "",
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         etl_name: str = None,
         writer: BufferedWriter = None,
+        latest: bool = False,
     ) -> ObjectReader:
         """
         Reads an object
@@ -94,8 +97,9 @@ class Object(AISSource):
                 from the archive
             chunk_size (int, optional): chunk_size to use while reading from stream
             etl_name (str, optional): Transforms an object based on ETL with etl_name
-            writer (BufferedWriter, optional): User-provided writer for writing content output.
+            writer (BufferedWriter, optional): User-provided writer for writing content output
                 User is responsible for closing the writer
+            latest (bool, optional): GET the latest object version from the associated remote bucket
 
         Returns:
             The stream of bytes to read an object or a file inside an archive.
@@ -110,6 +114,8 @@ class Object(AISSource):
         params[QPARAM_ARCHPATH] = archpath
         if etl_name:
             params[QPARAM_ETL_NAME] = etl_name
+        if latest:
+            params[QPARAM_LATEST] = "true"
         resp = self._client.request(
             HTTP_METHOD_GET,
             path=self._object_path,
