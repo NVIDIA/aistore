@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -112,7 +112,7 @@ func NewMountpath(mpath string) (mi *Mountpath, err error) {
 		return
 	}
 	if err = cos.Stat(cleanMpath); err != nil {
-		return nil, cos.NewErrNotFound("mountpath %q", mpath)
+		return nil, cos.NewErrNotFound(nil, "mountpath "+mpath)
 	}
 	if fsInfo, err = makeFsInfo(cleanMpath); err != nil {
 		return

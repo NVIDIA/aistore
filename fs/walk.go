@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/memsys"
@@ -136,7 +137,7 @@ func Walk(opts *WalkOpts) error {
 		}
 		// NOTE: mountpath is getting detached or disabled
 		if cmn.IsErrMountpathNotFound(err1) {
-			nlog.ErrorDepth(1, err1)
+			nlog.Errorln(err1)
 			continue
 		}
 		if cmn.IsErrAborted(err1) {
@@ -147,8 +148,8 @@ func Walk(opts *WalkOpts) error {
 			}
 			continue
 		}
-		if err1 != context.Canceled {
-			nlog.ErrorDepth(1, err1)
+		if err1 != context.Canceled && !cos.IsNotExist(err1) {
+			nlog.Errorln(err1)
 		}
 		err = err1
 	}

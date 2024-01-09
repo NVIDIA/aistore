@@ -312,6 +312,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 		coiParams.BckTo = wi.r.args.BckTo
 		coiParams.ObjnameTo = objNameTo
 		coiParams.Buf = buf
+		coiParams.OWT = cmn.OwtMigrateRepl
 		coiParams.DryRun = wi.msg.DryRun
 		coiParams.LatestVer = wi.msg.LatestVer
 		coiParams.Sync = wi.msg.Sync
@@ -321,7 +322,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 	slab.Free(buf)
 
 	if err != nil {
-		if !cmn.IsObjNotExist(err) || lrit.lrp != lrpList {
+		if !cos.IsNotExist(err) || lrit.lrp != lrpList {
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 		}
 	} else if wi.r.config.FastV(5, cos.SmoduleXs) {

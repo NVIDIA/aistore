@@ -1,6 +1,6 @@
 // Package k8s: initialization, client, and misc. helpers
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package k8s
 
@@ -66,7 +66,7 @@ func Metrics(podName string) (float64 /*cores*/, int64 /*mem*/, error) {
 	)
 	if err != nil {
 		if statusErr, ok := err.(*errors.StatusError); ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
-			err = cos.NewErrNotFound("metrics for pod %q", podName)
+			err = cos.NewErrNotFound(nil, "metrics for pod "+podName)
 		}
 		return 0, 0, err
 	}

@@ -1,6 +1,6 @@
 // Package kvdb provides a local key/value database server for AIS.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package kvdb
 
@@ -51,7 +51,7 @@ func buntToCommonErr(err error, collection, key string) error {
 		if key != "" {
 			what += " \"" + key + "\""
 		}
-		return cos.NewErrNotFound(what)
+		return cos.NewErrNotFound(nil, what)
 	}
 	return err
 }

@@ -1,6 +1,6 @@
 // Package mock provides a variety of mock implementations used for testing.
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package mock
 
@@ -56,7 +56,7 @@ func (bd *DBDriver) GetString(collection, key string) (string, error) {
 	name := bd.makePath(collection, key)
 	value, ok := bd.values[name]
 	if !ok {
-		return "", cos.NewErrNotFound(collection + " \"" + key + "\"")
+		return "", cos.NewErrNotFound(nil, collection+" \""+key+"\"")
 	}
 	return value, nil
 }
@@ -67,7 +67,7 @@ func (bd *DBDriver) Delete(collection, key string) error {
 	name := bd.makePath(collection, key)
 	_, ok := bd.values[name]
 	if !ok {
-		return cos.NewErrNotFound(collection + " \"" + key + "\"")
+		return cos.NewErrNotFound(nil, collection+" \""+key+"\"")
 	}
 	delete(bd.values, name)
 	return nil

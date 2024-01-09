@@ -145,7 +145,7 @@ func (is *infoStore) checkExists(req *request) (dljob *dljob, err error) {
 	dljob, err = is.getJob(req.id)
 	if err != nil {
 		debug.Assert(errors.Is(err, errJobNotFound))
-		err = cos.NewErrNotFound("%s: download job %q", core.T, req.id)
+		err = cos.NewErrNotFound(core.T, "download job "+req.id)
 		req.errRsp(err, http.StatusNotFound)
 	}
 	return

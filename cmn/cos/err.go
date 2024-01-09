@@ -1,6 +1,6 @@
 // Package cos provides common low-level types and utilities for all aistore projects
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cos
 
@@ -21,7 +21,8 @@ import (
 
 type (
 	ErrNotFound struct {
-		what string
+		where fmt.Stringer
+		what  string
 	}
 	ErrSignal struct {
 		signal syscall.Signal
@@ -45,15 +46,32 @@ var errBufferUnderrun = errors.New("buffer underrun")
 
 // ErrNotFound
 
-func NewErrNotFound(format string, a ...any) *ErrNotFound {
-	return &ErrNotFound{fmt.Sprintf(format, a...)}
+func NewErrNotFound(where fmt.Stringer, what string) *ErrNotFound {
+	return &ErrNotFound{where: where, what: what}
 }
 
-func (e *ErrNotFound) Error() string { return e.what + " does not exist" }
+func (e *ErrNotFound) Error() string {
+	s := e.what + " does not exist"
+	if e.where == nil {
+		return s
+	}
+	return e.where.String() + ": " + s
+}
 
 func IsErrNotFound(err error) bool {
 	_, ok := err.(*ErrNotFound)
 	return ok
+}
+
+//
+// gen-purpose not-finding-anything: objects, directories, xactions, nodes, ...
+//
+
+func IsNotExist(err error) bool {
+	if IsErrNotFound(err) {
+		return true
+	}
+	return os.IsNotExist(err) // unwraps for fs.ErrNotExist
 }
 
 // Errs

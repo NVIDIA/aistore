@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -149,7 +149,7 @@ func (p *proxy) handleETLPost(w http.ResponseWriter, r *http.Request) {
 	etlMD := p.owner.etl.get()
 	etlMsg := etlMD.get(etlName)
 	if etlMsg == nil {
-		p.writeErr(w, r, cos.NewErrNotFound("%s: etl[%s]", p, etlName))
+		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
 	}
 
@@ -193,7 +193,7 @@ func (p *proxy) handleETLDelete(w http.ResponseWriter, r *http.Request) {
 func (p *proxy) _deleteETLPre(ctx *etlMDModifier, clone *etlMD) (err error) {
 	debug.AssertNoErr(k8s.ValidateEtlName(ctx.etlName))
 	if exists := clone.del(ctx.etlName); !exists {
-		err = cos.NewErrNotFound("%s: etl[%s]", p, ctx.etlName)
+		err = cos.NewErrNotFound(p, "etl job "+ctx.etlName)
 	}
 	return
 }
@@ -275,7 +275,7 @@ func (p *proxy) infoETL(w http.ResponseWriter, r *http.Request, etlName string) 
 	etlMD := p.owner.etl.get()
 	initMsg := etlMD.get(etlName)
 	if initMsg == nil {
-		p.writeErr(w, r, cos.NewErrNotFound("%s: etl[%s]", p, etlName))
+		p.writeErr(w, r, cos.NewErrNotFound(p, "etl job "+etlName))
 		return
 	}
 	p.writeJSON(w, r, initMsg, "info-etl")

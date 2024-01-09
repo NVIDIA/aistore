@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -188,7 +188,7 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 	if !ok {
 		// a) not found (benign in an unlikely event of failing to commit)
 		txns.mtx.Unlock()
-		return nil, cos.NewErrNotFound("%s: txn %q", txns.t, uuid)
+		return nil, cos.NewErrNotFound(txns.t, "txn "+uuid)
 	}
 
 	if act == "" {
@@ -256,7 +256,7 @@ func (txns *transactions) commitAfter(caller string, msg *aisMsg, err error, arg
 		rndzvs, ok := txns.rendezvous.m[msg.UUID]
 		if !ok { // can't happen
 			txns.rendezvous.mtx.Unlock()
-			errDone = cos.NewErrNotFound("%s: rendezvous record %q (%v)", txns.t.si, msg.UUID, errDone)
+			errDone = cos.NewErrNotFound(txns.t, "rendezvous record "+msg.UUID)
 			return
 		}
 		rndzvs.err = &txnError{err: err}

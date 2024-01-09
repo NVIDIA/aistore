@@ -1232,7 +1232,7 @@ func (h *htrun) writeErrStatusf(w http.ResponseWriter, r *http.Request, errCode 
 
 func (h *htrun) writeErrf(w http.ResponseWriter, r *http.Request, format string, a ...any) {
 	err := fmt.Errorf(format, a...)
-	if cmn.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		h.writeErrMsg(w, r, err.Error(), http.StatusNotFound)
 	} else {
 		h.writeErrMsg(w, r, err.Error())

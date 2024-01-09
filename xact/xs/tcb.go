@@ -238,6 +238,7 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 		coiParams.BckTo = args.BckTo
 		coiParams.ObjnameTo = toName
 		coiParams.Buf = buf
+		coiParams.OWT = cmn.OwtMigrateRepl
 		coiParams.DryRun = args.Msg.DryRun
 		coiParams.LatestVer = args.Msg.LatestVer
 		coiParams.Sync = args.Msg.Sync

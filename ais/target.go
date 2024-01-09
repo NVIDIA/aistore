@@ -972,7 +972,7 @@ func (t *target) objhead(hdr http.Header, query url.Values, bck *meta.Bck, lom *
 
 	if !exists {
 		if bck.IsAIS() || apc.IsFltPresent(fltPresence) {
-			err = cos.NewErrNotFound("%s: object %s", t, lom.Cname())
+			err = cos.NewErrNotFound(t, lom.Cname())
 			return http.StatusNotFound, err
 		}
 	}
@@ -1088,7 +1088,7 @@ func (t *target) httpobjpatch(w http.ResponseWriter, r *http.Request, apireq *ap
 		return
 	}
 	if err := lom.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cmn.IsObjNotExist(err) {
+		if cos.IsNotExist(err) {
 			t.writeErr(w, r, err, http.StatusNotFound)
 		} else {
 			t.writeErr(w, r, err)
@@ -1269,7 +1269,7 @@ func (t *target) delobj(lom *core.LOM, evict bool) (int, error, bool) {
 	delFromBackend = lom.Bck().IsRemote() && !evict
 	err := lom.Load(false /*cache it*/, true /*locked*/)
 	if err != nil {
-		if !cmn.IsObjNotExist(err) {
+		if !cos.IsNotExist(err) {
 			return 0, err, false
 		}
 		if !delFromBackend {

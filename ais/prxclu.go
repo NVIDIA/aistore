@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -1347,7 +1347,7 @@ func (p *proxy) rmNode(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cos.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
+		err := cos.NewErrNotFound(p, "node "+opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}
@@ -1529,7 +1529,7 @@ func (p *proxy) stopMaintenance(w http.ResponseWriter, r *http.Request, msg *apc
 	}
 	si := smap.GetNode(opts.DaemonID)
 	if si == nil {
-		err := cos.NewErrNotFound("%s: node %s", p.si, opts.DaemonID)
+		err := cos.NewErrNotFound(p, "node "+opts.DaemonID)
 		p.writeErr(w, r, err, http.StatusNotFound)
 		return
 	}

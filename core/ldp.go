@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -52,20 +52,19 @@ func (lom *LOM) NewDeferROC() (cos.ReadOpenCloser, error) {
 	return nil, cmn.NewErrFailedTo(T, "open", lom.FQN, err)
 }
 
-// compare with ext/etl/dp.go
-// returns ErrSkip if not found (to favor streaming callers)
+// (compare with ext/etl/dp.go)
 func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH, error) {
 	lom.Lock(false)
 	loadErr := lom.Load(false /*cache it*/, true /*locked*/)
 	if loadErr == nil {
-		if latestVer {
+		if latestVer || sync {
 			debug.Assert(lom.Bck().IsRemote(), lom.Bck().String()) // caller's responsibility
 			eq, errCode, err := lom.CheckRemoteMD(true /* rlocked*/, sync)
 			if err != nil {
 				lom.Unlock(false)
-				if errCode == http.StatusNotFound || cmn.IsObjNotExist(err) {
-					err = cmn.ErrSkip
-				} else {
+				if errCode == http.StatusNotFound {
+					err = cos.NewErrNotFound(T, lom.Cname())
+				} else if !cos.IsNotExist(err) {
 					err = cmn.NewErrFailedTo(T.String()+ldpact, "head-latest", lom, err)
 				}
 				return nil, nil, err
@@ -82,11 +81,11 @@ func (*LDP) Reader(lom *LOM, latestVer, sync bool) (cos.ReadOpenCloser, cos.OAH,
 	}
 
 	lom.Unlock(false)
-	if !cmn.IsObjNotExist(loadErr) {
+	if !cos.IsNotExist(loadErr) {
 		return nil, nil, cmn.NewErrFailedTo(T.String()+ldpact, "load", lom, loadErr)
 	}
 	if !lom.Bck().IsRemote() {
-		return nil, nil, cmn.ErrSkip
+		return nil, nil, cos.NewErrNotFound(T, lom.Cname())
 	}
 
 remote:

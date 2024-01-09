@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -230,7 +230,7 @@ func (reb *Reb) findEmptyTarget(md *ec.Metadata, ct *core.CT, sender string) (*m
 				return tsi, nil
 			}
 		}
-		if err != nil && cmn.IsNotExist(err) {
+		if err != nil && cos.IsNotExist(err) {
 			return tsi, nil
 		}
 		if err != nil {

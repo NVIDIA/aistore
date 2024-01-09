@@ -1,6 +1,6 @@
 // Package meta: cluster-level metadata
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package meta
 
@@ -410,7 +410,7 @@ func (m *Smap) IsPrimary(si *Snode) bool {
 func (m *Smap) NewTmap(tids []string) (tmap NodeMap, err error) {
 	for _, tid := range tids {
 		if m.GetTarget(tid) == nil {
-			return nil, cos.NewErrNotFound("new-tmap: t[%s]", tid)
+			return nil, cos.NewErrNotFound(nil, "new-tmap: target "+tid)
 		}
 	}
 	tmap = make(NodeMap, len(tids))

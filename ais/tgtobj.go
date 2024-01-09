@@ -512,7 +512,7 @@ func (goi *getOI) get() (errCode int, err error) {
 do:
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {
-		cold = cmn.IsObjNotExist(err)
+		cold = cos.IsNotExist(err)
 		if !cold {
 			return http.StatusInternalServerError, err
 		}
@@ -602,7 +602,7 @@ do:
 		if res.Err != nil {
 			goi.lom.Unlock(true)
 			goi.unlocked = true
-			if res.ErrCode != http.StatusNotFound && !cmn.IsObjNotExist(res.Err) {
+			if res.ErrCode != http.StatusNotFound && !cos.IsNotExist(res.Err) {
 				nlog.Infoln(ftcg+"(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 			}
 			return res.ErrCode, res.Err
@@ -881,7 +881,7 @@ gfn:
 	if err != nil {
 		err = cmn.NewErrFailedTo(goi.t, "goi-restore-any", goi.lom, err)
 	} else {
-		err = cos.NewErrNotFound("%s: %s", goi.t.si, goi.lom.Cname())
+		err = cos.NewErrNotFound(goi.t, goi.lom.Cname())
 	}
 	errCode = http.StatusNotFound
 	return
@@ -1013,7 +1013,8 @@ func (goi *getOI) fini(fqn string, lmfh *os.File, hdr http.Header, hrng *htrange
 			return
 		}
 		if csl == nil {
-			return http.StatusNotFound, cos.NewErrNotFound("%q in archive %q", goi.archive.filename, goi.lom.Cname())
+			return http.StatusNotFound,
+				cos.NewErrNotFound(goi.t, goi.archive.filename+" in "+goi.lom.Cname())
 		}
 		// found
 		defer func() {
@@ -1402,7 +1403,7 @@ func (coi *copyOI) _regular(t *target, lom, dst *core.LOM) (size int64, _ error)
 	defer lom.Unlock(lcopy)
 
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cmn.IsObjNotExist(err) {
+		if !cos.IsNotExist(err) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom, err)
 		}
 		return 0, err

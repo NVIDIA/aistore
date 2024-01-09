@@ -1,6 +1,6 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
@@ -284,7 +284,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (b
 	src.Lock(false)
 	defer src.Unlock(false)
 	if err := src.Load(true /*cache it*/, true /*locked*/); err != nil {
-		if cmn.IsObjNotExist(err) {
+		if cos.IsNotExist(err) {
 			return false, nil
 		}
 		return false, err
@@ -294,7 +294,7 @@ func (*defaultDiffResolverCtx) CompareObjects(src *core.LOM, dst *DstElement) (b
 
 func (*defaultDiffResolverCtx) IsObjFromRemote(src *core.LOM) (bool, error) {
 	if err := src.Load(true /*cache it*/, false /*locked*/); err != nil {
-		if cmn.IsObjNotExist(err) {
+		if cos.IsNotExist(err) {
 			return false, nil
 		}
 		return false, err

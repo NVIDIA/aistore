@@ -365,7 +365,7 @@ func (m *AISBackendProvider) resolve(uuid string) (*remAis, string, error) {
 	}
 	alias := uuid
 	if uuid, ok = m.alias[alias]; !ok {
-		return nil, "", cos.NewErrNotFound("%s: remote cluster %q", m.t, alias)
+		return nil, "", cos.NewErrNotFound(m.t, "remote cluster \""+alias+"\"")
 	}
 	remAis, ok = m.remote[uuid]
 	debug.Assertf(ok, "%q vs %q", alias, uuid)

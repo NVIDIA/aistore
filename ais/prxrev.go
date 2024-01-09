@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -183,7 +183,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 		}
 	}
 	if !exists {
-		err = cos.NewErrNotFound("%s: remote UUID/alias %q (%s)", p.si, aliasOrUUID, backend)
+		err = cos.NewErrNotFound(p, "remote UUID/alias "+aliasOrUUID)
 		p.writeErr(w, r, err)
 		return err
 	}

@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -122,7 +122,7 @@ func (r *mncXact) visitObj(lom *core.LOM, buf []byte) (err error) {
 	}
 
 	if err != nil {
-		if cmn.IsObjNotExist(err) {
+		if cos.IsNotExist(err) {
 			return nil
 		}
 		if cos.IsErrOOS(err) {

@@ -1,6 +1,6 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -64,9 +64,8 @@ func copyBucketHandler(c *cli.Context) (err error) {
 		bckTo = bckFrom
 	}
 
-	allIncludingRemote := flagIsSet(c, copyAllObjsFlag) || flagIsSet(c, syncFlag)
-
-	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, allIncludingRemote)
+	// NOTE: copyAllObjsFlag forces 'x-list' to list the remote one, and vice versa
+	return copyTransform(c, "" /*etlName*/, objFrom, bckFrom, bckTo, flagIsSet(c, copyAllObjsFlag))
 }
 
 //

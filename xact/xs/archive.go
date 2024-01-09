@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -477,7 +477,7 @@ roll:
 func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	var coldGet bool
 	if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-		if !cmn.IsObjNotExist(err) {
+		if !cos.IsNotExist(err) {
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 			return
 		}
@@ -493,7 +493,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lriterator) {
 	if coldGet {
 		// cold
 		if errCode, err := core.T.GetCold(context.Background(), lom, cmn.OwtGetLock); err != nil {
-			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cmn.IsObjNotExist(err)) {
+			if lrit.lrp != lrpList && (errCode == http.StatusNotFound || cos.IsNotExist(err)) {
 				return
 			}
 			wi.r.addErr(err, wi.msg.ContinueOnError)

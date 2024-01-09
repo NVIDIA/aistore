@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -190,8 +190,8 @@ func CleanPathErr(err error) {
 		case ECMetaType:
 			what = "ec metadata"
 		default:
-			what = "????"
+			what = parsed.ContentType + "(?)"
 		}
-		pathErr.Err = cos.NewErrNotFound(what)
+		pathErr.Err = cos.NewErrNotFound(nil, "content type "+what)
 	}
 }

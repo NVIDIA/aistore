@@ -1,6 +1,6 @@
 // Package dsort provides distributed massively parallel resharding for very large datasets.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dsort
 
@@ -246,7 +246,7 @@ func PabortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if allNotFound {
-		err := cos.NewErrNotFound("%s job %q", apc.ActDsort, managerUUID)
+		err := cos.NewErrNotFound(core.T, "dsort job "+managerUUID)
 		cmn.WriteErr(w, r, err, http.StatusNotFound)
 		return
 	}

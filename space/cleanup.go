@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -482,7 +482,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	defer lom.Unlock(true)
 	// reload under lock and check atime - again
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		if !cmn.IsObjNotExist(err) {
+		if !cos.IsNotExist(err) {
 			j.ini.Xaction.AddErr(err)
 		}
 		return

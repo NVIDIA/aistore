@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -746,37 +745,14 @@ func IsErrBucketNought(err error) bool {
 }
 
 func IsErrObjNought(err error) bool {
-	return IsObjNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
+	return cos.IsNotExist(err) || IsStatusNotFound(err) || isErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
 // used internally to report http.StatusNotFound _iff_ status is not set (is zero)
-// TODO: catch backend generated as well, e.g. "aws-error[NotFound: Not Found]"
 func isErrNotFoundExtended(err error) bool {
-	return cos.IsErrNotFound(err) ||
-		IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
-		IsObjNotExist(err) ||
-		IsErrMountpathNotFound(err) ||
-		IsErrXactNotFound(err)
-}
-
-// usage: lom.Load() (compare w/ IsNotExist)
-func IsObjNotExist(err error) bool {
-	if os.IsNotExist(err) {
-		return true
-	}
-	return errors.Is(err, fs.ErrNotExist) // when wrapped
-}
-
-// usage: everywhere where applicable (directories, xactions, nodes, ...)
-// excluding _local_ LOM (where the above applies)
-func IsNotExist(err error) bool {
-	if os.IsNotExist(err) {
-		return true
-	}
-	if errors.Is(err, fs.ErrNotExist) {
-		return true
-	}
-	return cos.IsErrNotFound(err)
+	return IsErrBckNotFound(err) || IsErrRemoteBckNotFound(err) ||
+		IsErrMountpathNotFound(err) || IsErrXactNotFound(err) ||
+		cos.IsNotExist(err)
 }
 
 func IsFileAlreadyClosed(err error) bool {

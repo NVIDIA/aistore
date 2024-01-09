@@ -1,6 +1,6 @@
 // Package authn is authentication server for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package main
 
@@ -53,6 +53,8 @@ func newMgr(driver kvdb.Driver) (m *mgr, err error) {
 	return
 }
 
+func (*mgr) String() string { return svcName }
+
 //
 // users ============================================================
 //
@@ -86,7 +88,7 @@ func (m *mgr) updateUser(userID string, updateReq *authn.User) error {
 	uInfo := &authn.User{}
 	err := m.db.Get(usersCollection, userID, uInfo)
 	if err != nil {
-		return cos.NewErrNotFound("%s: user %q", svcName, userID)
+		return cos.NewErrNotFound(m, "user "+userID)
 	}
 	if userID == adminUserID && len(updateReq.Roles) != 0 {
 		return errors.New("cannot change administrator's role")
@@ -176,7 +178,7 @@ func (m *mgr) updateRole(role string, updateReq *authn.Role) error {
 	rInfo := &authn.Role{}
 	err := m.db.Get(rolesCollection, role, rInfo)
 	if err != nil {
-		return cos.NewErrNotFound("%s: role %q", svcName, role)
+		return cos.NewErrNotFound(m, "role "+role)
 	}
 
 	if updateReq.Desc != "" {
@@ -287,7 +289,7 @@ func (m *mgr) cluLookup(cluID, cluAlias string) string {
 func (m *mgr) getCluster(cluID string) (*authn.CluACL, error) {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return nil, cos.NewErrNotFound("%s: cluster %q", svcName, cluID)
+		return nil, cos.NewErrNotFound(m, "cluster "+cluID)
 	}
 	clu := &authn.CluACL{}
 	err := m.db.Get(clustersCollection, cid, clu)
@@ -350,7 +352,7 @@ func (m *mgr) updateCluster(cluID string, info *authn.CluACL) error {
 func (m *mgr) delCluster(cluID string) error {
 	cid := m.cluLookup(cluID, cluID)
 	if cid == "" {
-		return cos.NewErrNotFound("%s: cluster %q", svcName, cluID)
+		return cos.NewErrNotFound(m, "cluster "+cluID)
 	}
 	return m.db.Delete(clustersCollection, cid)
 }
@@ -386,7 +388,7 @@ func (m *mgr) issueToken(userID, pwd string, msg *authn.LoginMsg) (string, error
 		}
 		cid = m.cluLookup(msg.ClusterID, msg.ClusterID)
 		if cid == "" {
-			return "", cos.NewErrNotFound("%s: cluster %q", svcName, msg.ClusterID)
+			return "", cos.NewErrNotFound(m, "cluster "+msg.ClusterID)
 		}
 		uInfo.ClusterACLs = mergeClusterACLs(make([]*authn.CluACL, 0, len(uInfo.ClusterACLs)), uInfo.ClusterACLs, cid)
 		uInfo.BucketACLs = mergeBckACLs(make([]*authn.BckACL, 0, len(uInfo.BucketACLs)), uInfo.BucketACLs, cid)

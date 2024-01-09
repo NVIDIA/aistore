@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -341,7 +341,7 @@ func StopAll() {
 func GetCommunicator(etlName string) (Communicator, error) {
 	c, exists := reg.get(etlName)
 	if !exists {
-		return nil, cos.NewErrNotFound("%s: etl[%s]", core.T, etlName)
+		return nil, cos.NewErrNotFound(core.T, "etl job "+etlName)
 	}
 	return c, nil
 }

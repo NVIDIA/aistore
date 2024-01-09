@@ -1,6 +1,6 @@
 // Package reb provides global cluster-wide rebalance upon adding/removing storage nodes.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package reb
 
@@ -645,7 +645,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 		lomAck.mu.Lock()
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
-				if cmn.IsObjNotExist(err) {
+				if cos.IsNotExist(err) {
 					if rargs.config.FastV(4, cos.SmoduleReb) {
 						nlog.Infof("%s: %s not found", loghdr, lom)
 					}

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -333,7 +333,7 @@ func (t *target) bsumm(w http.ResponseWriter, r *http.Request, phase string, bck
 
 	// never started
 	if xctn == nil {
-		err := cos.NewErrNotFound("%s: x-%s[%s] (failed to start?)", t, apc.ActSummaryBck, msg.UUID)
+		err := cos.NewErrNotFound(t, apc.ActSummaryBck+" job "+msg.UUID)
 		t._erris(w, r, dpq.silent, err, http.StatusNotFound)
 		return
 	}

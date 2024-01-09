@@ -385,7 +385,7 @@ func RequestECMeta(bck *cmn.Bck, objName string, si *meta.Snode, client *http.Cl
 	}
 	defer cos.Close(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, cos.NewErrNotFound(bck.Cname(objName))
+		return nil, cos.NewErrNotFound(core.T, bck.Cname(objName))
 	} else if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to read %s GET request: %v", objName, err)
 	}

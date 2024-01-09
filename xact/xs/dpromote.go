@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -130,7 +130,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	}
 	// TODO: continue-on-error (unify w/ x-archive)
 	_, err = core.T.Promote(&params)
-	if cmn.IsNotExist(err) {
+	if cos.IsNotExist(err) {
 		err = nil
 	}
 	if r.BckJog.Config.FastV(5, cos.SmoduleXs) {

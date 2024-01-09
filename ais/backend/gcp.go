@@ -466,13 +466,12 @@ func _gcpErr(gcpError error) error {
 
 func handleObjectError(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
 	if objErr != storage.ErrObjectNotExist {
-		return http.StatusBadRequest, objErr
+		return http.StatusBadRequest, _gcpErr(objErr)
 	}
 
-	// Object does not exist, but in GCP it doesn't mean that the bucket existed.
-	// Check if the buckets exists.
+	// Object does not exist but in GCP it doesn't necessarily mean that the bucket does.
 	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
 		return gcpErrorToAISError(err, bck)
 	}
-	return http.StatusNotFound, cos.NewErrNotFound(objErr.Error())
+	return http.StatusNotFound, cos.NewErrNotFound(nil, _gcpErr(objErr).Error())
 }

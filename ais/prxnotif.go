@@ -185,7 +185,10 @@ func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) 
 		stats, _, abortedSnap, err := nl.UnmarshalStats(msg.Data)
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
-		debug.Assertf(abortedSnap == msg.AbortedX, "%s: %t vs %t [%s]", msg, abortedSnap, msg.AbortedX, nl.String())
+
+		if abortedSnap != msg.AbortedX && cmn.FastV(4, cos.SmoduleAIS) {
+			nlog.Infof("Warning: %s: %t vs %t [%s]", msg, abortedSnap, msg.AbortedX, nl.String())
+		}
 		aborted = aborted || abortedSnap
 	}
 	if msg.ErrMsg != "" {

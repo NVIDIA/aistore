@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -151,7 +151,7 @@ func (t *target) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 	if err != nil {
 		if err == cmn.ErrSkip {
 			name := lom.Cname()
-			s3.WriteErr(w, r, cos.NewErrNotFound("%s: %s", t.si, name), http.StatusNotFound)
+			s3.WriteErr(w, r, cos.NewErrNotFound(t, name), http.StatusNotFound)
 		} else {
 			s3.WriteErr(w, r, err, 0)
 		}
@@ -297,12 +297,12 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 	err = lom.Load(true /*cache it*/, false /*locked*/)
 	if err != nil {
 		exists = false
-		if !cmn.IsObjNotExist(err) {
+		if !cos.IsNotExist(err) {
 			s3.WriteErr(w, r, err, 0)
 			return
 		}
 		if bck.IsAIS() {
-			s3.WriteErr(w, r, cos.NewErrNotFound("%s: object %s", t.si, lom.Cname()), 0)
+			s3.WriteErr(w, r, cos.NewErrNotFound(t, lom.Cname()), 0)
 			return
 		}
 	}
@@ -364,7 +364,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 	if err != nil {
 		name := lom.Cname()
 		if errCode == http.StatusNotFound {
-			s3.WriteErr(w, r, cos.NewErrNotFound("%s: %s", t.si, name), http.StatusNotFound)
+			s3.WriteErr(w, r, cos.NewErrNotFound(t, name), http.StatusNotFound)
 		} else {
 			s3.WriteErr(w, r, fmt.Errorf("error deleting %s: %v", name, err), errCode)
 		}

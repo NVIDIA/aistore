@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -204,7 +204,7 @@ func (pc *pushComm) doRequest(bck *meta.Bck, lom *core.LOM, timeout time.Duratio
 	r, err = pc.do(lom, timeout)
 	lom.Unlock(false)
 
-	if err != nil && cmn.IsObjNotExist(err) && bck.IsRemote() {
+	if err != nil && cos.IsNotExist(err) && bck.IsRemote() {
 		_, err = core.T.GetCold(context.Background(), lom, cmn.OwtGetLock)
 		if err != nil {
 			return nil, err
@@ -472,7 +472,7 @@ func lomLoad(lom *core.LOM, bck *meta.Bck) (size int64, err error) {
 		return
 	}
 	if err = lom.Load(true /*cacheIt*/, false /*locked*/); err != nil {
-		if cmn.IsObjNotExist(err) && bck.IsRemote() {
+		if cos.IsNotExist(err) && bck.IsRemote() {
 			err = nil // NOTE: size == 0
 		}
 	} else {
