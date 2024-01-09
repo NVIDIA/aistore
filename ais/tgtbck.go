@@ -498,7 +498,7 @@ func (t *target) httpbckhead(w http.ResponseWriter, r *http.Request, apireq *api
 		}
 		inBMD = false
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		pid := apireq.query.Get(apc.QparamProxyID)
 		nlog.Infof("%s %s <= %s", r.Method, apireq.bck, pid)
 	}

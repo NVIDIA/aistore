@@ -1,12 +1,13 @@
 // Package dload implements functionality to download resources into AIS cluster from external source.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package dload
 
 import (
 	"sync"
 
+	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -78,7 +79,7 @@ func (j *jogger) jog() {
 
 		// do
 		lom := core.AllocLOM(t.obj.objName)
-		t.download(lom, j.parent.config)
+		t.download(lom)
 
 		// finish, cleanup
 		core.FreeLOM(lom)
@@ -152,7 +153,7 @@ func (j *jogger) abortJob(id string) {
 
 	j.mtx.Unlock()
 
-	if task != nil && j.parent.config.FastV(4, cos.SmoduleDload) /*verbose*/ {
+	if task != nil && cmn.Rom.FastV(4, cos.SmoduleDload) /*verbose*/ {
 		nlog.Infof("%s: abort-job[%s, mpath=%s], task=%s", core.T.String(), id, j.mpath, j.task.String())
 	}
 }

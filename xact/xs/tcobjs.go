@@ -198,7 +198,7 @@ func (r *XactTCObjs) Do(msg *cmn.TCObjsMsg) {
 		runtime.Gosched() // poor man's throttle
 		if l == c {
 			cnt := r.chanFull.Inc()
-			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && r.config.FastV(5, cos.SmoduleXs)) {
+			if (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleXs)) {
 				nlog.Errorln("work channel full", r.Name())
 			}
 		}
@@ -220,7 +220,7 @@ func (r *XactTCObjs) recv(hdr *transport.ObjHdr, objReader io.Reader, err error)
 	r.DecPending()
 	transport.DrainAndFreeReader(objReader)
 ex:
-	if err != nil && r.config.FastV(4, cos.SmoduleXs) {
+	if err != nil && cmn.Rom.FastV(4, cos.SmoduleXs) {
 		nlog.Errorln(err)
 	}
 	return err
@@ -281,10 +281,10 @@ func (r *XactTCObjs) _put(hdr *transport.ObjHdr, objReader io.Reader, lom *core.
 
 	if err != nil {
 		r.AddErr(err)
-		if r.config.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infoln("Error: ", err)
 		}
-	} else if r.config.FastV(5, cos.SmoduleXs) {
+	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-Rx %s, size=%d", r.Base.Name(), lom.Cname(), hdr.ObjAttrs.Size)
 	}
 	return
@@ -325,7 +325,7 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lriterator) {
 		if !cos.IsNotExist(err) || lrit.lrp != lrpList {
 			wi.r.addErr(err, wi.msg.ContinueOnError)
 		}
-	} else if wi.r.config.FastV(5, cos.SmoduleXs) {
+	} else if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: tco-lr %s => %s", wi.r.Base.Name(), lom.Cname(), wi.r.args.BckTo.Cname(objNameTo))
 	}
 }

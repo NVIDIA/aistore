@@ -1,6 +1,6 @@
 // Package core provides core metadata and in-cluster API
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package core
 
@@ -372,7 +372,7 @@ func (md *lmeta) unmarshal(buf []byte) error {
 				mpathInfo, _, err := fs.FQN2Mpath(copyFQN)
 				if err != nil {
 					// Mountpath with the copy is missing.
-					if cmn.FastV(4, cos.SmoduleCluster) {
+					if cmn.Rom.FastV(4, cos.SmoduleCluster) {
 						nlog.Warningln(err)
 					}
 					// For utilities and tests: fill the map with mpath names always

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -236,18 +236,21 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		if err == nil {
 			nlog.Infof("%s: current primary %s is up, moving back to idle", p, curPrimary)
 		} else {
-			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary", p, curPrimary.StringEx())
+			errV := fmt.Errorf("%s: current primary(?) %s responds but does not consider itself primary",
+				p, curPrimary.StringEx())
 			nlog.Errorln(errV)
 			xele.AddErr(errV)
 		}
 		return
 	}
-	nlog.Infof("%s: primary %s is confirmed down: [%v] - moving to election state phase 1 (prepare)", p, curPrimary.StringEx(), err)
+	nlog.Infof("%s: primary %s is confirmed down: [%v] - moving to election state phase 1 (prepare)",
+		p, curPrimary.StringEx(), err)
 
 	// 2. election phase 1
-	elected, votingErrors := p.electPhase1(vr, config)
+	elected, votingErrors := p.electPhase1(vr)
 	if !elected {
-		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary still %s w/ status unknown", p, curPrimary.StringEx())
+		errV := fmt.Errorf("%s: election phase 1 (prepare) failed: primary still %s w/ status unknown",
+			p, curPrimary.StringEx())
 		nlog.Errorln(errV)
 		xele.AddErr(errV)
 
@@ -261,11 +264,14 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 		svm, _, slowp := p.bcastMaxVer(smap, nil, nil)
 		if svm.Smap != nil && !slowp {
 			if svm.Smap.UUID == smap.UUID && svm.Smap.version() > smap.version() && svm.Smap.validate() == nil {
-				nlog.Warningf("%s: upgrading local %s to cluster max-ver %s", p, smap.StringEx(), svm.Smap.StringEx())
+				nlog.Warningf("%s: upgrading local %s to cluster max-ver %s",
+					p, smap.StringEx(), svm.Smap.StringEx())
 				if svm.Smap.Primary.ID() != smap.Primary.ID() {
-					nlog.Warningf("%s: new primary %s is already elected ...", p, svm.Smap.Primary.StringEx())
+					nlog.Warningf("%s: new primary %s is already elected ...",
+						p, svm.Smap.Primary.StringEx())
 				}
-				if errV := p.owner.smap.synchronize(p.si, svm.Smap, nil /*ms payload*/, p.smapUpdatedCB); errV != nil {
+				errV := p.owner.smap.synchronize(p.si, svm.Smap, nil /*ms payload*/, p.smapUpdatedCB)
+				if errV != nil {
 					cos.ExitLog(errV)
 				}
 			}
@@ -275,7 +281,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 	}
 
 	// 3. election phase 2
-	nlog.Infof("%s: moving to election state phase 2 (commit)", p)
+	nlog.Infoln(p.String()+":", "moving to election state phase 2 (commit)")
 	confirmationErrors := p.electPhase2(vr)
 	for sid := range confirmationErrors {
 		if !votingErrors.Contains(sid) {
@@ -291,7 +297,7 @@ func (p *proxy) elect(vr *VoteRecord, xele *xs.Election) {
 }
 
 // phase 1: prepare (via simple majority voting)
-func (p *proxy) electPhase1(vr *VoteRecord, config *cmn.Config) (winner bool, errors cos.StrSet) {
+func (p *proxy) electPhase1(vr *VoteRecord) (winner bool, errors cos.StrSet) {
 	var (
 		resCh = p.requestVotes(vr)
 		y, n  int
@@ -305,7 +311,7 @@ func (p *proxy) electPhase1(vr *VoteRecord, config *cmn.Config) (winner bool, er
 			}
 			n++
 		} else {
-			if config.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Infof("Node %s responded with (winner: %t)", res.daemonID, res.yes)
 			}
 			if res.yes {
@@ -637,11 +643,10 @@ func (h *htrun) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *meta.S
 }
 
 func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
-	config := cmn.GCO.Get()
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
 	if !h.keepalive.timeToPing(currPrimaryID) {
-		if config.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
 		return false, nil
@@ -656,7 +661,7 @@ func (h *htrun) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	}
 
 	vote := nextPrimaryProxy.ID() == daemonID
-	if config.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s: voting '%t' for %s", h, vote, daemonID)
 	}
 	return vote, nil

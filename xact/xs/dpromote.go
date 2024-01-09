@@ -133,7 +133,7 @@ func (r *XactDirPromote) walk(fqn string, de fs.DirEntry) error {
 	if cos.IsNotExist(err) {
 		err = nil
 	}
-	if r.BckJog.Config.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Infof("%s: %s => %s (over=%t, del=%t, share=%t): %v", r.Base.Name(), fqn, bck.Cname(objName),
 			args.OverwriteDst, args.DeleteSrc, r.confirmedFshare, err)
 	}

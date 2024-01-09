@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
-* Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -117,7 +117,7 @@ func (r *XactGet) DispatchResp(iReq intraReq, hdr *transport.ObjHdr, bck *meta.B
 	// Read the data into the slice writer and notify the slice when
 	// the transfer is complete
 	case respPut:
-		if r.config.FastV(4, cos.SmoduleEC) {
+		if cmn.Rom.FastV(4, cos.SmoduleEC) {
 			nlog.Infof("Response from %s, %s", hdr.SID, uname)
 		}
 		r.dOwner.mtx.Lock()
@@ -194,7 +194,7 @@ func (r *XactGet) Run(*sync.WaitGroup) {
 	for {
 		select {
 		case <-ticker.C:
-			if r.config.FastV(4, cos.SmoduleEC) {
+			if cmn.Rom.FastV(4, cos.SmoduleEC) {
 				if s := r.ECStats().String(); s != "" {
 					nlog.Infoln(s)
 				}

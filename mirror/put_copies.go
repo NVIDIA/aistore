@@ -1,6 +1,6 @@
 // Package mirror provides local mirroring and replica management
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package mirror
 
@@ -120,7 +120,7 @@ func (r *XactPut) do(lom *core.LOM, buf []byte) {
 
 	if err != nil {
 		r.AddErr(err)
-		if r.config.FastV(5, cos.SmoduleMirror) {
+		if cmn.Rom.FastV(5, cos.SmoduleMirror) {
 			nlog.Infof("Error: %v", err)
 		}
 	} else {
@@ -202,7 +202,7 @@ func (r *XactPut) stop() (err error) {
 		r.SubPending(n)
 		err = fmt.Errorf("%s: dropped %d object%s", r, n, cos.Plural(n))
 	}
-	if cnt := r.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && r.config.FastV(5, cos.SmoduleMirror)) {
+	if cnt := r.chanFull.Load(); (cnt >= 10 && cnt <= 20) || (cnt > 0 && cmn.Rom.FastV(5, cos.SmoduleMirror)) {
 		nlog.Errorln("work channel full (all mp workers)", r.String(), cnt)
 	}
 	return

@@ -101,8 +101,6 @@ func (*target) interruptedRestarted() (interrupted, restarted bool) {
 
 func (t *target) initBackends() {
 	config := cmn.GCO.Get()
-	backend.Init(config)
-
 	aisBackend := backend.NewAIS(t)
 	t.backend[apc.AIS] = aisBackend                  // always present
 	t.backend[apc.HTTP] = backend.NewHTTP(t, config) // ditto

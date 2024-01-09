@@ -59,7 +59,7 @@ func (hp *httpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps
 		return nil, http.StatusBadRequest, err
 	}
 
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_bucket] original_url: %q", origURL)
 	}
 
@@ -118,7 +118,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Obj
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] original_url: %q", origURL)
 	}
 	resp, err := hp.client(origURL).Head(origURL)
@@ -137,7 +137,7 @@ func (hp *httpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Obj
 	if v, ok := h.EncodeVersion(resp.Header.Get(cos.HdrETag)); ok {
 		oa.SetCustomKey(cmn.ETag, v)
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -154,7 +154,7 @@ func (hp *httpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) 
 	if res.Err != nil {
 		return 0, res.Err
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[get_object] %s", lom)
 	}
 	return 0, nil
@@ -170,7 +170,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res co
 	origURL, err := getOriginalURL(ctx, bck, lom.ObjName)
 	debug.AssertNoErr(err)
 
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[HTTP CLOUD][GET] original_url: %q", origURL)
 	}
 
@@ -185,7 +185,7 @@ func (hp *httpProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res co
 		return
 	}
 
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[HTTP CLOUD][GET] success, size: %d", resp.ContentLength)
 	}
 

@@ -1,7 +1,7 @@
 // Package cmn provides common constants, types, and utilities for AIS clients
 // and AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package cmn
 
@@ -707,8 +707,6 @@ func (c *Config) UpdateClusterConfig(updateConf *ConfigToSet, asType string) (er
 func (c *Config) TestingEnv() bool {
 	return c.LocalConfig.TestingEnv()
 }
-
-func (c *Config) FastV(verbosity, fl int) bool { return c.Log.Level.FastV(verbosity, fl) }
 
 ///////////////////
 // ClusterConfig //
@@ -1662,9 +1660,6 @@ func (ctu *ConfigToSet) FillFromKVS(kvs []string) (err error) {
 //
 // misc config utils
 //
-
-// (rather, use config instance if available)
-func FastV(verbosity, fl int) bool { return GCO.Get().FastV(verbosity, fl) }
 
 // checks if the two comma-separated IPv4 address lists contain at least one common IPv4
 func ipsOverlap(alist, blist string) (addr string, overlap bool) {

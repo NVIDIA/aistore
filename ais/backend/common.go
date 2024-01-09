@@ -9,19 +9,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 )
 
 type ctx = context.Context // used when omitted for shortness sake
-
-var verbose, superVerbose bool
-
-func Init(config *cmn.Config) {
-	verbose = config.FastV(4, cos.SmoduleBackend)
-	superVerbose = config.FastV(5, cos.SmoduleBackend)
-}
 
 func fmtTime(t time.Time) string { return t.Format(time.RFC3339) }
 

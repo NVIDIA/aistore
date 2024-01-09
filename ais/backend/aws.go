@@ -95,7 +95,7 @@ func (*awsProvider) HeadBucket(_ ctx, bck *meta.Bck) (bckProps cos.StrKVs, errCo
 		cloudBck = bck.RemoteBck()
 	)
 	svc, region, errC = newClient(sessConf{bck: cloudBck}, "")
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[head_bucket]", cloudBck.Name, errC)
 	}
 	if region == "" {
@@ -146,7 +146,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		versioning bool
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[list_objects]")
-	if err != nil && verbose {
+	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
 
@@ -167,7 +167,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 
 	resp, err := svc.ListObjectsV2(params)
 	if err != nil {
-		if verbose {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("list_objects", cloudBck.Name, err)
 		}
 		errCode, err = awsErrorToAISError(err, cloudBck, "")
@@ -205,7 +205,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	}
 
 	if len(lst.Entries) == 0 || !versioning {
-		if verbose {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries))
 		}
 		return
@@ -236,7 +236,7 @@ func (awsp *awsProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 			}
 		}
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infoln("[list_objects]", cloudBck.Name, len(lst.Entries), num)
 	}
 	return
@@ -260,7 +260,7 @@ func (*awsProvider) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, errCode int, err 
 
 	bcks = make(cmn.Bcks, len(result.Buckets))
 	for idx, bck := range result.Buckets {
-		if verbose {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infoln("[bucket_names]", aws.StringValue(bck.Name), "created", *bck.CreationDate)
 		}
 		bcks[idx] = cmn.Bck{
@@ -283,7 +283,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 		cloudBck   = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[head_object]")
-	if err != nil && verbose {
+	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
 	headOutput, err = svc.HeadObject(&s3.HeadObjectInput{
@@ -334,7 +334,7 @@ func (*awsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode int
 		}
 		oa.SetCustomKey(cmn.LastModified, fmtTime(mtime))
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[head_object]", cloudBck.Cname(lom.ObjName))
 	}
 	return
@@ -352,7 +352,7 @@ func (awsp *awsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	params := allocPutParams(res, owt)
 	err := awsp.t.PutObject(lom, params)
 	core.FreePutParams(params)
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -364,7 +364,7 @@ func (*awsProvider) GetObjReader(ctx context.Context, lom *core.LOM) (res core.G
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err := newClient(sessConf{bck: cloudBck}, "[get_object]")
-	if err != nil && superVerbose {
+	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
 	obj, err = svc.GetObjectWithContext(ctx, &s3.GetObjectInput{
@@ -429,7 +429,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err err
 	)
 
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[put_object]")
-	if err != nil && superVerbose {
+	if err != nil && cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
 
@@ -460,7 +460,7 @@ func (*awsProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, err err
 			lom.SetCustomKey(cmn.MD5ObjMD, v)
 		}
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[put_object]", lom.String())
 	}
 	cos.Close(r)
@@ -477,7 +477,7 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		cloudBck = lom.Bck().RemoteBck()
 	)
 	svc, _, err = newClient(sessConf{bck: cloudBck}, "[delete_object]")
-	if err != nil && verbose {
+	if err != nil && cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Warningln(err)
 	}
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
@@ -488,7 +488,7 @@ func (*awsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		errCode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 		return
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[delete_object]", lom.String())
 	}
 	return

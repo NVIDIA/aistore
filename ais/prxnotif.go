@@ -186,7 +186,7 @@ func (n *notifs) _finished(nl nl.Listener, tsi *meta.Snode, msg *core.NotifMsg) 
 		debug.AssertNoErr(err)
 		nl.SetStats(tsi.ID(), stats)
 
-		if abortedSnap != msg.AbortedX && cmn.FastV(4, cos.SmoduleAIS) {
+		if abortedSnap != msg.AbortedX && cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Infof("Warning: %s: %t vs %t [%s]", msg, abortedSnap, msg.AbortedX, nl.String())
 		}
 		aborted = aborted || abortedSnap
@@ -212,7 +212,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 		return
 	}
 	nl.SetAddedTime()
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln("add", nl.Name())
 	}
 	return
@@ -220,7 +220,7 @@ func (n *notifs) add(nl nl.Listener) (err error) {
 
 func (n *notifs) del(nl nl.Listener, locked bool) (ok bool) {
 	ok = n.nls.del(nl, locked /*locked*/)
-	if ok && cmn.FastV(5, cos.SmoduleAIS) {
+	if ok && cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln("del", nl.Name())
 	}
 	return
@@ -427,7 +427,7 @@ func (n *notifs) bcastGetStats(nl nl.Listener, dur time.Duration) {
 			nl.Lock()
 			done = done || n.markFinished(nl, res.si, err, true) // NOTE: not-found at one ==> all done
 			nl.Unlock()
-		} else if config.FastV(4, cos.SmoduleAIS) {
+		} else if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Errorf("%s: %s, node %s: %v", n.p, nl, res.si.StringEx(), res.unwrap())
 		}
 	}

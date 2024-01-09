@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -211,7 +211,7 @@ func (c *putJogger) splitAndDistribute(ctx *encodeCtx) error {
 
 // calculates and stores data and parity slices
 func (c *putJogger) encode(req *request, lom *core.LOM) error {
-	if c.parent.config.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Encoding %q...", lom)
 	}
 	var (
@@ -539,7 +539,7 @@ func (c *putJogger) sendSlices(ctx *encodeCtx) (err error) {
 		nlog.Errorf("Error while copying (data=%d, parity=%d) for %q: %v",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName, copyErr)
 		err = errSliceSendFailed
-	} else if c.parent.config.FastV(4, cos.SmoduleEC) {
+	} else if cmn.Rom.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("EC created (data=%d, parity=%d) for %q",
 			ctx.dataSlices, ctx.paritySlices, ctx.lom.ObjName)
 	}

@@ -129,7 +129,7 @@ func (p *proxy) handleETLPut(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infoln(p.String() + ": " + initMsg.String())
 	}
 }

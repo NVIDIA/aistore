@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -436,7 +436,7 @@ func (r *LsoXact) sentCb(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err er
 	if err == nil {
 		// using generic out-counter to count broadcast pages
 		r.OutObjsAdd(1, hdr.ObjAttrs.Size)
-	} else if r.config.FastV(4, cos.SmoduleXs) || !cos.IsRetriableConnErr(err) {
+	} else if cmn.Rom.FastV(4, cos.SmoduleXs) || !cos.IsRetriableConnErr(err) {
 		nlog.Infof("Warning: %s: failed to send [%+v]: %v", core.T, hdr, err)
 	}
 	sgl, ok := arg.(*memsys.SGL)

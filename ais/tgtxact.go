@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -111,7 +111,7 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if config := cmn.GCO.Get(); config.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infoln(msg.Action, xargs.String())
 	}
 	switch msg.Action {

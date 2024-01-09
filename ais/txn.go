@@ -176,7 +176,7 @@ func (txns *transactions) begin(txn txn, nlps ...core.NLP) (err error) {
 	txns.m[txn.uuid()] = txn
 	txns.mtx.Unlock()
 
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s begin: %s", txns.t, txn)
 	}
 	return
@@ -212,7 +212,7 @@ func (txns *transactions) find(uuid, act string) (txn, error) {
 		txn.unlock()
 	}
 
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s %s: %s", txns.t, act, txn)
 	}
 	return txn, nil

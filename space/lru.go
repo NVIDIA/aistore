@@ -2,7 +2,7 @@
 // least recently used cache replacement). It also serves as a built-in garbage-collection
 // mechanism for orphaned workfiles.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package space
 
@@ -439,7 +439,7 @@ func (j *lruJ) evictObj(lom *core.LOM) bool {
 		nlog.Errorf("%s: failed to evict %s: %v", j, lom, err)
 		return false
 	}
-	if j.ini.Config.FastV(5, cos.SmoduleSpace) {
+	if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 		nlog.Infof("%s: evicted %s, size=%d", j, lom, lom.SizeBytes(true /*not loaded*/))
 	}
 	return true

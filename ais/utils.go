@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -156,7 +156,7 @@ func _selectHost(locIPs []*localIPv4Info, hostnames []string) (string, error) {
 }
 
 // _localIP takes a list of local IPv4s and returns the best fit for a daemon to listen on it
-func _localIP(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err error) {
+func _localIP(addrList []*localIPv4Info) (ip net.IP, err error) {
 	if len(addrList) == 0 {
 		return nil, fmt.Errorf("no addresses to choose from")
 	}
@@ -170,7 +170,7 @@ func _localIP(config *cmn.Config, addrList []*localIPv4Info) (ip net.IP, err err
 		}
 		return ip, nil
 	}
-	if config.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%d IPv4s:", len(addrList))
 		for _, addr := range addrList {
 			nlog.Infof("    %#v\n", *addr)
@@ -204,13 +204,13 @@ func multihome(configuredIPv4s string) (pub string, extra []string) {
 }
 
 // choose one of the local IPv4s if local config doesn't contain (explicitly) specified
-func initNetInfo(ni *meta.NetInfo, config *cmn.Config, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (err error) {
+func initNetInfo(ni *meta.NetInfo, addrList []*localIPv4Info, proto, configuredIPv4s, port string) (err error) {
 	var (
 		ip   net.IP
 		host string
 	)
 	if configuredIPv4s == "" {
-		if ip, err = _localIP(config, addrList); err == nil {
+		if ip, err = _localIP(addrList); err == nil {
 			ni.Init(proto, ip.String(), port)
 		}
 		return

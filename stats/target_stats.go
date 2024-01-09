@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -353,7 +353,7 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 	}
 
 	// 6. running xactions
-	verbose := config.FastV(4, cos.SmoduleStats)
+	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if !idle {
 		var ln string
 		r.xallRun.Running = r.xallRun.Running[:0]

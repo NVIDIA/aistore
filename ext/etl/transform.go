@@ -149,7 +149,7 @@ func InitSpec(msg *InitSpecMsg, etlName string, opts StartOpts) error {
 	config := cmn.GCO.Get()
 	errCtx, podName, svcName, err := start(msg, etlName, opts, config)
 	if err == nil {
-		if config.FastV(4, cos.SmoduleETL) {
+		if cmn.Rom.FastV(4, cos.SmoduleETL) {
 			nlog.Infof("started etl[%s], msg %s, pod %s", etlName, msg, podName)
 		}
 		return nil
@@ -277,7 +277,7 @@ func start(msg *InitSpecMsg, xid string, opts StartOpts, config *cmn.Config) (er
 	if err = boot.waitPodReady(); err != nil {
 		return
 	}
-	if config.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("pod %q is ready, %+v, %s", podName, msg, boot.errCtx)
 	}
 	if err = boot.setupConnection(); err != nil {

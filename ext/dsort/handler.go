@@ -84,8 +84,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 	// to not yet initialized target.
 
 	// phase 1
-	config := cmn.GCO.Get()
-	if config.FastV(4, cos.SmoduleDsort) {
+	if cmn.Rom.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("[dsort] %s broadcasting init request to all targets", managerUUID)
 	}
 	path := apc.URLPathdSortInit.Join(managerUUID)
@@ -95,7 +94,7 @@ func PstartHandler(w http.ResponseWriter, r *http.Request, parsc *ParsedReq) {
 	}
 
 	// phase 2
-	if config.FastV(4, cos.SmoduleDsort) {
+	if cmn.Rom.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof("[dsort] %s broadcasting start request to all targets", managerUUID)
 	}
 	path = apc.URLPathdSortStart.Join(managerUUID)
@@ -649,7 +648,7 @@ func (managers *ManagerGroup) recordsHandler(w http.ResponseWriter, r *http.Requ
 	m.recm.EnqueueRecords(records)
 	m.incrementReceived()
 
-	if m.config.FastV(4, cos.SmoduleDsort) {
+	if cmn.Rom.FastV(4, cos.SmoduleDsort) {
 		nlog.Infof(
 			"[dsort] %s total times received records from another target: %d",
 			m.ManagerUUID, m.received.count.Load(),

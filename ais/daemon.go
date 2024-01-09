@@ -221,7 +221,7 @@ func initDaemon(version, buildTime string) cos.Runner {
 
 	// reg xaction factories
 	xs.Xreg(false /* x-ele only */)
-	space.Xreg(config)
+	space.Xreg()
 
 	t := newTarget(co)
 	t.init(config)

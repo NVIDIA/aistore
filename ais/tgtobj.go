@@ -166,7 +166,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 	// PUT is a no-op if the checksums do match
 	if !poi.skipVC && !poi.coldGET && !poi.cksumToUse.IsEmpty() {
 		if poi.lom.EqCksum(poi.cksumToUse) {
-			if poi.config.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Infof("destination %s has identical %s: PUT is a no-op", poi.lom, poi.cksumToUse)
 			}
 			cos.DrainReader(poi.r)
@@ -206,7 +206,7 @@ func (poi *putOI) putObject() (errCode int, err error) {
 		// xaction in-objs counters, promote first
 		poi.xctn.InObjsAdd(1, poi.lom.SizeBytes())
 	}
-	if poi.config.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln(poi.loghdr())
 	}
 	return
@@ -298,7 +298,7 @@ func (poi *putOI) fini() (errCode int, err error) {
 		debug.AssertFunc(func() bool { _, exclusive := lom.IsLocked(); return exclusive })
 	case cmn.OwtGetPrefetchLock:
 		if !lom.TryLock(true) {
-			if poi.config.FastV(4, cos.SmoduleAIS) {
+			if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 				nlog.Warningln(poi.loghdr(), "is busy")
 			}
 			return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going
@@ -932,7 +932,7 @@ func (goi *getOI) getFromNeighbor(lom *core.LOM, tsi *meta.Snode) bool {
 	errCode, erp := poi.putObject()
 	freePOI(poi)
 	if erp == nil {
-		if config.FastV(5, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 			nlog.Infof("%s: gfn %s <= %s", goi.t, goi.lom, tsi)
 		}
 		return true
@@ -1219,7 +1219,7 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, errCode int, err error) {
 		cos.NamedVal64{Name: stats.AppendCount, Value: 1},
 		cos.NamedVal64{Name: stats.AppendLatency, Value: lat},
 	)
-	if a.config.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("APPEND %s: %s", a.lom, lat)
 	}
 	return

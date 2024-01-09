@@ -1,7 +1,7 @@
 // Package bundle provides multi-streaming transport with the functionality
 // to dynamically (un)register receive endpoints, establish long-lived flows, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package bundle
 
@@ -147,7 +147,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 	}
 
 	if err != nil {
-		if sb.extra.Config.FastV(5, cos.SmoduleTransport) {
+		if cmn.Rom.FastV(5, cos.SmoduleTransport) {
 			nlog.Warningln(err)
 		}
 		// compare w/ transport doCmpl()

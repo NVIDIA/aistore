@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -74,7 +74,7 @@ func (b *etlBootstrapper) _prepSpec() (err error) {
 
 	b._setPodEnv()
 
-	if b.config.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("prep pod spec: %s, %+v", b.msg.String(), b.errCtx)
 	}
 	return
@@ -121,7 +121,7 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 	// it is accessible from target.
 	etlSocketAddr := fmt.Sprintf("%s:%d", hostIP, nodePort)
 	if err = b._dial(etlSocketAddr); err != nil {
-		if b.config.FastV(4, cos.SmoduleETL) {
+		if cmn.Rom.FastV(4, cos.SmoduleETL) {
 			nlog.Warningf("failed to dial -> %s: %s, %+v, %s", etlSocketAddr, b.msg.String(), b.errCtx, b.uri)
 		}
 		err = cmn.NewErrETL(b.errCtx, err.Error())
@@ -129,7 +129,7 @@ func (b *etlBootstrapper) setupConnection() (err error) {
 	}
 
 	b.uri = "http://" + etlSocketAddr
-	if b.config.FastV(4, cos.SmoduleETL) {
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
 		nlog.Infof("setup connection -> %s, %+v, %s", b.uri, b.msg.String(), b.errCtx)
 	}
 	return nil
@@ -192,8 +192,9 @@ func (b *etlBootstrapper) waitPodReady() error {
 	if err != nil {
 		return cmn.NewErrETL(b.errCtx, "%v", err)
 	}
-	if b.config.FastV(4, cos.SmoduleETL) {
-		nlog.Infof("waiting pod %q ready (%+v, %s) timeout=%v ival=%v", b.pod.Name, b.msg.String(), b.errCtx, timeout, interval)
+	if cmn.Rom.FastV(4, cos.SmoduleETL) {
+		nlog.Infof("waiting pod %q ready (%+v, %s) timeout=%v ival=%v",
+			b.pod.Name, b.msg.String(), b.errCtx, timeout, interval)
 	}
 	// wait
 	err = wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, /*immediate*/

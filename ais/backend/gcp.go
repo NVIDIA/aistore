@@ -130,7 +130,7 @@ func (*gcpProvider) CreateBucket(_ *meta.Bck) (int, error) {
 //
 
 func (*gcpProvider) HeadBucket(ctx context.Context, bck *meta.Bck) (bckProps cos.StrKVs, errCode int, err error) {
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("head_bucket %s", bck.Name)
 	}
 	cloudBck := bck.RemoteBck()
@@ -171,7 +171,7 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	)
 	nextPageToken, errPage := pager.NextPage(&objs)
 	if errPage != nil {
-		if verbose {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infof("list_objects %s: %v", cloudBck.Name, errPage)
 		}
 		errCode, err = gcpErrorToAISError(errPage, cloudBck)
@@ -208,7 +208,7 @@ func (gcpp *gcpProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		}
 	}
 	lst.Entries = lst.Entries[:l]
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[list_objects] count %d", len(lst.Entries))
 	}
 	return
@@ -242,7 +242,7 @@ func (gcpp *gcpProvider) ListBuckets(_ cmn.QueryBcks) (bcks cmn.Bcks, errCode in
 			Name:     battrs.Name,
 			Provider: apc.GCP,
 		})
-		if verbose {
+		if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 			nlog.Infof("[bucket_names] %s: created %v, versioning %t",
 				battrs.Name, battrs.Created, battrs.VersioningEnabled)
 		}
@@ -292,7 +292,7 @@ func (*gcpProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.ObjAttr
 	// unlike other custom attrs, "Content-Type" is not getting stored w/ LOM
 	// - only shown via list-objects and HEAD when not present
 	oa.SetCustomKey(cos.HdrContentType, attrs.ContentType)
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", cloudBck.Cname(lom.ObjName))
 	}
 	return
@@ -310,7 +310,7 @@ func (gcpp *gcpProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	params := allocPutParams(res, owt)
 	err := gcpp.t.PutObject(lom, params)
 	core.FreePutParams(params)
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -402,7 +402,7 @@ func (gcpp *gcpProvider) PutObj(r io.ReadCloser, lom *core.LOM) (errCode int, er
 		return
 	}
 	_ = setCustomGs(lom, attrs)
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s, size %d", lom, written)
 	}
 	return
@@ -421,7 +421,7 @@ func (*gcpProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		errCode, err = handleObjectError(gctx, gcpClient, err, cloudBck)
 		return
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[delete_object] %s", lom)
 	}
 	return

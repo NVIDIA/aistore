@@ -1,7 +1,7 @@
 // Package transport provides long-lived http/tcp connections for
 // intra-cluster communications (see README for details and usage example).
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package transport
 
@@ -36,7 +36,7 @@ var (
 )
 
 func Init(tstats cos.StatsUpdater, config *cmn.Config) *StreamCollector {
-	verbose = config.FastV(5 /*super-verbose*/, cos.SmoduleTransport)
+	verbose = cmn.Rom.FastV(5 /*super-verbose*/, cos.SmoduleTransport)
 
 	g.mm = memsys.PageMM()
 	g.tstats = tstats

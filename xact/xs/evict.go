@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -89,7 +89,7 @@ func (r *evictDelete) do(lom *core.LOM, lrit *lriterator) {
 	}
 eret:
 	r.AddErr(err)
-	if r.config.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		nlog.Warningln(err)
 	}
 }

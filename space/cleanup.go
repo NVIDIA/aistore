@@ -451,7 +451,7 @@ func (j *clnJ) visitObj(fqn string, lom *core.LOM) {
 	}
 	// too early
 	if lom.AtimeUnix()+int64(j.config.LRU.DontEvictTime) > j.now {
-		if j.ini.Config.FastV(5, cos.SmoduleSpace) {
+		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 			nlog.Infof("too early for %s: atime %v", lom, lom.Atime())
 		}
 		return
@@ -496,7 +496,7 @@ func (j *clnJ) rmExtraCopies(lom *core.LOM) {
 	if _, err := lom.DelExtraCopies(); err != nil {
 		err = fmt.Errorf("%s: failed delete redundant copies of %s: %v", j, lom, err)
 		j.ini.Xaction.AddErr(err)
-		if j.ini.Config.FastV(5, cos.SmoduleSpace) {
+		if cmn.Rom.FastV(5, cos.SmoduleSpace) {
 			nlog.Infoln("Error: ", err)
 		}
 	}
@@ -529,7 +529,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 		fevicted, bevicted int64
 		xcln               = j.ini.Xaction
 	)
-	if j.ini.Config.FastV(4, cos.SmoduleSpace) {
+	if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 		nlog.Infof("%s: num-old %d, misplaced (%d, ec=%d)", j, len(j.oldWork), len(j.misplaced.loms), len(j.misplaced.ec))
 	}
 
@@ -543,7 +543,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 				size += finfo.Size()
 				fevicted++
 				bevicted += finfo.Size()
-				if verbose {
+				if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 					nlog.Infof("%s: rm old work %q, size=%d", j, workfqn, size)
 				}
 			}
@@ -570,7 +570,7 @@ func (j *clnJ) rmLeftovers() (size int64, err error) {
 			if removed {
 				fevicted++
 				bevicted += mlom.SizeBytes(true /*not loaded*/)
-				if verbose {
+				if cmn.Rom.FastV(4, cos.SmoduleSpace) {
 					nlog.Infof("%s: rm misplaced %q, size=%d", j, mlom, mlom.SizeBytes(true /*not loaded*/))
 				}
 				if err = j.yieldTerm(); err != nil {

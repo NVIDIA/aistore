@@ -658,7 +658,7 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMpath *Mo
 			cos.ClearfAtomic(&mi.flags, FlagWaitingDD)
 			enabledMpath = mi
 			putAvailMPI(availableCopy)
-		} else if config.FastV(4, cos.SmoduleFS) {
+		} else if cmn.Rom.FastV(4, cos.SmoduleFS) {
 			nlog.Infof("%s: %s is already available, nothing to do", tid, mi)
 		}
 		return
@@ -1064,7 +1064,7 @@ func OnDiskSize(bck *cmn.Bck, prefix string) (size uint64) {
 	for _, mi := range avail {
 		sz, err := mi.onDiskSize(bck, prefix)
 		if err != nil {
-			if cmn.FastV(4, cos.SmoduleFS) {
+			if cmn.Rom.FastV(4, cos.SmoduleFS) {
 				nlog.Warningln("failed to 'du':", err, "["+mi.String(), bck.String(), prefix+"]")
 			}
 			return 0

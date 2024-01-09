@@ -220,7 +220,7 @@ func (hp *hdfsProvider) HeadObj(_ ctx, lom *core.LOM) (oa *cmn.ObjAttrs, errCode
 	oa = &cmn.ObjAttrs{}
 	oa.SetCustomKey(cmn.SourceObjMD, apc.HDFS)
 	oa.Size = fr.Stat().Size()
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -237,7 +237,7 @@ func (hp *hdfsProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT) 
 	}
 	params := allocPutParams(res, owt)
 	err := hp.t.PutObject(lom, params)
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -295,7 +295,7 @@ finish:
 		errCode, err = hdfsErrorToAISError(err)
 		return errCode, err
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s", lom)
 	}
 
@@ -312,7 +312,7 @@ func (hp *hdfsProvider) DeleteObj(lom *core.LOM) (errCode int, err error) {
 		errCode, err = hdfsErrorToAISError(err)
 		return errCode, err
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[delete_object] %s", lom)
 	}
 	return 0, nil

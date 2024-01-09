@@ -227,7 +227,7 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 		args   = r.p.args // TCBArgs
 		toName = args.Msg.ToName(lom.ObjName)
 	)
-	if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
+	if cmn.Rom.FastV(5, cos.SmoduleMirror) {
 		nlog.Infof("%s: %s => %s", r.Base.Name(), lom.Cname(), args.BckTo.Cname(toName))
 	}
 	coiParams := core.AllocCOI()
@@ -251,7 +251,7 @@ func (r *XactTCB) copyObject(lom *core.LOM, buf []byte) (err error) {
 		} else {
 			r.AddErr(err)
 		}
-		if r.BckJog.Config.FastV(5, cos.SmoduleMirror) {
+		if cmn.Rom.FastV(5, cos.SmoduleMirror) {
 			nlog.Infof("Error: %v", err)
 		}
 	}

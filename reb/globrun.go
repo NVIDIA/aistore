@@ -540,7 +540,7 @@ func (reb *Reb) runNoEC(rargs *rebArgs) error {
 		nlog.Infoln(logHdr, "abort joggers", err)
 		return err
 	}
-	if rargs.config.FastV(4, cos.SmoduleReb) {
+	if cmn.Rom.FastV(4, cos.SmoduleReb) {
 		nlog.Infof("finished rebalance walk (g%d)", rargs.id)
 	}
 	return nil
@@ -646,7 +646,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 		for uname, lom := range lomAck.q {
 			if err := lom.Load(false /*cache it*/, false /*locked*/); err != nil {
 				if cos.IsNotExist(err) {
-					if rargs.config.FastV(4, cos.SmoduleReb) {
+					if cmn.Rom.FastV(4, cos.SmoduleReb) {
 						nlog.Infof("%s: %s not found", loghdr, lom)
 					}
 				} else {
@@ -659,7 +659,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 			}
 			tsi, _ := rargs.smap.HrwHash2T(lom.Digest())
 			if core.T.HeadObjT2T(lom, tsi) {
-				if rargs.config.FastV(4, cos.SmoduleReb) {
+				if cmn.Rom.FastV(4, cos.SmoduleReb) {
 					nlog.Infof("%s: HEAD ok %s at %s", loghdr, lom, tsi.StringEx())
 				}
 				delete(lomAck.q, uname)
@@ -671,7 +671,7 @@ func (reb *Reb) retransmit(rargs *rebArgs, xreb *xs.Rebalance) (cnt int) {
 				err = rj.doSend(lom, tsi, roc)
 			}
 			if err == nil {
-				if rargs.config.FastV(4, cos.SmoduleReb) {
+				if cmn.Rom.FastV(4, cos.SmoduleReb) {
 					nlog.Infof("%s: retransmit %s => %s", loghdr, lom, tsi.StringEx())
 				}
 				cnt++
@@ -705,7 +705,7 @@ func (reb *Reb) _aborted(rargs *rebArgs) (yes bool) {
 
 func (reb *Reb) fini(rargs *rebArgs, logHdr string, err error) {
 	var stats core.Stats
-	if rargs.config.FastV(4, cos.SmoduleReb) {
+	if cmn.Rom.FastV(4, cos.SmoduleReb) {
 		nlog.Infof("finishing rebalance (reb_args: %s)", reb.logHdr(rargs.id, rargs.smap))
 	}
 	// prior to closing the streams
@@ -775,7 +775,7 @@ func (rj *rebJogger) objSentCallback(hdr *transport.ObjHdr, _ io.ReadCloser, arg
 		return
 	}
 	// log err
-	if cmn.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
+	if cmn.Rom.FastV(4, cos.SmoduleReb) || !cos.IsRetriableConnErr(err) {
 		if bundle.IsErrDestinationMissing(err) {
 			nlog.Errorf("%s: %v, %s", rj.xreb.Name(), err, rj.smap)
 		} else {

@@ -174,7 +174,7 @@ func (d *dispatcher) cleanupJob(jobID string) {
 }
 
 func (d *dispatcher) finish(job jobif) {
-	verbose := d.config.FastV(4, cos.SmoduleDload)
+	verbose := cmn.Rom.FastV(4, cos.SmoduleDload)
 	if verbose {
 		nlog.Infof("Waiting for job %q", job.ID())
 	}
@@ -353,7 +353,7 @@ func (d *dispatcher) doSingle(task *singleTask) (ok bool, err error) {
 }
 
 func (d *dispatcher) adminReq(req *request) (resp any, statusCode int, err error) {
-	if d.config.FastV(4, cos.SmoduleDload) {
+	if cmn.Rom.FastV(4, cos.SmoduleDload) {
 		nlog.Infof("Admin request (id: %q, action: %q, onlyActive: %t)", req.id, req.action, req.onlyActive)
 	}
 	// Need to make sure that the dispatcher has fully initialized and started,

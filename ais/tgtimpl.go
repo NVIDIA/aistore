@@ -159,7 +159,7 @@ func (t *target) GetCold(ctx context.Context, lom *core.LOM, owt cmn.OWT) (errCo
 	case cmn.OwtGetTryLock, cmn.OwtGetLock:
 		if owt == cmn.OwtGetTryLock {
 			if !lom.TryLock(true) {
-				if cmn.FastV(4, cos.SmoduleAIS) {
+				if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 					nlog.Warningf("%s: %s(%s) is busy", t, lom, owt)
 				}
 				return 0, cmn.ErrSkip // e.g. prefetch can skip it and keep on going

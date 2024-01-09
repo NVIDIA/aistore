@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -31,8 +31,7 @@ var (
 
 // [METHOD] /s3
 func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
-	config := cmn.GCO.Get()
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("s3Handler", p.String(), r.Method, r.URL)
 	}
 
@@ -53,7 +52,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.headBckS3(w, r, apiItems[0])
 			return
 		}
-		p.headObjS3(w, r, config, apiItems)
+		p.headObjS3(w, r, apiItems)
 	case http.MethodGet:
 		if len(apiItems) == 0 {
 			// list all buckets; NOTE: compare with `p.easyURLHandler` and see
@@ -80,11 +79,12 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// only bucket name - list objects in the bucket
+			config := cmn.GCO.Get()
 			p.listObjectsS3(w, r, config, apiItems[0])
 			return
 		}
 		// object data otherwise
-		p.getObjS3(w, r, config, apiItems, q, listMultipart)
+		p.getObjS3(w, r, apiItems, q, listMultipart)
 	case http.MethodPut:
 		if len(apiItems) == 0 {
 			s3.WriteErr(w, r, errS3Req, 0)
@@ -100,7 +100,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.putBckS3(w, r, apiItems[0])
 			return
 		}
-		p.putObjS3(w, r, config, apiItems)
+		p.putObjS3(w, r, apiItems)
 	case http.MethodPost:
 		q := r.URL.Query()
 		if q.Has(s3.QparamMptUploadID) || q.Has(s3.QparamMptUploads) {
@@ -131,7 +131,7 @@ func (p *proxy) s3Handler(w http.ResponseWriter, r *http.Request) {
 			p.delBckS3(w, r, apiItems[0])
 			return
 		}
-		p.delObjS3(w, r, config, apiItems)
+		p.delObjS3(w, r, apiItems)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead,
 			http.MethodPost, http.MethodPut)
@@ -337,7 +337,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, config *cm
 		return
 	}
 
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("lso", bck.String(), lsmsg, len(lst.Entries), err)
 	}
 
@@ -352,17 +352,17 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, config *cm
 }
 
 // PUT /s3/<bucket-name>/<object-name>
-func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (p *proxy) putObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if r.Header.Get(cos.S3HdrObjSrc) == "" {
-		p.directPutObjS3(w, r, config, items)
+		p.directPutObjS3(w, r, items)
 		return
 	}
-	p.copyObjS3(w, r, config, items)
+	p.copyObjS3(w, r, items)
 }
 
 // PUT /s3/<bucket-name>/<object-name> - with HeaderObjSrc in the request header
 // (compare with p.directPutObjS3)
-func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	src := r.Header.Get(cos.S3HdrObjSrc)
 	src = strings.Trim(src, "/")
 	parts := strings.SplitN(src, "/", 2)
@@ -400,7 +400,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infof("COPY: %s %s => %s/%v %s", r.Method, bckSrc.Cname(objName), bckDst.Cname(""), items, si)
 	}
 	started := time.Now()
@@ -410,7 +410,7 @@ func (p *proxy) copyObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 
 // PUT /s3/<bucket-name>/<object-name> - with empty `cos.S3HdrObjSrc`
 // (compare with p.copyObjS3)
-func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
@@ -436,7 +436,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
@@ -445,7 +445,7 @@ func (p *proxy) directPutObjS3(w http.ResponseWriter, r *http.Request, config *c
 }
 
 // GET /s3/<bucket-name>/<object-name>
-func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string, q url.Values, listMultipart bool) {
+func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, items []string, q url.Values, listMultipart bool) {
 	bucket := items[0]
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
@@ -475,7 +475,7 @@ func (p *proxy) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()
@@ -531,7 +531,7 @@ func (p *proxy) listMultipart(w http.ResponseWriter, r *http.Request, bck *meta.
 }
 
 // HEAD /s3/<bucket-name>/<object-name>
-func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	if len(items) < 2 {
 		s3.WriteErr(w, r, errS3Obj, 0)
 		return
@@ -552,7 +552,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		s3.WriteErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 
@@ -560,7 +560,7 @@ func (p *proxy) headObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 }
 
 // DELETE /s3/<bucket-name>/<object-name>
-func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
 	bck, err, errCode := meta.InitByNameOnly(bucket, p.owner.bmd)
 	if err != nil {
@@ -585,7 +585,7 @@ func (p *proxy) delObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Con
 		s3.WriteErr(w, r, err, 0)
 		return
 	}
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si)
 	}
 	started := time.Now()

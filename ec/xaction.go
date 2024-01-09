@@ -1,6 +1,6 @@
 // Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ec
 
@@ -248,7 +248,7 @@ func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request [
 	sw.twg.Add(1)
 	r.regWriter(uname, sw)
 
-	if r.config.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Requesting object %s from %s", lom, daemonID)
 	}
 	if err := r.sendByDaemonID([]string{daemonID}, o, nil, true); err != nil {
@@ -264,7 +264,7 @@ func (r *xactECBase) readRemote(lom *core.LOM, daemonID, uname string, request [
 	}
 	r.unregWriter(uname)
 
-	if r.config.FastV(4, cos.SmoduleEC) {
+	if cmn.Rom.FastV(4, cos.SmoduleEC) {
 		nlog.Infof("Received object %s from %s", lom, daemonID)
 	}
 	if sw.version != "" {

@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -656,7 +656,7 @@ func (p *proxy) httpobjget(w http.ResponseWriter, r *http.Request, origURLBck ..
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infoln("GET " + bck.Cname(objName) + " => " + tsi.String())
 	}
 	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraData, netPub)
@@ -730,7 +730,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 	}
 
 	// verbose
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		verb, s := "PUT", ""
 		if appendTyProvided {
 			verb = "APPEND"
@@ -738,7 +738,7 @@ func (p *proxy) httpobjput(w http.ResponseWriter, r *http.Request, apireq *apiRe
 		if bck.Props.Mirror.Enabled {
 			s = " (put-mirror)"
 		}
-		nlog.Infof("%s %s => %s%s", verb, bck.Cname(objName), tsi, s)
+		nlog.Infof("%s %s => %s%s", verb, bck.Cname(objName), tsi.StringEx(), s)
 	}
 
 	redirectURL := p.redirectURL(r, tsi, started, cmn.NetIntraData, netPub)
@@ -772,8 +772,8 @@ func (p *proxy) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
-		nlog.Infoln("DELETE " + bck.Cname(objName) + " => " + tsi.String())
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
+		nlog.Infoln("DELETE " + bck.Cname(objName) + " => " + tsi.StringEx())
 	}
 	redirectURL := p.redirectURL(r, tsi, time.Now() /*started*/, cmn.NetIntraControl)
 	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
@@ -1003,7 +1003,7 @@ func (p *proxy) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if smap.isPrimary(p.si) {
 		if prr {
 			if err := p.pready(smap, true); err != nil {
-				if cmn.FastV(5, cos.SmoduleAIS) {
+				if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable)
 				} else {
 					p.writeErr(w, r, err, http.StatusServiceUnavailable, Silent)
@@ -1552,8 +1552,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 			return
 		}
 		// verbose log
-		config := cmn.GCO.Get()
-		if config.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			var s string
 			if lsmsg.ContinuationToken != "" {
 				s = " cont=" + lsmsg.ContinuationToken
@@ -1564,6 +1563,7 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 			nlog.Infof("%s[%s] %s%s", amsg.Action, lsmsg.UUID, bck.Cname(""), s)
 		}
 
+		config := cmn.GCO.Get()
 		lst, err = p.lsObjsR(bck, lsmsg, smap, tsi, config, wantOnlyRemote)
 
 		// TODO: `status == http.StatusGone`: at this point we know that this
@@ -1940,7 +1940,7 @@ func (p *proxy) httpobjhead(w http.ResponseWriter, r *http.Request, origURLBck .
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, time.Now() /*started*/, cmn.NetIntraControl)
@@ -1968,7 +1968,7 @@ func (p *proxy) httpobjpatch(w http.ResponseWriter, r *http.Request) {
 		p.writeErr(w, r, err, http.StatusInternalServerError)
 		return
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infof("%s %s => %s", r.Method, bck.Cname(objName), si.StringEx())
 	}
 	redirectURL := p.redirectURL(r, si, started, cmn.NetIntraControl)
@@ -2259,7 +2259,7 @@ func (p *proxy) objMv(w http.ResponseWriter, r *http.Request, bck *meta.Bck, obj
 		p.writeErr(w, r, err)
 		return
 	}
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infof("%q %s => %s", msg.Action, bck.Cname(objName), si.StringEx())
 	}
 
@@ -2756,7 +2756,7 @@ func (p *proxy) daeSetPrimary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if prepare {
-		if cmn.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Infoln("Preparation step: do nothing")
 		}
 		return
@@ -2962,7 +2962,7 @@ func (p *proxy) htHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if cmn.FastV(5, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(5, cos.SmoduleAIS) {
 		nlog.Infof("[HTTP CLOUD] RevProxy handler for: %s -> %s", baseURL, r.URL.Path)
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {

@@ -1,6 +1,6 @@
 // Package res provides local volume resilvering upon mountpath-attach and similar
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package res
 
@@ -185,7 +185,7 @@ func (jg *joggerCtx) _mvSlice(ct *core.CT, buf []byte) {
 	if srcMetaFQN == "" {
 		return
 	}
-	if jg.config.FastV(4, cos.SmoduleReb) {
+	if cmn.Rom.FastV(4, cos.SmoduleReb) {
 		nlog.Infof("%s: moving %q -> %q", core.T, ct.FQN(), destFQN)
 	}
 	if _, _, err = cos.CopyFile(ct.FQN(), destFQN, buf, cos.ChecksumNone); err != nil {

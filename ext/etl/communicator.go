@@ -307,7 +307,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 	if err != nil {
 		return err
 	}
-	if pc.boot.config.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 
@@ -326,7 +326,7 @@ func (pc *pushComm) InlineTransform(w http.ResponseWriter, _ *http.Request, bck 
 func (pc *pushComm) OfflineTransform(bck *meta.Bck, objName string, timeout time.Duration) (r cos.ReadCloseSizer, err error) {
 	lom := core.AllocLOM(objName)
 	r, err = pc.doRequest(bck, lom, timeout)
-	if err == nil && pc.boot.config.FastV(5, cos.SmoduleETL) {
+	if err == nil && cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpush, lom.Cname(), err)
 	}
 	core.FreeLOM(lom)
@@ -354,7 +354,7 @@ func (rc *redirectComm) InlineTransform(w http.ResponseWriter, r *http.Request, 
 
 	http.Redirect(w, r, rc.redirectURL(lom), http.StatusTemporaryRedirect)
 
-	if rc.boot.config.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname())
 	}
 	core.FreeLOM(lom)
@@ -383,7 +383,7 @@ func (rc *redirectComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	etlURL := rc.redirectURL(lom)
 	r, err := rc.getWithTimeout(etlURL, size, timeout)
 
-	if rc.boot.config.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hpull, lom.Cname(), err)
 	}
 	core.FreeLOM(lom)
@@ -424,7 +424,7 @@ func (rp *revProxyComm) OfflineTransform(bck *meta.Bck, objName string, timeout 
 	etlURL := cos.JoinPath(rp.boot.uri, transformerPath(bck, objName))
 	r, err := rp.getWithTimeout(etlURL, size, timeout)
 
-	if rp.boot.config.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(Hrev, lom.Cname(), err)
 	}
 	core.FreeLOM(lom)

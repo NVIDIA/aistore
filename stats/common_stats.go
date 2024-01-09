@@ -1,7 +1,7 @@
 // Package stats provides methods and functionality to register, track, log,
 // and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package stats
 
@@ -910,12 +910,12 @@ func removeLogs(config *cmn.Config) {
 			}
 		}
 		if tot > maxtotal {
-			removeOlderLogs(config, tot, maxtotal, config.LogDir, logtype, finfos)
+			removeOlderLogs(tot, maxtotal, config.LogDir, logtype, finfos)
 		}
 	}
 }
 
-func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
+func removeOlderLogs(tot, maxtotal int64, logdir, logtype string, filteredInfos []rfs.FileInfo) {
 	const prefix = "GC logs"
 	l := len(filteredInfos)
 	if l <= 1 {
@@ -926,7 +926,7 @@ func removeOlderLogs(config *cmn.Config, tot, maxtotal int64, logdir, logtype st
 		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
 	}
 
-	verbose := config.FastV(4, cos.SmoduleStats)
+	verbose := cmn.Rom.FastV(4, cos.SmoduleStats)
 	if verbose {
 		nlog.Infoln(prefix + ": started")
 	}

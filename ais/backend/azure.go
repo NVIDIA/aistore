@@ -231,7 +231,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 		marker   = azblob.Marker{}
 		opts     = azblob.ListBlobsSegmentOptions{Prefix: msg.Prefix, MaxResults: int32(msg.PageSize)}
 	)
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("list_objects %s", cloudBck.Name)
 	}
 	if msg.ContinuationToken != "" {
@@ -276,7 +276,7 @@ func (ap *azureProvider) ListObjects(bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.Ls
 	if resp.NextMarker.Val != nil {
 		lst.ContinuationToken = *resp.NextMarker.Val
 	}
-	if verbose {
+	if cmn.Rom.FastV(4, cos.SmoduleBackend) {
 		nlog.Infof("[list_objects] count %d(marker: %s)", len(lst.Entries), lst.ContinuationToken)
 	}
 	return
@@ -342,7 +342,7 @@ func (ap *azureProvider) HeadObj(ctx context.Context, lom *core.LOM) (oa *cmn.Ob
 	if v, ok := h.EncodeCksum(resp.ContentMD5()); ok {
 		oa.SetCustomKey(cmn.MD5ObjMD, v)
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[head_object] %s", lom)
 	}
 	return
@@ -360,7 +360,7 @@ func (ap *azureProvider) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT)
 	params := allocPutParams(res, owt)
 	err := ap.t.PutObject(lom, params)
 	core.FreePutParams(params)
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infoln("[get_object]", lom.String(), err)
 	}
 	return 0, err
@@ -475,7 +475,7 @@ func (ap *azureProvider) PutObj(r io.ReadCloser, lom *core.LOM) (int, error) {
 		lom.SetCustomKey(cmn.ETag, v) // NOTE: using ETag as version
 		lom.SetVersion(v)
 	}
-	if superVerbose {
+	if cmn.Rom.FastV(5, cos.SmoduleBackend) {
 		nlog.Infof("[put_object] %s", lom)
 	}
 	return http.StatusOK, nil

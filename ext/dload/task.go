@@ -66,7 +66,7 @@ func (task *singleTask) init() {
 	task.downloadCtx, task.cancel = context.WithCancel(context.Background())
 }
 
-func (task *singleTask) download(lom *core.LOM, config *cmn.Config) {
+func (task *singleTask) download(lom *core.LOM) {
 	err := lom.InitBck(task.job.Bck())
 	if err == nil {
 		err = lom.Load(true /*cache it*/, false /*locked*/)
@@ -76,7 +76,7 @@ func (task *singleTask) download(lom *core.LOM, config *cmn.Config) {
 		return
 	}
 
-	if config.FastV(4, cos.SmoduleDload) {
+	if cmn.Rom.FastV(4, cos.SmoduleDload) {
 		nlog.Infof("Starting download for %v", task)
 	}
 

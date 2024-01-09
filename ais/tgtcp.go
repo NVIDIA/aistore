@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -255,7 +255,7 @@ func (t *target) daeSetPrimary(w http.ResponseWriter, r *http.Request, apiItems 
 	}
 
 	if prepare {
-		if cmn.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Infoln("Preparation step: do nothing")
 		}
 		return
@@ -1003,7 +1003,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ntid := msg.UUID
-	if cmn.FastV(4, cos.SmoduleAIS) {
+	if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 		nlog.Infof("%s %s: %s, join %s", t, msg, newSmap, meta.Tname(ntid)) // "start-gfn" | "stop-gfn"
 	}
 	switch msg.Action {
@@ -1021,7 +1021,7 @@ func (t *target) metasyncPost(w http.ResponseWriter, r *http.Request) {
 // GET /v1/health (apc.Health)
 func (t *target) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if t.regstate.disabled.Load() && daemon.cli.target.standby {
-		if cmn.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Warningf("[health] %s: standing by...", t)
 		}
 	} else if !t.NodeStarted() {

@@ -159,7 +159,7 @@ func (r *XactArch) Begin(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) 
 		if err != nil {
 			return
 		}
-		if r.config.FastV(5, cos.SmoduleXs) {
+		if cmn.Rom.FastV(5, cos.SmoduleXs) {
 			nlog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
 		}
 
@@ -333,7 +333,7 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	errCode, err := r.fini(wi)
 	r.DecPending()
-	if r.config.FastV(5, cos.SmoduleXs) {
+	if cmn.Rom.FastV(5, cos.SmoduleXs) {
 		var s string
 		if err != nil {
 			s = fmt.Sprintf(": %v(%d)", err, errCode)

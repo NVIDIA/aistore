@@ -1,6 +1,6 @@
 // Package etl provides utilities to initialize and use transformation pods.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package etl
 
@@ -62,7 +62,7 @@ func (dp *OfflineDP) Reader(lom *core.LOM, latestVer, sync bool) (cos.ReadOpenCl
 		BackOff:   true,
 		Verbosity: cmn.RetryLogQuiet,
 	})
-	if dp.config.FastV(5, cos.SmoduleETL) {
+	if cmn.Rom.FastV(5, cos.SmoduleETL) {
 		nlog.Infoln(action, err)
 	}
 	if err != nil {

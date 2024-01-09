@@ -76,11 +76,6 @@ func (l LogLevel) Validate() (err error) {
 	return
 }
 
-func (l LogLevel) FastV(verbosity, fl int) bool {
-	level, modules := l.Parse()
-	return level >= verbosity || modules&fl != 0
-}
-
 func (l LogLevel) String() (s string) {
 	var (
 		ms             string

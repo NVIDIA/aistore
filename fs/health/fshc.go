@@ -1,6 +1,6 @@
 // Package health provides a basic mountpath health monitor.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package health
@@ -189,7 +189,7 @@ func tryWriteFile(mpath string, fileSize int64) error {
 //	is accessible. When the specified local directory is inaccessible the
 //	function returns immediately without any read/write operations
 func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int) (readFails, writeFails int, accessible bool) {
-	if config.FastV(4, cos.SmoduleFS) {
+	if cmn.Rom.FastV(4, cos.SmoduleFS) {
 		nlog.Infof("Testing mountpath %q", mountpath)
 	}
 	if err := cos.Stat(mountpath); err != nil {
@@ -219,7 +219,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 		fqn, err := getRandomFileName(mountpath)
 		if err == io.EOF {
 			// No files in the mountpath.
-			if config.FastV(4, cos.SmoduleFS) {
+			if cmn.Rom.FastV(4, cos.SmoduleFS) {
 				nlog.Infof("Mountpath %q contains no files", mountpath)
 			}
 			break
@@ -234,7 +234,7 @@ func testMountpath(config *cmn.Config, filePath, mountpath string, fileSize int)
 			)
 			continue
 		}
-		if config.FastV(4, cos.SmoduleFS) {
+		if cmn.Rom.FastV(4, cos.SmoduleFS) {
 			nlog.Infof("Reading random file (fqn: %q)", fqn)
 		}
 		if err = tryReadFile(fqn); err != nil {

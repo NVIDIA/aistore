@@ -26,20 +26,21 @@ import (
 
 // [METHOD] /s3
 func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
-	config := cmn.GCO.Get()
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("s3Handler", t.String(), r.Method, r.URL)
 	}
 	apiItems, err := t.parseURL(w, r, apc.URLPathS3.L, 0, true)
 	if err != nil {
 		return
 	}
+
 	switch r.Method {
 	case http.MethodHead:
 		t.headObjS3(w, r, apiItems)
 	case http.MethodGet:
-		t.getObjS3(w, r, config, apiItems)
+		t.getObjS3(w, r, apiItems)
 	case http.MethodPut:
+		config := cmn.GCO.Get()
 		t.putCopyMpt(w, r, config, apiItems)
 	case http.MethodDelete:
 		q := r.URL.Query()
@@ -49,7 +50,7 @@ func (t *target) s3Handler(w http.ResponseWriter, r *http.Request) {
 			t.delObjS3(w, r, apiItems)
 		}
 	case http.MethodPost:
-		t.postObjS3(w, r, config, apiItems)
+		t.postObjS3(w, r, apiItems)
 	default:
 		cmn.WriteErr405(w, r, http.MethodDelete, http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPost)
 	}
@@ -72,12 +73,12 @@ func (t *target) putCopyMpt(w http.ResponseWriter, r *http.Request, config *cmn.
 	switch {
 	case q.Has(s3.QparamMptPartNo) && q.Has(s3.QparamMptUploadID):
 		if r.Header.Get(cos.S3HdrObjSrc) != "" {
-			if config.FastV(5, cos.SmoduleS3) {
+			if cmn.Rom.FastV(5, cos.SmoduleS3) {
 				nlog.Infoln("putMptCopy", items)
 			}
 			t.putMptCopy(w, r, items)
 		} else {
-			if config.FastV(5, cos.SmoduleS3) {
+			if cmn.Rom.FastV(5, cos.SmoduleS3) {
 				nlog.Infoln("putMptPart", bck.String(), items, q)
 			}
 			t.putMptPart(w, r, items, q, bck)
@@ -222,7 +223,7 @@ func (t *target) putObjS3(w http.ResponseWriter, r *http.Request, bck *meta.Bck,
 }
 
 // GET s3/<bucket-name[/<object-name>]
-func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bucket := items[0]
 	bck, err, errCode := meta.InitByNameOnly(bucket, t.owner.bmd)
 	if err != nil {
@@ -231,7 +232,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 	}
 	q := r.URL.Query()
 	if len(items) == 1 && q.Has(s3.QparamMptUploads) {
-		if config.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("listMptUploads", bck.String(), q)
 		}
 		t.listMptUploads(w, bck, q)
@@ -243,7 +244,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 	}
 	objName := s3.ObjName(items)
 	if q.Has(s3.QparamMptPartNo) {
-		if config.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("getMptPart", bck.String(), objName, q)
 		}
 		t.getMptPart(w, r, bck, objName, q)
@@ -251,7 +252,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 	}
 	uploadID := q.Get(s3.QparamMptUploadID)
 	if uploadID != "" {
-		if config.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("listMptParts", bck.String(), objName, q)
 		}
 		t.listMptParts(w, r, bck, objName, q)
@@ -265,7 +266,7 @@ func (t *target) getObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Co
 		return
 	}
 	lom := core.AllocLOM(objName)
-	if config.FastV(5, cos.SmoduleS3) {
+	if cmn.Rom.FastV(5, cos.SmoduleS3) {
 		nlog.Infoln("getObject", lom.String(), dpq)
 	}
 	t.getObject(w, r, dpq, bck, lom)
@@ -375,7 +376,7 @@ func (t *target) delObjS3(w http.ResponseWriter, r *http.Request, items []string
 }
 
 // POST /s3/<bucket-name>/<object-name>
-func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, config *cmn.Config, items []string) {
+func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, items []string) {
 	bck, err, errCode := meta.InitByNameOnly(items[0], t.owner.bmd)
 	if err != nil {
 		s3.WriteErr(w, r, err, errCode)
@@ -388,7 +389,7 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 			s3.WriteErr(w, r, err, 0)
 			return
 		}
-		if config.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("startMpt", bck.String(), items, q)
 		}
 		t.startMpt(w, r, items, bck)
@@ -400,7 +401,7 @@ func (t *target) postObjS3(w http.ResponseWriter, r *http.Request, config *cmn.C
 			s3.WriteErr(w, r, err, 0)
 			return
 		}
-		if config.FastV(5, cos.SmoduleS3) {
+		if cmn.Rom.FastV(5, cos.SmoduleS3) {
 			nlog.Infoln("completeMpt", bck.String(), items, q)
 		}
 		t.completeMpt(w, r, items, q, bck)

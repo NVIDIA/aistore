@@ -1,6 +1,6 @@
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package ais
 
@@ -389,7 +389,7 @@ func (ic *ic) bcastListenIC(nl nl.Listener) {
 
 func (ic *ic) sendOwnershipTbl(si *meta.Snode, smap *smapX) error {
 	if ic.p.notifs.size() == 0 {
-		if cmn.FastV(4, cos.SmoduleAIS) {
+		if cmn.Rom.FastV(4, cos.SmoduleAIS) {
 			nlog.Infof("%s: notifs empty, not sending to %s", ic.p, si)
 		}
 		return nil

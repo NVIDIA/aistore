@@ -1,7 +1,7 @@
 // Package xs is a collection of eXtended actions (xactions), including multi-object
 // operations, list-objects, (cluster) rebalance and (target) resilver, ETL, and more.
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION. All rights reserved.
  */
 package xs
 
@@ -71,7 +71,7 @@ func (p *rebFactory) WhenPrevIsRunning(prevEntry xreg.Renewable) (wpr xreg.WPR, 
 		nlog.Errorf("(reb: %s) %s is greater than %s", xreb.xctn, xreb.Args.UUID, p.Args.UUID)
 		wpr = xreg.WprUse
 	} else if xreb.Args.UUID == p.Args.UUID {
-		if cmn.FastV(4, cos.SmoduleXs) {
+		if cmn.Rom.FastV(4, cos.SmoduleXs) {
 			nlog.Infof("%s already running, nothing to do", xreb.xctn)
 		}
 		wpr = xreg.WprUse
